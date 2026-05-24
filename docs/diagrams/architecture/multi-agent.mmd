@@ -1,0 +1,84 @@
+graph TB
+    subgraph "用户层"
+        ADMIN[系统管理员]
+        DEV[开发者]
+        USER_ENT[企业用户]
+    end
+
+    subgraph "联邦指挥中心"
+        DASHBOARD[监控面板]
+        TOPO[智能体拓扑图]
+        CONSOLE[管理控制台]
+        ALERT[告警中心]
+    end
+
+    subgraph "主Agent"
+        MASTER[主Agent<br/>━━━━━━━━<br/>全局记忆L1-L10<br/>任务分解<br/>资源调度<br/>权限管理]
+    end
+
+    subgraph "子Agent集群"
+        SA1[子Agent-Dev<br/>━━━━━━━━<br/>代码生成<br/>Bug修复<br/>Code Review]
+        SA2[子Agent-Ops<br/>━━━━━━━━<br/>部署运维<br/>监控告警<br/>日志分析]
+        SA3[子Agent-Data<br/>━━━━━━━━<br/>数据分析<br/>ETL<br/>报表生成]
+        SA4[子Agent-RPA<br/>━━━━━━━━<br/>计算机操控<br/>浏览器自动化<br/>OCR识别]
+        SA5[子Agent-Comms<br/>━━━━━━━━<br/>飞书/钉钉<br/>微信/企微<br/>消息推送]
+    end
+
+    subgraph "通讯总线"
+        BUS[消息总线<br/>━━━━━━━━<br/>RabbitMQ + gRPC<br/>Pub/Sub模式<br/>请求/响应模式<br/>流式传输]
+    end
+
+    subgraph "共享资源"
+        SHARED_MEM[共享记忆池<br/>L1-L3共享]
+        SKILL_REPO[技能仓库<br/>共享技能]
+        KNOWLEDGE[知识图谱<br/>Neo4j共享]
+    end
+
+    ADMIN --> DASHBOARD
+    DEV --> CONSOLE
+    USER_ENT --> MASTER
+
+    DASHBOARD --> MASTER
+    TOPO --> MASTER
+    CONSOLE --> MASTER
+    ALERT --> MASTER
+
+    MASTER -->|"任务分配"| BUS
+    BUS -->|"开发任务"| SA1
+    BUS -->|"运维任务"| SA2
+    BUS -->|"数据任务"| SA3
+    BUS -->|"RPA任务"| SA4
+    BUS -->|"通讯任务"| SA5
+
+    SA1 -->|"结果汇报"| BUS
+    SA2 -->|"结果汇报"| BUS
+    SA3 -->|"结果汇报"| BUS
+    SA4 -->|"结果汇报"| BUS
+    SA5 -->|"结果汇报"| BUS
+
+    BUS -->|"汇总"| MASTER
+
+    SA1 -.-> SHARED_MEM
+    SA2 -.-> SHARED_MEM
+    SA3 -.-> SHARED_MEM
+    SA4 -.-> SHARED_MEM
+    SA5 -.-> SHARED_MEM
+
+    SA1 -.-> SKILL_REPO
+    SA2 -.-> SKILL_REPO
+    SA3 -.-> SKILL_REPO
+
+    SA1 -.-> KNOWLEDGE
+    SA3 -.-> KNOWLEDGE
+
+    MASTER -.-> SHARED_MEM
+    MASTER -.-> SKILL_REPO
+    MASTER -.-> KNOWLEDGE
+
+    style MASTER fill:#C0392B,color:#fff
+    style BUS fill:#4A90D9,color:#fff
+    style SA1 fill:#27AE60,color:#fff
+    style SA2 fill:#2980B9,color:#fff
+    style SA3 fill:#E67E22,color:#fff
+    style SA4 fill:#8E44AD,color:#fff
+    style SA5 fill:#1ABC9C,color:#fff

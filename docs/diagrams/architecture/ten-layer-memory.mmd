@@ -1,0 +1,85 @@
+graph TB
+    subgraph "输入源"
+        USER[用户交互]
+        SENSOR[传感器/API]
+        AGENT[Agent内部状态]
+    end
+
+    subgraph "底层感知 (毫秒-秒)"
+        L1[L1 感知记忆<br/>━━━━━━━━<br/>存储: Buffer<br/>周期: 0.1-1秒<br/>容量: 极大量<br/>职责: 原始输入缓冲]
+    end
+
+    subgraph "工作层 (秒-小时)"
+        L2[L2 工作记忆<br/>━━━━━━━━<br/>存储: Redis<br/>周期: 当前会话<br/>容量: 7±2项<br/>职责: 活跃信息处理]
+        L3[L3 短期记忆<br/>━━━━━━━━<br/>存储: PostgreSQL<br/>周期: 分钟-小时<br/>容量: 数千项<br/>职责: 会话上下文]
+    end
+
+    subgraph "情景层 (天-周)"
+        L4[L4 情景记忆<br/>━━━━━━━━<br/>存储: Milvus向量<br/>周期: 天-周<br/>容量: 百万级<br/>职责: 事件/经历]
+    end
+
+    subgraph "语义层 (月-年)"
+        L5[L5 语义记忆<br/>━━━━━━━━<br/>存储: Neo4j图谱<br/>周期: 月-年<br/>容量: 亿级<br/>职责: 知识/概念]
+    end
+
+    subgraph "程序层 (永久)"
+        L6[L6 程序记忆<br/>━━━━━━━━<br/>存储: PostgreSQL<br/>周期: 永久<br/>容量: 技能库<br/>职责: 技能/流程]
+        L7[L7 元记忆<br/>━━━━━━━━<br/>存储: PostgreSQL<br/>周期: 永久<br/>容量: 策略库<br/>职责: 学习策略]
+    end
+
+    subgraph "高层认知 (长期-永久)"
+        L8[L8 情感记忆<br/>━━━━━━━━<br/>存储: PostgreSQL<br/>周期: 可变<br/>容量: 情感标签<br/>职责: 情绪关联]
+        L9[L9 社会记忆<br/>━━━━━━━━<br/>存储: Neo4j<br/>周期: 永久<br/>容量: 关系网<br/>职责: 人际知识]
+        L10[L10 本体记忆<br/>━━━━━━━━<br/>存储: 混合<br/>周期: 永久<br/>容量: 世界模型<br/>职责: 自我认知]
+    end
+
+    subgraph "核心机制"
+        CONS[记忆巩固引擎<br/>SM-2改进算法]
+        RETR[多模式检索引擎<br/>向量+关键词+图]
+        DECAY[自适应遗忘引擎<br/>艾宾浩斯曲线]
+    end
+
+    USER --> L1
+    SENSOR --> L1
+    AGENT --> L1
+
+    L1 -->|"筛选"| L2
+    L2 -->|"重要信息"| L3
+    L3 -->|"巩固"| L4
+    L4 -->|"语义提取"| L5
+    L5 -->|"技能编码"| L6
+    L5 -->|"策略提取"| L7
+    L6 -->|"情感标注"| L8
+    L7 -->|"社会编码"| L9
+    L8 -->|"自我整合"| L10
+    L9 -->|"自我整合"| L10
+
+    CONS -.->|"评分驱动"| L1
+    CONS -.->|"评分驱动"| L2
+    CONS -.->|"评分驱动"| L3
+    CONS -.->|"评分驱动"| L4
+
+    RETR -.->|"统一查询"| L2
+    RETR -.->|"统一查询"| L3
+    RETR -.->|"统一查询"| L4
+    RETR -.->|"统一查询"| L5
+    RETR -.->|"统一查询"| L6
+
+    DECAY -.->|"周期扫描"| L3
+    DECAY -.->|"周期扫描"| L4
+    DECAY -.->|"周期扫描"| L5
+    DECAY -.->|"周期扫描"| L8
+
+    style L1 fill:#ECF0F1,color:#333
+    style L2 fill:#3498DB,color:#fff
+    style L3 fill:#2980B9,color:#fff
+    style L4 fill:#E67E22,color:#fff
+    style L5 fill:#D35400,color:#fff
+    style L6 fill:#27AE60,color:#fff
+    style L7 fill:#2ECC71,color:#fff
+    style L8 fill:#9B59B6,color:#fff
+    style L9 fill:#8E44AD,color:#fff
+    style L10 fill:#C0392B,color:#fff
+    style CONS fill:#F39C12,color:#fff
+    style RETR fill:#1ABC9C,color:#fff
+    style DECAY fill:#E74C3C,color:#fff

@@ -1,0 +1,82 @@
+graph TB
+    subgraph "接入层安全"
+        WAF[Web应用防火墙<br/>SQL注入/XSS/CSRF]
+        TLS[TLS 1.3<br/>证书管理]
+        RATE[速率限制<br/>IP/用户/API Key]
+    end
+
+    subgraph "认证层"
+        AUTH[统一认证]
+        OAUTH[OAuth 2.0<br/>飞书/钉钉/微信]
+        JWT[JWT令牌<br/>RS256签名<br/>15min刷新]
+        MFA[多因素认证<br/>TOTP/短信]
+        SSO[单点登录<br/>SAML/OIDC]
+    end
+
+    subgraph "授权层"
+        RBAC[RBAC权限模型]
+        ROLE[角色管理<br/>Admin/Dev/User]
+        POLICY[策略引擎<br/>OPA/Rego]
+        SCOPE[API作用域<br/>细粒度控制]
+    end
+
+    subgraph "数据安全"
+        ENC_TRANS[传输加密<br/>mTLS]
+        ENC_STORE[存储加密<br/>AES-256-GCM]
+        MASK[数据脱敏<br/>手机/身份证/邮箱]
+        DLP[数据防泄漏<br/>敏感词检测]
+    end
+
+    subgraph "审计与合规"
+        AUDIT[审计日志系统]
+        TRAIL[操作追踪<br/>谁/何时/做了什么]
+        ALERT[异常告警<br/>暴力破解/越权]
+        REPORT[合规报告<br/>等保2.0/SOC2]
+    end
+
+    subgraph "密钥管理"
+        VAULT[密钥管理<br/>Hashicorp Vault]
+        ROTATE[密钥轮换<br/>自动/手动]
+        SECRETS[凭据注入<br/>环境变量/文件]
+    end
+
+    INTERNET((互联网)) --> WAF
+    WAF --> TLS
+    TLS --> RATE
+    RATE --> AUTH
+
+    AUTH --> OAUTH
+    AUTH --> JWT
+    AUTH --> MFA
+    AUTH --> SSO
+
+    JWT --> RBAC
+    RBAC --> ROLE
+    RBAC --> POLICY
+    POLICY --> SCOPE
+
+    SCOPE --> ENC_TRANS
+    ENC_TRANS --> ENC_STORE
+    ENC_STORE --> MASK
+    MASK --> DLP
+
+    ROLE -.-> AUDIT
+    SCOPE -.-> AUDIT
+    ENC_STORE -.-> AUDIT
+
+    AUDIT --> TRAIL
+    AUDIT --> ALERT
+    AUDIT --> REPORT
+
+    ENC_TRANS -.-> VAULT
+    ENC_STORE -.-> VAULT
+    JWT -.-> VAULT
+
+    VAULT --> ROTATE
+    VAULT --> SECRETS
+
+    style WAF fill:#E74C3C,color:#fff
+    style AUTH fill:#3498DB,color:#fff
+    style RBAC fill:#E67E22,color:#fff
+    style AUDIT fill:#9B59B6,color:#fff
+    style VAULT fill:#1ABC9C,color:#fff

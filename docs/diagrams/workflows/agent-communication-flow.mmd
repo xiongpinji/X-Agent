@@ -1,0 +1,61 @@
+sequenceDiagram
+    participant U as 👤 用户
+    participant M as 🧠 主Agent
+    participant BUS as 📨 消息总线<br/>RabbitMQ
+    participant SA as 🤖 子Agent
+    participant MEM as 💾 记忆系统
+    participant EXT as 🌐 外部服务
+
+    Note over U,EXT: === 同步请求模式 ===
+    
+    U->>M: 发送任务请求
+    activate M
+    M->>MEM: 检索相关记忆(L2-L5)
+    MEM-->>M: 返回上下文
+    
+    M->>M: 任务分解<br/>生成子任务列表
+    
+    M->>BUS: 发布子任务1<br/>exchange: agent.tasks
+    BUS->>SA: 路由到对应子Agent
+    activate SA
+    SA->>MEM: 加载专属记忆
+    MEM-->>SA: 返回技能/数据
+    SA->>EXT: 调用外部API/工具
+    EXT-->>SA: 返回结果
+    SA->>BUS: 发布完成消息<br/>exchange: agent.results
+    deactivate SA
+    BUS->>M: 汇总子任务结果
+    
+    M->>M: 结果融合/验证
+    M->>MEM: 更新情景记忆(L4)
+    M-->>U: 返回最终结果
+    deactivate M
+
+    Note over U,EXT: === 流式响应模式 ===
+    
+    U->>M: 发起流式请求
+    activate M
+    M->>BUS: 订阅流式频道
+    
+    loop 流式处理
+        M->>SA: gRPC Stream
+        activate SA
+        SA-->>M: 增量结果chunk
+        M-->>U: 实时推送
+        deactivate SA
+    end
+    
+    M-->>U: 流结束
+    deactivate M
+
+    Note over U,EXT: === 事件广播模式 ===
+    
+    SA->>BUS: 发布系统事件<br/>exchange: agent.events
+    BUS->>M: 推送事件通知
+    M->>M: 评估事件重要性
+    alt 高优先级
+        M->>U: 即时通知<br/>(飞书/钉钉/企微)
+        M->>MEM: 记录事件(L3)
+    else 低优先级
+        M->>MEM: 批量记录(L4)
+    end

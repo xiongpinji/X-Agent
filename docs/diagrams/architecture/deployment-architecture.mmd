@@ -1,0 +1,95 @@
+graph TB
+    subgraph "DNS/负载均衡"
+        DNS[CloudFlare DNS]
+        LB[负载均衡<br/>NGINX Ingress]
+    end
+
+    subgraph "Kubernetes集群"
+        subgraph "Control Plane"
+            API_SERVER[API Server]
+            SCHEDULER[Kube Scheduler]
+            CM[ConfigMap/Secret]
+        end
+
+        subgraph "Agent服务 (Deployment x3)"
+            AGENT_POD1[Agent Pod 1<br/>━━━━━━━━<br/>FastAPI<br/>推理引擎<br/>工作流引擎]
+            AGENT_POD2[Agent Pod 2<br/>━━━━━━━━<br/>FastAPI<br/>推理引擎<br/>工作流引擎]
+            AGENT_POD3[Agent Pod 3<br/>━━━━━━━━<br/>FastAPI<br/>推理引擎<br/>工作流引擎]
+        end
+
+        subgraph "记忆服务 (StatefulSet x2)"
+            MEM_POD1[记忆 Pod 1<br/>━━━━━━━━<br/>记忆管理器<br/>巩固引擎<br/>检索引擎]
+            MEM_POD2[记忆 Pod 2<br/>━━━━━━━━<br/>记忆管理器<br/>巩固引擎<br/>检索引擎]
+        end
+
+        subgraph "Worker服务 (Deployment x2)"
+            WORKER1[RPA Worker<br/>━━━━━━━━<br/>计算机操控<br/>浏览器自动化<br/>OCR引擎]
+            WORKER2[任务Worker<br/>━━━━━━━━<br/>异步任务<br/>定时任务<br/>批量处理]
+        end
+    end
+
+    subgraph "数据层 (外部/Stateful)"
+        PG[(PostgreSQL 15<br/>主从复制<br/>3节点)]
+        MILVUS[(Milvus 2.3<br/>向量存储<br/>3节点)]
+        NEO4J[(Neo4j 5<br/>知识图谱<br/>3节点)]
+        REDIS[(Redis 7 Cluster<br/>缓存/队列<br/>6节点)]
+        MQ[RabbitMQ<br/>消息队列<br/>3节点镜像]
+    end
+
+    subgraph "监控与日志"
+        PROM[Prometheus<br/>指标采集]
+        GRAFANA[Grafana<br/>可视化面板]
+        LOKI[Loki<br/>日志聚合]
+        SENTRY[Sentry<br/>错误追踪]
+    end
+
+    subgraph "CI/CD"
+        GIT[GitHub Actions]
+        REGISTRY[Container Registry]
+        ARGO[ArgoCD<br/>GitOps部署]
+    end
+
+    DNS --> LB
+    LB --> API_SERVER
+    
+    API_SERVER --> AGENT_POD1
+    API_SERVER --> AGENT_POD2
+    API_SERVER --> AGENT_POD3
+    
+    AGENT_POD1 --> MEM_POD1
+    AGENT_POD1 --> MEM_POD2
+    AGENT_POD2 --> MEM_POD1
+    AGENT_POD2 --> MEM_POD2
+
+    MEM_POD1 --> PG
+    MEM_POD1 --> MILVUS
+    MEM_POD1 --> NEO4J
+    MEM_POD2 --> PG
+    MEM_POD2 --> MILVUS
+    MEM_POD2 --> NEO4J
+
+    AGENT_POD1 --> REDIS
+    AGENT_POD1 --> MQ
+    
+    WORKER1 --> MQ
+    WORKER2 --> MQ
+    WORKER1 --> REDIS
+    WORKER2 --> REDIS
+
+    AGENT_POD1 -.-> PROM
+    MEM_POD1 -.-> PROM
+
+    PROM --> GRAFANA
+    LOKI --> GRAFANA
+    SENTRY --> GRAFANA
+
+    GIT --> REGISTRY
+    REGISTRY --> ARGO
+    ARGO --> API_SERVER
+
+    style LB fill:#4A90D9,color:#fff
+    style AGENT_POD1 fill:#27AE60,color:#fff
+    style MEM_POD1 fill:#E67E22,color:#fff
+    style WORKER1 fill:#9B59B6,color:#fff
+    style PG fill:#2980B9,color:#fff
+    style MILVUS fill:#1ABC9C,color:#fff
