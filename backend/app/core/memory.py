@@ -831,6 +831,7 @@ class MemorySystem:
                 merged.append(text)
         return merged[:20]
 
+
     def _load_from_disk(self) -> None:
         if self._storage_path is None or not self._storage_path.exists():
             return
@@ -893,5 +894,7 @@ class MemorySystem:
         ranked = sorted(counts, key=lambda tag: (counts[tag], tag), reverse=True)
         return ["consolidated", *ranked[:8]]
 
+
+memory_system = MemorySystem()
 
 InMemoryMemorySystem = MemorySystem

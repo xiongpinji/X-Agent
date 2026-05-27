@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "x-agent-core"
 version = "0.1.0"
@@ -15,7 +19,16 @@ dependencies = [
     "pydantic-settings>=2.2.0",
     "qdrant-client>=1.11.0",
     "uvicorn[standard]>=0.30.0",
+    "celery>=5.3.0",
+    "redis>=5.0.0",
 ]
+
+[tool.setuptools]
+py-modules = []
+
+[tool.setuptools.packages.find]
+include = ["backend*", "data*", "diagrams*", "packaging*", "scripts*", "templates*"]
+exclude = ["frontend*"]
 
 [project.scripts]
 xagent-workflow-worker = "backend.app.workflow_worker:main"
@@ -24,11 +37,28 @@ xagent-package-desktop = "scripts.package_desktop:main"
 xagent-open-frontend = "scripts.one_click_desktop:open_frontend"
 
 [project.optional-dependencies]
+prod = [
+    "psycopg[binary]>=3.2.0",
+    "celery>=5.3.0",
+    "redis>=5.0.0",
+    "prometheus-client>=0.20.0",
+]
 dev = [
     "pytest>=8.2.0",
     "pytest-asyncio>=0.23.0",
     "httpx>=0.27.0",
     "ruff>=0.5.0",
+    "bandit>=1.7.0",
+    "mypy>=1.8.0",
+    "pylint>=3.0.0",
+]
+test = [
+    "pytest>=8.2.0",
+    "pytest-cov>=4.0.0",
+    "locust>=2.20.0",
+]
+monitoring = [
+    "prometheus-client>=0.20.0",
 ]
 
 [tool.pytest.ini_options]

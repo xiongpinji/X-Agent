@@ -25,6 +25,14 @@ from backend.app.core.test_mapper import test_mapper
 from backend.app.core.execution_planner import execution_planner
 from backend.app.core.agent_state_manager import AgentStateManager
 from backend.app.core.agent_runtime_adapter import AgentRuntimeAdapter
+from backend.app.core.agent_phases import (
+    InitializationPhase,
+    PlanningPhase,
+    ExecutionPhase,
+    CompletionPhase,
+    PhaseContext,
+)
+from backend.app.core.enums import StepKind, RecoveryBranch
 from backend.app.services.observability.langfuse_client import langfuse_client
 
 

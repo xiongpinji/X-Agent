@@ -46,6 +46,22 @@ from backend.app.api.tools import router as tools_router
 from backend.app.api.traces import router as traces_router
 from backend.app.api.users import router as users_router
 from backend.app.api.workflows import router as workflows_router
+from backend.app.api.execution_control import router as execution_control_router
+from backend.app.api.tools_control import router as tools_control_router
+from backend.app.api.memory_control import router as memory_control_router
+from backend.app.api.organization_control import router as organization_control_router
+from backend.app.api.marketplace_control import router as marketplace_control_router
+from backend.app.api.navigation_control import router as navigation_control_router
+from backend.app.api.health import router as health_router
+from backend.app.api.streaming import router as streaming_router
+from backend.app.api.tasks_ui import router as tasks_router
+from backend.app.api.questions import router as questions_router
+from backend.app.api.file_preview import router as file_preview_router
+from backend.app.api.parallel_agents import router as parallel_agents_router
+from backend.app.api.browser_advanced import router as browser_advanced_router
+from backend.app.api.workspace import router as workspace_router
+from backend.app.api.tools_batch import router as tools_batch_router
+from backend.app.api.memory_enhanced import router as memory_enhanced_router
 from backend.app.services.browser.automation import browser_automation
 from backend.app.services.browser.playwright_client import browser_client
 from backend.app.services.memory.indexer import memory_indexer
@@ -89,7 +105,6 @@ class _RateLimiter:
             if window is None:
                 window = deque()
                 self._windows[key] = window
-            # Remove entries outside the window
             while window and window[0] < now - window_seconds:
                 window.popleft()
             if len(window) >= limit:
@@ -109,7 +124,6 @@ _rate_limiter = _RateLimiter()
 
 
 def _get_client_ip(request: Request) -> str:
-    # Do not trust X-Forwarded-For without verified proxy chain to prevent IP spoofing
     return request.client.host if request.client else "unknown"
 
 
@@ -120,7 +134,11 @@ frontend_dir = settings.static_dir
 app = FastAPI(title=settings.app_name, version="0.1.0")
 if frontend_dir.exists():
     app.mount("/assets", StaticFiles(directory=frontend_dir, html=False), name="assets")
+# Parse CORS origins from settings - never use wildcard in production
 allow_origins = [origin.strip() for origin in settings.cors_origins.split(",") if origin.strip()]
+if "*" in allow_origins and settings.app_mode == "production":
+    logger.warning("CORS wildcard detected in production mode. Using restricted origins instead.")
+    allow_origins = ["http://localhost:3000", "http://localhost:8000"]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allow_origins,
@@ -134,7 +152,6 @@ app.add_middleware(
 async def rate_limit_middleware(request: Request, call_next):
     path = request.url.path
     client_ip = _get_client_ip(request)
-    # Strict limits for auth endpoints
     if path == "/api/v1/auth/login":
         if not _rate_limiter.is_allowed(f"login:{client_ip}", limit=10, window_seconds=60):
             return JSONResponse({"detail": "Rate limit exceeded. Try again later."}, status_code=429)
@@ -202,6 +219,22 @@ app.include_router(traces_router)
 app.include_router(tools_router)
 app.include_router(users_router)
 app.include_router(workflows_router)
+app.include_router(execution_control_router)
+app.include_router(tools_control_router)
+app.include_router(memory_control_router)
+app.include_router(organization_control_router)
+app.include_router(marketplace_control_router)
+app.include_router(navigation_control_router)
+app.include_router(health_router)
+app.include_router(streaming_router)
+app.include_router(tasks_router)
+app.include_router(questions_router)
+app.include_router(file_preview_router)
+app.include_router(parallel_agents_router)
+app.include_router(browser_advanced_router)
+app.include_router(workspace_router)
+app.include_router(tools_batch_router)
+app.include_router(memory_enhanced_router)
 app.add_exception_handler(XAgentAPIError, xagent_api_error_handler)
 app.add_exception_handler(RequestValidationError, validation_error_handler)
 
@@ -218,155 +251,17 @@ async def root() -> FileResponse:
 async def entry(principal: Principal = Depends(get_current_principal)) -> dict[str, object]:
     tools = ["agent", "memory", "workflow", "browser", "desktop", "plugins", "open_source"]
     sections = [
-        {
-            "id": "workbench",
-            "label": "Workbench",
-            "href": "/api/v1/workbench",
-            "description": "统一任务入口与工具总览",
-        },
-        {
-            "id": "overview",
-            "label": "Overview",
-            "href": "/api/v1/overview/draft",
-            "description": "生成任务概览、计划、验证与恢复上下文",
-        },
-        {
-            "id": "agents",
-            "label": "Agents",
-            "href": "/api/v1/agents",
-            "description": "智能体执行与运行管理",
-        },
-        {
-            "id": "workflows",
-            "label": "Workflows",
-            "href": "/api/v1/workflows/runs",
-            "description": "工作流、时间线、补偿与回放",
-        },
-        {
-            "id": "memory",
-            "label": "Memory",
-            "href": "/api/v1/memory/search",
-            "description": "记忆检索、写入与管理",
-        },
-        {
-            "id": "traces",
-            "label": "Traces",
-            "href": "/api/v1/traces",
-            "description": "追踪、审计与复盘",
-        },
+        {"key": "overview", "label": "overview"},
+        {"key": "execution", "label": "execution"},
+        {"key": "tools", "label": "tools"},
+        {"key": "memory", "label": "memory"},
+        {"key": "organization", "label": "organization"},
+        {"key": "marketplace", "label": "marketplace"},
+        {"key": "navigation", "label": "navigation"},
+        {"key": "audit", "label": "audit"},
     ]
     return {
-        "status": "active",
-        "service": settings.app_name,
-        "mode": settings.app_mode if principal.authenticated and principal.role == "admin" else "production",
-        "entrypoint": "/",
-        "landing": "/api/v1/workbench",
+        "principal": principal.model_dump(mode="json"),
         "tools": tools,
         "sections": sections,
-        "primary_actions": [
-            {"id": "create-task", "label": "Create Task", "href": "/api/v1/workbench/tasks"},
-            {"id": "health", "label": "Health", "href": "/health"},
-            {"id": "ready", "label": "Ready", "href": "/ready"},
-        ],
-        "notes": [
-            "All major capabilities should be reachable from this entry map.",
-            "The workbench is the primary operational entry for first-version delivery.",
-        ],
     }
-
-
-@app.get("/health")
-async def health() -> dict[str, str]:
-    return {"status": "ok", "service": settings.app_name}
-
-
-@app.get("/api-key/status")
-async def api_key_status(principal: Principal = Depends(get_current_principal)) -> dict[str, object]:
-    enforce_scope(principal, "security:manage")
-    return {"require_api_key": settings.require_api_key, "service": settings.app_name}
-
-
-@app.get("/ready")
-async def ready():
-    components: dict[str, str] = {}
-    checks = {
-        "memory": _check_memory,
-        "qdrant": _check_qdrant,
-        "trace": _check_trace,
-        "runs": _check_runs,
-        "workflows": _check_workflows,
-        "audit": _check_audit,
-        "browser": _check_browser,
-        "observability": _check_observability,
-    }
-    for name, check in checks.items():
-        try:
-            await check()
-            components[name] = "ok"
-        except Exception as exc:  # noqa: BLE001 - readiness should report component failures
-            components[name] = "failed"
-            logger.warning("ready_check_failed", extra={"component": name, "error": str(exc)})
-    status = "ready" if all(value == "ok" for value in components.values()) else "degraded"
-    return JSONResponse(
-        {
-            "status": status,
-            "service": settings.app_name,
-            "components": components,
-            "integrations": {
-                "qdrant": "real" if vector_client.has_real_client else "fallback",
-                "langfuse": "real" if langfuse_client.has_real_client else "fallback",
-                "browser": "real" if browser_client.has_real_client else "fallback",
-            },
-        },
-        status_code=200 if status == "ready" else 503,
-    )
-
-
-async def _check_memory() -> None:
-    count = get_memory().count()
-    if hasattr(count, "__await__"):
-        await count
-    memory_indexer.index(tenant_id="ready-check", text="ready.memory.check", source="ready")
-    results = memory_retriever.search(tenant_id="ready-check", query="ready memory", top_k=1)
-    if results is None:
-        raise RuntimeError("memory readiness failed")
-
-
-async def _check_qdrant() -> None:
-    names = vector_client.get_collection_names()
-    if names is None:
-        raise RuntimeError("qdrant readiness failed")
-    vector_client.ensure_collection("memory")
-    if "memory" not in vector_client.get_collection_names():
-        raise RuntimeError("qdrant memory collection missing")
-
-
-async def _check_trace() -> None:
-    get_trace_store().event_count()
-
-
-async def _check_runs() -> None:
-    get_run_store().count()
-
-
-async def _check_workflows() -> None:
-    get_workflow_repository().definition_count()
-
-
-async def _check_audit() -> None:
-    get_audit_store().count()
-
-
-async def _check_browser() -> None:
-    session = browser_automation.create_session(trace_id="ready-check", run_id="ready-check")
-    try:
-        if browser_automation.get_session(session.session_id) is None:
-            raise RuntimeError("browser readiness failed")
-    finally:
-        browser_automation.close(session.session_id)
-
-
-async def _check_observability() -> None:
-    event = langfuse_client.log("ready.check", service=settings.app_name)
-    if event.type != "ready.check":
-        raise RuntimeError("observability readiness failed")

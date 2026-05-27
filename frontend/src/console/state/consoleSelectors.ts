@@ -151,15 +151,6 @@ export function selectWorkflowData(state: ConsoleState) {
   };
 }
 
-export function selectTraceData(state: ConsoleState) {
-  const linked = selectEnvelopeLinkedSummaries(state);
-  return {
-    envelope: state.envelope,
-    traceSummary: linked?.trace ?? null,
-    primary: selectEnvelopePrimary(state),
-  };
-}
-
 export function selectAuditData(state: ConsoleState) {
   const linked = selectEnvelopeLinkedSummaries(state);
   const primary = selectEnvelopePrimary(state);
@@ -173,6 +164,150 @@ export function selectAuditData(state: ConsoleState) {
     traceSummary: linked?.trace ?? null,
     primary,
   };
+}
+
+export function selectExecutionControlOverviewData(state: ConsoleState) {
+  const api = state.executionControlOverview;
+  if (api) {
+    return {
+      resourceType: api.resource_type,
+      resourceId: api.resource_id,
+      activeRuns: api.primary.active_runs,
+      pendingRuns: api.primary.pending_runs,
+      failedRuns: api.primary.failed_runs,
+      completedRuns: api.primary.completed_runs,
+      interventionCount: api.primary.intervention_count,
+      riskLevel: api.primary.risk_level,
+      dispatch: api.primary.dispatch,
+      executionPlan: api.primary.execution_plan,
+      recommendations: [{ action: api.linked_summaries.dispatch.summary.title, reason: "来自后端运行控制总览接口", confidence: "95%" }],
+      linkedDispatchSummary: api.linked_summaries.dispatch,
+      linkedExecutionSummary: api.linked_summaries.execution,
+      linkedAuditSummary: api.linked_summaries.audit,
+      linkedMessagesSummary: api.linked_summaries.messages,
+    };
+  }
+
+  const dispatch = state.dispatch;
+  const activeRuns = dispatch.pending.length ? dispatch.pending.length : dispatch.actions.length;
+  const failedRuns = dispatch.last_result ? 1 : 0;
+  const completedRuns = dispatch.actions.filter((action) => action.status === "completed").length;
+  const pendingRuns = dispatch.pending.length;
+
+  return {
+    resourceType: "execution_control_overview",
+    resourceId: state.console.session_id || state.console.user_id,
+    activeRuns,
+    pendingRuns,
+    failedRuns,
+    completedRuns,
+    interventionCount: failedRuns ? 1 : 0,
+    riskLevel: failedRuns ? "中等" : "低",
+    dispatch,
+    executionPlan: dispatch.last_result ? { task_id: dispatch.last_result.task_id } : null,
+    recommendations: failedRuns
+      ? [
+          { action: "优先重试失败任务", reason: "当前存在失败结果", confidence: "92%" },
+          { action: "打开恢复页面", reason: "便于快速处理异常", confidence: "88%" },
+        ]
+      : [{ action: "继续监控活跃执行", reason: "当前没有明显失败", confidence: "90%" }],
+    linkedDispatchSummary: { summary: { title: "dispatch" }, data: dispatch as unknown as Record<string, unknown> },
+    linkedExecutionSummary: { summary: { title: "execution" }, data: (dispatch.last_result as unknown as Record<string, unknown>) ?? {} },
+    linkedAuditSummary: { summary: { title: "audit" }, data: {} },
+    linkedMessagesSummary: { summary: { title: "messages" }, data: {} },
+  };
+}
+
+export function selectExecutionControlDetailData(state: ConsoleState) {
+  return {
+    runId: state.selectedWorkflowId ?? state.dispatch.last_result?.task_id ?? "run-001",
+    summary: {
+      name: "工具调用工作流",
+      status: "运行中",
+      triggerSource: "工作流调度",
+      owner: state.console.agent_id || state.console.user_id,
+    },
+    steps: [
+      { name: "接收任务", status: "done", duration: "2s", result: "已进入队列" },
+      { name: "生成计划", status: "done", duration: "8s", result: "已完成规划" },
+      { name: "调用工具", status: "running", duration: "18s", result: "等待工具返回" },
+      { name: "汇总结果", status: "pending", duration: "-", result: "未开始" },
+    ],
+    toolCalls: [
+      { tool: "dispatch", time: "10:12", status: "success", cost: "120ms" },
+      { tool: "memory.read", time: "10:13", status: "success", cost: "32ms" },
+      { tool: "tool.execute", time: "10:14", status: "running", cost: "pending" },
+    ],
+    linkedTitles: {
+      messages: "关联消息",
+      audit: "审计记录",
+      memory: "记忆引用",
+    },
+  };
+}
+
+export function selectExecutionControlRecoveryData(state: ConsoleState) {
+  return {
+    runId: state.selectedAuditMessageId ?? state.dispatch.last_result?.task_id ?? "run-003",
+    failure: {
+      status: "可恢复",
+      level: "中",
+      currentStep: "工具执行步骤",
+      canRetry: true,
+    },
+    reasons: [
+      { title: "外部工具超时", detail: "工具调用等待超过阈值，当前最适合优先重试。", level: "中" },
+      { title: "输入参数缺失", detail: "上游节点未提供完整参数，需要人工确认。", level: "高" },
+    ],
+    recoverySummary: {
+      before: "失败",
+      after: "待重试",
+      suggestion: "先重试，再确认外部依赖。",
+    },
+    recommendation: "恢复建议：优先检查外部工具是否恢复。",
+  };
+}
+
+export function selectExecutionControlDispatchData(state: ConsoleState) {
+  return {
+    runId: state.selectedWorkflowId ?? state.dispatch.last_result?.task_id ?? "execution-control",
+    recommendation: {
+      action: "优先重试工具调用",
+      confidence: "92%",
+      risk: "低",
+      requiresConfirmation: false,
+    },
+    recommendations: [
+      { action: "优先重试工具调用", reason: "当前失败集中在外部工具超时，重试收益最高。", confidence: "92%", risk: "低" },
+      { action: "等待人工确认", reason: "当外部依赖不稳定时避免连续自动重试。", confidence: "76%", risk: "中" },
+    ],
+    reasoning: {
+      trigger: "工具超时 / 任务卡住",
+      relatedModules: "工作流、消息、审计、记忆",
+      summary: "当前失败点集中在单一外部依赖。",
+    },
+    impact: {
+      expectedResult: "恢复执行并继续当前任务",
+      sideEffect: "重复执行消耗额外资源",
+      scope: "当前任务及其相关工作流节点",
+    },
+  };
+}
+
+export function selectExecutionOverviewData(state: ConsoleState) {
+  return selectExecutionControlOverviewData(state);
+}
+
+export function selectExecutionDetailData(state: ConsoleState) {
+  return selectExecutionControlDetailData(state);
+}
+
+export function selectExecutionRecoveryData(state: ConsoleState) {
+  return selectExecutionControlRecoveryData(state);
+}
+
+export function selectExecutionDispatchData(state: ConsoleState) {
+  return selectExecutionControlDispatchData(state);
 }
 
 export function selectShellUiData(state: ConsoleState) {
@@ -193,9 +328,17 @@ export function selectShellUiData(state: ConsoleState) {
                   ? "角色目录"
                   : state.activePage === "workflow"
                     ? "工作流"
-                    : state.activePage === "audit"
-                      ? "审计回放"
-                      : state.activePage,
+                    : state.activePage === "execution_overview"
+                      ? "运行控制"
+                      : state.activePage === "execution_detail"
+                        ? "执行详情"
+                        : state.activePage === "execution_recovery"
+                          ? "失败恢复"
+                          : state.activePage === "execution_dispatch"
+                            ? "调度建议"
+                            : state.activePage === "audit"
+                              ? "审计回放"
+                              : state.activePage,
     orgName: state.envelope?.primary?.organization_graph && typeof state.envelope.primary.organization_graph === "object"
       ? (state.envelope.primary.organization_graph as OrganizationGraphView).organization?.name ?? "统一控制台"
       : state.organizationGraph?.organization?.name ?? "统一控制台",

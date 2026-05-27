@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from backend.app.core.contracts import ExecutionFrame, PlanFrame, RecoveryFrame, TaskFrame, ToolDecision
+from backend.app.core.capability_strategies import CapabilityRegistry
 
 
 @dataclass
@@ -23,27 +24,49 @@ class OrchestrationContext:
 
 
 class CapabilityRouter:
-    def route(self, context: OrchestrationContext) -> CapabilityDecision:
-        metadata = context.metadata
-        workflow = metadata.get("workflow", {}) if isinstance(metadata.get("workflow"), dict) else {}
-        approval = metadata.get("approval", {}) if isinstance(metadata.get("approval"), dict) else {}
-        browser = metadata.get("browser", {}) if isinstance(metadata.get("browser"), dict) else {}
-        desktop = metadata.get("desktop", {}) if isinstance(metadata.get("desktop"), dict) else {}
-        task_text = f"{context.task.goal} {context.task.description} {metadata.get('task', '')}".lower()
+    """
+    Routes orchestration contexts to appropriate capabilities using strategy pattern.
 
-        if approval.get("pending_count", 0) or context.task.requires_approval:
-            return CapabilityDecision(name="approval", reason="approval boundary detected", metadata={"approval": approval, "workflow": workflow, "browser": browser, "desktop": desktop})
-        if browser.get("active_count", 0) or "browser" in task_text:
-            return CapabilityDecision(name="browser", reason="browser context detected", metadata={"browser": browser, "workflow": workflow, "approval": approval, "desktop": desktop})
-        if desktop.get("active_count", 0) or "desktop" in task_text:
-            return CapabilityDecision(name="desktop", reason="desktop context detected", metadata={"desktop": desktop, "workflow": workflow, "approval": approval, "browser": browser})
-        if workflow:
-            return CapabilityDecision(name="workflow", reason="workflow context detected", metadata={"workflow": workflow, "approval": approval, "browser": browser, "desktop": desktop})
-        if any(token in task_text for token in ["memory", "remember", "recall"]):
-            return CapabilityDecision(name="memory", reason="memory intent detected", metadata={"memory": metadata.get("memory", {}), "workflow": workflow, "approval": approval, "browser": browser, "desktop": desktop})
-        if any(token in task_text for token in ["trace", "audit", "observe", "report"]):
-            return CapabilityDecision(name="observe", reason="observability intent detected", metadata={"trace": metadata.get("trace", {}), "workflow": workflow, "approval": approval, "browser": browser, "desktop": desktop})
-        return CapabilityDecision(name="agent", reason="default agent execution", metadata={"task": context.task.model_dump(mode="json")})
+    Replaces nested if-statements with composable, testable strategy objects.
+    Supports dynamic strategy registration and priority-based routing.
+    """
+
+    def __init__(self, registry: CapabilityRegistry | None = None) -> None:
+        """
+        Initialize the router with a capability registry.
+
+        Args:
+            registry: Optional custom registry. If None, uses default registry.
+        """
+        self._registry = registry or CapabilityRegistry()
+
+    async def route(self, context: OrchestrationContext) -> CapabilityDecision:
+        """
+        Route context to appropriate capability using registered strategies.
+
+        Args:
+            context: The orchestration context to route
+
+        Returns:
+            A CapabilityDecision from the first matching strategy
+
+        Raises:
+            ValueError: If no strategy can handle the context
+        """
+        return await self._registry.route(context)
+
+    def register_strategy(self, strategy) -> None:
+        """
+        Register a new capability strategy.
+
+        Args:
+            strategy: The strategy to register
+        """
+        self._registry.register(strategy)
+
+    def get_registry(self) -> CapabilityRegistry:
+        """Get the underlying capability registry."""
+        return self._registry
 
 
 class ContextHub:
@@ -146,9 +169,9 @@ class Orchestrator:
         self.planning_engine = planning_engine or PlanningEngine()
         self.tool_selection_engine = tool_selection_engine or ToolSelectionEngine()
 
-    def prepare(self, task: TaskFrame, execution: ExecutionFrame | None = None, *, metadata: dict[str, Any] | None = None) -> tuple[OrchestrationContext, CapabilityDecision, RecoveryFrame]:
+    async def prepare(self, task: TaskFrame, execution: ExecutionFrame | None = None, *, metadata: dict[str, Any] | None = None) -> tuple[OrchestrationContext, CapabilityDecision, RecoveryFrame]:
         context = self.context_hub.build(task, execution, metadata=metadata)
-        decision = self.router.route(context)
+        decision = await self.router.route(context)
         recovery = self.recovery_engine.decide(context)
         return context, decision, recovery
 

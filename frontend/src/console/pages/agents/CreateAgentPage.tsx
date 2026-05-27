@@ -9,6 +9,7 @@ export type CreateAgentPageProps = {
   initialRoomId?: string;
   onCreateAgent: (payload: AgentCreatePayload) => Promise<void>;
   onPreviewWorkflow?: (roleTemplateId: string) => void;
+  onPreviewTools?: (roleTemplateId: string) => void;
   onCancel?: () => void;
 };
 
@@ -156,8 +157,8 @@ export function CreateAgentPage(props: CreateAgentPageProps) {
 
       <aside className="space-y-4 rounded-2xl border bg-white p-4 shadow-sm">
         <section><h3 className="font-semibold">角色形象</h3><div className="mt-3 flex items-center gap-3"><div className="h-16 w-16 rounded-full bg-gradient-to-br from-gray-200 to-gray-300" /><div><div className="font-medium">{selectedAvatar?.display_name ?? "默认形象"}</div><div className="text-xs text-gray-500">{selectedAvatar?.style ?? "business"}</div></div></div></section>
-        <section><h3 className="font-semibold">工作流预览</h3><ul className="mt-3 space-y-2 text-sm text-gray-600">{workflow?.steps?.map((step) => <li key={step} className="rounded-lg border px-3 py-2">{step}</li>) ?? <li className="text-gray-400">暂无工作流</li>}</ul></section>
-        <section><h3 className="font-semibold">岗位能力</h3><div className="mt-3 flex flex-wrap gap-2">{selectedTemplate?.core_skills?.map((skill) => <span key={skill} className="rounded-full bg-blue-50 px-2 py-1 text-xs text-blue-700">{skill}</span>) ?? <span className="text-sm text-gray-400">暂无技能</span>}</div></section>
+        <section><h3 className="font-semibold">工作流预览</h3><ul className="mt-3 space-y-2 text-sm text-gray-600">{workflow?.steps?.map((step) => <li key={step} className="rounded-lg border px-3 py-2">{step}</li>) ?? <li className="text-gray-400">暂无工作流</li>}</ul><button className="mt-3 rounded-lg border px-3 py-2 text-sm hover:bg-gray-50" onClick={() => props.onPreviewWorkflow?.(form.roleTemplateId)}>预览工作流</button></section>
+        <section><h3 className="font-semibold">岗位能力</h3><div className="mt-3 flex flex-wrap gap-2">{selectedTemplate?.core_skills?.map((skill) => <span key={skill} className="rounded-full bg-blue-50 px-2 py-1 text-xs text-blue-700">{skill}</span>) ?? <span className="text-sm text-gray-400">暂无技能</span>}</div><button className="mt-3 rounded-lg border px-3 py-2 text-sm hover:bg-gray-50" onClick={() => props.onPreviewTools?.(form.roleTemplateId)}>查看工具映射</button></section>
       </aside>
     </div>
   );

@@ -1,0 +1,167 @@
+# Helm values for production environment
+global:
+  environment: production
+  logLevel: WARNING
+  debug: false
+
+image:
+  repository: your-registry/xagent
+  tag: latest
+  pullPolicy: Always
+
+api:
+  enabled: true
+  replicas: 5
+  port: 8000
+  workers: 4
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "250m"
+    limits:
+      memory: "1Gi"
+      cpu: "500m"
+  autoscaling:
+    enabled: true
+    minReplicas: 5
+    maxReplicas: 20
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+
+worker:
+  enabled: true
+  replicas: 4
+  concurrency: 4
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "250m"
+    limits:
+      memory: "1Gi"
+      cpu: "500m"
+  autoscaling:
+    enabled: true
+    minReplicas: 4
+    maxReplicas: 12
+    targetCPUUtilizationPercentage: 75
+    targetMemoryUtilizationPercentage: 80
+
+beat:
+  enabled: true
+  replicas: 1
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "100m"
+    limits:
+      memory: "512Mi"
+      cpu: "200m"
+
+postgres:
+  enabled: true
+  image: postgres:16-alpine
+  port: 5432
+  storage: 50Gi
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "500m"
+    limits:
+      memory: "1Gi"
+      cpu: "1000m"
+
+redis:
+  enabled: true
+  image: redis:7-alpine
+  port: 6379
+  storage: 10Gi
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "100m"
+    limits:
+      memory: "512Mi"
+      cpu: "200m"
+
+qdrant:
+  enabled: true
+  image: qdrant/qdrant:latest
+  port: 6333
+  storage: 50Gi
+  resources:
+    requests:
+      memory: "1Gi"
+      cpu: "500m"
+    limits:
+      memory: "2Gi"
+      cpu: "1000m"
+
+neo4j:
+  enabled: true
+  image: neo4j:5-community
+  port: 7687
+  storage: 50Gi
+  resources:
+    requests:
+      memory: "2Gi"
+      cpu: "1000m"
+    limits:
+      memory: "4Gi"
+      cpu: "2000m"
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+  hosts:
+    - host: api.xagent.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: xagent-tls
+      hosts:
+        - api.xagent.example.com
+
+service:
+  type: ClusterIP
+  port: 8000
+
+secrets:
+  dbUser: xagent
+  dbPassword: CHANGE_ME_IN_PRODUCTION
+  redisPassword: CHANGE_ME_IN_PRODUCTION
+  qdrantApiKey: CHANGE_ME_IN_PRODUCTION
+  neo4jPassword: CHANGE_ME_IN_PRODUCTION
+  secretKey: CHANGE_ME_IN_PRODUCTION_USE_STRONG_RANDOM_KEY
+
+database:
+  name: xagent_db
+  port: 5432
+
+redis:
+  port: 6379
+
+qdrant:
+  port: 6333
+
+neo4j:
+  user: neo4j
+  port: 7687
+
+monitoring:
+  enabled: true
+  prometheus:
+    enabled: true
+    port: 9090
+  grafana:
+    enabled: true
+    port: 3000
+
+backup:
+  enabled: true
+  schedule: "0 2 * * *"
+  retention: 30

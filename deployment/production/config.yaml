@@ -1,0 +1,93 @@
+environment: production
+
+database:
+  host: ${DB_HOST:prod-db.example.com}
+  port: ${DB_PORT:5432}
+  name: ${DB_NAME:xagent_prod}
+  user: ${DB_USER:xagent}
+  password: ${DB_PASSWORD}
+  pool_size: ${DB_POOL_SIZE:20}
+  max_overflow: ${DB_MAX_OVERFLOW:10}
+  ssl_mode: require
+  connection_timeout: 30
+  statement_timeout: 300000
+
+redis:
+  host: ${REDIS_HOST:prod-redis.example.com}
+  port: ${REDIS_PORT:6379}
+  db: ${REDIS_DB:0}
+  password: ${REDIS_PASSWORD}
+  max_connections: ${REDIS_MAX_CONNECTIONS:50}
+  socket_timeout: 5
+  socket_connect_timeout: 5
+
+qdrant:
+  host: ${QDRANT_HOST:prod-qdrant.example.com}
+  port: ${QDRANT_PORT:6333}
+  api_key: ${QDRANT_API_KEY}
+  timeout: 30
+  prefer_grpc: true
+
+neo4j:
+  uri: ${NEO4J_URI:bolt://prod-neo4j.example.com:7687}
+  user: ${NEO4J_USER:neo4j}
+  password: ${NEO4J_PASSWORD}
+  encrypted: true
+  trust: TRUST_ALL_CERTIFICATES
+
+security:
+  secret_key: ${SECRET_KEY}
+  jwt_expiration: 3600
+  jwt_algorithm: HS256
+  cors_origins:
+    - https://app.example.com
+    - https://api.example.com
+  allowed_hosts:
+    - api.example.com
+    - app.example.com
+  rate_limit:
+    enabled: true
+    requests_per_minute: 100
+    burst_size: 20
+
+logging:
+  level: INFO
+  format: json
+  output: /var/log/xagent/app.log
+  max_size: 100M
+  backup_count: 10
+  syslog_enabled: true
+  syslog_host: localhost
+  syslog_port: 514
+
+monitoring:
+  prometheus_enabled: true
+  prometheus_port: 9090
+  jaeger_enabled: true
+  jaeger_host: ${JAEGER_HOST:prod-jaeger.example.com}
+  jaeger_port: ${JAEGER_PORT:6831}
+  sentry_enabled: true
+  sentry_dsn: ${SENTRY_DSN}
+  sentry_environment: production
+  sentry_traces_sample_rate: 0.1
+
+performance:
+  worker_threads: 4
+  max_concurrent_tasks: 100
+  task_timeout: 3600
+  cache_ttl: 3600
+
+backup:
+  enabled: true
+  schedule: "0 2 * * *"
+  retention_days: 30
+  backup_path: /backups
+  s3_enabled: true
+  s3_bucket: ${S3_BACKUP_BUCKET}
+  s3_region: ${S3_REGION:us-east-1}
+
+health_check:
+  enabled: true
+  interval: 30
+  timeout: 10
+  startup_delay: 40

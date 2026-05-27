@@ -1,0 +1,184 @@
+groups:
+  - name: x-agent-alerts
+    interval: 30s
+    rules:
+      # API Performance Alerts
+      - alert: HighAPILatency
+        expr: histogram_quantile(0.95, rate(xagent_api_request_duration_seconds_bucket[5m])) > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High API latency detected"
+          description: "API P95 latency is {{ $value }}ms (threshold: 1000ms)"
+
+      - alert: CriticalAPILatency
+        expr: histogram_quantile(0.99, rate(xagent_api_request_duration_seconds_bucket[5m])) > 5
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical API latency detected"
+          description: "API P99 latency is {{ $value }}ms (threshold: 5000ms)"
+
+      # Error Rate Alerts
+      - alert: HighErrorRate
+        expr: rate(xagent_errors_total[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High error rate detected"
+          description: "Error rate is {{ $value }} errors/sec (threshold: 0.05)"
+
+      - alert: CriticalErrorRate
+        expr: rate(xagent_errors_total[5m]) > 0.1
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical error rate detected"
+          description: "Error rate is {{ $value }} errors/sec (threshold: 0.1)"
+
+      # Agent Execution Alerts
+      - alert: HighAgentFailureRate
+        expr: rate(xagent_agent_runs_total{status="failed"}[5m]) / rate(xagent_agent_runs_total[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High agent failure rate"
+          description: "Agent failure rate is {{ $value | humanizePercentage }} (threshold: 10%)"
+
+      - alert: AgentRunTimeout
+        expr: histogram_quantile(0.95, rate(xagent_agent_run_duration_seconds_bucket[5m])) > 300
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Agent runs taking too long"
+          description: "Agent P95 duration is {{ $value }}s (threshold: 300s)"
+
+      # Database Alerts
+      - alert: HighDatabaseLatency
+        expr: histogram_quantile(0.95, rate(xagent_db_query_duration_seconds_bucket[5m])) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High database query latency"
+          description: "Database P95 latency is {{ $value }}s (threshold: 0.5s)"
+
+      - alert: DatabaseConnectionPoolExhausted
+        expr: xagent_db_connections_active / xagent_db_connection_pool_size > 0.9
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Database connection pool nearly exhausted"
+          description: "Connection pool usage is {{ $value | humanizePercentage }} (threshold: 90%)"
+
+      - alert: DatabaseConnectionPoolFull
+        expr: xagent_db_connections_active >= xagent_db_connection_pool_size
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Database connection pool exhausted"
+          description: "All {{ $value }} connections are in use"
+
+      # Memory Alerts
+      - alert: HighMemoryUsage
+        expr: xagent_system_memory_usage_bytes / 1024 / 1024 / 1024 > 8
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage"
+          description: "Memory usage is {{ $value }}GB (threshold: 8GB)"
+
+      - alert: CriticalMemoryUsage
+        expr: xagent_system_memory_usage_bytes / 1024 / 1024 / 1024 > 15
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical memory usage"
+          description: "Memory usage is {{ $value }}GB (threshold: 15GB)"
+
+      # Cache Alerts
+      - alert: LowCacheHitRate
+        expr: rate(xagent_cache_hits_total[5m]) / (rate(xagent_cache_hits_total[5m]) + rate(xagent_cache_misses_total[5m])) < 0.5
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Low cache hit rate"
+          description: "Cache hit rate is {{ $value | humanizePercentage }} (threshold: 50%)"
+
+      # Tool Execution Alerts
+      - alert: HighToolFailureRate
+        expr: rate(xagent_tool_executions_total{status="failed"}[5m]) / rate(xagent_tool_executions_total[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High tool execution failure rate"
+          description: "Tool failure rate is {{ $value | humanizePercentage }} (threshold: 5%)"
+
+      - alert: SlowToolExecution
+        expr: histogram_quantile(0.95, rate(xagent_tool_execution_duration_seconds_bucket[5m])) > 30
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Slow tool execution detected"
+          description: "Tool P95 execution time is {{ $value }}s (threshold: 30s)"
+
+      # Health Check Alerts
+      - alert: ComponentUnhealthy
+        expr: xagent_health_check_status == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Component unhealthy"
+          description: "Component {{ $labels.component }} is unhealthy"
+
+      # Request Volume Alerts
+      - alert: UnusuallyLowRequestVolume
+        expr: rate(xagent_api_requests_total[5m]) < 1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Unusually low request volume"
+          description: "Request rate is {{ $value }} req/sec (expected: >1)"
+
+      - alert: UnusuallyHighRequestVolume
+        expr: rate(xagent_api_requests_total[5m]) > 1000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Unusually high request volume"
+          description: "Request rate is {{ $value }} req/sec (threshold: 1000)"
+
+      # Workflow Alerts
+      - alert: HighWorkflowFailureRate
+        expr: rate(xagent_workflow_runs_total{status="failed"}[5m]) / rate(xagent_workflow_runs_total[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High workflow failure rate"
+          description: "Workflow failure rate is {{ $value | humanizePercentage }} (threshold: 10%)"
+
+      - alert: LongRunningWorkflow
+        expr: histogram_quantile(0.95, rate(xagent_workflow_run_duration_seconds_bucket[5m])) > 600
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Long-running workflow detected"
+          description: "Workflow P95 duration is {{ $value }}s (threshold: 600s)"

@@ -11,6 +11,7 @@ export type RealtimeChatPageProps = {
   onMessageSent?: () => void;
   onOpenAudit?: (messageId?: string) => void;
   onOpenRoom?: (roomId: string) => void;
+  onOpenMessageThread?: (messageId: string) => void;
 };
 
 export function RealtimeChatPage(props: RealtimeChatPageProps) {
@@ -84,7 +85,7 @@ export function RealtimeChatPage(props: RealtimeChatPageProps) {
               </div>
             </header>
             <section className="mt-4 min-h-[420px]">
-              <ChatThreadPanel messages={visibleMessages} avatars={props.avatars} currentUserId={props.currentSenderId} onOpenAudit={props.onOpenAudit} onOpenRoom={props.onOpenRoom} />
+              <ChatThreadPanel messages={visibleMessages} avatars={props.avatars} currentUserId={props.currentSenderId} onOpenAudit={props.onOpenAudit} onOpenRoom={props.onOpenRoom} onOpenMessageThread={props.onOpenMessageThread} />
             </section>
             <section className="mt-4">
               <ChatComposer onSend={handleSendMessage} />
@@ -102,7 +103,7 @@ export function RealtimeChatPage(props: RealtimeChatPageProps) {
   );
 }
 
-function ChatThreadPanel({ messages, avatars, currentUserId, onOpenAudit, onOpenRoom }: { messages: RealtimeMessage[]; avatars: RoleAvatar[]; currentUserId?: string; onOpenAudit?: (messageId?: string) => void; onOpenRoom?: (roomId: string) => void; }) {
+function ChatThreadPanel({ messages, avatars, currentUserId, onOpenAudit, onOpenRoom, onOpenMessageThread }: { messages: RealtimeMessage[]; avatars: RoleAvatar[]; currentUserId?: string; onOpenAudit?: (messageId?: string) => void; onOpenRoom?: (roomId: string) => void; onOpenMessageThread?: (messageId: string) => void; }) {
   return (
     <div className="space-y-3">
       {messages.length ? messages.map((message) => {
@@ -115,6 +116,7 @@ function ChatThreadPanel({ messages, avatars, currentUserId, onOpenAudit, onOpen
             {message.references?.length ? <div className="mt-2 text-xs text-blue-600">引用：{message.references.join(", ")}</div> : null}
             <div className="mt-3 flex flex-wrap gap-2">
               <button className="rounded-lg border px-2 py-1 text-xs hover:bg-gray-50" onClick={() => onOpenAudit?.(message.message_id)}>查看审计</button>
+              <button className="rounded-lg border px-2 py-1 text-xs hover:bg-gray-50" onClick={() => onOpenMessageThread?.(message.message_id)}>查看线程</button>
               {message.room_id ? <button className="rounded-lg border px-2 py-1 text-xs hover:bg-gray-50" onClick={() => onOpenRoom?.(message.room_id)}>打开房间</button> : null}
             </div>
           </div>

@@ -45,22 +45,6 @@ class ConsoleContext(BaseModel):
     server_time: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
-class ConsoleBootstrapResponse(BaseModel):
-    console: ConsoleContext
-    dispatch: dict[str, object] = Field(default_factory=dict)
-    role_catalog: RoleCatalog = Field(default_factory=RoleCatalog)
-    organization_graph: dict[str, object] = Field(default_factory=dict)
-    meeting_rooms: dict[str, object] = Field(default_factory=dict)
-    realtime: dict[str, object] = Field(default_factory=dict)
-    ui: dict[str, object] = Field(default_factory=dict)
-    avatars: list[RoleAvatar] = Field(default_factory=list)
-    workflows: dict[str, object] = Field(default_factory=dict)
-    memory: dict[str, object] = Field(default_factory=dict)
-    permissions: dict[str, object] = Field(default_factory=dict)
-    trace_id: str = Field(default_factory=lambda: str(uuid4()))
-    server_time: datetime = Field(default_factory=lambda: datetime.now(UTC))
-
-
 class RoleCategory(StrEnum):
     LEADERSHIP = "leadership"
     FINANCE = "finance"
@@ -165,6 +149,22 @@ class RoleCatalog(BaseModel):
     role_groups: dict[str, list[str]] = Field(default_factory=dict)
     role_index: dict[str, str] = Field(default_factory=dict)
     avatar_map: dict[str, str] = Field(default_factory=dict)
+
+
+class ConsoleBootstrapResponse(BaseModel):
+    console: ConsoleContext
+    dispatch: dict[str, object] = Field(default_factory=dict)
+    role_catalog: RoleCatalog = Field(default_factory=RoleCatalog)
+    organization_graph: dict[str, object] = Field(default_factory=dict)
+    meeting_rooms: dict[str, object] = Field(default_factory=dict)
+    realtime: dict[str, object] = Field(default_factory=dict)
+    ui: dict[str, object] = Field(default_factory=dict)
+    avatars: list[RoleAvatar] = Field(default_factory=list)
+    workflows: dict[str, object] = Field(default_factory=dict)
+    memory: dict[str, object] = Field(default_factory=dict)
+    permissions: dict[str, object] = Field(default_factory=dict)
+    trace_id: str = Field(default_factory=lambda: str(uuid4()))
+    server_time: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class Organization(BaseModel):
@@ -443,6 +443,7 @@ def build_default_role_catalog() -> RoleCatalog:
             can_join_meetings=True,
         ),
     ]
+    role_index = {template.role_name: template.role_id for template in templates}
     workflows = [
         RoleWorkflowTemplate(role_template_id=templates[1].role_id, workflow_name="短剧导演工作流", steps=["故事党纲输入", "剧本生成", "用户审核", "分镜脚本生成", "故事板生成", "制作清单", "短视频制作建议", "发布建议"], review_steps=["剧本审核", "分镜审核", "故事板审核"], approval_steps=["剧本确认", "分镜确认", "成片确认"], input_contract=["故事党纲", "故事方向", "受众", "平台要求", "时长要求"], output_contract=["剧本", "分镜脚本", "故事板", "短视频制作清单"], example_prompts=["根据这个故事党纲生成短剧剧本"], example_outputs=["输出三幕式剧本、人物关系和冲突点"], validation_rules=["必须包含冲突点", "必须可拍摄", "必须能剪辑成短视频"], handoff_rules=["剧本确认后进入分镜", "分镜确认后进入故事板"], escalation_rules=["重大改稿升级总经理"], required_tools=["browser", "desktop", "memory"], required_plugins=["script_writing", "storyboard", "video_planning"], required_apps=["meeting_room", "video_pipeline"], checkpoints=["剧本确认", "分镜确认", "故事板确认", "制作清单确认"], artifacts=["剧本", "分镜脚本", "故事板", "拍摄清单"], estimated_steps=8),
         RoleWorkflowTemplate(role_template_id=templates[2].role_id, workflow_name="财务会计工作流", steps=["单据接收", "合规检查", "费用分类", "预算核对", "生成财务摘要", "提交审核"], review_steps=["票据复核", "预算复核"], approval_steps=["超预算审批", "异常支出审批"], input_contract=["发票", "报销单", "预算表"], output_contract=["财务摘要", "报销清单", "预算差异分析"], validation_rules=["金额必须匹配", "类别必须正确", "必须保留票据编号"], required_tools=["table", "ocr", "document"], required_plugins=["invoice", "budget", "expense_review"], required_apps=["finance_board"], checkpoints=["合规通过", "预算通过", "摘要确认"], artifacts=["报销清单", "预算差异分析"], estimated_steps=6),
@@ -453,7 +454,6 @@ def build_default_role_catalog() -> RoleCatalog:
         RoleWorkflowTemplate(role_template_id=role_index.get("销售经理", templates[0].role_id), workflow_name="销售经理工作流", steps=["线索分配", "需求确认", "方案报价", "谈判推进", "签约跟进"], review_steps=["商机复核", "报价复核"], approval_steps=["折扣审批", "合同审批"], input_contract=["客户需求", "销售目标", "报价策略"], output_contract=["客户方案", "报价单", "签约跟进记录"], validation_rules=["方案必须可成交", "报价必须有依据"], required_tools=["crm", "memory", "document"], required_plugins=["lead_tracking", "deal_pipeline"], required_apps=["sales_board"], checkpoints=["需求确认", "报价确认", "签约确认"], artifacts=["报价单", "跟进记录"], estimated_steps=5),
         RoleWorkflowTemplate(role_template_id=role_index.get("HR", templates[0].role_id), workflow_name="HR 工作流", steps=["岗位需求", "简历筛选", "面试安排", "面试反馈", "录用办理"], review_steps=["岗位复核", "面试复核"], approval_steps=["录用审批"], input_contract=["岗位说明", "候选人简历", "面试反馈"], output_contract=["面试安排", "录用建议", "入职清单"], validation_rules=["岗位必须明确", "候选人必须匹配"], required_tools=["document", "calendar", "memory"], required_plugins=["resume_screening", "interview_scheduler"], required_apps=["hr_board"], checkpoints=["筛选确认", "面试确认", "录用确认"], artifacts=["面试安排", "录用建议"], estimated_steps=5),
     ]
-    role_index = {template.role_name: template.role_id for template in templates}
     role_groups = {
         "leadership": [templates[0].role_id],
         "content": [templates[1].role_id],

@@ -1,0 +1,17 @@
+apiVersion: v2
+name: xagent
+description: X-Agent Production Deployment Helm Chart
+type: application
+version: 1.0.0
+appVersion: "0.1.0"
+keywords:
+  - xagent
+  - ai
+  - agent
+  - fastapi
+home: https://github.com/xagent/xagent
+sources:
+  - https://github.com/xagent/xagent
+maintainers:
+  - name: X-Agent Team
+    email: team@xagent.dev

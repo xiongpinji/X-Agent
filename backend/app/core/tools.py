@@ -17,28 +17,89 @@ from backend.app.core.contracts import RiskLevel, RunContext, ToolCallRecord, To
 from backend.app.core.policy import ToolPolicyEngine
 from backend.app.settings import PROJECT_ROOT
 
+# Import parallel execution components (lazy import to avoid circular dependencies)
+_parallel_executor = None
+_tool_result_cache = None
+
 ToolHandler = Callable[..., Awaitable[Any]]
 
 
+# Forbidden paths that should never be accessed
+_FORBIDDEN_PATHS = {
+    "/etc",
+    "/sys",
+    "/proc",
+    "/dev",
+    "/boot",
+    "/root",
+    "/var/log",
+    "/var/spool",
+    "/tmp",
+    "/var/tmp",
+}
+
+
+def _is_path_forbidden(path: Path) -> bool:
+    """Check if path is in forbidden system directories."""
+    path_str = str(path).lower()
+    for forbidden in _FORBIDDEN_PATHS:
+        if path_str.startswith(forbidden.lower()):
+            return True
+    return False
+
+
 def _resolve_tool_path(path: str) -> Path:
-    """Restrict file paths to the project root to prevent traversal attacks."""
+    """Restrict file paths to the project root to prevent traversal attacks.
+
+    Security checks:
+    - Path must be within PROJECT_ROOT
+    - Path must not contain symlinks pointing outside PROJECT_ROOT
+    - Path must not be in forbidden system directories
+    """
     base = Path(PROJECT_ROOT).resolve()
     target = Path(path).expanduser().resolve()
+
+    # Check if path is in forbidden directories
+    if _is_path_forbidden(target):
+        raise PermissionError(f"Access to system directory forbidden: {target}")
+
+    # Verify path is within project root
     try:
         target.relative_to(base)
     except ValueError:
         raise PermissionError(f"Path must be within project directory: {base}")
+
+    # Check for symlink attacks
+    if target.is_symlink():
+        real_target = target.resolve()
+        try:
+            real_target.relative_to(base)
+        except ValueError:
+            raise PermissionError(f"Symlink target must be within project directory: {real_target}")
+
     return target
 
 
 def _resolve_tool_root(root: str) -> Path:
-    """Restrict directory roots to the project root to prevent traversal attacks."""
+    """Restrict directory roots to the project root to prevent traversal attacks.
+
+    Security checks:
+    - Root must be within PROJECT_ROOT
+    - Root must not be in forbidden system directories
+    """
     base = Path(PROJECT_ROOT).resolve()
     target = Path(root).expanduser().resolve()
+
+    # Check if path is in forbidden directories
+    if _is_path_forbidden(target):
+        raise PermissionError(f"Access to system directory forbidden: {target}")
+
+    # Verify root is within project root
     try:
         target.relative_to(base)
     except ValueError:
         raise PermissionError(f"Root must be within project directory: {base}")
+
     return target
 
 
@@ -319,6 +380,134 @@ class ToolRegistry:
 
     def get_execution_store(self) -> ToolExecutionStore | None:
         return self._execution_store
+
+    async def execute_batch(
+        self,
+        context: RunContext,
+        tool_calls: list[dict[str, Any]],
+        allow_partial_failure: bool = True,
+    ) -> list[ToolCallRecord]:
+        """Execute multiple tool calls in parallel.
+
+        Args:
+            context: Execution context
+            tool_calls: List of dicts with 'name' and 'arguments' keys
+            allow_partial_failure: If False, stop on first failure
+
+        Returns:
+            List of ToolCallRecord objects
+        """
+        # Import here to avoid circular dependencies
+        from backend.app.core.parallel_tool_executor import ParallelToolExecutor, ToolCall
+
+        # Initialize parallel executor if needed
+        executor = ParallelToolExecutor(
+            tool_registry=self,
+            cache=self._get_or_create_cache(),
+            max_concurrent=10,
+        )
+
+        # Convert to ToolCall objects
+        calls = [
+            ToolCall(
+                tool_name=call.get("name", ""),
+                arguments=call.get("arguments", {}),
+            )
+            for call in tool_calls
+        ]
+
+        # Execute in parallel
+        results = await executor.execute_batch(calls, context, allow_partial_failure)
+
+        # Convert to ToolCallRecord objects
+        records = []
+        for result in results:
+            record = ToolCallRecord(
+                tool_name=result.tool_name,
+                success=result.success,
+                output=result.output,
+                error=result.error,
+                policy=self._approved_execution_verdict(
+                    allowed=result.success,
+                    reason="Batch execution" if result.success else result.error or "Unknown error",
+                ),
+                risk_level=RiskLevel.LOW,
+                latency_ms=result.latency_ms,
+                trace_id=context.trace_id,
+                request_id=context.request_id,
+            )
+            records.append(record)
+
+        return records
+
+    async def execute_batch_with_dependencies(
+        self,
+        context: RunContext,
+        tool_calls: list[dict[str, Any]],
+        allow_partial_failure: bool = True,
+    ) -> dict[str, ToolCallRecord]:
+        """Execute tool calls considering dependencies between them.
+
+        Args:
+            context: Execution context
+            tool_calls: List of dicts with 'id', 'name', and 'arguments' keys
+            allow_partial_failure: If False, stop on first failure
+
+        Returns:
+            Dictionary mapping call_id to ToolCallRecord
+        """
+        # Import here to avoid circular dependencies
+        from backend.app.core.parallel_tool_executor import ParallelToolExecutor, ToolCall
+
+        # Initialize parallel executor if needed
+        executor = ParallelToolExecutor(
+            tool_registry=self,
+            cache=self._get_or_create_cache(),
+            max_concurrent=10,
+        )
+
+        # Convert to ToolCall objects
+        calls = [
+            ToolCall(
+                tool_name=call.get("name", ""),
+                arguments=call.get("arguments", {}),
+                call_id=call.get("id", __import__("uuid").uuid4().hex[:8]),
+            )
+            for call in tool_calls
+        ]
+
+        # Execute with dependencies
+        results = await executor.execute_with_dependencies(calls, context, allow_partial_failure)
+
+        # Convert to ToolCallRecord objects
+        records = {}
+        for call_id, result in results.items():
+            record = ToolCallRecord(
+                tool_name=result.tool_name,
+                success=result.success,
+                output=result.output,
+                error=result.error,
+                policy=self._approved_execution_verdict(
+                    allowed=result.success,
+                    reason="Batch execution" if result.success else result.error or "Unknown error",
+                ),
+                risk_level=RiskLevel.LOW,
+                latency_ms=result.latency_ms,
+                trace_id=context.trace_id,
+                request_id=context.request_id,
+            )
+            records[call_id] = record
+
+        return records
+
+    def _get_or_create_cache(self) -> Any:
+        """Get or create the tool result cache."""
+        global _tool_result_cache
+        if _tool_result_cache is None:
+            from backend.app.core.tool_result_cache import ToolResultCache
+
+            _tool_result_cache = ToolResultCache(max_size=1000, default_ttl=300)
+        return _tool_result_cache
 
     def _record_execution(self, context: RunContext, record: ToolCallRecord) -> None:
         if self._execution_store is not None:

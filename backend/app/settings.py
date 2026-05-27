@@ -40,6 +40,9 @@ class Settings(BaseSettings):
     qdrant_url: str = "http://localhost:6333"
     qdrant_api_key: str | None = None
 
+    # Redis configuration for session storage
+    redis_url: str | None = None
+
     trace_backend: str = "memory"
     trace_store_path: Path = PROJECT_ROOT / "data" / "traces.jsonl"
     run_store_path: Path = PROJECT_ROOT / "data" / "runs.jsonl"
@@ -62,11 +65,32 @@ class Settings(BaseSettings):
     default_cost_budget_usd: float = 1.0
     enable_high_risk_tools: bool = False
 
+    # Security settings
+    jwt_secret: str = "change-this-to-a-random-64-char-string"
+    encryption_key: str = "change-this-to-32-char-hex-string"
+
     @field_validator("audit_hmac_secret")
     @classmethod
     def _validate_audit_hmac_secret(cls, value: str | None, info) -> str | None:
         if not value and info.data.get("app_mode") == "production":
             raise ValueError("audit_hmac_secret must be set for production deployments")
+        return value
+
+    @field_validator("jwt_secret", "encryption_key")
+    @classmethod
+    def _validate_production_secrets(cls, value: str, info) -> str:
+        """Enforce strong secrets in production mode."""
+        app_mode = info.data.get("app_mode", "development")
+        if app_mode == "production":
+            default_jwt = "change-this-to-a-random-64-char-string"
+            default_encryption = "change-this-to-32-char-hex-string"
+            if value == default_jwt or value == default_encryption:
+                raise ValueError(
+                    f"Production secrets must be changed from defaults. "
+                    f"Set JWT_SECRET and ENCRYPTION_KEY to strong random values."
+                )
+            if len(value) < 32:
+                raise ValueError(f"Production secrets must be at least 32 characters long")
         return value
 
     @field_validator("cors_origins")
@@ -76,6 +100,8 @@ class Settings(BaseSettings):
         if not origins:
             raise ValueError("cors_origins must contain at least one origin")
         return ",".join(origins)
+
+
 
 
 @lru_cache

@@ -6,6 +6,29 @@ export type ConsolePage =
   | "realtime_chat"
   | "role_catalog"
   | "workflow"
+  | "execution_overview"
+  | "execution_detail"
+  | "execution_recovery"
+  | "execution_dispatch"
+  | "tools_overview"
+  | "tools_detail"
+  | "tools_management"
+  | "tools_history"
+  | "memory_overview"
+  | "memory_detail"
+  | "memory_management"
+  | "memory_history"
+  | "org_overview"
+  | "org_structure"
+  | "org_roles"
+  | "org_audit"
+  | "market_overview"
+  | "market_detail"
+  | "market_management"
+  | "market_history"
+  | "search_overview"
+  | "search_results"
+  | "search_shortcuts"
   | "audit";
 
 export type ConsoleMode = "production" | "admin" | string;
@@ -52,6 +75,7 @@ export type ConsoleState = {
   realtime: RealtimeSnapshot;
   memory: MemorySnapshot;
   avatars: Record<string, string>;
+  memoryCenterOverview: MemoryCenterOverview | null;
   roleCatalog: RoleCatalogItem[];
   conversations: ConversationSummary[];
   activeRoomId: string | null;
@@ -61,6 +85,122 @@ export type ConsoleState = {
   selectedAuditMessageId: string | null;
   selectedRoleTemplateId: string | null;
   dispatch: DispatchResult;
+  executionControlOverview: ExecutionControlOverview | null;
+  toolsCenterOverview: ToolsCenterOverview | null;
+  marketplaceCenterOverview: MarketplaceCenterOverview | null;
+  navigationCenterOverview: NavigationCenterOverview | null;
+};
+
+export type NavigationCenterOverview = {
+  resource_type: string;
+  resource_id: string;
+  primary: {
+    recent_pages: string[];
+    favorite_pages: string[];
+    search_enabled: boolean;
+    risk_level: string;
+  };
+  linked_summaries: {
+    recent: { summary: { title: string }; data: Record<string, unknown> };
+    favorites: { summary: { title: string }; data: Record<string, unknown> };
+    search: { summary: { title: string }; data: Record<string, unknown> };
+    shortcuts: { summary: { title: string }; data: Record<string, unknown> };
+  };
+};
+
+export type MarketplaceCenterOverview = {
+  resource_type: string;
+  resource_id: string;
+  primary: {
+    total_capabilities: number;
+    active_capabilities: number;
+    pending_capabilities: number;
+    plugin_count: number;
+    tool_count: number;
+    risk_level: string;
+  };
+  linked_summaries: {
+    capabilities: { summary: { title: string }; data: Record<string, unknown> };
+    plugins: { summary: { title: string }; data: Record<string, unknown> };
+    tools: { summary: { title: string }; data: Record<string, unknown> };
+    history: { summary: { title: string }; data: Record<string, unknown> };
+  };
+};
+
+export type OrganizationCenterOverview = {
+  resource_type: string;
+  resource_id: string;
+  primary: {
+    total_departments: number;
+    total_roles: number;
+    total_members: number;
+    pending_reviews: number;
+    risk_level: string;
+  };
+  linked_summaries: {
+    organization: { summary: { title: string }; data: Record<string, unknown> };
+    departments: { summary: { title: string }; data: Record<string, unknown> };
+    roles: { summary: { title: string }; data: Record<string, unknown> };
+    audits: { summary: { title: string }; data: Record<string, unknown> };
+  };
+};
+
+export type MemoryCenterOverview = {
+  resource_type: string;
+  resource_id: string;
+  primary: {
+    total_memories: number;
+    active_memories: number;
+    archived_memories: number;
+    referenced_memories: number;
+    risk_level: string;
+  };
+  linked_summaries: {
+    memories: { summary: { title: string }; data: Record<string, unknown> };
+    experiences: { summary: { title: string }; data: Record<string, unknown> };
+    references: { summary: { title: string }; data: Record<string, unknown> };
+    history: { summary: { title: string }; data: Record<string, unknown> };
+  };
+};
+
+export type ToolsCenterOverview = {
+  resource_type: string;
+  resource_id: string;
+  primary: {
+    total_tools: number;
+    enabled_tools: number;
+    disabled_tools: number;
+    plugin_count: number;
+    resource_count: number;
+    risk_level: string;
+  };
+  linked_summaries: {
+    tools: { summary: { title: string }; data: Record<string, unknown> };
+    plugins: { summary: { title: string }; data: Record<string, unknown> };
+    resources: { summary: { title: string }; data: Record<string, unknown> };
+    history: { summary: { title: string }; data: Record<string, unknown> };
+  };
+};
+
+export type ExecutionControlOverview = {
+  resource_type: string;
+  resource_id: string;
+  primary: {
+    active_runs: number;
+    pending_runs: number;
+    failed_runs: number;
+    completed_runs: number;
+    intervention_count: number;
+    risk_level: string;
+    dispatch: DispatchResult;
+    execution_plan: Record<string, unknown>;
+  };
+  linked_summaries: {
+    dispatch: { summary: { title: string }; data: Record<string, unknown> };
+    execution: { summary: { title: string }; data: Record<string, unknown> };
+    audit: { summary: { title: string }; data: Record<string, unknown> };
+    messages: { summary: { title: string }; data: Record<string, unknown> };
+  };
 };
 
 export type ConsoleAction =
@@ -82,7 +222,12 @@ export type ConsoleAction =
   | { type: "memory/update"; payload: MemorySnapshot }
   | { type: "avatars/update"; payload: Record<string, string> }
   | { type: "roleCatalog/update"; payload: RoleCatalogItem[] }
-  | { type: "conversations/update"; payload: ConversationSummary[] };
+  | { type: "conversations/update"; payload: ConversationSummary[] }
+  | { type: "executionControl/overviewUpdate"; payload: ExecutionControlOverview }
+  | { type: "toolsCenter/overviewUpdate"; payload: ToolsCenterOverview }
+  | { type: "organizationCenter/overviewUpdate"; payload: OrganizationCenterOverview }
+  | { type: "marketplaceCenter/overviewUpdate"; payload: MarketplaceCenterOverview }
+  | { type: "navigationCenter/overviewUpdate"; payload: NavigationCenterOverview };
 
 export function createInitialConsoleState(): ConsoleState {
   return {
@@ -124,6 +269,12 @@ export function createInitialConsoleState(): ConsoleState {
       pending: [],
       last_result: null,
     },
+    executionControlOverview: null,
+    toolsCenterOverview: null,
+    marketplaceCenterOverview: null,
+    navigationCenterOverview: null,
+    memoryCenterOverview: null,
+    organizationCenterOverview: null,
   };
 }
 
@@ -146,6 +297,7 @@ function hydrateStateFromEnvelope(state: ConsoleState, payload: ConsoleBootstrap
     roleCatalog: (primary.role_catalog as RoleCatalogItem[] | undefined) ?? state.roleCatalog,
     conversations: (primary.conversations as ConversationSummary[] | undefined) ?? state.conversations,
     dispatch: (primary.dispatch as DispatchResult | undefined) ?? state.dispatch,
+    executionControlOverview: state.executionControlOverview,
   };
 }
 
@@ -186,6 +338,14 @@ export function consoleReducer(state: ConsoleState, action: ConsoleAction): Cons
       return { ...state, meetingRooms: action.payload };
     case "dispatch/update":
       return { ...state, dispatch: action.payload };
+    case "executionControl/overviewUpdate":
+      return { ...state, executionControlOverview: action.payload };
+    case "toolsCenter/overviewUpdate":
+      return { ...state, toolsCenterOverview: action.payload };
+    case "organizationCenter/overviewUpdate":
+      return { ...state, organizationCenterOverview: action.payload };
+    case "memoryCenter/overviewUpdate":
+      return { ...state, memoryCenterOverview: action.payload };
     case "graph/update":
       return { ...state, organizationGraph: action.payload };
     case "memory/update":

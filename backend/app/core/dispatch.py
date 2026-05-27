@@ -6,9 +6,9 @@ from uuid import uuid4
 
 from pydantic import BaseModel, Field
 
-from backend.app.core.collaboration import collaboration_store
-from backend.app.core.memory import memory_system
-from backend.app.core.org import organization_store
+from backend.app.core import collaboration as collaboration_core
+from backend.app.core import memory as memory_core
+from backend.app.core import org as org_core
 
 
 class DispatchRequest(BaseModel):
@@ -195,21 +195,21 @@ def _build_context(request: DispatchRequest) -> DispatchContext:
 def _resolve_organization(context: DispatchContext) -> dict[str, object]:
     if not context.org_id:
         return {}
-    org = organization_store.get_organization(context.org_id)
+    org = org_core.organization_store.get_organization(context.org_id)
     if org is None:
         return {}
-    departments = organization_store.list_departments(org_id=context.org_id)
-    agents = organization_store.list_agents(org_id=context.org_id)
-    trees = [organization_store.get_agent_tree(agent.agent_id) for agent in agents if agent.manager_agent_id is None]
-    department_summaries = [organization_store.department_memory_summary(department.department_id) for department in departments]
-    rooms = collaboration_store.list_rooms(tenant_id=org.tenant_id)
+    departments = org_core.organization_store.list_departments(org_id=context.org_id)
+    agents = org_core.organization_store.list_agents(org_id=context.org_id)
+    trees = [org_core.organization_store.get_agent_tree(agent.agent_id) for agent in agents if agent.manager_agent_id is None]
+    department_summaries = [org_core.organization_store.department_memory_summary(department.department_id) for department in departments]
+    rooms = collaboration_core.collaboration_store.list_rooms(tenant_id=org.tenant_id)
     return {
         "organization": org,
         "departments": departments,
         "department_summaries": department_summaries,
         "org_layer_totals": _merge_layer_totals(department_summaries),
         "leaders": [tree for tree in trees if tree is not None],
-        "leader_memories": [organization_store.agent_memory_summary(agent.agent_id) for agent in agents if agent.manager_agent_id is None],
+        "leader_memories": [org_core.organization_store.agent_memory_summary(agent.agent_id) for agent in agents if agent.manager_agent_id is None],
         "collaboration_rooms": rooms,
     }
 
@@ -217,12 +217,12 @@ def _resolve_organization(context: DispatchContext) -> dict[str, object]:
 def _resolve_department(context: DispatchContext) -> dict[str, object]:
     if not context.department_id:
         return {}
-    department = organization_store.get_department(context.department_id)
+    department = org_core.organization_store.get_department(context.department_id)
     if department is None:
         return {}
-    agents = organization_store.list_agents(department_id=context.department_id)
+    agents = org_core.organization_store.list_agents(department_id=context.department_id)
     leader = next((agent for agent in agents if agent.agent_id == department.leader_agent_id), None)
-    memory_summary = organization_store.department_memory_summary(context.department_id)
+    memory_summary = org_core.organization_store.department_memory_summary(context.department_id)
     return {
         "department": department,
         "leader": leader,
@@ -230,24 +230,24 @@ def _resolve_department(context: DispatchContext) -> dict[str, object]:
         "memory_summary": memory_summary,
         "memory_layers": memory_summary.get("layer_totals", {}) if memory_summary else {},
         "child_agents": [agent for agent in agents if agent.manager_agent_id is not None],
-        "parent_department": organization_store.get_department(department.parent_department_id) if department.parent_department_id else None,
+        "parent_department": org_core.organization_store.get_department(department.parent_department_id) if department.parent_department_id else None,
     }
 
 
 def _resolve_agent(context: DispatchContext) -> dict[str, object]:
     if not context.agent_id:
         return {}
-    agent = organization_store.get_agent(context.agent_id)
+    agent = org_core.organization_store.get_agent(context.agent_id)
     if agent is None:
         return {}
-    memory_summary = memory_system.agent_summary(agent.agent_id)
-    memory_layers = memory_system.agent_memory_layers(agent.agent_id)
+    memory_summary = memory_core.memory_system.agent_summary(agent.agent_id)
+    memory_layers = memory_core.memory_system.agent_memory_layers(agent.agent_id)
     return {
         "agent": agent,
         "memory_summary": memory_summary,
         "memory_layers": memory_layers,
         "session_ids": memory_summary.get("session_ids", []) if memory_summary else [],
-        "child_agents": [organization_store.get_agent(child_id) for child_id in agent.child_agent_ids if organization_store.get_agent(child_id) is not None],
+        "child_agents": [org_core.organization_store.get_agent(child_id) for child_id in agent.child_agent_ids if org_core.organization_store.get_agent(child_id) is not None],
         "collaboration_refs": [],
     }
 
@@ -255,11 +255,11 @@ def _resolve_agent(context: DispatchContext) -> dict[str, object]:
 def _resolve_session(context: DispatchContext) -> dict[str, object]:
     if not context.session_id:
         return {}
-    summary = memory_system.session_summary(context.session_id)
+    summary = memory_core.memory_system.session_summary(context.session_id)
     if summary is None:
         return {}
-    items = memory_system.session_items(context.session_id)
-    layers = memory_system.session_memory_layers(context.session_id)
+    items = memory_core.memory_system.session_items(context.session_id)
+    layers = memory_core.memory_system.session_memory_layers(context.session_id)
     return {
         "session_summary": summary,
         "session_items": items,
@@ -272,8 +272,8 @@ def _resolve_session(context: DispatchContext) -> dict[str, object]:
 
 
 def _resolve_collaboration(context: DispatchContext) -> dict[str, object]:
-    rooms = collaboration_store.list_rooms()
-    selected_room = collaboration_store.get_room(context.room_id) if context.room_id else None
+    rooms = collaboration_core.collaboration_store.list_rooms()
+    selected_room = collaboration_core.collaboration_store.get_room(context.room_id) if context.room_id else None
     return {
         "rooms": rooms,
         "selected_room": selected_room,
