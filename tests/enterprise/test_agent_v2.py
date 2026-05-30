@@ -239,6 +239,11 @@ class TestAgentExecutor:
     def test_executor_is_completed_false(self):
         """Test is_completed returns False for non-terminal states."""
         executor = AgentExecutor()
+        # 状态机规则:IDLE 只能转 INITIALIZING/PAUSED,不能直达 EXECUTING。
+        # 走合法路径 IDLE→INITIALIZING→PLANNING→EXECUTING 到达非终态,
+        # 再断言 is_completed 为 False(与 test_executor_is_completed_true 一致)。
+        executor.state_manager.transition_to(AgentState.INITIALIZING)
+        executor.state_manager.transition_to(AgentState.PLANNING)
         executor.state_manager.transition_to(AgentState.EXECUTING)
         assert not executor.is_completed()
 

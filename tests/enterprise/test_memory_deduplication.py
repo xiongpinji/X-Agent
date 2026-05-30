@@ -371,6 +371,10 @@ class TestMemoryDeduplicationService:
     @pytest.mark.asyncio
     async def test_auto_deduplicate_if_needed(self, service, sample_memories):
         """Test auto deduplication trigger."""
+        # 本用例验证"间隔到了才触发",需开启自动去重开关
+        # (service fixture 默认关闭,关闭时按设计应始终返回 None)
+        service.auto_deduplicate = True
+
         # First call should not deduplicate (interval not passed)
         result1 = await service.auto_deduplicate_if_needed(sample_memories)
         assert result1 is None
