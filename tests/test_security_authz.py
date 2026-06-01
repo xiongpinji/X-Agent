@@ -109,8 +109,10 @@ class TestRBACPolicy:
         )
         requested = ["agent:run", "memory:read"]
         resolved = policy.resolve_scopes(principal, requested)
-        # Unauthenticated users get requested scopes as-is (will be denied at enforcement)
-        assert resolved == requested
+        # SECURITY: unauthenticated principals get NO scopes (resolve_scopes
+        # returns [] for them). This is stricter than the old "pass-through then
+        # deny at enforcement" model — fail-closed at resolution time.
+        assert resolved == []
 
     def test_scopes_for_role(self, policy):
         """Test getting scopes for a role."""

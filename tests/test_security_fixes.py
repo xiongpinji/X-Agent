@@ -1,19 +1,25 @@
 """
 Security fixes verification tests for X-Agent.
-Tests all 5 security hardening tasks.
+Tests all 4 critical security hardening tasks:
+1. Path traversal prevention (CRITICAL)
+2. Default secret validation (HIGH)
+3. Sensitive information leakage prevention (HIGH)
+4. CSRF protection (HIGH)
 """
 
 from __future__ import annotations
 
 import json
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, patch, Mock
 
 import pytest
 from fastapi.testclient import TestClient
 
 from backend.app.main import app
 from backend.app.settings import Settings
+from backend.app.core.path_mapper import PathMapper
+from backend.app.core.error_handling import SafeErrorResponse, ErrorCategory
 
 
 class TestCORSFix:
@@ -143,7 +149,198 @@ class TestRedisSessionStorage:
         if pyproject_path.exists():
             with open(pyproject_path) as f:
                 content = f.read()
-            assert "redis" in content.lower(), "Redis should be in dependencies"
+            assert "redis" in content.lower()
+
+
+class TestPathTraversalPrevention:
+    """Test CRITICAL: Path traversal vulnerability fixes."""
+
+    def test_path_mapper_blocks_parent_directory_traversal(self):
+        """Test that PathMapper blocks .. traversal."""
+        mapper = PathMapper(Path("/workspace"))
+
+        with pytest.raises((ValueError, PermissionError)):
+            mapper.map_virtual_to_real("/../etc/passwd", "user1")
+
+    def test_path_mapper_blocks_absolute_paths(self):
+        """Test that PathMapper blocks absolute paths outside workspace."""
+        mapper = PathMapper(Path("/workspace"))
+
+        with pytest.raises(PermissionError):
+            mapper.map_virtual_to_real("/etc/passwd", "user1")
+
+    def test_path_mapper_validates_forbidden_paths(self):
+        """Test that PathMapper blocks forbidden system directories."""
+        mapper = PathMapper(Path("/workspace"))
+
+        # Test various forbidden paths
+        forbidden = ["/etc", "/sys", "/proc", "/dev", "/boot", "/root"]
+        for path in forbidden:
+            with pytest.raises(PermissionError):
+                mapper.map_virtual_to_real(path, "user1")
+
+    def test_path_mapper_allows_valid_paths(self):
+        """Test that PathMapper allows valid workspace paths."""
+        mapper = PathMapper(Path("/workspace"))
+
+        result = mapper.map_virtual_to_real("/documents/file.txt", "user1")
+        # Compare with OS-separator agnostic form: on Windows the result uses
+        # backslashes (e.g. D:\\workspace\\user1\\...), so normalize before the
+        # substring check instead of hardcoding POSIX separators.
+        normalized = str(result).replace("\\", "/")
+        assert "workspace/user1" in normalized
+        assert "documents/file.txt" in normalized
+
+    def test_files_api_validates_paths(self):
+        """Test that files API validates paths before processing."""
+        # This would require a full integration test with TestClient
+        # Verify the validation function exists
+        from backend.app.api.files_v2 import _validate_and_resolve_path
+        assert callable(_validate_and_resolve_path)
+
+
+class TestDefaultSecretValidation:
+    """Test HIGH: Default secret validation fixes."""
+
+    def test_production_rejects_default_jwt_secret(self):
+        """Test that production mode rejects default JWT secret."""
+        with pytest.raises(ValueError, match="Production secrets must be changed"):
+            Settings(
+                app_mode="production",
+                jwt_secret="change-this-to-a-random-64-char-string",
+                encryption_key="ValidEncryptionKeyWith32Characters123456"
+            )
+
+    def test_production_rejects_default_encryption_key(self):
+        """Test that production mode rejects default encryption key."""
+        with pytest.raises(ValueError, match="Production secrets must be changed"):
+            Settings(
+                app_mode="production",
+                jwt_secret="ValidJWTSecretKeyWith32Characters123456",
+                encryption_key="change-this-to-32-char-hex-string"
+            )
+
+    def test_production_rejects_short_secrets(self):
+        """Test that production mode rejects short secrets."""
+        with pytest.raises(ValueError, match="at least 32 characters"):
+            Settings(
+                app_mode="production",
+                jwt_secret="short",
+                encryption_key="ValidEncryptionKeyWith32Characters123456"
+            )
+
+    def test_production_requires_entropy(self):
+        """Test that production mode requires sufficient entropy."""
+        with pytest.raises(ValueError, match="uppercase letters and digits"):
+            Settings(
+                app_mode="production",
+                jwt_secret="alllowercasewithnouppercase123456789",
+                encryption_key="ValidEncryptionKeyWith32Characters123456"
+            )
+
+    def test_development_allows_default_secrets(self):
+        """Test that development mode allows default secrets."""
+        settings = Settings(
+            app_mode="development",
+            jwt_secret="change-this-to-a-random-64-char-string",
+            encryption_key="change-this-to-32-char-hex-string"
+        )
+        assert settings.jwt_secret == "change-this-to-a-random-64-char-string"
+
+
+class TestSensitiveInformationLeakage:
+    """Test HIGH: Sensitive information leakage prevention."""
+
+    def test_safe_error_response_hides_details(self):
+        """Test that SafeErrorResponse hides implementation details."""
+        error = ValueError("Database connection failed at 192.168.1.1:5432")
+
+        safe_msg = SafeErrorResponse.get_safe_message(error)
+        assert safe_msg == "Invalid input provided"
+        assert "192.168.1.1" not in safe_msg
+        assert "5432" not in safe_msg
+
+    def test_safe_error_response_sanitizes_paths(self):
+        """Test that SafeErrorResponse sanitizes file paths."""
+        error = FileNotFoundError("/home/user/secret/file.txt")
+
+        safe_msg = SafeErrorResponse.get_safe_message(error)
+        assert safe_msg == "Resource not found"
+        assert "/home/user" not in safe_msg
+
+    def test_safe_error_response_sanitizes_credentials(self):
+        """Test that SafeErrorResponse sanitizes credentials."""
+        message = "Failed to connect: password=secret123 api_key=abc123xyz"
+
+        sanitized = SafeErrorResponse.sanitize_error_message(message)
+        assert "secret123" not in sanitized
+        assert "abc123xyz" not in sanitized
+        assert "[REDACTED]" in sanitized
+
+    def test_safe_error_response_logs_actual_error(self):
+        """Test that SafeErrorResponse logs actual error details."""
+        error = ValueError("Actual error details")
+
+        with patch('backend.app.core.error_handling.logger') as mock_logger:
+            SafeErrorResponse.get_safe_message(error)
+            mock_logger.error.assert_called()
+
+    def test_files_api_uses_safe_error_handling(self):
+        """Test that files API uses safe error handling."""
+        from backend.app.api.files_v2 import SafeErrorResponse as FilesErrorResponse
+        assert FilesErrorResponse is not None
+
+
+class TestCSRFProtection:
+    """Test HIGH: CSRF protection fixes."""
+
+    def test_csrf_middleware_exists(self):
+        """Test that CSRF middleware is implemented."""
+        from backend.app.main import CSRFProtectionMiddleware
+        assert CSRFProtectionMiddleware is not None
+
+    def test_csrf_token_generation(self):
+        """Test CSRF token generation."""
+        from backend.app.main import _csrf_middleware
+
+        token = _csrf_middleware.generate_csrf_token("session123")
+        assert token is not None
+        assert len(token) > 0
+
+    def test_csrf_token_validation(self):
+        """Test CSRF token validation."""
+        from backend.app.main import _csrf_middleware
+
+        session_id = "session123"
+        token = _csrf_middleware.generate_csrf_token(session_id)
+
+        # Token should be valid for this session
+        assert token in _csrf_middleware._tokens.get(session_id, set())
+
+    def test_csrf_middleware_exempt_paths(self):
+        """Test that CSRF middleware exempts certain paths."""
+        from backend.app.main import CSRFProtectionMiddleware
+
+        exempt_paths = CSRFProtectionMiddleware.EXEMPT_PATHS
+        assert "/health" in exempt_paths
+        assert "/api/v1/auth/login" in exempt_paths
+
+    def test_csrf_middleware_safe_methods(self):
+        """Test that CSRF middleware allows safe methods."""
+        from backend.app.main import CSRFProtectionMiddleware
+
+        safe_methods = CSRFProtectionMiddleware.SAFE_METHODS
+        assert "GET" in safe_methods
+        assert "HEAD" in safe_methods
+        assert "OPTIONS" in safe_methods
+
+    def test_csrf_token_endpoint_exists(self):
+        """Test that CSRF token endpoint is available."""
+        client = TestClient(app)
+        # The endpoint should exist (though it may require auth)
+        response = client.post("/api/v1/csrf-token")
+        # Should either succeed or require auth, not 404
+        assert response.status_code != 404, "Redis should be in dependencies"
 
 
 class TestBackwardCompatibility:

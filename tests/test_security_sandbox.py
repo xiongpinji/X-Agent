@@ -2,10 +2,21 @@
 
 from __future__ import annotations
 
+import os
+
 import pytest
 from pathlib import Path
 
 from backend.app.core.tools import _resolve_tool_path, _resolve_tool_root, _is_path_forbidden
+
+# These assertions hardcode POSIX system paths (/etc, /sys, ...). On Windows,
+# Path("/etc") resolves to a drive-relative path (e.g. C:\etc) and never matches
+# the POSIX entries in _FORBIDDEN_PATHS, so the POSIX-specific protection cannot
+# be exercised. The Windows equivalents (C:\Windows, ...) are covered separately.
+posix_only = pytest.mark.skipif(
+    os.name == "nt",
+    reason="POSIX-specific system paths; not meaningful on Windows filesystems.",
+)
 
 
 class TestPathSandboxIsolation:
@@ -40,6 +51,7 @@ class TestPathSandboxIsolation:
         with pytest.raises(PermissionError, match="must be within project directory"):
             _resolve_tool_path(malicious_path)
 
+    @posix_only
     def test_forbidden_system_directories_denied(self):
         """Test that forbidden system directories are denied."""
         forbidden_paths = [
@@ -82,6 +94,7 @@ class TestPathSandboxIsolation:
         with pytest.raises(PermissionError, match="must be within project directory"):
             _resolve_tool_root(malicious_root)
 
+    @posix_only
     def test_forbidden_root_directories_denied(self):
         """Test that forbidden root directories are denied."""
         forbidden_roots = [
@@ -112,6 +125,7 @@ class TestPathSandboxIsolation:
             # Expected if ~ is outside project root
             pass
 
+    @posix_only
     def test_is_path_forbidden_checks(self):
         """Test forbidden path checking."""
         assert _is_path_forbidden(Path("/etc"))
@@ -134,6 +148,7 @@ class TestPathSandboxIsolation:
         assert not _is_path_forbidden(project_root / "src")
         assert not _is_path_forbidden(project_root / "tests")
 
+    @posix_only
     def test_case_insensitive_forbidden_path_check(self):
         """Test that forbidden path check is case-insensitive."""
         # On case-insensitive filesystems, /ETC should also be forbidden
