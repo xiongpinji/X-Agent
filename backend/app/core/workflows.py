@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
+import os
+import tempfile
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
@@ -20,6 +23,8 @@ from backend.app.services.observability.langfuse_client import langfuse_client
 
 if TYPE_CHECKING:
     from backend.app.core.agent import AgentLoop
+
+logger = logging.getLogger(__name__)
 
 
 class WorkflowNodeType(StrEnum):
@@ -233,6 +238,12 @@ class WorkflowRepository:
         self._definitions: dict[str, WorkflowDefinition] = {}
         self._runs: dict[str, WorkflowRunRecord] = {}
         self._lock = RLock()
+        # Disk writes are serialized by a SEPARATE lock so the in-memory state
+        # lock (self._lock) is never held across blocking file I/O. A monotonic
+        # version lets a later write skip a stale snapshot it would clobber.
+        self._io_lock = RLock()
+        self._def_version = 0
+        self._def_version_persisted = 0
         if self._definition_path:
             self._load_definitions()
         if self._run_path:
@@ -271,7 +282,12 @@ class WorkflowRepository:
         self._validate_definition(definition)
         with self._lock:
             self._definitions[definition.id] = definition
-            self._persist_definitions()
+            self._def_version += 1
+            version = self._def_version
+            snapshot = self._snapshot_definitions_locked()
+        # Disk write happens OUTSIDE self._lock: threads no longer queue on
+        # file I/O while holding the in-memory state lock.
+        self._persist_snapshot(version, snapshot)
         return definition
 
     def list_definitions(self) -> list[WorkflowDefinition]:
@@ -285,9 +301,13 @@ class WorkflowRepository:
     def delete_definition(self, workflow_id: str) -> bool:
         with self._lock:
             deleted = self._definitions.pop(workflow_id, None) is not None
-            if deleted:
-                self._persist_definitions()
-            return deleted
+            if not deleted:
+                return False
+            self._def_version += 1
+            version = self._def_version
+            snapshot = self._snapshot_definitions_locked()
+        self._persist_snapshot(version, snapshot)
+        return True
 
     def record_run(self, run: WorkflowRunRecord) -> WorkflowRunRecord:
         with self._lock:
@@ -420,21 +440,60 @@ class WorkflowRepository:
     def _load_definitions(self) -> None:
         if self._definition_path is None or not self._definition_path.exists():
             return
-        with self._definition_path.open("r", encoding="utf-8") as handle:
-            raw = json.load(handle)
+        try:
+            with self._definition_path.open("r", encoding="utf-8") as handle:
+                raw = json.load(handle)
+        except (json.JSONDecodeError, ValueError):
+            # File is empty or corrupt — treat as no definitions.
+            logger.warning(
+                "Workflow definitions file is empty or corrupt: %s",
+                self._definition_path,
+            )
+            return
         for item in raw:
             definition = WorkflowDefinition.model_validate(item)
             self._definitions[definition.id] = definition
 
-    def _persist_definitions(self) -> None:
+    def _snapshot_definitions_locked(self) -> list[dict]:
+        """Serialize all definitions to plain dicts. Call while holding self._lock."""
+        definitions = sorted(
+            self._definitions.values(),
+            key=lambda item: item.updated_at,
+            reverse=True,
+        )
+        return [definition.model_dump(mode="json") for definition in definitions]
+
+    def _persist_snapshot(self, version: int, payload: list[dict]) -> None:
+        """Atomically write a definitions snapshot to disk.
+
+        Serialized by self._io_lock (NOT self._lock), so concurrent writers do
+        not starve on the in-memory state lock. A stale snapshot (older version
+        than what was last persisted) is skipped so it cannot clobber newer data.
+        Writes to a temp file + os.replace for atomicity (no half-written JSON).
+        """
         if self._definition_path is None:
             return
-        self._definition_path.parent.mkdir(parents=True, exist_ok=True)
-        payload = [definition.model_dump(mode="json") for definition in self.list_definitions()]
-        self._definition_path.write_text(
-            json.dumps(payload, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
+        with self._io_lock:
+            if version < self._def_version_persisted:
+                return
+            self._definition_path.parent.mkdir(parents=True, exist_ok=True)
+            fd, tmp_name = tempfile.mkstemp(
+                dir=str(self._definition_path.parent),
+                prefix=self._definition_path.name + ".",
+                suffix=".tmp",
+            )
+            try:
+                with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                    handle.write(json.dumps(payload, ensure_ascii=False, indent=2))
+                os.replace(tmp_name, self._definition_path)
+                self._def_version_persisted = version
+            except BaseException:
+                # Clean up the temp file on any failure; don't leave litter.
+                try:
+                    os.unlink(tmp_name)
+                except OSError:
+                    pass
+                raise
 
     def _load_runs(self) -> None:
         if self._run_path is None or not self._run_path.exists():

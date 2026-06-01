@@ -147,6 +147,14 @@ class TestConcurrentWorkflowExecution:
         """Test creating multiple workflows concurrently."""
         import concurrent.futures
 
+        # Validates that concurrent workflow creation works correctly. Starlette's
+        # TestClient is not built for high-concurrency load (real load testing lives
+        # in tests/performance/: locustfile.py, test_load.py, test_stress.py), so we
+        # use a modest concurrency level here to exercise the concurrency path
+        # without overwhelming the single ASGI portal. as_completed has a timeout so
+        # the test fails loud instead of hanging if contention ever regresses.
+        concurrency = 10
+
         def create_workflow(i):
             return client.post(
                 "/api/v1/workflows",
@@ -160,11 +168,14 @@ class TestConcurrentWorkflowExecution:
                 }
             )
 
-        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
-            futures = [executor.submit(create_workflow, i) for i in range(50)]
-            responses = [f.result() for f in concurrent.futures.as_completed(futures)]
+        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+            futures = [executor.submit(create_workflow, i) for i in range(concurrency)]
+            responses = [
+                f.result()
+                for f in concurrent.futures.as_completed(futures, timeout=60)
+            ]
 
-        assert len(responses) == 50
+        assert len(responses) == concurrency
         assert all(r.status_code in [200, 201] for r in responses)
 
     def test_concurrent_workflow_execution(self, client):
@@ -187,17 +198,24 @@ class TestConcurrentWorkflowExecution:
         if create_response.status_code in [200, 201]:
             workflow_id = create_response.json().get("id")
 
+            # Modest concurrency (see note in test_concurrent_workflow_creation);
+            # high-concurrency load testing belongs in tests/performance/.
+            concurrency = 10
+
             def execute_workflow(i):
                 return client.post(
                     f"/api/v1/workflows/{workflow_id}/execute",
                     json={"data": f"input_{i}"}
                 )
 
-            with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
-                futures = [executor.submit(execute_workflow, i) for i in range(20)]
-                responses = [f.result() for f in concurrent.futures.as_completed(futures)]
+            with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+                futures = [executor.submit(execute_workflow, i) for i in range(concurrency)]
+                responses = [
+                    f.result()
+                    for f in concurrent.futures.as_completed(futures, timeout=60)
+                ]
 
-            assert len(responses) == 20
+            assert len(responses) == concurrency
 
 
 class TestErrorRecoveryIntegration:
