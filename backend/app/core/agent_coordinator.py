@@ -299,9 +299,40 @@ class AgentCoordinator:
         Returns:
             Agent output
         """
-        # Placeholder for actual agent execution
-        await asyncio.sleep(0.1)
-        return {"status": "completed", "task": task}
+        # Execute via the real AgentLoop engine (惰性导入避免循环依赖)。
+        from backend.app.dependencies import get_agent
+        from backend.app.core.contracts import RunContext
+
+        agent_id = ""
+        if isinstance(agent, dict):
+            agent_id = str(agent.get("agent_id", ""))
+        else:
+            agent_id = str(getattr(agent, "agent_id", "") or "")
+
+        ctx_data = dict(context or {})
+        run_context = RunContext(
+            tenant_id=str(ctx_data.get("tenant_id", "default")),
+            user_id=str(ctx_data.get("user_id", "system")),
+            agent_id=agent_id or "coordinator-agent",
+            request_id=str(ctx_data.get("request_id", agent_id or "coordinator")),
+            trace_id=str(ctx_data.get("trace_id", agent_id or "coordinator")),
+            permission_scope=list(ctx_data.get("permission_scope", []) or []),
+        )
+
+        agent_loop = get_agent()
+        response = await agent_loop.run(run_context, task or "", ctx_data)
+
+        status_value = getattr(getattr(response, "status", None), "value", None) or str(
+            getattr(response, "status", "completed")
+        )
+        return {
+            "status": status_value,
+            "task": task,
+            "answer": getattr(response, "answer", ""),
+            "iterations": getattr(response, "iterations", 0),
+            "trace_id": getattr(response, "trace_id", run_context.trace_id),
+            "error": getattr(response, "error", None),
+        }
 
     async def _execute_agent_safe(
         self,

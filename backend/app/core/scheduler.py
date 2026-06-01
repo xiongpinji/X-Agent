@@ -218,8 +218,8 @@ class CronScheduler:
             try:
                 now = datetime.now(UTC)
 
-                # Check all scheduled tasks
-                for task_id, task in self.scheduled_tasks.items():
+                # Check all scheduled tasks (snapshot: 迭代期间 _execute_task/取消可能改字典，B5)
+                for task_id, task in list(self.scheduled_tasks.items()):
                     if task.status != ScheduleStatus.ACTIVE:
                         continue
 

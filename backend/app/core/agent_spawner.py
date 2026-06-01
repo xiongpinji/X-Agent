@@ -25,6 +25,7 @@ class AgentStatus(str, Enum):
     READY = "ready"
     RUNNING = "running"
     PAUSED = "paused"
+    COMPLETED = "completed"
     FAILED = "failed"
     TERMINATED = "terminated"
 
@@ -86,6 +87,8 @@ class AgentSpawner:
         self.agents: Dict[str, AgentInstance] = {}
         self.agent_tasks: Dict[str, asyncio.Task] = {}
         self.logger = logger
+        # 并发上限检查与实例登记必须原子化，避免竞态下超额创建（B2）。
+        self._spawn_lock = asyncio.Lock()
 
     async def spawn_agent(
         self,
@@ -111,34 +114,35 @@ class AgentSpawner:
         Raises:
             RuntimeError: If max concurrent agents reached
         """
-        # Check concurrent limit
-        active_agents = sum(
-            1 for a in self.agents.values()
-            if a.status in (AgentStatus.INITIALIZING, AgentStatus.READY, AgentStatus.RUNNING)
-        )
-        if active_agents >= self.max_concurrent_agents:
-            raise RuntimeError(
-                f"Max concurrent agents ({self.max_concurrent_agents}) reached"
+        # Check concurrent limit + create instance atomically (B2: 原子化避免竞态超额)
+        async with self._spawn_lock:
+            active_agents = sum(
+                1 for a in self.agents.values()
+                if a.status in (AgentStatus.INITIALIZING, AgentStatus.READY, AgentStatus.RUNNING)
+            )
+            if active_agents >= self.max_concurrent_agents:
+                raise RuntimeError(
+                    f"Max concurrent agents ({self.max_concurrent_agents}) reached"
+                )
+
+            # Create agent instance
+            agent_id = f"agent_{uuid.uuid4().hex[:12]}"
+            isolation_level = IsolationLevel(isolation) if isolation else IsolationLevel.NONE
+
+            config = AgentConfig(
+                agent_type=agent_type,
+                task=task,
+                context=context,
+                isolation=isolation_level,
+                max_iterations=kwargs.get("max_iterations", 10),
+                timeout_seconds=kwargs.get("timeout_seconds", 3600),
+                memory_limit_mb=kwargs.get("memory_limit_mb", 512),
+                cpu_limit_percent=kwargs.get("cpu_limit_percent", 100),
+                metadata=kwargs.get("metadata", {}),
             )
 
-        # Create agent instance
-        agent_id = f"agent_{uuid.uuid4().hex[:12]}"
-        isolation_level = IsolationLevel(isolation) if isolation else IsolationLevel.NONE
-
-        config = AgentConfig(
-            agent_type=agent_type,
-            task=task,
-            context=context,
-            isolation=isolation_level,
-            max_iterations=kwargs.get("max_iterations", 10),
-            timeout_seconds=kwargs.get("timeout_seconds", 3600),
-            memory_limit_mb=kwargs.get("memory_limit_mb", 512),
-            cpu_limit_percent=kwargs.get("cpu_limit_percent", 100),
-            metadata=kwargs.get("metadata", {}),
-        )
-
-        agent = AgentInstance(agent_id=agent_id, config=config)
-        self.agents[agent_id] = agent
+            agent = AgentInstance(agent_id=agent_id, config=config)
+            self.agents[agent_id] = agent
 
         self.logger.info(
             f"Spawned agent {agent_id} (type={agent_type}, isolation={isolation_level})"
@@ -152,7 +156,11 @@ class AgentSpawner:
 
     async def _execute_agent(self, agent_id: str) -> None:
         """
-        Execute an agent.
+        Execute an agent using the real AgentLoop engine.
+
+        Builds an AgentLoop via the same factory the production /agents path
+        uses (backend.app.dependencies.get_agent), constructs a RunContext, and
+        runs the configured task under the agent's timeout.
 
         Args:
             agent_id: ID of agent to execute
@@ -162,19 +170,51 @@ class AgentSpawner:
         try:
             agent.status = AgentStatus.READY
             agent.started_at = datetime.now(UTC)
-
-            # Simulate agent execution
             agent.status = AgentStatus.RUNNING
 
-            # Wait for task completion or timeout
+            # Build the real agent engine + run context (惰性导入避免循环依赖)。
+            from backend.app.dependencies import get_agent
+            from backend.app.core.contracts import RunContext
+
+            agent_loop = get_agent()
+            agent_loop.max_iterations = agent.config.max_iterations
+
+            ctx_data = agent.config.context or {}
+            context = RunContext(
+                tenant_id=str(ctx_data.get("tenant_id", "default")),
+                user_id=str(ctx_data.get("user_id", "system")),
+                agent_id=agent_id,
+                request_id=str(ctx_data.get("request_id", agent_id)),
+                trace_id=str(ctx_data.get("trace_id", agent_id)),
+                permission_scope=list(ctx_data.get("permission_scope", []) or []),
+            )
+
+            # Enforce the configured timeout on real execution.
             timeout = agent.config.timeout_seconds
-            await asyncio.sleep(0.1)  # Placeholder for actual execution
+            response = await asyncio.wait_for(
+                agent_loop.run(context, agent.config.task, ctx_data),
+                timeout=timeout,
+            )
 
-            agent.status = AgentStatus.COMPLETED if agent.status == AgentStatus.RUNNING else agent.status
+            agent.iterations = getattr(response, "iterations", 0) or 0
+            status_value = getattr(getattr(response, "status", None), "value", None) or str(
+                getattr(response, "status", "completed")
+            )
+            failed = status_value.lower() == "failed"
+            agent.status = AgentStatus.FAILED if failed else AgentStatus.COMPLETED
             agent.completed_at = datetime.now(UTC)
-            agent.result = {"status": "completed", "iterations": agent.iterations}
-
-            self.logger.info(f"Agent {agent_id} completed successfully")
+            agent.result = {
+                "status": status_value,
+                "answer": getattr(response, "answer", ""),
+                "iterations": agent.iterations,
+                "trace_id": getattr(response, "trace_id", context.trace_id),
+                "memory_hits": getattr(response, "memory_hits", 0),
+            }
+            if failed:
+                agent.error = getattr(response, "error", None) or "agent run failed"
+                self.logger.error(f"Agent {agent_id} failed: {agent.error}")
+            else:
+                self.logger.info(f"Agent {agent_id} completed successfully")
 
         except asyncio.TimeoutError:
             agent.status = AgentStatus.FAILED
