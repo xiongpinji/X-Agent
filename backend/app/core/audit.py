@@ -11,6 +11,8 @@ from uuid import uuid4
 
 from pydantic import BaseModel, Field
 
+from backend.app.core.config import get_settings
+
 
 class AuditLogRecord(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid4()))
@@ -50,6 +52,15 @@ class AuditStore:
         self._lock = RLock()
         self._storage_path = Path(storage_path) if storage_path else None
         self._hmac_secret = hmac_secret
+
+        # Production fail-fast: HMAC secret is required in production
+        settings = get_settings()
+        if settings.is_production() and not self._hmac_secret:
+            raise RuntimeError(
+                "Audit HMAC secret is required in production. "
+                "Set XAGENT_AUDIT_HMAC_SECRET environment variable."
+            )
+
         if self._storage_path:
             self._load_from_disk()
 
@@ -101,12 +112,27 @@ class AuditStore:
         self,
         *,
         limit: int = 50,
+        offset: int = 0,
         tenant_id: str | None = None,
         actor_id: str | None = None,
         action: str | None = None,
         resource_type: str | None = None,
         outcome: str | None = None,
     ) -> list[AuditLogRecord]:
+        """List audit records with filtering and pagination.
+
+        Args:
+            limit: Maximum number of records to return
+            offset: Number of records to skip
+            tenant_id: Filter by tenant
+            actor_id: Filter by actor
+            action: Filter by action
+            resource_type: Filter by resource type
+            outcome: Filter by outcome
+
+        Returns:
+            List of matching audit records
+        """
         records = [
             record
             for record in self._records
@@ -117,7 +143,7 @@ class AuditStore:
             and (outcome is None or record.outcome == outcome)
         ]
         records.sort(key=lambda record: record.created_at, reverse=True)
-        return records[:limit]
+        return records[offset : offset + limit]
 
     def count(self) -> int:
         return len(self._records)
@@ -145,7 +171,18 @@ class AuditStore:
                 )
             if record.signature is not None:
                 signed += 1
+
+            # When HMAC is enabled, enforce that ALL records must have valid signatures
             if self._hmac_secret is not None:
+                if record.signature is None:
+                    return AuditChainVerification(
+                        valid=False,
+                        checked=index,
+                        signed=signed,
+                        signature_valid=False,
+                        broken_at=record.id,
+                        reason="Record missing required signature (HMAC enabled).",
+                    )
                 expected_signature = self._signature_record(record)
                 if record.signature != expected_signature:
                     return AuditChainVerification(
@@ -191,3 +228,101 @@ class AuditStore:
             digest.encode("utf-8"),
             sha256,
         ).hexdigest()
+
+    def export_csv(
+        self,
+        *,
+        tenant_id: str | None = None,
+        actor_id: str | None = None,
+        action: str | None = None,
+        resource_type: str | None = None,
+        outcome: str | None = None,
+    ) -> str:
+        """Export audit logs as CSV format.
+
+        Args:
+            tenant_id: Filter by tenant
+            actor_id: Filter by actor
+            action: Filter by action
+            resource_type: Filter by resource type
+            outcome: Filter by outcome
+
+        Returns:
+            CSV formatted string
+        """
+        import csv
+        from io import StringIO
+
+        records = self.list(
+            limit=10000,
+            tenant_id=tenant_id,
+            actor_id=actor_id,
+            action=action,
+            resource_type=resource_type,
+            outcome=outcome,
+        )
+
+        output = StringIO()
+        writer = csv.DictWriter(
+            output,
+            fieldnames=[
+                "id",
+                "created_at",
+                "tenant_id",
+                "actor_id",
+                "action",
+                "resource_type",
+                "resource_id",
+                "outcome",
+                "trace_id",
+                "run_id",
+                "workflow_id",
+            ],
+        )
+        writer.writeheader()
+        for record in records:
+            writer.writerow({
+                "id": record.id,
+                "created_at": record.created_at.isoformat(),
+                "tenant_id": record.tenant_id,
+                "actor_id": record.actor_id,
+                "action": record.action,
+                "resource_type": record.resource_type,
+                "resource_id": record.resource_id,
+                "outcome": record.outcome,
+                "trace_id": record.trace_id,
+                "run_id": record.run_id,
+                "workflow_id": record.workflow_id,
+            })
+        return output.getvalue()
+
+    def export_json(
+        self,
+        *,
+        tenant_id: str | None = None,
+        actor_id: str | None = None,
+        action: str | None = None,
+        resource_type: str | None = None,
+        outcome: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Export audit logs as JSON format.
+
+        Args:
+            tenant_id: Filter by tenant
+            actor_id: Filter by actor
+            action: Filter by action
+            resource_type: Filter by resource type
+            outcome: Filter by outcome
+
+        Returns:
+            List of audit records as dictionaries
+        """
+        records = self.list(
+            limit=10000,
+            tenant_id=tenant_id,
+            actor_id=actor_id,
+            action=action,
+            resource_type=resource_type,
+            outcome=outcome,
+        )
+        return [record.model_dump(mode="json") for record in records]

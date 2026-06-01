@@ -56,8 +56,32 @@ class PathMapper:
             ValueError: If path is invalid or outside workspace
             PermissionError: If path is forbidden
         """
+        # SECURITY (fail-loud): 在重映射之前显式拒绝可疑请求，而不是把
+        # /etc/passwd 这类静默重映射进沙箱。纵深防御 + 调用方能拿到明确错误。
+        # 1) 原始路径含父目录穿越 .. → 拒绝（normalize_path 会静默折叠 ..，
+        #    这里在折叠前就基于原始输入判断）。
+        raw = unquote(virtual_path or "").replace("\\", "/")
+        if ".." in raw.split("/"):
+            raise PermissionError(
+                f"Path traversal is not allowed: {virtual_path}"
+            )
+
         # Normalize virtual path
         normalized = self.normalize_path(virtual_path)
+
+        # 2) 规范化后的虚拟路径若指向禁止的系统目录 → 拒绝。
+        #    用规范化后的“虚拟”路径(而非重映射后的真实路径)判断，因为重映射
+        #    会把 /etc 变成 /workspace/<user>/etc 致 _FORBIDDEN_PATHS 永不命中。
+        normalized_lower = normalized.lower()
+        for forbidden in self._FORBIDDEN_PATHS:
+            fb = forbidden.replace("\\", "/").lower()
+            if not fb.startswith("/"):
+                # 跳过 Windows 形式(C:\...)的条目——它们针对真实路径，不是虚拟路径
+                continue
+            if normalized_lower == fb or normalized_lower.startswith(fb + "/"):
+                raise PermissionError(
+                    f"Access to system directory is forbidden: {virtual_path}"
+                )
 
         # Handle absolute vs relative paths
         if normalized.startswith("/"):

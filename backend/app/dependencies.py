@@ -211,7 +211,9 @@ def get_current_principal(request: Request) -> Principal:
                         )
         raise api_error(401, ErrorCode.AUTHENTICATION_FAILED, "Invalid or expired token.")
 
-    if settings.require_api_key:
+    # 生产环境绝不回落匿名主体（S5）：即便 require_api_key 默认 False，
+    # 生产模式也必须要求显式凭证，避免漏配 enforce_scope 的路由被未鉴权访问。
+    if settings.require_api_key or getattr(settings, "app_mode", "development") == "production":
         raise api_error(401, ErrorCode.AUTHENTICATION_FAILED, "API key required.")
     return anonymous_principal()
 
@@ -230,6 +232,10 @@ def _matches_bootstrap_key(
 
 
 def enforce_scope(principal: Principal, scope: str) -> None:
+    """Enforce that principal has required scope.
+
+    SECURITY: Rejects unauthenticated users and validates scope.
+    """
     if not principal.authenticated:
         raise api_error(
             401,

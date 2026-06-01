@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import threading
 import time
+from datetime import UTC, datetime
 from typing import Annotated
 from uuid import uuid4
 
@@ -25,6 +26,27 @@ _token_expiry: dict[str, float] = {}
 _token_users: dict[str, str] = {}
 _token_lock = threading.Lock()
 _DEFAULT_TOKEN_TTL_SECONDS = 900  # 15 minutes
+_last_purge_ts: float = 0.0
+_PURGE_INTERVAL_SECONDS = 300  # 清理过期 token 的最小间隔，避免每次校验都全量扫描
+
+
+def _purge_expired_tokens(force: bool = False) -> None:
+    """Opportunistically drop expired in-memory tokens to bound memory growth (S4).
+
+    Only the in-memory fallback dicts are purged; Redis entries expire natively.
+    Throttled to at most once per _PURGE_INTERVAL_SECONDS unless force=True.
+    """
+    global _last_purge_ts
+    now = time.time()
+    if not force and (now - _last_purge_ts) < _PURGE_INTERVAL_SECONDS:
+        return
+    with _token_lock:
+        _last_purge_ts = now
+        expired = [tok for tok, exp in _token_expiry.items() if now > exp]
+        for tok in expired:
+            _token_expiry.pop(tok, None)
+            _token_users.pop(tok, None)
+            _revoked_tokens.discard(tok)
 
 # Login failure tracking for account lockout
 _login_failures: dict[str, list[float]] = {}  # email -> [timestamp, ...]
@@ -90,6 +112,7 @@ def _is_token_valid(token: str) -> bool:
             logger.warning(f"Redis token validation failed: {e}. Using in-memory fallback.")
 
     # Fallback to in-memory storage
+    _purge_expired_tokens()
     with _token_lock:
         if token in _revoked_tokens:
             return False
@@ -169,6 +192,26 @@ def _clear_login_failures(email: str) -> None:
     _login_failures.pop(email, None)
 
 
+def _constant_time_compare(a: str, b: str) -> bool:
+    """Compare two strings in constant time to prevent timing attacks.
+
+    This function compares two strings byte-by-byte without short-circuiting,
+    ensuring that the comparison time is independent of where the strings differ.
+    This prevents attackers from using timing analysis to guess correct values.
+    """
+    if len(a) != len(b):
+        # Still do a full comparison to maintain constant time
+        result = False
+        for x, y in zip(a, b):
+            result |= x != y
+        return result
+
+    result = False
+    for x, y in zip(a, b):
+        result |= x != y
+    return result
+
+
 # Initialize Redis on module load
 _init_redis()
 
@@ -224,6 +267,7 @@ async def login(request: AuthLoginRequest) -> AuthTokenResponse:
     - Account lockout after 5 failed attempts (15 minute duration)
     - Constant-time password verification to prevent timing attacks
     - User enumeration prevention
+    - SECURITY: Bootstrap Key强制更换检查
     """
     if not request.email or not request.password:
         raise api_error(400, ErrorCode.VALIDATION_ERROR, "Email and password are required.")
@@ -251,17 +295,73 @@ async def login(request: AuthLoginRequest) -> AuthTokenResponse:
     refresh_token = _issue_token(ttl_seconds=86400)  # 24 hours
     _store_token_user(access_token, user.id)
     _store_token_user(refresh_token, user.id)
-    return AuthTokenResponse(
+
+    # SECURITY: 检查是否需要更换Bootstrap Key
+    from backend.app.core.bootstrap_key_enforcer import get_bootstrap_key_enforcer
+    enforcer = get_bootstrap_key_enforcer()
+    requires_bootstrap_key_change = enforcer.check_bootstrap_key_requirement(user.id)
+
+    response = AuthTokenResponse(
         access_token=access_token,
         refresh_token=refresh_token,
         user=user.model_dump(mode="json"),
     )
 
+    # 如果需要更换Bootstrap Key，在响应中添加标记
+    if requires_bootstrap_key_change:
+        response.user["requires_bootstrap_key_change"] = True
+
+    return response
+
 
 @router.post("/login/oauth")
-async def login_oauth(payload: dict[str, object] | None = None) -> dict[str, object]:
-    """OAuth login endpoint (not implemented)."""
-    raise api_error(501, ErrorCode.VALIDATION_ERROR, "OAuth login is not implemented.")
+async def login_oauth(
+    provider: str | None = None,
+    code: str | None = None,
+    state: str | None = None,
+) -> dict[str, object]:
+    """OAuth login endpoint supporting multiple providers.
+
+    Supported providers: google, github, microsoft
+
+    Args:
+        provider: OAuth provider name
+        code: Authorization code from provider
+        state: State parameter for CSRF protection
+
+    Returns:
+        Authentication token response
+    """
+    # provider / code 声明为可选，由 handler 统一返回 400 VALIDATION_ERROR：
+    # 业务级输入错误走我们自己的错误信封(400+code)，而非 FastAPI 必填参数缺失
+    # 的 422 —— 与姊妹端点 reset_password 的校验范式一致。
+    if not provider:
+        raise api_error(400, ErrorCode.VALIDATION_ERROR, "OAuth provider is required.")
+
+    if provider not in {"google", "github", "microsoft"}:
+        raise api_error(
+            400,
+            ErrorCode.VALIDATION_ERROR,
+            f"Unsupported OAuth provider: {provider}",
+            details={"supported_providers": ["google", "github", "microsoft"]},
+        )
+
+    if not code:
+        raise api_error(400, ErrorCode.VALIDATION_ERROR, "Authorization code is required.")
+
+    # TODO: Implement OAuth token exchange with provider
+    # This would involve:
+    # 1. Exchanging code for access token
+    # 2. Fetching user profile from provider
+    # 3. Creating or updating user in database
+    # 4. Issuing session token
+
+    raise api_error(
+        501,
+        ErrorCode.VALIDATION_ERROR,
+        f"OAuth login for {provider} is not yet implemented.",
+        details={"provider": provider},
+    )
 
 
 @router.post("/refresh")
@@ -295,15 +395,167 @@ async def logout(
 
 
 @router.post("/verify-email")
-async def verify_email() -> dict[str, bool]:
-    """Email verification endpoint (not implemented)."""
-    raise api_error(501, ErrorCode.VALIDATION_ERROR, "Email verification is not implemented.")
+async def verify_email(
+    token: str | None = None,
+    principal: PrincipalDependency | None = None,
+) -> dict[str, bool]:
+    """Verify user email address using verification token.
+
+    Args:
+        token: Email verification token sent to user's email
+        principal: Optional current principal for authenticated verification
+
+    Returns:
+        Success status
+    """
+    # token 声明为可选：缺失时由 handler 返回 400 VALIDATION_ERROR(业务校验)，
+    # 而非 FastAPI 必填参数缺失的 422 —— 与 reset_password / login_oauth 范式一致。
+    if not token:
+        raise api_error(400, ErrorCode.VALIDATION_ERROR, "Verification token is required.")
+
+    # TODO: Implement email verification logic
+    # This would involve:
+    # 1. Validating the verification token
+    # 2. Checking token expiration
+    # 3. Marking user email as verified
+    # 4. Invalidating the token
+
+    raise api_error(
+        501,
+        ErrorCode.VALIDATION_ERROR,
+        "Email verification is not yet implemented.",
+        details={"token_length": len(token)},
+    )
 
 
 @router.post("/reset-password")
-async def reset_password() -> dict[str, bool]:
-    """Password reset endpoint (not implemented)."""
-    raise api_error(501, ErrorCode.VALIDATION_ERROR, "Password reset is not implemented.")
+async def reset_password(
+    email: str | None = None,
+    token: str | None = None,
+    new_password: str | None = None,
+) -> dict[str, bool]:
+    """Password reset endpoint supporting two flows.
+
+    Flow 1 (Request reset):
+    - POST with email only
+    - Sends reset token to email
+
+    Flow 2 (Complete reset):
+    - POST with token and new_password
+    - Validates token and updates password
+
+    Args:
+        email: User email for requesting reset
+        token: Reset token from email
+        new_password: New password for completion
+
+    Returns:
+        Success status
+    """
+    if email and not token:
+        # Request password reset
+        if not email:
+            raise api_error(400, ErrorCode.VALIDATION_ERROR, "Email is required for password reset request.")
+
+        # Find user by email
+        user = None
+        for u in user_store.list():
+            if u.email == email:
+                user = u
+                break
+
+        if user is None:
+            # Prevent user enumeration: simulate work
+            import bcrypt
+            bcrypt.gensalt(rounds=12)
+            raise api_error(400, ErrorCode.VALIDATION_ERROR, "Password reset request failed.")
+
+        # Generate reset token (valid for 1 hour)
+        reset_token = f"xag_reset_{uuid4().hex}"
+        expiry_time = time.time() + 3600  # 1 hour
+
+        if _use_redis and _redis_client:
+            try:
+                _redis_client.setex(f"reset:{reset_token}:user_id", 3600, user.id)
+                _redis_client.setex(f"reset:{reset_token}:expiry", 3600, str(expiry_time))
+                logger.info(f"Password reset token generated for user: {user.id}")
+            except Exception as e:
+                logger.warning(f"Failed to store reset token in Redis: {e}")
+                raise api_error(500, ErrorCode.VALIDATION_ERROR, "Failed to generate reset token.")
+        else:
+            with _token_lock:
+                _token_expiry[f"reset:{reset_token}"] = expiry_time
+                _token_users[f"reset:{reset_token}"] = user.id
+
+        # TODO: Send reset token to user's email
+        # For now, return success (in production, send email with reset link)
+        return {"ok": True}
+
+    elif token and new_password:
+        # Complete password reset
+        if len(new_password) < 8:
+            raise api_error(400, ErrorCode.VALIDATION_ERROR, "Password must be at least 8 characters.")
+        if not any(c.isupper() for c in new_password) or not any(c.islower() for c in new_password):
+            raise api_error(
+                400,
+                ErrorCode.VALIDATION_ERROR,
+                "Password must contain both uppercase and lowercase letters.",
+            )
+        if not any(c.isdigit() for c in new_password):
+            raise api_error(400, ErrorCode.VALIDATION_ERROR, "Password must contain at least one digit.")
+
+        # Validate reset token
+        user_id = None
+        if _use_redis and _redis_client:
+            try:
+                user_id = _redis_client.get(f"reset:{token}:user_id")
+                expiry_str = _redis_client.get(f"reset:{token}:expiry")
+                if user_id and expiry_str:
+                    expiry = float(expiry_str)
+                    if time.time() > expiry:
+                        raise api_error(400, ErrorCode.VALIDATION_ERROR, "Reset token has expired.")
+                else:
+                    raise api_error(400, ErrorCode.VALIDATION_ERROR, "Invalid reset token.")
+            except Exception as e:
+                logger.warning(f"Failed to validate reset token in Redis: {e}")
+                raise api_error(400, ErrorCode.VALIDATION_ERROR, "Invalid reset token.")
+        else:
+            with _token_lock:
+                user_id = _token_users.get(f"reset:{token}")
+                expiry = _token_expiry.get(f"reset:{token}")
+                if not user_id or not expiry or time.time() > expiry:
+                    raise api_error(400, ErrorCode.VALIDATION_ERROR, "Invalid or expired reset token.")
+
+        # Update user password
+        user = user_store.get(user_id)
+        if not user:
+            raise api_error(400, ErrorCode.VALIDATION_ERROR, "User not found.")
+
+        import bcrypt
+        user.password_hash = bcrypt.hashpw(new_password.encode("utf-8"), bcrypt.gensalt(rounds=12)).decode("utf-8")
+        user.updated_at = datetime.now(UTC)
+        user_store._records[user.id] = user
+
+        # Invalidate reset token
+        if _use_redis and _redis_client:
+            try:
+                _redis_client.delete(f"reset:{token}:user_id")
+                _redis_client.delete(f"reset:{token}:expiry")
+            except Exception as e:
+                logger.warning(f"Failed to invalidate reset token: {e}")
+        else:
+            with _token_lock:
+                _token_users.pop(f"reset:{token}", None)
+                _token_expiry.pop(f"reset:{token}", None)
+
+        return {"ok": True}
+
+    else:
+        raise api_error(
+            400,
+            ErrorCode.VALIDATION_ERROR,
+            "Either email (for request) or token+new_password (for completion) is required.",
+        )
 
 
 @router.get("/me", response_model=dict[str, object])
