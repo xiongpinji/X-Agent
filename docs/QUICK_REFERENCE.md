@@ -8,10 +8,11 @@
 ## 目录
 
 1. [常用命令速查](#常用命令速查)
-2. [API 端点速查](#api-端点速查)
-3. [配置参数速查](#配置参数速查)
-4. [错误码速查](#错误码速查)
-5. [性能调优速查](#性能调优速查)
+2. [CI/CD 和监控命令](#cicd-和监控命令)
+3. [API 端点速查](#api-端点速查)
+4. [配置参数速查](#配置参数速查)
+5. [错误码速查](#错误码速查)
+6. [性能调优速查](#性能调优速查)
 
 ---
 
@@ -90,6 +91,88 @@ git rebase upstream/develop
 # 合并分支
 git merge feature/your-feature
 ```
+
+---
+
+## CI/CD 和监控命令
+
+### Makefile 命令
+
+```bash
+# 帮助信息
+make help
+
+# 安装和设置
+make install              # 安装依赖
+make dev                  # 安装开发依赖（包括测试和监控）
+
+# 开发工具
+make lint                 # 运行所有代码检查（ruff, mypy, pylint）
+make format               # 自动格式化代码（black, isort, ruff）
+make test                 # 运行单元测试并生成覆盖率报告
+make security             # 运行安全扫描（bandit, safety, semgrep）
+make ci                   # 运行完整 CI 流程（lint + security + test）
+
+# Docker 构建
+make build                # 构建 Docker 镜像
+
+# 监控栈管理
+make monitor-start        # 启动监控栈（Prometheus, Grafana, ELK, Jaeger）
+make monitor-stop         # 停止监控栈
+make monitor-logs         # 查看监控栈日志
+make monitor-status       # 检查监控栈状态
+
+# 清理
+make clean                # 清理临时文件和缓存
+make clean-docker         # 清理 Docker 容器和卷
+make clean-all            # 完整清理
+```
+
+### 验证脚本
+
+```bash
+# 验证 CI 流程配置
+python scripts/verify_ci.py
+
+# 验证监控栈
+python scripts/verify_monitoring.py
+```
+
+### GitHub Secrets 配置
+
+需要配置以下 GitHub Secrets：
+
+| Secret | 说明 |
+|--------|------|
+| AWS_ACCESS_KEY_ID | AWS 访问密钥 ID |
+| AWS_SECRET_ACCESS_KEY | AWS 秘密访问密钥 |
+| AWS_REGION | AWS 区域（如 us-east-1） |
+| HELM_REPO_URL | Helm 仓库 URL |
+| STAGING_SECRET_KEY | 暂存环境密钥（生成：openssl rand -base64 32） |
+| STAGING_DB_PASSWORD | 暂存数据库密码（生成：openssl rand -base64 32） |
+| STAGING_REDIS_PASSWORD | 暂存 Redis 密码（生成：openssl rand -base64 32） |
+| SLACK_WEBHOOK | Slack 通知 Webhook URL |
+
+### 监控服务访问
+
+| 服务 | URL | 登录凭证 |
+|------|-----|---------|
+| Prometheus | http://localhost:9090 | 无 |
+| Grafana | http://localhost:3000 | admin/admin |
+| AlertManager | http://localhost:9093 | 无 |
+| Elasticsearch | http://localhost:9200 | 无 |
+| Kibana | http://localhost:5601 | 无 |
+| Jaeger | http://localhost:16686 | 无 |
+| Node Exporter | http://localhost:9100 | 无 |
+
+### CI/CD 流程阶段
+
+1. **Lint** - 代码质量检查（ruff, mypy, pylint）
+2. **Security** - 安全扫描（bandit, safety, semgrep）
+3. **Test** - 单元和集成测试
+4. **Build** - Docker 镜像构建和推送
+5. **Deploy** - 部署到暂存/生产环境
+6. **Notify** - Slack 通知
 
 ---
 

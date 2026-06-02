@@ -6,6 +6,7 @@
 - [Runs API](#runs-api)
 - [Memory API](#memory-api)
 - [Tools API](#tools-api)
+- [MCP API](#mcp-api)
 - [Auth API](#auth-api)
 - [Traces API](#traces-api)
 - [Audit API](#audit-api)
@@ -694,6 +695,304 @@ Tools 是 Agent 可以调用的外部功能或服务。
     "tool_name": "web_search",
     "success": true
   }
+}
+```
+
+---
+
+## MCP API
+
+MCP（Model Context Protocol）API 用于管理和执行 MCP 工具。详细文档请参考 [MCP API 参考](MCP_API_REFERENCE.md)。
+
+### 获取 MCP 系统健康状态
+
+**端点**: `GET /api/v1/mcp/health`
+
+**权限**: `mcp:read`
+
+**描述**: 检查 MCP 系统和所有服务器的健康状态
+
+**响应** (200 OK):
+```json
+{
+  "status": "healthy",
+  "timestamp": "2025-05-29T10:30:00Z",
+  "servers": {
+    "filesystem": {
+      "status": "healthy",
+      "stats": {
+        "tools_count": 5,
+        "last_check": "2025-05-29T10:30:00Z"
+      }
+    },
+    "database": {
+      "status": "healthy",
+      "stats": {
+        "tools_count": 8,
+        "last_check": "2025-05-29T10:30:00Z"
+      }
+    }
+  }
+}
+```
+
+---
+
+### 获取 MCP 系统统计信息
+
+**端点**: `GET /api/v1/mcp/stats`
+
+**权限**: `mcp:read`
+
+**描述**: 获取 MCP 系统的详细统计信息
+
+**响应** (200 OK):
+```json
+{
+  "initialized": true,
+  "servers": {
+    "total_servers": 2,
+    "servers": {
+      "filesystem": {
+        "status": "healthy",
+        "tools_count": 5,
+        "active_connections": 2,
+        "avg_response_time_ms": 45
+      },
+      "database": {
+        "status": "healthy",
+        "tools_count": 8,
+        "active_connections": 1,
+        "avg_response_time_ms": 52
+      }
+    }
+  },
+  "tools": {
+    "total_mcp_tools": 13,
+    "by_category": {
+      "file_system": 5,
+      "database": 8
+    }
+  }
+}
+```
+
+---
+
+### 列出 MCP 工具
+
+**端点**: `GET /api/v1/tools?tags=mcp`
+
+**权限**: `tool:read`
+
+**查询参数**:
+- `tags` (string): 按标签过滤，使用 `mcp` 获取所有 MCP 工具
+- `server` (string, optional): 按服务器过滤
+- `risk_level` (string, optional): 按风险级别过滤
+
+**响应** (200 OK):
+```json
+{
+  "data": [
+    {
+      "id": "mcp_filesystem_read_file",
+      "name": "read_file",
+      "display_name": "Read File",
+      "description": "Read contents of a file",
+      "category": "file_system",
+      "risk_level": "low",
+      "server": "filesystem",
+      "tags": ["mcp", "mcp:filesystem", "file_system"]
+    },
+    {
+      "id": "mcp_database_query",
+      "name": "query",
+      "display_name": "Query Database",
+      "description": "Execute database query",
+      "category": "database",
+      "risk_level": "medium",
+      "server": "database",
+      "tags": ["mcp", "mcp:database", "database"]
+    }
+  ],
+  "pagination": {
+    "total": 13,
+    "limit": 100,
+    "offset": 0
+  }
+}
+```
+
+---
+
+### 执行 MCP 工具
+
+**端点**: `POST /api/v1/tools/{tool_id}/execute`
+
+**权限**: `tool:execute`
+
+**请求体**:
+```json
+{
+  "arguments": {
+    "path": "/tmp/test.txt"
+  }
+}
+```
+
+**响应** (200 OK):
+```json
+{
+  "tool_id": "mcp_filesystem_read_file",
+  "tool_name": "read_file",
+  "success": true,
+  "result": {
+    "content": "File content here",
+    "size": 18
+  },
+  "execution_time_ms": 45,
+  "cached": false,
+  "timestamp": "2025-05-29T10:30:00Z"
+}
+```
+
+---
+
+### 批量执行 MCP 工具
+
+**端点**: `POST /api/v1/tools/batch/execute`
+
+**权限**: `tool:execute`
+
+**请求体**:
+```json
+{
+  "requests": [
+    {
+      "tool_id": "mcp_filesystem_read_file",
+      "arguments": {"path": "/tmp/file1.txt"}
+    },
+    {
+      "tool_id": "mcp_filesystem_read_file",
+      "arguments": {"path": "/tmp/file2.txt"}
+    }
+  ]
+}
+```
+
+**响应** (200 OK):
+```json
+{
+  "results": [
+    {
+      "tool_id": "mcp_filesystem_read_file",
+      "success": true,
+      "result": {"content": "File 1 content", "size": 14},
+      "execution_time_ms": 45
+    },
+    {
+      "tool_id": "mcp_filesystem_read_file",
+      "success": true,
+      "result": {"content": "File 2 content", "size": 14},
+      "execution_time_ms": 42
+    }
+  ],
+  "total_time_ms": 87
+}
+```
+
+---
+
+### 列出 MCP 服务器
+
+**端点**: `GET /api/v1/mcp/servers`
+
+**权限**: `mcp:read`
+
+**响应** (200 OK):
+```json
+{
+  "data": [
+    {
+      "name": "filesystem",
+      "url": "http://localhost:8001",
+      "enabled": true,
+      "status": "healthy",
+      "tools_count": 5,
+      "active_connections": 2,
+      "last_check": "2025-05-29T10:30:00Z"
+    },
+    {
+      "name": "database",
+      "url": "http://localhost:8002",
+      "enabled": true,
+      "status": "healthy",
+      "tools_count": 8,
+      "active_connections": 1,
+      "last_check": "2025-05-29T10:30:00Z"
+    }
+  ]
+}
+```
+
+---
+
+### 刷新 MCP 服务器工具
+
+**端点**: `POST /api/v1/mcp/servers/{server_name}/refresh`
+
+**权限**: `mcp:manage`
+
+**描述**: 重新发现并注册指定服务器的工具
+
+**响应** (200 OK):
+```json
+{
+  "server_name": "filesystem",
+  "tools_discovered": 5,
+  "tools_registered": 5,
+  "timestamp": "2025-05-29T10:30:00Z"
+}
+```
+
+---
+
+### 获取 MCP 缓存统计
+
+**端点**: `GET /api/v1/mcp/cache/stats`
+
+**权限**: `mcp:read`
+
+**响应** (200 OK):
+```json
+{
+  "enabled": true,
+  "total_entries": 150,
+  "total_size_bytes": 524288,
+  "ttl_seconds": 300,
+  "hit_rate": 0.65,
+  "total_hits": 1200,
+  "total_misses": 650
+}
+```
+
+---
+
+### 清除 MCP 缓存
+
+**端点**: `POST /api/v1/mcp/cache/clear`
+
+**权限**: `mcp:manage`
+
+**查询参数**:
+- `server` (string, optional): 只清除特定服务器的缓存
+
+**响应** (200 OK):
+```json
+{
+  "cleared_entries": 150,
+  "freed_bytes": 524288,
+  "timestamp": "2025-05-29T10:30:00Z"
 }
 ```
 

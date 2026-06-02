@@ -6,6 +6,7 @@ Complete REST API documentation for X-Agent Core.
 
 - [API 使用指南](./API_GUIDE.md) - 详细的使用指南和最佳实践
 - [API 参考文档](./API_REFERENCE.md) - 完整的端点参考
+- [API 错误码参考](./API_ERROR_CODES.md) - 所有错误码及解决方案
 - [Postman 集合](./X-Agent.postman_collection.json) - 可导入的 Postman 集合
 - [OpenAPI Schema](./openapi.json) - OpenAPI 3.0 规范
 
