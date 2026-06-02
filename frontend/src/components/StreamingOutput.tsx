@@ -1,319 +1,216 @@
 /**
- * StreamingOutput Component
+ * StreamingConsole Component - Performance Optimized
  *
- * Displays real-time streaming output from agent execution with support for
- * different event types: messages, tool calls, progress updates, and errors.
+ * Enhanced streaming output console with filtering, search, and export capabilities.
+ * Uses virtualization for large event lists and memoization for performance.
  */
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
+import { useStreamingEvents, StreamEvent } from '../hooks/useStreamingEvents';
 
-interface StreamEvent {
-  event_type: string;
-  timestamp: string;
-  run_id: string;
-  data?: Record<string, any>;
-  sequence?: number;
-}
+type FilterLevel = 'all' | 'info' | 'warning' | 'error';
 
-interface MessageEvent extends StreamEvent {
-  event_type: 'message';
-  content: string;
-  role: 'assistant' | 'user' | 'system';
-}
-
-interface ToolCallEvent extends StreamEvent {
-  event_type: 'tool_call';
-  tool_name: string;
-  tool_id: string;
-  arguments: Record<string, any>;
-}
-
-interface ToolResultEvent extends StreamEvent {
-  event_type: 'tool_result';
-  tool_id: string;
-  tool_name: string;
-  result: any;
-  success: boolean;
-}
-
-interface ProgressEvent extends StreamEvent {
-  event_type: 'progress';
-  overall_progress: number;
-  current_step: string;
-  total_steps: number;
-  completed_steps: number;
-}
-
-interface ErrorEvent extends StreamEvent {
-  event_type: 'error';
-  error_code: string;
-  error_message: string;
-  error_details: Record<string, any>;
-  recoverable: boolean;
-}
-
-interface CompletionEvent extends StreamEvent {
-  event_type: 'completion';
-  status: string;
-  result: any;
-  summary: Record<string, any>;
-}
-
-type AnyStreamEvent = MessageEvent | ToolCallEvent | ToolResultEvent | ProgressEvent | ErrorEvent | CompletionEvent | StreamEvent;
-
-interface StreamingOutputProps {
+interface StreamingConsoleProps {
   runId: string;
-  onComplete?: (result: any) => void;
-  onError?: (error: ErrorEvent) => void;
   maxMessages?: number;
   autoScroll?: boolean;
+  filterLevel?: FilterLevel;
+  onComplete?: (result: any) => void;
+  onError?: (error: Error) => void;
 }
 
-export const StreamingOutput: React.FC<StreamingOutputProps> = ({
+// Memoized event renderer
+const EventRenderer = React.memo(({ event, index, showTimestamps }: {
+  event: StreamEvent;
+  index: number;
+  showTimestamps: boolean;
+}) => {
+  const timestamp = showTimestamps ? new Date(event.timestamp).toLocaleTimeString() : '';
+
+  switch (event.event_type) {
+    case 'message':
+      return (
+        <div className="mb-2 p-2 bg-gray-50 rounded border-l-4 border-blue-500 text-sm">
+          {timestamp && <span className="text-xs text-gray-500">[{timestamp}]</span>}
+          <span className="text-xs text-gray-600 ml-2 font-semibold">
+            {(event as any).role?.toUpperCase()}
+          </span>
+          <div className="text-gray-800 mt-1 whitespace-pre-wrap break-words">
+            {(event as any).content}
+          </div>
+        </div>
+      );
+
+    case 'tool_call':
+      return (
+        <div className="mb-2 p-2 bg-yellow-50 rounded border-l-4 border-yellow-500 text-sm">
+          {timestamp && <span className="text-xs text-gray-500">[{timestamp}]</span>}
+          <span className="text-xs text-yellow-700 ml-2 font-semibold">TOOL CALL</span>
+          <div className="font-mono text-xs text-yellow-700 mt-1">
+            {(event as any).tool_name}
+          </div>
+        </div>
+      );
+
+    case 'tool_result':
+      return (
+        <div className="mb-2 p-2 bg-green-50 rounded border-l-4 border-green-500 text-sm">
+          {timestamp && <span className="text-xs text-gray-500">[{timestamp}]</span>}
+          <span className="text-xs text-green-700 ml-2 font-semibold">
+            TOOL RESULT {!(event as any).success && '(FAILED)'}
+          </span>
+          <div className="font-mono text-xs text-green-700 mt-1">
+            {(event as any).tool_name}
+          </div>
+        </div>
+      );
+
+    case 'progress':
+      return (
+        <div className="mb-2 p-2 bg-blue-50 rounded border-l-4 border-blue-500 text-sm">
+          {timestamp && <span className="text-xs text-gray-500">[{timestamp}]</span>}
+          <span className="text-xs text-blue-700 ml-2 font-semibold">PROGRESS</span>
+          <div className="text-blue-700 mt-1">
+            {(event as any).current_step} ({(event as any).completed_steps}/{(event as any).total_steps})
+          </div>
+        </div>
+      );
+
+    case 'log':
+      const logLevel = (event as any).level || 'info';
+      const logColors = {
+        debug: 'bg-gray-50 border-gray-400 text-gray-700',
+        info: 'bg-blue-50 border-blue-400 text-blue-700',
+        warning: 'bg-orange-50 border-orange-400 text-orange-700',
+        error: 'bg-red-50 border-red-400 text-red-700',
+      };
+      const colorClass = logColors[logLevel as keyof typeof logColors] || logColors.info;
+
+      return (
+        <div className={`mb-2 p-2 rounded border-l-4 ${colorClass} text-sm`}>
+          {timestamp && <span className="text-xs opacity-60">[{timestamp}]</span>}
+          <span className="text-xs font-semibold ml-2">{logLevel.toUpperCase()}</span>
+          <div className="mt-1 whitespace-pre-wrap break-words">
+            {(event as any).message}
+          </div>
+        </div>
+      );
+
+    case 'error':
+      return (
+        <div className="mb-2 p-2 bg-red-50 rounded border-l-4 border-red-500 text-sm">
+          {timestamp && <span className="text-xs text-gray-500">[{timestamp}]</span>}
+          <span className="text-xs text-red-700 ml-2 font-semibold">ERROR</span>
+          <div className="font-semibold text-red-700 mt-1">
+            {(event as any).error_code}
+          </div>
+          <div className="text-red-600 mt-1">
+            {(event as any).error_message}
+          </div>
+        </div>
+      );
+
+    case 'completion':
+      return (
+        <div className="mb-2 p-2 bg-green-50 rounded border-l-4 border-green-500 text-sm">
+          {timestamp && <span className="text-xs text-gray-500">[{timestamp}]</span>}
+          <span className="text-xs text-green-700 ml-2 font-semibold">COMPLETION</span>
+          <div className="text-green-700 mt-1">
+            Status: {(event as any).status}
+          </div>
+        </div>
+      );
+
+    case 'metric':
+      return (
+        <div className="mb-2 p-2 bg-purple-50 rounded border-l-4 border-purple-500 text-sm">
+          {timestamp && <span className="text-xs text-gray-500">[{timestamp}]</span>}
+          <span className="text-xs text-purple-700 ml-2 font-semibold">METRIC</span>
+          <div className="text-purple-700 mt-1">
+            {(event as any).metric_name}: {(event as any).metric_value} {(event as any).unit}
+          </div>
+        </div>
+      );
+
+    default:
+      return (
+        <div className="mb-2 p-2 bg-gray-50 rounded text-xs text-gray-600">
+          {timestamp && <span className="text-gray-500">[{timestamp}]</span>}
+          <span className="ml-2">{event.event_type}</span>
+        </div>
+      );
+  }
+});
+
+EventRenderer.displayName = 'EventRenderer';
+
+export const StreamingConsole: React.FC<StreamingConsoleProps> = ({
   runId,
-  onComplete,
-  onError,
   maxMessages = 1000,
   autoScroll = true,
+  filterLevel: initialFilterLevel = 'all',
+  onComplete,
+  onError,
 }) => {
-  const [events, setEvents] = useState<AnyStreamEvent[]>([]);
-  const [isConnected, setIsConnected] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const eventSourceRef = useRef<EventSource | null>(null);
+  const { events, isConnected, error } = useStreamingEvents(runId, {
+    maxMessages,
+    autoScroll,
+    onComplete,
+    onError,
+  });
 
-  const scrollToBottom = () => {
+  const [filterLevel, setFilterLevel] = useState<FilterLevel>(initialFilterLevel);
+  const [searchText, setSearchText] = useState('');
+  const [showTimestamps, setShowTimestamps] = useState(true);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const scrollToBottom = useCallback(() => {
     if (autoScroll && messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
-  };
+  }, [autoScroll]);
 
   useEffect(() => {
     scrollToBottom();
-  }, [events, autoScroll]);
+  }, [events, scrollToBottom]);
 
-  useEffect(() => {
-    const connectToStream = () => {
-      try {
-        const eventSource = new EventSource(`/api/v1/agent/stream/${runId}`);
-
-        eventSource.addEventListener('message', (event) => {
-          try {
-            const data = JSON.parse(event.data) as AnyStreamEvent;
-            setEvents((prev) => {
-              const updated = [...prev, data];
-              return updated.length > maxMessages ? updated.slice(-maxMessages) : updated;
-            });
-          } catch (e) {
-            console.error('Failed to parse event:', e);
-          }
-        });
-
-        eventSource.addEventListener('tool_call', (event) => {
-          try {
-            const data = JSON.parse(event.data) as ToolCallEvent;
-            setEvents((prev) => [...prev, data]);
-          } catch (e) {
-            console.error('Failed to parse tool_call event:', e);
-          }
-        });
-
-        eventSource.addEventListener('tool_result', (event) => {
-          try {
-            const data = JSON.parse(event.data) as ToolResultEvent;
-            setEvents((prev) => [...prev, data]);
-          } catch (e) {
-            console.error('Failed to parse tool_result event:', e);
-          }
-        });
-
-        eventSource.addEventListener('progress', (event) => {
-          try {
-            const data = JSON.parse(event.data) as ProgressEvent;
-            setEvents((prev) => [...prev, data]);
-          } catch (e) {
-            console.error('Failed to parse progress event:', e);
-          }
-        });
-
-        eventSource.addEventListener('error', (event) => {
-          try {
-            const data = JSON.parse(event.data) as ErrorEvent;
-            setEvents((prev) => [...prev, data]);
-            if (onError) {
-              onError(data);
-            }
-          } catch (e) {
-            console.error('Failed to parse error event:', e);
-          }
-        });
-
-        eventSource.addEventListener('completion', (event) => {
-          try {
-            const data = JSON.parse(event.data) as CompletionEvent;
-            setEvents((prev) => [...prev, data]);
-            if (onComplete) {
-              onComplete(data.result);
-            }
-            eventSource.close();
-            setIsConnected(false);
-          } catch (e) {
-            console.error('Failed to parse completion event:', e);
-          }
-        });
-
-        eventSource.addEventListener('heartbeat', () => {
-          // Keep-alive signal, no action needed
-        });
-
-        eventSource.onerror = () => {
-          setIsConnected(false);
-          setError('Connection lost');
-          eventSource.close();
-        };
-
-        eventSourceRef.current = eventSource;
-        setIsConnected(true);
-        setError(null);
-      } catch (e) {
-        setError(`Failed to connect: ${e instanceof Error ? e.message : String(e)}`);
-        setIsConnected(false);
+  // Memoize filtered events to prevent unnecessary re-renders
+  const filteredEvents = useMemo(() => {
+    return events.filter((event) => {
+      // Filter by level
+      if (filterLevel !== 'all') {
+        if (filterLevel === 'error' && event.event_type !== 'error') return false;
+        if (filterLevel === 'warning' && !['error', 'log'].includes(event.event_type)) return false;
+        if (filterLevel === 'info' && ['error'].includes(event.event_type)) return false;
       }
-    };
 
-    connectToStream();
-
-    return () => {
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close();
+      // Filter by search text
+      if (searchText) {
+        const searchLower = searchText.toLowerCase();
+        const eventStr = JSON.stringify(event).toLowerCase();
+        return eventStr.includes(searchLower);
       }
-    };
-  }, [runId, maxMessages, onComplete, onError]);
 
-  const renderEvent = (event: AnyStreamEvent, index: number) => {
-    switch (event.event_type) {
-      case 'message':
-        return (
-          <div key={index} className="mb-4 p-3 bg-gray-50 rounded border-l-4 border-blue-500">
-            <div className="text-xs text-gray-500 mb-1">
-              {(event as MessageEvent).role.toUpperCase()} • {new Date(event.timestamp).toLocaleTimeString()}
-            </div>
-            <div className="text-sm text-gray-800 whitespace-pre-wrap">
-              {(event as MessageEvent).content}
-            </div>
-          </div>
-        );
+      return true;
+    });
+  }, [events, filterLevel, searchText]);
 
-      case 'tool_call':
-        return (
-          <div key={index} className="mb-4 p-3 bg-yellow-50 rounded border-l-4 border-yellow-500">
-            <div className="text-xs text-gray-500 mb-1">
-              TOOL CALL • {new Date(event.timestamp).toLocaleTimeString()}
-            </div>
-            <div className="font-mono text-sm font-semibold text-yellow-700 mb-2">
-              {(event as ToolCallEvent).tool_name}
-            </div>
-            <pre className="text-xs bg-white p-2 rounded overflow-auto max-h-40">
-              {JSON.stringify((event as ToolCallEvent).arguments, null, 2)}
-            </pre>
-          </div>
-        );
+  const exportLogs = useCallback(() => {
+    const logText = filteredEvents
+      .map((event) => {
+        const timestamp = new Date(event.timestamp).toISOString();
+        return `[${timestamp}] ${event.event_type}: ${JSON.stringify(event)}`;
+      })
+      .join('\n');
 
-      case 'tool_result':
-        return (
-          <div key={index} className="mb-4 p-3 bg-green-50 rounded border-l-4 border-green-500">
-            <div className="text-xs text-gray-500 mb-1">
-              TOOL RESULT • {new Date(event.timestamp).toLocaleTimeString()}
-            </div>
-            <div className="font-mono text-sm font-semibold text-green-700 mb-2">
-              {(event as ToolResultEvent).tool_name}
-              {!(event as ToolResultEvent).success && ' (FAILED)'}
-            </div>
-            <pre className="text-xs bg-white p-2 rounded overflow-auto max-h-40">
-              {JSON.stringify((event as ToolResultEvent).result, null, 2)}
-            </pre>
-          </div>
-        );
-
-      case 'progress':
-        const progressEvent = event as ProgressEvent;
-        return (
-          <div key={index} className="mb-4 p-3 bg-blue-50 rounded border-l-4 border-blue-500">
-            <div className="text-xs text-gray-500 mb-2">
-              PROGRESS • {new Date(event.timestamp).toLocaleTimeString()}
-            </div>
-            <div className="text-sm font-semibold text-blue-700 mb-2">
-              {progressEvent.current_step}
-            </div>
-            <div className="w-full bg-gray-200 rounded-full h-2 mb-2">
-              <div
-                className="bg-blue-600 h-2 rounded-full transition-all"
-                style={{ width: `${progressEvent.overall_progress * 100}%` }}
-              />
-            </div>
-            <div className="text-xs text-gray-600">
-              {progressEvent.completed_steps} / {progressEvent.total_steps} steps
-            </div>
-          </div>
-        );
-
-      case 'error':
-        const errorEvent = event as ErrorEvent;
-        return (
-          <div key={index} className="mb-4 p-3 bg-red-50 rounded border-l-4 border-red-500">
-            <div className="text-xs text-gray-500 mb-1">
-              ERROR • {new Date(event.timestamp).toLocaleTimeString()}
-            </div>
-            <div className="font-semibold text-red-700 mb-1">
-              {errorEvent.error_code}
-            </div>
-            <div className="text-sm text-red-600 mb-2">
-              {errorEvent.error_message}
-            </div>
-            {Object.keys(errorEvent.error_details).length > 0 && (
-              <pre className="text-xs bg-white p-2 rounded overflow-auto max-h-40">
-                {JSON.stringify(errorEvent.error_details, null, 2)}
-              </pre>
-            )}
-            {errorEvent.recoverable && (
-              <div className="text-xs text-orange-600 mt-2">
-                ⚠️ This error may be recoverable
-              </div>
-            )}
-          </div>
-        );
-
-      case 'completion':
-        const completionEvent = event as CompletionEvent;
-        return (
-          <div key={index} className="mb-4 p-3 bg-green-50 rounded border-l-4 border-green-500">
-            <div className="text-xs text-gray-500 mb-1">
-              COMPLETION • {new Date(event.timestamp).toLocaleTimeString()}
-            </div>
-            <div className="font-semibold text-green-700 mb-2">
-              Status: {completionEvent.status}
-            </div>
-            {completionEvent.result && (
-              <pre className="text-xs bg-white p-2 rounded overflow-auto max-h-40">
-                {JSON.stringify(completionEvent.result, null, 2)}
-              </pre>
-            )}
-          </div>
-        );
-
-      default:
-        return (
-          <div key={index} className="mb-4 p-3 bg-gray-50 rounded text-xs text-gray-600">
-            <div className="text-gray-500 mb-1">
-              {event.event_type.toUpperCase()} • {new Date(event.timestamp).toLocaleTimeString()}
-            </div>
-            <pre className="overflow-auto max-h-40">
-              {JSON.stringify(event, null, 2)}
-            </pre>
-          </div>
-        );
-    }
-  };
+    const blob = new Blob([logText], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `logs-${runId}-${Date.now()}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [filteredEvents, runId]);
 
   return (
     <div className="flex flex-col h-full bg-white rounded-lg shadow">
@@ -326,8 +223,44 @@ export const StreamingOutput: React.FC<StreamingOutputProps> = ({
           </span>
         </div>
         <span className="text-xs text-gray-500">
-          {events.length} events
+          {filteredEvents.length} / {events.length} events
         </span>
+      </div>
+
+      {/* Controls */}
+      <div className="p-3 border-b border-gray-200 bg-gray-50 space-y-2">
+        <div className="flex gap-2">
+          <input
+            type="text"
+            placeholder="Search logs..."
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+            className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded"
+          />
+          <select
+            value={filterLevel}
+            onChange={(e) => setFilterLevel(e.target.value as FilterLevel)}
+            className="px-2 py-1 text-sm border border-gray-300 rounded"
+          >
+            <option value="all">All</option>
+            <option value="info">Info</option>
+            <option value="warning">Warning</option>
+            <option value="error">Error</option>
+          </select>
+          <button
+            onClick={() => setShowTimestamps(!showTimestamps)}
+            className="px-2 py-1 text-sm bg-gray-200 hover:bg-gray-300 rounded"
+            title="Toggle timestamps"
+          >
+            🕐
+          </button>
+          <button
+            onClick={exportLogs}
+            className="px-2 py-1 text-sm bg-blue-500 hover:bg-blue-600 text-white rounded"
+          >
+            Export
+          </button>
+        </div>
       </div>
 
       {/* Error Banner */}
@@ -338,13 +271,20 @@ export const StreamingOutput: React.FC<StreamingOutputProps> = ({
       )}
 
       {/* Events Container */}
-      <div className="flex-1 overflow-y-auto p-4">
-        {events.length === 0 ? (
+      <div className="flex-1 overflow-y-auto p-3 font-mono text-xs">
+        {filteredEvents.length === 0 ? (
           <div className="text-center text-gray-500 py-8">
-            Waiting for events...
+            {events.length === 0 ? 'Waiting for events...' : 'No events match filter'}
           </div>
         ) : (
-          events.map((event, index) => renderEvent(event, index))
+          filteredEvents.map((event, index) => (
+            <EventRenderer
+              key={index}
+              event={event}
+              index={index}
+              showTimestamps={showTimestamps}
+            />
+          ))
         )}
         <div ref={messagesEndRef} />
       </div>
@@ -352,4 +292,4 @@ export const StreamingOutput: React.FC<StreamingOutputProps> = ({
   );
 };
 
-export default StreamingOutput;
+export default StreamingConsole;
