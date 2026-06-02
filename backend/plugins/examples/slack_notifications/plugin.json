@@ -1,0 +1,27 @@
+{
+  "name": "Slack Notifications",
+  "version": "1.0.0",
+  "author": "X-Agent Team",
+  "description": "Send messages and notifications to Slack channels",
+  "license": "MIT",
+  "keywords": ["slack", "notifications", "messaging", "channels"],
+  "categories": ["automation"],
+  "capabilities": [
+    "send_message",
+    "send_notification",
+    "create_channel",
+    "list_channels",
+    "send_file",
+    "get_user_info"
+  ],
+  "permissions": [
+    "slack:read",
+    "slack:write"
+  ],
+  "dependencies": {},
+  "entry_point": "main.py",
+  "icon_url": "https://a.slack-edge.com/80588/marketing/img/icons/icon_slack_hash_colored.png",
+  "screenshots": [],
+  "documentation_url": "https://api.slack.com/docs",
+  "support_url": "https://slack.com/help"
+}

@@ -1,0 +1,27 @@
+{
+  "name": "Code Review",
+  "version": "1.0.0",
+  "author": "X-Agent Team",
+  "description": "Automated code review with quality analysis, style checking, and security scanning",
+  "license": "MIT",
+  "keywords": ["code", "review", "quality", "security", "style"],
+  "categories": ["development"],
+  "capabilities": [
+    "review_code",
+    "check_style",
+    "detect_issues",
+    "suggest_improvements",
+    "check_security",
+    "generate_report"
+  ],
+  "permissions": [
+    "code:read",
+    "code:analyze"
+  ],
+  "dependencies": {},
+  "entry_point": "main.py",
+  "icon_url": "https://cdn-icons-png.flaticon.com/512/3143/3143615.png",
+  "screenshots": [],
+  "documentation_url": "https://www.sonarqube.org/features/code-quality/",
+  "support_url": "https://community.sonarsource.com/"
+}

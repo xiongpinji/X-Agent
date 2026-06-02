@@ -1,0 +1,131 @@
+{
+  "metadata": {
+    "plugin_id": "data-processor",
+    "name": "Data Processor",
+    "version": "1.0.0",
+    "author": "X-Agent Team",
+    "description": "Process, transform, and aggregate data with various operations",
+    "long_description": "A comprehensive data processing plugin that provides capabilities for array processing, data aggregation, transformation, filtering, and sorting. Supports multiple operations and data formats.",
+    "homepage": "https://x-agent.dev/plugins/data-processor",
+    "repository": "https://github.com/x-agent/plugins/data-processor",
+    "license": "MIT",
+    "keywords": ["data", "processing", "transformation", "aggregation"]
+  },
+  "capabilities": [
+    {
+      "name": "process_array",
+      "description": "Process array data with mathematical operations",
+      "version": "1.0",
+      "parameters": {
+        "data": {
+          "type": "array",
+          "description": "Array of numbers to process"
+        },
+        "operation": {
+          "type": "string",
+          "description": "Operation to perform: double, square, sqrt",
+          "default": "double"
+        }
+      }
+    },
+    {
+      "name": "aggregate",
+      "description": "Aggregate data using various methods",
+      "version": "1.0",
+      "parameters": {
+        "data": {
+          "type": "array",
+          "description": "Array of numbers to aggregate"
+        },
+        "method": {
+          "type": "string",
+          "description": "Aggregation method: sum, avg, min, max",
+          "default": "sum"
+        }
+      }
+    },
+    {
+      "name": "transform",
+      "description": "Transform data between formats",
+      "version": "1.0",
+      "parameters": {
+        "data": {
+          "type": "object",
+          "description": "Data to transform"
+        },
+        "transformation": {
+          "type": "string",
+          "description": "Transformation type: json, keys, values",
+          "default": "json"
+        }
+      }
+    },
+    {
+      "name": "filter",
+      "description": "Filter data based on conditions",
+      "version": "1.0",
+      "parameters": {
+        "data": {
+          "type": "array",
+          "description": "Array to filter"
+        },
+        "condition": {
+          "type": "string",
+          "description": "Filter condition: gt, lt, eq, gte, lte",
+          "default": "gt"
+        },
+        "value": {
+          "type": "number",
+          "description": "Comparison value",
+          "default": 0
+        }
+      }
+    },
+    {
+      "name": "sort",
+      "description": "Sort data in ascending or descending order",
+      "version": "1.0",
+      "parameters": {
+        "data": {
+          "type": "array",
+          "description": "Array to sort"
+        },
+        "order": {
+          "type": "string",
+          "description": "Sort order: asc, desc",
+          "default": "asc"
+        }
+      }
+    }
+  ],
+  "dependencies": [],
+  "permissions": [
+    {
+      "resource": "data",
+      "action": "process",
+      "scope": "plugin",
+      "description": "Process data within the plugin"
+    }
+  ],
+  "entry_point": "data_processor_plugin",
+  "config_schema": {
+    "type": "object",
+    "properties": {
+      "max_array_size": {
+        "type": "integer",
+        "description": "Maximum array size to process",
+        "default": 10000
+      },
+      "timeout_seconds": {
+        "type": "integer",
+        "description": "Operation timeout in seconds",
+        "default": 30
+      }
+    }
+  },
+  "risk_level": "low",
+  "requires_approval": false,
+  "sandbox_enabled": true,
+  "created_at": "2026-05-29T00:00:00Z",
+  "updated_at": "2026-05-29T00:00:00Z"
+}

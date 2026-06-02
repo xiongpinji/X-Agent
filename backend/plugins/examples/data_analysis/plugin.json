@@ -1,0 +1,27 @@
+{
+  "name": "Data Analysis",
+  "version": "1.0.0",
+  "author": "X-Agent Team",
+  "description": "Analyze, visualize, and forecast data with statistical tools",
+  "license": "MIT",
+  "keywords": ["data", "analysis", "statistics", "visualization", "forecasting"],
+  "categories": ["data"],
+  "capabilities": [
+    "analyze_data",
+    "generate_report",
+    "create_visualization",
+    "statistical_summary",
+    "detect_anomalies",
+    "forecast"
+  ],
+  "permissions": [
+    "data:read",
+    "data:write"
+  ],
+  "dependencies": {},
+  "entry_point": "main.py",
+  "icon_url": "https://cdn-icons-png.flaticon.com/512/3050/3050159.png",
+  "screenshots": [],
+  "documentation_url": "https://pandas.pydata.org/docs/",
+  "support_url": "https://stackoverflow.com/questions/tagged/pandas"
+}
