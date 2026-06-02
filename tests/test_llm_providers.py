@@ -313,11 +313,13 @@ class TestLLMProviderFactory:
 
     def test_unsupported_provider(self):
         """Test unsupported provider."""
-        config = LLMConfig(
-            provider="unsupported",
-            model="test",
-        )
+        # 生产代码在 LLMConfig 构造阶段(__post_init__)即校验 provider 合法性，
+        # 比工厂创建更早拦截非法值——所以 pytest.raises 需覆盖到构造这步。
         with pytest.raises(ValueError):
+            config = LLMConfig(
+                provider="unsupported",
+                model="test",
+            )
             LLMProviderFactory.create(config)
 
 
