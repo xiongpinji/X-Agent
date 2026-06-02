@@ -9,6 +9,7 @@ X-Agent 性能压力测试套件
 """
 
 import asyncio
+import threading
 import time
 from typing import List
 from uuid import uuid4
@@ -16,14 +17,13 @@ from uuid import uuid4
 import pytest
 
 from backend.app.core.agent import AgentLoop
-from backend.app.core.llm import LLMRouter
+from backend.app.core.llm import LLMRouter, MockLLMBackend
 from backend.app.core.memory import MemoryItem, MemoryScope, MemorySystem
 from backend.app.core.tool_registry import ToolRegistry
-from backend.app.core.tool_schema import ToolSchema
+from backend.app.core.tool_schema import ToolSchema, ToolCategory
 from backend.app.core.tracing import TraceStore
 from backend.app.core.audit import AuditStore
-from backend.app.services.observability.langfuse_client import langfuse_client
-
+from backend.app.core.contracts import RunContext
 
 # ============================================================================
 # 性能测试1：并发100个Agent请求
@@ -44,7 +44,7 @@ async def test_concurrent_agent_requests():
 
     # 2. 创建Agent工厂
     def create_agent():
-        llm_router = LLMRouter()
+        llm_router = LLMRouter(backend=MockLLMBackend())
         tool_registry = ToolRegistry()
         return AgentLoop(
             llm_router=llm_router,
@@ -57,11 +57,11 @@ async def test_concurrent_agent_requests():
     # 3. 定义Agent任务
     async def agent_task(agent_id: str, task_id: int):
         agent = create_agent()
+        context = RunContext(tenant_id=tenant_id, agent_id=agent_id)
 
         # 存储记忆
-        memory_item = MemoryItem(
-            tenant_id=tenant_id,
-            agent_id=agent_id,
+        memory_id = await agent.memory.store(
+            context=context,
             content=f"Agent {agent_id} task {task_id}",
             layer=1,
             importance=0.5,
@@ -69,23 +69,19 @@ async def test_concurrent_agent_requests():
             scope=MemoryScope(owner_agent_id=agent_id),
         )
 
-        stored = await agent.memory.store(memory_item)
-
         # 记录事件
-        trace_store.record_event(
-            event_type="agent.task.complete",
-            tenant_id=tenant_id,
-            data={
-                "agent_id": agent_id,
-                "task_id": task_id,
-                "memory_id": stored.id,
-            },
+        trace_store.record(
+            context,
+            event="agent.task.complete",
+            agent_id=agent_id,
+            task_id=task_id,
+            memory_id=memory_id,
         )
 
         return {
             "agent_id": agent_id,
             "task_id": task_id,
-            "memory_id": stored.id,
+            "memory_id": memory_id,
             "status": "success",
         }
 
@@ -136,10 +132,8 @@ async def test_parallel_tool_calls():
         schema = ToolSchema(
             name=f"tool_{i}",
             description=f"Test tool {i}",
-            parameters={
-                "input": {"type": "string", "description": "Input parameter"}
-            },
-            required=["input"],
+            category=ToolCategory.SYSTEM,
+            parameters=[],
         )
         tool_registry.register(schema)
 
@@ -208,9 +202,9 @@ async def test_memory_scale():
     start_time = time.time()
 
     async def store_memory(index: int):
-        item = MemoryItem(
-            tenant_id=tenant_id,
-            agent_id=agent_id,
+        context = RunContext(tenant_id=tenant_id, agent_id=agent_id)
+        return await memory_system.store(
+            context=context,
             content=f"Memory item {index}",
             layer=(index % 3) + 1,
             importance=0.3 + (index % 7) * 0.1,
@@ -221,7 +215,6 @@ async def test_memory_scale():
                 "batch": index // 1000,
             },
         )
-        return await memory_system.store(item)
 
     # 分批存储以避免内存溢出
     batch_size = 100
@@ -245,14 +238,14 @@ async def test_memory_scale():
     start_time = time.time()
 
     async def retrieve_memory(memory_id: str):
-        return await memory_system.retrieve(memory_id)
+        return memory_system.get_item(memory_id)
 
     # 随机查询1000条记忆
     import random
     sample_memories = random.sample(stored_memories, min(1000, len(stored_memories)))
 
     query_tasks = [
-        retrieve_memory(m.id)
+        retrieve_memory(m)
         for m in sample_memories
     ]
 
@@ -292,26 +285,22 @@ async def test_long_running_stability():
         iteration = 0
 
         while time.time() - start_time < duration_seconds:
+            context = RunContext(tenant_id=tenant_id, agent_id=f"agent-{task_id}")
             # 存储记忆
-            item = MemoryItem(
-                tenant_id=tenant_id,
-                agent_id=f"agent-{task_id}",
+            await memory_system.store(
+                context=context,
                 content=f"Task {task_id} iteration {iteration}",
                 layer=1,
                 importance=0.5,
                 scope=MemoryScope(owner_agent_id=f"agent-{task_id}"),
             )
 
-            await memory_system.store(item)
-
             # 记录事件
-            trace_store.record_event(
-                event_type="task.iteration",
-                tenant_id=tenant_id,
-                data={
-                    "task_id": task_id,
-                    "iteration": iteration,
-                },
+            trace_store.record(
+                context,
+                event="task.iteration",
+                task_id=task_id,
+                iteration=iteration,
             )
 
             iteration += 1
@@ -353,6 +342,19 @@ async def test_long_running_stability():
     # 5. 验证稳定性
     assert all(r["iterations"] > 0 for r in results)
     assert total_iterations > 0
+
+
+# ============================================================================
+# 性能测试5：记忆系统性能
+# ============================================================================
+
+
+class TestMemoryPerformance:
+    """测试记忆系统在负载下的性能"""
+
+    def test_memory_concurrent_access(self):
+        """测试并发记忆访问"""
+        memory_system = MemorySystem()
         results = []
 
         def add_memories():

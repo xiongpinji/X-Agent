@@ -12,7 +12,8 @@ from backend.app.services.desktop.ui_tars_client import UiTarsDesktopClient
 
 
 def test_api_key_guard_blocks_protected_routes_when_enabled(monkeypatch) -> None:
-    client = TestClient(app, headers={"x-api-key": "bootstrap"})
+    # Do NOT send x-api-key header — the guard checks for its presence.
+    client = TestClient(app)
     monkeypatch.setattr("backend.app.main.settings.require_api_key", True)
 
     response = client.get("/api/v1/overview")

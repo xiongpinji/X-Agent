@@ -18,6 +18,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
+from starlette.routing import Route
 from starlette.testclient import TestClient
 
 from backend.app.core.middleware.base import BaseMiddleware, MiddlewareChain
@@ -32,21 +33,26 @@ from backend.app.core.middleware.config import MiddlewareConfig, MiddlewareFacto
 @pytest.fixture
 def app():
     """Create test application."""
-    app = Starlette()
 
-    @app.route("/test")
     async def test_endpoint(request):
         return JSONResponse({"status": "ok"})
 
-    @app.route("/error")
     async def error_endpoint(request):
         raise ValueError("Test error")
 
-    @app.route("/slow")
     async def slow_endpoint(request):
         import time
         time.sleep(1.5)
         return JSONResponse({"status": "ok"})
+
+    # 新版 Starlette 移除了 @app.route 装饰器,改用构造期 routes=[Route(...)]。
+    app = Starlette(
+        routes=[
+            Route("/test", test_endpoint),
+            Route("/error", error_endpoint),
+            Route("/slow", slow_endpoint),
+        ]
+    )
 
     return app
 

@@ -14,6 +14,19 @@ class _FakePrincipal:
     user_id = "user-1"
     trace_id = "trace-1"
     request_id = "req-1"
+    permission_scope: list[str] = []
+    role = "developer"
+    scopes: list[str] = [
+        "agent:run",
+        "agent:read",
+        "tools:read",
+        "memory:read",
+        "memory:write",
+        "workflow:create",
+        "workflow:run",
+        "audit:read",
+    ]
+    authenticated = True
 
 
 class _OverridePrincipal:
@@ -56,6 +69,10 @@ def test_messages_end_to_end_publish_stream_snapshot_and_clear() -> None:
         )
         assert publish_response.status_code == 200
 
+        # /api/v1/messages/stream is an infinite SSE stream by default (live
+        # heartbeat loop). Tests pass replay_only=true so the endpoint returns the
+        # connect notice + replayed history then ends — a finite body a plain
+        # blocking get can read without hanging.
         stream_response = client.get(
             "/api/v1/messages/stream",
             params={
@@ -68,6 +85,7 @@ def test_messages_end_to_end_publish_stream_snapshot_and_clear() -> None:
                 "channel_type": "room",
                 "trace_id": "trace-e2e",
                 "last_event_id": "evt-missing",
+                "replay_only": "true",
             },
         )
         assert stream_response.status_code == 200

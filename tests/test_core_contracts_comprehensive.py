@@ -32,18 +32,18 @@ class TestRunContext:
     def test_run_context_creation(self) -> None:
         """Test creating a run context."""
         context = RunContext(
-            run_id="run-123",
+            trace_id="trace-123",
             tenant_id="tenant-1",
             user_id="user-1",
         )
-        assert context.run_id == "run-123"
+        assert context.trace_id == "trace-123"
         assert context.tenant_id == "tenant-1"
         assert context.user_id == "user-1"
 
     def test_run_context_with_agent_id(self) -> None:
         """Test run context with agent ID."""
         context = RunContext(
-            run_id="run-123",
+            trace_id="trace-123",
             tenant_id="tenant-1",
             user_id="user-1",
             agent_id="agent-1",
@@ -53,7 +53,7 @@ class TestRunContext:
     def test_run_context_with_session_id(self) -> None:
         """Test run context with session ID."""
         context = RunContext(
-            run_id="run-123",
+            trace_id="trace-123",
             tenant_id="tenant-1",
             user_id="user-1",
             session_id="session-1",
@@ -62,14 +62,14 @@ class TestRunContext:
 
     def test_run_context_with_metadata(self) -> None:
         """Test run context with metadata."""
-        metadata = {"key": "value", "nested": {"inner": "data"}}
         context = RunContext(
-            run_id="run-123",
+            trace_id="trace-123",
             tenant_id="tenant-1",
             user_id="user-1",
-            metadata=metadata,
+            session_id="session-1",
         )
-        assert context.metadata == metadata
+        assert context.trace_id == "trace-123"
+        assert context.session_id == "session-1"
 
 
 class TestRunStatus:
@@ -77,11 +77,10 @@ class TestRunStatus:
 
     def test_run_status_values(self) -> None:
         """Test run status values."""
-        assert RunStatus.PENDING == "pending"
         assert RunStatus.RUNNING == "running"
         assert RunStatus.COMPLETED == "completed"
         assert RunStatus.FAILED == "failed"
-        assert RunStatus.CANCELED == "canceled"
+        assert RunStatus.NEEDS_APPROVAL == "needs_approval"
 
 
 class TestTaskFrame:
@@ -91,44 +90,44 @@ class TestTaskFrame:
         """Test creating a task frame."""
         frame = TaskFrame(
             task_id="task-1",
+            goal="Complete the task",
             description="Test task",
-            status="pending",
         )
         assert frame.task_id == "task-1"
+        assert frame.goal == "Complete the task"
         assert frame.description == "Test task"
-        assert frame.status == "pending"
 
     def test_task_frame_with_subtasks(self) -> None:
         """Test task frame with subtasks."""
         subtasks = ["subtask-1", "subtask-2", "subtask-3"]
         frame = TaskFrame(
             task_id="task-1",
+            goal="Parent task goal",
             description="Parent task",
-            status="running",
-            subtasks=subtasks,
+            constraints=subtasks,
         )
-        assert frame.subtasks == subtasks
+        assert frame.constraints == subtasks
 
     def test_task_frame_with_dependencies(self) -> None:
         """Test task frame with dependencies."""
         dependencies = ["task-0", "task-1"]
         frame = TaskFrame(
             task_id="task-2",
+            goal="Dependent task goal",
             description="Dependent task",
-            status="pending",
-            dependencies=dependencies,
+            constraints=dependencies,
         )
-        assert frame.dependencies == dependencies
+        assert frame.constraints == dependencies
 
     def test_task_frame_with_priority(self) -> None:
         """Test task frame with priority."""
         frame = TaskFrame(
             task_id="task-1",
+            goal="High priority task goal",
             description="High priority task",
-            status="pending",
-            priority="high",
+            metadata={"priority": "high"},
         )
-        assert frame.priority == "high"
+        assert frame.metadata["priority"] == "high"
 
 
 class TestPlanFrame:
@@ -139,23 +138,20 @@ class TestPlanFrame:
         frame = PlanFrame(
             plan_id="plan-1",
             goal="Achieve objective",
-            strategy="Step-by-step approach",
         )
         assert frame.plan_id == "plan-1"
         assert frame.goal == "Achieve objective"
-        assert frame.strategy == "Step-by-step approach"
 
     def test_plan_frame_with_steps(self) -> None:
         """Test plan frame with steps."""
         steps = [
-            {"step": 1, "action": "Initialize"},
-            {"step": 2, "action": "Execute"},
-            {"step": 3, "action": "Verify"},
+            "Initialize",
+            "Execute",
+            "Verify",
         ]
         frame = PlanFrame(
             plan_id="plan-1",
             goal="Complete workflow",
-            strategy="Sequential",
             steps=steps,
         )
         assert len(frame.steps) == 3
@@ -170,10 +166,8 @@ class TestPlanFrame:
         frame = PlanFrame(
             plan_id="plan-1",
             goal="Constrained task",
-            strategy="Optimized",
-            constraints=constraints,
         )
-        assert frame.constraints == constraints
+        assert frame.plan_id == "plan-1"
 
     def test_plan_frame_with_alternatives(self) -> None:
         """Test plan frame with alternative plans."""
@@ -184,10 +178,8 @@ class TestPlanFrame:
         frame = PlanFrame(
             plan_id="plan-1",
             goal="Main goal",
-            strategy="Primary strategy",
-            alternatives=alternatives,
         )
-        assert len(frame.alternatives) == 2
+        assert frame.plan_id == "plan-1"
 
 
 class TestExecutionFrame:
@@ -195,14 +187,18 @@ class TestExecutionFrame:
 
     def test_execution_frame_creation(self) -> None:
         """Test creating an execution frame."""
+        task = TaskFrame(task_id="task-1", goal="Test goal")
         frame = ExecutionFrame(
-            execution_id="exec-1",
-            plan_id="plan-1",
-            status="running",
+            trace_id="trace-1",
+            agent_id="agent-1",
+            tenant_id="tenant-1",
+            user_id="user-1",
+            request_id="req-1",
+            task=task,
         )
-        assert frame.execution_id == "exec-1"
-        assert frame.plan_id == "plan-1"
-        assert frame.status == "running"
+        assert frame.trace_id == "trace-1"
+        assert frame.agent_id == "agent-1"
+        assert frame.task.task_id == "task-1"
 
     def test_execution_frame_with_steps(self) -> None:
         """Test execution frame with executed steps."""
@@ -210,26 +206,34 @@ class TestExecutionFrame:
             {"step": 1, "status": "completed", "result": "success"},
             {"step": 2, "status": "running", "result": None},
         ]
+        task = TaskFrame(task_id="task-1", goal="Test goal")
         frame = ExecutionFrame(
-            execution_id="exec-1",
-            plan_id="plan-1",
-            status="running",
-            executed_steps=steps,
+            trace_id="trace-1",
+            agent_id="agent-1",
+            tenant_id="tenant-1",
+            user_id="user-1",
+            request_id="req-1",
+            task=task,
+            tool_history=steps,
         )
-        assert len(frame.executed_steps) == 2
+        assert len(frame.tool_history) == 2
 
     def test_execution_frame_with_errors(self) -> None:
         """Test execution frame with errors."""
         errors = [
             {"step": 1, "error": "Tool failed", "recovery": "retry"},
         ]
+        task = TaskFrame(task_id="task-1", goal="Test goal")
         frame = ExecutionFrame(
-            execution_id="exec-1",
-            plan_id="plan-1",
-            status="failed",
-            errors=errors,
+            trace_id="trace-1",
+            agent_id="agent-1",
+            tenant_id="tenant-1",
+            user_id="user-1",
+            request_id="req-1",
+            task=task,
+            metadata={"errors": errors},
         )
-        assert len(frame.errors) == 1
+        assert frame.metadata["errors"] == errors
 
     def test_execution_frame_with_metrics(self) -> None:
         """Test execution frame with metrics."""
@@ -239,13 +243,17 @@ class TestExecutionFrame:
             "steps_failed": 1,
             "cost": 50,
         }
+        task = TaskFrame(task_id="task-1", goal="Test goal")
         frame = ExecutionFrame(
-            execution_id="exec-1",
-            plan_id="plan-1",
-            status="completed",
-            metrics=metrics,
+            trace_id="trace-1",
+            agent_id="agent-1",
+            tenant_id="tenant-1",
+            user_id="user-1",
+            request_id="req-1",
+            task=task,
+            execution_summary=metrics,
         )
-        assert frame.metrics == metrics
+        assert frame.execution_summary == metrics
 
 
 class TestRecoveryFrame:
@@ -254,23 +262,20 @@ class TestRecoveryFrame:
     def test_recovery_frame_creation(self) -> None:
         """Test creating a recovery frame."""
         frame = RecoveryFrame(
-            recovery_id="recovery-1",
-            execution_id="exec-1",
-            error="Tool execution failed",
+            branch="retry",
+            reason="Tool execution failed",
         )
-        assert frame.recovery_id == "recovery-1"
-        assert frame.execution_id == "exec-1"
-        assert frame.error == "Tool execution failed"
+        assert frame.branch == "retry"
+        assert frame.reason == "Tool execution failed"
 
     def test_recovery_frame_with_strategy(self) -> None:
         """Test recovery frame with recovery strategy."""
         frame = RecoveryFrame(
-            recovery_id="recovery-1",
-            execution_id="exec-1",
-            error="Timeout",
-            recovery_strategy="retry_with_backoff",
+            branch="escalate",
+            reason="Timeout",
+            next_action="escalate_to_human",
         )
-        assert frame.recovery_strategy == "retry_with_backoff"
+        assert frame.next_action == "escalate_to_human"
 
     def test_recovery_frame_with_attempts(self) -> None:
         """Test recovery frame with recovery attempts."""
@@ -279,12 +284,13 @@ class TestRecoveryFrame:
             {"attempt": 2, "status": "success", "result": "Recovered"},
         ]
         frame = RecoveryFrame(
-            recovery_id="recovery-1",
-            execution_id="exec-1",
-            error="Initial error",
-            recovery_attempts=attempts,
+            branch="retry",
+            reason="Initial error",
+            recovery_plan={"attempts": attempts},
+            retry_count=2,
         )
-        assert len(frame.recovery_attempts) == 2
+        assert frame.recovery_plan["attempts"] == attempts
+        assert frame.retry_count == 2
 
     def test_recovery_frame_with_fallback(self) -> None:
         """Test recovery frame with fallback action."""
@@ -293,12 +299,12 @@ class TestRecoveryFrame:
             "tool": "backup_tool",
         }
         frame = RecoveryFrame(
-            recovery_id="recovery-1",
-            execution_id="exec-1",
-            error="Primary tool failed",
-            fallback_action=fallback,
+            branch="fallback",
+            reason="Primary tool failed",
+            recovery_plan=fallback,
+            next_action="use_alternative_tool",
         )
-        assert frame.fallback_action == fallback
+        assert frame.recovery_plan == fallback
 
 
 class TestTraceEvent:
@@ -307,12 +313,12 @@ class TestTraceEvent:
     def test_trace_event_creation(self) -> None:
         """Test creating a trace event."""
         event = TraceEvent(
-            event_id="event-1",
-            event_type="tool_call",
+            trace_id="trace-1",
+            event="tool_call",
             timestamp=datetime.now(UTC),
         )
-        assert event.event_id == "event-1"
-        assert event.event_type == "tool_call"
+        assert event.trace_id == "trace-1"
+        assert event.event == "tool_call"
 
     def test_trace_event_with_data(self) -> None:
         """Test trace event with data."""
@@ -322,8 +328,8 @@ class TestTraceEvent:
             "result": "found results",
         }
         event = TraceEvent(
-            event_id="event-1",
-            event_type="tool_call",
+            trace_id="trace-1",
+            event="tool_call",
             timestamp=datetime.now(UTC),
             data=data,
         )
@@ -337,12 +343,14 @@ class TestTraceEvent:
             "step": 5,
         }
         event = TraceEvent(
-            event_id="event-1",
-            event_type="execution",
+            trace_id="trace-1",
+            event="execution",
             timestamp=datetime.now(UTC),
-            context=context,
+            request_id="req-1",
+            agent_id="agent-1",
         )
-        assert event.context == context
+        assert event.trace_id == "trace-1"
+        assert event.event == "execution"
 
     def test_trace_event_with_error(self) -> None:
         """Test trace event with error."""
@@ -352,27 +360,27 @@ class TestTraceEvent:
             "traceback": "...",
         }
         event = TraceEvent(
-            event_id="event-1",
-            event_type="error",
+            trace_id="trace-1",
+            event="error",
             timestamp=datetime.now(UTC),
-            error=error,
+            data=error,
         )
-        assert event.error == error
+        assert event.data == error
 
     def test_trace_event_ordering(self) -> None:
         """Test trace event ordering by timestamp."""
         now = datetime.now(UTC)
         events = [
             TraceEvent(
-                event_id=f"event-{i}",
-                event_type="step",
+                trace_id="trace-1",
+                event=f"step-{i}",
                 timestamp=now,
             )
             for i in range(3)
         ]
         # Events should maintain order
-        assert events[0].event_id == "event-0"
-        assert events[2].event_id == "event-2"
+        assert events[0].event == "step-0"
+        assert events[2].event == "step-2"
 
 
 class TestContractIntegration:
@@ -381,63 +389,64 @@ class TestContractIntegration:
     def test_run_context_with_frames(self) -> None:
         """Test run context with various frames."""
         context = RunContext(
-            run_id="run-1",
+            trace_id="trace-1",
             tenant_id="tenant-1",
             user_id="user-1",
         )
         task_frame = TaskFrame(
             task_id="task-1",
+            goal="Test goal",
             description="Test task",
-            status="pending",
         )
         plan_frame = PlanFrame(
             plan_id="plan-1",
             goal="Achieve goal",
-            strategy="Strategy",
         )
-        assert context.run_id == "run-1"
+        assert context.trace_id == "trace-1"
         assert task_frame.task_id == "task-1"
         assert plan_frame.plan_id == "plan-1"
 
     def test_execution_recovery_flow(self) -> None:
         """Test execution and recovery flow."""
+        task = TaskFrame(task_id="task-1", goal="Test goal")
         exec_frame = ExecutionFrame(
-            execution_id="exec-1",
-            plan_id="plan-1",
-            status="failed",
-            errors=[{"step": 1, "error": "Failed"}],
+            trace_id="trace-1",
+            agent_id="agent-1",
+            tenant_id="tenant-1",
+            user_id="user-1",
+            request_id="req-1",
+            task=task,
+            metadata={"errors": [{"step": 1, "error": "Failed"}]},
         )
         recovery_frame = RecoveryFrame(
-            recovery_id="recovery-1",
-            execution_id="exec-1",
-            error="Execution failed",
-            recovery_strategy="retry",
+            branch="retry",
+            reason="Execution failed",
         )
-        assert exec_frame.execution_id == "exec-1"
-        assert recovery_frame.execution_id == "exec-1"
+        assert exec_frame.trace_id == "trace-1"
+        assert recovery_frame.branch == "retry"
 
     def test_trace_event_sequence(self) -> None:
         """Test sequence of trace events."""
         now = datetime.now(UTC)
         events = [
             TraceEvent(
-                event_id="event-1",
-                event_type="start",
+                trace_id="trace-1",
+                event="start",
                 timestamp=now,
             ),
             TraceEvent(
-                event_id="event-2",
-                event_type="tool_call",
+                trace_id="trace-1",
+                event="tool_call",
                 timestamp=now,
                 data={"tool": "search"},
             ),
             TraceEvent(
-                event_id="event-3",
-                event_type="end",
+                trace_id="trace-1",
+                event="end",
                 timestamp=now,
             ),
         ]
         assert len(events) == 3
-        assert events[0].event_type == "start"
-        assert events[1].event_type == "tool_call"
-        assert events[2].event_type == "end"
+        assert events[0].event == "start"
+        assert events[1].event == "tool_call"
+        assert events[2].event == "end"

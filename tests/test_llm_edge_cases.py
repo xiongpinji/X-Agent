@@ -6,6 +6,7 @@ from backend.app.core.llm import (
     LLMBackendError,
     LLMResponse,
     MockLLMBackend,
+    OpenAIBackend,
     OpenAIResponsesBackend,
     LLMRouter,
     build_llm_router,
@@ -56,7 +57,7 @@ class TestMockLLMBackend:
     async def test_mock_backend_with_echo_command(self):
         """Test mock backend echo tool call."""
         backend = MockLLMBackend()
-        messages = [{"role": "user", "content": "Task:\necho: hello world"}]
+        messages = [{"role": "user", "content": "Task: echo: hello world"}]
         response = await backend.chat(messages, [])
         assert len(response.tool_calls) == 1
         assert response.tool_calls[0]["name"] == "echo"
@@ -254,7 +255,7 @@ class TestBuildLLMRouter:
             deepseek_base_url="https://api.deepseek.com/v1",
         )
         assert len(router._backends) == 1
-        assert isinstance(router._backends[0], OpenAIResponsesBackend)
+        assert isinstance(router._backends[0], OpenAIBackend)
 
     def test_build_router_with_deepseek_key(self):
         """Test building router with DeepSeek API key."""
@@ -268,7 +269,7 @@ class TestBuildLLMRouter:
             deepseek_base_url="https://api.deepseek.com/v1",
         )
         assert len(router._backends) == 1
-        assert isinstance(router._backends[0], OpenAIResponsesBackend)
+        assert isinstance(router._backends[0], OpenAIBackend)
         assert router._backends[0].name == "deepseek"
 
     def test_build_router_auto_mode_with_keys(self):
@@ -283,8 +284,8 @@ class TestBuildLLMRouter:
             deepseek_base_url="https://api.deepseek.com/v1",
         )
         assert len(router._backends) == 3
-        assert isinstance(router._backends[0], OpenAIResponsesBackend)
-        assert isinstance(router._backends[1], OpenAIResponsesBackend)
+        assert isinstance(router._backends[0], OpenAIBackend)
+        assert isinstance(router._backends[1], OpenAIBackend)
         assert isinstance(router._backends[2], MockLLMBackend)
 
     def test_build_router_auto_mode_without_keys(self):

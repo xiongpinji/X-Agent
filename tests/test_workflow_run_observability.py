@@ -31,5 +31,5 @@ def test_workflow_run_observability_cross_links_detail_trace_and_audit() -> None
     assert detail.status_code == 200
     assert trace_detail.status_code in {200, 404}
     assert audit_logs.status_code == 200
-    assert any(item["run_id"] == run["run_id"] for item in audit_logs.json())
+    assert any(item["run_id"] == run["run_id"] for item in audit_logs.json()["data"])
     assert detail.json()["run"]["run_id"] == run["run_id"]

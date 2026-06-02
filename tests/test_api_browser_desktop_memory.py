@@ -25,7 +25,7 @@ def _admin_principal() -> Principal:
 @pytest.fixture
 def _admin_client():
     app.dependency_overrides[get_current_principal] = _admin_principal
-    yield TestClient(app)
+    yield TestClient(app, headers={"x-api-key": "bootstrap"})
     app.dependency_overrides.pop(get_current_principal, None)
 
 

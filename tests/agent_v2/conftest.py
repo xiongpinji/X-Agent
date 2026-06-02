@@ -171,7 +171,7 @@ def tool_call_record() -> ToolCallRecord:
 def mock_llm_router() -> MagicMock:
     """Create a mock LLMRouter."""
     mock = MagicMock()
-    mock.route = AsyncMock(return_value="Test response")
+    mock.chat = AsyncMock(return_value=MagicMock(content="Test response", model="mock"))
     return mock
 
 

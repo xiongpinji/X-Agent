@@ -8,7 +8,7 @@ from datetime import UTC, datetime, timedelta
 from backend.app.core.execution_planner import ExecutionPlanner, ExecutionPlan
 from backend.app.core.repair_loop import RepairLoop, RepairSuggestion
 from backend.app.core.verification import VerificationEngine, VerificationResult
-from backend.app.core.contracts import ToolCallRecord
+from backend.app.core.contracts import ToolCallRecord, ToolPolicyVerdict
 from backend.app.core.memory import MemoryItem, MemoryScope, MemoryRevision
 from backend.app.core.agent_runtime_adapter import AgentRuntimeAdapter
 from backend.app.core.agent_state_manager import AgentRunState
@@ -120,14 +120,15 @@ class TestRepairLoopExceptionHandling:
             tool_name="test_tool",
             arguments_preview={"arg1": "value1"},
             success=False,
-            error_message="Validation failed"
+            error_message="Validation failed",
+            policy=ToolPolicyVerdict(allowed=False, reason="Test policy rejection"),
         )
 
         with patch.object(repair_loop.verifier, 'verify_tool_call') as mock_verify:
             mock_verify.return_value = VerificationResult(
-                is_valid=False,
+                passed=False,
+                summary="Invalid arguments",
                 error_type="validation_error",
-                error_message="Invalid arguments"
             )
             result, suggestion = repair_loop.analyze(tool_call)
             assert suggestion.should_retry is True
@@ -141,14 +142,15 @@ class TestRepairLoopExceptionHandling:
             tool_name="read_file",
             arguments_preview={"path": "/nonexistent/file.txt"},
             success=False,
-            error_message="File not found"
+            error_message="File not found",
+            policy=ToolPolicyVerdict(allowed=True, reason="Test policy"),
         )
 
         with patch.object(repair_loop.verifier, 'verify_tool_call') as mock_verify:
             mock_verify.return_value = VerificationResult(
-                is_valid=False,
+                passed=False,
+                summary="Resource not found",
                 error_type="missing_resource",
-                error_message="Resource not found"
             )
             result, suggestion = repair_loop.analyze(tool_call)
             assert suggestion.should_retry is True
@@ -161,14 +163,15 @@ class TestRepairLoopExceptionHandling:
             tool_name="write_file",
             arguments_preview={"path": "/protected/file.txt"},
             success=False,
-            error_message="Permission denied"
+            error_message="Permission denied",
+            policy=ToolPolicyVerdict(allowed=False, reason="Permission denied"),
         )
 
         with patch.object(repair_loop.verifier, 'verify_tool_call') as mock_verify:
             mock_verify.return_value = VerificationResult(
-                is_valid=False,
+                passed=False,
+                summary="Permission denied",
                 error_type="permission_denied",
-                error_message="Permission denied"
             )
             result, suggestion = repair_loop.analyze(tool_call)
             assert suggestion.should_retry is False
@@ -182,14 +185,15 @@ class TestRepairLoopExceptionHandling:
             tool_name="long_running_tool",
             arguments_preview={"timeout": 1},
             success=False,
-            error_message="Operation timed out"
+            error_message="Operation timed out",
+            policy=ToolPolicyVerdict(allowed=True, reason="Test policy"),
         )
 
         with patch.object(repair_loop.verifier, 'verify_tool_call') as mock_verify:
             mock_verify.return_value = VerificationResult(
-                is_valid=False,
+                passed=False,
+                summary="Timeout",
                 error_type="timeout",
-                error_message="Timeout"
             )
             result, suggestion = repair_loop.analyze(tool_call)
             assert suggestion.should_retry is True
@@ -203,14 +207,15 @@ class TestRepairLoopExceptionHandling:
             tool_name="api_call",
             arguments_preview={"endpoint": "/api/test"},
             success=False,
-            error_message="Rate limit exceeded"
+            error_message="Rate limit exceeded",
+            policy=ToolPolicyVerdict(allowed=True, reason="Test policy"),
         )
 
         with patch.object(repair_loop.verifier, 'verify_tool_call') as mock_verify:
             mock_verify.return_value = VerificationResult(
-                is_valid=False,
+                passed=False,
+                summary="Rate limit",
                 error_type="rate_limit",
-                error_message="Rate limit"
             )
             result, suggestion = repair_loop.analyze(tool_call)
             assert suggestion.should_retry is True
@@ -224,19 +229,22 @@ class TestRepairLoopExceptionHandling:
                 tool_name="tool1",
                 arguments_preview={"arg": "val1"},
                 success=True,
-                error_message=None
+                error_message=None,
+                policy=ToolPolicyVerdict(allowed=True, reason="Test"),
             ),
             ToolCallRecord(
                 tool_name="tool2",
                 arguments_preview={"arg": "val2"},
                 success=False,
-                error_message="Failed"
+                error_message="Failed",
+                policy=ToolPolicyVerdict(allowed=True, reason="Test"),
             ),
             ToolCallRecord(
                 tool_name="tool3",
                 arguments_preview={"arg": "val3"},
                 success=False,
-                error_message="Failed"
+                error_message="Failed",
+                policy=ToolPolicyVerdict(allowed=True, reason="Test"),
             ),
         ]
 
@@ -244,9 +252,9 @@ class TestRepairLoopExceptionHandling:
             mock_summarize.return_value = {"total_calls": 3}
             with patch.object(repair_loop, 'analyze') as mock_analyze:
                 mock_analyze.side_effect = [
-                    (VerificationResult(is_valid=False, error_type="validation_error"),
+                    (VerificationResult(passed=False, summary="validation failure", error_type="validation_error"),
                      RepairSuggestion(should_retry=True, error_type="validation_error")),
-                    (VerificationResult(is_valid=False, error_type="timeout"),
+                    (VerificationResult(passed=False, summary="timeout failure", error_type="timeout"),
                      RepairSuggestion(should_retry=True, error_type="timeout")),
                 ]
                 summary = repair_loop.summarize(tool_calls)
@@ -481,13 +489,14 @@ class TestConcurrentOperations:
                 tool_name=f"tool_{i}",
                 arguments_preview={"arg": f"val_{i}"},
                 success=False,
-                error_message="Failed"
+                error_message="Failed",
+                policy=ToolPolicyVerdict(allowed=True, reason="Test"),
             )
             with patch.object(repair_loop.verifier, 'verify_tool_call') as mock_verify:
                 mock_verify.return_value = VerificationResult(
-                    is_valid=False,
+                    passed=False,
+                    summary="Invalid",
                     error_type="validation_error",
-                    error_message="Invalid"
                 )
                 return repair_loop.analyze(tool_call)
 
@@ -527,14 +536,15 @@ class TestErrorRecoveryScenarios:
             tool_name="unknown_tool",
             arguments_preview={"arg": "value"},
             success=False,
-            error_message="Unknown error"
+            error_message="Unknown error",
+            policy=ToolPolicyVerdict(allowed=True, reason="Test"),
         )
 
         with patch.object(repair_loop.verifier, 'verify_tool_call') as mock_verify:
             mock_verify.return_value = VerificationResult(
-                is_valid=False,
+                passed=False,
+                summary="Unknown",
                 error_type="unknown_error_type",
-                error_message="Unknown"
             )
             result, suggestion = repair_loop.analyze(tool_call)
             assert suggestion.should_retry is True

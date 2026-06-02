@@ -43,7 +43,7 @@ async def test_db(_init_global_db):
     """返回与全局 _db_manager 同源的会话工厂。
 
     BillingEngine 内部走 SessionManager.get_session() → 全局 _db_manager(由
-    conftest 的 autouse _init_global_db 注入,底层是 StaticPool 共享内存库)。
+    conftest 的 autouse _init_global_db 注入,底层是 NullPool + 临时文件 SQLite)。
     若这里另建独立引擎,测试写入与引擎读取就落在两个不同的内存库,
     导致 calculate_usage_cost / generate_invoice / check_quota 等回查库的断言
     全部拿到 0/None。复用同一个 _session_factory 即可保证写读同库。

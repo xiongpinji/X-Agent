@@ -16,7 +16,10 @@ def test_replay_api_returns_payload(tmp_path) -> None:
     response = client.post("/api/v1/replay/draft", json={"task": "inspect app", "root": str(root), "limit": 10})
     assert response.status_code == 200
     payload = response.json()
-    assert payload["task"] == "inspect app"
-    assert "code_index" in payload
-    assert "execution_plan" in payload
-    assert "verification" in payload
+    # draft_replay returns a build_linked_summary envelope; the primary draft
+    # payload lives under linked_summaries.primary.data (not at the top level).
+    data = payload["linked_summaries"]["primary"]["data"]
+    assert data["task"] == "inspect app"
+    assert "code_index" in data
+    assert "execution_plan" in data
+    assert "verification" in data

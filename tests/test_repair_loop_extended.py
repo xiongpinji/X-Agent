@@ -27,7 +27,7 @@ class TestRepairLoopAnalysis:
     def test_validation_error_retry(self) -> None:
         """Test validation error triggers retry."""
         result, suggestion = RepairLoop().analyze(_record(error="missing required argument: path"))
-        assert result.error_type == "validation"
+        assert result.error_type == "validation_error"
         assert suggestion.should_retry is True
         assert suggestion.confidence > 0.8
 
@@ -43,7 +43,7 @@ class TestRepairLoopAnalysis:
         result, suggestion = RepairLoop().analyze(_record(error="pattern_not_found"))
         assert result.error_type == "patch_mismatch"
         assert suggestion.should_retry is True
-        assert "re-read" in suggestion.reason.lower()
+        assert "refresh file context" in suggestion.reason.lower()
 
     def test_approval_required_error(self) -> None:
         """Test approval required error does not retry."""
@@ -63,7 +63,7 @@ class TestRepairLoopAnalysis:
         result, suggestion = RepairLoop().analyze(_record(error="timeout"))
         assert result.error_type == "timeout"
         assert suggestion.should_retry is True
-        assert "backoff" in suggestion.reason.lower()
+        assert "retry after timeout" in suggestion.reason.lower()
 
     def test_rate_limit_error(self) -> None:
         """Test rate limit error triggers retry."""
@@ -75,7 +75,7 @@ class TestRepairLoopAnalysis:
     def test_unknown_error_retry(self) -> None:
         """Test unknown error triggers retry with low confidence."""
         result, suggestion = RepairLoop().analyze(_record(error="unexpected_failure"))
-        assert result.error_type == "unknown"
+        assert result.error_type == "unexpected_runtime_error"
         assert suggestion.should_retry is True
         assert suggestion.confidence < 0.6
 

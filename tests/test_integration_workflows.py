@@ -272,7 +272,20 @@ class TestCompleteWorkflow:
     @pytest.mark.asyncio
     async def test_fallback_mechanism_workflow(self):
         """Test fallback mechanism in workflow."""
-        from backend.app.core.llm import LLMRouter, TimeoutBackend, MockLLMBackend
+        from backend.app.core.llm import (
+            LLMRouter,
+            MockLLMBackend,
+            BaseLLMBackend,
+            LLMBackendError,
+        )
+
+        class TimeoutBackend(BaseLLMBackend):
+            """Backend that always fails to exercise fallback."""
+
+            name = "timeout"
+
+            async def chat(self, messages, tools):
+                raise LLMBackendError("Request timeout after 30s")
 
         # Create router with fallback
         backends = [

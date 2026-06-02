@@ -16,7 +16,7 @@ def test_trace_and_audit_cross_reference_for_agent_run() -> None:
     assert trace_detail.status_code == 200
     assert trace_detail.json()["summary"]["trace_id"] == run["trace_id"]
     assert audit_logs.status_code == 200
-    assert any(item["trace_id"] == run["trace_id"] for item in audit_logs.json())
+    assert any(item["trace_id"] == run["trace_id"] for item in audit_logs.json()["data"])
 
 
 def test_trace_and_audit_cross_reference_for_workflow_run() -> None:
@@ -43,4 +43,4 @@ def test_trace_and_audit_cross_reference_for_workflow_run() -> None:
     assert run["status"] == "completed"
     assert traces.status_code == 200
     assert audit_logs.status_code == 200
-    assert any(item["workflow_id"] == workflow["id"] for item in audit_logs.json())
+    assert any(item["workflow_id"] == workflow["id"] for item in audit_logs.json()["data"])

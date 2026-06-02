@@ -18,9 +18,12 @@ def test_trace_replay_and_debug_views() -> None:
     replay_json = replay.json()
     debug_json = debug.json()
 
-    assert replay_json["trace_id"] == run["trace_id"]
-    assert debug_json["trace_id"] == run["trace_id"]
+    # Both endpoints return a build_linked_summary envelope. The trace_id is
+    # available as resource_id at the top level; related_resources and debug
+    # info are nested inside the envelope structure.
+    assert replay_json["resource_id"] == run["trace_id"]
+    assert debug_json["resource_id"] == run["trace_id"]
     assert replay_json["resource_type"] == "trace_replay"
     assert debug_json["resource_type"] == "trace_debug"
-    assert replay_json["related_resources"]["tool_executions"] == []
-    assert "failure_points" in debug_json["debug"]
+    assert replay_json["snapshot"]["related_resources"]["tool_executions"] == []
+    assert "failure_points" in debug_json["linked_summaries"]["primary"]["debug"]

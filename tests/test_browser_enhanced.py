@@ -6,7 +6,7 @@ Tests all components: locator, waiter, interactions, analyzer, recovery, pool, s
 
 import pytest
 import asyncio
-from unittest.mock import Mock, AsyncMock, patch
+from unittest.mock import Mock, MagicMock, AsyncMock, patch
 from datetime import datetime
 
 from backend.app.services.browser.smart_locator import SmartLocator, LocatorStrategy, LocatorResult
@@ -160,7 +160,7 @@ class TestAdvancedInteractions:
         """Test hover interaction."""
         interactions = AdvancedInteractions("test_session")
 
-        page = AsyncMock()
+        page = MagicMock()
         element = AsyncMock()
         page.locator.return_value = element
         element.scroll_into_view_if_needed = AsyncMock()
@@ -175,7 +175,7 @@ class TestAdvancedInteractions:
         """Test double click interaction."""
         interactions = AdvancedInteractions("test_session")
 
-        page = AsyncMock()
+        page = MagicMock()
         element = AsyncMock()
         page.locator.return_value = element
         element.scroll_into_view_if_needed = AsyncMock()
@@ -225,11 +225,20 @@ class TestPageAnalyzer:
         """Test button extraction."""
         analyzer = PageAnalyzer("test_session")
 
-        page = AsyncMock()
-        locators = AsyncMock()
+        # page.locator() is sync in Playwright -> use MagicMock so it returns
+        # the locator object directly; only .count()/element methods are awaited.
+        page = MagicMock()
+        locators = MagicMock()
         page.locator.return_value = locators
         locators.count = AsyncMock(return_value=1)
-        locators.nth.return_value = AsyncMock()
+
+        element = MagicMock()
+        element.text_content = AsyncMock(return_value="Click")
+        element.is_visible = AsyncMock(return_value=True)
+        element.is_enabled = AsyncMock(return_value=True)
+        element.element_handle = AsyncMock(return_value=MagicMock())
+        locators.nth.return_value = element
+        page.evaluate = AsyncMock(return_value="#btn")
 
         buttons = await analyzer._extract_buttons(page)
         assert isinstance(buttons, list)
@@ -239,8 +248,8 @@ class TestPageAnalyzer:
         """Test link extraction."""
         analyzer = PageAnalyzer("test_session")
 
-        page = AsyncMock()
-        locators = AsyncMock()
+        page = MagicMock()
+        locators = MagicMock()
         page.locator.return_value = locators
         locators.count = AsyncMock(return_value=0)
 
@@ -287,8 +296,9 @@ class TestErrorRecovery:
         """Test CAPTCHA detection."""
         recovery = ErrorRecovery("test_session")
 
-        page = AsyncMock()
-        locators = AsyncMock()
+        # page.locator() is sync -> MagicMock; .count() is awaited -> AsyncMock.
+        page = MagicMock()
+        locators = MagicMock()
         page.locator.return_value = locators
         locators.count = AsyncMock(return_value=0)
 
@@ -424,7 +434,12 @@ class TestIntegration:
         """Test waiter with multiple strategies."""
         waiter = SmartWaiter("test_session")
 
-        page = AsyncMock()
+        # ADAPTIVE strategy uses sync page.locator() then awaits .count();
+        # use MagicMock for page/locator and AsyncMock only for count().
+        page = MagicMock()
+        locators = MagicMock()
+        page.locator.return_value = locators
+        locators.count = AsyncMock(return_value=1)
         page.wait_for_selector = AsyncMock()
 
         result = await waiter.wait_for_selector(

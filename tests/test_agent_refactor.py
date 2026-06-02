@@ -23,6 +23,12 @@ class TestInitializationPhase:
         mock_loop._dump_model = MagicMock(return_value={})
         mock_loop.state_manager = MagicMock()
         mock_loop.orchestrator = MagicMock()
+        # orchestrator.prepare returns a 3-tuple (orchestration_context,
+        # capability_decision, recovery_hint); a bare MagicMock iterates empty
+        # and would raise "not enough values to unpack (expected 3, got 0)".
+        mock_loop.orchestrator.prepare = MagicMock(
+            return_value=(MagicMock(), MagicMock(), MagicMock())
+        )
         mock_loop._emit_trace = MagicMock()
 
         context = RunContext(
@@ -65,6 +71,10 @@ class TestInitializationPhase:
         mock_loop._dump_model = MagicMock(return_value={})
         mock_loop.state_manager = MagicMock()
         mock_loop.orchestrator = MagicMock()
+        # orchestrator.prepare returns a 3-tuple; configure it so unpacking works.
+        mock_loop.orchestrator.prepare = MagicMock(
+            return_value=(MagicMock(), MagicMock(), MagicMock())
+        )
         mock_loop._emit_trace = MagicMock()
 
         context = RunContext(
@@ -299,6 +309,10 @@ class TestCompletionPhase:
         mock_loop.memory = MagicMock()
         mock_loop.memory.store = AsyncMock(return_value="memory-id")
         mock_loop.memory.count = MagicMock(return_value=10)
+        # max_iterations must be an int: CompletionPhase computes
+        # min(phase_ctx.iteration, loop.max_iterations); a bare MagicMock here
+        # raises "TypeError: '<' not supported between int and MagicMock".
+        mock_loop.max_iterations = 4
         mock_loop.tools = MagicMock()
         mock_loop.tools.capability_index = MagicMock(return_value={})
         mock_loop.run_store = None

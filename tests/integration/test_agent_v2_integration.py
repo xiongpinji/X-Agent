@@ -39,6 +39,7 @@ from backend.app.core.contracts import (
     PlanFrame,
     ExecutionFrame,
     ToolCallRecord,
+    ToolPolicyVerdict,
     TraceEvent,
 )
 from backend.app.core.llm import LLMRouter, LLMResponse
@@ -82,9 +83,12 @@ class TestAgentExecutorInterfaceCompatibility:
             trajectory=trajectory,
             extra_context={},
             execution_frame=ExecutionFrame(
-                execution_id="exec-001",
-                task_id="task-001",
-                status="running",
+                trace_id="test-trace-001",
+                agent_id="test-agent",
+                tenant_id="test-tenant",
+                user_id="test-user",
+                request_id="req-001",
+                task=TaskFrame(goal="Test goal"),
             ),
             task_frame=TaskFrame(goal="Test goal"),
             plan_frame=PlanFrame(goal="Test goal"),
@@ -116,6 +120,7 @@ class TestAgentExecutorInterfaceCompatibility:
 
     def test_executor_pause_resume(self, executor: AgentExecutor) -> None:
         """Test pause and resume functionality."""
+        executor.state_manager.transition_to(AgentState.INITIALIZING)
         executor.state_manager.transition_to(AgentState.PLANNING)
         executor.pause()
         assert executor.get_state() == AgentState.PAUSED
@@ -125,6 +130,7 @@ class TestAgentExecutorInterfaceCompatibility:
 
     def test_executor_reset(self, executor: AgentExecutor) -> None:
         """Test executor reset."""
+        executor.state_manager.transition_to(AgentState.INITIALIZING)
         executor.state_manager.transition_to(AgentState.PLANNING)
         executor.reset()
         assert executor.get_state() == AgentState.IDLE
@@ -137,11 +143,19 @@ class TestAgentExecutorInterfaceCompatibility:
         phase_context: PhaseContext,
     ) -> None:
         """Test basic execution flow through all phases."""
-        # Create mock phases
-        init_phase = AsyncMock()
-        planning_phase = AsyncMock()
-        execution_phase = AsyncMock()
-        completion_phase = AsyncMock()
+        # Create mock phases. execute() 自身负责 IDLE→INITIALIZING(line 91)
+        # 与 →COMPLETING→COMPLETED(line 128-129);phases 只承载中间相(PLANNING/
+        # EXECUTING)。can_skip 是生产同步方法(recovery.py:31 -> bool),裸 AsyncMock
+        # 会让 can_skip(...) 返回真值 Mock 致全相被跳过、状态停在 INITIALIZING,
+        # 故显式置 can_skip 同步返回 False、execute 为可 await 的 AsyncMock。
+        def _make_phase() -> MagicMock:
+            phase = MagicMock()
+            phase.can_skip = MagicMock(return_value=False)
+            phase.execute = AsyncMock()
+            return phase
+
+        planning_phase = _make_phase()
+        execution_phase = _make_phase()
 
         # Set up phase context response
         phase_context.response = MagicMock()
@@ -149,10 +163,8 @@ class TestAgentExecutorInterfaceCompatibility:
         phase_context.response.answer = "Test answer"
 
         phases = [
-            (AgentState.INITIALIZING, init_phase),
             (AgentState.PLANNING, planning_phase),
             (AgentState.EXECUTING, execution_phase),
-            (AgentState.COMPLETING, completion_phase),
         ]
 
         response = await executor.execute(
@@ -174,10 +186,16 @@ class TestAgentExecutorInterfaceCompatibility:
         phase_context: PhaseContext,
     ) -> None:
         """Test error handling during execution."""
-        error_phase = AsyncMock(side_effect=ValueError("Test error"))
+        # 错误注入在 phase.execute 上(执行器调 phase.execute(phase_context),
+        # 非 phase 本身);can_skip 同步 False 保证该相真正执行而非被跳过。
+        # 用 PLANNING(INITIALIZING 已由 execute() 内部完成)驱动:
+        # IDLE→INITIALIZING→PLANNING→(execute 抛 ValueError)→FAILED。
+        error_phase = MagicMock()
+        error_phase.can_skip = MagicMock(return_value=False)
+        error_phase.execute = AsyncMock(side_effect=ValueError("Test error"))
 
         phases = [
-            (AgentState.INITIALIZING, error_phase),
+            (AgentState.PLANNING, error_phase),
         ]
 
         response = await executor.execute(
@@ -216,7 +234,6 @@ class TestLLMRouterIntegration:
         tools = []
 
         response = await llm_router.chat(
-            context=run_context,
             messages=messages,
             tools=tools,
         )
@@ -247,7 +264,6 @@ class TestLLMRouterIntegration:
         ]
 
         response = await llm_router.chat(
-            context=run_context,
             messages=messages,
             tools=tools,
         )
@@ -279,26 +295,28 @@ class TestMemorySystemIntegration:
         run_context: RunContext,
     ) -> None:
         """Test memory store and retrieve operations."""
-        # Store memory
-        memory_item = await memory_system.store(
+        # Store memory（store 返回的是 memory_id 字符串，不是 MemoryItem）
+        memory_id = await memory_system.store(
             context=run_context,
             content="Test memory content",
             layer=1,
             tags=["test"],
         )
 
-        assert memory_item.id is not None
-        assert memory_item.content == "Test memory content"
+        assert memory_id is not None
+        stored_item = memory_system.get_item(memory_id)
+        assert stored_item is not None
+        assert stored_item.content == "Test memory content"
 
         # Retrieve memory
-        retrieved = await memory_system.retrieve(
+        retrieved = await memory_system.search(
             context=run_context,
             query="Test memory",
-            limit=10,
+            top_k=10,
         )
 
         assert len(retrieved) > 0
-        assert any(hit.item.id == memory_item.id for hit in retrieved)
+        assert any(item.id == memory_id for item in retrieved)
 
     @pytest.mark.asyncio
     async def test_memory_consolidation(
@@ -312,15 +330,15 @@ class TestMemorySystemIntegration:
             await memory_system.store(
                 context=run_context,
                 content=f"Memory {i}",
-                layer=1,
+                layer=3,
                 tags=["test"],
             )
 
         # Consolidate
         result = await memory_system.consolidate(
             context=run_context,
-            query="Memory",
-            limit=3,
+            source_layers=[3],
+            max_items=3,
         )
 
         assert result.source_count >= 0
@@ -483,7 +501,6 @@ class TestRunStoreIntegration:
             events=[],
             plan=[],
             execution_summary={},
-            snapshot={},
         )
 
         record = run_store.save(
@@ -516,7 +533,6 @@ class TestRunStoreIntegration:
                 events=[],
                 plan=[],
                 execution_summary={},
-                snapshot={},
             )
             run_store.save(
                 context=run_context,
@@ -579,20 +595,28 @@ class TestEndToEndIntegration:
             trajectory=trajectory,
             extra_context={},
             execution_frame=ExecutionFrame(
-                execution_id="exec-e2e",
-                task_id="task-e2e",
-                status="running",
+                trace_id=run_context.trace_id,
+                agent_id=run_context.agent_id,
+                tenant_id=run_context.tenant_id,
+                user_id=run_context.user_id,
+                request_id="req-e2e",
+                task=TaskFrame(goal="Test goal"),
             ),
             task_frame=TaskFrame(goal="Test goal"),
             plan_frame=PlanFrame(goal="Test goal"),
             compact_context={},
         )
 
-        # Create mock phases
-        init_phase = AsyncMock()
-        planning_phase = AsyncMock()
-        execution_phase = AsyncMock()
-        completion_phase = AsyncMock()
+        # Create mock phases. 同 basic_flow:execute() 自管首尾相,phases 只放中间相;
+        # can_skip 须同步 False,execute 须可 await,否则裸 AsyncMock 致全相被跳过。
+        def _make_phase() -> MagicMock:
+            phase = MagicMock()
+            phase.can_skip = MagicMock(return_value=False)
+            phase.execute = AsyncMock()
+            return phase
+
+        planning_phase = _make_phase()
+        execution_phase = _make_phase()
 
         # Set response
         from backend.app.core.contracts import AgentRunResponse
@@ -608,14 +632,11 @@ class TestEndToEndIntegration:
             events=[],
             plan=[],
             execution_summary={},
-            snapshot={},
         )
 
         phases = [
-            (AgentState.INITIALIZING, init_phase),
             (AgentState.PLANNING, planning_phase),
             (AgentState.EXECUTING, execution_phase),
-            (AgentState.COMPLETING, completion_phase),
         ]
 
         # Execute
@@ -680,7 +701,6 @@ class TestInputOutputFormatConsistency:
             events=[],
             plan=[],
             execution_summary={},
-            snapshot={},
         )
 
         assert response.trace_id == "test-001"
@@ -692,13 +712,14 @@ class TestInputOutputFormatConsistency:
         tool_call = ToolCallRecord(
             trace_id="test-001",
             tool_name="echo",
-            arguments={"text": "hello"},
             success=True,
+            policy=ToolPolicyVerdict(allowed=True, reason="ok"),
+            arguments_preview={"text": "hello"},
         )
 
         assert tool_call.trace_id == "test-001"
         assert tool_call.tool_name == "echo"
-        assert tool_call.arguments == {"text": "hello"}
+        assert tool_call.arguments_preview == {"text": "hello"}
 
 
 class TestErrorHandlingCompatibility:
@@ -713,7 +734,6 @@ class TestErrorHandlingCompatibility:
         # Test with invalid input
         try:
             response = await llm_router.chat(
-                context=context,
                 messages=[],
                 tools=[],
             )

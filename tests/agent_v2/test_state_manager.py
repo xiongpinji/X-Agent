@@ -7,7 +7,7 @@ from uuid import uuid4
 
 import pytest
 
-from backend.app.core.agent_state_manager import AgentStateManager
+from backend.app.core.agent_state_manager import AgentStateManager, AgentRunState, AgentRunState
 from backend.app.core.contracts import (
     ExecutionFrame,
     PlanFrame,
@@ -40,7 +40,7 @@ class TestAgentStateManager:
         )
 
         assert state is not None
-        assert isinstance(state, dict)
+        assert isinstance(state, AgentRunState)
 
     def test_create_initial_state_without_metadata(
         self, run_context: RunContext, task_frame: TaskFrame
@@ -55,7 +55,7 @@ class TestAgentStateManager:
         )
 
         assert state is not None
-        assert isinstance(state, dict)
+        assert isinstance(state, AgentRunState)
 
     def test_attach_execution_frame(
         self,
@@ -74,7 +74,7 @@ class TestAgentStateManager:
         updated_state = manager.attach_execution_frame(state, execution_frame)
 
         assert updated_state is not None
-        assert isinstance(updated_state, dict)
+        assert isinstance(updated_state, AgentRunState)
 
     def test_set_recovery_frame(
         self,
@@ -93,7 +93,7 @@ class TestAgentStateManager:
         updated_state = manager.set_recovery_frame(state, recovery_frame)
 
         assert updated_state is not None
-        assert isinstance(updated_state, dict)
+        assert isinstance(updated_state, AgentRunState)
 
     def test_attach_plan_frame(
         self,
@@ -112,7 +112,7 @@ class TestAgentStateManager:
         updated_state = manager.attach_plan_frame(state, plan_frame)
 
         assert updated_state is not None
-        assert isinstance(updated_state, dict)
+        assert isinstance(updated_state, AgentRunState)
 
     def test_build_initial_recovery(self) -> None:
         """Test building initial recovery frame."""
@@ -156,7 +156,7 @@ class TestAgentStateManager:
         state = manager.attach_plan_frame(state, plan_frame)
 
         assert state is not None
-        assert isinstance(state, dict)
+        assert isinstance(state, AgentRunState)
 
     def test_state_manager_multiple_contexts(
         self, task_frame: TaskFrame

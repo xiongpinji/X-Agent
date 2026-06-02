@@ -4,8 +4,7 @@ from backend.app.core.repair_loop import RepairLoop
 
 
 def test_error_classification_validation() -> None:
-    assert RepairLoop._suggest.__name__ == "_suggest"
-    assert RepairLoop().verifier._classify_error("missing required argument: path") == "validation"
+    assert RepairLoop().verifier._classify_error("missing required argument: path") == "validation_error"
 
 
 def test_error_classification_missing_resource() -> None:
@@ -17,11 +16,11 @@ def test_error_classification_patch_mismatch() -> None:
 
 
 def test_error_classification_approval() -> None:
-    assert RepairLoop().verifier._classify_error("approval required") == "approval"
+    assert RepairLoop().verifier._classify_error("approval required") == "approval_required"
 
 
 def test_error_classification_authorization() -> None:
-    assert RepairLoop().verifier._classify_error("permission denied") == "authorization"
+    assert RepairLoop().verifier._classify_error("permission denied") == "permission_denied"
 
 
 def test_error_classification_timeout() -> None:
@@ -29,4 +28,4 @@ def test_error_classification_timeout() -> None:
 
 
 def test_error_classification_runtime() -> None:
-    assert RepairLoop().verifier._classify_error("boom") == "runtime"
+    assert RepairLoop().verifier._classify_error("boom") == "unexpected_runtime_error"

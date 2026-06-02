@@ -21,10 +21,18 @@ from backend.app.core.memory_cache import (
     get_cached_search_results,
 )
 
+# Check if pytest-benchmark is available
+try:
+    import pytest_benchmark
+    HAS_BENCHMARK = True
+except ImportError:
+    HAS_BENCHMARK = False
+
 
 class TestCacheBenchmarks:
     """Performance benchmarks for cache operations."""
 
+    @pytest.mark.skipif(not HAS_BENCHMARK, reason="requires pytest-benchmark plugin (not installed)")
     @pytest.mark.asyncio
     async def test_cache_set_performance(self, benchmark) -> None:
         """Benchmark cache set operation."""
@@ -37,6 +45,7 @@ class TestCacheBenchmarks:
         # Run benchmark
         result = benchmark(lambda: asyncio.run(set_operation()))
 
+    @pytest.mark.skipif(not HAS_BENCHMARK, reason="requires pytest-benchmark plugin (not installed)")
     @pytest.mark.asyncio
     async def test_cache_get_performance(self, benchmark) -> None:
         """Benchmark cache get operation."""
@@ -52,6 +61,7 @@ class TestCacheBenchmarks:
         asyncio.run(setup())
         result = benchmark(lambda: asyncio.run(get_operation()))
 
+    @pytest.mark.skipif(not HAS_BENCHMARK, reason="requires pytest-benchmark plugin (not installed)")
     @pytest.mark.asyncio
     async def test_cache_hit_rate_performance(self, benchmark) -> None:
         """Benchmark cache hit rate with repeated gets."""
@@ -68,6 +78,7 @@ class TestCacheBenchmarks:
         asyncio.run(setup())
         result = benchmark(lambda: asyncio.run(repeated_gets()))
 
+    @pytest.mark.skipif(not HAS_BENCHMARK, reason="requires pytest-benchmark plugin (not installed)")
     @pytest.mark.asyncio
     async def test_memory_item_cache_performance(self, benchmark) -> None:
         """Benchmark memory item caching."""
@@ -85,6 +96,7 @@ class TestCacheBenchmarks:
 
         result = benchmark(lambda: asyncio.run(cache_operation()))
 
+    @pytest.mark.skipif(not HAS_BENCHMARK, reason="requires pytest-benchmark plugin (not installed)")
     @pytest.mark.asyncio
     async def test_search_results_cache_performance(self, benchmark) -> None:
         """Benchmark search results caching."""
@@ -108,6 +120,7 @@ class TestCacheBenchmarks:
 
         result = benchmark(lambda: asyncio.run(cache_operation()))
 
+    @pytest.mark.skipif(not HAS_BENCHMARK, reason="requires pytest-benchmark plugin (not installed)")
     @pytest.mark.asyncio
     async def test_embedding_cache_performance(self, benchmark) -> None:
         """Benchmark embedding caching."""
@@ -119,6 +132,7 @@ class TestCacheBenchmarks:
 
         result = benchmark(lambda: asyncio.run(cache_operation()))
 
+    @pytest.mark.skipif(not HAS_BENCHMARK, reason="requires pytest-benchmark plugin (not installed)")
     @pytest.mark.asyncio
     async def test_query_cache_performance(self, benchmark) -> None:
         """Benchmark database query caching."""
@@ -136,6 +150,7 @@ class TestCacheBenchmarks:
         result = benchmark(lambda: asyncio.run(cache_operation()))
 
 
+@pytest.mark.skipif(not HAS_BENCHMARK, reason="requires pytest-benchmark plugin (not installed)")
 class TestCacheScalability:
     """Test cache scalability with large datasets."""
 
@@ -202,6 +217,7 @@ class TestCacheScalability:
         print(f"Concurrent operations: {total_ops} ops in {elapsed:.2f}s ({total_ops/elapsed:.0f} ops/sec)")
 
 
+@pytest.mark.skipif(not HAS_BENCHMARK, reason="requires pytest-benchmark plugin (not installed)")
 class TestCacheMemoryUsage:
     """Test cache memory usage."""
 
@@ -231,6 +247,7 @@ class TestCacheMemoryUsage:
         assert exists_after == 0
 
 
+@pytest.mark.skipif(not HAS_BENCHMARK, reason="requires pytest-benchmark plugin (not installed)")
 class TestCacheComparison:
     """Compare cache performance with and without caching."""
 

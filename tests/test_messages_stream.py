@@ -14,6 +14,19 @@ class _FakePrincipal:
     user_id = "user-1"
     trace_id = "trace-1"
     request_id = "req-1"
+    permission_scope: list[str] = []
+    role = "developer"
+    scopes: list[str] = [
+        "agent:run",
+        "agent:read",
+        "tools:read",
+        "memory:read",
+        "memory:write",
+        "workflow:create",
+        "workflow:run",
+        "audit:read",
+    ]
+    authenticated = True
 
 
 class _OverridePrincipal:
@@ -31,6 +44,21 @@ def _clear_principal_override() -> None:
 
 def _clear_event_bus() -> None:
     message_event_bus.clear()
+
+
+def _read_stream_history(client, params: dict) -> str:
+    """Read an SSE /messages/stream response containing only the replayed history.
+
+    The endpoint streams an infinite live heartbeat loop by default, which a
+    blocking client.get() can never finish reading (hang). Passing replay_only=true
+    makes the server return the connect notice + replayed history then end, giving a
+    finite body. Returns the SSE text for assertions.
+    """
+    request_params = {**params, "replay_only": "true"}
+    response = client.get("/api/v1/messages/stream", params=request_params)
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/event-stream")
+    return response.text
 
 
 def test_messages_stream_replays_history_and_sets_sse_ids() -> None:
@@ -64,9 +92,9 @@ def test_messages_stream_replays_history_and_sets_sse_ids() -> None:
     message_event_bus.record(channel_key, historical_event)
 
     try:
-        response = client.get(
-            "/api/v1/messages/stream",
-            params={
+        stream_text = _read_stream_history(
+            client,
+            {
                 "tenant_id": "tenant-1",
                 "org_id": "org-1",
                 "room_id": "room-1",
@@ -79,11 +107,9 @@ def test_messages_stream_replays_history_and_sets_sse_ids() -> None:
             },
         )
 
-        assert response.status_code == 200
-        assert response.headers["content-type"].startswith("text/event-stream")
-        assert "event: system.notification" in response.text
-        assert "id: evt-1" in response.text
-        assert '\"event_type\":\"room.created\"' in response.text
+        assert "event: system.notification" in stream_text
+        assert "id: evt-1" in stream_text
+        assert '\"event_type\":\"room.created\"' in stream_text
         assert message_event_bus.get_event_types(channel_key) == ["room.created"]
         assert message_event_bus.get_domain_counts(channel_key) == {"room": 1}
         assert [event.event_type for event in message_event_bus.get_history_by_domain(channel_key, "room")] == ["room.created"]
@@ -125,9 +151,9 @@ def test_messages_stream_honors_domain_filters() -> None:
     )
 
     try:
-        response = client.get(
-            "/api/v1/messages/stream",
-            params={
+        stream_text = _read_stream_history(
+            client,
+            {
                 "tenant_id": "tenant-1",
                 "org_id": "org-1",
                 "room_id": "room-2",
@@ -140,9 +166,8 @@ def test_messages_stream_honors_domain_filters() -> None:
             },
         )
 
-        assert response.status_code == 200
-        assert "event: system.notification" in response.text
-        assert '\"event_type\":\"audit.created\"' not in response.text
+        assert "event: system.notification" in stream_text
+        assert '\"event_type\":\"audit.created\"' not in stream_text
         assert message_event_bus.get_domain_counts(channel_key) == {"audit": 1}
     finally:
         _clear_principal_override()
@@ -193,9 +218,9 @@ def test_messages_stream_uses_last_event_id_as_continuation_anchor() -> None:
     message_event_bus.record(channel_key, newer_event)
 
     try:
-        response = client.get(
-            "/api/v1/messages/stream",
-            params={
+        stream_text = _read_stream_history(
+            client,
+            {
                 "tenant_id": "tenant-1",
                 "org_id": "org-1",
                 "room_id": "room-3",
@@ -208,10 +233,9 @@ def test_messages_stream_uses_last_event_id_as_continuation_anchor() -> None:
             },
         )
 
-        assert response.status_code == 200
-        assert '\"event_id\":\"evt-10\"' not in response.text
-        assert '\"event_type\":\"room.member_added\"' in response.text
-        assert '\"event_type\":\"room.created\"' not in response.text
+        assert '\"event_id\":\"evt-10\"' not in stream_text
+        assert '\"event_type\":\"room.member_added\"' in stream_text
+        assert '\"event_type\":\"room.created\"' not in stream_text
         assert message_event_bus.get_event_types(channel_key) == ["room.created", "room.member_added"]
         assert message_event_bus.get_domain_counts(channel_key) == {"room": 2}
     finally:

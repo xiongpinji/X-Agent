@@ -17,8 +17,11 @@ def test_overview_api_returns_full_payload(tmp_path) -> None:
     response = client.post("/api/v1/overview/draft", json={"task": "update app", "root": str(root), "limit": 10})
     assert response.status_code == 200
     payload = response.json()
-    assert payload["code_index"]
-    assert payload["test_mapping"]
-    assert payload["execution_plan"]
-    assert payload["verification"]
-    assert payload["summary"]
+    # draft_overview returns a build_linked_summary envelope; the primary draft
+    # payload lives under linked_summaries.primary.data (not at the top level).
+    data = payload["linked_summaries"]["primary"]["data"]
+    assert data["code_index"]
+    assert data["test_mapping"]
+    assert data["execution_plan"]
+    assert data["verification"]
+    assert data["summary"]

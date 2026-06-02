@@ -253,10 +253,15 @@ class TestPriorityTaskQueue:
         await asyncio.sleep(0.5)
         await queue.stop()
 
-        # High priority should execute before low
-        assert executed[0] == 1  # First enqueued
-        assert executed[1] == 3  # High priority
-        assert executed[2] == 2  # Low priority
+        # All three tasks ran.
+        assert set(executed) == {1, 2, 3}
+        # The defining invariant of a priority queue: when multiple tasks are
+        # waiting, the higher-priority one is popped first.  Tasks 2 (LOW) and 3
+        # (HIGH) are always both queued by the time the single worker picks the
+        # next item, so HIGH must execute before LOW regardless of whether the
+        # worker happened to grab task 1 before the others were enqueued (which
+        # is a racy timing detail, not a priority guarantee).
+        assert executed.index(3) < executed.index(2)  # HIGH before LOW
 
 
 class TestResourceMonitor:

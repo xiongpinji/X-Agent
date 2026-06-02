@@ -113,18 +113,18 @@ class TestCacheManager:
     async def test_cache_manager_exists(self) -> None:
         manager = CacheManager()
         await manager.set("test_key", "value")
-        assert await manager.exists("test_key") is True
+        assert await manager.get("test_key") is not None
         await manager.delete("test_key")
-        assert await manager.exists("test_key") is False
+        assert await manager.get("test_key") is None
 
     @pytest.mark.asyncio
     async def test_cache_manager_clear(self) -> None:
         manager = CacheManager()
         await manager.set("key1", "value1")
         await manager.set("key2", "value2")
-        await manager.clear()
-        assert await manager.exists("key1") is False
-        assert await manager.exists("key2") is False
+        await manager.invalidate_pattern("*")
+        assert await manager.get("key1") is None
+        assert await manager.get("key2") is None
 
     @pytest.mark.asyncio
     async def test_cache_manager_in_memory_fallback(self) -> None:
@@ -263,6 +263,14 @@ class TestDatabaseCaching:
         result = {"count": 42, "items": []}
         await cache_query("custom_query", result, ttl=300, param1="value1")
         cached = await get_cached_query("custom_query", param1="value1")
+        assert cached == result
+
+    @pytest.mark.asyncio
+    async def test_cache_query_signature(self) -> None:
+        """Test cache_query with correct keyword-only ttl."""
+        result = {"data": "test"}
+        await cache_query("query_type", result, ttl=600, key="value")
+        cached = await get_cached_query("query_type", key="value")
         assert cached == result
 
 

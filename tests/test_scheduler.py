@@ -14,6 +14,58 @@ from backend.app.core.task_queue import task_queue, TaskPriority
 from backend.app.core.task_monitor import task_monitor
 
 
+def _reset_dependency_and_monitor() -> None:
+    """Clear TaskDependencyManager + TaskMonitor singleton state.
+
+    Uses real production attribute names, each guarded so a future rename
+    degrades gracefully instead of crashing every test in this file.
+    """
+    for attr in ("dependencies",):
+        container = getattr(task_dependency_manager, attr, None)
+        if hasattr(container, "clear"):
+            container.clear()
+    for attr in ("task_metrics", "execution_times", "execution_errors", "queue_history"):
+        container = getattr(task_monitor, attr, None)
+        if hasattr(container, "clear"):
+            container.clear()
+
+
+@pytest.fixture(autouse=True)
+def _reset_scheduler_singletons():
+    """Reset module-level scheduler singletons before/after each test.
+
+    Prevents state pollution from test_dequeue_task, test_priority_queue, test_task_retry
+    which accumulate tasks in the global task_queue and cron_scheduler.
+    """
+    # Clear before test
+    cron_scheduler.scheduled_tasks.clear()
+    cron_scheduler.execution_history.clear()
+    cron_scheduler.running_tasks.clear()
+    task_queue.queue.clear()
+    task_queue.task_map.clear()
+    task_queue.stats = {
+        "total_enqueued": 0,
+        "total_dequeued": 0,
+        "total_retried": 0,
+    }
+    _reset_dependency_and_monitor()
+
+    yield
+
+    # Clear after test
+    cron_scheduler.scheduled_tasks.clear()
+    cron_scheduler.execution_history.clear()
+    cron_scheduler.running_tasks.clear()
+    task_queue.queue.clear()
+    task_queue.task_map.clear()
+    task_queue.stats = {
+        "total_enqueued": 0,
+        "total_dequeued": 0,
+        "total_retried": 0,
+    }
+    _reset_dependency_and_monitor()
+
+
 @pytest.mark.asyncio
 async def test_schedule_interval():
     """Test interval-based scheduling."""

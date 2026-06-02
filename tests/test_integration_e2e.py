@@ -27,7 +27,7 @@ from backend.app.core.llm import LLMRouter
 from backend.app.core.memory import MemoryItem, MemoryScope, MemorySystem
 from backend.app.core.tool_executor import ToolExecutor, ToolWrapper
 from backend.app.core.tool_registry import ToolRegistry
-from backend.app.core.tool_schema import ToolCallInput, ToolSchema
+from backend.app.core.tool_schema import ToolCallInput, ToolSchema, ToolCategory
 from backend.app.core.tracing import TraceStore
 from backend.app.core.audit import AuditStore
 from backend.app.core.runs import RunStore
@@ -61,12 +61,10 @@ async def test_full_agent_workflow():
     agent_id = "test-agent"
 
     run_context = RunContext(
-        run_id=run_id,
+        trace_id=run_id,
         tenant_id=tenant_id,
         user_id=user_id,
         agent_id=agent_id,
-        task="Test agent workflow",
-        status=RunStatus.RUNNING,
     )
 
     # 3. 初始化Agent循环
@@ -87,28 +85,25 @@ async def test_full_agent_workflow():
     assert agent_loop.max_iterations == 2
 
     # 5. 存储记忆
-    memory_item = MemoryItem(
-        tenant_id=tenant_id,
-        agent_id=agent_id,
+    mem_id = await memory_system.store(
+        run_context,
         content="Test memory for agent workflow",
         layer=1,
         importance=0.8,
         tags=["test", "workflow"],
         scope=MemoryScope(owner_agent_id=agent_id),
     )
-
-    stored_memory = await memory_system.store(memory_item)
-    assert stored_memory.id is not None
+    assert isinstance(mem_id, str)
 
     # 6. 验证记忆检索
-    retrieved = await memory_system.retrieve(stored_memory.id)
+    retrieved = memory_system.get_item(mem_id)
     assert retrieved is not None
     assert retrieved.content == "Test memory for agent workflow"
 
     # 7. 记录审计日志
-    audit_store.log_action(
+    audit_store.record(
         tenant_id=tenant_id,
-        user_id=user_id,
+        actor_id=user_id,
         action="agent_workflow_test",
         resource_type="agent",
         resource_id=agent_id,
@@ -116,11 +111,11 @@ async def test_full_agent_workflow():
     )
 
     # 8. 验证追踪记录
-    trace_event = trace_store.record_event(
-        event_type="agent.workflow.complete",
-        run_id=run_id,
-        tenant_id=tenant_id,
-        data={"status": "success", "iterations": 2},
+    trace_event = trace_store.record(
+        run_context,
+        event="agent.workflow.complete",
+        status="success",
+        iterations=2,
     )
     assert trace_event is not None
 
@@ -160,16 +155,20 @@ async def test_multi_agent_collaboration():
 
     # 3. 并行执行Agent任务
     async def agent_task(agent_id: str, agent: AgentLoop, task_id: int):
-        memory_item = MemoryItem(
+        run_ctx = RunContext(
+            trace_id=str(uuid4()),
             tenant_id=tenant_id,
             agent_id=agent_id,
+        )
+        mem_id = await agent.memory.store(
+            run_ctx,
             content=f"Task {task_id} from {agent_id}",
             layer=1,
             importance=0.7,
             tags=["collaboration", f"task-{task_id}"],
             scope=MemoryScope(owner_agent_id=agent_id),
         )
-        return await agent.memory.store(memory_item)
+        return mem_id
 
     tasks = [
         agent_task(agent_id, agent, i)
@@ -180,7 +179,7 @@ async def test_multi_agent_collaboration():
 
     # 4. 验证所有Agent都成功执行
     assert len(results) == num_agents
-    assert all(r.id is not None for r in results)
+    assert all(isinstance(r, str) for r in results)
 
     # 5. 验证记忆共享
     all_memories = []
@@ -191,14 +190,16 @@ async def test_multi_agent_collaboration():
     assert len(all_memories) == num_agents
 
     # 6. 记录协作事件
-    trace_store.record_event(
-        event_type="agents.collaboration.complete",
+    run_ctx = RunContext(
+        trace_id=str(uuid4()),
         tenant_id=tenant_id,
-        data={
-            "agent_count": num_agents,
-            "memory_items": len(results),
-            "status": "success",
-        },
+    )
+    trace_store.record(
+        run_ctx,
+        event="agents.collaboration.complete",
+        agent_count=num_agents,
+        memory_items=len(results),
+        status="success",
     )
 
 
@@ -360,9 +361,13 @@ async def test_memory_system():
     # 2. 存储不同层级的记忆
     memories = []
     for layer in range(1, 4):
-        memory_item = MemoryItem(
+        run_ctx = RunContext(
+            trace_id=str(uuid4()),
             tenant_id=tenant_id,
             agent_id=agent_id,
+        )
+        mem_id = await memory_system.store(
+            run_ctx,
             content=f"Memory at layer {layer}",
             layer=layer,
             importance=0.5 + (layer * 0.1),
@@ -370,21 +375,22 @@ async def test_memory_system():
             scope=MemoryScope(owner_agent_id=agent_id),
             metadata={"layer_info": f"This is layer {layer} memory"},
         )
-        stored = await memory_system.store(memory_item)
-        memories.append(stored)
+        memories.append(mem_id)
 
     # 3. 验证存储
     assert len(memories) == 3
-    assert all(m.id is not None for m in memories)
+    assert all(isinstance(m, str) for m in memories)
 
     # 4. 验证层级
-    for i, memory in enumerate(memories):
-        assert memory.layer == i + 1
+    for i, mem_id in enumerate(memories):
+        retrieved = memory_system.get_item(mem_id)
+        assert retrieved is not None
+        assert retrieved.layer == i + 1
 
     # 5. 混合查询（关键词 + 向量 + 图）
     query_results = []
-    for memory in memories:
-        retrieved = await memory_system.retrieve(memory.id)
+    for mem_id in memories:
+        retrieved = memory_system.get_item(mem_id)
         if retrieved:
             query_results.append(retrieved)
 
@@ -393,18 +399,23 @@ async def test_memory_system():
     # 6. 记忆合并
     if len(memories) >= 2:
         # 模拟记忆合并
-        merged_content = " + ".join([m.content for m in memories[:2]])
-        merged_memory = MemoryItem(
+        merged_content = " + ".join([
+            (memory_system.get_item(m)).content for m in memories[:2]
+        ])
+        run_ctx = RunContext(
+            trace_id=str(uuid4()),
             tenant_id=tenant_id,
             agent_id=agent_id,
+        )
+        stored_merged = await memory_system.store(
+            run_ctx,
             content=merged_content,
             layer=2,
             importance=0.8,
             tags=["merged"],
             scope=MemoryScope(owner_agent_id=agent_id),
         )
-        stored_merged = await memory_system.store(merged_memory)
-        assert stored_merged.id is not None
+        assert isinstance(stored_merged, str)
 
     # 7. 关系管理
     # 在实际实现中，应该有关系管理的方法
@@ -443,12 +454,10 @@ async def test_system_interactions():
     )
 
     run_context = RunContext(
-        run_id=str(uuid4()),
+        trace_id=str(uuid4()),
         tenant_id="test-tenant",
         user_id="test-user",
         agent_id="test-agent",
-        task="Test system interactions",
-        status=RunStatus.RUNNING,
     )
 
     # 2. Agent引擎 + 工具并行调用
@@ -457,14 +466,14 @@ async def test_system_interactions():
         ToolSchema(
             name="tool_1",
             description="First test tool",
-            parameters={},
-            required=[],
+            category=ToolCategory.UTILITY,
+            parameters=[],
         ),
         ToolSchema(
             name="tool_2",
             description="Second test tool",
-            parameters={},
-            required=[],
+            category=ToolCategory.UTILITY,
+            parameters=[],
         ),
     ]
 
@@ -472,17 +481,15 @@ async def test_system_interactions():
         tool_registry.register(schema)
 
     # 3. Agent引擎 + 记忆系统
-    memory_item = MemoryItem(
-        tenant_id=run_context.tenant_id,
-        agent_id=run_context.agent_id,
-        content="System interaction test memory",
+    memory_item_content = "System interaction test memory"
+    stored_memory = await memory_system.store(
+        run_context,
+        content=memory_item_content,
         layer=1,
         importance=0.7,
         scope=MemoryScope(owner_agent_id=run_context.agent_id),
     )
-
-    stored_memory = await memory_system.store(memory_item)
-    assert stored_memory.id is not None
+    assert isinstance(stored_memory, str)
 
     # 4. 工具系统 + 文件系统
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -508,27 +515,25 @@ async def test_system_interactions():
     )
 
     # 6. 任务管理 + 流式输出
-    trace_store.record_event(
-        event_type="task.streaming.start",
-        run_id=run_context.run_id,
-        tenant_id=run_context.tenant_id,
-        data={"chunk_count": 0},
+    trace_store.record(
+        run_context,
+        event="task.streaming.start",
+        chunk_count=0,
     )
 
     # 模拟流式输出
     for i in range(3):
-        trace_store.record_event(
-            event_type="task.streaming.chunk",
-            run_id=run_context.run_id,
-            tenant_id=run_context.tenant_id,
-            data={"chunk_index": i, "content": f"Chunk {i}"},
+        trace_store.record(
+            run_context,
+            event="task.streaming.chunk",
+            chunk_index=i,
+            content=f"Chunk {i}",
         )
 
-    trace_store.record_event(
-        event_type="task.streaming.complete",
-        run_id=run_context.run_id,
-        tenant_id=run_context.tenant_id,
-        data={"total_chunks": 3},
+    trace_store.record(
+        run_context,
+        event="task.streaming.complete",
+        total_chunks=3,
     )
 
 
@@ -628,42 +633,49 @@ async def test_data_consistency():
     # 1. 三层记忆系统数据一致性
     memory_items = []
     for layer in range(1, 4):
-        item = MemoryItem(
+        run_ctx = RunContext(
+            trace_id=str(uuid4()),
             tenant_id=tenant_id,
             agent_id=agent_id,
+        )
+        mem_id = await memory_system.store(
+            run_ctx,
             content=f"Consistency test layer {layer}",
             layer=layer,
             importance=0.5,
             scope=MemoryScope(owner_agent_id=agent_id),
         )
-        stored = await memory_system.store(item)
-        memory_items.append(stored)
+        memory_items.append(mem_id)
 
     # 2. 验证存储的数据
-    for item in memory_items:
-        retrieved = await memory_system.retrieve(item.id)
+    for mem_id in memory_items:
+        retrieved = memory_system.get_item(mem_id)
         assert retrieved is not None
         assert retrieved.tenant_id == tenant_id
         assert retrieved.agent_id == agent_id
 
     # 3. 并发写入一致性
     async def concurrent_write(index: int):
-        item = MemoryItem(
+        run_ctx = RunContext(
+            trace_id=str(uuid4()),
             tenant_id=tenant_id,
             agent_id=agent_id,
+        )
+        mem_id = await memory_system.store(
+            run_ctx,
             content=f"Concurrent write {index}",
             layer=1,
             importance=0.5,
             scope=MemoryScope(owner_agent_id=agent_id),
         )
-        return await memory_system.store(item)
+        return mem_id
 
     concurrent_results = await asyncio.gather(*[
         concurrent_write(i) for i in range(5)
     ])
 
     assert len(concurrent_results) == 5
-    assert all(r.id is not None for r in concurrent_results)
+    assert all(isinstance(r, str) for r in concurrent_results)
 
     # 4. 缓存一致性
     # 在实际实现中，应该验证缓存与数据库的一致性
@@ -690,15 +702,18 @@ async def test_performance_baseline():
     start_time = time.time()
 
     for i in range(100):
-        item = MemoryItem(
+        run_ctx = RunContext(
+            trace_id=str(uuid4()),
             tenant_id=tenant_id,
             agent_id=agent_id,
+        )
+        await memory_system.store(
+            run_ctx,
             content=f"Performance test item {i}",
             layer=1,
             importance=0.5,
             scope=MemoryScope(owner_agent_id=agent_id),
         )
-        await memory_system.store(item)
 
     storage_time = time.time() - start_time
 
@@ -709,15 +724,19 @@ async def test_performance_baseline():
     start_time = time.time()
 
     async def concurrent_store(index: int):
-        item = MemoryItem(
+        run_ctx = RunContext(
+            trace_id=str(uuid4()),
             tenant_id=tenant_id,
             agent_id=agent_id,
+        )
+        mem_id = await memory_system.store(
+            run_ctx,
             content=f"Concurrent item {index}",
             layer=1,
             importance=0.5,
             scope=MemoryScope(owner_agent_id=agent_id),
         )
-        return await memory_system.store(item)
+        return mem_id
 
     concurrent_results = await asyncio.gather(*[
         concurrent_store(i) for i in range(50)

@@ -24,6 +24,7 @@ from backend.app.core.advanced_repair_loop import (
     FailureRecord,
     FailureCategory,
     RepairStrategy,
+    RepairSuggestion,
 )
 
 

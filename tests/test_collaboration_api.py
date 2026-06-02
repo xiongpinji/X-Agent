@@ -14,6 +14,19 @@ class _FakePrincipal:
     user_id = "user-1"
     trace_id = "trace-1"
     request_id = "req-1"
+    permission_scope: list[str] = []
+    role = "developer"
+    scopes: list[str] = [
+        "agent:run",
+        "agent:read",
+        "tools:read",
+        "memory:read",
+        "memory:write",
+        "workflow:create",
+        "workflow:run",
+        "audit:read",
+    ]
+    authenticated = True
 
 
 class _OverridePrincipal:

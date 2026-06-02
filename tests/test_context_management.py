@@ -104,7 +104,12 @@ class TestContextCompactor:
         ]
         result = compactor.compress(messages)
         assert result.success
-        assert result.metrics.messages_after >= compactor.min_messages_to_keep
+        # When the input is already at/below the keep-floor, compress() correctly
+        # returns everything (it cannot fabricate messages). The faithful invariant
+        # is therefore min(input_count, keep-floor), not the raw keep-floor.
+        assert result.metrics.messages_after >= min(
+            len(messages), compactor.min_messages_to_keep
+        )
 
     def test_incremental_compression(self, compactor: ContextCompactor) -> None:
         """Test incremental compression."""

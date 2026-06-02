@@ -20,7 +20,7 @@ def _record(error: str) -> ToolCallRecord:
 
 def test_repair_loop_validation_failure() -> None:
     result, suggestion = RepairLoop().analyze(_record("missing required argument: path"))
-    assert result.error_type == "validation"
+    assert result.error_type == "validation_error"
     assert suggestion.should_retry is True
 
 

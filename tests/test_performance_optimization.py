@@ -283,8 +283,10 @@ class TestPerformanceMonitor:
         )
         monitor.record_metric(metric)
 
-        assert "/api/v1/workflows" in monitor.metrics
-        assert len(monitor.metrics["/api/v1/workflows"]) == 1
+        # Metrics are keyed by "METHOD endpoint" so GET/POST to the same path
+        # don't collide (matches get_report's lookup key).
+        assert "GET /api/v1/workflows" in monitor.metrics
+        assert len(monitor.metrics["GET /api/v1/workflows"]) == 1
 
     def test_get_report(self) -> None:
         """Test report generation."""

@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 
 import pytest
 
-from backend.app.core.agent import AgentLoop, AgentPlanStep, AgentTrajectory
+from backend.app.core.agent import AgentLoop, AgentPlanStep, AgentPlanStepRecord, AgentTrajectory
 from backend.app.core.contracts import AgentRunRecord, AgentRunResponse, RunContext, RunStatus, ToolCallRecord, ToolPolicyVerdict
 from backend.app.core.repair_loop import RepairLoop
 from backend.app.core.replay import ReplayEngine
@@ -78,6 +78,8 @@ class DummyRepairLoop:
                 "arguments": {"path": record.output.get("path") if isinstance(record.output, dict) else ""},
                 "reason": "retry after failure",
                 "error_type": "tool_failure",
+                "confidence": 0.5,
+                "follow_up": [],
             },
         )()
         return verification, suggestion
@@ -201,7 +203,6 @@ async def test_run_store_continue_from_merges_previous_execution_summary() -> No
         memory_hits=1,
         tool_calls=[],
         execution_summary={"subtasks": ["inspect", "repair"], "custom": "kept"},
-        snapshot={"stage": "failed"},
         plan=[AgentPlanStepRecord(kind="tool", instruction="inspect", tool_name="read_file")],
     )
     store.save(RunContext(trace_id="trace-a", agent_id="agent-a"), "task-a", previous)
@@ -215,7 +216,6 @@ async def test_run_store_continue_from_merges_previous_execution_summary() -> No
         memory_hits=1,
         tool_calls=[ToolCallRecord(tool_name="write_file", success=True, output={"path": "demo.py"}, policy=ToolPolicyVerdict(allowed=True, requires_approval=False, reason="ok"))],
         execution_summary={"new": "value"},
-        snapshot={"stage": "finalizing"},
         plan=[AgentPlanStepRecord(kind="final", instruction="finalize")],
     )
 
@@ -255,6 +255,8 @@ async def test_repair_failure_records_retry_budget_exhaustion() -> None:
                     "arguments": {"path": record.output.get("path") if isinstance(record.output, dict) else ""},
                     "reason": "retry after failure",
                     "error_type": "tool_failure",
+                    "confidence": 0.5,
+                    "follow_up": [],
                 },
             )()
             return verification, suggestion
@@ -294,7 +296,6 @@ async def test_resume_run_reuses_previous_subtask_state() -> None:
             "tool_results": [{"tool_name": "write_file", "success": True}],
             "reflections": ["old reflection"],
         },
-        snapshot={"stage": "finalizing"},
         plan=[],
     )
     store.save(RunContext(trace_id="resume-source", agent_id="agent-a"), "resume task", previous)
@@ -340,7 +341,6 @@ async def test_resume_run_skips_completed_plan_labels() -> None:
             "subtask_status": {"inspect": "done"},
             "current_subtask_index": 1,
         },
-        snapshot={"stage": "finalizing"},
         plan=[AgentPlanStepRecord(kind="observe", instruction="Observe context for resume"), AgentPlanStepRecord(kind="final", instruction="finalize")],
     )
     store.save(RunContext(trace_id="resume-source-2", agent_id="agent-a"), "resume task", previous)
@@ -481,6 +481,7 @@ async def test_replay_engine_builds_continuous_view() -> None:
 async def test_replay_engine_surfaces_resume_chain() -> None:
     run_store = RunStore()
     trace_store = TraceStore()
+    engine = ReplayEngine(run_store=run_store, trace_store=trace_store)
     previous = AgentRunResponse(
         trace_id="trace-prev",
         agent_id="agent-a",
@@ -490,7 +491,6 @@ async def test_replay_engine_surfaces_resume_chain() -> None:
         memory_hits=1,
         tool_calls=[],
         execution_summary={"subtasks": ["inspect"], "branch": "continue"},
-        snapshot={"stage": "finalizing"},
         plan=[],
     )
     resumed = AgentRunResponse(
@@ -502,7 +502,6 @@ async def test_replay_engine_surfaces_resume_chain() -> None:
         memory_hits=1,
         tool_calls=[],
         execution_summary={"resumed_from": "trace-prev", "previous_stage": "finalizing"},
-        snapshot={"stage": "finalizing"},
         plan=[],
     )
     run_store.save(RunContext(trace_id="trace-prev", agent_id="agent-a"), "task", previous)

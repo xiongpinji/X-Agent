@@ -7,6 +7,7 @@ and file access control with security validation.
 from __future__ import annotations
 
 import json
+import shutil
 import tempfile
 from pathlib import Path
 from datetime import datetime, timedelta, UTC
@@ -19,14 +20,39 @@ from backend.app.core.mount_manager import MountManager, MountPoint
 from backend.app.core.file_access_control import FileAccessControl
 
 
+def _safe_rmtree(path, max_retries=3):
+    """Safely remove directory tree, retrying on Windows PermissionError.
+
+    Windows file locking can prevent immediate deletion. This helper closes
+    handles and retries to work around the issue.
+    """
+    if not Path(path).exists():
+        return
+
+    for attempt in range(max_retries):
+        try:
+            shutil.rmtree(path, ignore_errors=False)
+            return
+        except PermissionError:
+            if attempt < max_retries - 1:
+                import time
+                time.sleep(0.1)  # Brief delay before retry
+            else:
+                # Final attempt: ignore errors
+                shutil.rmtree(path, ignore_errors=True)
+
+
 class TestWorkspaceManager:
     """Tests for WorkspaceManager."""
 
     @pytest.fixture
     def temp_dir(self):
-        """Create temporary directory for tests."""
-        with tempfile.TemporaryDirectory() as tmpdir:
+        """Create temporary directory for tests with safe cleanup."""
+        tmpdir = tempfile.mkdtemp()
+        try:
             yield Path(tmpdir)
+        finally:
+            _safe_rmtree(tmpdir)
 
     @pytest.fixture
     def manager(self, temp_dir):
@@ -175,9 +201,12 @@ class TestPathMapper:
 
     @pytest.fixture
     def temp_dir(self):
-        """Create temporary directory."""
-        with tempfile.TemporaryDirectory() as tmpdir:
+        """Create temporary directory with safe cleanup."""
+        tmpdir = tempfile.mkdtemp()
+        try:
             yield Path(tmpdir)
+        finally:
+            _safe_rmtree(tmpdir)
 
     @pytest.fixture
     def mapper(self, temp_dir):
@@ -263,9 +292,12 @@ class TestMountManager:
 
     @pytest.fixture
     def temp_dir(self):
-        """Create temporary directory."""
-        with tempfile.TemporaryDirectory() as tmpdir:
+        """Create temporary directory with safe cleanup."""
+        tmpdir = tempfile.mkdtemp()
+        try:
             yield Path(tmpdir)
+        finally:
+            _safe_rmtree(tmpdir)
 
     @pytest.fixture
     def manager(self, temp_dir):
@@ -358,12 +390,14 @@ class TestMountManager:
         """Test mount permission checking."""
         host_path = temp_dir / "data"
         host_path.mkdir()
+        host_path_ro = temp_dir / "data_ro"
+        host_path_ro.mkdir()
 
         mount_rw = manager.mount_directory("user1", str(host_path), mode="rw")
         assert manager.check_mount_permission("user1", mount_rw.mount_id, "read")
         assert manager.check_mount_permission("user1", mount_rw.mount_id, "write")
 
-        mount_ro = manager.mount_directory("user1", str(host_path), "/ro", mode="ro")
+        mount_ro = manager.mount_directory("user1", str(host_path_ro), "/ro", mode="ro")
         assert manager.check_mount_permission("user1", mount_ro.mount_id, "read")
         assert not manager.check_mount_permission("user1", mount_ro.mount_id, "write")
 
@@ -389,9 +423,12 @@ class TestFileAccessControl:
 
     @pytest.fixture
     def temp_dir(self):
-        """Create temporary directory."""
-        with tempfile.TemporaryDirectory() as tmpdir:
+        """Create temporary directory with safe cleanup."""
+        tmpdir = tempfile.mkdtemp()
+        try:
             yield Path(tmpdir)
+        finally:
+            _safe_rmtree(tmpdir)
 
     @pytest.fixture
     def control(self, temp_dir):
@@ -416,6 +453,7 @@ class TestFileAccessControl:
 
     def test_check_write_permission(self, control, temp_dir):
         """Test write permission checking."""
+        control.grant_permission("user1", "write")
         test_file = temp_dir / "test.txt"
         allowed, reason = control.check_write_permission("user1", test_file, 1024)
         assert allowed is True
@@ -463,6 +501,7 @@ class TestFileAccessControl:
 
     def test_forbidden_extensions(self, control):
         """Test forbidden file extensions."""
+        control.grant_permission("user1", "write")
         control.add_forbidden_extension(".custom")
 
         test_file = Path("/test/file.custom")

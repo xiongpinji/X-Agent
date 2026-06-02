@@ -6,7 +6,8 @@ from backend.app.services.observability.langfuse_client import langfuse_client
 
 
 def test_browser_session_lifecycle_and_actions() -> None:
-    client = TestClient(app)
+    # Use bootstrap key to create a new API key (security:manage scope required)
+    client = TestClient(app, headers={"x-api-key": "bootstrap"})
     auth = client.post(
         "/api/v1/security/api-keys",
         json={"name": "browser-admin", "role": "admin", "user_id": "browser-admin"},
