@@ -12,6 +12,7 @@ build/
 # Testing
 .pytest_cache/
 .coverage
+coverage.xml
 htmlcov/
 .mypy_cache/
 
@@ -29,10 +30,55 @@ Thumbs.db
 .venv/
 venv/
 .env
+*.env
+!*.env.example
 .xagent_runtime/
 
 # Project specific
 data/api_keys.json
 data/workflows.json
+data/tool_executions.json
 data/approvals.json
+data/workflow_schedules.json
 x_agent_core.egg-info/
+
+# Test / run artifacts (transient â€” never commit)
+baseline*.xml
+baseline*.txt
+baseline*.log
+smoke*.log
+smoke*.txt
+full_run.*
+run_full.*
+*_run.txt
+*_run.log
+parse_baseline.py
+junit*.xml
+test-results*.xml
+
+# Runtime state dumps (transient â€” never commit)
+data/agent_contexts/
+data/migrations/
+data/*.jsonl
+
+# æ²™ç®±ç¦»çº¿ä¾èµ– wheelï¼ˆCLAUDE.md æ²™ç®±æµ‹è¯•æ–¹æ¡ˆï¼Œå‹¿æäº¤ï¼‰
+.wheels/
+
+# ÔËĞĞÊ±Ô­×ÓĞ´ÁÙÊ±ÎÄ¼ş£¨²âÊÔ/ÔËĞĞ²úÉú£©
+data/*.tmp
+
+# ÅÜ²âÊÔ/µ÷ÊÔµÄÊä³ö²úÎï£¨¾ø²»Èë¿â£©
+*.log
+*.bak
+verify_*.txt
+full_run_*.txt
+hang*.txt
+locate_hang.txt
+wf_fix*.txt
+concurrent_fix.txt
+tests/EXECUTION_SUMMARY.txt
+tests/TEST_REPORT.txt
+# ÏÔÊ½·ÅĞĞÕæÒÀÀµÇåµ¥£¨·ÀÉÏÃæ¹æÔòÎóÉË£©
+!requirements.txt
+!requirements-dev.txt
+!requirements-lock.txt
