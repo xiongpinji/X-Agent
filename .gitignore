@@ -188,3 +188,7 @@ backend/PERFORMANCE_OPTIMIZATION_REPORT.py
 /verify-kimi-helpers.ps1
 /competitive_analysis_report.md
 本轮安全修复交付清单*.md
+
+# 放行 .claude/skills/ 作为项目资产(开发技能),其余 .claude 仍忽略
+!.claude/skills/
+!.claude/skills/**
