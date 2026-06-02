@@ -82,3 +82,7 @@ tests/TEST_REPORT.txt
 !requirements.txt
 !requirements-dev.txt
 !requirements-lock.txt
+
+# 运行时数据存储（程序读写产物,绝不入库；store 缺文件时自动创建）
+data/*.json
+data/*.jsonl
