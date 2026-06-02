@@ -131,7 +131,9 @@ class TestRedisSessionStorage:
 
     def test_token_storage_functions_exist(self):
         """Verify token storage functions support both backends."""
-        auth_module = __import__("backend.app.api.auth", fromlist=[])
+        import importlib
+
+        auth_module = importlib.import_module("backend.app.api.auth")
         assert hasattr(auth_module, "_issue_token")
         assert hasattr(auth_module, "_is_token_valid")
         assert hasattr(auth_module, "_revoke_token")
@@ -363,6 +365,40 @@ class TestBackwardCompatibility:
         assert hasattr(settings, "app_name")
         assert hasattr(settings, "cors_origins")
         assert hasattr(settings, "database_url")
+
+
+class TestProductionAnonymousGuard:
+    """生产环境绝不回落匿名主体（S5 守卫）。"""
+
+    def _no_cred_request(self):
+        req = MagicMock()
+        req.headers = {}
+        return req
+
+    def test_production_rejects_anonymous(self):
+        """生产模式 + 无凭证 → 401，不回落 anonymous。"""
+        from backend.app.api.errors import XAgentAPIError
+        from backend.app import dependencies
+
+        fake = MagicMock()
+        fake.require_api_key = False
+        fake.app_mode = "production"
+        with patch.object(dependencies, "get_settings", return_value=fake):
+            with pytest.raises(XAgentAPIError) as exc:
+                dependencies.get_current_principal(self._no_cred_request())
+        assert exc.value.status_code == 401
+
+    def test_development_allows_anonymous(self):
+        """开发模式 + 无凭证 → 回落匿名主体（不破坏 dev 体验）。"""
+        from backend.app import dependencies
+
+        fake = MagicMock()
+        fake.require_api_key = False
+        fake.app_mode = "development"
+        with patch.object(dependencies, "get_settings", return_value=fake):
+            principal = dependencies.get_current_principal(self._no_cred_request())
+        assert principal is not None
+        assert getattr(principal, "authenticated", False) is False
 
 
 if __name__ == "__main__":

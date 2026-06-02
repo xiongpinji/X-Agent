@@ -36,8 +36,13 @@ class TestPathSandboxIsolation:
 
     def test_path_outside_project_root_denied(self):
         """Test that paths outside project root are denied."""
-        # Try to access /etc/passwd
-        with pytest.raises(PermissionError, match="must be within project directory"):
+        # Try to access /etc/passwd. Either denial reason is valid: the
+        # forbidden-system-directory guard fires before the project-root check,
+        # so accept whichever PermissionError reaches first.
+        with pytest.raises(
+            PermissionError,
+            match="(must be within project directory|system directory forbidden)",
+        ):
             _resolve_tool_path("/etc/passwd")
 
     def test_path_traversal_attack_denied(self):
@@ -81,7 +86,12 @@ class TestPathSandboxIsolation:
 
     def test_root_outside_project_root_denied(self):
         """Test that roots outside project root are denied."""
-        with pytest.raises(PermissionError, match="must be within project directory"):
+        # Either denial reason is valid: the forbidden-system-directory guard
+        # fires before the project-root check.
+        with pytest.raises(
+            PermissionError,
+            match="(must be within project directory|system directory forbidden)",
+        ):
             _resolve_tool_root("/etc")
 
     def test_root_traversal_attack_denied(self):
@@ -171,8 +181,14 @@ class TestPathSandboxIsolation:
             try:
                 symlink_path.symlink_to("/etc/passwd")
 
-                # Try to resolve the symlink
-                with pytest.raises(PermissionError, match="must be within project directory"):
+                # Try to resolve the symlink. The symlink points at /etc/passwd,
+                # which trips the forbidden-system-directory guard first; the
+                # symlink-target guard would also reject it. Accept any of the
+                # three valid denial messages — all mean the attack was blocked.
+                with pytest.raises(
+                    PermissionError,
+                    match="(must be within project directory|system directory forbidden|Symlink target must be within)",
+                ):
                     _resolve_tool_path(str(symlink_path))
             except (OSError, NotImplementedError):
                 # Symlinks might not be supported on this system

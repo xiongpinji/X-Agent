@@ -401,3 +401,146 @@ def get_error_tracker() -> ErrorTracker:
     if _error_tracker is None:
         _error_tracker = ErrorTracker()
     return _error_tracker
+
+
+class SafeErrorResponse:
+    """SECURITY: Generates safe error responses without exposing sensitive details.
+
+    Prevents information leakage through error messages by:
+    - Mapping exceptions to generic messages
+    - Logging actual errors for debugging
+    - Sanitizing sensitive patterns from messages
+    """
+
+    # Mapping of exception types to safe messages
+    _SAFE_MESSAGES = {
+        ValueError: "Invalid input provided",
+        PermissionError: "Access denied",
+        FileNotFoundError: "Resource not found",
+        TimeoutError: "Request timeout",
+        ConnectionError: "Service unavailable",
+        RuntimeError: "Operation failed",
+    }
+
+    @staticmethod
+    def get_safe_message(
+        error: Exception,
+        category: ErrorCategory = ErrorCategory.INTERNAL,
+        default_message: str = "An error occurred"
+    ) -> str:
+        """Get safe error message without exposing implementation details.
+
+        Args:
+            error: The exception that occurred
+            category: Error category for logging
+            default_message: Default message if no mapping found
+
+        Returns:
+            Safe error message for client
+        """
+        error_type = type(error)
+
+        # Log the actual error for debugging BEFORE returning. This must run for
+        # every error — including the mapped types below — otherwise the most
+        # common errors (ValueError/PermissionError/…) would silently skip
+        # logging on the early-return path, defeating this class's own contract
+        # of "logging actual errors for debugging".
+        logger.error(
+            f"Error occurred: {error_type.__name__}",
+            extra={
+                "error_type": error_type.__name__,
+                "error_message": str(error),
+                "category": category.value,
+            }
+        )
+
+        # Check if we have a safe message for this error type
+        if error_type in SafeErrorResponse._SAFE_MESSAGES:
+            return SafeErrorResponse._SAFE_MESSAGES[error_type]
+
+        return default_message
+
+    @staticmethod
+    def log_error_details(
+        error: Exception,
+        context: dict | None = None,
+        user_id: str | None = None,
+    ) -> None:
+        """Log error details for debugging without exposing to client.
+
+        Args:
+            error: The exception that occurred
+            context: Additional context information
+            user_id: User ID for audit trail
+        """
+        extra = {
+            "error_type": type(error).__name__,
+            "error_message": str(error),
+        }
+
+        if user_id:
+            extra["user_id"] = user_id
+
+        if context:
+            extra["context"] = context
+
+        logger.error(f"Error details", extra=extra, exc_info=True)
+
+    @staticmethod
+    def sanitize_error_message(message: str) -> str:
+        """Remove sensitive information from error message.
+
+        Args:
+            message: Original error message
+
+        Returns:
+            Sanitized error message
+        """
+        import re
+
+        # Remove common sensitive patterns
+        sensitive_patterns = [
+            r"password[=:]\S+",
+            r"token[=:]\S+",
+            r"api[_-]?key[=:]\S+",
+            r"secret[=:]\S+",
+            r"credential[=:]\S+",
+            r"/home/\S+",
+            r"C:\\Users\\\S+",
+            r"\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}",  # IP addresses
+        ]
+
+        sanitized = message
+        for pattern in sensitive_patterns:
+            sanitized = re.sub(pattern, "[REDACTED]", sanitized, flags=re.IGNORECASE)
+
+        return sanitized
+
+
+def create_error_response(
+    error: Exception,
+    status_code: int = 500,
+    category: ErrorCategory = ErrorCategory.INTERNAL,
+    user_id: str | None = None,
+) -> dict:
+    """Create a safe error response.
+
+    SECURITY: Returns safe error information without exposing implementation details.
+
+    Args:
+        error: The exception that occurred
+        status_code: HTTP status code
+        category: Error category
+        user_id: User ID for audit
+
+    Returns:
+        Safe error response dict
+    """
+    safe_message = SafeErrorResponse.get_safe_message(error, category)
+    SafeErrorResponse.log_error_details(error, {"status_code": status_code}, user_id)
+
+    return {
+        "detail": safe_message,
+        "error_code": category.value,
+        "status_code": status_code,
+    }
