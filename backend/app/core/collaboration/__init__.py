@@ -12,6 +12,12 @@ to work together on complex tasks. It includes:
 - Monitoring and performance tracking
 """
 
+from backend.app.core.collaboration.store import (
+    CollaborationMessage,
+    CollaborationRoom,
+    CollaborationStore,
+    collaboration_store,
+)
 from backend.app.core.collaboration.protocol import (
     Message,
     MessageType,
@@ -50,6 +56,10 @@ from backend.app.core.collaboration.monitor import (
 )
 
 __all__ = [
+    "CollaborationMessage",
+    "CollaborationRoom",
+    "CollaborationStore",
+    "collaboration_store",
     "Message",
     "MessageType",
     "Request",

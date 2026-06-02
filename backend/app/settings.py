@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from functools import lru_cache
 from pathlib import Path
 
@@ -65,9 +66,15 @@ class Settings(BaseSettings):
     default_cost_budget_usd: float = 1.0
     enable_high_risk_tools: bool = False
 
-    # Security settings
-    jwt_secret: str = "change-this-to-a-random-64-char-string"
-    encryption_key: str = "change-this-to-32-char-hex-string"
+    # Security settings - CRITICAL: Must be set via environment variables in production
+    jwt_secret: str = Field(
+        default="change-this-to-a-random-64-char-string",
+        description="JWT signing secret (minimum 32 characters, must be changed in production)"
+    )
+    encryption_key: str = Field(
+        default="change-this-to-32-char-hex-string",
+        description="Encryption key for sensitive data (minimum 32 characters, must be changed in production)"
+    )
 
     @field_validator("audit_hmac_secret")
     @classmethod
@@ -79,18 +86,43 @@ class Settings(BaseSettings):
     @field_validator("jwt_secret", "encryption_key")
     @classmethod
     def _validate_production_secrets(cls, value: str, info) -> str:
-        """Enforce strong secrets in production mode."""
+        """Enforce strong secrets in production mode.
+
+        SECURITY: Prevents use of default secrets in production which could
+        allow authentication bypass and data exposure.
+        """
         app_mode = info.data.get("app_mode", "development")
         if app_mode == "production":
-            default_jwt = "change-this-to-a-random-64-char-string"
-            default_encryption = "change-this-to-32-char-hex-string"
-            if value == default_jwt or value == default_encryption:
+            # List of known default values that must be changed
+            default_values = [
+                "change-this-to-a-random-64-char-string",
+                "change-this-to-32-char-hex-string",
+                "default",
+                "secret",
+                "key",
+                "",
+            ]
+
+            # Check if value matches any default
+            if value.lower() in [d.lower() for d in default_values]:
                 raise ValueError(
                     f"Production secrets must be changed from defaults. "
-                    f"Set JWT_SECRET and ENCRYPTION_KEY to strong random values."
+                    f"Set XAGENT_JWT_SECRET and XAGENT_ENCRYPTION_KEY environment variables "
+                    f"to strong random values (minimum 32 characters each). "
+                    f"Generate using: python scripts/generate_secrets.py"
                 )
+
+            # Enforce minimum length
             if len(value) < 32:
                 raise ValueError(f"Production secrets must be at least 32 characters long")
+
+            # Ensure sufficient entropy (at least 128 bits for 32 chars)
+            if not any(c.isupper() for c in value) or not any(c.isdigit() for c in value):
+                raise ValueError(
+                    f"Production secrets must contain uppercase letters and digits "
+                    f"for sufficient entropy"
+                )
+
         return value
 
     @field_validator("cors_origins")
@@ -99,7 +131,17 @@ class Settings(BaseSettings):
         origins = [origin.strip() for origin in value.split(",") if origin.strip()]
         if not origins:
             raise ValueError("cors_origins must contain at least one origin")
+        # Prevent wildcard in production
+        if "*" in origins:
+            app_mode = os.getenv("XAGENT_APP_MODE", "development")
+            if app_mode == "production":
+                raise ValueError("CORS wildcard (*) is not allowed in production mode")
         return ",".join(origins)
+
+
+@lru_cache
+def get_settings() -> Settings:
+    return Settings()
 
 
 

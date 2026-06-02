@@ -8,7 +8,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from threading import RLock
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, Field
 
@@ -16,6 +16,9 @@ from backend.app.core.approvals import ApprovalStatus, ApprovalStore
 from backend.app.core.contracts import RiskLevel, RunContext, ToolCallRecord, ToolPolicyVerdict, AgentPlanStepRecord
 from backend.app.core.policy import ToolPolicyEngine
 from backend.app.settings import PROJECT_ROOT
+
+if TYPE_CHECKING:
+    from backend.app.core.hooks import HookManager
 
 # Import parallel execution components (lazy import to avoid circular dependencies)
 _parallel_executor = None
@@ -183,27 +186,44 @@ class ToolExecutionStore:
 class ToolRegistry:
     def __init__(
         self,
-        policy_engine: ToolPolicyEngine,
+        policy_engine: ToolPolicyEngine | None = None,
         approval_store: ApprovalStore | None = None,
         execution_store: ToolExecutionStore | None = None,
+        hook_manager: "HookManager | None" = None,
     ) -> None:
-        self._policy = policy_engine
+        # ``policy_engine`` is optional so the registry can be constructed with
+        # no arguments (the agent-v2 integration suite and other lightweight
+        # callers do ``ToolRegistry()``). The default Phase-0 engine permits
+        # LOW-risk tools whenever the context carries the ``tools:read`` scope,
+        # which the default :class:`RunContext` already grants — so no-arg
+        # construction stays usable end-to-end without a bespoke policy.
+        self._policy = policy_engine if policy_engine is not None else ToolPolicyEngine()
         self._approval_store = approval_store
         self._execution_store = execution_store
+        self._hook_manager = hook_manager
         self._tools: dict[str, ToolDefinition] = {}
 
     def register(
         self,
-        name: str,
-        description: str,
-        handler: ToolHandler,
+        name: str | ToolDefinition,
+        description: str | None = None,
+        handler: ToolHandler | None = None,
         risk_level: RiskLevel = RiskLevel.LOW,
         required_scope: str | None = None,
         parameters_schema: dict[str, Any] | None = None,
     ) -> None:
+        # Two calling conventions are accepted:
+        #   * register(name, description, handler, ...)  — canonical / unpacked
+        #   * register(tool_def)                         — a prebuilt ToolDefinition
+        # The single-ToolDefinition form is used by the agent-v2 integration
+        # suite; it is stored verbatim so the caller stays in full control of
+        # required_scope / parameters_schema.
+        if isinstance(name, ToolDefinition):
+            self._tools[name.name] = name
+            return
         self._tools[name] = ToolDefinition(
             name,
-            description,
+            description or "",
             handler,
             risk_level,
             required_scope or f"tool:{name}",
@@ -280,9 +300,21 @@ class ToolRegistry:
     async def execute(
         self,
         context: RunContext,
-        name: str,
-        arguments: dict[str, Any],
+        name: str | None = None,
+        arguments: dict[str, Any] | None = None,
+        *,
+        tool_name: str | None = None,
     ) -> ToolCallRecord:
+        # ``tool_name`` is an alias for the positional ``name`` so callers can
+        # write ``execute(context=ctx, tool_name="echo", arguments={...})``
+        # (used by the agent-v2 integration suite). The positional form
+        # ``execute(ctx, "echo", {...})`` remains unchanged.
+        if name is None:
+            name = tool_name
+        if name is None:
+            raise TypeError("execute() requires a tool name (positional `name` or `tool_name=`).")
+        if arguments is None:
+            arguments = {}
         started = time.perf_counter()
         arguments_preview = self._preview_arguments(arguments)
         tool = self._tools.get(name)
@@ -348,8 +380,37 @@ class ToolRegistry:
             self._record_execution(context, record)
             return record
 
+        # PRE_TOOL_USE hooks (control plane). No-op when no hook manager.
+        if self._hook_manager is not None:
+            pre = await self._run_pre_tool_hooks(context, tool, arguments)
+            if pre is not None:
+                blocked_args, hook_error, approval_id = pre
+                error = hook_error
+                if approval_id:
+                    error = f"{hook_error} Approval request: {approval_id}"
+                record = ToolCallRecord(
+                    tool_name=name,
+                    success=False,
+                    error=error,
+                    policy=verdict,
+                    risk_level=tool.risk_level,
+                    latency_ms=self._elapsed_ms(started),
+                    arguments_preview=self._preview_arguments(blocked_args),
+                    trace_id=context.trace_id,
+                    request_id=context.request_id,
+                )
+                self._record_execution(context, record)
+                return record
+            # A MODIFY decision may have rewritten arguments in place.
+            arguments_preview = self._preview_arguments(arguments)
+
         try:
             output = await tool.handler(**arguments)
+            # POST_TOOL_USE hooks may rewrite the output (no-op when none).
+            if self._hook_manager is not None:
+                output = await self._run_post_tool_hooks(
+                    context, tool, arguments, output
+                )
             record = ToolCallRecord(
                 tool_name=name,
                 success=True,
@@ -377,6 +438,112 @@ class ToolRegistry:
             )
             self._record_execution(context, record)
             return record
+
+    async def _run_pre_tool_hooks(
+        self,
+        context: RunContext,
+        tool: ToolDefinition,
+        arguments: dict[str, Any],
+    ) -> tuple[dict[str, Any], str, str | None] | None:
+        """Run PRE_TOOL_USE hooks before a tool handler executes.
+
+        On DENY or ASK the call is stopped; for ASK an approval is created via
+        the existing ``ApprovalStore`` when available. On MODIFY the
+        ``arguments`` dict is rewritten in place so the handler receives the
+        new payload. On ALLOW nothing happens.
+
+        Args:
+            context: Active run context.
+            tool: The resolved tool definition.
+            arguments: Mutable tool arguments (rewritten in place on MODIFY).
+
+        Returns:
+            ``None`` when execution may proceed. Otherwise a tuple of
+            ``(arguments, reason, approval_id)`` describing why the call was
+            blocked, used by the caller to build a failure record.
+        """
+        from backend.app.core.hooks import HookContext, HookEvent
+
+        hook_ctx = HookContext(
+            event=HookEvent.PRE_TOOL_USE,
+            tool_name=tool.name,
+            arguments=dict(arguments),
+            trace_id=context.trace_id,
+            request_id=context.request_id,
+            tenant_id=context.tenant_id,
+            user_id=context.user_id,
+            risk_level=tool.risk_level.value,
+        )
+        result = await self._hook_manager.trigger(hook_ctx)
+
+        if result.denied:
+            return arguments, result.reason or "blocked by hook", None
+
+        if result.needs_approval:
+            approval_id: str | None = None
+            if self._approval_store is not None:
+                approval = self._approval_store.create_tool_approval(
+                    context=context,
+                    tool_name=tool.name,
+                    risk_level=tool.risk_level,
+                    reason=result.reason or "approval required by hook",
+                    arguments_preview=self._preview_arguments(arguments),
+                    arguments=arguments,
+                )
+                approval_id = approval.id
+            return arguments, result.reason or "approval required by hook", approval_id
+
+        if (
+            result.final_action.value == "modify"
+            and result.effective_arguments is not None
+        ):
+            arguments.clear()
+            arguments.update(result.effective_arguments)
+
+        return None
+
+    async def _run_post_tool_hooks(
+        self,
+        context: RunContext,
+        tool: ToolDefinition,
+        arguments: dict[str, Any],
+        output: Any,
+    ) -> Any:
+        """Run POST_TOOL_USE hooks after a tool handler returns.
+
+        POST hooks observe and may rewrite the output. DENY/ASK are not
+        meaningful post-execution and are treated as observations only.
+
+        Args:
+            context: Active run context.
+            tool: The resolved tool definition.
+            arguments: The arguments the handler ran with.
+            output: The handler's raw output.
+
+        Returns:
+            The (possibly modified) output.
+        """
+        from backend.app.core.hooks import HookContext, HookEvent
+
+        result_payload = output if isinstance(output, dict) else {"output": output}
+        hook_ctx = HookContext(
+            event=HookEvent.POST_TOOL_USE,
+            tool_name=tool.name,
+            arguments=dict(arguments),
+            result=dict(result_payload),
+            trace_id=context.trace_id,
+            request_id=context.request_id,
+            tenant_id=context.tenant_id,
+            user_id=context.user_id,
+            risk_level=tool.risk_level.value,
+        )
+        result = await self._hook_manager.trigger(hook_ctx)
+        if (
+            result.final_action.value == "modify"
+            and result.effective_result is not None
+        ):
+            return result.effective_result
+        return output
 
     def get_execution_store(self) -> ToolExecutionStore | None:
         return self._execution_store
@@ -1060,8 +1227,23 @@ def build_default_tool_registry(
     policy_engine: ToolPolicyEngine,
     approval_store: ApprovalStore | None = None,
     execution_store: ToolExecutionStore | None = None,
+    hook_manager: "HookManager | None" = None,
 ) -> ToolRegistry:
-    registry = ToolRegistry(policy_engine, approval_store=approval_store, execution_store=execution_store)
+    # Attach the process-global HookManager by default so configured hooks
+    # fire at the execute() chokepoint. An empty manager (no hooks registered)
+    # is a perfect no-op, so this stays backward compatible. The import is lazy
+    # to keep the hooks package off the tools.py module-import path (avoids the
+    # circular import; hooks/ never imports tools).
+    if hook_manager is None:
+        from backend.app.core.hooks import get_hook_manager
+
+        hook_manager = get_hook_manager()
+    registry = ToolRegistry(
+        policy_engine,
+        approval_store=approval_store,
+        execution_store=execution_store,
+        hook_manager=hook_manager,
+    )
     registry.register("echo", "Echo text back to the caller.", echo)
     registry.register("list_files", "List files under a root directory.", list_files)
     registry.register("inspect_tree", "Inspect directories and files under a root directory.", inspect_tree)

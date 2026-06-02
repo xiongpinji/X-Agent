@@ -13,7 +13,7 @@ from enum import Enum
 from typing import Annotated, Any
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
 from backend.app.core.security import Principal
@@ -242,7 +242,7 @@ async def list_tasks(
 @router.post("", response_model=TaskModel, status_code=status.HTTP_201_CREATED)
 async def create_task(
     request: TaskCreateRequest,
-    principal: PrincipalDependency = Depends(get_current_principal),
+    principal: PrincipalDependency,
 ) -> TaskModel:
     """
     Create a new task.
@@ -272,7 +272,7 @@ async def create_task(
 @router.get("/{task_id}", response_model=TaskModel)
 async def get_task(
     task_id: str,
-    principal: PrincipalDependency = Depends(get_current_principal),
+    principal: PrincipalDependency,
 ) -> TaskModel:
     """
     Get a task by ID.
@@ -296,7 +296,7 @@ async def get_task(
 async def update_task(
     task_id: str,
     request: TaskUpdateRequest,
-    principal: PrincipalDependency = Depends(get_current_principal),
+    principal: PrincipalDependency,
 ) -> TaskModel:
     """
     Update a task.
@@ -335,7 +335,7 @@ async def update_task(
 @router.delete("/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_task(
     task_id: str,
-    principal: PrincipalDependency = Depends(get_current_principal),
+    principal: PrincipalDependency,
 ) -> None:
     """
     Delete a task.
@@ -352,7 +352,7 @@ async def delete_task(
 @router.get("/{task_id}/progress", response_model=TaskProgressResponse)
 async def get_task_progress(
     task_id: str,
-    principal: PrincipalDependency = Depends(get_current_principal),
+    principal: PrincipalDependency,
 ) -> TaskProgressResponse:
     """
     Get detailed progress information for a task.
@@ -388,7 +388,7 @@ async def get_task_progress(
 @router.get("/{task_id}/dependencies", response_model=TaskDependencyGraph)
 async def get_task_dependencies(
     task_id: str,
-    principal: PrincipalDependency = Depends(get_current_principal),
+    principal: PrincipalDependency,
 ) -> TaskDependencyGraph:
     """
     Get task dependency graph.
@@ -434,7 +434,8 @@ async def get_task_dependencies(
 async def complete_task(
     task_id: str,
     result: Any = None,
-    principal: PrincipalDependency = Depends(get_current_principal),
+    *,
+    principal: PrincipalDependency,
 ) -> TaskModel:
     """
     Mark a task as completed.
@@ -467,8 +468,9 @@ async def complete_task(
 @router.post("/{task_id}/fail", response_model=TaskModel)
 async def fail_task(
     task_id: str,
-    error: str = Field(..., description="Error message"),
-    principal: PrincipalDependency = Depends(get_current_principal),
+    error: str = Body(..., description="Error message"),
+    *,
+    principal: PrincipalDependency,
 ) -> TaskModel:
     """
     Mark a task as failed.
@@ -499,7 +501,7 @@ async def fail_task(
 @router.get("/run/{run_id}/summary", response_model=dict[str, Any])
 async def get_run_task_summary(
     run_id: str,
-    principal: PrincipalDependency = Depends(get_current_principal),
+    principal: PrincipalDependency,
 ) -> dict[str, Any]:
     """
     Get task summary for a run.

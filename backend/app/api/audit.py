@@ -1,8 +1,10 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
+from fastapi.responses import StreamingResponse
 
 from backend.app.api.linked_summary import LinkedSummaryEnvelope, build_linked_summary
+from backend.app.api.pagination import PaginationParams, apply_pagination
 from backend.app.core.audit import AuditChainVerification, AuditLogRecord, AuditStore
 from backend.app.core.security import Principal
 from backend.app.dependencies import enforce_scope, get_audit_store, get_current_principal
@@ -12,11 +14,12 @@ AuditStoreDependency = Annotated[AuditStore, Depends(get_audit_store)]
 PrincipalDependency = Annotated[Principal, Depends(get_current_principal)]
 
 
-@router.get("", response_model=list[AuditLogRecord])
+@router.get("", response_model=dict[str, object])
 async def list_audit_logs(
     audit_store: AuditStoreDependency,
     principal: PrincipalDependency,
     limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
     tenant_id: str | None = None,
     actor_id: str | None = None,
     action: str | None = None,
@@ -26,10 +29,31 @@ async def list_audit_logs(
     run_id: str | None = None,
     workflow_id: str | None = None,
     has_snapshot: bool | None = None,
-) -> list[AuditLogRecord]:
+) -> dict[str, object]:
+    """List audit logs with filtering and pagination.
+
+    Args:
+        audit_store: Audit store dependency
+        principal: Current principal (must have audit:read scope)
+        limit: Number of items per page
+        offset: Number of items to skip
+        tenant_id: Filter by tenant
+        actor_id: Filter by actor
+        action: Filter by action
+        resource_type: Filter by resource type
+        outcome: Filter by outcome
+        trace_id: Filter by trace ID
+        run_id: Filter by run ID
+        workflow_id: Filter by workflow ID
+        has_snapshot: Filter by snapshot presence
+
+    Returns:
+        Paginated audit logs
+    """
     enforce_scope(principal, "audit:read")
     records = audit_store.list(
-        limit=limit,
+        limit=10000,
+        offset=0,
         tenant_id=tenant_id,
         actor_id=actor_id,
         action=action,
@@ -44,7 +68,14 @@ async def list_audit_logs(
         and (workflow_id is None or record.workflow_id == workflow_id)
         and (has_snapshot is None or bool(record.snapshot) == has_snapshot)
     ]
-    return filtered
+
+    # Apply pagination
+    paginated, metadata = apply_pagination(filtered, limit, offset)
+
+    return {
+        "data": [record.model_dump(mode="json") for record in paginated],
+        "pagination": metadata.model_dump(),
+    }
 
 
 @router.get("/verify", response_model=AuditChainVerification)
@@ -77,3 +108,78 @@ async def audit_summary(
         "by_outcome": by_outcome,
     }
     return build_linked_summary(resource_type="audit_summary", resource_id="audit_summary", primary=primary, audit=primary, extra=primary)
+
+
+@router.get("/export/csv")
+async def export_audit_logs_csv(
+    audit_store: AuditStoreDependency,
+    principal: PrincipalDependency,
+    tenant_id: str | None = None,
+    actor_id: str | None = None,
+    action: str | None = None,
+    resource_type: str | None = None,
+    outcome: str | None = None,
+) -> StreamingResponse:
+    """Export audit logs as CSV file.
+
+    Args:
+        audit_store: Audit store dependency
+        principal: Current principal (must have audit:read scope)
+        tenant_id: Filter by tenant
+        actor_id: Filter by actor
+        action: Filter by action
+        resource_type: Filter by resource type
+        outcome: Filter by outcome
+
+    Returns:
+        CSV file as streaming response
+    """
+    enforce_scope(principal, "audit:read")
+    csv_content = audit_store.export_csv(
+        tenant_id=tenant_id,
+        actor_id=actor_id,
+        action=action,
+        resource_type=resource_type,
+        outcome=outcome,
+    )
+
+    return StreamingResponse(
+        iter([csv_content]),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=audit-logs.csv"},
+    )
+
+
+@router.get("/export/json")
+async def export_audit_logs_json(
+    audit_store: AuditStoreDependency,
+    principal: PrincipalDependency,
+    tenant_id: str | None = None,
+    actor_id: str | None = None,
+    action: str | None = None,
+    resource_type: str | None = None,
+    outcome: str | None = None,
+) -> dict[str, object]:
+    """Export audit logs as JSON.
+
+    Args:
+        audit_store: Audit store dependency
+        principal: Current principal (must have audit:read scope)
+        tenant_id: Filter by tenant
+        actor_id: Filter by actor
+        action: Filter by action
+        resource_type: Filter by resource type
+        outcome: Filter by outcome
+
+    Returns:
+        JSON formatted audit logs
+    """
+    enforce_scope(principal, "audit:read")
+    records = audit_store.export_json(
+        tenant_id=tenant_id,
+        actor_id=actor_id,
+        action=action,
+        resource_type=resource_type,
+        outcome=outcome,
+    )
+    return {"data": records, "count": len(records)}

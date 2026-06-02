@@ -14,7 +14,7 @@ class SecurityConfig(BaseConfig):
     jwt_secret: str = Field(
         default="change-this-to-a-random-64-char-string",
         min_length=32,
-        description="JWT signing secret (minimum 32 characters)",
+        description="JWT signing secret (minimum 32 characters, MUST be changed in production)",
     )
     jwt_algorithm: str = Field(
         default="HS256",
@@ -37,19 +37,19 @@ class SecurityConfig(BaseConfig):
     encryption_key: str = Field(
         default="change-this-to-32-char-hex-string",
         min_length=32,
-        description="Encryption key for sensitive data (minimum 32 characters)",
+        description="Encryption key for sensitive data (minimum 32 characters, MUST be changed in production)",
     )
     encryption_algorithm: str = Field(
         default="AES-256-GCM",
         description="Encryption algorithm",
     )
 
-    # Password hashing
+    # Password hashing - CRITICAL: Using bcrypt with cost factor 12+ for production
     bcrypt_cost: int = Field(
         default=12,
-        ge=4,
+        ge=12,  # Minimum 12 for production security
         le=31,
-        description="Bcrypt cost factor (higher = slower but more secure)",
+        description="Bcrypt cost factor (higher = slower but more secure, minimum 12 for production)",
     )
 
     # API key configuration
@@ -59,7 +59,7 @@ class SecurityConfig(BaseConfig):
     )
     bootstrap_api_key: Optional[str] = Field(
         default=None,
-        description="Bootstrap API key for initial setup",
+        description="Bootstrap API key for initial setup (must be changed after first use)",
     )
     bootstrap_api_key_sha256: Optional[str] = Field(
         default=None,
@@ -72,10 +72,10 @@ class SecurityConfig(BaseConfig):
         description="API key expiration in days",
     )
 
-    # CORS configuration
+    # CORS configuration - CRITICAL: No wildcard in production
     cors_origins: str = Field(
         default="http://localhost:3000,http://127.0.0.1:3000",
-        description="Comma-separated list of allowed CORS origins",
+        description="Comma-separated list of allowed CORS origins (NO wildcards in production)",
     )
     cors_allow_credentials: bool = Field(
         default=True,
@@ -86,11 +86,11 @@ class SecurityConfig(BaseConfig):
         description="Allowed HTTP methods for CORS",
     )
     cors_allow_headers: str = Field(
-        default="*",
-        description="Allowed headers for CORS",
+        default="Authorization,Content-Type,X-Request-Id,X-API-Key",
+        description="Allowed headers for CORS (restricted list, no wildcard)",
     )
 
-    # Rate limiting
+    # Rate limiting - CRITICAL: Enabled by default
     rate_limit_default: int = Field(
         default=100,
         ge=1,
@@ -156,8 +156,8 @@ class SecurityConfig(BaseConfig):
             default_encryption = "change-this-to-32-char-hex-string"
             if v == default_jwt or v == default_encryption:
                 raise ValueError(
-                    f"Production secrets must be changed from defaults. "
-                    f"Set JWT_SECRET and ENCRYPTION_KEY to strong random values. "
+                    f"CRITICAL SECURITY: Production secrets must be changed from defaults. "
+                    f"Set JWT_SECRET and ENCRYPTION_KEY environment variables to strong random values. "
                     f"Generate using: python scripts/generate_secrets.py"
                 )
             if len(v) < 32:
@@ -166,12 +166,26 @@ class SecurityConfig(BaseConfig):
 
     @field_validator("cors_origins")
     @classmethod
-    def validate_cors_origins(cls, v: str) -> str:
-        """Validate and normalize CORS origins."""
+    def validate_cors_origins(cls, v: str, info) -> str:
+        """Validate and normalize CORS origins - prevent wildcard in production."""
         origins = [origin.strip() for origin in v.split(",") if origin.strip()]
         if not origins:
             raise ValueError("cors_origins must contain at least one origin")
+
+        environment = info.data.get("environment", Environment.DEVELOPMENT)
+        if environment == Environment.PRODUCTION and "*" in origins:
+            raise ValueError("CRITICAL SECURITY: CORS wildcard (*) is not allowed in production mode")
+
         return ",".join(origins)
+
+    @field_validator("cors_allow_headers")
+    @classmethod
+    def validate_cors_headers(cls, v: str, info) -> str:
+        """Validate CORS headers - prevent wildcard in production."""
+        environment = info.data.get("environment", Environment.DEVELOPMENT)
+        if environment == Environment.PRODUCTION and v == "*":
+            raise ValueError("CRITICAL SECURITY: CORS allow_headers wildcard (*) is not allowed in production mode")
+        return v
 
     @field_validator("require_https")
     @classmethod
@@ -179,7 +193,16 @@ class SecurityConfig(BaseConfig):
         """Enforce HTTPS in production."""
         environment = info.data.get("environment", Environment.DEVELOPMENT)
         if environment == Environment.PRODUCTION and not v:
-            raise ValueError("HTTPS is required in production mode")
+            raise ValueError("CRITICAL SECURITY: HTTPS is required in production mode")
+        return v
+
+    @field_validator("bcrypt_cost")
+    @classmethod
+    def validate_bcrypt_cost(cls, v: int, info) -> int:
+        """Enforce minimum bcrypt cost in production."""
+        environment = info.data.get("environment", Environment.DEVELOPMENT)
+        if environment == Environment.PRODUCTION and v < 12:
+            raise ValueError("CRITICAL SECURITY: Bcrypt cost must be at least 12 in production mode")
         return v
 
     def get_cors_origins_list(self) -> list[str]:

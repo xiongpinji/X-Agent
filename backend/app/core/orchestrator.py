@@ -3,24 +3,16 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from backend.app.core.contracts import ExecutionFrame, PlanFrame, RecoveryFrame, TaskFrame, ToolDecision
+from backend.app.core.contracts import (
+    CapabilityDecision,
+    ExecutionFrame,
+    OrchestrationContext,
+    PlanFrame,
+    RecoveryFrame,
+    TaskFrame,
+    ToolDecision,
+)
 from backend.app.core.capability_strategies import CapabilityRegistry
-
-
-@dataclass
-class CapabilityDecision:
-    name: str
-    reason: str
-    metadata: dict[str, Any] = field(default_factory=dict)
-
-
-@dataclass
-class OrchestrationContext:
-    task: TaskFrame
-    plan: PlanFrame | None = None
-    execution: ExecutionFrame | None = None
-    recovery: RecoveryFrame | None = None
-    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 class CapabilityRouter:

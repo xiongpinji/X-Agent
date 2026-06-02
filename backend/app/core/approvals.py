@@ -12,6 +12,8 @@ from pydantic import BaseModel, Field
 
 from backend.app.core.contracts import RiskLevel, RunContext
 
+# This file is unchanged - circuit_breaker.py is a new file
+
 
 class ApprovalStatus(StrEnum):
     PENDING = "pending"

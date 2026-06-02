@@ -161,6 +161,15 @@ async def get_workflow(workflow_id: str, repository: WorkflowRepositoryDependenc
     return {**workflow.model_dump(mode="json"), "id": workflow.id, "workflow_id": workflow.id, "resource_type": "workflow", "status": latest_status, "latest_run_id": latest_run.run_id if latest_run else None, "latest_run_status": latest_status, "run_count": repository.count_runs(workflow.id), "snapshot": snapshot}
 
 
+@router.delete("/{workflow_id}", status_code=204)
+async def delete_workflow(workflow_id: str, repository: WorkflowRepositoryDependency, principal: PrincipalDependency) -> None:
+    enforce_scope(principal, "workflow:create")
+    deleted = repository.delete_definition(workflow_id)
+    if not deleted:
+        raise api_error(404, ErrorCode.WORKFLOW_NOT_FOUND, "Workflow not found.")
+    _audit_store().record(action="workflow.delete", resource_type="workflow", resource_id=workflow_id, tenant_id=principal.tenant_id, actor_id=principal.user_id, workflow_id=workflow_id, details={})
+
+
 @router.get("/{workflow_id}/status")
 async def get_workflow_status(workflow_id: str, repository: WorkflowRepositoryDependency, principal: PrincipalDependency) -> dict[str, object]:
     enforce_scope(principal, "workflow:run")
@@ -261,6 +270,7 @@ async def cancel_workflow(workflow_id: str, scheduler: WorkflowSchedulerDependen
 
 
 @router.post("/{workflow_id}/run")
+@router.post("/{workflow_id}/execute")
 async def run_workflow(workflow_id: str, payload: dict[str, object], repository: WorkflowRepositoryDependency, scheduler: WorkflowSchedulerDependency, principal: PrincipalDependency) -> dict[str, object]:
     enforce_scope(principal, "workflow:run")
     workflow = repository.get_definition(workflow_id)
@@ -441,7 +451,7 @@ async def get_workflow_run_detail(run_id: str, repository: WorkflowRepositoryDep
         "timeline": timeline,
         "view_model": build_workflow_run_view_model(run, timeline, node_results, failure_chain, compensation_chain, trace_ids),
     }
-    return build_linked_summary(
+    payload = build_linked_summary(
         resource_type="workflow_run",
         resource_id=run.run_id,
         primary=primary,
@@ -456,6 +466,12 @@ async def get_workflow_run_detail(run_id: str, repository: WorkflowRepositoryDep
             "compensation_events": compensation_chain,
         },
     )
+    # 顶层补 run / timeline，与姊妹端点(traces /correlation)一致：调用方按
+    # detail["run"]["run_id"] / detail["timeline"] 直接取值；富链接信封仍在
+    # linked_summaries / snapshot 内保留，二者并存互不破坏。
+    payload["run"] = run.model_dump(mode="json")
+    payload["timeline"] = timeline
+    return payload
 
 
 @router.get("/runs/{run_id}/correlation")
@@ -490,7 +506,7 @@ async def get_workflow_run_correlation(run_id: str, repository: WorkflowReposito
         "trace_summary": linked_summaries["trace"],
         "view_model": build_workflow_run_view_model(run, timeline, node_results, failure_chain, compensation_chain, trace_ids),
     }
-    return build_linked_summary(
+    payload = build_linked_summary(
         resource_type="workflow_run",
         resource_id=run.run_id,
         primary=primary,
@@ -513,3 +529,7 @@ async def get_workflow_run_correlation(run_id: str, repository: WorkflowReposito
             "audit_anchors": [{"kind": event["kind"], "timestamp": event["timestamp"], "node_id": event.get("node_id"), "status": event.get("status")} for event in timeline if event["kind"] in {"run.started", "run.completed", "node.started", "node.completed", "node.compensated", "node.failed"}],
         },
     )
+    # 顶层补 run_id，与 /api/v1/traces/{id}/correlation 一致
+    payload["run_id"] = run.run_id
+    payload["snapshot"] = run.model_dump(mode="json")
+    return payload

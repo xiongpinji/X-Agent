@@ -24,7 +24,21 @@ class TemplateCategory(StrEnum):
     NOTIFICATION = "notification"
     APPROVAL = "approval"
     BATCH_PROCESSING = "batch_processing"
+    CODE_REVIEW = "code_review"
     CUSTOM = "custom"
+    # Additional categories used by TemplateLibrary methods
+    DOCUMENTATION = "documentation"
+    BUG_FIXING = "bug_fixing"
+    TESTING = "testing"
+    REFACTORING = "refactoring"
+    DATABASE_QUERY = "database_query"
+    FILE_OPERATION = "file_operation"
+    API_CALL = "api_call"
+    DATA_TRANSFORMATION = "data_transformation"
+    GITHUB_INTEGRATION = "github_integration"
+    SLACK_INTEGRATION = "slack_integration"
+    JIRA_INTEGRATION = "jira_integration"
+    JENKINS_INTEGRATION = "jenkins_integration"
 
 
 @dataclass
@@ -108,27 +122,37 @@ class WorkflowTemplate:
 
     def _substitute_nodes(self, parameters: dict[str, Any]) -> list[dict[str, Any]]:
         """Substitute parameters in nodes"""
-        import json
-        result = []
-        for node in self.nodes:
-            node_str = json.dumps(node)
-            for param_name, param_value in parameters.items():
-                placeholder = f"${{{param_name}}}"
-                node_str = node_str.replace(placeholder, json.dumps(param_value))
-            result.append(json.loads(node_str))
-        return result
+        return [self._substitute_value(node, parameters) for node in self.nodes]
 
     def _substitute_edges(self, parameters: dict[str, Any]) -> list[dict[str, Any]]:
         """Substitute parameters in edges"""
-        import json
-        result = []
-        for edge in self.edges:
-            edge_str = json.dumps(edge)
+        return [self._substitute_value(edge, parameters) for edge in self.edges]
+
+    def _substitute_value(self, value: Any, parameters: dict[str, Any]) -> Any:
+        """Recursively substitute ${param} placeholders in a value.
+
+        A placeholder that is the entire string (e.g. "${source}") is replaced
+        with the parameter's typed value (preserving lists, numbers, dicts).
+        A placeholder embedded within a larger string is replaced with the
+        string form of the value (interpolation).
+        """
+        if isinstance(value, dict):
+            return {k: self._substitute_value(v, parameters) for k, v in value.items()}
+        if isinstance(value, list):
+            return [self._substitute_value(item, parameters) for item in value]
+        if isinstance(value, str):
+            # Whole-value placeholder: preserve the parameter's native type.
+            for param_name, param_value in parameters.items():
+                if value == f"${{{param_name}}}":
+                    return param_value
+            # Embedded placeholder(s): interpolate as string.
+            result = value
             for param_name, param_value in parameters.items():
                 placeholder = f"${{{param_name}}}"
-                edge_str = edge_str.replace(placeholder, json.dumps(param_value))
-            result.append(json.loads(edge_str))
-        return result
+                if placeholder in result:
+                    result = result.replace(placeholder, str(param_value))
+            return result
+        return value
 
     def to_dict(self) -> dict[str, Any]:
         """Convert template to dictionary"""
@@ -495,6 +519,682 @@ class TemplateLibrary:
         )
 
     @staticmethod
+    def create_code_review_template() -> WorkflowTemplate:
+        """Create code review template"""
+        return WorkflowTemplate(
+            name="Code Review Pipeline",
+            description="Automated code review and quality checks",
+            category=TemplateCategory.CODE_REVIEW,
+            parameters=[
+                TemplateParameter(
+                    name="repository_url",
+                    type="string",
+                    description="Repository URL",
+                    required=True,
+                ),
+                TemplateParameter(
+                    name="pull_request_id",
+                    type="number",
+                    description="Pull request ID",
+                    required=True,
+                ),
+                TemplateParameter(
+                    name="review_criteria",
+                    type="array",
+                    description="Review criteria",
+                    default=["code_style", "security", "performance"],
+                ),
+            ],
+            nodes=[
+                {
+                    "id": "fetch_pr",
+                    "type": "tool",
+                    "config": {"tool_name": "fetch_pull_request", "url": "${repository_url}", "pr_id": "${pull_request_id}"},
+                },
+                {
+                    "id": "analyze",
+                    "type": "agent",
+                    "config": {"agent_type": "code_reviewer", "criteria": "${review_criteria}"},
+                },
+                {
+                    "id": "report",
+                    "type": "output",
+                    "config": {"format": "markdown"},
+                },
+            ],
+            edges=[
+                {"source": "fetch_pr", "target": "analyze"},
+                {"source": "analyze", "target": "report"},
+            ],
+            tags=["code", "review", "quality"],
+        )
+
+    @staticmethod
+    def create_documentation_template() -> WorkflowTemplate:
+        """Create documentation generation template"""
+        return WorkflowTemplate(
+            name="Documentation Generator",
+            description="Generate documentation from code",
+            category=TemplateCategory.DOCUMENTATION,
+            parameters=[
+                TemplateParameter(
+                    name="source_path",
+                    type="string",
+                    description="Source code path",
+                    required=True,
+                ),
+                TemplateParameter(
+                    name="doc_format",
+                    type="select",
+                    description="Documentation format",
+                    default="markdown",
+                    enum_values=["markdown", "html", "pdf"],
+                ),
+            ],
+            nodes=[
+                {
+                    "id": "read_code",
+                    "type": "tool",
+                    "config": {"tool_name": "read_files", "path": "${source_path}"},
+                },
+                {
+                    "id": "generate_docs",
+                    "type": "agent",
+                    "config": {"agent_type": "doc_generator"},
+                },
+                {
+                    "id": "format",
+                    "type": "transform",
+                    "config": {"format": "${doc_format}"},
+                },
+                {
+                    "id": "output",
+                    "type": "output",
+                    "config": {"format": "${doc_format}"},
+                },
+            ],
+            edges=[
+                {"source": "read_code", "target": "generate_docs"},
+                {"source": "generate_docs", "target": "format"},
+                {"source": "format", "target": "output"},
+            ],
+            tags=["documentation", "generation", "code"],
+        )
+
+    @staticmethod
+    def create_bug_fixing_template() -> WorkflowTemplate:
+        """Create bug fixing template"""
+        return WorkflowTemplate(
+            name="Bug Fixing Pipeline",
+            description="Automated bug detection and fixing",
+            category=TemplateCategory.BUG_FIXING,
+            parameters=[
+                TemplateParameter(
+                    name="bug_description",
+                    type="string",
+                    description="Bug description",
+                    required=True,
+                ),
+                TemplateParameter(
+                    name="file_path",
+                    type="string",
+                    description="File to fix",
+                    required=True,
+                ),
+            ],
+            nodes=[
+                {
+                    "id": "read_file",
+                    "type": "tool",
+                    "config": {"tool_name": "read_file", "path": "${file_path}"},
+                },
+                {
+                    "id": "analyze_bug",
+                    "type": "agent",
+                    "config": {"agent_type": "bug_analyzer", "description": "${bug_description}"},
+                },
+                {
+                    "id": "generate_fix",
+                    "type": "agent",
+                    "config": {"agent_type": "code_fixer"},
+                },
+                {
+                    "id": "output",
+                    "type": "output",
+                    "config": {"format": "code"},
+                },
+            ],
+            edges=[
+                {"source": "read_file", "target": "analyze_bug"},
+                {"source": "analyze_bug", "target": "generate_fix"},
+                {"source": "generate_fix", "target": "output"},
+            ],
+            tags=["bug", "fixing", "debugging"],
+        )
+
+    @staticmethod
+    def create_testing_template() -> WorkflowTemplate:
+        """Create testing template"""
+        return WorkflowTemplate(
+            name="Automated Testing Pipeline",
+            description="Run automated tests and generate reports",
+            category=TemplateCategory.TESTING,
+            parameters=[
+                TemplateParameter(
+                    name="test_path",
+                    type="string",
+                    description="Test directory path",
+                    required=True,
+                ),
+                TemplateParameter(
+                    name="test_framework",
+                    type="select",
+                    description="Test framework",
+                    default="pytest",
+                    enum_values=["pytest", "unittest", "jest", "mocha"],
+                ),
+            ],
+            nodes=[
+                {
+                    "id": "discover_tests",
+                    "type": "tool",
+                    "config": {"tool_name": "discover_tests", "path": "${test_path}"},
+                },
+                {
+                    "id": "run_tests",
+                    "type": "tool",
+                    "config": {"tool_name": "run_tests", "framework": "${test_framework}"},
+                },
+                {
+                    "id": "generate_report",
+                    "type": "transform",
+                    "config": {"format": "html"},
+                },
+                {
+                    "id": "output",
+                    "type": "output",
+                    "config": {"format": "html"},
+                },
+            ],
+            edges=[
+                {"source": "discover_tests", "target": "run_tests"},
+                {"source": "run_tests", "target": "generate_report"},
+                {"source": "generate_report", "target": "output"},
+            ],
+            tags=["testing", "automation", "quality"],
+        )
+
+    @staticmethod
+    def create_refactoring_template() -> WorkflowTemplate:
+        """Create refactoring template"""
+        return WorkflowTemplate(
+            name="Code Refactoring Pipeline",
+            description="Refactor code for better quality",
+            category=TemplateCategory.REFACTORING,
+            parameters=[
+                TemplateParameter(
+                    name="source_code",
+                    type="string",
+                    description="Source code to refactor",
+                    required=True,
+                ),
+                TemplateParameter(
+                    name="refactoring_goals",
+                    type="array",
+                    description="Refactoring goals",
+                    default=["readability", "performance"],
+                ),
+            ],
+            nodes=[
+                {
+                    "id": "analyze_code",
+                    "type": "agent",
+                    "config": {"agent_type": "code_analyzer"},
+                },
+                {
+                    "id": "plan_refactoring",
+                    "type": "agent",
+                    "config": {"agent_type": "refactoring_planner", "goals": "${refactoring_goals}"},
+                },
+                {
+                    "id": "apply_refactoring",
+                    "type": "agent",
+                    "config": {"agent_type": "code_refactorer"},
+                },
+                {
+                    "id": "output",
+                    "type": "output",
+                    "config": {"format": "code"},
+                },
+            ],
+            edges=[
+                {"source": "analyze_code", "target": "plan_refactoring"},
+                {"source": "plan_refactoring", "target": "apply_refactoring"},
+                {"source": "apply_refactoring", "target": "output"},
+            ],
+            tags=["refactoring", "code", "quality"],
+        )
+
+    @staticmethod
+    def create_database_query_template() -> WorkflowTemplate:
+        """Create database query template"""
+        return WorkflowTemplate(
+            name="Database Query Pipeline",
+            description="Execute and optimize database queries",
+            category=TemplateCategory.DATABASE_QUERY,
+            parameters=[
+                TemplateParameter(
+                    name="database_url",
+                    type="string",
+                    description="Database connection URL",
+                    required=True,
+                ),
+                TemplateParameter(
+                    name="query",
+                    type="string",
+                    description="SQL query",
+                    required=True,
+                ),
+            ],
+            nodes=[
+                {
+                    "id": "connect",
+                    "type": "tool",
+                    "config": {"tool_name": "connect_database", "url": "${database_url}"},
+                },
+                {
+                    "id": "execute",
+                    "type": "tool",
+                    "config": {"tool_name": "execute_query", "query": "${query}"},
+                },
+                {
+                    "id": "format_results",
+                    "type": "transform",
+                    "config": {"format": "json"},
+                },
+                {
+                    "id": "output",
+                    "type": "output",
+                    "config": {"format": "json"},
+                },
+            ],
+            edges=[
+                {"source": "connect", "target": "execute"},
+                {"source": "execute", "target": "format_results"},
+                {"source": "format_results", "target": "output"},
+            ],
+            tags=["database", "query", "sql"],
+        )
+
+    @staticmethod
+    def create_file_operation_template() -> WorkflowTemplate:
+        """Create file operation template"""
+        return WorkflowTemplate(
+            name="File Operation Pipeline",
+            description="Perform file operations and transformations",
+            category=TemplateCategory.FILE_OPERATION,
+            parameters=[
+                TemplateParameter(
+                    name="source_path",
+                    type="string",
+                    description="Source file path",
+                    required=True,
+                ),
+                TemplateParameter(
+                    name="operation",
+                    type="select",
+                    description="Operation type",
+                    default="read",
+                    enum_values=["read", "write", "copy", "move", "delete"],
+                ),
+            ],
+            nodes=[
+                {
+                    "id": "prepare",
+                    "type": "transform",
+                    "config": {"operation": "${operation}"},
+                },
+                {
+                    "id": "execute",
+                    "type": "tool",
+                    "config": {"tool_name": "file_operation", "path": "${source_path}"},
+                },
+                {
+                    "id": "output",
+                    "type": "output",
+                    "config": {"format": "json"},
+                },
+            ],
+            edges=[
+                {"source": "prepare", "target": "execute"},
+                {"source": "execute", "target": "output"},
+            ],
+            tags=["file", "operation", "io"],
+        )
+
+    @staticmethod
+    def create_api_call_template() -> WorkflowTemplate:
+        """Create API call template"""
+        return WorkflowTemplate(
+            name="API Call Pipeline",
+            description="Make and process API calls",
+            category=TemplateCategory.API_CALL,
+            parameters=[
+                TemplateParameter(
+                    name="api_url",
+                    type="string",
+                    description="API endpoint URL",
+                    required=True,
+                ),
+                TemplateParameter(
+                    name="method",
+                    type="select",
+                    description="HTTP method",
+                    default="GET",
+                    enum_values=["GET", "POST", "PUT", "DELETE", "PATCH"],
+                ),
+                TemplateParameter(
+                    name="headers",
+                    type="object",
+                    description="Request headers",
+                    default={},
+                ),
+            ],
+            nodes=[
+                {
+                    "id": "prepare_request",
+                    "type": "transform",
+                    "config": {"method": "${method}", "headers": "${headers}"},
+                },
+                {
+                    "id": "call_api",
+                    "type": "tool",
+                    "config": {"tool_name": "http_request", "url": "${api_url}"},
+                },
+                {
+                    "id": "process_response",
+                    "type": "transform",
+                    "config": {"format": "json"},
+                },
+                {
+                    "id": "output",
+                    "type": "output",
+                    "config": {"format": "json"},
+                },
+            ],
+            edges=[
+                {"source": "prepare_request", "target": "call_api"},
+                {"source": "call_api", "target": "process_response"},
+                {"source": "process_response", "target": "output"},
+            ],
+            tags=["api", "http", "integration"],
+        )
+
+    @staticmethod
+    def create_data_transformation_template() -> WorkflowTemplate:
+        """Create data transformation template"""
+        return WorkflowTemplate(
+            name="Data Transformation Pipeline",
+            description="Transform and normalize data",
+            category=TemplateCategory.DATA_TRANSFORMATION,
+            parameters=[
+                TemplateParameter(
+                    name="input_format",
+                    type="select",
+                    description="Input data format",
+                    default="json",
+                    enum_values=["json", "csv", "xml", "parquet"],
+                ),
+                TemplateParameter(
+                    name="output_format",
+                    type="select",
+                    description="Output data format",
+                    default="json",
+                    enum_values=["json", "csv", "xml", "parquet"],
+                ),
+            ],
+            nodes=[
+                {
+                    "id": "parse_input",
+                    "type": "transform",
+                    "config": {"format": "${input_format}"},
+                },
+                {
+                    "id": "normalize",
+                    "type": "transform",
+                    "config": {"operation": "normalize"},
+                },
+                {
+                    "id": "format_output",
+                    "type": "transform",
+                    "config": {"format": "${output_format}"},
+                },
+                {
+                    "id": "output",
+                    "type": "output",
+                    "config": {"format": "${output_format}"},
+                },
+            ],
+            edges=[
+                {"source": "parse_input", "target": "normalize"},
+                {"source": "normalize", "target": "format_output"},
+                {"source": "format_output", "target": "output"},
+            ],
+            tags=["data", "transformation", "etl"],
+        )
+
+    @staticmethod
+    def create_github_integration_template() -> WorkflowTemplate:
+        """Create GitHub integration template"""
+        return WorkflowTemplate(
+            name="GitHub Integration Pipeline",
+            description="Integrate with GitHub repositories",
+            category=TemplateCategory.GITHUB_INTEGRATION,
+            parameters=[
+                TemplateParameter(
+                    name="github_token",
+                    type="string",
+                    description="GitHub API token",
+                    required=True,
+                ),
+                TemplateParameter(
+                    name="repository",
+                    type="string",
+                    description="Repository (owner/repo)",
+                    required=True,
+                ),
+                TemplateParameter(
+                    name="action",
+                    type="select",
+                    description="Action to perform",
+                    default="list_issues",
+                    enum_values=["list_issues", "create_issue", "list_prs", "create_pr"],
+                ),
+            ],
+            nodes=[
+                {
+                    "id": "authenticate",
+                    "type": "tool",
+                    "config": {"tool_name": "github_auth", "token": "${github_token}"},
+                },
+                {
+                    "id": "execute_action",
+                    "type": "tool",
+                    "config": {"tool_name": "github_action", "repo": "${repository}", "action": "${action}"},
+                },
+                {
+                    "id": "output",
+                    "type": "output",
+                    "config": {"format": "json"},
+                },
+            ],
+            edges=[
+                {"source": "authenticate", "target": "execute_action"},
+                {"source": "execute_action", "target": "output"},
+            ],
+            tags=["github", "integration", "vcs"],
+        )
+
+    @staticmethod
+    def create_slack_integration_template() -> WorkflowTemplate:
+        """Create Slack integration template"""
+        return WorkflowTemplate(
+            name="Slack Integration Pipeline",
+            description="Send messages to Slack",
+            category=TemplateCategory.SLACK_INTEGRATION,
+            parameters=[
+                TemplateParameter(
+                    name="webhook_url",
+                    type="string",
+                    description="Slack webhook URL",
+                    required=True,
+                ),
+                TemplateParameter(
+                    name="message",
+                    type="string",
+                    description="Message to send",
+                    required=True,
+                ),
+                TemplateParameter(
+                    name="channel",
+                    type="string",
+                    description="Target channel",
+                    default="#general",
+                ),
+            ],
+            nodes=[
+                {
+                    "id": "prepare_message",
+                    "type": "transform",
+                    "config": {"message": "${message}", "channel": "${channel}"},
+                },
+                {
+                    "id": "send",
+                    "type": "tool",
+                    "config": {"tool_name": "slack_send", "webhook": "${webhook_url}"},
+                },
+                {
+                    "id": "output",
+                    "type": "output",
+                    "config": {"format": "json"},
+                },
+            ],
+            edges=[
+                {"source": "prepare_message", "target": "send"},
+                {"source": "send", "target": "output"},
+            ],
+            tags=["slack", "notification", "integration"],
+        )
+
+    @staticmethod
+    def create_jira_integration_template() -> WorkflowTemplate:
+        """Create Jira integration template"""
+        return WorkflowTemplate(
+            name="Jira Integration Pipeline",
+            description="Manage Jira issues",
+            category=TemplateCategory.JIRA_INTEGRATION,
+            parameters=[
+                TemplateParameter(
+                    name="jira_url",
+                    type="string",
+                    description="Jira instance URL",
+                    required=True,
+                ),
+                TemplateParameter(
+                    name="api_token",
+                    type="string",
+                    description="Jira API token",
+                    required=True,
+                ),
+                TemplateParameter(
+                    name="project_key",
+                    type="string",
+                    description="Project key",
+                    required=True,
+                ),
+            ],
+            nodes=[
+                {
+                    "id": "authenticate",
+                    "type": "tool",
+                    "config": {"tool_name": "jira_auth", "url": "${jira_url}", "token": "${api_token}"},
+                },
+                {
+                    "id": "query_issues",
+                    "type": "tool",
+                    "config": {"tool_name": "jira_query", "project": "${project_key}"},
+                },
+                {
+                    "id": "output",
+                    "type": "output",
+                    "config": {"format": "json"},
+                },
+            ],
+            edges=[
+                {"source": "authenticate", "target": "query_issues"},
+                {"source": "query_issues", "target": "output"},
+            ],
+            tags=["jira", "issue_tracking", "integration"],
+        )
+
+    @staticmethod
+    def create_jenkins_integration_template() -> WorkflowTemplate:
+        """Create Jenkins integration template"""
+        return WorkflowTemplate(
+            name="Jenkins Integration Pipeline",
+            description="Trigger and monitor Jenkins builds",
+            category=TemplateCategory.JENKINS_INTEGRATION,
+            parameters=[
+                TemplateParameter(
+                    name="jenkins_url",
+                    type="string",
+                    description="Jenkins instance URL",
+                    required=True,
+                ),
+                TemplateParameter(
+                    name="job_name",
+                    type="string",
+                    description="Job name",
+                    required=True,
+                ),
+                TemplateParameter(
+                    name="credentials",
+                    type="object",
+                    description="Jenkins credentials",
+                    required=True,
+                ),
+            ],
+            nodes=[
+                {
+                    "id": "authenticate",
+                    "type": "tool",
+                    "config": {"tool_name": "jenkins_auth", "url": "${jenkins_url}"},
+                },
+                {
+                    "id": "trigger_build",
+                    "type": "tool",
+                    "config": {"tool_name": "jenkins_trigger", "job": "${job_name}"},
+                },
+                {
+                    "id": "monitor",
+                    "type": "wait",
+                    "config": {"timeout": 3600},
+                },
+                {
+                    "id": "output",
+                    "type": "output",
+                    "config": {"format": "json"},
+                },
+            ],
+            edges=[
+                {"source": "authenticate", "target": "trigger_build"},
+                {"source": "trigger_build", "target": "monitor"},
+                {"source": "monitor", "target": "output"},
+            ],
+            tags=["jenkins", "ci_cd", "integration"],
+        )
+
+    @staticmethod
     def get_all_templates() -> list[WorkflowTemplate]:
         """Get all built-in templates"""
         return [
@@ -503,4 +1203,17 @@ class TemplateLibrary:
             TemplateLibrary.create_approval_workflow_template(),
             TemplateLibrary.create_notification_template(),
             TemplateLibrary.create_batch_processing_template(),
+            TemplateLibrary.create_code_review_template(),
+            TemplateLibrary.create_documentation_template(),
+            TemplateLibrary.create_bug_fixing_template(),
+            TemplateLibrary.create_testing_template(),
+            TemplateLibrary.create_refactoring_template(),
+            TemplateLibrary.create_database_query_template(),
+            TemplateLibrary.create_file_operation_template(),
+            TemplateLibrary.create_api_call_template(),
+            TemplateLibrary.create_data_transformation_template(),
+            TemplateLibrary.create_github_integration_template(),
+            TemplateLibrary.create_slack_integration_template(),
+            TemplateLibrary.create_jira_integration_template(),
+            TemplateLibrary.create_jenkins_integration_template(),
         ]

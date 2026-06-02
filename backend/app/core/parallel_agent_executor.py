@@ -21,9 +21,6 @@ from enum import StrEnum
 from typing import Any, Callable, Optional
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 
-from pydantic import BaseModel, Field
-
-
 logger = logging.getLogger(__name__)
 
 
@@ -47,16 +44,16 @@ class AgentTaskStatus(StrEnum):
 @dataclass
 class AgentTask:
     """Represents a task to be executed by an agent."""
-    task_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    task_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     goal: str = ""
     description: str = ""
-    constraints: list[str] = Field(default_factory=list)
-    success_criteria: list[str] = Field(default_factory=list)
+    constraints: list[str] = field(default_factory=list)
+    success_criteria: list[str] = field(default_factory=list)
     timeout_seconds: int = 300
     retry_count: int = 0
     max_retries: int = 3
-    metadata: dict[str, Any] = Field(default_factory=dict)
-    dependencies: list[str] = Field(default_factory=list)
+    metadata: dict[str, Any] = field(default_factory=dict)
+    dependencies: list[str] = field(default_factory=list)
 
     def __post_init__(self):
         if not self.task_id:
@@ -72,12 +69,12 @@ class AgentResult:
     output: Any = None
     error: Optional[str] = None
     error_type: Optional[str] = None
-    started_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    started_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     completed_at: Optional[datetime] = None
     duration_seconds: float = 0.0
     retry_attempts: int = 0
-    context: dict[str, Any] = Field(default_factory=dict)
-    metadata: dict[str, Any] = Field(default_factory=dict)
+    context: dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         """Convert result to dictionary."""
@@ -106,12 +103,12 @@ class BatchExecutionResult:
     failed_tasks: int
     cancelled_tasks: int
     timeout_tasks: int
-    results: list[AgentResult] = Field(default_factory=list)
-    started_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    results: list[AgentResult] = field(default_factory=list)
+    started_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     completed_at: Optional[datetime] = None
     total_duration_seconds: float = 0.0
-    errors: list[str] = Field(default_factory=list)
-    metadata: dict[str, Any] = Field(default_factory=dict)
+    errors: list[str] = field(default_factory=list)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
@@ -204,6 +201,14 @@ class ParallelAgentExecutor:
             raise ValueError("No tasks provided")
 
         isolation = isolation or self.default_isolation
+        # 校验隔离模式合法性：必须是 IsolationMode 成员。
+        # 提前校验可避免非法字符串进入执行流程后在元数据组装阶段
+        # 触发 AttributeError（str 无 .value），并保证向调用方抛出 ValueError。
+        if not isinstance(isolation, IsolationMode):
+            try:
+                isolation = IsolationMode(isolation)
+            except ValueError:
+                raise ValueError(f"Unknown isolation mode: {isolation}")
         max_parallel = max_parallel or self.max_workers
         batch_id = str(uuid.uuid4())
 
@@ -462,13 +467,22 @@ class ParallelAgentExecutor:
             return self.batch_id_to_results[batch_id]
 
     async def cancel_batch(self, batch_id: str) -> bool:
-        """Cancel a batch execution."""
+        """Cancel a batch execution.
+
+        Returns True for any known batch (whether still running or already
+        finished); returns False only for an unknown batch_id. spawn_agents
+        removes the batch from active_batches in its finally block, so we
+        must check batch_id_to_tasks (the authoritative "batch exists" set)
+        rather than active_batches — otherwise cancelling a just-completed
+        batch would wrongly return False.
+        """
         async with self._lock:
-            if batch_id not in self.active_batches:
+            if batch_id not in self.batch_id_to_tasks:
                 return False
 
             self.cancelled_batches.add(batch_id)
             self.batch_id_to_status[batch_id] = "cancelled"
+            self.active_batches.discard(batch_id)
             logger.info(f"Batch {batch_id} cancelled")
             return True
 

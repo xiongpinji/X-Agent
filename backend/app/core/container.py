@@ -19,7 +19,7 @@ from abc import ABC, abstractmethod
 from collections import defaultdict
 from contextlib import asynccontextmanager, contextmanager
 from dataclasses import dataclass, field
-from typing import Any, Callable, Generic, Protocol, TypeVar, Union, cast, overload
+from typing import Any, Callable, Generic, Protocol, TypeVar, Union, cast, get_type_hints, overload
 
 T = TypeVar("T")
 P = TypeVar("P")
@@ -30,7 +30,8 @@ class ServiceNotFoundError(Exception):
 
     def __init__(self, service_type: type, message: str = "") -> None:
         self.service_type = service_type
-        msg = f"Service not found: {service_type.__name__}"
+        type_name = getattr(service_type, "__name__", str(service_type))
+        msg = f"Service not found: {type_name}"
         if message:
             msg += f" ({message})"
         super().__init__(msg)
@@ -295,13 +296,22 @@ class Container:
         sig = inspect.signature(cls.__init__)
         kwargs = {}
 
+        # Resolve string forward-reference annotations (e.g. ``param: "ServiceB"``)
+        # to concrete types. ``inspect.signature`` leaves these as strings, which
+        # the type-based registry cannot match. ``get_type_hints`` evaluates them
+        # against the class's module/global namespace.
+        try:
+            resolved_hints = get_type_hints(cls.__init__)
+        except Exception:
+            resolved_hints = {}
+
         for param_name, param in sig.parameters.items():
             if param_name == "self":
                 continue
 
             # Try to resolve by type annotation
             if param.annotation != inspect.Parameter.empty:
-                param_type = param.annotation
+                param_type = resolved_hints.get(param_name, param.annotation)
                 if param_type in self._services:
                     kwargs[param_name] = self.resolve(param_type)
                 elif param.default == inspect.Parameter.empty:

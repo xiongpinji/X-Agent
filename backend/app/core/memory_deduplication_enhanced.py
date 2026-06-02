@@ -232,6 +232,15 @@ class MemoryDeduplicatorEnhanced:
         groups = self._find_incremental_duplicates(new_memories, existing_memories)
 
         result = self._merge_groups(groups, new_memories + existing_memories)
+        # _merge_groups 以 new+existing 合计作为 original/deduplicated 计数,
+        # 但增量去重的语义是"针对新增记忆",顶层计数需回填为新增数量,
+        # 与下方 stats.original_count 保持一致。
+        new_removed = [
+            rid for rid in result.removed_ids
+            if rid in {m.id for m in new_memories}
+        ]
+        result.original_count = len(new_memories)
+        result.deduplicated_count = len(new_memories) - len(new_removed)
         processing_time = time.time() - start_time
 
         result.stats = DeduplicationStats(
@@ -524,18 +533,25 @@ class MemoryDeduplicatorEnhanced:
         return np.array(embeddings)
 
     def _create_simple_embedding(self, text: str) -> np.ndarray:
-        """Create a simple embedding from text."""
-        # Word frequency-based embedding
+        """Create a simple embedding from text.
+
+        使用特征哈希(feature hashing)把每个词稳定映射到固定维度,
+        这样不同文本只在共享词的维度上重叠,余弦相似度才能真实反映
+        内容差异。避免按"文档内词频排序位次"赋值导致的伪重复
+        (例如 "First unique memory" 与 "Second unique memory" 误判相同)。
+        """
         words = text.lower().split()
-        word_freq = {}
-        for word in words:
-            word_freq[word] = word_freq.get(word, 0) + 1
-
-        # Create fixed-size embedding
         embedding = np.zeros(100)
-        for i, (word, freq) in enumerate(sorted(word_freq.items())[:100]):
-            embedding[i] = freq / len(words) if words else 0
+        if not words:
+            return embedding
 
+        for word in words:
+            # 用确定性哈希(非内置 hash,保证跨进程/跨运行可复现)
+            idx = int(hashlib.md5(word.encode("utf-8")).hexdigest(), 16) % 100
+            embedding[idx] += 1.0
+
+        # 归一化为词频比例
+        embedding /= len(words)
         return embedding
 
     def _calculate_memory_saved(self, removed_ids: list[str], memories: list[Memory]) -> int:

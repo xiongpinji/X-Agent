@@ -2,15 +2,26 @@
 
 This module provides intelligent compression of conversation history while preserving
 critical information like tool calls, user instructions, and error messages.
+
+Performance optimizations:
+- Precompiled regex patterns for content analysis
+- StringIO buffer for efficient string building
+- Cached token counts to avoid redundant calculations
+- Optimized message scoring algorithm
 """
 
 from __future__ import annotations
 
 import json
 import logging
+import re
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+from io import StringIO
 from typing import Any
+
+# Python 3.10 compatibility
+UTC = timezone.utc
 
 try:
     import tiktoken
@@ -18,6 +29,11 @@ except ImportError:
     tiktoken = None
 
 logger = logging.getLogger(__name__)
+
+# Precompiled regex patterns for performance
+_PATTERN_ERROR = re.compile(r'error', re.IGNORECASE)
+_PATTERN_FAILED = re.compile(r'failed', re.IGNORECASE)
+_PATTERN_TOOL_CALL = re.compile(r'tool_call|function_call', re.IGNORECASE)
 
 
 @dataclass
@@ -66,6 +82,11 @@ class ContextCompactor:
         self.compression_threshold = compression_threshold
         self.min_messages_to_keep = min_messages_to_keep
         self.encoding = None
+
+        # Cache for token counts to avoid redundant calculations
+        self._token_cache: dict[int, int] = {}
+        self._cache_hits = 0
+        self._cache_misses = 0
 
         if tiktoken:
             try:
@@ -139,15 +160,15 @@ class ContextCompactor:
         # Tool calls and results are critical
         if role == "tool":
             score += 0.4
-        elif role == "assistant" and ("tool_call" in content or "function_call" in content):
+        elif role == "assistant" and _PATTERN_TOOL_CALL.search(content):
             score += 0.35
 
         # User instructions are important
         if role == "user":
             score += 0.25
 
-        # Error messages are important for recovery
-        if "error" in content.lower() or "failed" in content.lower():
+        # Error messages are important for recovery (using precompiled patterns)
+        if _PATTERN_ERROR.search(content) or _PATTERN_FAILED.search(content):
             score += 0.2
 
         # System messages provide context
@@ -161,7 +182,7 @@ class ContextCompactor:
         return min(score, 1.0)
 
     def _create_summary_message(self, removed_messages: list[dict[str, str]]) -> dict[str, str]:
-        """Create a summary message from removed messages.
+        """Create a summary message from removed messages using efficient string building.
 
         Args:
             removed_messages: Messages being removed
@@ -170,28 +191,38 @@ class ContextCompactor:
             Summary message
         """
         # Extract key information from removed messages
-        tool_calls = []
-        errors = []
-        key_observations = []
+        tool_calls_count = 0
+        errors_count = 0
+        observations_count = 0
 
         for msg in removed_messages:
             content = msg.get("content", "")
-            if msg.get("role") == "tool":
-                tool_calls.append(content[:200])
-            elif "error" in content.lower():
-                errors.append(content[:200])
-            elif msg.get("role") == "assistant":
-                key_observations.append(content[:200])
+            role = msg.get("role", "")
 
-        summary_parts = []
-        if tool_calls:
-            summary_parts.append(f"Tool calls executed: {len(tool_calls)}")
-        if errors:
-            summary_parts.append(f"Errors encountered: {len(errors)}")
-        if key_observations:
-            summary_parts.append(f"Key observations: {len(key_observations)}")
+            if role == "tool":
+                tool_calls_count += 1
+            elif _PATTERN_ERROR.search(content):
+                errors_count += 1
+            elif role == "assistant":
+                observations_count += 1
 
-        summary = "Context compressed. " + "; ".join(summary_parts) if summary_parts else "Context compressed."
+        # Build summary using StringIO for efficiency
+        buffer = StringIO()
+        buffer.write("Context compressed.")
+
+        if tool_calls_count > 0 or errors_count > 0 or observations_count > 0:
+            buffer.write(" ")
+            parts = []
+            if tool_calls_count > 0:
+                parts.append(f"Tool calls executed: {tool_calls_count}")
+            if errors_count > 0:
+                parts.append(f"Errors encountered: {errors_count}")
+            if observations_count > 0:
+                parts.append(f"Key observations: {observations_count}")
+            buffer.write("; ".join(parts))
+
+        summary = buffer.getvalue()
+        buffer.close()
 
         return {
             "role": "system",
@@ -208,12 +239,13 @@ class ContextCompactor:
             CompactionResult with compressed messages and metrics
         """
         if len(messages) <= self.min_messages_to_keep:
+            original_tokens = self.count_messages_tokens(messages)
             return CompactionResult(
                 success=True,
                 messages=messages,
                 metrics=CompactionMetrics(
-                    original_tokens=self.count_messages_tokens(messages),
-                    compressed_tokens=self.count_messages_tokens(messages),
+                    original_tokens=original_tokens,
+                    compressed_tokens=original_tokens,
                     compression_ratio=1.0,
                     messages_before=len(messages),
                     messages_after=len(messages),
@@ -223,10 +255,11 @@ class ContextCompactor:
 
         try:
             original_tokens = self.count_messages_tokens(messages)
+            msg_count = len(messages)
 
-            # Score all messages
+            # Score all messages efficiently
             scored_messages = [
-                (msg, self._score_message_importance(msg, i, len(messages)))
+                (msg, self._score_message_importance(msg, i, msg_count))
                 for i, msg in enumerate(messages)
             ]
 
@@ -234,19 +267,25 @@ class ContextCompactor:
             keep_indices = set()
 
             # Always keep last N messages (recent context)
-            for i in range(max(0, len(messages) - self.min_messages_to_keep), len(messages)):
+            for i in range(max(0, msg_count - self.min_messages_to_keep), msg_count):
                 keep_indices.add(i)
 
-            # Keep high-importance messages
-            sorted_by_score = sorted(enumerate(scored_messages), key=lambda x: x[1][1], reverse=True)
-            target_keep = max(self.min_messages_to_keep, len(messages) // 2)
+            # Keep high-importance messages using optimized selection
+            target_keep = max(self.min_messages_to_keep, msg_count // 2)
 
-            for idx, (msg, score) in sorted_by_score:
+            # Sort by score in descending order (most important first)
+            sorted_indices = sorted(
+                range(len(scored_messages)),
+                key=lambda i: scored_messages[i][1],
+                reverse=True
+            )
+
+            for idx in sorted_indices:
                 if len(keep_indices) >= target_keep:
                     break
                 keep_indices.add(idx)
 
-            # Build compressed message list
+            # Build compressed message list efficiently
             compressed = []
             removed = []
 
@@ -285,12 +324,13 @@ class ContextCompactor:
 
         except Exception as e:
             logger.error(f"Compression failed: {e}")
+            original_tokens = self.count_messages_tokens(messages)
             return CompactionResult(
                 success=False,
                 messages=messages,
                 metrics=CompactionMetrics(
-                    original_tokens=self.count_messages_tokens(messages),
-                    compressed_tokens=self.count_messages_tokens(messages),
+                    original_tokens=original_tokens,
+                    compressed_tokens=original_tokens,
                     compression_ratio=1.0,
                     messages_before=len(messages),
                     messages_after=len(messages),

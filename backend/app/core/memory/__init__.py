@@ -2,6 +2,21 @@
 记忆融合系统包初始化模块。
 """
 
+from backend.app.core.memory.store import (
+    MemoryScope,
+    MemoryRevision,
+    MemoryItem,
+    SessionRecord,
+    MemorySearchHit,
+    MemoryConsolidationResult,
+    MemoryUpdateResult,
+    MemoryRollbackResult,
+    MemoryPollutionReport,
+    MemoryExportBundle,
+    MemorySystem,
+    memory_system,
+    InMemoryMemorySystem,
+)
 from backend.app.core.memory.merger import (
     MemoryMerger,
     MergedMemory,
@@ -39,6 +54,20 @@ from backend.app.core.memory.analytics import (
 from backend.app.core.memory.fusion_system import AdvancedMemoryFusionSystem
 
 __all__ = [
+    # Store (L1-L10 core memory system)
+    "MemoryScope",
+    "MemoryRevision",
+    "MemoryItem",
+    "SessionRecord",
+    "MemorySearchHit",
+    "MemoryConsolidationResult",
+    "MemoryUpdateResult",
+    "MemoryRollbackResult",
+    "MemoryPollutionReport",
+    "MemoryExportBundle",
+    "MemorySystem",
+    "memory_system",
+    "InMemoryMemorySystem",
     # Merger
     "MemoryMerger",
     "MergedMemory",

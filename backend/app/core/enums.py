@@ -18,6 +18,13 @@ class RecoveryBranch(str, Enum):
     CONTINUE = "continue"
     URGENT_CONTINUE = "urgent_continue"
     CAREFUL_CONTINUE = "careful_continue"
+
+
+# Stability enhancement enums will be in separate modules:
+# - circuit_breaker.py: CircuitBreakerState
+# - degradation.py: DegradationLevel, FeatureStatus
+# - distributed_lock.py: LockStatus
+# - retry.py: RetryStrategy
     RESUME = "resume"
     APPROVAL_WAIT = "approval_wait"
     BROWSER_OBSERVE = "browser_observe"

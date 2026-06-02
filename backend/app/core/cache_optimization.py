@@ -83,7 +83,11 @@ class CacheInvalidationStrategy:
         resource_id: str,
     ) -> None:
         """Invalidate cache when resource is updated."""
-        pattern = f"{resource_type}:{resource_id}:*"
+        # invalidate_pattern uses substring matching, so a trailing ":*" (glob
+        # syntax) never matches a key stored as "type:id". Use the bare prefix:
+        # it matches both the exact key ("workflow:1") and any sub-keys
+        # ("workflow:1:detail") while leaving siblings ("workflow:2") intact.
+        pattern = f"{resource_type}:{resource_id}"
         await cache_manager.invalidate_pattern(pattern)
         logger.info(f"Invalidated cache for {resource_type}:{resource_id}")
 

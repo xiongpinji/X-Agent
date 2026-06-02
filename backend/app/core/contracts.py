@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any
@@ -36,6 +37,12 @@ class ErrorCode(StrEnum):
     WORKFLOW_EXECUTION_FAILED = "workflow_execution_failed"
     AGENT_EXECUTION_FAILED = "agent_execution_failed"
     INTERNAL_ERROR = "internal_error"
+    RATE_LIMIT_EXCEEDED = "rate_limit_exceeded"
+    INVALID_TOKEN = "invalid_token"
+    TOKEN_EXPIRED = "token_expired"
+    EMAIL_VERIFICATION_REQUIRED = "email_verification_required"
+    ACCOUNT_LOCKED = "account_locked"
+    INVALID_CREDENTIALS = "invalid_credentials"
 
 
 class RunContext(BaseModel):
@@ -204,6 +211,16 @@ class ToolCallRecord(BaseModel):
     trace_id: str | None = None
     request_id: str | None = None
 
+    @property
+    def result(self) -> Any:
+        """Alias for :attr:`output`.
+
+        Some callers (and the agent-v2 integration suite) refer to the tool's
+        return value as ``record.result``. The canonical field is ``output``;
+        this read-only alias keeps both names working without duplicating state.
+        """
+        return self.output
+
 
 class AgentPlanStepRecord(BaseModel):
     kind: str
@@ -254,3 +271,28 @@ class AgentRunRecord(BaseModel):
     snapshot: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     completed_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
+# ---------------------------------------------------------------------------
+# Orchestration contracts
+#
+# These two dataclasses live here (rather than in orchestrator.py) so that both
+# orchestrator.py and capability_strategies.py can import them without forming
+# an import cycle (orchestrator -> capability_strategies -> orchestrator).
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class CapabilityDecision:
+    name: str
+    reason: str
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class OrchestrationContext:
+    task: TaskFrame
+    plan: PlanFrame | None = None
+    execution: ExecutionFrame | None = None
+    recovery: RecoveryFrame | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)

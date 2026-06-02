@@ -46,9 +46,9 @@ class Breakpoint:
 @dataclass
 class ExecutionFrame:
     """Single execution frame"""
-    id: str = field(default_factory=lambda: str(uuid4()))
     node_id: str
     node_type: str
+    id: str = field(default_factory=lambda: str(uuid4()))
     state: dict[str, Any] = field(default_factory=dict)
     inputs: dict[str, Any] = field(default_factory=dict)
     output: Any = None

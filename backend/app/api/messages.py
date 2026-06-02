@@ -322,6 +322,7 @@ async def stream_messages(
     include_system: bool = Query(default=True),
     include_audit: bool = Query(default=True),
     include_workflow: bool = Query(default=True),
+    replay_only: bool = Query(default=False),
 ):
     enforce_scope(principal, "agent:run")
 
@@ -359,6 +360,7 @@ async def stream_messages(
         last_event_id=stream_filter.last_event_id,
     )
     history = [event for event in history if _event_matches_filter(event, stream_filter)]
+    import sys as _sys; print(f"[DBG-STREAM] key={channel_key!r} raw_hist={len(message_event_bus._history.get(channel_key, []))} filtered={len(history)} all_keys={list(message_event_bus._history.keys())}", file=_sys.stderr)
     replay_ids = {event.event_id for event in history}
 
     async def event_generator():
@@ -386,6 +388,12 @@ async def stream_messages(
 
             for historical_event in history:
                 yield _serialize_sse(historical_event, historical_event.event_type)
+
+            # replay_only: non-streaming clients (tests, snapshot fetchers) get the
+            # connect notice + replayed history then the stream ends, instead of the
+            # infinite live heartbeat loop. Real SSE clients omit it and stream live.
+            if replay_only:
+                return
 
             while True:
                 try:

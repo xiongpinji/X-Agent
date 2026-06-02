@@ -42,6 +42,7 @@ ROLE_SCOPES: dict[str, list[str]] = {
         "workflow:run",
     ],
     "viewer": ["memory:read", "audit:read"],
+    "anonymous": [],  # SECURITY: Anonymous users have NO permissions
 }
 
 
@@ -70,6 +71,8 @@ class APIKeyRecord(BaseModel):
     revoked: bool = False
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     revoked_at: datetime | None = None
+    expires_at: datetime | None = None  # SECURITY: API Key过期时间（90天）
+    last_used_at: datetime | None = None  # 最后使用时间
 
 
 class APIKeyCreateRequest(BaseModel):
@@ -90,13 +93,23 @@ class RBACPolicy:
         return list(ROLE_SCOPES.get(role, []))
 
     def resolve_scopes(self, principal: Principal, requested_scopes: list[str]) -> list[str]:
+        """Resolve scopes for principal.
+
+        SECURITY: Unauthenticated principals get no scopes.
+        """
         if not principal.authenticated:
-            return requested_scopes
+            return []  # SECURITY: Anonymous users get NO scopes
         if self.has_scope(principal, "tools:*"):
             return requested_scopes
         return [scope for scope in requested_scopes if self.has_scope(principal, scope)]
 
     def has_scope(self, principal: Principal, scope: str) -> bool:
+        """Check if principal has required scope.
+
+        SECURITY: Unauthenticated principals have no scopes.
+        """
+        if not principal.authenticated:
+            return False  # SECURITY: Reject unauthenticated access
         return scope in principal.scopes or self._wildcard_scope(scope) in principal.scopes
 
     @staticmethod
@@ -118,6 +131,8 @@ class APIKeyStore:
         raw_key = f"xag_{token_urlsafe(32)}"
         role_scopes = ROLE_SCOPES.get(request.role, [])
         scopes = request.scopes or role_scopes
+        # SECURITY: API Key自动设置90天过期时间
+        expires_at = datetime.now(UTC) + __import__('datetime').timedelta(days=90)
         record = APIKeyRecord(
             name=request.name,
             key_prefix=raw_key[:12],
@@ -126,6 +141,7 @@ class APIKeyStore:
             user_id=request.user_id,
             role=request.role,
             scopes=list(scopes),
+            expires_at=expires_at,
         )
         with self._lock:
             self._records[record.id] = record
@@ -140,7 +156,13 @@ class APIKeyStore:
             record = self._records.get(record_id)
             if record is None or record.revoked:
                 continue
+            # SECURITY: 检查API Key是否过期
+            if record.expires_at and datetime.now(UTC) > record.expires_at:
+                continue
             if bcrypt.checkpw(raw_key.encode("utf-8"), record.key_hash.encode("utf-8")):
+                # 更新最后使用时间
+                record.last_used_at = datetime.now(UTC)
+                self._records[record_id] = record
                 return Principal(
                     tenant_id=record.tenant_id,
                     user_id=record.user_id,

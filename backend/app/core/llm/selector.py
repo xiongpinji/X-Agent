@@ -92,9 +92,9 @@ class ModelSelector:
     def __init__(self):
         """Initialize model selector with default model profiles."""
         self.models: dict[str, ModelProfile] = {}
-        self._initialize_default_models()
         self._performance_history: dict[str, list[dict[str, Any]]] = {}
         self._ab_test_assignments: dict[str, str] = {}
+        self._initialize_default_models()
 
     def _initialize_default_models(self) -> None:
         """Initialize default model profiles."""

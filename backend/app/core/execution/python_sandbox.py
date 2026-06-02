@@ -192,9 +192,22 @@ class PythonSandbox:
         """
         allowed_imports = allowed_imports or []
 
+        # 安全的导入函数：仅允许显式列入 allowed_imports 的模块在运行时导入。
+        # 这比 FORBIDDEN_MODULES 黑名单更严格（白名单），且 _is_safe 已在 AST 层
+        # 拦截禁用模块，此处提供运行时纵深防御。
+        _real_import = __import__
+        _allowed = set(allowed_imports)
+
+        def _safe_import(name, globals=None, locals=None, fromlist=(), level=0):
+            base = name.split(".")[0]
+            if base not in _allowed:
+                raise ImportError(f"Import of '{name}' is not allowed in sandbox")
+            return _real_import(name, globals, locals, fromlist, level)
+
         # 创建安全的全局变量
         safe_globals = {
             "__builtins__": {
+                "__import__": _safe_import,
                 "print": print,
                 "len": len,
                 "range": range,

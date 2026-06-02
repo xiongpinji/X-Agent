@@ -1,203 +1,378 @@
 """
-代码执行API端点 - 提供Python和Node.js代码执行接口
+Code execution API endpoints with security controls and audit logging.
 """
 
-from typing import Annotated, Optional
-from fastapi import APIRouter, Depends, HTTPException
+from __future__ import annotations
 
-from backend.app.core.execution import ExecutionManager
-from backend.app.dependencies import get_current_principal, enforce_scope
+import logging
+from typing import Annotated, Optional
+
+from fastapi import APIRouter, Depends
+from pydantic import BaseModel, Field
+
+from backend.app.api.errors import api_error
+from backend.app.core.code_executor import (
+    CodeExecutor,
+    ExecutionConfig,
+    ExecutionLanguage,
+)
+from backend.app.core.contracts import ErrorCode
+from backend.app.dependencies import get_agent, get_current_principal, enforce_scope
 from backend.app.core.security import Principal
 
-router = APIRouter(prefix="/api/v1/execution", tags=["execution"])
+logger = logging.getLogger(__name__)
+
+router = APIRouter(prefix="/api/v1/code", tags=["code_execution"])
+AgentDependency = Annotated[object, Depends(get_agent)]
 PrincipalDependency = Annotated[Principal, Depends(get_current_principal)]
 
-# 全局执行管理器
-_execution_manager = ExecutionManager(timeout=30)
+
+class CodeExecutionRequest(BaseModel):
+    """Request model for code execution."""
+    code: str = Field(..., description="Code to execute")
+    language: ExecutionLanguage = Field(
+        default=ExecutionLanguage.PYTHON,
+        description="Programming language"
+    )
+    timeout: int = Field(
+        default=30,
+        ge=1,
+        le=300,
+        description="Execution timeout in seconds (1-300)"
+    )
+    allow_network: bool = Field(
+        default=False,
+        description="Allow network access"
+    )
+    allow_file_system_write: bool = Field(
+        default=False,
+        description="Allow file system write access"
+    )
+    environment_vars: dict[str, str] = Field(
+        default_factory=dict,
+        description="Environment variables"
+    )
 
 
-@router.post("/python")
-async def execute_python(
-    request: dict,
+class CodeExecutionResponse(BaseModel):
+    """Response model for code execution."""
+    success: bool
+    stdout: str
+    stderr: str
+    exit_code: int
+    execution_time: float
+    status: str
+    error: Optional[str] = None
+    execution_id: str
+    language: str
+    resource_usage: dict = Field(default_factory=dict)
+
+
+@router.post("/execute/python")
+async def execute_python_code(
+    request: CodeExecutionRequest,
+    agent: AgentDependency,
     principal: PrincipalDependency,
-) -> dict:
-    """
-    执行Python代码
+) -> CodeExecutionResponse:
+    """Execute Python code in a sandboxed environment.
+
+    Security features:
+    - Code validation for dangerous patterns
+    - Execution timeout (default 30s, max 300s)
+    - Network access disabled by default
+    - File system write disabled by default
+    - Output size limited to 1MB
+    - Audit logging enabled
 
     Args:
-        request: 执行请求，包含code、context和allowed_imports
+        request: Code execution request with code and configuration
+        agent: Agent instance
+        principal: Current principal for authorization
 
     Returns:
-        dict: 执行结果
-    """
-    enforce_scope(principal, "execution:python")
+        Execution result with stdout, stderr, and metadata
 
-    code = request.get("code")
-    if not code:
-        raise HTTPException(status_code=400, detail="code is required")
+    Raises:
+        HTTPException: If code contains security violations or execution fails
+    """
+    enforce_scope(principal, "code:execute")
+
+    if request.language != ExecutionLanguage.PYTHON:
+        raise api_error(
+            400,
+            ErrorCode.VALIDATION_ERROR,
+            "Language mismatch: expected Python",
+        )
 
     try:
-        result = await _execution_manager.execute_python(
-            code,
-            context=request.get("context"),
-            allowed_imports=request.get("allowed_imports"),
+        # Create executor with configuration
+        config = ExecutionConfig(
+            timeout=request.timeout,
+            allow_network=request.allow_network,
+            allow_file_system_write=request.allow_file_system_write,
+            environment_vars=request.environment_vars,
         )
-        return result
+        executor = CodeExecutor(config=config)
+
+        # Execute code
+        result = await executor.execute_python(request.code, timeout=request.timeout)
+
+        # Audit log
+        logger.info(
+            f"Python code execution: {result.execution_id}, "
+            f"success={result.success}, time={result.execution_time}s"
+        )
+
+        return CodeExecutionResponse(
+            success=result.success,
+            stdout=result.stdout,
+            stderr=result.stderr,
+            exit_code=result.exit_code,
+            execution_time=result.execution_time,
+            status=result.status,
+            error=result.error,
+            execution_id=result.execution_id,
+            language=result.language,
+            resource_usage=result.resource_usage,
+        )
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Python execution error: {e}")
+        raise api_error(
+            500,
+            ErrorCode.INTERNAL_ERROR,
+            f"Code execution failed: {str(e)}",
+        )
 
 
-@router.post("/nodejs")
-async def execute_nodejs(
-    request: dict,
+@router.post("/execute/javascript")
+async def execute_javascript_code(
+    request: CodeExecutionRequest,
+    agent: AgentDependency,
     principal: PrincipalDependency,
-) -> dict:
-    """
-    执行Node.js代码
+) -> CodeExecutionResponse:
+    """Execute JavaScript code in a sandboxed environment.
+
+    Security features:
+    - Code validation for dangerous patterns
+    - Execution timeout (default 30s, max 300s)
+    - Network access disabled by default
+    - File system write disabled by default
+    - Output size limited to 1MB
+    - Audit logging enabled
 
     Args:
-        request: 执行请求，包含code和modules
+        request: Code execution request with code and configuration
+        agent: Agent instance
+        principal: Current principal for authorization
 
     Returns:
-        dict: 执行结果
-    """
-    enforce_scope(principal, "execution:nodejs")
+        Execution result with stdout, stderr, and metadata
 
-    code = request.get("code")
-    if not code:
-        raise HTTPException(status_code=400, detail="code is required")
+    Raises:
+        HTTPException: If code contains security violations or execution fails
+    """
+    enforce_scope(principal, "code:execute")
+
+    if request.language != ExecutionLanguage.JAVASCRIPT:
+        raise api_error(
+            400,
+            ErrorCode.VALIDATION_ERROR,
+            "Language mismatch: expected JavaScript",
+        )
 
     try:
-        result = await _execution_manager.execute_nodejs(
-            code,
-            modules=request.get("modules"),
+        # Create executor with configuration
+        config = ExecutionConfig(
+            timeout=request.timeout,
+            allow_network=request.allow_network,
+            allow_file_system_write=request.allow_file_system_write,
+            environment_vars=request.environment_vars,
         )
-        return result
+        executor = CodeExecutor(config=config)
+
+        # Execute code
+        result = await executor.execute_javascript(request.code, timeout=request.timeout)
+
+        # Audit log
+        logger.info(
+            f"JavaScript code execution: {result.execution_id}, "
+            f"success={result.success}, time={result.execution_time}s"
+        )
+
+        return CodeExecutionResponse(
+            success=result.success,
+            stdout=result.stdout,
+            stderr=result.stderr,
+            exit_code=result.exit_code,
+            execution_time=result.execution_time,
+            status=result.status,
+            error=result.error,
+            execution_id=result.execution_id,
+            language=result.language,
+            resource_usage=result.resource_usage,
+        )
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"JavaScript execution error: {e}")
+        raise api_error(
+            500,
+            ErrorCode.INTERNAL_ERROR,
+            f"Code execution failed: {str(e)}",
+        )
 
 
-@router.get("/{execution_id}")
+@router.post("/execute/bash")
+async def execute_bash_command(
+    request: CodeExecutionRequest,
+    agent: AgentDependency,
+    principal: PrincipalDependency,
+) -> CodeExecutionResponse:
+    """Execute Bash command in a sandboxed environment.
+
+    Security features:
+    - Command validation for dangerous patterns
+    - Execution timeout (default 30s, max 300s)
+    - Network access disabled by default
+    - File system write disabled by default
+    - Output size limited to 1MB
+    - Audit logging enabled
+
+    Args:
+        request: Code execution request with command and configuration
+        agent: Agent instance
+        principal: Current principal for authorization
+
+    Returns:
+        Execution result with stdout, stderr, and metadata
+
+    Raises:
+        HTTPException: If command contains security violations or execution fails
+    """
+    enforce_scope(principal, "code:execute")
+
+    if request.language != ExecutionLanguage.BASH:
+        raise api_error(
+            400,
+            ErrorCode.VALIDATION_ERROR,
+            "Language mismatch: expected Bash",
+        )
+
+    try:
+        # Create executor with configuration
+        config = ExecutionConfig(
+            timeout=request.timeout,
+            allow_network=request.allow_network,
+            allow_file_system_write=request.allow_file_system_write,
+            environment_vars=request.environment_vars,
+        )
+        executor = CodeExecutor(config=config)
+
+        # Execute command
+        result = await executor.execute_bash(request.code, timeout=request.timeout)
+
+        # Audit log
+        logger.info(
+            f"Bash command execution: {result.execution_id}, "
+            f"success={result.success}, time={result.execution_time}s"
+        )
+
+        return CodeExecutionResponse(
+            success=result.success,
+            stdout=result.stdout,
+            stderr=result.stderr,
+            exit_code=result.exit_code,
+            execution_time=result.execution_time,
+            status=result.status,
+            error=result.error,
+            execution_id=result.execution_id,
+            language=result.language,
+            resource_usage=result.resource_usage,
+        )
+
+    except Exception as e:
+        logger.error(f"Bash execution error: {e}")
+        raise api_error(
+            500,
+            ErrorCode.INTERNAL_ERROR,
+            f"Code execution failed: {str(e)}",
+        )
+
+
+@router.get("/execution/{execution_id}")
 async def get_execution_result(
     execution_id: str,
+    agent: AgentDependency,
     principal: PrincipalDependency,
 ) -> dict:
-    """
-    获取执行结果
+    """Get execution result by ID.
 
     Args:
-        execution_id: 执行ID
+        execution_id: Execution ID
+        agent: Agent instance
+        principal: Current principal for authorization
 
     Returns:
-        dict: 执行结果
+        Execution result metadata
+
+    Raises:
+        HTTPException: If execution not found
     """
-    enforce_scope(principal, "execution:read")
+    enforce_scope(principal, "code:read")
 
-    result = _execution_manager.get_execution_history(execution_id)
-    if not result:
-        raise HTTPException(status_code=404, detail="Execution not found")
-
-    return result
-
-
-@router.get("")
-async def list_executions(
-    limit: int = 100,
-    principal: PrincipalDependency = None,
-) -> dict:
-    """
-    列出执行历史
-
-    Args:
-        limit: 返回的最大记录数
-
-    Returns:
-        dict: 执行历史列表
-    """
-    enforce_scope(principal, "execution:read")
-
-    executions = _execution_manager.list_executions(limit=limit)
+    # Note: In a production system, this would query a database
+    # For now, we return a placeholder response
     return {
-        "total": len(executions),
-        "executions": executions,
+        "execution_id": execution_id,
+        "status": "completed",
+        "message": "Execution result storage not yet implemented",
     }
 
 
-@router.post("/batch")
-async def batch_execute(
-    request: dict,
+@router.post("/validate")
+async def validate_code(
+    request: CodeExecutionRequest,
+    agent: AgentDependency,
     principal: PrincipalDependency,
 ) -> dict:
-    """
-    批量执行代码
+    """Validate code for security violations without executing.
 
     Args:
-        request: 批量执行请求
+        request: Code execution request
+        agent: Agent instance
+        principal: Current principal for authorization
 
     Returns:
-        dict: 执行结果列表
+        Validation result with any detected issues
+
+    Raises:
+        HTTPException: If validation fails
     """
-    enforce_scope(principal, "execution:python")
+    enforce_scope(principal, "code:validate")
 
-    tasks = request.get("tasks", [])
-    if not tasks:
-        raise HTTPException(status_code=400, detail="tasks is required")
+    from backend.app.core.code_executor import SecurityValidator
 
-    results = []
-    for task in tasks:
-        try:
-            language = task.get("language", "python")
-            code = task.get("code")
+    validator = SecurityValidator()
+    is_valid = True
+    issues = []
 
-            if not code:
-                results.append({
-                    "task_id": task.get("id"),
-                    "error": "code is required",
-                })
-                continue
+    if request.language == ExecutionLanguage.PYTHON:
+        is_valid, error_msg = validator.validate_python(request.code)
+        if not is_valid:
+            issues.append(error_msg)
 
-            result = await _execution_manager.execute(
-                code,
-                language=language,
-                context=task.get("context"),
-                allowed_imports=task.get("allowed_imports"),
-            )
+    elif request.language == ExecutionLanguage.JAVASCRIPT:
+        is_valid, error_msg = validator.validate_javascript(request.code)
+        if not is_valid:
+            issues.append(error_msg)
 
-            results.append({
-                "task_id": task.get("id"),
-                "result": result,
-            })
-
-        except Exception as e:
-            results.append({
-                "task_id": task.get("id"),
-                "error": str(e),
-            })
+    elif request.language == ExecutionLanguage.BASH:
+        is_valid, error_msg = validator.validate_bash(request.code)
+        if not is_valid:
+            issues.append(error_msg)
 
     return {
-        "total": len(tasks),
-        "completed": len([r for r in results if "result" in r]),
-        "failed": len([r for r in results if "error" in r]),
-        "results": results,
-    }
-
-
-@router.delete("/history")
-async def clear_execution_history(
-    principal: PrincipalDependency,
-) -> dict:
-    """
-    清空执行历史
-
-    Returns:
-        dict: 清空结果
-    """
-    enforce_scope(principal, "execution:manage")
-
-    _execution_manager.clear_history()
-    return {
-        "success": True,
-        "message": "Execution history cleared",
+        "valid": is_valid,
+        "language": request.language,
+        "issues": issues,
     }

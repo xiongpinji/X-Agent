@@ -49,17 +49,17 @@ class MessageType(StrEnum):
 @dataclass
 class Message:
     """Represents a message in the communication bus."""
-    message_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    message_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     from_agent: str = ""
     to_agent: Optional[str] = None
     message_type: MessageType = MessageType.DIRECT
     topic: Optional[str] = None
     content: Any = None
     priority: MessagePriority = MessagePriority.NORMAL
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
     correlation_id: Optional[str] = None
     reply_to: Optional[str] = None
-    metadata: dict[str, Any] = Field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
     ttl_seconds: Optional[int] = None
     delivered: bool = False
     delivery_attempts: int = 0
@@ -104,19 +104,28 @@ class Message:
 @dataclass
 class MessageQueue:
     """Priority queue for messages."""
-    messages: list[tuple[int, Message]] = Field(default_factory=list)
+    messages: list[tuple[int, int, Message]] = field(default_factory=list)
     _counter: int = 0
 
     def put(self, message: Message):
         """Add message to queue."""
-        heappush(self.messages, (self._counter, message))
+        # 堆排序键必须把优先级放在首位，counter 仅作同优先级下的
+        # 稳定先到先出（FIFO）裁决项。此前误用 (counter, message) 导致
+        # counter 永不相等，message.__lt__ 从不被调用，优先级被完全忽略。
+        priority_rank = {
+            MessagePriority.CRITICAL: 0,
+            MessagePriority.HIGH: 1,
+            MessagePriority.NORMAL: 2,
+            MessagePriority.LOW: 3,
+        }[message.priority]
+        heappush(self.messages, (priority_rank, self._counter, message))
         self._counter += 1
 
     def get(self) -> Optional[Message]:
         """Get highest priority message from queue."""
         if not self.messages:
             return None
-        _, message = heappop(self.messages)
+        _, _, message = heappop(self.messages)
         return message
 
     def size(self) -> int:
@@ -527,7 +536,7 @@ class AgentCommunicationBus:
             for queue in self.message_queues.values():
                 original_size = queue.size()
                 queue.messages = [
-                    (counter, msg) for counter, msg in queue.messages
+                    (rank, counter, msg) for rank, counter, msg in queue.messages
                     if not msg.is_expired()
                 ]
                 removed += original_size - queue.size()
@@ -535,7 +544,7 @@ class AgentCommunicationBus:
             # Clear from broadcast queue
             original_size = self.broadcast_queue.size()
             self.broadcast_queue.messages = [
-                (counter, msg) for counter, msg in self.broadcast_queue.messages
+                (rank, counter, msg) for rank, counter, msg in self.broadcast_queue.messages
                 if not msg.is_expired()
             ]
             removed += original_size - self.broadcast_queue.size()
@@ -544,7 +553,7 @@ class AgentCommunicationBus:
             for queue in self.topic_queues.values():
                 original_size = queue.size()
                 queue.messages = [
-                    (counter, msg) for counter, msg in queue.messages
+                    (rank, counter, msg) for rank, counter, msg in queue.messages
                     if not msg.is_expired()
                 ]
                 removed += original_size - queue.size()

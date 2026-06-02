@@ -19,6 +19,14 @@ class ToolCategory(StrEnum):
     WORKFLOW = "workflow"
     PLUGIN = "plugin"
     SYSTEM = "system"
+    # 生产代码 mcp/discovery.py 的 _infer_category 引用以下成员;
+    # 缺失会在 MCP 工具发现时抛 AttributeError。补齐以对齐生产用法。
+    FILE_SYSTEM = "file_system"
+    DATABASE = "database"
+    WEB = "web"
+    SEARCH = "search"
+    CODE_EXECUTION = "code_execution"
+    UTILITY = "utility"
 
 
 class ToolRiskLevel(StrEnum):
@@ -122,7 +130,7 @@ class ToolCallOutput(BaseModel):
     tool_id: str
     tool_name: str
     success: bool
-    result: dict[str, Any] | None = None
+    result: Any = None
     error: str | None = None
     error_code: str | None = None
     latency_ms: int = 0

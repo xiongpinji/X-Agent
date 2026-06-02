@@ -18,7 +18,7 @@ from enum import StrEnum
 from typing import Any, Callable, Optional
 from collections import defaultdict
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 
 logger = logging.getLogger(__name__)
@@ -59,17 +59,17 @@ class AggregationConfig:
 @dataclass
 class AggregatedResult:
     """Result of aggregating multiple agent results."""
-    aggregation_id: str = Field(default_factory=lambda: str(__import__('uuid').uuid4()))
+    aggregation_id: str = field(default_factory=lambda: str(__import__('uuid').uuid4()))
     total_results: int = 0
     successful_results: int = 0
     failed_results: int = 0
     merged_output: Any = None
-    merged_context: dict[str, Any] = Field(default_factory=dict)
-    conflicts: list[dict[str, Any]] = Field(default_factory=list)
-    errors: list[str] = Field(default_factory=list)
-    warnings: list[str] = Field(default_factory=list)
-    aggregated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    metadata: dict[str, Any] = Field(default_factory=dict)
+    merged_context: dict[str, Any] = field(default_factory=dict)
+    conflicts: list[dict[str, Any]] = field(default_factory=list)
+    errors: list[str] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
+    aggregated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""

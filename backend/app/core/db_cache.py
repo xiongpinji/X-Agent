@@ -38,11 +38,16 @@ async def get_cached_query(query_type: str, *args: Any, **kwargs: Any) -> Any | 
 async def cache_query(
     query_type: str,
     result: Any,
-    ttl: int | None = None,
     *args: Any,
+    ttl: int | None = None,
     **kwargs: Any,
 ) -> None:
-    """Cache query result."""
+    """Cache query result.
+
+    ``ttl`` is keyword-only so that positional ``*args`` (which participate in
+    the cache key alongside ``query_type``) cannot collide with it. Helpers like
+    :func:`cache_user` pass the identifier positionally and ``ttl`` by keyword.
+    """
     cache = get_cache_manager()
     key = _make_query_cache_key(query_type, *args, **kwargs)
     ttl = ttl or DB_QUERY_TTL
@@ -71,7 +76,7 @@ async def get_cached_user(user_id: str) -> dict[str, Any] | None:
 
 async def cache_user(user_id: str, user_data: dict[str, Any]) -> None:
     """Cache user data."""
-    await cache_query("user", user_data, ttl=DB_USER_TTL, user_id)
+    await cache_query("user", user_data, user_id, ttl=DB_USER_TTL)
 
 
 async def invalidate_user_cache(user_id: str) -> None:
@@ -86,7 +91,7 @@ async def get_cached_tenant(tenant_id: str) -> dict[str, Any] | None:
 
 async def cache_tenant(tenant_id: str, tenant_data: dict[str, Any]) -> None:
     """Cache tenant data."""
-    await cache_query("tenant", tenant_data, ttl=DB_USER_TTL, tenant_id)
+    await cache_query("tenant", tenant_data, tenant_id, ttl=DB_USER_TTL)
 
 
 async def invalidate_tenant_cache(tenant_id: str) -> None:
@@ -101,7 +106,7 @@ async def get_cached_api_key(api_key_id: str) -> dict[str, Any] | None:
 
 async def cache_api_key(api_key_id: str, key_data: dict[str, Any]) -> None:
     """Cache API key data."""
-    await cache_query("api_key", key_data, ttl=DB_USER_TTL, api_key_id)
+    await cache_query("api_key", key_data, api_key_id, ttl=DB_USER_TTL)
 
 
 async def invalidate_api_key_cache(api_key_id: str) -> None:

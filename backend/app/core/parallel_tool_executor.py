@@ -45,6 +45,23 @@ class ToolResult:
 
 
 @dataclass
+class ToolExecutionResult:
+    """Lightweight tool result for the migration-adapter execution API.
+
+    Distinct from :class:`ToolResult` (which carries call-id/latency/cache
+    bookkeeping for the dependency-aware engine). This shape matches what the
+    migration adapter and migration test-suite expect from
+    :meth:`ParallelToolExecutor.execute_batch`/``execute_sequential`` when those
+    are invoked in *migration mode* (tuple tool-calls + an executor callable).
+    """
+
+    tool_name: str
+    success: bool
+    output: Any = None
+    error: str | None = None
+
+
+@dataclass
 class BatchExecutionStats:
     """Statistics for batch execution."""
 
@@ -62,19 +79,32 @@ class ParallelToolExecutor:
 
     def __init__(
         self,
-        tool_registry: Any,
+        tool_registry: Any = None,
         cache: ToolResultCache | None = None,
         max_concurrent: int = 10,
         default_timeout: float = 30.0,
+        max_parallel: int | None = None,
+        timeout: float | None = None,
     ) -> None:
         """Initialize the parallel executor.
 
         Args:
-            tool_registry: The tool registry for executing tools
+            tool_registry: The tool registry for executing tools. Optional in
+                *migration mode* (where the executor function is passed directly
+                to ``execute_batch``/``execute_sequential``).
             cache: Optional result cache for caching tool outputs
             max_concurrent: Maximum concurrent tool executions
             default_timeout: Default timeout for tool execution in seconds
+            max_parallel: Alias for ``max_concurrent`` (migration API). Takes
+                precedence when provided.
+            timeout: Alias for ``default_timeout`` (migration API). Takes
+                precedence when provided.
         """
+        if max_parallel is not None:
+            max_concurrent = max_parallel
+        if timeout is not None:
+            default_timeout = timeout
+
         self._registry = tool_registry
         self._cache = cache or ToolResultCache()
         self._max_concurrent = max_concurrent
@@ -90,14 +120,32 @@ class ParallelToolExecutor:
     ) -> list[ToolResult]:
         """Execute multiple tool calls in parallel.
 
+        Two calling conventions are supported:
+
+        * **Engine mode** (default): ``tool_calls`` are :class:`ToolCall`
+          objects and ``allow_partial_failure`` is a bool. Tools are executed
+          through ``self._registry`` with dependency-free parallelism.
+        * **Migration mode**: ``tool_calls`` are ``(name, arguments)`` tuples
+          and the third positional argument is an *executor callable*
+          ``async fn(context, name, arguments)``. Returns
+          :class:`ToolExecutionResult` objects. Used by the migration adapter.
+
         Args:
-            tool_calls: List of tool calls to execute
+            tool_calls: List of tool calls (ToolCall objects or (name, args) tuples)
             context: Execution context
-            allow_partial_failure: If False, stop on first failure
+            allow_partial_failure: bool flag, or — in migration mode — the
+                executor callable passed positionally.
 
         Returns:
-            List of tool results in the same order as input
+            List of tool results in the same order as input.
         """
+        # Migration mode is unambiguous: the discriminator slot holds a callable
+        # (a bool is never callable, and engine callers never pass a function).
+        if callable(allow_partial_failure):
+            return await self._execute_batch_migration(
+                tool_calls, context, allow_partial_failure
+            )
+
         if not tool_calls:
             return []
 
@@ -113,6 +161,94 @@ class ParallelToolExecutor:
         )
 
         return results
+
+    # ------------------------------------------------------------------ #
+    # Migration-mode execution API (tuple calls + explicit executor fn)
+    # ------------------------------------------------------------------ #
+    async def _execute_one_migration(
+        self,
+        executor_fn: Any,
+        context: RunContext,
+        name: str,
+        arguments: dict[str, Any],
+    ) -> ToolExecutionResult:
+        """Run a single (name, args) call through ``executor_fn`` safely."""
+        try:
+            if asyncio.iscoroutinefunction(executor_fn):
+                output = await executor_fn(context, name, arguments)
+            else:
+                output = executor_fn(context, name, arguments)
+            return ToolExecutionResult(tool_name=name, success=True, output=output)
+        except Exception as exc:  # pragma: no cover - defensive
+            return ToolExecutionResult(tool_name=name, success=False, error=str(exc))
+
+    async def _execute_batch_migration(
+        self,
+        tool_calls: list[tuple[str, dict[str, Any]]],
+        context: RunContext,
+        executor_fn: Any,
+    ) -> list[ToolExecutionResult]:
+        """Execute ``(name, args)`` tuples in parallel via ``executor_fn``.
+
+        Concurrency is bounded by ``self._max_concurrent``. Results preserve
+        input order.
+        """
+        if not tool_calls:
+            return []
+
+        semaphore = asyncio.Semaphore(self._max_concurrent)
+
+        async def run(call: tuple[str, dict[str, Any]]) -> ToolExecutionResult:
+            name, arguments = call
+            async with semaphore:
+                return await self._execute_one_migration(
+                    executor_fn, context, name, arguments
+                )
+
+        return list(await asyncio.gather(*(run(c) for c in tool_calls)))
+
+    async def execute_sequential(
+        self,
+        tool_calls: list[tuple[str, dict[str, Any]]],
+        context: RunContext,
+        executor_fn: Any,
+    ) -> list[ToolExecutionResult]:
+        """Execute ``(name, args)`` tuples one at a time via ``executor_fn``.
+
+        Migration-mode counterpart to :meth:`execute_batch`. Preserves order
+        and never runs calls concurrently.
+        """
+        results: list[ToolExecutionResult] = []
+        for name, arguments in tool_calls:
+            results.append(
+                await self._execute_one_migration(
+                    executor_fn, context, name, arguments
+                )
+            )
+        return results
+
+    @staticmethod
+    def get_execution_summary(
+        results: list[ToolExecutionResult],
+    ) -> dict[str, Any]:
+        """Summarise a list of migration-mode results.
+
+        Args:
+            results: Results from :meth:`execute_batch`/:meth:`execute_sequential`.
+
+        Returns:
+            Dict with ``total_tools``, ``successful``, ``failed`` and
+            ``success_rate`` (0.0 when there are no results).
+        """
+        total = len(results)
+        successful = sum(1 for r in results if r.success)
+        failed = total - successful
+        return {
+            "total_tools": total,
+            "successful": successful,
+            "failed": failed,
+            "success_rate": (successful / total) if total else 0.0,
+        }
 
     async def execute_with_dependencies(
         self,

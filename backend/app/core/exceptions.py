@@ -254,12 +254,13 @@ class NetworkError(XAgentException):
         self,
         message: str,
         error_code: ErrorCode = ErrorCode.CONNECTION_ERROR,
+        severity: ErrorSeverity = ErrorSeverity.HIGH,
         **kwargs,
     ) -> None:
         super().__init__(
             message,
             error_code=error_code,
-            severity=ErrorSeverity.HIGH,
+            severity=severity,
             is_retryable=True,
             **kwargs,
         )

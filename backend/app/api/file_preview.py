@@ -226,7 +226,7 @@ def _read_file_content(file_path: Path, max_lines: int = 1000) -> tuple[str, int
 @router.get("/preview/{file_path:path}", response_model=FilePreview)
 async def preview_file(
     file_path: str,
-    principal: PrincipalDependency = Depends(get_current_principal),
+    principal: PrincipalDependency,
     max_lines: int = Query(default=1000, ge=1, le=10000, description="Maximum lines to preview"),
 ) -> FilePreview:
     """
@@ -299,7 +299,7 @@ async def preview_file(
 @router.get("/metadata/{file_path:path}", response_model=FileMetadata)
 async def get_file_metadata(
     file_path: str,
-    principal: PrincipalDependency = Depends(get_current_principal),
+    principal: PrincipalDependency,
 ) -> FileMetadata:
     """
     Get file metadata.
@@ -323,7 +323,7 @@ async def get_file_metadata(
 @router.get("/download/{file_path:path}")
 async def download_file(
     file_path: str,
-    principal: PrincipalDependency = Depends(get_current_principal),
+    principal: PrincipalDependency,
 ) -> FileResponse:
     """
     Download a file.
@@ -354,7 +354,7 @@ async def download_file(
 @router.get("/directory/{dir_path:path}", response_model=DirectoryListing)
 async def list_directory(
     dir_path: str,
-    principal: PrincipalDependency = Depends(get_current_principal),
+    principal: PrincipalDependency,
     recursive: bool = Query(default=False, description="List recursively"),
     max_depth: int = Query(default=1, ge=0, le=5, description="Maximum recursion depth"),
 ) -> DirectoryListing:
@@ -406,7 +406,7 @@ async def list_directory(
 @router.get("/code/{file_path:path}", response_model=CodePreview)
 async def preview_code(
     file_path: str,
-    principal: PrincipalDependency = Depends(get_current_principal),
+    principal: PrincipalDependency,
     max_lines: int = Query(default=1000, ge=1, le=10000),
     highlight_lines: str = Query(default="", description="Comma-separated line numbers to highlight"),
 ) -> CodePreview:

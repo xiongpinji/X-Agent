@@ -234,7 +234,7 @@ async def add_member(room_id: str, request: dict[str, str], principal: Principal
         raise api_error(400, ErrorCode.VALIDATION_ERROR, "member_id is required.")
     try:
         room = collaboration_store.add_member(room_id, member_id)
-    except KeyError:
+    except (KeyError, ValueError):
         raise api_error(404, ErrorCode.RESOURCE_NOT_FOUND, "Collaboration room not found.", details={"resource_type": "collaboration_room", "resource_id": room_id})
     channel_key = build_channel_key(tenant_id=room.tenant_id, room_id=room.room_id, agent_id=principal.agent_id, user_id=principal.user_id, trace_id=principal.trace_id)
     await message_event_bus.publish(
@@ -267,7 +267,7 @@ async def post_message(room_id: str, request: CollaborationMessageCreateRequest,
                 "agent_id": request.metadata.get("agent_id") or principal.agent_id,
             },
         )
-    except KeyError:
+    except (KeyError, ValueError):
         raise api_error(404, ErrorCode.RESOURCE_NOT_FOUND, "Collaboration room not found.", details={"resource_type": "collaboration_room", "resource_id": room_id})
     room = collaboration_store.get_room(room_id)
     if room is not None:
@@ -332,8 +332,9 @@ async def suggest_workflow_from_room(room_id: str, principal: PrincipalDependenc
 @router.post("/rooms/{room_id}/close")
 async def close_room(room_id: str, principal: PrincipalDependency) -> dict[str, bool]:
     enforce_scope(principal, "agent:run")
-    room = collaboration_store.close_room(room_id)
-    if room is None:
+    try:
+        room = collaboration_store.close_room(room_id)
+    except (KeyError, ValueError):
         raise api_error(404, ErrorCode.RESOURCE_NOT_FOUND, "Collaboration room not found.", details={"resource_type": "collaboration_room", "resource_id": room_id})
     channel_key = build_channel_key(tenant_id=room.tenant_id, room_id=room.room_id, agent_id=principal.agent_id, user_id=principal.user_id, trace_id=principal.trace_id)
     await message_event_bus.publish(

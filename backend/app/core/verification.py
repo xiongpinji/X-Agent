@@ -125,7 +125,7 @@ class VerificationEngine:
             return "permission_denied"
         if "timeout" in error:
             return "timeout"
-        if "rate limit" in error or "too many requests" in error:
+        if "rate limit" in error or "rate_limit" in error or "too many requests" in error:
             return "rate_limit"
         if "syntaxerror" in error or "indentationerror" in error:
             return "syntax_error"

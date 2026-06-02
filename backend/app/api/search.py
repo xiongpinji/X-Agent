@@ -24,7 +24,8 @@ async def search(
     num_results: int = Query(10, ge=1, le=50),
     search_type: str = Query("web", regex="^(web|news|images)$"),
     use_cache: bool = Query(True),
-    principal: PrincipalDependency = Depends(get_current_principal),
+    *,
+    principal: PrincipalDependency,
 ) -> dict:
     """Perform a search.
 
@@ -71,7 +72,8 @@ async def search(
 @router.get("/extract")
 async def extract_content(
     url: str = Query(..., min_length=1),
-    principal: PrincipalDependency = Depends(get_current_principal),
+    *,
+    principal: PrincipalDependency,
 ) -> dict:
     """Extract content from URL.
 
@@ -94,7 +96,8 @@ async def extract_content(
 @router.get("/history")
 async def get_search_history(
     limit: int = Query(50, ge=1, le=500),
-    principal: PrincipalDependency = Depends(get_current_principal),
+    *,
+    principal: PrincipalDependency,
 ) -> dict:
     """Get search history.
 
@@ -118,7 +121,7 @@ async def get_search_history(
 
 @router.get("/cache/stats")
 async def get_cache_stats(
-    principal: PrincipalDependency = Depends(get_current_principal),
+    principal: PrincipalDependency,
 ) -> dict:
     """Get search cache statistics.
 
@@ -136,7 +139,7 @@ async def get_cache_stats(
 
 @router.post("/cache/clear")
 async def clear_cache(
-    principal: PrincipalDependency = Depends(get_current_principal),
+    principal: PrincipalDependency,
 ) -> dict:
     """Clear search cache.
 
@@ -156,7 +159,8 @@ async def clear_cache(
 async def get_search_suggestions(
     query: str = Query(..., min_length=1, max_length=100),
     limit: int = Query(10, ge=1, le=50),
-    principal: PrincipalDependency = Depends(get_current_principal),
+    *,
+    principal: PrincipalDependency,
 ) -> dict:
     """Get search suggestions.
 

@@ -265,34 +265,34 @@ class HotMemoryStore:
 
         for line in lines:
             if line.startswith("**Category:**"):
-                category = line.split(":", 1)[1].strip()
+                category = line.split(":**", 1)[1].strip()
             elif line.startswith("**Importance:**"):
                 try:
-                    importance = float(line.split(":", 1)[1].strip())
+                    importance = float(line.split(":**", 1)[1].strip())
                 except ValueError:
                     pass
             elif line.startswith("**Created:**"):
                 try:
-                    created_at = datetime.fromisoformat(line.split(":", 1)[1].strip())
+                    created_at = datetime.fromisoformat(line.split(":**", 1)[1].strip())
                 except ValueError:
                     pass
             elif line.startswith("**Updated:**"):
                 try:
-                    updated_at = datetime.fromisoformat(line.split(":", 1)[1].strip())
+                    updated_at = datetime.fromisoformat(line.split(":**", 1)[1].strip())
                 except ValueError:
                     pass
             elif line.startswith("**Accessed:**"):
                 try:
-                    accessed_at = datetime.fromisoformat(line.split(":", 1)[1].strip())
+                    accessed_at = datetime.fromisoformat(line.split(":**", 1)[1].strip())
                 except ValueError:
                     pass
             elif line.startswith("**Access Count:**"):
                 try:
-                    access_count = int(line.split(":", 1)[1].strip())
+                    access_count = int(line.split(":**", 1)[1].strip())
                 except ValueError:
                     pass
             elif line.startswith("**Tags:**"):
-                tags_str = line.split(":", 1)[1].strip()
+                tags_str = line.split(":**", 1)[1].strip()
                 tags = [t.strip() for t in tags_str.split(",")]
             elif line.startswith("- [["):
                 # Extract related memory ID

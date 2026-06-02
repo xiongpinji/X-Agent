@@ -286,16 +286,42 @@ class MemoryPersistence:
         lines = content.split("\n")
 
         in_content = False
+        in_metadata = False
         content_lines = []
 
         for line in lines:
             if line.startswith("## Content"):
                 in_content = True
+                in_metadata = False
                 continue
 
             if in_content:
                 content_lines.append(line)
-            elif line.startswith("**Category:**"):
+                continue
+
+            # Parse the "**Metadata:**" block written by _create_memory_markdown
+            # (each item formatted as "- {key}: {json.dumps(value)}"). Without
+            # this, save->load silently drops all metadata.
+            if line.startswith("**Metadata:**"):
+                in_metadata = True
+                continue
+
+            if in_metadata:
+                stripped = line.strip()
+                if stripped.startswith("- "):
+                    key, sep, raw_value = stripped[2:].partition(":")
+                    if sep:
+                        key = key.strip()
+                        raw_value = raw_value.strip()
+                        try:
+                            entry.metadata[key] = json.loads(raw_value)
+                        except (json.JSONDecodeError, ValueError):
+                            entry.metadata[key] = raw_value
+                    continue
+                # Any blank or non-list line ends the metadata block.
+                in_metadata = False
+
+            if line.startswith("**Category:**"):
                 entry.category = line.split(":", 1)[1].strip()
             elif line.startswith("**Tags:**"):
                 tags_str = line.split(":", 1)[1].strip()

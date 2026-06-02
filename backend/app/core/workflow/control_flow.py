@@ -346,6 +346,13 @@ class ControlFlowExecutor:
         executor: Callable[[str, dict[str, Any]], Awaitable[Any]] | None = None,
     ) -> Any:
         """Execute a control flow node"""
+        # An empty/None dispatch target means a branch terminates with no
+        # downstream node (e.g. an if-branch or loop body that does nothing).
+        # Treat it as a safe no-op rather than a hard error. A genuinely
+        # missing (non-empty) node_id still raises below.
+        if not node_id:
+            return None
+
         node = self.nodes.get(node_id)
         if node is None:
             raise ValueError(f"Node not found: {node_id}")

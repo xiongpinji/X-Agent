@@ -59,6 +59,16 @@ class BrowserSession:
 class PlaywrightBrowserClient:
     """Playwright-backed browser client with in-memory fallback."""
 
+    # CSS selector complexity limits
+    _MAX_SELECTOR_LENGTH = 500
+    _MAX_SELECTOR_DEPTH = 10
+    _DANGEROUS_PATTERNS = [
+        r"\*:nth-child\(\d{4,}\)",  # nth-child with large numbers
+        r":has\(",  # :has() can be expensive
+        r":is\(",  # :is() with many selectors
+        r":where\(",  # :where() with many selectors
+    ]
+
     def __init__(self) -> None:
         self._sessions: dict[str, BrowserSession] = {}
 
@@ -68,6 +78,33 @@ class PlaywrightBrowserClient:
             return sync_playwright is not None and not asyncio.get_running_loop().is_running()
         except RuntimeError:
             return sync_playwright is not None
+
+    def _validate_selector(self, selector: str) -> None:
+        """Validate CSS selector to prevent DoS attacks and injection.
+
+        Raises ValueError if selector is invalid or dangerous.
+        """
+        import re
+
+        # Check length
+        if len(selector) > self._MAX_SELECTOR_LENGTH:
+            raise ValueError(f"Selector too long (max {self._MAX_SELECTOR_LENGTH} chars)")
+
+        # Check depth (count commas and combinators)
+        depth = selector.count(",") + selector.count(">") + selector.count("+") + selector.count("~")
+        if depth > self._MAX_SELECTOR_DEPTH:
+            raise ValueError(f"Selector too complex (max depth {self._MAX_SELECTOR_DEPTH})")
+
+        # Check for dangerous patterns
+        for pattern in self._DANGEROUS_PATTERNS:
+            if re.search(pattern, selector):
+                raise ValueError(f"Selector contains dangerous pattern: {pattern}")
+
+        # Basic syntax validation - ensure balanced parentheses and brackets
+        if selector.count("(") != selector.count(")"):
+            raise ValueError("Selector has unbalanced parentheses")
+        if selector.count("[") != selector.count("]"):
+            raise ValueError("Selector has unbalanced brackets")
 
     def create_session(
         self,
@@ -130,35 +167,99 @@ class PlaywrightBrowserClient:
         return session.record("goto", True, url=url, navigation_kind="real" if session.page is not None else "fallback")
 
     def click(self, session_id: str, selector: str) -> BrowserActionResult:
+        """Click element with selector validation and timeout protection."""
         session = self._require_session(session_id)
-        if session.page is not None:
-            session.page.click(selector)
-        return session.record("click", True, selector=selector, execution_mode="real" if session.page is not None else "fallback")
+        try:
+            self._validate_selector(selector)
+            if session.page is not None:
+                # Set timeout to prevent hanging on complex selectors
+                session.page.click(selector, timeout=5000)  # 5 second timeout
+            return session.record("click", True, selector=selector, execution_mode="real" if session.page is not None else "fallback")
+        except Exception as e:
+            return session.record("click", False, detail=f"Click failed: {str(e)}", selector=selector)
 
     def fill(self, session_id: str, selector: str, value: str) -> BrowserActionResult:
+        """Fill input field with selector validation and timeout protection."""
         session = self._require_session(session_id)
-        if session.page is not None:
-            session.page.fill(selector, value)
-        return session.record("fill", True, selector=selector, value=value, execution_mode="real" if session.page is not None else "fallback")
+        try:
+            self._validate_selector(selector)
+            if session.page is not None:
+                # Set timeout to prevent hanging on complex selectors
+                session.page.fill(selector, value, timeout=5000)  # 5 second timeout
+            return session.record("fill", True, selector=selector, value=value, execution_mode="real" if session.page is not None else "fallback")
+        except Exception as e:
+            return session.record("fill", False, detail=f"Fill failed: {str(e)}", selector=selector, value=value)
 
     def screenshot(self, session_id: str, path: str) -> BrowserActionResult:
+        """Take a screenshot with strict path validation to prevent directory traversal attacks."""
+        import os
+        from pathlib import Path
+
         session = self._require_session(session_id)
-        if session.page is not None:
-            session.page.screenshot(path=path, full_page=True)
-        return session.record("screenshot", True, path=path, execution_mode="real" if session.page is not None else "fallback")
+
+        # Validate and normalize the path
+        try:
+            # Get the real absolute path
+            real_path = os.path.realpath(os.path.expanduser(path))
+
+            # Define allowed base directories
+            allowed_bases = [
+                os.path.realpath("/tmp"),
+                os.path.realpath("/var/tmp"),
+                os.path.realpath(os.path.expanduser("~/xagent_screenshots")),
+            ]
+
+            # On Windows, add temp directory
+            if os.name == "nt":
+                allowed_bases.append(os.path.realpath(os.environ.get("TEMP", "C:\\Temp")))
+
+            # Verify the real path is within allowed directories
+            is_allowed = False
+            for base in allowed_bases:
+                try:
+                    Path(real_path).relative_to(base)
+                    is_allowed = True
+                    break
+                except ValueError:
+                    continue
+
+            if not is_allowed:
+                raise ValueError(f"Screenshot path must be within allowed directories: {allowed_bases}")
+
+            # Ensure parent directory exists
+            os.makedirs(os.path.dirname(real_path), exist_ok=True)
+
+            if session.page is not None:
+                session.page.screenshot(path=real_path, full_page=True)
+
+            return session.record("screenshot", True, path=real_path, execution_mode="real" if session.page is not None else "fallback")
+        except Exception as e:
+            return session.record("screenshot", False, detail=f"Screenshot failed: {str(e)}", path=path)
 
     def extract_text(self, session_id: str, selector: str) -> BrowserActionResult:
+        """Extract text with selector validation and timeout protection."""
         session = self._require_session(session_id)
         text = ""
-        if session.page is not None:
-            text = session.page.locator(selector).inner_text()
-        return session.record("extract_text", True, selector=selector, text=text, execution_mode="real" if session.page is not None else "fallback")
+        try:
+            self._validate_selector(selector)
+            if session.page is not None:
+                # Set timeout to prevent hanging on complex selectors
+                text = session.page.locator(selector).inner_text(timeout=5000)
+            return session.record("extract_text", True, selector=selector, text=text, execution_mode="real" if session.page is not None else "fallback")
+        except Exception as e:
+            return session.record("extract_text", False, detail=f"Extract text failed: {str(e)}", selector=selector)
 
     def wait_for(self, session_id: str, selector: str) -> BrowserActionResult:
+        """Wait for element with selector validation and timeout protection."""
         session = self._require_session(session_id)
-        if session.page is not None:
-            session.page.wait_for_selector(selector)
-        return session.record("wait_for", True, selector=selector, execution_mode="real" if session.page is not None else "fallback")
+        try:
+            self._validate_selector(selector)
+            if session.page is not None:
+                # Set timeout to prevent hanging on complex selectors
+                session.page.wait_for_selector(selector, timeout=10000)  # 10 second timeout
+            return session.record("wait_for", True, selector=selector, execution_mode="real" if session.page is not None else "fallback")
+        except Exception as e:
+            return session.record("wait_for", False, detail=f"Wait for failed: {str(e)}", selector=selector)
 
     def _require_session(self, session_id: str) -> BrowserSession:
         session = self._sessions.get(session_id)

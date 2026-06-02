@@ -292,40 +292,65 @@ def cache_key(*args: Any, **kwargs: Any) -> str:
     return hashlib.md5(key_str.encode()).hexdigest()
 
 
-def cached(ttl: int | None = None, key_func: Callable | None = None):
+def cached(ttl_seconds: int | None = None, key_prefix: str | None = None):
     """
-    Decorator for caching async function results.
+    Decorator for caching *synchronous* function results in-process.
+
+    Uses a per-wrapper in-memory dict with optional TTL. Suitable for
+    standalone functions called synchronously (no event loop required).
 
     Args:
-        ttl: Time to live in seconds
-        key_func: Custom function to generate cache key
+        ttl_seconds: Time to live in seconds (None = never expires)
+        key_prefix: Optional prefix for the cache key namespace
+    """
+
+    def decorator(func: Callable) -> Callable:
+        _local_cache: dict[str, tuple[Any, float]] = {}
+
+        @wraps(func)
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
+            prefix = key_prefix or func.__module__
+            key = f"{prefix}:{func.__name__}:{cache_key(*args, **kwargs)}"
+            now = time.time()
+
+            if key in _local_cache:
+                value, expires_at = _local_cache[key]
+                if ttl_seconds is None or now < expires_at:
+                    return value
+                del _local_cache[key]
+
+            result = func(*args, **kwargs)
+            expires_at = now + ttl_seconds if ttl_seconds is not None else float("inf")
+            _local_cache[key] = (result, expires_at)
+            return result
+
+        return wrapper
+
+    return decorator
+
+
+def async_cached(ttl_seconds: int | None = None, key_prefix: str | None = None):
+    """
+    Decorator for caching *async* function results via the global cache manager.
+
+    Args:
+        ttl_seconds: Time to live in seconds
+        key_prefix: Optional prefix for the cache key namespace
     """
 
     def decorator(func: Callable) -> Callable:
         @wraps(func)
         async def wrapper(*args: Any, **kwargs: Any) -> Any:
-            # Get cache manager from first argument (self)
-            if not args or not hasattr(args[0], "_cache_manager"):
-                return await func(*args, **kwargs)
+            cache_manager = get_cache_manager()
+            prefix = key_prefix or func.__module__
+            key = f"{prefix}:{func.__name__}:{cache_key(*args, **kwargs)}"
 
-            cache_manager = args[0]._cache_manager
-            if cache_manager is None:
-                return await func(*args, **kwargs)
-
-            # Generate cache key
-            if key_func:
-                key = key_func(*args, **kwargs)
-            else:
-                key = f"{func.__module__}.{func.__name__}:{cache_key(*args[1:], **kwargs)}"
-
-            # Try to get from cache
             cached_value = await cache_manager.get(key)
             if cached_value is not None:
                 return cached_value
 
-            # Call function and cache result
             result = await func(*args, **kwargs)
-            await cache_manager.set(key, result, ttl)
+            await cache_manager.set(key, result, ttl_seconds)
             return result
 
         return wrapper

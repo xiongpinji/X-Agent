@@ -12,6 +12,31 @@ except ImportError:
     Counter = Gauge = Histogram = Summary = None  # type: ignore
 
 
+# 模块级 metric 缓存：prometheus_client 的 metric 注册到全局默认 registry，
+# 同名重复注册会抛 "Duplicated timeseries in CollectorRegistry"。模块底部的
+# 单例 metrics_collector 在 import 时已注册一遍全部 metric；任何对
+# MetricsCollector(enabled=True) 的再次实例化（测试里每个用例都建一个、
+# 或多个调用点各建一个）都会撞名。用按 metric 名缓存的 get-or-create 让
+# 后续实例复用同一组 collector，而不是重复注册。生产行为不变：metric 仍在
+# 默认 registry 上、且只注册一次。
+_METRIC_CACHE: dict[str, object] = {}
+
+
+def _get_or_create(metric_cls, name: str, documentation: str, labelnames=None, **kwargs):
+    """按名缓存的 metric 工厂，避免重复注册撞名。"""
+    if metric_cls is None:
+        return None
+    cached = _METRIC_CACHE.get(name)
+    if cached is not None:
+        return cached
+    if labelnames:
+        metric = metric_cls(name, documentation, labelnames, **kwargs)
+    else:
+        metric = metric_cls(name, documentation, **kwargs)
+    _METRIC_CACHE[name] = metric
+    return metric
+
+
 class MetricsCollector:
     """Centralized metrics collection using Prometheus."""
 
@@ -25,12 +50,13 @@ class MetricsCollector:
             return
 
         # HTTP Request Metrics
-        self.http_requests_total = Counter(
+        self.http_requests_total = _get_or_create(
+            Counter,
             "xagent_http_requests_total",
             "Total HTTP requests",
             ["method", "endpoint", "status"],
         )
-        self.http_request_duration_seconds = Histogram(
+        self.http_request_duration_seconds = _get_or_create(Histogram,
             "xagent_http_request_duration_seconds",
             "HTTP request duration in seconds",
             ["method", "endpoint"],
@@ -38,42 +64,42 @@ class MetricsCollector:
         )
 
         # Error Metrics
-        self.errors_total = Counter(
+        self.errors_total = _get_or_create(Counter,
             "xagent_errors_total",
             "Total errors",
             ["error_type", "endpoint"],
         )
-        self.error_rate = Gauge(
+        self.error_rate = _get_or_create(Gauge,
             "xagent_error_rate",
             "Current error rate",
             ["error_type"],
         )
 
         # Agent Execution Metrics
-        self.agent_executions_total = Counter(
+        self.agent_executions_total = _get_or_create(Counter,
             "xagent_agent_executions_total",
             "Total agent executions",
             ["agent_id", "status"],
         )
-        self.agent_execution_duration_seconds = Histogram(
+        self.agent_execution_duration_seconds = _get_or_create(Histogram,
             "xagent_agent_execution_duration_seconds",
             "Agent execution duration in seconds",
             ["agent_id"],
             buckets=(0.1, 0.5, 1.0, 5.0, 10.0, 30.0, 60.0, 300.0),
         )
-        self.agent_active_executions = Gauge(
+        self.agent_active_executions = _get_or_create(Gauge,
             "xagent_agent_active_executions",
             "Number of active agent executions",
             ["agent_id"],
         )
 
         # Tool Execution Metrics
-        self.tool_calls_total = Counter(
+        self.tool_calls_total = _get_or_create(Counter,
             "xagent_tool_calls_total",
             "Total tool calls",
             ["tool_name", "status"],
         )
-        self.tool_call_duration_seconds = Histogram(
+        self.tool_call_duration_seconds = _get_or_create(Histogram,
             "xagent_tool_call_duration_seconds",
             "Tool call duration in seconds",
             ["tool_name"],
@@ -81,17 +107,17 @@ class MetricsCollector:
         )
 
         # LLM Metrics
-        self.llm_calls_total = Counter(
+        self.llm_calls_total = _get_or_create(Counter,
             "xagent_llm_calls_total",
             "Total LLM calls",
             ["model", "status"],
         )
-        self.llm_tokens_total = Counter(
+        self.llm_tokens_total = _get_or_create(Counter,
             "xagent_llm_tokens_total",
             "Total LLM tokens used",
             ["model", "token_type"],
         )
-        self.llm_call_duration_seconds = Histogram(
+        self.llm_call_duration_seconds = _get_or_create(Histogram,
             "xagent_llm_call_duration_seconds",
             "LLM call duration in seconds",
             ["model"],
@@ -99,17 +125,17 @@ class MetricsCollector:
         )
 
         # Memory Metrics
-        self.memory_operations_total = Counter(
+        self.memory_operations_total = _get_or_create(Counter,
             "xagent_memory_operations_total",
             "Total memory operations",
             ["operation", "status"],
         )
-        self.memory_size_bytes = Gauge(
+        self.memory_size_bytes = _get_or_create(Gauge,
             "xagent_memory_size_bytes",
             "Memory size in bytes",
             ["memory_type"],
         )
-        self.memory_retrieval_duration_seconds = Histogram(
+        self.memory_retrieval_duration_seconds = _get_or_create(Histogram,
             "xagent_memory_retrieval_duration_seconds",
             "Memory retrieval duration in seconds",
             ["memory_type"],
@@ -117,12 +143,12 @@ class MetricsCollector:
         )
 
         # Workflow Metrics
-        self.workflow_executions_total = Counter(
+        self.workflow_executions_total = _get_or_create(Counter,
             "xagent_workflow_executions_total",
             "Total workflow executions",
             ["workflow_id", "status"],
         )
-        self.workflow_execution_duration_seconds = Histogram(
+        self.workflow_execution_duration_seconds = _get_or_create(Histogram,
             "xagent_workflow_execution_duration_seconds",
             "Workflow execution duration in seconds",
             ["workflow_id"],
@@ -130,83 +156,83 @@ class MetricsCollector:
         )
 
         # Database Metrics
-        self.db_queries_total = Counter(
+        self.db_queries_total = _get_or_create(Counter,
             "xagent_db_queries_total",
             "Total database queries",
             ["query_type", "status"],
         )
-        self.db_query_duration_seconds = Histogram(
+        self.db_query_duration_seconds = _get_or_create(Histogram,
             "xagent_db_query_duration_seconds",
             "Database query duration in seconds",
             ["query_type"],
             buckets=(0.001, 0.01, 0.05, 0.1, 0.5, 1.0, 5.0),
         )
-        self.db_connection_pool_size = Gauge(
+        self.db_connection_pool_size = _get_or_create(Gauge,
             "xagent_db_connection_pool_size",
             "Database connection pool size",
         )
-        self.db_active_connections = Gauge(
+        self.db_active_connections = _get_or_create(Gauge,
             "xagent_db_active_connections",
             "Number of active database connections",
         )
 
         # Cache Metrics
-        self.cache_hits_total = Counter(
+        self.cache_hits_total = _get_or_create(Counter,
             "xagent_cache_hits_total",
             "Total cache hits",
             ["cache_name"],
         )
-        self.cache_misses_total = Counter(
+        self.cache_misses_total = _get_or_create(Counter,
             "xagent_cache_misses_total",
             "Total cache misses",
             ["cache_name"],
         )
-        self.cache_size_bytes = Gauge(
+        self.cache_size_bytes = _get_or_create(Gauge,
             "xagent_cache_size_bytes",
             "Cache size in bytes",
             ["cache_name"],
         )
 
         # Business Metrics
-        self.approvals_pending = Gauge(
+        self.approvals_pending = _get_or_create(Gauge,
             "xagent_approvals_pending",
             "Number of pending approvals",
         )
-        self.runs_total = Gauge(
+        self.runs_total = _get_or_create(Gauge,
             "xagent_runs_total",
             "Total number of runs",
         )
-        self.traces_total = Gauge(
+        self.traces_total = _get_or_create(Gauge,
             "xagent_traces_total",
             "Total number of traces",
         )
-        self.memories_total = Gauge(
+        self.memories_total = _get_or_create(Gauge,
             "xagent_memories_total",
             "Total number of memories",
         )
 
         # Resource Metrics
-        self.cpu_usage_percent = Gauge(
+        self.cpu_usage_percent = _get_or_create(Gauge,
             "xagent_cpu_usage_percent",
             "CPU usage percentage",
         )
-        self.memory_usage_bytes = Gauge(
+        self.memory_usage_bytes = _get_or_create(Gauge,
             "xagent_memory_usage_bytes",
             "Memory usage in bytes",
         )
-        self.disk_usage_bytes = Gauge(
+        self.disk_usage_bytes = _get_or_create(Gauge,
             "xagent_disk_usage_bytes",
             "Disk usage in bytes",
             ["mount_point"],
         )
 
         # Langfuse Metrics
-        self.langfuse_events_total = Counter(
+        self.langfuse_events_total = _get_or_create(Counter,
             "xagent_langfuse_events_total",
             "Total Langfuse events sent",
             ["event_type"],
         )
-        self.langfuse_api_calls_total = Counter(
+        self.langfuse_api_calls_total = _get_or_create(Counter,
             "xagent_langfuse_api_calls_total",
             "Total Langfuse API calls",
             ["endpoint", "status"],

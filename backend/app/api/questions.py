@@ -62,7 +62,7 @@ class QuestionListResponse(BaseModel):
 @router.post("", response_model=InteractiveQuestion, status_code=status.HTTP_201_CREATED)
 async def create_question(
     request: CreateQuestionRequest,
-    principal: PrincipalDependency = Depends(get_current_principal),
+    principal: PrincipalDependency,
 ) -> InteractiveQuestion:
     """
     Create an interactive question.
@@ -110,7 +110,8 @@ async def create_question(
 @router.get("/pending", response_model=QuestionListResponse)
 async def get_pending_questions(
     run_id: str = Query(..., description="Run ID"),
-    principal: PrincipalDependency = Depends(get_current_principal),
+    *,
+    principal: PrincipalDependency,
 ) -> QuestionListResponse:
     """
     Get pending questions for a run.
@@ -136,7 +137,7 @@ async def get_pending_questions(
 @router.get("/{question_id}", response_model=InteractiveQuestion)
 async def get_question(
     question_id: str,
-    principal: PrincipalDependency = Depends(get_current_principal),
+    principal: PrincipalDependency,
 ) -> InteractiveQuestion:
     """
     Get a question by ID.
@@ -160,7 +161,7 @@ async def get_question(
 async def answer_question(
     question_id: str,
     request: AnswerQuestionRequest,
-    principal: PrincipalDependency = Depends(get_current_principal),
+    principal: PrincipalDependency,
 ) -> InteractiveQuestion:
     """
     Submit an answer to a question.
@@ -194,7 +195,7 @@ async def answer_question(
 @router.post("/{question_id}/timeout", response_model=InteractiveQuestion)
 async def timeout_question(
     question_id: str,
-    principal: PrincipalDependency = Depends(get_current_principal),
+    principal: PrincipalDependency,
 ) -> InteractiveQuestion:
     """
     Mark a question as timed out.
@@ -221,7 +222,7 @@ async def timeout_question(
 @router.post("/{question_id}/cancel", response_model=InteractiveQuestion)
 async def cancel_question(
     question_id: str,
-    principal: PrincipalDependency = Depends(get_current_principal),
+    principal: PrincipalDependency,
 ) -> InteractiveQuestion:
     """
     Cancel a question.
@@ -248,7 +249,7 @@ async def cancel_question(
 @router.get("/run/{run_id}/history", response_model=list[QuestionHistory])
 async def get_question_history(
     run_id: str,
-    principal: PrincipalDependency = Depends(get_current_principal),
+    principal: PrincipalDependency,
     limit: int = Query(default=100, ge=1, le=1000),
 ) -> list[QuestionHistory]:
     """
@@ -268,7 +269,7 @@ async def get_question_history(
 
 @router.post("/cleanup")
 async def cleanup_expired_questions(
-    principal: PrincipalDependency = Depends(get_current_principal),
+    principal: PrincipalDependency,
 ) -> dict[str, int]:
     """
     Clean up expired questions.

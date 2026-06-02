@@ -39,6 +39,9 @@ class ConcurrencyStats:
     total_tasks: int = 0
     successful_tasks: int = 0
     failed_tasks: int = 0
+    # Lifetime counters (never reset) — used for reporting via get_stats().
+    lifetime_successful: int = 0
+    lifetime_failed: int = 0
     peak_active: int = 0
     total_wait_time: float = 0.0
     last_adjustment_time: float = field(default_factory=time.time)
@@ -81,8 +84,10 @@ class ConcurrencyLimiter:
 
         if success:
             self._stats.successful_tasks += 1
+            self._stats.lifetime_successful += 1
         else:
             self._stats.failed_tasks += 1
+            self._stats.lifetime_failed += 1
 
     async def run(self, coro: Any, success_check: Optional[Callable] = None) -> Any:
         """Run a coroutine with concurrency limiting."""
@@ -188,8 +193,10 @@ class AdaptiveConcurrencyLimiter:
 
         if success:
             self._stats.successful_tasks += 1
+            self._stats.lifetime_successful += 1
         else:
             self._stats.failed_tasks += 1
+            self._stats.lifetime_failed += 1
 
     async def run(self, coro: Any, success_check: Optional[Callable] = None) -> Any:
         """Run a coroutine with concurrency limiting and auto-adjustment."""
@@ -256,8 +263,15 @@ class AdaptiveConcurrencyLimiter:
 
     def get_stats(self) -> dict[str, Any]:
         """Get concurrency statistics."""
-        total = self._stats.successful_tasks + self._stats.failed_tasks
-        success_rate = self._stats.successful_tasks / total if total > 0 else 0
+        # Report success_rate from lifetime counters so it survives the
+        # windowed reset performed by _adjust_limit (which zeroes the
+        # successful/failed counters each adjustment interval).
+        lifetime_total = self._stats.lifetime_successful + self._stats.lifetime_failed
+        success_rate = (
+            self._stats.lifetime_successful / lifetime_total
+            if lifetime_total > 0
+            else 0
+        )
         avg_wait_time = (
             self._stats.total_wait_time / self._stats.total_tasks
             if self._stats.total_tasks > 0
@@ -269,8 +283,8 @@ class AdaptiveConcurrencyLimiter:
             "current_limit": self._stats.current_limit,
             "active_tasks": self._stats.active_tasks,
             "total_tasks": self._stats.total_tasks,
-            "successful_tasks": self._stats.successful_tasks,
-            "failed_tasks": self._stats.failed_tasks,
+            "successful_tasks": self._stats.lifetime_successful,
+            "failed_tasks": self._stats.lifetime_failed,
             "peak_active": self._stats.peak_active,
             "success_rate": success_rate,
             "avg_wait_time": avg_wait_time,
@@ -429,7 +443,11 @@ class PriorityTaskQueue:
                     if asyncio.iscoroutinefunction(task):
                         await task()
                     else:
-                        task()
+                        result = task()
+                        # A sync callable (e.g. a lambda) may itself return a
+                        # coroutine; await it so the wrapped work actually runs.
+                        if asyncio.iscoroutine(result):
+                            await result
 
                     async with self._lock:
                         self._completed_tasks += 1

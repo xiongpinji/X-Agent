@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
 from backend.app.api.errors import api_error
-from backend.app.api.recovery_helpers import build_recovery_context
+from backend.app.api.recovery_helpers import build_recovery_context, build_recovery_payload
 from backend.app.core.contracts import ErrorCode
 from backend.app.core.desktop import desktop_automation_store
 from backend.app.core.security import Principal

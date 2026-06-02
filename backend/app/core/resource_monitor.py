@@ -233,9 +233,13 @@ class ResourceMonitor:
             logger.error(f"Error checking queue {name}: {e}")
 
     async def _emit_alert(self, alert: ResourceAlert) -> None:
-        """Emit an alert."""
-        async with self._lock:
-            self._alerts.append(alert)
+        """Emit an alert.
+
+        NOTE: This method is always called from within _check_resources which
+        already holds self._lock.  Do NOT re-acquire the lock here — asyncio.Lock
+        is non-reentrant and would deadlock.
+        """
+        self._alerts.append(alert)
 
         logger.log(
             logging.WARNING if alert.severity == "warning" else logging.ERROR,

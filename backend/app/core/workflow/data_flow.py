@@ -80,8 +80,15 @@ class DataTransformer:
             return data
 
         if transform_type == "map":
+            mapping = transformation.get("mapping", {})
+            if isinstance(data, list):
+                # Map each element in the list (consistent with filter/reduce/sort)
+                return [
+                    {new_key: item.get(old_key) for new_key, old_key in mapping.items()}
+                    if isinstance(item, dict) else item
+                    for item in data
+                ]
             if isinstance(data, dict):
-                mapping = transformation.get("mapping", {})
                 return {
                     new_key: data.get(old_key)
                     for new_key, old_key in mapping.items()
@@ -188,14 +195,18 @@ class DataTransformer:
 class ExpressionEvaluator:
     """Evaluates expressions and templates"""
 
-    # Supported operators
+    # Supported operators.
+    # NOTE: ordering matters — the evaluate() loop splits on the FIRST matching
+    # operator, so looser-binding operators (comparison/logical) are listed
+    # before tighter-binding arithmetic so that e.g. "$a + $b > $c" splits on
+    # ">" first (outermost), yielding ($a + $b) > $c.
     OPERATORS = {
         "==": lambda a, b: a == b,
         "!=": lambda a, b: a != b,
-        "<": lambda a, b: a < b,
-        ">": lambda a, b: a > b,
         "<=": lambda a, b: a <= b,
         ">=": lambda a, b: a >= b,
+        "<": lambda a, b: a < b,
+        ">": lambda a, b: a > b,
         "and": lambda a, b: a and b,
         "or": lambda a, b: a or b,
         "in": lambda a, b: a in b,
@@ -203,6 +214,10 @@ class ExpressionEvaluator:
         "contains": lambda a, b: b in a if isinstance(a, (str, list)) else False,
         "starts_with": lambda a, b: a.startswith(b) if isinstance(a, str) else False,
         "ends_with": lambda a, b: a.endswith(b) if isinstance(a, str) else False,
+        "+": lambda a, b: a + b,
+        "-": lambda a, b: a - b,
+        "*": lambda a, b: a * b,
+        "/": lambda a, b: a / b,
     }
 
     @staticmethod
@@ -231,7 +246,17 @@ class ExpressionEvaluator:
         except ValueError:
             pass
 
-        # Handle variable references
+        # Handle operators BEFORE variable references so that "$x > $y" is
+        # correctly split on the operator rather than mis-resolved as a single
+        # variable named "x > $y".
+        for op in ExpressionEvaluator.OPERATORS:
+            if f" {op} " in expression:
+                parts = expression.split(f" {op} ", 1)
+                left = ExpressionEvaluator.evaluate(parts[0], context)
+                right = ExpressionEvaluator.evaluate(parts[1], context)
+                return ExpressionEvaluator.OPERATORS[op](left, right)
+
+        # Handle variable references (simple $var with no operators)
         if expression.startswith("$"):
             var_name = expression[1:]
             return ExpressionEvaluator._resolve_variable(var_name, context)
@@ -239,14 +264,6 @@ class ExpressionEvaluator:
         # Handle function calls
         if "(" in expression and ")" in expression:
             return ExpressionEvaluator._evaluate_function(expression, context)
-
-        # Handle operators
-        for op in ExpressionEvaluator.OPERATORS:
-            if f" {op} " in expression:
-                parts = expression.split(f" {op} ", 1)
-                left = ExpressionEvaluator.evaluate(parts[0], context)
-                right = ExpressionEvaluator.evaluate(parts[1], context)
-                return ExpressionEvaluator.OPERATORS[op](left, right)
 
         # Default: treat as variable reference
         return context.get(expression)

@@ -277,7 +277,8 @@ async def relate_memories(
 async def get_related_memories(
     memory_id: str,
     limit: int = Query(default=5, ge=1, le=50),
-    hybrid_memory: HybridMemoryDependency = Depends(get_hybrid_memory_system),
+    *,
+    hybrid_memory: HybridMemoryDependency,
     principal: Principal = Depends(),
 ) -> RecallMemoryResponse:
     """Get memories related to a specific memory.

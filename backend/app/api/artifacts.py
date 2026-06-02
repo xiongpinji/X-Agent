@@ -44,7 +44,8 @@ async def list_artifacts(
     tags: Optional[str] = Query(None),
     limit: int = Query(100, ge=1, le=1000),
     offset: int = Query(0, ge=0),
-    principal: PrincipalDependency = Depends(get_current_principal),
+    *,
+    principal: PrincipalDependency,
 ) -> dict:
     """List artifacts with optional filtering.
 
@@ -178,7 +179,8 @@ async def render_artifact(
 async def search_artifacts(
     query: str = Query(..., min_length=1),
     limit: int = Query(50, ge=1, le=500),
-    principal: PrincipalDependency = Depends(get_current_principal),
+    *,
+    principal: PrincipalDependency,
 ) -> dict:
     """Search artifacts.
 

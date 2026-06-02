@@ -298,7 +298,13 @@ class PriorityTaskScheduler:
                     if asyncio.iscoroutinefunction(task):
                         await task()
                     else:
-                        task()
+                        # 同步 callable 可能返回 coroutine(如 lambda: coro(args)、
+                        # functools.partial 包裹的 async 函数),iscoroutinefunction
+                        # 对这类包装返回 False。调用后若拿到 awaitable 必须 await,
+                        # 否则任务体永不执行。
+                        result = task()
+                        if asyncio.iscoroutine(result):
+                            await result
 
                     async with self._lock:
                         self._stats["completed_tasks"] += 1

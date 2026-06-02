@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field, fields, asdict
 from datetime import UTC, datetime
 from enum import Enum
 from typing import Any, Callable, Optional
@@ -55,13 +55,27 @@ class Message:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Message:
-        """Deserialize message from dictionary."""
+        """Deserialize message from dictionary.
+
+        When invoked on the base ``Message`` class, dispatches to the concrete
+        subclass (Request/Response/Event) based on ``message_type`` so that
+        subclass-specific fields (e.g. ``action``) round-trip correctly.
+        """
         data = dict(data)
         if isinstance(data.get("message_type"), str):
             data["message_type"] = MessageType(data["message_type"])
         if isinstance(data.get("timestamp"), str):
             data["timestamp"] = datetime.fromisoformat(data["timestamp"])
-        return cls(**data)
+
+        target_cls: type[Message] = cls
+        if cls is Message:
+            target_cls = _MESSAGE_TYPE_REGISTRY.get(
+                data.get("message_type"), Message
+            )
+
+        valid = {f.name for f in fields(target_cls)}
+        filtered = {k: v for k, v in data.items() if k in valid}
+        return target_cls(**filtered)
 
     @classmethod
     def from_json(cls, json_str: str) -> Message:
@@ -106,6 +120,14 @@ class Event(Message):
 
     def __post_init__(self) -> None:
         self.message_type = MessageType.EVENT
+
+
+# Maps message_type -> concrete subclass for Message.from_dict dispatch.
+_MESSAGE_TYPE_REGISTRY: dict[MessageType, type[Message]] = {
+    MessageType.REQUEST: Request,
+    MessageType.RESPONSE: Response,
+    MessageType.EVENT: Event,
+}
 
 
 class MessageRouter:

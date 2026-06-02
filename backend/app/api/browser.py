@@ -199,12 +199,32 @@ async def create_browser_session(
     request: BrowserSessionCreateRequest,
     principal: PrincipalDependency,
 ) -> BrowserSessionResponse:
+    """Create a browser session with strict tenant isolation.
+
+    Security: Enforce that the requested tenant_id matches the principal's tenant_id
+    unless the principal is an admin. This prevents tenant isolation bypass attacks.
+    """
     enforce_scope(principal, "tools:read")
+
+    # CRITICAL SECURITY FIX: Validate tenant_id matches current principal
+    # Non-admin users can only create sessions for their own tenant
+    if principal.role != "admin" and request.tenant_id != principal.tenant_id:
+        raise api_error(
+            403,
+            ErrorCode.AUTHORIZATION_FAILED,
+            f"Cannot create session for tenant '{request.tenant_id}'. You can only create sessions for your own tenant '{principal.tenant_id}'."
+        )
+
+    # Use principal's user_id if not explicitly provided or if user is not admin
+    user_id = request.user_id
+    if principal.role != "admin":
+        user_id = principal.user_id
+
     session = browser_automation.create_session(
         trace_id=request.trace_id,
         run_id=request.run_id,
         tenant_id=request.tenant_id,
-        user_id=request.user_id,
+        user_id=user_id,
     )
     return _session_response(session)
 

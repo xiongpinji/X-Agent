@@ -12,14 +12,39 @@ except ImportError:  # pragma: no cover - optional runtime dependency
 class LangfuseClient:
     """Langfuse-backed observability facade with in-memory fallback."""
 
-    def __init__(self, public_key: str | None = None, secret_key: str | None = None, host: str | None = None) -> None:
-        self._client = Langfuse(public_key=public_key, secret_key=secret_key, host=host) if Langfuse is not None and public_key and secret_key else None
+    def __init__(
+        self,
+        public_key: str | None = None,
+        secret_key: str | None = None,
+        host: str | None = None,
+    ) -> None:
+        """Initialize Langfuse client with optional credentials.
+
+        Args:
+            public_key: Langfuse public key
+            secret_key: Langfuse secret key
+            host: Langfuse host URL
+        """
+        self._client = (
+            Langfuse(public_key=public_key, secret_key=secret_key, host=host)
+            if Langfuse is not None and public_key and secret_key
+            else None
+        )
 
     @property
     def has_real_client(self) -> bool:
         return self._client is not None
 
-    def log(self, event_type: str, **payload):
+    def log(self, event_type: str, **payload) -> Any:
+        """Log an event to Langfuse with fallback to in-memory storage.
+
+        Args:
+            event_type: Type of event to log
+            **payload: Event payload data
+
+        Returns:
+            The exported event object
+        """
         event = observability_exporter.export(event_type, **payload)
         if self._client is not None:
             trace = self._client.trace(id=event.trace_id or payload.get("trace_id"))
@@ -36,7 +61,12 @@ class LangfuseClient:
             )
         return event
 
-    def events(self):
+    def events(self) -> list[Any]:
+        """Get all logged events.
+
+        Returns:
+            List of all events in the exporter
+        """
         return observability_exporter.list_events()
 
 

@@ -19,7 +19,7 @@ from datetime import datetime
 from typing import Annotated, Any, AsyncGenerator
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
 from backend.app.core.agent import AgentLoop
@@ -133,34 +133,105 @@ class HeartbeatEvent(BaseModel):
     sequence: int = 0
 
 
+class LogEvent(BaseModel):
+    """Log event for execution logs."""
+    event_type: str = "log"
+    timestamp: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
+    run_id: str
+    level: str = Field(default="info", description="Log level: debug, info, warning, error")
+    message: str = Field(..., description="Log message")
+    source: str = Field(default="agent", description="Log source: agent, tool, system")
+    sequence: int = 0
+
+
+class MetricEvent(BaseModel):
+    """Metric event for real-time metrics."""
+    event_type: str = "metric"
+    timestamp: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
+    run_id: str
+    metric_name: str = Field(..., description="Name of the metric")
+    metric_value: float | int | str = Field(..., description="Metric value")
+    unit: str = Field(default="", description="Unit of measurement")
+    sequence: int = 0
+
+
+class TaskStatusEvent(BaseModel):
+    """Task status event for task list updates."""
+    event_type: str = "task_status"
+    timestamp: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
+    run_id: str
+    task_id: str = Field(..., description="ID of the task")
+    status: str = Field(..., description="Task status: pending, running, completed, failed")
+    title: str = Field(default="", description="Task title")
+    details: dict[str, Any] = Field(default_factory=dict, description="Task details")
+    sequence: int = 0
+
+
 # In-memory event store for streaming (in production, use Redis or similar)
 class StreamEventStore:
-    """Simple in-memory event store for streaming."""
+    """In-memory event store for streaming with connection management."""
 
-    def __init__(self):
+    def __init__(self, max_events_per_run: int = 1000, max_queue_size: int = 100):
         self.events: dict[str, list[StreamEvent]] = {}
         self.subscribers: dict[str, list[asyncio.Queue]] = {}
+        self.sequence_counters: dict[str, int] = {}
+        self.max_events_per_run = max_events_per_run
+        self.max_queue_size = max_queue_size
+        self.connection_count: dict[str, int] = {}
 
     def add_event(self, run_id: str, event: StreamEvent) -> None:
         """Add event to store and notify subscribers."""
         if run_id not in self.events:
             self.events[run_id] = []
+            self.sequence_counters[run_id] = 0
+
+        # Assign sequence number
+        self.sequence_counters[run_id] += 1
+        event.sequence = self.sequence_counters[run_id]
+
+        # Add event to store
         self.events[run_id].append(event)
+
+        # Keep only recent events (circular buffer)
+        if len(self.events[run_id]) > self.max_events_per_run:
+            self.events[run_id] = self.events[run_id][-self.max_events_per_run:]
 
         # Notify all subscribers
         if run_id in self.subscribers:
+            dead_queues = []
             for queue in self.subscribers[run_id]:
                 try:
                     queue.put_nowait(event)
                 except asyncio.QueueFull:
-                    logger.warning(f"Event queue full for run {run_id}")
+                    logger.warning(f"Event queue full for run {run_id}, dropping oldest event")
+                    try:
+                        queue.get_nowait()
+                        queue.put_nowait(event)
+                    except asyncio.QueueEmpty:
+                        pass
+                except Exception as e:
+                    logger.error(f"Error notifying subscriber for run {run_id}: {e}")
+                    dead_queues.append(queue)
+
+            # Clean up dead queues
+            for queue in dead_queues:
+                try:
+                    self.subscribers[run_id].remove(queue)
+                except ValueError:
+                    pass
 
     def subscribe(self, run_id: str) -> asyncio.Queue:
         """Subscribe to events for a run."""
         if run_id not in self.subscribers:
             self.subscribers[run_id] = []
-        queue: asyncio.Queue = asyncio.Queue(maxsize=100)
+        if run_id not in self.connection_count:
+            self.connection_count[run_id] = 0
+
+        queue: asyncio.Queue = asyncio.Queue(maxsize=self.max_queue_size)
         self.subscribers[run_id].append(queue)
+        self.connection_count[run_id] += 1
+
+        logger.debug(f"New subscriber for run {run_id}, total connections: {self.connection_count[run_id]}")
         return queue
 
     def unsubscribe(self, run_id: str, queue: asyncio.Queue) -> None:
@@ -168,6 +239,9 @@ class StreamEventStore:
         if run_id in self.subscribers:
             try:
                 self.subscribers[run_id].remove(queue)
+                if run_id in self.connection_count:
+                    self.connection_count[run_id] -= 1
+                logger.debug(f"Subscriber removed for run {run_id}, remaining connections: {self.connection_count[run_id]}")
             except ValueError:
                 pass
 
@@ -176,6 +250,21 @@ class StreamEventStore:
         if run_id not in self.events:
             return []
         return [e for e in self.events[run_id] if e.sequence > since_sequence]
+
+    def get_connection_count(self, run_id: str) -> int:
+        """Get number of active connections for a run."""
+        return self.connection_count.get(run_id, 0)
+
+    def get_stats(self) -> dict[str, Any]:
+        """Get statistics about the event store."""
+        total_events = sum(len(events) for events in self.events.values())
+        total_connections = sum(self.connection_count.values())
+        return {
+            "total_runs": len(self.events),
+            "total_events": total_events,
+            "total_connections": total_connections,
+            "avg_events_per_run": total_events // len(self.events) if self.events else 0,
+        }
 
 
 # Global event store
@@ -298,11 +387,12 @@ async def subscribe_to_stream(
 
 @router.post("/run/stream")
 async def create_streaming_run(
-    task: str = Field(..., min_length=1, max_length=20_000, description="Task to execute"),
-    extra_context: dict[str, Any] = Field(default_factory=dict, description="Additional context"),
-    agent: AgentDependency = Depends(get_agent),
-    principal: PrincipalDependency = Depends(get_current_principal),
-    run_store: RunStoreDependency = Depends(get_run_store),
+    task: str = Body(..., min_length=1, max_length=20_000, description="Task to execute"),
+    extra_context: dict[str, Any] = Body(default={}, description="Additional context"),
+    *,
+    agent: AgentDependency,
+    principal: PrincipalDependency,
+    run_store: RunStoreDependency,
 ) -> dict[str, Any]:
     """
     Create a new agent run with streaming support.
@@ -419,7 +509,7 @@ async def get_stream_events(
 async def emit_event(
     run_id: str,
     event: StreamEvent,
-    principal: PrincipalDependency = Depends(get_current_principal),
+    principal: PrincipalDependency,
 ) -> dict[str, str]:
     """
     Emit a custom event to a stream (for internal use).
@@ -437,3 +527,165 @@ async def emit_event(
     event_store.add_event(run_id, event)
 
     return {"status": "emitted", "run_id": run_id}
+
+
+@router.post("/stream/{run_id}/log")
+async def emit_log(
+    run_id: str,
+    level: str = Query(default="info", regex="^(debug|info|warning|error)$"),
+    message: str = Query(..., min_length=1, max_length=10000),
+    source: str = Query(default="agent"),
+    *,
+    principal: PrincipalDependency,
+) -> dict[str, str]:
+    """
+    Emit a log event to a stream.
+
+    Args:
+        run_id: ID of the agent run
+        level: Log level (debug, info, warning, error)
+        message: Log message
+        source: Log source (agent, tool, system)
+
+    Returns:
+        Confirmation
+    """
+    enforce_scope(principal, "agent:run")
+
+    log_event = LogEvent(
+        run_id=run_id,
+        level=level,
+        message=message,
+        source=source,
+    )
+    event_store.add_event(run_id, log_event)
+
+    return {"status": "logged", "run_id": run_id}
+
+
+@router.post("/stream/{run_id}/metric")
+async def emit_metric(
+    run_id: str,
+    metric_name: str = Query(..., min_length=1, max_length=100),
+    metric_value: str = Query(..., min_length=1, max_length=1000),
+    unit: str = Query(default=""),
+    *,
+    principal: PrincipalDependency,
+) -> dict[str, str]:
+    """
+    Emit a metric event to a stream.
+
+    Args:
+        run_id: ID of the agent run
+        metric_name: Name of the metric
+        metric_value: Value of the metric (can be number or string)
+        unit: Unit of measurement
+
+    Returns:
+        Confirmation
+    """
+    enforce_scope(principal, "agent:run")
+
+    # Try to parse as number
+    try:
+        if "." in metric_value:
+            value: float | int | str = float(metric_value)
+        else:
+            value = int(metric_value)
+    except ValueError:
+        value = metric_value
+
+    metric_event = MetricEvent(
+        run_id=run_id,
+        metric_name=metric_name,
+        metric_value=value,
+        unit=unit,
+    )
+    event_store.add_event(run_id, metric_event)
+
+    return {"status": "metric_emitted", "run_id": run_id}
+
+
+@router.post("/stream/{run_id}/task-status")
+async def emit_task_status(
+    run_id: str,
+    task_id: str = Query(..., min_length=1),
+    status: str = Query(..., regex="^(pending|running|completed|failed)$"),
+    title: str = Query(default=""),
+    details: dict[str, Any] = Body(default={}),
+    *,
+    principal: PrincipalDependency,
+) -> dict[str, str]:
+    """
+    Emit a task status event to a stream.
+
+    Args:
+        run_id: ID of the agent run
+        task_id: ID of the task
+        status: Task status (pending, running, completed, failed)
+        title: Task title
+        details: Task details
+
+    Returns:
+        Confirmation
+    """
+    enforce_scope(principal, "agent:run")
+
+    task_event = TaskStatusEvent(
+        run_id=run_id,
+        task_id=task_id,
+        status=status,
+        title=title,
+        details=details,
+    )
+    event_store.add_event(run_id, task_event)
+
+    return {"status": "task_status_emitted", "run_id": run_id}
+
+
+@router.get("/stream/{run_id}/stats")
+async def get_stream_stats(
+    run_id: str,
+    principal: PrincipalDependency,
+) -> dict[str, Any]:
+    """
+    Get statistics for a stream.
+
+    Args:
+        run_id: ID of the agent run
+
+    Returns:
+        Stream statistics
+    """
+    enforce_scope(principal, "agent:read")
+
+    events = event_store.get_events(run_id)
+    connections = event_store.get_connection_count(run_id)
+
+    # Count events by type
+    event_counts: dict[str, int] = {}
+    for event in events:
+        event_type = event.event_type
+        event_counts[event_type] = event_counts.get(event_type, 0) + 1
+
+    return {
+        "run_id": run_id,
+        "total_events": len(events),
+        "active_connections": connections,
+        "event_counts": event_counts,
+        "store_stats": event_store.get_stats(),
+    }
+
+
+@router.get("/stream/health")
+async def stream_health() -> dict[str, Any]:
+    """
+    Get health status of the streaming service.
+
+    Returns:
+        Health status
+    """
+    return {
+        "status": "healthy",
+        "store_stats": event_store.get_stats(),
+    }

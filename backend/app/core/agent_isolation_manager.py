@@ -50,17 +50,17 @@ class ResourceLimits:
 @dataclass
 class IsolatedEnvironment:
     """Represents an isolated execution environment."""
-    env_id: str = Field(default_factory=lambda: str(uuid4()))
+    env_id: str = field(default_factory=lambda: str(uuid4()))
     agent_id: str = ""
     isolation_type: IsolationType = IsolationType.THREAD
-    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     process: Optional[mp.Process] = None
     thread: Optional[threading.Thread] = None
     worktree_path: Optional[Path] = None
     temp_dir: Optional[Path] = None
-    resource_limits: ResourceLimits = Field(default_factory=ResourceLimits)
+    resource_limits: ResourceLimits = field(default_factory=ResourceLimits)
     is_active: bool = False
-    metadata: dict[str, Any] = Field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""

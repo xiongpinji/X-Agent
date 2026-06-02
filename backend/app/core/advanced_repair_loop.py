@@ -131,7 +131,8 @@ class AdvancedRepairLoop:
         """
         # Check learning records
         if self.learning_enabled:
-            learning = self._learning_records.get(failure.error_pattern)
+            error_pattern = f"{failure.error_type}:{failure.category.value}"
+            learning = self._learning_records.get(error_pattern)
             if learning and learning.successful_strategies:
                 best_strategy = max(
                     learning.successful_strategies,
@@ -411,13 +412,13 @@ class AdvancedRepairLoop:
         Returns:
             Failure category
         """
-        if "timeout" in error_message.lower():
+        if "timeout" in error_message.lower() or error_type == "TimeoutError":
             return FailureCategory.TIMEOUT
         elif "resource" in error_message.lower() or "memory" in error_message.lower():
             return FailureCategory.RESOURCE
         elif "validation" in error_message.lower():
             return FailureCategory.VALIDATION
-        elif error_type in ("ConnectionError", "TimeoutError", "IOError"):
+        elif error_type in ("ConnectionError", "IOError"):
             return FailureCategory.TRANSIENT
         else:
             return FailureCategory.PERMANENT

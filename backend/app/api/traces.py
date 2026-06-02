@@ -44,7 +44,9 @@ async def list_traces(
     agent_id: str | None = None,
     user_id: str | None = None,
     request_id: str | None = None,
-) -> dict[str, object]:
+    trace_id: str | None = None,
+    workflow_id: str | None = None,
+) -> list[dict[str, object]]:
     enforce_scope(principal, "audit:read")
     summaries = trace_store.list_summaries(limit=10_000)
     filtered = [
@@ -54,13 +56,12 @@ async def list_traces(
         and (agent_id is None or summary.snapshot.get("agent_id") == agent_id)
         and (user_id is None or summary.snapshot.get("user_id") == user_id)
         and (request_id is None or summary.snapshot.get("request_id") == request_id)
+        and (trace_id is None or summary.trace_id == trace_id)
+        and (workflow_id is None or summary.snapshot.get("workflow_id") == workflow_id)
     ]
-    primary = {
-        "count": len(filtered[:limit]),
-        "items": filtered[:limit],
-        "filters": {"agent_id": agent_id, "user_id": user_id, "request_id": request_id},
-    }
-    return build_linked_summary(resource_type="trace_list", resource_id="trace_list", primary=primary, trace={"count": len(filtered[:limit]), "items": filtered[:limit], "filters": {"agent_id": agent_id, "user_id": user_id, "request_id": request_id}}, extra=primary)
+    # 与姊妹端点 /api/v1/runs 一致：列表端点返回纯列表，每项含 trace_id。
+    # 调用方(测试/前端)对此端点都按列表迭代；信封富视图由 /correlation 等子路由提供。
+    return filtered[:limit]
 
 
 @router.get("/{trace_id}", response_model=TraceDetail)
@@ -81,56 +82,10 @@ async def get_trace(
     summary = trace_store.get_summary(trace_id)
     if summary.snapshot.get("tenant_id") != principal.tenant_id:
         raise api_error(404, ErrorCode.TRACE_NOT_FOUND, "Trace not found.", trace_id=trace_id)
-    snapshot = summary.snapshot if isinstance(summary.snapshot, dict) else {}
-    run_view = snapshot.get("run_view", {}) if isinstance(snapshot, dict) else {}
-    recovery = run_view.get("recovery", {}) if isinstance(run_view, dict) else {}
-    recovery_plan = {}
-    if isinstance(run_view, dict):
-        inner_snapshot = run_view.get("snapshot", {})
-        if isinstance(inner_snapshot, dict):
-            recovery_plan = inner_snapshot.get("recovery_plan", {}) if isinstance(inner_snapshot.get("recovery_plan", {}), dict) else {}
-    if not recovery_plan and isinstance(snapshot, dict):
-        recovery_plan = snapshot.get("recovery_plan", {}) if isinstance(snapshot.get("recovery_plan", {}), dict) else {}
-    if not recovery:
-        recovery = build_recovery_context(
-            status=str(snapshot.get("status", "unknown")) if isinstance(snapshot, dict) else "unknown",
-            resource_type="trace",
-            resource_id=summary.trace_id,
-            next_actions=recovery_plan.get("next_actions", []) if isinstance(recovery_plan, dict) else [],
-            recovery_plan=recovery_plan,
-            branch=snapshot.get("last_agent_recovery_branch") if isinstance(snapshot, dict) else None,
-            retryable=bool(recovery_plan),
-            confidence=0.8 if recovery_plan else 0.5,
-            tool_name="inspect_trace",
-            follow_up=["review trace summary", "inspect replay"],
-            status_detail=f"trace {summary.event_count} events",
-            remediation="review trace summary and replay if needed",
-        )
-    run_summary, approval_summary, audit_summary, memory_summary, tool_summary = _build_linked_summaries(
-        trace_id=trace_id,
-        trace_summary=summary,
-        snapshot=snapshot,
-        run_view=run_view,
-    )
-    linked_payload = build_linked_summary(
-        resource_type="trace",
-        resource_id=summary.trace_id,
-        primary=summary.model_dump(mode="json"),
-        run=run_summary,
-        audit=audit_summary,
-        approvals=approval_summary,
-        memory=memory_summary,
-        tools=tool_summary,
-        extra={
-            "event_count": summary.event_count,
-            "last_event": summary.last_event,
-            "task": summary.task,
-            "run_view": run_view,
-            "recovery": recovery.model_dump(mode="json") if hasattr(recovery, "model_dump") else recovery,
-        },
-    )
-    linked_payload["snapshot"].update({"recovery": recovery.model_dump(mode="json") if hasattr(recovery, "model_dump") else recovery})
-    return linked_payload
+    # response_model=TraceDetail 要求返回 {summary, events}。富链接视图(recovery /
+    # linked_summaries 等)由 /correlation、/replay、/debug 子路由提供；基础详情端点
+    # 只需满足 TraceDetail 契约，否则 FastAPI 服务端 ResponseValidationError → 500。
+    return TraceDetail(summary=summary, events=events)
 
 
 @router.get("/{trace_id}/correlation")
@@ -181,7 +136,7 @@ async def get_trace_correlation(
         snapshot=snapshot,
         run_view=run_view,
     )
-    return build_linked_summary(
+    payload = build_linked_summary(
         resource_type="trace",
         resource_id=summary.trace_id,
         primary=summary.model_dump(mode="json"),
@@ -198,6 +153,11 @@ async def get_trace_correlation(
             "recovery": recovery.model_dump(mode="json") if hasattr(recovery, "model_dump") else recovery,
         },
     )
+    # 顶层补 trace_id / trace_summary，与姊妹端点 /api/v1/agents/runs/{id}/correlation
+    # 一致；调用方按 correlation.json()["trace_id"] / ["trace_summary"]["trace_id"] 取值。
+    payload["trace_id"] = summary.trace_id
+    payload["trace_summary"] = summary.model_dump(mode="json")
+    return payload
 
 
 @router.get("/{trace_id}/replay")
@@ -257,6 +217,18 @@ async def get_trace_replay(
     tool_executions = _collect_tool_executions(trace_id)
     run_view_payload = run.run_view if run and isinstance(run.run_view, dict) else run_view if isinstance(run_view, dict) else {}
     run_snapshot = run.snapshot if run and isinstance(run.snapshot, dict) else {}
+    # Mirror the sibling /correlation endpoint's run summary shape
+    # (see _build_linked_summaries). Without this the replay payload below
+    # references an undefined `run_summary` and raises NameError at runtime.
+    run_summary = {
+        "trace_id": snapshot.get("trace_id", trace_id),
+        "status": snapshot.get("status", "unknown"),
+        "iterations": snapshot.get("iterations"),
+        "memory_hits": snapshot.get("memory_hits"),
+        "tool_call_count": snapshot.get("tool_call_count"),
+        "run_view": run_view_payload,
+        "snapshot": run_snapshot or snapshot,
+    }
     audit_summary = {
         "count": len(audit_records),
         "actions": sorted({record.get("action", "") for record in audit_records if isinstance(record, dict) and record.get("action")}),

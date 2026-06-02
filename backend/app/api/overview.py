@@ -13,11 +13,59 @@ from backend.app.core.execution_planner import execution_planner
 from backend.app.core.security import Principal
 from backend.app.core.test_mapper import test_mapper
 from backend.app.core.verification import VerificationEngine
-from backend.app.dependencies import enforce_scope, get_current_principal
+from backend.app.dependencies import (
+    enforce_scope,
+    get_agent,
+    get_approval_store,
+    get_current_principal,
+    get_memory,
+    get_run_store,
+    get_trace_store,
+    get_workflow_repository,
+)
 
 router = APIRouter(prefix="/api/v1/overview", tags=["overview"])
 PrincipalDependency = Annotated[Principal, Depends(get_current_principal)]
 _verification_engine = VerificationEngine()
+
+
+@router.get("")
+async def get_overview(principal: PrincipalDependency) -> dict[str, object]:
+    """聚合可观测性总览：traces / runs / approvals / workflows / memory / tools。
+
+    与 /api/v1/ops/summary 共用同一组 store getter，但本端点面向前端总览面板，
+    返回各核心域的轻量计数快照（而非 ops 的健康判定）。每个子键都是 dict，便于
+    前端按域展开；调用方(test_observability_shapes / test_api_contracts)只断言
+    六个顶层域键存在。
+    """
+    enforce_scope(principal, "audit:read")
+    trace_store = get_trace_store()
+    run_store = get_run_store()
+    approval_store = get_approval_store()
+    workflow_repository = get_workflow_repository()
+    agent = get_agent()
+    memory = get_memory()
+
+    memory_count: object = 0
+    try:
+        snapshot = memory.snapshot() if hasattr(memory, "snapshot") else {}
+        memory_count = snapshot.get("count", memory.count())
+        if hasattr(memory_count, "__await__"):
+            memory_count = await memory_count
+    except Exception:  # noqa: BLE001 - 总览面板不应因单域故障而 500
+        memory_count = 0
+
+    return {
+        "traces": {"count": trace_store.event_count(), "latest_count": len(trace_store.list_summaries(limit=10)), "last_event": trace_store.list_summaries(limit=1)[0].last_event if trace_store.list_summaries(limit=1) else None},
+        "runs": {"count": run_store.count(), "recent_count": len(run_store.list(limit=10))},
+        "approvals": {"count": approval_store.count(), "pending": approval_store.pending_count(), "recent_count": len(approval_store.list(limit=10))},
+        "workflows": {
+            "count": len(workflow_repository.list_definitions()),
+            "runs": len(workflow_repository.list_runs(limit=200)),
+        },
+        "memory": {"count": int(memory_count or 0)},
+        "tools": {"count": len(agent.tools.manifest())},
+    }
 
 
 @router.post("/draft")
