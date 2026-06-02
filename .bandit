@@ -1,0 +1,31 @@
+[bandit]
+exclude_dirs = [".venv", "venv", "tests", "build", "dist"]
+tests = [
+    "B201",  # flask_debug_true
+    "B301",  # pickle
+    "B302",  # marshal
+    "B303",  # md5
+    "B304",  # ciphers
+    "B305",  # cipher_modes
+    "B306",  # mktemp_q
+    "B307",  # eval
+    "B308",  # mark_safe
+    "B309",  # httpsconnection
+    "B310",  # urllib_urlopen
+    "B311",  # random
+    "B312",  # telnetlib
+    "B313",  # xml_bad_etree
+    "B314",  # xml_bad_expat
+    "B315",  # xml_bad_sax
+    "B316",  # xml_bad_pulldom
+    "B317",  # xml_bad_etree
+    "B318",  # xml_bad_etree
+    "B319",  # xml_bad_etree
+    "B320",  # xml_bad_etree
+    "B321",  # ftplib
+    "B322",  # unverified_context
+    "B323",  # unverified_context
+    "B324",  # hashlib
+    "B325",  # tempnam
+]
+skips = []

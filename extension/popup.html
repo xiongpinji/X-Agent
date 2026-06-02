@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>X-Agent</title>
+    <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <div class="logo">
+                <span class="logo-icon">⚡</span>
+                <span class="logo-text">X-Agent</span>
+            </div>
+            <div class="status-indicator" id="status-indicator">
+                <span class="status-dot"></span>
+                <span class="status-text">连接中...</span>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="content">
+            <!-- Session Info -->
+            <div class="section">
+                <h3 class="section-title">当前会话</h3>
+                <div class="session-info" id="session-info">
+                    <p class="info-text">未创建会话</p>
+                </div>
+                <button class="btn btn-primary" id="create-session-btn">创建新会话</button>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="section">
+                <h3 class="section-title">快速操作</h3>
+                <div class="action-grid">
+                    <button class="action-btn" id="extract-btn" title="提取页面内容">
+                        <span class="action-icon">📄</span>
+                        <span class="action-label">提取内容</span>
+                    </button>
+                    <button class="action-btn" id="highlight-btn" title="高亮页面元素">
+                        <span class="action-icon">✨</span>
+                        <span class="action-label">高亮元素</span>
+                    </button>
+                    <button class="action-btn" id="record-btn" title="录制操作">
+                        <span class="action-icon">⏺️</span>
+                        <span class="action-label">录制操作</span>
+                    </button>
+                    <button class="action-btn" id="sidebar-btn" title="打开侧边栏">
+                        <span class="action-icon">📋</span>
+                        <span class="action-label">侧边栏</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Tab Groups -->
+            <div class="section">
+                <h3 class="section-title">标签组</h3>
+                <div class="tab-groups" id="tab-groups">
+                    <p class="info-text">加载中...</p>
+                </div>
+                <button class="btn btn-secondary" id="create-group-btn">创建标签组</button>
+            </div>
+
+            <!-- Recent Actions -->
+            <div class="section">
+                <h3 class="section-title">最近操作</h3>
+                <div class="action-history" id="action-history">
+                    <p class="info-text">暂无操作记录</p>
+                </div>
+            </div>
+
+            <!-- Settings -->
+            <div class="section">
+                <h3 class="section-title">设置</h3>
+                <div class="settings-group">
+                    <label class="setting-item">
+                        <input type="checkbox" id="auto-highlight-toggle" checked>
+                        <span>自动高亮元素</span>
+                    </label>
+                    <label class="setting-item">
+                        <input type="checkbox" id="notifications-toggle" checked>
+                        <span>启用通知</span>
+                    </label>
+                    <label class="setting-item">
+                        <input type="checkbox" id="debug-toggle">
+                        <span>调试模式</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="footer">
+                <button class="btn btn-link" id="settings-btn">设置</button>
+                <button class="btn btn-link" id="help-btn">帮助</button>
+                <button class="btn btn-link" id="about-btn">关于</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="popup.js"></script>
+</body>
+</html>

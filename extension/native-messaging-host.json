@@ -1,0 +1,9 @@
+{
+  "name": "com.xagent.extension",
+  "description": "X-Agent Browser Extension Native Messaging Host",
+  "path": "/path/to/x-agent-native-host",
+  "type": "stdio",
+  "allowed_origins": [
+    "chrome-extension://YOUR_EXTENSION_ID/"
+  ]
+}
