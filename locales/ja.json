@@ -1,0 +1,72 @@
+{
+  "common": {
+    "loading": "読み込み中...",
+    "error": "エラー",
+    "success": "成功",
+    "warning": "警告",
+    "info": "情報",
+    "confirm": "確認",
+    "cancel": "キャンセル",
+    "save": "保存",
+    "delete": "削除",
+    "edit": "編集",
+    "close": "閉じる",
+    "back": "戻る",
+    "next": "次へ",
+    "previous": "前へ",
+    "search": "検索",
+    "filter": "フィルター",
+    "sort": "ソート",
+    "export": "エクスポート",
+    "import": "インポート",
+    "download": "ダウンロード",
+    "upload": "アップロード",
+    "settings": "設定",
+    "help": "ヘルプ",
+    "about": "について",
+    "logout": "ログアウト",
+    "login": "ログイン",
+    "register": "登録",
+    "profile": "プロフィール",
+    "language": "言語",
+    "theme": "テーマ",
+    "dark": "ダーク",
+    "light": "ライト",
+    "auto": "自動"
+  },
+  "navigation": {
+    "dashboard": "ダッシュボード",
+    "chat": "チャット",
+    "tasks": "タスク",
+    "tools": "ツール",
+    "memory": "メモリ",
+    "agents": "エージェント",
+    "marketplace": "マーケットプレイス",
+    "console": "コンソール"
+  },
+  "errors": {
+    "notFound": "見つかりません",
+    "unauthorized": "認可されていません",
+    "forbidden": "禁止されています",
+    "serverError": "サーバーエラー",
+    "networkError": "ネットワークエラー",
+    "validationError": "検証エラー",
+    "tryAgain": "もう一度試してください"
+  },
+  "validation": {
+    "required": "このフィールドは必須です",
+    "email": "有効なメールアドレスを入力してください",
+    "minLength": "最小長は {min} です",
+    "maxLength": "最大長は {max} です",
+    "pattern": "形式が無効です"
+  },
+  "i18n": {
+    "selectLanguage": "言語を選択",
+    "selectRegion": "地域を選択",
+    "timezone": "タイムゾーン",
+    "currency": "通貨",
+    "dateFormat": "日付形式",
+    "timeFormat": "時間形式",
+    "numberFormat": "数値形式"
+  }
+}

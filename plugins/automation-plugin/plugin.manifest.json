@@ -1,0 +1,38 @@
+{
+  "name": "自动化助手",
+  "version": "1.0.0",
+  "author": "X-Agent Team",
+  "description": "Automation plugin for X-Agent. Automate repetitive tasks and workflows.",
+  "description_zh": "自动化插件。自动化重复性任务和工作流。",
+  "long_description": "This plugin enables you to create and manage automated workflows, schedule tasks, and integrate with external services.",
+  "long_description_zh": "这个插件让你可以创建和管理自动化工作流、安排任务和与外部服务集成。",
+  "homepage": "https://github.com/x-agent/automation-plugin",
+  "repository": "https://github.com/x-agent/automation-plugin",
+  "license": "MIT",
+  "keywords": ["automation", "workflow", "scheduling", "task"],
+  "capabilities": [
+    "创建自动化工作流",
+    "安排定时任务",
+    "条件判断和分支",
+    "错误处理和重试",
+    "与外部API集成",
+    "日志和监控"
+  ],
+  "dependencies": {
+    "python:APScheduler": "3.10.0",
+    "python:requests": "2.28.0"
+  },
+  "permissions": [
+    "system:execute",
+    "network:http"
+  ],
+  "entry_point": "automation.main",
+  "icon_url": "https://example.com/automation-icon.png",
+  "screenshots": [],
+  "category": "automation",
+  "risk_level": "medium",
+  "system_requirements": {
+    "os": ["Linux", "macOS", "Windows"],
+    "python_version": "3.8"
+  }
+}

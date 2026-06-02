@@ -1,0 +1,253 @@
+{
+  "schema_version": "1.0",
+  "name": "github-mcp",
+  "version": "1.0.0",
+  "type": "mcp-plugin",
+  "xagent_compatibility": {
+    "min_version": "0.1.0",
+    "max_version": "1.0.0"
+  },
+  "metadata": {
+    "display_name": "GitHub助手",
+    "description": "GitHub API integration for X-Agent. Manage repositories, issues, and pull requests directly from X-Agent.",
+    "description_zh": "GitHub API集成插件。直接在X-Agent中管理代码仓库、问题和拉取请求。",
+    "author": "X-Agent Team",
+    "author_email": "team@x-agent.com",
+    "license": "MIT",
+    "homepage": "https://github.com/x-agent/github-mcp",
+    "repository": "https://github.com/x-agent/github-mcp",
+    "icon_url": "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png",
+    "category": "development"
+  },
+  "chinese": {
+    "name": "GitHub助手",
+    "description": "这个插件让你可以在X-Agent中直接管理GitHub代码仓库、问题和拉取请求，无需离开X-Agent。",
+    "usage": "1. 安装插件\n2. 配置GitHub Token\n3. 在对话中使用GitHub命令\n4. 查看结果",
+    "适合谁用": ["开发者", "项目经理", "DevOps工程师"],
+    "常见问题": [
+      {
+        "question": "如何获取GitHub Token？",
+        "answer": "访问 https://github.com/settings/tokens 创建新的Personal Access Token，选择repo权限。"
+      },
+      {
+        "question": "支持哪些操作？",
+        "answer": "支持查看仓库、创建/管理问题、创建/管理拉取请求、查看项目统计等。"
+      },
+      {
+        "question": "如何处理API限制？",
+        "answer": "GitHub API有速率限制。插件会自动处理，如果超限会等待。"
+      }
+    ],
+    "tutorial": "https://example.com/github-plugin-tutorial"
+  },
+  "capabilities": {
+    "tools": true,
+    "resources": true,
+    "prompts": false
+  },
+  "permissions": {
+    "network": {
+      "required": true,
+      "domains": ["api.github.com", "github.com"]
+    },
+    "filesystem": {
+      "required": false,
+      "paths": []
+    },
+    "environment": {
+      "required": false,
+      "variables": []
+    }
+  },
+  "entry_point": {
+    "type": "python",
+    "module": "main",
+    "class": "GitHubPlugin"
+  },
+  "dependencies": {
+    "python": ">=3.11",
+    "packages": {
+      "requests": ">=2.31.0",
+      "pydantic": ">=2.0.0"
+    }
+  },
+  "configuration": {
+    "github_token": {
+      "type": "string",
+      "required": true,
+      "description": "GitHub Personal Access Token",
+      "description_zh": "GitHub个人访问令牌",
+      "secret": true
+    },
+    "timeout": {
+      "type": "integer",
+      "required": false,
+      "default": 30,
+      "min": 1,
+      "max": 300,
+      "description": "Request timeout in seconds",
+      "description_zh": "请求超时时间（秒）"
+    }
+  },
+  "tools": [
+    {
+      "name": "list_repositories",
+      "description": "List user repositories",
+      "description_zh": "列出用户的代码仓库",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "username": {
+            "type": "string",
+            "description": "GitHub username"
+          },
+          "limit": {
+            "type": "integer",
+            "default": 10,
+            "description": "Number of repositories to return"
+          }
+        },
+        "required": ["username"]
+      }
+    },
+    {
+      "name": "get_repository",
+      "description": "Get repository information",
+      "description_zh": "获取仓库信息",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "owner": {
+            "type": "string",
+            "description": "Repository owner"
+          },
+          "repo": {
+            "type": "string",
+            "description": "Repository name"
+          }
+        },
+        "required": ["owner", "repo"]
+      }
+    },
+    {
+      "name": "create_issue",
+      "description": "Create an issue",
+      "description_zh": "创建一个问题",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "owner": {
+            "type": "string",
+            "description": "Repository owner"
+          },
+          "repo": {
+            "type": "string",
+            "description": "Repository name"
+          },
+          "title": {
+            "type": "string",
+            "description": "Issue title"
+          },
+          "body": {
+            "type": "string",
+            "description": "Issue body"
+          }
+        },
+        "required": ["owner", "repo", "title"]
+      }
+    },
+    {
+      "name": "list_issues",
+      "description": "List repository issues",
+      "description_zh": "列出仓库的问题",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "owner": {
+            "type": "string",
+            "description": "Repository owner"
+          },
+          "repo": {
+            "type": "string",
+            "description": "Repository name"
+          },
+          "state": {
+            "type": "string",
+            "default": "open",
+            "description": "Issue state (open, closed, all)"
+          },
+          "limit": {
+            "type": "integer",
+            "default": 10,
+            "description": "Number of issues to return"
+          }
+        },
+        "required": ["owner", "repo"]
+      }
+    },
+    {
+      "name": "create_pull_request",
+      "description": "Create a pull request",
+      "description_zh": "创建一个拉取请求",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "owner": {
+            "type": "string",
+            "description": "Repository owner"
+          },
+          "repo": {
+            "type": "string",
+            "description": "Repository name"
+          },
+          "title": {
+            "type": "string",
+            "description": "PR title"
+          },
+          "head": {
+            "type": "string",
+            "description": "Head branch"
+          },
+          "base": {
+            "type": "string",
+            "description": "Base branch"
+          },
+          "body": {
+            "type": "string",
+            "description": "PR body"
+          }
+        },
+        "required": ["owner", "repo", "title", "head", "base"]
+      }
+    }
+  ],
+  "resources": [
+    {
+      "uri": "github://repos/user/repo",
+      "name": "Repository",
+      "description": "GitHub repository resource",
+      "description_zh": "GitHub仓库资源",
+      "mime_type": "application/json"
+    },
+    {
+      "uri": "github://issues/user/repo",
+      "name": "Issues",
+      "description": "GitHub repository issues",
+      "description_zh": "GitHub仓库问题",
+      "mime_type": "application/json"
+    }
+  ],
+  "security": {
+    "sandbox": true,
+    "max_memory_mb": 512,
+    "max_cpu_percent": 50,
+    "timeout_seconds": 300,
+    "allowed_protocols": ["https"],
+    "blocked_paths": ["/etc", "/root", "/sys"]
+  },
+  "quality_metrics": {
+    "code_quality_score": 8.5,
+    "test_coverage": 85,
+    "documentation_completeness": 90
+  }
+}

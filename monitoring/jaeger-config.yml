@@ -1,0 +1,196 @@
+# Jaeger Configuration for X-Agent Distributed Tracing
+
+# Jaeger Agent Configuration
+jaeger:
+  agent:
+    # Agent server configuration
+    server:
+      host_port: "0.0.0.0:6831"
+      protocol: "udp"
+
+    # Processor configuration
+    processor:
+      jaeger:
+        server:
+          host_port: "0.0.0.0:14268"
+          protocol: "http"
+      zipkin:
+        server:
+          host_port: "0.0.0.0:9411"
+          protocol: "http"
+
+  # Collector configuration
+  collector:
+    port: 14250
+    grpc:
+      enabled: true
+      host_port: "0.0.0.0:14250"
+    http_server:
+      host_port: "0.0.0.0:14268"
+
+  # Storage configuration
+  storage:
+    type: "elasticsearch"
+    elasticsearch:
+      server_urls:
+        - "http://elasticsearch:9200"
+      index_prefix: "jaeger"
+      use_aliases: true
+      create_index_as_alias: false
+      bulk:
+        actions: 1000
+        flush_interval: 200ms
+        size: 5242880
+      read:
+        max_lookback: 72h
+      index_date_layout: "2006-01-02"
+
+  # Sampling configuration
+  sampling:
+    type: "probabilistic"
+    param: 0.1  # 10% sampling rate
+    strategies:
+      - service_name: "x-agent-api"
+        type: "probabilistic"
+        param: 0.5  # 50% for API service
+      - service_name: "x-agent-worker"
+        type: "probabilistic"
+        param: 0.3  # 30% for worker service
+      - service_name: "x-agent-memory"
+        type: "probabilistic"
+        param: 0.2  # 20% for memory service
+
+  # Query configuration
+  query:
+    port: 16686
+    base_path: "/"
+    static_files:
+      path: "/etc/jaeger/ui"
+
+  # Logging configuration
+  logging:
+    level: "info"
+    format: "json"
+
+# OpenTelemetry Configuration
+otel:
+  enabled: true
+  exporter:
+    otlp:
+      endpoint: "http://localhost:4317"
+      protocol: "grpc"
+
+  # Trace configuration
+  traces:
+    sampler:
+      type: "probabilistic"
+      param: 0.1
+
+    # Span processors
+    processors:
+      - type: "batch"
+        batch:
+          schedule_delay: 5s
+          export_timeout: 30s
+          max_queue_size: 2048
+          max_export_batch_size: 512
+
+# Metrics Configuration
+metrics:
+  enabled: true
+  prometheus:
+    port: 8888
+    path: "/metrics"
+
+# Health Check Configuration
+health_check:
+  enabled: true
+  port: 13133
+  path: "/healthz"
+
+# Logging Configuration
+logging:
+  level: "info"
+  format: "json"
+  output_paths:
+    - "stdout"
+    - "/var/log/jaeger/jaeger.log"
+  error_output_paths:
+    - "stderr"
+    - "/var/log/jaeger/jaeger-error.log"
+
+# Service Configuration
+service:
+  pipelines:
+    traces:
+      receivers:
+        - jaeger
+        - otlp
+      processors:
+        - batch
+        - memory_limiter
+      exporters:
+        - jaeger
+        - logging
+
+# Receivers Configuration
+receivers:
+  jaeger:
+    protocols:
+      grpc:
+        endpoint: "0.0.0.0:14250"
+      thrift_http:
+        endpoint: "0.0.0.0:14268"
+      thrift_compact:
+        endpoint: "0.0.0.0:6831"
+      thrift_binary:
+        endpoint: "0.0.0.0:6832"
+
+  otlp:
+    protocols:
+      grpc:
+        endpoint: "0.0.0.0:4317"
+      http:
+        endpoint: "0.0.0.0:4318"
+
+# Processors Configuration
+processors:
+  batch:
+    send_batch_size: 1024
+    timeout: 10s
+    send_batch_max_size: 2048
+
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 512
+    spike_limit_mib: 128
+
+  attributes:
+    actions:
+      - key: "service.name"
+        value: "x-agent"
+        action: "upsert"
+      - key: "environment"
+        value: "${ENVIRONMENT:development}"
+        action: "upsert"
+
+# Exporters Configuration
+exporters:
+  jaeger:
+    endpoint: "http://localhost:14250"
+    tls:
+      insecure: true
+
+  logging:
+    loglevel: "debug"
+
+# Extensions Configuration
+extensions:
+  health_check:
+    endpoint: "0.0.0.0:13133"
+
+  pprof:
+    endpoint: "0.0.0.0:1777"
+
+  zpages:
+    endpoint: "0.0.0.0:55679"

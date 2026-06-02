@@ -1,0 +1,39 @@
+{
+  "name": "数据处理器",
+  "version": "1.0.0",
+  "author": "X-Agent Team",
+  "description": "Data processing and analysis plugin for X-Agent. Clean, transform, and analyze data with ease.",
+  "description_zh": "数据处理和分析插件。轻松清洗、转换和分析数据。",
+  "long_description": "This plugin provides powerful data processing capabilities including data cleaning, transformation, visualization, and statistical analysis.",
+  "long_description_zh": "这个插件提供强大的数据处理能力，包括数据清洗、转换、可视化和统计分析。",
+  "homepage": "https://github.com/x-agent/data-processor-plugin",
+  "repository": "https://github.com/x-agent/data-processor-plugin",
+  "license": "MIT",
+  "keywords": ["data", "analysis", "processing", "pandas", "visualization"],
+  "capabilities": [
+    "数据清洗",
+    "数据转换",
+    "统计分析",
+    "数据可视化",
+    "报表生成",
+    "数据导入导出"
+  ],
+  "dependencies": {
+    "python:pandas": "1.5.0",
+    "python:numpy": "1.23.0",
+    "python:matplotlib": "3.6.0"
+  },
+  "permissions": [
+    "file:read",
+    "file:write"
+  ],
+  "entry_point": "data_processor.main",
+  "icon_url": "https://example.com/data-icon.png",
+  "screenshots": [],
+  "category": "data",
+  "risk_level": "low",
+  "system_requirements": {
+    "os": ["Linux", "macOS", "Windows"],
+    "python_version": "3.8"
+  }
+}

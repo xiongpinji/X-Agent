@@ -1,0 +1,112 @@
+#!/usr/bin/env python3
+"""
+X-Agent 文档清理脚本 - 第二阶段
+清理根目录下的临时文档
+"""
+
+import os
+import sys
+from pathlib import Path
+
+# 项目根目录（上一级）
+PROJECT_ROOT = Path(__file__).parent.parent.parent
+
+# 要删除的根目录文件
+FILES_TO_DELETE = [
+    # 审计报告
+    "X-Agent深度审计综合报告.md",
+
+    # 部署文档
+    "DEPLOYMENT_GUIDE_IMMEDIATE.md",
+    "DEPLOYMENT_STATUS_REPORT.md",
+    "DEPLOYMENT_EXECUTION_SUMMARY.md",
+    "DEPLOYMENT_FINAL_REPORT.md",
+    "BUG_FIX_VERIFICATION_REPORT.md",
+    "DEPLOYMENT_COMPLETE_REPORT.md",
+
+    # 升级方案
+    "X-Agent完整升级修复方案.md",
+    "SKILLS_INTEGRATION.md",
+    "PARALLEL_EXECUTION_PLAN.md",
+
+    # 清理文档
+    "CLEANUP_PLAN.md",
+    "CLEANUP_README.md",
+    "CLEANUP_SUMMARY.md",
+]
+
+def delete_file(file_path: Path) -> bool:
+    """删除文件"""
+    try:
+        if file_path.exists():
+            file_path.unlink()
+            print(f"✅ 已删除: {file_path.name}")
+            return True
+        else:
+            print(f"⚠️  文件不存在: {file_path.name}")
+            return False
+    except Exception as e:
+        print(f"❌ 删除失败: {file_path.name} - {e}")
+        return False
+
+def main():
+    """主函数"""
+    print("=" * 60)
+    print("X-Agent 文档清理 - 第二阶段（根目录）")
+    print("=" * 60)
+    print(f"项目根目录: {PROJECT_ROOT}")
+    print(f"待删除文件数: {len(FILES_TO_DELETE)}")
+    print()
+
+    # 列出存在的文件
+    existing_files = []
+    for file_name in FILES_TO_DELETE:
+        file_path = PROJECT_ROOT / file_name
+        if file_path.exists():
+            existing_files.append(file_name)
+            print(f"  - {file_name}")
+
+    if not existing_files:
+        print("没有需要删除的文件。")
+        return 0
+
+    print(f"\n找到 {len(existing_files)} 个文件需要删除。")
+
+    # 确认
+    response = input("\n确认删除以上文件？(yes/no): ")
+    if response.lower() not in ['yes', 'y']:
+        print("取消清理")
+        return 1
+
+    print("\n开始清理...")
+    print("-" * 60)
+
+    deleted_count = 0
+    failed_count = 0
+
+    for file_name in existing_files:
+        file_path = PROJECT_ROOT / file_name
+        if delete_file(file_path):
+            deleted_count += 1
+        else:
+            failed_count += 1
+
+    # 总结
+    print()
+    print("=" * 60)
+    print("清理完成")
+    print("=" * 60)
+    print(f"✅ 已删除: {deleted_count} 个文件")
+    print(f"❌ 失败: {failed_count} 个文件")
+    print()
+
+    if failed_count == 0:
+        print("🎉 所有文件清理成功！")
+        print("项目目录已达到可开源级别的干净程度。")
+        return 0
+    else:
+        print("⚠️  部分文件清理失败，请手动检查。")
+        return 1
+
+if __name__ == "__main__":
+    sys.exit(main())
