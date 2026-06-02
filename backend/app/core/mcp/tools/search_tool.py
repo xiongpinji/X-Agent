@@ -1,27 +1,137 @@
-"""MCP search operation tools."""
+"""MCP search operation tools with permission control and audit logging."""
 
 from __future__ import annotations
 
+import logging
 from typing import Any, Dict, List, Optional
+from datetime import datetime
 import httpx
 import os
 from urllib.parse import urlencode
 
+logger = logging.getLogger(__name__)
+
+
+class SearchAuditLog:
+    """Audit log for search operations."""
+
+    def __init__(self, max_entries: int = 1000):
+        """Initialize audit log.
+
+        Args:
+            max_entries: Maximum number of log entries to keep
+        """
+        self.max_entries = max_entries
+        self.entries: list[Dict[str, Any]] = []
+
+    def log(
+        self,
+        operation: str,
+        query: str,
+        success: bool,
+        details: Optional[Dict[str, Any]] = None,
+        error: Optional[str] = None,
+    ) -> None:
+        """Log a search operation.
+
+        Args:
+            operation: Operation type (web_search, news_search)
+            query: Search query
+            success: Whether operation succeeded
+            details: Additional details
+            error: Error message if failed
+        """
+        entry = {
+            "timestamp": datetime.now().isoformat(),
+            "operation": operation,
+            "query": query,
+            "success": success,
+            "details": details or {},
+            "error": error,
+        }
+        self.entries.append(entry)
+
+        if len(self.entries) > self.max_entries:
+            self.entries = self.entries[-self.max_entries :]
+
+        log_level = logging.INFO if success else logging.WARNING
+        logger.log(log_level, f"Audit: {operation} '{query}' - {success}")
+
+    def get_entries(self, limit: int = 100) -> list[Dict[str, Any]]:
+        """Get recent audit log entries.
+
+        Args:
+            limit: Maximum number of entries to return
+
+        Returns:
+            List of audit log entries
+        """
+        return self.entries[-limit:]
+
+    def clear(self) -> None:
+        """Clear all audit logs."""
+        self.entries.clear()
+
+
+class SearchPermissionChecker:
+    """Permission checker for search operations."""
+
+    def __init__(self, allowed_operations: Optional[Dict[str, bool]] = None):
+        """Initialize permission checker.
+
+        Args:
+            allowed_operations: Dict of operation -> allowed (web_search, news_search)
+        """
+        self.allowed_operations = allowed_operations or {
+            "web_search": True,
+            "news_search": True,
+        }
+
+    def check_permission(self, operation: str) -> bool:
+        """Check if operation is allowed.
+
+        Args:
+            operation: Operation type
+
+        Returns:
+            True if allowed, False otherwise
+        """
+        return self.allowed_operations.get(operation, False)
+
+    def set_permission(self, operation: str, allowed: bool) -> None:
+        """Set permission for an operation.
+
+        Args:
+            operation: Operation type
+            allowed: Whether to allow the operation
+        """
+        self.allowed_operations[operation] = allowed
+
 
 class SearchOperationTool:
-    """Search operation tool for MCP."""
+    """Search operation tool for MCP with permission control and audit logging."""
 
-    def __init__(self, api_key: Optional[str] = None, search_engine_id: Optional[str] = None):
+    def __init__(
+        self,
+        api_key: Optional[str] = None,
+        search_engine_id: Optional[str] = None,
+        permission_checker: Optional[SearchPermissionChecker] = None,
+        audit_log: Optional[SearchAuditLog] = None,
+    ):
         """Initialize search operation tool.
 
         Args:
             api_key: Google Custom Search API key
             search_engine_id: Google Custom Search Engine ID
+            permission_checker: Permission checker instance
+            audit_log: Audit log instance
         """
         self.api_key = api_key or os.getenv("GOOGLE_SEARCH_API_KEY")
         self.search_engine_id = search_engine_id or os.getenv("GOOGLE_SEARCH_ENGINE_ID")
         self.client = httpx.AsyncClient(timeout=30.0)
         self.base_url = "https://www.googleapis.com/customsearch/v1"
+        self.permission_checker = permission_checker or SearchPermissionChecker()
+        self.audit_log = audit_log or SearchAuditLog()
 
     async def search(
         self,
@@ -62,13 +172,27 @@ class SearchOperationTool:
         Returns:
             Web search results
         """
-        if not self.api_key or not self.search_engine_id:
+        if not self.permission_checker.check_permission("web_search"):
+            error_msg = "Web search operation not allowed"
+            self.audit_log.log("web_search", query, False, error=error_msg)
             return {
                 "query": query,
                 "search_type": "web",
                 "results": [],
                 "total": 0,
-                "error": "Google Search API credentials not configured",
+                "error": error_msg,
+                "status": "permission_denied",
+            }
+
+        if not self.api_key or not self.search_engine_id:
+            error_msg = "Google Search API credentials not configured"
+            self.audit_log.log("web_search", query, False, error=error_msg)
+            return {
+                "query": query,
+                "search_type": "web",
+                "results": [],
+                "total": 0,
+                "error": error_msg,
             }
 
         try:
@@ -93,6 +217,13 @@ class SearchOperationTool:
                     "display_link": item.get("displayLink", ""),
                 })
 
+            self.audit_log.log(
+                "web_search",
+                query,
+                True,
+                details={"results_count": len(results), "num_results": num_results},
+            )
+
             return {
                 "query": query,
                 "search_type": "web",
@@ -101,6 +232,7 @@ class SearchOperationTool:
                 "status": "success",
             }
         except Exception as e:
+            self.audit_log.log("web_search", query, False, error=str(e))
             return {
                 "query": query,
                 "search_type": "web",
@@ -120,8 +252,21 @@ class SearchOperationTool:
         Returns:
             News search results
         """
+        if not self.permission_checker.check_permission("news_search"):
+            error_msg = "News search operation not allowed"
+            self.audit_log.log("news_search", query, False, error=error_msg)
+            return {
+                "query": query,
+                "search_type": "news",
+                "results": [],
+                "total": 0,
+                "error": error_msg,
+                "status": "permission_denied",
+            }
+
         # Placeholder for news search
         # In production, integrate with NewsAPI or similar
+        self.audit_log.log("news_search", query, True, details={"status": "not_implemented"})
         return {
             "query": query,
             "search_type": "news",
@@ -244,3 +389,31 @@ class SearchOperationTool:
     async def close(self) -> None:
         """Close the client."""
         await self.client.aclose()
+
+    def get_audit_logs(self, limit: int = 100) -> list[Dict[str, Any]]:
+        """Get audit logs.
+
+        Args:
+            limit: Maximum number of entries to return
+
+        Returns:
+            List of audit log entries
+        """
+        return self.audit_log.get_entries(limit)
+
+    def set_permissions(self, permissions: Dict[str, bool]) -> None:
+        """Set permissions for operations.
+
+        Args:
+            permissions: Dict of operation -> allowed
+        """
+        for operation, allowed in permissions.items():
+            self.permission_checker.set_permission(operation, allowed)
+
+    def get_permissions(self) -> Dict[str, bool]:
+        """Get current permissions.
+
+        Returns:
+            Dict of operation -> allowed
+        """
+        return self.permission_checker.allowed_operations.copy()
