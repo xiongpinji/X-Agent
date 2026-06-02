@@ -13,7 +13,7 @@ from backend.app.core.tool_schema import (
     ToolSchema,
     ToolRiskLevel,
 )
-from backend.app.core.tool_registry import ToolRegistry
+from backend.app.core.tool_registry import ToolCatalog
 
 T = TypeVar("T")
 
@@ -51,7 +51,7 @@ class ToolWrapper:
 
     def __init__(
         self,
-        registry: ToolRegistry,
+        registry: ToolCatalog,
         approval_checker: Callable[[str, ToolRiskLevel], bool] | None = None,
         permission_checker: Callable[[str, str], bool] | None = None,
     ):
@@ -203,7 +203,7 @@ class ToolWrapper:
 class ToolExecutionEngine:
     """工具执行引擎 - 管理工具的生命周期和执行"""
 
-    def __init__(self, registry: ToolRegistry):
+    def __init__(self, registry: ToolCatalog):
         self.registry = registry
         self.wrapper = ToolWrapper(registry)
 
@@ -277,3 +277,19 @@ class ToolExecutionEngine:
     def get_statistics(self) -> dict[str, Any]:
         """获取统计信息"""
         return self.registry.get_statistics()
+
+
+class ToolExecutor(ToolExecutionEngine):
+    """便捷的工具执行器。
+
+    相比 ToolExecutionEngine，构造时可不传 registry（自动新建一个），
+    并接受可选的 timeout_seconds 参数。
+    """
+
+    def __init__(
+        self,
+        registry: ToolCatalog | None = None,
+        timeout_seconds: float | None = None,
+    ) -> None:
+        super().__init__(registry if registry is not None else ToolCatalog())
+        self.timeout_seconds = timeout_seconds

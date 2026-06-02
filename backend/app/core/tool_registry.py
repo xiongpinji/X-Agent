@@ -1,5 +1,10 @@
 """
-工具注册表 - 支持动态注册、版本管理、权限检查
+工具目录 (ToolCatalog) - 支持动态注册、版本管理、权限检查、审计与持久化。
+
+历史命名说明：本模块的目录类原名 ``ToolRegistry``，与 ``core/tools.py`` 中
+负责运行时执行（policy/approval/hooks/execute）的 ``ToolRegistry`` 同名，长期
+造成混淆。现规范名为 ``ToolCatalog``（工具 schema 目录/生命周期），并保留
+``ToolRegistry`` 作为向后兼容别名，避免破坏既有 import。
 """
 from __future__ import annotations
 
@@ -19,8 +24,8 @@ from backend.app.core.tool_schema import (
 )
 
 
-class ToolRegistry:
-    """工具注册表 - 管理所有工具的生命周期"""
+class ToolCatalog:
+    """工具目录 - 管理所有工具的 schema 生命周期（注册/版本/审计/持久化）。"""
 
     def __init__(self, storage_path: str | Path | None = None):
         self._tools: dict[str, ToolSchema] = {}
@@ -354,3 +359,15 @@ class ToolRegistry:
                     if line.strip():
                         event = ToolLifecycleEvent.model_validate_json(line)
                         self._lifecycle_events.append(event)
+
+
+# ---------------------------------------------------------------------------
+# Backward-compatible alias.
+#
+# ``ToolCatalog`` is the canonical name for this schema/lifecycle catalog.
+# ``ToolRegistry`` is retained so existing imports
+# (``from backend.app.core.tool_registry import ToolRegistry``) keep working
+# unchanged. New code should import ``ToolCatalog`` to avoid confusion with
+# ``backend.app.core.tools.ToolRegistry`` (the runtime execution registry).
+# ---------------------------------------------------------------------------
+ToolRegistry = ToolCatalog

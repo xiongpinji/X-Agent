@@ -9,7 +9,7 @@ from typing import Any
 
 from backend.app.core.tool_definitions import STANDARD_TOOLS
 from backend.app.core.tool_executor import ToolExecutionEngine
-from backend.app.core.tool_registry import ToolRegistry
+from backend.app.core.tool_registry import ToolCatalog
 from backend.app.core.tool_schema import ToolCallInput, ToolCallOutput
 
 
@@ -17,7 +17,7 @@ class ToolManager:
     """工具管理器 - 初始化和管理所有工具"""
 
     def __init__(self, storage_path: str | Path | None = None):
-        self.registry = ToolRegistry(storage_path)
+        self.registry = ToolCatalog(storage_path)
         self.engine = ToolExecutionEngine(self.registry)
         self._initialized = False
 
