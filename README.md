@@ -9,6 +9,7 @@ X-Agent Core combines cutting-edge LLM capabilities with enterprise-grade infras
 - **Multi-LLM Router**: Seamlessly switch between different LLM providers (OpenAI, Claude, etc.) with intelligent routing based on task requirements
 - **Advanced Memory System**: Persistent graph-based memory with vector embeddings for semantic search and context retrieval
 - **Workflow Orchestration**: Define, schedule, and execute complex multi-step workflows with conditional logic and error handling
+- **Multi-Agent Collaboration**: Delegate tasks between agents with capability matching and load balancing
 - **Browser Automation**: Integrated Playwright-based browser control for web interaction and data extraction
 - **Observability & Tracing**: Full request tracing with Langfuse integration for debugging and performance monitoring
 - **Approval Workflows**: Human-in-the-loop approval system for sensitive operations with audit trails
@@ -16,6 +17,7 @@ X-Agent Core combines cutting-edge LLM capabilities with enterprise-grade infras
 - **PostgreSQL Persistence**: Reliable data storage with support for complex queries and transactions
 - **Vector Search**: Qdrant integration for semantic similarity search and memory retrieval
 - **Multi-Tenant Support**: Built-in tenant isolation and role-based access control
+- **Plugin System**: Extensible plugin architecture for custom functionality
 
 ## Quick Start
 
@@ -82,8 +84,11 @@ X-Agent Core follows a modular, layered architecture:
 - [Installation Guide](./INSTALL.md) - Detailed setup instructions
 - [Contributing Guide](./CONTRIBUTING.md) - Development workflow and guidelines
 - [API Documentation](./docs/API.md) - REST API reference
+- [API Error Codes](./docs/API_ERROR_CODES.md) - Complete error code reference
+- [Advanced Features](./docs/ADVANCED_FEATURES.md) - Workflow orchestration, multi-agent collaboration, memory system
 - [Architecture Guide](./docs/ARCHITECTURE.md) - System design and components
 - [Examples](./docs/EXAMPLES.md) - Code examples and use cases
+- [Documentation Index](./docs/INDEX.md) - Complete documentation navigation
 
 ## Development
 
