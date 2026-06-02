@@ -191,6 +191,10 @@ class CSRFProtectionMiddleware(BaseHTTPMiddleware):
         "/api/v1/auth/login",
         "/api/v1/auth/register",
         "/api/v1/auth/logout",
+        # The CSRF-token issuing endpoint must itself be exempt — a client has no
+        # token yet when it calls here, so requiring one creates a bootstrap
+        # deadlock (the endpoint that hands out tokens could never be reached).
+        "/api/v1/csrf-token",
         # Signature-authenticated server-to-server webhook. Feishu's servers
         # cannot carry a cookie-based CSRF token; the endpoint authenticates via
         # HMAC signature headers (x-feishu-signature/-timestamp/-nonce) which an
@@ -200,10 +204,19 @@ class CSRFProtectionMiddleware(BaseHTTPMiddleware):
         "/api/v1/integrations/feishu/events",
     }
 
+    # SECURITY/ARCHITECTURE: token store is class-level (shared across instances).
+    # Two instances exist — the module-level ``_csrf_middleware`` used by the
+    # /api/v1/csrf-token endpoint to GENERATE tokens, and the instance Starlette
+    # creates when this class is added to the ASGI stack (which VALIDATES tokens).
+    # If the store were per-instance, generated tokens would be invisible to the
+    # validating instance and every token would be rejected. A class-level dict
+    # keyed by session_id makes generation and validation share the same state
+    # within the process.
+    _tokens: dict[str, set[str]] = {}  # session_id -> set of valid tokens
+    _lock = Lock()
+
     def __init__(self, app):
         super().__init__(app)
-        self._tokens: dict[str, set[str]] = {}  # session_id -> set of valid tokens
-        self._lock = Lock()
 
     async def dispatch(self, request: Request, call_next):
         # Skip CSRF check for safe methods
@@ -703,7 +716,7 @@ async def entry(principal: Principal = Depends(get_current_principal)) -> dict[s
 
 
 @app.post("/api/v1/csrf-token")
-async def get_csrf_token(request: Request) -> dict[str, str]:
+async def get_csrf_token(request: Request) -> JSONResponse:
     """Generate CSRF token for client.
 
     SECURITY: Returns a CSRF token that must be included in X-CSRF-Token header
@@ -714,4 +727,13 @@ async def get_csrf_token(request: Request) -> dict[str, str]:
     """
     session_id = request.cookies.get("session_id") or str(uuid4())
     token = _csrf_middleware.generate_csrf_token(session_id)
-    return {"csrf_token": token}
+    # Bind the token to a session by returning the session_id as a cookie. Without
+    # this, a first-time client (no session_id yet) receives a token tied to a
+    # server-generated session it never learns, so the token can't be validated
+    # on the follow-up request. Setting the cookie closes that loop.
+    response = JSONResponse({"csrf_token": token})
+    response.set_cookie(
+        "session_id", session_id, httponly=True, samesite="lax",
+        secure=(settings.app_mode == "production"),
+    )
+    return response

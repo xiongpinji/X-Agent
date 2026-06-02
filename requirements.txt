@@ -4,12 +4,12 @@
 # SECURITY: All versions are pinned to known-secure releases
 
 # Core Framework
-fastapi==0.115.0
-uvicorn[standard]==0.30.0
-starlette==0.37.2
+fastapi>=0.115.0         # loosened: 0.115.0 incompatible with modern starlette; resolver picks compatible pair (sandbox-validated on 0.133.x)
+uvicorn[standard]>=0.30.0
+starlette>=0.37.2  # loosened (transitive dep, resolver-managed)
 
 # API & HTTP
-httpx==0.27.0
+httpx>=0.27.0
 requests==2.32.3
 
 # LLM & AI
@@ -17,84 +17,84 @@ openai==1.100.0
 anthropic==0.28.0
 langfuse==2.60.0
 
-# Vision Models & Image Processing
-Pillow==10.1.0
-opencv-python==4.8.1.78
-torch==2.1.2
-torchvision==0.16.2
-transformers==4.36.2
-clip-by-openai==1.0.0
-pytesseract==0.3.10
-paddleocr==2.7.0.3
-ultralytics==8.1.0
-numpy==1.24.3
+# Numeric / Scientific (CORE — used by memory analytics/fusion/dedup & multimodal at module level)
+numpy>=1.26.0          # loosened: 1.24.3 has no cp313 wheel (compile fails on Py3.13)
+
+# Vision/Multimodal (OPTIONAL — moved to requirements-vision.txt)
+# Core service does NOT require these. For image/video/OCR features:
+#   pip install -r requirements-vision.txt
 
 # Browser Automation
 playwright==1.48.0
 
 # Database & ORM
-asyncpg==0.29.0
-psycopg[binary]==3.2.0
-sqlalchemy==2.0.25
+asyncpg>=0.30.0        # loosened: 0.30+ ships cp313 wheels
+psycopg[binary]>=3.2.2   # loosened: cp313 wheels in 3.2.2+
+sqlalchemy>=2.0.30       # loosened for Python 3.13 C-ext wheels
+aiosqlite>=0.20.0        # async SQLite driver — REQUIRED for default DATABASE_URL=sqlite:///
 
 # Vector Database
-qdrant-client==1.11.0
+qdrant-client>=1.11.0
 
 # Data Validation
-pydantic==2.7.0
-pydantic-settings==2.2.0
+pydantic>=2.9.0        # loosened: pydantic-core needs cp313 wheel (>=2.9)
+pydantic-settings>=2.4.0  # align with pydantic>=2.9
 
 # Task Queue & Caching
 celery==5.3.0
-redis==5.0.0
-kombu==5.3.4
+redis>=5.0.0             # (pure-python, range ok)
+kombu>=5.3.4  # loosened (transitive dep, resolver-managed)
 
 # Monitoring & Observability
 prometheus-client==0.20.0
+
+# Additional Core Runtime (module-level imports in core paths — required for fresh install)
+aiohttp>=3.10.0        # loosened: 3.10+ ships cp313 wheels
+scikit-learn>=1.5.0    # loosened for Python 3.13 wheel availability
+PyYAML>=6.0.2            # loosened: 6.0.2 adds cp313 wheel
+psutil>=6.0.0          # loosened: 6.0+ ships cp313 wheels
+structlog==24.1.0
+python-json-logger==2.0.7
 
 # Utilities
 click==8.1.7
 pytz==2024.1
 packaging==24.0
 semver==3.0.2
-typing-extensions==4.10.0
+typing-extensions>=4.11.0  # loosened: openai requires >=4.11
 
 # Security & Cryptography (CRITICAL: Using bcrypt 4.1.2+ for secure password hashing)
-bcrypt==4.1.2
-cryptography==43.0.0
+bcrypt>=4.2.0          # loosened for Python 3.13
+cryptography>=43.0.1   # loosened for Python 3.13
 
 # Network & Protocol
-h11==0.14.0
-h2==4.1.0
-hpack==4.0.0
-httpcore==1.0.5
-hyperframe==6.1.0
+h11>=0.14.0  # loosened (transitive dep, resolver-managed)
+h2>=4.1.0  # loosened (transitive dep, resolver-managed)
+hpack>=4.0.0  # loosened (transitive dep, resolver-managed)
+httpcore>=1.0.5  # loosened (transitive dep, resolver-managed)
+hyperframe>=6.1.0  # loosened (transitive dep, resolver-managed)
 
 # Async & Concurrency
-anyio==4.4.0
-sniffio==1.3.1
-greenlet==3.0.3
-exceptiongroup==1.2.0
+anyio>=4.4.0  # loosened (transitive dep, resolver-managed)
+sniffio>=1.3.1  # loosened (transitive dep, resolver-managed)
+greenlet>=3.1.0        # loosened: 3.1+ ships cp313 wheels
+exceptiongroup>=1.2.0  # loosened (transitive dep, resolver-managed)
 
 # Encoding & Validation
-charset-normalizer==3.3.2
-idna==3.6
-certifi==2024.2.2
-email-validator==2.1.1
+charset-normalizer>=3.3.2  # loosened (transitive dep, resolver-managed)
+idna>=3.6  # loosened (transitive dep, resolver-managed)
+certifi>=2024.2.2  # loosened (transitive dep, resolver-managed)
+email-validator>=2.1.1  # loosened (transitive dep, resolver-managed)
 
 # High-Performance JSON Serialization
-orjson==3.9.15
+orjson>=3.10.0         # loosened for Python 3.13
 
-# gRPC Support
-grpcio==1.60.1
-grpcio-tools==1.60.1
-protobuf==4.25.3
 
 # DNS
-dnspython==2.6.1
+dnspython>=2.6.1  # loosened (transitive dep, resolver-managed)
 
 # Type Annotations
-annotated-types==0.7.0
+annotated-types>=0.7.0  # loosened (transitive dep, resolver-managed)
 
 # Dependency Management
-vine==5.1.0
+vine>=5.1.0  # loosened (transitive dep, resolver-managed)

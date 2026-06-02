@@ -303,20 +303,20 @@ python
 
 ```bash
 # 启动后端服务器（带热重载）
-uvicorn backend.app.web:app --reload --host 0.0.0.0 --port 8000
+uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8000
 
 # 启动工作流 worker
 python -m backend.app.workflow_worker
 
 # 设置日志级别
-LOG_LEVEL=DEBUG uvicorn backend.app.web:app --reload
+LOG_LEVEL=DEBUG uvicorn backend.app.main:app --reload
 ```
 
 ### 生产模式
 
 ```bash
 # 使用 Gunicorn
-gunicorn backend.app.web:app \
+gunicorn backend.app.main:app \
   --workers 4 \
   --worker-class uvicorn.workers.UvicornWorker \
   --bind 0.0.0.0:8000

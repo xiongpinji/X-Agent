@@ -119,7 +119,7 @@ python -c "from backend.app.core.memory_postgres import PostgresMemory; print('D
 pytest tests/test_ready_checks.py -v
 
 # Start the server (Ctrl+C to stop)
-uvicorn backend.app.web:app --reload
+uvicorn backend.app.main:app --reload
 ```
 
 ## Development Setup
@@ -142,7 +142,7 @@ pre-commit install
 docker-compose up -d
 
 # Terminal 2: Start FastAPI server
-uvicorn backend.app.web:app --reload --host 0.0.0.0 --port 8000
+uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8000
 
 # Terminal 3: Start workflow worker
 xagent-workflow-worker
@@ -417,7 +417,7 @@ kill -9 <PID>  # Linux/macOS
 taskkill /PID <PID> /F  # Windows
 
 # Or use different port
-uvicorn backend.app.web:app --port 8001
+uvicorn backend.app.main:app --port 8001
 ```
 
 #### 5. Qdrant Connection Error
@@ -464,7 +464,7 @@ For production deployments:
 pip install gunicorn
 
 # Run with multiple workers
-gunicorn backend.app.web:app \
+gunicorn backend.app.main:app \
   --workers 4 \
   --worker-class uvicorn.workers.UvicornWorker \
   --bind 0.0.0.0:8000

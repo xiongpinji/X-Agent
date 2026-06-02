@@ -184,7 +184,7 @@ cat config/xagent_local_config.json | python -m json.tool
 
 ```bash
 # 1. 启动应用
-uvicorn backend.app.web:app --reload --host 0.0.0.0 --port 8000
+uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8000
 
 # 2. 在另一个终端验证
 curl http://localhost:8000/health
@@ -561,14 +561,14 @@ print(f'Average: {duration/100*1000:.2f}ms per operation')
 
 ```bash
 # 启动开发服务器
-uvicorn backend.app.web:app --reload --host 0.0.0.0 --port 8000
+uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 ### 8.2 生产环境
 
 ```bash
 # 使用Gunicorn
-gunicorn backend.app.web:app \
+gunicorn backend.app.main:app \
   --workers 4 \
   --worker-class uvicorn.workers.UvicornWorker \
   --bind 0.0.0.0:8000 \
@@ -592,7 +592,7 @@ RUN pip install -r requirements.txt
 
 COPY . .
 
-CMD ["uvicorn", "backend.app.web:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "backend.app.main:app", "--host", "0.0.0.0", "--port", "8000"]
 ```
 
 ```bash

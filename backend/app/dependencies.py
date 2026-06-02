@@ -1,6 +1,8 @@
+import logging
 from functools import lru_cache
 from hashlib import sha256
 from secrets import compare_digest
+from secrets import token_urlsafe
 
 from fastapi import Request
 
@@ -144,7 +146,23 @@ def get_audit_store() -> AuditStore:
     settings = get_settings()
     hmac_secret = settings.audit_hmac_secret
     if not hmac_secret:
-        raise RuntimeError("audit_hmac_secret must be configured")
+        # Production: hard requirement (settings validator also enforces this at
+        # load time). An unsigned audit log in production is a tamper risk.
+        if settings.app_mode == "production":
+            raise RuntimeError(
+                "audit_hmac_secret must be configured in production "
+                "(set XAGENT_AUDIT_HMAC_SECRET; see .env.example)"
+            )
+        # Development/test: settings permits an absent secret, so generate an
+        # ephemeral per-process key instead of hard-failing. Audit signing still
+        # works for local runs; the key is non-persistent (rotates each restart),
+        # which is acceptable for dev but never for production.
+        hmac_secret = token_urlsafe(32)
+        logging.getLogger("xagent.dependencies").warning(
+            "audit_hmac_secret not set; using an ephemeral dev key. "
+            "Set XAGENT_AUDIT_HMAC_SECRET for stable audit signatures "
+            "(required in production)."
+        )
     return AuditStore(
         storage_path=settings.audit_store_path,
         hmac_secret=hmac_secret,

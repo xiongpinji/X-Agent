@@ -52,9 +52,13 @@ X-Agent Core combines cutting-edge LLM capabilities with enterprise-grade infras
    # Edit .env with your configuration
    ```
 
-5. **Initialize the database**
+5. **(Optional) Initialize the database**
+
+   The database initializes automatically on first run — local SQLite stores are
+   created lazily, so you can skip this step for a quick start. To pre-initialize
+   the local store explicitly:
    ```bash
-   python -m backend.app.core.migration init
+   python -c "from backend.local.migration import initialize_local_database; initialize_local_database()"
    ```
 
 ## Architecture
@@ -115,7 +119,7 @@ ruff format .
 docker-compose up -d
 
 # Run the backend server
-uvicorn backend.app.web:app --reload
+uvicorn backend.app.main:app --reload
 
 # Run workflow worker
 xagent-workflow-worker
