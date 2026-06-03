@@ -2,15 +2,33 @@ from __future__ import annotations
 
 import os
 import asyncio
+import tempfile
 
 os.environ.setdefault("APP_MODE", "development")
 os.environ.setdefault("XAGENT_AUDIT_HMAC_SECRET", "test-audit-secret")
 os.environ.setdefault("XAGENT_BOOTSTRAP_API_KEY", "bootstrap")
-# 强制 qdrant 走确定性内存 fallback：默认 qdrant_url="http://localhost:6333" 为真值，
-# 会让模块级 vector_client 构造真实 QdrantClient，对死掉的 localhost:6333 发同步阻塞网络调用，
-# 在 test_indexer_concurrent_indexing 等并发用例里挂死 xdist worker（node down/INTERNALERROR）。
-# 置空 → QdrantVectorClient(_client=None) → 内存 fallback。见 [[project_xagent_refreshed_baseline_0531]]。
 os.environ.setdefault("XAGENT_QDRANT_URL", "")
+
+# Per-worker isolated data directory for xdist parallel runs.
+# Prevents PermissionError when multiple workers write to the same
+# data/audit.jsonl, data/runs.jsonl, etc. on Windows.
+def _set_worker_data_dir() -> None:
+    worker_id = os.environ.get("PYTEST_XDIST_WORKER", "")
+    if worker_id:
+        _tmpdir = tempfile.mkdtemp(prefix=f"xagent_data_{worker_id}_")
+        # Settings reads these via XAGENT_ prefix before app imports
+        for key, rel in [
+            ("XAGENT_AUDIT_STORE_PATH", f"{_tmpdir}/audit.jsonl"),
+            ("XAGENT_RUN_STORE_PATH", f"{_tmpdir}/runs.jsonl"),
+            ("XAGENT_WORKFLOW_STORE_PATH", f"{_tmpdir}/workflows.json"),
+            ("XAGENT_WORKFLOW_RUN_STORE_PATH", f"{_tmpdir}/workflow_runs.jsonl"),
+            ("XAGENT_WORKFLOW_SCHEDULE_STORE_PATH", f"{_tmpdir}/workflow_schedules.json"),
+            ("XAGENT_APPROVAL_STORE_PATH", f"{_tmpdir}/approvals.json"),
+            ("XAGENT_TOOL_EXECUTION_STORE_PATH", f"{_tmpdir}/tool_executions.json"),
+        ]:
+            os.environ.setdefault(key, rel)
+
+_set_worker_data_dir()
 
 import pytest
 import pytest_asyncio
