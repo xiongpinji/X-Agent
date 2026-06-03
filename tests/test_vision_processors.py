@@ -3,6 +3,12 @@
 """
 
 import pytest
+
+# Vision tests need optional ML deps (Pillow/torch/transformers — see
+# requirements-vision.txt). Skip cleanly in a core-only env instead of
+# erroring at collection.
+pytest.importorskip("PIL", reason="vision deps not installed (requirements-vision.txt)")
+pytest.importorskip("numpy")
 import tempfile
 from pathlib import Path
 from PIL import Image

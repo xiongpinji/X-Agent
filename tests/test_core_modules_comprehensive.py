@@ -77,9 +77,10 @@ class TestMemoryGraphEdgeCases:
         from backend.app.core.memory_graph import MemoryGraph
 
         graph = MemoryGraph()
-        large_text = "word " * 10000
+        large_text = " ".join(["word", "test"] * 5000)
         graph.add_text(large_text)
-        # Should handle large text without error
+        # Should handle large text without error and create edges
+        # (co-occurrence needs at least two distinct terms)
         assert len(graph._edges) > 0
 
 

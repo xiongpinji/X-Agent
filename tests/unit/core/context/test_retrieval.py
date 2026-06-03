@@ -393,10 +393,18 @@ class TestContextRetriever:
     def test_retrieve_hybrid_empty_query(self, retriever):
         """测试混合检索的空查询。
 
-        验证空查询返回空结果。
+        混合检索 = relevance + recency + importance 加权。空查询使
+        relevance 分量为 0，但 recency/importance 仍是有效信号，因此
+        混合检索会优雅降级为按时间/重要性排序，而非返回空（这与纯
+        relevance 检索 retrieve_by_relevance 的空查询返回 [] 不同——
+        那是有意的设计区分）。
         """
         results = retriever.retrieve_hybrid("", top_k=10)
-        assert results == []
+        # 有消息时空查询应返回按 recency/importance 排序的结果，不是空
+        assert len(results) > 0
+        # relevance 分量为 0，但 hybrid 分数由 recency/importance 贡献
+        for item in results:
+            assert item.relevance_score >= 0.0
 
     def test_clear_retriever(self, sample_messages):
         """测试清空检索器。

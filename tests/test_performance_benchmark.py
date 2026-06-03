@@ -336,7 +336,7 @@ class TestAPIEndpointPerformance:
 class TestPerformanceSummary:
     """Summary of performance benchmarks"""
 
-    def test_generate_performance_report(self, benchmark):
+    def test_generate_performance_report(self, benchmark, tmp_path):
         """Generate performance report"""
         # The benchmark fixture is function-scoped, so record at least one
         # measurement before summarizing (get_summary returns {} when empty).
@@ -350,5 +350,11 @@ class TestPerformanceSummary:
         assert "memory" in summary
         assert "cpu" in summary
 
-        # Export metrics
-        benchmark.export_metrics("/tmp/performance_metrics.json")
+        # Export metrics — use tmp_path (portable across OS) instead of /tmp
+        # which does not exist on Windows.
+        metrics_path = str(tmp_path / "performance_metrics.json")
+        benchmark.export_metrics(metrics_path)
+
+        # Verify the file was written
+        import os
+        assert os.path.exists(metrics_path)

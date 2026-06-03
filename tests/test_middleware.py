@@ -138,8 +138,12 @@ class TestStructuredLoggingMiddleware:
 
     def test_logging_middleware_json_format(self, app, client, caplog):
         """Test logging middleware outputs JSON."""
+        import logging
         app.add_middleware(StructuredLoggingMiddleware)
-        response = client.get("/test")
+        # Successful requests are logged at INFO level; caplog defaults to
+        # WARNING, so lower the threshold to capture the structured log line.
+        with caplog.at_level(logging.INFO, logger="backend.app.core.middleware.logging_middleware"):
+            response = client.get("/test")
         assert response.status_code == 200
 
         # Check logs contain JSON

@@ -16,6 +16,8 @@ from dataclasses import dataclass, asdict
 from enum import Enum
 import csv
 
+import pytest
+
 
 # ============================================================================
 # 数据模型
@@ -486,7 +488,8 @@ class TestExecutionManagement:
         assert report.total_tests == 3
         assert report.passed_tests == 2
         assert report.failed_tests == 1
-        assert report.pass_rate == 66.67
+        # 2/3 * 100 = 66.66666...; use approx instead of exact float comparison
+        assert report.pass_rate == pytest.approx(66.67, abs=0.01)
 
 
 class TestReportGeneration:
@@ -543,6 +546,5 @@ class TestReportGeneration:
 # ============================================================================
 
 if __name__ == "__main__":
-    import pytest
     pytest.main([__file__, "-v", "--tb=short"])
 

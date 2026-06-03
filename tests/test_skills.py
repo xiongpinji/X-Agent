@@ -9,10 +9,14 @@ from backend.app.core.skills import Skill, SkillMetadata, SkillContext, SkillReg
 class MockSkill(Skill):
     """测试用的模拟技能"""
 
+    def __init__(self, name: str = "mock_skill"):
+        super().__init__()
+        self._name = name
+
     @property
     def metadata(self) -> SkillMetadata:
         return SkillMetadata(
-            name="mock_skill",
+            name=self._name,
             version="1.0.0",
             description="Mock skill for testing",
             author="Test",
@@ -52,14 +56,14 @@ class TestSkillRegistry:
     def test_list_skills(self):
         """测试列出技能"""
         registry = SkillRegistry()
-        skill1 = MockSkill()
-        skill2 = MockSkill()
+        skill1 = MockSkill("mock_skill_1")
+        skill2 = MockSkill("mock_skill_2")
 
         registry.register(skill1)
         registry.register(skill2)
 
         skills = registry.list_skills()
-        assert len(skills) == 1  # 同名技能只注册一次
+        assert len(skills) == 2  # 两个不同名技能各注册一次
 
     def test_get_by_capability(self):
         """测试根据能力获取技能"""

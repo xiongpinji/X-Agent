@@ -87,6 +87,7 @@ def test_messages_stream_replays_history_and_sets_sse_ids() -> None:
         agent_id="agent-1",
         user_id="user-1",
         channel_type="room",
+        trace_id="trace-1",
         payload={"ok": True},
     )
     message_event_bus.record(channel_key, historical_event)
@@ -200,6 +201,7 @@ def test_messages_stream_uses_last_event_id_as_continuation_anchor() -> None:
         agent_id="agent-1",
         user_id="user-1",
         channel_type="room",
+        trace_id="trace-1",
         payload={"step": 1},
     )
     newer_event = UnifiedMessageEvent(
@@ -212,6 +214,7 @@ def test_messages_stream_uses_last_event_id_as_continuation_anchor() -> None:
         agent_id="agent-1",
         user_id="user-1",
         channel_type="room",
+        trace_id="trace-1",
         payload={"step": 2},
     )
     message_event_bus.record(channel_key, older_event)

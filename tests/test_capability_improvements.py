@@ -7,6 +7,7 @@ import pytest
 import asyncio
 from pathlib import Path
 from datetime import datetime
+from unittest.mock import patch
 
 # Import new modules
 from backend.app.core.code_editor import (
@@ -96,6 +97,18 @@ def another_function():
 
 class TestPluginManager:
     """Test plugin management."""
+
+    @pytest.fixture(autouse=True)
+    def _isolate_plugin_registry(self):
+        """Prevent PluginRegistry from touching ~/.xagent/plugins/registry.json.
+
+        Real disk I/O causes cross-test pollution: a registry.json left over
+        from a prior run makes register() return False (name already exists).
+        """
+        from backend.app.core.plugin_manager import PluginRegistry
+        with patch.object(PluginRegistry, "_load_registry"), \
+             patch.object(PluginRegistry, "_save_registry"):
+            yield
 
     @pytest.mark.asyncio
     async def test_plugin_registry(self):

@@ -256,7 +256,7 @@ class TestSkillChain:
         """测试顺序链"""
         registry = SkillRegistry()
         executor = SkillExecutor(registry)
-        chain_executor = SkillChainExecutor()
+        chain_executor = SkillChainExecutor(executor=executor, registry=registry)
 
         skill = TestSkill()
         await registry.register(skill)
@@ -269,7 +269,7 @@ class TestSkillChain:
                     name="step1",
                     skill_name="test-skill",
                     input_mapping={"input_text": "text"},
-                    output_mapping={"result": "output"},
+                    output_mapping={"output": "result"},
                 ),
             ],
         )
@@ -289,7 +289,7 @@ class TestSkillChain:
         """测试并行链"""
         registry = SkillRegistry()
         executor = SkillExecutor(registry)
-        chain_executor = SkillChainExecutor()
+        chain_executor = SkillChainExecutor(executor=executor, registry=registry)
 
         skill = TestSkill()
         await registry.register(skill)

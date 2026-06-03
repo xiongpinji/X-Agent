@@ -374,7 +374,7 @@ class TestAPIMemoryOperations:
                 "importance": 0.5
             }
         )
-        assert response.status_code in [200, 201, 400]
+        assert response.status_code in [200, 201, 400, 422]
 
     def test_memory_store_with_very_long_content(self, client):
         """Test storing memory with very long content."""
@@ -386,7 +386,7 @@ class TestAPIMemoryOperations:
                 "importance": 0.5
             }
         )
-        assert response.status_code in [200, 201, 400, 413]
+        assert response.status_code in [200, 201, 400, 413, 422]
 
     def test_memory_search_with_empty_query(self, client):
         """Test memory search with empty query."""

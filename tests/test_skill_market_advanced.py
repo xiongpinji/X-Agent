@@ -359,6 +359,22 @@ class TestSkillUpdateManager:
 class TestIntegration:
     """集成测试"""
 
+    @pytest.fixture(autouse=True)
+    def _reset_skill_market_singletons(self):
+        """Reset module-level singletons so this integration test is isolated
+        from state left by earlier tests (e.g. an already-created version)."""
+        import backend.app.core.skill_version_manager as _svm
+        import backend.app.core.skill_review_system as _srs
+        import backend.app.core.skill_search_engine as _sse
+        import backend.app.core.skill_dependency_manager as _sdm
+        import backend.app.core.skill_update_manager as _sum
+        _svm._skill_version_manager = None
+        _srs._skill_review_system = None
+        _sse._skill_search_engine = None
+        _sdm._skill_dependency_manager = None
+        _sum._skill_update_manager = None
+        yield
+
     def test_full_workflow(self):
         """测试完整工作流"""
         # 1. 创建版本

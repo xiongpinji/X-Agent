@@ -3,6 +3,12 @@
 """
 
 import pytest
+
+# Vision tests require optional ML deps (Pillow/torch/transformers,
+# see requirements-vision.txt). Skip cleanly when they are not installed
+# instead of failing collection in a core-only environment.
+pytest.importorskip("PIL", reason="vision deps not installed (requirements-vision.txt)")
+pytest.importorskip("numpy")
 import asyncio
 from pathlib import Path
 from unittest.mock import Mock, patch, AsyncMock

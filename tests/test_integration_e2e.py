@@ -420,11 +420,11 @@ async def test_memory_system():
     # 7. 关系管理
     # 在实际实现中，应该有关系管理的方法
     relationships = []
-    for i, memory in enumerate(memories):
+    for i, memory_id in enumerate(memories):
         if i > 0:
             relationships.append({
-                "source": memories[i-1].id,
-                "target": memory.id,
+                "source": memories[i-1],
+                "target": memory_id,
                 "relation_type": "precedes",
             })
 

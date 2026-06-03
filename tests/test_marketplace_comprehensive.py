@@ -216,6 +216,8 @@ class TestPluginMarketSearch:
         from backend.app.api.plugin_market import (
             PluginRecord, PluginManifest, PluginCategory, _plugins_db
         )
+        # 隔离：清空模块级字典，避免前序测试污染。
+        _plugins_db.clear()
 
         # 创建不同分类的插件
         plugins = [

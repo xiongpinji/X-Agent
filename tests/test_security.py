@@ -7,6 +7,7 @@ audit have been fixed and cannot be reintroduced without breaking the build.
 from __future__ import annotations
 
 import time
+from pathlib import Path
 
 import nest_asyncio
 from fastapi.testclient import TestClient
@@ -303,4 +304,18 @@ def test_workflow_run_ignores_client_tenant_id() -> None:
 
 async def test_tool_read_file_blocks_traversal() -> None:
     """Verify that the read_file tool refuses paths outside PROJECT_ROOT."""
-    fro
+    import pytest
+
+    from backend.app.core import tools as tools_module
+    from backend.app.settings import PROJECT_ROOT
+
+    base = Path(PROJECT_ROOT).resolve()
+
+    # A path that traverses outside the project root must be rejected.
+    traversal_path = str(base / ".." / ".." / ".." / "etc" / "passwd")
+    with pytest.raises(PermissionError):
+        await tools_module.read_file(traversal_path)
+
+    # An absolute system path outside the project root must also be rejected.
+    with pytest.raises(PermissionError):
+        await tools_module.read_file("/etc/passwd")

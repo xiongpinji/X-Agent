@@ -1,6 +1,12 @@
+import pytest
+
 from backend.app.services.browser.playwright_client import browser_client
 
 
+@pytest.mark.skipif(
+    not browser_client._client,
+    reason="Playwright browser not available (requires real browser installation).",
+)
 def test_browser_session_can_record_actions() -> None:
     session = browser_client.create_session(trace_id="trace-1", run_id="run-1")
 

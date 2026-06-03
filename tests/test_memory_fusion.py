@@ -115,15 +115,24 @@ class TestMemoryImportanceScorer:
 
         scorer.adjust_weights(access_frequency_weight=0.5)
 
-        assert scorer.weights.access_frequency_weight == 0.5
-        assert abs(
-            sum([
-                scorer.weights.access_frequency_weight,
-                scorer.weights.temporal_decay_weight,
-                scorer.weights.association_weight,
-                scorer.weights.user_feedback_weight,
-            ]) - 1.0
-        ) < 0.01
+        # adjust_weights 设定原始值后会调用 normalize() 使四权重和为 1，
+        # 因此设定的 0.5 会被等比缩放，但仍是最大权重。
+        weights_sum = sum([
+            scorer.weights.access_frequency_weight,
+            scorer.weights.temporal_decay_weight,
+            scorer.weights.association_weight,
+            scorer.weights.user_feedback_weight,
+        ])
+        assert abs(weights_sum - 1.0) < 0.01
+        # 设定的访问频率权重(0.5)在归一化后应严格大于其调整前的占比
+        assert scorer.weights.access_frequency_weight > original_weights
+        # 且在四个权重中最大
+        assert scorer.weights.access_frequency_weight == max(
+            scorer.weights.access_frequency_weight,
+            scorer.weights.temporal_decay_weight,
+            scorer.weights.association_weight,
+            scorer.weights.user_feedback_weight,
+        )
 
     def test_batch_compute_importance(self):
         """测试批量计算重要性。"""

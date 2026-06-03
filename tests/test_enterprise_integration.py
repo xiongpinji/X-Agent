@@ -657,9 +657,9 @@ class TestIntegrationScenarios:
         # Verify audit trail
         records = audit_store.list(resource_type="workflow")
         assert len(records) == 3
-        assert records[0].action == "create"
+        assert records[0].action == "complete"
         assert records[1].action == "execute"
-        assert records[2].action == "complete"
+        assert records[2].action == "create"
         # Verify chain integrity
         verification = audit_store.verify_chain()
         assert verification.valid

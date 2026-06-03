@@ -5,6 +5,11 @@ import logging
 from typing import Any
 
 import pytest
+
+# Browser tests need playwright + a real browser binary (not part of the
+# core install). Skip cleanly when playwright is unavailable instead of
+# erroring at collection in a core-only environment.
+pytest.importorskip("playwright", reason="playwright not installed (browser automation optional)")
 from playwright.async_api import async_playwright, Browser, Page
 
 logger = logging.getLogger(__name__)
