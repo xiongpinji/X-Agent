@@ -248,7 +248,7 @@ class PluginCrawler:
     @staticmethod
     def _is_xagent_plugin(repo_name: str, description: str) -> bool:
         """检查是否是X-Agent插件"""
-        keywords = ["x-agent", "plugin", "xagent"]
+        keywords = ["x-agent", "xagent"]
         text = f"{repo_name} {description}".lower()
         return any(keyword in text for keyword in keywords)
 

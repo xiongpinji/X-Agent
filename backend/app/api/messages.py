@@ -360,7 +360,6 @@ async def stream_messages(
         last_event_id=stream_filter.last_event_id,
     )
     history = [event for event in history if _event_matches_filter(event, stream_filter)]
-    import sys as _sys; print(f"[DBG-STREAM] key={channel_key!r} raw_hist={len(message_event_bus._history.get(channel_key, []))} filtered={len(history)} all_keys={list(message_event_bus._history.keys())}", file=_sys.stderr)
     replay_ids = {event.event_id for event in history}
 
     async def event_generator():
@@ -447,7 +446,7 @@ async def publish_test_event(principal: PrincipalDependency, payload: dict[str, 
     )
     event = UnifiedMessageEvent(
         event_type=str(payload.get("event_type") or "system.notification"),
-        trace_id=principal.trace_id,
+        trace_id=payload.get("trace_id") or principal.trace_id,
         tenant_id=str(payload.get("tenant_id") or principal.tenant_id),
         org_id=payload.get("org_id") or None,
         room_id=payload.get("room_id") or None,

@@ -44,10 +44,20 @@ def _is_url_allowed(url: str) -> bool:
 def _sanitize_screenshot_path(path: str) -> str:
     """Restrict screenshot paths to /tmp or relative paths without .."""
     import os
+    import re
     from pathlib import Path
+    # Strip surrounding whitespace so leading-space variants like " C:/Windows"
+    # cannot bypass the absolute-path checks below.
+    path = path.strip()
     normalized = os.path.normpath(path)
-    if ".." in normalized.split(os.sep):
+    # Detect traversal using either separator so the check is host-OS independent.
+    if ".." in re.split(r"[\\/]", normalized):
         raise api_error(400, ErrorCode.VALIDATION_ERROR, "Invalid path: traversal detected.")
+    # Block Windows drive-letter and UNC paths regardless of host OS. On Linux
+    # ``Path("C:/...").is_absolute()`` is False, so such paths would otherwise
+    # slip through the POSIX absolute-path check below.
+    if re.match(r"^[A-Za-z]:[\\/]", path) or path.startswith("\\\\"):
+        raise api_error(400, ErrorCode.VALIDATION_ERROR, "Invalid path: Windows absolute paths are not allowed.")
     # Block absolute paths on any platform
     if Path(path).is_absolute() or path.startswith("/") or path.startswith("\\"):
         allowed_prefixes = ("/tmp", "/var/tmp")

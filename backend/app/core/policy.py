@@ -24,7 +24,7 @@ class ToolPolicyEngine:
                 allowed=False,
                 requires_approval=True,
                 sandbox_profile="locked",
-                reason=f"Tool {tool_name} is {risk_level.value} risk and requires approval.",
+                reason=f"Tool {tool_name} is {risk_level.name} risk and requires approval.",
             )
 
         scope = f"tool:{tool_name}"

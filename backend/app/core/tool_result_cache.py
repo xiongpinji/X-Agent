@@ -22,7 +22,7 @@ class CacheEntry:
 
     def is_expired(self) -> bool:
         """Check if this entry has expired."""
-        return time.time() - self.created_at > self.ttl
+        return time.time() - self.created_at >= self.ttl
 
     def touch(self) -> None:
         """Update last access time and increment access count."""
@@ -115,7 +115,7 @@ class ToolResultCache:
             ttl: Time-to-live in seconds (uses default if None)
         """
         key = self._make_key(tool_name, args)
-        ttl = ttl or self._default_ttl
+        ttl = self._default_ttl if ttl is None else ttl
 
         # Check if we need to evict
         if len(self._cache) >= self._max_size and key not in self._cache:

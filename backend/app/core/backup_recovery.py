@@ -240,10 +240,13 @@ class BackupRecoveryEngine:
             raise ValueError(f"Backup {backup_id} not found")
 
         backup = self.backups[backup_id]
+        integrity_check_passed = True  # In production, perform actual checks
+        recovery_test_passed = True
         verification = BackupVerification(
             backup_id=backup_id,
-            integrity_check_passed=True,  # In production, perform actual checks
-            recovery_test_passed=True
+            success=integrity_check_passed and recovery_test_passed,
+            integrity_check_passed=integrity_check_passed,
+            recovery_test_passed=recovery_test_passed,
         )
 
         self.verifications[verification.id] = verification

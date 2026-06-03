@@ -271,7 +271,11 @@ async def post_message(room_id: str, request: CollaborationMessageCreateRequest,
         raise api_error(404, ErrorCode.RESOURCE_NOT_FOUND, "Collaboration room not found.", details={"resource_type": "collaboration_room", "resource_id": room_id})
     room = collaboration_store.get_room(room_id)
     if room is not None:
-        channel_key = build_channel_key(tenant_id=room.tenant_id, room_id=room.room_id, conversation_id=str(request.metadata.get("conversation_id") or "") or None, agent_id=principal.agent_id, user_id=principal.user_id, trace_id=principal.trace_id)
+        # Route message events on the room-level channel key (no conversation_id
+        # dimension) so room subscribers receive them, matching room.created /
+        # member_added / workflow.updated / room.closed. The conversation_id is
+        # still preserved on the event object and payload for consumers.
+        channel_key = build_channel_key(tenant_id=room.tenant_id, room_id=room.room_id, agent_id=principal.agent_id, user_id=principal.user_id, trace_id=principal.trace_id)
         await message_event_bus.publish(
             channel_key,
             UnifiedMessageEvent(

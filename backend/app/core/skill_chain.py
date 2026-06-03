@@ -192,10 +192,22 @@ class ChainExecutionContext:
 class SkillChainExecutor:
     """技能链执行引擎"""
 
-    def __init__(self):
-        self.executor = get_skill_executor()
-        self.registry = get_skill_registry()
+    def __init__(self, executor=None, registry=None):
+        # get_skill_executor/get_skill_registry are async singleton factories;
+        # they cannot be awaited in this sync __init__. Store any injected
+        # instances and lazily resolve the globals on first use (see
+        # _ensure_runtime), so self.executor/self.registry are real objects
+        # rather than un-awaited coroutines.
+        self.executor = executor
+        self.registry = registry
         self._execution_history: Dict[str, ChainExecutionContext] = {}
+
+    async def _ensure_runtime(self) -> None:
+        """Lazily resolve the global async executor/registry if not injected."""
+        if self.registry is None:
+            self.registry = await get_skill_registry()
+        if self.executor is None:
+            self.executor = await get_skill_executor()
 
     async def execute_chain(
         self,
@@ -216,6 +228,7 @@ class SkillChainExecutor:
         Returns:
             ChainExecutionContext: 执行上下文
         """
+        await self._ensure_runtime()
         context = ChainExecutionContext(
             chain_id=chain.chain_id,
             chain_name=chain.name,

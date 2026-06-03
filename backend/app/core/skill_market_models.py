@@ -7,36 +7,53 @@ from enum import Enum
 from typing import Optional, Any
 from pydantic import BaseModel, Field
 
+__all__ = [
+    "SkillCategory",
+    "SkillStatus",
+    "SkillRiskLevel",
+    "SkillManifest",
+    "SkillRecord",
+    "SkillCategoryInfo",
+    "SkillInstallRequest",
+    "SkillUninstallRequest",
+    "SkillExecuteRequest",
+    "SkillSearchRequest",
+    "SkillInstallationProgress",
+    "SkillUsageRecord",
+    "SkillRecommendation",
+    "SkillComment",
+]
+
 
 class SkillCategory(str, Enum):
     """技能分类"""
-    OFFICE = "office"  # 办公助手
-    DESIGN = "design"  # 设计助手
-    DEVELOPMENT = "development"  # 编程助手
-    DATA = "data"  # 数据助手
-    AUTOMATION = "automation"  # 自动化助手
-    LEARNING = "learning"  # 学习助手
-    SEARCH = "search"  # 搜索助手
-    CREATIVITY = "creativity"  # 创意助手
+    OFFICE = "office"
+    DESIGN = "design"
+    DEVELOPMENT = "development"
+    DATA = "data"
+    AUTOMATION = "automation"
+    LEARNING = "learning"
+    SEARCH = "search"
+    CREATIVITY = "creativity"
 
 
 class SkillStatus(str, Enum):
     """技能状态"""
-    DRAFT = "draft"  # 草稿
-    PUBLISHED = "published"  # 已发布
-    INSTALLING = "installing"  # 安装中
-    INSTALLED = "installed"  # 已安装
-    UPDATING = "updating"  # 更新中
-    DISABLED = "disabled"  # 已禁用
-    ERROR = "error"  # 错误
+    DRAFT = "draft"
+    PUBLISHED = "published"
+    INSTALLING = "installing"
+    INSTALLED = "installed"
+    UPDATING = "updating"
+    DISABLED = "disabled"
+    ERROR = "error"
 
 
 class SkillRiskLevel(str, Enum):
     """风险等级"""
-    LOW = "low"  # 低
-    MEDIUM = "medium"  # 中
-    HIGH = "high"  # 高
-    CRITICAL = "critical"  # 严重
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    CRITICAL = "critical"
 
 
 class SkillManifest(BaseModel):
@@ -70,8 +87,6 @@ class SkillRecord(BaseModel):
     category: SkillCategory = Field(..., description="分类")
     status: SkillStatus = Field(default=SkillStatus.PUBLISHED, description="状态")
     risk_level: SkillRiskLevel = Field(default=SkillRiskLevel.MEDIUM, description="风险等级")
-
-    # 中文化内容
     what_is_it: str = Field(default="", description="这个技能是干什么的")
     who_is_it_for: str = Field(default="", description="适合谁用")
     how_to_use: str = Field(default="", description="怎么用（步骤化）")
@@ -79,28 +94,20 @@ class SkillRecord(BaseModel):
     faq: list[dict[str, str]] = Field(default_factory=list, description="常见问题")
     tutorial: str = Field(default="", description="使用教程")
     examples: list[dict[str, str]] = Field(default_factory=list, description="使用示例")
-
-    # 统计信息
     downloads: int = Field(default=0, description="下载次数")
     rating: float = Field(default=0.0, description="评分")
     rating_count: int = Field(default=0, description="评分数")
     installed_count: int = Field(default=0, description="安装数")
     usage_count: int = Field(default=0, description="使用次数")
-
-    # 时间戳
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC), description="创建时间")
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC), description="更新时间")
     published_at: Optional[datetime] = Field(default=None, description="发布时间")
-
-    # 用户相关
     is_installed: bool = Field(default=False, description="是否已安装")
     is_enabled: bool = Field(default=False, description="是否已启用")
     is_favorite: bool = Field(default=False, description="是否已收藏")
     install_path: Optional[str] = Field(default=None, description="安装路径")
     install_time: Optional[datetime] = Field(default=None, description="安装时间")
     comments: list = Field(default_factory=list, description="评论列表")
-
-    # 源信息
     source_repo: str = Field(default="", description="源仓库")
     source_url: str = Field(default="", description="源URL")
     source_type: str = Field(default="github", description="源类型")

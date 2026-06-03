@@ -68,7 +68,7 @@ class RunStore:
             tool_call_count=len(response.tool_calls),
             error=response.error[:2_000] if response.error else None,
             stage=response.snapshot.get("stage", previous.stage),
-            execution_summary={**previous.execution_summary, **response.execution_summary, "resumed_from": trace_id, "previous_stage": previous.stage, "previous_tool_call_count": previous.tool_call_count},
+            execution_summary={**previous.execution_summary, **response.execution_summary, "resumed_from": trace_id, "previous_stage": previous.status, "previous_tool_call_count": previous.tool_call_count},
             plan=response.plan or previous.plan,
             tool_calls=response.tool_calls or previous.tool_calls,
             run_view=response.snapshot.get("run_view", previous.run_view) if isinstance(response.snapshot, dict) else previous.run_view,

@@ -471,6 +471,10 @@ async def get_workflow_run_detail(run_id: str, repository: WorkflowRepositoryDep
     # linked_summaries / snapshot 内保留，二者并存互不破坏。
     payload["run"] = run.model_dump(mode="json")
     payload["timeline"] = timeline
+    # 把 run 字段(含 run_id/workflow_id/status 等)并入顶层 snapshot，
+    # 与 correlation 端点保持一致(调用方按 detail["snapshot"]["run_id"] 取值);
+    # 原信封字段(linked_summaries/timeline 等)仍保留在 snapshot 内。
+    payload["snapshot"] = {**payload.get("snapshot", {}), **run.model_dump(mode="json")}
     return payload
 
 
@@ -529,7 +533,17 @@ async def get_workflow_run_correlation(run_id: str, repository: WorkflowReposito
             "audit_anchors": [{"kind": event["kind"], "timestamp": event["timestamp"], "node_id": event.get("node_id"), "status": event.get("status")} for event in timeline if event["kind"] in {"run.started", "run.completed", "node.started", "node.completed", "node.compensated", "node.failed"}],
         },
     )
-    # 顶层补 run_id，与 /api/v1/traces/{id}/correlation 一致
+    # 顶层补 run_id/workflow_id/trace_id/trace_summary/audit_anchors，
+    # 与姊妹端点 /api/v1/traces/{id}/correlation 一致(调用方按
+    # correlation.json()["trace_summary"]["trace_id"] 等取值)。
     payload["run_id"] = run.run_id
+    payload["workflow_id"] = run.workflow_id
+    payload["trace_id"] = run.run_id
+    payload["trace_summary"] = linked_summaries["trace"]
+    payload["audit_anchors"] = [
+        {"kind": event["kind"], "timestamp": event["timestamp"], "node_id": event.get("node_id"), "status": event.get("status")}
+        for event in timeline
+        if event["kind"] in {"run.started", "run.completed", "node.started", "node.completed", "node.compensated", "node.failed"}
+    ]
     payload["snapshot"] = run.model_dump(mode="json")
     return payload

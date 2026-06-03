@@ -199,9 +199,14 @@ class RetrieverOptimizer:
         results = []
         seen_ids = set()
 
+        embeddings = np.asarray(embeddings)
+        target_dim = embeddings.shape[1] if embeddings.ndim == 2 else len(embeddings[0])
+        if target_dim <= 0:
+            return []
+
         for query in queries:
-            # 获取查询嵌入
-            query_embedding = self._get_query_embedding(query)
+            # 获取查询嵌入(维度与记忆嵌入对齐,避免 cosine_similarity 维度不匹配)
+            query_embedding = self._get_query_embedding(query, dim=target_dim)
 
             # 计算相似度
             similarities = cosine_similarity(
@@ -417,20 +422,31 @@ class RetrieverOptimizer:
 
         return expanded
 
-    def _get_query_embedding(self, query: str) -> np.ndarray:
+    def _get_query_embedding(self, query: str, dim: Optional[int] = None) -> np.ndarray:
         """
         获取查询的嵌入向量。
 
-        使用简单的哈希方法。
+        使用基于查询哈希的确定性方法生成向量。当提供 ``dim`` 时,
+        生成与记忆嵌入同维度的向量,避免 cosine_similarity 因维度
+        不一致而报错;同一查询始终生成相同向量(便于缓存与复现)。
 
         Args:
             query: 查询文本
+            dim: 目标向量维度。None 时回退到 16 字节哈希派生的 4 维向量。
 
         Returns:
             嵌入向量
         """
-        hash_val = hashlib.md5(query.encode()).digest()
-        embedding = np.frombuffer(hash_val, dtype=np.float32)
+        if dim is None:
+            hash_val = hashlib.md5(query.encode()).digest()
+            embedding = np.frombuffer(hash_val, dtype=np.float32).copy()
+        else:
+            # 用查询哈希做确定性随机种子,生成目标维度向量
+            seed = int.from_bytes(
+                hashlib.md5(query.encode()).digest()[:8], "little", signed=False
+            )
+            rng = np.random.default_rng(seed)
+            embedding = rng.standard_normal(int(dim)).astype(np.float32)
         # 标准化
         norm = np.linalg.norm(embedding)
         if norm > 0:
