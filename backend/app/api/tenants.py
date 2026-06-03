@@ -47,7 +47,7 @@ async def update_tenant(tenant_id: str, request: TenantUpdateRequest, principal:
 async def get_tenant_usage(
     tenant_id: str,
     principal: PrincipalDependency,
-    period: str = Query("month", regex="^(day|week|month|year)$"),
+    period: str = Query("month", pattern="^(day|week|month|year)$"),
 ) -> dict[str, object]:
     """Get tenant usage statistics for the specified period.
 

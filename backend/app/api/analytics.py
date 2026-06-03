@@ -337,7 +337,7 @@ async def generate_custom_report(
 async def get_report(
     principal: PrincipalDependency,
     report_id: str,
-    format: str = Query("json", regex="^(json|csv|pdf)$"),
+    format: str = Query("json", pattern="^(json|csv|pdf)$"),
 ) -> dict | str:
     """Get report.
 

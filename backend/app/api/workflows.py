@@ -311,6 +311,23 @@ async def schedule_workflow(workflow_id: str, payload: dict[str, object], reposi
     return {**schedule.model_dump(mode="json"), "id": schedule.schedule_id, "schedule_id": schedule.schedule_id, "workflow_id": workflow.id, "resource_type": "workflow_schedule", "snapshot": {**schedule.snapshot, "workflow_id": workflow.id, "schedule_id": schedule.schedule_id}}
 
 
+_AUDIT_ANCHOR_EVENT_TYPES = frozenset({
+    "run.started", "run.completed",
+    "node.started", "node.completed",
+    "node.compensated", "node.failed",
+})
+
+
+def _build_audit_anchors(timeline: list[dict[str, object]]) -> list[dict[str, object]]:
+    """从运行时间线中提取审计锚点事件。"""
+    return [
+        {"kind": event["kind"], "timestamp": event["timestamp"],
+         "node_id": event.get("node_id"), "status": event.get("status")}
+        for event in timeline
+        if event["kind"] in _AUDIT_ANCHOR_EVENT_TYPES
+    ]
+
+
 def _build_workflow_summary(run: WorkflowRunRecord, failure_count: int, compensation_count: int) -> dict[str, object]:
     recovery_plan = run.snapshot.get("last_agent_execution_summary", {}).get("recovery_plan", {}) if isinstance(run.snapshot, dict) else {}
     return {
@@ -461,7 +478,7 @@ async def get_workflow_run_detail(run_id: str, repository: WorkflowRepositoryDep
         extra={
             "timeline": timeline,
             "view_model": primary["view_model"],
-            "audit_anchors": [{"kind": event["kind"], "timestamp": event["timestamp"], "node_id": event.get("node_id"), "status": event.get("status")} for event in timeline if event["kind"] in {"run.started", "run.completed", "node.started", "node.completed", "node.compensated", "node.failed"}],
+            "audit_anchors": _build_audit_anchors(timeline),
             "failure_events": failure_chain,
             "compensation_events": compensation_chain,
         },
@@ -530,7 +547,7 @@ async def get_workflow_run_correlation(run_id: str, repository: WorkflowReposito
             "compensation_chain": compensation_chain,
             "trace_summary": linked_summaries["trace"],
             "view_model": primary["view_model"],
-            "audit_anchors": [{"kind": event["kind"], "timestamp": event["timestamp"], "node_id": event.get("node_id"), "status": event.get("status")} for event in timeline if event["kind"] in {"run.started", "run.completed", "node.started", "node.completed", "node.compensated", "node.failed"}],
+            "audit_anchors": _build_audit_anchors(timeline),
         },
     )
     # 顶层补 run_id/workflow_id/trace_id/trace_summary/audit_anchors，
@@ -540,10 +557,6 @@ async def get_workflow_run_correlation(run_id: str, repository: WorkflowReposito
     payload["workflow_id"] = run.workflow_id
     payload["trace_id"] = run.run_id
     payload["trace_summary"] = linked_summaries["trace"]
-    payload["audit_anchors"] = [
-        {"kind": event["kind"], "timestamp": event["timestamp"], "node_id": event.get("node_id"), "status": event.get("status")}
-        for event in timeline
-        if event["kind"] in {"run.started", "run.completed", "node.started", "node.completed", "node.compensated", "node.failed"}
-    ]
+    payload["audit_anchors"] = _build_audit_anchors(timeline)
     payload["snapshot"] = run.model_dump(mode="json")
     return payload

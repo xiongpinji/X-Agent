@@ -367,7 +367,7 @@ async def subscribe_to_stream(
                 yield f"data: {event_json}\n\n"
 
             # Stream new events
-            async for chunk in _stream_events(run_id):
+            async for chunk in _stream_events(run_id, queue):
                 yield chunk
 
         finally:
@@ -532,7 +532,7 @@ async def emit_event(
 @router.post("/stream/{run_id}/log")
 async def emit_log(
     run_id: str,
-    level: str = Query(default="info", regex="^(debug|info|warning|error)$"),
+    level: str = Query(default="info", pattern="^(debug|info|warning|error)$"),
     message: str = Query(..., min_length=1, max_length=10000),
     source: str = Query(default="agent"),
     *,
@@ -610,7 +610,7 @@ async def emit_metric(
 async def emit_task_status(
     run_id: str,
     task_id: str = Query(..., min_length=1),
-    status: str = Query(..., regex="^(pending|running|completed|failed)$"),
+    status: str = Query(..., pattern="^(pending|running|completed|failed)$"),
     title: str = Query(default=""),
     details: dict[str, Any] = Body(default={}),
     *,

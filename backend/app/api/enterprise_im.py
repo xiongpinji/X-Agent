@@ -36,7 +36,7 @@ class SendMessageRequest(BaseModel):
     platform: str = Field(..., min_length=1, max_length=50)
     user_id: str = Field(..., min_length=1, max_length=200)
     message: str = Field(..., min_length=1, max_length=10000)
-    msg_type: str = Field(default="text", regex="^(text|markdown|card)$")
+    msg_type: str = Field(default="text", pattern="^(text|markdown|card)$")
 
 
 class SendCardRequest(BaseModel):
@@ -50,7 +50,7 @@ class BroadcastMessageRequest(BaseModel):
     """Broadcast message request"""
     platforms: List[str] = Field(default_factory=list)
     message: str = Field(..., min_length=1, max_length=10000)
-    msg_type: str = Field(default="text", regex="^(text|markdown|card)$")
+    msg_type: str = Field(default="text", pattern="^(text|markdown|card)$")
 
 
 class CreateApprovalRequest(BaseModel):

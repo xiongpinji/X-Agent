@@ -45,7 +45,7 @@ class DocumentUpdateRequest(BaseModel):
 
 
 class OperationRequest(BaseModel):
-    op_type: str = Field(..., regex="^(insert|delete|replace)$")
+    op_type: str = Field(..., pattern="^(insert|delete|replace)$")
     position: int = Field(..., ge=0)
     content: str = Field(default="")
 
@@ -58,25 +58,25 @@ class CommentRequest(BaseModel):
 
 class PermissionGrantRequest(BaseModel):
     user_id: str = Field(..., min_length=1)
-    level: str = Field(..., regex="^(view|comment|edit|manage)$")
+    level: str = Field(..., pattern="^(view|comment|edit|manage)$")
     expires_in_days: Optional[int] = None
 
 
 class ShareLinkCreateRequest(BaseModel):
-    permission_level: str = Field(default="view", regex="^(view|comment|edit)$")
+    permission_level: str = Field(default="view", pattern="^(view|comment|edit)$")
     expires_in_days: Optional[int] = None
     password: Optional[str] = None
 
 
 class InvitationRequest(BaseModel):
-    invitee_email: str = Field(..., regex="^[^@]+@[^@]+\\.[^@]+$")
-    permission_level: str = Field(default="edit", regex="^(view|comment|edit)$")
+    invitee_email: str = Field(..., pattern="^[^@]+@[^@]+\\.[^@]+$")
+    permission_level: str = Field(default="edit", pattern="^(view|comment|edit)$")
     message: Optional[str] = None
 
 
 class ConflictResolutionRequest(BaseModel):
     conflict_id: str
-    resolution: str = Field(..., regex="^(keep_op1|keep_op2|merge)$")
+    resolution: str = Field(..., pattern="^(keep_op1|keep_op2|merge)$")
 
 
 class CursorUpdateRequest(BaseModel):

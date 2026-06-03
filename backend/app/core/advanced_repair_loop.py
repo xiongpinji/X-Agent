@@ -255,7 +255,7 @@ class AdvancedRepairLoop:
                     await asyncio.sleep(wait_time)
 
                 result = operation(*args, **kwargs)
-                if isinstance(result, asyncio.coroutine):
+                if inspect.iscoroutine(result):
                     result = await result
 
                 failure.recovery_attempted = True

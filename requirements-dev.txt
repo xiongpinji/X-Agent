@@ -7,7 +7,7 @@
 
 # Testing
 pytest==8.2.0
-pytest-asyncio==0.23.0
+pytest-asyncio==0.25.0   # PINNED: 0.23 has collection bug, 1.x changes async-fixture mechanics (2929 errors)
 pytest-cov==4.0.0
 aiosqlite==0.20.0
 locust==2.20.0
@@ -33,3 +33,4 @@ pre-commit==3.0.0
 
 # Development Utilities
 ipython==8.12.0
+nest-asyncio>=1.6.0   # test: nested event loop (test_security.py)

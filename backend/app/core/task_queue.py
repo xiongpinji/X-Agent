@@ -270,9 +270,13 @@ class TaskQueue:
                 )
                 return False
 
-            # Remove from queue
-            self.queue.remove(task)
-            heapq.heapify(self.queue)
+            # Remove from queue if still present. A task being re-queued for
+            # retry has typically already been dequeued for execution, so it
+            # won't be in self.queue (only in task_map). Guard the remove to
+            # avoid ValueError: list.remove(x): x not in list.
+            if task in self.queue:
+                self.queue.remove(task)
+                heapq.heapify(self.queue)
 
             # Update task
             task.retry_count += 1

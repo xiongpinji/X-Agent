@@ -78,7 +78,7 @@ async def create_post(
 async def list_posts(
     category: Optional[str] = Query(None),
     tag: Optional[str] = Query(None),
-    sort_by: str = Query("created_at", regex="^(created_at|views|likes|comments)$"),
+    sort_by: str = Query("created_at", pattern="^(created_at|views|likes|comments)$"),
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
     principal: PrincipalDependency = None,

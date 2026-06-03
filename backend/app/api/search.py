@@ -22,7 +22,7 @@ content_extractor = ContentExtractor(timeout=10.0)
 async def search(
     query: str = Query(..., min_length=1, max_length=500),
     num_results: int = Query(10, ge=1, le=50),
-    search_type: str = Query("web", regex="^(web|news|images)$"),
+    search_type: str = Query("web", pattern="^(web|news|images)$"),
     use_cache: bool = Query(True),
     *,
     principal: PrincipalDependency,

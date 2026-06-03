@@ -164,6 +164,10 @@ class CodebaseIndex:
                     logger.debug(f"Failed to update file index {file_path}: {e}")
         self._build_dependency_graph()
         self._stats.total_symbols = sum(len(node.symbols) for node in self._files.values())
+        # Bug fix: update_index previously left indexed_files stale after deletions
+        # (only build_index recomputed it). Recompute here too so the file count
+        # reflects additions/removals — mirrors build_index().
+        self._stats.indexed_files = len(self._files)
         self._stats.index_time_seconds = time.time() - start_time
         self._stats.last_updated = datetime.now(timezone.utc)
         logger.info(f"Incremental update complete: {updated_count} files updated")
