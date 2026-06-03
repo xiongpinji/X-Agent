@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Callable
@@ -302,7 +303,7 @@ class AdvancedRepairLoop:
         for fallback_op in fallback_operations:
             try:
                 result = fallback_op(*args, **kwargs)
-                if isinstance(result, asyncio.coroutine):
+                if inspect.iscoroutine(result):
                     result = await result
 
                 failure.recovery_attempted = True
@@ -355,7 +356,7 @@ class AdvancedRepairLoop:
         # Retry operation
         try:
             result = operation(*args, **kwargs)
-            if isinstance(result, asyncio.coroutine):
+            if inspect.iscoroutine(result):
                 result = await result
 
             failure.recovery_attempted = True

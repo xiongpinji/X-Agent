@@ -412,7 +412,7 @@ class TestAdvancedRepairLoop:
 
         call_count = 0
 
-        async def failing_operation():
+        def failing_operation():
             nonlocal call_count
             call_count += 1
             if call_count < 3:
