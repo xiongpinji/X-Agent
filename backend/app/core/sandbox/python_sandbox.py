@@ -321,7 +321,12 @@ finally:
         return "\n".join(indent + line if line.strip() else line for line in code.split("\n"))
 
     async def _execute_in_container(self, script_path: str) -> ExecutionResult:
-        """Execute script in Docker container.
+        """Execute script in a Docker container when available.
+
+        Uses DockerSandbox for real container isolation. When Docker is not
+        reachable (no daemon / no root / CI), DockerSandbox itself reports
+        subprocess backend and we fall through to _execute_direct so behavior
+        is unchanged on machines without Docker.
 
         Args:
             script_path: Path to script to execute
@@ -329,24 +334,57 @@ finally:
         Returns:
             ExecutionResult
         """
+        import os
         import time
 
         start_time = time.perf_counter()
 
         try:
-            # For now, execute directly (Docker integration can be added later)
-            # In production, this would use docker-py to create isolated containers
-            result = await self._execute_direct(script_path)
-            return result
+            from backend.app.core.sandbox.docker_sandbox import (
+                DockerSandbox,
+                SandboxSpec,
+                is_docker_available,
+            )
+
+            # No Docker daemon → keep the existing subprocess path verbatim.
+            if not is_docker_available():
+                return await self._execute_direct(script_path)
+
+            script_dir = os.path.dirname(os.path.abspath(script_path))
+            script_name = os.path.basename(script_path)
+            spec = SandboxSpec(
+                image=self.config.docker_image,
+                timeout_seconds=self.config.timeout_seconds,
+                memory_limit_mb=self.config.memory_limit_mb,
+                cpu_limit=max(self.config.cpu_limit_percent / 100.0, 0.1),
+                enable_network=self.config.enable_network,
+                workspace_path=script_dir,  # mounted at /workspace
+            )
+            async with DockerSandbox(spec) as sandbox:
+                self._container_id = sandbox._container_id
+                run = await sandbox.run(f"python {script_name}")
+                elapsed_ms = (time.perf_counter() - start_time) * 1000
+                return ExecutionResult(
+                    success=run.success,
+                    stdout=run.stdout[: self.config.max_output_bytes],
+                    stderr=run.stderr[: self.config.max_output_bytes],
+                    execution_time_ms=elapsed_ms,
+                    error_code=None if run.success else "CONTAINER_NONZERO_EXIT",
+                    error_message=run.error,
+                )
 
         except Exception as e:
             logger.exception(f"Container execution error: {e}")
-            return ExecutionResult(
-                success=False,
-                error_code="CONTAINER_ERROR",
-                error_message=str(e),
-                execution_time_ms=(time.perf_counter() - start_time) * 1000,
-            )
+            # Resilience: if container path blows up, fall back to subprocess
+            try:
+                return await self._execute_direct(script_path)
+            except Exception:
+                return ExecutionResult(
+                    success=False,
+                    error_code="CONTAINER_ERROR",
+                    error_message=str(e),
+                    execution_time_ms=(time.perf_counter() - start_time) * 1000,
+                )
 
     async def _execute_direct(self, script_path: str) -> ExecutionResult:
         """Execute script directly (fallback for development).
@@ -363,13 +401,16 @@ finally:
         start_time = time.perf_counter()
 
         try:
-            # Execute with timeout and resource limits
+            # Execute with timeout and resource limits.
+            # NOTE: create_subprocess_exec does NOT accept a timeout kwarg —
+            # the timeout is enforced by asyncio.wait_for around communicate()
+            # below. Passing timeout= here leaks into subprocess.Popen and
+            # raises TypeError.
             process = await asyncio.create_subprocess_exec(
                 "python",
                 script_path,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
-                timeout=self.config.timeout_seconds,
             )
 
             try:

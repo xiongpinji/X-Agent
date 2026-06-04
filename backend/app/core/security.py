@@ -23,6 +23,8 @@ ROLE_SCOPES: dict[str, list[str]] = {
         "workflow:control",
         "audit:read",
         "security:manage",
+        "sandbox:run",
+        "sandbox:read",
     ],
     "developer": [
         "agent:run",
@@ -33,6 +35,7 @@ ROLE_SCOPES: dict[str, list[str]] = {
         "workflow:create",
         "workflow:run",
         "audit:read",
+        "sandbox:run",
     ],
     "user": [
         "agent:run",

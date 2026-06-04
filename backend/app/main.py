@@ -68,6 +68,8 @@ from backend.app.api.tools_batch import router as tools_batch_router
 from backend.app.api.memory_enhanced import router as memory_enhanced_router
 from backend.app.api.feedback import router as feedback_router
 from backend.app.api.sync import router as sync_router
+from backend.app.api.sandbox_tasks import router as sandbox_tasks_router
+from backend.app.api.sandbox_tasks import start_sandbox_worker, stop_sandbox_worker
 from backend.app.services.browser.automation import browser_automation
 from backend.app.services.browser.playwright_client import browser_client
 from backend.app.services.memory.indexer import memory_indexer
@@ -525,6 +527,7 @@ app.include_router(tools_batch_router)
 app.include_router(memory_enhanced_router)
 app.include_router(feedback_router)
 app.include_router(sync_router)
+app.include_router(sandbox_tasks_router)
 app.add_exception_handler(XAgentAPIError, xagent_api_error_handler)
 app.add_exception_handler(RequestValidationError, validation_error_handler)
 app.add_exception_handler(PydanticValidationError, pydantic_validation_error_handler)
@@ -585,6 +588,13 @@ async def startup_event():
         logger.error(f"Failed to load hooks configuration: {e}", exc_info=True)
         logger.warning("Application startup continuing without hooks")
 
+    # Start the sandbox worker (persistent drain loop on the app event loop).
+    try:
+        await start_sandbox_worker()
+    except Exception as e:
+        logger.error(f"Failed to start sandbox worker: {e}", exc_info=True)
+        logger.warning("Application startup continuing without sandbox worker")
+
 
 @app.on_event("shutdown")
 async def shutdown_event():
@@ -601,6 +611,12 @@ async def shutdown_event():
         logger.info("MCP manager shutdown complete")
     except Exception as e:
         logger.error(f"Error during MCP manager shutdown: {e}", exc_info=True)
+
+    try:
+        await stop_sandbox_worker()
+        logger.info("Sandbox worker shutdown complete")
+    except Exception as e:
+        logger.error(f"Error during sandbox worker shutdown: {e}", exc_info=True)
 
     logger.info("X-Agent application shutdown complete")
 
