@@ -199,12 +199,28 @@ class AuditStore:
     def _load_from_disk(self) -> None:
         if self._storage_path is None or not self._storage_path.exists():
             return
+        bad_lines = 0
         with self._storage_path.open("r", encoding="utf-8") as handle:
             for line in handle:
                 line = line.strip()
                 if not line:
                     continue
-                self._records.append(AuditLogRecord.model_validate(json.loads(line)))
+                try:
+                    self._records.append(
+                        AuditLogRecord.model_validate(json.loads(line))
+                    )
+                except (json.JSONDecodeError, ValueError) as exc:
+                    bad_lines += 1
+                    import logging
+                    logging.getLogger(__name__).warning(
+                        "Skipping corrupt audit line in %s: %s",
+                        self._storage_path, exc,
+                    )
+        if bad_lines:
+            import logging
+            logging.getLogger(__name__).warning(
+                "Audit store loaded with %d corrupt line(s) skipped.", bad_lines
+            )
 
     def _append_to_disk(self, record: AuditLogRecord) -> None:
         if self._storage_path is None:

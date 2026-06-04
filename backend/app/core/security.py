@@ -207,12 +207,25 @@ class APIKeyStore:
     def _load_from_disk(self) -> None:
         if self._storage_path is None or not self._storage_path.exists():
             return
-        with self._storage_path.open("r", encoding="utf-8") as handle:
-            payload = json.load(handle)
-        for item in payload:
-            record = APIKeyRecord.model_validate(item)
-            self._records[record.id] = record
-            self._hash_index.setdefault(record.key_prefix, []).append(record.id)
+        try:
+            with self._storage_path.open("r", encoding="utf-8") as handle:
+                payload = json.load(handle)
+            for item in payload:
+                record = APIKeyRecord.model_validate(item)
+                self._records[record.id] = record
+                self._hash_index.setdefault(record.key_prefix, []).append(record.id)
+        except (json.JSONDecodeError, ValueError, KeyError) as exc:
+            import logging
+            logging.getLogger(__name__).warning(
+                "Failed to load API key store from %s: %s. Starting empty.",
+                self._storage_path, exc,
+            )
+            try:
+                self._storage_path.rename(
+                    self._storage_path.with_suffix(self._storage_path.suffix + ".bak")
+                )
+            except OSError:
+                pass
 
     def _persist(self) -> None:
         if self._storage_path is None:
