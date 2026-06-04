@@ -1,0 +1,133 @@
+"""AgentFixRunner — connects a real AgentLoop to the IssueToPR pipeline.
+
+The IssueToPR pipeline takes a `fix_runner(sandbox, issue, workspace) -> bool`
+callable. This module provides a runner backed by an actual AgentLoop: it
+composes a task from the GitHub issue, runs the agent pointed at the cloned
+repo, and reports whether the agent produced file changes.
+
+Design:
+- Lazy agent: built via dependencies.get_agent() on first use unless one is
+  injected (tests inject a fake). Keeps the heavy LLM/memory wiring out of
+  import time.
+- Workspace targeting: the cloned repo lives at <workspace>/repo. We pass it
+  to the agent via extra_context["root"] so the file tools operate there.
+- Success = agent COMPLETED and at least one file-mutating tool call
+  (write_file / apply_text_patch / apply_batch_patch) succeeded. We do NOT
+  trust the agent's prose; we check actual tool effects. The pipeline then
+  independently re-checks `git has_changes`, so a false positive here still
+  can't open an empty PR.
+"""
+
+from __future__ import annotations
+
+import logging
+from pathlib import Path
+from typing import Any, Optional
+from uuid import uuid4
+
+logger = logging.getLogger(__name__)
+
+# Tool names that indicate the agent actually mutated files.
+_MUTATING_TOOLS = {"write_file", "apply_text_patch", "apply_batch_patch"}
+
+
+class AgentFixRunner:
+    """A fix_runner backed by a real AgentLoop.
+
+    Usage:
+        runner = AgentFixRunner()
+        pipeline = IssueToPRPipeline(github, runner, config)
+
+    The instance is callable with the FixRunner signature
+    (sandbox, issue, workspace) -> bool.
+    """
+
+    def __init__(self, agent: Any = None, max_iterations: int = 6):
+        self._agent = agent
+        self._max_iterations = max_iterations
+
+    def _get_agent(self) -> Any:
+        if self._agent is None:
+            # Lazy import to avoid pulling the whole dependency graph at import.
+            from backend.app.dependencies import get_agent
+
+            self._agent = get_agent()
+        return self._agent
+
+    @staticmethod
+    def _compose_task(issue: Any) -> str:
+        """Build an agent task prompt from the issue. Kept explicit so the
+        agent gets the title + body + a clear instruction to edit files."""
+        title = getattr(issue, "title", "")
+        body = getattr(issue, "body", "") or ""
+        number = getattr(issue, "issue_number", "?")
+        return (
+            f"Resolve GitHub issue #{number}: {title}\n\n"
+            f"Issue description:\n{body}\n\n"
+            "Investigate the repository under the working root, make the "
+            "necessary code changes to resolve the issue, and use the "
+            "file-editing tools (write_file / apply_text_patch) to apply them. "
+            "Keep changes minimal and focused on the issue."
+        )
+
+    async def __call__(self, sandbox: Any, issue: Any, workspace: str) -> bool:
+        """Run the agent to fix the issue. Returns True if files were mutated.
+
+        `workspace` is the sandbox-provisioned dir; the clone lives at
+        <workspace>/repo (matching IssueToPRPipeline).
+        """
+        from backend.app.core.contracts import RunContext, RiskLevel, RunStatus
+
+        clone_dir = str(Path(workspace) / "repo")
+        agent = self._get_agent()
+
+        context = RunContext(
+            tenant_id="sandbox",
+            user_id="issue-fixer",
+            agent_id=f"issue-fixer-{getattr(issue, 'issue_number', uuid4().hex[:8])}",
+            trace_id=str(uuid4()),
+            request_id=str(uuid4()),
+            permission_scope=[
+                "tools:read",
+                "tools:write",
+                "memory:read",
+                "memory:write",
+            ],
+            risk_level=RiskLevel.HIGH,  # file-mutating tools are HIGH risk
+        )
+
+        task = self._compose_task(issue)
+        try:
+            result = await agent.run(
+                context,
+                task,
+                extra_context={"root": clone_dir, "retry_budget": 2},
+            )
+        except Exception:
+            logger.exception("AgentFixRunner: agent.run raised for issue %s",
+                             getattr(issue, "issue_number", "?"))
+            return False
+
+        # Did the agent complete?
+        status = getattr(result, "status", None)
+        completed = status == RunStatus.COMPLETED or str(status).endswith("COMPLETED")
+
+        # Did it actually mutate files? Inspect tool_calls for successful
+        # mutating tools rather than trusting the prose answer.
+        mutated = False
+        for call in getattr(result, "tool_calls", []) or []:
+            name = getattr(call, "tool_name", None) or getattr(call, "name", None)
+            ok = getattr(call, "success", None)
+            if ok is None:
+                # some records use status/error instead of success
+                err = getattr(call, "error", None)
+                ok = err is None
+            if name in _MUTATING_TOOLS and ok:
+                mutated = True
+                break
+
+        logger.info(
+            "AgentFixRunner issue=%s status=%s mutated=%s",
+            getattr(issue, "issue_number", "?"), status, mutated,
+        )
+        return bool(completed and mutated)

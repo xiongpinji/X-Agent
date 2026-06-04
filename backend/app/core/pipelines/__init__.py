@@ -5,5 +5,11 @@ from backend.app.core.pipelines.issue_to_pr import (
     PipelineConfig,
     PipelineResult,
 )
+from backend.app.core.pipelines.agent_fix_runner import AgentFixRunner
 
-__all__ = ["IssueToPRPipeline", "PipelineConfig", "PipelineResult"]
+__all__ = [
+    "IssueToPRPipeline",
+    "PipelineConfig",
+    "PipelineResult",
+    "AgentFixRunner",
+]
