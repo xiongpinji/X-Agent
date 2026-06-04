@@ -1666,8 +1666,38 @@ class AgentLoop:
         steps = self._enrich_patch_plan(trajectory, steps, extra_context, related_tools or tool_manifest)
         steps = self._align_plan_with_context(steps, platform_context, trajectory)
         steps = self._dedupe_plan_steps(trajectory, steps)
+        try:
+            _profile = self._build_task_profile(trajectory, extra_context, platform_context)
+            _intent = str(_profile.get("intent") or "general")
+        except Exception:
+            _intent = "general"
+        _MUTATING = {"write_file", "apply_text_patch", "apply_batch_patch"}
+        _READING = {"read_file", "search_text", "list_files", "inspect_tree", "coordinate_files"}
+        if (
+            _intent == "code_change"
+            and any(step.kind == "tool" and step.tool_name in _READING for step in steps)
+            and not any(step.kind == "tool" and step.tool_name in _MUTATING for step in steps)
+            and not any(step.kind == "reflect" for step in steps)
+        ):
+            final_steps = [step for step in steps if step.kind == "final"]
+            non_final_steps = [step for step in steps if step.kind != "final"]
+            steps = non_final_steps + [AgentPlanStep(
+                kind="reflect",
+                instruction="Reflect on read evidence and re-plan the concrete write_file/apply_text_patch step",
+            )] + (final_steps or [AgentPlanStep(kind="final", instruction="Finalize answer")])
         if len(steps) > self.max_iterations:
-            steps = steps[: self.max_iterations]
+            reflect_steps = [step for step in steps if step.kind == "reflect"]
+            needs_reflect = (
+                _intent == "code_change"
+                and reflect_steps
+                and any(step.kind == "tool" and step.tool_name in _READING for step in steps)
+                and not any(step.kind == "tool" and step.tool_name in _MUTATING for step in steps)
+            )
+            if needs_reflect:
+                leading = [step for step in steps if step.kind not in {"reflect", "final"}]
+                steps = leading[: max(0, self.max_iterations - 1)] + [reflect_steps[0]]
+            else:
+                steps = steps[: self.max_iterations]
         trajectory.steps = steps
         trajectory.stage = "planning_done"
         self._record_audit("agent.plan.ready", context, trajectory, step_count=len(steps), tools=len(tool_manifest), related_tools=len(related_tools), model=getattr(response, "model", "mock"))

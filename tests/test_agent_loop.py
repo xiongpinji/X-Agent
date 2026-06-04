@@ -102,3 +102,38 @@ def test_reflect_replan_prompt_prefers_mutating_tool_after_read() -> None:
     assert "Do not choose read_file/search_text again" in prompt
     assert "apply_text_patch" in prompt
     assert "write_file" in prompt
+
+
+async def test_code_change_plan_inserts_reflect_before_final_after_read_only_plan() -> None:
+    from backend.app.core.llm.backends import LLMResponse
+
+    class _ReadOnlyPlanner:
+        async def chat(self, messages, tools):
+            return LLMResponse(
+                content=(
+                    '[{"kind":"tool","instruction":"inspect repo","tool_name":"inspect_tree","arguments":{"root":"."}},'
+                    '{"kind":"tool","instruction":"read calc","tool_name":"read_file","arguments":{"path":"calc.py"}},'
+                    '{"kind":"final","instruction":"Finalize answer"}]'
+                ),
+                model="fake",
+            )
+
+    agent = AgentLoop(
+        llm_router=_ReadOnlyPlanner(),
+        memory=InMemoryMemorySystem(),
+        tools=build_default_tool_registry(ToolPolicyEngine()),
+    )
+    trajectory = AgentTrajectory(
+        task="fix calc.py by adding a subtract function",
+        goal="fix calc.py by adding a subtract function",
+    )
+
+    steps = await agent._plan(RunContext(), trajectory, {"root": "."})
+    tool_names = [step.tool_name for step in steps if step.kind == "tool"]
+    kinds = [step.kind for step in steps]
+
+    assert "inspect_tree" in tool_names
+    assert any(name in {"read_file", "search_text", "inspect_tree"} for name in tool_names)
+    assert not any(name in {"write_file", "apply_text_patch", "apply_batch_patch"} for name in tool_names)
+    assert "reflect" in kinds
+    assert kinds[-1] == "reflect"
