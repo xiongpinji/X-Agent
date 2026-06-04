@@ -1,125 +1,132 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
-
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-
-## [0.1.0] - 2025-04-20
-
-### Added
-
-- **Core Agent Framework**: Foundation for building autonomous agents with LLM integration
-- **Multi-LLM Router**: Support for multiple LLM providers with intelligent routing
-  - OpenAI GPT-4 and GPT-3.5 Turbo
-  - Anthropic Claude models
-  - Fallback and load balancing strategies
-- **Advanced Memory System**: Persistent graph-based memory with vector embeddings
-  - PostgreSQL backend for structured data
-  - Qdrant vector database for semantic search
-  - Memory indexing and retrieval optimization
-  - Context window management
-- **Workflow Orchestration**: Define and execute complex multi-step workflows
-  - Conditional logic and branching
-  - Error handling and retry mechanisms
-  - Workflow scheduling and cron support
-  - Workflow state persistence
-- **Browser Automation**: Integrated Playwright-based web interaction
-  - Session management
-  - Screenshot and DOM capture
-  - Form filling and navigation
-  - Cookie and storage management
-- **Observability & Tracing**: Comprehensive request tracing and monitoring
-  - Langfuse integration for trace visualization
-  - Request correlation and causality tracking
-  - Performance metrics collection
-  - Error tracking and debugging
-- **Approval Workflows**: Human-in-the-loop approval system
-  - Configurable approval policies
-  - Audit trail for all approvals
-  - Multi-level approval chains
-  - Notification system
-- **Policy Engine**: Define and enforce agent behavior policies
-  - Resource access control
-  - Rate limiting and quotas
-  - Behavior constraints
-  - Policy versioning
-- **Multi-Tenant Support**: Enterprise-grade tenant isolation
-  - Role-based access control (RBAC)
-  - Tenant-specific configurations
-  - Data isolation and security
-  - Audit logging per tenant
-- **REST API**: Comprehensive FastAPI-based REST API
-  - Workflow management endpoints
-  - Agent execution endpoints
-  - Memory and context endpoints
-  - Approval and policy endpoints
-  - Metrics and observability endpoints
-- **Authentication & Security**: Built-in security features
-  - API key authentication
-  - JWT token support
-  - CORS configuration
-  - Input validation and sanitization
-  - Security audit logging
-- **Database Migrations**: Automated schema management
-  - PostgreSQL migration system
-  - Version tracking
-  - Rollback support
-- **Testing Framework**: Comprehensive test suite
-  - Unit tests for core components
-  - Integration tests for API endpoints
-  - End-to-end workflow tests
-  - Mock LLM providers for testing
-- **CLI Tools**: Command-line utilities
-  - Workflow worker for background execution
-  - Desktop application launcher
-  - Package management tools
-- **Documentation**: Complete project documentation
-  - README with quick start guide
-  - Contributing guidelines
-  - API documentation
-  - Architecture guide
-  - Installation instructions
-
-### Changed
-
-- N/A (Initial release)
-
-### Deprecated
-
-- N/A (Initial release)
-
-### Removed
-
-- N/A (Initial release)
-
-### Fixed
-
-- N/A (Initial release)
-
-### Security
-
-- Implemented secure credential storage
-- Added input validation for all API endpoints
-- Enabled CORS with configurable origins
-- Implemented rate limiting for API endpoints
-- Added audit logging for sensitive operations
+All notable changes to X-Agent are documented in this file.
 
 ## [Unreleased]
 
-### Planned Features
+### Phase 5.5 - Cloud Sandbox Engine (2026-06-04)
 
-- Multi-agent collaboration framework
-- Advanced reasoning with chain-of-thought
-- Custom model fine-tuning support
-- Enterprise SSO integration
-- Advanced compliance and audit features
-- Performance optimization for large-scale deployments
-- GraphQL API support
-- WebSocket support for real-time updates
-- Plugin system for extensibility
-- Advanced caching strategies
+#### Added
+- **Cloud Sandbox Execution Engine**: Docker-based isolated code execution with subprocess fallback
+  - `DockerSandbox` class: Container isolation with network/memory/CPU limits, read-only rootfs
+  - `SandboxOrchestrator`: Persistent drain loop for task scheduling and worker coordination
+  - `SandboxWorker`: Parallel task execution with priority queue management
+  - `TaskQueue`: Priority-based task queuing with status tracking
+  
+- **Sandbox API Endpoints**:
+  - `POST /api/v1/sandbox/tasks`: Fire-and-forget task submission with timeout/image/network config
+  - `GET /api/v1/sandbox/tasks`: List all tasks with filtering
+  - `GET /api/v1/sandbox/tasks/{task_id}`: Poll task status and results
+  - `POST /api/v1/sandbox/webhook/github`: HMAC-signed GitHub issue webhook integration
+
+- **GitHub Automation Pipeline**:
+  - `GitOperations`: Clone, commit, push, branch creation with token demasking in logs
+  - `GitHubWebhookHandler`: HMAC-SHA256 signature validation, constant-time comparison
+  - `IssueToPRPipeline`: Complete Issue→Fix→Test→PR workflow with AgentFixRunner
+  - Automatic issue assignment detection and PR creation with comments
+
+- **Infrastructure**:
+  - Docker backend detection with auto-fallback to subprocess isolation
+  - Docker-out-of-Docker (DooD) support for containerized deployments
+  - Dockerfile runtime updates: git installation for IssueToPR pipeline
+  - requirements.txt optional docker dependency (docker>=7.0.0)
+
+#### Security
+- HMAC-SHA256 webhook verification with secret rotation support
+- Sandbox:run scope enforcement for all API endpoints
+- Network isolation by default (configurable per-task)
+- Token demasking in task logs and audit trails
+
+#### Tests
+- 38 integration tests covering:
+  - Docker container execution and subprocess fallback
+  - Parallel task orchestration and priority scheduling
+  - API submission, polling, and webhook verification
+  - Full Issue→PR pipeline including git operations
 
 ---
 
-For more information about releases, visit the [GitHub Releases](https://github.com/x-agent/x-agent-core/releases) page.
+## [v1.0.0-rc1] - 2026-06-01
+
+### Phase 1-4 Complete
+
+#### Phase 1 - MCP Protocol Enhancement
+- MCP tool discovery engine with auto-registration
+- MCP manager integration to FastAPI startup/shutdown lifecycle
+- MCP server configuration management (YAML-based)
+- Tool adapter for unified MCP client handling
+
+#### Phase 2 - CLI Tools
+- Typer-based command-line interface with 6 command modules
+- Interactive REPL for agent communication
+- Configuration management CLI
+- Workflow command suite
+
+#### Phase 3 - Hook System
+- Extensible hook executor with fail-open semantics
+- Hook configuration from `.xagent/hooks.json`
+- Integration to startup lifecycle
+- Type-safe hook definitions
+
+#### Phase 4 - Context Management Enhanced
+- Session recovery with distributed state management
+- Code indexing for context compression
+- Semantic retrieval from vector store
+- Compression pipeline for token optimization
+
+### Bug Fixes
+
+#### LLM Backend & Tool Execution
+- Fixed retry coroutine leakage in `llm_providers.py`
+- Fixed schema validation for tool execution arguments
+- Fixed tool name normalization across MCP and native registries
+- Fixed argument parsing for complex nested tool inputs
+- Fixed tool root path resolution for file operations
+
+#### Production Infrastructure
+- Fixed Dockerfile git installation (IssueToPR dependency)
+- Fixed requirements.txt optional docker package declaration
+- Fixed FastAPI route regex deprecation (pattern parameter)
+
+#### Memory & Context
+- Fixed memory store/retrieve interface contracts
+- Fixed session recovery deadlock in non-reentrant locks
+- Fixed compression regex unicode support
+- Fixed code index enumeration state management
+
+---
+
+## Previous Releases
+
+### [v0.9.0] - 2026-05-30
+- Test suite consolidation (backend/tests → root tests/enterprise)
+- Pytest collection error fixes (75 errors resolved)
+- QueuePool async engine compatibility fixes
+- Prometheus duplicate registry fixes
+- Observability contract fixes (error envelope structure)
+
+### [v0.8.0] - 2026-05-28
+- PBKDF2HMAC security implementation
+- AST-based execution sandbox
+- Concurrent lock refactoring
+- Random salt generation for encryption
+- Authentication TTL enforcement
+
+### [v0.7.0] - 2026-05-25
+- Multi-cluster version drift fixes (57 failures)
+- Starlette route API updates
+- HTTPx transport parameter alignment
+- SQLite executescript for multi-statement support
+
+---
+
+## Development Milestones
+
+- **Q2 2026**: Phase 5.5 Cloud Sandbox (current)
+- **Q3 2026**: Phase 5.6 Multi-Channel Unified Adapter
+- **Q4 2026**: Production hardening and performance optimization
+- **2026+**: Enterprise compliance and advanced reasoning
+
+---
+
+**Format**: Following [Semantic Versioning](https://semver.org/) with Phase numbering for major features.

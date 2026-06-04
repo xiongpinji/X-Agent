@@ -18,6 +18,9 @@ X-Agent Core combines cutting-edge LLM capabilities with enterprise-grade infras
 - **Vector Search**: Qdrant integration for semantic similarity search and memory retrieval
 - **Multi-Tenant Support**: Built-in tenant isolation and role-based access control
 - **Plugin System**: Extensible plugin architecture for custom functionality
+- **Cloud Sandbox Engine** *(Phase 5.5)*: Isolated code execution with Docker containerization, optional subprocess fallback, GitHub Issue→PR automation, and fire-and-forget task queuing
+- **MCP Protocol Support**: Model Context Protocol integration for seamless tool discovery and management
+- **CLI Tools**: Full command-line interface with REPL, interactive configuration, and workflow management
 
 ## Quick Start
 
@@ -91,6 +94,7 @@ X-Agent Core follows a modular, layered architecture:
 - [API Error Codes](./docs/API_ERROR_CODES.md) - Complete error code reference
 - [Advanced Features](./docs/ADVANCED_FEATURES.md) - Workflow orchestration, multi-agent collaboration, memory system
 - [Architecture Guide](./docs/ARCHITECTURE.md) - System design and components
+- [Cloud Sandbox Engine](./docs/PHASE_55_DEPLOYMENT.md) - Docker-based code execution, GitHub automation, API reference
 - [Examples](./docs/EXAMPLES.md) - Code examples and use cases
 - [Documentation Index](./docs/INDEX.md) - Complete documentation navigation
 
