@@ -75,6 +75,7 @@ def _issue(clone_url: str) -> IssueEvent:
 
 class TestIssueToPRPipeline:
     @pytest.mark.asyncio
+    @pytest.mark.timeout(90)
     async def test_full_flow_opens_pr(self, tmp_path):
         clone_url = _make_bare_remote(tmp_path)
 
@@ -103,6 +104,7 @@ class TestIssueToPRPipeline:
         assert len(gh.comments) == 1
 
     @pytest.mark.asyncio
+    @pytest.mark.timeout(90)
     async def test_no_changes_short_circuits(self, tmp_path):
         clone_url = _make_bare_remote(tmp_path)
 
@@ -137,6 +139,7 @@ class TestIssueToPRPipeline:
         assert len(gh.created_prs) == 0
 
     @pytest.mark.asyncio
+    @pytest.mark.timeout(90)
     async def test_tests_failed_blocks_pr(self, tmp_path):
         clone_url = _make_bare_remote(tmp_path)
 

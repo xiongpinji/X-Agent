@@ -49,6 +49,7 @@ class TestDockerSandboxFallback:
             assert result.exit_code == 3
 
     @pytest.mark.asyncio
+    @pytest.mark.timeout(30)
     async def test_workspace_persists_across_runs(self):
         async with DockerSandbox(SandboxSpec()) as sbx:
             await sbx.run("echo persisted > marker.txt")
@@ -57,9 +58,12 @@ class TestDockerSandboxFallback:
             assert "persisted" in result.stdout
 
     @pytest.mark.asyncio
+    @pytest.mark.timeout(30)
     async def test_timeout_returns_124(self):
-        async with DockerSandbox(SandboxSpec(timeout_seconds=1.0)) as sbx:
-            result = await sbx.run("sleep 5", timeout=1.0)
+        # sleep well beyond the timeout so the kill path fires deterministically
+        # even when the host is saturated (-n auto).
+        async with DockerSandbox(SandboxSpec(timeout_seconds=2.0)) as sbx:
+            result = await sbx.run("sleep 30", timeout=2.0)
             assert result.success is False
             assert result.exit_code == 124
             assert "timed out" in (result.error or "")
