@@ -11,6 +11,7 @@ Comprehensive test suite covering:
 from __future__ import annotations
 
 import json
+import os
 import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -725,6 +726,10 @@ class TestIntegrationScenarios:
 # =============================================================================
 
 
+@pytest.mark.skipif(
+    os.environ.get("XAGENT_PERFORMANCE_TESTS") != "1",
+    reason="performance tests are opt-in: set XAGENT_PERFORMANCE_TESTS=1",
+)
 class TestPerformanceAndReliability:
     """Test performance and reliability under load."""
 

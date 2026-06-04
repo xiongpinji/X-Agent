@@ -45,6 +45,7 @@ class AgentFixRunner:
     def __init__(self, agent: Any = None, max_iterations: int = 6):
         self._agent = agent
         self._max_iterations = max_iterations
+        self.last_result: Any = None
 
     def _get_agent(self) -> Any:
         if self._agent is None:
@@ -113,6 +114,7 @@ class AgentFixRunner:
                 task,
                 extra_context={"root": clone_dir, "retry_budget": 2},
             )
+            self.last_result = result
         except Exception:
             logger.exception("AgentFixRunner: agent.run raised for issue %s",
                              getattr(issue, "issue_number", "?"))

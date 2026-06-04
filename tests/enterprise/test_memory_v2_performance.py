@@ -1,6 +1,7 @@
 """Memory V2 - Performance Tests and Benchmarks"""
 
 import asyncio
+import os
 import time
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -15,6 +16,12 @@ from backend.app.core.memory_v2_system import (
 )
 from backend.app.core.memory_v2_skill import SkillMemoryLayer, SkillExample
 from backend.app.core.memory_v2_nudge import NudgeMemoryLayer, NudgeConfig
+
+
+pytestmark = pytest.mark.skipif(
+    os.environ.get("XAGENT_PERFORMANCE_TESTS") != "1",
+    reason="performance tests are opt-in: set XAGENT_PERFORMANCE_TESTS=1",
+)
 
 
 class TestMemoryV2Performance:

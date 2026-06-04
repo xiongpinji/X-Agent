@@ -63,8 +63,22 @@ async def test_agent_fix_runner_real_llm(tmp_path):
     runner = AgentFixRunner()  # lazily builds get_agent()
     mutated = await runner(sandbox=None, issue=_Issue(), workspace=str(workspace))
 
-    # 4. Assert the agent actually changed a file.
+    # 4. Assert the agent actually changed a file, and expose the tool sequence
+    # so this e2e can verify reflect re-plan moved from read evidence to a
+    # mutating tool rather than looping on read_file/search_text.
     after = (repo / "calc.py").read_text()
+    tool_names = [
+        getattr(call, "tool_name", None) or getattr(call, "name", None)
+        for call in getattr(runner.last_result, "tool_calls", []) or []
+    ]
+    print("\n--- agent tool sequence ---\n" + " -> ".join(str(name) for name in tool_names))
     print("\n--- calc.py after agent ---\n" + after)
     assert mutated is True, "AgentFixRunner reported no file mutation"
     assert "subtract" in after, "agent did not add a subtract function"
+    assert any(name in {"write_file", "apply_text_patch", "apply_batch_patch"} for name in tool_names)
+    if "read_file" in tool_names:
+        first_read = tool_names.index("read_file")
+        assert any(
+            name in {"write_file", "apply_text_patch", "apply_batch_patch"}
+            for name in tool_names[first_read + 1 :]
+        ), f"agent read file but never transitioned to a mutating tool: {tool_names}"

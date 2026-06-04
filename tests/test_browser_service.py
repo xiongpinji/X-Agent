@@ -4,7 +4,7 @@ from backend.app.services.browser.playwright_client import browser_client
 
 
 @pytest.mark.skipif(
-    not browser_client._client,
+    not browser_client.has_real_client,
     reason="Playwright browser not available (requires real browser installation).",
 )
 def test_browser_session_can_record_actions() -> None:
