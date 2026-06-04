@@ -1,4 +1,4 @@
-from backend.app.core.agent import AgentLoop
+from backend.app.core.agent import AgentLoop, AgentTrajectory
 from backend.app.core.contracts import RunContext, RunStatus
 from backend.app.core.llm import LLMRouter
 from backend.app.core.memory import InMemoryMemorySystem
@@ -59,3 +59,46 @@ async def test_agent_tool_call_is_policy_checked() -> None:
     assert result.snapshot["execution_summary"] == result.execution_summary
     assert result.snapshot["execution_frame"]["tool_history"][0]["tool_name"] == "echo"
     assert result.snapshot["execution_frame"]["recovery_hint"]["branch"] == "continue"
+
+
+def test_reflect_replan_prompt_prefers_mutating_tool_after_read() -> None:
+    memory = InMemoryMemorySystem()
+    context = RunContext(permission_scope=["tools:read", "tools:write"])
+    agent = AgentLoop(
+        llm_router=LLMRouter(),
+        memory=memory,
+        tools=build_default_tool_registry(ToolPolicyEngine()),
+    )
+    trajectory = AgentTrajectory(
+        task="fix app.py by replacing foo with bar",
+        goal="fix app.py by replacing foo with bar",
+        stage="step_2_reflect",
+        subtasks=["locate relevant files", "apply modification", "verify results"],
+        subtask_status={"locate relevant files": "done", "apply modification": "pending"},
+        current_subtask_index=1,
+        observations=["app.py contains foo"],
+        tool_results=[
+            {
+                "tool_name": "read_file",
+                "success": True,
+                "output": "print('foo')",
+                "arguments_preview": {"path": "app.py"},
+            }
+        ],
+    )
+
+    prompt = agent._build_user_prompt(
+        context,
+        trajectory,
+        {
+            "_after_reflect_replan": True,
+            "_replan_guidance": "Use write tools now.",
+        },
+        agent.tools.related_tools("fix app.py write_file apply_text_patch"),
+        {},
+    )
+
+    assert "Reflect re-plan guidance" in prompt
+    assert "Do not choose read_file/search_text again" in prompt
+    assert "apply_text_patch" in prompt
+    assert "write_file" in prompt
