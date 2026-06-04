@@ -34,11 +34,14 @@ class _FakeAgent:
 
     def __init__(self, result):
         self._result = result
+        self.max_iterations = 2
+        self.max_iterations_seen = None
         self.last_context = None
         self.last_task = None
         self.last_extra = None
 
     async def run(self, context, task, extra_context=None, event_callback=None):
+        self.max_iterations_seen = self.max_iterations
         self.last_context = context
         self.last_task = task
         self.last_extra = extra_context
@@ -119,3 +122,16 @@ class TestAgentFixRunner:
         runner = AgentFixRunner(agent=_FakeAgent(result))
         ok = await runner(sandbox=None, issue=_Issue(), workspace="/tmp/ws")
         assert ok is True
+
+    @pytest.mark.asyncio
+    async def test_temporarily_raises_agent_iteration_budget(self):
+        result = _FakeResult(
+            status=RunStatus.COMPLETED,
+            tool_calls=[_FakeToolCall("write_file", success=True)],
+        )
+        agent = _FakeAgent(result)
+        runner = AgentFixRunner(agent=agent, max_iterations=6)
+        ok = await runner(sandbox=None, issue=_Issue(), workspace="/tmp/ws")
+        assert ok is True
+        assert agent.max_iterations_seen == 6
+        assert agent.max_iterations == 2

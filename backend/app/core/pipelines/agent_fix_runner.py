@@ -108,6 +108,9 @@ class AgentFixRunner:
         )
 
         token = set_tool_root_override(clone_dir)
+        previous_max_iterations = getattr(agent, "max_iterations", None)
+        if previous_max_iterations is not None:
+            agent.max_iterations = max(int(previous_max_iterations), self._max_iterations)
         try:
             result = await agent.run(
                 context,
@@ -120,6 +123,8 @@ class AgentFixRunner:
                              getattr(issue, "issue_number", "?"))
             return False
         finally:
+            if previous_max_iterations is not None:
+                agent.max_iterations = previous_max_iterations
             reset_tool_root_override(token)
 
         # Did the agent complete?
