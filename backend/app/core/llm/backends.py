@@ -19,6 +19,73 @@ from typing import Any, AsyncGenerator
 logger = logging.getLogger(__name__)
 
 
+def _normalize_tool_parameters(parameters: Any) -> dict[str, Any]:
+    """Coerce a tool's JSON-Schema parameters into a valid object schema.
+
+    Strict providers (DeepSeek/OpenAI function calling) reject a function whose
+    `parameters` is null or lacks `type: "object"` with:
+        "schema must be a JSON Schema of 'type: object', got 'type: null'".
+    A tool that takes no arguments must still send an empty object schema, not
+    null. This normalizes None / missing-type / non-dict into a safe shape.
+    """
+    if not isinstance(parameters, dict) or not parameters:
+        return {"type": "object", "properties": {}}
+    # If a schema was provided but omits/!= object type, force object and keep
+    # any declared properties.
+    if parameters.get("type") != "object":
+        normalized = dict(parameters)
+        normalized["type"] = "object"
+        normalized.setdefault("properties", {})
+        return normalized
+    parameters.setdefault("properties", {})
+    return parameters
+
+
+def _to_openai_tool(tool: dict[str, Any]) -> dict[str, Any]:
+    """Convert a tool definition into OpenAI function-calling shape.
+
+    definitions_for_llm() already emits {"type":"function","function":{...}};
+    pass those through (normalizing the nested parameters). Only bare
+    {name, description, parameters} dicts get wrapped. This fixes the bug where
+    every tool came through as name=null -> "Tool names must be unique".
+    """
+    if tool.get("type") == "function" and isinstance(tool.get("function"), dict):
+        fn = dict(tool["function"])
+        fn["parameters"] = _normalize_tool_parameters(fn.get("parameters"))
+        # strip non-standard x- keys the provider may reject
+        fn = {k: v for k, v in fn.items() if not k.startswith("x-")}
+        return {"type": "function", "function": fn}
+    return {
+        "type": "function",
+        "function": {
+            "name": tool.get("name", "unknown"),
+            "description": tool.get("description", ""),
+            "parameters": _normalize_tool_parameters(tool.get("parameters")),
+        },
+    }
+
+
+def _parse_tool_arguments(raw: Any) -> dict[str, Any]:
+    """Parse a tool call's arguments into a dict.
+
+    OpenAI/DeepSeek return function-call arguments as a JSON STRING. The agent
+    loop expects a dict (it does `args["path"]` etc.), so an unparsed string
+    surfaced as "Missing required argument: path". Handle string/None/dict.
+    """
+    if isinstance(raw, dict):
+        return raw
+    if not raw:
+        return {}
+    if isinstance(raw, str):
+        import json as _json
+        try:
+            parsed = _json.loads(raw)
+            return parsed if isinstance(parsed, dict) else {}
+        except (ValueError, TypeError):
+            return {}
+    return {}
+
+
 @dataclass
 class LLMResponse:
     content: str | None = None
@@ -153,13 +220,19 @@ class OpenAIBackend(BaseLLMBackend):
 
     async def _retry_with_backoff(
         self,
-        coro,
+        coro_factory,
         attempt: int = 0,
     ) -> Any:
-        """Retry with exponential backoff."""
+        """Retry with exponential backoff.
+
+        `coro_factory` MUST be a zero-arg callable returning a FRESH awaitable
+        on every call. A coroutine object can only be awaited once, so retries
+        must rebuild it (previously this reused an exhausted coroutine and every
+        retry failed with 'cannot reuse already awaited coroutine').
+        """
         try:
             await self._check_rate_limit()
-            return await asyncio.wait_for(coro, timeout=self.timeout)
+            return await asyncio.wait_for(coro_factory(), timeout=self.timeout)
         except (asyncio.TimeoutError, Exception) as exc:
             if attempt < self.max_retries:
                 delay = self.retry_delay * (2 ** attempt)
@@ -167,7 +240,7 @@ class OpenAIBackend(BaseLLMBackend):
                     f"Attempt {attempt + 1} failed: {exc}. Retrying in {delay}s..."
                 )
                 await asyncio.sleep(delay)
-                return await self._retry_with_backoff(coro, attempt + 1)
+                return await self._retry_with_backoff(coro_factory, attempt + 1)
             raise LLMBackendError(f"{self.name} failed after {self.max_retries} retries: {exc}") from exc
     async def chat(
         self,
@@ -197,20 +270,12 @@ class OpenAIBackend(BaseLLMBackend):
 
             if tools:
                 request_kwargs["tools"] = [
-                    {
-                        "type": "function",
-                        "function": {
-                            "name": tool.get("name", "unknown"),
-                            "description": tool.get("description", ""),
-                            "parameters": tool.get("parameters", {}),
-                        },
-                    }
-                    for tool in tools
+                    _to_openai_tool(tool) for tool in tools
                 ]
 
             # Make request with retry logic
             response = await self._retry_with_backoff(
-                client.chat.completions.create(**request_kwargs)
+                lambda: client.chat.completions.create(**request_kwargs)
             )
 
             # Extract response data
@@ -225,7 +290,9 @@ class OpenAIBackend(BaseLLMBackend):
                     tool_calls = [
                         {
                             "name": tc.function.name,
-                            "arguments": tc.function.arguments,
+                            "arguments": _parse_tool_arguments(
+                                tc.function.arguments
+                            ),
                         }
                         for tc in msg.tool_calls
                     ]
@@ -298,7 +365,7 @@ class OpenAIBackend(BaseLLMBackend):
                 ]
 
             stream = await self._retry_with_backoff(
-                client.chat.completions.create(**request_kwargs)
+                lambda: client.chat.completions.create(**request_kwargs)
             )
 
             async for chunk in stream:

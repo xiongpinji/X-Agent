@@ -97,6 +97,16 @@ class AgentFixRunner:
         )
 
         task = self._compose_task(issue)
+
+        # Point the file tools at the cloned repo for the duration of this run.
+        # Without this, write_file/read_file resolve against PROJECT_ROOT and
+        # reject the sandbox workspace ("Path must be within project directory").
+        from backend.app.core.tools import (
+            set_tool_root_override,
+            reset_tool_root_override,
+        )
+
+        token = set_tool_root_override(clone_dir)
         try:
             result = await agent.run(
                 context,
@@ -107,6 +117,8 @@ class AgentFixRunner:
             logger.exception("AgentFixRunner: agent.run raised for issue %s",
                              getattr(issue, "issue_number", "?"))
             return False
+        finally:
+            reset_tool_root_override(token)
 
         # Did the agent complete?
         status = getattr(result, "status", None)

@@ -17,6 +17,33 @@ from backend.app.core.contracts import RiskLevel, RunContext, ToolCallRecord, To
 from backend.app.core.policy import ToolPolicyEngine
 from backend.app.settings import PROJECT_ROOT
 
+import contextvars as _contextvars
+
+# Per-run override for the file-tool sandbox root. Defaults to PROJECT_ROOT.
+# Set via set_tool_root_override() so sandbox/issue-to-PR tasks can operate on
+# a cloned repo dir while keeping the same within-root containment guarantee
+# (paths are still confined to whichever root is active). contextvars keeps
+# this coroutine-safe so concurrent agent runs don't leak roots into each other.
+_tool_root_override: "_contextvars.ContextVar[str | None]" = _contextvars.ContextVar(
+    "xagent_tool_root_override", default=None
+)
+
+
+def set_tool_root_override(root: str | None):
+    """Set the active file-tool root (returns a token for reset)."""
+    return _tool_root_override.set(root)
+
+
+def reset_tool_root_override(token) -> None:
+    """Restore the previous file-tool root."""
+    _tool_root_override.reset(token)
+
+
+def _active_tool_base() -> "Path":
+    """The currently-allowed root: per-run override if set, else PROJECT_ROOT."""
+    override = _tool_root_override.get()
+    return Path(override).resolve() if override else Path(PROJECT_ROOT).resolve()
+
 if TYPE_CHECKING:
     from backend.app.core.hooks import HookManager
 
@@ -59,7 +86,7 @@ def _resolve_tool_path(path: str) -> Path:
     - Path must not contain symlinks pointing outside PROJECT_ROOT
     - Path must not be in forbidden system directories
     """
-    base = Path(PROJECT_ROOT).resolve()
+    base = _active_tool_base()
     target = Path(path).expanduser().resolve()
 
     # Check if path is in forbidden directories
@@ -90,7 +117,7 @@ def _resolve_tool_root(root: str) -> Path:
     - Root must be within PROJECT_ROOT
     - Root must not be in forbidden system directories
     """
-    base = Path(PROJECT_ROOT).resolve()
+    base = _active_tool_base()
     target = Path(root).expanduser().resolve()
 
     # Check if path is in forbidden directories
