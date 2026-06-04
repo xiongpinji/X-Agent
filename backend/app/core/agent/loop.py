@@ -2163,7 +2163,8 @@ class AgentLoop:
                 replan_guidance.extend([
                     "Reflect/re-plan state: this is a code-change continuation after successful read/search evidence.",
                     "Do not choose read_file/search_text again unless the target file is still unknown.",
-                    "Next tool step should be mutating: prefer apply_text_patch for focused replacements, write_file for full-file rewrites, or apply_batch_patch for multiple edits.",
+                    "Next tool step MUST be mutating: choose exactly one of apply_text_patch, write_file, or apply_batch_patch.",
+                    "Do not choose inspect_tree, analyze_entrypoints, analyze_dependencies, read_file, search_text, list_files, or any other non-mutating tool in this re-plan.",
                     "Use the latest tool results and observations as the source of truth for path/content; then verify the write result.",
                 ])
             if extra_context.get("_replan_guidance"):
@@ -2193,6 +2194,7 @@ class AgentLoop:
                 f"Tool strategy: {json.dumps(tool_profile, ensure_ascii=False, default=str)}",
                 f"Decision confidence: {tool_profile.get('confidence')}",
                 f"Subtasks: {json.dumps(trajectory.subtasks, ensure_ascii=False, default=str)}",
+                f"Recent tool results: {json.dumps(trajectory.tool_results[-3:], ensure_ascii=False, default=str)[:4000]}",
                 f"Focused context: {json.dumps(extra_context, ensure_ascii=False, default=str)}",
                 f"Related memory: {json.dumps(related_memory, ensure_ascii=False, default=str)}",
                 f"Workflow boundary: {json.dumps(workflow_context, ensure_ascii=False, default=str)}",
@@ -2515,6 +2517,14 @@ class AgentLoop:
             if step.kind == "final":
                 aligned.append(step)
                 continue
+            if step.kind == "reflect":
+                # Reflect steps are control-flow checkpoints, not subtask prose.
+                # Preserve them even when their wording does not contain the exact
+                # current subtask label; otherwise code-change plans that read
+                # evidence first lose the reflect re-plan step and stop before
+                # write_file/apply_text_patch can be selected.
+                aligned.append(step)
+                continue
             # 具体工具步骤（含真实 tool_name）代表已落实的执行动作。
             # 不能因子任务标签与指令文本不匹配而被对齐逻辑丢弃：
             # 否则 has_concrete_tool 变 False，_apply_execution_plan 会据
@@ -2554,6 +2564,23 @@ class AgentLoop:
             trajectory.subtask_status[current] = "observed"
             return
         if succeeded:
+            read_only_tools = {"read_file", "search_text", "list_files", "inspect_tree", "coordinate_files"}
+            mutating_tools = {"write_file", "apply_text_patch", "apply_batch_patch"}
+            if current.lower() == "apply modification":
+                if any(token in kind for token in read_only_tools):
+                    # Reading/discovery can inform an edit, but it has not applied the
+                    # modification. Keep the edit subtask open so the subsequent
+                    # reflect step can trigger a write_file/apply_text_patch re-plan.
+                    trajectory.subtask_status[current] = "in_progress"
+                    return
+                if kind == "final" and not any(
+                    isinstance(result, dict)
+                    and result.get("tool_name") in mutating_tools
+                    and result.get("success") is True
+                    for result in trajectory.tool_results
+                ):
+                    trajectory.subtask_status[current] = "in_progress"
+                    return
             trajectory.subtask_status[current] = "done"
             next_index = idx + 1
             while next_index < len(trajectory.subtasks) and trajectory.subtask_status.get(trajectory.subtasks[next_index], "pending") == "done":
