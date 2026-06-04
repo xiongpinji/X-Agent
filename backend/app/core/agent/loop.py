@@ -654,6 +654,42 @@ class AgentLoop:
                 answer, last_tool_result, plan_records = self._execute_reflect_step(
                     context, trajectory, step, last_tool_result, plan_records, execution_frame, iteration
                 )
+                # Re-plan after reflection for unfinished code-change tasks:
+                # if no mutating tool has succeeded yet, ask the LLM again (it
+                # now has the read file contents in trajectory) so it can emit
+                # write_file/apply_text_patch. Without this, an edit task that
+                # only read files would stop at "final" having changed nothing.
+                _did_mutate = any(
+                    (r.tool_name in {"write_file", "apply_text_patch", "apply_batch_patch"})
+                    and r.success
+                    for r in tool_calls
+                )
+                if not _did_mutate:
+                    try:
+                        _profile = self._build_task_profile(trajectory, extra_context, {})
+                        _intent = str(_profile.get("intent") or "general")
+                    except Exception:
+                        _intent = "general"
+                    _replanned = int(execution_frame.execution_summary.get("_reflect_replans", 0) or 0)
+                    if _intent == "code_change" and _replanned < 1:
+                        execution_frame.execution_summary["_reflect_replans"] = _replanned + 1
+                        try:
+                            new_steps = await self._plan(context, trajectory, extra_context)
+                            mutating_steps = [
+                                s for s in new_steps
+                                if s.kind == "tool" and s.tool_name in {
+                                    "write_file", "apply_text_patch", "apply_batch_patch"
+                                }
+                            ]
+                            if mutating_steps:
+                                plan[:0] = mutating_steps
+                                self._emit_trace(
+                                    context, "agent.replan.after_reflect",
+                                    iteration=iteration,
+                                    injected=len(mutating_steps),
+                                )
+                        except Exception:
+                            pass
             elif step.kind == "final":
                 answer, plan_records = self._execute_final_step(
                     context, task, trajectory, step, last_tool_result, extra_context, plan_records, execution_frame, iteration
@@ -1602,6 +1638,18 @@ class AgentLoop:
                         arguments=call.get("arguments", {}) if isinstance(call.get("arguments", {}), dict) else {},
                     )
                 )
+            _MUTATING = {"write_file", "apply_text_patch", "apply_batch_patch"}
+            _picked = {s.tool_name for s in steps}
+            try:
+                _profile = self._build_task_profile(trajectory, extra_context, {})
+                _intent = str(_profile.get("intent") or "general")
+            except Exception:
+                _intent = "general"
+            if _intent == "code_change" and not (_picked & _MUTATING):
+                steps.append(AgentPlanStep(
+                    kind="reflect",
+                    instruction="Reflect on what was read and apply the change with write_file/apply_text_patch",
+                ))
             steps.append(AgentPlanStep(kind="final", instruction="Finalize answer"))
             return steps
         steps = self._parse_plan(plan_text, tool_manifest, trajectory)
