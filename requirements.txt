@@ -98,3 +98,10 @@ annotated-types>=0.7.0  # loosened (transitive dep, resolver-managed)
 
 # Dependency Management
 vine>=5.1.0  # loosened (transitive dep, resolver-managed)
+
+# Cloud Sandbox (Phase 5.5) — optional container isolation backend.
+# DockerSandbox auto-falls-back to subprocess when this is absent, so it is
+# optional, but installing it enables real per-task container isolation
+# (Codex-style). git_ops uses the git CLI and github_integration uses httpx,
+# so no gitpython/PyGithub needed.
+docker>=7.0.0  # optional: enables Docker container isolation for sandbox tasks
