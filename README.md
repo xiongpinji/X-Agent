@@ -89,6 +89,8 @@ X-Agent Core follows a modular, layered architecture:
 ## Documentation
 
 - [Installation Guide](./INSTALL.md) - Detailed setup instructions
+- [Deployment Quickstart](./DEPLOYMENT.md) - Supported local, DeepSeek, and Docker Compose startup paths
+- [Release Readiness](./RELEASE_READINESS.md) - Current commercial delivery status, validation commands, and production checklist
 - [Contributing Guide](./CONTRIBUTING.md) - Development workflow and guidelines
 - [API Documentation](./docs/API.md) - REST API reference
 - [API Error Codes](./docs/API_ERROR_CODES.md) - Complete error code reference
@@ -106,7 +108,10 @@ X-Agent Core follows a modular, layered architecture:
 # Install development dependencies
 pip install -e ".[dev]"
 
-# Run tests
+# Fast correctness baseline for release-candidate checks
+python scripts/release_candidate_check.py
+
+# Full local suite with coverage (slower, environment-dependent)
 pytest
 
 # Run linter
@@ -144,17 +149,4 @@ This project is licensed under the MIT License - see [LICENSE](./LICENSE) file f
 
 ## Support
 
-- GitHub Issues: [Report bugs or request features](https://github.com/x-agent/x-agent-core/issues)
-- Documentation: [Full documentation](./docs/README.md)
-- Email: support@x-agent.dev
-
-## Roadmap
-
-- Q2 2025: Multi-agent collaboration framework
-- Q3 2025: Advanced reasoning with chain-of-thought
-- Q4 2025: Custom model fine-tuning support
-- 2026: Enterprise features (SSO, advanced audit, compliance)
-
----
-
-**X-Agent Core** - Building the future of autonomous systems
+- GitHub Issues: [Report bugs or request features](https://github.com
