@@ -140,3 +140,45 @@ class TestGitHubWebhook:
         assert r.status_code == 200
         assert r.json()["status"] == "queued"
         assert r.json()["issue"] == 42
+
+    def test_valid_signature_pipeline_mode_with_token(self, client, monkeypatch):
+        """With XAGENT_GITHUB_TOKEN set, the webhook routes to the real
+        IssueToPR pipeline (mode=pipeline) instead of the echo fallback.
+        We stub the background pipeline runner so nothing real executes."""
+        import hashlib
+        import hmac
+        import json
+        import backend.app.api.sandbox_tasks as st
+
+        secret = "test-webhook-secret"
+        monkeypatch.setenv("XAGENT_GITHUB_WEBHOOK_SECRET", secret)
+        monkeypatch.setenv("XAGENT_GITHUB_TOKEN", "ghp_faketoken")
+
+        called = {"ran": False}
+
+        async def _fake_pipeline(event, token):
+            called["ran"] = True
+
+        monkeypatch.setattr(st, "_run_issue_pipeline", _fake_pipeline)
+
+        payload = {
+            "action": "assigned",
+            "issue": {"number": 99, "title": "Fix", "body": "b", "labels": []},
+            "repository": {
+                "full_name": "foo/bar",
+                "clone_url": "https://github.com/foo/bar.git",
+                "default_branch": "main",
+            },
+        }
+        body = json.dumps(payload).encode("utf-8")
+        sig = "sha256=" + hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
+
+        r = client.post(
+            "/api/v1/sandbox/webhook/github",
+            content=body,
+            headers={"X-Hub-Signature-256": sig, "Content-Type": "application/json"},
+        )
+        assert r.status_code == 200
+        assert r.json()["mode"] == "pipeline"
+        assert r.json()["issue"] == 99
+

@@ -207,6 +207,43 @@ async def list_tasks(principal: PrincipalDependency) -> dict[str, Any]:
     return {"tasks": [{"task_id": tid, "status": st} for tid, st in _status.items()]}
 
 
+# ----- GitHub issue -> PR pipeline (background) -----
+
+_issue_status: dict[str, str] = {}
+_issue_results: dict[str, Any] = {}
+
+
+async def _run_issue_pipeline(event: Any, token: str) -> None:
+    """Run the full IssueToPR pipeline for one issue event in the background.
+
+    Uses a real AgentLoop (via AgentFixRunner) to produce the fix. Runs on the
+    app event loop (launched from the webhook handler), so the agent + git +
+    sandbox all execute without blocking the webhook response.
+    """
+    from backend.app.core.github_integration import GitHubAPIClient
+    from backend.app.core.pipelines import (
+        IssueToPRPipeline,
+        PipelineConfig,
+        AgentFixRunner,
+    )
+
+    key = f"issue-{event.issue_number}"
+    _issue_status[key] = "running"
+    try:
+        github = GitHubAPIClient(token=token)
+        pipeline = IssueToPRPipeline(
+            github=github,
+            fix_runner=AgentFixRunner(),
+            config=PipelineConfig(),
+        )
+        result = await pipeline.run(event)
+        _issue_results[key] = result
+        _issue_status[key] = result.status
+    except Exception:
+        _issue_status[key] = "error"
+        logger.exception("issue pipeline failed for #%s", event.issue_number)
+
+
 @router.post("/webhook/github")
 async def github_webhook(request: Request) -> dict[str, Any]:
     """Receive a GitHub issue webhook and enqueue an issue task.
@@ -236,6 +273,19 @@ async def github_webhook(request: Request) -> dict[str, Any]:
     if event is None:
         return {"status": "ignored", "reason": "not an actionable issue event"}
 
+    github_token = os.environ.get("XAGENT_GITHUB_TOKEN", "")
+    if github_token:
+        # Real Issue->PR pipeline: run a true AgentLoop fix in the background.
+        asyncio.create_task(_run_issue_pipeline(event, github_token))
+        _issue_status[f"issue-{event.issue_number}"] = "queued"
+        return {
+            "status": "queued",
+            "issue": event.issue_number,
+            "mode": "pipeline",
+        }
+
+    # No GitHub token configured: acknowledge + enqueue a no-op echo task so the
+    # webhook is still observable without performing repo mutations.
     orch = _get_orchestrator()
     task_id = await orch.submit(
         name=f"github-issue-{event.issue_number}",
