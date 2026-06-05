@@ -51,8 +51,8 @@ class _FakeAgent:
 @dataclass
 class _Issue:
     issue_number: int = 7
-    title: str = "Add multiply"
-    body: str = "Please add a multiply function"
+    title: str = "Add multiply to calc.py"
+    body: str = "calc.py has add() but no multiply(). Please add a multiply(a, b) function that returns a * b."
 
 
 class TestAgentFixRunner:
