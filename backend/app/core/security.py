@@ -39,6 +39,7 @@ ROLE_SCOPES: dict[str, list[str]] = {
     ],
     "user": [
         "agent:run",
+        "agent:read",
         "tools:read",
         "memory:read",
         "memory:write",
@@ -53,8 +54,10 @@ class Principal(BaseModel):
     tenant_id: str = "default"
     user_id: str = "anonymous"
     agent_id: str = "default-agent"
+    session_id: str = Field(default_factory=lambda: str(uuid4()))
     request_id: str = Field(default_factory=lambda: str(uuid4()))
     trace_id: str = Field(default_factory=lambda: str(uuid4()))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     permission_scope: list[str] = Field(default_factory=list)
     role: str = "anonymous"
     scopes: list[str] = Field(default_factory=list)

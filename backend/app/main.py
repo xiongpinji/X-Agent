@@ -18,6 +18,7 @@ from backend.app.api.agents import router as agents_router
 from backend.app.api.approvals import router as approvals_router
 from backend.app.api.audit import router as audit_router
 from backend.app.api.browser import router as browser_router
+from backend.app.api.channels import router as channels_router
 from backend.app.api.collaboration import router as collaboration_router
 from backend.app.api.desktop import router as desktop_router
 from backend.app.api.dispatch import router as dispatch_router
@@ -30,6 +31,7 @@ from backend.app.api.errors import (
 from backend.app.api.auth import router as auth_router
 from backend.app.api.feishu import router as feishu_router
 from backend.app.api.integrations import router as integrations_router
+from backend.app.api.issue_to_pr import router as issue_to_pr_router
 from backend.app.api.memory import router as memory_router
 from backend.app.api.messages import router as messages_router
 from backend.app.api.org import router as org_router
@@ -45,6 +47,7 @@ from backend.app.api.replay import router as replay_router
 from backend.app.api.ops import router as ops_router
 from backend.app.api.runs import router as runs_router
 from backend.app.api.security import router as security_router
+from backend.app.api.skill_curator import router as skill_curator_router
 from backend.app.api.tenants import router as tenants_router
 from backend.app.api.tools import router as tools_router
 from backend.app.api.traces import router as traces_router
@@ -104,7 +107,7 @@ from backend.app.settings import get_settings
 def require_api_key_header(request: Request) -> None:
     if not settings.require_api_key:
         return
-    if request.url.path in {"/", "/health", "/ready"}:
+    if request.url.path in {"/", "/health", "/ready", "/api/v1/channels/telegram/webhook"}:
         return
     if request.headers.get("x-api-key"):
         return
@@ -204,6 +207,17 @@ class CSRFProtectionMiddleware(BaseHTTPMiddleware):
         # header-based API-key exemption below. Without this the webhook is
         # unreachable in production (CSRF 403s before the signature check runs).
         "/api/v1/integrations/feishu/events",
+        # First-run chat bootstrap. Authentication is still enforced inside the
+        # workflow router; unauthenticated access is only granted in non-production
+        # dev mode by a route-specific principal, not by global anonymous scope.
+        "/api/v1/workflows/create/chat",
+        # Read-only issue-to-PR planning endpoint. Execute mode intentionally
+        # remains CSRF-protected.
+        "/api/v1/issue-to-pr/dry-run",
+        # Signature-token authenticated Telegram webhook. Telegram cannot send
+        # browser CSRF tokens, and forged browser pages cannot set Telegram's
+        # secret-token header across origins.
+        "/api/v1/channels/telegram/webhook",
     }
 
     # SECURITY/ARCHITECTURE: token store is class-level (shared across instances).
@@ -366,7 +380,7 @@ async def rate_limit_middleware(request: Request, call_next):
 async def request_logging_middleware(request: Request, call_next):
     request_id = request.headers.get("x-request-id") or str(uuid4())
     started = time.perf_counter()
-    if settings.require_api_key and request.url.path not in {"/", "/health", "/ready"}:
+    if settings.require_api_key and request.url.path not in {"/", "/health", "/ready", "/api/v1/channels/telegram/webhook"}:
         if not request.headers.get("x-api-key"):
             response = JSONResponse({"detail": "Missing API key"}, status_code=401)
             response.headers["x-request-id"] = request_id
@@ -484,11 +498,13 @@ app.include_router(agents_router)
 app.include_router(approvals_router)
 app.include_router(audit_router)
 app.include_router(browser_router)
+app.include_router(channels_router)
 app.include_router(collaboration_router)
 app.include_router(desktop_router)
 app.include_router(dispatch_router)
 app.include_router(feishu_router)
 app.include_router(integrations_router)
+app.include_router(issue_to_pr_router)
 app.include_router(memory_router)
 app.include_router(org_router)
 app.include_router(evolution_router)
@@ -504,6 +520,7 @@ app.include_router(replay_router)
 app.include_router(ops_router)
 app.include_router(runs_router)
 app.include_router(security_router)
+app.include_router(skill_curator_router)
 app.include_router(tenants_router)
 app.include_router(traces_router)
 app.include_router(tools_router)
