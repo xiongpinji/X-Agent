@@ -86,7 +86,7 @@ async def create_short_drama_storyboard(
                 resp = await router.chat([
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt},
-                ])
+                ], [])  # tools=[] for plain text generation
                 return str(resp.content if hasattr(resp, "content") else (resp or {}).get("content", ""))
             return caller
         except Exception as exc:
