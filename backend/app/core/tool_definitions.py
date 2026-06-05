@@ -41,7 +41,7 @@ BROWSER_NAVIGATE = ToolSchema(
     returns=ToolReturn(
         type="object",
         description="Navigation result",
-        schema={"url": "string", "title": "string", "status": "number"},
+        result_schema={"url": "string", "title": "string", "status": "number"},
     ),
     examples=[
         ToolExample(
@@ -72,7 +72,7 @@ BROWSER_CLICK = ToolSchema(
     returns=ToolReturn(
         type="object",
         description="Click result",
-        schema={"success": "boolean", "message": "string"},
+        result_schema={"success": "boolean", "message": "string"},
     ),
     permissions=["browser:interact"],
     tags=["browser", "interaction"],
@@ -101,7 +101,7 @@ BROWSER_FILL = ToolSchema(
     returns=ToolReturn(
         type="object",
         description="Fill result",
-        schema={"success": "boolean", "message": "string"},
+        result_schema={"success": "boolean", "message": "string"},
     ),
     permissions=["browser:interact"],
     tags=["browser", "form"],
@@ -124,7 +124,7 @@ BROWSER_SCREENSHOT = ToolSchema(
     returns=ToolReturn(
         type="object",
         description="Screenshot result",
-        schema={"path": "string", "size": "number"},
+        result_schema={"path": "string", "size": "number"},
     ),
     permissions=["browser:screenshot"],
     tags=["browser", "screenshot"],
@@ -147,7 +147,7 @@ BROWSER_EXTRACT_TEXT = ToolSchema(
     returns=ToolReturn(
         type="object",
         description="Extracted text",
-        schema={"text": "string"},
+        result_schema={"text": "string"},
     ),
     permissions=["browser:read"],
     tags=["browser", "extraction"],
@@ -181,7 +181,7 @@ DESKTOP_CLICK = ToolSchema(
     returns=ToolReturn(
         type="object",
         description="Click result",
-        schema={"success": "boolean"},
+        result_schema={"success": "boolean"},
     ),
     permissions=["desktop:interact"],
     tags=["desktop", "interaction"],
@@ -204,7 +204,7 @@ DESKTOP_TYPE = ToolSchema(
     returns=ToolReturn(
         type="object",
         description="Type result",
-        schema={"success": "boolean"},
+        result_schema={"success": "boolean"},
     ),
     permissions=["desktop:interact"],
     tags=["desktop", "typing"],
@@ -227,7 +227,7 @@ DESKTOP_SCREENSHOT = ToolSchema(
     returns=ToolReturn(
         type="object",
         description="Screenshot result",
-        schema={"path": "string"},
+        result_schema={"path": "string"},
     ),
     permissions=["desktop:screenshot"],
     tags=["desktop", "screenshot"],
@@ -268,7 +268,7 @@ MEMORY_STORE = ToolSchema(
     returns=ToolReturn(
         type="object",
         description="Store result",
-        schema={"memory_id": "string", "created_at": "string"},
+        result_schema={"memory_id": "string", "created_at": "string"},
     ),
     permissions=["memory:write"],
     tags=["memory", "storage"],
@@ -298,7 +298,7 @@ MEMORY_RETRIEVE = ToolSchema(
     returns=ToolReturn(
         type="object",
         description="Retrieve result",
-        schema={"items": "array", "total": "number"},
+        result_schema={"items": "array", "total": "number"},
     ),
     permissions=["memory:read"],
     tags=["memory", "retrieval"],
@@ -327,7 +327,7 @@ MEMORY_UPDATE = ToolSchema(
     returns=ToolReturn(
         type="object",
         description="Update result",
-        schema={"success": "boolean"},
+        result_schema={"success": "boolean"},
     ),
     permissions=["memory:write"],
     tags=["memory", "update"],
@@ -361,7 +361,7 @@ WORKFLOW_EXECUTE = ToolSchema(
     returns=ToolReturn(
         type="object",
         description="Execution result",
-        schema={"run_id": "string", "status": "string"},
+        result_schema={"run_id": "string", "status": "string"},
     ),
     permissions=["workflow:execute"],
     requires_approval=True,
@@ -385,7 +385,7 @@ WORKFLOW_STATUS = ToolSchema(
     returns=ToolReturn(
         type="object",
         description="Status result",
-        schema={"status": "string", "progress": "number"},
+        result_schema={"status": "string", "progress": "number"},
     ),
     permissions=["workflow:read"],
     tags=["workflow", "status"],
@@ -420,7 +420,7 @@ PLUGIN_INSTALL = ToolSchema(
     returns=ToolReturn(
         type="object",
         description="Install result",
-        schema={"plugin_id": "string", "status": "string"},
+        result_schema={"plugin_id": "string", "status": "string"},
     ),
     permissions=["plugin:install"],
     requires_approval=True,
@@ -444,7 +444,7 @@ PLUGIN_UNINSTALL = ToolSchema(
     returns=ToolReturn(
         type="object",
         description="Uninstall result",
-        schema={"success": "boolean"},
+        result_schema={"success": "boolean"},
     ),
     permissions=["plugin:uninstall"],
     requires_approval=True,
@@ -480,7 +480,7 @@ PLUGIN_EXECUTE = ToolSchema(
     returns=ToolReturn(
         type="object",
         description="Execution result",
-        schema={"success": "boolean", "output": "object"},
+        result_schema={"success": "boolean", "output": "object"},
     ),
     permissions=["plugin:execute"],
     tags=["plugin", "execution"],

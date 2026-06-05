@@ -63,7 +63,7 @@ class ToolReturn(BaseModel):
     """工具返回值定义"""
     type: str  # string, number, boolean, object, array
     description: str = ""
-    schema: dict[str, Any] = Field(default_factory=dict)
+    result_schema: dict[str, Any] = Field(default_factory=dict)
 
 
 class ToolExample(BaseModel):
