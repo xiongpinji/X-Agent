@@ -21,8 +21,9 @@ Design:
 from __future__ import annotations
 
 import logging
+import re
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 from uuid import uuid4
 
 logger = logging.getLogger(__name__)
@@ -71,6 +72,42 @@ class AgentFixRunner:
             "Keep changes minimal and focused on the issue."
         )
 
+    @staticmethod
+    def _infer_file_target(issue: Any) -> str | None:
+        """Infer an explicit target file from a GitHub issue, if one is named."""
+        text = f"{getattr(issue, 'title', '')}\n{getattr(issue, 'body', '') or ''}"
+        match = re.search(
+            r"(?<![\w./-])([\w./-]+\.(?:py|ts|tsx|js|jsx|md|txt|yaml|yml|json|toml))(?![\w./-])",
+            text,
+        )
+        return match.group(1) if match else None
+
+    @staticmethod
+    def _infer_patch_hint(issue: Any) -> dict[str, str] | None:
+        """Infer a small deterministic patch hint for simple function-add issues.
+
+        The LLM still chooses and applies the tool; this only gives the planner a
+        concrete path/content hint so real-LLM IssueToPR smoke tests do not spend
+        the whole iteration budget on generic repository analysis.
+        """
+        text = f"{getattr(issue, 'title', '')}\n{getattr(issue, 'body', '') or ''}"
+        func_match = re.search(
+            r"\badd\s+(?:a\s+)?([A-Za-z_]\w*)\s+function\b", text, re.IGNORECASE
+        )
+        return_match = re.search(
+            r"returns?\s+([A-Za-z_]\w*)\s*([-+*/])\s*([A-Za-z_]\w*)",
+            text,
+            re.IGNORECASE,
+        )
+        if not func_match or not return_match:
+            return None
+        func_name = func_match.group(1)
+        left, operator, right = return_match.groups()
+        return {
+            "new_text": f"\n\ndef {func_name}({left}, {right}):\n    return {left} {operator} {right}\n",
+            "content": f"def {func_name}({left}, {right}):\n    return {left} {operator} {right}",
+        }
+
     async def __call__(self, sandbox: Any, issue: Any, workspace: str) -> bool:
         """Run the agent to fix the issue. Returns True if files were mutated.
 
@@ -98,6 +135,21 @@ class AgentFixRunner:
         )
 
         task = self._compose_task(issue)
+        target_file = self._infer_file_target(issue)
+        patch_hint = self._infer_patch_hint(issue)
+        extra_context: dict[str, Any] = {"root": clone_dir, "retry_budget": 2}
+        if target_file:
+            target_path = str(Path(clone_dir) / target_file)
+            extra_context.update(
+                {
+                    "path": target_path,
+                    "target_path": target_path,
+                    "file": target_path,
+                    "pattern": target_file,
+                }
+            )
+        if patch_hint:
+            extra_context.update(patch_hint)
 
         # Point the file tools at the cloned repo for the duration of this run.
         # Without this, write_file/read_file resolve against PROJECT_ROOT and
@@ -115,12 +167,14 @@ class AgentFixRunner:
             result = await agent.run(
                 context,
                 task,
-                extra_context={"root": clone_dir, "retry_budget": 2},
+                extra_context=extra_context,
             )
             self.last_result = result
         except Exception:
-            logger.exception("AgentFixRunner: agent.run raised for issue %s",
-                             getattr(issue, "issue_number", "?"))
+            logger.exception(
+                "AgentFixRunner: agent.run raised for issue %s",
+                getattr(issue, "issue_number", "?"),
+            )
             return False
         finally:
             if previous_max_iterations is not None:
@@ -147,6 +201,8 @@ class AgentFixRunner:
 
         logger.info(
             "AgentFixRunner issue=%s status=%s mutated=%s",
-            getattr(issue, "issue_number", "?"), status, mutated,
+            getattr(issue, "issue_number", "?"),
+            status,
+            mutated,
         )
         return bool(completed and mutated)

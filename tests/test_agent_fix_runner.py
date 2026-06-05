@@ -68,6 +68,8 @@ class TestAgentFixRunner:
         assert ok is True
         # the agent was pointed at <workspace>/repo
         assert agent.last_extra["root"].endswith("repo")
+        assert agent.last_extra["path"].endswith("repo/calc.py") or agent.last_extra["path"].endswith("repo\\calc.py")
+        assert "def multiply" in agent.last_extra["new_text"]
         # task includes the issue title + body
         assert "Add multiply" in agent.last_task
         assert "multiply function" in agent.last_task
