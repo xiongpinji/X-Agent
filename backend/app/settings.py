@@ -65,6 +65,7 @@ class Settings(BaseSettings):
     default_token_budget: int = 16_000
     default_cost_budget_usd: float = 1.0
     enable_high_risk_tools: bool = False
+    github_webhook_secret: str | None = None
 
     # Security settings - CRITICAL: Must be set via environment variables in production
     jwt_secret: str = Field(
@@ -123,6 +124,16 @@ class Settings(BaseSettings):
                     f"for sufficient entropy"
                 )
 
+        return value
+
+    @field_validator("github_webhook_secret")
+    @classmethod
+    def _validate_github_webhook_secret(cls, value: str | None, info) -> str | None:
+        if not value and info.data.get("app_mode") == "production":
+            import logging
+            logging.getLogger(__name__).warning(
+                "XAGENT_GITHUB_WEBHOOK_SECRET is not set — GitHub webhooks will be unauthenticated"
+            )
         return value
 
     @field_validator("cors_origins")

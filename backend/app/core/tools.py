@@ -438,6 +438,17 @@ class ToolRegistry:
                 output = await self._run_post_tool_hooks(
                     context, tool, arguments, output
                 )
+            approval_id: str | None = None
+            if tool.risk_level in {RiskLevel.HIGH, RiskLevel.CRITICAL} and self._approval_store is not None:
+                approval = self._approval_store.create_tool_approval(
+                    context=context,
+                    tool_name=tool.name,
+                    risk_level=tool.risk_level,
+                    reason="high-risk tool executed successfully",
+                    arguments_preview=arguments_preview,
+                    arguments=arguments,
+                )
+                approval_id = approval.id
             record = ToolCallRecord(
                 tool_name=name,
                 success=True,
