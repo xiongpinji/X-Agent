@@ -632,6 +632,11 @@ async def shutdown_event():
     logger.info("X-Agent application shutdown complete")
 
 
+@app.get("/chat")
+async def chat_page() -> FileResponse:
+    return FileResponse(frontend_dir / "chat.html")
+
+
 @app.get("/")
 async def root() -> FileResponse:
     startup = frontend_dir / "startup.html"
