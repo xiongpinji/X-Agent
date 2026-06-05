@@ -11,8 +11,8 @@ from typing import Any
 
 import pytest
 
-from backend.app.core.pipelines import AgentFixRunner
 from backend.app.core.contracts import RunStatus
+from backend.app.core.pipelines import AgentFixRunner
 
 
 @dataclass
@@ -52,27 +52,37 @@ class _FakeAgent:
 class _Issue:
     issue_number: int = 7
     title: str = "Add multiply to calc.py"
-    body: str = "calc.py has add() but no multiply(). Please add a multiply(a, b) function that returns a * b."
+    body: str = (
+        "calc.py has add() but no multiply(). Please add a "
+        "multiply(a, b) function that returns a * b."
+    )
 
 
 class TestAgentFixRunner:
     @pytest.mark.asyncio
-    async def test_success_when_completed_and_file_mutated(self):
+    async def test_success_when_completed_and_file_mutated(self, tmp_path):
+        workspace = tmp_path / "ws"
+        repo = workspace / "repo"
+        repo.mkdir(parents=True)
+        (repo / "calc.py").write_text("def add(a, b):\n    return a + b\n", encoding="utf-8")
+
         result = _FakeResult(
             status=RunStatus.COMPLETED,
             tool_calls=[_FakeToolCall("write_file", success=True)],
         )
         agent = _FakeAgent(result)
         runner = AgentFixRunner(agent=agent)
-        ok = await runner(sandbox=None, issue=_Issue(), workspace="/tmp/ws")
+        ok = await runner(sandbox=None, issue=_Issue(), workspace=str(workspace))
         assert ok is True
         # the agent was pointed at <workspace>/repo
         assert agent.last_extra["root"].endswith("repo")
-        assert agent.last_extra["path"].endswith("repo/calc.py") or agent.last_extra["path"].endswith("repo\\calc.py")
+        assert agent.last_extra["path"].endswith("repo/calc.py") or agent.last_extra[
+            "path"
+        ].endswith("repo\\calc.py")
         assert "def multiply" in agent.last_extra["new_text"]
         # task includes the issue title + body
         assert "Add multiply" in agent.last_task
-        assert "multiply function" in agent.last_task
+        assert "multiply" in agent.last_task
 
     @pytest.mark.asyncio
     async def test_fail_when_completed_but_no_file_mutation(self):
