@@ -91,6 +91,36 @@ Generate secrets with:
 python scripts/generate_secrets.py
 ```
 
+## Three-tier deployment strategy
+
+X-Agent supports three deployment modes. The API key enforcement setting differs by tier.
+
+**Cloud server (production)** — The API is public-facing and must be authenticated.
+
+```env
+XAGENT_APP_MODE=production
+XAGENT_REQUIRE_API_KEY=true
+XAGENT_BOOTSTRAP_API_KEY=your-admin-key
+XAGENT_GITHUB_WEBHOOK_SECRET=your-webhook-secret
+XAGENT_CORS_ORIGINS=https://your-app.example.com
+```
+
+Run via Docker Compose. Mobile apps and web clients authenticate with the `x-api-key` header.
+
+**Desktop (local)** — User is the sole operator. API key auth is optional.
+
+```env
+XAGENT_APP_MODE=development
+XAGENT_REQUIRE_API_KEY=false
+XAGENT_LLM_BACKEND=deepseek
+```
+
+Start with `uvicorn backend.app.main:app --reload`.
+
+**Mobile App** — App authenticates against the cloud server above using a provisioned API key. No separate backend needed; configure the app to point at the cloud server URL and include `x-api-key` in all requests.
+
+---
+
 ## Release-candidate validation
 
 See `RELEASE_READINESS.md` for the current targeted baseline commands, known limits, and production checklist.

@@ -541,6 +541,17 @@ async def startup_event():
     """
     logger.info("Starting X-Agent application...")
 
+    # Security check: warn if production API auth is disabled
+    from backend.app.settings import get_settings as _get_settings
+    _settings = _get_settings()
+    if _settings.app_mode == "production" and not _settings.require_api_key:
+        logger.warning(
+            "SECURITY WARNING: XAGENT_REQUIRE_API_KEY=false in production mode. "
+            "Cloud and API deployments should set XAGENT_REQUIRE_API_KEY=true to prevent unauthenticated access. "
+            "Desktop-local deployments may leave this off intentionally."
+        )
+
+
     try:
         # 初始化MCP管理器
         # MCP管理器负责发现、连接和管理MCP服务器
