@@ -70,15 +70,27 @@ async def create_short_drama_storyboard(
 
     def make_llm_caller():
         try:
-            router = LLMRouter()
+            from backend.app.dependencies import build_llm_router
+            from backend.app.settings import get_settings
+            _s = get_settings()
+            router = build_llm_router(
+                llm_backend=_s.llm_backend,
+                fallback_order=_s.llm_fallback_order,
+                openai_api_key=_s.openai_api_key,
+                openai_model=_s.openai_model,
+                deepseek_api_key=_s.deepseek_api_key,
+                deepseek_model=_s.deepseek_model,
+                deepseek_base_url=_s.deepseek_base_url or "https://api.deepseek.com/v1",
+            )
             async def caller(system_prompt: str, user_prompt: str) -> str:
                 resp = await router.chat([
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt},
                 ])
-                return str(resp.content if hasattr(resp, "content") else resp.get("content", ""))
+                return str(resp.content if hasattr(resp, "content") else (resp or {}).get("content", ""))
             return caller
-        except Exception:
+        except Exception as exc:
+            import logging; logging.getLogger(__name__).warning("creative_studio llm unavailable: %s", exc)
             return None
 
     agent = ShortDramaProducerAgent(llm_caller=make_llm_caller(), max_shots=8)
