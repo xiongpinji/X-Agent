@@ -564,7 +564,9 @@ def _next_commands(*, status: str, provider: str, expected_commit_sha: str | Non
             "Review .xagent_runtime/reports/rc-owner-verified-finalize.json.",
             f"Confirm the hosted Actions head SHA and release commit are {expected}.",
             "Verify any existing RC tag points at that SHA before handoff: "
-            f"git rev-parse {EXAMPLE_RC_TAG_NAME}; do not force-update pushed tags without owner approval.",
+            f"python scripts\\rc_tag_consistency_gate.py --expected-commit-sha {expected} "
+            f"--tag-name {EXAMPLE_RC_TAG_NAME} --require-match.",
+            "Do not force-update pushed tags without owner approval.",
         ]
     if status == "planned":
         return [

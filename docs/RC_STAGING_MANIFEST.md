@@ -1,6 +1,6 @@
 # X-Agent RC Staging Manifest
 
-Last updated: 2026-06-06
+Last updated: 2026-06-08
 
 This manifest defines the candidate release files for the current
 `codex/codex-hermes-gap-closure` branch. It is a source-control guard: stage
@@ -114,6 +114,7 @@ scripts/rc_owner_handoff_gate.py
 scripts/rc_owner_gate_checklist.py
 scripts/rc_owner_env_template.py
 scripts/rc_owner_verified_finalize.py
+scripts/rc_tag_consistency_gate.py
 scripts/rc_install_release_gate.py
 scripts/rc_single_user_local_gate.py
 scripts/rc_supply_chain_gate.py
@@ -145,6 +146,7 @@ tests/test_rc_owner_handoff_gate.py
 tests/test_rc_owner_gate_checklist.py
 tests/test_rc_owner_env_template.py
 tests/test_rc_owner_verified_finalize.py
+tests/test_rc_tag_consistency_gate.py
 tests/test_rc_install_release_gate.py
 tests/test_rc_single_user_local_gate.py
 tests/test_rc_supply_chain_gate.py
