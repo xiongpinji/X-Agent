@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from scripts import rc_owner_gate_plan
 from scripts.rc_owner_gate_plan import build_owner_gate_plan
 
 EXPECTED_HEAD_SHA = "0123456789abcdef0123456789abcdef01234567"
@@ -605,3 +606,25 @@ def test_owner_gate_plan_keeps_verified_gates_when_external_evidence_is_fresh(tm
     assert report.status == "verified"
     assert report.evidence_freshness["fresh"] is True
     assert all(gate.status == "verified" for gate in report.gates)
+
+
+def test_owner_gate_plan_reports_repo_relative_handoff_paths(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(rc_owner_gate_plan, "ROOT", tmp_path)
+    external = _write_external(
+        tmp_path / ".xagent_runtime" / "reports" / "rc-external-smoke.json",
+        [_provider_passed_check()],
+    )
+    source_bundle = _write_source_bundle(
+        tmp_path / ".xagent_runtime" / "reports" / "rc-source-bundle.json",
+        "2026-06-05T09:00:00Z",
+    )
+
+    report = build_owner_gate_plan(external_smoke_path=external, source_bundle_path=source_bundle)
+    payload = report.to_dict()
+    text = json.dumps(payload, ensure_ascii=False)
+
+    assert payload["external_smoke_report"] == ".xagent_runtime/reports/rc-external-smoke.json"
+    assert payload["source_bundle_report"] == ".xagent_runtime/reports/rc-source-bundle.json"
+    assert str(tmp_path) not in text
+    assert "/" + "/".join(["home", "runner"]) + "/" not in text
+    assert "\\Users\\" not in text

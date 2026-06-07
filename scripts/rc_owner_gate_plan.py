@@ -30,6 +30,10 @@ GITHUB_ACTIONS_RUN_URL_RE = re.compile(
     r"^https://github\.com/[^/\s]+/[^/\s]+/actions/runs/[0-9]+(?:[/?#][^\s]*)?$"
 )
 GITHUB_COMMIT_SHA_RE = re.compile(r"^[0-9a-fA-F]{40}$")
+LOCAL_HANDOFF_PATH_RE = re.compile(
+    r"(?i)(?:[A-Z]:[\\/]|/(?:home|Users|tmp|var)/)(?:(?![\"'\s`<>]).)*?"
+    r"([\\/]\.xagent_runtime[\\/][^\"'\s`,)]+)"
+)
 
 
 @dataclass(frozen=True)
@@ -58,7 +62,7 @@ class OwnerGatePlanReport:
     def to_dict(self) -> dict[str, Any]:
         payload = asdict(self)
         payload["gates"] = [asdict(gate) for gate in self.gates]
-        return payload
+        return _handoff_value(payload)
 
 
 def _utc_now() -> str:
@@ -71,6 +75,30 @@ def _getenv(*names: str) -> str:
         if value:
             return value
     return ""
+
+
+def _handoff_text(value: str) -> str:
+    def replace(match: re.Match[str]) -> str:
+        return match.group(1).replace("\\", "/").lstrip("/")
+
+    return LOCAL_HANDOFF_PATH_RE.sub(replace, value)
+
+
+def _handoff_value(value: Any) -> Any:
+    if isinstance(value, str):
+        return _handoff_text(value)
+    if isinstance(value, list):
+        return [_handoff_value(item) for item in value]
+    if isinstance(value, dict):
+        return {key: _handoff_value(item) for key, item in value.items()}
+    return value
+
+
+def _handoff_path(path: Path) -> str:
+    try:
+        return path.resolve(strict=False).relative_to(ROOT.resolve(strict=False)).as_posix()
+    except ValueError:
+        return _handoff_text(str(path))
 
 
 def _configured_names(groups: list[list[str]]) -> list[str]:
@@ -145,8 +173,8 @@ def _evidence_freshness(external_smoke_path: Path, source_bundle_path: Path | No
     return {
         "required": True,
         "fresh": not problems,
-        "external_smoke_report": str(external_smoke_path),
-        "source_bundle_report": str(source_bundle_path),
+        "external_smoke_report": _handoff_path(external_smoke_path),
+        "source_bundle_report": _handoff_path(source_bundle_path),
         "external_generated_at": external_generated_at,
         "source_bundle_generated_at": source_generated_at,
         "problems": problems,
@@ -606,7 +634,7 @@ def build_owner_gate_plan(
     return OwnerGatePlanReport(
         status=status,
         generated_at=_utc_now(),
-        external_smoke_report=str(external_smoke_path),
+        external_smoke_report=_handoff_path(external_smoke_path),
         gates=gates,
         next_commands=[
             "Set the missing XAGENT_* environment variables in the deployment owner's secret store or shell.",
@@ -624,7 +652,7 @@ def build_owner_gate_plan(
             "--github-execute-preflight --github-actions-preflight",
             "python scripts\\rc_final_gate.py --require-ready-to-tag",
         ],
-        source_bundle_report=str(source_bundle_path) if source_bundle_path is not None else None,
+        source_bundle_report=_handoff_path(source_bundle_path) if source_bundle_path is not None else None,
         evidence_freshness=freshness,
     )
 

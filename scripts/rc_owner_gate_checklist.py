@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -21,6 +22,10 @@ REPORT_DIR = ROOT / ".xagent_runtime" / "reports"
 DEFAULT_PLAN = REPORT_DIR / "rc-owner-gate-plan.json"
 DEFAULT_JSON_OUTPUT = REPORT_DIR / "rc-owner-gate-checklist.json"
 DEFAULT_MARKDOWN_OUTPUT = REPORT_DIR / "rc-owner-gate-checklist.md"
+LOCAL_HANDOFF_PATH_RE = re.compile(
+    r"(?i)(?:[A-Z]:[\\/]|/(?:home|Users|tmp|var)/)(?:(?![\"'\s`<>]).)*?"
+    r"([\\/]\.xagent_runtime[\\/][^\"'\s`,)]+)"
+)
 
 
 @dataclass(frozen=True)
@@ -53,11 +58,35 @@ class OwnerGateChecklist:
     def to_dict(self) -> dict[str, Any]:
         payload = asdict(self)
         payload["gates"] = [asdict(gate) for gate in self.gates]
-        return payload
+        return _handoff_value(payload)
 
 
 def _utc_now() -> str:
     return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def _handoff_text(value: str) -> str:
+    def replace(match: re.Match[str]) -> str:
+        return match.group(1).replace("\\", "/").lstrip("/")
+
+    return LOCAL_HANDOFF_PATH_RE.sub(replace, value)
+
+
+def _handoff_value(value: Any) -> Any:
+    if isinstance(value, str):
+        return _handoff_text(value)
+    if isinstance(value, list):
+        return [_handoff_value(item) for item in value]
+    if isinstance(value, dict):
+        return {key: _handoff_value(item) for key, item in value.items()}
+    return value
+
+
+def _handoff_path(path: Path) -> str:
+    try:
+        return path.resolve(strict=False).relative_to(ROOT.resolve(strict=False)).as_posix()
+    except ValueError:
+        return _handoff_text(str(path))
 
 
 def _read_plan(path: Path) -> tuple[dict[str, Any] | None, list[str]]:
@@ -164,7 +193,7 @@ def build_checklist(plan_path: Path = DEFAULT_PLAN) -> OwnerGateChecklist:
         return OwnerGateChecklist(
             status="failed",
             generated_at=_utc_now(),
-            owner_gate_plan=str(plan_path),
+            owner_gate_plan=_handoff_path(plan_path),
             source_bundle_report=None,
             external_smoke_report=None,
             evidence_freshness={},
@@ -200,14 +229,14 @@ def build_checklist(plan_path: Path = DEFAULT_PLAN) -> OwnerGateChecklist:
     return OwnerGateChecklist(
         status=status,
         generated_at=_utc_now(),
-        owner_gate_plan=str(plan_path),
+        owner_gate_plan=_handoff_path(plan_path),
         source_bundle_report=(
-            str(plan.get("source_bundle_report")) if plan.get("source_bundle_report") is not None else None
+            _handoff_text(str(plan.get("source_bundle_report"))) if plan.get("source_bundle_report") is not None else None
         ),
-        external_smoke_report=external_smoke_report,
-        evidence_freshness=freshness if isinstance(freshness, dict) else {},
+        external_smoke_report=_handoff_text(external_smoke_report),
+        evidence_freshness=_handoff_value(freshness) if isinstance(freshness, dict) else {},
         gates=gates,
-        next_commands=_string_list(plan.get("next_commands")),
+        next_commands=[_handoff_text(command) for command in _string_list(plan.get("next_commands"))],
         errors=checklist_errors,
     )
 

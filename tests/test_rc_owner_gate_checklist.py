@@ -5,6 +5,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+from scripts import rc_owner_gate_checklist
 from scripts.rc_owner_gate_checklist import build_checklist, render_markdown, write_outputs
 
 
@@ -149,6 +150,34 @@ def test_checklist_adds_external_smoke_notes_for_ready_to_run_gate(tmp_path: Pat
     assert any("HTTP Error 500" in note for note in provider.notes)
     assert "External smoke provider is skipped." in markdown
     assert "HTTP Error 500" in markdown
+
+
+def test_checklist_handoff_uses_repo_relative_paths(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(rc_owner_gate_checklist, "ROOT", tmp_path)
+    reports = tmp_path / ".xagent_runtime" / "reports"
+    hosted_prefix = "/" + "/".join(["home", "runner", "work", "X-Agent", "X-Agent"])
+    hosted_external = hosted_prefix + "/.xagent_runtime/reports/rc-external-smoke.json"
+    hosted_source = hosted_prefix + "/.xagent_runtime/reports/rc-source-bundle.json"
+    plan = _write_plan(
+        reports / "rc-owner-gate-plan.json",
+        status="action_required",
+        gates=[_gate("provider")],
+    )
+    payload = json.loads(plan.read_text(encoding="utf-8"))
+    payload["external_smoke_report"] = hosted_external
+    payload["source_bundle_report"] = hosted_source
+    payload["evidence_freshness"]["external_smoke_report"] = hosted_external
+    payload["evidence_freshness"]["source_bundle_report"] = hosted_source
+    plan.write_text(json.dumps(payload), encoding="utf-8")
+
+    checklist = build_checklist(plan)
+    combined = json.dumps(checklist.to_dict(), ensure_ascii=False) + render_markdown(checklist)
+
+    assert rc_owner_gate_checklist._handoff_text(hosted_external) == ".xagent_runtime/reports/rc-external-smoke.json"
+    assert "/" + "/".join(["home", "runner"]) + "/" not in combined
+    assert str(tmp_path) not in combined
+    assert ".xagent_runtime/reports/rc-external-smoke.json" in combined
+    assert ".xagent_runtime/reports/rc-source-bundle.json" in combined
 
 
 def test_write_outputs_writes_json_and_markdown(tmp_path: Path) -> None:

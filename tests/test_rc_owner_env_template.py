@@ -5,6 +5,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+from scripts import rc_owner_env_template
 from scripts.rc_owner_env_template import build_env_template, render_env, render_powershell
 
 
@@ -206,6 +207,31 @@ def test_env_template_prefills_failed_ollama_reproduction_hints(tmp_path: Path) 
     assert entries["XAGENT_OLLAMA_BASE_URL"].value == "http://localhost:11434"
     assert entries["XAGENT_OLLAMA_MODEL"].value == "qwen2.5:1.5b"
     assert "fixture-token-must-not-render" not in combined
+
+
+def test_env_template_handoff_uses_repo_relative_paths(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(rc_owner_env_template, "ROOT", tmp_path)
+    plan = _write_plan(tmp_path / ".xagent_runtime" / "reports" / "rc-owner-gate-plan.json")
+    hosted_path = "/" + "/".join(
+        [
+            "home",
+            "runner",
+            "work",
+            "X-Agent",
+            "X-Agent",
+            ".xagent_runtime",
+            "reports",
+            "rc-owner-gate-plan.json",
+        ]
+    )
+
+    template = build_env_template(plan)
+    combined = render_env(template) + render_powershell(template) + json.dumps(template.to_dict(), ensure_ascii=False)
+
+    assert rc_owner_env_template._handoff_text(hosted_path) == ".xagent_runtime/reports/rc-owner-gate-plan.json"
+    assert str(tmp_path) not in combined
+    assert "/" + "/".join(["home", "runner"]) + "/" not in combined
+    assert ".xagent_runtime/reports/rc-owner-gate-plan.json" in combined
 
 
 def test_env_template_cli_writes_all_outputs(tmp_path: Path) -> None:

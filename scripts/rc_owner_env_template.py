@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -46,6 +47,10 @@ SAFE_PROVIDER_PREFILL_NAMES = {
     "XAGENT_OLLAMA_BASE_URL",
     "XAGENT_OLLAMA_MODEL",
 }
+LOCAL_HANDOFF_PATH_RE = re.compile(
+    r"(?i)(?:[A-Z]:[\\/]|/(?:home|Users|tmp|var)/)(?:(?![\"'\s`<>]).)*?"
+    r"([\\/]\.xagent_runtime[\\/][^\"'\s`,)]+)"
+)
 
 
 @dataclass(frozen=True)
@@ -70,11 +75,35 @@ class OwnerEnvTemplate:
     def to_dict(self) -> dict[str, Any]:
         payload = asdict(self)
         payload["entries"] = [asdict(entry) for entry in self.entries]
-        return payload
+        return _handoff_value(payload)
 
 
 def _utc_now() -> str:
     return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def _handoff_text(value: str) -> str:
+    def replace(match: re.Match[str]) -> str:
+        return match.group(1).replace("\\", "/").lstrip("/")
+
+    return LOCAL_HANDOFF_PATH_RE.sub(replace, value)
+
+
+def _handoff_value(value: Any) -> Any:
+    if isinstance(value, str):
+        return _handoff_text(value)
+    if isinstance(value, list):
+        return [_handoff_value(item) for item in value]
+    if isinstance(value, dict):
+        return {key: _handoff_value(item) for key, item in value.items()}
+    return value
+
+
+def _handoff_path(path: Path) -> str:
+    try:
+        return path.resolve(strict=False).relative_to(ROOT.resolve(strict=False)).as_posix()
+    except ValueError:
+        return _handoff_text(str(path))
 
 
 def _read_plan(path: Path) -> tuple[dict[str, Any] | None, list[str]]:
@@ -205,7 +234,7 @@ def build_env_template(plan_path: Path = DEFAULT_PLAN, external_smoke_path: Path
         return OwnerEnvTemplate(
             status="failed",
             generated_at=_utc_now(),
-            owner_gate_plan=str(plan_path),
+            owner_gate_plan=_handoff_path(plan_path),
             env_groups=[],
             entries=[],
             command_sequence=[f"python scripts\\rc_owner_gate_plan.py --output {plan_path}"],
@@ -224,7 +253,7 @@ def build_env_template(plan_path: Path = DEFAULT_PLAN, external_smoke_path: Path
     return OwnerEnvTemplate(
         status="failed" if template_errors else "created",
         generated_at=_utc_now(),
-        owner_gate_plan=str(plan_path),
+        owner_gate_plan=_handoff_path(plan_path),
         env_groups=_template_env_groups(gates),
         entries=entries,
         command_sequence=[
