@@ -35,9 +35,9 @@ powershell -ExecutionPolicy Bypass -File scripts\install-xagent.ps1 -DryRun
 python scripts\rc_runtime_smoke.py
 python scripts\rc_external_smoke.py
 python scripts\rc_release_audit.py
-python scripts\rc_owner_verified_finalize.py --provider ollama --ollama-model qwen2.5:1.5b --ollama-base-url http://127.0.0.1:11435 --github-actions-run-url https://github.com/xiongpinji/X-Agent/actions/runs/27105724396 --github-actions-head-sha e0febc0d92ce348503e995c1a0d0bc897f5585df --expected-commit-sha e0febc0d92ce348503e995c1a0d0bc897f5585df
-python scripts\rc_tag_consistency_gate.py --expected-commit-sha e0febc0d92ce348503e995c1a0d0bc897f5585df --tag-name x-agent-commercial-rc-20260608-3 --require-match
-python scripts\rc_delivery_status.py --expected-commit-sha e0febc0d92ce348503e995c1a0d0bc897f5585df --tag-name x-agent-commercial-rc-20260608-3 --github-actions-run-url https://github.com/xiongpinji/X-Agent/actions/runs/27105724396 --github-actions-head-sha e0febc0d92ce348503e995c1a0d0bc897f5585df
+python scripts\rc_owner_verified_finalize.py --provider ollama --ollama-model qwen2.5:1.5b --ollama-base-url http://127.0.0.1:11435 --github-actions-run-url <hosted-commercial-rc-run-url> --github-actions-head-sha <expected-release-commit-sha> --expected-commit-sha <expected-release-commit-sha>
+python scripts\rc_tag_consistency_gate.py --expected-commit-sha <expected-release-commit-sha> --tag-name <selected-rc-tag> --require-match
+python scripts\rc_delivery_status.py --expected-commit-sha <expected-release-commit-sha> --tag-name <selected-rc-tag> --github-actions-run-url <hosted-commercial-rc-run-url> --github-actions-head-sha <expected-release-commit-sha> --fetch-github
 python scripts\rc_owner_gate_runner.py --gate all --dry-run --env-file .xagent_runtime\reports\rc-owner-env-template.env
 python scripts\xagent_doctor.py --json
 git diff --check
@@ -83,16 +83,14 @@ Observed status:
   ASCII-only model directory `D:\ollama-models`; the sentinel response
   `xagent-rc-ok` was recorded. Feishu, GitHub issue-to-PR, and hosted Actions
   are verified in the owner-controlled RC evidence snapshot.
-- RC final gate: the current release commit is
-  `e0febc0d92ce348503e995c1a0d0bc897f5585df`, and hosted Commercial RC run
-  `https://github.com/xiongpinji/X-Agent/actions/runs/27105724396` completed
-  successfully for that same head SHA. The non-destructive RC tag
-  `x-agent-commercial-rc-20260608-3` points locally and remotely at that commit
-  and passes `scripts\rc_tag_consistency_gate.py --require-match`. Current
-  local final gate status remains `ready_with_owner_gates`, and current
-  delivery status is `owner_finalize_pending` until owner-controlled Feishu and
-  GitHub issue-to-PR environment variables are provided and
-  `scripts\rc_owner_verified_finalize.py` passes for that exact commit.
+- RC final gate: the selected release commit, hosted Commercial RC run, and
+  non-destructive RC tag must be read from
+  `.xagent_runtime\reports\rc-delivery-status.json` and verified with
+  `scripts\rc_tag_consistency_gate.py --require-match`. Current local final
+  gate status remains `ready_with_owner_gates`, and current delivery status is
+  `owner_finalize_pending` until owner-controlled Feishu and GitHub issue-to-PR
+  environment variables are provided and `scripts\rc_owner_verified_finalize.py`
+  passes for that exact commit.
 - RC final gate also enforces release receipt freshness: the receipt
   `generated_at` must not be older than the source bundle, artifact integrity,
   owner gate plan, owner handoff gate, `owner_env_template`,
