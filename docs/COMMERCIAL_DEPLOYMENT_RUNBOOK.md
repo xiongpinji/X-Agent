@@ -9,13 +9,15 @@ deployment docs into a commercial RC procedure with explicit verification gates.
 It is not a GA claim and it is not a full Codex/Hermes parity claim. It is a
 commercial pilot/RC deployment path that must still be validated with the
 customer's real provider tokens, channel credentials, and infrastructure.
-Current fixed-point local final-gate status is `ready_with_owner_gates`, with
-`full_parity_claimed=false`. Earlier intermediate refreshes can temporarily
-report `ready_with_receipt_refresh_required` until receipt and evidence-pack
-reports are regenerated in order. The owner finalization command below must be
-rerun in the owner shell with real Feishu, GitHub, provider, and hosted Actions
-variables before RC tagging. This runbook does not claim full Codex/Hermes
-parity.
+Current fixed-point local final-gate status is `ready_for_rc_tag`, with
+`full_parity_claimed=false`, after the owner-verified refresh chain passed with
+real Feishu, GitHub issue-to-PR, provider, and hosted Actions evidence. Earlier
+intermediate refreshes can temporarily report
+`ready_with_receipt_refresh_required` until receipt and evidence-pack reports
+are regenerated in order. The owner finalization command below remains the
+repeatable tag-readiness proof and must be rerun if any release evidence or
+owner-controlled variable changes. This runbook does not claim full
+Codex/Hermes parity.
 Current local provider smoke is verified with Ollama at
 `http://127.0.0.1:11435`, model `qwen2.5:1.5b`, after copying the required
 model blobs to the ASCII-only model directory `D:\ollama-models`. The direct
@@ -29,6 +31,12 @@ release smoke, use an ASCII-only `OLLAMA_MODELS` path, prove `ollama run
 the refresh chain.
 Feishu, GitHub issue-to-PR, and hosted GitHub Actions are owner-controlled
 gates and must remain verified for the exact commit SHA used for RC tagging.
+Tag evidence is for commit `643a017b3a2ae00be212d186e2681a147b46bf6b`. The
+already-pushed tag `x-agent-commercial-rc-20260608` currently resolves to
+`08cd6d114e0c0cb357ccea3e529aed7b2aea1045`, so release handoff must not treat
+that pushed tag as verified until the owner either creates a new tag at
+`643a017b3a2ae00be212d186e2681a147b46bf6b` or explicitly approves correcting
+the existing remote tag.
 
 ## 1. Release Scope
 
@@ -130,6 +138,8 @@ python scripts/codex_hermes_gap_matrix.py --write-report
 python scripts/xagent_doctor.py --json
 python scripts/rc_runtime_smoke.py
 python scripts/rc_owner_verified_finalize.py --provider ollama --ollama-model qwen2.5:1.5b --ollama-base-url http://127.0.0.1:11435
+git rev-parse HEAD
+git rev-parse x-agent-commercial-rc-20260608
 ```
 
 Provider smoke is a sentinel check, not just a connectivity check: the selected
@@ -146,6 +156,10 @@ entrypoint. It wraps the owner-verified refresh chain, summarizes
 `rc_final_gate.py` tag-readiness state, writes
 `.xagent_runtime/reports/rc-owner-verified-finalize.json`, and intentionally
 does not create git tags or store secret values.
+It binds `XAGENT_COMMERCIAL_RC_GITHUB_ACTIONS_HEAD_SHA` to the expected release
+commit SHA, defaulting to `git rev-parse HEAD`; use `--expected-commit-sha`
+only when finalizing a specific checked commit. The hosted Actions run SHA, the
+local release commit, and the RC tag target must all match before handoff.
 For Ollama/local release evidence, pass the exact `--ollama-model` and
 `--ollama-base-url` used for provider smoke so refreshed reports do not
 implicitly fall back to the default model.
@@ -434,16 +448,16 @@ Before enabling an integration for a customer:
 
 Keep these items visible in the release report:
 
-- GitHub Actions commercial RC workflow has been defined locally but must still
-  run successfully in GitHub before final RC tagging. Trigger the hosted Commercial RC Gate workflow
-  on GitHub Actions first, then record the
-  successful run URL in `XAGENT_COMMERCIAL_RC_GITHUB_ACTIONS_RUN_URL` and the
-  exact hosted run commit in `XAGENT_COMMERCIAL_RC_GITHUB_ACTIONS_HEAD_SHA` as a
-  40-character hex git commit SHA before
-  running `scripts/rc_owner_gate_runner.py`, `scripts/rc_external_smoke.py`,
+- GitHub Actions commercial RC workflow has run successfully in GitHub for this
+  RC evidence snapshot. The hosted Commercial RC Gate workflow run is recorded
+  in `XAGENT_COMMERCIAL_RC_GITHUB_ACTIONS_RUN_URL`, and the exact hosted run
+  commit is recorded in `XAGENT_COMMERCIAL_RC_GITHUB_ACTIONS_HEAD_SHA` as a
+  40-character hex git commit SHA before running
+  `scripts/rc_owner_gate_runner.py`, `scripts/rc_external_smoke.py`,
   `scripts/rc_owner_gate_plan.py`, `scripts/rc_owner_env_template.py`, and
-  `scripts/rc_owner_gate_checklist.py --fail-action-required` for the final
-  tag gate. The value must be a
+  `scripts/rc_owner_gate_checklist.py --fail-action-required` for the final tag
+  gate. Trigger the hosted Commercial RC Gate workflow again if any staged
+  release input changes. The value must be a
   GitHub Actions run URL shaped like
   `https://github.com/<owner>/<repo>/actions/runs/<run-id>`, and
   `scripts/rc_external_smoke.py --github-actions-preflight` must confirm

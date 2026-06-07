@@ -16,7 +16,7 @@ needs security, runtime, CI, documentation, and rollback proof.
   Curator MVP, Gateway dry-run mode, installer, doctor, and IDE roadmap.
 - Non-claim: do not claim full Codex or Hermes parity without broader external
   product, production, IDE, ecosystem, and real-provider evidence.
-- Machine boundary: current local final gate is `ready_with_owner_gates` and
+- Machine boundary: current local final gate is `ready_for_rc_tag` and
   `full_parity_claimed=false`.
 
 ## Current Evidence Snapshot
@@ -77,12 +77,18 @@ Observed status:
   verified with Ollama `qwen2.5:1.5b` at `http://127.0.0.1:11435` using the
   ASCII-only model directory `D:\ollama-models`; the sentinel response
   `xagent-rc-ok` was recorded. Feishu, GitHub issue-to-PR, and hosted Actions
-  remain skipped/action-required until owner credentials and resources exist.
-- RC final gate: `ready_with_owner_gates`; local gates are green after the
-  fixed-point refresh, but owner-controlled external resources still hold the
-  final RC tag. Intermediate refreshes can temporarily report
+  are verified in the owner-controlled RC evidence snapshot.
+- RC final gate: `ready_for_rc_tag`; local gates and owner-controlled external
+  resources are green after the fixed-point refresh. Intermediate refreshes can
+  temporarily report
   `ready_with_receipt_refresh_required` until receipt and evidence-pack reports
   are regenerated in order.
+- RC tag consistency: owner-verified evidence is for commit
+  `643a017b3a2ae00be212d186e2681a147b46bf6b`, while the already-pushed
+  `x-agent-commercial-rc-20260608` tag currently points at
+  `08cd6d114e0c0cb357ccea3e529aed7b2aea1045`. Do not hand off that tag as the
+  verified RC tag until the owner creates a new tag at the verified commit or
+  explicitly approves correcting the pushed tag.
 - RC final gate also enforces release receipt freshness: the receipt
   `generated_at` must not be older than the source bundle, artifact integrity,
   owner gate plan, owner handoff gate, `owner_env_template`,
@@ -310,14 +316,15 @@ Runtime smoke evidence captured on 2026-06-06:
   `.xagent_runtime/reports/rc-external-smoke.json`. Provider is verified:
   the current local Ollama attempt uses `qwen2.5:1.5b` at
   `http://127.0.0.1:11435` with `D:\ollama-models` and records
-  `sentinel_matched=true`. Feishu webhook contract, GitHub dry-run, GitHub
-  execute-preflight, and hosted Actions remain skipped because the
-  owner-controlled credentials/test resources are not configured in this
-  workstation. Execute
-  preflight now requires token-authenticated read-only GitHub issue API and
-  repository permission probes against the disposable test repository; the repo
-  probe must confirm `permissions.push=true`, and the smoke still performs no
-  repository mutations.
+  `sentinel_matched=true`. The owner-verified RC evidence snapshot also records
+  Feishu webhook contract, GitHub dry-run, GitHub execute-preflight, and hosted
+  Actions as verified. If this command is rerun in a workstation without the
+  owner-controlled credentials/test resources, those non-provider checks will
+  correctly fall back to skipped/action-required. Execute preflight now requires
+  token-authenticated read-only GitHub issue API and repository permission
+  probes against the disposable test repository; the repo probe must confirm
+  `permissions.push=true`, and the smoke still performs no repository
+  mutations.
 - Provider smoke is a sentinel check: the selected real backend must return
   content containing `xagent-rc-ok`, and the report records
   `sentinel_matched=true` before the provider owner gate is considered passed.
@@ -334,11 +341,11 @@ Runtime smoke evidence captured on 2026-06-06:
 - `scripts/rc_final_gate.py` reads the gap matrix, release audit, runtime
   smoke, external smoke, owner gate plan, install/release, supply-chain,
   secrets, source bundle, and staging plan reports, then writes
-  `.xagent_runtime/reports/rc-final-gate.json`. With current local evidence it
-  reports `ready_with_owner_gates`, not `ready_for_rc_tag`, because Feishu,
-  GitHub issue-to-PR, and hosted Actions owner resources are still absent. The latest final gate
-  has `rc_candidate=true`, `full_parity_claimed=false`,
-  `can_stage_candidate_files=true`, and `can_tag_rc_now=false`.
+  `.xagent_runtime/reports/rc-final-gate.json`. With current owner-verified
+  evidence it reports `ready_for_rc_tag` because Feishu, GitHub issue-to-PR,
+  and hosted Actions owner resources are verified. The latest final gate has
+  `rc_candidate=true`, `full_parity_claimed=false`,
+  `can_stage_candidate_files=true`, and `can_tag_rc_now=true`.
 - `scripts/rc_owner_gate_plan.py` writes
   `.xagent_runtime/reports/rc-owner-gate-plan.json`. Hosted GitHub Actions
   remains an owner gate until `XAGENT_COMMERCIAL_RC_GITHUB_ACTIONS_RUN_URL`
@@ -482,8 +489,8 @@ Deployment gate evidence captured on 2026-06-06:
   integrity validation, install/release artifact gate, final RC gate, and
   release receipt generation plus Windows installer dry-run jobs.
   `scripts/rc_ci_contract.py`
-  validates this workflow contract locally; the workflow still needs to be
-  executed on GitHub Actions before final RC tagging.
+  validates this workflow contract locally; the hosted workflow evidence is
+  recorded in the owner-verified RC snapshot before final RC tagging.
 - `docker-compose.yml` now passes production-relevant security, LLM, Langfuse,
   GitHub, and Feishu `XAGENT_*` variables to API/worker services, with
   `tests/test_docker_compose_env_contract.py` covering the contract.

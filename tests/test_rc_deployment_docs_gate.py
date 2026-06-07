@@ -181,6 +181,7 @@ Status: commercial release candidate, not GA.
 - --allow-missing-evidence-pack
 - Final final gate remains strict
 - ready_with_owner_gates
+- not ready_for_rc_tag
 - full_parity_claimed=false
 - docs/RC_STAGING_MANIFEST.md
 - npm ci

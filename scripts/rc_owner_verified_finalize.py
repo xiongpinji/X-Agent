@@ -28,6 +28,7 @@ DEFAULT_REFRESH_CHAIN = REPORT_DIR / "rc-refresh-release-chain.json"
 DEFAULT_FINAL_GATE = REPORT_DIR / "rc-final-gate.json"
 DEFAULT_EVIDENCE_PACK = REPORT_DIR / "rc-evidence-pack.json"
 DEFAULT_RECEIPT = RELEASE_DIR / "x-agent-commercial-rc-receipt.json"
+EXAMPLE_RC_TAG_NAME = "x-agent-commercial-rc-20260608"
 
 PROVIDER_CHOICES = ("openai", "deepseek", "anthropic", "ollama", "local")
 SAFE_ENV_NAMES = frozenset(
@@ -70,6 +71,9 @@ SAFE_ENV_NAMES = frozenset(
 )
 SECRET_KEY_OUTPUT_RE = re.compile(r"(?i)(\b[A-Z0-9_]*(?:api[_-]?key|token|secret|password)\b\s*[:=]\s*).+")
 SECRET_VALUE_OUTPUT_RE = re.compile(r"\b(?:sk|ghp|github_pat|xagent)[_-][A-Za-z0-9_=-]{24,}\b")
+SENSITIVE_ENV_NAME_RE = re.compile(r"(?i)(api[_-]?key|token|secret|password|encrypt[_-]?key)")
+GITHUB_ACTIONS_RUN_URL_RE = re.compile(r"^https://github\.com/[^/]+/[^/]+/actions/runs/\d+/?$")
+GIT_COMMIT_SHA_RE = re.compile(r"^[0-9a-fA-F]{40}$")
 PLACEHOLDER_MARKERS = (
     "<",
     "TODO",
@@ -77,6 +81,15 @@ PLACEHOLDER_MARKERS = (
     "REPLACE",
     "SET-IN-OWNER-SECRET-STORE",
     "PASTE",
+)
+OWNER_GATE_ENV_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("feishu_app_id", ("XAGENT_FEISHU_APP_ID", "FEISHU_APP_ID")),
+    ("feishu_app_secret", ("XAGENT_FEISHU_APP_SECRET", "FEISHU_APP_SECRET")),
+    ("feishu_encrypt_key", ("XAGENT_FEISHU_ENCRYPT_KEY", "FEISHU_ENCRYPT_KEY")),
+    ("github_test_issue_url", ("XAGENT_GITHUB_TEST_ISSUE_URL", "GITHUB_TEST_ISSUE_URL")),
+    ("github_token", ("XAGENT_GITHUB_TOKEN", "GITHUB_TOKEN")),
+    ("github_actions_run_url", ("XAGENT_COMMERCIAL_RC_GITHUB_ACTIONS_RUN_URL",)),
+    ("github_actions_head_sha", ("XAGENT_COMMERCIAL_RC_GITHUB_ACTIONS_HEAD_SHA",)),
 )
 
 
@@ -97,6 +110,7 @@ class OwnerVerifiedFinalizeReport:
     generated_at: str
     provider: str
     dry_run: bool
+    expected_commit_sha: str | None
     env_file: str | None
     loaded_env_names: list[str]
     skipped_env_names: list[str]
@@ -120,18 +134,25 @@ def _utc_now() -> str:
     return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
-def _sanitize_output_line(line: str) -> str:
+def _sanitize_output_line(line: str, secret_values: tuple[str, ...] = ()) -> str:
+    for secret_value in secret_values:
+        if secret_value:
+            line = line.replace(secret_value, "<redacted-secret>")
     line = SECRET_KEY_OUTPUT_RE.sub(r"\1<redacted-output>", line)
     line = SECRET_VALUE_OUTPUT_RE.sub("<redacted-secret>", line)
     return line
 
 
-def _tail(text: str | bytes | None, limit: int = 20) -> list[str]:
+def _tail(text: str | bytes | None, limit: int = 20, secret_values: tuple[str, ...] = ()) -> list[str]:
     if text is None:
         return []
     if isinstance(text, bytes):
         text = text.decode("utf-8", errors="replace")
-    lines = [_sanitize_output_line(line) for line in text.splitlines() if line.strip()]
+    lines = [
+        _sanitize_output_line(line, secret_values=secret_values)
+        for line in text.splitlines()
+        if line.strip()
+    ]
     return lines[-limit:]
 
 
@@ -208,6 +229,114 @@ def _safe_command(command: list[str]) -> list[str]:
     return ["python" if item == sys.executable else item for item in command]
 
 
+def _current_git_head_sha() -> tuple[str | None, str | None]:
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            timeout=10,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return None, f"could not resolve current git HEAD: {exc}"
+    if result.returncode != 0:
+        error = (result.stderr or result.stdout or "").strip()
+        return None, f"could not resolve current git HEAD: {error or f'exit {result.returncode}'}"
+    sha = result.stdout
+    if isinstance(sha, bytes):
+        sha = sha.decode("utf-8", errors="replace")
+    sha = sha.strip()
+    if not GIT_COMMIT_SHA_RE.fullmatch(sha):
+        return None, "git rev-parse HEAD did not return a 40-character git SHA"
+    return sha.lower(), None
+
+
+def _effective_env_value(names: tuple[str, ...], env_overrides: dict[str, str]) -> str:
+    for name in names:
+        if name in env_overrides and not _is_placeholder(env_overrides[name]):
+            return env_overrides[name]
+        value = os.environ.get(name, "")
+        if value and not _is_placeholder(value):
+            return value
+    return ""
+
+
+def _provider_env_groups(provider: str) -> tuple[tuple[str, tuple[str, ...]], ...]:
+    if provider == "openai":
+        return (("openai_api_key", ("XAGENT_OPENAI_API_KEY", "OPENAI_API_KEY")),)
+    if provider == "deepseek":
+        return (("deepseek_api_key", ("XAGENT_DEEPSEEK_API_KEY", "DEEPSEEK_API_KEY")),)
+    if provider == "anthropic":
+        return (("anthropic_api_key", ("XAGENT_ANTHROPIC_API_KEY", "ANTHROPIC_API_KEY")),)
+    if provider in {"ollama", "local"}:
+        return (
+            ("ollama_base_url", ("XAGENT_OLLAMA_BASE_URL", "OLLAMA_BASE_URL")),
+            ("ollama_model", ("XAGENT_OLLAMA_MODEL", "OLLAMA_MODEL")),
+        )
+    return ()
+
+
+def _sensitive_env_values(env_overrides: dict[str, str]) -> tuple[str, ...]:
+    values: set[str] = set()
+    for name in set(os.environ).union(env_overrides):
+        if not SENSITIVE_ENV_NAME_RE.search(name):
+            continue
+        override_value = env_overrides.get(name)
+        if override_value and not _is_placeholder(override_value):
+            values.add(override_value)
+        inherited_value = os.environ.get(name, "")
+        if inherited_value and not _is_placeholder(inherited_value):
+            values.add(inherited_value)
+    return tuple(sorted(values, key=len, reverse=True))
+
+
+def _owner_env_preflight(
+    provider: str,
+    env_overrides: dict[str, str],
+    *,
+    expected_commit_sha: str | None,
+) -> FinalizeStep | None:
+    missing: list[str] = []
+    for _label, names in (*_provider_env_groups(provider), *OWNER_GATE_ENV_GROUPS):
+        if not _effective_env_value(names, env_overrides):
+            missing.append("/".join(names))
+
+    invalid: list[str] = []
+    if not expected_commit_sha:
+        invalid.append("expected release commit SHA could not be resolved; pass --expected-commit-sha")
+    elif not GIT_COMMIT_SHA_RE.fullmatch(expected_commit_sha):
+        invalid.append("--expected-commit-sha must be a 40-character git SHA")
+    run_url = _effective_env_value(("XAGENT_COMMERCIAL_RC_GITHUB_ACTIONS_RUN_URL",), env_overrides)
+    if run_url and not GITHUB_ACTIONS_RUN_URL_RE.fullmatch(run_url):
+        invalid.append("XAGENT_COMMERCIAL_RC_GITHUB_ACTIONS_RUN_URL must be a GitHub Actions run URL")
+    head_sha = _effective_env_value(("XAGENT_COMMERCIAL_RC_GITHUB_ACTIONS_HEAD_SHA",), env_overrides)
+    if head_sha and not GIT_COMMIT_SHA_RE.fullmatch(head_sha):
+        invalid.append("XAGENT_COMMERCIAL_RC_GITHUB_ACTIONS_HEAD_SHA must be a 40-character git SHA")
+    elif head_sha and expected_commit_sha and head_sha.lower() != expected_commit_sha.lower():
+        invalid.append(
+            "XAGENT_COMMERCIAL_RC_GITHUB_ACTIONS_HEAD_SHA must match expected release commit SHA "
+            f"({expected_commit_sha.lower()})"
+        )
+
+    if not missing and not invalid:
+        return None
+
+    problems: list[str] = []
+    if missing:
+        problems.append(f"missing required owner env groups: {'; '.join(missing)}")
+    if invalid:
+        problems.append(f"invalid owner env values: {'; '.join(invalid)}")
+    return FinalizeStep(
+        name="owner_env_preflight",
+        command=["owner-env-preflight"],
+        status="failed",
+        returncode=None,
+        error="; ".join(problems),
+    )
+
+
 def _run_refresh_chain(
     *,
     provider: str,
@@ -217,6 +346,7 @@ def _run_refresh_chain(
     env_overrides: dict[str, str],
     ollama_model: str | None,
     ollama_base_url: str | None,
+    secret_values: tuple[str, ...],
 ) -> FinalizeStep:
     command = [
         sys.executable,
@@ -249,8 +379,8 @@ def _run_refresh_chain(
             command=_safe_command(command),
             status="failed",
             returncode=None,
-            stdout_tail=_tail(exc.stdout),
-            stderr_tail=_tail(exc.stderr),
+            stdout_tail=_tail(exc.stdout, secret_values=secret_values),
+            stderr_tail=_tail(exc.stderr, secret_values=secret_values),
             error=f"command timed out after {timeout_seconds * 40}s",
         )
     return FinalizeStep(
@@ -258,8 +388,8 @@ def _run_refresh_chain(
         command=_safe_command(command),
         status="passed" if result.returncode == 0 else "failed",
         returncode=result.returncode,
-        stdout_tail=_tail(result.stdout),
-        stderr_tail=_tail(result.stderr),
+        stdout_tail=_tail(result.stdout, secret_values=secret_values),
+        stderr_tail=_tail(result.stderr, secret_values=secret_values),
         error=None if result.returncode == 0 else f"command exited {result.returncode}",
     )
 
@@ -297,6 +427,7 @@ def build_owner_verified_finalize(
     ollama_base_url: str | None = None,
     github_actions_run_url: str | None = None,
     github_actions_head_sha: str | None = None,
+    expected_commit_sha: str | None = None,
     reports_dir: Path = REPORT_DIR,
     release_dir: Path = RELEASE_DIR,
 ) -> OwnerVerifiedFinalizeReport:
@@ -313,6 +444,18 @@ def build_owner_verified_finalize(
     if github_actions_head_sha:
         env_overrides["XAGENT_COMMERCIAL_RC_GITHUB_ACTIONS_HEAD_SHA"] = github_actions_head_sha
 
+    requested_expected_sha = expected_commit_sha.lower() if expected_commit_sha else None
+    resolved_expected_sha: str | None = requested_expected_sha
+    expected_sha_error: str | None = None
+    if not dry_run:
+        current_head_sha, expected_sha_error = _current_git_head_sha()
+        if current_head_sha and requested_expected_sha and requested_expected_sha != current_head_sha:
+            expected_sha_error = (
+                "--expected-commit-sha must match current git HEAD "
+                f"({current_head_sha})"
+            )
+        resolved_expected_sha = requested_expected_sha or current_head_sha
+
     steps: list[FinalizeStep] = []
     refresh_chain_path = (
         reports_dir / "rc-owner-verified-finalize-refresh-chain-dry-run.json"
@@ -323,6 +466,22 @@ def build_owner_verified_finalize(
     evidence_pack_path = reports_dir / "rc-evidence-pack.json"
     receipt_path = release_dir / "x-agent-commercial-rc-receipt.json"
 
+    preflight = None
+    if not dry_run and not env_errors:
+        if expected_sha_error:
+            preflight = FinalizeStep(
+                name="owner_env_preflight",
+                command=["owner-env-preflight"],
+                status="failed",
+                returncode=None,
+                error=expected_sha_error,
+            )
+        else:
+            preflight = _owner_env_preflight(
+                provider,
+                env_overrides,
+                expected_commit_sha=resolved_expected_sha,
+            )
     if env_errors:
         steps.append(
             FinalizeStep(
@@ -333,6 +492,8 @@ def build_owner_verified_finalize(
                 error="; ".join(env_errors),
             )
         )
+    elif preflight is not None:
+        steps.append(preflight)
     else:
         steps.append(
             _run_refresh_chain(
@@ -343,6 +504,7 @@ def build_owner_verified_finalize(
                 env_overrides=env_overrides,
                 ollama_model=ollama_model,
                 ollama_base_url=ollama_base_url,
+                secret_values=_sensitive_env_values(env_overrides),
             )
         )
 
@@ -362,6 +524,7 @@ def build_owner_verified_finalize(
         generated_at=_utc_now(),
         provider=provider,
         dry_run=dry_run,
+        expected_commit_sha=resolved_expected_sha,
         env_file=str(env_file) if env_file else None,
         loaded_env_names=sorted(env_overrides),
         skipped_env_names=skipped_env_names,
@@ -373,15 +536,22 @@ def build_owner_verified_finalize(
         release_receipt_status=receipt.get("status") if receipt else None,
         refresh_chain_report_path=str(refresh_chain_path),
         steps=steps,
-        next_commands=_next_commands(status=status, provider=provider),
+        next_commands=_next_commands(
+            status=status,
+            provider=provider,
+            expected_commit_sha=resolved_expected_sha,
+        ),
     )
 
 
-def _next_commands(*, status: str, provider: str) -> list[str]:
+def _next_commands(*, status: str, provider: str, expected_commit_sha: str | None) -> list[str]:
     if status == "ready_for_rc_tag":
+        expected = expected_commit_sha or "<expected-release-commit-sha>"
         return [
             "Review .xagent_runtime/reports/rc-owner-verified-finalize.json.",
-            "Create the RC tag from the current commit only after confirming the branch and hosted run SHA.",
+            f"Confirm the hosted Actions head SHA and release commit are {expected}.",
+            "Verify any existing RC tag points at that SHA before handoff: "
+            f"git rev-parse {EXAMPLE_RC_TAG_NAME}; do not force-update pushed tags without owner approval.",
         ]
     if status == "planned":
         return [
@@ -410,6 +580,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--ollama-base-url")
     parser.add_argument("--github-actions-run-url")
     parser.add_argument("--github-actions-head-sha")
+    parser.add_argument(
+        "--expected-commit-sha",
+        help="expected release commit SHA; defaults to git rev-parse HEAD",
+    )
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     return parser.parse_args()
 
@@ -425,6 +599,7 @@ def main() -> int:
         ollama_base_url=args.ollama_base_url,
         github_actions_run_url=args.github_actions_run_url,
         github_actions_head_sha=args.github_actions_head_sha,
+        expected_commit_sha=args.expected_commit_sha,
     )
     write_report(report, args.output)
     print(f"RC owner-verified finalize status: {report.status}")

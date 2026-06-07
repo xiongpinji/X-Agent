@@ -148,7 +148,7 @@ RELEASE_NOTE_TOKENS = (
     "scripts/rc_evidence_pack.py",
     "--allow-missing-evidence-pack",
     "Final final gate remains strict",
-    "ready_with_owner_gates",
+    "ready_for_rc_tag",
     "This release does not claim full Codex",
     "docs/RC_STAGING_MANIFEST.md",
     "npm ci",
