@@ -431,6 +431,30 @@ def test_deployment_docs_gate_can_bootstrap_before_first_evidence_pack(tmp_path:
     assert check.details["evidence_pack_bootstrap_allowed"] is True
 
 
+def test_deployment_docs_gate_can_bootstrap_before_first_receipt_and_evidence_pack(tmp_path: Path) -> None:
+    paths = _reports(tmp_path)
+    paths["receipt"].unlink()
+    _write_json(paths["pack"], {"status": "failed", "output_path": "", "pack_sha256": ""})
+
+    report = _gate_allow_missing_pack(paths)
+
+    assert report.status == "passed"
+    check = next(item for item in report.checks if item.name == "artifact_handoff_docs")
+    assert check.details["release_receipt_bootstrap_allowed"] is True
+    assert check.details["evidence_pack_bootstrap_allowed"] is True
+
+
+def test_deployment_docs_gate_requires_receipt_after_bootstrap(tmp_path: Path) -> None:
+    paths = _reports(tmp_path)
+    paths["receipt"].unlink()
+
+    report = _gate(paths)
+
+    assert report.status == "failed"
+    check = next(item for item in report.checks if item.name == "artifact_handoff_docs")
+    assert "x-agent-commercial-rc-receipt.json" in str(check.error)
+
+
 def test_deployment_docs_gate_allows_bootstrap_final_gate_evidence_pack_blocker(tmp_path: Path) -> None:
     paths = _reports(tmp_path)
     _write_json(

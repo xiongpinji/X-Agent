@@ -416,7 +416,7 @@ def _artifact_handoff_check(
 ) -> DeploymentDocsCheck:
     problems: list[str] = []
     details: dict[str, Any] = {}
-    if receipt_error:
+    if receipt_error and not allow_missing_evidence_pack:
         problems.append(receipt_error)
     if pack_error and not allow_missing_evidence_pack:
         problems.append(pack_error)
@@ -430,10 +430,12 @@ def _artifact_handoff_check(
         "artifact_sha256_present": len(artifact_sha) == 64,
         "evidence_pack_path": pack_path,
         "evidence_pack_sha256_present": len(pack_sha) == 64,
+        "release_receipt_bootstrap_allowed": allow_missing_evidence_pack
+        and (bool(receipt_error) or not artifact_path or len(artifact_sha) != 64),
         "evidence_pack_bootstrap_allowed": allow_missing_evidence_pack
         and (bool(pack_error) or not pack_path or len(pack_sha) != 64),
     }
-    if not artifact_path or len(artifact_sha) != 64:
+    if (not artifact_path or len(artifact_sha) != 64) and not allow_missing_evidence_pack:
         problems.append("release receipt artifact path/sha256 is incomplete")
     if (not pack_path or len(pack_sha) != 64) and not allow_missing_evidence_pack:
         problems.append("evidence pack output path/sha256 is incomplete")
