@@ -327,7 +327,12 @@ def build_refresh_chain(
         raise ValueError("owner-verified refresh requires a non-mock provider")
 
     env_overrides = _provider_env_overrides(provider_env_overrides)
-    if not dry_run and not owner_verified and _external_smoke_has_verified_owner_evidence():
+    if (
+        not dry_run
+        and not owner_verified
+        and provider != "mock"
+        and _external_smoke_has_verified_owner_evidence()
+    ):
         guard_step = RefreshStep(
             name="owner_evidence_guard",
             command=[

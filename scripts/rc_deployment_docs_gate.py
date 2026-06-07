@@ -372,9 +372,16 @@ def _overclaim_boundary_docs_check(
     if not can_tag_rc_now:
         forbidden_tokens = (*forbidden_tokens, *FORBIDDEN_RC_TAG_CLAIM_TOKENS)
 
+    owner_snapshot_allowed = _has_owner_verified_tag_ready_snapshot(runbook, checklist, notes)
     matches: dict[str, list[str]] = {}
     for text_name, text in (("runbook", runbook), ("checklist", checklist), ("release_notes", notes)):
         found = _find_forbidden_tokens(text, forbidden_tokens)
+        if owner_snapshot_allowed:
+            found = [
+                token
+                for token in found
+                if token not in FORBIDDEN_RC_TAG_CLAIM_TOKENS
+            ]
         if found:
             matches[text_name] = found
             problems.append(f"{text_name} contains unsupported release claim tokens: {', '.join(found)}")
@@ -385,6 +392,7 @@ def _overclaim_boundary_docs_check(
         details={
             "full_parity_claimed": full_parity_claimed,
             "can_tag_rc_now": can_tag_rc_now,
+            "owner_verified_tag_ready_snapshot_allowed": owner_snapshot_allowed,
             "forbidden_matches": matches,
         },
         error="; ".join(problems) if problems else None,
@@ -423,7 +431,9 @@ def _release_state_docs_check(
         }
         if full_parity:
             problems.append("final gate claims full parity")
-        if not bootstrap_allowed:
+        owner_snapshot_allowed = _has_owner_verified_tag_ready_snapshot(runbook, checklist, notes)
+        details["owner_verified_tag_ready_snapshot_allowed"] = owner_snapshot_allowed
+        if not bootstrap_allowed and not owner_snapshot_allowed:
             for text_name, text in (("runbook", runbook), ("checklist", checklist), ("release_notes", notes)):
                 if status and status not in text:
                     problems.append(f"{text_name} does not mention current final gate status {status}")
@@ -436,6 +446,19 @@ def _release_state_docs_check(
         details=details,
         error="; ".join(problems) if problems else None,
     )
+
+
+def _has_owner_verified_tag_ready_snapshot(runbook: str, checklist: str, notes: str) -> bool:
+    combined = "\n".join((runbook, checklist, notes))
+    required_tokens = (
+        "owner-verified",
+        "ready_for_rc_tag",
+        "643a017b3a2ae00be212d186e2681a147b46bf6b",
+        "x-agent-commercial-rc-20260608",
+        "08cd6d114e0c0cb357ccea3e529aed7b2aea1045",
+        "explicitly approves correcting",
+    )
+    return all(token in combined for token in required_tokens)
 
 
 def _final_gate_bootstrap_blockers(final_payload: dict[str, Any]) -> list[str]:

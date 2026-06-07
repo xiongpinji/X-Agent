@@ -158,6 +158,44 @@ def test_refresh_chain_non_owner_mode_refuses_to_overwrite_verified_owner_extern
     assert calls == []
 
 
+def test_refresh_chain_mock_provider_can_refresh_over_existing_owner_external_smoke(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    reports = tmp_path / "reports"
+    reports.mkdir()
+    (reports / "rc-external-smoke.json").write_text(
+        json.dumps(
+            {
+                "status": "passed",
+                "require_configured": True,
+                "checks": [
+                    {"name": "provider", "status": "passed"},
+                    {"name": "feishu_webhook_contract", "status": "passed"},
+                    {"name": "github_issue_to_pr_dry_run", "status": "passed"},
+                    {"name": "github_issue_to_pr_execute_preflight", "status": "passed"},
+                    {"name": "hosted_github_actions_run", "status": "passed"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    calls: list[list[str]] = []
+
+    def fake_run(command, **kwargs):  # noqa: ANN001
+        calls.append(list(command))
+        return subprocess.CompletedProcess(command, 0, stdout=b"ok", stderr=b"")
+
+    monkeypatch.setattr(rc_refresh_release_chain, "REPORT_DIR", reports)
+    monkeypatch.setattr(rc_refresh_release_chain.subprocess, "run", fake_run)
+
+    report = build_refresh_chain(provider="mock", timeout_seconds=1)
+
+    assert report.status == "passed"
+    assert calls
+    assert report.steps[0].name != "owner_evidence_guard"
+
+
 def test_refresh_chain_passes_provider_env_overrides(monkeypatch) -> None:
     captured_envs: list[dict[str, str]] = []
 
