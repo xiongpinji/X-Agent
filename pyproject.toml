@@ -9,6 +9,8 @@ description = "Phase 0 MVP for X-Agent AgentCore"
 requires-python = ">=3.11"
 dependencies = [
     "asyncpg>=0.29.0",
+    "bcrypt>=4.1.2,<5.0.0",
+    "cryptography>=46.0.0,<49.0.0",
     "fastapi>=0.115.0",
     "langfuse>=2.60.0",
     "httpx>=0.27.0",
@@ -19,6 +21,8 @@ dependencies = [
     "pydantic-settings>=2.2.0",
     "python-multipart>=0.0.28",
     "qdrant-client>=1.11.0",
+    "scikit-learn>=1.5.0",
+    "sqlalchemy>=2.0.0",
     "uvicorn[standard]>=0.30.0",
     "celery>=5.3.0",
     "redis>=5.0.0",
@@ -52,6 +56,7 @@ prod = [
     "prometheus-client>=0.20.0",
 ]
 dev = [
+    "aiosqlite>=0.20.0",
     "pytest>=8.2.0",
     "pytest-asyncio>=0.25.0,<0.26",
     "pytest-cov>=4.0.0",

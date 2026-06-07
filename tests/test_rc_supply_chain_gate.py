@@ -53,12 +53,16 @@ def test_python_manifest_requires_pip_audit_in_dev_extra(tmp_path: Path) -> None
 [project]
 requires-python = ">=3.11"
 dependencies = [
+    "bcrypt>=4.1.2,<5.0.0",
+    "cryptography>=46.0.0,<49.0.0",
     "fastapi>=0.115.0",
     "pydantic>=2.7.0",
     "uvicorn>=0.30.0",
     "redis>=5.0.0",
     "celery>=5.3.0",
     "python-multipart>=0.0.28",
+    "scikit-learn>=1.5.0",
+    "sqlalchemy>=2.0.0",
 ]
 
 [project.optional-dependencies]
@@ -71,7 +75,8 @@ cli = ["typer>=0.12.0"]
     check = check_python_manifest(tmp_path)
 
     assert check.status == "failed"
-    assert check.details["missing_dev_tools"] == ["pip-audit"]
+    assert check.details["missing_dev_tools"] == ["aiosqlite", "pip-audit"]
+    assert "missing dev dependency aiosqlite" in check.details["missing"]
     assert "missing dev dependency pip-audit" in check.details["missing"]
 
 
@@ -130,7 +135,9 @@ def test_python_lockfile_runs_pip_audit_when_available_and_fails(tmp_path: Path,
         "\n".join(
             [
                 "asyncpg==0.29.0",
+                "bcrypt==4.1.2",
                 "celery==5.3.0",
+                "cryptography==46.0.0",
                 "fastapi==0.115.0",
                 "httpx==0.27.0",
                 "langfuse==2.60.0",
@@ -142,6 +149,8 @@ def test_python_lockfile_runs_pip_audit_when_available_and_fails(tmp_path: Path,
                 "python-multipart==0.0.28",
                 "qdrant-client==1.11.0",
                 "redis==5.0.0",
+                "scikit-learn==1.5.0",
+                "sqlalchemy==2.0.0",
                 "uvicorn[standard]==0.30.0",
             ]
         ),
@@ -173,7 +182,9 @@ def test_python_lockfile_treats_pip_audit_tool_error_as_failure(tmp_path: Path, 
         "\n".join(
             [
                 "asyncpg==0.29.0",
+                "bcrypt==4.1.2",
                 "celery==5.3.0",
+                "cryptography==46.0.0",
                 "fastapi==0.115.0",
                 "httpx==0.27.0",
                 "langfuse==2.60.0",
@@ -185,6 +196,8 @@ def test_python_lockfile_treats_pip_audit_tool_error_as_failure(tmp_path: Path, 
                 "python-multipart==0.0.28",
                 "qdrant-client==1.11.0",
                 "redis==5.0.0",
+                "scikit-learn==1.5.0",
+                "sqlalchemy==2.0.0",
                 "uvicorn[standard]==0.30.0",
             ]
         ),

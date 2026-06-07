@@ -34,7 +34,7 @@ LOCAL_USER_PATH_OUTPUT_RE = re.compile(
 )
 LOCAL_RUNTIME_MARKER_RE = re.compile(r"(?i)\bhermes-agent\b")
 NPM_REGISTRY_PREFIX = "https://registry.npmjs.org/"
-REQUIRED_PYPROJECT_DEV_TOOLS = ("pip-audit",)
+REQUIRED_PYPROJECT_DEV_TOOLS = ("aiosqlite", "pip-audit")
 
 
 @dataclass(frozen=True)
@@ -127,7 +127,18 @@ def check_python_manifest(root: Path = ROOT) -> SupplyChainCheck:
     missing: list[str] = []
     if project.get("requires-python") != ">=3.11":
         missing.append("project.requires-python must be >=3.11")
-    for package in ("fastapi", "pydantic", "python-multipart", "uvicorn", "redis", "celery"):
+    for package in (
+        "bcrypt",
+        "cryptography",
+        "fastapi",
+        "pydantic",
+        "python-multipart",
+        "scikit-learn",
+        "sqlalchemy",
+        "uvicorn",
+        "redis",
+        "celery",
+    ):
         if not any(str(item).lower().startswith(package) for item in dependencies):
             missing.append(f"missing runtime dependency {package}")
     for extra in ("dev", "cli"):
@@ -182,7 +193,9 @@ def check_python_lockfile(root: Path = ROOT, *, timeout_seconds: float = 120.0) 
 
     required = {
         "asyncpg",
+        "bcrypt",
         "celery",
+        "cryptography",
         "fastapi",
         "httpx",
         "langfuse",
@@ -194,6 +207,8 @@ def check_python_lockfile(root: Path = ROOT, *, timeout_seconds: float = 120.0) 
         "python-multipart",
         "qdrant-client",
         "redis",
+        "scikit-learn",
+        "sqlalchemy",
         "uvicorn",
     }
     missing = sorted(required.difference(packages))
