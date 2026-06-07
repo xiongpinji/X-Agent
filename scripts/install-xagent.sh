@@ -25,7 +25,7 @@ run_cmd "python -m venv venv"
 run_cmd "./venv/bin/python -m pip install --upgrade pip"
 run_cmd "./venv/bin/python -m pip install -e '.[dev,cli]'"
 run_cmd "cd frontend && npm ci && npm run type-check"
-run_cmd "python scripts/xagent_doctor.py --json"
+run_cmd "./venv/bin/python scripts/xagent_doctor.py --json"
 
 if [ "$EXECUTE" -eq 0 ]; then
   echo "Dry-run only. Rerun with --execute to apply."

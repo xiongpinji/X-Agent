@@ -191,7 +191,7 @@ def test_windows_installer_dry_run_parses_expected_output(monkeypatch) -> None:
         lambda command, timeout_seconds: subprocess.CompletedProcess(
             command,
             0,
-            stdout="X-Agent installer (dry-run)\n> cd frontend && npm ci && npm run type-check\n> python scripts/xagent_doctor.py --json\nDry-run only.\n",
+            stdout="X-Agent installer (dry-run)\n> Push-Location frontend; npm ci; npm run type-check; Pop-Location\n> .\\venv\\Scripts\\python scripts/xagent_doctor.py --json\nDry-run only.\n",
             stderr="",
         ),
     )
@@ -218,7 +218,7 @@ def test_posix_installer_dry_run_rejects_npm_install(monkeypatch) -> None:
         lambda command, timeout_seconds: subprocess.CompletedProcess(
             command,
             0,
-            stdout="X-Agent installer (dry-run)\n> cd frontend && npm install && npm run type-check\n> python scripts/xagent_doctor.py --json\nDry-run only.\n",
+            stdout="X-Agent installer (dry-run)\n> cd frontend && npm install && npm run type-check\n> ./venv/bin/python scripts/xagent_doctor.py --json\nDry-run only.\n",
             stderr="",
         ),
     )
