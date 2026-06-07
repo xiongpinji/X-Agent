@@ -12,6 +12,7 @@ from scripts.rc_owner_verified_finalize import build_owner_verified_finalize, wr
 
 EXPECTED_SHA = "643a017b3a2ae00be212d186e2681a147b46bf6b"
 OLD_SHA = "08cd6d114e0c0cb357ccea3e529aed7b2aea1045"
+HOSTED_RUN_URL = "https://github.com/xiongpinji/X-Agent/actions/runs/27100639918"
 
 
 def _is_head_command(command: object) -> bool:
@@ -71,7 +72,7 @@ def test_finalize_runs_owner_verified_refresh_chain_with_expected_overrides(
         ollama_model="qwen2.5:1.5b",
         ollama_base_url="http://127.0.0.1:11435",
         env_file=_owner_env_file(tmp_path),
-        github_actions_run_url="https://github.com/xiongpinji/X-Agent/actions/runs/27100639918",
+        github_actions_run_url=HOSTED_RUN_URL,
         github_actions_head_sha=EXPECTED_SHA,
         expected_commit_sha=EXPECTED_SHA,
         reports_dir=reports_dir,
@@ -98,6 +99,8 @@ def test_finalize_runs_owner_verified_refresh_chain_with_expected_overrides(
     assert report.status == "ready_for_rc_tag"
     assert report.can_tag_rc_now is True
     assert report.expected_commit_sha == EXPECTED_SHA
+    assert report.github_actions_run_url == HOSTED_RUN_URL
+    assert report.github_actions_head_sha == EXPECTED_SHA
     assert report.refresh_chain_owner_verified is True
     assert report.loaded_env_names == [
         "XAGENT_COMMERCIAL_RC_GITHUB_ACTIONS_HEAD_SHA",
@@ -156,7 +159,7 @@ def test_finalize_loads_owner_env_file_without_leaking_secret_values(
         env_file=env_file,
         ollama_model="qwen2.5:1.5b",
         ollama_base_url="http://127.0.0.1:11435",
-        github_actions_run_url="https://github.com/xiongpinji/X-Agent/actions/runs/27100639918",
+        github_actions_run_url=HOSTED_RUN_URL,
         github_actions_head_sha=EXPECTED_SHA,
         expected_commit_sha=EXPECTED_SHA,
         reports_dir=reports_dir,
@@ -205,7 +208,7 @@ def test_finalize_redacts_sensitive_values_inherited_from_environment(
         env_file=_owner_env_file(tmp_path),
         ollama_model="qwen2.5:1.5b",
         ollama_base_url="http://127.0.0.1:11435",
-        github_actions_run_url="https://github.com/xiongpinji/X-Agent/actions/runs/27100639918",
+        github_actions_run_url=HOSTED_RUN_URL,
         github_actions_head_sha=EXPECTED_SHA,
         expected_commit_sha=EXPECTED_SHA,
         reports_dir=reports_dir,
@@ -245,7 +248,7 @@ def test_finalize_redacts_non_allowlisted_sensitive_environment_values(
         env_file=_owner_env_file(tmp_path),
         ollama_model="qwen2.5:1.5b",
         ollama_base_url="http://127.0.0.1:11435",
-        github_actions_run_url="https://github.com/xiongpinji/X-Agent/actions/runs/27100639918",
+        github_actions_run_url=HOSTED_RUN_URL,
         github_actions_head_sha=EXPECTED_SHA,
         expected_commit_sha=EXPECTED_SHA,
         reports_dir=reports_dir,
@@ -297,7 +300,7 @@ def test_finalize_preflight_stops_before_refresh_chain_when_owner_env_is_missing
         timeout_seconds=1,
         ollama_model="qwen2.5:1.5b",
         ollama_base_url="http://127.0.0.1:11435",
-        github_actions_run_url="https://github.com/xiongpinji/X-Agent/actions/runs/27100639918",
+        github_actions_run_url=HOSTED_RUN_URL,
         github_actions_head_sha=EXPECTED_SHA,
         expected_commit_sha=EXPECTED_SHA,
         reports_dir=reports_dir,
@@ -327,7 +330,7 @@ def test_finalize_preflight_rejects_hosted_actions_sha_for_different_commit(
         env_file=_owner_env_file(tmp_path),
         ollama_model="qwen2.5:1.5b",
         ollama_base_url="http://127.0.0.1:11435",
-        github_actions_run_url="https://github.com/xiongpinji/X-Agent/actions/runs/27100639918",
+        github_actions_run_url=HOSTED_RUN_URL,
         github_actions_head_sha=OLD_SHA,
         expected_commit_sha=EXPECTED_SHA,
         reports_dir=tmp_path / "reports",
@@ -357,7 +360,7 @@ def test_finalize_preflight_rejects_explicit_expected_sha_that_differs_from_head
         env_file=_owner_env_file(tmp_path),
         ollama_model="qwen2.5:1.5b",
         ollama_base_url="http://127.0.0.1:11435",
-        github_actions_run_url="https://github.com/xiongpinji/X-Agent/actions/runs/27100639918",
+        github_actions_run_url=HOSTED_RUN_URL,
         github_actions_head_sha=OLD_SHA,
         expected_commit_sha=OLD_SHA,
         reports_dir=tmp_path / "reports",
@@ -426,7 +429,7 @@ def test_finalize_reports_action_required_when_final_gate_is_not_tag_ready(
         env_file=_owner_env_file(tmp_path),
         ollama_model="qwen2.5:1.5b",
         ollama_base_url="http://127.0.0.1:11435",
-        github_actions_run_url="https://github.com/xiongpinji/X-Agent/actions/runs/27100639918",
+        github_actions_run_url=HOSTED_RUN_URL,
         github_actions_head_sha=EXPECTED_SHA,
         expected_commit_sha=EXPECTED_SHA,
         reports_dir=reports_dir,
@@ -481,4 +484,6 @@ def test_write_report_serializes_finalize_steps(tmp_path: Path) -> None:
 
     payload = json.loads(output.read_text(encoding="utf-8"))
     assert payload["provider"] == "ollama"
+    assert "github_actions_run_url" in payload
+    assert "github_actions_head_sha" in payload
     assert payload["steps"][0]["name"] == "owner_verified_refresh_chain"

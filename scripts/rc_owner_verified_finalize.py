@@ -111,6 +111,8 @@ class OwnerVerifiedFinalizeReport:
     provider: str
     dry_run: bool
     expected_commit_sha: str | None
+    github_actions_run_url: str | None
+    github_actions_head_sha: str | None
     env_file: str | None
     loaded_env_names: list[str]
     skipped_env_names: list[str]
@@ -456,6 +458,15 @@ def build_owner_verified_finalize(
             )
         resolved_expected_sha = requested_expected_sha or current_head_sha
 
+    resolved_github_actions_run_url = (
+        _effective_env_value(("XAGENT_COMMERCIAL_RC_GITHUB_ACTIONS_RUN_URL",), env_overrides) or None
+    )
+    resolved_github_actions_head_sha = (
+        _effective_env_value(("XAGENT_COMMERCIAL_RC_GITHUB_ACTIONS_HEAD_SHA",), env_overrides) or None
+    )
+    if resolved_github_actions_head_sha:
+        resolved_github_actions_head_sha = resolved_github_actions_head_sha.lower()
+
     steps: list[FinalizeStep] = []
     refresh_chain_path = (
         reports_dir / "rc-owner-verified-finalize-refresh-chain-dry-run.json"
@@ -525,6 +536,8 @@ def build_owner_verified_finalize(
         provider=provider,
         dry_run=dry_run,
         expected_commit_sha=resolved_expected_sha,
+        github_actions_run_url=resolved_github_actions_run_url,
+        github_actions_head_sha=resolved_github_actions_head_sha,
         env_file=str(env_file) if env_file else None,
         loaded_env_names=sorted(env_overrides),
         skipped_env_names=skipped_env_names,
@@ -605,6 +618,12 @@ def main() -> int:
     print(f"RC owner-verified finalize status: {report.status}")
     print(f"Provider: {report.provider}")
     print(f"Report written to {args.output}")
+    if report.expected_commit_sha:
+        print(f"Expected release commit SHA: {report.expected_commit_sha}")
+    if report.github_actions_run_url:
+        print(f"Hosted GitHub Actions run: {report.github_actions_run_url}")
+    if report.github_actions_head_sha:
+        print(f"Hosted GitHub Actions head SHA: {report.github_actions_head_sha}")
     if report.env_file:
         print(f"Env file: {report.env_file}")
         print(f"Loaded env names: {','.join(report.loaded_env_names) if report.loaded_env_names else '<none>'}")
