@@ -33,7 +33,7 @@ powershell -ExecutionPolicy Bypass -File scripts\install-xagent.ps1 -DryRun
 python scripts\rc_runtime_smoke.py
 python scripts\rc_external_smoke.py
 python scripts\rc_release_audit.py
-python scripts\rc_refresh_release_chain.py --provider ollama --ollama-model qwen2.5:1.5b --ollama-base-url http://127.0.0.1:11435
+python scripts\rc_refresh_release_chain.py --provider ollama --ollama-model qwen2.5:1.5b --ollama-base-url http://127.0.0.1:11435 --owner-verified
 python scripts\rc_owner_gate_runner.py --gate all --dry-run --env-file .xagent_runtime\reports\rc-owner-env-template.env
 python scripts\xagent_doctor.py --json
 git diff --check
@@ -98,8 +98,10 @@ Observed status:
   path reproducible without storing secret values.
 - RC refresh release chain: runs the dependent RC evidence refresh scripts in
   order with
-  `python scripts\rc_refresh_release_chain.py --provider ollama --ollama-model qwen2.5:1.5b --ollama-base-url http://127.0.0.1:11435`,
-  so downstream reports do not read half-written or stale upstream JSON.
+  `python scripts\rc_refresh_release_chain.py --provider ollama --ollama-model qwen2.5:1.5b --ollama-base-url http://127.0.0.1:11435 --owner-verified`,
+  so downstream reports do not read half-written or stale upstream JSON and
+  owner-controlled Feishu, GitHub, and hosted Actions evidence is refreshed in
+  strict `--require-configured` mode before tagging.
 - RC refresh release chain bootstrap uses `--allow-missing-evidence-pack` only
   before the first evidence pack exists. Final final gate remains strict:
   `python scripts\rc_final_gate.py --require-ready-to-tag` must consume a

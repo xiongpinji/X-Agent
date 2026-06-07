@@ -443,6 +443,99 @@ def _artifact_integrity_gate(path: Path) -> GateInput:
     )
 
 
+def _deployment_docs_gate(path: Path, *, allow_missing: bool) -> GateInput:
+    gate = _gate_from_report("deployment_docs_gate", path, {"passed"})
+    if gate.ok or not allow_missing:
+        return gate
+
+    payload, _ = _read_json(path)
+    if payload is None or not _deployment_docs_bootstrap_refresh_only(payload):
+        return gate
+
+    details = dict(gate.details)
+    details["bootstrap_allowed"] = True
+    details["bootstrap_reason"] = "deployment docs are refreshed from a bootstrap final gate snapshot"
+    return GateInput(
+        name="deployment_docs_gate",
+        path=str(path),
+        status="bootstrap_allowed",
+        ok=True,
+        details=details,
+        error="deployment docs state-only refresh required during bootstrap",
+    )
+
+
+def _deployment_docs_bootstrap_refresh_only(payload: dict[str, Any]) -> bool:
+    if payload.get("status") != "failed":
+        return False
+    checks = payload.get("checks")
+    if not isinstance(checks, list) or not checks:
+        return False
+    failed = {
+        str(check.get("name") or "")
+        for check in checks
+        if isinstance(check, dict) and check.get("status") != "passed"
+    }
+    return bool(failed) and failed.issubset({"release_state_docs", "overclaim_boundary_docs"})
+
+
+def _refresh_release_chain_gate(path: Path, *, allow_missing: bool) -> GateInput:
+    expected_status = {"passed", "running"} if allow_missing else {"passed"}
+    gate = _gate_from_report("refresh_release_chain", path, expected_status)
+    payload, _ = _read_json(path)
+    details = dict(gate.details)
+    problems: list[str] = []
+    if gate.error:
+        problems.append(gate.error)
+    if payload is None:
+        problems.append("refresh_release_chain report is missing or invalid")
+    else:
+        status = str(payload.get("status") or "")
+        if status not in expected_status:
+            problems.append(f"expected {sorted(expected_status)}, got {status}")
+        if payload.get("dry_run") is True:
+            problems.append("refresh_release_chain dry_run must be false for final gate")
+        steps = payload.get("steps")
+        if not isinstance(steps, list) or not steps:
+            problems.append("refresh_release_chain.steps is missing or empty")
+        elif not allow_missing:
+            step_by_name = {
+                str(step.get("name") or ""): step
+                for step in steps
+                if isinstance(step, dict)
+            }
+            final_step = step_by_name.get("final_gate_final")
+            if not isinstance(final_step, dict) or final_step.get("status") != "passed":
+                problems.append("refresh_release_chain final_gate_final step must be passed")
+            external_step = step_by_name.get("external_smoke")
+            command = external_step.get("command") if isinstance(external_step, dict) else []
+            if payload.get("owner_verified") is True and not isinstance(command, list):
+                problems.append("refresh_release_chain external_smoke command is missing")
+            elif payload.get("owner_verified") is True:
+                for token in (
+                    "--check",
+                    "provider",
+                    "feishu_webhook_contract",
+                    "github_issue_to_pr_dry_run",
+                    "github_issue_to_pr_execute_preflight",
+                    "hosted_github_actions_run",
+                    "--require-configured",
+                    "--github-execute-preflight",
+                    "--github-actions-preflight",
+                ):
+                    if token not in command:
+                        problems.append(f"refresh_release_chain external_smoke command missing token: {token}")
+
+    return GateInput(
+        name="refresh_release_chain",
+        path=str(path),
+        status=gate.status,
+        ok=not problems,
+        details=details,
+        error="; ".join(problems) if problems else None,
+    )
+
+
 def _evidence_pack_gate(paths: dict[str, Path], *, allow_missing: bool) -> GateInput:
     path = paths["evidence_pack"]
     gate = _checked_report_gate(
@@ -1637,6 +1730,25 @@ def _merge_owner_gates(*groups: list[OwnerGate]) -> list[OwnerGate]:
     return list(merged.values())
 
 
+def _refresh_release_chain_owner_gate(refresh_payload: dict[str, Any] | None) -> list[OwnerGate]:
+    if not refresh_payload or refresh_payload.get("owner_verified") is True:
+        return []
+    return [
+        OwnerGate(
+            name="refresh_release_chain_owner_verified",
+            status="action_required",
+            missing=[
+                "Run scripts/rc_refresh_release_chain.py with --owner-verified before RC tagging.",
+            ],
+            details={
+                "owner_verified": refresh_payload.get("owner_verified"),
+                "provider": refresh_payload.get("provider"),
+                "status": refresh_payload.get("status"),
+            },
+        )
+    ]
+
+
 def run_final_gate(inputs: dict[str, Path] | None = None, *, allow_missing_evidence_pack: bool = False) -> FinalGateReport:
     paths = inputs or DEFAULT_INPUTS
     local_gates = [
@@ -1645,13 +1757,9 @@ def run_final_gate(inputs: dict[str, Path] | None = None, *, allow_missing_evide
         _gate_from_report("runtime_smoke", paths["runtime_smoke"], {"passed"}),
         _gate_from_report("external_smoke", paths["external_smoke"], {"passed"}),
         _gate_from_report("ci_contract", paths["ci_contract"], {"passed"}),
-        _gate_from_report(
-            "refresh_release_chain",
-            paths["refresh_release_chain"],
-            {"passed", "planned", "running"} if allow_missing_evidence_pack else {"passed", "planned"},
-        ),
+        _refresh_release_chain_gate(paths["refresh_release_chain"], allow_missing=allow_missing_evidence_pack),
         _gate_from_report("release_diff_review_gate", paths["release_diff_review_gate"], {"passed"}),
-        _gate_from_report("deployment_docs_gate", paths["deployment_docs_gate"], {"passed"}),
+        _deployment_docs_gate(paths["deployment_docs_gate"], allow_missing=allow_missing_evidence_pack),
         _gate_from_report("owner_gate_plan", paths["owner_gate_plan"], {"verified", "ready_to_run", "action_required"}),
         _owner_gate_plan_freshness_gate(paths["owner_gate_plan"]),
         _owner_gate_runner_gate(paths["owner_gate_runner"]),
@@ -1697,7 +1805,12 @@ def run_final_gate(inputs: dict[str, Path] | None = None, *, allow_missing_evide
     ]
     external_payload, _ = _read_json(paths["external_smoke"])
     owner_plan_payload, _ = _read_json(paths["owner_gate_plan"])
-    owner_gates = _merge_owner_gates(_owner_gates(external_payload), _owner_plan_gates(owner_plan_payload))
+    refresh_payload, _ = _read_json(paths["refresh_release_chain"])
+    owner_gates = _merge_owner_gates(
+        _owner_gates(external_payload),
+        _owner_plan_gates(owner_plan_payload),
+        _refresh_release_chain_owner_gate(refresh_payload),
+    )
     local_ok = all(gate.ok for gate in local_gates)
     receipt_refresh_required = any(gate.details.get("refresh_required") is True for gate in local_gates)
     full_parity_claimed = False

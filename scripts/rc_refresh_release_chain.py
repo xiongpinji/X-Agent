@@ -32,6 +32,15 @@ SECRET_VALUE_OUTPUT_RE = re.compile(r"\b(?:sk|ghp|github_pat|xagent)[_-][A-Za-z0
 BOOTSTRAP_FINAL_GATE_STEPS = frozenset(
     {"final_gate_bootstrap", "final_gate", "final_gate_after_docs", "final_gate_after_receipt"}
 )
+OWNER_VERIFIED_EXTERNAL_CHECKS = frozenset(
+    {
+        "provider",
+        "feishu_webhook_contract",
+        "github_issue_to_pr_dry_run",
+        "github_issue_to_pr_execute_preflight",
+        "hosted_github_actions_run",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -50,6 +59,7 @@ class RefreshChainReport:
     status: str
     generated_at: str
     provider: str
+    owner_verified: bool
     dry_run: bool
     stop_on_failure: bool
     steps: list[RefreshStep]
@@ -95,6 +105,23 @@ def _read_json(path: Path) -> dict[str, Any] | None:
     except (FileNotFoundError, json.JSONDecodeError):
         return None
     return payload if isinstance(payload, dict) else None
+
+
+def _external_smoke_has_verified_owner_evidence(path: Path | None = None) -> bool:
+    payload = _read_json(path or (REPORT_DIR / "rc-external-smoke.json"))
+    if not isinstance(payload, dict):
+        return False
+    if payload.get("status") != "passed" or payload.get("require_configured") is not True:
+        return False
+    checks = payload.get("checks")
+    if not isinstance(checks, list):
+        return False
+    statuses = {
+        str(check.get("name") or ""): check.get("status")
+        for check in checks
+        if isinstance(check, dict)
+    }
+    return all(statuses.get(name) == "passed" for name in OWNER_VERIFIED_EXTERNAL_CHECKS)
 
 
 def _owner_gate_summary() -> dict[str, Any]:
@@ -165,9 +192,27 @@ def _external_check_summary_details(check: dict[str, Any]) -> dict[str, Any]:
     return {key: details[key] for key in safe_keys if key in details}
 
 
-def _step_commands(provider: str) -> list[tuple[str, list[str]]]:
+def _step_commands(provider: str, *, owner_verified: bool = False) -> list[tuple[str, list[str]]]:
     owner_plan_command = ["scripts/rc_owner_gate_plan.py"]
     external_smoke_command = ["scripts/rc_external_smoke.py"]
+    if owner_verified:
+        external_smoke_command.extend(
+            [
+                "--check",
+                "provider",
+                "--check",
+                "feishu_webhook_contract",
+                "--check",
+                "github_issue_to_pr_dry_run",
+                "--check",
+                "github_issue_to_pr_execute_preflight",
+                "--check",
+                "hosted_github_actions_run",
+                "--require-configured",
+                "--github-execute-preflight",
+                "--github-actions-preflight",
+            ]
+        )
     if provider != "mock":
         external_smoke_command.extend(["--provider", provider])
         owner_plan_command.extend(["--provider", provider])
@@ -273,18 +318,47 @@ def build_refresh_chain(
     stop_on_failure: bool = True,
     report_path: Path | None = None,
     provider_env_overrides: dict[str, str] | None = None,
+    owner_verified: bool = False,
 ) -> RefreshChainReport:
     if provider not in PROVIDER_CHOICES:
         raise ValueError(f"unsupported provider: {provider}")
+    if owner_verified and provider == "mock":
+        raise ValueError("owner-verified refresh requires a non-mock provider")
 
     env_overrides = _provider_env_overrides(provider_env_overrides)
+    if not dry_run and not owner_verified and _external_smoke_has_verified_owner_evidence():
+        guard_step = RefreshStep(
+            name="owner_evidence_guard",
+            command=[
+                "python",
+                "scripts/rc_refresh_release_chain.py",
+                "--owner-verified",
+            ],
+            status="failed",
+            returncode=None,
+            error=(
+                "existing owner-verified rc-external-smoke.json would be overwritten by a non-owner refresh; "
+                "rerun with --owner-verified or move the existing owner evidence aside"
+            ),
+        )
+        return _make_report(
+            status="failed",
+            provider=provider,
+            owner_verified=owner_verified,
+            dry_run=dry_run,
+            stop_on_failure=stop_on_failure,
+            steps=[guard_step],
+            provider_env_overrides=env_overrides,
+        )
+
     steps: list[RefreshStep] = []
-    for name, command in _step_commands(provider):
+    for name, command in _step_commands(provider, owner_verified=owner_verified):
         if name in BOOTSTRAP_FINAL_GATE_STEPS and report_path is not None and not dry_run:
             write_report(
                 _make_report(
                     status="running",
                     provider=provider,
+                    owner_verified=owner_verified,
                     dry_run=dry_run,
                     stop_on_failure=stop_on_failure,
                     steps=steps,
@@ -297,6 +371,7 @@ def build_refresh_chain(
                 _make_report(
                     status="running",
                     provider=provider,
+                    owner_verified=owner_verified,
                     dry_run=dry_run,
                     stop_on_failure=stop_on_failure,
                     steps=steps,
@@ -316,6 +391,7 @@ def build_refresh_chain(
                 _make_report(
                     status="passed",
                     provider=provider,
+                    owner_verified=owner_verified,
                     dry_run=dry_run,
                     stop_on_failure=stop_on_failure,
                     steps=[*steps, after_receipt_pack_step],
@@ -335,6 +411,7 @@ def build_refresh_chain(
                 _make_report(
                     status="passed",
                     provider=provider,
+                    owner_verified=owner_verified,
                     dry_run=dry_run,
                     stop_on_failure=stop_on_failure,
                     steps=[*steps, final_pack_step],
@@ -352,6 +429,7 @@ def build_refresh_chain(
     return _make_report(
         status=status,
         provider=provider,
+        owner_verified=owner_verified,
         dry_run=dry_run,
         stop_on_failure=stop_on_failure,
         steps=steps,
@@ -363,6 +441,7 @@ def _make_report(
     *,
     status: str,
     provider: str,
+    owner_verified: bool,
     dry_run: bool,
     stop_on_failure: bool,
     steps: list[RefreshStep],
@@ -372,6 +451,7 @@ def _make_report(
         status=status,
         generated_at=_utc_now(),
         provider=provider,
+        owner_verified=owner_verified,
         dry_run=dry_run,
         stop_on_failure=stop_on_failure,
         steps=steps,
@@ -379,6 +459,7 @@ def _make_report(
         next_commands=[
             "Inspect .xagent_runtime/reports/rc-refresh-release-chain.json.",
             "If a step failed, fix that gate and rerun this script; downstream reports may be stale.",
+            "Use --owner-verified for the final tag-ready refresh so external smoke requires Feishu, GitHub, and hosted Actions evidence.",
             "Run python scripts\\rc_final_gate.py --require-ready-to-tag only after owner gates are verified.",
         ],
         owner_gate_summary=_owner_gate_summary(),
@@ -398,6 +479,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--timeout", type=float, default=180.0)
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--continue-on-failure", action="store_true")
+    parser.add_argument(
+        "--owner-verified",
+        action="store_true",
+        help=(
+            "run the strict owner-controlled external smoke suite: provider, Feishu, GitHub issue-to-PR "
+            "dry-run, GitHub execute preflight, and hosted GitHub Actions preflight"
+        ),
+    )
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     return parser.parse_args()
 
@@ -416,11 +505,13 @@ def main() -> int:
         stop_on_failure=not args.continue_on_failure,
         report_path=args.output,
         provider_env_overrides=provider_env_overrides,
+        owner_verified=args.owner_verified,
     )
     if args.dry_run or report.status != "passed":
         write_report(report, args.output)
     print(f"RC refresh release chain status: {report.status}")
     print(f"Provider: {report.provider}")
+    print(f"Owner verified: {report.owner_verified}")
     print(f"Report written to {args.output}")
     for step in report.steps:
         print(f"- {step.name}: {step.status}")

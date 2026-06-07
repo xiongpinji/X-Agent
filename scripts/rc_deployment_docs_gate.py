@@ -47,6 +47,7 @@ RUNBOOK_TOKENS = (
     "python scripts/rc_final_gate.py --require-ready-to-tag",
     "python scripts/rc_refresh_release_chain.py --provider ollama --ollama-model",
     "--ollama-base-url",
+    "--owner-verified",
     "python scripts/rc_evidence_pack.py",
     "--allow-missing-evidence-pack",
     "Final final gate remains strict",
@@ -96,6 +97,7 @@ CHECKLIST_TOKENS = (
     "RC final gate",
     "RC evidence pack",
     "--allow-missing-evidence-pack",
+    "--owner-verified",
     "Final final gate remains strict",
     "RC refresh release chain",
     "RC owner gate runner",
@@ -256,6 +258,8 @@ def _find_forbidden_tokens(text: str, tokens: tuple[str, ...]) -> list[str]:
             if token_lower not in line.lower():
                 continue
             normalized = line.lower().replace("`", "").replace('"', "").replace("'", "")
+            if token_lower == "ready_for_rc_tag" and not _is_ready_for_rc_tag_claim(normalized):
+                continue
             is_negated_boundary = any(
                 marker in normalized
                 for marker in (
@@ -269,6 +273,61 @@ def _find_forbidden_tokens(text: str, tokens: tuple[str, ...]) -> list[str]:
                 matches.append(token)
                 break
     return matches
+
+
+def _is_ready_for_rc_tag_claim(normalized_line: str) -> bool:
+    current_claim_markers = (
+        "current final gate status",
+        "current local final-gate status",
+        "current local final gate",
+        "current rc final gate status",
+        "current rc final gate",
+        "status ready_for_rc_tag",
+        "status: ready_for_rc_tag",
+        "status is ready_for_rc_tag",
+        "status is now ready_for_rc_tag",
+    )
+    claim_markers = (
+        *current_claim_markers,
+        "final gate status is",
+        "final rc gate status is",
+        "final gate reports",
+        "final rc gate reports",
+        "reports ready_for_rc_tag",
+        "report ready_for_rc_tag",
+    )
+    conditional_markers = (
+        "after ",
+        "once ",
+        "when ",
+        "only after ",
+        "only ",
+        "until ",
+        "before ",
+        "expected ",
+        "target ",
+    )
+    token_index = normalized_line.find("ready_for_rc_tag")
+    current_claim_before_token = any(
+        (index := normalized_line.find(marker)) != -1 and index <= token_index
+        for marker in current_claim_markers
+    )
+    stripped = normalized_line.strip().lstrip("-* ").strip()
+    conditional_before_token = any(
+        (index := normalized_line.find(marker)) != -1 and index < token_index
+        for marker in conditional_markers
+    )
+    if any(marker in normalized_line for marker in claim_markers):
+        if any(stripped.startswith(marker) for marker in conditional_markers):
+            return False
+        if conditional_before_token and not current_claim_before_token:
+            return False
+        return True
+    if any(stripped.startswith(marker) for marker in conditional_markers):
+        return False
+    if conditional_before_token and not current_claim_before_token:
+        return False
+    return "ready_for_rc_tag" in normalized_line
 
 
 

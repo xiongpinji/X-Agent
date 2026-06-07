@@ -47,6 +47,7 @@ Required env:
 Commands:
 - python scripts/rc_final_gate.py --require-ready-to-tag
 - python scripts/rc_refresh_release_chain.py --provider ollama --ollama-model qwen2.5:1.5b --ollama-base-url http://localhost:11434
+- --owner-verified
 - python scripts/rc_evidence_pack.py
 - --allow-missing-evidence-pack
 - Final final gate remains strict
@@ -107,6 +108,7 @@ Boundary: full_parity_claimed=false.
 - RC final gate
 - RC evidence pack
 - --allow-missing-evidence-pack
+- --owner-verified
 - Final final gate remains strict
 - RC refresh release chain
 - RC owner gate runner
@@ -407,6 +409,35 @@ def test_deployment_docs_gate_allows_negated_ready_to_tag_boundary(tmp_path: Pat
     report = _gate(paths)
 
     assert report.status == "passed"
+
+
+def test_deployment_docs_gate_allows_conditional_ready_to_tag_handoff(tmp_path: Path) -> None:
+    paths = _reports(tmp_path)
+    paths["runbook"].write_text(
+        _runbook_text()
+        + "\nAfter owner-controlled evidence is verified, the final gate reports `ready_for_rc_tag`.\n",
+        encoding="utf-8",
+    )
+
+    report = _gate(paths)
+
+    assert report.status == "passed"
+
+
+def test_deployment_docs_gate_rejects_current_ready_to_tag_claim_with_condition_word(tmp_path: Path) -> None:
+    paths = _reports(tmp_path)
+    paths["runbook"].write_text(
+        _runbook_text()
+        + "\nCurrent final gate status is `ready_for_rc_tag` after docs refresh.\n",
+        encoding="utf-8",
+    )
+
+    report = _gate(paths)
+
+    assert report.status == "failed"
+    overclaim = next(check for check in report.checks if check.name == "overclaim_boundary_docs")
+    assert overclaim.status == "failed"
+    assert "ready_for_rc_tag" in str(overclaim.error)
 
 
 def test_deployment_docs_gate_requires_evidence_pack_sha_and_path(tmp_path: Path) -> None:

@@ -46,6 +46,7 @@ def test_refresh_chain_dry_run_plans_dependency_order() -> None:
     ]
     assert all(step.status == "planned" for step in report.steps)
     assert all(step.command[0] == "python" for step in report.steps)
+    assert report.owner_verified is False
     assert report.steps[4].command[-2:] == ["--provider", "ollama"]
     assert report.steps[5].command[-2:] == ["--provider", "ollama"]
     for step_name in ("final_gate_bootstrap", "final_gate", "final_gate_after_docs", "final_gate_after_receipt"):
@@ -67,6 +68,85 @@ def test_refresh_chain_mock_provider_does_not_force_provider_flag() -> None:
     owner_plan_command = next(step.command for step in report.steps if step.name == "owner_gate_plan")
     assert "--provider" not in external_command
     assert "--provider" not in owner_plan_command
+
+
+def test_refresh_chain_owner_verified_uses_strict_external_smoke() -> None:
+    report = build_refresh_chain(provider="ollama", dry_run=True, owner_verified=True)
+
+    external_command = next(step.command for step in report.steps if step.name == "external_smoke")
+
+    assert report.owner_verified is True
+    assert external_command == [
+        "python",
+        "scripts/rc_external_smoke.py",
+        "--check",
+        "provider",
+        "--check",
+        "feishu_webhook_contract",
+        "--check",
+        "github_issue_to_pr_dry_run",
+        "--check",
+        "github_issue_to_pr_execute_preflight",
+        "--check",
+        "hosted_github_actions_run",
+        "--require-configured",
+        "--github-execute-preflight",
+        "--github-actions-preflight",
+        "--provider",
+        "ollama",
+    ]
+
+
+def test_refresh_chain_owner_verified_rejects_mock_provider() -> None:
+    with pytest.raises(ValueError, match="non-mock provider"):
+        build_refresh_chain(provider="mock", dry_run=True, owner_verified=True)
+
+
+def test_refresh_chain_non_owner_mode_refuses_to_overwrite_verified_owner_external_smoke(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    reports = tmp_path / "reports"
+    reports.mkdir()
+    (reports / "rc-external-smoke.json").write_text(
+        json.dumps(
+            {
+                "status": "passed",
+                "require_configured": True,
+                "checks": [
+                    {"name": "provider", "status": "passed"},
+                    {"name": "feishu_webhook_contract", "status": "passed"},
+                    {"name": "github_issue_to_pr_dry_run", "status": "passed"},
+                    {"name": "github_issue_to_pr_execute_preflight", "status": "passed"},
+                    {"name": "hosted_github_actions_run", "status": "passed"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    calls: list[list[str]] = []
+
+    def fake_run(command, **kwargs):  # noqa: ANN001
+        calls.append(list(command))
+        return subprocess.CompletedProcess(command, 0, stdout=b"ok", stderr=b"")
+
+    monkeypatch.setattr(rc_refresh_release_chain, "REPORT_DIR", reports)
+    monkeypatch.setattr(rc_refresh_release_chain.subprocess, "run", fake_run)
+
+    report = build_refresh_chain(provider="ollama", timeout_seconds=1)
+
+    assert report.status == "failed"
+    assert report.steps == [
+        rc_refresh_release_chain.RefreshStep(
+            name="owner_evidence_guard",
+            command=["python", "scripts/rc_refresh_release_chain.py", "--owner-verified"],
+            status="failed",
+            returncode=None,
+            error=report.steps[0].error,
+        )
+    ]
+    assert "would be overwritten" in str(report.steps[0].error)
+    assert calls == []
 
 
 def test_refresh_chain_passes_provider_env_overrides(monkeypatch) -> None:
@@ -352,7 +432,37 @@ def test_refresh_chain_cli_writes_dry_run_report(tmp_path: Path) -> None:
     assert "planned" in result.stdout
     payload = json.loads(output.read_text(encoding="utf-8"))
     assert payload["status"] == "planned"
+    assert payload["owner_verified"] is False
     assert payload["provider_env_overrides"] == {
         "XAGENT_OLLAMA_MODEL": "qwen2.5:1.5b",
         "XAGENT_OLLAMA_BASE_URL": "http://127.0.0.1:11435",
     }
+
+
+def test_refresh_chain_cli_writes_owner_verified_dry_run_report(tmp_path: Path) -> None:
+    output = tmp_path / "rc-refresh-release-chain.json"
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "scripts/rc_refresh_release_chain.py",
+            "--provider",
+            "ollama",
+            "--owner-verified",
+            "--dry-run",
+            "--output",
+            str(output),
+        ],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    )
+
+    assert result.returncode == 0
+    assert "Owner verified: True" in result.stdout
+    payload = json.loads(output.read_text(encoding="utf-8"))
+    assert payload["owner_verified"] is True
+    external_step = next(step for step in payload["steps"] if step["name"] == "external_smoke")
+    assert "--require-configured" in external_step["command"]
+    assert "--github-execute-preflight" in external_step["command"]
+    assert "--github-actions-preflight" in external_step["command"]

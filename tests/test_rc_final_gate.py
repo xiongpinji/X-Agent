@@ -429,8 +429,32 @@ def _inputs(tmp_path: Path, *, external_checks: list[dict[str, object]] | None =
                 "status": "passed",
                 "generated_at": "2026-06-05T10:01:00Z",
                 "provider": "ollama",
+                "owner_verified": True,
                 "dry_run": False,
-                "steps": [{"name": "final_gate_final", "status": "passed"}],
+                "steps": [
+                    {
+                        "name": "external_smoke",
+                        "status": "passed",
+                        "command": [
+                            "python",
+                            "scripts/rc_external_smoke.py",
+                            "--check",
+                            "provider",
+                            "--check",
+                            "feishu_webhook_contract",
+                            "--check",
+                            "github_issue_to_pr_dry_run",
+                            "--check",
+                            "github_issue_to_pr_execute_preflight",
+                            "--check",
+                            "hosted_github_actions_run",
+                            "--require-configured",
+                            "--github-execute-preflight",
+                            "--github-actions-preflight",
+                        ],
+                    },
+                    {"name": "final_gate_final", "status": "passed"},
+                ],
             },
         ),
         "release_diff_review_gate": _write_json(
@@ -819,6 +843,12 @@ def test_final_gate_fails_when_owner_gate_plan_verified_with_stale_evidence(tmp_
             "next_commands": [],
         },
     )
+    receipt = json.loads(inputs["release_receipt"].read_text(encoding="utf-8"))
+    receipt["final_gate"] = {"status": "ready_for_rc_tag"}
+    receipt["approval_request"]["final_gate_status"] = "ready_for_rc_tag"
+    receipt["approval_request"]["can_tag_rc_now"] = True
+    receipt["approval_request"]["remaining_risks"] = []
+    _write_json(inputs["release_receipt"], receipt)
 
     report = run_final_gate(inputs)
 
@@ -842,6 +872,12 @@ def test_final_gate_fails_when_owner_gate_plan_verified_without_freshness_summar
             "next_commands": [],
         },
     )
+    receipt = json.loads(inputs["release_receipt"].read_text(encoding="utf-8"))
+    receipt["final_gate"] = {"status": "ready_for_rc_tag"}
+    receipt["approval_request"]["final_gate_status"] = "ready_for_rc_tag"
+    receipt["approval_request"]["can_tag_rc_now"] = True
+    receipt["approval_request"]["remaining_risks"] = []
+    _write_json(inputs["release_receipt"], receipt)
 
     report = run_final_gate(inputs)
 
@@ -1060,6 +1096,62 @@ def test_final_gate_allows_running_refresh_chain_only_for_bootstrap(tmp_path: Pa
     strict_gate = next(item for item in strict_report.local_gates if item.name == "refresh_release_chain")
     assert strict_gate.ok is False
     assert strict_gate.status == "running"
+
+
+def test_final_gate_rejects_planned_refresh_chain_in_strict_mode(tmp_path: Path) -> None:
+    inputs = _inputs(tmp_path)
+    refresh_payload = json.loads(inputs["refresh_release_chain"].read_text(encoding="utf-8"))
+    refresh_payload["status"] = "planned"
+    refresh_payload["dry_run"] = True
+    _write_json(inputs["refresh_release_chain"], refresh_payload)
+
+    report = run_final_gate(inputs)
+
+    assert report.status == "failed"
+    gate = next(item for item in report.local_gates if item.name == "refresh_release_chain")
+    assert gate.ok is False
+    assert gate.status == "planned"
+    assert "dry_run must be false" in str(gate.error)
+
+
+def test_final_gate_requires_owner_verified_refresh_chain_for_tag_ready(tmp_path: Path) -> None:
+    inputs = _inputs(
+        tmp_path,
+        external_checks=_verified_external_checks(),
+    )
+    refresh_payload = json.loads(inputs["refresh_release_chain"].read_text(encoding="utf-8"))
+    refresh_payload["owner_verified"] = False
+    _write_json(inputs["refresh_release_chain"], refresh_payload)
+    _write_json(
+        inputs["owner_gate_plan"],
+        {
+            "status": "verified",
+            "generated_at": "2026-06-05T10:01:00Z",
+            "gates": [
+                {"name": "provider", "status": "verified", "missing": []},
+                {"name": "feishu_webhook_contract", "status": "verified", "missing": []},
+                {"name": "github_issue_to_pr_dry_run", "status": "verified", "missing": []},
+                {"name": "github_issue_to_pr_execute_preflight", "status": "verified", "missing": []},
+                {"name": "hosted_github_actions_commercial_rc", "status": "verified", "missing": []},
+            ],
+            "evidence_freshness": {"required": True, "fresh": True},
+            "next_commands": [],
+        },
+    )
+    receipt = json.loads(inputs["release_receipt"].read_text(encoding="utf-8"))
+    receipt["final_gate"] = {"status": "ready_for_rc_tag"}
+    receipt["approval_request"]["final_gate_status"] = "ready_for_rc_tag"
+    receipt["approval_request"]["can_tag_rc_now"] = True
+    receipt["approval_request"]["remaining_risks"] = []
+    _write_json(inputs["release_receipt"], receipt)
+
+    report = run_final_gate(inputs)
+
+    assert report.status == "ready_with_owner_gates"
+    assert report.release_decision["can_tag_rc_now"] is False
+    gate = next(item for item in report.owner_gates if item.name == "refresh_release_chain_owner_verified")
+    assert gate.status == "action_required"
+    assert "--owner-verified" in gate.missing[0]
 
 
 def test_final_gate_fails_when_evidence_pack_required_check_failed(tmp_path: Path) -> None:
@@ -1900,6 +1992,29 @@ def test_final_gate_requires_evidence_pack_refresh_after_refresh_chain_changes(t
     gate = next(item for item in report.local_gates if item.name == "evidence_pack")
     assert gate.status == "failed"
     assert any(item["name"] == "refresh_release_chain" for item in gate.details["stale_reports"])
+
+
+def test_final_gate_bootstrap_allows_deployment_docs_state_only_refresh(tmp_path: Path) -> None:
+    inputs = _inputs(tmp_path)
+    _write_json(
+        inputs["deployment_docs_gate"],
+        {
+            "status": "failed",
+            "generated_at": "2026-06-05T10:01:00Z",
+            "checks": [
+                {"name": "runbook_document", "status": "passed"},
+                {"name": "release_state_docs", "status": "failed"},
+                {"name": "overclaim_boundary_docs", "status": "failed"},
+            ],
+        },
+    )
+
+    report = run_final_gate(inputs, allow_missing_evidence_pack=True)
+
+    gate = next(item for item in report.local_gates if item.name == "deployment_docs_gate")
+    assert gate.ok is True
+    assert gate.status == "bootstrap_allowed"
+    assert gate.details["bootstrap_allowed"] is True
 
 
 def test_final_gate_fails_when_owner_gate_plan_missing(tmp_path: Path) -> None:

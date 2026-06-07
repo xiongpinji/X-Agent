@@ -9,9 +9,8 @@ deployment docs into a commercial RC procedure with explicit verification gates.
 It is not a GA claim and it is not a full Codex/Hermes parity claim. It is a
 commercial pilot/RC deployment path that must still be validated with the
 customer's real provider tokens, channel credentials, and infrastructure.
-Current local final-gate status is `ready_for_rc_tag` with
-`full_parity_claimed=false`; this runbook does not claim full Codex/Hermes
-parity.
+Current local/CI final-gate status is `ready_with_owner_gates` with
+`full_parity_claimed=false`. Only after owner-controlled Feishu, GitHub, and hosted Actions evidence is verified for the current commit does the final gate report `ready_for_rc_tag`. This runbook does not claim full Codex/Hermes parity.
 Current local provider smoke is verified with Ollama at
 `http://127.0.0.1:11435`, model `qwen2.5:1.5b`, after copying the required
 model blobs to the ASCII-only model directory `D:\ollama-models`. The direct
@@ -125,7 +124,7 @@ Run these from the repository root before packaging or tagging:
 python scripts/codex_hermes_gap_matrix.py --write-report
 python scripts/xagent_doctor.py --json
 python scripts/rc_runtime_smoke.py
-python scripts/rc_refresh_release_chain.py --provider ollama --ollama-model qwen2.5:1.5b --ollama-base-url http://127.0.0.1:11435
+python scripts/rc_refresh_release_chain.py --provider ollama --ollama-model qwen2.5:1.5b --ollama-base-url http://127.0.0.1:11435 --owner-verified
 python scripts/rc_final_gate.py --require-ready-to-tag
 ```
 
@@ -141,6 +140,11 @@ the release refresh chain.
 For Ollama/local release evidence, pass the exact `--ollama-model` and
 `--ollama-base-url` used for provider smoke so refreshed reports do not
 implicitly fall back to the default model.
+For the final tag-ready refresh, also pass `--owner-verified`; that mode reruns
+the owner-controlled external smoke checks with `--require-configured`,
+`--github-execute-preflight`, and `--github-actions-preflight` so existing
+Feishu, GitHub issue-to-PR, and hosted Actions evidence is not overwritten by a
+non-owner local smoke snapshot.
 
 The refresh chain uses `--allow-missing-evidence-pack` only for bootstrap
 `rc_final_gate.py` passes that run before the first evidence pack exists. Final final gate remains strict:
