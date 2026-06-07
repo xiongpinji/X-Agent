@@ -33,7 +33,7 @@ powershell -ExecutionPolicy Bypass -File scripts\install-xagent.ps1 -DryRun
 python scripts\rc_runtime_smoke.py
 python scripts\rc_external_smoke.py
 python scripts\rc_release_audit.py
-python scripts\rc_refresh_release_chain.py --provider ollama --ollama-model qwen2.5:1.5b --ollama-base-url http://127.0.0.1:11435 --owner-verified
+python scripts\rc_owner_verified_finalize.py --provider ollama --ollama-model qwen2.5:1.5b --ollama-base-url http://127.0.0.1:11435
 python scripts\rc_owner_gate_runner.py --gate all --dry-run --env-file .xagent_runtime\reports\rc-owner-env-template.env
 python scripts\xagent_doctor.py --json
 git diff --check
@@ -78,8 +78,11 @@ Observed status:
   ASCII-only model directory `D:\ollama-models`; the sentinel response
   `xagent-rc-ok` was recorded. Feishu, GitHub issue-to-PR, and hosted Actions
   remain skipped/action-required until owner credentials and resources exist.
-- RC final gate: `ready_with_owner_gates`; local gates are green, but final RC
-  tag is held by owner-controlled external resources.
+- RC final gate: `ready_with_owner_gates`; local gates are green after the
+  fixed-point refresh, but owner-controlled external resources still hold the
+  final RC tag. Intermediate refreshes can temporarily report
+  `ready_with_receipt_refresh_required` until receipt and evidence-pack reports
+  are regenerated in order.
 - RC final gate also enforces release receipt freshness: the receipt
   `generated_at` must not be older than the source bundle, artifact integrity,
   owner gate plan, owner handoff gate, `owner_env_template`,
@@ -102,6 +105,10 @@ Observed status:
   so downstream reports do not read half-written or stale upstream JSON and
   owner-controlled Feishu, GitHub, and hosted Actions evidence is refreshed in
   strict `--require-configured` mode before tagging.
+- RC owner-verified finalization: wraps the owner-verified refresh chain,
+  writes `.xagent_runtime\reports\rc-owner-verified-finalize.json`, records
+  only owner env variable names, and reports whether the fixed-point final gate
+  is tag-ready without creating a git tag or storing secret values.
 - RC refresh release chain bootstrap uses `--allow-missing-evidence-pack` only
   before the first evidence pack exists. Final final gate remains strict:
   `python scripts\rc_final_gate.py --require-ready-to-tag` must consume a
@@ -386,7 +393,7 @@ Runtime smoke evidence captured on 2026-06-06:
 - `scripts/rc_staging_plan.py` writes
   `.xagent_runtime/reports/rc-staging-plan.json` with exact `git add -- ...`
   commands split into safe chunks. It does not stage files. The latest dry-run
-  planned 119 files across 6 commands, and `git diff --cached --name-only`
+  planned 121 files across 7 commands, and `git diff --cached --name-only`
   remained empty.
 
 ## RC-S1 Evidence Notes

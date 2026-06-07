@@ -89,6 +89,9 @@ Important correction made during review:
   bytes, UTF-8 decode failures, merge conflict markers, or trailing whitespace.
 - `scripts/rc_refresh_release_chain.py` refreshes dependent release reports in
   order so downstream gates do not read half-written upstream JSON.
+- `scripts/rc_owner_verified_finalize.py` wraps the owner-verified refresh
+  chain for release owners, records only env variable names, and does not
+  create git tags or store secret values.
 - `scripts/rc_runtime_smoke.py` starts backend + Vite and validates health,
   readiness, `/chat`, workflow-chat, and proxied workbench.
 
@@ -113,7 +116,7 @@ git diff --check
 Observed local results:
 
 - RC release gate group: 299 passed.
-- Release audit: passed, 119 candidate files, no secret-like findings, no
+- Release audit: passed, 121 candidate files, no secret-like findings, no
   manifest unsafe paths, no excluded-area references, no local user/runtime
   path findings, and no file hygiene findings.
 - Release diff review gate: passed.

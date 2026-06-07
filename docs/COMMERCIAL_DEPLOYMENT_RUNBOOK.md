@@ -9,8 +9,13 @@ deployment docs into a commercial RC procedure with explicit verification gates.
 It is not a GA claim and it is not a full Codex/Hermes parity claim. It is a
 commercial pilot/RC deployment path that must still be validated with the
 customer's real provider tokens, channel credentials, and infrastructure.
-Current local/CI final-gate status is `ready_with_owner_gates` with
-`full_parity_claimed=false`. Only after owner-controlled Feishu, GitHub, and hosted Actions evidence is verified for the current commit does the final gate report `ready_for_rc_tag`. This runbook does not claim full Codex/Hermes parity.
+Current fixed-point local final-gate status is `ready_with_owner_gates`, with
+`full_parity_claimed=false`. Earlier intermediate refreshes can temporarily
+report `ready_with_receipt_refresh_required` until receipt and evidence-pack
+reports are regenerated in order. The owner finalization command below must be
+rerun in the owner shell with real Feishu, GitHub, provider, and hosted Actions
+variables before RC tagging. This runbook does not claim full Codex/Hermes
+parity.
 Current local provider smoke is verified with Ollama at
 `http://127.0.0.1:11435`, model `qwen2.5:1.5b`, after copying the required
 model blobs to the ASCII-only model directory `D:\ollama-models`. The direct
@@ -124,8 +129,7 @@ Run these from the repository root before packaging or tagging:
 python scripts/codex_hermes_gap_matrix.py --write-report
 python scripts/xagent_doctor.py --json
 python scripts/rc_runtime_smoke.py
-python scripts/rc_refresh_release_chain.py --provider ollama --ollama-model qwen2.5:1.5b --ollama-base-url http://127.0.0.1:11435 --owner-verified
-python scripts/rc_final_gate.py --require-ready-to-tag
+python scripts/rc_owner_verified_finalize.py --provider ollama --ollama-model qwen2.5:1.5b --ollama-base-url http://127.0.0.1:11435
 ```
 
 Provider smoke is a sentinel check, not just a connectivity check: the selected
@@ -137,6 +141,11 @@ refresh entrypoint. It runs the dependent RC reports sequentially so downstream
 gates never read a half-written JSON report from an upstream gate. Keep the
 individual `rc_*` scripts available for focused debugging, but do not parallelize
 the release refresh chain.
+`scripts/rc_owner_verified_finalize.py` is the owner-facing finalization
+entrypoint. It wraps the owner-verified refresh chain, summarizes
+`rc_final_gate.py` tag-readiness state, writes
+`.xagent_runtime/reports/rc-owner-verified-finalize.json`, and intentionally
+does not create git tags or store secret values.
 For Ollama/local release evidence, pass the exact `--ollama-model` and
 `--ollama-base-url` used for provider smoke so refreshed reports do not
 implicitly fall back to the default model.
@@ -170,6 +179,8 @@ any staging, commit, tag, or deployment.
 Focused debugging entrypoints remain:
 
 ```bash
+python scripts/rc_refresh_release_chain.py --provider ollama --ollama-model qwen2.5:1.5b --ollama-base-url http://127.0.0.1:11435 --owner-verified
+python scripts/rc_final_gate.py --require-ready-to-tag
 python scripts/rc_owner_gate_runner.py --gate all --dry-run --env-file .xagent_runtime/reports/rc-owner-env-template.env
 python scripts/rc_owner_handoff_gate.py
 python scripts/rc_evidence_pack.py
