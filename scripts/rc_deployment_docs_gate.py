@@ -35,6 +35,7 @@ OWNER_GATE_IDS = (
     "github_issue_to_pr_dry_run",
     "github_issue_to_pr_execute_preflight",
     "hosted_github_actions_commercial_rc",
+    "refresh_release_chain_owner_verified",
 )
 
 RUNBOOK_TOKENS = (

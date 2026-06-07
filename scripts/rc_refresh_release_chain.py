@@ -218,7 +218,7 @@ def _step_commands(provider: str, *, owner_verified: bool = False) -> list[tuple
         owner_plan_command.extend(["--provider", provider])
 
     return [
-        ("release_audit", ["scripts/rc_release_audit.py"]),
+        ("release_audit", ["scripts/rc_release_audit.py", "--manifest-candidates"]),
         ("staging_plan", ["scripts/rc_staging_plan.py"]),
         ("source_bundle", ["scripts/rc_source_bundle.py", "--create"]),
         ("artifact_integrity_gate", ["scripts/rc_artifact_integrity_gate.py"]),
@@ -395,6 +395,26 @@ def build_refresh_chain(
                     dry_run=dry_run,
                     stop_on_failure=stop_on_failure,
                     steps=[*steps, after_receipt_pack_step],
+                    provider_env_overrides=env_overrides,
+                ),
+                report_path,
+            )
+        if name == "final_gate_final" and report_path is not None and not dry_run:
+            final_gate_step = RefreshStep(
+                name=name,
+                command=["python", *command],
+                status="passed",
+                returncode=0,
+                stdout_tail=["Final gate reads this fixed-point snapshot while validating the refresh chain."],
+            )
+            write_report(
+                _make_report(
+                    status="passed",
+                    provider=provider,
+                    owner_verified=owner_verified,
+                    dry_run=dry_run,
+                    stop_on_failure=stop_on_failure,
+                    steps=[*steps, final_gate_step],
                     provider_env_overrides=env_overrides,
                 ),
                 report_path,

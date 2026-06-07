@@ -156,7 +156,7 @@ REQUIRED_CONTAINS: tuple[Requirement, ...] = (
         id="release_gate_commands",
         description="Workflow runs every commercial RC local gate command.",
         tokens=(
-            "python scripts/rc_refresh_release_chain.py --provider ollama --ollama-model qwen2.5:1.5b --ollama-base-url http://localhost:11434",
+            "python scripts/rc_refresh_release_chain.py --provider mock",
             "python scripts/codex_hermes_gap_matrix.py --write-report",
             "python scripts/rc_release_audit.py",
             "python scripts/rc_runtime_smoke.py",

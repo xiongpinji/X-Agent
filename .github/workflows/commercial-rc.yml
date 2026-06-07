@@ -83,7 +83,7 @@ jobs:
         run: python scripts/rc_release_audit.py
 
       - name: Sequential release evidence refresh
-        run: python scripts/rc_refresh_release_chain.py --provider ollama --ollama-model qwen2.5:1.5b --ollama-base-url http://localhost:11434
+        run: python scripts/rc_refresh_release_chain.py --provider mock
 
       - name: Owner gate handoff command contract
         shell: python

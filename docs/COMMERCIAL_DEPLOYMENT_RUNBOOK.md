@@ -410,6 +410,13 @@ Before enabling an integration for a customer:
   `XAGENT_COMMERCIAL_RC_GITHUB_ACTIONS_HEAD_SHA`; the latter must be a
   40-character hex git commit SHA. The read-only Actions run API must report
   `head_sha_verified=true` before the gate can be treated as verified.
+- `refresh_release_chain_owner_verified`: after provider, Feishu, GitHub
+  issue-to-PR, and hosted Actions evidence all pass for the current commit,
+  rerun `python scripts/rc_refresh_release_chain.py --provider ollama
+  --ollama-model qwen2.5:1.5b --ollama-base-url http://127.0.0.1:11435
+  --owner-verified`. This final refresh preserves owner-controlled external
+  evidence and prevents a later mock or skipped local smoke snapshot from being
+  packaged as tag-ready evidence.
 - Skill Curator: keep custom draft roots disabled in production/API-key mode.
 
 ## 9. Residual RC Risks

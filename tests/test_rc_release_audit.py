@@ -13,6 +13,7 @@ from scripts.rc_release_audit import (
     manifest_unsafe_path_findings,
     missing_from_manifest,
     repository_classification_paths,
+    run_audit,
     scan_excluded_reference_findings,
     scan_file_hygiene_findings,
     scan_local_path_findings,
@@ -112,6 +113,55 @@ missing.py
     assert candidates == ["scripts/rc_runtime_smoke.py"]
     assert excluded == []
     assert manifest_fallback is True
+
+
+def test_run_audit_can_use_full_manifest_candidates(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr("scripts.rc_release_audit.ROOT", tmp_path)
+    (tmp_path / "scripts").mkdir()
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "scripts" / "rc_runtime_smoke.py").write_text("print('ok')\n", encoding="utf-8")
+    (tmp_path / "tests" / "test_rc_runtime_smoke.py").write_text("def test_ok(): pass\n", encoding="utf-8")
+    manifest = tmp_path / "manifest.md"
+    manifest.write_text(
+        """
+## Tracked Modified Candidate Files
+
+```text
+scripts/rc_runtime_smoke.py
+```
+
+## New Candidate Files
+
+```text
+tests/test_rc_runtime_smoke.py
+```
+""",
+        encoding="utf-8",
+    )
+
+    def fake_git_lines(*args: str) -> list[str]:
+        if args == ("diff", "--name-only"):
+            return ["scripts/rc_runtime_smoke.py"]
+        if args == ("diff", "--cached", "--name-only"):
+            return []
+        if args == ("ls-files", "--others", "--exclude-standard"):
+            return []
+        if args == ("ls-tree", "-r", "--name-only", "HEAD"):
+            return ["scripts/rc_runtime_smoke.py", "tests/test_rc_runtime_smoke.py"]
+        if args == ("ls-files", "--cached"):
+            return ["scripts/rc_runtime_smoke.py", "tests/test_rc_runtime_smoke.py"]
+        if args == ("branch", "--show-current"):
+            return ["codex/test"]
+        raise AssertionError(args)
+
+    monkeypatch.setattr("scripts.rc_release_audit._git_lines", fake_git_lines)
+
+    audit = run_audit(manifest, manifest_candidates=True)
+
+    assert audit.status == "passed"
+    assert audit.candidate_count == 2
+    assert audit.manifest_count == 2
+    assert audit.manifest_extra == []
 
 
 def test_candidate_paths_includes_staged_diff(monkeypatch) -> None:

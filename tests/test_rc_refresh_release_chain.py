@@ -47,6 +47,7 @@ def test_refresh_chain_dry_run_plans_dependency_order() -> None:
     assert all(step.status == "planned" for step in report.steps)
     assert all(step.command[0] == "python" for step in report.steps)
     assert report.owner_verified is False
+    assert report.steps[0].command[-1] == "--manifest-candidates"
     assert report.steps[4].command[-2:] == ["--provider", "ollama"]
     assert report.steps[5].command[-2:] == ["--provider", "ollama"]
     for step_name in ("final_gate_bootstrap", "final_gate", "final_gate_after_docs", "final_gate_after_receipt"):
@@ -295,6 +296,10 @@ def test_refresh_chain_writes_running_report_before_evidence_pack(tmp_path: Path
     )
     assert any(
         snapshot["status"] == "passed" and snapshot["steps"][-1]["name"] == "evidence_pack_after_receipt"
+        for snapshot in snapshots
+    )
+    assert any(
+        snapshot["status"] == "passed" and snapshot["steps"][-1]["name"] == "final_gate_final"
         for snapshot in snapshots
     )
 

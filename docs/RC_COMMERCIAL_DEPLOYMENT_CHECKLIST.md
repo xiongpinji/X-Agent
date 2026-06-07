@@ -269,6 +269,13 @@ Observed status:
   and the SHA value must be a 40-character hex git commit SHA. Then run
   `--github-actions-preflight` so the read-only Actions run API confirms
   `status=completed`, `conclusion=success`, and `head_sha_verified=true`.
+- [ ] Run `refresh_release_chain_owner_verified` after all owner external gates
+  pass for the current commit: `python scripts\rc_refresh_release_chain.py
+  --provider ollama --ollama-model qwen2.5:1.5b --ollama-base-url
+  http://127.0.0.1:11435 --owner-verified`. This is the only refresh chain
+  mode that can produce tag-ready evidence because it reruns required provider,
+  Feishu, GitHub issue-to-PR, and hosted Actions checks without falling back to
+  mock or skipped smoke evidence.
 - [x] Record external-service limitations and missing tokens in the final report.
 - [x] Aggregate local and owner-controlled gates into a final machine-readable
   RC decision report.

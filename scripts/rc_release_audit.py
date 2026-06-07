@@ -434,11 +434,16 @@ def scan_file_hygiene_findings(paths: Iterable[str], root: Path = ROOT) -> list[
     return findings
 
 
-def run_audit(manifest_path: Path = DEFAULT_MANIFEST) -> ReleaseAudit:
+def run_audit(manifest_path: Path = DEFAULT_MANIFEST, *, manifest_candidates: bool = False) -> ReleaseAudit:
     tracked, untracked = repository_classification_paths()
     manifest_text = manifest_path.read_text(encoding="utf-8")
-    candidates, excluded_present, manifest_fallback = candidate_paths(manifest_text)
     manifest_paths = manifest_candidate_paths(manifest_text)
+    if manifest_candidates:
+        candidates = [path for path in manifest_paths if (ROOT / path).exists()]
+        excluded_present = []
+        manifest_fallback = True
+    else:
+        candidates, excluded_present, manifest_fallback = candidate_paths(manifest_text)
     manifest_sections = manifest_candidate_sections(manifest_text)
     post_commit_manifest = bool(set(manifest_sections["New Candidate Files"]).intersection(tracked))
     manifest_unsafe_paths = manifest_unsafe_path_findings(manifest_paths)
@@ -503,10 +508,15 @@ def write_report(audit: ReleaseAudit, output_path: Path) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Audit X-Agent commercial RC candidate files")
     parser.add_argument("--manifest", type=Path, default=DEFAULT_MANIFEST)
+    parser.add_argument(
+        "--manifest-candidates",
+        action="store_true",
+        help="audit the full staging manifest instead of only the current working-tree diff",
+    )
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     args = parser.parse_args()
 
-    audit = run_audit(args.manifest)
+    audit = run_audit(args.manifest, manifest_candidates=args.manifest_candidates)
     write_report(audit, args.output)
     print(f"RC release audit status: {audit.status}")
     print(f"Candidate files: {audit.candidate_count}")

@@ -96,7 +96,7 @@ def test_ci_contract_requires_refresh_chain_execution_not_only_uploaded_report(t
     text = workflow.read_text(encoding="utf-8")
     workflow.write_text(
         text.replace(
-            "python scripts/rc_refresh_release_chain.py --provider ollama --ollama-model qwen2.5:1.5b --ollama-base-url http://localhost:11434",
+            "python scripts/rc_refresh_release_chain.py --provider mock",
             "# upload still includes .xagent_runtime/reports/rc-supply-chain-gate.json",
         ),
         encoding="utf-8",
