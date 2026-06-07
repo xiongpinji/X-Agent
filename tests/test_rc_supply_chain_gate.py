@@ -58,6 +58,7 @@ dependencies = [
     "uvicorn>=0.30.0",
     "redis>=5.0.0",
     "celery>=5.3.0",
+    "python-multipart>=0.0.28",
 ]
 
 [project.optional-dependencies]
@@ -138,6 +139,7 @@ def test_python_lockfile_runs_pip_audit_when_available_and_fails(tmp_path: Path,
                 "psycopg[binary]==3.2.0",
                 "psycopg-binary==3.2.0",
                 "pydantic==2.7.0",
+                "python-multipart==0.0.28",
                 "qdrant-client==1.11.0",
                 "redis==5.0.0",
                 "uvicorn[standard]==0.30.0",
@@ -180,6 +182,7 @@ def test_python_lockfile_treats_pip_audit_tool_error_as_failure(tmp_path: Path, 
                 "psycopg[binary]==3.2.0",
                 "psycopg-binary==3.2.0",
                 "pydantic==2.7.0",
+                "python-multipart==0.0.28",
                 "qdrant-client==1.11.0",
                 "redis==5.0.0",
                 "uvicorn[standard]==0.30.0",

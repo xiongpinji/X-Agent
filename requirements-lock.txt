@@ -173,6 +173,8 @@ python-dotenv==1.2.2
     # via
     #   pydantic-settings
     #   uvicorn
+python-multipart==0.0.32
+    # via x-agent-core (pyproject.toml)
 pywin32==312
     # via portalocker
 pyyaml==6.0.3

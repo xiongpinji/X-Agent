@@ -222,14 +222,24 @@ def manifest_classification_mismatches(
     *,
     tracked_paths: Iterable[str],
     untracked_paths: Iterable[str],
+    active_paths: Iterable[str] | None = None,
+    allow_committed_new_entries: bool = False,
 ) -> tuple[list[str], list[str]]:
     sections = manifest_candidate_sections(manifest_text)
     tracked = set(tracked_paths)
     untracked = set(untracked_paths)
+    active = set(active_paths) if active_paths is not None else None
     tracked_block = sections["Tracked Modified Candidate Files"]
     new_block = sections["New Candidate Files"]
+    if active is not None:
+        tracked_block = [path for path in tracked_block if path in active]
+        new_block = [path for path in new_block if path in active]
     tracked_misclassified = [path for path in tracked_block if path in untracked]
-    new_misclassified = [path for path in new_block if path in tracked]
+    new_misclassified = [
+        path
+        for path in new_block
+        if path in tracked and not allow_committed_new_entries
+    ]
     return tracked_misclassified, new_misclassified
 
 
@@ -429,9 +439,15 @@ def run_audit(manifest_path: Path = DEFAULT_MANIFEST) -> ReleaseAudit:
     manifest_text = manifest_path.read_text(encoding="utf-8")
     candidates, excluded_present, manifest_fallback = candidate_paths(manifest_text)
     manifest_paths = manifest_candidate_paths(manifest_text)
+    manifest_sections = manifest_candidate_sections(manifest_text)
+    post_commit_manifest = bool(set(manifest_sections["New Candidate Files"]).intersection(tracked))
     manifest_unsafe_paths = manifest_unsafe_path_findings(manifest_paths)
     missing = missing_from_manifest(candidates, manifest_text)
-    extra = manifest_extra_paths(manifest_paths, candidates)
+    known_manifest_paths = set(candidates)
+    if post_commit_manifest:
+        known_manifest_paths.update(tracked)
+        known_manifest_paths.update(untracked)
+    extra = manifest_extra_paths(manifest_paths, known_manifest_paths)
     if manifest_fallback:
         tracked_misclassified, new_misclassified = [], []
     else:
@@ -439,6 +455,8 @@ def run_audit(manifest_path: Path = DEFAULT_MANIFEST) -> ReleaseAudit:
             manifest_text,
             tracked_paths=tracked,
             untracked_paths=untracked,
+            active_paths=candidates if post_commit_manifest else None,
+            allow_committed_new_entries=post_commit_manifest,
         )
     findings = scan_secret_findings(candidates)
     excluded_reference_findings = scan_excluded_reference_findings(candidates)

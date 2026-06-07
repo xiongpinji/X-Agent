@@ -127,7 +127,7 @@ def check_python_manifest(root: Path = ROOT) -> SupplyChainCheck:
     missing: list[str] = []
     if project.get("requires-python") != ">=3.11":
         missing.append("project.requires-python must be >=3.11")
-    for package in ("fastapi", "pydantic", "uvicorn", "redis", "celery"):
+    for package in ("fastapi", "pydantic", "python-multipart", "uvicorn", "redis", "celery"):
         if not any(str(item).lower().startswith(package) for item in dependencies):
             missing.append(f"missing runtime dependency {package}")
     for extra in ("dev", "cli"):
@@ -191,6 +191,7 @@ def check_python_lockfile(root: Path = ROOT, *, timeout_seconds: float = 120.0) 
         "psycopg",
         "psycopg-binary",
         "pydantic",
+        "python-multipart",
         "qdrant-client",
         "redis",
         "uvicorn",

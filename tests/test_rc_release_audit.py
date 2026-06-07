@@ -201,6 +201,34 @@ tracked_test.py
     assert new_misclassified == ["tracked_test.py"]
 
 
+def test_manifest_classification_can_scope_to_active_followup_paths() -> None:
+    manifest = """
+## Tracked Modified Candidate Files
+
+```text
+pyproject.toml
+```
+
+## New Candidate Files
+
+```text
+scripts/rc_release_audit.py
+tests/test_rc_release_audit.py
+```
+"""
+
+    tracked_misclassified, new_misclassified = manifest_classification_mismatches(
+        manifest,
+        tracked_paths=["pyproject.toml", "scripts/rc_release_audit.py", "tests/test_rc_release_audit.py"],
+        untracked_paths=[],
+        active_paths=["pyproject.toml", "scripts/rc_release_audit.py"],
+        allow_committed_new_entries=True,
+    )
+
+    assert tracked_misclassified == []
+    assert new_misclassified == []
+
+
 def test_secret_scan_ignores_placeholders_but_flags_realistic_tokens(tmp_path: Path) -> None:
     candidate = tmp_path / "candidate.py"
     fake_token = "ghp_" + "abcdefghijklmnopqrstuvwxyz1234567890"
