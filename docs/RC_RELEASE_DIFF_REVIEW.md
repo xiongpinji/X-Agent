@@ -95,6 +95,9 @@ Important correction made during review:
 - `scripts/rc_tag_consistency_gate.py` records whether the selected RC tag
   resolves to the expected release commit and fails only when release owners
   explicitly pass `--require-match`.
+- `scripts/rc_delivery_status.py` summarizes current HEAD, remote branch,
+  hosted CI evidence, owner finalize evidence, and the selected RC tag in one
+  read-only handoff report.
 - `scripts/rc_runtime_smoke.py` starts backend + Vite and validates health,
   readiness, `/chat`, workflow-chat, and proxied workbench.
 
@@ -103,9 +106,10 @@ Important correction made during review:
 Latest local review evidence:
 
 ```powershell
-python -m pytest tests/test_rc_runtime_smoke.py tests/test_rc_external_smoke.py tests/test_docker_compose_env_contract.py tests/test_rc_release_audit.py tests/test_rc_release_diff_review_gate.py tests/test_rc_deployment_docs_gate.py tests/test_rc_ci_contract.py tests/test_rc_evidence_pack.py tests/test_rc_refresh_release_chain.py tests/test_rc_owner_gate_plan.py tests/test_rc_owner_env_template.py tests/test_rc_owner_gate_checklist.py tests/test_rc_owner_verified_finalize.py tests/test_rc_tag_consistency_gate.py tests/test_rc_install_release_gate.py tests/test_rc_single_user_local_gate.py tests/test_rc_supply_chain_gate.py tests/test_rc_secrets_gate.py tests/test_rc_artifact_integrity_gate.py tests/test_rc_final_gate.py tests/test_rc_release_receipt.py tests/test_rc_source_bundle.py tests/test_rc_staging_plan.py tests/test_codex_hermes_gap_matrix.py -o addopts="" -p no:cov -p no:cacheprovider -q
+python -m pytest tests/test_rc_runtime_smoke.py tests/test_rc_external_smoke.py tests/test_docker_compose_env_contract.py tests/test_rc_release_audit.py tests/test_rc_release_diff_review_gate.py tests/test_rc_deployment_docs_gate.py tests/test_rc_ci_contract.py tests/test_rc_evidence_pack.py tests/test_rc_refresh_release_chain.py tests/test_rc_owner_gate_plan.py tests/test_rc_owner_env_template.py tests/test_rc_owner_gate_checklist.py tests/test_rc_owner_verified_finalize.py tests/test_rc_tag_consistency_gate.py tests/test_rc_delivery_status.py tests/test_rc_install_release_gate.py tests/test_rc_single_user_local_gate.py tests/test_rc_supply_chain_gate.py tests/test_rc_secrets_gate.py tests/test_rc_artifact_integrity_gate.py tests/test_rc_final_gate.py tests/test_rc_release_receipt.py tests/test_rc_source_bundle.py tests/test_rc_staging_plan.py tests/test_codex_hermes_gap_matrix.py -o addopts="" -p no:cov -p no:cacheprovider -q
 python scripts\rc_release_audit.py
-python scripts\rc_tag_consistency_gate.py --expected-commit-sha 1c46c851dfe8867ddae26ee0842c568c7a969d86
+python scripts\rc_tag_consistency_gate.py --expected-commit-sha e0febc0d92ce348503e995c1a0d0bc897f5585df --tag-name x-agent-commercial-rc-20260608-3 --require-match
+python scripts\rc_delivery_status.py --expected-commit-sha e0febc0d92ce348503e995c1a0d0bc897f5585df --tag-name x-agent-commercial-rc-20260608-3 --github-actions-run-url https://github.com/xiongpinji/X-Agent/actions/runs/27105724396 --github-actions-head-sha e0febc0d92ce348503e995c1a0d0bc897f5585df
 python scripts\rc_single_user_local_gate.py --require-rc2-handoff
 python scripts\rc_refresh_release_chain.py --provider ollama --ollama-model qwen2.5:1.5b --ollama-base-url http://localhost:11434
 python scripts\rc_release_diff_review_gate.py
@@ -119,14 +123,17 @@ git diff --check
 
 Observed local results:
 
-- RC release gate group: 442 passed.
-- Release audit: passed, 123 candidate files, no secret-like findings, no
+- RC release gate group: 449 passed after adding the delivery status gate.
+- Release audit: passed, 125 candidate files, no secret-like findings, no
   manifest unsafe paths, no excluded-area references, no local user/runtime
   path findings, and no file hygiene findings.
-- RC tag consistency gate: action_required for the already-pushed
-  `x-agent-commercial-rc-20260608` tag because it resolves to
-  `08cd6d114e0c0cb357ccea3e529aed7b2aea1045`, not the current release
-  candidate commit.
+- RC tag consistency gate: passed for
+  `x-agent-commercial-rc-20260608-3`, which resolves locally and remotely to
+  `e0febc0d92ce348503e995c1a0d0bc897f5585df`.
+- RC delivery status: owner finalize pending until owner-controlled
+  Feishu/GitHub environment variables are provided and
+  `scripts\rc_owner_verified_finalize.py` passes for
+  `e0febc0d92ce348503e995c1a0d0bc897f5585df`.
 - Release diff review gate: passed.
 - Gap matrix: passed, 9/9 categories, `full_parity_claimed=false`.
 - Runtime smoke: passed.

@@ -136,6 +136,7 @@ python scripts/codex_hermes_gap_matrix.py --write-report
 python scripts/xagent_doctor.py --json
 python scripts/rc_runtime_smoke.py
 python scripts/rc_owner_verified_finalize.py --provider ollama --ollama-model qwen2.5:1.5b --ollama-base-url http://127.0.0.1:11435
+python scripts/rc_delivery_status.py --expected-commit-sha <40-character-release-commit-sha> --tag-name <rc-tag-name>
 git rev-parse HEAD
 git rev-parse x-agent-commercial-rc-20260608
 ```
@@ -166,6 +167,11 @@ the owner-controlled external smoke checks with `--require-configured`,
 `--github-execute-preflight`, and `--github-actions-preflight` so existing
 Feishu, GitHub issue-to-PR, and hosted Actions evidence is not overwritten by a
 non-owner local smoke snapshot.
+`scripts/rc_delivery_status.py` is the read-only handoff summary. It combines
+current HEAD, remote branch, hosted CI metadata, owner finalization evidence,
+and RC tag consistency into `.xagent_runtime/reports/rc-delivery-status.json`.
+Treat `owner_finalize_pending` as a hard stop for commercial handoff until the
+owner-controlled Feishu/GitHub evidence passes for the exact release commit.
 
 The refresh chain uses `--allow-missing-evidence-pack` only for bootstrap
 `rc_final_gate.py` passes that run before the first evidence pack exists. Final final gate remains strict:

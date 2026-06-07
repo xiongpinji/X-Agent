@@ -102,6 +102,10 @@ CI release gates, and production deployment handoff docs.
   finalization entrypoint. It wraps the strict owner-verified refresh chain,
   summarizes tag readiness from the fixed-point final gate, writes
   `rc-owner-verified-finalize.json`, and records only owner env variable names.
+- Added `scripts/rc_delivery_status.py` as a read-only handoff summary for
+  current HEAD, remote branch, hosted CI metadata, owner finalization evidence,
+  and selected RC tag consistency. It reports `owner_finalize_pending` instead
+  of commercial readiness when owner-controlled evidence is missing or stale.
 - Added `scripts/rc_deployment_docs_gate.py` to keep the commercial deployment
   runbook, checklist, install quickstart, and release notes aligned with the
   current RC evidence and owner-gate status.
@@ -149,6 +153,7 @@ python scripts\rc_artifact_integrity_gate.py
 python scripts\rc_staging_plan.py
 python scripts\rc_install_release_gate.py
 python scripts\rc_owner_verified_finalize.py --provider ollama --ollama-model qwen2.5:1.5b --ollama-base-url http://127.0.0.1:11435 --dry-run
+python scripts\rc_delivery_status.py --expected-commit-sha <40-character-release-commit-sha> --tag-name <rc-tag-name>
 python scripts\rc_final_gate.py
 python scripts\rc_release_receipt.py
 python -m pytest tests/test_rc_runtime_smoke.py tests/test_rc_external_smoke.py tests/test_docker_compose_env_contract.py tests/test_rc_release_audit.py tests/test_rc_release_diff_review_gate.py tests/test_rc_deployment_docs_gate.py tests/test_rc_ci_contract.py tests/test_rc_evidence_pack.py tests/test_rc_refresh_release_chain.py tests/test_rc_owner_gate_plan.py tests/test_rc_owner_env_template.py tests/test_rc_owner_gate_checklist.py tests/test_rc_install_release_gate.py tests/test_rc_supply_chain_gate.py tests/test_rc_secrets_gate.py tests/test_rc_artifact_integrity_gate.py tests/test_rc_final_gate.py tests/test_rc_release_receipt.py tests/test_rc_source_bundle.py tests/test_rc_staging_plan.py tests/test_codex_hermes_gap_matrix.py -o addopts="" -p no:cov -p no:cacheprovider -q

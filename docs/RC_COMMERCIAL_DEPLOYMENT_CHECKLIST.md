@@ -1,6 +1,6 @@
 # X-Agent Commercial RC Deployment Checklist
 
-Last updated: 2026-06-07
+Last updated: 2026-06-08
 
 This checklist is the release gate for turning the current
 `codex/codex-hermes-gap-closure` branch into a commercial deployment release
@@ -16,13 +16,14 @@ needs security, runtime, CI, documentation, and rollback proof.
   Curator MVP, Gateway dry-run mode, installer, doctor, and IDE roadmap.
 - Non-claim: do not claim full Codex or Hermes parity without broader external
   product, production, IDE, ecosystem, and real-provider evidence.
-- Machine boundary: do not treat the current checkout as tag-ready until the
-  owner-verified finalization command is rerun for the current HEAD and reports
-  `full_parity_claimed=false`.
+- Machine boundary: do not treat the current checkout as fully commercial-RC
+  ready until the owner-verified finalization command passes for the current
+  HEAD, the hosted Actions head SHA matches that HEAD, and the selected RC tag
+  passes `scripts\rc_tag_consistency_gate.py --require-match`.
 
 ## Current Evidence Snapshot
 
-These checks were last verified locally on 2026-06-07:
+These checks were last verified locally on 2026-06-08:
 
 ```powershell
 python scripts\codex_hermes_gap_matrix.py --write-report
@@ -34,7 +35,9 @@ powershell -ExecutionPolicy Bypass -File scripts\install-xagent.ps1 -DryRun
 python scripts\rc_runtime_smoke.py
 python scripts\rc_external_smoke.py
 python scripts\rc_release_audit.py
-python scripts\rc_owner_verified_finalize.py --provider ollama --ollama-model qwen2.5:1.5b --ollama-base-url http://127.0.0.1:11435
+python scripts\rc_owner_verified_finalize.py --provider ollama --ollama-model qwen2.5:1.5b --ollama-base-url http://127.0.0.1:11435 --github-actions-run-url https://github.com/xiongpinji/X-Agent/actions/runs/27105724396 --github-actions-head-sha e0febc0d92ce348503e995c1a0d0bc897f5585df --expected-commit-sha e0febc0d92ce348503e995c1a0d0bc897f5585df
+python scripts\rc_tag_consistency_gate.py --expected-commit-sha e0febc0d92ce348503e995c1a0d0bc897f5585df --tag-name x-agent-commercial-rc-20260608-3 --require-match
+python scripts\rc_delivery_status.py --expected-commit-sha e0febc0d92ce348503e995c1a0d0bc897f5585df --tag-name x-agent-commercial-rc-20260608-3 --github-actions-run-url https://github.com/xiongpinji/X-Agent/actions/runs/27105724396 --github-actions-head-sha e0febc0d92ce348503e995c1a0d0bc897f5585df
 python scripts\rc_owner_gate_runner.py --gate all --dry-run --env-file .xagent_runtime\reports\rc-owner-env-template.env
 python scripts\xagent_doctor.py --json
 git diff --check
@@ -48,6 +51,7 @@ python -m pytest tests/test_rc_owner_gate_runner.py -o addopts="" -p no:cov -p n
 python -m pytest tests/test_rc_owner_handoff_gate.py -o addopts="" -p no:cov -p no:cacheprovider -q
 python -m pytest tests/test_rc_owner_env_template.py -o addopts="" -p no:cov -p no:cacheprovider -q
 python -m pytest tests/test_rc_owner_gate_checklist.py -o addopts="" -p no:cov -p no:cacheprovider -q
+python -m pytest tests/test_rc_delivery_status.py -o addopts="" -p no:cov -p no:cacheprovider -q
 python -m pytest tests/test_rc_install_release_gate.py -o addopts="" -p no:cov -p no:cacheprovider -q
 python -m pytest tests/test_rc_supply_chain_gate.py -o addopts="" -p no:cov -p no:cacheprovider -q
 python -m pytest tests/test_rc_secrets_gate.py -o addopts="" -p no:cov -p no:cacheprovider -q
@@ -79,15 +83,16 @@ Observed status:
   ASCII-only model directory `D:\ollama-models`; the sentinel response
   `xagent-rc-ok` was recorded. Feishu, GitHub issue-to-PR, and hosted Actions
   are verified in the owner-controlled RC evidence snapshot.
-- RC final gate: owner-verified evidence reports `ready_for_rc_tag` for commit
-  `643a017b3a2ae00be212d186e2681a147b46bf6b`; local gates and
-  owner-controlled external resources are green after the fixed-point refresh.
-  The already-pushed `x-agent-commercial-rc-20260608` tag currently points at
-  `08cd6d114e0c0cb357ccea3e529aed7b2aea1045`; do not hand off that tag as the
-  verified RC tag until the owner creates a new tag at the verified commit or
-  explicitly approves correcting the pushed tag. Intermediate refreshes can
-  temporarily report `ready_with_receipt_refresh_required` until receipt and
-  evidence-pack reports are regenerated in order.
+- RC final gate: the current release commit is
+  `e0febc0d92ce348503e995c1a0d0bc897f5585df`, and hosted Commercial RC run
+  `https://github.com/xiongpinji/X-Agent/actions/runs/27105724396` completed
+  successfully for that same head SHA. The non-destructive RC tag
+  `x-agent-commercial-rc-20260608-3` points locally and remotely at that commit
+  and passes `scripts\rc_tag_consistency_gate.py --require-match`. Current
+  local final gate status remains `ready_with_owner_gates`, and current
+  delivery status is `owner_finalize_pending` until owner-controlled Feishu and
+  GitHub issue-to-PR environment variables are provided and
+  `scripts\rc_owner_verified_finalize.py` passes for that exact commit.
 - RC final gate also enforces release receipt freshness: the receipt
   `generated_at` must not be older than the source bundle, artifact integrity,
   owner gate plan, owner handoff gate, `owner_env_template`,
@@ -114,6 +119,12 @@ Observed status:
   writes `.xagent_runtime\reports\rc-owner-verified-finalize.json`, records
   only owner env variable names, and reports whether the fixed-point final gate
   is tag-ready without creating a git tag or storing secret values.
+- RC delivery status: `scripts\rc_delivery_status.py` reads current HEAD,
+  remote branch, hosted CI metadata, owner finalize evidence, and the selected
+  RC tag consistency report, then writes
+  `.xagent_runtime\reports\rc-delivery-status.json`. It returns
+  `owner_finalize_pending` until owner-controlled Feishu/GitHub evidence passes
+  for the same commit.
 - RC refresh release chain bootstrap uses `--allow-missing-evidence-pack` only
   before the first evidence pack exists. Final final gate remains strict:
   `python scripts\rc_final_gate.py --require-ready-to-tag` must consume a
@@ -399,7 +410,7 @@ Runtime smoke evidence captured on 2026-06-06:
 - `scripts/rc_staging_plan.py` writes
   `.xagent_runtime/reports/rc-staging-plan.json` with exact `git add -- ...`
   commands split into safe chunks. It does not stage files. The latest dry-run
-  planned 123 files across 7 commands, and `git diff --cached --name-only`
+  planned 125 files across 7 commands, and `git diff --cached --name-only`
   remained empty.
 
 ## RC-S1 Evidence Notes

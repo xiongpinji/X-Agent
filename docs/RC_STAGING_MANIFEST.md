@@ -115,6 +115,7 @@ scripts/rc_owner_gate_checklist.py
 scripts/rc_owner_env_template.py
 scripts/rc_owner_verified_finalize.py
 scripts/rc_tag_consistency_gate.py
+scripts/rc_delivery_status.py
 scripts/rc_install_release_gate.py
 scripts/rc_single_user_local_gate.py
 scripts/rc_supply_chain_gate.py
@@ -147,6 +148,7 @@ tests/test_rc_owner_gate_checklist.py
 tests/test_rc_owner_env_template.py
 tests/test_rc_owner_verified_finalize.py
 tests/test_rc_tag_consistency_gate.py
+tests/test_rc_delivery_status.py
 tests/test_rc_install_release_gate.py
 tests/test_rc_single_user_local_gate.py
 tests/test_rc_supply_chain_gate.py
@@ -187,6 +189,7 @@ archive it in source control:
 - `.xagent_runtime/reports/rc-owner-env-template.ps1`
 - `.xagent_runtime/reports/rc-owner-verified-finalize.json`
 - `.xagent_runtime/reports/rc-refresh-release-chain.json`
+- `.xagent_runtime/reports/rc-delivery-status.json`
 - `.xagent_runtime/reports/rc-install-release-gate.json`
 - `.xagent_runtime/reports/rc-single-user-local-gate.json`
 - `.xagent_runtime/reports/rc-supply-chain-gate.json`

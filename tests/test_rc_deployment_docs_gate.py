@@ -50,6 +50,7 @@ Commands:
 - python scripts/rc_refresh_release_chain.py --provider ollama --ollama-model qwen2.5:1.5b --ollama-base-url http://localhost:11434
 - --owner-verified
 - python scripts/rc_evidence_pack.py
+- python scripts/rc_delivery_status.py
 - --allow-missing-evidence-pack
 - Final final gate remains strict
 - python scripts/rc_owner_gate_runner.py --gate all --dry-run --env-file .xagent_runtime/reports/rc-owner-env-template.env
@@ -114,6 +115,7 @@ Boundary: full_parity_claimed=false.
 - RC refresh release chain
 - RC owner gate runner
 - RC owner handoff gate
+- RC delivery status
 - --gate github_issue_to_pr_dry_run must not require XAGENT_GITHUB_TOKEN
 - read_probe.state=open
 - Deployment owner generates and stores final production secrets
@@ -177,11 +179,14 @@ Status: commercial release candidate, not GA.
 
 - scripts/rc_final_gate.py
 - scripts/rc_evidence_pack.py
+- scripts/rc_delivery_status.py
 - rc_evidence_pack.py
 - --allow-missing-evidence-pack
 - Final final gate remains strict
 - ready_with_owner_gates
 - not ready_for_rc_tag
+- scripts/rc_delivery_status.py
+- owner_finalize_pending
 - full_parity_claimed=false
 - docs/RC_STAGING_MANIFEST.md
 - npm ci
