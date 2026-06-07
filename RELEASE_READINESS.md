@@ -4,7 +4,11 @@ Last updated: 2026-06-05
 
 ## Current release-candidate status
 
-X-Agent is now in commercial-delivery convergence mode. The current `develop` branch includes the core enterprise agent framework, MCP integration, CLI, hooks, enhanced context management, Phase 5.5 cloud sandbox / Issue-to-PR infrastructure, Phase 5.6 channel adapters, and the DeepSeek real-LLM e2e fix.
+X-Agent is now in commercial-delivery convergence mode. The current
+`codex/codex-hermes-gap-closure` branch includes the core enterprise agent
+framework, MCP integration, CLI, hooks, enhanced context management, Phase 5.5
+cloud sandbox / Issue-to-PR infrastructure, Phase 5.6 channel adapters, and the
+DeepSeek real-LLM e2e fix.
 
 Latest confirmed commit at the start of this readiness pass:
 
@@ -12,7 +16,10 @@ Latest confirmed commit at the start of this readiness pass:
 c2b7dc9 fix: ensure agent replan applies code changes after read
 ```
 
-The project is suitable for internal pilot and PoC demonstration. It is not yet a final GA release until the production deployment checklist, security decisions, and full release-candidate baseline are completed.
+The project is suitable for internal pilot and PoC demonstration. It is not yet
+a final GA release until the production deployment checklist, security
+decisions, and full release-candidate baseline are completed. The active
+commercial RC gate is tracked in `docs/RC_COMMERCIAL_DEPLOYMENT_CHECKLIST.md`.
 
 ## Confirmed working capabilities
 
@@ -98,6 +105,12 @@ Persistent JSON stores under `data/` can become corrupted by interrupted local t
 Playwright, real PostgreSQL/Qdrant, heavy ML, and performance/bcrypt tests remain environment-dependent. They should be marked as CI-profile or workstation-profile tests before GA.
 
 ## Production deployment checklist
+
+Commercial RC convergence now uses the stricter gate in
+`docs/RC_COMMERCIAL_DEPLOYMENT_CHECKLIST.md`, with the exact source-control
+candidate list in `docs/RC_STAGING_MANIFEST.md`. The operational deployment
+handoff is `docs/COMMERCIAL_DEPLOYMENT_RUNBOOK.md`. The checklist below remains
+a production configuration quick reference.
 
 Before external commercial deployment, complete the following checklist:
 

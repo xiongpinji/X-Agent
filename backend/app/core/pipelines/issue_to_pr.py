@@ -17,6 +17,8 @@ or a shell command). This keeps the orchestration testable without an LLM.
 from __future__ import annotations
 
 import logging
+import re
+from dataclasses import asdict
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Awaitable, Callable, Optional
@@ -29,6 +31,10 @@ logger = logging.getLogger(__name__)
 
 # fix_runner(sandbox, issue, workspace) -> bool (True = produced a fix)
 FixRunner = Callable[[DockerSandbox, IssueEvent, str], Awaitable[bool]]
+
+GITHUB_ISSUE_URL_RE = re.compile(
+    r"^https?://github\.com/(?P<owner>[^/\s]+)/(?P<repo>[^/\s]+)/issues/(?P<number>\d+)(?:[?#].*)?$"
+)
 
 
 @dataclass
@@ -61,6 +67,198 @@ class PipelineConfig:
     sandbox_timeout: float = 600.0
     run_tests: bool = True
     open_pr: bool = True
+
+
+@dataclass
+class IssueToPRPlan:
+    """Deterministic plan for an issue-to-PR dry run."""
+
+    repo_full_name: str
+    issue_number: int
+    title: str
+    base_branch: str
+    branch_name: str
+    touched_file_candidates: list[str]
+    steps: list[str]
+    risk_flags: list[str]
+    test_command: str
+    install_command: str | None
+
+
+@dataclass
+class IssueToPRDryRunResult:
+    """No-write issue-to-PR planning result."""
+
+    status: str
+    dry_run: bool
+    issue: dict[str, Any]
+    plan: IssueToPRPlan
+    branch_name: str
+    commit_title: str
+    pr_title: str
+    pr_body: str
+    execute_allowed: bool = False
+
+    def to_dict(self) -> dict[str, Any]:
+        payload = asdict(self)
+        payload["plan"] = asdict(self.plan)
+        return payload
+
+
+@dataclass
+class IssueToPRExecutionResult:
+    """Guarded execute response for API/CLI callers."""
+
+    status: str
+    execute: bool
+    dry_run: IssueToPRDryRunResult
+    pipeline_result: dict[str, Any] | None = None
+    error: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "status": self.status,
+            "execute": self.execute,
+            "dry_run": self.dry_run.to_dict(),
+            "pipeline_result": self.pipeline_result,
+            "error": self.error,
+        }
+
+
+def parse_github_issue_url(issue_url: str) -> tuple[str, int]:
+    """Parse a GitHub issue URL into repo full name and issue number."""
+
+    match = GITHUB_ISSUE_URL_RE.match(issue_url.strip())
+    if not match:
+        raise ValueError("Issue URL must look like https://github.com/owner/repo/issues/123")
+    return f"{match.group('owner')}/{match.group('repo')}", int(match.group("number"))
+
+
+def build_issue_event(payload: dict[str, Any]) -> IssueEvent:
+    """Build an IssueEvent from a URL or structured issue payload."""
+
+    issue_data = dict(payload.get("issue") or payload)
+    issue_url = str(payload.get("issue_url") or issue_data.get("issue_url") or "")
+    if issue_url:
+        repo_full_name, issue_number = parse_github_issue_url(issue_url)
+    else:
+        repo_full_name = str(
+            issue_data.get("repo_full_name")
+            or issue_data.get("repository")
+            or issue_data.get("repo")
+            or ""
+        )
+        issue_number = int(issue_data.get("issue_number") or issue_data.get("number") or 0)
+    if not repo_full_name or not issue_number:
+        raise ValueError("repo_full_name and issue_number are required")
+
+    clone_url = str(
+        issue_data.get("clone_url")
+        or payload.get("clone_url")
+        or f"https://github.com/{repo_full_name}.git"
+    )
+    return IssueEvent(
+        action=str(issue_data.get("action") or "opened"),
+        repo_full_name=repo_full_name,
+        issue_number=issue_number,
+        title=str(issue_data.get("title") or f"Issue #{issue_number}"),
+        body=str(issue_data.get("body") or ""),
+        labels=[
+            str(label.get("name", ""))
+            if isinstance(label, dict)
+            else str(label)
+            for label in issue_data.get("labels", [])
+        ],
+        clone_url=clone_url,
+        default_branch=str(issue_data.get("default_branch") or payload.get("default_branch") or "main"),
+    )
+
+
+def _file_candidates(issue: IssueEvent) -> list[str]:
+    text = f"{issue.title}\n{issue.body}"
+    explicit = re.findall(r"[\w./-]+\.(?:py|ts|tsx|js|jsx|md|json|yaml|yml)", text)
+    candidates = list(dict.fromkeys(explicit))
+    label_text = " ".join(issue.labels).lower()
+    if "doc" in label_text or "documentation" in text.lower():
+        candidates.append("docs/")
+    if "test" in label_text or "test" in text.lower():
+        candidates.append("tests/")
+    if not candidates:
+        candidates.extend(["README.md", "backend/app/"])
+    return candidates
+
+
+def _risk_flags(issue: IssueEvent) -> list[str]:
+    text = f"{issue.title}\n{issue.body}".lower()
+    flags: list[str] = []
+    for keyword, flag in (
+        ("secret", "touches_secret_or_credentials"),
+        ("password", "touches_secret_or_credentials"),
+        ("token", "touches_secret_or_credentials"),
+        ("migration", "may_require_database_migration"),
+        ("auth", "may_affect_authentication"),
+        ("security", "security_sensitive"),
+    ):
+        if keyword in text and flag not in flags:
+            flags.append(flag)
+    return flags
+
+
+def plan_issue_to_pr(issue: IssueEvent, config: PipelineConfig | None = None) -> IssueToPRPlan:
+    config = config or PipelineConfig()
+    branch = f"xagent/issue-{issue.issue_number}"
+    return IssueToPRPlan(
+        repo_full_name=issue.repo_full_name,
+        issue_number=issue.issue_number,
+        title=issue.title,
+        base_branch=config.base_branch_override or issue.default_branch,
+        branch_name=branch,
+        touched_file_candidates=_file_candidates(issue),
+        risk_flags=_risk_flags(issue),
+        test_command=config.test_command,
+        install_command=config.install_command,
+        steps=[
+            "parse_issue",
+            "inspect_repository",
+            "create_branch_metadata",
+            "draft_patch_plan",
+            "prepare_test_command",
+            "draft_pull_request_payload",
+        ],
+    )
+
+
+def dry_run_issue_to_pr(
+    payload: dict[str, Any] | IssueEvent,
+    config: PipelineConfig | None = None,
+) -> IssueToPRDryRunResult:
+    issue = payload if isinstance(payload, IssueEvent) else build_issue_event(payload)
+    plan = plan_issue_to_pr(issue, config)
+    commit_title = f"fix: resolve #{issue.issue_number} - {issue.title}"
+    pr_title = f"Fix #{issue.issue_number}: {issue.title}"
+    pr_body = (
+        f"Dry-run PR draft generated by X-Agent for #{issue.issue_number}.\n\n"
+        "No repository writes, pushes, comments, or network mutations were performed.\n\n"
+        f"Planned branch: `{plan.branch_name}`\n"
+        f"Risk flags: {', '.join(plan.risk_flags) if plan.risk_flags else 'none'}"
+    )
+    return IssueToPRDryRunResult(
+        status="planned",
+        dry_run=True,
+        issue={
+            "repo_full_name": issue.repo_full_name,
+            "issue_number": issue.issue_number,
+            "title": issue.title,
+            "labels": issue.labels,
+            "default_branch": issue.default_branch,
+            "clone_url": issue.clone_url,
+        },
+        plan=plan,
+        branch_name=plan.branch_name,
+        commit_title=commit_title,
+        pr_title=pr_title,
+        pr_body=pr_body,
+    )
 
 
 class IssueToPRPipeline:

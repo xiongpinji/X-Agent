@@ -202,7 +202,7 @@ class CSRFProtectionMiddleware(BaseHTTPMiddleware):
         "/api/v1/csrf-token",
         # Signature-authenticated server-to-server webhook. Feishu's servers
         # cannot carry a cookie-based CSRF token; the endpoint authenticates via
-        # HMAC signature headers (x-feishu-signature/-timestamp/-nonce) which an
+        # signed callback headers (official X-Lark-* or legacy x-feishu-*) which an
         # attacker page cannot forge. Same CSRF-immunity rationale as the
         # header-based API-key exemption below. Without this the webhook is
         # unreachable in production (CSRF 403s before the signature check runs).

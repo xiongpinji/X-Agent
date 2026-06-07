@@ -154,12 +154,17 @@ class RoleCatalog(BaseModel):
 class ConsoleBootstrapResponse(BaseModel):
     console: ConsoleContext
     dispatch: dict[str, object] = Field(default_factory=dict)
+    collaboration: dict[str, object] = Field(default_factory=dict)
+    workflow: dict[str, object] = Field(default_factory=dict)
+    execution: dict[str, object] = Field(default_factory=dict)
     role_catalog: RoleCatalog = Field(default_factory=RoleCatalog)
     organization_graph: dict[str, object] = Field(default_factory=dict)
     meeting_rooms: dict[str, object] = Field(default_factory=dict)
     realtime: dict[str, object] = Field(default_factory=dict)
     ui: dict[str, object] = Field(default_factory=dict)
     avatars: list[RoleAvatar] = Field(default_factory=list)
+    tools: dict[str, object] = Field(default_factory=dict)
+    entries: list[dict[str, object]] = Field(default_factory=list)
     workflows: dict[str, object] = Field(default_factory=dict)
     memory: dict[str, object] = Field(default_factory=dict)
     permissions: dict[str, object] = Field(default_factory=dict)

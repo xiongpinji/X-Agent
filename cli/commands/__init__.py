@@ -9,5 +9,16 @@ from cli.commands.workflow_cmd import workflow_app
 from cli.commands.init_cmd import init_app
 from cli.commands.hooks_cmd import hooks_app
 from cli.commands.approvals_cmd import approvals_app
+from cli.commands.github_cmd import github_app
+from cli.commands.gateway_cmd import gateway_app
 
-__all__ = ["agent_app", "tools_app", "workflow_app", "init_app", "hooks_app", "approvals_app"]
+__all__ = [
+    "agent_app",
+    "tools_app",
+    "workflow_app",
+    "init_app",
+    "hooks_app",
+    "approvals_app",
+    "github_app",
+    "gateway_app",
+]

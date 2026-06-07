@@ -2,16 +2,47 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, Field
 
 from backend.app.core.dispatch import DispatchRequest, dispatch
 from backend.app.core.org import ConsoleBootstrapResponse, ConsoleContext, RoleAvatar, build_default_role_catalog, organization_store
-from backend.app.core.security import Principal
+from backend.app.core.security import ROLE_SCOPES, Principal
 from backend.app.dependencies import enforce_scope, get_current_principal
+from backend.app.settings import get_settings
 
 router = APIRouter(prefix="/api/v1/workbench", tags=["workbench"])
-PrincipalDependency = Annotated[Principal, Depends(get_current_principal)]
+
+
+def get_workbench_principal(request: Request) -> Principal:
+    """Resolve principal for first-run workbench bootstrap.
+
+    In development mode the workbench is allowed to bootstrap with a local
+    default principal so the product entrypoint is visible without setup. Other
+    protected APIs still use get_current_principal directly and reject anonymous
+    access.
+    """
+    settings = get_settings()
+    has_credentials = bool(
+        request.headers.get("x-api-key")
+        or request.headers.get("authorization")
+    )
+    if (
+        not has_credentials
+        and not settings.require_api_key
+        and getattr(settings, "app_mode", "development") != "production"
+    ):
+        return Principal(
+            tenant_id="default",
+            user_id="anonymous",
+            role="user",
+            scopes=list(ROLE_SCOPES.get("user", [])),
+            authenticated=True,
+        )
+    return get_current_principal(request)
+
+
+PrincipalDependency = Annotated[Principal, Depends(get_workbench_principal)]
 
 
 class WorkbenchTaskRequest(BaseModel):
@@ -51,12 +82,33 @@ async def get_workbench(principal: PrincipalDependency) -> ConsoleBootstrapRespo
     return ConsoleBootstrapResponse(
         console={"mode": "unified_console", "tenant_id": principal.tenant_id, "org_id": principal.tenant_id, "agent_id": principal.agent_id, "session_id": principal.session_id, "user_id": principal.user_id, "created_at": principal.created_at, "server_time": principal.created_at},
         dispatch=dispatch_result.model_dump(mode="json"),
+        collaboration={
+            "rooms": [],
+            "online_agents": [],
+            "active_threads": [],
+            "handoff_available": True,
+        },
+        workflow={
+            "templates": [wf.workflow_name for wf in role_catalog.workflows],
+            "active": [],
+            "can_create": True,
+        },
+        execution={
+            "status": "ready",
+            "active_runs": [],
+            "sandbox": "available",
+        },
         role_catalog=role_catalog,
         organization_graph=organization_graph.model_dump(mode="json") if organization_graph else {},
         meeting_rooms={"rooms": [], "active_room": None, "room_members": [], "room_topics": [], "room_messages": [], "room_tasks": [], "room_summary": {}},
         realtime={"conversations": [], "messages": [], "presence": {}, "unread_count": 0, "online_agents": [], "typing_agents": [], "last_message_at": None},
         ui={"panels": [{"id": "create_agent", "title": "创建智能体", "kind": "form"}, {"id": "organization_graph", "title": "组织架构图", "kind": "graph"}, {"id": "meeting_rooms", "title": "会议室", "kind": "room_list"}, {"id": "realtime_messages", "title": "实时通讯", "kind": "message_stream"}], "routes": [{"path": "/console/overview"}, {"path": "/console/agents/create"}, {"path": "/console/organization"}, {"path": "/console/rooms"}, {"path": "/console/chat"}], "shortcuts": [], "actions": [], "badges": []},
         avatars=avatars,
+        tools={"available": tools, "count": len(tools)},
+        entries=[
+            {"id": "chat", "label": "Chat", "path": "/chat"},
+            {"id": "workbench", "label": "Workbench", "path": "/api/v1/workbench"},
+        ],
         workflows={"templates": [wf.model_dump(mode="json") for wf in role_catalog.workflows], "active_workflows": [], "workflow_states": {}, "workflow_links": []},
         memory={"session_summary": {}, "agent_summary": {}, "department_summary": {}, "layer_totals": {}, "memory_refs": []},
         permissions={"scope": ["tools:read", "agent:run", "memory:read"], "can_create_agent": True, "can_create_room": True, "can_manage_org": True, "can_read_memory": True, "can_send_message": True, "can_trigger_execution": True, "can_approve": True, "can_audit": True},

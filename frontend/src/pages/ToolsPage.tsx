@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { useAppStore } from '@/store/appStore'
 import { apiClient, Tool } from '@/services/api'
-import { Settings, Play, BarChart3, Toggle2 } from 'lucide-react'
+import { Settings, Play, BarChart3, ToggleLeft, ToggleRight } from 'lucide-react'
 import clsx from 'clsx'
 
 export const ToolsPage: React.FC = () => {
@@ -164,7 +164,7 @@ const ToolCard: React.FC<ToolCardProps> = ({ tool, onToggle, onTest, onConfigure
           )}
           title={tool.enabled ? 'Disable' : 'Enable'}
         >
-          <Toggle2 size={20} />
+          {tool.enabled ? <ToggleRight size={20} /> : <ToggleLeft size={20} />}
         </button>
       </div>
 

@@ -8,9 +8,16 @@ and can be wrapped later). Use get_channel_registry() to route by channel id.
 from backend.app.core.channels.base import (
     ChannelAdapter,
     ChannelConfig,
+    ChannelDispatchResult,
     ChannelMessage,
     ChannelRegistry,
     get_channel_registry,
+)
+from backend.app.core.channels.router import (
+    ChannelRouter,
+    ChannelRouterError,
+    ChannelSignatureError,
+    default_channel_dispatch,
 )
 from backend.app.core.channels.discord_adapter import DiscordAdapter
 from backend.app.core.channels.telegram_adapter import TelegramAdapter
@@ -19,8 +26,13 @@ from backend.app.core.channels.dingtalk_adapter import DingTalkAdapter
 __all__ = [
     "ChannelAdapter",
     "ChannelConfig",
+    "ChannelDispatchResult",
     "ChannelMessage",
     "ChannelRegistry",
+    "ChannelRouter",
+    "ChannelRouterError",
+    "ChannelSignatureError",
+    "default_channel_dispatch",
     "get_channel_registry",
     "DiscordAdapter",
     "TelegramAdapter",

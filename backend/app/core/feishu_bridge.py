@@ -91,14 +91,23 @@ class FeishuBridge:
     def __init__(self) -> None:
         self.app_id: str | None = None
         self.app_secret: str | None = None
+        self.encrypt_key: str | None = None
         self.base_url = "https://open.feishu.cn"
         self._tenant_access_token: str | None = None
         self._tenant_token_expire_at: datetime | None = None
         self.store = FeishuSyncStore()
 
-    def configure(self, *, app_id: str, app_secret: str, base_url: str = "https://open.feishu.cn") -> None:
+    def configure(
+        self,
+        *,
+        app_id: str,
+        app_secret: str,
+        base_url: str = "https://open.feishu.cn",
+        encrypt_key: str | None = None,
+    ) -> None:
         self.app_id = app_id
         self.app_secret = app_secret
+        self.encrypt_key = encrypt_key
         self.base_url = base_url.rstrip("/")
 
     async def get_tenant_access_token(self) -> str:
@@ -138,13 +147,53 @@ class FeishuBridge:
             response.raise_for_status()
             return response.json()
 
-    def verify_signature(self, *, timestamp: str, nonce: str, body: bytes, signature: str) -> bool:
+    @staticmethod
+    def calculate_lark_signature(*, timestamp: str, nonce: str, encrypt_key: str, body: bytes) -> str:
+        """Calculate Feishu/Lark event-callback signature for signed events."""
+
+        raw = f"{timestamp}{nonce}{encrypt_key}".encode("utf-8") + body
+        return hashlib.sha256(raw).hexdigest()
+
+    def _verify_lark_signature(self, *, timestamp: str, nonce: str, body: bytes, signature: str) -> bool:
+        if not self.encrypt_key:
+            return False
+        expected = self.calculate_lark_signature(
+            timestamp=timestamp,
+            nonce=nonce,
+            encrypt_key=self.encrypt_key,
+            body=body,
+        )
+        return hmac.compare_digest(expected, signature)
+
+    def _verify_legacy_signature(self, *, timestamp: str, nonce: str, body: bytes, signature: str) -> bool:
         if not self.app_secret:
             return False
         raw = f"{timestamp}\n{nonce}\n".encode("utf-8") + body
         digest = hmac.new(self.app_secret.encode("utf-8"), raw, hashlib.sha256).digest()
         expected = base64.b64encode(digest).decode("utf-8")
         return hmac.compare_digest(expected, signature)
+
+    def verify_signature(
+        self,
+        *,
+        timestamp: str,
+        nonce: str,
+        body: bytes,
+        signature: str,
+        mode: Literal["lark_sha256", "legacy_hmac_sha256"] | None = None,
+    ) -> bool:
+        if not (timestamp and nonce and signature):
+            return False
+        if mode == "lark_sha256":
+            return self._verify_lark_signature(timestamp=timestamp, nonce=nonce, body=body, signature=signature)
+        if mode == "legacy_hmac_sha256":
+            return self._verify_legacy_signature(timestamp=timestamp, nonce=nonce, body=body, signature=signature)
+        return self._verify_lark_signature(
+            timestamp=timestamp,
+            nonce=nonce,
+            body=body,
+            signature=signature,
+        ) or self._verify_legacy_signature(timestamp=timestamp, nonce=nonce, body=body, signature=signature)
 
     async def handle_event(self, payload: dict[str, Any]) -> dict[str, Any]:
         event_id = payload.get("event_id") or payload.get("uuid") or str(uuid4())

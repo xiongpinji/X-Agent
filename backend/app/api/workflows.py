@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from typing import Annotated, Any
+from uuid import uuid4
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 
 from backend.app.api.errors import api_error
 from backend.app.api.linked_summary import LinkedSummaryEnvelope, build_linked_summary
@@ -24,6 +25,7 @@ from backend.app.core.workflows import (
     WorkflowScheduler,
     WorkflowNodeType,
 )
+from backend.app.core.security import ROLE_SCOPES
 from backend.app.dependencies import (
     enforce_scope,
     get_approval_store,
@@ -34,6 +36,7 @@ from backend.app.dependencies import (
     get_workflow_schedule_store,
     get_workflow_scheduler,
 )
+from backend.app.settings import get_settings
 
 router = APIRouter(prefix="/api/v1/workflows", tags=["workflows"])
 PrincipalDependency = Annotated[Principal, Depends(get_current_principal)]
@@ -46,6 +49,93 @@ AuditStoreDependency = Annotated[AuditStore, Depends(get_audit_store)]
 
 def _audit_store() -> AuditStore:
     return get_audit_store()
+
+
+def get_chat_principal(request: Request) -> Principal:
+    """Resolve principal for the first-run chat endpoint only.
+
+    This mirrors the workbench bootstrap rule: in local development the chat
+    entrypoint can be tried without credentials, while production and invalid
+    credentials still use the normal authentication path.
+    """
+
+    settings = get_settings()
+    has_credentials = bool(
+        request.headers.get("x-api-key")
+        or request.headers.get("authorization")
+    )
+    if (
+        not has_credentials
+        and not settings.require_api_key
+        and getattr(settings, "app_mode", "development") != "production"
+    ):
+        return Principal(
+            tenant_id="default",
+            user_id="anonymous",
+            role="user",
+            scopes=list(ROLE_SCOPES.get("user", [])),
+            authenticated=True,
+        )
+    return get_current_principal(request)
+
+
+ChatPrincipalDependency = Annotated[Principal, Depends(get_chat_principal)]
+
+
+def _workflow_chat_response(
+    *,
+    request_text: str,
+    workflow_id: str,
+    principal: Principal,
+    agent_id: str | None = None,
+) -> dict[str, object]:
+    run_id = f"chat-{uuid4()}"
+    selected_agent = agent_id or principal.agent_id
+    message = f"Workflow chat received: {request_text}" if request_text else "Workflow chat is ready."
+    created_at = datetime.now(UTC).isoformat()
+    events: list[dict[str, object]] = [
+        {
+            "type": "run.accepted",
+            "status": "accepted",
+            "message": "Chat request accepted by X-Agent.",
+            "created_at": created_at,
+        },
+        {
+            "type": "tool_events.placeholder",
+            "status": "idle",
+            "message": "Tool execution events will stream here when a run uses tools.",
+            "created_at": created_at,
+        },
+    ]
+    next_actions = [
+        {"id": "open_workbench", "label": "Open Workbench", "path": "/api/v1/workbench"},
+        {"id": "watch_events", "label": "Watch Events", "path": f"/api/v1/workflows/runs/{run_id}"},
+    ]
+    return {
+        "run_id": run_id,
+        "trace_id": run_id,
+        "status": "accepted",
+        "message": message,
+        "events": events,
+        "approval_required": False,
+        "next_actions": next_actions,
+        "agent_id": selected_agent,
+        "workflow_id": workflow_id,
+        "request": request_text,
+        "response": message,
+        "name": request_text[:32] if request_text else "workflow chat",
+        "id": run_id,
+        "resource_type": "workflow_chat",
+        "snapshot": {
+            "workflow_id": workflow_id,
+            "request": request_text,
+            "run_id": run_id,
+            "agent_id": selected_agent,
+            "tenant_id": principal.tenant_id,
+            "user_id": principal.user_id,
+            "status": "accepted",
+        },
+    }
 
 
 @router.post("")
@@ -80,11 +170,17 @@ async def list_global_workflow_templates(repository: WorkflowRepositoryDependenc
 
 
 @router.post("/create/chat")
-async def create_global_workflow_chat(payload: dict[str, object], repository: WorkflowRepositoryDependency, principal: PrincipalDependency) -> dict[str, object]:
+async def create_global_workflow_chat(payload: dict[str, object], repository: WorkflowRepositoryDependency, principal: ChatPrincipalDependency) -> dict[str, object]:
     enforce_scope(principal, "workflow:run")
     request = str(payload.get("request", ""))
     workflow_id = str(payload.get("workflow_id") or "")
-    return {"workflow_id": workflow_id, "request": request, "name": request[:32] if request else "workflow chat", "response": f"Workflow chat received: {request}", "id": workflow_id or "chat", "resource_type": "workflow_chat", "snapshot": {"workflow_id": workflow_id, "request": request}}
+    agent_id = str(payload.get("agent_id") or payload.get("agentId") or principal.agent_id)
+    return _workflow_chat_response(
+        request_text=request,
+        workflow_id=workflow_id,
+        principal=principal,
+        agent_id=agent_id,
+    )
 
 
 @router.get("/runs")
@@ -213,7 +309,15 @@ async def create_workflow_chat(workflow_id: str, payload: dict[str, object], rep
     if workflow is None:
         raise api_error(404, ErrorCode.WORKFLOW_NOT_FOUND, "Workflow not found.")
     request = str(payload.get("request", ""))
-    return {"workflow_id": workflow.id, "request": request, "name": request[:32] if request else workflow.name, "response": f"Workflow chat received: {request}", "id": workflow.id, "resource_type": "workflow_chat", "snapshot": {"workflow_id": workflow.id, "request": request}}
+    agent_id = str(payload.get("agent_id") or payload.get("agentId") or principal.agent_id)
+    response = _workflow_chat_response(
+        request_text=request,
+        workflow_id=workflow.id,
+        principal=principal,
+        agent_id=agent_id,
+    )
+    response["name"] = request[:32] if request else workflow.name
+    return response
 
 
 @router.post("/{workflow_id}/pause")

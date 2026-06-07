@@ -19,6 +19,7 @@ class FeishuConfigRequest(BaseModel):
     app_id: str = Field(..., min_length=1)
     app_secret: str = Field(..., min_length=1)
     base_url: str = Field(default="https://open.feishu.cn", min_length=1)
+    encrypt_key: str | None = Field(default=None, min_length=1)
 
 
 class FeishuSendRequest(BaseModel):
@@ -35,7 +36,12 @@ class FeishuEventRequest(BaseModel):
 @router.post("/configure")
 async def configure_feishu(request: FeishuConfigRequest, principal: PrincipalDependency) -> dict[str, object]:
     enforce_scope(principal, "security:manage")
-    feishu_bridge.configure(app_id=request.app_id, app_secret=request.app_secret, base_url=request.base_url)
+    feishu_bridge.configure(
+        app_id=request.app_id,
+        app_secret=request.app_secret,
+        base_url=request.base_url,
+        encrypt_key=request.encrypt_key,
+    )
     return {"configured": True, "base_url": request.base_url}
 
 
@@ -69,15 +75,34 @@ async def send_feishu_message(request: FeishuSendRequest, principal: PrincipalDe
 
 
 @router.post("/events")
-async def feishu_event_callback(request: Request, x_feishu_signature: str | None = Header(default=None), x_feishu_timestamp: str | None = Header(default=None), x_feishu_nonce: str | None = Header(default=None)) -> dict[str, object]:
+async def feishu_event_callback(
+    request: Request,
+    x_lark_signature: str | None = Header(default=None, alias="X-Lark-Signature"),
+    x_lark_timestamp: str | None = Header(default=None, alias="X-Lark-Request-Timestamp"),
+    x_lark_nonce: str | None = Header(default=None, alias="X-Lark-Request-Nonce"),
+    x_feishu_signature: str | None = Header(default=None),
+    x_feishu_timestamp: str | None = Header(default=None),
+    x_feishu_nonce: str | None = Header(default=None),
+) -> dict[str, object]:
     body = await request.body()
-    if not (x_feishu_signature and x_feishu_timestamp and x_feishu_nonce):
+    if x_lark_signature and x_lark_timestamp and x_lark_nonce:
+        signature = x_lark_signature
+        timestamp = x_lark_timestamp
+        nonce = x_lark_nonce
+        mode = "lark_sha256"
+    elif x_feishu_signature and x_feishu_timestamp and x_feishu_nonce:
+        signature = x_feishu_signature
+        timestamp = x_feishu_timestamp
+        nonce = x_feishu_nonce
+        mode = "legacy_hmac_sha256"
+    else:
         raise api_error(401, ErrorCode.AUTHENTICATION_FAILED, "Missing Feishu signature headers.")
     if not feishu_bridge.verify_signature(
-        timestamp=x_feishu_timestamp,
-        nonce=x_feishu_nonce,
+        timestamp=timestamp,
+        nonce=nonce,
         body=body,
-        signature=x_feishu_signature,
+        signature=signature,
+        mode=mode,
     ):
         raise api_error(401, ErrorCode.AUTHENTICATION_FAILED, "Invalid Feishu signature.")
     payload = await request.json()
