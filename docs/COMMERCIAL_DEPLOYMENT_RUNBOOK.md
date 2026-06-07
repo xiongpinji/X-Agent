@@ -9,7 +9,7 @@ deployment docs into a commercial RC procedure with explicit verification gates.
 It is not a GA claim and it is not a full Codex/Hermes parity claim. It is a
 commercial pilot/RC deployment path that must still be validated with the
 customer's real provider tokens, channel credentials, and infrastructure.
-Current local final-gate status is `ready_with_owner_gates` with
+Current local final-gate status is `ready_for_rc_tag` with
 `full_parity_claimed=false`; this runbook does not claim full Codex/Hermes
 parity.
 Current local provider smoke is verified with Ollama at
@@ -23,8 +23,8 @@ mojibake from the non-ASCII `D:\AI模型库` directory. For Windows local-provid
 release smoke, use an ASCII-only `OLLAMA_MODELS` path, prove `ollama run
 <model>` works, and pass the same `--ollama-base-url` and `--ollama-model` to
 the refresh chain.
-Feishu, GitHub issue-to-PR, and hosted GitHub Actions remain
-owner-controlled gates before RC tagging.
+Feishu, GitHub issue-to-PR, and hosted GitHub Actions are owner-controlled
+gates and must remain verified for the exact commit SHA used for RC tagging.
 
 ## 1. Release Scope
 
