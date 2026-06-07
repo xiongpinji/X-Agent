@@ -151,6 +151,11 @@ def test_owner_gate_plan_reports_missing_default_resources(tmp_path: Path, monke
     assert "--env-file .xagent_runtime\\reports\\rc-owner-env-template.env" in owner_runner_command
     combined_external_smoke = next(command for command in report.next_commands if "rc_external_smoke.py --provider" in command)
     assert "--telegram-live-preflight" not in combined_external_smoke
+    assert "--check provider" in combined_external_smoke
+    assert "--check feishu_webhook_contract" in combined_external_smoke
+    assert "--check github_issue_to_pr_dry_run" in combined_external_smoke
+    assert "--check github_issue_to_pr_execute_preflight" in combined_external_smoke
+    assert "--check hosted_github_actions_run" in combined_external_smoke
     assert "--github-execute-preflight" in combined_external_smoke
     assert "--github-actions-preflight" in combined_external_smoke
     trigger_index = next(

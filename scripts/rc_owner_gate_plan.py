@@ -648,8 +648,10 @@ def build_owner_gate_plan(
                 "successful hosted run in .xagent_runtime\\reports\\rc-owner-env-template.env or the owner secret store."
             ),
             "python scripts\\rc_owner_gate_runner.py --gate all --env-file .xagent_runtime\\reports\\rc-owner-env-template.env",
-            f"python scripts\\rc_external_smoke.py --provider {provider_for_command} --require-configured "
-            "--github-execute-preflight --github-actions-preflight",
+            f"python scripts\\rc_external_smoke.py --provider {provider_for_command} "
+            "--check provider --check feishu_webhook_contract --check github_issue_to_pr_dry_run "
+            "--check github_issue_to_pr_execute_preflight --check hosted_github_actions_run "
+            "--require-configured --github-execute-preflight --github-actions-preflight",
             "python scripts\\rc_final_gate.py --require-ready-to-tag",
         ],
         source_bundle_report=_handoff_path(source_bundle_path) if source_bundle_path is not None else None,
