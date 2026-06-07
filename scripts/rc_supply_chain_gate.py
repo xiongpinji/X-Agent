@@ -34,7 +34,7 @@ LOCAL_USER_PATH_OUTPUT_RE = re.compile(
 )
 LOCAL_RUNTIME_MARKER_RE = re.compile(r"(?i)\bhermes-agent\b")
 NPM_REGISTRY_PREFIX = "https://registry.npmjs.org/"
-REQUIRED_PYPROJECT_DEV_TOOLS = ("aiosqlite", "pip-audit")
+REQUIRED_PYPROJECT_DEV_TOOLS = ("aiosqlite", "nest-asyncio", "pip-audit")
 
 
 @dataclass(frozen=True)

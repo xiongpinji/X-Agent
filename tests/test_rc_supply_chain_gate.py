@@ -75,8 +75,9 @@ cli = ["typer>=0.12.0"]
     check = check_python_manifest(tmp_path)
 
     assert check.status == "failed"
-    assert check.details["missing_dev_tools"] == ["aiosqlite", "pip-audit"]
+    assert check.details["missing_dev_tools"] == ["aiosqlite", "nest-asyncio", "pip-audit"]
     assert "missing dev dependency aiosqlite" in check.details["missing"]
+    assert "missing dev dependency nest-asyncio" in check.details["missing"]
     assert "missing dev dependency pip-audit" in check.details["missing"]
 
 
