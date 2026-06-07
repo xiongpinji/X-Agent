@@ -1994,6 +1994,23 @@ def test_final_gate_requires_evidence_pack_refresh_after_refresh_chain_changes(t
     assert any(item["name"] == "refresh_release_chain" for item in gate.details["stale_reports"])
 
 
+def test_final_gate_allows_refresh_chain_fixed_point_after_evidence_pack(tmp_path: Path) -> None:
+    inputs = _inputs(tmp_path)
+    payload = json.loads(inputs["refresh_release_chain"].read_text(encoding="utf-8"))
+    payload["generated_at"] = "2026-06-05T10:04:00Z"
+    payload["steps"] = [
+        {"name": "evidence_pack_after_receipt", "status": "passed"},
+        {"name": "final_gate_final", "status": "passed"},
+    ]
+    _write_json(inputs["refresh_release_chain"], payload)
+
+    report = run_final_gate(inputs)
+
+    gate = next(item for item in report.local_gates if item.name == "evidence_pack")
+    assert gate.status == "passed"
+    assert gate.ok is True
+
+
 def test_final_gate_bootstrap_allows_deployment_docs_state_only_refresh(tmp_path: Path) -> None:
     inputs = _inputs(tmp_path)
     _write_json(

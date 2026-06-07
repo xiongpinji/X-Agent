@@ -613,7 +613,11 @@ def _evidence_pack_gate(paths: dict[str, Path], *, allow_missing: bool) -> GateI
         if _is_future_report_time(report_time, now=now):
             invalid_reports.append({"name": label, "error": "generated_at is in the future"})
             continue
-        if pack_time is not None and pack_time < report_time:
+        if (
+            pack_time is not None
+            and pack_time < report_time
+            and not _is_refresh_chain_fixed_point_evidence(label, report_payload)
+        ):
             stale_reports.append(
                 {
                     "name": label,
@@ -654,6 +658,26 @@ def _evidence_pack_gate(paths: dict[str, Path], *, allow_missing: bool) -> GateI
             error="; ".join(problems),
         )
     return gate
+
+
+def _is_refresh_chain_fixed_point_evidence(label: str, payload: dict[str, Any]) -> bool:
+    if label != "refresh_release_chain":
+        return False
+    if payload.get("status") != "passed":
+        return False
+    steps = payload.get("steps")
+    if not isinstance(steps, list):
+        return False
+    step_by_name = {
+        str(step.get("name") or ""): step
+        for step in steps
+        if isinstance(step, dict)
+    }
+    required_passed = ("evidence_pack_after_receipt", "final_gate_final")
+    return all(
+        isinstance(step_by_name.get(name), dict) and step_by_name[name].get("status") == "passed"
+        for name in required_passed
+    )
 
 
 def _evidence_pack_bootstrap_refresh_only(payload: dict[str, Any]) -> bool:

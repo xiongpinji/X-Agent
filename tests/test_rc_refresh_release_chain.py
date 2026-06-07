@@ -11,6 +11,13 @@ from scripts import rc_refresh_release_chain
 from scripts.rc_refresh_release_chain import build_refresh_chain, write_report
 
 
+@pytest.fixture(autouse=True)
+def _isolate_report_dir(tmp_path: Path, monkeypatch) -> None:
+    reports = tmp_path / "isolated-reports"
+    reports.mkdir()
+    monkeypatch.setattr(rc_refresh_release_chain, "REPORT_DIR", reports)
+
+
 def test_refresh_chain_dry_run_plans_dependency_order() -> None:
     report = build_refresh_chain(provider="ollama", dry_run=True)
 
