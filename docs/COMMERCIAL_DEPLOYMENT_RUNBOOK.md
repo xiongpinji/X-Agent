@@ -138,7 +138,7 @@ python scripts/rc_runtime_smoke.py
 python scripts/rc_owner_verified_finalize.py --provider ollama --ollama-model qwen2.5:1.5b --ollama-base-url http://127.0.0.1:11435
 python scripts/rc_delivery_status.py --expected-commit-sha <40-character-release-commit-sha> --tag-name <rc-tag-name>
 git rev-parse HEAD
-git rev-parse x-agent-commercial-rc-20260608
+git rev-parse <rc-tag-name>
 ```
 
 Provider smoke is a sentinel check, not just a connectivity check: the selected

@@ -88,7 +88,12 @@ jobs:
         run: python scripts/rc_tag_consistency_gate.py
 
       - name: RC delivery status snapshot
-        run: python scripts/rc_delivery_status.py || true
+        run: |
+          python scripts/rc_delivery_status.py \
+            --expected-commit-sha "$GITHUB_SHA" \
+            --tag-name x-agent-commercial-rc-20260608-ci-snapshot \
+            --tag-consistency-report .xagent_runtime/reports/rc-delivery-status-tag-snapshot.json \
+            || true
 
       - name: Sequential release evidence refresh
         run: python scripts/rc_refresh_release_chain.py --provider mock

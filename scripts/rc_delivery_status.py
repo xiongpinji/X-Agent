@@ -26,7 +26,6 @@ DEFAULT_OWNER_FINALIZE_REPORT = REPORT_DIR / "rc-owner-verified-finalize.json"
 DEFAULT_TAG_CONSISTENCY_REPORT = REPORT_DIR / "rc-tag-consistency-gate.json"
 DEFAULT_REMOTE = "origin"
 DEFAULT_BRANCH = "codex/codex-hermes-gap-closure"
-DEFAULT_TAG_NAME = "x-agent-commercial-rc-20260608"
 GIT_COMMIT_SHA_RE = re.compile(r"^[0-9a-fA-F]{40}$")
 GITHUB_ACTIONS_RUN_URL_RE = re.compile(
     r"^https://github\.com/(?P<owner>[^/]+)/(?P<repo>[^/]+)/actions/runs/(?P<run_id>[0-9]+)$"
@@ -153,15 +152,22 @@ def _commit_check(expected_sha: str | None, expected_error: str | None) -> Deliv
 
 
 def _remote_branch_check(*, expected_sha: str | None, remote: str, branch: str) -> DeliveryCheck:
-    stdout, error = _run_git(["rev-parse", f"{remote}/{branch}"])
+    stdout, error = _run_git(["ls-remote", "--heads", remote, f"refs/heads/{branch}"])
     if error:
         return DeliveryCheck(
             name="remote_branch",
             status="failed",
             details={"remote": remote, "branch": branch, "expected_commit_sha": expected_sha},
-            error=f"could not resolve {remote}/{branch}: {error}",
+            error=f"could not resolve remote branch {remote}/{branch}: {error}",
         )
-    actual_sha = stdout.strip().lower()
+    actual_sha = _select_remote_head_sha(stdout, branch)
+    if actual_sha is None:
+        return DeliveryCheck(
+            name="remote_branch",
+            status="failed",
+            details={"remote": remote, "branch": branch, "expected_commit_sha": expected_sha},
+            error=f"remote branch {remote}/{branch} is missing",
+        )
     matches = bool(expected_sha and actual_sha == expected_sha)
     return DeliveryCheck(
         name="remote_branch",
@@ -175,6 +181,18 @@ def _remote_branch_check(*, expected_sha: str | None, remote: str, branch: str) 
         },
         error=None if matches else f"{remote}/{branch} points at {actual_sha}, expected {expected_sha}",
     )
+
+
+def _select_remote_head_sha(stdout: str, branch: str) -> str | None:
+    exact_ref = f"refs/heads/{branch}"
+    for line in stdout.splitlines():
+        parts = line.strip().split()
+        if len(parts) != 2:
+            continue
+        sha, ref = parts
+        if ref == exact_ref and GIT_COMMIT_SHA_RE.fullmatch(sha):
+            return sha.lower()
+    return None
 
 
 def _hosted_ci_check(
@@ -414,13 +432,15 @@ def build_delivery_status_report(
     expected_commit_sha: str | None = None,
     remote: str = DEFAULT_REMOTE,
     branch: str = DEFAULT_BRANCH,
-    tag_name: str = DEFAULT_TAG_NAME,
+    tag_name: str | None = None,
     github_actions_run_url: str | None = None,
     github_actions_head_sha: str | None = None,
     owner_finalize_report_path: Path = DEFAULT_OWNER_FINALIZE_REPORT,
     tag_consistency_report_path: Path = DEFAULT_TAG_CONSISTENCY_REPORT,
     fetch_github: bool = False,
 ) -> DeliveryStatusReport:
+    if not tag_name:
+        raise ValueError("tag_name is required; pass the selected RC tag explicitly")
     expected_sha, expected_error = _resolve_expected_commit_sha(expected_commit_sha)
     checks = [
         _commit_check(expected_sha, expected_error),
@@ -469,7 +489,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--expected-commit-sha")
     parser.add_argument("--remote", default=DEFAULT_REMOTE)
     parser.add_argument("--branch", default=DEFAULT_BRANCH)
-    parser.add_argument("--tag-name", default=DEFAULT_TAG_NAME)
+    parser.add_argument("--tag-name", required=True)
     parser.add_argument("--github-actions-run-url")
     parser.add_argument("--github-actions-head-sha")
     parser.add_argument("--owner-finalize-report", type=Path, default=DEFAULT_OWNER_FINALIZE_REPORT)

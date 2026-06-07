@@ -167,6 +167,7 @@ REQUIRED_CONTAINS: tuple[Requirement, ...] = (
             "python scripts/rc_release_audit.py",
             "python scripts/rc_tag_consistency_gate.py",
             "python scripts/rc_delivery_status.py",
+            "--tag-name x-agent-commercial-rc-20260608-ci-snapshot",
             "python scripts/rc_runtime_smoke.py",
             "python scripts/rc_ci_contract.py",
         ),

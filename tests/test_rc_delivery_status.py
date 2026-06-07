@@ -20,8 +20,19 @@ def _fake_git(monkeypatch: pytest.MonkeyPatch, *, head_sha: str = EXPECTED_SHA, 
     def fake_run(command, **_kwargs):  # noqa: ANN001
         if command == ["git", "rev-parse", "HEAD"]:
             return subprocess.CompletedProcess(command, 0, stdout=head_sha + "\n", stderr="")
-        if command == ["git", "rev-parse", "origin/codex/codex-hermes-gap-closure"]:
-            return subprocess.CompletedProcess(command, 0, stdout=remote_sha + "\n", stderr="")
+        if command == [
+            "git",
+            "ls-remote",
+            "--heads",
+            "origin",
+            "refs/heads/codex/codex-hermes-gap-closure",
+        ]:
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                stdout=f"{remote_sha}\trefs/heads/codex/codex-hermes-gap-closure\n",
+                stderr="",
+            )
         raise AssertionError(f"unexpected command: {command}")
 
     monkeypatch.setattr(rc_delivery_status.subprocess, "run", fake_run)
@@ -182,6 +193,54 @@ def test_delivery_status_fails_when_hosted_ci_head_sha_differs(
     assert report.status == "failed"
     ci_check = next(check for check in report.checks if check.name == "hosted_ci")
     assert ci_check.status == "failed"
+
+
+def test_delivery_status_uses_live_remote_head_lookup(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    commands: list[list[str]] = []
+
+    def fake_run(command, **_kwargs):  # noqa: ANN001
+        commands.append(command)
+        if command == ["git", "rev-parse", "HEAD"]:
+            return subprocess.CompletedProcess(command, 0, stdout=EXPECTED_SHA + "\n", stderr="")
+        if command == [
+            "git",
+            "ls-remote",
+            "--heads",
+            "origin",
+            "refs/heads/codex/codex-hermes-gap-closure",
+        ]:
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                stdout=f"{EXPECTED_SHA}\trefs/heads/codex/codex-hermes-gap-closure\n",
+                stderr="",
+            )
+        raise AssertionError(f"unexpected command: {command}")
+
+    monkeypatch.setattr(rc_delivery_status.subprocess, "run", fake_run)
+    owner = tmp_path / "owner.json"
+    tag = tmp_path / "tag.json"
+    _write_owner_finalize(owner)
+    _write_tag_consistency(tag)
+
+    report = build_delivery_status_report(
+        expected_commit_sha=EXPECTED_SHA,
+        tag_name=TAG_NAME,
+        github_actions_run_url=RUN_URL,
+        github_actions_head_sha=EXPECTED_SHA,
+        owner_finalize_report_path=owner,
+        tag_consistency_report_path=tag,
+    )
+
+    assert report.status == "commercial_rc_ready"
+    assert ["git", "rev-parse", "origin/codex/codex-hermes-gap-closure"] not in commands
+    assert [
+        "git",
+        "ls-remote",
+        "--heads",
+        "origin",
+        "refs/heads/codex/codex-hermes-gap-closure",
+    ] in commands
 
 
 def test_write_report_serializes_delivery_checks(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
