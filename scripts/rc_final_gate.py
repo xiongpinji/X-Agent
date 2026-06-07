@@ -39,6 +39,7 @@ DEFAULT_INPUTS = {
     "owner_gate_checklist": REPORT_DIR / "rc-owner-gate-checklist.json",
     "owner_handoff_gate": REPORT_DIR / "rc-owner-handoff-gate.json",
     "install_release_gate": REPORT_DIR / "rc-install-release-gate.json",
+    "single_user_local_gate": REPORT_DIR / "rc-single-user-local-gate.json",
     "supply_chain_gate": REPORT_DIR / "rc-supply-chain-gate.json",
     "secrets_gate": REPORT_DIR / "rc-secrets-gate.json",
     "source_bundle": REPORT_DIR / "rc-source-bundle.json",
@@ -65,6 +66,17 @@ REQUIRED_INSTALL_RELEASE_CHECKS = {
     "artifact_integrity_report",
     "staging_plan_report",
     "release_artifact_consistency",
+}
+
+REQUIRED_SINGLE_USER_LOCAL_CHECKS = {
+    "install_release_gate",
+    "frontend_production_build",
+    "runtime_smoke",
+    "targeted_single_user_tests",
+}
+
+OPTIONAL_SKIPPED_CHECKS_BY_GATE = {
+    "single_user_local_gate": {"rc2_release_handoff_snapshot"},
 }
 
 REQUIRED_SUPPLY_CHAIN_CHECKS = {
@@ -109,6 +121,7 @@ REQUIRED_RECEIPT_CHECKS = {
     "owner_env_template",
     "owner_gate_checklist",
     "install_release_gate",
+    "single_user_local_gate",
     "supply_chain_gate",
     "secrets_gate",
     "release_artifact_consistency",
@@ -116,6 +129,7 @@ REQUIRED_RECEIPT_CHECKS = {
 
 REQUIRED_RECEIPT_GATE_SECTIONS = {
     "install_release_gate",
+    "single_user_local_gate",
     "release_diff_review_gate",
     "deployment_docs_gate",
     "owner_handoff_gate",
@@ -372,6 +386,7 @@ def _checked_report_gate(
         problems.append(error)
     if status not in expected_status:
         problems.append(f"expected {sorted(expected_status)}, got {status}")
+    optional_skipped = OPTIONAL_SKIPPED_CHECKS_BY_GATE.get(name, set())
     if payload is not None:
         checks = payload.get("checks")
         checks_by_name = _check_map(payload)
@@ -390,7 +405,9 @@ def _checked_report_gate(
         unexpected_failed = sorted(
             check_name
             for check_name, check in checks_by_name.items()
-            if check_name not in required_checks and check.get("status") != "passed"
+            if check_name not in required_checks
+            and check.get("status") != "passed"
+            and not (check_name in optional_skipped and check.get("status") == "skipped")
         )
         if unexpected_failed:
             problems.append(f"non-required {name} checks failed: {', '.join(unexpected_failed)}")
@@ -1593,6 +1610,22 @@ def _summary_details(name: str, payload: dict[str, Any] | None) -> dict[str, Any
             ],
             "next_commands": payload.get("next_commands", []),
         }
+    if name == "single_user_local_gate":
+        return {
+            "scope": payload.get("scope"),
+            "mode": payload.get("mode"),
+            "checks": [
+                {
+                    "name": check.get("name"),
+                    "status": check.get("status"),
+                    "error": check.get("error"),
+                    "duration_seconds": check.get("duration_seconds"),
+                }
+                for check in payload.get("checks", [])
+                if isinstance(check, dict)
+            ],
+            "next_commands": payload.get("next_commands", []),
+        }
     if name == "supply_chain_gate":
         return {
             "checks": [
@@ -1797,6 +1830,12 @@ def run_final_gate(inputs: dict[str, Path] | None = None, *, allow_missing_evide
             required_checks=REQUIRED_INSTALL_RELEASE_CHECKS,
         ),
         _checked_report_gate(
+            "single_user_local_gate",
+            paths["single_user_local_gate"],
+            expected_status={"passed"},
+            required_checks=REQUIRED_SINGLE_USER_LOCAL_CHECKS,
+        ),
+        _checked_report_gate(
             "supply_chain_gate",
             paths["supply_chain_gate"],
             expected_status={"passed"},
@@ -1903,6 +1942,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--owner-gate-checklist", type=Path, default=DEFAULT_INPUTS["owner_gate_checklist"])
     parser.add_argument("--owner-handoff-gate", type=Path, default=DEFAULT_INPUTS["owner_handoff_gate"])
     parser.add_argument("--install-release-gate", type=Path, default=DEFAULT_INPUTS["install_release_gate"])
+    parser.add_argument("--single-user-local-gate", type=Path, default=DEFAULT_INPUTS["single_user_local_gate"])
     parser.add_argument("--supply-chain-gate", type=Path, default=DEFAULT_INPUTS["supply_chain_gate"])
     parser.add_argument("--secrets-gate", type=Path, default=DEFAULT_INPUTS["secrets_gate"])
     parser.add_argument("--source-bundle", type=Path, default=DEFAULT_INPUTS["source_bundle"])
@@ -1938,6 +1978,7 @@ def main() -> int:
             "owner_gate_checklist": args.owner_gate_checklist,
             "owner_handoff_gate": args.owner_handoff_gate,
             "install_release_gate": args.install_release_gate,
+            "single_user_local_gate": args.single_user_local_gate,
             "supply_chain_gate": args.supply_chain_gate,
             "secrets_gate": args.secrets_gate,
             "source_bundle": args.source_bundle,

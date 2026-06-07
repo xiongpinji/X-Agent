@@ -32,6 +32,7 @@ DEFAULT_OWNER_HANDOFF_GATE = REPORT_DIR / "rc-owner-handoff-gate.json"
 DEFAULT_OWNER_ENV_TEMPLATE = REPORT_DIR / "rc-owner-env-template.json"
 DEFAULT_OWNER_GATE_CHECKLIST = REPORT_DIR / "rc-owner-gate-checklist.json"
 DEFAULT_INSTALL_RELEASE_GATE = REPORT_DIR / "rc-install-release-gate.json"
+DEFAULT_SINGLE_USER_LOCAL_GATE = REPORT_DIR / "rc-single-user-local-gate.json"
 DEFAULT_SUPPLY_CHAIN_GATE = REPORT_DIR / "rc-supply-chain-gate.json"
 DEFAULT_SECRETS_GATE = REPORT_DIR / "rc-secrets-gate.json"
 DEFAULT_OUTPUT = RELEASE_DIR / "x-agent-commercial-rc-receipt.json"
@@ -62,6 +63,9 @@ REQUIRED_OWNER_GATE_RUNNER_REFRESH_STEPS = {
     "refresh:rc_owner_gate_checklist",
     "refresh:rc_owner_handoff_gate",
     "refresh:rc_final_gate",
+}
+OPTIONAL_SKIPPED_CHECKS_BY_GATE = {
+    "single_user_local_gate": {"rc2_release_handoff_snapshot"},
 }
 
 REQUIRED_OWNER_HANDOFF_CHECKS = {
@@ -103,6 +107,7 @@ class ReleaseReceipt:
     release_diff_review_gate: dict[str, Any]
     deployment_docs_gate: dict[str, Any]
     install_release_gate: dict[str, Any]
+    single_user_local_gate: dict[str, Any]
     supply_chain_gate: dict[str, Any]
     secrets_gate: dict[str, Any]
     checks: list[ReceiptCheck]
@@ -481,13 +486,31 @@ def _check_gate_report(name: str, payload: dict[str, Any] | None, error: str | N
     problems: list[str] = []
     if status != "passed":
         problems.append(f"expected passed, got {status}")
+    optional_skipped = OPTIONAL_SKIPPED_CHECKS_BY_GATE.get(name, set())
     if not isinstance(checks, list) or not checks:
         problems.append(f"{name}.checks is missing or empty")
-    elif any(not isinstance(check, dict) or check.get("status") != "passed" for check in checks):
+    elif any(
+        not isinstance(check, dict)
+        or (
+            check.get("status") != "passed"
+            and not (
+                str(check.get("name") or "") in optional_skipped
+                and check.get("status") == "skipped"
+            )
+        )
+        for check in checks
+    ):
         failed = [
             str(check.get("name") or name)
             for check in checks
-            if not isinstance(check, dict) or check.get("status") != "passed"
+            if not isinstance(check, dict)
+            or (
+                check.get("status") != "passed"
+                and not (
+                    str(check.get("name") or "") in optional_skipped
+                    and check.get("status") == "skipped"
+                )
+            )
         ]
         problems.append(f"{name} has failed checks: {', '.join(failed)}")
     return ReceiptCheck(
@@ -903,6 +926,7 @@ def run_release_receipt(
     owner_env_template_report: Path = DEFAULT_OWNER_ENV_TEMPLATE,
     owner_gate_checklist_report: Path = DEFAULT_OWNER_GATE_CHECKLIST,
     install_release_gate_report: Path = DEFAULT_INSTALL_RELEASE_GATE,
+    single_user_local_gate_report: Path = DEFAULT_SINGLE_USER_LOCAL_GATE,
     supply_chain_gate_report: Path = DEFAULT_SUPPLY_CHAIN_GATE,
     secrets_gate_report: Path = DEFAULT_SECRETS_GATE,
     write_sha256: bool = True,
@@ -920,6 +944,7 @@ def run_release_receipt(
     owner_env_payload, owner_env_error = _read_json(owner_env_template_report)
     owner_checklist_payload, owner_checklist_error = _read_json(owner_gate_checklist_report)
     install_payload, install_error = _read_json(install_release_gate_report)
+    single_user_payload, single_user_error = _read_json(single_user_local_gate_report)
     supply_payload, supply_error = _read_json(supply_chain_gate_report)
     secrets_payload, secrets_error = _read_json(secrets_gate_report)
 
@@ -938,6 +963,7 @@ def run_release_receipt(
         _check_owner_env_template(owner_env_payload, owner_env_error),
         _check_owner_gate_checklist(owner_checklist_payload, owner_checklist_error),
         _check_gate_report("install_release_gate", install_payload, install_error),
+        _check_gate_report("single_user_local_gate", single_user_payload, single_user_error),
         _check_gate_report("supply_chain_gate", supply_payload, supply_error),
         _check_gate_report("secrets_gate", secrets_payload, secrets_error),
         _check_release_artifact_consistency(artifact_payload, source_payload),
@@ -964,6 +990,7 @@ def run_release_receipt(
         release_diff_review_gate=_gate_summary(diff_review_payload),
         deployment_docs_gate=_gate_summary(deployment_docs_payload),
         install_release_gate=_gate_summary(install_payload),
+        single_user_local_gate=_gate_summary(single_user_payload),
         supply_chain_gate=_gate_summary(supply_payload),
         secrets_gate=_gate_summary(secrets_payload),
         checks=checks,
@@ -1004,6 +1031,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--owner-env-template-report", type=Path, default=DEFAULT_OWNER_ENV_TEMPLATE)
     parser.add_argument("--owner-gate-checklist-report", type=Path, default=DEFAULT_OWNER_GATE_CHECKLIST)
     parser.add_argument("--install-release-gate-report", type=Path, default=DEFAULT_INSTALL_RELEASE_GATE)
+    parser.add_argument("--single-user-local-gate-report", type=Path, default=DEFAULT_SINGLE_USER_LOCAL_GATE)
     parser.add_argument("--supply-chain-gate-report", type=Path, default=DEFAULT_SUPPLY_CHAIN_GATE)
     parser.add_argument("--secrets-gate-report", type=Path, default=DEFAULT_SECRETS_GATE)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
@@ -1026,6 +1054,7 @@ def main() -> int:
         owner_env_template_report=args.owner_env_template_report,
         owner_gate_checklist_report=args.owner_gate_checklist_report,
         install_release_gate_report=args.install_release_gate_report,
+        single_user_local_gate_report=args.single_user_local_gate_report,
         supply_chain_gate_report=args.supply_chain_gate_report,
         secrets_gate_report=args.secrets_gate_report,
         write_sha256=not args.no_sha256_sidecar,

@@ -97,8 +97,9 @@ Important correction made during review:
 Latest local review evidence:
 
 ```powershell
-python -m pytest tests/test_rc_runtime_smoke.py tests/test_rc_external_smoke.py tests/test_docker_compose_env_contract.py tests/test_rc_release_audit.py tests/test_rc_release_diff_review_gate.py tests/test_rc_deployment_docs_gate.py tests/test_rc_ci_contract.py tests/test_rc_evidence_pack.py tests/test_rc_refresh_release_chain.py tests/test_rc_owner_gate_plan.py tests/test_rc_owner_env_template.py tests/test_rc_owner_gate_checklist.py tests/test_rc_install_release_gate.py tests/test_rc_supply_chain_gate.py tests/test_rc_secrets_gate.py tests/test_rc_artifact_integrity_gate.py tests/test_rc_final_gate.py tests/test_rc_release_receipt.py tests/test_rc_source_bundle.py tests/test_rc_staging_plan.py tests/test_codex_hermes_gap_matrix.py -o addopts="" -p no:cov -p no:cacheprovider -q
+python -m pytest tests/test_rc_runtime_smoke.py tests/test_rc_external_smoke.py tests/test_docker_compose_env_contract.py tests/test_rc_release_audit.py tests/test_rc_release_diff_review_gate.py tests/test_rc_deployment_docs_gate.py tests/test_rc_ci_contract.py tests/test_rc_evidence_pack.py tests/test_rc_refresh_release_chain.py tests/test_rc_owner_gate_plan.py tests/test_rc_owner_env_template.py tests/test_rc_owner_gate_checklist.py tests/test_rc_install_release_gate.py tests/test_rc_single_user_local_gate.py tests/test_rc_supply_chain_gate.py tests/test_rc_secrets_gate.py tests/test_rc_artifact_integrity_gate.py tests/test_rc_final_gate.py tests/test_rc_release_receipt.py tests/test_rc_source_bundle.py tests/test_rc_staging_plan.py tests/test_codex_hermes_gap_matrix.py -o addopts="" -p no:cov -p no:cacheprovider -q
 python scripts\rc_release_audit.py
+python scripts\rc_single_user_local_gate.py --require-rc2-handoff
 python scripts\rc_refresh_release_chain.py --provider ollama --ollama-model qwen2.5:1.5b --ollama-base-url http://localhost:11434
 python scripts\rc_release_diff_review_gate.py
 python scripts\codex_hermes_gap_matrix.py --write-report
@@ -112,7 +113,7 @@ git diff --check
 Observed local results:
 
 - RC release gate group: 299 passed.
-- Release audit: passed, 117 candidate files, no secret-like findings, no
+- Release audit: passed, 119 candidate files, no secret-like findings, no
   manifest unsafe paths, no excluded-area references, no local user/runtime
   path findings, and no file hygiene findings.
 - Release diff review gate: passed.

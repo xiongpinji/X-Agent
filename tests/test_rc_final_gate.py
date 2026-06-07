@@ -251,6 +251,7 @@ def _receipt_checks() -> list[dict[str, object]]:
         {"name": "owner_env_template", "status": "passed"},
         {"name": "owner_gate_checklist", "status": "passed"},
         {"name": "install_release_gate", "status": "passed"},
+        {"name": "single_user_local_gate", "status": "passed"},
         {"name": "supply_chain_gate", "status": "passed"},
         {"name": "secrets_gate", "status": "passed"},
         {"name": "release_artifact_consistency", "status": "passed"},
@@ -528,6 +529,22 @@ def _inputs(tmp_path: Path, *, external_checks: list[dict[str, object]] | None =
                 "checks": _install_checks(),
             },
         ),
+        "single_user_local_gate": _write_json(
+            tmp_path / "reports" / "rc-single-user-local-gate.json",
+            {
+                "status": "passed",
+                "generated_at": "2026-06-05T10:01:00Z",
+                "scope": "single-machine single-user local validation",
+                "mode": "mock provider; no external Feishu/GitHub mutations",
+                "checks": [
+                    {"name": "rc2_release_handoff_snapshot", "status": "skipped"},
+                    {"name": "install_release_gate", "status": "passed"},
+                    {"name": "frontend_production_build", "status": "passed"},
+                    {"name": "runtime_smoke", "status": "passed"},
+                    {"name": "targeted_single_user_tests", "status": "passed"},
+                ],
+            },
+        ),
         "supply_chain_gate": _write_json(
             tmp_path / "reports" / "rc-supply-chain-gate.json",
             {
@@ -615,6 +632,15 @@ def _inputs(tmp_path: Path, *, external_checks: list[dict[str, object]] | None =
                 "release_diff_review_gate": _gate_summary([{"name": "review_document", "status": "passed"}]),
                 "deployment_docs_gate": _gate_summary([{"name": "runbook_document", "status": "passed"}]),
                 "install_release_gate": _gate_summary(_install_checks()),
+                "single_user_local_gate": _gate_summary(
+                    [
+                        {"name": "rc2_release_handoff_snapshot", "status": "passed"},
+                        {"name": "install_release_gate", "status": "passed"},
+                        {"name": "frontend_production_build", "status": "passed"},
+                        {"name": "runtime_smoke", "status": "passed"},
+                        {"name": "targeted_single_user_tests", "status": "passed"},
+                    ]
+                ),
                 "supply_chain_gate": _gate_summary(_supply_checks()),
                 "secrets_gate": _gate_summary(_secrets_checks()),
                 "checks": _receipt_checks(),
@@ -1366,6 +1392,15 @@ def test_final_gate_accepts_refreshed_receipt_from_refresh_required_state(tmp_pa
             "release_diff_review_gate": _gate_summary([{"name": "review_document", "status": "passed"}]),
             "deployment_docs_gate": _gate_summary([{"name": "runbook_document", "status": "passed"}]),
             "install_release_gate": _gate_summary(_install_checks()),
+            "single_user_local_gate": _gate_summary(
+                [
+                    {"name": "rc2_release_handoff_snapshot", "status": "passed"},
+                    {"name": "install_release_gate", "status": "passed"},
+                    {"name": "frontend_production_build", "status": "passed"},
+                    {"name": "runtime_smoke", "status": "passed"},
+                    {"name": "targeted_single_user_tests", "status": "passed"},
+                ]
+            ),
             "supply_chain_gate": _gate_summary(_supply_checks()),
             "secrets_gate": _gate_summary(_secrets_checks()),
             "checks": _receipt_checks(),
@@ -2128,6 +2163,49 @@ def test_final_gate_fails_when_install_release_required_check_missing(tmp_path: 
     gate = next(item for item in report.local_gates if item.name == "install_release_gate")
     assert gate.ok is False
     assert "missing required install_release_gate checks: release_artifact_consistency" in str(gate.error)
+
+
+def test_final_gate_fails_when_single_user_local_gate_missing(tmp_path: Path) -> None:
+    inputs = _inputs(tmp_path)
+    inputs["single_user_local_gate"].unlink()
+
+    report = run_final_gate(inputs)
+
+    assert report.status == "failed"
+    gate = next(item for item in report.local_gates if item.name == "single_user_local_gate")
+    assert gate.ok is False
+    assert "report missing" in str(gate.error)
+
+
+def test_final_gate_fails_when_single_user_required_check_missing(tmp_path: Path) -> None:
+    inputs = _inputs(tmp_path)
+    _write_json(
+        inputs["single_user_local_gate"],
+        {
+            "status": "passed",
+            "checks": [
+                {"name": "rc2_release_handoff_snapshot", "status": "passed"},
+                {"name": "install_release_gate", "status": "passed"},
+                {"name": "frontend_production_build", "status": "passed"},
+                {"name": "runtime_smoke", "status": "passed"},
+            ],
+        },
+    )
+
+    report = run_final_gate(inputs)
+
+    assert report.status == "failed"
+    gate = next(item for item in report.local_gates if item.name == "single_user_local_gate")
+    assert gate.ok is False
+    assert "missing required single_user_local_gate checks: targeted_single_user_tests" in str(gate.error)
+
+
+def test_final_gate_allows_optional_single_user_handoff_snapshot_skipped(tmp_path: Path) -> None:
+    report = run_final_gate(_inputs(tmp_path))
+
+    gate = next(item for item in report.local_gates if item.name == "single_user_local_gate")
+    assert gate.ok is True
+    assert gate.status == "passed"
 
 
 def test_final_gate_fails_when_supply_chain_gate_fails(tmp_path: Path) -> None:

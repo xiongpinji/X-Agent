@@ -50,6 +50,7 @@ REQUIRED_REPORTS = (
     REPORT_DIR / "rc-artifact-integrity-gate.json",
     REPORT_DIR / "rc-staging-plan.json",
     REPORT_DIR / "rc-install-release-gate.json",
+    REPORT_DIR / "rc-single-user-local-gate.json",
     REPORT_DIR / "rc-supply-chain-gate.json",
     REPORT_DIR / "rc-secrets-gate.json",
     REPORT_DIR / "rc-final-gate.json",

@@ -37,6 +37,7 @@ def test_refresh_chain_dry_run_plans_dependency_order() -> None:
         "release_diff_review_gate",
         "deployment_docs_gate_bootstrap",
         "install_release_gate",
+        "single_user_local_gate",
         "supply_chain_gate",
         "secrets_gate",
         "final_gate_bootstrap",

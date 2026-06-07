@@ -285,6 +285,19 @@ def _reports(tmp_path: Path) -> dict[str, Path]:
                 ],
             },
         ),
+        "single_user": _write_json(
+            tmp_path / "reports" / "rc-single-user-local-gate.json",
+            {
+                "status": "passed",
+                "checks": [
+                    {"name": "rc2_release_handoff_snapshot", "status": "skipped"},
+                    {"name": "install_release_gate", "status": "passed"},
+                    {"name": "frontend_production_build", "status": "passed"},
+                    {"name": "runtime_smoke", "status": "passed"},
+                    {"name": "targeted_single_user_tests", "status": "passed"},
+                ],
+            },
+        ),
         "supply": _write_json(
             tmp_path / "reports" / "rc-supply-chain-gate.json",
             {
@@ -330,6 +343,7 @@ def _receipt(reports: dict[str, Path], *, write_sha256: bool = True):
         owner_env_template_report=reports["owner_env"],
         owner_gate_checklist_report=reports["owner_checklist"],
         install_release_gate_report=reports["install"],
+        single_user_local_gate_report=reports["single_user"],
         supply_chain_gate_report=reports["supply"],
         secrets_gate_report=reports["secrets"],
         write_sha256=write_sha256,
@@ -395,9 +409,11 @@ def test_release_receipt_created_and_writes_sha256_sidecar(tmp_path: Path) -> No
     assert receipt.release_diff_review_gate["status"] == "passed"
     assert receipt.deployment_docs_gate["status"] == "passed"
     assert receipt.install_release_gate["status"] == "passed"
+    assert receipt.single_user_local_gate["status"] == "passed"
     assert receipt.supply_chain_gate["status"] == "passed"
     assert receipt.secrets_gate["status"] == "passed"
     assert any(check.name == "install_release_gate" and check.status == "passed" for check in receipt.checks)
+    assert any(check.name == "single_user_local_gate" and check.status == "passed" for check in receipt.checks)
     assert any(check.name == "supply_chain_gate" and check.status == "passed" for check in receipt.checks)
     assert any(check.name == "secrets_gate" and check.status == "passed" for check in receipt.checks)
     assert any(check.name == "owner_handoff_gate" and check.status == "passed" for check in receipt.checks)
@@ -893,6 +909,21 @@ def test_release_receipt_rejects_failed_deployment_docs_gate(tmp_path: Path) -> 
     check = next(item for item in receipt.checks if item.name == "deployment_docs_gate")
     assert check.status == "failed"
     assert "expected passed" in str(check.error)
+
+
+def test_release_receipt_rejects_failed_single_user_local_gate(tmp_path: Path) -> None:
+    reports = _reports(tmp_path)
+    _write_json(
+        reports["single_user"],
+        {"status": "passed", "checks": [{"name": "runtime_smoke", "status": "failed"}]},
+    )
+
+    receipt = _receipt(reports)
+
+    assert receipt.status == "failed"
+    check = next(item for item in receipt.checks if item.name == "single_user_local_gate")
+    assert check.status == "failed"
+    assert "has failed checks" in str(check.error)
 
 
 def test_release_receipt_rejects_failed_supply_chain_gate(tmp_path: Path) -> None:

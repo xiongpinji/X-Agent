@@ -242,6 +242,7 @@ def _step_commands(provider: str, *, owner_verified: bool = False) -> list[tuple
         ("release_diff_review_gate", ["scripts/rc_release_diff_review_gate.py"]),
         ("deployment_docs_gate_bootstrap", ["scripts/rc_deployment_docs_gate.py", "--allow-missing-evidence-pack"]),
         ("install_release_gate", ["scripts/rc_install_release_gate.py"]),
+        ("single_user_local_gate", ["scripts/rc_single_user_local_gate.py"]),
         ("supply_chain_gate", ["scripts/rc_supply_chain_gate.py"]),
         ("secrets_gate", ["scripts/rc_secrets_gate.py"]),
         ("final_gate_bootstrap", ["scripts/rc_final_gate.py", "--allow-missing-evidence-pack"]),

@@ -54,7 +54,7 @@ jobs:
       - name: Static release checks
         run: |
           git diff --check
-          python -m py_compile scripts/codex_hermes_gap_matrix.py scripts/xagent_doctor.py scripts/rc_runtime_smoke.py scripts/rc_external_smoke.py scripts/rc_release_audit.py scripts/rc_release_diff_review_gate.py scripts/rc_deployment_docs_gate.py scripts/rc_ci_contract.py scripts/rc_evidence_pack.py scripts/rc_refresh_release_chain.py scripts/rc_owner_gate_plan.py scripts/rc_owner_gate_runner.py scripts/rc_owner_handoff_gate.py scripts/rc_owner_gate_checklist.py scripts/rc_owner_env_template.py scripts/rc_install_release_gate.py scripts/rc_supply_chain_gate.py scripts/rc_secrets_gate.py scripts/rc_artifact_integrity_gate.py scripts/rc_final_gate.py scripts/rc_release_receipt.py scripts/rc_source_bundle.py scripts/rc_staging_plan.py
+          python -m py_compile scripts/codex_hermes_gap_matrix.py scripts/xagent_doctor.py scripts/rc_runtime_smoke.py scripts/rc_external_smoke.py scripts/rc_release_audit.py scripts/rc_release_diff_review_gate.py scripts/rc_deployment_docs_gate.py scripts/rc_ci_contract.py scripts/rc_evidence_pack.py scripts/rc_refresh_release_chain.py scripts/rc_owner_gate_plan.py scripts/rc_owner_gate_runner.py scripts/rc_owner_handoff_gate.py scripts/rc_owner_gate_checklist.py scripts/rc_owner_env_template.py scripts/rc_install_release_gate.py scripts/rc_single_user_local_gate.py scripts/rc_supply_chain_gate.py scripts/rc_secrets_gate.py scripts/rc_artifact_integrity_gate.py scripts/rc_final_gate.py scripts/rc_release_receipt.py scripts/rc_source_bundle.py scripts/rc_staging_plan.py
           bash scripts/install-xagent.sh --dry-run
 
       - name: Frontend audit, type-check, and build
@@ -68,7 +68,7 @@ jobs:
         run: python scripts/xagent_doctor.py --json
 
       - name: RC smoke unit tests
-        run: python -m pytest tests/test_rc_runtime_smoke.py tests/test_rc_external_smoke.py tests/test_docker_compose_env_contract.py tests/test_rc_release_audit.py tests/test_rc_release_diff_review_gate.py tests/test_rc_deployment_docs_gate.py tests/test_rc_ci_contract.py tests/test_rc_evidence_pack.py tests/test_rc_refresh_release_chain.py tests/test_rc_owner_gate_plan.py tests/test_rc_owner_gate_runner.py tests/test_rc_owner_handoff_gate.py tests/test_rc_owner_gate_checklist.py tests/test_rc_owner_env_template.py tests/test_rc_install_release_gate.py tests/test_rc_supply_chain_gate.py tests/test_rc_secrets_gate.py tests/test_rc_artifact_integrity_gate.py tests/test_rc_final_gate.py tests/test_rc_release_receipt.py tests/test_rc_source_bundle.py tests/test_rc_staging_plan.py -o addopts= -p no:cov -q
+        run: python -m pytest tests/test_rc_runtime_smoke.py tests/test_rc_external_smoke.py tests/test_docker_compose_env_contract.py tests/test_rc_release_audit.py tests/test_rc_release_diff_review_gate.py tests/test_rc_deployment_docs_gate.py tests/test_rc_ci_contract.py tests/test_rc_evidence_pack.py tests/test_rc_refresh_release_chain.py tests/test_rc_owner_gate_plan.py tests/test_rc_owner_gate_runner.py tests/test_rc_owner_handoff_gate.py tests/test_rc_owner_gate_checklist.py tests/test_rc_owner_env_template.py tests/test_rc_install_release_gate.py tests/test_rc_single_user_local_gate.py tests/test_rc_supply_chain_gate.py tests/test_rc_secrets_gate.py tests/test_rc_artifact_integrity_gate.py tests/test_rc_final_gate.py tests/test_rc_release_receipt.py tests/test_rc_source_bundle.py tests/test_rc_staging_plan.py -o addopts= -p no:cov -q
 
       - name: Codex/Hermes gap matrix
         run: python scripts/codex_hermes_gap_matrix.py --write-report
@@ -136,6 +136,7 @@ jobs:
             .xagent_runtime/reports/rc-owner-env-template.env
             .xagent_runtime/reports/rc-owner-env-template.ps1
             .xagent_runtime/reports/rc-install-release-gate.json
+            .xagent_runtime/reports/rc-single-user-local-gate.json
             .xagent_runtime/reports/rc-supply-chain-gate.json
             .xagent_runtime/reports/rc-secrets-gate.json
             .xagent_runtime/reports/rc-artifact-integrity-gate.json
