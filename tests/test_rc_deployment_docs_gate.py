@@ -447,11 +447,9 @@ def test_deployment_docs_gate_allows_owner_verified_tag_ready_snapshot_with_tag_
 ) -> None:
     paths = _reports(tmp_path)
     snapshot = """
-Owner-verified RC evidence snapshot reports `ready_for_rc_tag` for commit
-`643a017b3a2ae00be212d186e2681a147b46bf6b`.
-The already-pushed tag `x-agent-commercial-rc-20260608` currently resolves to
-`08cd6d114e0c0cb357ccea3e529aed7b2aea1045`; do not use that tag until the
-owner creates a new tag or explicitly approves correcting the pushed tag.
+Owner-verified RC evidence snapshot reports `ready_for_rc_tag` for commit `643a017b3a2ae00be212d186e2681a147b46bf6b`;
+the already-pushed tag `x-agent-commercial-rc-20260608` currently resolves to `08cd6d114e0c0cb357ccea3e529aed7b2aea1045`;
+do not use that tag until the owner creates a new tag or explicitly approves correcting the pushed tag.
 """
     paths["runbook"].write_text(_runbook_text() + snapshot, encoding="utf-8")
     paths["checklist"].write_text(_checklist_text() + snapshot, encoding="utf-8")
@@ -462,8 +460,35 @@ owner creates a new tag or explicitly approves correcting the pushed tag.
     assert report.status == "passed"
     release_state = next(check for check in report.checks if check.name == "release_state_docs")
     overclaim = next(check for check in report.checks if check.name == "overclaim_boundary_docs")
-    assert release_state.details["owner_verified_tag_ready_snapshot_allowed"] is True
-    assert overclaim.details["owner_verified_tag_ready_snapshot_allowed"] is True
+    assert release_state.details["owner_verified_tag_ready_snapshot_docs"] == {
+        "runbook": True,
+        "checklist": True,
+        "release_notes": True,
+    }
+    assert overclaim.status == "passed"
+
+
+def test_deployment_docs_gate_rejects_unsafe_ready_to_tag_claim_even_with_snapshot(
+    tmp_path: Path,
+) -> None:
+    paths = _reports(tmp_path)
+    snapshot = """
+Owner-verified RC evidence snapshot reports `ready_for_rc_tag` for commit `643a017b3a2ae00be212d186e2681a147b46bf6b`;
+the already-pushed tag `x-agent-commercial-rc-20260608` currently resolves to `08cd6d114e0c0cb357ccea3e529aed7b2aea1045`;
+do not use that tag until the owner creates a new tag or explicitly approves correcting the pushed tag.
+"""
+    unsafe_claim = "\nCurrent final gate status is ready_for_rc_tag.\nready to tag the RC now.\ncan_tag_rc_now=true\n"
+    paths["runbook"].write_text(_runbook_text() + snapshot + unsafe_claim, encoding="utf-8")
+    paths["checklist"].write_text(_checklist_text() + snapshot, encoding="utf-8")
+    paths["notes"].write_text(_release_notes_text() + snapshot, encoding="utf-8")
+
+    report = _gate(paths)
+
+    assert report.status == "failed"
+    overclaim = next(check for check in report.checks if check.name == "overclaim_boundary_docs")
+    assert "ready_for_rc_tag" in str(overclaim.error)
+    assert "ready to tag the RC now" in str(overclaim.error)
+    assert "can_tag_rc_now=true" in str(overclaim.error)
 
 
 def test_deployment_docs_gate_requires_evidence_pack_sha_and_path(tmp_path: Path) -> None:

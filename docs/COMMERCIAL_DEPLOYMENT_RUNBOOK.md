@@ -9,15 +9,19 @@ deployment docs into a commercial RC procedure with explicit verification gates.
 It is not a GA claim and it is not a full Codex/Hermes parity claim. It is a
 commercial pilot/RC deployment path that must still be validated with the
 customer's real provider tokens, channel credentials, and infrastructure.
-Current fixed-point local final-gate status is `ready_for_rc_tag`, with
-`full_parity_claimed=false`, after the owner-verified refresh chain passed with
-real Feishu, GitHub issue-to-PR, provider, and hosted Actions evidence. Earlier
-intermediate refreshes can temporarily report
-`ready_with_receipt_refresh_required` until receipt and evidence-pack reports
-are regenerated in order. The owner finalization command below remains the
-repeatable tag-readiness proof and must be rerun if any release evidence or
-owner-controlled variable changes. This runbook does not claim full
-Codex/Hermes parity.
+The last owner-verified fixed-point final-gate snapshot reported
+`ready_for_rc_tag`, with `full_parity_claimed=false`, after the owner-verified
+refresh chain passed with real Feishu, GitHub issue-to-PR, provider, and hosted
+Actions evidence for commit `643a017b3a2ae00be212d186e2681a147b46bf6b`; the already-pushed tag
+`x-agent-commercial-rc-20260608` currently resolves to
+`08cd6d114e0c0cb357ccea3e529aed7b2aea1045`, so release handoff must not treat
+that pushed tag as verified until the owner creates a new tag at the verified
+commit or explicitly approves correcting the existing remote tag. Earlier
+intermediate refreshes can temporarily report `ready_with_receipt_refresh_required`
+until receipt and evidence-pack reports are regenerated in order. The owner
+finalization command below remains the repeatable tag-readiness proof and must
+be rerun if any release evidence, current HEAD, or owner-controlled variable
+changes. This runbook does not claim full Codex/Hermes parity.
 Current local provider smoke is verified with Ollama at
 `http://127.0.0.1:11435`, model `qwen2.5:1.5b`, after copying the required
 model blobs to the ASCII-only model directory `D:\ollama-models`. The direct
@@ -31,12 +35,6 @@ release smoke, use an ASCII-only `OLLAMA_MODELS` path, prove `ollama run
 the refresh chain.
 Feishu, GitHub issue-to-PR, and hosted GitHub Actions are owner-controlled
 gates and must remain verified for the exact commit SHA used for RC tagging.
-Tag evidence is for commit `643a017b3a2ae00be212d186e2681a147b46bf6b`. The
-already-pushed tag `x-agent-commercial-rc-20260608` currently resolves to
-`08cd6d114e0c0cb357ccea3e529aed7b2aea1045`, so release handoff must not treat
-that pushed tag as verified until the owner either creates a new tag at
-`643a017b3a2ae00be212d186e2681a147b46bf6b` or explicitly approves correcting
-the existing remote tag.
 
 ## 1. Release Scope
 

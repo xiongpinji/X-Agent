@@ -253,13 +253,16 @@ def _doc_token_check(name: str, text: str, error: str | None, tokens: tuple[str,
 
 def _find_forbidden_tokens(text: str, tokens: tuple[str, ...]) -> list[str]:
     matches: list[str] = []
+    owner_snapshot_context = _owner_verified_snapshot_context(text)
     for token in tokens:
         token_lower = token.lower()
-        for line in text.splitlines():
+        for index, line in enumerate(text.splitlines()):
             if token_lower not in line.lower():
                 continue
             normalized = line.lower().replace("`", "").replace('"', "").replace("'", "")
             if token_lower == "ready_for_rc_tag" and not _is_ready_for_rc_tag_claim(normalized):
+                continue
+            if token in FORBIDDEN_RC_TAG_CLAIM_TOKENS and index in owner_snapshot_context:
                 continue
             is_negated_boundary = any(
                 marker in normalized
@@ -274,6 +277,38 @@ def _find_forbidden_tokens(text: str, tokens: tuple[str, ...]) -> list[str]:
                 matches.append(token)
                 break
     return matches
+
+
+def _owner_verified_snapshot_context(text: str) -> set[int]:
+    lines = text.splitlines()
+    context: set[int] = set()
+    for index, _line in enumerate(lines):
+        window_lines = lines[index : index + 10]
+        block = "\n".join(window_lines)
+        if _is_owner_verified_snapshot_block(block):
+            end_offset = next(
+                (
+                    offset
+                    for offset, window_line in enumerate(window_lines)
+                    if "explicitly approves correcting" in window_line.lower()
+                ),
+                len(window_lines) - 1,
+            )
+            context.update(range(index, min(index + end_offset + 1, len(lines))))
+    return context
+
+
+def _is_owner_verified_snapshot_block(text: str) -> bool:
+    normalized = text.lower()
+    required_tokens = (
+        "owner-verified",
+        "ready_for_rc_tag",
+        "643a017b3a2ae00be212d186e2681a147b46bf6b",
+        "x-agent-commercial-rc-20260608",
+        "08cd6d114e0c0cb357ccea3e529aed7b2aea1045",
+        "explicitly approves correcting",
+    )
+    return all(token in normalized for token in required_tokens)
 
 
 def _is_ready_for_rc_tag_claim(normalized_line: str) -> bool:
@@ -372,16 +407,9 @@ def _overclaim_boundary_docs_check(
     if not can_tag_rc_now:
         forbidden_tokens = (*forbidden_tokens, *FORBIDDEN_RC_TAG_CLAIM_TOKENS)
 
-    owner_snapshot_allowed = _has_owner_verified_tag_ready_snapshot(runbook, checklist, notes)
     matches: dict[str, list[str]] = {}
     for text_name, text in (("runbook", runbook), ("checklist", checklist), ("release_notes", notes)):
         found = _find_forbidden_tokens(text, forbidden_tokens)
-        if owner_snapshot_allowed:
-            found = [
-                token
-                for token in found
-                if token not in FORBIDDEN_RC_TAG_CLAIM_TOKENS
-            ]
         if found:
             matches[text_name] = found
             problems.append(f"{text_name} contains unsupported release claim tokens: {', '.join(found)}")
@@ -392,7 +420,6 @@ def _overclaim_boundary_docs_check(
         details={
             "full_parity_claimed": full_parity_claimed,
             "can_tag_rc_now": can_tag_rc_now,
-            "owner_verified_tag_ready_snapshot_allowed": owner_snapshot_allowed,
             "forbidden_matches": matches,
         },
         error="; ".join(problems) if problems else None,
@@ -431,11 +458,15 @@ def _release_state_docs_check(
         }
         if full_parity:
             problems.append("final gate claims full parity")
-        owner_snapshot_allowed = _has_owner_verified_tag_ready_snapshot(runbook, checklist, notes)
-        details["owner_verified_tag_ready_snapshot_allowed"] = owner_snapshot_allowed
-        if not bootstrap_allowed and not owner_snapshot_allowed:
+        owner_snapshot_docs = {
+            "runbook": bool(_owner_verified_snapshot_context(runbook)),
+            "checklist": bool(_owner_verified_snapshot_context(checklist)),
+            "release_notes": bool(_owner_verified_snapshot_context(notes)),
+        }
+        details["owner_verified_tag_ready_snapshot_docs"] = owner_snapshot_docs
+        if not bootstrap_allowed:
             for text_name, text in (("runbook", runbook), ("checklist", checklist), ("release_notes", notes)):
-                if status and status not in text:
+                if status and status not in text and not owner_snapshot_docs[text_name]:
                     problems.append(f"{text_name} does not mention current final gate status {status}")
         for text_name, text in (("runbook", runbook), ("checklist", checklist), ("release_notes", notes)):
             if "full_parity_claimed=false" not in text and "does not claim full" not in text:
@@ -446,19 +477,6 @@ def _release_state_docs_check(
         details=details,
         error="; ".join(problems) if problems else None,
     )
-
-
-def _has_owner_verified_tag_ready_snapshot(runbook: str, checklist: str, notes: str) -> bool:
-    combined = "\n".join((runbook, checklist, notes))
-    required_tokens = (
-        "owner-verified",
-        "ready_for_rc_tag",
-        "643a017b3a2ae00be212d186e2681a147b46bf6b",
-        "x-agent-commercial-rc-20260608",
-        "08cd6d114e0c0cb357ccea3e529aed7b2aea1045",
-        "explicitly approves correcting",
-    )
-    return all(token in combined for token in required_tokens)
 
 
 def _final_gate_bootstrap_blockers(final_payload: dict[str, Any]) -> list[str]:

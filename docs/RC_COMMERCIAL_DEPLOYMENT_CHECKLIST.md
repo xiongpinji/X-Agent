@@ -16,7 +16,8 @@ needs security, runtime, CI, documentation, and rollback proof.
   Curator MVP, Gateway dry-run mode, installer, doctor, and IDE roadmap.
 - Non-claim: do not claim full Codex or Hermes parity without broader external
   product, production, IDE, ecosystem, and real-provider evidence.
-- Machine boundary: current local final gate is `ready_for_rc_tag` and
+- Machine boundary: do not treat the current checkout as tag-ready until the
+  owner-verified finalization command is rerun for the current HEAD and reports
   `full_parity_claimed=false`.
 
 ## Current Evidence Snapshot
@@ -78,17 +79,15 @@ Observed status:
   ASCII-only model directory `D:\ollama-models`; the sentinel response
   `xagent-rc-ok` was recorded. Feishu, GitHub issue-to-PR, and hosted Actions
   are verified in the owner-controlled RC evidence snapshot.
-- RC final gate: `ready_for_rc_tag`; local gates and owner-controlled external
-  resources are green after the fixed-point refresh. Intermediate refreshes can
-  temporarily report
-  `ready_with_receipt_refresh_required` until receipt and evidence-pack reports
-  are regenerated in order.
-- RC tag consistency: owner-verified evidence is for commit
-  `643a017b3a2ae00be212d186e2681a147b46bf6b`, while the already-pushed
-  `x-agent-commercial-rc-20260608` tag currently points at
-  `08cd6d114e0c0cb357ccea3e529aed7b2aea1045`. Do not hand off that tag as the
+- RC final gate: owner-verified evidence reports `ready_for_rc_tag` for commit
+  `643a017b3a2ae00be212d186e2681a147b46bf6b`; local gates and
+  owner-controlled external resources are green after the fixed-point refresh.
+  The already-pushed `x-agent-commercial-rc-20260608` tag currently points at
+  `08cd6d114e0c0cb357ccea3e529aed7b2aea1045`; do not hand off that tag as the
   verified RC tag until the owner creates a new tag at the verified commit or
-  explicitly approves correcting the pushed tag.
+  explicitly approves correcting the pushed tag. Intermediate refreshes can
+  temporarily report `ready_with_receipt_refresh_required` until receipt and
+  evidence-pack reports are regenerated in order.
 - RC final gate also enforces release receipt freshness: the receipt
   `generated_at` must not be older than the source bundle, artifact integrity,
   owner gate plan, owner handoff gate, `owner_env_template`,
@@ -341,11 +340,11 @@ Runtime smoke evidence captured on 2026-06-06:
 - `scripts/rc_final_gate.py` reads the gap matrix, release audit, runtime
   smoke, external smoke, owner gate plan, install/release, supply-chain,
   secrets, source bundle, and staging plan reports, then writes
-  `.xagent_runtime/reports/rc-final-gate.json`. With current owner-verified
-  evidence it reports `ready_for_rc_tag` because Feishu, GitHub issue-to-PR,
-  and hosted Actions owner resources are verified. The latest final gate has
-  `rc_candidate=true`, `full_parity_claimed=false`,
-  `can_stage_candidate_files=true`, and `can_tag_rc_now=true`.
+  `.xagent_runtime/reports/rc-final-gate.json`. The last owner-verified
+  snapshot reported tag readiness because Feishu, GitHub issue-to-PR, and
+  hosted Actions owner resources were verified for its recorded commit. Rerun
+  `scripts/rc_owner_verified_finalize.py` for the current HEAD before making
+  any current tag-readiness claim.
 - `scripts/rc_owner_gate_plan.py` writes
   `.xagent_runtime/reports/rc-owner-gate-plan.json`. Hosted GitHub Actions
   remains an owner gate until `XAGENT_COMMERCIAL_RC_GITHUB_ACTIONS_RUN_URL`
