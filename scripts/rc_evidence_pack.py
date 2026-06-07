@@ -297,12 +297,10 @@ def _security_scan(files: list[EvidencePackFile]) -> EvidencePackCheck:
 
 def _scan_privacy_file(path: Path, archive_path: str) -> list[dict[str, Any]]:
     findings: list[dict[str, Any]] = []
-    if path.suffix.lower() not in TEXT_SUFFIXES:
+    archive_text = _archive_text(path)
+    if archive_text is None:
         return findings
-    try:
-        lines = path.read_text(encoding="utf-8").splitlines()
-    except UnicodeDecodeError:
-        return findings
+    lines = archive_text.splitlines()
     for line_number, line in enumerate(lines, start=1):
         for pattern in LOCAL_PATH_PATTERNS:
             for match in pattern.finditer(line):
@@ -346,14 +344,21 @@ def _sanitize_archive_text(text: str) -> str:
     return text.replace("\ufffd", "<replacement-char>")
 
 
-def _archive_text_bytes(path: Path) -> bytes | None:
+def _archive_text(path: Path) -> str | None:
     if path.suffix.lower() not in TEXT_SUFFIXES:
         return None
     try:
         text = path.read_text(encoding="utf-8")
     except UnicodeDecodeError:
         return None
-    return _sanitize_archive_text(text).encode("utf-8")
+    return _sanitize_archive_text(text)
+
+
+def _archive_text_bytes(path: Path) -> bytes | None:
+    archive_text = _archive_text(path)
+    if archive_text is None:
+        return None
+    return archive_text.encode("utf-8")
 
 
 def _receipt_approval_request_problems(

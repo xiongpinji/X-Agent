@@ -401,29 +401,51 @@ def test_evidence_pack_fails_on_secret_like_handoff_text(tmp_path: Path, monkeyp
     assert "secret-like" in str(check.error)
 
 
-def test_evidence_pack_fails_on_local_user_runtime_paths(tmp_path: Path, monkeypatch) -> None:
+def test_evidence_pack_redacts_local_user_runtime_paths_before_privacy_scan(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
     paths = _write_pack_fixture(tmp_path, monkeypatch)
+    output = tmp_path / ".xagent_runtime" / "release" / "evidence.zip"
+    raw_path = _windows_user_path(
+        "AppData",
+        "Local",
+        "uv",
+        "cache",
+        "archive-v0",
+        "example",
+        "httpx",
+    )
+    _write_json(
+        tmp_path / ".xagent_runtime" / "reports" / "codex-hermes-gap-closure.json",
+        {
+            "status": "passed",
+            "generated_at": "2026-06-05T10:00:00Z",
+            "checks": [{"name": "gap_matrix", "status": "passed"}],
+            "stdout_tail": [f"warning from dependency cache: {raw_path}"],
+        },
+    )
+
+    report = build_evidence_pack(receipt_path=paths["receipt"], output_path=output)
+
+    assert report.status == "created"
+    check = next(item for item in report.checks if item.name == "evidence_local_path_privacy_scan")
+    assert check.status == "passed"
+    assert check.details["privacy_findings"] == []
+    with zipfile.ZipFile(output) as archive:
+        archived_text = archive.read(".xagent_runtime/reports/codex-hermes-gap-closure.json").decode("utf-8")
+    assert "<redacted-local-path>" in archived_text
+    assert raw_path not in archived_text
+    assert raw_path.replace("\\", "\\\\") not in archived_text
+
+
+def test_evidence_pack_fails_on_unredacted_runtime_marker(tmp_path: Path, monkeypatch) -> None:
+    paths = _write_pack_fixture(tmp_path, monkeypatch)
+    runner = _owner_gate_runner_report()
+    runner["stdout_tail"] = ["fallback command still references hermes-agent runtime"]
     _write_json(
         tmp_path / ".xagent_runtime" / "reports" / "rc-owner-gate-runner.json",
-        {
-            "status": "planned",
-            "steps": [
-                {
-                    "command": [
-                        _windows_user_path(
-                            "AppData",
-                            "Local",
-                            "hermes",
-                            "hermes-agent",
-                            "venv",
-                            "Scripts",
-                            "python.exe",
-                        ),
-                        "scripts/rc_external_smoke.py",
-                    ]
-                }
-            ],
-        },
+        runner,
     )
 
     report = build_evidence_pack(receipt_path=paths["receipt"])
@@ -434,33 +456,33 @@ def test_evidence_pack_fails_on_local_user_runtime_paths(tmp_path: Path, monkeyp
     assert "local user/runtime path" in str(check.error)
 
 
-def test_evidence_pack_fails_on_general_user_runtime_paths(tmp_path: Path, monkeypatch) -> None:
+def test_evidence_pack_redacts_general_user_runtime_paths_before_privacy_scan(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
     paths = _write_pack_fixture(tmp_path, monkeypatch)
+    output = tmp_path / ".xagent_runtime" / "release" / "evidence.zip"
+    raw_paths = [
+        _windows_user_path(".codex", "bin", "python.exe"),
+        _posix_user_path("home", ".agents", "tools", "python"),
+        _posix_user_path("Users", "Library", "Application Support", "X-Agent", "runtime"),
+    ]
+    runner = _owner_gate_runner_report()
+    runner["diagnostics"] = raw_paths
     _write_json(
         tmp_path / ".xagent_runtime" / "reports" / "rc-owner-gate-runner.json",
-        {
-            "status": "planned",
-            "steps": [
-                {
-                    "command": [
-                        _windows_user_path(".codex", "bin", "python.exe"),
-                        "scripts/rc_external_smoke.py",
-                    ]
-                },
-                {"command": [_posix_user_path("home", ".agents", "tools", "python"), "scripts/rc_final_gate.py"]},
-                {
-                    "command": [
-                        _posix_user_path("Users", "Library", "Application Support", "X-Agent", "runtime"),
-                        "scripts/rc_final_gate.py",
-                    ]
-                },
-            ],
-        },
+        runner,
     )
 
-    report = build_evidence_pack(receipt_path=paths["receipt"])
+    report = build_evidence_pack(receipt_path=paths["receipt"], output_path=output)
 
-    assert report.status == "failed"
+    assert report.status == "created"
     check = next(item for item in report.checks if item.name == "evidence_local_path_privacy_scan")
-    assert check.status == "failed"
-    assert len(check.details["privacy_findings"]) == 3
+    assert check.status == "passed"
+    assert check.details["privacy_findings"] == []
+    with zipfile.ZipFile(output) as archive:
+        archived_text = archive.read(".xagent_runtime/reports/rc-owner-gate-runner.json").decode("utf-8")
+    assert "<redacted-local-path>" in archived_text
+    for raw_path in raw_paths:
+        assert raw_path not in archived_text
+        assert raw_path.replace("\\", "\\\\") not in archived_text
