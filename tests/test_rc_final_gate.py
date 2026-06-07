@@ -755,7 +755,7 @@ def test_final_gate_rejects_future_dated_external_smoke_even_when_owner_gates_ve
     assert "external_smoke generated_at is in the future" in str(gate.error)
 
 
-def test_final_gate_requires_receipt_refresh_when_owner_gates_verified_but_receipt_is_not_tag_ready(
+def test_final_gate_allows_receipt_only_refresh_cycle_when_owner_gates_verified(
     tmp_path: Path,
 ) -> None:
     inputs = _inputs(
@@ -778,14 +778,20 @@ def test_final_gate_requires_receipt_refresh_when_owner_gates_verified_but_recei
             "next_commands": [],
         },
     )
+    receipt = json.loads(inputs["release_receipt"].read_text(encoding="utf-8"))
+    receipt["final_gate"] = {"status": "ready_with_receipt_refresh_required"}
+    receipt["approval_request"]["final_gate_status"] = "ready_with_receipt_refresh_required"
+    receipt["approval_request"]["can_tag_rc_now"] = False
+    receipt["approval_request"]["remaining_risks"] = []
+    _write_json(inputs["release_receipt"], receipt)
 
     report = run_final_gate(inputs)
 
-    assert report.status == "ready_with_receipt_refresh_required"
-    assert report.release_decision["can_tag_rc_now"] is False
+    assert report.status == "ready_for_rc_tag"
+    assert report.release_decision["can_tag_rc_now"] is True
     gate = next(item for item in report.local_gates if item.name == "release_receipt")
-    assert gate.status == "refresh_required"
-    assert "must be ready_for_rc_tag when owner gate plan is verified" in str(gate.error)
+    assert gate.ok is True
+    assert gate.status == "created"
 
 
 def test_final_gate_fails_when_owner_gate_plan_verified_with_stale_evidence(tmp_path: Path) -> None:

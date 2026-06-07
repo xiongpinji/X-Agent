@@ -878,6 +878,28 @@ def _receipt_approval_request_problems(section: dict[str, Any], payload: dict[st
     return problems
 
 
+def _receipt_is_refreshed_from_receipt_only_final_gate_cycle(
+    payload: dict[str, Any] | None,
+    owner_gate_plan_payload: dict[str, Any] | None,
+) -> bool:
+    """Detect the expected receipt/final-gate fixed point after owner gates are verified."""
+
+    if payload is None or owner_gate_plan_payload is None:
+        return False
+    if _status(owner_gate_plan_payload, "status") != "verified":
+        return False
+    final_gate = payload.get("final_gate") if isinstance(payload.get("final_gate"), dict) else {}
+    if final_gate.get("status") != "ready_with_receipt_refresh_required":
+        return False
+    approval_request = payload.get("approval_request")
+    if not isinstance(approval_request, dict):
+        return False
+    return (
+        approval_request.get("final_gate_status") == "ready_with_receipt_refresh_required"
+        and approval_request.get("can_tag_rc_now") is False
+    )
+
+
 def _release_receipt_gate(
     path: Path,
     artifact_integrity_path: Path,
@@ -1023,7 +1045,11 @@ def _release_receipt_gate(
         }:
             problems.append("receipt final_gate.status is not a recognized refreshed final gate state")
         owner_gate_plan_status = _status(owner_gate_plan_payload, "status")
-        if owner_gate_plan_status == "verified" and final_gate_status != "ready_for_rc_tag":
+        if (
+            owner_gate_plan_status == "verified"
+            and final_gate_status != "ready_for_rc_tag"
+            and not _receipt_is_refreshed_from_receipt_only_final_gate_cycle(payload, owner_gate_plan_payload)
+        ):
             problems.append("receipt final_gate.status must be ready_for_rc_tag when owner gate plan is verified")
         checks = payload.get("checks")
         if isinstance(checks, list):
