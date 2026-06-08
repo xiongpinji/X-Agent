@@ -16,7 +16,7 @@ def test_sdk_noninteractive_report_default_is_read_only() -> None:
     report = build_sdk_noninteractive_report()
     payload = report.to_dict()
 
-    assert report.status == "sdk_runtime_flag_application_execute_contract_owner_review_ready"
+    assert report.status == "sdk_live_runtime_flag_application_implementation_readiness_plan_ready"
     assert report.evidence_type == "sdk_noninteractive_cli_contract"
     assert report.full_codex_parity_claimed is False
     assert report.dry_run is True
@@ -767,6 +767,40 @@ def test_sdk_noninteractive_report_covers_runtime_flag_application_execute_contr
     assert review["mutation_performed"] is False
 
 
+def test_sdk_noninteractive_report_covers_live_runtime_flag_application_readiness_plan() -> None:
+    plan = build_sdk_noninteractive_report().live_runtime_flag_application_implementation_readiness_plan
+
+    assert plan["stage"] == "live_runtime_flag_application_implementation_readiness_plan"
+    assert plan["plan_status"] == "ready_but_disabled"
+    assert plan["plan_type"] == "sdk_write_runner_live_runtime_flag_application_implementation"
+    assert plan["owner_gate"]["requires_independent_owner_review_acceptance"] is True
+    assert plan["owner_gate"]["requires_explicit_live_application_request"] is True
+    assert plan["adapter_boundary"]["env_var"] == "XAGENT_SDK_WRITE_RUNNER_ENABLED"
+    assert plan["adapter_boundary"]["runtime_flag_reader_required"] is True
+    assert plan["adapter_boundary"]["runtime_flag_writer_enabled"] is False
+    assert plan["adapter_boundary"]["adapter_import_allowed"] is False
+    assert plan["adapter_boundary"]["adapter_execution_allowed"] is False
+    assert "apply_runtime_flag_for_smoke_window" in plan["implementation_steps"]
+    assert plan["audit_contract"]["future_success_action"] == (
+        "sdk.write_runner.runtime_flag_application.applied"
+    )
+    assert plan["rollback_plan"]["disable_runtime_flag_first"] is True
+    assert plan["rollback_plan"]["do_not_invoke_write_runner_on_application_failure"] is True
+    assert plan["rollback_plan"]["do_not_mark_approval_executed"] is True
+    assert plan["smoke_plan"]["requires_no_write_runner_invocation"] is True
+    assert plan["smoke_plan"]["requires_no_file_network_channel_mutation"] is True
+    assert plan["implementation_enabled"] is False
+    assert plan["runtime_flag_enabled"] is False
+    assert plan["flag_application_performed"] is False
+    assert plan["execute_enabled"] is False
+    assert plan["write_runner_enabled"] is False
+    assert plan["adapter_execution_enabled"] is False
+    assert plan["agent_execution_enabled"] is False
+    assert plan["runner_invoked"] is False
+    assert plan["mark_executed"] is False
+    assert plan["mutation_performed"] is False
+
+
 def test_sdk_noninteractive_report_keeps_feishu_first_channel_strategy() -> None:
     strategy = build_sdk_noninteractive_report().channel_strategy
 
@@ -787,7 +821,7 @@ def test_write_sdk_noninteractive_report_json_and_markdown(tmp_path: Path) -> No
 
     payload = json.loads(json_output.read_text(encoding="utf-8"))
     markdown = markdown_output.read_text(encoding="utf-8")
-    assert payload["status"] == "sdk_runtime_flag_application_execute_contract_owner_review_ready"
+    assert payload["status"] == "sdk_live_runtime_flag_application_implementation_readiness_plan_ready"
     assert payload["full_codex_parity_claimed"] is False
     assert payload["mutation_performed"] is False
     assert "# X-Agent SDK Non-Interactive Report" in markdown
@@ -799,6 +833,7 @@ def test_write_sdk_noninteractive_report_json_and_markdown(tmp_path: Path) -> No
     assert "## Runtime Flag Application Owner Approval Workflow" in markdown
     assert "## Runtime Flag Application Execute Contract Workflow" in markdown
     assert "## Runtime Flag Application Execute Contract Owner Review" in markdown
+    assert "## Live Runtime Flag Application Implementation Readiness Plan" in markdown
     assert "## Write Runner Implementation Plan" in markdown
     assert "## Runtime Smoke Runbook" in markdown
     assert "## Runtime Enablement Receipt" in markdown

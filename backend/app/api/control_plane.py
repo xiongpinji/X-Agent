@@ -1174,6 +1174,11 @@ async def invoke_sdk_control_plane(
             sdk_metadata["runtime_flag_application_execute_contract_workflow"],
         )
     )
+    sdk_metadata["live_runtime_flag_application_implementation_readiness_plan"] = (
+        _sdk_live_runtime_flag_application_implementation_readiness_plan_contract(
+            sdk_metadata["runtime_flag_application_execute_contract_owner_review"],
+        )
+    )
     return SDKControlPlaneInvokeResponse(
         id=control_request.id,
         ok=control_response.ok,
@@ -3009,7 +3014,7 @@ def _sdk_backend_stub_metadata(
     read_only_runner_contract = _sdk_read_only_runner_contract(original, request, response)
     write_runner_safety_contract = _sdk_write_runner_safety_contract(original, request, execution_adapter_contract)
     return {
-        "status": "sdk_runtime_flag_application_execute_contract_owner_review_ready",
+        "status": "sdk_live_runtime_flag_application_implementation_readiness_plan_ready",
         "operation": request.context.sdk_operation or original.operation,
         "method": request.method,
         "sdk_surface": request.context.sdk_surface or "python",
@@ -3051,6 +3056,7 @@ def _sdk_backend_stub_metadata(
             "Runtime implementation readiness lock recording is owner-gated and disabled for execution.",
             "Runtime flag application execute contract recording is owner-gated and disabled for execution.",
             "Runtime flag application execute contract owner review is ready but does not enable runtime effects.",
+            "Live runtime flag application implementation readiness is declared but no adapter is enabled.",
             "No SDK HTTP adapter execution, agent runner invocation, channel send, file change, or network mutation is enabled.",
             "Write methods remain owner-gated behind the approval/sandbox/admin contract.",
             "Feishu remains the only domestic V1 pilot channel.",
@@ -4957,6 +4963,123 @@ def _sdk_runtime_flag_application_execute_contract_owner_review_contract(
             "This owner review pack is read-only metadata returned by /sdk/invoke.",
             "It does not apply XAGENT_SDK_WRITE_RUNNER_ENABLED.",
             "It does not invoke the SDK write runner, mark approvals executed, or mutate external systems.",
+        ],
+    }
+
+
+def _sdk_live_runtime_flag_application_implementation_readiness_plan_contract(
+    owner_review: dict[str, Any],
+) -> dict[str, Any]:
+    checks = {
+        "owner_review_ready_but_disabled": owner_review.get("review_status") == "ready_but_disabled",
+        "manual_review_required": owner_review.get("owner_review_policy", {}).get(
+            "manual_review_required"
+        )
+        is True,
+        "independent_review_required": owner_review.get("owner_review_policy", {}).get(
+            "independent_review_required"
+        )
+        is True,
+        "explicit_live_application_request_required": owner_review.get("owner_review_policy", {}).get(
+            "requires_live_application_request"
+        )
+        is True,
+        "owner_review_cannot_apply_flag": owner_review.get("owner_review_policy", {}).get(
+            "can_apply_runtime_flag_after_review"
+        )
+        is False,
+        "owner_review_cannot_invoke_runner": owner_review.get("owner_review_policy", {}).get(
+            "can_invoke_write_runner_after_review"
+        )
+        is False,
+        "runtime_flag_still_disabled": owner_review.get("runtime_flag_enabled") is False,
+        "runner_not_invoked": owner_review.get("runner_invoked") is False,
+        "mutation_still_disabled": owner_review.get("mutation_performed") is False,
+    }
+    ready = all(checks.values())
+    return {
+        "available": owner_review.get("available") is True,
+        "stage": "live_runtime_flag_application_implementation_readiness_plan",
+        "plan_status": "ready_but_disabled" if ready else "blocked",
+        "plan_type": "sdk_write_runner_live_runtime_flag_application_implementation",
+        "owner_gate": {
+            "requires_independent_owner_review_acceptance": True,
+            "requires_explicit_live_application_request": True,
+            "requires_operator_acknowledgement": True,
+            "requires_smoke_window": True,
+            "requires_rollback_owner": True,
+        },
+        "adapter_boundary": {
+            "module": "backend.app.api.control_plane",
+            "function": "record_sdk_runtime_flag_application_execute_contract",
+            "future_adapter": "sdk_runtime_flag_application_adapter",
+            "env_var": "XAGENT_SDK_WRITE_RUNNER_ENABLED",
+            "runtime_flag_reader_required": True,
+            "runtime_flag_writer_enabled": False,
+            "adapter_import_allowed": False,
+            "adapter_execution_allowed": False,
+        },
+        "implementation_steps": [
+            "read_execute_contract_by_strict_audit_keys",
+            "verify_owner_review_accepted",
+            "verify_explicit_live_application_request",
+            "acquire_idempotency_lock",
+            "apply_runtime_flag_for_smoke_window",
+            "persist_runtime_flag_application_receipt",
+            "run_post_application_readiness_smoke",
+            "keep_write_runner_wiring_separate_until_smoke_passes",
+        ],
+        "audit_contract": {
+            "future_start_action": "sdk.write_runner.runtime_flag_application.started",
+            "future_success_action": "sdk.write_runner.runtime_flag_application.applied",
+            "future_failure_action": "sdk.write_runner.runtime_flag_application.failed",
+            "resource_type": "sdk_write_runner_runtime_flag_application",
+            "required_receipt_fields": [
+                "runtime_flag_execute_contract_id",
+                "approval_id",
+                "runtime_flag_approval_id",
+                "idempotency_key_hash",
+                "operator_id",
+                "runtime_flag_name",
+                "previous_state",
+                "target_state",
+                "rollback_plan_ref",
+                "smoke_runbook_ref",
+            ],
+        },
+        "rollback_plan": {
+            "disable_runtime_flag_first": True,
+            "persist_failure_receipt": True,
+            "do_not_invoke_write_runner_on_application_failure": True,
+            "do_not_mark_approval_executed": True,
+            "operator_runbook": "docs/runbooks/sdk-write-runner-runtime-enable.md",
+        },
+        "smoke_plan": {
+            "requires_flag_state_readback": True,
+            "requires_no_write_runner_invocation": True,
+            "requires_no_file_network_channel_mutation": True,
+            "requires_owner_review_receipt": True,
+        },
+        "checks": checks,
+        "next_gate": "owner_requested_live_runtime_flag_application_adapter",
+        "implementation_enabled": False,
+        "runtime_flag_enabled": False,
+        "flag_application_performed": False,
+        "execute_enabled": False,
+        "write_runner_enabled": False,
+        "adapter_execution_enabled": False,
+        "agent_execution_enabled": False,
+        "write_execution_enabled": False,
+        "runner_invoked": False,
+        "mark_executed": False,
+        "mutation_performed": False,
+        "network_mutation_performed": False,
+        "file_mutation_performed": False,
+        "channel_mutation_performed": False,
+        "known_limits": [
+            "This is an implementation readiness plan, not the live runtime flag adapter.",
+            "It does not read, write, or apply XAGENT_SDK_WRITE_RUNNER_ENABLED.",
+            "The SDK write runner remains a separate follow-up gate after runtime flag application smoke evidence.",
         ],
     }
 

@@ -74,6 +74,7 @@ class SDKNonInteractiveReport:
     runtime_flag_application_owner_approval_workflow: dict[str, Any]
     runtime_flag_application_execute_contract_workflow: dict[str, Any]
     runtime_flag_application_execute_contract_owner_review: dict[str, Any]
+    live_runtime_flag_application_implementation_readiness_plan: dict[str, Any]
     channel_strategy: dict[str, Any]
     checks: list[SDKNonInteractiveCheck]
     official_sources: list[str]
@@ -441,6 +442,9 @@ def _build_checks(report_payload: dict[str, Any]) -> list[SDKNonInteractiveCheck
     runtime_flag_execute_contract = report_payload["runtime_flag_application_execute_contract_workflow"]
     runtime_flag_execute_contract_review = report_payload[
         "runtime_flag_application_execute_contract_owner_review"
+    ]
+    live_flag_application_plan = report_payload[
+        "live_runtime_flag_application_implementation_readiness_plan"
     ]
     methods = [_sdk_contract_method(contract) for contract in contracts]
     command_methods = [command["method"] for command in commands]
@@ -1269,6 +1273,52 @@ def _build_checks(report_payload: dict[str, Any]) -> list[SDKNonInteractiveCheck
             else "runtime flag application execute contract owner review is not ready but disabled",
         ),
         SDKNonInteractiveCheck(
+            name="live_runtime_flag_application_implementation_readiness_plan_ready",
+            status="passed"
+            if live_flag_application_plan.get("stage")
+            == "live_runtime_flag_application_implementation_readiness_plan"
+            and live_flag_application_plan.get("plan_status") == "ready_but_disabled"
+            and live_flag_application_plan.get("plan_type")
+            == "sdk_write_runner_live_runtime_flag_application_implementation"
+            and live_flag_application_plan.get("owner_gate", {}).get(
+                "requires_independent_owner_review_acceptance"
+            )
+            is True
+            and live_flag_application_plan.get("owner_gate", {}).get(
+                "requires_explicit_live_application_request"
+            )
+            is True
+            and live_flag_application_plan.get("adapter_boundary", {}).get(
+                "runtime_flag_writer_enabled"
+            )
+            is False
+            and live_flag_application_plan.get("adapter_boundary", {}).get(
+                "adapter_execution_allowed"
+            )
+            is False
+            and live_flag_application_plan.get("rollback_plan", {}).get(
+                "do_not_invoke_write_runner_on_application_failure"
+            )
+            is True
+            and live_flag_application_plan.get("smoke_plan", {}).get("requires_no_write_runner_invocation")
+            is True
+            and live_flag_application_plan.get("implementation_enabled") is False
+            and live_flag_application_plan.get("runtime_flag_enabled") is False
+            and live_flag_application_plan.get("flag_application_performed") is False
+            and live_flag_application_plan.get("execute_enabled") is False
+            and live_flag_application_plan.get("write_runner_enabled") is False
+            and live_flag_application_plan.get("adapter_execution_enabled") is False
+            and live_flag_application_plan.get("agent_execution_enabled") is False
+            and live_flag_application_plan.get("runner_invoked") is False
+            and live_flag_application_plan.get("mark_executed") is False
+            and live_flag_application_plan.get("mutation_performed") is False
+            else "failed",
+            details=live_flag_application_plan,
+            error=None
+            if live_flag_application_plan.get("plan_status") == "ready_but_disabled"
+            else "live runtime flag application implementation readiness plan is not ready but disabled",
+        ),
+        SDKNonInteractiveCheck(
             name="feishu_domestic_v1_primary",
             status="passed"
             if report_payload["channel_strategy"].get("domestic_v1_primary") == "feishu"
@@ -1292,7 +1342,7 @@ def _build_checks(report_payload: dict[str, Any]) -> list[SDKNonInteractiveCheck
 
 def build_sdk_noninteractive_report() -> SDKNonInteractiveReport:
     report_payload: dict[str, Any] = {
-        "status": "sdk_runtime_flag_application_execute_contract_owner_review_ready",
+        "status": "sdk_live_runtime_flag_application_implementation_readiness_plan_ready",
         "generated_at": _utc_now(),
         "evidence_type": "sdk_noninteractive_cli_contract",
         "full_codex_parity_claimed": False,
@@ -1305,7 +1355,7 @@ def build_sdk_noninteractive_report() -> SDKNonInteractiveReport:
         "backend_stub": {
             "endpoint": "/api/v1/control-plane/sdk/invoke",
             "normalizes_to": "/api/v1/control-plane/invoke",
-            "status": "sdk_runtime_flag_application_execute_contract_owner_review_ready",
+            "status": "sdk_live_runtime_flag_application_implementation_readiness_plan_ready",
             "approval_subject_type": "command",
             "approval_intent_created_for_write_methods": True,
             "owner_gate_required": True,
@@ -2464,6 +2514,84 @@ def build_sdk_noninteractive_report() -> SDKNonInteractiveReport:
             "file_mutation_performed": False,
             "channel_mutation_performed": False,
         },
+        "live_runtime_flag_application_implementation_readiness_plan": {
+            "stage": "live_runtime_flag_application_implementation_readiness_plan",
+            "plan_status": "ready_but_disabled",
+            "plan_type": "sdk_write_runner_live_runtime_flag_application_implementation",
+            "owner_gate": {
+                "requires_independent_owner_review_acceptance": True,
+                "requires_explicit_live_application_request": True,
+                "requires_operator_acknowledgement": True,
+                "requires_smoke_window": True,
+                "requires_rollback_owner": True,
+            },
+            "adapter_boundary": {
+                "module": "backend.app.api.control_plane",
+                "function": "record_sdk_runtime_flag_application_execute_contract",
+                "future_adapter": "sdk_runtime_flag_application_adapter",
+                "env_var": "XAGENT_SDK_WRITE_RUNNER_ENABLED",
+                "runtime_flag_reader_required": True,
+                "runtime_flag_writer_enabled": False,
+                "adapter_import_allowed": False,
+                "adapter_execution_allowed": False,
+            },
+            "implementation_steps": [
+                "read_execute_contract_by_strict_audit_keys",
+                "verify_owner_review_accepted",
+                "verify_explicit_live_application_request",
+                "acquire_idempotency_lock",
+                "apply_runtime_flag_for_smoke_window",
+                "persist_runtime_flag_application_receipt",
+                "run_post_application_readiness_smoke",
+                "keep_write_runner_wiring_separate_until_smoke_passes",
+            ],
+            "audit_contract": {
+                "future_start_action": "sdk.write_runner.runtime_flag_application.started",
+                "future_success_action": "sdk.write_runner.runtime_flag_application.applied",
+                "future_failure_action": "sdk.write_runner.runtime_flag_application.failed",
+                "resource_type": "sdk_write_runner_runtime_flag_application",
+                "required_receipt_fields": [
+                    "runtime_flag_execute_contract_id",
+                    "approval_id",
+                    "runtime_flag_approval_id",
+                    "idempotency_key_hash",
+                    "operator_id",
+                    "runtime_flag_name",
+                    "previous_state",
+                    "target_state",
+                    "rollback_plan_ref",
+                    "smoke_runbook_ref",
+                ],
+            },
+            "rollback_plan": {
+                "disable_runtime_flag_first": True,
+                "persist_failure_receipt": True,
+                "do_not_invoke_write_runner_on_application_failure": True,
+                "do_not_mark_approval_executed": True,
+                "operator_runbook": "docs/runbooks/sdk-write-runner-runtime-enable.md",
+            },
+            "smoke_plan": {
+                "requires_flag_state_readback": True,
+                "requires_no_write_runner_invocation": True,
+                "requires_no_file_network_channel_mutation": True,
+                "requires_owner_review_receipt": True,
+            },
+            "next_gate": "owner_requested_live_runtime_flag_application_adapter",
+            "implementation_enabled": False,
+            "runtime_flag_enabled": False,
+            "flag_application_performed": False,
+            "execute_enabled": False,
+            "write_runner_enabled": False,
+            "adapter_execution_enabled": False,
+            "agent_execution_enabled": False,
+            "write_execution_enabled": False,
+            "runner_invoked": False,
+            "mark_executed": False,
+            "mutation_performed": False,
+            "network_mutation_performed": False,
+            "file_mutation_performed": False,
+            "channel_mutation_performed": False,
+        },
         "channel_strategy": _channel_strategy(),
         "official_sources": list(CODEX_SDK_SOURCES),
         "known_limits": [
@@ -2496,6 +2624,7 @@ def build_sdk_noninteractive_report() -> SDKNonInteractiveReport:
             "Runtime flag application owner approval can be recorded, but it does not apply the runtime flag.",
             "Runtime flag application execute contract can be recorded, but it does not apply the runtime flag or invoke the write runner.",
             "Runtime flag application execute contract owner review is ready, but it does not enable runtime effects.",
+            "Live runtime flag application implementation readiness is planned, but no adapter is enabled.",
             "No SDK HTTP adapter, agent runner, file mutation, channel send, or network mutation is enabled.",
             "Feishu remains the only domestic V1 pilot channel in this contract.",
             "Slack is tracked as a Codex reference surface, but it is non-blocking for the domestic first version.",
@@ -2728,6 +2857,13 @@ def render_markdown_report(report: SDKNonInteractiveReport) -> str:
         f"- Manual review required: `{report.runtime_flag_application_execute_contract_owner_review['owner_review_policy']['manual_review_required']}`\n"
         f"- Can apply runtime flag after review: `{report.runtime_flag_application_execute_contract_owner_review['owner_review_policy']['can_apply_runtime_flag_after_review']}`\n"
         f"- Runner invoked: `{report.runtime_flag_application_execute_contract_owner_review['runner_invoked']}`\n\n"
+        "## Live Runtime Flag Application Implementation Readiness Plan\n\n"
+        f"- Stage: `{report.live_runtime_flag_application_implementation_readiness_plan['stage']}`\n"
+        f"- Plan status: `{report.live_runtime_flag_application_implementation_readiness_plan['plan_status']}`\n"
+        f"- Plan type: `{report.live_runtime_flag_application_implementation_readiness_plan['plan_type']}`\n"
+        f"- Runtime flag writer enabled: `{report.live_runtime_flag_application_implementation_readiness_plan['adapter_boundary']['runtime_flag_writer_enabled']}`\n"
+        f"- Adapter execution allowed: `{report.live_runtime_flag_application_implementation_readiness_plan['adapter_boundary']['adapter_execution_allowed']}`\n"
+        f"- Runner invoked: `{report.live_runtime_flag_application_implementation_readiness_plan['runner_invoked']}`\n\n"
         "## Channel Strategy\n\n"
         f"- Domestic V1 primary: `{report.channel_strategy['domestic_v1_primary']}`\n"
         f"- Telegram required: `{report.channel_strategy['telegram_required']}`\n"
@@ -2775,7 +2911,7 @@ def main() -> int:
         print(f"- {check.name}: {check.status}")
         if check.error:
             print(f"  error: {check.error}")
-    return 0 if report.status == "sdk_runtime_flag_application_execute_contract_owner_review_ready" else 1
+    return 0 if report.status == "sdk_live_runtime_flag_application_implementation_readiness_plan_ready" else 1
 
 
 if __name__ == "__main__":

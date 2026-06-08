@@ -1025,12 +1025,33 @@ Expected: selected approval and sandbox tests pass.
 - [x] Include required evidence, audit actions, readback keys, and independent review policy.
 - [x] Keep owner review read-only: it does not apply `XAGENT_SDK_WRITE_RUNNER_ENABLED`, invoke the write runner, mark approvals executed, or perform file/network/channel mutation.
 - [x] Promote SDK alignment status to `sdk_runtime_flag_application_execute_contract_owner_review_ready`.
-- [ ] Implement live runtime flag application only after this owner review is independently accepted and explicitly requested; keep write-runner wiring as a separate follow-up gate.
+- [x] Define a live runtime flag application implementation readiness plan before any adapter work begins.
+
+### Task 42: Live Runtime Flag Application Implementation Readiness Plan
+
+**Target:** Declare the concrete future adapter boundary, audit contract, rollback plan, and smoke plan for live runtime flag application while still keeping all runtime effects disabled.
+
+**Files:**
+- Modify: `backend/app/api/control_plane.py`
+- Modify: `scripts/sdk_noninteractive_report.py`
+- Modify: `scripts/latest_codex_alignment.py`
+- Modify: `tests/test_control_plane_protocol.py`
+- Modify: `tests/test_sdk_noninteractive_report.py`
+- Modify: `tests/test_latest_codex_alignment.py`
+- Runtime evidence: `.xagent_runtime/reports/sdk-noninteractive-report.json`
+- Runtime evidence: `.xagent_runtime/reports/latest-codex-alignment.json`
+
+- [x] Add `/sdk/invoke` live runtime flag application implementation readiness plan metadata.
+- [x] Require execute contract owner review readiness, independent owner acceptance, and explicit live application request before any future adapter can be enabled.
+- [x] Define future adapter boundary, audit actions, rollback policy, and smoke requirements.
+- [x] Keep readiness planning read-only: it does not read, write, or apply `XAGENT_SDK_WRITE_RUNNER_ENABLED`, invoke the write runner, mark approvals executed, or perform file/network/channel mutation.
+- [x] Promote SDK alignment status to `sdk_live_runtime_flag_application_implementation_readiness_plan_ready`.
+- [ ] Implement the live runtime flag application adapter only after this readiness plan is owner-accepted and explicitly requested; keep write-runner wiring as a separate follow-up gate.
 
 ## Completion Criteria
 
 - `scripts/latest_codex_alignment.py` returns `latest_codex_alignment_plan_ready`.
-- `scripts/sdk_noninteractive_report.py` returns `sdk_runtime_flag_application_execute_contract_owner_review_ready`.
+- `scripts/sdk_noninteractive_report.py` returns `sdk_live_runtime_flag_application_implementation_readiness_plan_ready`.
 - P0 task board is complete and machine-readable.
 - Feishu Pilot V1 remains `customer_acceptance_pack_ready`.
 - `full_codex_parity_claimed=false` remains true in all generated alignment and pilot reports.
