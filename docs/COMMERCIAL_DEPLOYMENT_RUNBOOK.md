@@ -1,6 +1,6 @@
 # X-Agent Commercial RC Deployment Runbook
 
-Last updated: 2026-06-07
+Last updated: 2026-06-08
 
 This runbook is the deployment handoff for the current
 `codex/codex-hermes-gap-closure` release-candidate branch. It turns the broader
@@ -9,19 +9,25 @@ deployment docs into a commercial RC procedure with explicit verification gates.
 It is not a GA claim and it is not a full Codex/Hermes parity claim. It is a
 commercial pilot/RC deployment path that must still be validated with the
 customer's real provider tokens, channel credentials, and infrastructure.
-The last owner-verified fixed-point final-gate snapshot reported
-`ready_for_rc_tag`, with `full_parity_claimed=false`, after the owner-verified
-refresh chain passed with real Feishu, GitHub issue-to-PR, provider, and hosted
-Actions evidence for commit `643a017b3a2ae00be212d186e2681a147b46bf6b`; the already-pushed tag
-`x-agent-commercial-rc-20260608` currently resolves to
-`08cd6d114e0c0cb357ccea3e529aed7b2aea1045`, so release handoff must not treat
-that pushed tag as verified until the owner creates a new tag at the verified
-commit or explicitly approves correcting the existing remote tag. Earlier
-intermediate refreshes can temporarily report `ready_with_receipt_refresh_required`
-until receipt and evidence-pack reports are regenerated in order. The owner
-finalization command below remains the repeatable tag-readiness proof and must
-be rerun if any release evidence, current HEAD, or owner-controlled variable
-changes. This runbook does not claim full Codex/Hermes parity.
+Current commercial RC readiness is machine-report driven, not inferred from any
+historical tag-ready snapshot. For the active non-destructive RC candidate, read
+`.xagent_runtime/reports/rc-delivery-status.json` and rerun the commands in the
+pre-deploy gate below for the selected commit, hosted Actions run, and RC tag.
+At the time of this update, the selected candidate is
+`x-agent-commercial-rc-20260608-5` at
+`5877b0b273a8d4abd1fad1ce501d673c6cd06f32`; current HEAD, remote branch,
+hosted CI, and tag consistency pass. Current local final gate status is
+`ready_with_owner_gates`, and commercial handoff remains
+`owner_finalize_pending` until the owner reruns the Feishu, GitHub issue-to-PR,
+provider, and hosted Actions gates for that exact SHA. Older owner-verified
+snapshots or earlier pushed tags are historical evidence only and must not be
+treated as current commercial handoff proof. This runbook does not claim full
+Codex/Hermes parity.
+When the owner-verified finalization command passes for the same selected
+commit, hosted Actions run, and RC tag, the current final gate status is
+`ready_for_rc_tag`; rerun `rc_delivery_status.py` immediately after that proof
+so the handoff report records `commercial_rc_ready` before any tag or deployment
+claim.
 Current local provider smoke is verified with Ollama at
 `http://127.0.0.1:11435`, model `qwen2.5:1.5b`, after copying the required
 model blobs to the ASCII-only model directory `D:\ollama-models`. The direct
@@ -135,10 +141,11 @@ Run these from the repository root before packaging or tagging:
 python scripts/codex_hermes_gap_matrix.py --write-report
 python scripts/xagent_doctor.py --json
 python scripts/rc_runtime_smoke.py
-python scripts/rc_owner_verified_finalize.py --provider ollama --ollama-model qwen2.5:1.5b --ollama-base-url http://127.0.0.1:11435
-python scripts/rc_delivery_status.py --expected-commit-sha <40-character-release-commit-sha> --tag-name <rc-tag-name>
+python scripts/rc_owner_verified_finalize.py --provider ollama --ollama-model qwen2.5:1.5b --ollama-base-url http://127.0.0.1:11435 --github-actions-run-url <hosted-commercial-rc-run-url> --github-actions-head-sha <expected-release-commit-sha> --expected-commit-sha <expected-release-commit-sha>
+python scripts/rc_tag_consistency_gate.py --expected-commit-sha <expected-release-commit-sha> --tag-name <selected-rc-tag> --require-match
+python scripts/rc_delivery_status.py --expected-commit-sha <expected-release-commit-sha> --tag-name <selected-rc-tag> --github-actions-run-url <hosted-commercial-rc-run-url> --github-actions-head-sha <expected-release-commit-sha> --fetch-github
 git rev-parse HEAD
-git rev-parse <rc-tag-name>
+git rev-parse <selected-rc-tag>
 ```
 
 Provider smoke is a sentinel check, not just a connectivity check: the selected
@@ -181,6 +188,9 @@ The final gate also treats `rc-refresh-release-chain.json` as a local gate and
 as an evidence-pack freshness input. If the refresh-chain report is regenerated
 after the evidence pack, rerun `rc_release_receipt.py`, `rc_evidence_pack.py`,
 and `rc_final_gate.py --require-ready-to-tag` before handoff.
+Final-gate fixed-point reports are validators only: they must not relax
+receipt, refresh-chain, owner-gate, secrets, artifact, or source-bundle
+freshness requirements.
 
 The RC final gate also enforces release receipt freshness. The
 `x-agent-commercial-rc-receipt.json` `generated_at` value must not be older than
