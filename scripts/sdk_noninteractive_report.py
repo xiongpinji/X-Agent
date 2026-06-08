@@ -52,6 +52,7 @@ class SDKNonInteractiveReport:
     write_runner_safety_contract: dict[str, Any]
     dry_run_executor_stub: dict[str, Any]
     runtime_evidence_readback: dict[str, Any]
+    runner_safety_review: dict[str, Any]
     channel_strategy: dict[str, Any]
     checks: list[SDKNonInteractiveCheck]
     official_sources: list[str]
@@ -155,6 +156,7 @@ def _build_checks(report_payload: dict[str, Any]) -> list[SDKNonInteractiveCheck
     write_runner = report_payload["write_runner_safety_contract"]
     dry_run_stub = report_payload["dry_run_executor_stub"]
     evidence_readback = report_payload["runtime_evidence_readback"]
+    runner_review = report_payload["runner_safety_review"]
     methods = [contract["request"]["method"] for contract in contracts]
     command_methods = [command["method"] for command in commands]
     cli_execute_targets = [
@@ -328,6 +330,21 @@ def _build_checks(report_payload: dict[str, Any]) -> list[SDKNonInteractiveCheck
             else "runtime evidence readback contract is missing receipt schema",
         ),
         SDKNonInteractiveCheck(
+            name="persisted_receipt_safety_review_ready",
+            status="passed"
+            if runner_review.get("stage") == "persisted_dry_run_receipt_safety_review"
+            and runner_review.get("review_status") == "passed"
+            and runner_review.get("write_runner_enabled") is False
+            and runner_review.get("agent_execution_enabled") is False
+            and runner_review.get("mark_executed") is False
+            and runner_review.get("mutation_performed") is False
+            else "failed",
+            details=runner_review,
+            error=None
+            if runner_review.get("write_runner_enabled") is False
+            else "write runner was enabled before safety review gate completion",
+        ),
+        SDKNonInteractiveCheck(
             name="feishu_domestic_v1_primary",
             status="passed"
             if report_payload["channel_strategy"].get("domestic_v1_primary") == "feishu"
@@ -351,7 +368,7 @@ def _build_checks(report_payload: dict[str, Any]) -> list[SDKNonInteractiveCheck
 
 def build_sdk_noninteractive_report() -> SDKNonInteractiveReport:
     report_payload: dict[str, Any] = {
-        "status": "sdk_dry_run_receipt_persistence_ready",
+        "status": "sdk_write_runner_safety_review_ready",
         "generated_at": _utc_now(),
         "evidence_type": "sdk_noninteractive_cli_contract",
         "full_codex_parity_claimed": False,
@@ -364,7 +381,7 @@ def build_sdk_noninteractive_report() -> SDKNonInteractiveReport:
         "backend_stub": {
             "endpoint": "/api/v1/control-plane/sdk/invoke",
             "normalizes_to": "/api/v1/control-plane/invoke",
-            "status": "sdk_dry_run_receipt_persistence_ready",
+            "status": "sdk_write_runner_safety_review_ready",
             "approval_subject_type": "command",
             "approval_intent_created_for_write_methods": True,
             "owner_gate_required": True,
@@ -523,6 +540,32 @@ def build_sdk_noninteractive_report() -> SDKNonInteractiveReport:
             "file_mutation_performed": False,
             "channel_mutation_performed": False,
         },
+        "runner_safety_review": {
+            "stage": "persisted_dry_run_receipt_safety_review",
+            "review_status": "passed",
+            "required_receipt_checks": [
+                "receipt_available",
+                "receipt_persisted",
+                "status_dry_run_planned",
+                "audit_signature_present",
+                "audit_hash_present",
+                "runner_not_invoked",
+                "mark_executed_false",
+                "mutation_false",
+                "network_mutation_false",
+                "file_mutation_false",
+                "channel_mutation_false",
+            ],
+            "next_gate": "owner_approved_write_runner_implementation_review",
+            "write_runner_enabled": False,
+            "adapter_execution_enabled": False,
+            "agent_execution_enabled": False,
+            "mark_executed": False,
+            "mutation_performed": False,
+            "network_mutation_performed": False,
+            "file_mutation_performed": False,
+            "channel_mutation_performed": False,
+        },
         "channel_strategy": _channel_strategy(),
         "official_sources": list(CODEX_SDK_SOURCES),
         "known_limits": [
@@ -535,6 +578,7 @@ def build_sdk_noninteractive_report() -> SDKNonInteractiveReport:
             "Owner-approved write SDK methods return a safety runner plan and receipt template only.",
             "Owner-approved write SDK dry-run executor stubs persist audit events and dry-run receipts only.",
             "Runtime evidence/read can return the SDK dry-run executor receipt schema and persisted receipt readback.",
+            "Persisted receipt safety review is read-only and does not enable the write runner.",
             "No SDK HTTP adapter, agent runner, file mutation, channel send, or network mutation is enabled.",
             "Feishu remains the only domestic V1 pilot channel in this contract.",
             "Slack is tracked as a Codex reference surface, but it is non-blocking for the domestic first version.",
@@ -613,6 +657,12 @@ def render_markdown_report(report: SDKNonInteractiveReport) -> str:
         f"- Readback method: `{report.runtime_evidence_readback['readback_method']}`\n"
         f"- SDK command: `{report.runtime_evidence_readback['sdk_command']}`\n"
         f"- Receipt schema available: `{report.runtime_evidence_readback['receipt_schema_available']}`\n\n"
+        "## Persisted Receipt Safety Review\n\n"
+        f"- Stage: `{report.runner_safety_review['stage']}`\n"
+        f"- Review status: `{report.runner_safety_review['review_status']}`\n"
+        f"- Write runner enabled: `{report.runner_safety_review['write_runner_enabled']}`\n"
+        f"- Agent execution enabled: `{report.runner_safety_review['agent_execution_enabled']}`\n"
+        f"- Mutation performed: `{report.runner_safety_review['mutation_performed']}`\n\n"
         "## Channel Strategy\n\n"
         f"- Domestic V1 primary: `{report.channel_strategy['domestic_v1_primary']}`\n"
         f"- Telegram required: `{report.channel_strategy['telegram_required']}`\n"
@@ -660,7 +710,7 @@ def main() -> int:
         print(f"- {check.name}: {check.status}")
         if check.error:
             print(f"  error: {check.error}")
-    return 0 if report.status == "sdk_dry_run_receipt_persistence_ready" else 1
+    return 0 if report.status == "sdk_write_runner_safety_review_ready" else 1
 
 
 if __name__ == "__main__":

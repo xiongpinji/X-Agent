@@ -471,7 +471,29 @@ Expected: selected approval and sandbox tests pass.
 - [x] Read back persisted receipts by `approval_id`, `method`, and optional `audit_id`.
 - [x] Surface `receipt_available`, `receipt_persisted`, audit hash, and signature presence in runtime evidence.
 - [x] Keep `runner_invoked=false`, agent/write execution disabled, `mark_executed=false`, and all mutation flags false.
-- [ ] Implement the concrete owner-approved write SDK runner only after persisted receipt safety review.
+- [x] Implement persisted receipt safety review before any concrete owner-approved write SDK runner.
+
+### Task 20: Persisted Receipt Safety Review Gate
+
+**Target:** Add a read-only safety review gate over persisted SDK dry-run receipts so the next write-runner implementation phase has machine-readable proof of safe preconditions.
+
+**Files:**
+- Modify: `backend/app/api/control_plane.py`
+- Modify: `scripts/sdk_noninteractive_report.py`
+- Modify: `scripts/latest_codex_alignment.py`
+- Modify: `tests/test_control_plane_protocol.py`
+- Modify: `tests/test_xagent_sdk_contract.py`
+- Modify: `tests/test_cli_client.py`
+- Modify: `tests/test_sdk_noninteractive_report.py`
+- Modify: `tests/test_latest_codex_alignment.py`
+- Runtime evidence: `.xagent_runtime/reports/sdk-noninteractive-report.json`
+- Runtime evidence: `.xagent_runtime/reports/latest-codex-alignment.json`
+
+- [x] Add `runner_safety_review` to `sdk_dry_run_executor_stub` runtime evidence.
+- [x] Require persisted receipt, dry-run status, audit hash/signature, no runner invocation, no `mark_executed`, and no mutation flags.
+- [x] Keep `write_runner_enabled=false`, `agent_execution_enabled=false`, `adapter_execution_enabled=false`, and `mutation_performed=false`.
+- [x] Promote SDK alignment status to `sdk_write_runner_safety_review_ready`.
+- [ ] Implement the concrete owner-approved write SDK runner only after this safety review is accepted.
 
 ## Completion Criteria
 

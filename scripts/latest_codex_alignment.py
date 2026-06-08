@@ -43,6 +43,7 @@ READY_XAGENT_STATUSES = frozenset(
         "governance_lifecycle_report_ready",
         "github_review_action_report_ready",
         "partial",
+        "sdk_write_runner_safety_review_ready",
         "sdk_dry_run_receipt_persistence_ready",
         "sdk_runtime_evidence_readback_ready",
         "sdk_dry_run_executor_stub_ready",
@@ -67,6 +68,7 @@ NEXT_TASK_DONE_STATUSES = frozenset(
         "durable_thread_contract_ready",
         "governance_lifecycle_report_ready",
         "github_review_action_report_ready",
+        "sdk_write_runner_safety_review_ready",
         "sdk_dry_run_receipt_persistence_ready",
         "sdk_runtime_evidence_readback_ready",
         "sdk_dry_run_executor_stub_ready",
@@ -228,6 +230,7 @@ def build_evidence_specs(root: Path = ROOT, report_dir: Path = REPORT_DIR) -> tu
                     "sdk_dry_run_executor_stub_ready",
                     "sdk_runtime_evidence_readback_ready",
                     "sdk_dry_run_receipt_persistence_ready",
+                    "sdk_write_runner_safety_review_ready",
                 }
             ),
             expected_evidence_type="sdk_noninteractive_cli_contract",
@@ -523,7 +526,7 @@ def _capabilities() -> list[CodexAlignmentCapability]:
             capability="cli_and_programmatic_sdk",
             codex_surface="Codex CLI, non-interactive mode, and Codex SDK",
             priority="P1",
-            xagent_status="sdk_dry_run_receipt_persistence_ready",
+            xagent_status="sdk_write_runner_safety_review_ready",
             evidence=[
                 "sdk_noninteractive_report",
                 "sdk_contract_module",
@@ -541,7 +544,7 @@ def _capabilities() -> list[CodexAlignmentCapability]:
                 "https://developers.openai.com/codex/noninteractive",
                 "https://developers.openai.com/codex/sdk",
             ],
-            rationale="X-Agent now exposes SDK-style thread start/resume/run/read/evidence-read envelopes, non-interactive CLI JSON output, an owner-gated backend SDK invoke stub, a CLI HTTP adapter for read-only --execute, pending owner approval intent creation for write methods, approval handoff/readback commands, owner-approved write preflight, a write runner safety plan/receipt contract, an audited dry-run executor stub, and runtime evidence/readback for persisted SDK dry-run receipts; real write agent execution remains disabled.",
+            rationale="X-Agent now exposes SDK-style thread start/resume/run/read/evidence-read envelopes, non-interactive CLI JSON output, an owner-gated backend SDK invoke stub, a CLI HTTP adapter for read-only --execute, pending owner approval intent creation for write methods, approval handoff/readback commands, owner-approved write preflight, a write runner safety plan/receipt contract, an audited dry-run executor stub, runtime evidence/readback for persisted SDK dry-run receipts, and a read-only persisted-receipt safety review gate; real write agent execution remains disabled.",
         ),
         CodexAlignmentCapability(
             capability="slack_to_domestic_channel_strategy",

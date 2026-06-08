@@ -926,7 +926,7 @@ def _sdk_backend_stub_metadata(
     read_only_runner_contract = _sdk_read_only_runner_contract(original, request, response)
     write_runner_safety_contract = _sdk_write_runner_safety_contract(original, request, execution_adapter_contract)
     return {
-        "status": "sdk_dry_run_receipt_persistence_ready",
+        "status": "sdk_write_runner_safety_review_ready",
         "operation": request.context.sdk_operation or original.operation,
         "method": request.method,
         "sdk_surface": request.context.sdk_surface or "python",
@@ -954,6 +954,7 @@ def _sdk_backend_stub_metadata(
             "Approved write methods can produce a dry-run executor stub receipt and audit event.",
             "Runtime evidence/read can return the SDK dry-run executor receipt schema and audit readback hints.",
             "Dry-run executor receipts are persisted in the audit log and can be read back through runtime evidence.",
+            "Persisted dry-run receipts expose a read-only write-runner safety review gate.",
             "No SDK HTTP adapter execution, agent runner invocation, channel send, file change, or network mutation is enabled.",
             "Write methods remain owner-gated behind the approval/sandbox/admin contract.",
             "Feishu remains the only domestic V1 pilot channel.",
@@ -2177,6 +2178,7 @@ def _sdk_dry_run_executor_runtime_evidence(
         audit_id=audit_id if isinstance(audit_id, str) else None,
         tenant_id=principal.tenant_id if principal else None,
     )
+    safety_review = _sdk_write_runner_safety_review(receipt)
     return {
         "evidence_type": "sdk_dry_run_executor_stub",
         "available": True,
@@ -2213,6 +2215,7 @@ def _sdk_dry_run_executor_runtime_evidence(
             "query_keys": ["approval_id", "method", "trace_id", "audit_id"],
             "receipt_persisted": receipt is not None,
         },
+        "runner_safety_review": safety_review,
         "control_plane_readback": {
             "method": "runtime/evidence/read",
             "params": {
@@ -2237,6 +2240,39 @@ def _sdk_dry_run_executor_runtime_evidence(
             "This runtime evidence reads SDK dry-run executor receipts persisted in the audit log.",
             "It does not execute or replay the recorded receipt.",
             "Concrete owner-approved write execution remains disabled.",
+        ],
+    }
+
+
+def _sdk_write_runner_safety_review(receipt: dict[str, Any] | None) -> dict[str, Any]:
+    checks = {
+        "receipt_available": receipt is not None,
+        "receipt_persisted": bool(receipt and receipt.get("receipt_persisted") is True),
+        "status_dry_run_planned": bool(receipt and receipt.get("status") == "dry_run_planned"),
+        "audit_signature_present": bool(receipt and receipt.get("audit_signature_present") is True),
+        "audit_hash_present": bool(receipt and isinstance(receipt.get("audit_hash"), str) and receipt.get("audit_hash")),
+        "runner_not_invoked": bool(receipt and receipt.get("runner_invoked") is False),
+        "agent_trace_absent": bool(receipt and receipt.get("agent_trace_id") is None),
+        "mark_executed_false": bool(receipt and receipt.get("mark_executed") is False),
+        "mutation_false": bool(receipt and receipt.get("mutation_performed") is False),
+        "network_mutation_false": bool(receipt and receipt.get("network_mutation_performed") is False),
+        "file_mutation_false": bool(receipt and receipt.get("file_mutation_performed") is False),
+        "channel_mutation_false": bool(receipt and receipt.get("channel_mutation_performed") is False),
+    }
+    passed = all(checks.values())
+    return {
+        "stage": "persisted_dry_run_receipt_safety_review",
+        "status": "passed" if passed else "action_required",
+        "checks": checks,
+        "write_runner_enabled": False,
+        "adapter_execution_enabled": False,
+        "agent_execution_enabled": False,
+        "mark_executed": False,
+        "mutation_performed": False,
+        "next_gate": "owner_approved_write_runner_implementation_review",
+        "known_limits": [
+            "Passing this review only proves the dry-run receipt is safe to inspect.",
+            "It does not enable or invoke the owner-approved write runner.",
         ],
     }
 
