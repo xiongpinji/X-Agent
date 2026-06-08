@@ -127,6 +127,11 @@ DEFAULT_ARTIFACTS = (
     ),
     ArtifactSpec("delivery_pack_doc", ROOT / "docs" / "FEISHU_PILOT_V1_DELIVERY_PACK.md", "source_doc"),
     ArtifactSpec(
+        "acceptance_gate_script",
+        ROOT / "scripts" / "commercial_pilot_acceptance_gate.py",
+        "source_script",
+    ),
+    ArtifactSpec(
         "delivery_manifest_script",
         ROOT / "scripts" / "commercial_pilot_delivery_manifest.py",
         "source_script",
@@ -158,6 +163,11 @@ DEFAULT_ARTIFACTS = (
         "feishu_outbound_smoke_script",
         ROOT / "scripts" / "commercial_pilot_feishu_outbound_smoke.py",
         "source_script",
+    ),
+    ArtifactSpec(
+        "acceptance_gate_tests",
+        ROOT / "tests" / "test_commercial_pilot_acceptance_gate.py",
+        "source_test",
     ),
     ArtifactSpec("ops_status_tests", ROOT / "tests" / "test_commercial_pilot_ops_status.py", "source_test"),
     ArtifactSpec(

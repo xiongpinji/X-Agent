@@ -199,3 +199,15 @@ def test_default_manifest_includes_final_handoff_wrapper_tests() -> None:
     assert spec.path.name == "test_run_feishu_pilot_final_handoff.py"
     assert spec.category == "source_test"
     assert spec.required is True
+
+
+def test_default_manifest_includes_acceptance_gate_artifacts() -> None:
+    script = next(artifact for artifact in DEFAULT_ARTIFACTS if artifact.name == "acceptance_gate_script")
+    tests = next(artifact for artifact in DEFAULT_ARTIFACTS if artifact.name == "acceptance_gate_tests")
+
+    assert script.path.name == "commercial_pilot_acceptance_gate.py"
+    assert script.category == "source_script"
+    assert script.required is True
+    assert tests.path.name == "test_commercial_pilot_acceptance_gate.py"
+    assert tests.category == "source_test"
+    assert tests.required is True
