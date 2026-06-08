@@ -13,6 +13,15 @@ Current RC proof:
 - Commit: `592141f35520df62578a00cbb805eeaa7371a940`.
 - Report: `.xagent_runtime/reports/rc-delivery-status.json`.
 
+Current Feishu Pilot V1 handoff:
+
+- Delivery pack: `docs/FEISHU_PILOT_V1_DELIVERY_PACK.md`.
+- Status report: `.xagent_runtime/reports/commercial-pilot-handoff-status.json`.
+- Status: `pilot_handoff_ready`.
+- Pilot tag: `x-agent-commercial-pilot-feishu-20260608`.
+- Pilot commit: `765d44b69da061caba6585a4cee0105bbf3310a7`.
+- Full Codex parity claimed: `false`.
+
 ## Pilot Scope
 
 Included:
