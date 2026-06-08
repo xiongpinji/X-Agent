@@ -287,6 +287,34 @@ def _emit_or_record_runtime_flag_application_execute_contract(
     _emit(result)
 
 
+def _emit_or_record_runtime_flag_application_readiness_plan_decision(
+    payload: dict[str, object],
+    *,
+    execute: bool,
+) -> None:
+    if not execute:
+        _emit(payload)
+        return
+
+    config = get_current_config()
+    try:
+        client = create_client(config)
+        request_payload = payload.get("request")
+        if not isinstance(request_payload, dict):
+            raise XAgentCLIError("SDK runtime flag application readiness plan decision envelope is missing request payload.")
+        result = asyncio.run(client.record_sdk_runtime_flag_application_readiness_plan_decision(request_payload))
+    except NotImplementedError as e:
+        typer.echo(f"SDK runtime flag application readiness plan decision recording failed: {e}", err=True)
+        raise typer.Exit(code=1)
+    except (ConnectionError, AuthError, APIError) as e:
+        typer.echo(f"SDK runtime flag application readiness plan decision recording failed: {e}", err=True)
+        raise typer.Exit(code=1)
+    except XAgentCLIError as e:
+        typer.echo(f"SDK CLI error: {e}", err=True)
+        raise typer.Exit(code=1)
+    _emit(result)
+
+
 @sdk_app.command("thread-start")
 def thread_start(
     task: str = typer.Argument(..., help="Task text for the new thread."),
@@ -725,3 +753,45 @@ def runtime_flag_application_execute_contract_record(
         dry_run=not execute,
     )
     _emit_or_record_runtime_flag_application_execute_contract(contract.to_dict(), execute=execute)
+
+
+@sdk_app.command("runtime-flag-application-readiness-plan-decision-record")
+def runtime_flag_application_readiness_plan_decision_record(
+    readiness_plan_decision_id: str = typer.Option(..., "--readiness-plan-decision-id"),
+    approval_id: str = typer.Option(..., "--approval-id"),
+    runtime_flag_execute_contract_id: str = typer.Option(..., "--runtime-flag-execute-contract-id"),
+    runtime_flag_execute_contract_audit_id: str = typer.Option(..., "--runtime-flag-execute-contract-audit-id"),
+    runtime_flag_approval_id: str = typer.Option(..., "--runtime-flag-approval-id"),
+    runtime_flag_preflight_id: str = typer.Option(..., "--runtime-flag-preflight-id"),
+    runtime_flag_enablement_id: str = typer.Option(..., "--runtime-flag-enablement-id"),
+    final_decision_id: str = typer.Option(..., "--final-decision-id"),
+    runtime_flag_name: str = typer.Option("XAGENT_SDK_WRITE_RUNNER_ENABLED", "--runtime-flag-name"),
+    decision: str = typer.Option(..., "--decision"),
+    decided_by: str = typer.Option(..., "--decided-by"),
+    decided_at: str = typer.Option(..., "--decided-at"),
+    reason: str = typer.Option(..., "--reason"),
+    decision_signature: Optional[str] = typer.Option(None, "--decision-signature"),
+    decision_hash: Optional[str] = typer.Option(None, "--decision-hash"),
+    notes: Optional[str] = typer.Option(None, "--notes"),
+    execute: bool = typer.Option(False, "--execute", help="Call the owner-gated readiness plan decision stub."),
+) -> None:
+    contract = ControlPlaneSDK().record_runtime_flag_application_readiness_plan_decision(
+        readiness_plan_decision_id=readiness_plan_decision_id,
+        approval_id=approval_id,
+        runtime_flag_execute_contract_id=runtime_flag_execute_contract_id,
+        runtime_flag_execute_contract_audit_id=runtime_flag_execute_contract_audit_id,
+        runtime_flag_approval_id=runtime_flag_approval_id,
+        runtime_flag_preflight_id=runtime_flag_preflight_id,
+        runtime_flag_enablement_id=runtime_flag_enablement_id,
+        final_decision_id=final_decision_id,
+        runtime_flag_name=runtime_flag_name,
+        decision=decision,
+        decided_by=decided_by,
+        decided_at=decided_at,
+        reason=reason,
+        decision_signature=decision_signature,
+        decision_hash=decision_hash,
+        notes=notes,
+        dry_run=True,
+    )
+    _emit_or_record_runtime_flag_application_readiness_plan_decision(contract.to_dict(), execute=execute)

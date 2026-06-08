@@ -179,6 +179,21 @@ class SDKRuntimeFlagApplicationExecuteContractRecordContract:
         return payload
 
 
+@dataclass(frozen=True)
+class SDKRuntimeFlagApplicationReadinessPlanDecisionRecordContract:
+    operation: str
+    endpoint: str
+    request: dict[str, Any]
+    owner_gate: dict[str, Any]
+    known_limits: list[str]
+
+    def to_dict(self) -> dict[str, Any]:
+        payload = asdict(self)
+        payload["mutation_performed"] = False
+        payload["network_mutation_performed"] = False
+        return payload
+
+
 class ControlPlaneSDK:
     """Build SDK-compatible control-plane request envelopes."""
 
@@ -845,6 +860,79 @@ class ControlPlaneSDK:
                 "This SDK contract records the live runtime flag application execute contract only.",
                 "It does not apply XAGENT_SDK_WRITE_RUNNER_ENABLED or invoke the write runner.",
                 "It does not mark an approval executed.",
+            ],
+        )
+
+    def record_runtime_flag_application_readiness_plan_decision(
+        self,
+        *,
+        readiness_plan_decision_id: str,
+        approval_id: str,
+        runtime_flag_execute_contract_id: str,
+        runtime_flag_execute_contract_audit_id: str,
+        runtime_flag_approval_id: str,
+        runtime_flag_preflight_id: str,
+        runtime_flag_enablement_id: str,
+        final_decision_id: str,
+        decision: str,
+        decided_by: str,
+        decided_at: str,
+        reason: str,
+        runtime_flag_name: str = "XAGENT_SDK_WRITE_RUNNER_ENABLED",
+        decision_signature: str | None = None,
+        decision_hash: str | None = None,
+        notes: str | None = None,
+        dry_run: bool = True,
+    ) -> SDKRuntimeFlagApplicationReadinessPlanDecisionRecordContract:
+        return SDKRuntimeFlagApplicationReadinessPlanDecisionRecordContract(
+            operation="runtime_flag_application_readiness_plan_decision_record",
+            endpoint="/api/v1/control-plane/sdk/runtime-flag/application-readiness-plan/decision/record",
+            request={
+                "readiness_plan_decision_id": readiness_plan_decision_id,
+                "approval_id": approval_id,
+                "runtime_flag_execute_contract_id": runtime_flag_execute_contract_id,
+                "runtime_flag_execute_contract_audit_id": runtime_flag_execute_contract_audit_id,
+                "runtime_flag_approval_id": runtime_flag_approval_id,
+                "runtime_flag_preflight_id": runtime_flag_preflight_id,
+                "runtime_flag_enablement_id": runtime_flag_enablement_id,
+                "final_decision_id": final_decision_id,
+                "runtime_flag_name": runtime_flag_name,
+                "decision": decision,
+                "decided_by": decided_by,
+                "decided_at": decided_at,
+                "reason": reason,
+                "decision_signature": decision_signature,
+                "decision_hash": decision_hash,
+                "notes": notes,
+                "dry_run": dry_run,
+            },
+            owner_gate={
+                "requires_approved_sdk_approval": True,
+                "requires_runtime_flag_application_execute_contract": True,
+                "requires_readiness_plan_review": True,
+                "requires_decision_accept_or_reject": True,
+                "requires_runtime_flag_name": "XAGENT_SDK_WRITE_RUNNER_ENABLED",
+                "requires_signature_or_hash": True,
+                "marks_approval_executed": False,
+                "runtime_flag_enabled": False,
+                "flag_application_performed": False,
+                "implementation_enabled": False,
+                "execute_enabled": False,
+                "write_runner_enabled": False,
+                "adapter_execution_enabled": False,
+                "agent_execution_enabled": False,
+                "write_execution_enabled": False,
+                "runner_invoked": False,
+                "mark_executed": False,
+                "mutation_performed": False,
+                "network_mutation_performed": False,
+                "file_mutation_performed": False,
+                "channel_mutation_performed": False,
+            },
+            known_limits=[
+                "This SDK contract records an owner decision for the readiness plan only.",
+                "Accepted decisions do not apply XAGENT_SDK_WRITE_RUNNER_ENABLED or enable the adapter.",
+                "It does not mark an approval executed or invoke the write runner.",
             ],
         )
 

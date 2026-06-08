@@ -1048,10 +1048,37 @@ Expected: selected approval and sandbox tests pass.
 - [x] Promote SDK alignment status to `sdk_live_runtime_flag_application_implementation_readiness_plan_ready`.
 - [ ] Implement the live runtime flag application adapter only after this readiness plan is owner-accepted and explicitly requested; keep write-runner wiring as a separate follow-up gate.
 
+### Task 43: Live Runtime Flag Application Readiness Plan Decision Workflow
+
+**Target:** Record the owner accept/reject decision for the live runtime flag application readiness plan, while still keeping `XAGENT_SDK_WRITE_RUNNER_ENABLED`, the future adapter, and the SDK write-runner disabled.
+
+**Files:**
+- Modify: `backend/app/api/control_plane.py`
+- Modify: `backend/app/sdk/control_plane.py`
+- Modify: `backend/app/sdk/__init__.py`
+- Modify: `cli/client.py`
+- Modify: `cli/commands/sdk_cmd.py`
+- Modify: `scripts/sdk_noninteractive_report.py`
+- Modify: `scripts/latest_codex_alignment.py`
+- Modify: `tests/test_control_plane_protocol.py`
+- Modify: `tests/test_xagent_sdk_contract.py`
+- Modify: `tests/test_cli_client.py`
+- Modify: `tests/test_sdk_noninteractive_report.py`
+- Modify: `tests/test_latest_codex_alignment.py`
+- Runtime evidence: `.xagent_runtime/reports/sdk-noninteractive-report.json`
+- Runtime evidence: `.xagent_runtime/reports/latest-codex-alignment.json`
+
+- [x] Add `/api/v1/control-plane/sdk/runtime-flag/application-readiness-plan/decision/record` as an owner-gated readiness plan decision endpoint.
+- [x] Add SDK wrapper, HTTP client adapter, and non-interactive CLI command `xagent sdk runtime-flag-application-readiness-plan-decision-record --execute`.
+- [x] Require approved SDK approval, recorded accepted runtime flag application execute contract, runtime flag name, accept/reject decision, timestamp, reason, signature/hash, and dry-run mode before recording.
+- [x] Keep readiness plan decision recording read-only with respect to runtime effects: it does not apply `XAGENT_SDK_WRITE_RUNNER_ENABLED`, enable the adapter, invoke the write runner, mark approvals executed, or perform file/network/channel mutation.
+- [x] Add `/sdk/invoke` readiness plan decision workflow metadata and promote SDK alignment status to `sdk_live_runtime_flag_application_readiness_plan_decision_workflow_ready`.
+- [ ] Implement the live runtime flag application adapter only after this decision workflow records owner acceptance and a separate explicit adapter implementation request is made.
+
 ## Completion Criteria
 
 - `scripts/latest_codex_alignment.py` returns `latest_codex_alignment_plan_ready`.
-- `scripts/sdk_noninteractive_report.py` returns `sdk_live_runtime_flag_application_implementation_readiness_plan_ready`.
+- `scripts/sdk_noninteractive_report.py` returns `sdk_live_runtime_flag_application_readiness_plan_decision_workflow_ready`.
 - P0 task board is complete and machine-readable.
 - Feishu Pilot V1 remains `customer_acceptance_pack_ready`.
 - `full_codex_parity_claimed=false` remains true in all generated alignment and pilot reports.
