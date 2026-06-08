@@ -183,8 +183,8 @@ def test_sdk_control_plane_stub_accepts_thread_start_envelope_without_mutation()
     assert response.status_code == 200
     payload = response.json()
     assert payload["ok"] is False
-    assert payload["status"] == "sdk_live_runtime_flag_application_readiness_plan_decision_workflow_ready"
-    assert payload["sdk"]["status"] == "sdk_live_runtime_flag_application_readiness_plan_decision_workflow_ready"
+    assert payload["status"] == "sdk_live_runtime_flag_application_adapter_implementation_request_workflow_ready"
+    assert payload["sdk"]["status"] == "sdk_live_runtime_flag_application_adapter_implementation_request_workflow_ready"
     assert payload["sdk"]["method"] == "thread/start"
     assert payload["sdk"]["dry_run"] is False
     assert payload["sdk"]["idempotency_key_present"] is True
@@ -459,8 +459,8 @@ def test_sdk_control_plane_stub_reads_approved_execution_adapter_contract_withou
     assert response.status_code == 200
     payload = response.json()
     assert payload["ok"] is False
-    assert payload["status"] == "sdk_live_runtime_flag_application_readiness_plan_decision_workflow_ready"
-    assert payload["sdk"]["status"] == "sdk_live_runtime_flag_application_readiness_plan_decision_workflow_ready"
+    assert payload["status"] == "sdk_live_runtime_flag_application_adapter_implementation_request_workflow_ready"
+    assert payload["sdk"]["status"] == "sdk_live_runtime_flag_application_adapter_implementation_request_workflow_ready"
     assert payload["sdk"]["approval_intent"]["created"] is False
     assert payload["sdk"]["approval_intent"]["approval_id"] == approval.id
     adapter = payload["sdk"]["execution_adapter_contract"]
@@ -724,8 +724,8 @@ def test_sdk_control_plane_stub_can_read_thread_through_existing_contract() -> N
     assert response.status_code == 200
     payload = response.json()
     assert payload["ok"] is True
-    assert payload["status"] == "sdk_live_runtime_flag_application_readiness_plan_decision_workflow_ready"
-    assert payload["sdk"]["status"] == "sdk_live_runtime_flag_application_readiness_plan_decision_workflow_ready"
+    assert payload["status"] == "sdk_live_runtime_flag_application_adapter_implementation_request_workflow_ready"
+    assert payload["sdk"]["status"] == "sdk_live_runtime_flag_application_adapter_implementation_request_workflow_ready"
     assert payload["sdk"]["method"] == "thread/read"
     assert payload["sdk"]["owner_gate_required"] is False
     assert payload["sdk"]["approval_intent"]["required"] is False
@@ -772,7 +772,7 @@ def test_sdk_control_plane_stub_reads_runtime_evidence_through_read_only_runner(
     assert response.status_code == 200
     payload = response.json()
     assert payload["ok"] is True
-    assert payload["status"] == "sdk_live_runtime_flag_application_readiness_plan_decision_workflow_ready"
+    assert payload["status"] == "sdk_live_runtime_flag_application_adapter_implementation_request_workflow_ready"
     assert payload["sdk"]["method"] == "runtime/evidence/read"
     runner = payload["sdk"]["read_only_runner_contract"]
     assert runner["available"] is True
@@ -837,7 +837,7 @@ def test_sdk_control_plane_stub_reads_persisted_dry_run_executor_runtime_evidenc
     assert response.status_code == 200
     payload = response.json()
     assert payload["ok"] is True
-    assert payload["status"] == "sdk_live_runtime_flag_application_readiness_plan_decision_workflow_ready"
+    assert payload["status"] == "sdk_live_runtime_flag_application_adapter_implementation_request_workflow_ready"
     evidence = payload["control_plane"]["result"]["evidence"]
     assert evidence["evidence_type"] == "sdk_dry_run_executor_stub"
     assert evidence["available"] is True
@@ -888,7 +888,7 @@ def test_sdk_control_plane_stub_reads_owner_acceptance_runtime_evidence_contract
     assert response.status_code == 200
     payload = response.json()
     assert payload["ok"] is True
-    assert payload["status"] == "sdk_live_runtime_flag_application_readiness_plan_decision_workflow_ready"
+    assert payload["status"] == "sdk_live_runtime_flag_application_adapter_implementation_request_workflow_ready"
     evidence = payload["control_plane"]["result"]["evidence"]
     assert evidence["evidence_type"] == "sdk_write_runner_owner_acceptance"
     assert evidence["available"] is True
@@ -1718,7 +1718,7 @@ def test_runtime_implementation_readiness_lock_readback_requires_strict_audit_qu
     assert response.status_code == 200
     payload = response.json()
     assert payload["ok"] is True
-    assert payload["status"] == "sdk_live_runtime_flag_application_readiness_plan_decision_workflow_ready"
+    assert payload["status"] == "sdk_live_runtime_flag_application_adapter_implementation_request_workflow_ready"
     evidence = payload["control_plane"]["result"]["evidence"]
     assert evidence["evidence_type"] == "sdk_write_runner_runtime_implementation_readiness_lock"
     assert evidence["implementation_lock_present"] is True
@@ -2959,6 +2959,227 @@ def test_sdk_runtime_flag_application_readiness_plan_decision_rejects_without_dr
     assert decision["mutation_performed"] is False
     assert audit_store.list(
         action="sdk.write_runner.runtime_flag_application_readiness_plan_decision_recorded"
+    ) == []
+
+
+def test_sdk_runtime_flag_application_adapter_implementation_request_records_without_enabling_adapter() -> None:
+    approval_store = ApprovalStore()
+    audit_store = AuditStore(hmac_secret="test-secret")
+    context = RunContext(
+        trace_id="trace-flag-adapter-request",
+        tenant_id="default",
+        user_id="operator",
+        request_id="req-flag-adapter-request",
+    )
+    approval = approval_store.create_approval(
+        context=context,
+        resource_type="command",
+        resource_id="sdk:turn/start",
+        action="command.execute",
+        risk_level=RiskLevel.HIGH,
+        reason="Owner-approved SDK runtime flag adapter implementation request.",
+        arguments_preview={"method": "turn/start", "adapter_execution_enabled": False},
+    )
+    approval_store.approve(
+        approval.id,
+        ApprovalDecisionRequest(decided_by="owner", reason="ready for adapter implementation request"),
+    )
+    readiness_decision_audit = audit_store.record(
+        action="sdk.write_runner.runtime_flag_application_readiness_plan_decision_recorded",
+        resource_type="sdk_write_runner_runtime_flag_application_readiness_plan_decision",
+        resource_id="readiness-plan-decision-adapter-1",
+        outcome="accepted",
+        tenant_id="default",
+        actor_id="operator",
+        details={
+            "approval_id": approval.id,
+            "runtime_flag_execute_contract_id": "flag-execute-contract-adapter-1",
+            "runtime_flag_approval_id": "flag-approval-adapter-1",
+            "runtime_flag_preflight_id": "flag-preflight-adapter-1",
+            "runtime_flag_enablement_id": "flag-enable-adapter-1",
+            "final_decision_id": "final-decision-adapter-1",
+            "runtime_flag_name": "XAGENT_SDK_WRITE_RUNNER_ENABLED",
+            "readiness_plan_decision": {
+                "readiness_plan_decision_id": "readiness-plan-decision-adapter-1",
+                "approval_id": approval.id,
+                "runtime_flag_execute_contract_id": "flag-execute-contract-adapter-1",
+                "runtime_flag_execute_contract_audit_id": "audit-flag-execute-contract-adapter-1",
+                "runtime_flag_approval_id": "flag-approval-adapter-1",
+                "runtime_flag_preflight_id": "flag-preflight-adapter-1",
+                "runtime_flag_enablement_id": "flag-enable-adapter-1",
+                "final_decision_id": "final-decision-adapter-1",
+                "runtime_flag_name": "XAGENT_SDK_WRITE_RUNNER_ENABLED",
+                "decision": "accepted",
+                "decided_by": "owner",
+                "decided_at": "2026-06-08T08:00:00Z",
+                "reason": "owner accepted readiness plan for adapter implementation request",
+                "decision_hash": "hash-readiness-plan-decision-adapter-1",
+            },
+        },
+    )
+
+    with _client_with_stores(RunStore(), TraceStore(), approval_store, audit_store) as client:
+        response = client.post(
+            "/api/v1/control-plane/sdk/runtime-flag/application-adapter/implementation-request/record",
+            json={
+                "adapter_implementation_request_id": "adapter-implementation-request-1",
+                "approval_id": approval.id,
+                "readiness_plan_decision_id": "readiness-plan-decision-adapter-1",
+                "readiness_plan_decision_audit_id": readiness_decision_audit.id,
+                "runtime_flag_execute_contract_id": "flag-execute-contract-adapter-1",
+                "runtime_flag_approval_id": "flag-approval-adapter-1",
+                "runtime_flag_preflight_id": "flag-preflight-adapter-1",
+                "runtime_flag_enablement_id": "flag-enable-adapter-1",
+                "final_decision_id": "final-decision-adapter-1",
+                "runtime_flag_name": "XAGENT_SDK_WRITE_RUNNER_ENABLED",
+                "requested_by": "owner",
+                "requested_at": "2026-06-08T09:00:00Z",
+                "implementation_request_reason": "owner explicitly requests adapter implementation planning",
+                "adapter_design_ref": "docs/runbooks/sdk-write-runner-runtime-flag-adapter-design.md",
+                "rollback_plan_ref": "docs/runbooks/sdk-write-runner-rollback.md",
+                "smoke_runbook_ref": "docs/runbooks/sdk-write-runner-smoke.md",
+                "request_hash": "hash-adapter-implementation-request-1",
+                "dry_run": True,
+            },
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["ok"] is True
+    assert payload["status"] == (
+        "sdk_live_runtime_flag_application_adapter_implementation_request_workflow_ready"
+    )
+    request = payload["adapter_implementation_request"]
+    assert request["record_status"] == "recorded"
+    assert request["audit_event_recorded"] is True
+    assert request["audit_action"] == (
+        "sdk.write_runner.runtime_flag_application_adapter_implementation_request_recorded"
+    )
+    assert request["checks"]["approval_status_approved"] is True
+    assert request["checks"]["readiness_plan_decision_audit_record_present"] is True
+    assert request["checks"]["readiness_plan_decision_validation_valid"] is True
+    assert request["checks"]["readiness_plan_decision_outcome_accepted"] is True
+    assert request["checks"]["adapter_implementation_request_valid"] is True
+    assert request["runtime_flag_enabled"] is False
+    assert request["flag_application_performed"] is False
+    assert request["implementation_enabled"] is False
+    assert request["execute_enabled"] is False
+    assert request["write_runner_enabled"] is False
+    assert request["adapter_execution_enabled"] is False
+    assert request["agent_execution_enabled"] is False
+    assert request["write_execution_enabled"] is False
+    assert request["runner_invoked"] is False
+    assert request["mark_executed"] is False
+    assert request["mutation_performed"] is False
+    assert request["network_mutation_performed"] is False
+    assert request["file_mutation_performed"] is False
+    assert request["channel_mutation_performed"] is False
+    assert request["runtime_flag_writer_enabled"] is False
+    assert request["adapter_import_allowed"] is False
+    assert request["adapter_execution_allowed"] is False
+    assert approval_store.get(approval.id).status == "approved"
+    assert approval_store.get(approval.id).executed_at is None
+
+
+def test_sdk_runtime_flag_application_adapter_implementation_request_rejects_without_dry_run_guard() -> None:
+    approval_store = ApprovalStore()
+    audit_store = AuditStore(hmac_secret="test-secret")
+    context = RunContext(
+        trace_id="trace-flag-adapter-request-reject",
+        tenant_id="default",
+        user_id="operator",
+        request_id="req-flag-adapter-request-reject",
+    )
+    approval = approval_store.create_approval(
+        context=context,
+        resource_type="command",
+        resource_id="sdk:turn/start",
+        action="command.execute",
+        risk_level=RiskLevel.HIGH,
+        reason="Owner-approved SDK runtime flag adapter implementation request reject.",
+        arguments_preview={"method": "turn/start", "adapter_execution_enabled": False},
+    )
+    approval_store.approve(
+        approval.id,
+        ApprovalDecisionRequest(decided_by="owner", reason="ready for adapter implementation request reject"),
+    )
+    readiness_decision_audit = audit_store.record(
+        action="sdk.write_runner.runtime_flag_application_readiness_plan_decision_recorded",
+        resource_type="sdk_write_runner_runtime_flag_application_readiness_plan_decision",
+        resource_id="readiness-plan-decision-adapter-reject",
+        outcome="accepted",
+        tenant_id="default",
+        actor_id="operator",
+        details={
+            "approval_id": approval.id,
+            "runtime_flag_execute_contract_id": "flag-execute-contract-adapter-reject",
+            "runtime_flag_approval_id": "flag-approval-adapter-reject",
+            "runtime_flag_preflight_id": "flag-preflight-adapter-reject",
+            "runtime_flag_enablement_id": "flag-enable-adapter-reject",
+            "final_decision_id": "final-decision-adapter-reject",
+            "runtime_flag_name": "XAGENT_SDK_WRITE_RUNNER_ENABLED",
+            "readiness_plan_decision": {
+                "readiness_plan_decision_id": "readiness-plan-decision-adapter-reject",
+                "approval_id": approval.id,
+                "runtime_flag_execute_contract_id": "flag-execute-contract-adapter-reject",
+                "runtime_flag_execute_contract_audit_id": "audit-flag-execute-contract-adapter-reject",
+                "runtime_flag_approval_id": "flag-approval-adapter-reject",
+                "runtime_flag_preflight_id": "flag-preflight-adapter-reject",
+                "runtime_flag_enablement_id": "flag-enable-adapter-reject",
+                "final_decision_id": "final-decision-adapter-reject",
+                "runtime_flag_name": "XAGENT_SDK_WRITE_RUNNER_ENABLED",
+                "decision": "accepted",
+                "decided_by": "owner",
+                "decided_at": "2026-06-08T08:00:00Z",
+                "reason": "owner accepted readiness plan for adapter implementation request reject",
+                "decision_hash": "hash-readiness-plan-decision-adapter-reject",
+            },
+        },
+    )
+
+    with _client_with_stores(RunStore(), TraceStore(), approval_store, audit_store) as client:
+        response = client.post(
+            "/api/v1/control-plane/sdk/runtime-flag/application-adapter/implementation-request/record",
+            json={
+                "adapter_implementation_request_id": "adapter-implementation-request-reject",
+                "approval_id": approval.id,
+                "readiness_plan_decision_id": "readiness-plan-decision-adapter-reject",
+                "readiness_plan_decision_audit_id": readiness_decision_audit.id,
+                "runtime_flag_execute_contract_id": "flag-execute-contract-adapter-reject",
+                "runtime_flag_approval_id": "flag-approval-adapter-reject",
+                "runtime_flag_preflight_id": "flag-preflight-adapter-reject",
+                "runtime_flag_enablement_id": "flag-enable-adapter-reject",
+                "final_decision_id": "final-decision-adapter-reject",
+                "runtime_flag_name": "XAGENT_SDK_WRITE_RUNNER_ENABLED",
+                "requested_by": "owner",
+                "requested_at": "2026-06-08T09:00:00Z",
+                "implementation_request_reason": "should not record without dry-run guard",
+                "adapter_design_ref": "docs/runbooks/sdk-write-runner-runtime-flag-adapter-design.md",
+                "rollback_plan_ref": "docs/runbooks/sdk-write-runner-rollback.md",
+                "smoke_runbook_ref": "docs/runbooks/sdk-write-runner-smoke.md",
+                "request_hash": "hash-adapter-implementation-request-reject",
+                "dry_run": False,
+            },
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["ok"] is False
+    request = payload["adapter_implementation_request"]
+    assert request["record_status"] == "rejected"
+    assert request["checks"]["dry_run_does_not_enable_adapter"] is False
+    assert request["audit_event_recorded"] is False
+    assert request["runtime_flag_enabled"] is False
+    assert request["flag_application_performed"] is False
+    assert request["implementation_enabled"] is False
+    assert request["write_runner_enabled"] is False
+    assert request["adapter_execution_enabled"] is False
+    assert request["runner_invoked"] is False
+    assert request["mutation_performed"] is False
+    assert request["adapter_import_allowed"] is False
+    assert request["adapter_execution_allowed"] is False
+    assert audit_store.list(
+        action="sdk.write_runner.runtime_flag_application_adapter_implementation_request_recorded"
     ) == []
 
 

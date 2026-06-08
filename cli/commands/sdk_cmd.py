@@ -315,6 +315,34 @@ def _emit_or_record_runtime_flag_application_readiness_plan_decision(
     _emit(result)
 
 
+def _emit_or_record_runtime_flag_application_adapter_implementation_request(
+    payload: dict[str, object],
+    *,
+    execute: bool,
+) -> None:
+    if not execute:
+        _emit(payload)
+        return
+
+    config = get_current_config()
+    try:
+        client = create_client(config)
+        request_payload = payload.get("request")
+        if not isinstance(request_payload, dict):
+            raise XAgentCLIError("SDK runtime flag application adapter implementation request envelope is missing request payload.")
+        result = asyncio.run(client.record_sdk_runtime_flag_application_adapter_implementation_request(request_payload))
+    except NotImplementedError as e:
+        typer.echo(f"SDK runtime flag application adapter implementation request recording failed: {e}", err=True)
+        raise typer.Exit(code=1)
+    except (ConnectionError, AuthError, APIError) as e:
+        typer.echo(f"SDK runtime flag application adapter implementation request recording failed: {e}", err=True)
+        raise typer.Exit(code=1)
+    except XAgentCLIError as e:
+        typer.echo(f"SDK CLI error: {e}", err=True)
+        raise typer.Exit(code=1)
+    _emit(result)
+
+
 @sdk_app.command("thread-start")
 def thread_start(
     task: str = typer.Argument(..., help="Task text for the new thread."),
@@ -795,3 +823,54 @@ def runtime_flag_application_readiness_plan_decision_record(
         dry_run=True,
     )
     _emit_or_record_runtime_flag_application_readiness_plan_decision(contract.to_dict(), execute=execute)
+
+
+@sdk_app.command("runtime-flag-application-adapter-implementation-request-record")
+def runtime_flag_application_adapter_implementation_request_record(
+    adapter_implementation_request_id: str = typer.Option(..., "--adapter-implementation-request-id"),
+    approval_id: str = typer.Option(..., "--approval-id"),
+    readiness_plan_decision_id: str = typer.Option(..., "--readiness-plan-decision-id"),
+    readiness_plan_decision_audit_id: str = typer.Option(..., "--readiness-plan-decision-audit-id"),
+    runtime_flag_execute_contract_id: str = typer.Option(..., "--runtime-flag-execute-contract-id"),
+    runtime_flag_approval_id: str = typer.Option(..., "--runtime-flag-approval-id"),
+    runtime_flag_preflight_id: str = typer.Option(..., "--runtime-flag-preflight-id"),
+    runtime_flag_enablement_id: str = typer.Option(..., "--runtime-flag-enablement-id"),
+    final_decision_id: str = typer.Option(..., "--final-decision-id"),
+    runtime_flag_name: str = typer.Option("XAGENT_SDK_WRITE_RUNNER_ENABLED", "--runtime-flag-name"),
+    requested_by: str = typer.Option(..., "--requested-by"),
+    requested_at: str = typer.Option(..., "--requested-at"),
+    implementation_request_reason: str = typer.Option(..., "--implementation-request-reason"),
+    adapter_design_ref: str = typer.Option(..., "--adapter-design-ref"),
+    rollback_plan_ref: str = typer.Option(..., "--rollback-plan-ref"),
+    smoke_runbook_ref: str = typer.Option(..., "--smoke-runbook-ref"),
+    request_signature: Optional[str] = typer.Option(None, "--request-signature"),
+    request_hash: Optional[str] = typer.Option(None, "--request-hash"),
+    notes: Optional[str] = typer.Option(None, "--notes"),
+    execute: bool = typer.Option(False, "--execute", help="Call the owner-gated adapter implementation request stub."),
+) -> None:
+    contract = ControlPlaneSDK().record_runtime_flag_application_adapter_implementation_request(
+        adapter_implementation_request_id=adapter_implementation_request_id,
+        approval_id=approval_id,
+        readiness_plan_decision_id=readiness_plan_decision_id,
+        readiness_plan_decision_audit_id=readiness_plan_decision_audit_id,
+        runtime_flag_execute_contract_id=runtime_flag_execute_contract_id,
+        runtime_flag_approval_id=runtime_flag_approval_id,
+        runtime_flag_preflight_id=runtime_flag_preflight_id,
+        runtime_flag_enablement_id=runtime_flag_enablement_id,
+        final_decision_id=final_decision_id,
+        runtime_flag_name=runtime_flag_name,
+        requested_by=requested_by,
+        requested_at=requested_at,
+        implementation_request_reason=implementation_request_reason,
+        adapter_design_ref=adapter_design_ref,
+        rollback_plan_ref=rollback_plan_ref,
+        smoke_runbook_ref=smoke_runbook_ref,
+        request_signature=request_signature,
+        request_hash=request_hash,
+        notes=notes,
+        dry_run=True,
+    )
+    _emit_or_record_runtime_flag_application_adapter_implementation_request(
+        contract.to_dict(),
+        execute=execute,
+    )

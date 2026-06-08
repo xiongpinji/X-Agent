@@ -1056,6 +1056,82 @@ class TestHTTPClient:
             assert result["readiness_plan_decision"]["mutation_performed"] is False
 
     @pytest.mark.asyncio
+    async def test_http_client_record_sdk_runtime_flag_application_adapter_implementation_request_calls_owner_gated_stub(self):
+        """Test SDK runtime flag adapter implementation request uses the backend evidence stub."""
+        config = CLIConfig(api_base_url="http://localhost:8000")
+        client = HTTPClient(config)
+        payload = {
+            "adapter_implementation_request_id": "adapter-implementation-request-1",
+            "approval_id": "approval-1",
+            "readiness_plan_decision_id": "readiness-plan-decision-1",
+            "readiness_plan_decision_audit_id": "audit-readiness-plan-decision-1",
+            "runtime_flag_execute_contract_id": "flag-execute-contract-1",
+            "runtime_flag_approval_id": "flag-approval-1",
+            "runtime_flag_preflight_id": "flag-preflight-1",
+            "runtime_flag_enablement_id": "flag-enable-1",
+            "final_decision_id": "final-decision-1",
+            "runtime_flag_name": "XAGENT_SDK_WRITE_RUNNER_ENABLED",
+            "requested_by": "owner",
+            "requested_at": "2026-06-08T00:00:00Z",
+            "implementation_request_reason": "owner requested adapter implementation",
+            "adapter_design_ref": "docs/runbooks/sdk-write-runner-runtime-flag-adapter-design.md",
+            "rollback_plan_ref": "docs/runbooks/sdk-write-runner-rollback.md",
+            "smoke_runbook_ref": "docs/runbooks/sdk-write-runner-smoke.md",
+            "request_hash": "hash-adapter-implementation-request-1",
+            "dry_run": True,
+        }
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "ok": True,
+            "status": "sdk_live_runtime_flag_application_adapter_implementation_request_workflow_ready",
+            "adapter_implementation_request": {
+                "audit_event_recorded": True,
+                "runtime_flag_enabled": False,
+                "flag_application_performed": False,
+                "implementation_enabled": False,
+                "execute_enabled": False,
+                "write_runner_enabled": False,
+                "adapter_execution_enabled": False,
+                "agent_execution_enabled": False,
+                "write_execution_enabled": False,
+                "runner_invoked": False,
+                "mark_executed": False,
+                "mutation_performed": False,
+                "adapter_import_allowed": False,
+                "adapter_execution_allowed": False,
+            },
+        }
+
+        with patch.object(
+            httpx.AsyncClient,
+            "request",
+            new_callable=AsyncMock,
+            return_value=mock_response,
+        ) as mock_request:
+            result = await client.record_sdk_runtime_flag_application_adapter_implementation_request(payload)
+
+            call_args = mock_request.call_args
+            assert call_args[0][0] == "POST"
+            assert call_args[0][1] == (
+                "/api/v1/control-plane/sdk/runtime-flag/application-adapter/implementation-request/record"
+            )
+            assert call_args[1]["json"] == payload
+            assert result["status"] == (
+                "sdk_live_runtime_flag_application_adapter_implementation_request_workflow_ready"
+            )
+            assert result["adapter_implementation_request"]["runtime_flag_enabled"] is False
+            assert result["adapter_implementation_request"]["flag_application_performed"] is False
+            assert result["adapter_implementation_request"]["implementation_enabled"] is False
+            assert result["adapter_implementation_request"]["execute_enabled"] is False
+            assert result["adapter_implementation_request"]["write_runner_enabled"] is False
+            assert result["adapter_implementation_request"]["adapter_execution_enabled"] is False
+            assert result["adapter_implementation_request"]["runner_invoked"] is False
+            assert result["adapter_implementation_request"]["mutation_performed"] is False
+            assert result["adapter_implementation_request"]["adapter_import_allowed"] is False
+            assert result["adapter_implementation_request"]["adapter_execution_allowed"] is False
+
+    @pytest.mark.asyncio
     async def test_http_client_list_agents(self):
         """Test list_agents calls correct endpoint."""
         config = CLIConfig(api_base_url="http://localhost:8000")
@@ -1447,6 +1523,18 @@ class TestLocalClient:
 
         with pytest.raises(NotImplementedError, match="SDK runtime flag application readiness plan decision recording"):
             await client.record_sdk_runtime_flag_application_readiness_plan_decision({"approval_id": "approval-1"})
+
+    @pytest.mark.asyncio
+    async def test_local_client_record_sdk_runtime_flag_application_adapter_implementation_request_not_implemented(self):
+        """Test SDK runtime flag adapter implementation request recording is HTTP-only."""
+        config = CLIConfig(mode="local")
+        client = LocalClient(config)
+
+        with pytest.raises(
+            NotImplementedError,
+            match="SDK runtime flag application adapter implementation request recording",
+        ):
+            await client.record_sdk_runtime_flag_application_adapter_implementation_request({"approval_id": "approval-1"})
 
     @pytest.mark.asyncio
     async def test_local_client_health_check_healthy(self):
