@@ -621,7 +621,30 @@ Expected: selected approval and sandbox tests pass.
 - [x] Add SDK and CLI wrappers for `xagent sdk acceptance-record ... --execute`.
 - [x] Keep `runtime_flag_enabled=false`, `execute_enabled=false`, `write_runner_enabled=false`, `agent_execution_enabled=false`, `adapter_execution_enabled=false`, `mark_executed=false`, and all mutation flags false.
 - [x] Promote SDK alignment status to `sdk_owner_acceptance_record_workflow_ready`.
-- [ ] Add runtime enablement review contract that consumes the audit-backed acceptance record but still requires explicit owner enablement before any concrete runner implementation.
+- [x] Add runtime enablement review contract that consumes the audit-backed acceptance record but still requires explicit owner enablement before any concrete runner implementation.
+
+### Task 26: Runtime Enablement Review Contract
+
+**Target:** Add a disabled runtime enablement review contract after owner acceptance recording, so X-Agent can prove the remaining write-runner enablement gates without turning on concrete execution.
+
+**Files:**
+- Modify: `backend/app/api/control_plane.py`
+- Modify: `backend/app/sdk/control_plane.py`
+- Modify: `scripts/sdk_noninteractive_report.py`
+- Modify: `scripts/latest_codex_alignment.py`
+- Modify: `tests/test_control_plane_protocol.py`
+- Modify: `tests/test_xagent_sdk_contract.py`
+- Modify: `tests/test_cli_client.py`
+- Modify: `tests/test_sdk_noninteractive_report.py`
+- Modify: `tests/test_latest_codex_alignment.py`
+- Runtime evidence: `.xagent_runtime/reports/sdk-noninteractive-report.json`
+- Runtime evidence: `.xagent_runtime/reports/latest-codex-alignment.json`
+
+- [x] Add `runtime_enablement_review` metadata to `/sdk/invoke` after owner acceptance evidence metadata.
+- [x] Require disabled runtime flag declaration, strict acceptance readback keys, approval execute remaining disabled, and mutation boundary still false.
+- [x] Keep `runtime_flag_enabled=false`, `execute_enabled=false`, `write_runner_enabled=false`, `agent_execution_enabled=false`, `adapter_execution_enabled=false`, `mark_executed=false`, and all mutation flags false.
+- [x] Promote SDK alignment status to `sdk_runtime_enablement_review_contract_ready`.
+- [ ] Add the concrete write-runner implementation plan behind this disabled review; do not enable it until owner explicitly requests runtime enablement.
 
 ## Completion Criteria
 

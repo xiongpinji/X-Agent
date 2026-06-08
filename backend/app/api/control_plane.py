@@ -890,6 +890,13 @@ async def invoke_sdk_control_plane(
         control_request,
         write_runner_runtime_flag=sdk_metadata["write_runner_runtime_flag"],
     )
+    sdk_metadata["runtime_enablement_review"] = _sdk_runtime_enablement_review_contract(
+        control_request,
+        write_runner_runtime_flag=sdk_metadata["write_runner_runtime_flag"],
+        owner_acceptance_evidence=sdk_metadata["owner_acceptance_evidence"],
+        write_runner_execute_gate=sdk_metadata["write_runner_execute_gate"],
+        write_runner_adapter_review=sdk_metadata["write_runner_adapter_review"],
+    )
     return SDKControlPlaneInvokeResponse(
         id=control_request.id,
         ok=control_response.ok,
@@ -1102,7 +1109,7 @@ def _sdk_backend_stub_metadata(
     read_only_runner_contract = _sdk_read_only_runner_contract(original, request, response)
     write_runner_safety_contract = _sdk_write_runner_safety_contract(original, request, execution_adapter_contract)
     return {
-        "status": "sdk_write_runner_owner_acceptance_contract_ready",
+        "status": "sdk_runtime_enablement_review_contract_ready",
         "operation": request.context.sdk_operation or original.operation,
         "method": request.method,
         "sdk_surface": request.context.sdk_surface or "python",
@@ -1821,6 +1828,72 @@ def _sdk_owner_acceptance_evidence_contract(
             "No owner acceptance record is created by /sdk/invoke.",
             "This contract defines the owner evidence schema and readback shape only.",
             "The concrete write runner remains disabled until this evidence is provided and reviewed.",
+        ],
+    }
+
+
+def _sdk_runtime_enablement_review_contract(
+    request: ControlPlaneInvokeRequest,
+    *,
+    write_runner_runtime_flag: dict[str, Any],
+    owner_acceptance_evidence: dict[str, Any],
+    write_runner_execute_gate: dict[str, Any],
+    write_runner_adapter_review: dict[str, Any],
+) -> dict[str, Any]:
+    checks = {
+        "write_method": request.method not in {"thread/read", "thread/search", "runtime/evidence/read"},
+        "execute_gate_ready_but_disabled": write_runner_execute_gate.get("gate_status") == "ready_but_disabled",
+        "adapter_review_ready_but_disabled": write_runner_adapter_review.get("review_status") == "ready_but_disabled",
+        "runtime_flag_declared_disabled": write_runner_runtime_flag.get("flag_status") == "declared_disabled"
+        and write_runner_runtime_flag.get("runtime_flag_enabled") is False,
+        "owner_acceptance_recording_contract_ready": owner_acceptance_evidence.get("recording_contract_ready")
+        is True,
+        "owner_acceptance_readback_contract_ready": owner_acceptance_evidence.get("readback_contract", {}).get(
+            "returns_record_if_present"
+        )
+        is True,
+        "strict_acceptance_readback_keys_required": owner_acceptance_evidence.get("readback_contract", {}).get(
+            "query_keys"
+        )
+        == ["approval_id", "owner_acceptance_id", "audit_id"],
+        "approval_execute_still_disabled": owner_acceptance_evidence.get("mark_executed") is False,
+        "mutation_still_disabled": owner_acceptance_evidence.get("mutation_performed") is False,
+    }
+    review_ready = all(checks.values())
+    return {
+        "available": owner_acceptance_evidence.get("available") is True,
+        "stage": "owner_approved_write_runner_runtime_enablement_review",
+        "review_status": "ready_but_disabled" if review_ready else "blocked",
+        "required_evidence_type": "sdk_write_runner_owner_acceptance",
+        "required_audit_action": "sdk.write_runner.owner_acceptance_recorded",
+        "required_readback_keys": ["approval_id", "owner_acceptance_id", "audit_id"],
+        "required_runtime_guards": [
+            "runtime_flag_enabled",
+            "owner_acceptance_audit_record_valid",
+            "approval_status_approved",
+            "adapter_review_ready",
+            "execute_gate_ready",
+            "dry_run_receipt_safety_review_passed",
+            "idempotency_key_present",
+        ],
+        "checks": checks,
+        "next_gate": "owner_approved_write_runner_concrete_runner_implementation",
+        "implementation_enabled": False,
+        "runtime_flag_enabled": False,
+        "execute_enabled": False,
+        "write_runner_enabled": False,
+        "adapter_execution_enabled": False,
+        "agent_execution_enabled": False,
+        "write_execution_enabled": False,
+        "mark_executed": False,
+        "mutation_performed": False,
+        "network_mutation_performed": False,
+        "file_mutation_performed": False,
+        "channel_mutation_performed": False,
+        "known_limits": [
+            "This review consumes owner acceptance contracts only; it does not read a runtime flag as permission.",
+            "A valid audit-backed owner acceptance record remains necessary before implementation work.",
+            "The concrete SDK write runner remains disabled.",
         ],
     }
 

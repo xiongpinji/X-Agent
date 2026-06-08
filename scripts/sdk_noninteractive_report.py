@@ -58,6 +58,7 @@ class SDKNonInteractiveReport:
     write_runner_runtime_flag: dict[str, Any]
     owner_acceptance_evidence: dict[str, Any]
     owner_acceptance_record_workflow: dict[str, Any]
+    runtime_enablement_review: dict[str, Any]
     channel_strategy: dict[str, Any]
     checks: list[SDKNonInteractiveCheck]
     official_sources: list[str]
@@ -182,6 +183,7 @@ def _build_checks(report_payload: dict[str, Any]) -> list[SDKNonInteractiveCheck
     runtime_flag = report_payload["write_runner_runtime_flag"]
     owner_acceptance = report_payload["owner_acceptance_evidence"]
     owner_acceptance_workflow = report_payload["owner_acceptance_record_workflow"]
+    runtime_enablement_review = report_payload["runtime_enablement_review"]
     methods = [contract["request"]["method"] for contract in contracts]
     command_methods = [command["method"] for command in commands]
     cli_execute_targets = [
@@ -476,6 +478,24 @@ def _build_checks(report_payload: dict[str, Any]) -> list[SDKNonInteractiveCheck
             else "owner acceptance workflow unexpectedly enables write runner",
         ),
         SDKNonInteractiveCheck(
+            name="runtime_enablement_review_contract_ready",
+            status="passed"
+            if runtime_enablement_review.get("stage") == "owner_approved_write_runner_runtime_enablement_review"
+            and runtime_enablement_review.get("review_status") == "ready_but_disabled"
+            and runtime_enablement_review.get("required_evidence_type") == "sdk_write_runner_owner_acceptance"
+            and runtime_enablement_review.get("runtime_flag_enabled") is False
+            and runtime_enablement_review.get("execute_enabled") is False
+            and runtime_enablement_review.get("write_runner_enabled") is False
+            and runtime_enablement_review.get("agent_execution_enabled") is False
+            and runtime_enablement_review.get("mark_executed") is False
+            and runtime_enablement_review.get("mutation_performed") is False
+            else "failed",
+            details=runtime_enablement_review,
+            error=None
+            if runtime_enablement_review.get("review_status") == "ready_but_disabled"
+            else "runtime enablement review is not ready but disabled",
+        ),
+        SDKNonInteractiveCheck(
             name="feishu_domestic_v1_primary",
             status="passed"
             if report_payload["channel_strategy"].get("domestic_v1_primary") == "feishu"
@@ -499,7 +519,7 @@ def _build_checks(report_payload: dict[str, Any]) -> list[SDKNonInteractiveCheck
 
 def build_sdk_noninteractive_report() -> SDKNonInteractiveReport:
     report_payload: dict[str, Any] = {
-        "status": "sdk_owner_acceptance_record_workflow_ready",
+        "status": "sdk_runtime_enablement_review_contract_ready",
         "generated_at": _utc_now(),
         "evidence_type": "sdk_noninteractive_cli_contract",
         "full_codex_parity_claimed": False,
@@ -512,7 +532,7 @@ def build_sdk_noninteractive_report() -> SDKNonInteractiveReport:
         "backend_stub": {
             "endpoint": "/api/v1/control-plane/sdk/invoke",
             "normalizes_to": "/api/v1/control-plane/invoke",
-            "status": "sdk_owner_acceptance_record_workflow_ready",
+            "status": "sdk_runtime_enablement_review_contract_ready",
             "approval_subject_type": "command",
             "approval_intent_created_for_write_methods": True,
             "owner_gate_required": True,
@@ -902,6 +922,35 @@ def build_sdk_noninteractive_report() -> SDKNonInteractiveReport:
             "file_mutation_performed": False,
             "channel_mutation_performed": False,
         },
+        "runtime_enablement_review": {
+            "stage": "owner_approved_write_runner_runtime_enablement_review",
+            "review_status": "ready_but_disabled",
+            "required_evidence_type": "sdk_write_runner_owner_acceptance",
+            "required_audit_action": "sdk.write_runner.owner_acceptance_recorded",
+            "required_readback_keys": ["approval_id", "owner_acceptance_id", "audit_id"],
+            "required_runtime_guards": [
+                "runtime_flag_enabled",
+                "owner_acceptance_audit_record_valid",
+                "approval_status_approved",
+                "adapter_review_ready",
+                "execute_gate_ready",
+                "dry_run_receipt_safety_review_passed",
+                "idempotency_key_present",
+            ],
+            "next_gate": "owner_approved_write_runner_concrete_runner_implementation",
+            "implementation_enabled": False,
+            "runtime_flag_enabled": False,
+            "execute_enabled": False,
+            "write_runner_enabled": False,
+            "adapter_execution_enabled": False,
+            "agent_execution_enabled": False,
+            "write_execution_enabled": False,
+            "mark_executed": False,
+            "mutation_performed": False,
+            "network_mutation_performed": False,
+            "file_mutation_performed": False,
+            "channel_mutation_performed": False,
+        },
         "channel_strategy": _channel_strategy(),
         "official_sources": list(CODEX_SDK_SOURCES),
         "known_limits": [
@@ -919,6 +968,7 @@ def build_sdk_noninteractive_report() -> SDKNonInteractiveReport:
             "Owner-approved write runner adapter implementation review declares the future AgentCoordinator.run target but remains disabled.",
             "Runtime feature flag remains disabled; owner acceptance evidence can be recorded and read back through an audit-backed owner-controlled workflow.",
             "Recording owner acceptance evidence does not execute the SDK write runner or mark the approval executed.",
+            "Runtime enablement review is contract-ready but remains disabled and does not implement the concrete runner.",
             "No SDK HTTP adapter, agent runner, file mutation, channel send, or network mutation is enabled.",
             "Feishu remains the only domestic V1 pilot channel in this contract.",
             "Slack is tracked as a Codex reference surface, but it is non-blocking for the domestic first version.",
@@ -1031,6 +1081,12 @@ def render_markdown_report(report: SDKNonInteractiveReport) -> str:
         f"- Audit action: `{report.owner_acceptance_record_workflow['audit_action']}`\n"
         f"- Marks approval executed: `{report.owner_acceptance_record_workflow['marks_approval_executed']}`\n"
         f"- Write runner enabled: `{report.owner_acceptance_record_workflow['write_runner_enabled']}`\n\n"
+        "## Runtime Enablement Review\n\n"
+        f"- Stage: `{report.runtime_enablement_review['stage']}`\n"
+        f"- Review status: `{report.runtime_enablement_review['review_status']}`\n"
+        f"- Required evidence type: `{report.runtime_enablement_review['required_evidence_type']}`\n"
+        f"- Runtime flag enabled: `{report.runtime_enablement_review['runtime_flag_enabled']}`\n"
+        f"- Write runner enabled: `{report.runtime_enablement_review['write_runner_enabled']}`\n\n"
         "## Channel Strategy\n\n"
         f"- Domestic V1 primary: `{report.channel_strategy['domestic_v1_primary']}`\n"
         f"- Telegram required: `{report.channel_strategy['telegram_required']}`\n"
@@ -1078,7 +1134,7 @@ def main() -> int:
         print(f"- {check.name}: {check.status}")
         if check.error:
             print(f"  error: {check.error}")
-    return 0 if report.status == "sdk_owner_acceptance_record_workflow_ready" else 1
+    return 0 if report.status == "sdk_runtime_enablement_review_contract_ready" else 1
 
 
 if __name__ == "__main__":

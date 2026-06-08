@@ -299,6 +299,8 @@ class ControlPlaneSDK:
                 "owner_acceptance_recording_contract": method not in self._READ_ONLY_METHODS,
                 "owner_acceptance_readback_contract": method not in self._READ_ONLY_METHODS,
                 "owner_acceptance_record_present": False,
+                "runtime_enablement_review_contract": method not in self._READ_ONLY_METHODS,
+                "runtime_enablement_review_enabled": False,
                 "runtime_flag_enabled": False,
                 "runner_invoked": False,
                 "agent_execution_enabled": False,
@@ -324,6 +326,7 @@ class ControlPlaneSDK:
                 "The write runner adapter review contract declares the future runner target but remains disabled.",
                 "The runtime write-runner flag and owner acceptance evidence are declared but not enabled by this SDK wrapper.",
                 "Owner acceptance evidence recording/readback is contract-ready but no acceptance record is created by this SDK wrapper.",
+                "Runtime enablement review is declared but remains disabled by this SDK wrapper.",
                 "Feishu remains the first domestic V1 channel; no new channel send is performed.",
             ],
         )
