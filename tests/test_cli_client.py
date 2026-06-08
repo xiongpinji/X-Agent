@@ -241,7 +241,7 @@ class TestHTTPClient:
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {
-            "status": "sdk_write_runner_implementation_plan_ready",
+            "status": "sdk_runtime_smoke_runbook_contract_ready",
             "sdk": {
                 "adapter_execution_enabled": False,
                 "agent_execution_enabled": False,
@@ -316,6 +316,20 @@ class TestHTTPClient:
                     "mark_executed": False,
                     "mutation_performed": False,
                 },
+                "runtime_smoke_runbook": {
+                    "contract_status": "ready_but_disabled",
+                    "smoke_plan": {"requires_runtime_flag": "XAGENT_SDK_WRITE_RUNNER_ENABLED=true"},
+                    "rollback_plan": {"failure_receipt_required": True},
+                    "failure_receipt_contract": {
+                        "audit_action": "sdk.write_runner.failed",
+                        "mark_executed_must_be_false_on_failure": True,
+                    },
+                    "write_runner_enabled": False,
+                    "agent_execution_enabled": False,
+                    "runner_invoked": False,
+                    "mark_executed": False,
+                    "mutation_performed": False,
+                },
             },
         }
 
@@ -331,7 +345,7 @@ class TestHTTPClient:
             assert call_args[0][0] == "POST"
             assert call_args[0][1] == "/api/v1/control-plane/sdk/invoke"
             assert call_args[1]["json"] == contract
-            assert result["status"] == "sdk_write_runner_implementation_plan_ready"
+            assert result["status"] == "sdk_runtime_smoke_runbook_contract_ready"
             assert result["sdk"]["adapter_execution_enabled"] is False
             assert result["sdk"]["execution_adapter_contract"]["mark_executed"] is False
             assert result["sdk"]["read_only_runner_contract"]["write_execution_enabled"] is False
@@ -361,6 +375,17 @@ class TestHTTPClient:
             assert result["sdk"]["write_runner_implementation_plan"]["runner_invoked"] is False
             assert result["sdk"]["write_runner_implementation_plan"]["mark_executed"] is False
             assert result["sdk"]["write_runner_implementation_plan"]["mutation_performed"] is False
+            assert result["sdk"]["runtime_smoke_runbook"]["contract_status"] == "ready_but_disabled"
+            assert (
+                result["sdk"]["runtime_smoke_runbook"]["smoke_plan"]["requires_runtime_flag"]
+                == "XAGENT_SDK_WRITE_RUNNER_ENABLED=true"
+            )
+            assert result["sdk"]["runtime_smoke_runbook"]["rollback_plan"]["failure_receipt_required"] is True
+            assert result["sdk"]["runtime_smoke_runbook"]["write_runner_enabled"] is False
+            assert result["sdk"]["runtime_smoke_runbook"]["agent_execution_enabled"] is False
+            assert result["sdk"]["runtime_smoke_runbook"]["runner_invoked"] is False
+            assert result["sdk"]["runtime_smoke_runbook"]["mark_executed"] is False
+            assert result["sdk"]["runtime_smoke_runbook"]["mutation_performed"] is False
 
     @pytest.mark.asyncio
     async def test_http_client_record_sdk_owner_acceptance_calls_owner_gated_stub(self):

@@ -668,12 +668,37 @@ Expected: selected approval and sandbox tests pass.
 - [x] Require ready-but-disabled runtime enablement review, ready execute gate, declared adapter target, and strict owner acceptance readback keys.
 - [x] Keep `implementation_enabled=false`, `runtime_flag_enabled=false`, `execute_enabled=false`, `write_runner_enabled=false`, `agent_execution_enabled=false`, `adapter_execution_enabled=false`, `runner_invoked=false`, `mark_executed=false`, and all mutation flags false.
 - [x] Promote SDK alignment status to `sdk_write_runner_implementation_plan_ready`.
+- [x] Define runtime smoke/runbook, rollback, and failure receipt contracts before any runtime implementation.
 - [ ] Implement the runtime write-runner only after owner acceptance evidence, explicit `XAGENT_SDK_WRITE_RUNNER_ENABLED=true`, and smoke validation are present.
+
+### Task 28: Runtime Smoke Runbook And Failure Receipt Contract
+
+**Target:** Define the owner-reviewed smoke, rollback, and failure receipt contract required before the concrete SDK write runner can be enabled.
+
+**Files:**
+- Modify: `backend/app/api/control_plane.py`
+- Modify: `backend/app/sdk/control_plane.py`
+- Modify: `scripts/sdk_noninteractive_report.py`
+- Modify: `scripts/latest_codex_alignment.py`
+- Modify: `tests/test_control_plane_protocol.py`
+- Modify: `tests/test_xagent_sdk_contract.py`
+- Modify: `tests/test_cli_client.py`
+- Modify: `tests/test_sdk_noninteractive_report.py`
+- Modify: `tests/test_latest_codex_alignment.py`
+- Runtime evidence: `.xagent_runtime/reports/sdk-noninteractive-report.json`
+- Runtime evidence: `.xagent_runtime/reports/latest-codex-alignment.json`
+
+- [x] Add `runtime_smoke_runbook` metadata to `/sdk/invoke` after the write-runner implementation plan.
+- [x] Declare smoke command, required runtime flag, owner acceptance evidence, result receipt review, rollback sequence, and failure receipt schema.
+- [x] Require implementation plan ready-but-disabled, idempotency, rollback plan, and failure audit action before the smoke/runbook contract reports ready.
+- [x] Keep `implementation_enabled=false`, `runtime_flag_enabled=false`, `execute_enabled=false`, `write_runner_enabled=false`, `agent_execution_enabled=false`, `adapter_execution_enabled=false`, `runner_invoked=false`, `mark_executed=false`, and all mutation flags false.
+- [x] Promote SDK alignment status to `sdk_runtime_smoke_runbook_contract_ready`.
+- [ ] Implement the runtime write-runner only after owner explicitly accepts this smoke/runbook contract and performs controlled runtime enablement.
 
 ## Completion Criteria
 
 - `scripts/latest_codex_alignment.py` returns `latest_codex_alignment_plan_ready`.
-- `scripts/sdk_noninteractive_report.py` returns `sdk_write_runner_implementation_plan_ready`.
+- `scripts/sdk_noninteractive_report.py` returns `sdk_runtime_smoke_runbook_contract_ready`.
 - P0 task board is complete and machine-readable.
 - Feishu Pilot V1 remains `customer_acceptance_pack_ready`.
 - `full_codex_parity_claimed=false` remains true in all generated alignment and pilot reports.
