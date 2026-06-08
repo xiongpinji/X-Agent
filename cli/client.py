@@ -366,6 +366,13 @@ class BaseClient(ABC):
         """Record SDK runtime flag adapter implementation request through the backend stub."""
         pass
 
+    @abstractmethod
+    async def record_sdk_runtime_flag_application_adapter_design_review(
+        self, payload: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Record SDK runtime flag adapter design review through the backend stub."""
+        pass
+
 
 class HTTPClient(BaseClient):
     """HTTP-based client for remote API calls.
@@ -738,6 +745,19 @@ class HTTPClient(BaseClient):
             json=payload,
         )
 
+    async def record_sdk_runtime_flag_application_adapter_design_review(
+        self, payload: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Record SDK runtime flag adapter design review without enabling the adapter.
+
+        POST /api/v1/control-plane/sdk/runtime-flag/application-adapter/design-review/record
+        """
+        return await self._request(
+            "POST",
+            "/api/v1/control-plane/sdk/runtime-flag/application-adapter/design-review/record",
+            json=payload,
+        )
+
 
 class LocalClient(BaseClient):
     """Local client for direct backend module imports.
@@ -1087,6 +1107,19 @@ class LocalClient(BaseClient):
         """
         raise NotImplementedError(
             "SDK runtime flag application adapter implementation request recording is not supported in local mode. "
+            "Use HTTP mode to call the owner-gated control-plane stub."
+        )
+
+    async def record_sdk_runtime_flag_application_adapter_design_review(
+        self, payload: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Record SDK runtime flag adapter design review locally.
+
+        Runtime flag adapter design review recording is HTTP-only so it
+        stays behind the API audit and approval/sandbox/admin contract.
+        """
+        raise NotImplementedError(
+            "SDK runtime flag application adapter design review recording is not supported in local mode. "
             "Use HTTP mode to call the owner-gated control-plane stub."
         )
 

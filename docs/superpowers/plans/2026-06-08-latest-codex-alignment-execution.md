@@ -1100,12 +1100,39 @@ Expected: selected approval and sandbox tests pass.
 - [x] Require approved SDK approval, recorded accepted readiness plan decision audit, runtime flag name, adapter design reference, rollback plan reference, smoke runbook reference, timestamp, reason, signature/hash, and dry-run mode before recording.
 - [x] Keep adapter implementation request recording read-only with respect to runtime effects: it does not read, write, or apply `XAGENT_SDK_WRITE_RUNNER_ENABLED`, import/instantiate/enable the adapter, invoke the write runner, mark approvals executed, or perform file/network/channel mutation.
 - [x] Add `/sdk/invoke` adapter implementation request workflow metadata and promote SDK alignment status to `sdk_live_runtime_flag_application_adapter_implementation_request_workflow_ready`.
-- [ ] Run owner design review for the live runtime flag application adapter before implementing the adapter; keep write-runner wiring as a separate follow-up gate.
+- [x] Defer live adapter implementation until a separate owner design review workflow records acceptance.
+
+### Task 45: Live Runtime Flag Application Adapter Design Review Workflow
+
+**Target:** Record owner design review for the future live runtime flag application adapter after an accepted implementation request, while still keeping `XAGENT_SDK_WRITE_RUNNER_ENABLED`, adapter import/instantiation, adapter execution, and SDK write-runner execution disabled.
+
+**Files:**
+- Modify: `backend/app/api/control_plane.py`
+- Modify: `backend/app/sdk/control_plane.py`
+- Modify: `backend/app/sdk/__init__.py`
+- Modify: `cli/client.py`
+- Modify: `cli/commands/sdk_cmd.py`
+- Modify: `scripts/sdk_noninteractive_report.py`
+- Modify: `scripts/latest_codex_alignment.py`
+- Modify: `tests/test_control_plane_protocol.py`
+- Modify: `tests/test_xagent_sdk_contract.py`
+- Modify: `tests/test_cli_client.py`
+- Modify: `tests/test_sdk_noninteractive_report.py`
+- Modify: `tests/test_latest_codex_alignment.py`
+- Runtime evidence: `.xagent_runtime/reports/sdk-noninteractive-report.json`
+- Runtime evidence: `.xagent_runtime/reports/latest-codex-alignment.json`
+
+- [x] Add `/api/v1/control-plane/sdk/runtime-flag/application-adapter/design-review/record` as an owner-gated adapter design review endpoint.
+- [x] Add SDK wrapper, HTTP client adapter, and non-interactive CLI command `xagent sdk runtime-flag-application-adapter-design-review-record --execute`.
+- [x] Require approved SDK approval, recorded accepted adapter implementation request audit, runtime flag name, accept/reject review decision, adapter design reference, security review reference, test plan reference, rollback plan reference, smoke runbook reference, timestamp, reason, signature/hash, and dry-run mode before recording.
+- [x] Keep adapter design review recording read-only with respect to runtime effects: it does not read, write, or apply `XAGENT_SDK_WRITE_RUNNER_ENABLED`, import/instantiate/enable the adapter, invoke the write runner, mark approvals executed, or perform file/network/channel mutation.
+- [x] Add `/sdk/invoke` adapter design review workflow metadata and promote SDK alignment status to `sdk_live_runtime_flag_application_adapter_design_review_workflow_ready`.
+- [ ] Implement the live runtime flag application adapter only after accepted design review is recorded; keep write-runner wiring as a separate follow-up gate.
 
 ## Completion Criteria
 
 - `scripts/latest_codex_alignment.py` returns `latest_codex_alignment_plan_ready`.
-- `scripts/sdk_noninteractive_report.py` returns `sdk_live_runtime_flag_application_adapter_implementation_request_workflow_ready`.
+- `scripts/sdk_noninteractive_report.py` returns `sdk_live_runtime_flag_application_adapter_design_review_workflow_ready`.
 - P0 task board is complete and machine-readable.
 - Feishu Pilot V1 remains `customer_acceptance_pack_ready`.
 - `full_codex_parity_claimed=false` remains true in all generated alignment and pilot reports.

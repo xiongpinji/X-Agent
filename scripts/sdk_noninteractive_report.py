@@ -77,6 +77,7 @@ class SDKNonInteractiveReport:
     live_runtime_flag_application_implementation_readiness_plan: dict[str, Any]
     live_runtime_flag_application_readiness_plan_decision_workflow: dict[str, Any]
     live_runtime_flag_application_adapter_implementation_request_workflow: dict[str, Any]
+    live_runtime_flag_application_adapter_design_review_workflow: dict[str, Any]
     channel_strategy: dict[str, Any]
     checks: list[SDKNonInteractiveCheck]
     official_sources: list[str]
@@ -269,6 +270,28 @@ def _sdk_contracts() -> list[dict[str, Any]]:
             smoke_runbook_ref="<smoke_runbook_ref>",
             request_hash="<request_hash>",
         ).to_dict(),
+        sdk.record_runtime_flag_application_adapter_design_review(
+            adapter_design_review_id="<adapter_design_review_id>",
+            approval_id="<approval_id>",
+            adapter_implementation_request_id="<adapter_implementation_request_id>",
+            adapter_implementation_request_audit_id="<adapter_implementation_request_audit_id>",
+            readiness_plan_decision_id="<readiness_plan_decision_id>",
+            runtime_flag_execute_contract_id="<runtime_flag_execute_contract_id>",
+            runtime_flag_approval_id="<runtime_flag_approval_id>",
+            runtime_flag_preflight_id="<runtime_flag_preflight_id>",
+            runtime_flag_enablement_id="<runtime_flag_enablement_id>",
+            final_decision_id="<final_decision_id>",
+            review_decision="accepted",
+            reviewed_by="<owner>",
+            reviewed_at="2026-06-08T00:00:00Z",
+            review_reason="<reason>",
+            adapter_design_ref="<adapter_design_ref>",
+            security_review_ref="<security_review_ref>",
+            test_plan_ref="<test_plan_ref>",
+            rollback_plan_ref="<rollback_plan_ref>",
+            smoke_runbook_ref="<smoke_runbook_ref>",
+            review_hash="<review_hash>",
+        ).to_dict(),
     ]
 
 
@@ -426,6 +449,14 @@ def _cli_commands() -> list[dict[str, Any]]:
             "execute_target": "/api/v1/control-plane/sdk/runtime-flag/application-adapter/implementation-request/record",
             "execute_starts_agent": False,
         },
+        {
+            "command": "xagent sdk runtime-flag-application-adapter-design-review-record --adapter-design-review-id <adapter_design_review_id> --adapter-implementation-request-id <adapter_implementation_request_id> --adapter-implementation-request-audit-id <adapter_implementation_request_audit_id> --review-decision accepted --execute",
+            "method": "runtime_flag_application_adapter_design_review_record",
+            "non_interactive": True,
+            "dry_run_default": True,
+            "execute_target": "/api/v1/control-plane/sdk/runtime-flag/application-adapter/design-review/record",
+            "execute_starts_agent": False,
+        },
     ]
 
 
@@ -503,6 +534,9 @@ def _build_checks(report_payload: dict[str, Any]) -> list[SDKNonInteractiveCheck
     live_flag_adapter_implementation_request = report_payload[
         "live_runtime_flag_application_adapter_implementation_request_workflow"
     ]
+    live_flag_adapter_design_review = report_payload[
+        "live_runtime_flag_application_adapter_design_review_workflow"
+    ]
     methods = [_sdk_contract_method(contract) for contract in contracts]
     command_methods = [command["method"] for command in commands]
     allowed_execute_targets = {
@@ -517,6 +551,7 @@ def _build_checks(report_payload: dict[str, Any]) -> list[SDKNonInteractiveCheck
         "/api/v1/control-plane/sdk/runtime-flag/application-execute-contract/record",
         "/api/v1/control-plane/sdk/runtime-flag/application-readiness-plan/decision/record",
         "/api/v1/control-plane/sdk/runtime-flag/application-adapter/implementation-request/record",
+        "/api/v1/control-plane/sdk/runtime-flag/application-adapter/design-review/record",
     }
     cli_execute_targets = [
         command["method"]
@@ -553,10 +588,11 @@ def _build_checks(report_payload: dict[str, Any]) -> list[SDKNonInteractiveCheck
                 "runtime_flag_application_execute_contract_record",
                 "runtime_flag_application_readiness_plan_decision_record",
                 "runtime_flag_application_adapter_implementation_request_record",
+                "runtime_flag_application_adapter_design_review_record",
             ]
             else "failed",
             details={"methods": methods},
-            error=None if len(methods) == 19 else "SDK methods are incomplete",
+            error=None if len(methods) == 20 else "SDK methods are incomplete",
         ),
         SDKNonInteractiveCheck(
             name="cli_non_interactive_commands_complete",
@@ -1476,6 +1512,61 @@ def _build_checks(report_payload: dict[str, Any]) -> list[SDKNonInteractiveCheck
             else "live runtime flag application adapter implementation request workflow is not ready but disabled",
         ),
         SDKNonInteractiveCheck(
+            name="live_runtime_flag_application_adapter_design_review_workflow_ready",
+            status="passed"
+            if live_flag_adapter_design_review.get("stage")
+            == "runtime_flag_application_adapter_design_review_workflow"
+            and live_flag_adapter_design_review.get("workflow_status") == "ready_but_disabled"
+            and live_flag_adapter_design_review.get("endpoint")
+            == "/api/v1/control-plane/sdk/runtime-flag/application-adapter/design-review/record"
+            and live_flag_adapter_design_review.get("audit_action")
+            == "sdk.write_runner.runtime_flag_application_adapter_design_review_recorded"
+            and live_flag_adapter_design_review.get("requires_approved_sdk_approval") is True
+            and live_flag_adapter_design_review.get("requires_accepted_adapter_implementation_request")
+            is True
+            and live_flag_adapter_design_review.get("requires_adapter_implementation_request_audit")
+            is True
+            and live_flag_adapter_design_review.get("requires_runtime_flag_name")
+            == "XAGENT_SDK_WRITE_RUNNER_ENABLED"
+            and live_flag_adapter_design_review.get("requires_review_decision_accept_or_reject")
+            is True
+            and live_flag_adapter_design_review.get("requires_adapter_design_ref") is True
+            and live_flag_adapter_design_review.get("requires_security_review_ref") is True
+            and live_flag_adapter_design_review.get("requires_test_plan_ref") is True
+            and live_flag_adapter_design_review.get("requires_rollback_plan_ref") is True
+            and live_flag_adapter_design_review.get("requires_smoke_runbook_ref") is True
+            and live_flag_adapter_design_review.get("requires_signature_or_hash") is True
+            and live_flag_adapter_design_review.get("review_effect", {}).get(
+                "accepted_implements_adapter"
+            )
+            is False
+            and live_flag_adapter_design_review.get("review_effect", {}).get(
+                "accepted_imports_adapter"
+            )
+            is False
+            and live_flag_adapter_design_review.get("review_effect", {}).get(
+                "accepted_invokes_write_runner"
+            )
+            is False
+            and live_flag_adapter_design_review.get("implementation_enabled") is False
+            and live_flag_adapter_design_review.get("runtime_flag_enabled") is False
+            and live_flag_adapter_design_review.get("flag_application_performed") is False
+            and live_flag_adapter_design_review.get("execute_enabled") is False
+            and live_flag_adapter_design_review.get("write_runner_enabled") is False
+            and live_flag_adapter_design_review.get("adapter_execution_enabled") is False
+            and live_flag_adapter_design_review.get("agent_execution_enabled") is False
+            and live_flag_adapter_design_review.get("runner_invoked") is False
+            and live_flag_adapter_design_review.get("mark_executed") is False
+            and live_flag_adapter_design_review.get("mutation_performed") is False
+            and live_flag_adapter_design_review.get("adapter_import_allowed") is False
+            and live_flag_adapter_design_review.get("adapter_execution_allowed") is False
+            else "failed",
+            details=live_flag_adapter_design_review,
+            error=None
+            if live_flag_adapter_design_review.get("workflow_status") == "ready_but_disabled"
+            else "live runtime flag application adapter design review workflow is not ready but disabled",
+        ),
+        SDKNonInteractiveCheck(
             name="feishu_domestic_v1_primary",
             status="passed"
             if report_payload["channel_strategy"].get("domestic_v1_primary") == "feishu"
@@ -1499,7 +1590,7 @@ def _build_checks(report_payload: dict[str, Any]) -> list[SDKNonInteractiveCheck
 
 def build_sdk_noninteractive_report() -> SDKNonInteractiveReport:
     report_payload: dict[str, Any] = {
-        "status": "sdk_live_runtime_flag_application_adapter_implementation_request_workflow_ready",
+        "status": "sdk_live_runtime_flag_application_adapter_design_review_workflow_ready",
         "generated_at": _utc_now(),
         "evidence_type": "sdk_noninteractive_cli_contract",
         "full_codex_parity_claimed": False,
@@ -1512,7 +1603,7 @@ def build_sdk_noninteractive_report() -> SDKNonInteractiveReport:
         "backend_stub": {
             "endpoint": "/api/v1/control-plane/sdk/invoke",
             "normalizes_to": "/api/v1/control-plane/invoke",
-            "status": "sdk_live_runtime_flag_application_adapter_implementation_request_workflow_ready",
+            "status": "sdk_live_runtime_flag_application_adapter_design_review_workflow_ready",
             "approval_subject_type": "command",
             "approval_intent_created_for_write_methods": True,
             "owner_gate_required": True,
@@ -2834,6 +2925,55 @@ def build_sdk_noninteractive_report() -> SDKNonInteractiveReport:
             "adapter_import_allowed": False,
             "adapter_execution_allowed": False,
         },
+        "live_runtime_flag_application_adapter_design_review_workflow": {
+            "stage": "runtime_flag_application_adapter_design_review_workflow",
+            "workflow_status": "ready_but_disabled",
+            "endpoint": "/api/v1/control-plane/sdk/runtime-flag/application-adapter/design-review/record",
+            "sdk_operation": "runtime_flag_application_adapter_design_review_record",
+            "cli_command": "xagent sdk runtime-flag-application-adapter-design-review-record --execute",
+            "requires_approved_sdk_approval": True,
+            "requires_accepted_adapter_implementation_request": True,
+            "requires_adapter_implementation_request_audit": True,
+            "requires_runtime_flag_name": "XAGENT_SDK_WRITE_RUNNER_ENABLED",
+            "requires_review_decision_accept_or_reject": True,
+            "requires_adapter_design_ref": True,
+            "requires_security_review_ref": True,
+            "requires_test_plan_ref": True,
+            "requires_rollback_plan_ref": True,
+            "requires_smoke_runbook_ref": True,
+            "requires_signature_or_hash": True,
+            "audit_action": "sdk.write_runner.runtime_flag_application_adapter_design_review_recorded",
+            "resource_type": "sdk_write_runner_runtime_flag_application_adapter_design_review",
+            "audit_event_recorded_by_sdk_invoke": False,
+            "allowed_decisions": ["accepted", "rejected"],
+            "review_effect": {
+                "accepted_implements_adapter": False,
+                "accepted_imports_adapter": False,
+                "accepted_instantiates_adapter": False,
+                "accepted_applies_runtime_flag": False,
+                "accepted_invokes_write_runner": False,
+                "starts_agent_execution": False,
+                "marks_approval_executed": False,
+            },
+            "next_gate": "owner_approved_live_runtime_flag_application_adapter_implementation",
+            "implementation_enabled": False,
+            "runtime_flag_enabled": False,
+            "flag_application_performed": False,
+            "execute_enabled": False,
+            "write_runner_enabled": False,
+            "adapter_execution_enabled": False,
+            "agent_execution_enabled": False,
+            "write_execution_enabled": False,
+            "runner_invoked": False,
+            "mark_executed": False,
+            "mutation_performed": False,
+            "network_mutation_performed": False,
+            "file_mutation_performed": False,
+            "channel_mutation_performed": False,
+            "runtime_flag_writer_enabled": False,
+            "adapter_import_allowed": False,
+            "adapter_execution_allowed": False,
+        },
         "channel_strategy": _channel_strategy(),
         "official_sources": list(CODEX_SDK_SOURCES),
         "known_limits": [
@@ -2869,6 +3009,7 @@ def build_sdk_noninteractive_report() -> SDKNonInteractiveReport:
             "Live runtime flag application implementation readiness is planned, but no adapter is enabled.",
             "Live runtime flag application readiness plan decisions can be recorded, but accepted decisions do not enable adapter execution.",
             "Live runtime flag application adapter implementation requests can be recorded, but they do not implement or import the adapter.",
+            "Live runtime flag application adapter design reviews can be recorded, but they do not implement, import, or execute the adapter.",
             "No SDK HTTP adapter, agent runner, file mutation, channel send, or network mutation is enabled.",
             "Feishu remains the only domestic V1 pilot channel in this contract.",
             "Slack is tracked as a Codex reference surface, but it is non-blocking for the domestic first version.",
@@ -3125,6 +3266,15 @@ def render_markdown_report(report: SDKNonInteractiveReport) -> str:
         f"- Adapter import allowed: `{report.live_runtime_flag_application_adapter_implementation_request_workflow['adapter_import_allowed']}`\n"
         f"- Adapter execution allowed: `{report.live_runtime_flag_application_adapter_implementation_request_workflow['adapter_execution_allowed']}`\n"
         f"- Runner invoked: `{report.live_runtime_flag_application_adapter_implementation_request_workflow['runner_invoked']}`\n\n"
+        "## Live Runtime Flag Application Adapter Design Review Workflow\n\n"
+        f"- Stage: `{report.live_runtime_flag_application_adapter_design_review_workflow['stage']}`\n"
+        f"- Workflow status: `{report.live_runtime_flag_application_adapter_design_review_workflow['workflow_status']}`\n"
+        f"- Endpoint: `{report.live_runtime_flag_application_adapter_design_review_workflow['endpoint']}`\n"
+        f"- Audit action: `{report.live_runtime_flag_application_adapter_design_review_workflow['audit_action']}`\n"
+        f"- Runtime flag enabled: `{report.live_runtime_flag_application_adapter_design_review_workflow['runtime_flag_enabled']}`\n"
+        f"- Adapter import allowed: `{report.live_runtime_flag_application_adapter_design_review_workflow['adapter_import_allowed']}`\n"
+        f"- Adapter execution allowed: `{report.live_runtime_flag_application_adapter_design_review_workflow['adapter_execution_allowed']}`\n"
+        f"- Runner invoked: `{report.live_runtime_flag_application_adapter_design_review_workflow['runner_invoked']}`\n\n"
         "## Channel Strategy\n\n"
         f"- Domestic V1 primary: `{report.channel_strategy['domestic_v1_primary']}`\n"
         f"- Telegram required: `{report.channel_strategy['telegram_required']}`\n"
@@ -3172,7 +3322,7 @@ def main() -> int:
         print(f"- {check.name}: {check.status}")
         if check.error:
             print(f"  error: {check.error}")
-    return 0 if report.status == "sdk_live_runtime_flag_application_adapter_implementation_request_workflow_ready" else 1
+    return 0 if report.status == "sdk_live_runtime_flag_application_adapter_design_review_workflow_ready" else 1
 
 
 if __name__ == "__main__":
