@@ -342,6 +342,11 @@ class BaseClient(ABC):
         """Record SDK runtime flag application preflight through the backend stub."""
         pass
 
+    @abstractmethod
+    async def record_sdk_runtime_flag_application_owner_approval(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """Record SDK runtime flag application owner approval through the backend stub."""
+        pass
+
 
 class HTTPClient(BaseClient):
     """HTTP-based client for remote API calls.
@@ -666,6 +671,17 @@ class HTTPClient(BaseClient):
             json=payload,
         )
 
+    async def record_sdk_runtime_flag_application_owner_approval(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """Record SDK runtime flag application owner approval without applying the flag.
+
+        POST /api/v1/control-plane/sdk/runtime-flag/application-approval/record
+        """
+        return await self._request(
+            "POST",
+            "/api/v1/control-plane/sdk/runtime-flag/application-approval/record",
+            json=payload,
+        )
+
 
 class LocalClient(BaseClient):
     """Local client for direct backend module imports.
@@ -967,6 +983,17 @@ class LocalClient(BaseClient):
         """
         raise NotImplementedError(
             "SDK runtime flag application preflight recording is not supported in local mode. "
+            "Use HTTP mode to call the owner-gated control-plane stub."
+        )
+
+    async def record_sdk_runtime_flag_application_owner_approval(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """Record SDK runtime flag application owner approval locally.
+
+        Runtime flag application owner approval recording is HTTP-only so it
+        stays behind the API audit and approval/sandbox/admin contract.
+        """
+        raise NotImplementedError(
+            "SDK runtime flag application owner approval recording is not supported in local mode. "
             "Use HTTP mode to call the owner-gated control-plane stub."
         )
 

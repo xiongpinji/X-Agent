@@ -231,6 +231,34 @@ def _emit_or_record_runtime_flag_application_preflight(
     _emit(result)
 
 
+def _emit_or_record_runtime_flag_application_owner_approval(
+    payload: dict[str, object],
+    *,
+    execute: bool,
+) -> None:
+    if not execute:
+        _emit(payload)
+        return
+
+    config = get_current_config()
+    try:
+        client = create_client(config)
+        request_payload = payload.get("request")
+        if not isinstance(request_payload, dict):
+            raise XAgentCLIError("SDK runtime flag application owner approval envelope is missing request payload.")
+        result = asyncio.run(client.record_sdk_runtime_flag_application_owner_approval(request_payload))
+    except NotImplementedError as e:
+        typer.echo(f"SDK runtime flag application owner approval recording failed: {e}", err=True)
+        raise typer.Exit(code=1)
+    except (ConnectionError, AuthError, APIError) as e:
+        typer.echo(f"SDK runtime flag application owner approval recording failed: {e}", err=True)
+        raise typer.Exit(code=1)
+    except XAgentCLIError as e:
+        typer.echo(f"SDK CLI error: {e}", err=True)
+        raise typer.Exit(code=1)
+    _emit(result)
+
+
 @sdk_app.command("thread-start")
 def thread_start(
     task: str = typer.Argument(..., help="Task text for the new thread."),
@@ -585,3 +613,41 @@ def runtime_flag_application_preflight_record(
         dry_run=not execute,
     )
     _emit_or_record_runtime_flag_application_preflight(contract.to_dict(), execute=execute)
+
+
+@sdk_app.command("runtime-flag-application-approval-record")
+def runtime_flag_application_approval_record(
+    runtime_flag_approval_id: str = typer.Option(..., "--runtime-flag-approval-id"),
+    approval_id: str = typer.Option(..., "--approval-id"),
+    runtime_flag_preflight_id: str = typer.Option(..., "--runtime-flag-preflight-id"),
+    runtime_flag_preflight_audit_id: str = typer.Option(..., "--runtime-flag-preflight-audit-id"),
+    runtime_flag_enablement_id: str = typer.Option(..., "--runtime-flag-enablement-id"),
+    final_decision_id: str = typer.Option(..., "--final-decision-id"),
+    runtime_flag_name: str = typer.Option("XAGENT_SDK_WRITE_RUNNER_ENABLED", "--runtime-flag-name"),
+    decision: str = typer.Option(..., "--decision"),
+    decided_by: str = typer.Option(..., "--decided-by"),
+    decided_at: str = typer.Option(..., "--decided-at"),
+    approval_reason: str = typer.Option(..., "--approval-reason"),
+    approval_signature: Optional[str] = typer.Option(None, "--approval-signature"),
+    approval_hash: Optional[str] = typer.Option(None, "--approval-hash"),
+    notes: Optional[str] = typer.Option(None, "--notes"),
+    execute: bool = typer.Option(False, "--execute", help="Record runtime flag application owner approval in the backend audit log."),
+) -> None:
+    contract = ControlPlaneSDK().record_runtime_flag_application_owner_approval(
+        runtime_flag_approval_id=runtime_flag_approval_id,
+        approval_id=approval_id,
+        runtime_flag_preflight_id=runtime_flag_preflight_id,
+        runtime_flag_preflight_audit_id=runtime_flag_preflight_audit_id,
+        runtime_flag_enablement_id=runtime_flag_enablement_id,
+        final_decision_id=final_decision_id,
+        runtime_flag_name=runtime_flag_name,
+        decision=decision,
+        decided_by=decided_by,
+        decided_at=decided_at,
+        approval_reason=approval_reason,
+        approval_signature=approval_signature,
+        approval_hash=approval_hash,
+        notes=notes,
+        dry_run=not execute,
+    )
+    _emit_or_record_runtime_flag_application_owner_approval(contract.to_dict(), execute=execute)

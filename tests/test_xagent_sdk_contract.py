@@ -1623,3 +1623,121 @@ def test_cli_sdk_runtime_flag_application_preflight_execute_flag_records_preflig
     assert request["preflight_hash"] == "hash-flag-preflight-1"
     assert request["dry_run"] is False
     mock_client.invoke_sdk_contract.assert_not_called()
+
+
+def test_sdk_runtime_flag_application_owner_approval_contract_is_safe() -> None:
+    payload = ControlPlaneSDK().record_runtime_flag_application_owner_approval(
+        runtime_flag_approval_id="flag-approval-1",
+        approval_id="approval-1",
+        runtime_flag_preflight_id="flag-preflight-1",
+        runtime_flag_preflight_audit_id="audit-flag-preflight-1",
+        runtime_flag_enablement_id="flag-enable-1",
+        final_decision_id="final-decision-1",
+        decision="accepted",
+        decided_by="owner",
+        decided_at="2026-06-08T00:00:00Z",
+        approval_reason="owner approved runtime flag application preflight",
+        approval_hash="hash-flag-approval-1",
+    ).to_dict()
+
+    assert payload["operation"] == "runtime_flag_application_owner_approval_record"
+    assert payload["endpoint"] == "/api/v1/control-plane/sdk/runtime-flag/application-approval/record"
+    assert payload["request"]["runtime_flag_approval_id"] == "flag-approval-1"
+    assert payload["request"]["approval_id"] == "approval-1"
+    assert payload["request"]["runtime_flag_preflight_id"] == "flag-preflight-1"
+    assert payload["request"]["runtime_flag_preflight_audit_id"] == "audit-flag-preflight-1"
+    assert payload["request"]["runtime_flag_enablement_id"] == "flag-enable-1"
+    assert payload["request"]["decision"] == "accepted"
+    assert payload["request"]["approval_hash"] == "hash-flag-approval-1"
+    assert payload["request"]["dry_run"] is True
+    assert payload["owner_gate"]["requires_approved_sdk_approval"] is True
+    assert payload["owner_gate"]["requires_runtime_flag_application_preflight"] is True
+    assert payload["owner_gate"]["requires_decision_accept_or_reject"] is True
+    assert payload["owner_gate"]["requires_runtime_flag_name"] == "XAGENT_SDK_WRITE_RUNNER_ENABLED"
+    assert payload["owner_gate"]["requires_signature_or_hash"] is True
+    assert payload["owner_gate"]["runtime_flag_enabled"] is False
+    assert payload["owner_gate"]["flag_application_performed"] is False
+    assert payload["owner_gate"]["write_runner_enabled"] is False
+    assert payload["owner_gate"]["agent_execution_enabled"] is False
+    assert payload["owner_gate"]["runner_invoked"] is False
+    assert payload["owner_gate"]["mark_executed"] is False
+    assert payload["owner_gate"]["mutation_performed"] is False
+    assert payload["mutation_performed"] is False
+    assert payload["network_mutation_performed"] is False
+
+
+def test_cli_sdk_runtime_flag_application_owner_approval_execute_flag_records_approval_only() -> None:
+    set_current_config(CLIConfig(api_base_url="http://localhost:8000", output_format="json"))
+    mock_client = AsyncMock()
+    mock_client.record_sdk_runtime_flag_application_owner_approval.return_value = {
+        "ok": True,
+        "status": "sdk_runtime_flag_application_owner_approval_workflow_ready",
+        "runtime_flag_approval": {
+            "record_status": "recorded",
+            "audit_event_recorded": True,
+            "runtime_flag_enabled": False,
+            "flag_application_performed": False,
+            "implementation_enabled": False,
+            "write_runner_enabled": False,
+            "agent_execution_enabled": False,
+            "runner_invoked": False,
+            "mark_executed": False,
+            "mutation_performed": False,
+        },
+    }
+
+    with patch("cli.commands.sdk_cmd.create_client", return_value=mock_client):
+        result = CliRunner().invoke(
+            app,
+            [
+                "sdk",
+                "runtime-flag-application-approval-record",
+                "--runtime-flag-approval-id",
+                "flag-approval-1",
+                "--approval-id",
+                "approval-1",
+                "--runtime-flag-preflight-id",
+                "flag-preflight-1",
+                "--runtime-flag-preflight-audit-id",
+                "audit-flag-preflight-1",
+                "--runtime-flag-enablement-id",
+                "flag-enable-1",
+                "--final-decision-id",
+                "final-decision-1",
+                "--decision",
+                "accepted",
+                "--decided-by",
+                "owner",
+                "--decided-at",
+                "2026-06-08T00:00:00Z",
+                "--approval-reason",
+                "owner approved runtime flag application preflight",
+                "--approval-hash",
+                "hash-flag-approval-1",
+                "--execute",
+            ],
+        )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["status"] == "sdk_runtime_flag_application_owner_approval_workflow_ready"
+    assert payload["runtime_flag_approval"]["record_status"] == "recorded"
+    assert payload["runtime_flag_approval"]["runtime_flag_enabled"] is False
+    assert payload["runtime_flag_approval"]["flag_application_performed"] is False
+    assert payload["runtime_flag_approval"]["write_runner_enabled"] is False
+    assert payload["runtime_flag_approval"]["runner_invoked"] is False
+    assert payload["runtime_flag_approval"]["mutation_performed"] is False
+
+    mock_client.record_sdk_runtime_flag_application_owner_approval.assert_awaited_once()
+    request = mock_client.record_sdk_runtime_flag_application_owner_approval.await_args.args[0]
+    assert request["runtime_flag_approval_id"] == "flag-approval-1"
+    assert request["approval_id"] == "approval-1"
+    assert request["runtime_flag_preflight_id"] == "flag-preflight-1"
+    assert request["runtime_flag_preflight_audit_id"] == "audit-flag-preflight-1"
+    assert request["runtime_flag_enablement_id"] == "flag-enable-1"
+    assert request["final_decision_id"] == "final-decision-1"
+    assert request["runtime_flag_name"] == "XAGENT_SDK_WRITE_RUNNER_ENABLED"
+    assert request["decision"] == "accepted"
+    assert request["approval_hash"] == "hash-flag-approval-1"
+    assert request["dry_run"] is False
+    mock_client.invoke_sdk_contract.assert_not_called()
