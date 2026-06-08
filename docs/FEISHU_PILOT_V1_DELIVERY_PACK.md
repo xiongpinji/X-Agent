@@ -18,6 +18,7 @@ Current machine-readable handoff:
 - RC baseline tag: `x-agent-commercial-rc-20260608-6`
 - RC baseline commit: `592141f35520df62578a00cbb805eeaa7371a940`
 - Hosted CI run: `https://github.com/xiongpinji/X-Agent/actions/runs/27119766813`
+- Operator status report: `.xagent_runtime/reports/commercial-pilot-ops-status.json`
 - Handoff report: `.xagent_runtime/reports/commercial-pilot-handoff-status.json`
 
 Confirmed evidence:
@@ -42,6 +43,7 @@ Use these files as the canonical source of truth for this pilot:
 
 | Artifact | Purpose |
 | --- | --- |
+| `.xagent_runtime/reports/commercial-pilot-ops-status.json` | Single operator and UI status rollup for Feishu Pilot V1. |
 | `.xagent_runtime/reports/commercial-pilot-handoff-status.json` | Final aggregate Feishu pilot handoff status. |
 | `.xagent_runtime/reports/commercial-pilot-feishu-live.json` | Real inbound Feishu event evidence. |
 | `.xagent_runtime/reports/commercial-pilot-readiness.json` | Aggregate pilot readiness evidence. |
@@ -49,6 +51,7 @@ Use these files as the canonical source of truth for this pilot:
 | `.xagent_runtime/reports/commercial-pilot-channel-readiness.json` | Channel matrix showing Feishu ready and other channels preview. |
 | `.xagent_runtime/reports/commercial-pilot-feishu-outbound-live.json` | Optional owner-approved outbound send evidence. |
 | `.xagent_runtime/reports/rc-delivery-status.json` | Frozen commercial RC baseline proof. |
+| `scripts/commercial_pilot_ops_status.py` | Read-only operations status rollup. |
 | `scripts/commercial_pilot_handoff_status.py` | Read-only handoff gate. |
 | `scripts/commercial_pilot_refresh_chain.py` | Readiness evidence refresh chain. |
 | `scripts/commercial_pilot_feishu_outbound_smoke.py` | Owner-gated outbound smoke; dry-run by default. |
@@ -176,6 +179,12 @@ Refresh channel readiness:
 python scripts\commercial_pilot_channel_readiness.py
 ```
 
+Refresh operator status rollup:
+
+```powershell
+python scripts\commercial_pilot_ops_status.py
+```
+
 Refresh full pilot evidence:
 
 ```powershell
@@ -237,10 +246,22 @@ The handoff report must contain:
 }
 ```
 
+The operator status report must contain:
+
+```json
+{
+  "status": "pilot_ops_ready",
+  "pilot_channel": "feishu",
+  "outbound_owner_gate_status": "preview",
+  "full_codex_parity_claimed": false
+}
+```
+
 Do not accept the pilot as ready if:
 
 - `full_codex_parity_claimed` is `true`.
 - `outbound_message_sent` is `true` in the inbound evidence report.
+- `commercial-pilot-ops-status.json` is not `pilot_ops_ready`.
 - The pilot tag points at a different commit.
 - The RC baseline report is not `commercial_rc_ready`.
 - Hosted CI head SHA does not match the pilot commit.
@@ -249,6 +270,27 @@ Do not accept the pilot as ready if:
 
 The frontend session can read or display these report fields without changing
 the backend contract:
+
+From `.xagent_runtime/reports/commercial-pilot-ops-status.json`:
+
+- `status`
+- `generated_at`
+- `pilot_channel`
+- `pilot_tag_name`
+- `pilot_commit_sha`
+- `rc_tag_name`
+- `rc_commit_sha`
+- `handoff_status`
+- `channel_readiness_status`
+- `inbound_live_status`
+- `outbound_owner_gate_status`
+- `full_codex_parity_claimed`
+- `checks[].name`
+- `checks[].status`
+- `checks[].details`
+- `checks[].error`
+- `reports`
+- `known_limits[]`
 
 From `.xagent_runtime/reports/commercial-pilot-handoff-status.json`:
 
@@ -288,6 +330,9 @@ Suggested UI status mapping:
 
 | Report status | UI label | Meaning |
 | --- | --- | --- |
+| `pilot_ops_ready` | Ready | Feishu Pilot V1 operations evidence is complete. |
+| `pilot_ops_action_required` | Action required | A required evidence source is missing or not ready. |
+| `pilot_ops_blocked` | Blocked | A hard mismatch or unsafe claim exists in the evidence chain. |
 | `pilot_handoff_ready` | Ready | Feishu Pilot V1 evidence is complete. |
 | `pilot_tag_action_required` | Tag required | Evidence is ready, but pilot tag is missing or stale. |
 | `ci_evidence_pending` | CI pending | Hosted CI URL or head SHA evidence is missing. |
@@ -405,9 +450,11 @@ No live evidence file:
 
 Handoff status not ready:
 
+- Inspect `.xagent_runtime/reports/commercial-pilot-ops-status.json`.
 - Inspect `.xagent_runtime/reports/commercial-pilot-handoff-status.json`.
 - Fix the first non-passing check.
 - Rerun the handoff status command with `--fetch-github`.
+- Rerun `scripts\commercial_pilot_ops_status.py`.
 
 ## 13. Sign-Off Checklist
 
@@ -415,6 +462,7 @@ Handoff status not ready:
 - [ ] Pilot tag points at `765d44b69da061caba6585a4cee0105bbf3310a7`.
 - [ ] Hosted CI run is completed successfully for the pilot commit.
 - [ ] Feishu inbound live evidence is present and passed.
+- [ ] Operator status report is `pilot_ops_ready`.
 - [ ] `mutation_performed=false`.
 - [ ] `outbound_message_sent=false` for inbound evidence.
 - [ ] `full_codex_parity_claimed=false`.
