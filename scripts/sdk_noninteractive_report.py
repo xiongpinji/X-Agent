@@ -72,6 +72,7 @@ class SDKNonInteractiveReport:
     runtime_flag_enablement_record_workflow: dict[str, Any]
     runtime_flag_application_preflight_workflow: dict[str, Any]
     runtime_flag_application_owner_approval_workflow: dict[str, Any]
+    runtime_flag_application_execute_contract_workflow: dict[str, Any]
     channel_strategy: dict[str, Any]
     checks: list[SDKNonInteractiveCheck]
     official_sources: list[str]
@@ -214,6 +215,23 @@ def _sdk_contracts() -> list[dict[str, Any]]:
             approval_reason="<reason>",
             approval_hash="<approval_hash>",
         ).to_dict(),
+        sdk.record_runtime_flag_application_execute_contract(
+            runtime_flag_execute_contract_id="<runtime_flag_execute_contract_id>",
+            approval_id="<approval_id>",
+            runtime_flag_approval_id="<runtime_flag_approval_id>",
+            runtime_flag_approval_audit_id="<runtime_flag_approval_audit_id>",
+            runtime_flag_preflight_id="<runtime_flag_preflight_id>",
+            runtime_flag_enablement_id="<runtime_flag_enablement_id>",
+            final_decision_id="<final_decision_id>",
+            operator_id="<operator>",
+            locked_at="2026-06-08T00:00:00Z",
+            execute_contract_reason="<reason>",
+            idempotency_key="<idempotency_key>",
+            idempotency_hash="<idempotency_hash>",
+            rollback_plan_ref="<rollback_plan_ref>",
+            smoke_runbook_ref="<smoke_runbook_ref>",
+            execute_contract_hash="<execute_contract_hash>",
+        ).to_dict(),
     ]
 
 
@@ -347,6 +365,14 @@ def _cli_commands() -> list[dict[str, Any]]:
             "execute_target": "/api/v1/control-plane/sdk/runtime-flag/application-approval/record",
             "execute_starts_agent": False,
         },
+        {
+            "command": "xagent sdk runtime-flag-application-execute-contract-record --runtime-flag-execute-contract-id <runtime_flag_execute_contract_id> --runtime-flag-approval-id <runtime_flag_approval_id> --runtime-flag-approval-audit-id <runtime_flag_approval_audit_id> --idempotency-key <idempotency_key> --idempotency-hash <idempotency_hash> --execute",
+            "method": "runtime_flag_application_execute_contract_record",
+            "non_interactive": True,
+            "dry_run_default": True,
+            "execute_target": "/api/v1/control-plane/sdk/runtime-flag/application-execute-contract/record",
+            "execute_starts_agent": False,
+        },
     ]
 
 
@@ -411,6 +437,7 @@ def _build_checks(report_payload: dict[str, Any]) -> list[SDKNonInteractiveCheck
     runtime_flag_enablement = report_payload["runtime_flag_enablement_record_workflow"]
     runtime_flag_preflight = report_payload["runtime_flag_application_preflight_workflow"]
     runtime_flag_approval = report_payload["runtime_flag_application_owner_approval_workflow"]
+    runtime_flag_execute_contract = report_payload["runtime_flag_application_execute_contract_workflow"]
     methods = [_sdk_contract_method(contract) for contract in contracts]
     command_methods = [command["method"] for command in commands]
     allowed_execute_targets = {
@@ -422,6 +449,7 @@ def _build_checks(report_payload: dict[str, Any]) -> list[SDKNonInteractiveCheck
         "/api/v1/control-plane/sdk/runtime-flag/enablement/record",
         "/api/v1/control-plane/sdk/runtime-flag/application-preflight/record",
         "/api/v1/control-plane/sdk/runtime-flag/application-approval/record",
+        "/api/v1/control-plane/sdk/runtime-flag/application-execute-contract/record",
     }
     cli_execute_targets = [
         command["method"]
@@ -455,10 +483,11 @@ def _build_checks(report_payload: dict[str, Any]) -> list[SDKNonInteractiveCheck
                 "runtime_flag_enablement_record",
                 "runtime_flag_application_preflight_record",
                 "runtime_flag_application_owner_approval_record",
+                "runtime_flag_application_execute_contract_record",
             ]
             else "failed",
             details={"methods": methods},
-            error=None if len(methods) == 16 else "SDK methods are incomplete",
+            error=None if len(methods) == 17 else "SDK methods are incomplete",
         ),
         SDKNonInteractiveCheck(
             name="cli_non_interactive_commands_complete",
@@ -1148,6 +1177,47 @@ def _build_checks(report_payload: dict[str, Any]) -> list[SDKNonInteractiveCheck
             else "runtime flag application owner approval workflow is not ready but disabled",
         ),
         SDKNonInteractiveCheck(
+            name="runtime_flag_application_execute_contract_workflow_ready",
+            status="passed"
+            if runtime_flag_execute_contract.get("stage")
+            == "runtime_flag_application_execute_contract_record_workflow"
+            and runtime_flag_execute_contract.get("workflow_status") == "ready_but_disabled"
+            and runtime_flag_execute_contract.get("endpoint")
+            == "/api/v1/control-plane/sdk/runtime-flag/application-execute-contract/record"
+            and runtime_flag_execute_contract.get("audit_action")
+            == "sdk.write_runner.runtime_flag_application_execute_contract_recorded"
+            and runtime_flag_execute_contract.get("requires_approved_sdk_approval") is True
+            and runtime_flag_execute_contract.get("requires_runtime_flag_application_owner_approval") is True
+            and runtime_flag_execute_contract.get("requires_owner_approval_decision") == "accepted"
+            and runtime_flag_execute_contract.get("requires_runtime_flag_name")
+            == "XAGENT_SDK_WRITE_RUNNER_ENABLED"
+            and runtime_flag_execute_contract.get("requires_idempotency_key") is True
+            and runtime_flag_execute_contract.get("requires_idempotency_hash") is True
+            and runtime_flag_execute_contract.get("requires_rollback_plan") is True
+            and runtime_flag_execute_contract.get("requires_smoke_runbook") is True
+            and runtime_flag_execute_contract.get("requires_signature_or_hash") is True
+            and runtime_flag_execute_contract.get("audit_event_recorded_by_sdk_invoke") is False
+            and runtime_flag_execute_contract.get("decision_effect", {}).get("applies_runtime_flag") is False
+            and runtime_flag_execute_contract.get("decision_effect", {}).get("starts_agent_execution") is False
+            and runtime_flag_execute_contract.get("decision_effect", {}).get("marks_approval_executed") is False
+            and runtime_flag_execute_contract.get("decision_effect", {}).get("invokes_write_runner") is False
+            and runtime_flag_execute_contract.get("implementation_enabled") is False
+            and runtime_flag_execute_contract.get("runtime_flag_enabled") is False
+            and runtime_flag_execute_contract.get("flag_application_performed") is False
+            and runtime_flag_execute_contract.get("execute_enabled") is False
+            and runtime_flag_execute_contract.get("write_runner_enabled") is False
+            and runtime_flag_execute_contract.get("adapter_execution_enabled") is False
+            and runtime_flag_execute_contract.get("agent_execution_enabled") is False
+            and runtime_flag_execute_contract.get("runner_invoked") is False
+            and runtime_flag_execute_contract.get("mark_executed") is False
+            and runtime_flag_execute_contract.get("mutation_performed") is False
+            else "failed",
+            details=runtime_flag_execute_contract,
+            error=None
+            if runtime_flag_execute_contract.get("workflow_status") == "ready_but_disabled"
+            else "runtime flag application execute contract workflow is not ready but disabled",
+        ),
+        SDKNonInteractiveCheck(
             name="feishu_domestic_v1_primary",
             status="passed"
             if report_payload["channel_strategy"].get("domestic_v1_primary") == "feishu"
@@ -1171,7 +1241,7 @@ def _build_checks(report_payload: dict[str, Any]) -> list[SDKNonInteractiveCheck
 
 def build_sdk_noninteractive_report() -> SDKNonInteractiveReport:
     report_payload: dict[str, Any] = {
-        "status": "sdk_runtime_flag_application_owner_approval_workflow_ready",
+        "status": "sdk_runtime_flag_application_execute_contract_workflow_ready",
         "generated_at": _utc_now(),
         "evidence_type": "sdk_noninteractive_cli_contract",
         "full_codex_parity_claimed": False,
@@ -1184,7 +1254,7 @@ def build_sdk_noninteractive_report() -> SDKNonInteractiveReport:
         "backend_stub": {
             "endpoint": "/api/v1/control-plane/sdk/invoke",
             "normalizes_to": "/api/v1/control-plane/invoke",
-            "status": "sdk_runtime_flag_application_owner_approval_workflow_ready",
+            "status": "sdk_runtime_flag_application_execute_contract_workflow_ready",
             "approval_subject_type": "command",
             "approval_intent_created_for_write_methods": True,
             "owner_gate_required": True,
@@ -2246,6 +2316,47 @@ def build_sdk_noninteractive_report() -> SDKNonInteractiveReport:
             "file_mutation_performed": False,
             "channel_mutation_performed": False,
         },
+        "runtime_flag_application_execute_contract_workflow": {
+            "stage": "runtime_flag_application_execute_contract_record_workflow",
+            "workflow_status": "ready_but_disabled",
+            "endpoint": "/api/v1/control-plane/sdk/runtime-flag/application-execute-contract/record",
+            "sdk_operation": "runtime_flag_application_execute_contract_record",
+            "cli_command": "xagent sdk runtime-flag-application-execute-contract-record --execute",
+            "requires_approved_sdk_approval": True,
+            "requires_runtime_flag_application_owner_approval": True,
+            "requires_owner_approval_decision": "accepted",
+            "requires_runtime_flag_name": "XAGENT_SDK_WRITE_RUNNER_ENABLED",
+            "requires_idempotency_key": True,
+            "requires_idempotency_hash": True,
+            "requires_rollback_plan": True,
+            "requires_smoke_runbook": True,
+            "requires_signature_or_hash": True,
+            "audit_action": "sdk.write_runner.runtime_flag_application_execute_contract_recorded",
+            "resource_type": "sdk_write_runner_runtime_flag_application_execute_contract",
+            "audit_event_recorded_by_sdk_invoke": False,
+            "decision_effect": {
+                "applies_runtime_flag": False,
+                "starts_agent_execution": False,
+                "marks_approval_executed": False,
+                "persists_runner_default": False,
+                "invokes_write_runner": False,
+            },
+            "next_gate": "owner_requested_live_runtime_flag_application_implementation",
+            "implementation_enabled": False,
+            "runtime_flag_enabled": False,
+            "flag_application_performed": False,
+            "execute_enabled": False,
+            "write_runner_enabled": False,
+            "adapter_execution_enabled": False,
+            "agent_execution_enabled": False,
+            "write_execution_enabled": False,
+            "runner_invoked": False,
+            "mark_executed": False,
+            "mutation_performed": False,
+            "network_mutation_performed": False,
+            "file_mutation_performed": False,
+            "channel_mutation_performed": False,
+        },
         "channel_strategy": _channel_strategy(),
         "official_sources": list(CODEX_SDK_SOURCES),
         "known_limits": [
@@ -2276,6 +2387,7 @@ def build_sdk_noninteractive_report() -> SDKNonInteractiveReport:
             "Runtime flag enablement intent can be recorded, but it does not set the runtime flag.",
             "Runtime flag application preflight can be recorded, but it does not apply the runtime flag.",
             "Runtime flag application owner approval can be recorded, but it does not apply the runtime flag.",
+            "Runtime flag application execute contract can be recorded, but it does not apply the runtime flag or invoke the write runner.",
             "No SDK HTTP adapter, agent runner, file mutation, channel send, or network mutation is enabled.",
             "Feishu remains the only domestic V1 pilot channel in this contract.",
             "Slack is tracked as a Codex reference surface, but it is non-blocking for the domestic first version.",
@@ -2493,6 +2605,14 @@ def render_markdown_report(report: SDKNonInteractiveReport) -> str:
         f"- Runtime flag enabled: `{report.runtime_flag_application_owner_approval_workflow['runtime_flag_enabled']}`\n"
         f"- Flag application performed: `{report.runtime_flag_application_owner_approval_workflow['flag_application_performed']}`\n"
         f"- Runner invoked: `{report.runtime_flag_application_owner_approval_workflow['runner_invoked']}`\n\n"
+        "## Runtime Flag Application Execute Contract Workflow\n\n"
+        f"- Stage: `{report.runtime_flag_application_execute_contract_workflow['stage']}`\n"
+        f"- Workflow status: `{report.runtime_flag_application_execute_contract_workflow['workflow_status']}`\n"
+        f"- Endpoint: `{report.runtime_flag_application_execute_contract_workflow['endpoint']}`\n"
+        f"- Audit action: `{report.runtime_flag_application_execute_contract_workflow['audit_action']}`\n"
+        f"- Runtime flag enabled: `{report.runtime_flag_application_execute_contract_workflow['runtime_flag_enabled']}`\n"
+        f"- Flag application performed: `{report.runtime_flag_application_execute_contract_workflow['flag_application_performed']}`\n"
+        f"- Runner invoked: `{report.runtime_flag_application_execute_contract_workflow['runner_invoked']}`\n\n"
         "## Channel Strategy\n\n"
         f"- Domestic V1 primary: `{report.channel_strategy['domestic_v1_primary']}`\n"
         f"- Telegram required: `{report.channel_strategy['telegram_required']}`\n"
@@ -2540,7 +2660,7 @@ def main() -> int:
         print(f"- {check.name}: {check.status}")
         if check.error:
             print(f"  error: {check.error}")
-    return 0 if report.status == "sdk_runtime_flag_application_owner_approval_workflow_ready" else 1
+    return 0 if report.status == "sdk_runtime_flag_application_execute_contract_workflow_ready" else 1
 
 
 if __name__ == "__main__":

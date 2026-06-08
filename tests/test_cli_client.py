@@ -927,6 +927,70 @@ class TestHTTPClient:
             assert result["runtime_flag_approval"]["mutation_performed"] is False
 
     @pytest.mark.asyncio
+    async def test_http_client_record_sdk_runtime_flag_application_execute_contract_calls_owner_gated_stub(self):
+        """Test SDK runtime flag application execute contract uses the backend evidence stub."""
+        config = CLIConfig(api_base_url="http://localhost:8000")
+        client = HTTPClient(config)
+        payload = {
+            "runtime_flag_execute_contract_id": "flag-execute-contract-1",
+            "approval_id": "approval-1",
+            "runtime_flag_approval_id": "flag-approval-1",
+            "runtime_flag_approval_audit_id": "audit-flag-approval-1",
+            "runtime_flag_preflight_id": "flag-preflight-1",
+            "runtime_flag_enablement_id": "flag-enable-1",
+            "final_decision_id": "final-decision-1",
+            "runtime_flag_name": "XAGENT_SDK_WRITE_RUNNER_ENABLED",
+            "operator_id": "operator",
+            "locked_at": "2026-06-08T00:00:00Z",
+            "execute_contract_reason": "owner requested live runtime flag application contract",
+            "idempotency_key": "idem-flag-execute-1",
+            "idempotency_hash": "hash-idem-flag-execute-1",
+            "rollback_plan_ref": "runbooks/sdk-write-runner-rollback.md",
+            "smoke_runbook_ref": "runbooks/sdk-write-runner-smoke.md",
+            "execute_contract_hash": "hash-flag-execute-contract-1",
+        }
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "ok": True,
+            "status": "sdk_runtime_flag_application_execute_contract_workflow_ready",
+            "runtime_flag_execute_contract": {
+                "audit_event_recorded": True,
+                "runtime_flag_enabled": False,
+                "flag_application_performed": False,
+                "implementation_enabled": False,
+                "execute_enabled": False,
+                "write_runner_enabled": False,
+                "adapter_execution_enabled": False,
+                "agent_execution_enabled": False,
+                "write_execution_enabled": False,
+                "runner_invoked": False,
+                "mark_executed": False,
+                "mutation_performed": False,
+            },
+        }
+
+        with patch.object(
+            httpx.AsyncClient,
+            "request",
+            new_callable=AsyncMock,
+            return_value=mock_response,
+        ) as mock_request:
+            result = await client.record_sdk_runtime_flag_application_execute_contract(payload)
+
+            call_args = mock_request.call_args
+            assert call_args[0][0] == "POST"
+            assert call_args[0][1] == "/api/v1/control-plane/sdk/runtime-flag/application-execute-contract/record"
+            assert call_args[1]["json"] == payload
+            assert result["status"] == "sdk_runtime_flag_application_execute_contract_workflow_ready"
+            assert result["runtime_flag_execute_contract"]["runtime_flag_enabled"] is False
+            assert result["runtime_flag_execute_contract"]["flag_application_performed"] is False
+            assert result["runtime_flag_execute_contract"]["execute_enabled"] is False
+            assert result["runtime_flag_execute_contract"]["write_runner_enabled"] is False
+            assert result["runtime_flag_execute_contract"]["runner_invoked"] is False
+            assert result["runtime_flag_execute_contract"]["mutation_performed"] is False
+
+    @pytest.mark.asyncio
     async def test_http_client_list_agents(self):
         """Test list_agents calls correct endpoint."""
         config = CLIConfig(api_base_url="http://localhost:8000")
@@ -1300,6 +1364,15 @@ class TestLocalClient:
 
         with pytest.raises(NotImplementedError, match="SDK runtime flag application owner approval recording"):
             await client.record_sdk_runtime_flag_application_owner_approval({"approval_id": "approval-1"})
+
+    @pytest.mark.asyncio
+    async def test_local_client_record_sdk_runtime_flag_application_execute_contract_not_implemented(self):
+        """Test SDK runtime flag application execute contract recording is HTTP-only."""
+        config = CLIConfig(mode="local")
+        client = LocalClient(config)
+
+        with pytest.raises(NotImplementedError, match="SDK runtime flag application execute contract recording"):
+            await client.record_sdk_runtime_flag_application_execute_contract({"approval_id": "approval-1"})
 
     @pytest.mark.asyncio
     async def test_local_client_health_check_healthy(self):

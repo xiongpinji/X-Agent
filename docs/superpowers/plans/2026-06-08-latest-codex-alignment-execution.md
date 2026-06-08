@@ -977,12 +977,39 @@ Expected: selected approval and sandbox tests pass.
 - [x] Require approved SDK approval, recorded runtime flag application preflight, accept/reject decision, runtime flag name, timestamp, reason, signature/hash, and dry-run mode before recording.
 - [x] Keep owner approval recording read-only with respect to runtime effects: it does not apply `XAGENT_SDK_WRITE_RUNNER_ENABLED`, invoke the write runner, mark approvals executed, or perform file/network/channel mutation.
 - [x] Add `/sdk/invoke` runtime flag application owner approval metadata and promote SDK alignment status to `sdk_runtime_flag_application_owner_approval_workflow_ready`.
-- [ ] Define the live runtime flag application execute contract only after owner approval review; keep write-runner wiring as a separate follow-up gate.
+- [x] Define the live runtime flag application execute contract only after owner approval review; keep write-runner wiring as a separate follow-up gate.
+
+### Task 40: Live Runtime Flag Application Execute Contract Workflow
+
+**Target:** Record the owner-gated execute contract required before live runtime flag application, while still keeping `XAGENT_SDK_WRITE_RUNNER_ENABLED` disabled and the SDK write-runner uninvoked.
+
+**Files:**
+- Modify: `backend/app/api/control_plane.py`
+- Modify: `backend/app/sdk/control_plane.py`
+- Modify: `backend/app/sdk/__init__.py`
+- Modify: `cli/client.py`
+- Modify: `cli/commands/sdk_cmd.py`
+- Modify: `scripts/sdk_noninteractive_report.py`
+- Modify: `scripts/latest_codex_alignment.py`
+- Modify: `tests/test_control_plane_protocol.py`
+- Modify: `tests/test_xagent_sdk_contract.py`
+- Modify: `tests/test_cli_client.py`
+- Modify: `tests/test_sdk_noninteractive_report.py`
+- Modify: `tests/test_latest_codex_alignment.py`
+- Runtime evidence: `.xagent_runtime/reports/sdk-noninteractive-report.json`
+- Runtime evidence: `.xagent_runtime/reports/latest-codex-alignment.json`
+
+- [x] Add `/api/v1/control-plane/sdk/runtime-flag/application-execute-contract/record` as an owner-gated execute contract endpoint.
+- [x] Add SDK and non-interactive CLI wrappers for runtime flag application execute contract recording.
+- [x] Require approved SDK approval, recorded accepted runtime flag application owner approval, runtime flag name, idempotency key/hash, rollback plan, smoke runbook, timestamp, reason, signature/hash, and dry-run mode before recording.
+- [x] Keep execute contract recording read-only with respect to runtime effects: it does not apply `XAGENT_SDK_WRITE_RUNNER_ENABLED`, invoke the write runner, mark approvals executed, or perform file/network/channel mutation.
+- [x] Add `/sdk/invoke` runtime flag application execute contract metadata and promote SDK alignment status to `sdk_runtime_flag_application_execute_contract_workflow_ready`.
+- [ ] Implement live runtime flag application only after this execute contract is independently reviewed and explicitly requested; keep write-runner wiring as a separate follow-up gate.
 
 ## Completion Criteria
 
 - `scripts/latest_codex_alignment.py` returns `latest_codex_alignment_plan_ready`.
-- `scripts/sdk_noninteractive_report.py` returns `sdk_runtime_flag_application_owner_approval_workflow_ready`.
+- `scripts/sdk_noninteractive_report.py` returns `sdk_runtime_flag_application_execute_contract_workflow_ready`.
 - P0 task board is complete and machine-readable.
 - Feishu Pilot V1 remains `customer_acceptance_pack_ready`.
 - `full_codex_parity_claimed=false` remains true in all generated alignment and pilot reports.

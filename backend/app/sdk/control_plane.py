@@ -164,6 +164,21 @@ class SDKRuntimeFlagApplicationOwnerApprovalRecordContract:
         return payload
 
 
+@dataclass(frozen=True)
+class SDKRuntimeFlagApplicationExecuteContractRecordContract:
+    operation: str
+    endpoint: str
+    request: dict[str, Any]
+    owner_gate: dict[str, Any]
+    known_limits: list[str]
+
+    def to_dict(self) -> dict[str, Any]:
+        payload = asdict(self)
+        payload["mutation_performed"] = False
+        payload["network_mutation_performed"] = False
+        return payload
+
+
 class ControlPlaneSDK:
     """Build SDK-compatible control-plane request envelopes."""
 
@@ -749,6 +764,86 @@ class ControlPlaneSDK:
             known_limits=[
                 "This SDK contract records owner approval intent for runtime flag application only.",
                 "It does not set XAGENT_SDK_WRITE_RUNNER_ENABLED or invoke the write runner.",
+                "It does not mark an approval executed.",
+            ],
+        )
+
+    def record_runtime_flag_application_execute_contract(
+        self,
+        *,
+        runtime_flag_execute_contract_id: str,
+        approval_id: str,
+        runtime_flag_approval_id: str,
+        runtime_flag_approval_audit_id: str,
+        runtime_flag_preflight_id: str,
+        runtime_flag_enablement_id: str,
+        final_decision_id: str,
+        operator_id: str,
+        locked_at: str,
+        execute_contract_reason: str,
+        idempotency_key: str,
+        idempotency_hash: str,
+        rollback_plan_ref: str,
+        smoke_runbook_ref: str,
+        runtime_flag_name: str = "XAGENT_SDK_WRITE_RUNNER_ENABLED",
+        execute_contract_signature: str | None = None,
+        execute_contract_hash: str | None = None,
+        notes: str | None = None,
+        dry_run: bool = True,
+    ) -> SDKRuntimeFlagApplicationExecuteContractRecordContract:
+        return SDKRuntimeFlagApplicationExecuteContractRecordContract(
+            operation="runtime_flag_application_execute_contract_record",
+            endpoint="/api/v1/control-plane/sdk/runtime-flag/application-execute-contract/record",
+            request={
+                "runtime_flag_execute_contract_id": runtime_flag_execute_contract_id,
+                "approval_id": approval_id,
+                "runtime_flag_approval_id": runtime_flag_approval_id,
+                "runtime_flag_approval_audit_id": runtime_flag_approval_audit_id,
+                "runtime_flag_preflight_id": runtime_flag_preflight_id,
+                "runtime_flag_enablement_id": runtime_flag_enablement_id,
+                "final_decision_id": final_decision_id,
+                "runtime_flag_name": runtime_flag_name,
+                "operator_id": operator_id,
+                "locked_at": locked_at,
+                "execute_contract_reason": execute_contract_reason,
+                "idempotency_key": idempotency_key,
+                "idempotency_hash": idempotency_hash,
+                "rollback_plan_ref": rollback_plan_ref,
+                "smoke_runbook_ref": smoke_runbook_ref,
+                "execute_contract_signature": execute_contract_signature,
+                "execute_contract_hash": execute_contract_hash,
+                "notes": notes,
+                "dry_run": dry_run,
+            },
+            owner_gate={
+                "requires_approved_sdk_approval": True,
+                "requires_runtime_flag_application_owner_approval": True,
+                "requires_owner_approval_decision": "accepted",
+                "requires_runtime_flag_name": "XAGENT_SDK_WRITE_RUNNER_ENABLED",
+                "requires_idempotency_key": True,
+                "requires_idempotency_hash": True,
+                "requires_rollback_plan": True,
+                "requires_smoke_runbook": True,
+                "requires_signature_or_hash": True,
+                "marks_approval_executed": False,
+                "runtime_flag_enabled": False,
+                "flag_application_performed": False,
+                "implementation_enabled": False,
+                "execute_enabled": False,
+                "write_runner_enabled": False,
+                "adapter_execution_enabled": False,
+                "agent_execution_enabled": False,
+                "write_execution_enabled": False,
+                "runner_invoked": False,
+                "mark_executed": False,
+                "mutation_performed": False,
+                "network_mutation_performed": False,
+                "file_mutation_performed": False,
+                "channel_mutation_performed": False,
+            },
+            known_limits=[
+                "This SDK contract records the live runtime flag application execute contract only.",
+                "It does not apply XAGENT_SDK_WRITE_RUNNER_ENABLED or invoke the write runner.",
                 "It does not mark an approval executed.",
             ],
         )

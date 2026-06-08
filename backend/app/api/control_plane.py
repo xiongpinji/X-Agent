@@ -835,6 +835,35 @@ class SDKRuntimeFlagApplicationOwnerApprovalRecordResponse(BaseModel):
     evidence: ControlPlaneEvidence
 
 
+class SDKRuntimeFlagApplicationExecuteContractRecordRequest(BaseModel):
+    runtime_flag_execute_contract_id: str = Field(..., min_length=1, max_length=240)
+    approval_id: str = Field(..., min_length=1, max_length=240)
+    runtime_flag_approval_id: str = Field(..., min_length=1, max_length=240)
+    runtime_flag_approval_audit_id: str = Field(..., min_length=1, max_length=240)
+    runtime_flag_preflight_id: str = Field(..., min_length=1, max_length=240)
+    runtime_flag_enablement_id: str = Field(..., min_length=1, max_length=240)
+    final_decision_id: str = Field(..., min_length=1, max_length=240)
+    runtime_flag_name: str = Field(..., min_length=1, max_length=240)
+    operator_id: str = Field(..., min_length=1, max_length=240)
+    locked_at: str = Field(..., min_length=1, max_length=80)
+    execute_contract_reason: str = Field(..., min_length=1, max_length=1000)
+    idempotency_key: str = Field(..., min_length=1, max_length=500)
+    idempotency_hash: str = Field(..., min_length=1, max_length=500)
+    rollback_plan_ref: str = Field(..., min_length=1, max_length=500)
+    smoke_runbook_ref: str = Field(..., min_length=1, max_length=500)
+    execute_contract_signature: str | None = Field(default=None, max_length=500)
+    execute_contract_hash: str | None = Field(default=None, max_length=500)
+    notes: str | None = Field(default=None, max_length=2000)
+    dry_run: bool = True
+
+
+class SDKRuntimeFlagApplicationExecuteContractRecordResponse(BaseModel):
+    ok: bool
+    status: str
+    runtime_flag_execute_contract: dict[str, Any]
+    evidence: ControlPlaneEvidence
+
+
 def _method_catalog() -> list[dict[str, object]]:
     return [spec.to_payload() for spec in METHOD_SPECS]
 
@@ -1135,6 +1164,11 @@ async def invoke_sdk_control_plane(
             sdk_metadata["runtime_flag_application_preflight_workflow"],
         )
     )
+    sdk_metadata["runtime_flag_application_execute_contract_workflow"] = (
+        _sdk_runtime_flag_application_execute_contract_workflow_contract(
+            sdk_metadata["runtime_flag_application_owner_approval_workflow"],
+        )
+    )
     return SDKControlPlaneInvokeResponse(
         id=control_request.id,
         ok=control_response.ok,
@@ -1400,6 +1434,40 @@ async def record_sdk_runtime_flag_application_owner_approval(
         ok=runtime_flag_approval["record_status"] == "recorded",
         status="sdk_runtime_flag_application_owner_approval_workflow_ready",
         runtime_flag_approval=runtime_flag_approval,
+        evidence=evidence,
+    )
+
+
+@router.post(
+    "/sdk/runtime-flag/application-execute-contract/record",
+    response_model=SDKRuntimeFlagApplicationExecuteContractRecordResponse,
+)
+async def record_sdk_runtime_flag_application_execute_contract(
+    request: SDKRuntimeFlagApplicationExecuteContractRecordRequest,
+    principal: PrincipalDependency,
+    audit_store: AuditStoreDependency,
+    approval_store: ApprovalStoreDependency,
+) -> SDKRuntimeFlagApplicationExecuteContractRecordResponse:
+    """Record the live runtime flag application execute contract without applying it."""
+    enforce_scope(principal, "workflow:control")
+    trace_id = principal.trace_id or f"trace_{uuid4().hex}"
+    execute_contract = _sdk_record_runtime_flag_application_execute_contract(
+        request,
+        principal=principal,
+        approval_store=approval_store,
+        audit_store=audit_store,
+        trace_id=trace_id,
+    )
+    evidence = ControlPlaneEvidence(
+        trace_id=trace_id,
+        audit_id=execute_contract.get("audit_id")
+        if execute_contract.get("audit_event_recorded")
+        else None,
+    )
+    return SDKRuntimeFlagApplicationExecuteContractRecordResponse(
+        ok=execute_contract["record_status"] == "recorded",
+        status="sdk_runtime_flag_application_execute_contract_workflow_ready",
+        runtime_flag_execute_contract=execute_contract,
         evidence=evidence,
     )
 
@@ -2718,6 +2786,206 @@ def _sdk_record_runtime_flag_application_owner_approval(
     }
 
 
+def _sdk_runtime_flag_application_execute_contract_validation(
+    record: dict[str, Any] | None,
+) -> dict[str, Any]:
+    required_fields = [
+        "runtime_flag_execute_contract_id",
+        "approval_id",
+        "runtime_flag_approval_id",
+        "runtime_flag_approval_audit_id",
+        "runtime_flag_preflight_id",
+        "runtime_flag_enablement_id",
+        "final_decision_id",
+        "runtime_flag_name",
+        "operator_id",
+        "locked_at",
+        "execute_contract_reason",
+        "idempotency_key",
+        "idempotency_hash",
+        "rollback_plan_ref",
+        "smoke_runbook_ref",
+    ]
+    checks = {
+        "record_present": isinstance(record, dict),
+        "required_fields_present": bool(
+            isinstance(record, dict) and all(record.get(field) not in (None, "") for field in required_fields)
+        ),
+        "locked_at_rfc3339": bool(
+            isinstance(record, dict) and _is_rfc3339_timestamp(record.get("locked_at"))
+        ),
+        "runtime_flag_name_allowed": bool(
+            isinstance(record, dict)
+            and record.get("runtime_flag_name") == "XAGENT_SDK_WRITE_RUNNER_ENABLED"
+        ),
+        "idempotency_key_present": bool(isinstance(record, dict) and record.get("idempotency_key")),
+        "idempotency_hash_present": bool(isinstance(record, dict) and record.get("idempotency_hash")),
+        "rollback_plan_ref_present": bool(isinstance(record, dict) and record.get("rollback_plan_ref")),
+        "smoke_runbook_ref_present": bool(isinstance(record, dict) and record.get("smoke_runbook_ref")),
+        "signature_or_hash_present": bool(
+            isinstance(record, dict)
+            and (record.get("execute_contract_signature") or record.get("execute_contract_hash"))
+        ),
+    }
+    return {
+        "status": "valid" if all(checks.values()) else "invalid",
+        "checks": checks,
+    }
+
+
+def _sdk_record_runtime_flag_application_execute_contract(
+    request: SDKRuntimeFlagApplicationExecuteContractRecordRequest,
+    *,
+    principal: Principal,
+    approval_store: object,
+    audit_store: AuditStore,
+    trace_id: str,
+) -> dict[str, Any]:
+    approval = approval_store.get(request.approval_id) if hasattr(approval_store, "get") else None
+    runtime_flag_approval = _sdk_runtime_flag_application_owner_approval_record_from_audit(
+        audit_store,
+        runtime_flag_approval_id=request.runtime_flag_approval_id,
+        approval_id=request.approval_id,
+        runtime_flag_preflight_id=request.runtime_flag_preflight_id,
+        runtime_flag_enablement_id=request.runtime_flag_enablement_id,
+        final_decision_id=request.final_decision_id,
+        runtime_flag_name=request.runtime_flag_name,
+        audit_id=request.runtime_flag_approval_audit_id,
+        tenant_id=principal.tenant_id if principal else None,
+    )
+    raw_execute_contract = {
+        "runtime_flag_execute_contract_id": request.runtime_flag_execute_contract_id,
+        "approval_id": request.approval_id,
+        "runtime_flag_approval_id": request.runtime_flag_approval_id,
+        "runtime_flag_approval_audit_id": request.runtime_flag_approval_audit_id,
+        "runtime_flag_preflight_id": request.runtime_flag_preflight_id,
+        "runtime_flag_enablement_id": request.runtime_flag_enablement_id,
+        "final_decision_id": request.final_decision_id,
+        "runtime_flag_name": request.runtime_flag_name,
+        "operator_id": request.operator_id,
+        "locked_at": request.locked_at,
+        "execute_contract_reason": request.execute_contract_reason,
+        "idempotency_key": request.idempotency_key,
+        "idempotency_hash": request.idempotency_hash,
+        "rollback_plan_ref": request.rollback_plan_ref,
+        "smoke_runbook_ref": request.smoke_runbook_ref,
+        "execute_contract_signature": request.execute_contract_signature,
+        "execute_contract_hash": request.execute_contract_hash,
+        "notes": request.notes,
+    }
+    validation = _sdk_runtime_flag_application_execute_contract_validation(raw_execute_contract)
+    approval_status = getattr(approval, "status", None)
+    approval_status_value = getattr(approval_status, "value", approval_status)
+    approval_resource_id = getattr(approval, "resource_id", None)
+    approval_tenant_id = getattr(approval, "tenant_id", None)
+    checks = {
+        "approval_found": approval is not None,
+        "approval_status_approved": approval_status == ApprovalStatus.APPROVED or approval_status_value == "approved",
+        "approval_resource_sdk_command": isinstance(approval_resource_id, str)
+        and approval_resource_id.startswith("sdk:"),
+        "tenant_matches": not principal.authenticated or approval_tenant_id == principal.tenant_id,
+        "runtime_flag_owner_approval_audit_record_present": isinstance(runtime_flag_approval, dict),
+        "runtime_flag_owner_approval_validation_valid": bool(
+            isinstance(runtime_flag_approval, dict)
+            and _sdk_runtime_flag_application_owner_approval_validation(runtime_flag_approval)["status"] == "valid"
+        ),
+        "runtime_flag_owner_approval_accepted": bool(
+            isinstance(runtime_flag_approval, dict) and runtime_flag_approval.get("decision") == "accepted"
+        ),
+        "runtime_flag_execute_contract_valid": validation["status"] == "valid",
+        "dry_run_does_not_apply_flag": request.dry_run is True,
+    }
+    can_record = all(checks.values())
+    execute_contract_payload = {
+        key: value
+        for key, value in raw_execute_contract.items()
+        if value is not None
+    }
+    audit_record = None
+    if can_record:
+        audit_record = audit_store.record(
+            action="sdk.write_runner.runtime_flag_application_execute_contract_recorded",
+            resource_type="sdk_write_runner_runtime_flag_application_execute_contract",
+            resource_id=request.runtime_flag_execute_contract_id,
+            outcome="accepted",
+            tenant_id=approval_tenant_id or principal.tenant_id,
+            actor_id=principal.user_id if principal.authenticated else request.operator_id,
+            trace_id=trace_id,
+            details={
+                "approval_id": request.approval_id,
+                "runtime_flag_approval_id": request.runtime_flag_approval_id,
+                "runtime_flag_approval_audit_id": request.runtime_flag_approval_audit_id,
+                "runtime_flag_preflight_id": request.runtime_flag_preflight_id,
+                "runtime_flag_enablement_id": request.runtime_flag_enablement_id,
+                "final_decision_id": request.final_decision_id,
+                "runtime_flag_name": request.runtime_flag_name,
+                "runtime_flag_execute_contract": execute_contract_payload,
+                "runtime_flag_owner_approval_record": runtime_flag_approval,
+                "validation": validation,
+                "dry_run": request.dry_run,
+                "runtime_flag_enabled": False,
+                "flag_application_performed": False,
+                "implementation_enabled": False,
+                "execute_enabled": False,
+                "write_runner_enabled": False,
+                "adapter_execution_enabled": False,
+                "agent_execution_enabled": False,
+                "write_execution_enabled": False,
+                "runner_invoked": False,
+                "mark_executed": False,
+                "mutation_performed": False,
+                "network_mutation_performed": False,
+                "file_mutation_performed": False,
+                "channel_mutation_performed": False,
+            },
+        )
+    return {
+        "stage": "runtime_flag_application_execute_contract_record_workflow",
+        "record_status": "recorded" if audit_record else "rejected",
+        "recording_endpoint": "/api/v1/control-plane/sdk/runtime-flag/application-execute-contract/record",
+        "runtime_flag_execute_contract_id": request.runtime_flag_execute_contract_id,
+        "approval_id": request.approval_id,
+        "runtime_flag_approval_id": request.runtime_flag_approval_id,
+        "runtime_flag_approval_audit_id": request.runtime_flag_approval_audit_id,
+        "runtime_flag_preflight_id": request.runtime_flag_preflight_id,
+        "runtime_flag_enablement_id": request.runtime_flag_enablement_id,
+        "final_decision_id": request.final_decision_id,
+        "runtime_flag_name": request.runtime_flag_name,
+        "idempotency_key": request.idempotency_key,
+        "idempotency_hash_present": bool(request.idempotency_hash),
+        "rollback_plan_ref": request.rollback_plan_ref,
+        "smoke_runbook_ref": request.smoke_runbook_ref,
+        "approval_status": approval_status_value,
+        "approval_resource_id": approval_resource_id,
+        "checks": checks,
+        "validation": validation,
+        "audit_event_recorded": audit_record is not None,
+        "audit_action": "sdk.write_runner.runtime_flag_application_execute_contract_recorded",
+        "audit_id": getattr(audit_record, "id", None) if audit_record else None,
+        "audit_hash": getattr(audit_record, "hash", None) if audit_record else None,
+        "audit_signature_present": bool(getattr(audit_record, "signature", None)) if audit_record else False,
+        "runtime_flag_enabled": False,
+        "flag_application_performed": False,
+        "implementation_enabled": False,
+        "execute_enabled": False,
+        "write_runner_enabled": False,
+        "adapter_execution_enabled": False,
+        "agent_execution_enabled": False,
+        "write_execution_enabled": False,
+        "runner_invoked": False,
+        "mark_executed": False,
+        "mutation_performed": False,
+        "network_mutation_performed": False,
+        "file_mutation_performed": False,
+        "channel_mutation_performed": False,
+        "known_limits": [
+            "This endpoint records the live runtime flag application execute contract only.",
+            "It does not set XAGENT_SDK_WRITE_RUNNER_ENABLED or invoke the SDK write runner.",
+            "Live runtime flag application implementation remains a separate owner-requested task.",
+        ],
+    }
+
+
 def _sdk_backend_stub_metadata(
     original: SDKControlPlaneInvokeRequest,
     request: ControlPlaneInvokeRequest,
@@ -2736,7 +3004,7 @@ def _sdk_backend_stub_metadata(
     read_only_runner_contract = _sdk_read_only_runner_contract(original, request, response)
     write_runner_safety_contract = _sdk_write_runner_safety_contract(original, request, execution_adapter_contract)
     return {
-        "status": "sdk_runtime_flag_application_owner_approval_workflow_ready",
+        "status": "sdk_runtime_flag_application_execute_contract_workflow_ready",
         "operation": request.context.sdk_operation or original.operation,
         "method": request.method,
         "sdk_surface": request.context.sdk_surface or "python",
@@ -2776,6 +3044,7 @@ def _sdk_backend_stub_metadata(
             "Runtime enablement owner review pack is ready for audit but disabled for execution.",
             "Runtime enablement owner pack decision workflow is ready for audit but disabled for execution.",
             "Runtime implementation readiness lock recording is owner-gated and disabled for execution.",
+            "Runtime flag application execute contract recording is owner-gated and disabled for execution.",
             "No SDK HTTP adapter execution, agent runner invocation, channel send, file change, or network mutation is enabled.",
             "Write methods remain owner-gated behind the approval/sandbox/admin contract.",
             "Feishu remains the only domestic V1 pilot channel.",
@@ -4525,6 +4794,75 @@ def _sdk_runtime_flag_application_owner_approval_workflow_contract(
             "This workflow records an owner accept/reject decision for runtime flag application only.",
             "Accepted owner approvals do not apply XAGENT_SDK_WRITE_RUNNER_ENABLED.",
             "Live runtime flag application remains a separate owner-reviewed execution contract.",
+        ],
+    }
+
+
+def _sdk_runtime_flag_application_execute_contract_workflow_contract(
+    owner_approval_workflow: dict[str, Any],
+) -> dict[str, Any]:
+    checks = {
+        "owner_approval_ready_but_disabled": owner_approval_workflow.get("workflow_status")
+        == "ready_but_disabled",
+        "owner_approval_does_not_apply_flag": owner_approval_workflow.get("decision_effect", {}).get(
+            "accepted_enables_runtime_flag"
+        )
+        is False,
+        "runtime_flag_still_disabled": owner_approval_workflow.get("runtime_flag_enabled") is False,
+        "flag_application_still_disabled": owner_approval_workflow.get("flag_application_performed") is False,
+        "implementation_still_disabled": owner_approval_workflow.get("implementation_enabled") is False,
+        "execute_still_disabled": owner_approval_workflow.get("execute_enabled") is False,
+        "runner_not_invoked": owner_approval_workflow.get("runner_invoked") is False,
+        "mark_executed_disabled": owner_approval_workflow.get("mark_executed") is False,
+        "mutation_still_disabled": owner_approval_workflow.get("mutation_performed") is False,
+    }
+    ready = all(checks.values())
+    return {
+        "available": owner_approval_workflow.get("available") is True,
+        "stage": "runtime_flag_application_execute_contract_record_workflow",
+        "workflow_status": "ready_but_disabled" if ready else "blocked",
+        "endpoint": "/api/v1/control-plane/sdk/runtime-flag/application-execute-contract/record",
+        "sdk_operation": "runtime_flag_application_execute_contract_record",
+        "cli_command": "xagent sdk runtime-flag-application-execute-contract-record --execute",
+        "requires_approved_sdk_approval": True,
+        "requires_runtime_flag_application_owner_approval": True,
+        "requires_owner_approval_decision": "accepted",
+        "requires_runtime_flag_name": "XAGENT_SDK_WRITE_RUNNER_ENABLED",
+        "requires_idempotency_key": True,
+        "requires_idempotency_hash": True,
+        "requires_rollback_plan": True,
+        "requires_smoke_runbook": True,
+        "requires_signature_or_hash": True,
+        "audit_action": "sdk.write_runner.runtime_flag_application_execute_contract_recorded",
+        "resource_type": "sdk_write_runner_runtime_flag_application_execute_contract",
+        "audit_event_recorded_by_sdk_invoke": False,
+        "decision_effect": {
+            "applies_runtime_flag": False,
+            "starts_agent_execution": False,
+            "marks_approval_executed": False,
+            "persists_runner_default": False,
+            "invokes_write_runner": False,
+        },
+        "next_gate": "owner_requested_live_runtime_flag_application_implementation",
+        "checks": checks,
+        "implementation_enabled": False,
+        "runtime_flag_enabled": False,
+        "flag_application_performed": False,
+        "execute_enabled": False,
+        "write_runner_enabled": False,
+        "adapter_execution_enabled": False,
+        "agent_execution_enabled": False,
+        "write_execution_enabled": False,
+        "runner_invoked": False,
+        "mark_executed": False,
+        "mutation_performed": False,
+        "network_mutation_performed": False,
+        "file_mutation_performed": False,
+        "channel_mutation_performed": False,
+        "known_limits": [
+            "This workflow records a live runtime flag application execute contract only.",
+            "It does not apply XAGENT_SDK_WRITE_RUNNER_ENABLED.",
+            "The SDK write runner, approval execution marker, and all mutations remain disabled.",
         ],
     }
 
@@ -6499,6 +6837,68 @@ def _sdk_runtime_flag_application_preflight_record_from_audit(
             continue
         return {
             **_jsonable(preflight),
+            "audit_id": getattr(record, "id", audit_id),
+            "audit_created_at": _jsonable(getattr(record, "created_at", None)),
+            "audit_hash": getattr(record, "hash", None),
+            "audit_signature_present": bool(getattr(record, "signature", None)),
+            "record_persisted": True,
+        }
+    return None
+
+
+def _sdk_runtime_flag_application_owner_approval_record_from_audit(
+    audit_store: AuditStore | None,
+    *,
+    runtime_flag_approval_id: str | None,
+    approval_id: str | None,
+    runtime_flag_preflight_id: str | None,
+    runtime_flag_enablement_id: str | None,
+    final_decision_id: str | None,
+    runtime_flag_name: str | None,
+    audit_id: str | None,
+    tenant_id: str | None,
+) -> dict[str, Any] | None:
+    if (
+        audit_store is None
+        or not runtime_flag_approval_id
+        or not approval_id
+        or not runtime_flag_preflight_id
+        or not runtime_flag_enablement_id
+        or not final_decision_id
+        or not runtime_flag_name
+        or not audit_id
+    ):
+        return None
+    records = audit_store.list(
+        limit=200,
+        tenant_id=tenant_id,
+        action="sdk.write_runner.runtime_flag_application_owner_approval_recorded",
+        resource_type="sdk_write_runner_runtime_flag_application_owner_approval",
+        outcome="accepted",
+    )
+    for record in records:
+        if audit_id and getattr(record, "id", None) != audit_id:
+            continue
+        if runtime_flag_approval_id and getattr(record, "resource_id", None) != runtime_flag_approval_id:
+            continue
+        details = getattr(record, "details", {}) or {}
+        if approval_id and details.get("approval_id") != approval_id:
+            continue
+        if runtime_flag_preflight_id and details.get("runtime_flag_preflight_id") != runtime_flag_preflight_id:
+            continue
+        if runtime_flag_enablement_id and details.get("runtime_flag_enablement_id") != runtime_flag_enablement_id:
+            continue
+        if final_decision_id and details.get("final_decision_id") != final_decision_id:
+            continue
+        approval = details.get("runtime_flag_owner_approval")
+        if not isinstance(approval, dict):
+            continue
+        if runtime_flag_name and approval.get("runtime_flag_name") != runtime_flag_name:
+            continue
+        if approval.get("decision") != "accepted":
+            continue
+        return {
+            **_jsonable(approval),
             "audit_id": getattr(record, "id", audit_id),
             "audit_created_at": _jsonable(getattr(record, "created_at", None)),
             "audit_hash": getattr(record, "hash", None),
