@@ -861,6 +861,14 @@ async def invoke_sdk_control_plane(
         execution_adapter_contract=sdk_metadata["execution_adapter_contract"],
         write_runner_execute_gate=sdk_metadata["write_runner_execute_gate"],
     )
+    sdk_metadata["write_runner_runtime_flag"] = _sdk_write_runner_runtime_flag_contract(
+        control_request,
+        write_runner_adapter_review=sdk_metadata["write_runner_adapter_review"],
+    )
+    sdk_metadata["owner_acceptance_evidence"] = _sdk_owner_acceptance_evidence_contract(
+        control_request,
+        write_runner_runtime_flag=sdk_metadata["write_runner_runtime_flag"],
+    )
     return SDKControlPlaneInvokeResponse(
         id=control_request.id,
         ok=control_response.ok,
@@ -939,7 +947,7 @@ def _sdk_backend_stub_metadata(
     read_only_runner_contract = _sdk_read_only_runner_contract(original, request, response)
     write_runner_safety_contract = _sdk_write_runner_safety_contract(original, request, execution_adapter_contract)
     return {
-        "status": "sdk_write_runner_adapter_review_ready",
+        "status": "sdk_write_runner_runtime_flag_ready",
         "operation": request.context.sdk_operation or original.operation,
         "method": request.method,
         "sdk_surface": request.context.sdk_surface or "python",
@@ -970,6 +978,7 @@ def _sdk_backend_stub_metadata(
             "Persisted dry-run receipts expose a read-only write-runner safety review gate.",
             "Owner-approved write dry-run receipts are consolidated into a disabled execute gate contract.",
             "Owner-approved write runner adapter implementation is represented as a disabled review contract.",
+            "Runtime feature flag and owner acceptance evidence contracts are present and disabled by default.",
             "No SDK HTTP adapter execution, agent runner invocation, channel send, file change, or network mutation is enabled.",
             "Write methods remain owner-gated behind the approval/sandbox/admin contract.",
             "Feishu remains the only domestic V1 pilot channel.",
@@ -1514,6 +1523,111 @@ def _sdk_write_runner_adapter_review(
             "This is the adapter implementation review contract, not the implementation switch.",
             "The future adapter target is declared, but AgentCoordinator.run is not called here.",
             "Approvals are not marked executed until a future runner succeeds under an explicit runtime feature flag.",
+        ],
+    }
+
+
+def _sdk_write_runner_runtime_flag_contract(
+    request: ControlPlaneInvokeRequest,
+    *,
+    write_runner_adapter_review: dict[str, Any],
+) -> dict[str, Any]:
+    review_ready = write_runner_adapter_review.get("review_status") == "ready_but_disabled"
+    checks = {
+        "adapter_review_ready_but_disabled": review_ready,
+        "feature_flag_declared": True,
+        "feature_flag_default_disabled": True,
+        "owner_acceptance_required": True,
+        "audit_required": True,
+        "rollback_required": True,
+        "implementation_still_disabled": write_runner_adapter_review.get("implementation_enabled") is False,
+    }
+    return {
+        "available": write_runner_adapter_review.get("available") is True,
+        "stage": "owner_approved_write_runner_runtime_feature_flag",
+        "flag_name": "XAGENT_SDK_WRITE_RUNNER_ENABLED",
+        "flag_status": "declared_disabled",
+        "default_enabled": False,
+        "env_var": "XAGENT_SDK_WRITE_RUNNER_ENABLED",
+        "owner_acceptance_evidence_required": True,
+        "required_owner_evidence": [
+            "owner_acceptance_id",
+            "accepted_by",
+            "accepted_at",
+            "approval_id",
+            "runbook_acknowledged",
+            "rollback_plan_acknowledged",
+        ],
+        "required_runtime_guards": [
+            "runtime_flag_enabled",
+            "owner_acceptance_evidence_present",
+            "adapter_review_ready",
+            "approval_status_approved",
+            "idempotency_key_present",
+            "dry_run_receipt_persisted",
+            "audit_hmac_available",
+        ],
+        "checks": checks,
+        "next_gate": "owner_acceptance_evidence_record",
+        "implementation_enabled": False,
+        "runtime_flag_enabled": False,
+        "execute_enabled": False,
+        "write_runner_enabled": False,
+        "adapter_execution_enabled": False,
+        "agent_execution_enabled": False,
+        "write_execution_enabled": False,
+        "mark_executed": False,
+        "mutation_performed": False,
+        "network_mutation_performed": False,
+        "file_mutation_performed": False,
+        "channel_mutation_performed": False,
+        "known_limits": [
+            "This declares the runtime switch required before concrete write runner execution.",
+            "The flag defaults disabled and is not read as an execution permission in this task.",
+            "Owner acceptance evidence is still required before the flag can be honored.",
+        ],
+    }
+
+
+def _sdk_owner_acceptance_evidence_contract(
+    request: ControlPlaneInvokeRequest,
+    *,
+    write_runner_runtime_flag: dict[str, Any],
+) -> dict[str, Any]:
+    checks = {
+        "runtime_flag_contract_declared": write_runner_runtime_flag.get("flag_status") == "declared_disabled",
+        "runtime_flag_disabled": write_runner_runtime_flag.get("runtime_flag_enabled") is False,
+        "owner_acceptance_required": write_runner_runtime_flag.get("owner_acceptance_evidence_required") is True,
+        "acceptance_record_present": False,
+        "runbook_acknowledged": False,
+        "rollback_plan_acknowledged": False,
+        "execution_still_disabled": write_runner_runtime_flag.get("execute_enabled") is False,
+    }
+    return {
+        "available": write_runner_runtime_flag.get("available") is True,
+        "stage": "owner_acceptance_evidence_record",
+        "evidence_status": "required_not_provided",
+        "method": request.method,
+        "required_fields": list(write_runner_runtime_flag.get("required_owner_evidence", [])),
+        "evidence_readback_method": "runtime/evidence/read",
+        "acceptance_report_name": "sdk-write-runner-owner-acceptance.json",
+        "checks": checks,
+        "next_gate": "owner_approved_write_runner_runtime_enablement",
+        "implementation_enabled": False,
+        "runtime_flag_enabled": False,
+        "execute_enabled": False,
+        "write_runner_enabled": False,
+        "adapter_execution_enabled": False,
+        "agent_execution_enabled": False,
+        "write_execution_enabled": False,
+        "mark_executed": False,
+        "mutation_performed": False,
+        "network_mutation_performed": False,
+        "file_mutation_performed": False,
+        "channel_mutation_performed": False,
+        "known_limits": [
+            "No owner acceptance record is created by /sdk/invoke.",
+            "The concrete write runner remains disabled until this evidence is provided and reviewed.",
         ],
     }
 

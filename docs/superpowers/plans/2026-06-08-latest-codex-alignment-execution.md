@@ -542,7 +542,32 @@ Expected: selected approval and sandbox tests pass.
 - [x] Declare audit contract for future `sdk.write_runner.executed` receipts.
 - [x] Keep `implementation_enabled=false`, `execute_enabled=false`, `write_runner_enabled=false`, `agent_execution_enabled=false`, `adapter_execution_enabled=false`, `mark_executed=false`, and all mutation flags false.
 - [x] Promote SDK alignment status to `sdk_write_runner_adapter_review_ready`.
-- [ ] Add runtime feature flag plus owner acceptance evidence before enabling the concrete runner.
+- [x] Add runtime feature flag plus owner acceptance evidence contracts before enabling the concrete runner.
+- [ ] Add owner acceptance evidence recording/readback before enabling the concrete runner.
+
+### Task 23: Write Runner Runtime Flag And Owner Acceptance Evidence Contract
+
+**Target:** Declare the disabled runtime feature flag and required owner acceptance evidence that must exist before any concrete owner-approved write runner can be enabled.
+
+**Files:**
+- Modify: `backend/app/api/control_plane.py`
+- Modify: `backend/app/sdk/control_plane.py`
+- Modify: `scripts/sdk_noninteractive_report.py`
+- Modify: `scripts/latest_codex_alignment.py`
+- Modify: `tests/test_control_plane_protocol.py`
+- Modify: `tests/test_xagent_sdk_contract.py`
+- Modify: `tests/test_cli_client.py`
+- Modify: `tests/test_sdk_noninteractive_report.py`
+- Modify: `tests/test_latest_codex_alignment.py`
+- Runtime evidence: `.xagent_runtime/reports/sdk-noninteractive-report.json`
+- Runtime evidence: `.xagent_runtime/reports/latest-codex-alignment.json`
+
+- [x] Add `write_runner_runtime_flag` to `/sdk/invoke` metadata after adapter implementation review.
+- [x] Declare `XAGENT_SDK_WRITE_RUNNER_ENABLED` with `flag_status=declared_disabled` and `runtime_flag_enabled=false`.
+- [x] Add `owner_acceptance_evidence` metadata with required fields and `evidence_status=required_not_provided`.
+- [x] Keep `implementation_enabled=false`, `execute_enabled=false`, `write_runner_enabled=false`, `agent_execution_enabled=false`, `adapter_execution_enabled=false`, `mark_executed=false`, and all mutation flags false.
+- [x] Promote SDK alignment status to `sdk_write_runner_runtime_flag_ready`.
+- [ ] Implement owner acceptance evidence recording/readback and only then consider runtime enablement.
 
 ## Completion Criteria
 

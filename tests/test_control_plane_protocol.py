@@ -182,8 +182,8 @@ def test_sdk_control_plane_stub_accepts_thread_start_envelope_without_mutation()
     assert response.status_code == 200
     payload = response.json()
     assert payload["ok"] is False
-    assert payload["status"] == "sdk_write_runner_adapter_review_ready"
-    assert payload["sdk"]["status"] == "sdk_write_runner_adapter_review_ready"
+    assert payload["status"] == "sdk_write_runner_runtime_flag_ready"
+    assert payload["sdk"]["status"] == "sdk_write_runner_runtime_flag_ready"
     assert payload["sdk"]["method"] == "thread/start"
     assert payload["sdk"]["dry_run"] is False
     assert payload["sdk"]["idempotency_key_present"] is True
@@ -233,6 +233,16 @@ def test_sdk_control_plane_stub_accepts_thread_start_envelope_without_mutation()
     assert review["agent_execution_enabled"] is False
     assert review["mark_executed"] is False
     assert review["mutation_performed"] is False
+    runtime_flag = payload["sdk"]["write_runner_runtime_flag"]
+    assert runtime_flag["flag_name"] == "XAGENT_SDK_WRITE_RUNNER_ENABLED"
+    assert runtime_flag["flag_status"] == "declared_disabled"
+    assert runtime_flag["runtime_flag_enabled"] is False
+    assert runtime_flag["implementation_enabled"] is False
+    assert runtime_flag["write_runner_enabled"] is False
+    owner_evidence = payload["sdk"]["owner_acceptance_evidence"]
+    assert owner_evidence["evidence_status"] == "required_not_provided"
+    assert owner_evidence["execute_enabled"] is False
+    assert owner_evidence["mutation_performed"] is False
     handoff = payload["sdk"]["approval_handoff"]
     assert handoff["available"] is True
     assert handoff["approval_id"] == payload["sdk"]["approval_intent"]["approval_id"]
@@ -299,8 +309,8 @@ def test_sdk_control_plane_stub_reads_approved_execution_adapter_contract_withou
     assert response.status_code == 200
     payload = response.json()
     assert payload["ok"] is False
-    assert payload["status"] == "sdk_write_runner_adapter_review_ready"
-    assert payload["sdk"]["status"] == "sdk_write_runner_adapter_review_ready"
+    assert payload["status"] == "sdk_write_runner_runtime_flag_ready"
+    assert payload["sdk"]["status"] == "sdk_write_runner_runtime_flag_ready"
     assert payload["sdk"]["approval_intent"]["created"] is False
     assert payload["sdk"]["approval_intent"]["approval_id"] == approval.id
     adapter = payload["sdk"]["execution_adapter_contract"]
@@ -386,6 +396,32 @@ def test_sdk_control_plane_stub_reads_approved_execution_adapter_contract_withou
     assert review["adapter_execution_enabled"] is False
     assert review["mark_executed"] is False
     assert review["mutation_performed"] is False
+    runtime_flag = payload["sdk"]["write_runner_runtime_flag"]
+    assert runtime_flag["stage"] == "owner_approved_write_runner_runtime_feature_flag"
+    assert runtime_flag["flag_name"] == "XAGENT_SDK_WRITE_RUNNER_ENABLED"
+    assert runtime_flag["flag_status"] == "declared_disabled"
+    assert runtime_flag["checks"]["adapter_review_ready_but_disabled"] is True
+    assert runtime_flag["owner_acceptance_evidence_required"] is True
+    assert "owner_acceptance_evidence_present" in runtime_flag["required_runtime_guards"]
+    assert runtime_flag["runtime_flag_enabled"] is False
+    assert runtime_flag["implementation_enabled"] is False
+    assert runtime_flag["write_runner_enabled"] is False
+    assert runtime_flag["agent_execution_enabled"] is False
+    assert runtime_flag["mark_executed"] is False
+    assert runtime_flag["mutation_performed"] is False
+    owner_evidence = payload["sdk"]["owner_acceptance_evidence"]
+    assert owner_evidence["stage"] == "owner_acceptance_evidence_record"
+    assert owner_evidence["evidence_status"] == "required_not_provided"
+    assert "owner_acceptance_id" in owner_evidence["required_fields"]
+    assert owner_evidence["acceptance_report_name"] == "sdk-write-runner-owner-acceptance.json"
+    assert owner_evidence["checks"]["runtime_flag_disabled"] is True
+    assert owner_evidence["checks"]["acceptance_record_present"] is False
+    assert owner_evidence["runtime_flag_enabled"] is False
+    assert owner_evidence["execute_enabled"] is False
+    assert owner_evidence["write_runner_enabled"] is False
+    assert owner_evidence["agent_execution_enabled"] is False
+    assert owner_evidence["mark_executed"] is False
+    assert owner_evidence["mutation_performed"] is False
     assert approval_store.pending_count() == 0
     assert approval_store.get(approval.id).status == "approved"
     audit_records = audit_store.list(action="sdk.write_runner.dry_run_planned")
@@ -410,8 +446,8 @@ def test_sdk_control_plane_stub_can_read_thread_through_existing_contract() -> N
     assert response.status_code == 200
     payload = response.json()
     assert payload["ok"] is True
-    assert payload["status"] == "sdk_write_runner_adapter_review_ready"
-    assert payload["sdk"]["status"] == "sdk_write_runner_adapter_review_ready"
+    assert payload["status"] == "sdk_write_runner_runtime_flag_ready"
+    assert payload["sdk"]["status"] == "sdk_write_runner_runtime_flag_ready"
     assert payload["sdk"]["method"] == "thread/read"
     assert payload["sdk"]["owner_gate_required"] is False
     assert payload["sdk"]["approval_intent"]["required"] is False
@@ -458,7 +494,7 @@ def test_sdk_control_plane_stub_reads_runtime_evidence_through_read_only_runner(
     assert response.status_code == 200
     payload = response.json()
     assert payload["ok"] is True
-    assert payload["status"] == "sdk_write_runner_adapter_review_ready"
+    assert payload["status"] == "sdk_write_runner_runtime_flag_ready"
     assert payload["sdk"]["method"] == "runtime/evidence/read"
     runner = payload["sdk"]["read_only_runner_contract"]
     assert runner["available"] is True
@@ -523,7 +559,7 @@ def test_sdk_control_plane_stub_reads_persisted_dry_run_executor_runtime_evidenc
     assert response.status_code == 200
     payload = response.json()
     assert payload["ok"] is True
-    assert payload["status"] == "sdk_write_runner_adapter_review_ready"
+    assert payload["status"] == "sdk_write_runner_runtime_flag_ready"
     evidence = payload["control_plane"]["result"]["evidence"]
     assert evidence["evidence_type"] == "sdk_dry_run_executor_stub"
     assert evidence["available"] is True
