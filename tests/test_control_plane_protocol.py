@@ -183,8 +183,8 @@ def test_sdk_control_plane_stub_accepts_thread_start_envelope_without_mutation()
     assert response.status_code == 200
     payload = response.json()
     assert payload["ok"] is False
-    assert payload["status"] == "sdk_runtime_implementation_owner_pack_ready"
-    assert payload["sdk"]["status"] == "sdk_runtime_implementation_owner_pack_ready"
+    assert payload["status"] == "sdk_runtime_implementation_final_decision_workflow_ready"
+    assert payload["sdk"]["status"] == "sdk_runtime_implementation_final_decision_workflow_ready"
     assert payload["sdk"]["method"] == "thread/start"
     assert payload["sdk"]["dry_run"] is False
     assert payload["sdk"]["idempotency_key_present"] is True
@@ -215,6 +215,17 @@ def test_sdk_control_plane_stub_accepts_thread_start_envelope_without_mutation()
     assert implementation_pack["write_runner_enabled"] is False
     assert implementation_pack["runner_invoked"] is False
     assert implementation_pack["mutation_performed"] is False
+    final_decision = payload["sdk"]["runtime_implementation_final_decision_workflow"]
+    assert final_decision["workflow_status"] == "blocked"
+    assert final_decision["endpoint"] == "/api/v1/control-plane/sdk/runtime-implementation/final-decision/record"
+    assert final_decision["requires_runtime_implementation_readiness_lock"] is True
+    assert final_decision["requires_decision_accept_or_reject"] is True
+    assert final_decision["decision_effect"]["enables_runtime_flag"] is False
+    assert final_decision["decision_effect"]["starts_agent_execution"] is False
+    assert final_decision["decision_effect"]["marks_approval_executed"] is False
+    assert final_decision["write_runner_enabled"] is False
+    assert final_decision["runner_invoked"] is False
+    assert final_decision["mutation_performed"] is False
     assert payload["sdk"]["execution_adapter_contract"]["ready_for_owner_approved_adapter"] is False
     assert payload["sdk"]["execution_adapter_contract"]["adapter_execution_enabled"] is False
     assert payload["sdk"]["read_only_runner_contract"]["available"] is False
@@ -387,8 +398,8 @@ def test_sdk_control_plane_stub_reads_approved_execution_adapter_contract_withou
     assert response.status_code == 200
     payload = response.json()
     assert payload["ok"] is False
-    assert payload["status"] == "sdk_runtime_implementation_owner_pack_ready"
-    assert payload["sdk"]["status"] == "sdk_runtime_implementation_owner_pack_ready"
+    assert payload["status"] == "sdk_runtime_implementation_final_decision_workflow_ready"
+    assert payload["sdk"]["status"] == "sdk_runtime_implementation_final_decision_workflow_ready"
     assert payload["sdk"]["approval_intent"]["created"] is False
     assert payload["sdk"]["approval_intent"]["approval_id"] == approval.id
     adapter = payload["sdk"]["execution_adapter_contract"]
@@ -403,6 +414,16 @@ def test_sdk_control_plane_stub_reads_approved_execution_adapter_contract_withou
     assert adapter["execute_disabled"] is True
     assert adapter["mark_executed"] is False
     assert adapter["mutation_performed"] is False
+    final_decision = payload["sdk"]["runtime_implementation_final_decision_workflow"]
+    assert final_decision["workflow_status"] == "ready_but_disabled"
+    assert final_decision["audit_action"] == "sdk.write_runner.runtime_implementation_final_decision_recorded"
+    assert final_decision["decision_effect"]["enables_runtime_flag"] is False
+    assert final_decision["decision_effect"]["starts_agent_execution"] is False
+    assert final_decision["decision_effect"]["marks_approval_executed"] is False
+    assert final_decision["implementation_enabled"] is False
+    assert final_decision["write_runner_enabled"] is False
+    assert final_decision["runner_invoked"] is False
+    assert final_decision["mutation_performed"] is False
     assert adapter["network_mutation_performed"] is False
     assert payload["sdk"]["read_only_runner_contract"]["available"] is False
     assert payload["sdk"]["read_only_runner_contract"]["write_execution_enabled"] is False
@@ -642,8 +663,8 @@ def test_sdk_control_plane_stub_can_read_thread_through_existing_contract() -> N
     assert response.status_code == 200
     payload = response.json()
     assert payload["ok"] is True
-    assert payload["status"] == "sdk_runtime_implementation_owner_pack_ready"
-    assert payload["sdk"]["status"] == "sdk_runtime_implementation_owner_pack_ready"
+    assert payload["status"] == "sdk_runtime_implementation_final_decision_workflow_ready"
+    assert payload["sdk"]["status"] == "sdk_runtime_implementation_final_decision_workflow_ready"
     assert payload["sdk"]["method"] == "thread/read"
     assert payload["sdk"]["owner_gate_required"] is False
     assert payload["sdk"]["approval_intent"]["required"] is False
@@ -690,7 +711,7 @@ def test_sdk_control_plane_stub_reads_runtime_evidence_through_read_only_runner(
     assert response.status_code == 200
     payload = response.json()
     assert payload["ok"] is True
-    assert payload["status"] == "sdk_runtime_implementation_owner_pack_ready"
+    assert payload["status"] == "sdk_runtime_implementation_final_decision_workflow_ready"
     assert payload["sdk"]["method"] == "runtime/evidence/read"
     runner = payload["sdk"]["read_only_runner_contract"]
     assert runner["available"] is True
@@ -755,7 +776,7 @@ def test_sdk_control_plane_stub_reads_persisted_dry_run_executor_runtime_evidenc
     assert response.status_code == 200
     payload = response.json()
     assert payload["ok"] is True
-    assert payload["status"] == "sdk_runtime_implementation_owner_pack_ready"
+    assert payload["status"] == "sdk_runtime_implementation_final_decision_workflow_ready"
     evidence = payload["control_plane"]["result"]["evidence"]
     assert evidence["evidence_type"] == "sdk_dry_run_executor_stub"
     assert evidence["available"] is True
@@ -806,7 +827,7 @@ def test_sdk_control_plane_stub_reads_owner_acceptance_runtime_evidence_contract
     assert response.status_code == 200
     payload = response.json()
     assert payload["ok"] is True
-    assert payload["status"] == "sdk_runtime_implementation_owner_pack_ready"
+    assert payload["status"] == "sdk_runtime_implementation_final_decision_workflow_ready"
     evidence = payload["control_plane"]["result"]["evidence"]
     assert evidence["evidence_type"] == "sdk_write_runner_owner_acceptance"
     assert evidence["available"] is True
@@ -1636,7 +1657,7 @@ def test_runtime_implementation_readiness_lock_readback_requires_strict_audit_qu
     assert response.status_code == 200
     payload = response.json()
     assert payload["ok"] is True
-    assert payload["status"] == "sdk_runtime_implementation_owner_pack_ready"
+    assert payload["status"] == "sdk_runtime_implementation_final_decision_workflow_ready"
     evidence = payload["control_plane"]["result"]["evidence"]
     assert evidence["evidence_type"] == "sdk_write_runner_runtime_implementation_readiness_lock"
     assert evidence["implementation_lock_present"] is True
@@ -1761,6 +1782,182 @@ def test_sdk_runtime_implementation_readiness_lock_rejects_rejected_owner_pack_d
     assert readiness_lock["runner_invoked"] is False
     assert readiness_lock["mutation_performed"] is False
     assert audit_store.list(action="sdk.write_runner.runtime_implementation_readiness_lock_recorded") == []
+
+
+def test_sdk_runtime_implementation_final_decision_records_audit_without_execution() -> None:
+    approval_store = ApprovalStore()
+    audit_store = AuditStore(hmac_secret="test-secret")
+    context = RunContext(
+        trace_id="trace-final-decision",
+        tenant_id="default",
+        user_id="operator",
+        request_id="req-final-decision",
+    )
+    approval = approval_store.create_approval(
+        context=context,
+        resource_type="command",
+        resource_id="sdk:turn/start",
+        action="command.execute",
+        risk_level=RiskLevel.HIGH,
+        reason="Owner-approved SDK final decision.",
+        arguments_preview={"method": "turn/start", "adapter_execution_enabled": False},
+    )
+    approval_store.approve(
+        approval.id,
+        ApprovalDecisionRequest(decided_by="owner", reason="ready for final decision"),
+    )
+    readiness_lock_audit = audit_store.record(
+        action="sdk.write_runner.runtime_implementation_readiness_lock_recorded",
+        resource_type="sdk_write_runner_runtime_implementation_readiness_lock",
+        resource_id="lock-final-1",
+        outcome="accepted",
+        tenant_id="default",
+        actor_id="operator",
+        details={
+            "approval_id": approval.id,
+            "readiness_receipt_id": "readiness-final-1",
+            "owner_pack_decision_id": "decision-final-1",
+            "readiness_lock": {
+                "implementation_lock_id": "lock-final-1",
+                "idempotency_key": "sdk-write-runner-lock-final",
+                "idempotency_hash": "hash-idempotency-final",
+                "approval_id": approval.id,
+                "readiness_receipt_id": "readiness-final-1",
+                "readiness_receipt_audit_id": "audit-readiness-final-1",
+                "owner_pack_decision_id": "decision-final-1",
+                "owner_pack_decision_audit_id": "audit-decision-final-1",
+                "operator_id": "operator",
+                "locked_at": "2026-06-08T02:00:00Z",
+                "lock_reason": "owner accepted readiness lock",
+                "lock_hash": "hash-lock-final",
+            },
+        },
+    )
+
+    with _client_with_stores(RunStore(), TraceStore(), approval_store, audit_store) as client:
+        response = client.post(
+            "/api/v1/control-plane/sdk/runtime-implementation/final-decision/record",
+            json={
+                "final_decision_id": "final-decision-record-1",
+                "decision": "accepted",
+                "approval_id": approval.id,
+                "implementation_lock_id": "lock-final-1",
+                "implementation_lock_audit_id": readiness_lock_audit.id,
+                "readiness_receipt_id": "readiness-final-1",
+                "owner_pack_decision_id": "decision-final-1",
+                "decided_by": "owner",
+                "decided_at": "2026-06-08T03:00:00Z",
+                "reason": "owner accepted final implementation decision",
+                "decision_hash": "hash-final-decision",
+                "dry_run": True,
+            },
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["ok"] is True
+    assert payload["status"] == "sdk_runtime_implementation_final_decision_workflow_ready"
+    final_decision = payload["final_decision"]
+    assert final_decision["record_status"] == "recorded"
+    assert final_decision["decision"] == "accepted"
+    assert final_decision["audit_event_recorded"] is True
+    assert final_decision["audit_action"] == "sdk.write_runner.runtime_implementation_final_decision_recorded"
+    assert final_decision["checks"]["approval_status_approved"] is True
+    assert final_decision["checks"]["readiness_lock_audit_record_present"] is True
+    assert final_decision["checks"]["readiness_lock_validation_valid"] is True
+    assert final_decision["checks"]["decision_valid"] is True
+    assert final_decision["runtime_flag_enabled"] is False
+    assert final_decision["implementation_enabled"] is False
+    assert final_decision["write_runner_enabled"] is False
+    assert final_decision["agent_execution_enabled"] is False
+    assert final_decision["runner_invoked"] is False
+    assert final_decision["mark_executed"] is False
+    assert final_decision["mutation_performed"] is False
+    assert approval_store.get(approval.id).status == "approved"
+    assert approval_store.get(approval.id).executed_at is None
+
+
+def test_sdk_runtime_implementation_final_decision_rejects_without_dry_run_guard() -> None:
+    approval_store = ApprovalStore()
+    audit_store = AuditStore(hmac_secret="test-secret")
+    context = RunContext(
+        trace_id="trace-final-decision-reject",
+        tenant_id="default",
+        user_id="operator",
+        request_id="req-final-decision-reject",
+    )
+    approval = approval_store.create_approval(
+        context=context,
+        resource_type="command",
+        resource_id="sdk:turn/start",
+        action="command.execute",
+        risk_level=RiskLevel.HIGH,
+        reason="Owner-approved SDK final decision reject.",
+        arguments_preview={"method": "turn/start", "adapter_execution_enabled": False},
+    )
+    approval_store.approve(
+        approval.id,
+        ApprovalDecisionRequest(decided_by="owner", reason="ready for final decision reject"),
+    )
+    readiness_lock_audit = audit_store.record(
+        action="sdk.write_runner.runtime_implementation_readiness_lock_recorded",
+        resource_type="sdk_write_runner_runtime_implementation_readiness_lock",
+        resource_id="lock-final-reject",
+        outcome="accepted",
+        tenant_id="default",
+        actor_id="operator",
+        details={
+            "approval_id": approval.id,
+            "readiness_receipt_id": "readiness-final-reject",
+            "owner_pack_decision_id": "decision-final-reject",
+            "readiness_lock": {
+                "implementation_lock_id": "lock-final-reject",
+                "idempotency_key": "sdk-write-runner-lock-final-reject",
+                "idempotency_hash": "hash-idempotency-final-reject",
+                "approval_id": approval.id,
+                "readiness_receipt_id": "readiness-final-reject",
+                "readiness_receipt_audit_id": "audit-readiness-final-reject",
+                "owner_pack_decision_id": "decision-final-reject",
+                "owner_pack_decision_audit_id": "audit-decision-final-reject",
+                "operator_id": "operator",
+                "locked_at": "2026-06-08T02:00:00Z",
+                "lock_reason": "owner accepted readiness lock",
+                "lock_hash": "hash-lock-final-reject",
+            },
+        },
+    )
+
+    with _client_with_stores(RunStore(), TraceStore(), approval_store, audit_store) as client:
+        response = client.post(
+            "/api/v1/control-plane/sdk/runtime-implementation/final-decision/record",
+            json={
+                "final_decision_id": "final-decision-rejected-1",
+                "decision": "accepted",
+                "approval_id": approval.id,
+                "implementation_lock_id": "lock-final-reject",
+                "implementation_lock_audit_id": readiness_lock_audit.id,
+                "readiness_receipt_id": "readiness-final-reject",
+                "owner_pack_decision_id": "decision-final-reject",
+                "decided_by": "owner",
+                "decided_at": "2026-06-08T03:00:00Z",
+                "reason": "should not record without dry-run guard",
+                "decision_hash": "hash-final-decision-reject",
+                "dry_run": False,
+            },
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["ok"] is False
+    final_decision = payload["final_decision"]
+    assert final_decision["record_status"] == "rejected"
+    assert final_decision["checks"]["dry_run_does_not_execute"] is False
+    assert final_decision["audit_event_recorded"] is False
+    assert final_decision["runtime_flag_enabled"] is False
+    assert final_decision["write_runner_enabled"] is False
+    assert final_decision["runner_invoked"] is False
+    assert final_decision["mutation_performed"] is False
+    assert audit_store.list(action="sdk.write_runner.runtime_implementation_final_decision_recorded") == []
 
 
 def test_control_plane_rejects_raw_secret_payloads() -> None:

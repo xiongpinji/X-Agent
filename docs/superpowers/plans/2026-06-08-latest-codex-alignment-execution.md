@@ -871,10 +871,37 @@ Expected: selected approval and sandbox tests pass.
 - [x] Promote SDK alignment status to `sdk_runtime_implementation_owner_pack_ready`.
 - [ ] Implement the runtime write-runner only after this owner review pack is independently accepted and runtime enablement is explicitly requested.
 
+### Task 36: Runtime Implementation Final Decision Workflow
+
+**Target:** Record the final owner-gated runtime implementation decision after the implementation owner review pack, while still keeping concrete SDK write-runner execution disabled.
+
+**Files:**
+- Modify: `backend/app/api/control_plane.py`
+- Modify: `backend/app/sdk/control_plane.py`
+- Modify: `backend/app/sdk/__init__.py`
+- Modify: `cli/client.py`
+- Modify: `cli/commands/sdk_cmd.py`
+- Modify: `scripts/sdk_noninteractive_report.py`
+- Modify: `scripts/latest_codex_alignment.py`
+- Modify: `tests/test_control_plane_protocol.py`
+- Modify: `tests/test_xagent_sdk_contract.py`
+- Modify: `tests/test_cli_client.py`
+- Modify: `tests/test_sdk_noninteractive_report.py`
+- Modify: `tests/test_latest_codex_alignment.py`
+- Runtime evidence: `.xagent_runtime/reports/sdk-noninteractive-report.json`
+- Runtime evidence: `.xagent_runtime/reports/latest-codex-alignment.json`
+
+- [x] Add `/api/v1/control-plane/sdk/runtime-implementation/final-decision/record` as an owner-gated final decision endpoint.
+- [x] Add SDK and non-interactive CLI wrappers for final implementation decision recording.
+- [x] Require approved SDK approval, recorded runtime implementation readiness lock, accept/reject decision, timestamp, reason, signature/hash, and dry-run mode before recording.
+- [x] Keep final decision recording read-only with respect to runtime effects: accepted decisions do not enable runtime flags, invoke the write runner, mark approvals executed, or perform file/network/channel mutation.
+- [x] Add `/sdk/invoke` final-decision workflow metadata and promote SDK alignment status to `sdk_runtime_implementation_final_decision_workflow_ready`.
+- [ ] Implement the live runtime write-runner only after this final decision is recorded and the owner explicitly requests runtime flag enablement.
+
 ## Completion Criteria
 
 - `scripts/latest_codex_alignment.py` returns `latest_codex_alignment_plan_ready`.
-- `scripts/sdk_noninteractive_report.py` returns `sdk_runtime_implementation_owner_pack_ready`.
+- `scripts/sdk_noninteractive_report.py` returns `sdk_runtime_implementation_final_decision_workflow_ready`.
 - P0 task board is complete and machine-readable.
 - Feishu Pilot V1 remains `customer_acceptance_pack_ready`.
 - `full_codex_parity_claimed=false` remains true in all generated alignment and pilot reports.

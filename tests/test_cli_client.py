@@ -241,7 +241,7 @@ class TestHTTPClient:
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {
-            "status": "sdk_runtime_implementation_owner_pack_ready",
+            "status": "sdk_runtime_implementation_final_decision_workflow_ready",
             "sdk": {
                 "adapter_execution_enabled": False,
                 "agent_execution_enabled": False,
@@ -375,6 +375,23 @@ class TestHTTPClient:
                     "runner_invoked": False,
                     "mutation_performed": False,
                 },
+                "runtime_implementation_final_decision_workflow": {
+                    "workflow_status": "ready_but_disabled",
+                    "endpoint": "/api/v1/control-plane/sdk/runtime-implementation/final-decision/record",
+                    "audit_action": "sdk.write_runner.runtime_implementation_final_decision_recorded",
+                    "decision_effect": {
+                        "enables_runtime_flag": False,
+                        "starts_agent_execution": False,
+                        "marks_approval_executed": False,
+                    },
+                    "runtime_flag_enabled": False,
+                    "implementation_enabled": False,
+                    "write_runner_enabled": False,
+                    "agent_execution_enabled": False,
+                    "runner_invoked": False,
+                    "mark_executed": False,
+                    "mutation_performed": False,
+                },
             },
         }
 
@@ -390,7 +407,7 @@ class TestHTTPClient:
             assert call_args[0][0] == "POST"
             assert call_args[0][1] == "/api/v1/control-plane/sdk/invoke"
             assert call_args[1]["json"] == contract
-            assert result["status"] == "sdk_runtime_implementation_owner_pack_ready"
+            assert result["status"] == "sdk_runtime_implementation_final_decision_workflow_ready"
             assert result["sdk"]["adapter_execution_enabled"] is False
             assert result["sdk"]["execution_adapter_contract"]["mark_executed"] is False
             assert result["sdk"]["read_only_runner_contract"]["write_execution_enabled"] is False
@@ -476,6 +493,21 @@ class TestHTTPClient:
             assert result["sdk"]["runtime_implementation_owner_pack"]["write_runner_enabled"] is False
             assert result["sdk"]["runtime_implementation_owner_pack"]["runner_invoked"] is False
             assert result["sdk"]["runtime_implementation_owner_pack"]["mutation_performed"] is False
+            final_decision = result["sdk"]["runtime_implementation_final_decision_workflow"]
+            assert final_decision["workflow_status"] == "ready_but_disabled"
+            assert (
+                final_decision["endpoint"]
+                == "/api/v1/control-plane/sdk/runtime-implementation/final-decision/record"
+            )
+            assert final_decision["decision_effect"]["enables_runtime_flag"] is False
+            assert final_decision["decision_effect"]["starts_agent_execution"] is False
+            assert final_decision["decision_effect"]["marks_approval_executed"] is False
+            assert final_decision["runtime_flag_enabled"] is False
+            assert final_decision["implementation_enabled"] is False
+            assert final_decision["write_runner_enabled"] is False
+            assert final_decision["runner_invoked"] is False
+            assert final_decision["mark_executed"] is False
+            assert final_decision["mutation_performed"] is False
 
     @pytest.mark.asyncio
     async def test_http_client_record_sdk_owner_acceptance_calls_owner_gated_stub(self):
@@ -676,6 +708,59 @@ class TestHTTPClient:
             assert result["readiness_lock"]["write_runner_enabled"] is False
             assert result["readiness_lock"]["runner_invoked"] is False
             assert result["readiness_lock"]["mutation_performed"] is False
+
+    @pytest.mark.asyncio
+    async def test_http_client_record_sdk_runtime_implementation_final_decision_calls_owner_gated_stub(self):
+        """Test SDK runtime implementation final decision uses the backend evidence stub."""
+        config = CLIConfig(api_base_url="http://localhost:8000")
+        client = HTTPClient(config)
+        payload = {
+            "final_decision_id": "final-decision-1",
+            "decision": "accepted",
+            "approval_id": "approval-1",
+            "implementation_lock_id": "lock-1",
+            "implementation_lock_audit_id": "audit-lock-1",
+            "readiness_receipt_id": "readiness-1",
+            "owner_pack_decision_id": "decision-1",
+            "decided_by": "owner",
+            "decided_at": "2026-06-08T00:00:00Z",
+            "reason": "owner accepted final decision",
+            "decision_hash": "hash-final-decision-1",
+        }
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "ok": True,
+            "status": "sdk_runtime_implementation_final_decision_workflow_ready",
+            "final_decision": {
+                "audit_event_recorded": True,
+                "runtime_flag_enabled": False,
+                "implementation_enabled": False,
+                "write_runner_enabled": False,
+                "runner_invoked": False,
+                "mark_executed": False,
+                "mutation_performed": False,
+            },
+        }
+
+        with patch.object(
+            httpx.AsyncClient,
+            "request",
+            new_callable=AsyncMock,
+            return_value=mock_response,
+        ) as mock_request:
+            result = await client.record_sdk_runtime_implementation_final_decision(payload)
+
+            call_args = mock_request.call_args
+            assert call_args[0][0] == "POST"
+            assert call_args[0][1] == "/api/v1/control-plane/sdk/runtime-implementation/final-decision/record"
+            assert call_args[1]["json"] == payload
+            assert result["status"] == "sdk_runtime_implementation_final_decision_workflow_ready"
+            assert result["final_decision"]["runtime_flag_enabled"] is False
+            assert result["final_decision"]["implementation_enabled"] is False
+            assert result["final_decision"]["write_runner_enabled"] is False
+            assert result["final_decision"]["runner_invoked"] is False
+            assert result["final_decision"]["mutation_performed"] is False
 
     @pytest.mark.asyncio
     async def test_http_client_list_agents(self):
@@ -1015,6 +1100,15 @@ class TestLocalClient:
 
         with pytest.raises(NotImplementedError, match="SDK runtime implementation readiness lock recording"):
             await client.record_sdk_runtime_implementation_readiness_lock({"approval_id": "approval-1"})
+
+    @pytest.mark.asyncio
+    async def test_local_client_record_sdk_runtime_implementation_final_decision_not_implemented(self):
+        """Test SDK runtime implementation final decision recording is HTTP-only."""
+        config = CLIConfig(mode="local")
+        client = LocalClient(config)
+
+        with pytest.raises(NotImplementedError, match="SDK runtime implementation final decision recording"):
+            await client.record_sdk_runtime_implementation_final_decision({"approval_id": "approval-1"})
 
     @pytest.mark.asyncio
     async def test_local_client_health_check_healthy(self):

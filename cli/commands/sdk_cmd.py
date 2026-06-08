@@ -147,6 +147,34 @@ def _emit_or_record_runtime_implementation_lock(payload: dict[str, object], *, e
     _emit(result)
 
 
+def _emit_or_record_runtime_implementation_final_decision(
+    payload: dict[str, object],
+    *,
+    execute: bool,
+) -> None:
+    if not execute:
+        _emit(payload)
+        return
+
+    config = get_current_config()
+    try:
+        client = create_client(config)
+        request_payload = payload.get("request")
+        if not isinstance(request_payload, dict):
+            raise XAgentCLIError("SDK runtime implementation final decision envelope is missing request payload.")
+        result = asyncio.run(client.record_sdk_runtime_implementation_final_decision(request_payload))
+    except NotImplementedError as e:
+        typer.echo(f"SDK runtime implementation final decision recording failed: {e}", err=True)
+        raise typer.Exit(code=1)
+    except (ConnectionError, AuthError, APIError) as e:
+        typer.echo(f"SDK runtime implementation final decision recording failed: {e}", err=True)
+        raise typer.Exit(code=1)
+    except XAgentCLIError as e:
+        typer.echo(f"SDK CLI error: {e}", err=True)
+        raise typer.Exit(code=1)
+    _emit(result)
+
+
 @sdk_app.command("thread-start")
 def thread_start(
     task: str = typer.Argument(..., help="Task text for the new thread."),
@@ -389,3 +417,39 @@ def runtime_implementation_readiness_lock_record(
         dry_run=not execute,
     )
     _emit_or_record_runtime_implementation_lock(contract.to_dict(), execute=execute)
+
+
+@sdk_app.command("runtime-implementation-final-decision-record")
+def runtime_implementation_final_decision_record(
+    final_decision_id: str = typer.Option(..., "--final-decision-id"),
+    decision: str = typer.Option(..., "--decision"),
+    approval_id: str = typer.Option(..., "--approval-id"),
+    implementation_lock_id: str = typer.Option(..., "--implementation-lock-id"),
+    implementation_lock_audit_id: str = typer.Option(..., "--implementation-lock-audit-id"),
+    readiness_receipt_id: str = typer.Option(..., "--readiness-receipt-id"),
+    owner_pack_decision_id: str = typer.Option(..., "--decision-id"),
+    decided_by: str = typer.Option(..., "--decided-by"),
+    decided_at: str = typer.Option(..., "--decided-at"),
+    reason: str = typer.Option(..., "--reason"),
+    decision_signature: Optional[str] = typer.Option(None, "--decision-signature"),
+    decision_hash: Optional[str] = typer.Option(None, "--decision-hash"),
+    notes: Optional[str] = typer.Option(None, "--notes"),
+    execute: bool = typer.Option(False, "--execute", help="Record runtime implementation final decision in the backend audit log."),
+) -> None:
+    contract = ControlPlaneSDK().record_runtime_implementation_final_decision(
+        final_decision_id=final_decision_id,
+        decision=decision,
+        approval_id=approval_id,
+        implementation_lock_id=implementation_lock_id,
+        implementation_lock_audit_id=implementation_lock_audit_id,
+        readiness_receipt_id=readiness_receipt_id,
+        owner_pack_decision_id=owner_pack_decision_id,
+        decided_by=decided_by,
+        decided_at=decided_at,
+        reason=reason,
+        decision_signature=decision_signature,
+        decision_hash=decision_hash,
+        notes=notes,
+        dry_run=not execute,
+    )
+    _emit_or_record_runtime_implementation_final_decision(contract.to_dict(), execute=execute)

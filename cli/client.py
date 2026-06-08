@@ -327,6 +327,11 @@ class BaseClient(ABC):
         """Record SDK runtime implementation readiness lock through the backend stub."""
         pass
 
+    @abstractmethod
+    async def record_sdk_runtime_implementation_final_decision(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """Record SDK runtime implementation final decision through the backend stub."""
+        pass
+
 
 class HTTPClient(BaseClient):
     """HTTP-based client for remote API calls.
@@ -618,6 +623,17 @@ class HTTPClient(BaseClient):
             json=payload,
         )
 
+    async def record_sdk_runtime_implementation_final_decision(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """Record SDK runtime implementation final decision without executing the runner.
+
+        POST /api/v1/control-plane/sdk/runtime-implementation/final-decision/record
+        """
+        return await self._request(
+            "POST",
+            "/api/v1/control-plane/sdk/runtime-implementation/final-decision/record",
+            json=payload,
+        )
+
 
 class LocalClient(BaseClient):
     """Local client for direct backend module imports.
@@ -886,6 +902,17 @@ class LocalClient(BaseClient):
         """
         raise NotImplementedError(
             "SDK runtime implementation readiness lock recording is not supported in local mode. "
+            "Use HTTP mode to call the owner-gated control-plane stub."
+        )
+
+    async def record_sdk_runtime_implementation_final_decision(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """Record SDK runtime implementation final decision locally.
+
+        Runtime implementation final decision recording is HTTP-only so it
+        stays behind the API audit and approval/sandbox/admin contract.
+        """
+        raise NotImplementedError(
+            "SDK runtime implementation final decision recording is not supported in local mode. "
             "Use HTTP mode to call the owner-gated control-plane stub."
         )
 

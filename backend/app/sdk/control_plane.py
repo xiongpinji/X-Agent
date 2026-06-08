@@ -104,6 +104,21 @@ class SDKRuntimeImplementationReadinessLockRecordContract:
         return payload
 
 
+@dataclass(frozen=True)
+class SDKRuntimeImplementationFinalDecisionRecordContract:
+    operation: str
+    endpoint: str
+    request: dict[str, Any]
+    owner_gate: dict[str, Any]
+    known_limits: list[str]
+
+    def to_dict(self) -> dict[str, Any]:
+        payload = asdict(self)
+        payload["mutation_performed"] = False
+        payload["network_mutation_performed"] = False
+        return payload
+
+
 class ControlPlaneSDK:
     """Build SDK-compatible control-plane request envelopes."""
 
@@ -436,6 +451,66 @@ class ControlPlaneSDK:
             known_limits=[
                 "This SDK contract records a readiness lock and idempotency receipt only.",
                 "It does not enable runtime flags or invoke the write runner.",
+                "It does not mark an approval executed.",
+            ],
+        )
+
+    def record_runtime_implementation_final_decision(
+        self,
+        *,
+        final_decision_id: str,
+        decision: str,
+        approval_id: str,
+        implementation_lock_id: str,
+        implementation_lock_audit_id: str,
+        readiness_receipt_id: str,
+        owner_pack_decision_id: str,
+        decided_by: str,
+        decided_at: str,
+        reason: str,
+        decision_signature: str | None = None,
+        decision_hash: str | None = None,
+        notes: str | None = None,
+        dry_run: bool = True,
+    ) -> SDKRuntimeImplementationFinalDecisionRecordContract:
+        return SDKRuntimeImplementationFinalDecisionRecordContract(
+            operation="runtime_implementation_final_decision_record",
+            endpoint="/api/v1/control-plane/sdk/runtime-implementation/final-decision/record",
+            request={
+                "final_decision_id": final_decision_id,
+                "decision": decision,
+                "approval_id": approval_id,
+                "implementation_lock_id": implementation_lock_id,
+                "implementation_lock_audit_id": implementation_lock_audit_id,
+                "readiness_receipt_id": readiness_receipt_id,
+                "owner_pack_decision_id": owner_pack_decision_id,
+                "decided_by": decided_by,
+                "decided_at": decided_at,
+                "reason": reason,
+                "decision_signature": decision_signature,
+                "decision_hash": decision_hash,
+                "notes": notes,
+                "dry_run": dry_run,
+            },
+            owner_gate={
+                "requires_approved_sdk_approval": True,
+                "requires_runtime_implementation_readiness_lock": True,
+                "requires_decision_accept_or_reject": True,
+                "requires_signature_or_hash": True,
+                "marks_approval_executed": False,
+                "runtime_flag_enabled": False,
+                "implementation_enabled": False,
+                "execute_enabled": False,
+                "write_runner_enabled": False,
+                "agent_execution_enabled": False,
+                "runner_invoked": False,
+                "mark_executed": False,
+                "mutation_performed": False,
+                "network_mutation_performed": False,
+            },
+            known_limits=[
+                "This SDK contract records a final implementation decision only.",
+                "Accepted decisions do not enable runtime flags or invoke the write runner.",
                 "It does not mark an approval executed.",
             ],
         )
