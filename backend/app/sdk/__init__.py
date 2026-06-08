@@ -3,7 +3,13 @@
 from backend.app.sdk.control_plane import (
     ControlPlaneSDK,
     SDKControlPlaneRequest,
+    SDKRuntimeEnablementReceiptRecordContract,
     SDKThreadRunContract,
 )
 
-__all__ = ["ControlPlaneSDK", "SDKControlPlaneRequest", "SDKThreadRunContract"]
+__all__ = [
+    "ControlPlaneSDK",
+    "SDKControlPlaneRequest",
+    "SDKRuntimeEnablementReceiptRecordContract",
+    "SDKThreadRunContract",
+]

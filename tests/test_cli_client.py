@@ -241,7 +241,7 @@ class TestHTTPClient:
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {
-            "status": "sdk_runtime_implementation_preflight_contract_ready",
+            "status": "sdk_runtime_enablement_receipt_record_workflow_ready",
             "sdk": {
                 "adapter_execution_enabled": False,
                 "agent_execution_enabled": False,
@@ -375,7 +375,7 @@ class TestHTTPClient:
             assert call_args[0][0] == "POST"
             assert call_args[0][1] == "/api/v1/control-plane/sdk/invoke"
             assert call_args[1]["json"] == contract
-            assert result["status"] == "sdk_runtime_implementation_preflight_contract_ready"
+            assert result["status"] == "sdk_runtime_enablement_receipt_record_workflow_ready"
             assert result["sdk"]["adapter_execution_enabled"] is False
             assert result["sdk"]["execution_adapter_contract"]["mark_executed"] is False
             assert result["sdk"]["read_only_runner_contract"]["write_execution_enabled"] is False
@@ -495,6 +495,60 @@ class TestHTTPClient:
             assert result["status"] == "sdk_owner_acceptance_record_workflow_ready"
             assert result["owner_acceptance"]["write_runner_enabled"] is False
             assert result["owner_acceptance"]["mutation_performed"] is False
+
+    @pytest.mark.asyncio
+    async def test_http_client_record_sdk_runtime_enablement_receipt_calls_owner_gated_stub(self):
+        """Test SDK runtime readiness receipt record uses the backend evidence stub."""
+        config = CLIConfig(api_base_url="http://localhost:8000")
+        client = HTTPClient(config)
+        payload = {
+            "readiness_receipt_id": "readiness-1",
+            "approval_id": "approval-1",
+            "owner_acceptance_id": "acceptance-1",
+            "owner_acceptance_audit_id": "audit-acceptance-1",
+            "runtime_flag_name": "XAGENT_SDK_WRITE_RUNNER_ENABLED",
+            "smoke_runbook_version": "v1",
+            "rollback_runbook_version": "v1",
+            "accepted_by": "owner",
+            "accepted_at": "2026-06-08T00:00:00Z",
+            "expires_at": "2026-06-09T00:00:00Z",
+            "smoke_runbook_acknowledged": True,
+            "rollback_runbook_acknowledged": True,
+            "failure_receipt_reviewed": True,
+            "acceptance_hash": "hash-readiness-1",
+        }
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "ok": True,
+            "status": "sdk_runtime_enablement_receipt_record_workflow_ready",
+            "runtime_enablement_receipt": {
+                "audit_event_recorded": True,
+                "runtime_flag_enabled": False,
+                "write_runner_enabled": False,
+                "runner_invoked": False,
+                "mark_executed": False,
+                "mutation_performed": False,
+            },
+        }
+
+        with patch.object(
+            httpx.AsyncClient,
+            "request",
+            new_callable=AsyncMock,
+            return_value=mock_response,
+        ) as mock_request:
+            result = await client.record_sdk_runtime_enablement_receipt(payload)
+
+            call_args = mock_request.call_args
+            assert call_args[0][0] == "POST"
+            assert call_args[0][1] == "/api/v1/control-plane/sdk/runtime-enablement/receipt/record"
+            assert call_args[1]["json"] == payload
+            assert result["status"] == "sdk_runtime_enablement_receipt_record_workflow_ready"
+            assert result["runtime_enablement_receipt"]["runtime_flag_enabled"] is False
+            assert result["runtime_enablement_receipt"]["write_runner_enabled"] is False
+            assert result["runtime_enablement_receipt"]["runner_invoked"] is False
+            assert result["runtime_enablement_receipt"]["mutation_performed"] is False
 
     @pytest.mark.asyncio
     async def test_http_client_list_agents(self):
@@ -807,6 +861,15 @@ class TestLocalClient:
 
         with pytest.raises(NotImplementedError, match="SDK owner acceptance recording"):
             await client.record_sdk_owner_acceptance({"approval_id": "approval-1"})
+
+    @pytest.mark.asyncio
+    async def test_local_client_record_sdk_runtime_enablement_receipt_not_implemented(self):
+        """Test SDK runtime enablement receipt recording is HTTP-only."""
+        config = CLIConfig(mode="local")
+        client = LocalClient(config)
+
+        with pytest.raises(NotImplementedError, match="SDK runtime enablement receipt recording"):
+            await client.record_sdk_runtime_enablement_receipt({"approval_id": "approval-1"})
 
     @pytest.mark.asyncio
     async def test_local_client_health_check_healthy(self):

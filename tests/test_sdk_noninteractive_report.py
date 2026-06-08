@@ -16,7 +16,7 @@ def test_sdk_noninteractive_report_default_is_read_only() -> None:
     report = build_sdk_noninteractive_report()
     payload = report.to_dict()
 
-    assert report.status == "sdk_runtime_implementation_preflight_contract_ready"
+    assert report.status == "sdk_runtime_enablement_receipt_record_workflow_ready"
     assert report.evidence_type == "sdk_noninteractive_cli_contract"
     assert report.full_codex_parity_claimed is False
     assert report.dry_run is True
@@ -28,7 +28,7 @@ def test_sdk_noninteractive_report_default_is_read_only() -> None:
 
 def test_sdk_noninteractive_report_covers_sdk_and_cli_methods() -> None:
     report = build_sdk_noninteractive_report()
-    methods = [item["request"]["method"] for item in report.sdk_contracts]
+    methods = [item["request"].get("method") or item["operation"] for item in report.sdk_contracts]
     command_methods = [item["method"] for item in report.cli_commands]
 
     assert methods == [
@@ -39,14 +39,33 @@ def test_sdk_noninteractive_report_covers_sdk_and_cli_methods() -> None:
         "runtime/evidence/read",
         "runtime/evidence/read",
         "runtime/evidence/read",
+        "runtime/evidence/read",
+        "runtime_enablement_receipt_record",
     ]
     assert command_methods == methods
     assert any(
         item["request"]["params"].get("evidence_type") == "sdk_write_runner_owner_acceptance"
         for item in report.sdk_contracts
+        if item["request"].get("method") == "runtime/evidence/read"
     )
-    assert all(item["request"]["context"]["non_interactive"] is True for item in report.sdk_contracts)
-    assert all(item["request"]["mutation_performed"] is False for item in report.sdk_contracts)
+    assert any(
+        item["request"]["params"].get("evidence_type") == "sdk_write_runner_runtime_enablement_readiness"
+        for item in report.sdk_contracts
+        if item["request"].get("method") == "runtime/evidence/read"
+    )
+    assert any(
+        item["operation"] == "runtime_enablement_receipt_record"
+        for item in report.sdk_contracts
+    )
+    assert all(
+        item["request"].get("context", {}).get("non_interactive") is True
+        for item in report.sdk_contracts
+        if item["request"].get("method") is not None
+    )
+    assert all(
+        item["request"].get("mutation_performed", item.get("mutation_performed")) is False
+        for item in report.sdk_contracts
+    )
     assert all(item["execute_starts_agent"] is False for item in report.cli_commands)
 
 
@@ -386,6 +405,35 @@ def test_sdk_noninteractive_report_covers_runtime_implementation_preflight() -> 
     assert preflight["mutation_performed"] is False
 
 
+def test_sdk_noninteractive_report_covers_runtime_enablement_receipt_record_workflow() -> None:
+    workflow = build_sdk_noninteractive_report().runtime_enablement_receipt_record_workflow
+
+    assert workflow["stage"] == "runtime_enablement_readiness_receipt_record_workflow"
+    assert workflow["workflow_status"] == "ready_but_disabled"
+    assert workflow["endpoint"] == "/api/v1/control-plane/sdk/runtime-enablement/receipt/record"
+    assert workflow["sdk_operation"] == "runtime_enablement_receipt_record"
+    assert workflow["audit_action"] == "sdk.write_runner.runtime_enablement_receipt_recorded"
+    assert workflow["requires_approved_sdk_approval"] is True
+    assert workflow["requires_owner_acceptance_audit_record"] is True
+    assert workflow["requires_signature_or_hash"] is True
+    assert workflow["requires_expiry"] is True
+    assert workflow["readback_contract"]["evidence_type"] == "sdk_write_runner_runtime_enablement_readiness"
+    assert workflow["readback_contract"]["query_keys"] == [
+        "readiness_receipt_id",
+        "approval_id",
+        "owner_acceptance_id",
+        "audit_id",
+    ]
+    assert workflow["runtime_flag_enabled"] is False
+    assert workflow["write_runner_enabled"] is False
+    assert workflow["adapter_execution_enabled"] is False
+    assert workflow["agent_execution_enabled"] is False
+    assert workflow["write_execution_enabled"] is False
+    assert workflow["runner_invoked"] is False
+    assert workflow["mark_executed"] is False
+    assert workflow["mutation_performed"] is False
+
+
 def test_sdk_noninteractive_report_keeps_feishu_first_channel_strategy() -> None:
     strategy = build_sdk_noninteractive_report().channel_strategy
 
@@ -406,7 +454,7 @@ def test_write_sdk_noninteractive_report_json_and_markdown(tmp_path: Path) -> No
 
     payload = json.loads(json_output.read_text(encoding="utf-8"))
     markdown = markdown_output.read_text(encoding="utf-8")
-    assert payload["status"] == "sdk_runtime_implementation_preflight_contract_ready"
+    assert payload["status"] == "sdk_runtime_enablement_receipt_record_workflow_ready"
     assert payload["full_codex_parity_claimed"] is False
     assert payload["mutation_performed"] is False
     assert "# X-Agent SDK Non-Interactive Report" in markdown
@@ -414,6 +462,7 @@ def test_write_sdk_noninteractive_report_json_and_markdown(tmp_path: Path) -> No
     assert "## Runtime Smoke Runbook" in markdown
     assert "## Runtime Enablement Receipt" in markdown
     assert "## Runtime Implementation Preflight" in markdown
+    assert "## Runtime Enablement Receipt Record Workflow" in markdown
     assert "thread/start" in render_markdown_report(report)
 
 

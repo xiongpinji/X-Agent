@@ -743,10 +743,38 @@ Expected: selected approval and sandbox tests pass.
 - [x] Promote SDK alignment status to `sdk_runtime_implementation_preflight_contract_ready`.
 - [ ] Implement the runtime write-runner only after this preflight adapter contract is owner-accepted and the owner explicitly requests runtime enablement.
 
+### Task 31: Runtime Enablement Readiness Receipt Record/Readback Workflow
+
+**Target:** Add the owner-gated workflow for recording and reading back runtime enablement readiness receipts, while still keeping concrete SDK write-runner execution disabled.
+
+**Files:**
+- Modify: `backend/app/api/control_plane.py`
+- Modify: `backend/app/sdk/control_plane.py`
+- Modify: `backend/app/sdk/__init__.py`
+- Modify: `cli/client.py`
+- Modify: `cli/commands/sdk_cmd.py`
+- Modify: `scripts/sdk_noninteractive_report.py`
+- Modify: `scripts/latest_codex_alignment.py`
+- Modify: `tests/test_control_plane_protocol.py`
+- Modify: `tests/test_xagent_sdk_contract.py`
+- Modify: `tests/test_cli_client.py`
+- Modify: `tests/test_sdk_noninteractive_report.py`
+- Modify: `tests/test_latest_codex_alignment.py`
+- Runtime evidence: `.xagent_runtime/reports/sdk-noninteractive-report.json`
+- Runtime evidence: `.xagent_runtime/reports/latest-codex-alignment.json`
+
+- [x] Add `/api/v1/control-plane/sdk/runtime-enablement/receipt/record` as an owner-gated readiness receipt recording endpoint.
+- [x] Add SDK and non-interactive CLI wrappers for recording the readiness receipt.
+- [x] Add strict `runtime/evidence/read` readback for `sdk_write_runner_runtime_enablement_readiness`.
+- [x] Require approved SDK approval, audit-backed owner acceptance evidence, runbook/rollback acknowledgement, failure receipt review, expiry, and signature/hash before recording.
+- [x] Keep `runtime_flag_enabled=false`, `execute_enabled=false`, `write_runner_enabled=false`, `agent_execution_enabled=false`, `adapter_execution_enabled=false`, `runner_invoked=false`, `mark_executed=false`, and all mutation flags false.
+- [x] Promote SDK alignment status to `sdk_runtime_enablement_receipt_record_workflow_ready`.
+- [ ] Implement the runtime write-runner only after this readiness receipt record/readback workflow is owner-accepted and runtime enablement is explicitly requested.
+
 ## Completion Criteria
 
 - `scripts/latest_codex_alignment.py` returns `latest_codex_alignment_plan_ready`.
-- `scripts/sdk_noninteractive_report.py` returns `sdk_runtime_implementation_preflight_contract_ready`.
+- `scripts/sdk_noninteractive_report.py` returns `sdk_runtime_enablement_receipt_record_workflow_ready`.
 - P0 task board is complete and machine-readable.
 - Feishu Pilot V1 remains `customer_acceptance_pack_ready`.
 - `full_codex_parity_claimed=false` remains true in all generated alignment and pilot reports.

@@ -75,6 +75,30 @@ def _emit_or_record_acceptance(payload: dict[str, object], *, execute: bool) -> 
     _emit(result)
 
 
+def _emit_or_record_runtime_receipt(payload: dict[str, object], *, execute: bool) -> None:
+    if not execute:
+        _emit(payload)
+        return
+
+    config = get_current_config()
+    try:
+        client = create_client(config)
+        request_payload = payload.get("request")
+        if not isinstance(request_payload, dict):
+            raise XAgentCLIError("SDK runtime enablement receipt envelope is missing request payload.")
+        result = asyncio.run(client.record_sdk_runtime_enablement_receipt(request_payload))
+    except NotImplementedError as e:
+        typer.echo(f"SDK runtime enablement receipt recording failed: {e}", err=True)
+        raise typer.Exit(code=1)
+    except (ConnectionError, AuthError, APIError) as e:
+        typer.echo(f"SDK runtime enablement receipt recording failed: {e}", err=True)
+        raise typer.Exit(code=1)
+    except XAgentCLIError as e:
+        typer.echo(f"SDK CLI error: {e}", err=True)
+        raise typer.Exit(code=1)
+    _emit(result)
+
+
 @sdk_app.command("thread-start")
 def thread_start(
     task: str = typer.Argument(..., help="Task text for the new thread."),
@@ -155,6 +179,7 @@ def evidence_read(
     approval_id: Optional[str] = typer.Option(None, "--approval-id"),
     owner_acceptance_id: Optional[str] = typer.Option(None, "--acceptance-id"),
     audit_id: Optional[str] = typer.Option(None, "--audit-id"),
+    readiness_receipt_id: Optional[str] = typer.Option(None, "--readiness-receipt-id"),
     method: Optional[str] = typer.Option(None, "--method"),
     execute: bool = typer.Option(False, "--execute", help="Submit the read-only SDK envelope to the backend."),
 ) -> None:
@@ -163,6 +188,7 @@ def evidence_read(
         evidence_type=evidence_type,
         approval_id=approval_id,
         owner_acceptance_id=owner_acceptance_id,
+        readiness_receipt_id=readiness_receipt_id,
         audit_id=audit_id,
         method=method,
     )
@@ -195,3 +221,45 @@ def acceptance_record(
         dry_run=not execute,
     )
     _emit_or_record_acceptance(contract.to_dict(), execute=execute)
+
+
+@sdk_app.command("runtime-enable-receipt-record")
+def runtime_enable_receipt_record(
+    approval_id: str = typer.Option(..., "--approval-id"),
+    readiness_receipt_id: str = typer.Option(..., "--readiness-receipt-id"),
+    owner_acceptance_id: str = typer.Option(..., "--acceptance-id"),
+    owner_acceptance_audit_id: str = typer.Option(..., "--acceptance-audit-id"),
+    accepted_by: str = typer.Option(..., "--accepted-by"),
+    accepted_at: str = typer.Option(..., "--accepted-at"),
+    expires_at: str = typer.Option(..., "--expires-at"),
+    smoke_runbook_version: str = typer.Option(..., "--smoke-runbook-version"),
+    rollback_runbook_version: str = typer.Option(..., "--rollback-runbook-version"),
+    smoke_runbook_acknowledged: bool = typer.Option(False, "--smoke-runbook-acknowledged"),
+    rollback_runbook_acknowledged: bool = typer.Option(False, "--rollback-runbook-acknowledged"),
+    failure_receipt_reviewed: bool = typer.Option(False, "--failure-receipt-reviewed"),
+    runtime_flag_name: str = typer.Option("XAGENT_SDK_WRITE_RUNNER_ENABLED", "--runtime-flag-name"),
+    acceptance_signature: Optional[str] = typer.Option(None, "--acceptance-signature"),
+    acceptance_hash: Optional[str] = typer.Option(None, "--acceptance-hash"),
+    notes: Optional[str] = typer.Option(None, "--notes"),
+    execute: bool = typer.Option(False, "--execute", help="Record runtime enablement readiness receipt in the backend audit log."),
+) -> None:
+    contract = ControlPlaneSDK().record_runtime_enablement_receipt(
+        readiness_receipt_id=readiness_receipt_id,
+        approval_id=approval_id,
+        owner_acceptance_id=owner_acceptance_id,
+        owner_acceptance_audit_id=owner_acceptance_audit_id,
+        runtime_flag_name=runtime_flag_name,
+        smoke_runbook_version=smoke_runbook_version,
+        rollback_runbook_version=rollback_runbook_version,
+        accepted_by=accepted_by,
+        accepted_at=accepted_at,
+        expires_at=expires_at,
+        smoke_runbook_acknowledged=smoke_runbook_acknowledged,
+        rollback_runbook_acknowledged=rollback_runbook_acknowledged,
+        failure_receipt_reviewed=failure_receipt_reviewed,
+        acceptance_signature=acceptance_signature,
+        acceptance_hash=acceptance_hash,
+        notes=notes,
+        dry_run=not execute,
+    )
+    _emit_or_record_runtime_receipt(contract.to_dict(), execute=execute)

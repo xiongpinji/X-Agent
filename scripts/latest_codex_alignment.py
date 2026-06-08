@@ -43,6 +43,7 @@ READY_XAGENT_STATUSES = frozenset(
         "governance_lifecycle_report_ready",
         "github_review_action_report_ready",
         "partial",
+        "sdk_runtime_enablement_receipt_record_workflow_ready",
         "sdk_runtime_implementation_preflight_contract_ready",
         "sdk_runtime_enablement_receipt_contract_ready",
         "sdk_runtime_smoke_runbook_contract_ready",
@@ -76,6 +77,7 @@ NEXT_TASK_DONE_STATUSES = frozenset(
         "durable_thread_contract_ready",
         "governance_lifecycle_report_ready",
         "github_review_action_report_ready",
+        "sdk_runtime_enablement_receipt_record_workflow_ready",
         "sdk_runtime_implementation_preflight_contract_ready",
         "sdk_runtime_enablement_receipt_contract_ready",
         "sdk_runtime_smoke_runbook_contract_ready",
@@ -233,7 +235,7 @@ def build_evidence_specs(root: Path = ROOT, report_dir: Path = REPORT_DIR) -> tu
             "sdk_noninteractive_report",
             report_dir / "sdk-noninteractive-report.json",
             "runtime_report",
-            expected_statuses=frozenset({"sdk_runtime_implementation_preflight_contract_ready"}),
+            expected_statuses=frozenset({"sdk_runtime_enablement_receipt_record_workflow_ready"}),
             expected_evidence_type="sdk_noninteractive_cli_contract",
         ),
         AlignmentEvidenceSpec(
@@ -527,7 +529,7 @@ def _capabilities() -> list[CodexAlignmentCapability]:
             capability="cli_and_programmatic_sdk",
             codex_surface="Codex CLI, non-interactive mode, and Codex SDK",
             priority="P1",
-            xagent_status="sdk_runtime_implementation_preflight_contract_ready",
+            xagent_status="sdk_runtime_enablement_receipt_record_workflow_ready",
             evidence=[
                 "sdk_noninteractive_report",
                 "sdk_contract_module",
@@ -539,7 +541,7 @@ def _capabilities() -> list[CodexAlignmentCapability]:
                 "control_plane_protocol",
                 "control_plane_protocol_tests",
             ],
-            next_task="Implement the runtime write-runner only after the preflight adapter contract is owner-accepted and runtime enablement is explicitly requested.",
+            next_task="Implement the runtime write-runner only after the readiness receipt record/readback workflow is owner-accepted and runtime enablement is explicitly requested.",
             acceptance_command="python scripts\\sdk_noninteractive_report.py && python -m pytest tests/test_xagent_sdk_contract.py tests/test_sdk_noninteractive_report.py tests/test_cli_commands.py tests/test_control_plane_protocol.py -o addopts=\"\" -p no:cov -p no:cacheprovider -q",
             official_sources=[
                 "https://developers.openai.com/codex/noninteractive",

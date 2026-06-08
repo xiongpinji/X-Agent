@@ -59,6 +59,21 @@ class SDKOwnerAcceptanceRecordContract:
         return payload
 
 
+@dataclass(frozen=True)
+class SDKRuntimeEnablementReceiptRecordContract:
+    operation: str
+    endpoint: str
+    request: dict[str, Any]
+    owner_gate: dict[str, Any]
+    known_limits: list[str]
+
+    def to_dict(self) -> dict[str, Any]:
+        payload = asdict(self)
+        payload["mutation_performed"] = False
+        payload["network_mutation_performed"] = False
+        return payload
+
+
 class ControlPlaneSDK:
     """Build SDK-compatible control-plane request envelopes."""
 
@@ -174,6 +189,7 @@ class ControlPlaneSDK:
         evidence_type: str | None = None,
         approval_id: str | None = None,
         owner_acceptance_id: str | None = None,
+        readiness_receipt_id: str | None = None,
         audit_id: str | None = None,
         method: str | None = None,
     ) -> SDKThreadRunContract:
@@ -184,6 +200,8 @@ class ControlPlaneSDK:
             params["approval_id"] = approval_id
         if owner_acceptance_id:
             params["owner_acceptance_id"] = owner_acceptance_id
+        if readiness_receipt_id:
+            params["readiness_receipt_id"] = readiness_receipt_id
         if audit_id:
             params["audit_id"] = audit_id
         if method:
@@ -197,6 +215,71 @@ class ControlPlaneSDK:
             idempotency_key=None,
             approved_approval_id=None,
             dry_run=True,
+        )
+
+    def record_runtime_enablement_receipt(
+        self,
+        *,
+        readiness_receipt_id: str,
+        approval_id: str,
+        owner_acceptance_id: str,
+        owner_acceptance_audit_id: str,
+        smoke_runbook_version: str,
+        rollback_runbook_version: str,
+        accepted_by: str,
+        accepted_at: str,
+        expires_at: str,
+        smoke_runbook_acknowledged: bool,
+        rollback_runbook_acknowledged: bool,
+        failure_receipt_reviewed: bool,
+        runtime_flag_name: str = "XAGENT_SDK_WRITE_RUNNER_ENABLED",
+        acceptance_signature: str | None = None,
+        acceptance_hash: str | None = None,
+        notes: str | None = None,
+        dry_run: bool = True,
+    ) -> SDKRuntimeEnablementReceiptRecordContract:
+        return SDKRuntimeEnablementReceiptRecordContract(
+            operation="runtime_enablement_receipt_record",
+            endpoint="/api/v1/control-plane/sdk/runtime-enablement/receipt/record",
+            request={
+                "readiness_receipt_id": readiness_receipt_id,
+                "approval_id": approval_id,
+                "owner_acceptance_id": owner_acceptance_id,
+                "owner_acceptance_audit_id": owner_acceptance_audit_id,
+                "runtime_flag_name": runtime_flag_name,
+                "smoke_runbook_version": smoke_runbook_version,
+                "rollback_runbook_version": rollback_runbook_version,
+                "accepted_by": accepted_by,
+                "accepted_at": accepted_at,
+                "expires_at": expires_at,
+                "smoke_runbook_acknowledged": smoke_runbook_acknowledged,
+                "rollback_runbook_acknowledged": rollback_runbook_acknowledged,
+                "failure_receipt_reviewed": failure_receipt_reviewed,
+                "acceptance_signature": acceptance_signature,
+                "acceptance_hash": acceptance_hash,
+                "notes": notes,
+                "dry_run": dry_run,
+            },
+            owner_gate={
+                "requires_approved_sdk_approval": True,
+                "requires_owner_acceptance_audit_record": True,
+                "requires_signature_or_hash": True,
+                "requires_expiry": True,
+                "marks_approval_executed": False,
+                "runtime_flag_enabled": False,
+                "execute_enabled": False,
+                "write_runner_enabled": False,
+                "agent_execution_enabled": False,
+                "runner_invoked": False,
+                "mark_executed": False,
+                "mutation_performed": False,
+                "network_mutation_performed": False,
+            },
+            known_limits=[
+                "This SDK contract records runtime enablement readiness evidence only.",
+                "It does not enable runtime flags or invoke the write runner.",
+                "It does not mark an approval executed.",
+            ],
         )
 
     def record_owner_acceptance(
