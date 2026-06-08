@@ -898,10 +898,37 @@ Expected: selected approval and sandbox tests pass.
 - [x] Add `/sdk/invoke` final-decision workflow metadata and promote SDK alignment status to `sdk_runtime_implementation_final_decision_workflow_ready`.
 - [ ] Implement the live runtime write-runner only after this final decision is recorded and the owner explicitly requests runtime flag enablement.
 
+### Task 37: Runtime Flag Enablement Record Workflow
+
+**Target:** Record the explicit owner runtime flag enablement intent after the final implementation decision, while still keeping the SDK write-runner runtime flag disabled.
+
+**Files:**
+- Modify: `backend/app/api/control_plane.py`
+- Modify: `backend/app/sdk/control_plane.py`
+- Modify: `backend/app/sdk/__init__.py`
+- Modify: `cli/client.py`
+- Modify: `cli/commands/sdk_cmd.py`
+- Modify: `scripts/sdk_noninteractive_report.py`
+- Modify: `scripts/latest_codex_alignment.py`
+- Modify: `tests/test_control_plane_protocol.py`
+- Modify: `tests/test_xagent_sdk_contract.py`
+- Modify: `tests/test_cli_client.py`
+- Modify: `tests/test_sdk_noninteractive_report.py`
+- Modify: `tests/test_latest_codex_alignment.py`
+- Runtime evidence: `.xagent_runtime/reports/sdk-noninteractive-report.json`
+- Runtime evidence: `.xagent_runtime/reports/latest-codex-alignment.json`
+
+- [x] Add `/api/v1/control-plane/sdk/runtime-flag/enablement/record` as an owner-gated runtime flag enablement intent endpoint.
+- [x] Add SDK and non-interactive CLI wrappers for runtime flag enablement intent recording.
+- [x] Require approved SDK approval, recorded accepted final implementation decision, runtime flag name, timestamp, reason, signature/hash, and dry-run mode before recording.
+- [x] Keep runtime flag enablement recording read-only with respect to runtime effects: it does not set `XAGENT_SDK_WRITE_RUNNER_ENABLED`, invoke the write runner, mark approvals executed, or perform file/network/channel mutation.
+- [x] Add `/sdk/invoke` runtime flag enablement workflow metadata and promote SDK alignment status to `sdk_runtime_flag_enablement_record_workflow_ready`.
+- [ ] Implement live runtime flag application and write-runner wiring only after owner reviews this recorded enablement intent.
+
 ## Completion Criteria
 
 - `scripts/latest_codex_alignment.py` returns `latest_codex_alignment_plan_ready`.
-- `scripts/sdk_noninteractive_report.py` returns `sdk_runtime_implementation_final_decision_workflow_ready`.
+- `scripts/sdk_noninteractive_report.py` returns `sdk_runtime_flag_enablement_record_workflow_ready`.
 - P0 task board is complete and machine-readable.
 - Feishu Pilot V1 remains `customer_acceptance_pack_ready`.
 - `full_codex_parity_claimed=false` remains true in all generated alignment and pilot reports.

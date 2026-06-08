@@ -3,9 +3,10 @@
 from backend.app.sdk.control_plane import (
     ControlPlaneSDK,
     SDKControlPlaneRequest,
-    SDKRuntimeImplementationFinalDecisionRecordContract,
     SDKRuntimeEnablementOwnerPackDecisionRecordContract,
     SDKRuntimeEnablementReceiptRecordContract,
+    SDKRuntimeFlagEnablementRecordContract,
+    SDKRuntimeImplementationFinalDecisionRecordContract,
     SDKRuntimeImplementationReadinessLockRecordContract,
     SDKThreadRunContract,
 )
@@ -13,9 +14,10 @@ from backend.app.sdk.control_plane import (
 __all__ = [
     "ControlPlaneSDK",
     "SDKControlPlaneRequest",
-    "SDKRuntimeImplementationFinalDecisionRecordContract",
     "SDKRuntimeEnablementOwnerPackDecisionRecordContract",
     "SDKRuntimeEnablementReceiptRecordContract",
+    "SDKRuntimeFlagEnablementRecordContract",
+    "SDKRuntimeImplementationFinalDecisionRecordContract",
     "SDKRuntimeImplementationReadinessLockRecordContract",
     "SDKThreadRunContract",
 ]

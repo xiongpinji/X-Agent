@@ -284,6 +284,30 @@ def test_sdk_resume_run_and_read_thread_methods_are_stable() -> None:
     assert final_decision["owner_gate"]["write_runner_enabled"] is False
     assert final_decision["owner_gate"]["runner_invoked"] is False
     assert final_decision["mutation_performed"] is False
+    runtime_flag_enablement = sdk.record_runtime_flag_enablement(
+        runtime_flag_enablement_id="flag-enable-1",
+        approval_id="approval-1",
+        final_decision_id="final-decision-1",
+        final_decision_audit_id="audit-final-decision-1",
+        implementation_lock_id="lock-1",
+        readiness_receipt_id="readiness-1",
+        requested_by="owner",
+        requested_at="2026-06-08T00:00:00Z",
+        enablement_reason="owner explicitly requested runtime flag enablement",
+        enablement_hash="hash-flag-enable-1",
+    ).to_dict()
+    assert runtime_flag_enablement["operation"] == "runtime_flag_enablement_record"
+    assert runtime_flag_enablement["endpoint"] == "/api/v1/control-plane/sdk/runtime-flag/enablement/record"
+    assert runtime_flag_enablement["request"]["runtime_flag_name"] == "XAGENT_SDK_WRITE_RUNNER_ENABLED"
+    assert runtime_flag_enablement["request"]["final_decision_audit_id"] == "audit-final-decision-1"
+    assert runtime_flag_enablement["owner_gate"]["requires_runtime_implementation_final_decision"] is True
+    assert runtime_flag_enablement["owner_gate"]["requires_final_decision_accepted"] is True
+    assert runtime_flag_enablement["owner_gate"]["marks_approval_executed"] is False
+    assert runtime_flag_enablement["owner_gate"]["runtime_flag_enabled"] is False
+    assert runtime_flag_enablement["owner_gate"]["implementation_enabled"] is False
+    assert runtime_flag_enablement["owner_gate"]["write_runner_enabled"] is False
+    assert runtime_flag_enablement["owner_gate"]["runner_invoked"] is False
+    assert runtime_flag_enablement["mutation_performed"] is False
 
 
 def test_sdk_contract_keeps_feishu_domestic_v1_primary() -> None:
@@ -1420,5 +1444,77 @@ def test_cli_sdk_runtime_implementation_final_decision_execute_flag_records_deci
     assert request["readiness_receipt_id"] == "readiness-1"
     assert request["owner_pack_decision_id"] == "decision-1"
     assert request["decision_hash"] == "hash-final-decision-1"
+    assert request["dry_run"] is False
+    mock_client.invoke_sdk_contract.assert_not_called()
+
+
+def test_cli_sdk_runtime_flag_enable_execute_flag_records_intent_only() -> None:
+    set_current_config(CLIConfig(api_base_url="http://localhost:8000", output_format="json"))
+    mock_client = AsyncMock()
+    mock_client.record_sdk_runtime_flag_enablement.return_value = {
+        "ok": True,
+        "status": "sdk_runtime_flag_enablement_record_workflow_ready",
+        "runtime_flag_enablement": {
+            "record_status": "recorded",
+            "audit_event_recorded": True,
+            "runtime_flag_enabled": False,
+            "implementation_enabled": False,
+            "write_runner_enabled": False,
+            "agent_execution_enabled": False,
+            "runner_invoked": False,
+            "mark_executed": False,
+            "mutation_performed": False,
+        },
+    }
+
+    with patch("cli.commands.sdk_cmd.create_client", return_value=mock_client):
+        result = CliRunner().invoke(
+            app,
+            [
+                "sdk",
+                "runtime-flag-enable-record",
+                "--runtime-flag-enablement-id",
+                "flag-enable-1",
+                "--approval-id",
+                "approval-1",
+                "--final-decision-id",
+                "final-decision-1",
+                "--final-decision-audit-id",
+                "audit-final-decision-1",
+                "--implementation-lock-id",
+                "lock-1",
+                "--readiness-receipt-id",
+                "readiness-1",
+                "--requested-by",
+                "owner",
+                "--requested-at",
+                "2026-06-08T00:00:00Z",
+                "--enablement-reason",
+                "owner requested runtime flag enablement",
+                "--enablement-hash",
+                "hash-flag-enable-1",
+                "--execute",
+            ],
+        )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["status"] == "sdk_runtime_flag_enablement_record_workflow_ready"
+    assert payload["runtime_flag_enablement"]["record_status"] == "recorded"
+    assert payload["runtime_flag_enablement"]["runtime_flag_enabled"] is False
+    assert payload["runtime_flag_enablement"]["write_runner_enabled"] is False
+    assert payload["runtime_flag_enablement"]["runner_invoked"] is False
+    assert payload["runtime_flag_enablement"]["mutation_performed"] is False
+
+    mock_client.record_sdk_runtime_flag_enablement.assert_awaited_once()
+    request = mock_client.record_sdk_runtime_flag_enablement.await_args.args[0]
+    assert request["runtime_flag_enablement_id"] == "flag-enable-1"
+    assert request["approval_id"] == "approval-1"
+    assert request["final_decision_id"] == "final-decision-1"
+    assert request["final_decision_audit_id"] == "audit-final-decision-1"
+    assert request["implementation_lock_id"] == "lock-1"
+    assert request["readiness_receipt_id"] == "readiness-1"
+    assert request["runtime_flag_name"] == "XAGENT_SDK_WRITE_RUNNER_ENABLED"
+    assert request["enablement_hash"] == "hash-flag-enable-1"
     assert request["dry_run"] is False
     mock_client.invoke_sdk_contract.assert_not_called()

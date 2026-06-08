@@ -119,6 +119,21 @@ class SDKRuntimeImplementationFinalDecisionRecordContract:
         return payload
 
 
+@dataclass(frozen=True)
+class SDKRuntimeFlagEnablementRecordContract:
+    operation: str
+    endpoint: str
+    request: dict[str, Any]
+    owner_gate: dict[str, Any]
+    known_limits: list[str]
+
+    def to_dict(self) -> dict[str, Any]:
+        payload = asdict(self)
+        payload["mutation_performed"] = False
+        payload["network_mutation_performed"] = False
+        return payload
+
+
 class ControlPlaneSDK:
     """Build SDK-compatible control-plane request envelopes."""
 
@@ -511,6 +526,67 @@ class ControlPlaneSDK:
             known_limits=[
                 "This SDK contract records a final implementation decision only.",
                 "Accepted decisions do not enable runtime flags or invoke the write runner.",
+                "It does not mark an approval executed.",
+            ],
+        )
+
+    def record_runtime_flag_enablement(
+        self,
+        *,
+        runtime_flag_enablement_id: str,
+        approval_id: str,
+        final_decision_id: str,
+        final_decision_audit_id: str,
+        implementation_lock_id: str,
+        readiness_receipt_id: str,
+        requested_by: str,
+        requested_at: str,
+        enablement_reason: str,
+        runtime_flag_name: str = "XAGENT_SDK_WRITE_RUNNER_ENABLED",
+        enablement_signature: str | None = None,
+        enablement_hash: str | None = None,
+        notes: str | None = None,
+        dry_run: bool = True,
+    ) -> SDKRuntimeFlagEnablementRecordContract:
+        return SDKRuntimeFlagEnablementRecordContract(
+            operation="runtime_flag_enablement_record",
+            endpoint="/api/v1/control-plane/sdk/runtime-flag/enablement/record",
+            request={
+                "runtime_flag_enablement_id": runtime_flag_enablement_id,
+                "approval_id": approval_id,
+                "final_decision_id": final_decision_id,
+                "final_decision_audit_id": final_decision_audit_id,
+                "implementation_lock_id": implementation_lock_id,
+                "readiness_receipt_id": readiness_receipt_id,
+                "runtime_flag_name": runtime_flag_name,
+                "requested_by": requested_by,
+                "requested_at": requested_at,
+                "enablement_reason": enablement_reason,
+                "enablement_signature": enablement_signature,
+                "enablement_hash": enablement_hash,
+                "notes": notes,
+                "dry_run": dry_run,
+            },
+            owner_gate={
+                "requires_approved_sdk_approval": True,
+                "requires_runtime_implementation_final_decision": True,
+                "requires_final_decision_accepted": True,
+                "requires_runtime_flag_name": "XAGENT_SDK_WRITE_RUNNER_ENABLED",
+                "requires_signature_or_hash": True,
+                "marks_approval_executed": False,
+                "runtime_flag_enabled": False,
+                "implementation_enabled": False,
+                "execute_enabled": False,
+                "write_runner_enabled": False,
+                "agent_execution_enabled": False,
+                "runner_invoked": False,
+                "mark_executed": False,
+                "mutation_performed": False,
+                "network_mutation_performed": False,
+            },
+            known_limits=[
+                "This SDK contract records explicit owner runtime flag enablement intent only.",
+                "It does not set XAGENT_SDK_WRITE_RUNNER_ENABLED or invoke the write runner.",
                 "It does not mark an approval executed.",
             ],
         )

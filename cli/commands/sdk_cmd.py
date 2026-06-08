@@ -175,6 +175,34 @@ def _emit_or_record_runtime_implementation_final_decision(
     _emit(result)
 
 
+def _emit_or_record_runtime_flag_enablement(
+    payload: dict[str, object],
+    *,
+    execute: bool,
+) -> None:
+    if not execute:
+        _emit(payload)
+        return
+
+    config = get_current_config()
+    try:
+        client = create_client(config)
+        request_payload = payload.get("request")
+        if not isinstance(request_payload, dict):
+            raise XAgentCLIError("SDK runtime flag enablement envelope is missing request payload.")
+        result = asyncio.run(client.record_sdk_runtime_flag_enablement(request_payload))
+    except NotImplementedError as e:
+        typer.echo(f"SDK runtime flag enablement recording failed: {e}", err=True)
+        raise typer.Exit(code=1)
+    except (ConnectionError, AuthError, APIError) as e:
+        typer.echo(f"SDK runtime flag enablement recording failed: {e}", err=True)
+        raise typer.Exit(code=1)
+    except XAgentCLIError as e:
+        typer.echo(f"SDK CLI error: {e}", err=True)
+        raise typer.Exit(code=1)
+    _emit(result)
+
+
 @sdk_app.command("thread-start")
 def thread_start(
     task: str = typer.Argument(..., help="Task text for the new thread."),
@@ -453,3 +481,39 @@ def runtime_implementation_final_decision_record(
         dry_run=not execute,
     )
     _emit_or_record_runtime_implementation_final_decision(contract.to_dict(), execute=execute)
+
+
+@sdk_app.command("runtime-flag-enable-record")
+def runtime_flag_enable_record(
+    runtime_flag_enablement_id: str = typer.Option(..., "--runtime-flag-enablement-id"),
+    approval_id: str = typer.Option(..., "--approval-id"),
+    final_decision_id: str = typer.Option(..., "--final-decision-id"),
+    final_decision_audit_id: str = typer.Option(..., "--final-decision-audit-id"),
+    implementation_lock_id: str = typer.Option(..., "--implementation-lock-id"),
+    readiness_receipt_id: str = typer.Option(..., "--readiness-receipt-id"),
+    runtime_flag_name: str = typer.Option("XAGENT_SDK_WRITE_RUNNER_ENABLED", "--runtime-flag-name"),
+    requested_by: str = typer.Option(..., "--requested-by"),
+    requested_at: str = typer.Option(..., "--requested-at"),
+    enablement_reason: str = typer.Option(..., "--enablement-reason"),
+    enablement_signature: Optional[str] = typer.Option(None, "--enablement-signature"),
+    enablement_hash: Optional[str] = typer.Option(None, "--enablement-hash"),
+    notes: Optional[str] = typer.Option(None, "--notes"),
+    execute: bool = typer.Option(False, "--execute", help="Record runtime flag enablement intent in the backend audit log."),
+) -> None:
+    contract = ControlPlaneSDK().record_runtime_flag_enablement(
+        runtime_flag_enablement_id=runtime_flag_enablement_id,
+        approval_id=approval_id,
+        final_decision_id=final_decision_id,
+        final_decision_audit_id=final_decision_audit_id,
+        implementation_lock_id=implementation_lock_id,
+        readiness_receipt_id=readiness_receipt_id,
+        runtime_flag_name=runtime_flag_name,
+        requested_by=requested_by,
+        requested_at=requested_at,
+        enablement_reason=enablement_reason,
+        enablement_signature=enablement_signature,
+        enablement_hash=enablement_hash,
+        notes=notes,
+        dry_run=not execute,
+    )
+    _emit_or_record_runtime_flag_enablement(contract.to_dict(), execute=execute)

@@ -16,7 +16,7 @@ def test_sdk_noninteractive_report_default_is_read_only() -> None:
     report = build_sdk_noninteractive_report()
     payload = report.to_dict()
 
-    assert report.status == "sdk_runtime_implementation_final_decision_workflow_ready"
+    assert report.status == "sdk_runtime_flag_enablement_record_workflow_ready"
     assert report.evidence_type == "sdk_noninteractive_cli_contract"
     assert report.full_codex_parity_claimed is False
     assert report.dry_run is True
@@ -45,6 +45,7 @@ def test_sdk_noninteractive_report_covers_sdk_and_cli_methods() -> None:
         "runtime_enablement_owner_pack_decision_record",
         "runtime_implementation_readiness_lock_record",
         "runtime_implementation_final_decision_record",
+        "runtime_flag_enablement_record",
     ]
     assert command_methods == methods
     assert any(
@@ -77,6 +78,10 @@ def test_sdk_noninteractive_report_covers_sdk_and_cli_methods() -> None:
     )
     assert any(
         item["operation"] == "runtime_implementation_final_decision_record"
+        for item in report.sdk_contracts
+    )
+    assert any(
+        item["operation"] == "runtime_flag_enablement_record"
         for item in report.sdk_contracts
     )
     assert all(
@@ -595,6 +600,34 @@ def test_sdk_noninteractive_report_covers_runtime_implementation_final_decision_
     assert workflow["mutation_performed"] is False
 
 
+def test_sdk_noninteractive_report_covers_runtime_flag_enablement_record_workflow() -> None:
+    workflow = build_sdk_noninteractive_report().runtime_flag_enablement_record_workflow
+
+    assert workflow["stage"] == "runtime_flag_enablement_record_workflow"
+    assert workflow["workflow_status"] == "ready_but_disabled"
+    assert workflow["endpoint"] == "/api/v1/control-plane/sdk/runtime-flag/enablement/record"
+    assert workflow["sdk_operation"] == "runtime_flag_enablement_record"
+    assert workflow["audit_action"] == "sdk.write_runner.runtime_flag_enablement_requested"
+    assert workflow["requires_approved_sdk_approval"] is True
+    assert workflow["requires_runtime_implementation_final_decision"] is True
+    assert workflow["requires_final_decision_accepted"] is True
+    assert workflow["requires_runtime_flag_name"] == "XAGENT_SDK_WRITE_RUNNER_ENABLED"
+    assert workflow["requires_signature_or_hash"] is True
+    assert workflow["audit_event_recorded_by_sdk_invoke"] is False
+    assert workflow["decision_effect"]["enables_runtime_flag"] is False
+    assert workflow["decision_effect"]["starts_agent_execution"] is False
+    assert workflow["decision_effect"]["marks_approval_executed"] is False
+    assert workflow["implementation_enabled"] is False
+    assert workflow["runtime_flag_enabled"] is False
+    assert workflow["write_runner_enabled"] is False
+    assert workflow["adapter_execution_enabled"] is False
+    assert workflow["agent_execution_enabled"] is False
+    assert workflow["write_execution_enabled"] is False
+    assert workflow["runner_invoked"] is False
+    assert workflow["mark_executed"] is False
+    assert workflow["mutation_performed"] is False
+
+
 def test_sdk_noninteractive_report_keeps_feishu_first_channel_strategy() -> None:
     strategy = build_sdk_noninteractive_report().channel_strategy
 
@@ -615,13 +648,14 @@ def test_write_sdk_noninteractive_report_json_and_markdown(tmp_path: Path) -> No
 
     payload = json.loads(json_output.read_text(encoding="utf-8"))
     markdown = markdown_output.read_text(encoding="utf-8")
-    assert payload["status"] == "sdk_runtime_implementation_final_decision_workflow_ready"
+    assert payload["status"] == "sdk_runtime_flag_enablement_record_workflow_ready"
     assert payload["full_codex_parity_claimed"] is False
     assert payload["mutation_performed"] is False
     assert "# X-Agent SDK Non-Interactive Report" in markdown
     assert "## Runtime Implementation Readiness Lock Workflow" in markdown
     assert "## Runtime Implementation Owner Pack" in markdown
     assert "## Runtime Implementation Final Decision Workflow" in markdown
+    assert "## Runtime Flag Enablement Record Workflow" in markdown
     assert "## Write Runner Implementation Plan" in markdown
     assert "## Runtime Smoke Runbook" in markdown
     assert "## Runtime Enablement Receipt" in markdown

@@ -69,6 +69,7 @@ class SDKNonInteractiveReport:
     runtime_implementation_readiness_lock_workflow: dict[str, Any]
     runtime_implementation_owner_pack: dict[str, Any]
     runtime_implementation_final_decision_workflow: dict[str, Any]
+    runtime_flag_enablement_record_workflow: dict[str, Any]
     channel_strategy: dict[str, Any]
     checks: list[SDKNonInteractiveCheck]
     official_sources: list[str]
@@ -172,6 +173,18 @@ def _sdk_contracts() -> list[dict[str, Any]]:
             decided_at="2026-06-08T00:00:00Z",
             reason="<reason>",
             decision_hash="<decision_hash>",
+        ).to_dict(),
+        sdk.record_runtime_flag_enablement(
+            runtime_flag_enablement_id="<runtime_flag_enablement_id>",
+            approval_id="<approval_id>",
+            final_decision_id="<final_decision_id>",
+            final_decision_audit_id="<final_decision_audit_id>",
+            implementation_lock_id="<implementation_lock_id>",
+            readiness_receipt_id="<readiness_receipt_id>",
+            requested_by="<owner>",
+            requested_at="2026-06-08T00:00:00Z",
+            enablement_reason="<reason>",
+            enablement_hash="<enablement_hash>",
         ).to_dict(),
     ]
 
@@ -282,6 +295,14 @@ def _cli_commands() -> list[dict[str, Any]]:
             "execute_target": "/api/v1/control-plane/sdk/runtime-implementation/final-decision/record",
             "execute_starts_agent": False,
         },
+        {
+            "command": "xagent sdk runtime-flag-enable-record --runtime-flag-enablement-id <runtime_flag_enablement_id> --final-decision-id <final_decision_id> --final-decision-audit-id <final_decision_audit_id> --execute",
+            "method": "runtime_flag_enablement_record",
+            "non_interactive": True,
+            "dry_run_default": True,
+            "execute_target": "/api/v1/control-plane/sdk/runtime-flag/enablement/record",
+            "execute_starts_agent": False,
+        },
     ]
 
 
@@ -343,6 +364,7 @@ def _build_checks(report_payload: dict[str, Any]) -> list[SDKNonInteractiveCheck
     readiness_lock = report_payload["runtime_implementation_readiness_lock_workflow"]
     implementation_owner_pack = report_payload["runtime_implementation_owner_pack"]
     final_decision = report_payload["runtime_implementation_final_decision_workflow"]
+    runtime_flag_enablement = report_payload["runtime_flag_enablement_record_workflow"]
     methods = [_sdk_contract_method(contract) for contract in contracts]
     command_methods = [command["method"] for command in commands]
     allowed_execute_targets = {
@@ -351,6 +373,7 @@ def _build_checks(report_payload: dict[str, Any]) -> list[SDKNonInteractiveCheck
         "/api/v1/control-plane/sdk/runtime-enablement/owner-pack/decision/record",
         "/api/v1/control-plane/sdk/runtime-implementation/readiness-lock/record",
         "/api/v1/control-plane/sdk/runtime-implementation/final-decision/record",
+        "/api/v1/control-plane/sdk/runtime-flag/enablement/record",
     }
     cli_execute_targets = [
         command["method"]
@@ -381,10 +404,11 @@ def _build_checks(report_payload: dict[str, Any]) -> list[SDKNonInteractiveCheck
                 "runtime_enablement_owner_pack_decision_record",
                 "runtime_implementation_readiness_lock_record",
                 "runtime_implementation_final_decision_record",
+                "runtime_flag_enablement_record",
             ]
             else "failed",
             details={"methods": methods},
-            error=None if len(methods) == 13 else "SDK methods are incomplete",
+            error=None if len(methods) == 14 else "SDK methods are incomplete",
         ),
         SDKNonInteractiveCheck(
             name="cli_non_interactive_commands_complete",
@@ -968,6 +992,40 @@ def _build_checks(report_payload: dict[str, Any]) -> list[SDKNonInteractiveCheck
             else "runtime implementation final decision workflow is not ready but disabled",
         ),
         SDKNonInteractiveCheck(
+            name="runtime_flag_enablement_record_workflow_ready",
+            status="passed"
+            if runtime_flag_enablement.get("stage") == "runtime_flag_enablement_record_workflow"
+            and runtime_flag_enablement.get("workflow_status") == "ready_but_disabled"
+            and runtime_flag_enablement.get("endpoint")
+            == "/api/v1/control-plane/sdk/runtime-flag/enablement/record"
+            and runtime_flag_enablement.get("audit_action")
+            == "sdk.write_runner.runtime_flag_enablement_requested"
+            and runtime_flag_enablement.get("requires_approved_sdk_approval") is True
+            and runtime_flag_enablement.get("requires_runtime_implementation_final_decision") is True
+            and runtime_flag_enablement.get("requires_final_decision_accepted") is True
+            and runtime_flag_enablement.get("requires_runtime_flag_name")
+            == "XAGENT_SDK_WRITE_RUNNER_ENABLED"
+            and runtime_flag_enablement.get("requires_signature_or_hash") is True
+            and runtime_flag_enablement.get("audit_event_recorded_by_sdk_invoke") is False
+            and runtime_flag_enablement.get("decision_effect", {}).get("enables_runtime_flag") is False
+            and runtime_flag_enablement.get("decision_effect", {}).get("starts_agent_execution") is False
+            and runtime_flag_enablement.get("decision_effect", {}).get("marks_approval_executed") is False
+            and runtime_flag_enablement.get("implementation_enabled") is False
+            and runtime_flag_enablement.get("runtime_flag_enabled") is False
+            and runtime_flag_enablement.get("execute_enabled") is False
+            and runtime_flag_enablement.get("write_runner_enabled") is False
+            and runtime_flag_enablement.get("adapter_execution_enabled") is False
+            and runtime_flag_enablement.get("agent_execution_enabled") is False
+            and runtime_flag_enablement.get("runner_invoked") is False
+            and runtime_flag_enablement.get("mark_executed") is False
+            and runtime_flag_enablement.get("mutation_performed") is False
+            else "failed",
+            details=runtime_flag_enablement,
+            error=None
+            if runtime_flag_enablement.get("workflow_status") == "ready_but_disabled"
+            else "runtime flag enablement record workflow is not ready but disabled",
+        ),
+        SDKNonInteractiveCheck(
             name="feishu_domestic_v1_primary",
             status="passed"
             if report_payload["channel_strategy"].get("domestic_v1_primary") == "feishu"
@@ -991,7 +1049,7 @@ def _build_checks(report_payload: dict[str, Any]) -> list[SDKNonInteractiveCheck
 
 def build_sdk_noninteractive_report() -> SDKNonInteractiveReport:
     report_payload: dict[str, Any] = {
-        "status": "sdk_runtime_implementation_final_decision_workflow_ready",
+        "status": "sdk_runtime_flag_enablement_record_workflow_ready",
         "generated_at": _utc_now(),
         "evidence_type": "sdk_noninteractive_cli_contract",
         "full_codex_parity_claimed": False,
@@ -1004,7 +1062,7 @@ def build_sdk_noninteractive_report() -> SDKNonInteractiveReport:
         "backend_stub": {
             "endpoint": "/api/v1/control-plane/sdk/invoke",
             "normalizes_to": "/api/v1/control-plane/invoke",
-            "status": "sdk_runtime_implementation_final_decision_workflow_ready",
+            "status": "sdk_runtime_flag_enablement_record_workflow_ready",
             "approval_subject_type": "command",
             "approval_intent_created_for_write_methods": True,
             "owner_gate_required": True,
@@ -1955,6 +2013,41 @@ def build_sdk_noninteractive_report() -> SDKNonInteractiveReport:
             "file_mutation_performed": False,
             "channel_mutation_performed": False,
         },
+        "runtime_flag_enablement_record_workflow": {
+            "stage": "runtime_flag_enablement_record_workflow",
+            "workflow_status": "ready_but_disabled",
+            "endpoint": "/api/v1/control-plane/sdk/runtime-flag/enablement/record",
+            "sdk_operation": "runtime_flag_enablement_record",
+            "cli_command": "xagent sdk runtime-flag-enable-record --execute",
+            "requires_approved_sdk_approval": True,
+            "requires_runtime_implementation_final_decision": True,
+            "requires_final_decision_accepted": True,
+            "requires_runtime_flag_name": "XAGENT_SDK_WRITE_RUNNER_ENABLED",
+            "requires_signature_or_hash": True,
+            "audit_action": "sdk.write_runner.runtime_flag_enablement_requested",
+            "resource_type": "sdk_write_runner_runtime_flag_enablement_request",
+            "audit_event_recorded_by_sdk_invoke": False,
+            "decision_effect": {
+                "enables_runtime_flag": False,
+                "starts_agent_execution": False,
+                "marks_approval_executed": False,
+                "persists_runner_default": False,
+            },
+            "next_gate": "owner_requested_live_runtime_flag_application_and_write_runner_implementation",
+            "implementation_enabled": False,
+            "runtime_flag_enabled": False,
+            "execute_enabled": False,
+            "write_runner_enabled": False,
+            "adapter_execution_enabled": False,
+            "agent_execution_enabled": False,
+            "write_execution_enabled": False,
+            "runner_invoked": False,
+            "mark_executed": False,
+            "mutation_performed": False,
+            "network_mutation_performed": False,
+            "file_mutation_performed": False,
+            "channel_mutation_performed": False,
+        },
         "channel_strategy": _channel_strategy(),
         "official_sources": list(CODEX_SDK_SOURCES),
         "known_limits": [
@@ -1982,6 +2075,7 @@ def build_sdk_noninteractive_report() -> SDKNonInteractiveReport:
             "Runtime enablement owner pack accept/reject decisions can be recorded, but they do not enable execution.",
             "Runtime implementation owner pack is ready for audit but remains disabled for execution.",
             "Runtime implementation final decisions can be recorded, but they do not enable execution.",
+            "Runtime flag enablement intent can be recorded, but it does not set the runtime flag.",
             "No SDK HTTP adapter, agent runner, file mutation, channel send, or network mutation is enabled.",
             "Feishu remains the only domestic V1 pilot channel in this contract.",
             "Slack is tracked as a Codex reference surface, but it is non-blocking for the domestic first version.",
@@ -2175,6 +2269,14 @@ def render_markdown_report(report: SDKNonInteractiveReport) -> str:
         f"- Next gate: `{report.runtime_implementation_final_decision_workflow['next_gate']}`\n"
         f"- Write runner enabled: `{report.runtime_implementation_final_decision_workflow['write_runner_enabled']}`\n"
         f"- Runner invoked: `{report.runtime_implementation_final_decision_workflow['runner_invoked']}`\n\n"
+        "## Runtime Flag Enablement Record Workflow\n\n"
+        f"- Stage: `{report.runtime_flag_enablement_record_workflow['stage']}`\n"
+        f"- Workflow status: `{report.runtime_flag_enablement_record_workflow['workflow_status']}`\n"
+        f"- Endpoint: `{report.runtime_flag_enablement_record_workflow['endpoint']}`\n"
+        f"- Audit action: `{report.runtime_flag_enablement_record_workflow['audit_action']}`\n"
+        f"- Runtime flag enabled: `{report.runtime_flag_enablement_record_workflow['runtime_flag_enabled']}`\n"
+        f"- Write runner enabled: `{report.runtime_flag_enablement_record_workflow['write_runner_enabled']}`\n"
+        f"- Runner invoked: `{report.runtime_flag_enablement_record_workflow['runner_invoked']}`\n\n"
         "## Channel Strategy\n\n"
         f"- Domestic V1 primary: `{report.channel_strategy['domestic_v1_primary']}`\n"
         f"- Telegram required: `{report.channel_strategy['telegram_required']}`\n"
@@ -2222,7 +2324,7 @@ def main() -> int:
         print(f"- {check.name}: {check.status}")
         if check.error:
             print(f"  error: {check.error}")
-    return 0 if report.status == "sdk_runtime_implementation_final_decision_workflow_ready" else 1
+    return 0 if report.status == "sdk_runtime_flag_enablement_record_workflow_ready" else 1
 
 
 if __name__ == "__main__":
