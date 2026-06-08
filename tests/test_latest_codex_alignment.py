@@ -68,11 +68,27 @@ def _governance_lifecycle_payload(
     }
 
 
+def _approval_sandbox_admin_payload(
+    *,
+    status: str = "approval_sandbox_admin_contract_ready",
+    parity: bool = False,
+    mutation: bool = False,
+) -> dict[str, object]:
+    return {
+        "status": status,
+        "evidence_type": "approval_sandbox_enterprise_admin_contract",
+        "full_codex_parity_claimed": parity,
+        "mutation_performed": mutation,
+        "network_mutation_performed": mutation,
+    }
+
+
 def _write_default_evidence(tmp_path: Path) -> dict[str, Path]:
     paths = {
         "customer_pack": tmp_path / "reports" / "commercial-pilot-customer-acceptance-pack.json",
         "github_report": tmp_path / "reports" / "github-review-action-report.json",
         "governance_report": tmp_path / "reports" / "governance-lifecycle-report.json",
+        "approval_sandbox_report": tmp_path / "reports" / "approval-sandbox-admin-report.json",
         "control_plane": tmp_path / "docs" / "specs" / "xagent-control-plane-protocol.md",
         "control_plane_api": tmp_path / "backend" / "app" / "api" / "control_plane.py",
         "control_plane_tests": tmp_path / "tests" / "test_control_plane_protocol.py",
@@ -87,6 +103,8 @@ def _write_default_evidence(tmp_path: Path) -> dict[str, Path]:
         "skill": tmp_path / "tests" / "test_skill_curator_api.py",
         "approvals": tmp_path / "tests" / "test_approvals.py",
         "sandbox": tmp_path / "tests" / "test_security_sandbox.py",
+        "approval_sandbox_script": tmp_path / "scripts" / "approval_sandbox_admin_report.py",
+        "approval_sandbox_tests": tmp_path / "tests" / "test_approval_sandbox_admin_report.py",
         "github_report_script": tmp_path / "scripts" / "github_review_action_report.py",
         "github_report_tests": tmp_path / "tests" / "test_github_review_action_report.py",
         "governance_report_script": tmp_path / "scripts" / "governance_lifecycle_report.py",
@@ -103,8 +121,9 @@ def _write_default_evidence(tmp_path: Path) -> dict[str, Path]:
     _write_json(paths["customer_pack"], _customer_pack_payload())
     _write_json(paths["github_report"], _github_review_action_payload())
     _write_json(paths["governance_report"], _governance_lifecycle_payload())
+    _write_json(paths["approval_sandbox_report"], _approval_sandbox_admin_payload())
     for key, path in paths.items():
-        if key not in {"customer_pack", "github_report", "governance_report"}:
+        if key not in {"customer_pack", "github_report", "governance_report", "approval_sandbox_report"}:
             _write_text(path)
     return paths
 
@@ -132,6 +151,13 @@ def _evidence_specs(paths: dict[str, Path]) -> tuple[AlignmentEvidenceSpec, ...]
             expected_statuses=frozenset({"governance_lifecycle_report_ready"}),
             expected_evidence_type="skills_plugins_mcp_hooks_governance",
         ),
+        AlignmentEvidenceSpec(
+            "approval_sandbox_admin_report",
+            paths["approval_sandbox_report"],
+            "runtime_report",
+            expected_statuses=frozenset({"approval_sandbox_admin_contract_ready"}),
+            expected_evidence_type="approval_sandbox_enterprise_admin_contract",
+        ),
         AlignmentEvidenceSpec("control_plane_protocol", paths["control_plane"], "source_doc"),
         AlignmentEvidenceSpec("control_plane_api", paths["control_plane_api"], "source_api"),
         AlignmentEvidenceSpec("control_plane_protocol_tests", paths["control_plane_tests"], "source_test"),
@@ -150,6 +176,16 @@ def _evidence_specs(paths: dict[str, Path]) -> tuple[AlignmentEvidenceSpec, ...]
         AlignmentEvidenceSpec("skill_curator_api_tests", paths["skill"], "source_test"),
         AlignmentEvidenceSpec("approval_tests", paths["approvals"], "source_test"),
         AlignmentEvidenceSpec("sandbox_security_tests", paths["sandbox"], "source_test"),
+        AlignmentEvidenceSpec(
+            "approval_sandbox_admin_script",
+            paths["approval_sandbox_script"],
+            "source_script",
+        ),
+        AlignmentEvidenceSpec(
+            "approval_sandbox_admin_tests",
+            paths["approval_sandbox_tests"],
+            "source_test",
+        ),
         AlignmentEvidenceSpec("github_review_action_script", paths["github_report_script"], "source_script"),
         AlignmentEvidenceSpec(
             "github_review_action_report_tests",
@@ -192,7 +228,7 @@ def test_latest_codex_alignment_ready_with_current_evidence(tmp_path: Path) -> N
     assert not any("cloud_task_environment" in item for item in report.next_p0_tasks)
     assert not any("github_review_and_action_workflows" in item for item in report.next_p0_tasks)
     assert not any("skills_plugins_and_mcp" in item for item in report.next_p0_tasks)
-    assert any("approval_sandbox_and_enterprise_admin" in item for item in report.next_p0_tasks)
+    assert not any("approval_sandbox_and_enterprise_admin" in item for item in report.next_p0_tasks)
     control_plane = next(item for item in report.capabilities if item.capability == "app_server_control_plane")
     assert control_plane.xagent_status == "contract_first_ready"
     assert {
@@ -235,6 +271,15 @@ def test_latest_codex_alignment_ready_with_current_evidence(tmp_path: Path) -> N
         "mcp_manager_tests",
         "hooks_manager_tests",
     }.issubset(set(governance.evidence))
+    approval = next(item for item in report.capabilities if item.capability == "approval_sandbox_and_enterprise_admin")
+    assert approval.xagent_status == "approval_sandbox_admin_contract_ready"
+    assert {
+        "approval_sandbox_admin_report",
+        "approval_sandbox_admin_script",
+        "approval_sandbox_admin_tests",
+        "approval_tests",
+        "sandbox_security_tests",
+    }.issubset(set(approval.evidence))
     assert {check.status for check in report.checks} == {"passed"}
     assert all(item.official_sources for item in report.capabilities)
 

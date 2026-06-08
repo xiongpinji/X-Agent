@@ -36,6 +36,7 @@ CODEX_OFFICIAL_SOURCES = (
 READY_XAGENT_STATUSES = frozenset(
     {
         "aligned_for_pilot_v1",
+        "approval_sandbox_admin_contract_ready",
         "contract_first_ready",
         "cloud_task_contract_ready",
         "durable_thread_contract_ready",
@@ -49,6 +50,7 @@ READY_XAGENT_STATUSES = frozenset(
 NEXT_TASK_DONE_STATUSES = frozenset(
     {
         "aligned_for_pilot_v1",
+        "approval_sandbox_admin_contract_ready",
         "cloud_task_contract_ready",
         "contract_first_ready",
         "durable_thread_contract_ready",
@@ -181,6 +183,13 @@ def build_evidence_specs(root: Path = ROOT, report_dir: Path = REPORT_DIR) -> tu
             expected_evidence_type="skills_plugins_mcp_hooks_governance",
         ),
         AlignmentEvidenceSpec(
+            "approval_sandbox_admin_report",
+            report_dir / "approval-sandbox-admin-report.json",
+            "runtime_report",
+            expected_statuses=frozenset({"approval_sandbox_admin_contract_ready"}),
+            expected_evidence_type="approval_sandbox_enterprise_admin_contract",
+        ),
+        AlignmentEvidenceSpec(
             "control_plane_protocol",
             root / "docs" / "specs" / "xagent-control-plane-protocol.md",
             "source_doc",
@@ -222,6 +231,16 @@ def build_evidence_specs(root: Path = ROOT, report_dir: Path = REPORT_DIR) -> tu
         AlignmentEvidenceSpec("skill_curator_api_tests", root / "tests" / "test_skill_curator_api.py", "source_test"),
         AlignmentEvidenceSpec("approval_tests", root / "tests" / "test_approvals.py", "source_test"),
         AlignmentEvidenceSpec("sandbox_security_tests", root / "tests" / "test_security_sandbox.py", "source_test"),
+        AlignmentEvidenceSpec(
+            "approval_sandbox_admin_script",
+            root / "scripts" / "approval_sandbox_admin_report.py",
+            "source_script",
+        ),
+        AlignmentEvidenceSpec(
+            "approval_sandbox_admin_tests",
+            root / "tests" / "test_approval_sandbox_admin_report.py",
+            "source_test",
+        ),
         AlignmentEvidenceSpec(
             "github_review_action_script",
             root / "scripts" / "github_review_action_report.py",
@@ -424,15 +443,21 @@ def _capabilities() -> list[CodexAlignmentCapability]:
             capability="approval_sandbox_and_enterprise_admin",
             codex_surface="Codex approvals, sandboxing, RBAC, audit, and admin controls",
             priority="P0",
-            xagent_status="partial",
-            evidence=["approval_tests", "sandbox_security_tests"],
-            next_task="Normalize approval subjects and sandbox policies across API, CLI, channels, browser, MCP, and issue-to-PR flows.",
-            acceptance_command="python -m pytest tests/test_approvals.py tests/test_security_sandbox.py -o addopts=\"\" -p no:cov -p no:cacheprovider -q",
+            xagent_status="approval_sandbox_admin_contract_ready",
+            evidence=[
+                "approval_sandbox_admin_report",
+                "approval_sandbox_admin_script",
+                "approval_sandbox_admin_tests",
+                "approval_tests",
+                "sandbox_security_tests",
+            ],
+            next_task="Implement adapter-level enforcement for the normalized approval subjects across CLI, channel, MCP, browser, and GitHub execute flows after contract evidence review.",
+            acceptance_command="python scripts\\approval_sandbox_admin_report.py && python -m pytest tests/test_approval_sandbox_admin_report.py tests/test_approvals.py tests/test_security_sandbox.py -o addopts=\"\" -p no:cov -p no:cacheprovider -q",
             official_sources=[
                 "https://developers.openai.com/codex/agent-approvals-security",
                 "https://developers.openai.com/codex/enterprise/admin-setup",
             ],
-            rationale="Approval and sandbox tests exist, but full enterprise policy and admin parity is not claimed.",
+            rationale="X-Agent now normalizes command, file-change, network, MCP elicitation, browser action, channel send, and issue-to-PR execute approvals into one subject and decision contract; adapter execution remains owner-gated.",
         ),
         CodexAlignmentCapability(
             capability="cli_and_programmatic_sdk",

@@ -3,6 +3,13 @@ from types import SimpleNamespace
 from fastapi.testclient import TestClient
 
 from backend.app.core.approvals import ApprovalDecisionRequest, ApprovalStore
+from backend.app.core.approvals import (
+    ApprovalDecisionType,
+    ApprovalStatus,
+    ApprovalSubjectRequest,
+    ApprovalSubjectType,
+    infer_approval_subject_type,
+)
 from backend.app.core.contracts import RiskLevel, RunContext
 from backend.app.core.policy import ToolPolicyEngine
 from backend.app.core.tools import ToolRegistry
@@ -31,6 +38,81 @@ def test_approval_store_persists_and_decides(tmp_path) -> None:
     assert approved.status == "approved"
     assert reloaded.get(record.id).status == "approved"
     assert reloaded.get(record.id).arguments == {"target": "/tmp"}
+
+
+def test_approval_store_normalizes_safety_subjects_and_decisions(tmp_path) -> None:
+    store = ApprovalStore(storage_path=tmp_path / "approvals.json")
+    record = store.create_subject_approval(
+        context=RunContext(user_id="u1", tenant_id="t1", trace_id="trace-subject"),
+        subject=ApprovalSubjectRequest(
+            subject_type=ApprovalSubjectType.NETWORK_REQUEST,
+            resource_id="https://example.com/api",
+            risk_level=RiskLevel.HIGH,
+            reason="external network requires owner gate",
+            arguments_preview={"method": "POST", "host": "example.com"},
+            sandbox_profile="network_default_deny",
+            policy_snapshot={"policy": "default-deny"},
+        ),
+    )
+    approved = store.approve(
+        record.id,
+        ApprovalDecisionRequest(
+            decided_by="admin",
+            reason="allow for this run",
+            decision_type=ApprovalDecisionType.APPROVE_FOR_RUN,
+        ),
+    )
+    reloaded = ApprovalStore(storage_path=tmp_path / "approvals.json").get(record.id)
+
+    assert record.subject_type == ApprovalSubjectType.NETWORK_REQUEST
+    assert record.resource_type == "network_request"
+    assert record.action == "network.request"
+    assert record.owner_gate_required is True
+    assert record.audit_required is True
+    assert record.sandbox_profile == "network_default_deny"
+    assert approved.status == ApprovalStatus.APPROVED
+    assert approved.decision_type == ApprovalDecisionType.APPROVE_FOR_RUN
+    assert approved.decision_scope == "run"
+    assert reloaded.subject_type == ApprovalSubjectType.NETWORK_REQUEST
+    assert reloaded.policy_snapshot == {"policy": "default-deny"}
+
+
+def test_approval_store_supports_deny_and_abort_decisions() -> None:
+    store = ApprovalStore()
+    denied = store.create_subject_approval(
+        context=RunContext(),
+        subject=ApprovalSubjectRequest(
+            subject_type=ApprovalSubjectType.CHANNEL_SEND,
+            resource_id="feishu:chat:oc_123",
+            risk_level=RiskLevel.MEDIUM,
+            reason="channel send requires owner gate",
+        ),
+    )
+    aborted = store.create_subject_approval(
+        context=RunContext(),
+        subject=ApprovalSubjectRequest(
+            subject_type=ApprovalSubjectType.ISSUE_TO_PR_EXECUTE,
+            resource_id="github:xiongpinji/X-Agent#1",
+            risk_level=RiskLevel.HIGH,
+            reason="GitHub mutation requires owner gate",
+        ),
+    )
+
+    rejected = store.reject(denied.id, ApprovalDecisionRequest(decided_by="admin", reason="no send"))
+    stopped = store.abort(aborted.id, ApprovalDecisionRequest(decided_by="admin", reason="stop task"))
+
+    assert rejected.status == ApprovalStatus.REJECTED
+    assert rejected.decision_type == ApprovalDecisionType.DENY
+    assert rejected.decision_scope == "deny"
+    assert stopped.status == ApprovalStatus.ABORTED
+    assert stopped.decision_type == ApprovalDecisionType.ABORT
+    assert stopped.decision_scope == "abort"
+
+
+def test_infer_approval_subject_type_keeps_legacy_tool_and_workflow_compatible() -> None:
+    assert infer_approval_subject_type("tool", "tool.execute") == ApprovalSubjectType.TOOL
+    assert infer_approval_subject_type("workflow", "workflow.node.approve") == ApprovalSubjectType.WORKFLOW
+    assert infer_approval_subject_type("file_change", "file_change.apply") == ApprovalSubjectType.FILE_CHANGE
 
 
 async def test_high_risk_tool_creates_approval_request() -> None:

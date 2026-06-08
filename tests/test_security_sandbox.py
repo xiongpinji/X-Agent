@@ -8,6 +8,8 @@ import pytest
 from pathlib import Path
 
 from backend.app.core.tools import _resolve_tool_path, _resolve_tool_root, _is_path_forbidden
+from backend.app.core.approvals import ApprovalSubjectType
+from backend.app.core.sandbox.security import get_enterprise_safety_policy, list_enterprise_safety_policies
 
 # These assertions hardcode POSIX system paths (/etc, /sys, ...). On Windows,
 # Path("/etc") resolves to a drive-relative path (e.g. C:\etc) and never matches
@@ -227,3 +229,36 @@ class TestPathSandboxIsolation:
         except (ValueError, PermissionError):
             # Expected - either ValueError from Path or PermissionError from our check
             pass
+
+
+class TestEnterpriseSafetyPolicyContract:
+    def test_mutating_subjects_are_owner_admin_audit_gated(self):
+        policies = list_enterprise_safety_policies()
+        subjects = {policy.subject_type for policy in policies}
+
+        assert {
+            ApprovalSubjectType.COMMAND,
+            ApprovalSubjectType.FILE_CHANGE,
+            ApprovalSubjectType.NETWORK_REQUEST,
+            ApprovalSubjectType.MCP_ELICITATION,
+            ApprovalSubjectType.BROWSER_ACTION,
+            ApprovalSubjectType.CHANNEL_SEND,
+            ApprovalSubjectType.ISSUE_TO_PR_EXECUTE,
+        }.issubset(subjects)
+
+        for policy in policies:
+            assert policy.owner_gate_required is True
+            assert policy.admin_policy_required is True
+            assert policy.audit_required is True
+            assert policy.blocked_without_approval is True
+            assert policy.default_sandbox_profile
+            assert "approve_once" in policy.allowed_decision_types
+            assert "deny" in policy.allowed_decision_types
+            assert "abort" in policy.allowed_decision_types
+
+    def test_specific_network_policy_is_default_deny(self):
+        policy = get_enterprise_safety_policy(ApprovalSubjectType.NETWORK_REQUEST)
+
+        assert policy is not None
+        assert policy.default_sandbox_profile == "network_default_deny"
+        assert policy.to_dict()["subject_type"] == "network_request"

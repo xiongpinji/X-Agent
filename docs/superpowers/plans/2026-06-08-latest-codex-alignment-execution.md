@@ -197,15 +197,25 @@ Expected: selected governance tests pass.
 
 **Files:**
 - Modify: `backend/app/core/approvals.py`
-- Modify: `backend/app/core/sandbox/`
+- Modify: `backend/app/core/sandbox/security.py`
+- Create: `scripts/approval_sandbox_admin_report.py`
+- Create: `tests/test_approval_sandbox_admin_report.py`
+- Modify: `scripts/latest_codex_alignment.py`
+- Modify: `tests/test_latest_codex_alignment.py`
+- Runtime evidence: `.xagent_runtime/reports/approval-sandbox-admin-report.json`
+- Runtime evidence: `.xagent_runtime/reports/approval-sandbox-admin-report.md`
 - Test: `tests/test_approvals.py`
 - Test: `tests/test_security_sandbox.py`
 
-- [ ] Normalize approval subjects: command, file change, network request, MCP elicitation, browser action, channel send, issue-to-PR execute.
-- [ ] Add decision types: approve once, approve for run, approve for session, deny, abort.
+- [x] Normalize approval subjects: command, file change, network request, MCP elicitation, browser action, channel send, issue-to-PR execute.
+- [x] Add decision types: approve once, approve for run, approve for session, deny, abort.
+- [x] Attach sandbox profile, owner gate, admin policy, and audit-required metadata to each mutating subject.
+- [x] Keep adapter-level execution enforcement as a future owner-gated implementation step.
+- [ ] Implement adapter-level enforcement for CLI, channel, MCP, browser, and GitHub execute flows after contract evidence review.
 - [ ] Validate with:
 
 ```powershell
+python scripts\approval_sandbox_admin_report.py
 python -m pytest tests/test_approvals.py tests/test_security_sandbox.py -o addopts="" -p no:cov -p no:cacheprovider -q
 ```
 
