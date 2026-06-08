@@ -94,6 +94,7 @@ from backend.app.core.mcp.manager import (
     initialize_mcp_manager,
     shutdown_mcp_manager,
 )
+from backend.app.core.feishu_bridge import feishu_bridge
 from backend.app.core.hooks import (
     DEFAULT_CONFIG_RELPATH,
     HooksConfig,
@@ -104,10 +105,19 @@ from backend.app.core.tool_registry import ToolCatalog
 from backend.app.settings import get_settings
 
 
+API_KEY_EXEMPT_PATHS = {
+    "/",
+    "/health",
+    "/ready",
+    "/api/v1/channels/telegram/webhook",
+    "/api/v1/integrations/feishu/events",
+}
+
+
 def require_api_key_header(request: Request) -> None:
     if not settings.require_api_key:
         return
-    if request.url.path in {"/", "/health", "/ready", "/api/v1/channels/telegram/webhook"}:
+    if request.url.path in API_KEY_EXEMPT_PATHS:
         return
     if request.headers.get("x-api-key"):
         return
@@ -380,7 +390,7 @@ async def rate_limit_middleware(request: Request, call_next):
 async def request_logging_middleware(request: Request, call_next):
     request_id = request.headers.get("x-request-id") or str(uuid4())
     started = time.perf_counter()
-    if settings.require_api_key and request.url.path not in {"/", "/health", "/ready", "/api/v1/channels/telegram/webhook"}:
+    if settings.require_api_key and request.url.path not in API_KEY_EXEMPT_PATHS:
         if not request.headers.get("x-api-key"):
             response = JSONResponse({"detail": "Missing API key"}, status_code=401)
             response.headers["x-request-id"] = request_id
@@ -568,6 +578,18 @@ async def startup_event():
             "Desktop-local deployments may leave this off intentionally."
         )
 
+    if _settings.feishu_app_id and _settings.feishu_app_secret:
+        feishu_bridge.configure(
+            app_id=_settings.feishu_app_id,
+            app_secret=_settings.feishu_app_secret,
+            base_url=_settings.feishu_base_url,
+            encrypt_key=_settings.feishu_encrypt_key,
+        )
+        logger.info("Feishu bridge configured from environment")
+    elif feishu_bridge.configure_from_env():
+        logger.info("Feishu bridge configured from legacy environment aliases")
+    else:
+        logger.info("Feishu bridge not configured from environment")
 
     try:
         # 初始化MCP管理器

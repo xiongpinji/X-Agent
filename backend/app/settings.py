@@ -60,6 +60,10 @@ class Settings(BaseSettings):
     langfuse_public_key: str | None = None
     langfuse_secret_key: str | None = None
     langfuse_host: str | None = None
+    feishu_app_id: str | None = None
+    feishu_app_secret: str | None = None
+    feishu_encrypt_key: str | None = None
+    feishu_base_url: str = "https://open.feishu.cn"
 
     max_iterations: int = 4
     default_token_budget: int = 16_000

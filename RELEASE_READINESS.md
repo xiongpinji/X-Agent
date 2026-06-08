@@ -135,3 +135,5 @@ The following items should not be changed automatically without explicit owner a
 ## Recommended next milestone
 
 The next milestone is `v1.0.0-beta`: a deployable pilot release with documented setup, deterministic targeted verification, mock and DeepSeek modes, Docker Compose alignment, and an explicit known-limits section. GA should follow only after the full workstation/CI baseline and security decision list are closed.
+
+Post-RC commercial productization is tracked in `docs/superpowers/plans/2026-06-08-codex-aligned-commercial-delivery.md`. That plan keeps the current RC evidence frozen while adding Codex-aligned commercial-pilot workstreams for the X-Agent control plane, thread workbench, plugin/skill lifecycle, approval/sandbox governance, channel/browser entrypoints, and pilot packaging. It must not be used to claim full Codex parity until the plan's evidence gates pass.

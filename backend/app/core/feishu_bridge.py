@@ -6,12 +6,14 @@ import hashlib
 import hmac
 import json
 import logging
+import os
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any, Literal
 from uuid import uuid4
 
 import httpx
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
 logger = logging.getLogger("xagent.feishu")
 
@@ -110,6 +112,21 @@ class FeishuBridge:
         self.encrypt_key = encrypt_key
         self.base_url = base_url.rstrip("/")
 
+    def configure_from_env(self) -> bool:
+        app_id = os.getenv("XAGENT_FEISHU_APP_ID") or os.getenv("FEISHU_APP_ID")
+        app_secret = os.getenv("XAGENT_FEISHU_APP_SECRET") or os.getenv("FEISHU_APP_SECRET")
+        encrypt_key = os.getenv("XAGENT_FEISHU_ENCRYPT_KEY") or os.getenv("FEISHU_ENCRYPT_KEY")
+        base_url = os.getenv("XAGENT_FEISHU_BASE_URL") or os.getenv("FEISHU_BASE_URL") or self.base_url
+        if not (app_id and app_secret):
+            return False
+        self.configure(
+            app_id=app_id,
+            app_secret=app_secret,
+            base_url=base_url,
+            encrypt_key=encrypt_key,
+        )
+        return True
+
     async def get_tenant_access_token(self) -> str:
         if self._tenant_access_token and self._tenant_token_expire_at and datetime.now(UTC) < self._tenant_token_expire_at:
             return self._tenant_access_token
@@ -195,8 +212,30 @@ class FeishuBridge:
             signature=signature,
         ) or self._verify_legacy_signature(timestamp=timestamp, nonce=nonce, body=body, signature=signature)
 
+    def decrypt_callback_payload(self, encrypted: str) -> dict[str, Any]:
+        if not self.encrypt_key:
+            raise RuntimeError("Feishu event encrypt key is not configured")
+        key = hashlib.sha256(self.encrypt_key.encode("utf-8")).digest()
+        raw = base64.b64decode(encrypted)
+        if len(raw) < 32:
+            raise ValueError("Encrypted Feishu callback payload is too short")
+        iv = raw[:16]
+        ciphertext = raw[16:]
+        if len(ciphertext) % 16 != 0:
+            raise ValueError("Encrypted Feishu callback payload is not block aligned")
+        decryptor = Cipher(algorithms.AES(key), modes.CBC(iv)).decryptor()
+        padded = decryptor.update(ciphertext) + decryptor.finalize()
+        padding_size = padded[-1]
+        if padding_size < 1 or padding_size > 16:
+            raise ValueError("Invalid Feishu callback padding")
+        plaintext = padded[:-padding_size]
+        payload = json.loads(plaintext.decode("utf-8"))
+        if not isinstance(payload, dict):
+            raise ValueError("Decrypted Feishu callback payload must be an object")
+        return payload
+
     async def handle_event(self, payload: dict[str, Any]) -> dict[str, Any]:
-        event_id = payload.get("event_id") or payload.get("uuid") or str(uuid4())
+        event_id = payload.get("event_id") or payload.get("header", {}).get("event_id") or payload.get("uuid") or str(uuid4())
         if not await self.store.mark_event_seen(event_id):
             return {"accepted": False, "reason": "duplicate_event", "event_id": event_id}
         event_type = payload.get("header", {}).get("event_type") or payload.get("type") or "unknown"
