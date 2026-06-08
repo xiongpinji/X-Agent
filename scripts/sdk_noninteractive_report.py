@@ -50,6 +50,7 @@ class SDKNonInteractiveReport:
     execution_adapter_contract: dict[str, Any]
     read_only_runner_contract: dict[str, Any]
     write_runner_safety_contract: dict[str, Any]
+    dry_run_executor_stub: dict[str, Any]
     channel_strategy: dict[str, Any]
     checks: list[SDKNonInteractiveCheck]
     official_sources: list[str]
@@ -137,6 +138,7 @@ def _build_checks(report_payload: dict[str, Any]) -> list[SDKNonInteractiveCheck
     execution_adapter = report_payload["execution_adapter_contract"]
     read_only_runner = report_payload["read_only_runner_contract"]
     write_runner = report_payload["write_runner_safety_contract"]
+    dry_run_stub = report_payload["dry_run_executor_stub"]
     methods = [contract["request"]["method"] for contract in contracts]
     command_methods = [command["method"] for command in commands]
     cli_execute_targets = [
@@ -277,6 +279,22 @@ def _build_checks(report_payload: dict[str, Any]) -> list[SDKNonInteractiveCheck
             else "write SDK runner was invoked unexpectedly",
         ),
         SDKNonInteractiveCheck(
+            name="dry_run_executor_stub_ready",
+            status="passed"
+            if dry_run_stub.get("stub_stage") == "owner_approved_write_dry_run_executor"
+            and dry_run_stub.get("audit_action") == "sdk.write_runner.dry_run_planned"
+            and dry_run_stub.get("audit_event_recorded") is True
+            and dry_run_stub.get("runner_invoked") is False
+            and dry_run_stub.get("agent_execution_enabled") is False
+            and dry_run_stub.get("mark_executed") is False
+            and dry_run_stub.get("mutation_performed") is False
+            else "failed",
+            details=dry_run_stub,
+            error=None
+            if dry_run_stub.get("audit_event_recorded") is True
+            else "dry-run executor audit event contract is missing",
+        ),
+        SDKNonInteractiveCheck(
             name="feishu_domestic_v1_primary",
             status="passed"
             if report_payload["channel_strategy"].get("domestic_v1_primary") == "feishu"
@@ -300,7 +318,7 @@ def _build_checks(report_payload: dict[str, Any]) -> list[SDKNonInteractiveCheck
 
 def build_sdk_noninteractive_report() -> SDKNonInteractiveReport:
     report_payload: dict[str, Any] = {
-        "status": "sdk_write_runner_safety_contract_ready",
+        "status": "sdk_dry_run_executor_stub_ready",
         "generated_at": _utc_now(),
         "evidence_type": "sdk_noninteractive_cli_contract",
         "full_codex_parity_claimed": False,
@@ -313,7 +331,7 @@ def build_sdk_noninteractive_report() -> SDKNonInteractiveReport:
         "backend_stub": {
             "endpoint": "/api/v1/control-plane/sdk/invoke",
             "normalizes_to": "/api/v1/control-plane/invoke",
-            "status": "sdk_write_runner_safety_contract_ready",
+            "status": "sdk_dry_run_executor_stub_ready",
             "approval_subject_type": "command",
             "approval_intent_created_for_write_methods": True,
             "owner_gate_required": True,
@@ -434,6 +452,22 @@ def build_sdk_noninteractive_report() -> SDKNonInteractiveReport:
             "file_mutation_performed": False,
             "channel_mutation_performed": False,
         },
+        "dry_run_executor_stub": {
+            "stub_stage": "owner_approved_write_dry_run_executor",
+            "audit_event_recorded": True,
+            "audit_action": "sdk.write_runner.dry_run_planned",
+            "receipt_status": "dry_run_planned",
+            "receipt_includes_audit_id": True,
+            "runner_invoked": False,
+            "agent_execution_enabled": False,
+            "write_execution_enabled": False,
+            "adapter_execution_enabled": False,
+            "mark_executed": False,
+            "mutation_performed": False,
+            "network_mutation_performed": False,
+            "file_mutation_performed": False,
+            "channel_mutation_performed": False,
+        },
         "channel_strategy": _channel_strategy(),
         "official_sources": list(CODEX_SDK_SOURCES),
         "known_limits": [
@@ -444,6 +478,7 @@ def build_sdk_noninteractive_report() -> SDKNonInteractiveReport:
             "Supplying --approved-approval-id enables owner-approved execution preflight/readback only.",
             "Read-only SDK methods can be submitted with --execute and return backend read contracts.",
             "Owner-approved write SDK methods return a safety runner plan and receipt template only.",
+            "Owner-approved write SDK dry-run executor stubs record audit events and receipts only.",
             "No SDK HTTP adapter, agent runner, file mutation, channel send, or network mutation is enabled.",
             "Feishu remains the only domestic V1 pilot channel in this contract.",
             "Slack is tracked as a Codex reference surface, but it is non-blocking for the domestic first version.",
@@ -511,6 +546,12 @@ def render_markdown_report(report: SDKNonInteractiveReport) -> str:
         f"- Runner invoked: `{report.write_runner_safety_contract['runner_invoked']}`\n"
         f"- Agent execution enabled: `{report.write_runner_safety_contract['agent_execution_enabled']}`\n"
         f"- Mark executed: `{report.write_runner_safety_contract['mark_executed']}`\n\n"
+        "## Dry-Run Executor Stub\n\n"
+        f"- Stage: `{report.dry_run_executor_stub['stub_stage']}`\n"
+        f"- Audit action: `{report.dry_run_executor_stub['audit_action']}`\n"
+        f"- Audit event recorded: `{report.dry_run_executor_stub['audit_event_recorded']}`\n"
+        f"- Runner invoked: `{report.dry_run_executor_stub['runner_invoked']}`\n"
+        f"- Mutation performed: `{report.dry_run_executor_stub['mutation_performed']}`\n\n"
         "## Channel Strategy\n\n"
         f"- Domestic V1 primary: `{report.channel_strategy['domestic_v1_primary']}`\n"
         f"- Telegram required: `{report.channel_strategy['telegram_required']}`\n"
@@ -558,7 +599,7 @@ def main() -> int:
         print(f"- {check.name}: {check.status}")
         if check.error:
             print(f"  error: {check.error}")
-    return 0 if report.status == "sdk_write_runner_safety_contract_ready" else 1
+    return 0 if report.status == "sdk_dry_run_executor_stub_ready" else 1
 
 
 if __name__ == "__main__":

@@ -107,9 +107,9 @@ def test_cli_sdk_turn_run_execute_flag_calls_backend_stub_without_agent_executio
     set_current_config(CLIConfig(api_base_url="http://localhost:8000", output_format="json"))
     mock_client = AsyncMock()
     mock_client.invoke_sdk_contract.return_value = {
-        "status": "sdk_write_runner_safety_contract_ready",
+        "status": "sdk_dry_run_executor_stub_ready",
         "sdk": {
-            "status": "sdk_write_runner_safety_contract_ready",
+            "status": "sdk_dry_run_executor_stub_ready",
             "method": "turn/start",
             "dry_run": False,
             "adapter_execution_enabled": False,
@@ -163,6 +163,17 @@ def test_cli_sdk_turn_run_execute_flag_calls_backend_stub_without_agent_executio
                 "mark_executed": False,
                 "mutation_performed": False,
             },
+            "dry_run_executor_stub": {
+                "available": True,
+                "audit_event_recorded": True,
+                "audit_action": "sdk.write_runner.dry_run_planned",
+                "receipt": {"status": "dry_run_planned", "runner_invoked": False},
+                "runner_invoked": False,
+                "agent_execution_enabled": False,
+                "write_execution_enabled": False,
+                "mark_executed": False,
+                "mutation_performed": False,
+            },
         },
         "control_plane": {
             "ok": False,
@@ -188,8 +199,8 @@ def test_cli_sdk_turn_run_execute_flag_calls_backend_stub_without_agent_executio
 
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
-    assert payload["status"] == "sdk_write_runner_safety_contract_ready"
-    assert payload["sdk"]["status"] == "sdk_write_runner_safety_contract_ready"
+    assert payload["status"] == "sdk_dry_run_executor_stub_ready"
+    assert payload["sdk"]["status"] == "sdk_dry_run_executor_stub_ready"
     assert payload["sdk"]["method"] == "turn/start"
     assert payload["sdk"]["dry_run"] is False
     assert payload["sdk"]["adapter_execution_enabled"] is False
@@ -209,6 +220,9 @@ def test_cli_sdk_turn_run_execute_flag_calls_backend_stub_without_agent_executio
     assert payload["sdk"]["write_runner_safety_contract"]["ready_for_runner_contract"] is True
     assert payload["sdk"]["write_runner_safety_contract"]["runner_invoked"] is False
     assert payload["sdk"]["write_runner_safety_contract"]["mark_executed"] is False
+    assert payload["sdk"]["dry_run_executor_stub"]["audit_event_recorded"] is True
+    assert payload["sdk"]["dry_run_executor_stub"]["runner_invoked"] is False
+    assert payload["sdk"]["dry_run_executor_stub"]["mutation_performed"] is False
     assert payload["control_plane"]["error"]["code"] == "adapter_pending"
 
     mock_client.invoke_sdk_contract.assert_awaited_once()
@@ -225,9 +239,9 @@ def test_cli_sdk_thread_read_execute_flag_calls_read_only_runner_contract() -> N
     set_current_config(CLIConfig(api_base_url="http://localhost:8000", output_format="json"))
     mock_client = AsyncMock()
     mock_client.invoke_sdk_contract.return_value = {
-        "status": "sdk_write_runner_safety_contract_ready",
+        "status": "sdk_dry_run_executor_stub_ready",
         "sdk": {
-            "status": "sdk_write_runner_safety_contract_ready",
+            "status": "sdk_dry_run_executor_stub_ready",
             "method": "thread/read",
             "read_only_runner_contract": {
                 "available": True,
@@ -248,7 +262,7 @@ def test_cli_sdk_thread_read_execute_flag_calls_read_only_runner_contract() -> N
 
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
-    assert payload["status"] == "sdk_write_runner_safety_contract_ready"
+    assert payload["status"] == "sdk_dry_run_executor_stub_ready"
     assert payload["sdk"]["method"] == "thread/read"
     assert payload["sdk"]["read_only_runner_contract"]["available"] is True
     assert payload["sdk"]["read_only_runner_contract"]["agent_execution_enabled"] is False

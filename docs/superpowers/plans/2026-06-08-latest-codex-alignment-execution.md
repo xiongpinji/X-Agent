@@ -405,6 +405,28 @@ Expected: selected approval and sandbox tests pass.
 - [x] Keep `runner_invoked=false`, agent/write execution disabled, `mark_executed=false`, and all mutation flags false.
 - [ ] Implement concrete owner-approved write SDK runner after runtime safety review.
 
+### Task 17: Owner-Approved Write Dry-Run Executor Stub
+
+**Target:** Add an audited dry-run executor stub for approved write SDK requests without invoking the real agent runner.
+
+**Files:**
+- Modify: `backend/app/api/control_plane.py`
+- Modify: `scripts/sdk_noninteractive_report.py`
+- Modify: `scripts/latest_codex_alignment.py`
+- Modify: `tests/test_control_plane_protocol.py`
+- Modify: `tests/test_xagent_sdk_contract.py`
+- Modify: `tests/test_cli_client.py`
+- Modify: `tests/test_sdk_noninteractive_report.py`
+- Modify: `tests/test_latest_codex_alignment.py`
+- Runtime evidence: `.xagent_runtime/reports/sdk-noninteractive-report.json`
+- Runtime evidence: `.xagent_runtime/reports/latest-codex-alignment.json`
+
+- [x] Add `dry_run_executor_stub` to `/sdk/invoke` metadata.
+- [x] Record `sdk.write_runner.dry_run_planned` audit event when approved write preflight is ready.
+- [x] Include receipt with audit id, method, operation, approval id, and mutation flags.
+- [x] Keep `runner_invoked=false`, agent/write execution disabled, `mark_executed=false`, and all mutation flags false.
+- [ ] Implement concrete owner-approved write SDK runner after runtime safety review.
+
 ## Completion Criteria
 
 - `scripts/latest_codex_alignment.py` returns `latest_codex_alignment_plan_ready`.

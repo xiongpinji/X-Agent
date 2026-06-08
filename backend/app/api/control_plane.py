@@ -840,6 +840,13 @@ async def invoke_sdk_control_plane(
         approval_store=approval_store,
         principal=principal,
     )
+    sdk_metadata["dry_run_executor_stub"] = _sdk_dry_run_executor_stub(
+        audit_store,
+        principal,
+        request=control_request,
+        trace_id=control_response.evidence.trace_id,
+        write_runner_safety_contract=sdk_metadata["write_runner_safety_contract"],
+    )
     return SDKControlPlaneInvokeResponse(
         id=control_request.id,
         ok=control_response.ok,
@@ -918,7 +925,7 @@ def _sdk_backend_stub_metadata(
     read_only_runner_contract = _sdk_read_only_runner_contract(original, request, response)
     write_runner_safety_contract = _sdk_write_runner_safety_contract(original, request, execution_adapter_contract)
     return {
-        "status": "sdk_write_runner_safety_contract_ready",
+        "status": "sdk_dry_run_executor_stub_ready",
         "operation": request.context.sdk_operation or original.operation,
         "method": request.method,
         "sdk_surface": request.context.sdk_surface or "python",
@@ -943,6 +950,7 @@ def _sdk_backend_stub_metadata(
             "Write-method invocations create a pending owner approval intent but do not execute it.",
             "Approved SDK approval ids are read back for execution-adapter preflight only.",
             "Owner-approved write methods expose a runner safety plan and receipt template only.",
+            "Approved write methods can produce a dry-run executor stub receipt and audit event.",
             "No SDK HTTP adapter execution, agent runner invocation, channel send, file change, or network mutation is enabled.",
             "Write methods remain owner-gated behind the approval/sandbox/admin contract.",
             "Feishu remains the only domestic V1 pilot channel.",
@@ -1230,6 +1238,84 @@ def _sdk_write_runner_input_preview(request: ControlPlaneInvokeRequest) -> dict[
         if isinstance(value, str):
             preview[key] = value[:200]
     return preview
+
+
+def _sdk_dry_run_executor_stub(
+    audit_store: AuditStore,
+    principal: Principal,
+    *,
+    request: ControlPlaneInvokeRequest,
+    trace_id: str,
+    write_runner_safety_contract: dict[str, Any],
+) -> dict[str, Any]:
+    ready = write_runner_safety_contract.get("ready_for_runner_contract") is True
+    receipt = {
+        **write_runner_safety_contract.get("receipt_template", {}),
+        "status": "dry_run_planned" if ready else "blocked_before_dry_run_executor",
+        "dry_run_executor_invoked": ready,
+        "runner_invoked": False,
+        "agent_trace_id": None,
+        "audit_id": None,
+        "mark_executed": False,
+        "mutation_performed": False,
+        "network_mutation_performed": False,
+        "file_mutation_performed": False,
+        "channel_mutation_performed": False,
+    }
+    if not ready:
+        return {
+            "available": False,
+            "stub_stage": "owner_approved_write_dry_run_executor",
+            "blocked_reason": write_runner_safety_contract.get("preflight_status"),
+            "audit_event_recorded": False,
+            "receipt": receipt,
+            "runner_invoked": False,
+            "agent_execution_enabled": False,
+            "write_execution_enabled": False,
+            "mutation_performed": False,
+        }
+
+    audit = audit_store.record(
+        action="sdk.write_runner.dry_run_planned",
+        resource_type="sdk_write_runner",
+        resource_id=request.method,
+        outcome="planned",
+        tenant_id=principal.tenant_id,
+        actor_id=principal.user_id,
+        trace_id=trace_id,
+        details={
+            "request_id": request.id,
+            "method": request.method,
+            "operation": request.context.sdk_operation,
+            "approval_id": write_runner_safety_contract.get("approved_approval_id"),
+            "runner_plan": write_runner_safety_contract.get("runner_plan"),
+            "runner_invoked": False,
+            "agent_execution_enabled": False,
+            "write_execution_enabled": False,
+            "mutation_performed": False,
+            "network_mutation_performed": False,
+            "file_mutation_performed": False,
+            "channel_mutation_performed": False,
+        },
+    )
+    receipt["audit_id"] = audit.id
+    return {
+        "available": True,
+        "stub_stage": "owner_approved_write_dry_run_executor",
+        "audit_event_recorded": True,
+        "audit_action": "sdk.write_runner.dry_run_planned",
+        "audit_id": audit.id,
+        "receipt": receipt,
+        "runner_invoked": False,
+        "agent_execution_enabled": False,
+        "write_execution_enabled": False,
+        "adapter_execution_enabled": False,
+        "mark_executed": False,
+        "mutation_performed": False,
+        "network_mutation_performed": False,
+        "file_mutation_performed": False,
+        "channel_mutation_performed": False,
+    }
 
 
 def _sdk_approval_intent(
