@@ -57,6 +57,7 @@ class SDKNonInteractiveReport:
     write_runner_adapter_review: dict[str, Any]
     write_runner_runtime_flag: dict[str, Any]
     owner_acceptance_evidence: dict[str, Any]
+    owner_acceptance_record_workflow: dict[str, Any]
     channel_strategy: dict[str, Any]
     checks: list[SDKNonInteractiveCheck]
     official_sources: list[str]
@@ -180,6 +181,7 @@ def _build_checks(report_payload: dict[str, Any]) -> list[SDKNonInteractiveCheck
     adapter_review = report_payload["write_runner_adapter_review"]
     runtime_flag = report_payload["write_runner_runtime_flag"]
     owner_acceptance = report_payload["owner_acceptance_evidence"]
+    owner_acceptance_workflow = report_payload["owner_acceptance_record_workflow"]
     methods = [contract["request"]["method"] for contract in contracts]
     command_methods = [command["method"] for command in commands]
     cli_execute_targets = [
@@ -455,6 +457,25 @@ def _build_checks(report_payload: dict[str, Any]) -> list[SDKNonInteractiveCheck
             else "owner acceptance evidence unexpectedly enables execution",
         ),
         SDKNonInteractiveCheck(
+            name="owner_acceptance_record_workflow_ready",
+            status="passed"
+            if owner_acceptance_workflow.get("stage") == "owner_acceptance_evidence_record_workflow"
+            and owner_acceptance_workflow.get("endpoint") == "/api/v1/control-plane/sdk/owner-acceptance/record"
+            and owner_acceptance_workflow.get("audit_action") == "sdk.write_runner.owner_acceptance_recorded"
+            and owner_acceptance_workflow.get("requires_approved_sdk_approval") is True
+            and owner_acceptance_workflow.get("requires_signature_or_hash") is True
+            and owner_acceptance_workflow.get("marks_approval_executed") is False
+            and owner_acceptance_workflow.get("runtime_flag_enabled") is False
+            and owner_acceptance_workflow.get("write_runner_enabled") is False
+            and owner_acceptance_workflow.get("agent_execution_enabled") is False
+            and owner_acceptance_workflow.get("mutation_performed") is False
+            else "failed",
+            details=owner_acceptance_workflow,
+            error=None
+            if owner_acceptance_workflow.get("write_runner_enabled") is False
+            else "owner acceptance workflow unexpectedly enables write runner",
+        ),
+        SDKNonInteractiveCheck(
             name="feishu_domestic_v1_primary",
             status="passed"
             if report_payload["channel_strategy"].get("domestic_v1_primary") == "feishu"
@@ -478,7 +499,7 @@ def _build_checks(report_payload: dict[str, Any]) -> list[SDKNonInteractiveCheck
 
 def build_sdk_noninteractive_report() -> SDKNonInteractiveReport:
     report_payload: dict[str, Any] = {
-        "status": "sdk_write_runner_owner_acceptance_contract_ready",
+        "status": "sdk_owner_acceptance_record_workflow_ready",
         "generated_at": _utc_now(),
         "evidence_type": "sdk_noninteractive_cli_contract",
         "full_codex_parity_claimed": False,
@@ -491,7 +512,7 @@ def build_sdk_noninteractive_report() -> SDKNonInteractiveReport:
         "backend_stub": {
             "endpoint": "/api/v1/control-plane/sdk/invoke",
             "normalizes_to": "/api/v1/control-plane/invoke",
-            "status": "sdk_write_runner_owner_acceptance_contract_ready",
+            "status": "sdk_owner_acceptance_record_workflow_ready",
             "approval_subject_type": "command",
             "approval_intent_created_for_write_methods": True,
             "owner_gate_required": True,
@@ -855,6 +876,32 @@ def build_sdk_noninteractive_report() -> SDKNonInteractiveReport:
             "file_mutation_performed": False,
             "channel_mutation_performed": False,
         },
+        "owner_acceptance_record_workflow": {
+            "stage": "owner_acceptance_evidence_record_workflow",
+            "endpoint": "/api/v1/control-plane/sdk/owner-acceptance/record",
+            "http_method": "POST",
+            "cli_command": "xagent sdk acceptance-record --approval-id <approval_id> --acceptance-id <owner_acceptance_id> --accepted-by <owner> --accepted-at <rfc3339> --acceptance-hash <hash> --runbook-acknowledged --rollback-plan-acknowledged --execute",
+            "audit_action": "sdk.write_runner.owner_acceptance_recorded",
+            "resource_type": "sdk_write_runner_owner_acceptance",
+            "requires_approved_sdk_approval": True,
+            "requires_signature_or_hash": True,
+            "requires_runbook_acknowledged": True,
+            "requires_rollback_plan_acknowledged": True,
+            "requires_strict_readback_keys": ["approval_id", "owner_acceptance_id", "audit_id"],
+            "readback_method": "runtime/evidence/read",
+            "marks_approval_executed": False,
+            "runtime_flag_enabled": False,
+            "execute_enabled": False,
+            "write_runner_enabled": False,
+            "adapter_execution_enabled": False,
+            "agent_execution_enabled": False,
+            "write_execution_enabled": False,
+            "mark_executed": False,
+            "mutation_performed": False,
+            "network_mutation_performed": False,
+            "file_mutation_performed": False,
+            "channel_mutation_performed": False,
+        },
         "channel_strategy": _channel_strategy(),
         "official_sources": list(CODEX_SDK_SOURCES),
         "known_limits": [
@@ -870,7 +917,8 @@ def build_sdk_noninteractive_report() -> SDKNonInteractiveReport:
             "Persisted receipt safety review is read-only and does not enable the write runner.",
             "Owner-approved write execute gate is ready for review but remains disabled.",
             "Owner-approved write runner adapter implementation review declares the future AgentCoordinator.run target but remains disabled.",
-            "Runtime feature flag remains disabled; owner acceptance evidence recording/readback is contract-ready but no acceptance evidence is provided.",
+            "Runtime feature flag remains disabled; owner acceptance evidence can be recorded and read back through an audit-backed owner-controlled workflow.",
+            "Recording owner acceptance evidence does not execute the SDK write runner or mark the approval executed.",
             "No SDK HTTP adapter, agent runner, file mutation, channel send, or network mutation is enabled.",
             "Feishu remains the only domestic V1 pilot channel in this contract.",
             "Slack is tracked as a Codex reference surface, but it is non-blocking for the domestic first version.",
@@ -977,6 +1025,12 @@ def render_markdown_report(report: SDKNonInteractiveReport) -> str:
         f"- Evidence status: `{report.owner_acceptance_evidence['evidence_status']}`\n"
         f"- Acceptance report: `{report.owner_acceptance_evidence['acceptance_report_name']}`\n"
         f"- Execute enabled: `{report.owner_acceptance_evidence['execute_enabled']}`\n\n"
+        "## Owner Acceptance Record Workflow\n\n"
+        f"- Stage: `{report.owner_acceptance_record_workflow['stage']}`\n"
+        f"- Endpoint: `{report.owner_acceptance_record_workflow['endpoint']}`\n"
+        f"- Audit action: `{report.owner_acceptance_record_workflow['audit_action']}`\n"
+        f"- Marks approval executed: `{report.owner_acceptance_record_workflow['marks_approval_executed']}`\n"
+        f"- Write runner enabled: `{report.owner_acceptance_record_workflow['write_runner_enabled']}`\n\n"
         "## Channel Strategy\n\n"
         f"- Domestic V1 primary: `{report.channel_strategy['domestic_v1_primary']}`\n"
         f"- Telegram required: `{report.channel_strategy['telegram_required']}`\n"
@@ -1024,7 +1078,7 @@ def main() -> int:
         print(f"- {check.name}: {check.status}")
         if check.error:
             print(f"  error: {check.error}")
-    return 0 if report.status == "sdk_write_runner_owner_acceptance_contract_ready" else 1
+    return 0 if report.status == "sdk_owner_acceptance_record_workflow_ready" else 1
 
 
 if __name__ == "__main__":

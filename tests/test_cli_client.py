@@ -329,6 +329,49 @@ class TestHTTPClient:
             assert result["sdk"]["owner_acceptance_evidence"]["recording_contract_ready"] is True
 
     @pytest.mark.asyncio
+    async def test_http_client_record_sdk_owner_acceptance_calls_owner_gated_stub(self):
+        """Test SDK owner acceptance record uses the backend evidence stub."""
+        config = CLIConfig(api_base_url="http://localhost:8000")
+        client = HTTPClient(config)
+        payload = {
+            "owner_acceptance_id": "acceptance-1",
+            "approval_id": "approval-1",
+            "accepted_by": "owner",
+            "accepted_at": "2026-06-08T00:00:00Z",
+            "runbook_acknowledged": True,
+            "rollback_plan_acknowledged": True,
+            "acceptance_hash": "hash-1",
+        }
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "ok": True,
+            "status": "sdk_owner_acceptance_record_workflow_ready",
+            "owner_acceptance": {
+                "audit_event_recorded": True,
+                "write_runner_enabled": False,
+                "agent_execution_enabled": False,
+                "mutation_performed": False,
+            },
+        }
+
+        with patch.object(
+            httpx.AsyncClient,
+            "request",
+            new_callable=AsyncMock,
+            return_value=mock_response,
+        ) as mock_request:
+            result = await client.record_sdk_owner_acceptance(payload)
+
+            call_args = mock_request.call_args
+            assert call_args[0][0] == "POST"
+            assert call_args[0][1] == "/api/v1/control-plane/sdk/owner-acceptance/record"
+            assert call_args[1]["json"] == payload
+            assert result["status"] == "sdk_owner_acceptance_record_workflow_ready"
+            assert result["owner_acceptance"]["write_runner_enabled"] is False
+            assert result["owner_acceptance"]["mutation_performed"] is False
+
+    @pytest.mark.asyncio
     async def test_http_client_list_agents(self):
         """Test list_agents calls correct endpoint."""
         config = CLIConfig(api_base_url="http://localhost:8000")
@@ -630,6 +673,15 @@ class TestLocalClient:
 
         with pytest.raises(NotImplementedError, match="SDK backend invocation"):
             await client.invoke_sdk_contract({"operation": "turn_start"})
+
+    @pytest.mark.asyncio
+    async def test_local_client_record_sdk_owner_acceptance_not_implemented(self):
+        """Test SDK owner acceptance recording is HTTP-only."""
+        config = CLIConfig(mode="local")
+        client = LocalClient(config)
+
+        with pytest.raises(NotImplementedError, match="SDK owner acceptance recording"):
+            await client.record_sdk_owner_acceptance({"approval_id": "approval-1"})
 
     @pytest.mark.asyncio
     async def test_local_client_health_check_healthy(self):

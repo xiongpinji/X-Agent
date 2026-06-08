@@ -594,7 +594,34 @@ Expected: selected approval and sandbox tests pass.
 - [x] Keep `/sdk/invoke`, `runtime/evidence/read`, and SDK CLI readbacks non-mutating; no owner acceptance record is created by these paths.
 - [x] Keep `runtime_flag_enabled=false`, `execute_enabled=false`, `write_runner_enabled=false`, `agent_execution_enabled=false`, `adapter_execution_enabled=false`, `mark_executed=false`, and all mutation flags false.
 - [x] Promote SDK alignment status to `sdk_write_runner_owner_acceptance_contract_ready`.
-- [ ] Build the owner-controlled acceptance evidence creation/review workflow before enabling the concrete write runner.
+- [x] Build the owner-controlled acceptance evidence creation/review workflow before enabling the concrete write runner.
+
+### Task 25: Owner-Controlled Acceptance Evidence Record Workflow
+
+**Target:** Add an owner-gated, audit-backed workflow for recording SDK write-runner owner acceptance evidence while still keeping concrete write execution disabled.
+
+**Files:**
+- Modify: `backend/app/api/control_plane.py`
+- Modify: `backend/app/sdk/control_plane.py`
+- Modify: `cli/client.py`
+- Modify: `cli/commands/sdk_cmd.py`
+- Modify: `scripts/sdk_noninteractive_report.py`
+- Modify: `scripts/latest_codex_alignment.py`
+- Modify: `tests/test_control_plane_protocol.py`
+- Modify: `tests/test_xagent_sdk_contract.py`
+- Modify: `tests/test_cli_client.py`
+- Modify: `tests/test_sdk_noninteractive_report.py`
+- Modify: `tests/test_latest_codex_alignment.py`
+- Runtime evidence: `.xagent_runtime/reports/sdk-noninteractive-report.json`
+- Runtime evidence: `.xagent_runtime/reports/latest-codex-alignment.json`
+
+- [x] Add `/api/v1/control-plane/sdk/owner-acceptance/record` as an owner-controlled evidence recording endpoint.
+- [x] Require an approved `sdk:*` approval, tenant match, RFC3339 `accepted_at`, runbook acknowledgement, rollback acknowledgement, and signature/hash before recording.
+- [x] Record only `sdk.write_runner.owner_acceptance_recorded` audit evidence; do not call `approval.execute`, `mark_executed`, `AgentCoordinator.run`, or agent tools.
+- [x] Add SDK and CLI wrappers for `xagent sdk acceptance-record ... --execute`.
+- [x] Keep `runtime_flag_enabled=false`, `execute_enabled=false`, `write_runner_enabled=false`, `agent_execution_enabled=false`, `adapter_execution_enabled=false`, `mark_executed=false`, and all mutation flags false.
+- [x] Promote SDK alignment status to `sdk_owner_acceptance_record_workflow_ready`.
+- [ ] Add runtime enablement review contract that consumes the audit-backed acceptance record but still requires explicit owner enablement before any concrete runner implementation.
 
 ## Completion Criteria
 

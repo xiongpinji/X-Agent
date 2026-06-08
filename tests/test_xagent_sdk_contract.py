@@ -105,6 +105,23 @@ def test_sdk_resume_run_and_read_thread_methods_are_stable() -> None:
     assert acceptance_evidence["request"]["params"]["evidence_type"] == "sdk_write_runner_owner_acceptance"
     assert acceptance_evidence["request"]["params"]["owner_acceptance_id"] == "acceptance-1"
     assert acceptance_evidence["request"]["params"]["audit_id"] == "audit-1"
+    acceptance_record = sdk.record_owner_acceptance(
+        owner_acceptance_id="acceptance-1",
+        approval_id="approval-1",
+        accepted_by="owner",
+        accepted_at="2026-06-08T00:00:00Z",
+        runbook_acknowledged=True,
+        rollback_plan_acknowledged=True,
+        acceptance_hash="hash-1",
+    ).to_dict()
+    assert acceptance_record["operation"] == "owner_acceptance_record"
+    assert acceptance_record["endpoint"] == "/api/v1/control-plane/sdk/owner-acceptance/record"
+    assert acceptance_record["request"]["approval_id"] == "approval-1"
+    assert acceptance_record["request"]["acceptance_hash"] == "hash-1"
+    assert acceptance_record["owner_gate"]["requires_approved_sdk_approval"] is True
+    assert acceptance_record["owner_gate"]["marks_approval_executed"] is False
+    assert acceptance_record["owner_gate"]["write_runner_enabled"] is False
+    assert acceptance_record["mutation_performed"] is False
 
 
 def test_sdk_contract_keeps_feishu_domestic_v1_primary() -> None:
@@ -497,3 +514,59 @@ def test_cli_sdk_evidence_read_execute_flag_supports_owner_acceptance_readback()
     assert contract["request"]["params"]["approval_id"] == "approval-1"
     assert contract["request"]["params"]["owner_acceptance_id"] == "acceptance-1"
     assert contract["request"]["params"]["audit_id"] == "audit-1"
+
+
+def test_cli_sdk_acceptance_record_execute_flag_records_owner_evidence_only() -> None:
+    set_current_config(CLIConfig(api_base_url="http://localhost:8000", output_format="json"))
+    mock_client = AsyncMock()
+    mock_client.record_sdk_owner_acceptance.return_value = {
+        "ok": True,
+        "status": "sdk_owner_acceptance_record_workflow_ready",
+        "owner_acceptance": {
+            "record_status": "recorded",
+            "audit_event_recorded": True,
+            "write_runner_enabled": False,
+            "agent_execution_enabled": False,
+            "mark_executed": False,
+            "mutation_performed": False,
+        },
+    }
+
+    with patch("cli.commands.sdk_cmd.create_client", return_value=mock_client):
+        result = CliRunner().invoke(
+            app,
+            [
+                "sdk",
+                "acceptance-record",
+                "--approval-id",
+                "approval-1",
+                "--acceptance-id",
+                "acceptance-1",
+                "--accepted-by",
+                "owner",
+                "--accepted-at",
+                "2026-06-08T00:00:00Z",
+                "--acceptance-hash",
+                "hash-1",
+                "--runbook-acknowledged",
+                "--rollback-plan-acknowledged",
+                "--execute",
+            ],
+        )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["status"] == "sdk_owner_acceptance_record_workflow_ready"
+    assert payload["owner_acceptance"]["record_status"] == "recorded"
+    assert payload["owner_acceptance"]["write_runner_enabled"] is False
+    assert payload["owner_acceptance"]["mutation_performed"] is False
+
+    mock_client.record_sdk_owner_acceptance.assert_awaited_once()
+    request = mock_client.record_sdk_owner_acceptance.await_args.args[0]
+    assert request["approval_id"] == "approval-1"
+    assert request["owner_acceptance_id"] == "acceptance-1"
+    assert request["acceptance_hash"] == "hash-1"
+    assert request["runbook_acknowledged"] is True
+    assert request["rollback_plan_acknowledged"] is True
+    assert request["dry_run"] is False
+    mock_client.invoke_sdk_contract.assert_not_called()

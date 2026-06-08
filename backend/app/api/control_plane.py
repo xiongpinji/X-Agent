@@ -640,6 +640,26 @@ class SDKControlPlaneInvokeResponse(BaseModel):
     evidence: ControlPlaneEvidence
 
 
+class SDKOwnerAcceptanceRecordRequest(BaseModel):
+    owner_acceptance_id: str = Field(..., min_length=1, max_length=240)
+    approval_id: str = Field(..., min_length=1, max_length=240)
+    accepted_by: str = Field(..., min_length=1, max_length=240)
+    accepted_at: str = Field(..., min_length=1, max_length=80)
+    runbook_acknowledged: bool = False
+    rollback_plan_acknowledged: bool = False
+    acceptance_signature: str | None = Field(default=None, max_length=500)
+    acceptance_hash: str | None = Field(default=None, max_length=500)
+    notes: str | None = Field(default=None, max_length=2000)
+    dry_run: bool = True
+
+
+class SDKOwnerAcceptanceRecordResponse(BaseModel):
+    ok: bool
+    status: str
+    owner_acceptance: dict[str, Any]
+    evidence: ControlPlaneEvidence
+
+
 def _method_catalog() -> list[dict[str, object]]:
     return [spec.to_payload() for spec in METHOD_SPECS]
 
@@ -880,6 +900,35 @@ async def invoke_sdk_control_plane(
     )
 
 
+@router.post("/sdk/owner-acceptance/record", response_model=SDKOwnerAcceptanceRecordResponse)
+async def record_sdk_owner_acceptance(
+    request: SDKOwnerAcceptanceRecordRequest,
+    principal: PrincipalDependency,
+    audit_store: AuditStoreDependency,
+    approval_store: ApprovalStoreDependency,
+) -> SDKOwnerAcceptanceRecordResponse:
+    """Record owner acceptance evidence without enabling SDK write execution."""
+    enforce_scope(principal, "workflow:control")
+    trace_id = principal.trace_id or f"trace_{uuid4().hex}"
+    owner_acceptance = _sdk_record_owner_acceptance(
+        request,
+        principal=principal,
+        approval_store=approval_store,
+        audit_store=audit_store,
+        trace_id=trace_id,
+    )
+    evidence = ControlPlaneEvidence(
+        trace_id=trace_id,
+        audit_id=owner_acceptance.get("audit_id") if owner_acceptance.get("audit_event_recorded") else None,
+    )
+    return SDKOwnerAcceptanceRecordResponse(
+        ok=owner_acceptance["record_status"] == "recorded",
+        status="sdk_owner_acceptance_record_workflow_ready",
+        owner_acceptance=owner_acceptance,
+        evidence=evidence,
+    )
+
+
 def _sdk_control_plane_request(request: SDKControlPlaneInvokeRequest) -> ControlPlaneInvokeRequest:
     if request.request is not None:
         payload = request.request
@@ -928,6 +977,111 @@ def _sdk_control_plane_request(request: SDKControlPlaneInvokeRequest) -> Control
         idempotency_key=request.idempotency_key,
         dry_run=request.dry_run,
     )
+
+
+def _sdk_record_owner_acceptance(
+    request: SDKOwnerAcceptanceRecordRequest,
+    *,
+    principal: Principal,
+    approval_store: object,
+    audit_store: AuditStore,
+    trace_id: str,
+) -> dict[str, Any]:
+    approval = approval_store.get(request.approval_id) if hasattr(approval_store, "get") else None
+    raw_evidence = {
+        "owner_acceptance_id": request.owner_acceptance_id,
+        "accepted_by": request.accepted_by,
+        "accepted_at": request.accepted_at,
+        "approval_id": request.approval_id,
+        "runbook_acknowledged": request.runbook_acknowledged,
+        "rollback_plan_acknowledged": request.rollback_plan_acknowledged,
+        "acceptance_signature": request.acceptance_signature,
+        "acceptance_hash": request.acceptance_hash,
+        "notes": request.notes,
+    }
+    validation = _sdk_owner_acceptance_evidence_validation(raw_evidence)
+    approval_status = getattr(approval, "status", None)
+    approval_status_value = getattr(approval_status, "value", approval_status)
+    approval_resource_id = getattr(approval, "resource_id", None)
+    approval_tenant_id = getattr(approval, "tenant_id", None)
+    checks = {
+        "approval_found": approval is not None,
+        "approval_status_approved": approval_status == ApprovalStatus.APPROVED or approval_status_value == "approved",
+        "approval_resource_sdk_command": isinstance(approval_resource_id, str)
+        and approval_resource_id.startswith("sdk:"),
+        "tenant_matches": not principal.authenticated or approval_tenant_id == principal.tenant_id,
+        "evidence_valid": validation["status"] == "valid",
+        "dry_run_does_not_execute": request.dry_run is True,
+    }
+    can_record = all(checks.values())
+    record_payload = {
+        key: value
+        for key, value in raw_evidence.items()
+        if value is not None
+    }
+    audit_record = None
+    if can_record:
+        audit_record = audit_store.record(
+            action="sdk.write_runner.owner_acceptance_recorded",
+            resource_type="sdk_write_runner_owner_acceptance",
+            resource_id=request.owner_acceptance_id,
+            outcome="accepted",
+            tenant_id=approval_tenant_id or principal.tenant_id,
+            actor_id=principal.user_id if principal.authenticated else request.accepted_by,
+            trace_id=trace_id,
+            details={
+                "approval_id": request.approval_id,
+                "owner_acceptance_evidence": record_payload,
+                "validation": validation,
+                "dry_run": request.dry_run,
+                "execution_enabled": False,
+                "write_runner_enabled": False,
+                "mutation_performed": False,
+            },
+        )
+    return {
+        "stage": "owner_acceptance_evidence_record_workflow",
+        "record_status": "recorded" if audit_record else "rejected",
+        "recording_endpoint": "/api/v1/control-plane/sdk/owner-acceptance/record",
+        "owner_acceptance_id": request.owner_acceptance_id,
+        "approval_id": request.approval_id,
+        "approval_status": approval_status_value,
+        "approval_resource_id": approval_resource_id,
+        "checks": checks,
+        "validation": validation,
+        "audit_event_recorded": audit_record is not None,
+        "audit_action": "sdk.write_runner.owner_acceptance_recorded",
+        "audit_id": getattr(audit_record, "id", None) if audit_record else None,
+        "audit_hash": getattr(audit_record, "hash", None) if audit_record else None,
+        "audit_signature_present": bool(getattr(audit_record, "signature", None)) if audit_record else False,
+        "readback": {
+            "method": "runtime/evidence/read",
+            "endpoint": "/api/v1/control-plane/invoke",
+            "params": {
+                "evidence_type": "sdk_write_runner_owner_acceptance",
+                "report_name": "sdk-write-runner-owner-acceptance.json",
+                "approval_id": request.approval_id,
+                "owner_acceptance_id": request.owner_acceptance_id,
+                "audit_id": getattr(audit_record, "id", None) if audit_record else None,
+            },
+        },
+        "runtime_flag_enabled": False,
+        "execute_enabled": False,
+        "write_runner_enabled": False,
+        "adapter_execution_enabled": False,
+        "agent_execution_enabled": False,
+        "write_execution_enabled": False,
+        "mark_executed": False,
+        "mutation_performed": False,
+        "network_mutation_performed": False,
+        "file_mutation_performed": False,
+        "channel_mutation_performed": False,
+        "known_limits": [
+            "This endpoint records owner acceptance evidence only.",
+            "It does not mark the approval executed.",
+            "It does not enable or invoke the SDK write runner.",
+        ],
+    }
 
 
 def _sdk_backend_stub_metadata(

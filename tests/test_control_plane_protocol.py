@@ -766,6 +766,131 @@ def test_owner_acceptance_readback_requires_strict_audit_query_keys() -> None:
     assert strict_evidence["safety"]["mutation_performed"] is False
 
 
+def test_sdk_owner_acceptance_record_workflow_records_audit_without_execution() -> None:
+    approval_store = ApprovalStore()
+    audit_store = AuditStore(hmac_secret="test-secret")
+    context = RunContext(
+        trace_id="trace-acceptance-record",
+        tenant_id="default",
+        user_id="operator",
+        request_id="req-acceptance-record",
+    )
+    approval = approval_store.create_approval(
+        context=context,
+        resource_type="command",
+        resource_id="sdk:turn/start",
+        action="command.execute",
+        risk_level=RiskLevel.HIGH,
+        reason="Owner-approved SDK write preflight.",
+        arguments_preview={"method": "turn/start", "adapter_execution_enabled": False},
+    )
+    approval_store.approve(
+        approval.id,
+        ApprovalDecisionRequest(decided_by="owner", reason="ready for owner acceptance"),
+    )
+    request_payload = {
+        "owner_acceptance_id": "acceptance-record-1",
+        "approval_id": approval.id,
+        "accepted_by": "owner",
+        "accepted_at": "2026-06-08T00:00:00Z",
+        "runbook_acknowledged": True,
+        "rollback_plan_acknowledged": True,
+        "acceptance_hash": "hash-audit-backed",
+        "dry_run": True,
+    }
+
+    with _client_with_stores(RunStore(), TraceStore(), approval_store, audit_store) as client:
+        response = client.post(
+            "/api/v1/control-plane/sdk/owner-acceptance/record",
+            json=request_payload,
+        )
+        readback = client.post(
+            "/api/v1/control-plane/sdk/invoke",
+            json=ControlPlaneSDK(default_tenant_id="default", default_user_id="operator")
+            .read_runtime_evidence(
+                "sdk-write-runner-owner-acceptance.json",
+                evidence_type="sdk_write_runner_owner_acceptance",
+                approval_id=approval.id,
+                owner_acceptance_id="acceptance-record-1",
+                audit_id=response.json()["evidence"]["audit_id"],
+            )
+            .to_dict(),
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["ok"] is True
+    assert payload["status"] == "sdk_owner_acceptance_record_workflow_ready"
+    record = payload["owner_acceptance"]
+    assert record["record_status"] == "recorded"
+    assert record["audit_event_recorded"] is True
+    assert record["audit_action"] == "sdk.write_runner.owner_acceptance_recorded"
+    assert record["checks"]["approval_status_approved"] is True
+    assert record["checks"]["evidence_valid"] is True
+    assert record["runtime_flag_enabled"] is False
+    assert record["write_runner_enabled"] is False
+    assert record["agent_execution_enabled"] is False
+    assert record["mark_executed"] is False
+    assert record["mutation_performed"] is False
+    assert approval_store.get(approval.id).status == "approved"
+    assert approval_store.get(approval.id).executed_at is None
+
+    evidence = readback.json()["control_plane"]["result"]["evidence"]
+    assert evidence["acceptance_record_present"] is True
+    assert evidence["evidence_status"] == "provided"
+    assert evidence["record"]["owner_acceptance_id"] == "acceptance-record-1"
+    assert evidence["record"]["approval_id"] == approval.id
+    assert evidence["validation"]["status"] == "valid"
+    assert evidence["safety"]["write_runner_enabled"] is False
+    assert evidence["safety"]["mutation_performed"] is False
+
+
+def test_sdk_owner_acceptance_record_workflow_rejects_unapproved_or_unsigned_evidence() -> None:
+    approval_store = ApprovalStore()
+    audit_store = AuditStore(hmac_secret="test-secret")
+    context = RunContext(
+        trace_id="trace-acceptance-reject",
+        tenant_id="default",
+        user_id="operator",
+        request_id="req-acceptance-reject",
+    )
+    pending = approval_store.create_approval(
+        context=context,
+        resource_type="command",
+        resource_id="sdk:turn/start",
+        action="command.execute",
+        risk_level=RiskLevel.HIGH,
+        reason="Pending SDK write preflight.",
+        arguments_preview={"method": "turn/start", "adapter_execution_enabled": False},
+    )
+    request_payload = {
+        "owner_acceptance_id": "acceptance-reject-1",
+        "approval_id": pending.id,
+        "accepted_by": "owner",
+        "accepted_at": "2026-06-08T00:00:00Z",
+        "runbook_acknowledged": True,
+        "rollback_plan_acknowledged": True,
+        "dry_run": True,
+    }
+
+    with _client_with_stores(RunStore(), TraceStore(), approval_store, audit_store) as client:
+        response = client.post(
+            "/api/v1/control-plane/sdk/owner-acceptance/record",
+            json=request_payload,
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["ok"] is False
+    assert payload["owner_acceptance"]["record_status"] == "rejected"
+    assert payload["owner_acceptance"]["checks"]["approval_status_approved"] is False
+    assert payload["owner_acceptance"]["validation"]["checks"]["signature_or_hash_present"] is False
+    assert payload["owner_acceptance"]["audit_event_recorded"] is False
+    assert payload["owner_acceptance"]["write_runner_enabled"] is False
+    assert payload["owner_acceptance"]["mutation_performed"] is False
+    assert audit_store.list(action="sdk.write_runner.owner_acceptance_recorded") == []
+
+
 def test_control_plane_rejects_raw_secret_payloads() -> None:
     response = _client().post(
         "/api/v1/control-plane/invoke",

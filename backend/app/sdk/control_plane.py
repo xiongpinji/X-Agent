@@ -44,6 +44,21 @@ class SDKThreadRunContract:
         return payload
 
 
+@dataclass(frozen=True)
+class SDKOwnerAcceptanceRecordContract:
+    operation: str
+    endpoint: str
+    request: dict[str, Any]
+    owner_gate: dict[str, Any]
+    known_limits: list[str]
+
+    def to_dict(self) -> dict[str, Any]:
+        payload = asdict(self)
+        payload["mutation_performed"] = False
+        payload["network_mutation_performed"] = False
+        return payload
+
+
 class ControlPlaneSDK:
     """Build SDK-compatible control-plane request envelopes."""
 
@@ -182,6 +197,56 @@ class ControlPlaneSDK:
             idempotency_key=None,
             approved_approval_id=None,
             dry_run=True,
+        )
+
+    def record_owner_acceptance(
+        self,
+        *,
+        owner_acceptance_id: str,
+        approval_id: str,
+        accepted_by: str,
+        accepted_at: str,
+        runbook_acknowledged: bool,
+        rollback_plan_acknowledged: bool,
+        acceptance_signature: str | None = None,
+        acceptance_hash: str | None = None,
+        notes: str | None = None,
+        dry_run: bool = True,
+    ) -> SDKOwnerAcceptanceRecordContract:
+        return SDKOwnerAcceptanceRecordContract(
+            operation="owner_acceptance_record",
+            endpoint="/api/v1/control-plane/sdk/owner-acceptance/record",
+            request={
+                "owner_acceptance_id": owner_acceptance_id,
+                "approval_id": approval_id,
+                "accepted_by": accepted_by,
+                "accepted_at": accepted_at,
+                "runbook_acknowledged": runbook_acknowledged,
+                "rollback_plan_acknowledged": rollback_plan_acknowledged,
+                "acceptance_signature": acceptance_signature,
+                "acceptance_hash": acceptance_hash,
+                "notes": notes,
+                "dry_run": dry_run,
+            },
+            owner_gate={
+                "requires_approved_sdk_approval": True,
+                "requires_signature_or_hash": True,
+                "requires_runbook_acknowledged": True,
+                "requires_rollback_plan_acknowledged": True,
+                "marks_approval_executed": False,
+                "runtime_flag_enabled": False,
+                "execute_enabled": False,
+                "write_runner_enabled": False,
+                "agent_execution_enabled": False,
+                "mark_executed": False,
+                "mutation_performed": False,
+                "network_mutation_performed": False,
+            },
+            known_limits=[
+                "This SDK contract records owner acceptance evidence only.",
+                "It does not enable runtime flags or invoke the write runner.",
+                "It does not mark an approval executed.",
+            ],
         )
 
     def _thread_contract(

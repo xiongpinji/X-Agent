@@ -51,6 +51,30 @@ def _emit_or_invoke(payload: dict[str, object], *, execute: bool) -> None:
     _emit(result)
 
 
+def _emit_or_record_acceptance(payload: dict[str, object], *, execute: bool) -> None:
+    if not execute:
+        _emit(payload)
+        return
+
+    config = get_current_config()
+    try:
+        client = create_client(config)
+        request_payload = payload.get("request")
+        if not isinstance(request_payload, dict):
+            raise XAgentCLIError("SDK owner acceptance envelope is missing request payload.")
+        result = asyncio.run(client.record_sdk_owner_acceptance(request_payload))
+    except NotImplementedError as e:
+        typer.echo(f"SDK owner acceptance recording failed: {e}", err=True)
+        raise typer.Exit(code=1)
+    except (ConnectionError, AuthError, APIError) as e:
+        typer.echo(f"SDK owner acceptance recording failed: {e}", err=True)
+        raise typer.Exit(code=1)
+    except XAgentCLIError as e:
+        typer.echo(f"SDK CLI error: {e}", err=True)
+        raise typer.Exit(code=1)
+    _emit(result)
+
+
 @sdk_app.command("thread-start")
 def thread_start(
     task: str = typer.Argument(..., help="Task text for the new thread."),
@@ -143,3 +167,31 @@ def evidence_read(
         method=method,
     )
     _emit_or_invoke(contract.to_dict(), execute=execute)
+
+
+@sdk_app.command("acceptance-record")
+def acceptance_record(
+    approval_id: str = typer.Option(..., "--approval-id"),
+    owner_acceptance_id: str = typer.Option(..., "--acceptance-id"),
+    accepted_by: str = typer.Option(..., "--accepted-by"),
+    accepted_at: str = typer.Option(..., "--accepted-at"),
+    runbook_acknowledged: bool = typer.Option(False, "--runbook-acknowledged"),
+    rollback_plan_acknowledged: bool = typer.Option(False, "--rollback-plan-acknowledged"),
+    acceptance_signature: Optional[str] = typer.Option(None, "--acceptance-signature"),
+    acceptance_hash: Optional[str] = typer.Option(None, "--acceptance-hash"),
+    notes: Optional[str] = typer.Option(None, "--notes"),
+    execute: bool = typer.Option(False, "--execute", help="Record owner acceptance evidence in the backend audit log."),
+) -> None:
+    contract = ControlPlaneSDK().record_owner_acceptance(
+        owner_acceptance_id=owner_acceptance_id,
+        approval_id=approval_id,
+        accepted_by=accepted_by,
+        accepted_at=accepted_at,
+        runbook_acknowledged=runbook_acknowledged,
+        rollback_plan_acknowledged=rollback_plan_acknowledged,
+        acceptance_signature=acceptance_signature,
+        acceptance_hash=acceptance_hash,
+        notes=notes,
+        dry_run=not execute,
+    )
+    _emit_or_record_acceptance(contract.to_dict(), execute=execute)
