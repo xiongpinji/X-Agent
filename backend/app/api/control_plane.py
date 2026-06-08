@@ -916,8 +916,9 @@ def _sdk_backend_stub_metadata(
         principal=principal,
     )
     read_only_runner_contract = _sdk_read_only_runner_contract(original, request, response)
+    write_runner_safety_contract = _sdk_write_runner_safety_contract(original, request, execution_adapter_contract)
     return {
-        "status": "sdk_read_only_runner_contract_ready",
+        "status": "sdk_write_runner_safety_contract_ready",
         "operation": request.context.sdk_operation or original.operation,
         "method": request.method,
         "sdk_surface": request.context.sdk_surface or "python",
@@ -932,6 +933,7 @@ def _sdk_backend_stub_metadata(
         "approval_handoff": _sdk_approval_handoff(approval_intent),
         "execution_adapter_contract": execution_adapter_contract,
         "read_only_runner_contract": read_only_runner_contract,
+        "write_runner_safety_contract": write_runner_safety_contract,
         "approval_sandbox_admin": _sdk_approval_sandbox_admin_contract(request),
         "control_plane_ok": response.ok,
         "control_plane_error_code": response.error.code if response.error else None,
@@ -940,6 +942,7 @@ def _sdk_backend_stub_metadata(
             "Read-only SDK methods can return backend read results through the control-plane contract.",
             "Write-method invocations create a pending owner approval intent but do not execute it.",
             "Approved SDK approval ids are read back for execution-adapter preflight only.",
+            "Owner-approved write methods expose a runner safety plan and receipt template only.",
             "No SDK HTTP adapter execution, agent runner invocation, channel send, file change, or network mutation is enabled.",
             "Write methods remain owner-gated behind the approval/sandbox/admin contract.",
             "Feishu remains the only domestic V1 pilot channel.",
@@ -1057,6 +1060,7 @@ def _sdk_execution_adapter_contract(
         "subject_type": _status_value(getattr(record, "subject_type", None)),
         "decision_type": _status_value(getattr(record, "decision_type", None)),
         "decision_scope": getattr(record, "decision_scope", None),
+        "sandbox_profile": getattr(record, "sandbox_profile", None),
     }
     ready = (
         checks["approval_status_ok"] is True
@@ -1137,6 +1141,95 @@ def _sdk_read_only_runner_contract(
             "Read-only runner availability does not claim full Codex SDK parity.",
         ],
     }
+
+
+def _sdk_write_runner_safety_contract(
+    original: SDKControlPlaneInvokeRequest,
+    request: ControlPlaneInvokeRequest,
+    execution_adapter_contract: dict[str, Any],
+) -> dict[str, Any]:
+    spec = METHODS_BY_NAME.get(request.method)
+    write_method = spec is not None and spec.operation_kind == "write"
+    approved_ready = execution_adapter_contract.get("preflight_status") == "approved_ready"
+    approved_approval_id = execution_adapter_contract.get("approved_approval_id")
+    ready = write_method and approved_ready and isinstance(approved_approval_id, str) and bool(approved_approval_id)
+    runner_plan = {
+        "runner_kind": "sdk_owner_approved_write",
+        "operation": request.context.sdk_operation or original.operation,
+        "method": request.method,
+        "approval_id": approved_approval_id,
+        "idempotency_key_present": bool(request.idempotency_key),
+        "input_preview": _sdk_write_runner_input_preview(request),
+        "guard_order": [
+            "approval/read",
+            "approval_status_must_be_approved",
+            "resource_id_must_match_sdk_method",
+            "tenant_must_match",
+            "sandbox_profile_must_allow_command_locked",
+            "idempotency_key_must_be_present_for_write",
+            "agent_runner_still_disabled_in_this_task",
+        ],
+    }
+    return {
+        "available": write_method,
+        "contract_stage": "owner_approved_write_runner_safety",
+        "ready_for_runner_contract": ready,
+        "preflight_status": execution_adapter_contract.get("preflight_status"),
+        "approved_approval_id": approved_approval_id,
+        "runner_plan": runner_plan,
+        "receipt_template": {
+            "status": "planned_not_executed" if ready else "blocked_before_runner",
+            "runner_invoked": False,
+            "agent_trace_id": None,
+            "approval_id": approved_approval_id,
+            "method": request.method,
+            "operation": request.context.sdk_operation or original.operation,
+            "mark_executed": False,
+            "mutation_performed": False,
+            "network_mutation_performed": False,
+            "file_mutation_performed": False,
+            "channel_mutation_performed": False,
+        },
+        "required_guards": {
+            "approval_preflight_ready": approved_ready,
+            "write_method": write_method,
+            "idempotency_key_present": bool(request.idempotency_key),
+            "sandbox_profile": execution_adapter_contract.get("sandbox_profile", "command_locked"),
+            "owner_gate_required": True,
+            "audit_required": True,
+        },
+        "next_commands": [
+            "xagent sdk turn-run <thread_id> <input> --execute --approved-approval-id <approval_id> --idempotency-key <key>",
+            "python scripts\\sdk_noninteractive_report.py",
+        ],
+        "runner_invoked": False,
+        "agent_execution_enabled": False,
+        "write_execution_enabled": False,
+        "adapter_execution_enabled": False,
+        "execute_disabled": True,
+        "mark_executed": False,
+        "mutation_performed": False,
+        "network_mutation_performed": False,
+        "file_mutation_performed": False,
+        "channel_mutation_performed": False,
+        "known_limits": [
+            "This is a safety contract and receipt template for future write execution.",
+            "No concrete SDK write runner is invoked in this task.",
+            "Approvals are not marked executed by this endpoint.",
+        ],
+    }
+
+
+def _sdk_write_runner_input_preview(request: ControlPlaneInvokeRequest) -> dict[str, Any]:
+    preview: dict[str, Any] = {
+        "dry_run": request.dry_run,
+        "idempotency_key_present": bool(request.idempotency_key),
+    }
+    for key in ("thread_id", "task", "input"):
+        value = request.params.get(key)
+        if isinstance(value, str):
+            preview[key] = value[:200]
+    return preview
 
 
 def _sdk_approval_intent(

@@ -49,6 +49,7 @@ class SDKNonInteractiveReport:
     approval_handoff: dict[str, Any]
     execution_adapter_contract: dict[str, Any]
     read_only_runner_contract: dict[str, Any]
+    write_runner_safety_contract: dict[str, Any]
     channel_strategy: dict[str, Any]
     checks: list[SDKNonInteractiveCheck]
     official_sources: list[str]
@@ -135,6 +136,7 @@ def _build_checks(report_payload: dict[str, Any]) -> list[SDKNonInteractiveCheck
     handoff = report_payload["approval_handoff"]
     execution_adapter = report_payload["execution_adapter_contract"]
     read_only_runner = report_payload["read_only_runner_contract"]
+    write_runner = report_payload["write_runner_safety_contract"]
     methods = [contract["request"]["method"] for contract in contracts]
     command_methods = [command["method"] for command in commands]
     cli_execute_targets = [
@@ -259,6 +261,22 @@ def _build_checks(report_payload: dict[str, Any]) -> list[SDKNonInteractiveCheck
             else "read-only SDK runner contract is not enabled",
         ),
         SDKNonInteractiveCheck(
+            name="write_runner_safety_contract_ready",
+            status="passed"
+            if write_runner.get("stage") == "owner_approved_write_runner_safety"
+            and write_runner.get("ready_status") == "planned_not_executed"
+            and write_runner.get("runner_invoked") is False
+            and write_runner.get("agent_execution_enabled") is False
+            and write_runner.get("write_execution_enabled") is False
+            and write_runner.get("mark_executed") is False
+            and write_runner.get("mutation_performed") is False
+            else "failed",
+            details=write_runner,
+            error=None
+            if write_runner.get("runner_invoked") is False
+            else "write SDK runner was invoked unexpectedly",
+        ),
+        SDKNonInteractiveCheck(
             name="feishu_domestic_v1_primary",
             status="passed"
             if report_payload["channel_strategy"].get("domestic_v1_primary") == "feishu"
@@ -282,7 +300,7 @@ def _build_checks(report_payload: dict[str, Any]) -> list[SDKNonInteractiveCheck
 
 def build_sdk_noninteractive_report() -> SDKNonInteractiveReport:
     report_payload: dict[str, Any] = {
-        "status": "sdk_read_only_runner_contract_ready",
+        "status": "sdk_write_runner_safety_contract_ready",
         "generated_at": _utc_now(),
         "evidence_type": "sdk_noninteractive_cli_contract",
         "full_codex_parity_claimed": False,
@@ -295,7 +313,7 @@ def build_sdk_noninteractive_report() -> SDKNonInteractiveReport:
         "backend_stub": {
             "endpoint": "/api/v1/control-plane/sdk/invoke",
             "normalizes_to": "/api/v1/control-plane/invoke",
-            "status": "sdk_read_only_runner_contract_ready",
+            "status": "sdk_write_runner_safety_contract_ready",
             "approval_subject_type": "command",
             "approval_intent_created_for_write_methods": True,
             "owner_gate_required": True,
@@ -380,6 +398,42 @@ def build_sdk_noninteractive_report() -> SDKNonInteractiveReport:
             "file_mutation_performed": False,
             "channel_mutation_performed": False,
         },
+        "write_runner_safety_contract": {
+            "stage": "owner_approved_write_runner_safety",
+            "approved_approval_id_required": True,
+            "ready_status": "planned_not_executed",
+            "blocked_status": "blocked_before_runner",
+            "runner_plan_fields": [
+                "runner_kind",
+                "operation",
+                "method",
+                "approval_id",
+                "idempotency_key_present",
+                "input_preview",
+                "guard_order",
+            ],
+            "receipt_template_fields": [
+                "status",
+                "runner_invoked",
+                "agent_trace_id",
+                "approval_id",
+                "method",
+                "operation",
+                "mark_executed",
+                "mutation_performed",
+            ],
+            "requires_idempotency_key_for_write": True,
+            "runner_invoked": False,
+            "agent_execution_enabled": False,
+            "write_execution_enabled": False,
+            "adapter_execution_enabled": False,
+            "execute_disabled": True,
+            "mark_executed": False,
+            "mutation_performed": False,
+            "network_mutation_performed": False,
+            "file_mutation_performed": False,
+            "channel_mutation_performed": False,
+        },
         "channel_strategy": _channel_strategy(),
         "official_sources": list(CODEX_SDK_SOURCES),
         "known_limits": [
@@ -389,6 +443,7 @@ def build_sdk_noninteractive_report() -> SDKNonInteractiveReport:
             "SDK responses include approval handoff commands and readback links for the owner.",
             "Supplying --approved-approval-id enables owner-approved execution preflight/readback only.",
             "Read-only SDK methods can be submitted with --execute and return backend read contracts.",
+            "Owner-approved write SDK methods return a safety runner plan and receipt template only.",
             "No SDK HTTP adapter, agent runner, file mutation, channel send, or network mutation is enabled.",
             "Feishu remains the only domestic V1 pilot channel in this contract.",
             "Slack is tracked as a Codex reference surface, but it is non-blocking for the domestic first version.",
@@ -450,6 +505,12 @@ def render_markdown_report(report: SDKNonInteractiveReport) -> str:
         f"- Returns control-plane result: `{report.read_only_runner_contract['returns_control_plane_result']}`\n"
         f"- Agent execution enabled: `{report.read_only_runner_contract['agent_execution_enabled']}`\n"
         f"- Write execution enabled: `{report.read_only_runner_contract['write_execution_enabled']}`\n\n"
+        "## Write Runner Safety Contract\n\n"
+        f"- Stage: `{report.write_runner_safety_contract['stage']}`\n"
+        f"- Ready status: `{report.write_runner_safety_contract['ready_status']}`\n"
+        f"- Runner invoked: `{report.write_runner_safety_contract['runner_invoked']}`\n"
+        f"- Agent execution enabled: `{report.write_runner_safety_contract['agent_execution_enabled']}`\n"
+        f"- Mark executed: `{report.write_runner_safety_contract['mark_executed']}`\n\n"
         "## Channel Strategy\n\n"
         f"- Domestic V1 primary: `{report.channel_strategy['domestic_v1_primary']}`\n"
         f"- Telegram required: `{report.channel_strategy['telegram_required']}`\n"
@@ -497,7 +558,7 @@ def main() -> int:
         print(f"- {check.name}: {check.status}")
         if check.error:
             print(f"  error: {check.error}")
-    return 0 if report.status == "sdk_read_only_runner_contract_ready" else 1
+    return 0 if report.status == "sdk_write_runner_safety_contract_ready" else 1
 
 
 if __name__ == "__main__":

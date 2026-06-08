@@ -16,7 +16,7 @@ def test_sdk_noninteractive_report_default_is_read_only() -> None:
     report = build_sdk_noninteractive_report()
     payload = report.to_dict()
 
-    assert report.status == "sdk_read_only_runner_contract_ready"
+    assert report.status == "sdk_write_runner_safety_contract_ready"
     assert report.evidence_type == "sdk_noninteractive_cli_contract"
     assert report.full_codex_parity_claimed is False
     assert report.dry_run is True
@@ -124,6 +124,22 @@ def test_sdk_noninteractive_report_covers_read_only_runner_contract() -> None:
     assert contract["mutation_performed"] is False
 
 
+def test_sdk_noninteractive_report_covers_write_runner_safety_contract() -> None:
+    contract = build_sdk_noninteractive_report().write_runner_safety_contract
+
+    assert contract["stage"] == "owner_approved_write_runner_safety"
+    assert contract["approved_approval_id_required"] is True
+    assert contract["ready_status"] == "planned_not_executed"
+    assert "runner_kind" in contract["runner_plan_fields"]
+    assert "runner_invoked" in contract["receipt_template_fields"]
+    assert contract["requires_idempotency_key_for_write"] is True
+    assert contract["runner_invoked"] is False
+    assert contract["agent_execution_enabled"] is False
+    assert contract["write_execution_enabled"] is False
+    assert contract["mark_executed"] is False
+    assert contract["mutation_performed"] is False
+
+
 def test_sdk_noninteractive_report_keeps_feishu_first_channel_strategy() -> None:
     strategy = build_sdk_noninteractive_report().channel_strategy
 
@@ -144,7 +160,7 @@ def test_write_sdk_noninteractive_report_json_and_markdown(tmp_path: Path) -> No
 
     payload = json.loads(json_output.read_text(encoding="utf-8"))
     markdown = markdown_output.read_text(encoding="utf-8")
-    assert payload["status"] == "sdk_read_only_runner_contract_ready"
+    assert payload["status"] == "sdk_write_runner_safety_contract_ready"
     assert payload["full_codex_parity_claimed"] is False
     assert payload["mutation_performed"] is False
     assert "# X-Agent SDK Non-Interactive Report" in markdown

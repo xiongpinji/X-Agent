@@ -382,6 +382,29 @@ Expected: selected approval and sandbox tests pass.
 - [x] Keep write SDK methods owner-gated; no agent runner, `mark_executed`, file/network/channel mutation.
 - [ ] Implement concrete owner-approved write SDK runner after runtime safety review.
 
+### Task 16: Owner-Approved Write Runner Safety Contract
+
+**Target:** Add an auditable safety plan and receipt template for future owner-approved write SDK execution without invoking the write runner.
+
+**Files:**
+- Modify: `backend/app/api/control_plane.py`
+- Modify: `backend/app/sdk/control_plane.py`
+- Modify: `scripts/sdk_noninteractive_report.py`
+- Modify: `scripts/latest_codex_alignment.py`
+- Modify: `tests/test_control_plane_protocol.py`
+- Modify: `tests/test_xagent_sdk_contract.py`
+- Modify: `tests/test_cli_client.py`
+- Modify: `tests/test_sdk_noninteractive_report.py`
+- Modify: `tests/test_latest_codex_alignment.py`
+- Runtime evidence: `.xagent_runtime/reports/sdk-noninteractive-report.json`
+- Runtime evidence: `.xagent_runtime/reports/latest-codex-alignment.json`
+
+- [x] Return `write_runner_safety_contract` from `/sdk/invoke`.
+- [x] Include runner plan fields, guard order, and receipt template.
+- [x] Mark approved write preflight as `ready_for_runner_contract=true` only when approval/resource/tenant checks pass.
+- [x] Keep `runner_invoked=false`, agent/write execution disabled, `mark_executed=false`, and all mutation flags false.
+- [ ] Implement concrete owner-approved write SDK runner after runtime safety review.
+
 ## Completion Criteria
 
 - `scripts/latest_codex_alignment.py` returns `latest_codex_alignment_plan_ready`.
