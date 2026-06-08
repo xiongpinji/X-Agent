@@ -5,6 +5,7 @@ from pathlib import Path
 
 from scripts.commercial_pilot_delivery_manifest import (
     ArtifactSpec,
+    DEFAULT_ARTIFACTS,
     build_delivery_manifest_report,
     write_report,
 )
@@ -182,3 +183,19 @@ def test_write_report_serializes_manifest(tmp_path: Path) -> None:
     assert payload["evidence_type"] == "commercial_pilot_delivery_manifest"
     assert payload["artifacts"][0]["name"] == "ops_status_report"
     assert payload["artifacts"][0]["sha256"]
+
+
+def test_default_manifest_includes_final_handoff_wrapper_script() -> None:
+    spec = next(artifact for artifact in DEFAULT_ARTIFACTS if artifact.name == "final_handoff_script")
+
+    assert spec.path.name == "run_feishu_pilot_final_handoff.ps1"
+    assert spec.category == "source_script"
+    assert spec.required is True
+
+
+def test_default_manifest_includes_final_handoff_wrapper_tests() -> None:
+    spec = next(artifact for artifact in DEFAULT_ARTIFACTS if artifact.name == "final_handoff_tests")
+
+    assert spec.path.name == "test_run_feishu_pilot_final_handoff.py"
+    assert spec.category == "source_test"
+    assert spec.required is True

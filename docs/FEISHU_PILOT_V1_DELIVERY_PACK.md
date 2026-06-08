@@ -60,6 +60,7 @@ Use these files as the canonical source of truth for this pilot:
 | `.xagent_runtime/reports/commercial-pilot-feishu-outbound-live.json` | Optional owner-approved outbound send evidence. |
 | `.xagent_runtime/reports/rc-delivery-status.json` | Frozen commercial RC baseline proof. |
 | `scripts/commercial_pilot_final_gate.py` | One-command final delivery gate. |
+| `scripts/run_feishu_pilot_final_handoff.ps1` | Windows one-step final handoff wrapper; runs final gate before receipt. |
 | `scripts/commercial_pilot_delivery_receipt.py` | Customer delivery receipt generator. |
 | `scripts/commercial_pilot_ops_status.py` | Read-only operations status rollup. |
 | `scripts/commercial_pilot_delivery_manifest.py` | Read-only delivery manifest generator. |
@@ -69,6 +70,7 @@ Use these files as the canonical source of truth for this pilot:
 | `tests/test_commercial_pilot_final_gate.py` | Final gate contract tests. |
 | `tests/test_commercial_pilot_delivery_receipt.py` | Delivery receipt contract tests. |
 | `tests/test_commercial_pilot_delivery_manifest.py` | Delivery manifest contract tests. |
+| `tests/test_run_feishu_pilot_final_handoff.py` | Windows final handoff wrapper contract tests. |
 | `tests/test_feishu_channel_api.py` | Feishu callback contract and live-evidence tests. |
 
 Generated reports under `.xagent_runtime/` are runtime evidence and are not
@@ -203,6 +205,12 @@ Refresh delivery manifest:
 
 ```powershell
 python scripts\commercial_pilot_delivery_manifest.py
+```
+
+Run the Windows one-step final handoff wrapper:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\run_feishu_pilot_final_handoff.ps1
 ```
 
 Run the final pre-handoff gate:
@@ -601,6 +609,7 @@ Handoff status not ready:
 - Rerun the handoff status command with `--fetch-github`.
 - Rerun `scripts\commercial_pilot_ops_status.py`.
 - Rerun `scripts\commercial_pilot_delivery_manifest.py`.
+- Rerun `powershell -ExecutionPolicy Bypass -File scripts\run_feishu_pilot_final_handoff.ps1`.
 - Rerun `scripts\commercial_pilot_final_gate.py`.
 - Rerun `scripts\commercial_pilot_delivery_receipt.py`.
 

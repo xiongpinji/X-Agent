@@ -141,6 +141,11 @@ DEFAULT_ARTIFACTS = (
         ROOT / "scripts" / "commercial_pilot_final_gate.py",
         "source_script",
     ),
+    ArtifactSpec(
+        "final_handoff_script",
+        ROOT / "scripts" / "run_feishu_pilot_final_handoff.ps1",
+        "source_script",
+    ),
     ArtifactSpec("ops_status_script", ROOT / "scripts" / "commercial_pilot_ops_status.py", "source_script"),
     ArtifactSpec("handoff_status_script", ROOT / "scripts" / "commercial_pilot_handoff_status.py", "source_script"),
     ArtifactSpec(
@@ -168,6 +173,11 @@ DEFAULT_ARTIFACTS = (
     ArtifactSpec(
         "final_gate_tests",
         ROOT / "tests" / "test_commercial_pilot_final_gate.py",
+        "source_test",
+    ),
+    ArtifactSpec(
+        "final_handoff_tests",
+        ROOT / "tests" / "test_run_feishu_pilot_final_handoff.py",
         "source_test",
     ),
     ArtifactSpec(
