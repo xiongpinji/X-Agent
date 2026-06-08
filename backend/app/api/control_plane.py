@@ -687,6 +687,30 @@ class SDKRuntimeEnablementReceiptRecordResponse(BaseModel):
     evidence: ControlPlaneEvidence
 
 
+class SDKRuntimeEnablementOwnerPackDecisionRecordRequest(BaseModel):
+    owner_pack_decision_id: str = Field(..., min_length=1, max_length=240)
+    decision: str = Field(..., min_length=1, max_length=20)
+    approval_id: str = Field(..., min_length=1, max_length=240)
+    readiness_receipt_id: str = Field(..., min_length=1, max_length=240)
+    readiness_receipt_audit_id: str = Field(..., min_length=1, max_length=240)
+    owner_acceptance_id: str = Field(..., min_length=1, max_length=240)
+    owner_acceptance_audit_id: str = Field(..., min_length=1, max_length=240)
+    decided_by: str = Field(..., min_length=1, max_length=240)
+    decided_at: str = Field(..., min_length=1, max_length=80)
+    reason: str = Field(..., min_length=1, max_length=1000)
+    decision_signature: str | None = Field(default=None, max_length=500)
+    decision_hash: str | None = Field(default=None, max_length=500)
+    notes: str | None = Field(default=None, max_length=2000)
+    dry_run: bool = True
+
+
+class SDKRuntimeEnablementOwnerPackDecisionRecordResponse(BaseModel):
+    ok: bool
+    status: str
+    owner_pack_decision: dict[str, Any]
+    evidence: ControlPlaneEvidence
+
+
 def _method_catalog() -> list[dict[str, object]]:
     return [spec.to_payload() for spec in METHOD_SPECS]
 
@@ -954,6 +978,11 @@ async def invoke_sdk_control_plane(
         runtime_enablement_review=sdk_metadata["runtime_enablement_review"],
         runtime_implementation_preflight=sdk_metadata["runtime_implementation_preflight"],
     )
+    sdk_metadata["runtime_enablement_owner_pack_decision_workflow"] = (
+        _sdk_runtime_enablement_owner_pack_decision_workflow_contract(
+            sdk_metadata["runtime_enablement_owner_pack"],
+        )
+    )
     return SDKControlPlaneInvokeResponse(
         id=control_request.id,
         ok=control_response.ok,
@@ -1021,6 +1050,38 @@ async def record_sdk_runtime_enablement_receipt(
         ok=receipt["record_status"] == "recorded",
         status="sdk_runtime_enablement_receipt_record_workflow_ready",
         runtime_enablement_receipt=receipt,
+        evidence=evidence,
+    )
+
+
+@router.post(
+    "/sdk/runtime-enablement/owner-pack/decision/record",
+    response_model=SDKRuntimeEnablementOwnerPackDecisionRecordResponse,
+)
+async def record_sdk_runtime_enablement_owner_pack_decision(
+    request: SDKRuntimeEnablementOwnerPackDecisionRecordRequest,
+    principal: PrincipalDependency,
+    audit_store: AuditStoreDependency,
+    approval_store: ApprovalStoreDependency,
+) -> SDKRuntimeEnablementOwnerPackDecisionRecordResponse:
+    """Record an owner decision for the runtime enablement review pack without executing it."""
+    enforce_scope(principal, "workflow:control")
+    trace_id = principal.trace_id or f"trace_{uuid4().hex}"
+    decision = _sdk_record_runtime_enablement_owner_pack_decision(
+        request,
+        principal=principal,
+        approval_store=approval_store,
+        audit_store=audit_store,
+        trace_id=trace_id,
+    )
+    evidence = ControlPlaneEvidence(
+        trace_id=trace_id,
+        audit_id=decision.get("audit_id") if decision.get("audit_event_recorded") else None,
+    )
+    return SDKRuntimeEnablementOwnerPackDecisionRecordResponse(
+        ok=decision["record_status"] == "recorded",
+        status="sdk_runtime_enablement_owner_pack_decision_workflow_ready",
+        owner_pack_decision=decision,
         evidence=evidence,
     )
 
@@ -1314,6 +1375,168 @@ def _sdk_record_runtime_enablement_receipt(
     }
 
 
+def _sdk_runtime_enablement_owner_pack_decision_validation(
+    record: dict[str, Any] | None,
+) -> dict[str, Any]:
+    required_fields = [
+        "owner_pack_decision_id",
+        "decision",
+        "approval_id",
+        "readiness_receipt_id",
+        "readiness_receipt_audit_id",
+        "owner_acceptance_id",
+        "owner_acceptance_audit_id",
+        "decided_by",
+        "decided_at",
+        "reason",
+    ]
+    checks = {
+        "record_present": isinstance(record, dict),
+        "required_fields_present": bool(
+            isinstance(record, dict) and all(record.get(field) not in (None, "") for field in required_fields)
+        ),
+        "decision_allowed": bool(
+            isinstance(record, dict) and record.get("decision") in {"accepted", "rejected"}
+        ),
+        "decided_at_rfc3339": bool(
+            isinstance(record, dict) and _is_rfc3339_timestamp(record.get("decided_at"))
+        ),
+        "signature_or_hash_present": bool(
+            isinstance(record, dict) and (record.get("decision_signature") or record.get("decision_hash"))
+        ),
+    }
+    return {
+        "status": "valid" if all(checks.values()) else "invalid",
+        "checks": checks,
+    }
+
+
+def _sdk_record_runtime_enablement_owner_pack_decision(
+    request: SDKRuntimeEnablementOwnerPackDecisionRecordRequest,
+    *,
+    principal: Principal,
+    approval_store: object,
+    audit_store: AuditStore,
+    trace_id: str,
+) -> dict[str, Any]:
+    approval = approval_store.get(request.approval_id) if hasattr(approval_store, "get") else None
+    readiness_receipt = _sdk_runtime_enablement_readiness_record_from_audit(
+        audit_store,
+        readiness_receipt_id=request.readiness_receipt_id,
+        approval_id=request.approval_id,
+        owner_acceptance_id=request.owner_acceptance_id,
+        audit_id=request.readiness_receipt_audit_id,
+        tenant_id=principal.tenant_id if principal else None,
+    )
+    raw_decision = {
+        "owner_pack_decision_id": request.owner_pack_decision_id,
+        "decision": request.decision,
+        "approval_id": request.approval_id,
+        "readiness_receipt_id": request.readiness_receipt_id,
+        "readiness_receipt_audit_id": request.readiness_receipt_audit_id,
+        "owner_acceptance_id": request.owner_acceptance_id,
+        "owner_acceptance_audit_id": request.owner_acceptance_audit_id,
+        "decided_by": request.decided_by,
+        "decided_at": request.decided_at,
+        "reason": request.reason,
+        "decision_signature": request.decision_signature,
+        "decision_hash": request.decision_hash,
+        "notes": request.notes,
+    }
+    validation = _sdk_runtime_enablement_owner_pack_decision_validation(raw_decision)
+    approval_status = getattr(approval, "status", None)
+    approval_status_value = getattr(approval_status, "value", approval_status)
+    approval_resource_id = getattr(approval, "resource_id", None)
+    approval_tenant_id = getattr(approval, "tenant_id", None)
+    checks = {
+        "approval_found": approval is not None,
+        "approval_status_approved": approval_status == ApprovalStatus.APPROVED or approval_status_value == "approved",
+        "approval_resource_sdk_command": isinstance(approval_resource_id, str)
+        and approval_resource_id.startswith("sdk:"),
+        "tenant_matches": not principal.authenticated or approval_tenant_id == principal.tenant_id,
+        "readiness_receipt_audit_record_present": isinstance(readiness_receipt, dict),
+        "readiness_receipt_validation_valid": bool(
+            isinstance(readiness_receipt, dict)
+            and _sdk_runtime_enablement_receipt_validation(readiness_receipt)["status"] == "valid"
+        ),
+        "decision_valid": validation["status"] == "valid",
+        "dry_run_does_not_execute": request.dry_run is True,
+    }
+    can_record = all(checks.values())
+    decision_payload = {
+        key: value
+        for key, value in raw_decision.items()
+        if value is not None
+    }
+    audit_record = None
+    if can_record:
+        audit_record = audit_store.record(
+            action="sdk.write_runner.runtime_enablement_owner_pack_decision_recorded",
+            resource_type="sdk_write_runner_runtime_enablement_owner_review_pack",
+            resource_id=request.owner_pack_decision_id,
+            outcome=request.decision,
+            tenant_id=approval_tenant_id or principal.tenant_id,
+            actor_id=principal.user_id if principal.authenticated else request.decided_by,
+            trace_id=trace_id,
+            details={
+                "approval_id": request.approval_id,
+                "readiness_receipt_id": request.readiness_receipt_id,
+                "readiness_receipt_audit_id": request.readiness_receipt_audit_id,
+                "owner_acceptance_id": request.owner_acceptance_id,
+                "owner_acceptance_audit_id": request.owner_acceptance_audit_id,
+                "owner_pack_decision": decision_payload,
+                "readiness_receipt_record": readiness_receipt,
+                "validation": validation,
+                "dry_run": request.dry_run,
+                "runtime_flag_enabled": False,
+                "execute_enabled": False,
+                "write_runner_enabled": False,
+                "runner_invoked": False,
+                "mark_executed": False,
+                "mutation_performed": False,
+            },
+        )
+    return {
+        "stage": "runtime_enablement_owner_pack_decision_record_workflow",
+        "record_status": "recorded" if audit_record else "rejected",
+        "recording_endpoint": "/api/v1/control-plane/sdk/runtime-enablement/owner-pack/decision/record",
+        "owner_pack_decision_id": request.owner_pack_decision_id,
+        "decision": request.decision,
+        "approval_id": request.approval_id,
+        "readiness_receipt_id": request.readiness_receipt_id,
+        "readiness_receipt_audit_id": request.readiness_receipt_audit_id,
+        "owner_acceptance_id": request.owner_acceptance_id,
+        "owner_acceptance_audit_id": request.owner_acceptance_audit_id,
+        "approval_status": approval_status_value,
+        "approval_resource_id": approval_resource_id,
+        "checks": checks,
+        "validation": validation,
+        "audit_event_recorded": audit_record is not None,
+        "audit_action": "sdk.write_runner.runtime_enablement_owner_pack_decision_recorded",
+        "audit_id": getattr(audit_record, "id", None) if audit_record else None,
+        "audit_hash": getattr(audit_record, "hash", None) if audit_record else None,
+        "audit_signature_present": bool(getattr(audit_record, "signature", None)) if audit_record else False,
+        "runtime_flag_enabled": False,
+        "execute_enabled": False,
+        "write_runner_enabled": False,
+        "adapter_execution_enabled": False,
+        "agent_execution_enabled": False,
+        "write_execution_enabled": False,
+        "runner_invoked": False,
+        "mark_executed": False,
+        "mutation_performed": False,
+        "network_mutation_performed": False,
+        "file_mutation_performed": False,
+        "channel_mutation_performed": False,
+        "known_limits": [
+            "This endpoint records an owner pack decision only.",
+            "Accepted decisions do not enable the runtime flag.",
+            "Rejected decisions do not roll back or mutate runtime state.",
+            "It does not invoke the SDK write runner or mark an approval executed.",
+        ],
+    }
+
+
 def _sdk_backend_stub_metadata(
     original: SDKControlPlaneInvokeRequest,
     request: ControlPlaneInvokeRequest,
@@ -1332,7 +1555,7 @@ def _sdk_backend_stub_metadata(
     read_only_runner_contract = _sdk_read_only_runner_contract(original, request, response)
     write_runner_safety_contract = _sdk_write_runner_safety_contract(original, request, execution_adapter_contract)
     return {
-        "status": "sdk_runtime_enablement_owner_pack_ready",
+        "status": "sdk_runtime_enablement_owner_pack_decision_workflow_ready",
         "operation": request.context.sdk_operation or original.operation,
         "method": request.method,
         "sdk_surface": request.context.sdk_surface or "python",
@@ -1370,6 +1593,7 @@ def _sdk_backend_stub_metadata(
             "Runtime implementation preflight adapter boundaries are declared but remain disabled.",
             "Runtime enablement readiness receipt recording/readback workflow is owner-gated and disabled for execution.",
             "Runtime enablement owner review pack is ready for audit but disabled for execution.",
+            "Runtime enablement owner pack decision workflow is ready for audit but disabled for execution.",
             "No SDK HTTP adapter execution, agent runner invocation, channel send, file change, or network mutation is enabled.",
             "Write methods remain owner-gated behind the approval/sandbox/admin contract.",
             "Feishu remains the only domestic V1 pilot channel.",
@@ -2665,6 +2889,64 @@ def _sdk_runtime_enablement_owner_pack_contract(
             "This pack aggregates owner review evidence only.",
             "It does not record a new audit event by /sdk/invoke.",
             "It does not enable the runtime flag or invoke the SDK write runner.",
+        ],
+    }
+
+
+def _sdk_runtime_enablement_owner_pack_decision_workflow_contract(
+    owner_pack: dict[str, Any],
+) -> dict[str, Any]:
+    checks = {
+        "owner_pack_ready_but_disabled": owner_pack.get("pack_status") == "ready_but_disabled",
+        "manual_review_required": owner_pack.get("owner_decision_policy", {}).get("manual_review_required")
+        is True,
+        "runtime_flag_cannot_be_enabled_after_pack": owner_pack.get("owner_decision_policy", {}).get(
+            "can_enable_runtime_flag_after_pack"
+        )
+        is False,
+        "runtime_flag_still_disabled": owner_pack.get("runtime_flag_enabled") is False,
+        "runner_not_invoked": owner_pack.get("runner_invoked") is False,
+        "mark_executed_disabled": owner_pack.get("mark_executed") is False,
+        "mutation_still_disabled": owner_pack.get("mutation_performed") is False,
+    }
+    ready = all(checks.values())
+    return {
+        "available": owner_pack.get("available") is True,
+        "stage": "runtime_enablement_owner_pack_decision_record_workflow",
+        "workflow_status": "ready_but_disabled" if ready else "blocked",
+        "endpoint": "/api/v1/control-plane/sdk/runtime-enablement/owner-pack/decision/record",
+        "sdk_operation": "runtime_enablement_owner_pack_decision_record",
+        "cli_command": "xagent sdk runtime-enable-owner-pack-decision-record --execute",
+        "requires_approved_sdk_approval": True,
+        "requires_runtime_enablement_readiness_receipt": True,
+        "requires_decision_accept_or_reject": True,
+        "requires_signature_or_hash": True,
+        "audit_action": "sdk.write_runner.runtime_enablement_owner_pack_decision_recorded",
+        "resource_type": "sdk_write_runner_runtime_enablement_owner_review_pack",
+        "audit_event_recorded_by_sdk_invoke": False,
+        "allowed_decisions": ["accepted", "rejected"],
+        "decision_effect": {
+            "accepted_enables_runtime_flag": False,
+            "rejected_rolls_back_runtime": False,
+            "marks_approval_executed": False,
+        },
+        "checks": checks,
+        "runtime_flag_enabled": False,
+        "execute_enabled": False,
+        "write_runner_enabled": False,
+        "adapter_execution_enabled": False,
+        "agent_execution_enabled": False,
+        "write_execution_enabled": False,
+        "runner_invoked": False,
+        "mark_executed": False,
+        "mutation_performed": False,
+        "network_mutation_performed": False,
+        "file_mutation_performed": False,
+        "channel_mutation_performed": False,
+        "known_limits": [
+            "This workflow records owner pack accept/reject decisions only.",
+            "It does not enable the runtime flag or invoke the SDK write runner.",
+            "It does not mark approvals executed or mutate runtime state.",
         ],
     }
 

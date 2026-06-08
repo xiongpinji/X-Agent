@@ -99,6 +99,30 @@ def _emit_or_record_runtime_receipt(payload: dict[str, object], *, execute: bool
     _emit(result)
 
 
+def _emit_or_record_owner_pack_decision(payload: dict[str, object], *, execute: bool) -> None:
+    if not execute:
+        _emit(payload)
+        return
+
+    config = get_current_config()
+    try:
+        client = create_client(config)
+        request_payload = payload.get("request")
+        if not isinstance(request_payload, dict):
+            raise XAgentCLIError("SDK runtime enablement owner pack decision envelope is missing request payload.")
+        result = asyncio.run(client.record_sdk_runtime_enablement_owner_pack_decision(request_payload))
+    except NotImplementedError as e:
+        typer.echo(f"SDK runtime enablement owner pack decision recording failed: {e}", err=True)
+        raise typer.Exit(code=1)
+    except (ConnectionError, AuthError, APIError) as e:
+        typer.echo(f"SDK runtime enablement owner pack decision recording failed: {e}", err=True)
+        raise typer.Exit(code=1)
+    except XAgentCLIError as e:
+        typer.echo(f"SDK CLI error: {e}", err=True)
+        raise typer.Exit(code=1)
+    _emit(result)
+
+
 @sdk_app.command("thread-start")
 def thread_start(
     task: str = typer.Argument(..., help="Task text for the new thread."),
@@ -263,3 +287,39 @@ def runtime_enable_receipt_record(
         dry_run=not execute,
     )
     _emit_or_record_runtime_receipt(contract.to_dict(), execute=execute)
+
+
+@sdk_app.command("runtime-enable-owner-pack-decision-record")
+def runtime_enable_owner_pack_decision_record(
+    owner_pack_decision_id: str = typer.Option(..., "--decision-id"),
+    decision: str = typer.Option(..., "--decision"),
+    approval_id: str = typer.Option(..., "--approval-id"),
+    readiness_receipt_id: str = typer.Option(..., "--readiness-receipt-id"),
+    readiness_receipt_audit_id: str = typer.Option(..., "--readiness-receipt-audit-id"),
+    owner_acceptance_id: str = typer.Option(..., "--acceptance-id"),
+    owner_acceptance_audit_id: str = typer.Option(..., "--acceptance-audit-id"),
+    decided_by: str = typer.Option(..., "--decided-by"),
+    decided_at: str = typer.Option(..., "--decided-at"),
+    reason: str = typer.Option(..., "--reason"),
+    decision_signature: Optional[str] = typer.Option(None, "--decision-signature"),
+    decision_hash: Optional[str] = typer.Option(None, "--decision-hash"),
+    notes: Optional[str] = typer.Option(None, "--notes"),
+    execute: bool = typer.Option(False, "--execute", help="Record owner pack accept/reject decision in the backend audit log."),
+) -> None:
+    contract = ControlPlaneSDK().record_runtime_enablement_owner_pack_decision(
+        owner_pack_decision_id=owner_pack_decision_id,
+        decision=decision,
+        approval_id=approval_id,
+        readiness_receipt_id=readiness_receipt_id,
+        readiness_receipt_audit_id=readiness_receipt_audit_id,
+        owner_acceptance_id=owner_acceptance_id,
+        owner_acceptance_audit_id=owner_acceptance_audit_id,
+        decided_by=decided_by,
+        decided_at=decided_at,
+        reason=reason,
+        decision_signature=decision_signature,
+        decision_hash=decision_hash,
+        notes=notes,
+        dry_run=not execute,
+    )
+    _emit_or_record_owner_pack_decision(contract.to_dict(), execute=execute)

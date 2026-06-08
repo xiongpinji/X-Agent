@@ -74,6 +74,21 @@ class SDKRuntimeEnablementReceiptRecordContract:
         return payload
 
 
+@dataclass(frozen=True)
+class SDKRuntimeEnablementOwnerPackDecisionRecordContract:
+    operation: str
+    endpoint: str
+    request: dict[str, Any]
+    owner_gate: dict[str, Any]
+    known_limits: list[str]
+
+    def to_dict(self) -> dict[str, Any]:
+        payload = asdict(self)
+        payload["mutation_performed"] = False
+        payload["network_mutation_performed"] = False
+        return payload
+
+
 class ControlPlaneSDK:
     """Build SDK-compatible control-plane request envelopes."""
 
@@ -277,6 +292,65 @@ class ControlPlaneSDK:
             },
             known_limits=[
                 "This SDK contract records runtime enablement readiness evidence only.",
+                "It does not enable runtime flags or invoke the write runner.",
+                "It does not mark an approval executed.",
+            ],
+        )
+
+    def record_runtime_enablement_owner_pack_decision(
+        self,
+        *,
+        owner_pack_decision_id: str,
+        decision: str,
+        approval_id: str,
+        readiness_receipt_id: str,
+        readiness_receipt_audit_id: str,
+        owner_acceptance_id: str,
+        owner_acceptance_audit_id: str,
+        decided_by: str,
+        decided_at: str,
+        reason: str,
+        decision_signature: str | None = None,
+        decision_hash: str | None = None,
+        notes: str | None = None,
+        dry_run: bool = True,
+    ) -> SDKRuntimeEnablementOwnerPackDecisionRecordContract:
+        return SDKRuntimeEnablementOwnerPackDecisionRecordContract(
+            operation="runtime_enablement_owner_pack_decision_record",
+            endpoint="/api/v1/control-plane/sdk/runtime-enablement/owner-pack/decision/record",
+            request={
+                "owner_pack_decision_id": owner_pack_decision_id,
+                "decision": decision,
+                "approval_id": approval_id,
+                "readiness_receipt_id": readiness_receipt_id,
+                "readiness_receipt_audit_id": readiness_receipt_audit_id,
+                "owner_acceptance_id": owner_acceptance_id,
+                "owner_acceptance_audit_id": owner_acceptance_audit_id,
+                "decided_by": decided_by,
+                "decided_at": decided_at,
+                "reason": reason,
+                "decision_signature": decision_signature,
+                "decision_hash": decision_hash,
+                "notes": notes,
+                "dry_run": dry_run,
+            },
+            owner_gate={
+                "requires_approved_sdk_approval": True,
+                "requires_runtime_enablement_readiness_receipt": True,
+                "requires_decision_accept_or_reject": True,
+                "requires_signature_or_hash": True,
+                "marks_approval_executed": False,
+                "runtime_flag_enabled": False,
+                "execute_enabled": False,
+                "write_runner_enabled": False,
+                "agent_execution_enabled": False,
+                "runner_invoked": False,
+                "mark_executed": False,
+                "mutation_performed": False,
+                "network_mutation_performed": False,
+            },
+            known_limits=[
+                "This SDK contract records an owner pack accept/reject decision only.",
                 "It does not enable runtime flags or invoke the write runner.",
                 "It does not mark an approval executed.",
             ],

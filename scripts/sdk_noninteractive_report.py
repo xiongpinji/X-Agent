@@ -65,6 +65,7 @@ class SDKNonInteractiveReport:
     runtime_implementation_preflight: dict[str, Any]
     runtime_enablement_receipt_record_workflow: dict[str, Any]
     runtime_enablement_owner_pack: dict[str, Any]
+    runtime_enablement_owner_pack_decision_workflow: dict[str, Any]
     channel_strategy: dict[str, Any]
     checks: list[SDKNonInteractiveCheck]
     official_sources: list[str]
@@ -119,6 +120,19 @@ def _sdk_contracts() -> list[dict[str, Any]]:
             rollback_runbook_acknowledged=True,
             failure_receipt_reviewed=True,
             acceptance_hash="<acceptance_hash>",
+        ).to_dict(),
+        sdk.record_runtime_enablement_owner_pack_decision(
+            owner_pack_decision_id="<owner_pack_decision_id>",
+            decision="accepted",
+            approval_id="<approval_id>",
+            readiness_receipt_id="<readiness_receipt_id>",
+            readiness_receipt_audit_id="<readiness_receipt_audit_id>",
+            owner_acceptance_id="<owner_acceptance_id>",
+            owner_acceptance_audit_id="<owner_acceptance_audit_id>",
+            decided_by="<owner>",
+            decided_at="2026-06-08T00:00:00Z",
+            reason="<reason>",
+            decision_hash="<decision_hash>",
         ).to_dict(),
     ]
 
@@ -197,6 +211,14 @@ def _cli_commands() -> list[dict[str, Any]]:
             "execute_target": "/api/v1/control-plane/sdk/runtime-enablement/receipt/record",
             "execute_starts_agent": False,
         },
+        {
+            "command": "xagent sdk runtime-enable-owner-pack-decision-record --decision accepted --decision-id <owner_pack_decision_id> --approval-id <approval_id> --readiness-receipt-id <readiness_receipt_id> --readiness-receipt-audit-id <readiness_receipt_audit_id> --execute",
+            "method": "runtime_enablement_owner_pack_decision_record",
+            "non_interactive": True,
+            "dry_run_default": True,
+            "execute_target": "/api/v1/control-plane/sdk/runtime-enablement/owner-pack/decision/record",
+            "execute_starts_agent": False,
+        },
     ]
 
 
@@ -254,11 +276,13 @@ def _build_checks(report_payload: dict[str, Any]) -> list[SDKNonInteractiveCheck
     implementation_preflight = report_payload["runtime_implementation_preflight"]
     receipt_record_workflow = report_payload["runtime_enablement_receipt_record_workflow"]
     owner_pack = report_payload["runtime_enablement_owner_pack"]
+    owner_pack_decision = report_payload["runtime_enablement_owner_pack_decision_workflow"]
     methods = [_sdk_contract_method(contract) for contract in contracts]
     command_methods = [command["method"] for command in commands]
     allowed_execute_targets = {
         "/api/v1/control-plane/sdk/invoke",
         "/api/v1/control-plane/sdk/runtime-enablement/receipt/record",
+        "/api/v1/control-plane/sdk/runtime-enablement/owner-pack/decision/record",
     }
     cli_execute_targets = [
         command["method"]
@@ -285,10 +309,11 @@ def _build_checks(report_payload: dict[str, Any]) -> list[SDKNonInteractiveCheck
                 "runtime/evidence/read",
                 "runtime/evidence/read",
                 "runtime_enablement_receipt_record",
+                "runtime_enablement_owner_pack_decision_record",
             ]
             else "failed",
             details={"methods": methods},
-            error=None if len(methods) == 9 else "SDK methods are incomplete",
+            error=None if len(methods) == 10 else "SDK methods are incomplete",
         ),
         SDKNonInteractiveCheck(
             name="cli_non_interactive_commands_complete",
@@ -746,6 +771,34 @@ def _build_checks(report_payload: dict[str, Any]) -> list[SDKNonInteractiveCheck
             else "runtime enablement owner pack is not ready but disabled",
         ),
         SDKNonInteractiveCheck(
+            name="runtime_enablement_owner_pack_decision_workflow_ready",
+            status="passed"
+            if owner_pack_decision.get("stage") == "runtime_enablement_owner_pack_decision_record_workflow"
+            and owner_pack_decision.get("workflow_status") == "ready_but_disabled"
+            and owner_pack_decision.get("endpoint")
+            == "/api/v1/control-plane/sdk/runtime-enablement/owner-pack/decision/record"
+            and owner_pack_decision.get("audit_action")
+            == "sdk.write_runner.runtime_enablement_owner_pack_decision_recorded"
+            and owner_pack_decision.get("requires_approved_sdk_approval") is True
+            and owner_pack_decision.get("requires_runtime_enablement_readiness_receipt") is True
+            and owner_pack_decision.get("requires_decision_accept_or_reject") is True
+            and owner_pack_decision.get("requires_signature_or_hash") is True
+            and owner_pack_decision.get("audit_event_recorded_by_sdk_invoke") is False
+            and owner_pack_decision.get("runtime_flag_enabled") is False
+            and owner_pack_decision.get("execute_enabled") is False
+            and owner_pack_decision.get("write_runner_enabled") is False
+            and owner_pack_decision.get("adapter_execution_enabled") is False
+            and owner_pack_decision.get("agent_execution_enabled") is False
+            and owner_pack_decision.get("runner_invoked") is False
+            and owner_pack_decision.get("mark_executed") is False
+            and owner_pack_decision.get("mutation_performed") is False
+            else "failed",
+            details=owner_pack_decision,
+            error=None
+            if owner_pack_decision.get("workflow_status") == "ready_but_disabled"
+            else "runtime enablement owner pack decision workflow is not ready but disabled",
+        ),
+        SDKNonInteractiveCheck(
             name="feishu_domestic_v1_primary",
             status="passed"
             if report_payload["channel_strategy"].get("domestic_v1_primary") == "feishu"
@@ -769,7 +822,7 @@ def _build_checks(report_payload: dict[str, Any]) -> list[SDKNonInteractiveCheck
 
 def build_sdk_noninteractive_report() -> SDKNonInteractiveReport:
     report_payload: dict[str, Any] = {
-        "status": "sdk_runtime_enablement_owner_pack_ready",
+        "status": "sdk_runtime_enablement_owner_pack_decision_workflow_ready",
         "generated_at": _utc_now(),
         "evidence_type": "sdk_noninteractive_cli_contract",
         "full_codex_parity_claimed": False,
@@ -782,7 +835,7 @@ def build_sdk_noninteractive_report() -> SDKNonInteractiveReport:
         "backend_stub": {
             "endpoint": "/api/v1/control-plane/sdk/invoke",
             "normalizes_to": "/api/v1/control-plane/invoke",
-            "status": "sdk_runtime_enablement_owner_pack_ready",
+            "status": "sdk_runtime_enablement_owner_pack_decision_workflow_ready",
             "approval_subject_type": "command",
             "approval_intent_created_for_write_methods": True,
             "owner_gate_required": True,
@@ -1571,6 +1624,38 @@ def build_sdk_noninteractive_report() -> SDKNonInteractiveReport:
             "file_mutation_performed": False,
             "channel_mutation_performed": False,
         },
+        "runtime_enablement_owner_pack_decision_workflow": {
+            "stage": "runtime_enablement_owner_pack_decision_record_workflow",
+            "workflow_status": "ready_but_disabled",
+            "endpoint": "/api/v1/control-plane/sdk/runtime-enablement/owner-pack/decision/record",
+            "sdk_operation": "runtime_enablement_owner_pack_decision_record",
+            "cli_command": "xagent sdk runtime-enable-owner-pack-decision-record --execute",
+            "requires_approved_sdk_approval": True,
+            "requires_runtime_enablement_readiness_receipt": True,
+            "requires_decision_accept_or_reject": True,
+            "requires_signature_or_hash": True,
+            "audit_action": "sdk.write_runner.runtime_enablement_owner_pack_decision_recorded",
+            "resource_type": "sdk_write_runner_runtime_enablement_owner_review_pack",
+            "audit_event_recorded_by_sdk_invoke": False,
+            "allowed_decisions": ["accepted", "rejected"],
+            "decision_effect": {
+                "accepted_enables_runtime_flag": False,
+                "rejected_rolls_back_runtime": False,
+                "marks_approval_executed": False,
+            },
+            "runtime_flag_enabled": False,
+            "execute_enabled": False,
+            "write_runner_enabled": False,
+            "adapter_execution_enabled": False,
+            "agent_execution_enabled": False,
+            "write_execution_enabled": False,
+            "runner_invoked": False,
+            "mark_executed": False,
+            "mutation_performed": False,
+            "network_mutation_performed": False,
+            "file_mutation_performed": False,
+            "channel_mutation_performed": False,
+        },
         "channel_strategy": _channel_strategy(),
         "official_sources": list(CODEX_SDK_SOURCES),
         "known_limits": [
@@ -1595,6 +1680,7 @@ def build_sdk_noninteractive_report() -> SDKNonInteractiveReport:
             "Runtime implementation preflight adapter boundaries are ready for owner review but remain disabled.",
             "Runtime enablement readiness receipt recording/readback workflow is owner-gated and remains disabled for execution.",
             "Runtime enablement owner review pack is ready for audit but remains disabled for execution.",
+            "Runtime enablement owner pack accept/reject decisions can be recorded, but they do not enable execution.",
             "No SDK HTTP adapter, agent runner, file mutation, channel send, or network mutation is enabled.",
             "Feishu remains the only domestic V1 pilot channel in this contract.",
             "Slack is tracked as a Codex reference surface, but it is non-blocking for the domestic first version.",
@@ -1757,6 +1843,13 @@ def render_markdown_report(report: SDKNonInteractiveReport) -> str:
         f"- Can enable runtime flag after pack: `{report.runtime_enablement_owner_pack['owner_decision_policy']['can_enable_runtime_flag_after_pack']}`\n"
         f"- Write runner enabled: `{report.runtime_enablement_owner_pack['write_runner_enabled']}`\n"
         f"- Runner invoked: `{report.runtime_enablement_owner_pack['runner_invoked']}`\n\n"
+        "## Runtime Enablement Owner Pack Decision Workflow\n\n"
+        f"- Stage: `{report.runtime_enablement_owner_pack_decision_workflow['stage']}`\n"
+        f"- Workflow status: `{report.runtime_enablement_owner_pack_decision_workflow['workflow_status']}`\n"
+        f"- Endpoint: `{report.runtime_enablement_owner_pack_decision_workflow['endpoint']}`\n"
+        f"- Audit action: `{report.runtime_enablement_owner_pack_decision_workflow['audit_action']}`\n"
+        f"- Write runner enabled: `{report.runtime_enablement_owner_pack_decision_workflow['write_runner_enabled']}`\n"
+        f"- Runner invoked: `{report.runtime_enablement_owner_pack_decision_workflow['runner_invoked']}`\n\n"
         "## Channel Strategy\n\n"
         f"- Domestic V1 primary: `{report.channel_strategy['domestic_v1_primary']}`\n"
         f"- Telegram required: `{report.channel_strategy['telegram_required']}`\n"
@@ -1804,7 +1897,7 @@ def main() -> int:
         print(f"- {check.name}: {check.status}")
         if check.error:
             print(f"  error: {check.error}")
-    return 0 if report.status == "sdk_runtime_enablement_owner_pack_ready" else 1
+    return 0 if report.status == "sdk_runtime_enablement_owner_pack_decision_workflow_ready" else 1
 
 
 if __name__ == "__main__":
