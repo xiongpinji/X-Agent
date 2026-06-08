@@ -223,3 +223,15 @@ def test_default_manifest_includes_handoff_index_artifacts() -> None:
     assert tests.path.name == "test_commercial_pilot_handoff_index.py"
     assert tests.category == "source_test"
     assert tests.required is True
+
+
+def test_default_manifest_includes_commercial_pilot_api_contract() -> None:
+    api = next(artifact for artifact in DEFAULT_ARTIFACTS if artifact.name == "commercial_pilot_api")
+    tests = next(artifact for artifact in DEFAULT_ARTIFACTS if artifact.name == "commercial_pilot_api_tests")
+
+    assert api.path.name == "commercial_pilot.py"
+    assert api.category == "source_api"
+    assert api.required is True
+    assert tests.path.name == "test_commercial_pilot_api.py"
+    assert tests.category == "source_test"
+    assert tests.required is True

@@ -166,6 +166,11 @@ DEFAULT_ARTIFACTS = (
         "source_script",
     ),
     ArtifactSpec(
+        "commercial_pilot_api",
+        ROOT / "backend" / "app" / "api" / "commercial_pilot.py",
+        "source_api",
+    ),
+    ArtifactSpec(
         "acceptance_gate_tests",
         ROOT / "tests" / "test_commercial_pilot_acceptance_gate.py",
         "source_test",
@@ -209,6 +214,11 @@ DEFAULT_ARTIFACTS = (
     ArtifactSpec(
         "feishu_outbound_smoke_tests",
         ROOT / "tests" / "test_commercial_pilot_feishu_outbound_smoke.py",
+        "source_test",
+    ),
+    ArtifactSpec(
+        "commercial_pilot_api_tests",
+        ROOT / "tests" / "test_commercial_pilot_api.py",
         "source_test",
     ),
 )

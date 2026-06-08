@@ -80,6 +80,8 @@ Use these files as the canonical source of truth for this pilot:
 | `tests/test_commercial_pilot_handoff_index.py` | Customer handoff index contract tests. |
 | `tests/test_commercial_pilot_delivery_receipt.py` | Delivery receipt contract tests. |
 | `tests/test_commercial_pilot_delivery_manifest.py` | Delivery manifest contract tests. |
+| `backend/app/api/commercial_pilot.py` | Stable read-only Feishu pilot report API contract. |
+| `tests/test_commercial_pilot_api.py` | Feishu pilot report API contract tests. |
 | `tests/test_run_feishu_pilot_final_handoff.py` | Windows final handoff wrapper contract tests. |
 | `tests/test_feishu_channel_api.py` | Feishu callback contract and live-evidence tests. |
 
@@ -247,6 +249,14 @@ Generate the customer handoff archive index:
 python scripts\commercial_pilot_handoff_index.py
 ```
 
+Read the stable Feishu pilot operations API:
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:8000/api/v1/commercial-pilot/feishu/status
+Invoke-RestMethod http://127.0.0.1:8000/api/v1/commercial-pilot/feishu/reports
+Invoke-RestMethod http://127.0.0.1:8000/api/v1/commercial-pilot/feishu/reports/acceptance_gate
+```
+
 Refresh full pilot evidence:
 
 ```powershell
@@ -306,6 +316,20 @@ Commercial pilot handoff index status: handoff_index_ready
 - acceptance_gate_ready: passed
 - no_full_codex_parity_claim: passed
 - no_archive_mutation: passed
+```
+
+Expected stable API status:
+
+```json
+{
+  "status": "pilot_operational_ready",
+  "pilot_channel": "feishu",
+  "acceptance_gate_status": "pilot_acceptance_ready",
+  "handoff_index_status": "handoff_index_ready",
+  "full_codex_parity_claimed": false,
+  "mutation_performed": false,
+  "outbound_message_sent": false
+}
 ```
 
 ## 8. Evidence Acceptance Criteria
@@ -617,6 +641,9 @@ Suggested UI status mapping:
 | `handoff_index_ready` | Ready | Customer archive index and required evidence digests are complete. |
 | `handoff_index_action_required` | Action required | A required archive artifact is missing or not ready. |
 | `handoff_index_blocked` | Blocked | Archive evidence contains an unsafe claim or mutation. |
+| `pilot_operational_ready` | Ready | Stable API accepted the Feishu pilot operations report set. |
+| `pilot_operational_action_required` | Action required | Stable API found missing or non-ready report evidence. |
+| `pilot_operational_blocked` | Blocked | Stable API found unsafe claim or mutation evidence. |
 | `pilot_acceptance_ready` | Ready | Operations acceptance gate has accepted final gate, receipt, handoff, ops, manifest, and Feishu live evidence. |
 | `pilot_acceptance_action_required` | Action required | Required acceptance evidence is missing or not ready. |
 | `pilot_acceptance_blocked` | Blocked | Acceptance evidence contains an unsafe claim, mutation, or identity mismatch. |
