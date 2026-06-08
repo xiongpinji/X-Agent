@@ -123,6 +123,30 @@ def _emit_or_record_owner_pack_decision(payload: dict[str, object], *, execute: 
     _emit(result)
 
 
+def _emit_or_record_runtime_implementation_lock(payload: dict[str, object], *, execute: bool) -> None:
+    if not execute:
+        _emit(payload)
+        return
+
+    config = get_current_config()
+    try:
+        client = create_client(config)
+        request_payload = payload.get("request")
+        if not isinstance(request_payload, dict):
+            raise XAgentCLIError("SDK runtime implementation readiness lock envelope is missing request payload.")
+        result = asyncio.run(client.record_sdk_runtime_implementation_readiness_lock(request_payload))
+    except NotImplementedError as e:
+        typer.echo(f"SDK runtime implementation readiness lock recording failed: {e}", err=True)
+        raise typer.Exit(code=1)
+    except (ConnectionError, AuthError, APIError) as e:
+        typer.echo(f"SDK runtime implementation readiness lock recording failed: {e}", err=True)
+        raise typer.Exit(code=1)
+    except XAgentCLIError as e:
+        typer.echo(f"SDK CLI error: {e}", err=True)
+        raise typer.Exit(code=1)
+    _emit(result)
+
+
 @sdk_app.command("thread-start")
 def thread_start(
     task: str = typer.Argument(..., help="Task text for the new thread."),
@@ -323,3 +347,41 @@ def runtime_enable_owner_pack_decision_record(
         dry_run=not execute,
     )
     _emit_or_record_owner_pack_decision(contract.to_dict(), execute=execute)
+
+
+@sdk_app.command("runtime-implementation-readiness-lock-record")
+def runtime_implementation_readiness_lock_record(
+    implementation_lock_id: str = typer.Option(..., "--implementation-lock-id"),
+    idempotency_key: str = typer.Option(..., "--idempotency-key"),
+    idempotency_hash: str = typer.Option(..., "--idempotency-hash"),
+    approval_id: str = typer.Option(..., "--approval-id"),
+    readiness_receipt_id: str = typer.Option(..., "--readiness-receipt-id"),
+    readiness_receipt_audit_id: str = typer.Option(..., "--readiness-receipt-audit-id"),
+    owner_pack_decision_id: str = typer.Option(..., "--decision-id"),
+    owner_pack_decision_audit_id: str = typer.Option(..., "--decision-audit-id"),
+    operator_id: str = typer.Option(..., "--operator-id"),
+    locked_at: str = typer.Option(..., "--locked-at"),
+    lock_reason: str = typer.Option(..., "--lock-reason"),
+    lock_signature: Optional[str] = typer.Option(None, "--lock-signature"),
+    lock_hash: Optional[str] = typer.Option(None, "--lock-hash"),
+    notes: Optional[str] = typer.Option(None, "--notes"),
+    execute: bool = typer.Option(False, "--execute", help="Record runtime implementation readiness lock in the backend audit log."),
+) -> None:
+    contract = ControlPlaneSDK().record_runtime_implementation_readiness_lock(
+        implementation_lock_id=implementation_lock_id,
+        idempotency_key=idempotency_key,
+        idempotency_hash=idempotency_hash,
+        approval_id=approval_id,
+        readiness_receipt_id=readiness_receipt_id,
+        readiness_receipt_audit_id=readiness_receipt_audit_id,
+        owner_pack_decision_id=owner_pack_decision_id,
+        owner_pack_decision_audit_id=owner_pack_decision_audit_id,
+        operator_id=operator_id,
+        locked_at=locked_at,
+        lock_reason=lock_reason,
+        lock_signature=lock_signature,
+        lock_hash=lock_hash,
+        notes=notes,
+        dry_run=not execute,
+    )
+    _emit_or_record_runtime_implementation_lock(contract.to_dict(), execute=execute)

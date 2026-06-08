@@ -89,6 +89,21 @@ class SDKRuntimeEnablementOwnerPackDecisionRecordContract:
         return payload
 
 
+@dataclass(frozen=True)
+class SDKRuntimeImplementationReadinessLockRecordContract:
+    operation: str
+    endpoint: str
+    request: dict[str, Any]
+    owner_gate: dict[str, Any]
+    known_limits: list[str]
+
+    def to_dict(self) -> dict[str, Any]:
+        payload = asdict(self)
+        payload["mutation_performed"] = False
+        payload["network_mutation_performed"] = False
+        return payload
+
+
 class ControlPlaneSDK:
     """Build SDK-compatible control-plane request envelopes."""
 
@@ -351,6 +366,69 @@ class ControlPlaneSDK:
             },
             known_limits=[
                 "This SDK contract records an owner pack accept/reject decision only.",
+                "It does not enable runtime flags or invoke the write runner.",
+                "It does not mark an approval executed.",
+            ],
+        )
+
+    def record_runtime_implementation_readiness_lock(
+        self,
+        *,
+        implementation_lock_id: str,
+        idempotency_key: str,
+        idempotency_hash: str,
+        approval_id: str,
+        readiness_receipt_id: str,
+        readiness_receipt_audit_id: str,
+        owner_pack_decision_id: str,
+        owner_pack_decision_audit_id: str,
+        operator_id: str,
+        locked_at: str,
+        lock_reason: str,
+        lock_signature: str | None = None,
+        lock_hash: str | None = None,
+        notes: str | None = None,
+        dry_run: bool = True,
+    ) -> SDKRuntimeImplementationReadinessLockRecordContract:
+        return SDKRuntimeImplementationReadinessLockRecordContract(
+            operation="runtime_implementation_readiness_lock_record",
+            endpoint="/api/v1/control-plane/sdk/runtime-implementation/readiness-lock/record",
+            request={
+                "implementation_lock_id": implementation_lock_id,
+                "idempotency_key": idempotency_key,
+                "idempotency_hash": idempotency_hash,
+                "approval_id": approval_id,
+                "readiness_receipt_id": readiness_receipt_id,
+                "readiness_receipt_audit_id": readiness_receipt_audit_id,
+                "owner_pack_decision_id": owner_pack_decision_id,
+                "owner_pack_decision_audit_id": owner_pack_decision_audit_id,
+                "operator_id": operator_id,
+                "locked_at": locked_at,
+                "lock_reason": lock_reason,
+                "lock_signature": lock_signature,
+                "lock_hash": lock_hash,
+                "notes": notes,
+                "dry_run": dry_run,
+            },
+            owner_gate={
+                "requires_approved_sdk_approval": True,
+                "requires_runtime_enablement_readiness_receipt": True,
+                "requires_accepted_owner_pack_decision": True,
+                "requires_idempotency_key": True,
+                "requires_idempotency_hash": True,
+                "requires_signature_or_hash": True,
+                "marks_approval_executed": False,
+                "runtime_flag_enabled": False,
+                "execute_enabled": False,
+                "write_runner_enabled": False,
+                "agent_execution_enabled": False,
+                "runner_invoked": False,
+                "mark_executed": False,
+                "mutation_performed": False,
+                "network_mutation_performed": False,
+            },
+            known_limits=[
+                "This SDK contract records a readiness lock and idempotency receipt only.",
                 "It does not enable runtime flags or invoke the write runner.",
                 "It does not mark an approval executed.",
             ],
