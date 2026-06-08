@@ -182,8 +182,8 @@ def test_sdk_control_plane_stub_accepts_thread_start_envelope_without_mutation()
     assert response.status_code == 200
     payload = response.json()
     assert payload["ok"] is False
-    assert payload["status"] == "sdk_write_runner_safety_review_ready"
-    assert payload["sdk"]["status"] == "sdk_write_runner_safety_review_ready"
+    assert payload["status"] == "sdk_write_runner_execute_gate_ready"
+    assert payload["sdk"]["status"] == "sdk_write_runner_execute_gate_ready"
     assert payload["sdk"]["method"] == "thread/start"
     assert payload["sdk"]["dry_run"] is False
     assert payload["sdk"]["idempotency_key_present"] is True
@@ -212,6 +212,18 @@ def test_sdk_control_plane_stub_accepts_thread_start_envelope_without_mutation()
     assert stub["audit_event_recorded"] is False
     assert stub["runner_invoked"] is False
     assert stub["mutation_performed"] is False
+    gate = payload["sdk"]["write_runner_execute_gate"]
+    assert gate["stage"] == "owner_approved_write_runner_execute_gate"
+    assert gate["gate_status"] == "blocked"
+    assert gate["checks"]["write_method"] is True
+    assert gate["checks"]["approved_preflight_ready"] is False
+    assert gate["checks"]["receipt_persisted"] is False
+    assert gate["execute_enabled"] is False
+    assert gate["write_runner_enabled"] is False
+    assert gate["agent_execution_enabled"] is False
+    assert gate["adapter_execution_enabled"] is False
+    assert gate["mark_executed"] is False
+    assert gate["mutation_performed"] is False
     handoff = payload["sdk"]["approval_handoff"]
     assert handoff["available"] is True
     assert handoff["approval_id"] == payload["sdk"]["approval_intent"]["approval_id"]
@@ -278,8 +290,8 @@ def test_sdk_control_plane_stub_reads_approved_execution_adapter_contract_withou
     assert response.status_code == 200
     payload = response.json()
     assert payload["ok"] is False
-    assert payload["status"] == "sdk_write_runner_safety_review_ready"
-    assert payload["sdk"]["status"] == "sdk_write_runner_safety_review_ready"
+    assert payload["status"] == "sdk_write_runner_execute_gate_ready"
+    assert payload["sdk"]["status"] == "sdk_write_runner_execute_gate_ready"
     assert payload["sdk"]["approval_intent"]["created"] is False
     assert payload["sdk"]["approval_intent"]["approval_id"] == approval.id
     adapter = payload["sdk"]["execution_adapter_contract"]
@@ -315,9 +327,37 @@ def test_sdk_control_plane_stub_reads_approved_execution_adapter_contract_withou
     assert stub["receipt_readback_method"] == "runtime/evidence/read"
     assert stub["receipt"]["status"] == "dry_run_planned"
     assert stub["receipt"]["audit_id"] == stub["audit_id"]
+    assert stub["receipt"]["audit_hash"] == stub["audit_hash"]
+    assert stub["receipt"]["audit_signature_present"] is True
+    assert stub["receipt"]["receipt_persisted"] is True
     assert stub["receipt"]["runner_invoked"] is False
     assert stub["receipt"]["mark_executed"] is False
     assert stub["mutation_performed"] is False
+    gate = payload["sdk"]["write_runner_execute_gate"]
+    assert gate["stage"] == "owner_approved_write_runner_execute_gate"
+    assert gate["gate_status"] == "ready_but_disabled"
+    assert gate["approved_approval_id"] == approval.id
+    assert gate["checks"]["write_method"] is True
+    assert gate["checks"]["approved_preflight_ready"] is True
+    assert gate["checks"]["runner_contract_ready"] is True
+    assert gate["checks"]["receipt_persisted"] is True
+    assert gate["checks"]["dry_run_receipt_planned"] is True
+    assert gate["checks"]["audit_event_recorded"] is True
+    assert gate["checks"]["audit_hash_present"] is True
+    assert gate["checks"]["audit_signature_present"] is True
+    assert gate["checks"]["safety_review_passed"] is True
+    assert gate["checks"]["runner_not_invoked"] is True
+    assert gate["checks"]["mark_executed_false"] is True
+    assert gate["checks"]["mutation_false"] is True
+    assert gate["checks"]["idempotency_key_present"] is True
+    assert gate["execute_enabled"] is False
+    assert gate["write_runner_enabled"] is False
+    assert gate["agent_execution_enabled"] is False
+    assert gate["adapter_execution_enabled"] is False
+    assert gate["mark_executed"] is False
+    assert gate["mutation_performed"] is False
+    assert gate["network_mutation_performed"] is False
+    assert gate["next_gate"] == "owner_approved_write_runner_adapter_implementation"
     assert approval_store.pending_count() == 0
     assert approval_store.get(approval.id).status == "approved"
     audit_records = audit_store.list(action="sdk.write_runner.dry_run_planned")
@@ -342,8 +382,8 @@ def test_sdk_control_plane_stub_can_read_thread_through_existing_contract() -> N
     assert response.status_code == 200
     payload = response.json()
     assert payload["ok"] is True
-    assert payload["status"] == "sdk_write_runner_safety_review_ready"
-    assert payload["sdk"]["status"] == "sdk_write_runner_safety_review_ready"
+    assert payload["status"] == "sdk_write_runner_execute_gate_ready"
+    assert payload["sdk"]["status"] == "sdk_write_runner_execute_gate_ready"
     assert payload["sdk"]["method"] == "thread/read"
     assert payload["sdk"]["owner_gate_required"] is False
     assert payload["sdk"]["approval_intent"]["required"] is False
@@ -361,6 +401,11 @@ def test_sdk_control_plane_stub_can_read_thread_through_existing_contract() -> N
     assert runner["agent_execution_enabled"] is False
     assert runner["write_execution_enabled"] is False
     assert "thread/read" in runner["supported_methods"]
+    gate = payload["sdk"]["write_runner_execute_gate"]
+    assert gate["available"] is False
+    assert gate["gate_status"] == "blocked"
+    assert gate["execute_enabled"] is False
+    assert gate["mutation_performed"] is False
     assert payload["sdk"]["mutation_performed"] is False
     assert payload["control_plane"]["result"]["contract"]["dry_run"] is True
     assert payload["control_plane"]["result"]["compatibility"]["sdk_surface"] == "python"
@@ -383,7 +428,7 @@ def test_sdk_control_plane_stub_reads_runtime_evidence_through_read_only_runner(
     assert response.status_code == 200
     payload = response.json()
     assert payload["ok"] is True
-    assert payload["status"] == "sdk_write_runner_safety_review_ready"
+    assert payload["status"] == "sdk_write_runner_execute_gate_ready"
     assert payload["sdk"]["method"] == "runtime/evidence/read"
     runner = payload["sdk"]["read_only_runner_contract"]
     assert runner["available"] is True
@@ -448,7 +493,7 @@ def test_sdk_control_plane_stub_reads_persisted_dry_run_executor_runtime_evidenc
     assert response.status_code == 200
     payload = response.json()
     assert payload["ok"] is True
-    assert payload["status"] == "sdk_write_runner_safety_review_ready"
+    assert payload["status"] == "sdk_write_runner_execute_gate_ready"
     evidence = payload["control_plane"]["result"]["evidence"]
     assert evidence["evidence_type"] == "sdk_dry_run_executor_stub"
     assert evidence["available"] is True

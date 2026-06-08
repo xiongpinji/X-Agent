@@ -493,7 +493,30 @@ Expected: selected approval and sandbox tests pass.
 - [x] Require persisted receipt, dry-run status, audit hash/signature, no runner invocation, no `mark_executed`, and no mutation flags.
 - [x] Keep `write_runner_enabled=false`, `agent_execution_enabled=false`, `adapter_execution_enabled=false`, and `mutation_performed=false`.
 - [x] Promote SDK alignment status to `sdk_write_runner_safety_review_ready`.
-- [ ] Implement the concrete owner-approved write SDK runner only after this safety review is accepted.
+- [x] Use the persisted safety review as an input to the owner-approved write execute gate.
+- [ ] Implement the concrete owner-approved write SDK runner only after execute gate review is accepted.
+
+### Task 21: Owner-Approved Write Runner Execute Gate
+
+**Target:** Consolidate approval preflight, write runner safety contract, persisted dry-run receipt, and safety review into a disabled execute gate contract for future owner-approved write runner implementation.
+
+**Files:**
+- Modify: `backend/app/api/control_plane.py`
+- Modify: `scripts/sdk_noninteractive_report.py`
+- Modify: `scripts/latest_codex_alignment.py`
+- Modify: `tests/test_control_plane_protocol.py`
+- Modify: `tests/test_xagent_sdk_contract.py`
+- Modify: `tests/test_cli_client.py`
+- Modify: `tests/test_sdk_noninteractive_report.py`
+- Modify: `tests/test_latest_codex_alignment.py`
+- Runtime evidence: `.xagent_runtime/reports/sdk-noninteractive-report.json`
+- Runtime evidence: `.xagent_runtime/reports/latest-codex-alignment.json`
+
+- [x] Add `write_runner_execute_gate` to `/sdk/invoke` metadata after the dry-run executor stub is built.
+- [x] Require approved preflight, ready runner contract, persisted dry-run receipt, audit hash/signature, safety review pass, idempotency key, no runner invocation, no `mark_executed`, and no mutation flags.
+- [x] Keep `execute_enabled=false`, `write_runner_enabled=false`, `agent_execution_enabled=false`, `adapter_execution_enabled=false`, and all mutation flags false.
+- [x] Promote SDK alignment status to `sdk_write_runner_execute_gate_ready`.
+- [ ] Implement the concrete owner-approved write SDK runner adapter only after this execute gate contract is accepted.
 
 ## Completion Criteria
 

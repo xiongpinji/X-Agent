@@ -16,7 +16,7 @@ def test_sdk_noninteractive_report_default_is_read_only() -> None:
     report = build_sdk_noninteractive_report()
     payload = report.to_dict()
 
-    assert report.status == "sdk_write_runner_safety_review_ready"
+    assert report.status == "sdk_write_runner_execute_gate_ready"
     assert report.evidence_type == "sdk_noninteractive_cli_contract"
     assert report.full_codex_parity_claimed is False
     assert report.dry_run is True
@@ -184,6 +184,23 @@ def test_sdk_noninteractive_report_covers_persisted_receipt_safety_review() -> N
     assert review["mutation_performed"] is False
 
 
+def test_sdk_noninteractive_report_covers_write_runner_execute_gate() -> None:
+    gate = build_sdk_noninteractive_report().write_runner_execute_gate
+
+    assert gate["stage"] == "owner_approved_write_runner_execute_gate"
+    assert gate["gate_status"] == "ready_but_disabled"
+    assert "approved_preflight_ready" in gate["required_checks"]
+    assert "receipt_persisted" in gate["required_checks"]
+    assert "safety_review_passed" in gate["required_checks"]
+    assert gate["next_gate"] == "owner_approved_write_runner_adapter_implementation"
+    assert gate["execute_enabled"] is False
+    assert gate["write_runner_enabled"] is False
+    assert gate["adapter_execution_enabled"] is False
+    assert gate["agent_execution_enabled"] is False
+    assert gate["mark_executed"] is False
+    assert gate["mutation_performed"] is False
+
+
 def test_sdk_noninteractive_report_keeps_feishu_first_channel_strategy() -> None:
     strategy = build_sdk_noninteractive_report().channel_strategy
 
@@ -204,7 +221,7 @@ def test_write_sdk_noninteractive_report_json_and_markdown(tmp_path: Path) -> No
 
     payload = json.loads(json_output.read_text(encoding="utf-8"))
     markdown = markdown_output.read_text(encoding="utf-8")
-    assert payload["status"] == "sdk_write_runner_safety_review_ready"
+    assert payload["status"] == "sdk_write_runner_execute_gate_ready"
     assert payload["full_codex_parity_claimed"] is False
     assert payload["mutation_performed"] is False
     assert "# X-Agent SDK Non-Interactive Report" in markdown

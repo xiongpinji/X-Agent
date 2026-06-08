@@ -848,6 +848,13 @@ async def invoke_sdk_control_plane(
         trace_id=control_response.evidence.trace_id,
         write_runner_safety_contract=sdk_metadata["write_runner_safety_contract"],
     )
+    sdk_metadata["write_runner_execute_gate"] = _sdk_write_runner_execute_gate(
+        request,
+        control_request,
+        execution_adapter_contract=sdk_metadata["execution_adapter_contract"],
+        write_runner_safety_contract=sdk_metadata["write_runner_safety_contract"],
+        dry_run_executor_stub=sdk_metadata["dry_run_executor_stub"],
+    )
     return SDKControlPlaneInvokeResponse(
         id=control_request.id,
         ok=control_response.ok,
@@ -926,7 +933,7 @@ def _sdk_backend_stub_metadata(
     read_only_runner_contract = _sdk_read_only_runner_contract(original, request, response)
     write_runner_safety_contract = _sdk_write_runner_safety_contract(original, request, execution_adapter_contract)
     return {
-        "status": "sdk_write_runner_safety_review_ready",
+        "status": "sdk_write_runner_execute_gate_ready",
         "operation": request.context.sdk_operation or original.operation,
         "method": request.method,
         "sdk_surface": request.context.sdk_surface or "python",
@@ -955,6 +962,7 @@ def _sdk_backend_stub_metadata(
             "Runtime evidence/read can return the SDK dry-run executor receipt schema and audit readback hints.",
             "Dry-run executor receipts are persisted in the audit log and can be read back through runtime evidence.",
             "Persisted dry-run receipts expose a read-only write-runner safety review gate.",
+            "Owner-approved write dry-run receipts are consolidated into a disabled execute gate contract.",
             "No SDK HTTP adapter execution, agent runner invocation, channel send, file change, or network mutation is enabled.",
             "Write methods remain owner-gated behind the approval/sandbox/admin contract.",
             "Feishu remains the only domestic V1 pilot channel.",
@@ -1305,15 +1313,23 @@ def _sdk_dry_run_executor_stub(
         },
     )
     receipt["audit_id"] = audit.id
+    response_receipt = {
+        **receipt,
+        "audit_hash": audit.hash,
+        "audit_signature_present": bool(audit.signature),
+        "receipt_persisted": True,
+    }
     return {
         "available": True,
         "stub_stage": "owner_approved_write_dry_run_executor",
         "audit_event_recorded": True,
         "audit_action": "sdk.write_runner.dry_run_planned",
         "audit_id": audit.id,
+        "audit_hash": audit.hash,
+        "audit_signature_present": bool(audit.signature),
         "receipt_persisted": True,
         "receipt_readback_method": "runtime/evidence/read",
-        "receipt": receipt,
+        "receipt": response_receipt,
         "runner_invoked": False,
         "agent_execution_enabled": False,
         "write_execution_enabled": False,
@@ -1323,6 +1339,94 @@ def _sdk_dry_run_executor_stub(
         "network_mutation_performed": False,
         "file_mutation_performed": False,
         "channel_mutation_performed": False,
+    }
+
+
+def _sdk_write_runner_execute_gate(
+    original: SDKControlPlaneInvokeRequest,
+    request: ControlPlaneInvokeRequest,
+    *,
+    execution_adapter_contract: dict[str, Any],
+    write_runner_safety_contract: dict[str, Any],
+    dry_run_executor_stub: dict[str, Any],
+) -> dict[str, Any]:
+    spec = METHODS_BY_NAME.get(request.method)
+    receipt = dry_run_executor_stub.get("receipt")
+    receipt_payload = receipt if isinstance(receipt, dict) else None
+    safety_review = _sdk_write_runner_safety_review(receipt_payload)
+    write_method = spec is not None and spec.operation_kind == "write"
+    mutation_keys = (
+        "mutation_performed",
+        "network_mutation_performed",
+        "file_mutation_performed",
+        "channel_mutation_performed",
+    )
+    checks = {
+        "write_method": write_method,
+        "approved_preflight_ready": execution_adapter_contract.get("preflight_status") == "approved_ready"
+        and execution_adapter_contract.get("ready_for_owner_approved_adapter") is True,
+        "runner_contract_ready": write_runner_safety_contract.get("ready_for_runner_contract") is True,
+        "receipt_persisted": dry_run_executor_stub.get("receipt_persisted") is True
+        and bool(receipt_payload and receipt_payload.get("receipt_persisted") is True),
+        "dry_run_receipt_planned": bool(receipt_payload and receipt_payload.get("status") == "dry_run_planned"),
+        "audit_event_recorded": dry_run_executor_stub.get("audit_event_recorded") is True,
+        "audit_hash_present": bool(
+            receipt_payload
+            and isinstance(receipt_payload.get("audit_hash"), str)
+            and receipt_payload.get("audit_hash")
+        ),
+        "audit_signature_present": bool(receipt_payload and receipt_payload.get("audit_signature_present") is True),
+        "safety_review_passed": safety_review.get("status") == "passed",
+        "runner_not_invoked": write_runner_safety_contract.get("runner_invoked") is False
+        and dry_run_executor_stub.get("runner_invoked") is False
+        and bool(receipt_payload and receipt_payload.get("runner_invoked") is False),
+        "mark_executed_false": execution_adapter_contract.get("mark_executed") is False
+        and write_runner_safety_contract.get("mark_executed") is False
+        and dry_run_executor_stub.get("mark_executed") is False
+        and bool(receipt_payload and receipt_payload.get("mark_executed") is False),
+        "mutation_false": all(
+            execution_adapter_contract.get(key) is False
+            and write_runner_safety_contract.get(key) is False
+            and dry_run_executor_stub.get(key) is False
+            and bool(receipt_payload and receipt_payload.get(key) is False)
+            for key in mutation_keys
+        ),
+        "idempotency_key_present": bool(request.idempotency_key)
+        and write_runner_safety_contract.get("required_guards", {}).get("idempotency_key_present") is True,
+    }
+    gate_ready = all(checks.values())
+    return {
+        "available": write_method,
+        "stage": "owner_approved_write_runner_execute_gate",
+        "gate_status": "ready_but_disabled" if gate_ready else "blocked",
+        "method": request.method,
+        "operation": request.context.sdk_operation or original.operation,
+        "approved_approval_id": write_runner_safety_contract.get("approved_approval_id"),
+        "idempotency_key_present": bool(request.idempotency_key),
+        "checks": checks,
+        "safety_review": safety_review,
+        "receipt_readback": {
+            "method": "runtime/evidence/read",
+            "evidence_type": "sdk_dry_run_executor_stub",
+            "audit_id": receipt_payload.get("audit_id") if receipt_payload else None,
+        },
+        "next_gate": "owner_approved_write_runner_adapter_implementation",
+        "execute_enabled": False,
+        "write_runner_enabled": False,
+        "agent_execution_enabled": False,
+        "adapter_execution_enabled": False,
+        "write_execution_enabled": False,
+        "execute_disabled": True,
+        "mark_executed": False,
+        "mutation_performed": False,
+        "network_mutation_performed": False,
+        "file_mutation_performed": False,
+        "channel_mutation_performed": False,
+        "known_limits": [
+            "This gate proves the owner-approved write runner preconditions are machine-readable.",
+            "It intentionally keeps execution disabled until a concrete runner adapter implementation is reviewed.",
+            "No approval is marked executed and no agent, file, network, or channel mutation is performed.",
+        ],
     }
 
 
