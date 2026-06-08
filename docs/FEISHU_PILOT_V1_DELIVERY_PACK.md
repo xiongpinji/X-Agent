@@ -19,6 +19,8 @@ Current machine-readable handoff:
 - RC baseline commit: `592141f35520df62578a00cbb805eeaa7371a940`
 - Hosted CI run: `https://github.com/xiongpinji/X-Agent/actions/runs/27119766813`
 - Final gate report: `.xagent_runtime/reports/commercial-pilot-final-gate.json`
+- Delivery receipt: `.xagent_runtime/reports/commercial-pilot-delivery-receipt.json`
+- Delivery receipt markdown: `.xagent_runtime/reports/commercial-pilot-delivery-receipt.md`
 - Operator status report: `.xagent_runtime/reports/commercial-pilot-ops-status.json`
 - Delivery manifest: `.xagent_runtime/reports/commercial-pilot-delivery-manifest.json`
 - Handoff report: `.xagent_runtime/reports/commercial-pilot-handoff-status.json`
@@ -46,6 +48,8 @@ Use these files as the canonical source of truth for this pilot:
 | Artifact | Purpose |
 | --- | --- |
 | `.xagent_runtime/reports/commercial-pilot-final-gate.json` | Final pre-handoff gate; refreshes ops status before delivery manifest. |
+| `.xagent_runtime/reports/commercial-pilot-delivery-receipt.json` | Customer handoff receipt generated from final gate, ops status, and manifest. |
+| `.xagent_runtime/reports/commercial-pilot-delivery-receipt.md` | Customer-readable Markdown version of the delivery receipt. |
 | `.xagent_runtime/reports/commercial-pilot-ops-status.json` | Single operator and UI status rollup for Feishu Pilot V1. |
 | `.xagent_runtime/reports/commercial-pilot-delivery-manifest.json` | Delivery inventory with SHA-256 digests for handoff artifacts. |
 | `.xagent_runtime/reports/commercial-pilot-handoff-status.json` | Final aggregate Feishu pilot handoff status. |
@@ -56,12 +60,14 @@ Use these files as the canonical source of truth for this pilot:
 | `.xagent_runtime/reports/commercial-pilot-feishu-outbound-live.json` | Optional owner-approved outbound send evidence. |
 | `.xagent_runtime/reports/rc-delivery-status.json` | Frozen commercial RC baseline proof. |
 | `scripts/commercial_pilot_final_gate.py` | One-command final delivery gate. |
+| `scripts/commercial_pilot_delivery_receipt.py` | Customer delivery receipt generator. |
 | `scripts/commercial_pilot_ops_status.py` | Read-only operations status rollup. |
 | `scripts/commercial_pilot_delivery_manifest.py` | Read-only delivery manifest generator. |
 | `scripts/commercial_pilot_handoff_status.py` | Read-only handoff gate. |
 | `scripts/commercial_pilot_refresh_chain.py` | Readiness evidence refresh chain. |
 | `scripts/commercial_pilot_feishu_outbound_smoke.py` | Owner-gated outbound smoke; dry-run by default. |
 | `tests/test_commercial_pilot_final_gate.py` | Final gate contract tests. |
+| `tests/test_commercial_pilot_delivery_receipt.py` | Delivery receipt contract tests. |
 | `tests/test_commercial_pilot_delivery_manifest.py` | Delivery manifest contract tests. |
 | `tests/test_feishu_channel_api.py` | Feishu callback contract and live-evidence tests. |
 
@@ -205,6 +211,12 @@ Run the final pre-handoff gate:
 python scripts\commercial_pilot_final_gate.py
 ```
 
+Generate the customer delivery receipt:
+
+```powershell
+python scripts\commercial_pilot_delivery_receipt.py
+```
+
 Refresh full pilot evidence:
 
 ```powershell
@@ -302,11 +314,27 @@ The final gate report must contain:
 }
 ```
 
+The delivery receipt must contain:
+
+```json
+{
+  "status": "delivery_receipt_ready",
+  "evidence_type": "commercial_pilot_delivery_receipt",
+  "final_gate_status": "final_gate_ready",
+  "ops_status": "pilot_ops_ready",
+  "delivery_manifest_status": "delivery_manifest_ready",
+  "mutation_performed": false,
+  "outbound_message_sent": false,
+  "full_codex_parity_claimed": false
+}
+```
+
 Do not accept the pilot as ready if:
 
 - `full_codex_parity_claimed` is `true`.
 - `outbound_message_sent` is `true` in the inbound evidence report.
 - `commercial-pilot-final-gate.json` is not `final_gate_ready`.
+- `commercial-pilot-delivery-receipt.json` is not `delivery_receipt_ready`.
 - `commercial-pilot-ops-status.json` is not `pilot_ops_ready`.
 - `commercial-pilot-delivery-manifest.json` is not `delivery_manifest_ready`.
 - The pilot tag points at a different commit.
@@ -336,6 +364,31 @@ From `.xagent_runtime/reports/commercial-pilot-final-gate.json`:
 - `checks[].status`
 - `checks[].error`
 - `reports`
+
+From `.xagent_runtime/reports/commercial-pilot-delivery-receipt.json`:
+
+- `status`
+- `generated_at`
+- `evidence_type`
+- `pilot_channel`
+- `pilot_tag_name`
+- `pilot_commit_sha`
+- `rc_tag_name`
+- `rc_commit_sha`
+- `final_gate_status`
+- `ops_status`
+- `delivery_manifest_status`
+- `outbound_owner_gate_status`
+- `artifact_count`
+- `mutation_performed`
+- `outbound_message_sent`
+- `full_codex_parity_claimed`
+- `source_reports[].name`
+- `source_reports[].status`
+- `source_reports[].sha256`
+- `checks[].name`
+- `checks[].status`
+- `checks[].error`
 
 From `.xagent_runtime/reports/commercial-pilot-ops-status.json`:
 
@@ -415,6 +468,8 @@ Suggested UI status mapping:
 | --- | --- | --- |
 | `final_gate_ready` | Ready | Final pre-handoff gate has refreshed and accepted ops status plus manifest. |
 | `final_gate_blocked` | Blocked | Final pre-handoff gate found a failed required check. |
+| `delivery_receipt_ready` | Ready | Customer handoff receipt is generated from accepted evidence. |
+| `delivery_receipt_blocked` | Blocked | Receipt source reports are missing or not accepted. |
 | `pilot_ops_ready` | Ready | Feishu Pilot V1 operations evidence is complete. |
 | `pilot_ops_action_required` | Action required | A required evidence source is missing or not ready. |
 | `pilot_ops_blocked` | Blocked | A hard mismatch or unsafe claim exists in the evidence chain. |
@@ -538,6 +593,7 @@ No live evidence file:
 Handoff status not ready:
 
 - Inspect `.xagent_runtime/reports/commercial-pilot-final-gate.json`.
+- Inspect `.xagent_runtime/reports/commercial-pilot-delivery-receipt.json`.
 - Inspect `.xagent_runtime/reports/commercial-pilot-ops-status.json`.
 - Inspect `.xagent_runtime/reports/commercial-pilot-delivery-manifest.json`.
 - Inspect `.xagent_runtime/reports/commercial-pilot-handoff-status.json`.
@@ -546,6 +602,7 @@ Handoff status not ready:
 - Rerun `scripts\commercial_pilot_ops_status.py`.
 - Rerun `scripts\commercial_pilot_delivery_manifest.py`.
 - Rerun `scripts\commercial_pilot_final_gate.py`.
+- Rerun `scripts\commercial_pilot_delivery_receipt.py`.
 
 ## 13. Sign-Off Checklist
 
@@ -554,6 +611,7 @@ Handoff status not ready:
 - [ ] Hosted CI run is completed successfully for the pilot commit.
 - [ ] Feishu inbound live evidence is present and passed.
 - [ ] Final gate report is `final_gate_ready`.
+- [ ] Delivery receipt is `delivery_receipt_ready`.
 - [ ] Operator status report is `pilot_ops_ready`.
 - [ ] Delivery manifest is `delivery_manifest_ready`.
 - [ ] `mutation_performed=false`.

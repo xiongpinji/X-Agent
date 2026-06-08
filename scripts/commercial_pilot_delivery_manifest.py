@@ -132,6 +132,11 @@ DEFAULT_ARTIFACTS = (
         "source_script",
     ),
     ArtifactSpec(
+        "delivery_receipt_script",
+        ROOT / "scripts" / "commercial_pilot_delivery_receipt.py",
+        "source_script",
+    ),
+    ArtifactSpec(
         "final_gate_script",
         ROOT / "scripts" / "commercial_pilot_final_gate.py",
         "source_script",
@@ -153,6 +158,11 @@ DEFAULT_ARTIFACTS = (
     ArtifactSpec(
         "delivery_manifest_tests",
         ROOT / "tests" / "test_commercial_pilot_delivery_manifest.py",
+        "source_test",
+    ),
+    ArtifactSpec(
+        "delivery_receipt_tests",
+        ROOT / "tests" / "test_commercial_pilot_delivery_receipt.py",
         "source_test",
     ),
     ArtifactSpec(
