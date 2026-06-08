@@ -220,6 +220,8 @@ class ControlPlaneSDK:
         approval_id: str | None = None,
         owner_acceptance_id: str | None = None,
         readiness_receipt_id: str | None = None,
+        implementation_lock_id: str | None = None,
+        owner_pack_decision_id: str | None = None,
         audit_id: str | None = None,
         method: str | None = None,
     ) -> SDKThreadRunContract:
@@ -232,6 +234,10 @@ class ControlPlaneSDK:
             params["owner_acceptance_id"] = owner_acceptance_id
         if readiness_receipt_id:
             params["readiness_receipt_id"] = readiness_receipt_id
+        if implementation_lock_id:
+            params["implementation_lock_id"] = implementation_lock_id
+        if owner_pack_decision_id:
+            params["owner_pack_decision_id"] = owner_pack_decision_id
         if audit_id:
             params["audit_id"] = audit_id
         if method:

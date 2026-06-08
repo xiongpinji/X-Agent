@@ -67,6 +67,7 @@ class SDKNonInteractiveReport:
     runtime_enablement_owner_pack: dict[str, Any]
     runtime_enablement_owner_pack_decision_workflow: dict[str, Any]
     runtime_implementation_readiness_lock_workflow: dict[str, Any]
+    runtime_implementation_owner_pack: dict[str, Any]
     channel_strategy: dict[str, Any]
     checks: list[SDKNonInteractiveCheck]
     official_sources: list[str]
@@ -106,6 +107,15 @@ def _sdk_contracts() -> list[dict[str, Any]]:
             approval_id="<approval_id>",
             owner_acceptance_id="<owner_acceptance_id>",
             audit_id="<audit_id>",
+        ).to_dict(),
+        sdk.read_runtime_evidence(
+            "sdk-write-runner-runtime-implementation-readiness-lock.json",
+            evidence_type="sdk_write_runner_runtime_implementation_readiness_lock",
+            implementation_lock_id="<implementation_lock_id>",
+            approval_id="<approval_id>",
+            readiness_receipt_id="<readiness_receipt_id>",
+            owner_pack_decision_id="<owner_pack_decision_id>",
+            audit_id="<implementation_lock_audit_id>",
         ).to_dict(),
         sdk.record_runtime_enablement_receipt(
             readiness_receipt_id="<readiness_receipt_id>",
@@ -219,6 +229,14 @@ def _cli_commands() -> list[dict[str, Any]]:
             "execute_starts_agent": False,
         },
         {
+            "command": "xagent sdk evidence-read sdk-write-runner-runtime-implementation-readiness-lock.json --evidence-type sdk_write_runner_runtime_implementation_readiness_lock --implementation-lock-id <implementation_lock_id> --approval-id <approval_id> --readiness-receipt-id <readiness_receipt_id> --decision-id <owner_pack_decision_id> --audit-id <implementation_lock_audit_id> --execute",
+            "method": "runtime/evidence/read",
+            "non_interactive": True,
+            "dry_run_default": True,
+            "execute_target": "/api/v1/control-plane/sdk/invoke",
+            "execute_starts_agent": False,
+        },
+        {
             "command": "xagent sdk runtime-enable-receipt-record --approval-id <approval_id> --readiness-receipt-id <readiness_receipt_id> --acceptance-id <owner_acceptance_id> --acceptance-audit-id <owner_acceptance_audit_id> --execute",
             "method": "runtime_enablement_receipt_record",
             "non_interactive": True,
@@ -301,6 +319,7 @@ def _build_checks(report_payload: dict[str, Any]) -> list[SDKNonInteractiveCheck
     owner_pack = report_payload["runtime_enablement_owner_pack"]
     owner_pack_decision = report_payload["runtime_enablement_owner_pack_decision_workflow"]
     readiness_lock = report_payload["runtime_implementation_readiness_lock_workflow"]
+    implementation_owner_pack = report_payload["runtime_implementation_owner_pack"]
     methods = [_sdk_contract_method(contract) for contract in contracts]
     command_methods = [command["method"] for command in commands]
     allowed_execute_targets = {
@@ -333,13 +352,14 @@ def _build_checks(report_payload: dict[str, Any]) -> list[SDKNonInteractiveCheck
                 "runtime/evidence/read",
                 "runtime/evidence/read",
                 "runtime/evidence/read",
+                "runtime/evidence/read",
                 "runtime_enablement_receipt_record",
                 "runtime_enablement_owner_pack_decision_record",
                 "runtime_implementation_readiness_lock_record",
             ]
             else "failed",
             details={"methods": methods},
-            error=None if len(methods) == 11 else "SDK methods are incomplete",
+            error=None if len(methods) == 12 else "SDK methods are incomplete",
         ),
         SDKNonInteractiveCheck(
             name="cli_non_interactive_commands_complete",
@@ -855,6 +875,42 @@ def _build_checks(report_payload: dict[str, Any]) -> list[SDKNonInteractiveCheck
             else "runtime implementation readiness lock workflow is not ready but disabled",
         ),
         SDKNonInteractiveCheck(
+            name="runtime_implementation_owner_pack_ready",
+            status="passed"
+            if implementation_owner_pack.get("stage") == "runtime_implementation_owner_acceptance_pack"
+            and implementation_owner_pack.get("pack_status") == "ready_but_disabled"
+            and implementation_owner_pack.get("pack_type")
+            == "sdk_write_runner_runtime_implementation_owner_review_pack"
+            and "runtime_implementation_readiness_lock_record"
+            in implementation_owner_pack.get("required_evidence", [])
+            and "runtime_implementation_readiness_lock_readback"
+            in implementation_owner_pack.get("required_evidence", [])
+            and implementation_owner_pack.get("readback_contract", {}).get("evidence_type")
+            == "sdk_write_runner_runtime_implementation_readiness_lock"
+            and implementation_owner_pack.get("owner_decision_policy", {}).get(
+                "can_enable_runtime_flag_after_pack"
+            )
+            is False
+            and implementation_owner_pack.get("owner_decision_policy", {}).get(
+                "can_invoke_write_runner_after_pack"
+            )
+            is False
+            and implementation_owner_pack.get("implementation_enabled") is False
+            and implementation_owner_pack.get("runtime_flag_enabled") is False
+            and implementation_owner_pack.get("execute_enabled") is False
+            and implementation_owner_pack.get("write_runner_enabled") is False
+            and implementation_owner_pack.get("adapter_execution_enabled") is False
+            and implementation_owner_pack.get("agent_execution_enabled") is False
+            and implementation_owner_pack.get("runner_invoked") is False
+            and implementation_owner_pack.get("mark_executed") is False
+            and implementation_owner_pack.get("mutation_performed") is False
+            else "failed",
+            details=implementation_owner_pack,
+            error=None
+            if implementation_owner_pack.get("pack_status") == "ready_but_disabled"
+            else "runtime implementation owner pack is not ready but disabled",
+        ),
+        SDKNonInteractiveCheck(
             name="feishu_domestic_v1_primary",
             status="passed"
             if report_payload["channel_strategy"].get("domestic_v1_primary") == "feishu"
@@ -878,7 +934,7 @@ def _build_checks(report_payload: dict[str, Any]) -> list[SDKNonInteractiveCheck
 
 def build_sdk_noninteractive_report() -> SDKNonInteractiveReport:
     report_payload: dict[str, Any] = {
-        "status": "sdk_runtime_implementation_readiness_lock_workflow_ready",
+        "status": "sdk_runtime_implementation_owner_pack_ready",
         "generated_at": _utc_now(),
         "evidence_type": "sdk_noninteractive_cli_contract",
         "full_codex_parity_claimed": False,
@@ -891,7 +947,7 @@ def build_sdk_noninteractive_report() -> SDKNonInteractiveReport:
         "backend_stub": {
             "endpoint": "/api/v1/control-plane/sdk/invoke",
             "normalizes_to": "/api/v1/control-plane/invoke",
-            "status": "sdk_runtime_implementation_readiness_lock_workflow_ready",
+            "status": "sdk_runtime_implementation_owner_pack_ready",
             "approval_subject_type": "command",
             "approval_intent_created_for_write_methods": True,
             "owner_gate_required": True,
@@ -1746,6 +1802,68 @@ def build_sdk_noninteractive_report() -> SDKNonInteractiveReport:
             "file_mutation_performed": False,
             "channel_mutation_performed": False,
         },
+        "runtime_implementation_owner_pack": {
+            "stage": "runtime_implementation_owner_acceptance_pack",
+            "pack_status": "ready_but_disabled",
+            "pack_type": "sdk_write_runner_runtime_implementation_owner_review_pack",
+            "source_workflow": "runtime_implementation_readiness_lock_record_workflow",
+            "required_evidence": [
+                "approved_sdk_approval",
+                "runtime_enablement_readiness_receipt_record",
+                "accepted_owner_pack_decision",
+                "runtime_implementation_readiness_lock_record",
+                "runtime_implementation_readiness_lock_readback",
+                "idempotency_key_and_hash",
+                "disabled_execution_invariants",
+            ],
+            "owner_review_sections": [
+                "approval",
+                "readiness_receipt",
+                "owner_pack_decision",
+                "readiness_lock",
+                "readback",
+                "idempotency",
+                "disabled_execution_invariants",
+            ],
+            "readback_contract": {
+                "method": "runtime/evidence/read",
+                "evidence_type": "sdk_write_runner_runtime_implementation_readiness_lock",
+                "report_name": "sdk-write-runner-runtime-implementation-readiness-lock.json",
+                "query_keys": [
+                    "implementation_lock_id",
+                    "approval_id",
+                    "readiness_receipt_id",
+                    "owner_pack_decision_id",
+                    "audit_id",
+                ],
+                "record_required_before_runtime_implementation": True,
+            },
+            "audit_contract": {
+                "review_action": "sdk.write_runner.runtime_implementation_owner_pack_reviewed",
+                "source_record_action": "sdk.write_runner.runtime_implementation_readiness_lock_recorded",
+                "resource_type": "sdk_write_runner_runtime_implementation_owner_review_pack",
+                "audit_event_recorded_now": False,
+            },
+            "owner_decision_policy": {
+                "manual_review_required": True,
+                "can_enable_runtime_flag_after_pack": False,
+                "can_invoke_write_runner_after_pack": False,
+                "next_gate": "owner_approved_write_runner_runtime_implementation_final_decision",
+            },
+            "implementation_enabled": False,
+            "runtime_flag_enabled": False,
+            "execute_enabled": False,
+            "write_runner_enabled": False,
+            "adapter_execution_enabled": False,
+            "agent_execution_enabled": False,
+            "write_execution_enabled": False,
+            "runner_invoked": False,
+            "mark_executed": False,
+            "mutation_performed": False,
+            "network_mutation_performed": False,
+            "file_mutation_performed": False,
+            "channel_mutation_performed": False,
+        },
         "channel_strategy": _channel_strategy(),
         "official_sources": list(CODEX_SDK_SOURCES),
         "known_limits": [
@@ -1771,6 +1889,7 @@ def build_sdk_noninteractive_report() -> SDKNonInteractiveReport:
             "Runtime enablement readiness receipt recording/readback workflow is owner-gated and remains disabled for execution.",
             "Runtime enablement owner review pack is ready for audit but remains disabled for execution.",
             "Runtime enablement owner pack accept/reject decisions can be recorded, but they do not enable execution.",
+            "Runtime implementation owner pack is ready for audit but remains disabled for execution.",
             "No SDK HTTP adapter, agent runner, file mutation, channel send, or network mutation is enabled.",
             "Feishu remains the only domestic V1 pilot channel in this contract.",
             "Slack is tracked as a Codex reference surface, but it is non-blocking for the domestic first version.",
@@ -1947,6 +2066,15 @@ def render_markdown_report(report: SDKNonInteractiveReport) -> str:
         f"- Audit action: `{report.runtime_implementation_readiness_lock_workflow['audit_action']}`\n"
         f"- Write runner enabled: `{report.runtime_implementation_readiness_lock_workflow['write_runner_enabled']}`\n"
         f"- Runner invoked: `{report.runtime_implementation_readiness_lock_workflow['runner_invoked']}`\n\n"
+        "## Runtime Implementation Owner Pack\n\n"
+        f"- Stage: `{report.runtime_implementation_owner_pack['stage']}`\n"
+        f"- Pack status: `{report.runtime_implementation_owner_pack['pack_status']}`\n"
+        f"- Pack type: `{report.runtime_implementation_owner_pack['pack_type']}`\n"
+        f"- Readback evidence type: `{report.runtime_implementation_owner_pack['readback_contract']['evidence_type']}`\n"
+        f"- Can enable runtime flag after pack: `{report.runtime_implementation_owner_pack['owner_decision_policy']['can_enable_runtime_flag_after_pack']}`\n"
+        f"- Can invoke write runner after pack: `{report.runtime_implementation_owner_pack['owner_decision_policy']['can_invoke_write_runner_after_pack']}`\n"
+        f"- Write runner enabled: `{report.runtime_implementation_owner_pack['write_runner_enabled']}`\n"
+        f"- Runner invoked: `{report.runtime_implementation_owner_pack['runner_invoked']}`\n\n"
         "## Channel Strategy\n\n"
         f"- Domestic V1 primary: `{report.channel_strategy['domestic_v1_primary']}`\n"
         f"- Telegram required: `{report.channel_strategy['telegram_required']}`\n"
@@ -1994,7 +2122,7 @@ def main() -> int:
         print(f"- {check.name}: {check.status}")
         if check.error:
             print(f"  error: {check.error}")
-    return 0 if report.status == "sdk_runtime_implementation_readiness_lock_workflow_ready" else 1
+    return 0 if report.status == "sdk_runtime_implementation_owner_pack_ready" else 1
 
 
 if __name__ == "__main__":

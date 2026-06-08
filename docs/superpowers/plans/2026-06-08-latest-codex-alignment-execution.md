@@ -846,10 +846,35 @@ Expected: selected approval and sandbox tests pass.
 - [x] Promote SDK alignment status to `sdk_runtime_implementation_readiness_lock_workflow_ready`.
 - [ ] Implement the runtime write-runner only after the readiness lock is independently reviewed and runtime enablement is explicitly requested.
 
+### Task 35: Runtime Implementation Owner Review Pack
+
+**Target:** Add readback support and owner review-pack metadata for the recorded runtime implementation readiness lock, without enabling the concrete SDK write-runner runtime.
+
+**Files:**
+- Modify: `backend/app/api/control_plane.py`
+- Modify: `backend/app/sdk/control_plane.py`
+- Modify: `cli/commands/sdk_cmd.py`
+- Modify: `scripts/sdk_noninteractive_report.py`
+- Modify: `scripts/latest_codex_alignment.py`
+- Modify: `tests/test_control_plane_protocol.py`
+- Modify: `tests/test_xagent_sdk_contract.py`
+- Modify: `tests/test_cli_client.py`
+- Modify: `tests/test_sdk_noninteractive_report.py`
+- Modify: `tests/test_latest_codex_alignment.py`
+- Runtime evidence: `.xagent_runtime/reports/sdk-noninteractive-report.json`
+- Runtime evidence: `.xagent_runtime/reports/latest-codex-alignment.json`
+
+- [x] Add `runtime/evidence/read` parameters for `implementation_lock_id` and `owner_pack_decision_id`.
+- [x] Add readback metadata for `sdk_write_runner_runtime_implementation_readiness_lock`.
+- [x] Add `runtime_implementation_owner_pack` metadata to `/sdk/invoke`.
+- [x] Keep the owner review pack disabled for runtime effects: no runtime flag, no write runner, no approval execution mark, and no file/network/channel mutation.
+- [x] Promote SDK alignment status to `sdk_runtime_implementation_owner_pack_ready`.
+- [ ] Implement the runtime write-runner only after this owner review pack is independently accepted and runtime enablement is explicitly requested.
+
 ## Completion Criteria
 
 - `scripts/latest_codex_alignment.py` returns `latest_codex_alignment_plan_ready`.
-- `scripts/sdk_noninteractive_report.py` returns `sdk_runtime_implementation_readiness_lock_workflow_ready`.
+- `scripts/sdk_noninteractive_report.py` returns `sdk_runtime_implementation_owner_pack_ready`.
 - P0 task board is complete and machine-readable.
 - Feishu Pilot V1 remains `customer_acceptance_pack_ready`.
 - `full_codex_parity_claimed=false` remains true in all generated alignment and pilot reports.

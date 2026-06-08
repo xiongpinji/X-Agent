@@ -1013,6 +1013,9 @@ async def invoke_sdk_control_plane(
             sdk_metadata["runtime_enablement_owner_pack_decision_workflow"],
         )
     )
+    sdk_metadata["runtime_implementation_owner_pack"] = _sdk_runtime_implementation_owner_pack_contract(
+        sdk_metadata["runtime_implementation_readiness_lock_workflow"],
+    )
     return SDKControlPlaneInvokeResponse(
         id=control_request.id,
         ok=control_response.ok,
@@ -1797,7 +1800,7 @@ def _sdk_backend_stub_metadata(
     read_only_runner_contract = _sdk_read_only_runner_contract(original, request, response)
     write_runner_safety_contract = _sdk_write_runner_safety_contract(original, request, execution_adapter_contract)
     return {
-        "status": "sdk_runtime_implementation_readiness_lock_workflow_ready",
+        "status": "sdk_runtime_implementation_owner_pack_ready",
         "operation": request.context.sdk_operation or original.operation,
         "method": request.method,
         "sdk_surface": request.context.sdk_surface or "python",
@@ -3251,6 +3254,96 @@ def _sdk_runtime_implementation_readiness_lock_workflow_contract(
     }
 
 
+def _sdk_runtime_implementation_owner_pack_contract(
+    readiness_lock_workflow: dict[str, Any],
+) -> dict[str, Any]:
+    required_evidence = [
+        "approved_sdk_approval",
+        "runtime_enablement_readiness_receipt_record",
+        "accepted_owner_pack_decision",
+        "runtime_implementation_readiness_lock_record",
+        "runtime_implementation_readiness_lock_readback",
+        "idempotency_key_and_hash",
+        "disabled_execution_invariants",
+    ]
+    checks = {
+        "readiness_lock_workflow_ready": readiness_lock_workflow.get("workflow_status")
+        == "ready_but_disabled",
+        "readiness_lock_endpoint_present": readiness_lock_workflow.get("endpoint")
+        == "/api/v1/control-plane/sdk/runtime-implementation/readiness-lock/record",
+        "readiness_lock_requires_accepted_decision": readiness_lock_workflow.get(
+            "requires_accepted_owner_pack_decision"
+        )
+        is True,
+        "runtime_flag_still_disabled": readiness_lock_workflow.get("runtime_flag_enabled") is False,
+        "runner_not_invoked": readiness_lock_workflow.get("runner_invoked") is False,
+        "mark_executed_disabled": readiness_lock_workflow.get("mark_executed") is False,
+        "mutation_still_disabled": readiness_lock_workflow.get("mutation_performed") is False,
+    }
+    ready = all(checks.values())
+    return {
+        "available": readiness_lock_workflow.get("available") is True,
+        "stage": "runtime_implementation_owner_acceptance_pack",
+        "pack_status": "ready_but_disabled" if ready else "blocked",
+        "pack_type": "sdk_write_runner_runtime_implementation_owner_review_pack",
+        "source_workflow": "runtime_implementation_readiness_lock_record_workflow",
+        "required_evidence": required_evidence,
+        "owner_review_sections": [
+            "approval",
+            "readiness_receipt",
+            "owner_pack_decision",
+            "readiness_lock",
+            "readback",
+            "idempotency",
+            "disabled_execution_invariants",
+        ],
+        "readback_contract": {
+            "method": "runtime/evidence/read",
+            "evidence_type": "sdk_write_runner_runtime_implementation_readiness_lock",
+            "report_name": "sdk-write-runner-runtime-implementation-readiness-lock.json",
+            "query_keys": [
+                "implementation_lock_id",
+                "approval_id",
+                "readiness_receipt_id",
+                "owner_pack_decision_id",
+                "audit_id",
+            ],
+            "record_required_before_runtime_implementation": True,
+        },
+        "audit_contract": {
+            "review_action": "sdk.write_runner.runtime_implementation_owner_pack_reviewed",
+            "source_record_action": "sdk.write_runner.runtime_implementation_readiness_lock_recorded",
+            "resource_type": "sdk_write_runner_runtime_implementation_owner_review_pack",
+            "audit_event_recorded_now": False,
+        },
+        "owner_decision_policy": {
+            "manual_review_required": True,
+            "can_enable_runtime_flag_after_pack": False,
+            "can_invoke_write_runner_after_pack": False,
+            "next_gate": "owner_approved_write_runner_runtime_implementation_final_decision",
+        },
+        "checks": checks,
+        "implementation_enabled": False,
+        "runtime_flag_enabled": False,
+        "execute_enabled": False,
+        "write_runner_enabled": False,
+        "adapter_execution_enabled": False,
+        "agent_execution_enabled": False,
+        "write_execution_enabled": False,
+        "runner_invoked": False,
+        "mark_executed": False,
+        "mutation_performed": False,
+        "network_mutation_performed": False,
+        "file_mutation_performed": False,
+        "channel_mutation_performed": False,
+        "known_limits": [
+            "This pack aggregates readiness lock evidence only.",
+            "It does not record a new audit event by /sdk/invoke.",
+            "It does not enable the runtime flag or invoke the SDK write runner.",
+        ],
+    }
+
+
 def _sdk_owner_acceptance_evidence_schema(required_fields: list[str]) -> dict[str, Any]:
     return {
         "type": "object",
@@ -4241,6 +4334,12 @@ def _runtime_evidence_metadata(
             audit_store=audit_store,
             principal=principal,
         )
+    if evidence_type == "sdk_write_runner_runtime_implementation_readiness_lock":
+        return _sdk_runtime_implementation_readiness_lock_evidence(
+            params,
+            audit_store=audit_store,
+            principal=principal,
+        )
     report_name = params.get("report_name")
     if not isinstance(report_name, str) or not report_name:
         return {
@@ -4579,6 +4678,167 @@ def _sdk_runtime_enablement_readiness_evidence(
     }
 
 
+def _sdk_runtime_implementation_readiness_lock_schema(required_fields: list[str]) -> dict[str, Any]:
+    return {
+        "type": "object",
+        "required": required_fields,
+        "properties": {
+            "implementation_lock_id": "string",
+            "idempotency_key": "string",
+            "idempotency_hash": "string",
+            "approval_id": "string",
+            "readiness_receipt_id": "string",
+            "readiness_receipt_audit_id": "string",
+            "owner_pack_decision_id": "string",
+            "owner_pack_decision_audit_id": "string",
+            "operator_id": "string",
+            "locked_at": "RFC3339 timestamp",
+            "lock_reason": "string",
+            "lock_signature": "string optional",
+            "lock_hash": "string optional",
+            "notes": "string optional",
+        },
+        "safety_invariants": {
+            "runtime_flag_enabled": False,
+            "execute_enabled": False,
+            "write_runner_enabled": False,
+            "agent_execution_enabled": False,
+            "runner_invoked": False,
+            "mark_executed": False,
+            "mutation_performed": False,
+        },
+    }
+
+
+def _sdk_runtime_implementation_readiness_lock_evidence(
+    params: dict[str, Any],
+    *,
+    audit_store: AuditStore | None = None,
+    principal: Principal | None = None,
+) -> dict[str, Any]:
+    implementation_lock_id = params.get("implementation_lock_id")
+    approval_id = params.get("approval_id")
+    readiness_receipt_id = params.get("readiness_receipt_id")
+    owner_pack_decision_id = params.get("owner_pack_decision_id")
+    audit_id = params.get("audit_id")
+    report_name = params.get("report_name")
+    safe_report_name = (
+        report_name
+        if isinstance(report_name, str)
+        and report_name == "sdk-write-runner-runtime-implementation-readiness-lock.json"
+        else "sdk-write-runner-runtime-implementation-readiness-lock.json"
+    )
+    required_query_keys = {
+        "implementation_lock_id": isinstance(implementation_lock_id, str) and bool(implementation_lock_id),
+        "approval_id": isinstance(approval_id, str) and bool(approval_id),
+        "readiness_receipt_id": isinstance(readiness_receipt_id, str) and bool(readiness_receipt_id),
+        "owner_pack_decision_id": isinstance(owner_pack_decision_id, str) and bool(owner_pack_decision_id),
+        "audit_id": isinstance(audit_id, str) and bool(audit_id),
+    }
+    missing_required_query_keys = [
+        key for key, present in required_query_keys.items() if present is not True
+    ]
+    audit_record = (
+        _sdk_runtime_implementation_readiness_lock_record_from_audit(
+            audit_store,
+            implementation_lock_id=implementation_lock_id if isinstance(implementation_lock_id, str) else None,
+            approval_id=approval_id if isinstance(approval_id, str) else None,
+            readiness_receipt_id=readiness_receipt_id if isinstance(readiness_receipt_id, str) else None,
+            owner_pack_decision_id=owner_pack_decision_id if isinstance(owner_pack_decision_id, str) else None,
+            audit_id=audit_id if isinstance(audit_id, str) else None,
+            tenant_id=principal.tenant_id if principal else None,
+        )
+        if not missing_required_query_keys
+        else None
+    )
+    validation = _sdk_runtime_implementation_readiness_lock_validation(
+        audit_record if isinstance(audit_record, dict) else None
+    )
+    record_present = validation["status"] == "valid"
+    return {
+        "evidence_type": "sdk_write_runner_runtime_implementation_readiness_lock",
+        "available": True,
+        "evidence_status": "provided" if record_present else "required_not_provided",
+        "recording_contract_ready": True,
+        "readback_contract_ready": True,
+        "implementation_lock_present": record_present,
+        "missing_required_query_keys": missing_required_query_keys,
+        "validation": validation,
+        "record": audit_record,
+        "implementation_lock_id": implementation_lock_id
+        if isinstance(implementation_lock_id, str) and implementation_lock_id
+        else None,
+        "approval_id": approval_id if isinstance(approval_id, str) and approval_id else None,
+        "readiness_receipt_id": readiness_receipt_id
+        if isinstance(readiness_receipt_id, str) and readiness_receipt_id
+        else None,
+        "owner_pack_decision_id": owner_pack_decision_id
+        if isinstance(owner_pack_decision_id, str) and owner_pack_decision_id
+        else None,
+        "audit_id": audit_id if isinstance(audit_id, str) and audit_id else None,
+        "report_preview_only": True,
+        "schema": _sdk_runtime_implementation_readiness_lock_schema(
+            [
+                "implementation_lock_id",
+                "idempotency_key",
+                "idempotency_hash",
+                "approval_id",
+                "readiness_receipt_id",
+                "readiness_receipt_audit_id",
+                "owner_pack_decision_id",
+                "owner_pack_decision_audit_id",
+                "operator_id",
+                "locked_at",
+                "lock_reason",
+            ]
+        ),
+        "audit_readback": {
+            "action": "sdk.write_runner.runtime_implementation_readiness_lock_recorded",
+            "resource_type": "sdk_write_runner_runtime_implementation_readiness_lock",
+            "control_plane_method": "runtime/evidence/read",
+            "query_keys": [
+                "implementation_lock_id",
+                "approval_id",
+                "readiness_receipt_id",
+                "owner_pack_decision_id",
+                "audit_id",
+            ],
+            "record_persisted": audit_record is not None,
+        },
+        "control_plane_readback": {
+            "method": "runtime/evidence/read",
+            "params": {
+                "evidence_type": "sdk_write_runner_runtime_implementation_readiness_lock",
+                "report_name": safe_report_name,
+                "implementation_lock_id": implementation_lock_id,
+                "approval_id": approval_id,
+                "readiness_receipt_id": readiness_receipt_id,
+                "owner_pack_decision_id": owner_pack_decision_id,
+                "audit_id": audit_id,
+            },
+            "endpoint": "/api/v1/control-plane/invoke",
+        },
+        "safety": {
+            "runtime_flag_enabled": False,
+            "execute_enabled": False,
+            "write_runner_enabled": False,
+            "adapter_execution_enabled": False,
+            "agent_execution_enabled": False,
+            "runner_invoked": False,
+            "mark_executed": False,
+            "mutation_performed": False,
+            "network_mutation_performed": False,
+            "file_mutation_performed": False,
+            "channel_mutation_performed": False,
+        },
+        "known_limits": [
+            "This readback only inspects runtime implementation readiness locks if they already exist.",
+            "No readiness lock is recorded by runtime/evidence/read.",
+            "Concrete owner-approved write execution remains disabled.",
+        ],
+    }
+
+
 def _sdk_write_runner_safety_review(receipt: dict[str, Any] | None) -> dict[str, Any]:
     checks = {
         "receipt_available": receipt is not None,
@@ -4842,6 +5102,58 @@ def _sdk_runtime_enablement_owner_pack_decision_record_from_audit(
             continue
         return {
             **_jsonable(decision),
+            "audit_id": getattr(record, "id", audit_id),
+            "audit_created_at": _jsonable(getattr(record, "created_at", None)),
+            "audit_hash": getattr(record, "hash", None),
+            "audit_signature_present": bool(getattr(record, "signature", None)),
+            "record_persisted": True,
+        }
+    return None
+
+
+def _sdk_runtime_implementation_readiness_lock_record_from_audit(
+    audit_store: AuditStore | None,
+    *,
+    implementation_lock_id: str | None,
+    approval_id: str | None,
+    readiness_receipt_id: str | None,
+    owner_pack_decision_id: str | None,
+    audit_id: str | None,
+    tenant_id: str | None,
+) -> dict[str, Any] | None:
+    if (
+        audit_store is None
+        or not implementation_lock_id
+        or not approval_id
+        or not readiness_receipt_id
+        or not owner_pack_decision_id
+        or not audit_id
+    ):
+        return None
+    records = audit_store.list(
+        limit=200,
+        tenant_id=tenant_id,
+        action="sdk.write_runner.runtime_implementation_readiness_lock_recorded",
+        resource_type="sdk_write_runner_runtime_implementation_readiness_lock",
+        outcome="accepted",
+    )
+    for record in records:
+        if audit_id and getattr(record, "id", None) != audit_id:
+            continue
+        if implementation_lock_id and getattr(record, "resource_id", None) != implementation_lock_id:
+            continue
+        details = getattr(record, "details", {}) or {}
+        if approval_id and details.get("approval_id") != approval_id:
+            continue
+        if readiness_receipt_id and details.get("readiness_receipt_id") != readiness_receipt_id:
+            continue
+        if owner_pack_decision_id and details.get("owner_pack_decision_id") != owner_pack_decision_id:
+            continue
+        readiness_lock = details.get("readiness_lock")
+        if not isinstance(readiness_lock, dict):
+            continue
+        return {
+            **_jsonable(readiness_lock),
             "audit_id": getattr(record, "id", audit_id),
             "audit_created_at": _jsonable(getattr(record, "created_at", None)),
             "audit_hash": getattr(record, "hash", None),

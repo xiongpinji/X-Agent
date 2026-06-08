@@ -228,6 +228,8 @@ def evidence_read(
     owner_acceptance_id: Optional[str] = typer.Option(None, "--acceptance-id"),
     audit_id: Optional[str] = typer.Option(None, "--audit-id"),
     readiness_receipt_id: Optional[str] = typer.Option(None, "--readiness-receipt-id"),
+    implementation_lock_id: Optional[str] = typer.Option(None, "--implementation-lock-id"),
+    owner_pack_decision_id: Optional[str] = typer.Option(None, "--decision-id"),
     method: Optional[str] = typer.Option(None, "--method"),
     execute: bool = typer.Option(False, "--execute", help="Submit the read-only SDK envelope to the backend."),
 ) -> None:
@@ -237,6 +239,8 @@ def evidence_read(
         approval_id=approval_id,
         owner_acceptance_id=owner_acceptance_id,
         readiness_receipt_id=readiness_receipt_id,
+        implementation_lock_id=implementation_lock_id,
+        owner_pack_decision_id=owner_pack_decision_id,
         audit_id=audit_id,
         method=method,
     )

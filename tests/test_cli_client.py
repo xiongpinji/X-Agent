@@ -241,7 +241,7 @@ class TestHTTPClient:
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {
-            "status": "sdk_runtime_implementation_readiness_lock_workflow_ready",
+            "status": "sdk_runtime_implementation_owner_pack_ready",
             "sdk": {
                 "adapter_execution_enabled": False,
                 "agent_execution_enabled": False,
@@ -360,6 +360,21 @@ class TestHTTPClient:
                     "mark_executed": False,
                     "mutation_performed": False,
                 },
+                "runtime_implementation_owner_pack": {
+                    "pack_status": "ready_but_disabled",
+                    "readback_contract": {
+                        "evidence_type": "sdk_write_runner_runtime_implementation_readiness_lock",
+                    },
+                    "owner_decision_policy": {
+                        "can_enable_runtime_flag_after_pack": False,
+                        "can_invoke_write_runner_after_pack": False,
+                    },
+                    "runtime_flag_enabled": False,
+                    "write_runner_enabled": False,
+                    "agent_execution_enabled": False,
+                    "runner_invoked": False,
+                    "mutation_performed": False,
+                },
             },
         }
 
@@ -375,7 +390,7 @@ class TestHTTPClient:
             assert call_args[0][0] == "POST"
             assert call_args[0][1] == "/api/v1/control-plane/sdk/invoke"
             assert call_args[1]["json"] == contract
-            assert result["status"] == "sdk_runtime_implementation_readiness_lock_workflow_ready"
+            assert result["status"] == "sdk_runtime_implementation_owner_pack_ready"
             assert result["sdk"]["adapter_execution_enabled"] is False
             assert result["sdk"]["execution_adapter_contract"]["mark_executed"] is False
             assert result["sdk"]["read_only_runner_contract"]["write_execution_enabled"] is False
@@ -452,6 +467,15 @@ class TestHTTPClient:
             assert result["sdk"]["runtime_implementation_preflight"]["runner_invoked"] is False
             assert result["sdk"]["runtime_implementation_preflight"]["mark_executed"] is False
             assert result["sdk"]["runtime_implementation_preflight"]["mutation_performed"] is False
+            assert result["sdk"]["runtime_implementation_owner_pack"]["pack_status"] == "ready_but_disabled"
+            assert (
+                result["sdk"]["runtime_implementation_owner_pack"]["readback_contract"]["evidence_type"]
+                == "sdk_write_runner_runtime_implementation_readiness_lock"
+            )
+            assert result["sdk"]["runtime_implementation_owner_pack"]["runtime_flag_enabled"] is False
+            assert result["sdk"]["runtime_implementation_owner_pack"]["write_runner_enabled"] is False
+            assert result["sdk"]["runtime_implementation_owner_pack"]["runner_invoked"] is False
+            assert result["sdk"]["runtime_implementation_owner_pack"]["mutation_performed"] is False
 
     @pytest.mark.asyncio
     async def test_http_client_record_sdk_owner_acceptance_calls_owner_gated_stub(self):

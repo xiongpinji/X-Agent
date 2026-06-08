@@ -183,8 +183,8 @@ def test_sdk_control_plane_stub_accepts_thread_start_envelope_without_mutation()
     assert response.status_code == 200
     payload = response.json()
     assert payload["ok"] is False
-    assert payload["status"] == "sdk_runtime_implementation_readiness_lock_workflow_ready"
-    assert payload["sdk"]["status"] == "sdk_runtime_implementation_readiness_lock_workflow_ready"
+    assert payload["status"] == "sdk_runtime_implementation_owner_pack_ready"
+    assert payload["sdk"]["status"] == "sdk_runtime_implementation_owner_pack_ready"
     assert payload["sdk"]["method"] == "thread/start"
     assert payload["sdk"]["dry_run"] is False
     assert payload["sdk"]["idempotency_key_present"] is True
@@ -205,6 +205,16 @@ def test_sdk_control_plane_stub_accepts_thread_start_envelope_without_mutation()
     assert readiness_lock["write_runner_enabled"] is False
     assert readiness_lock["runner_invoked"] is False
     assert readiness_lock["mutation_performed"] is False
+    implementation_pack = payload["sdk"]["runtime_implementation_owner_pack"]
+    assert implementation_pack["pack_status"] == "blocked"
+    assert implementation_pack["readback_contract"]["evidence_type"] == (
+        "sdk_write_runner_runtime_implementation_readiness_lock"
+    )
+    assert implementation_pack["owner_decision_policy"]["can_enable_runtime_flag_after_pack"] is False
+    assert implementation_pack["owner_decision_policy"]["can_invoke_write_runner_after_pack"] is False
+    assert implementation_pack["write_runner_enabled"] is False
+    assert implementation_pack["runner_invoked"] is False
+    assert implementation_pack["mutation_performed"] is False
     assert payload["sdk"]["execution_adapter_contract"]["ready_for_owner_approved_adapter"] is False
     assert payload["sdk"]["execution_adapter_contract"]["adapter_execution_enabled"] is False
     assert payload["sdk"]["read_only_runner_contract"]["available"] is False
@@ -377,8 +387,8 @@ def test_sdk_control_plane_stub_reads_approved_execution_adapter_contract_withou
     assert response.status_code == 200
     payload = response.json()
     assert payload["ok"] is False
-    assert payload["status"] == "sdk_runtime_implementation_readiness_lock_workflow_ready"
-    assert payload["sdk"]["status"] == "sdk_runtime_implementation_readiness_lock_workflow_ready"
+    assert payload["status"] == "sdk_runtime_implementation_owner_pack_ready"
+    assert payload["sdk"]["status"] == "sdk_runtime_implementation_owner_pack_ready"
     assert payload["sdk"]["approval_intent"]["created"] is False
     assert payload["sdk"]["approval_intent"]["approval_id"] == approval.id
     adapter = payload["sdk"]["execution_adapter_contract"]
@@ -632,8 +642,8 @@ def test_sdk_control_plane_stub_can_read_thread_through_existing_contract() -> N
     assert response.status_code == 200
     payload = response.json()
     assert payload["ok"] is True
-    assert payload["status"] == "sdk_runtime_implementation_readiness_lock_workflow_ready"
-    assert payload["sdk"]["status"] == "sdk_runtime_implementation_readiness_lock_workflow_ready"
+    assert payload["status"] == "sdk_runtime_implementation_owner_pack_ready"
+    assert payload["sdk"]["status"] == "sdk_runtime_implementation_owner_pack_ready"
     assert payload["sdk"]["method"] == "thread/read"
     assert payload["sdk"]["owner_gate_required"] is False
     assert payload["sdk"]["approval_intent"]["required"] is False
@@ -680,7 +690,7 @@ def test_sdk_control_plane_stub_reads_runtime_evidence_through_read_only_runner(
     assert response.status_code == 200
     payload = response.json()
     assert payload["ok"] is True
-    assert payload["status"] == "sdk_runtime_implementation_readiness_lock_workflow_ready"
+    assert payload["status"] == "sdk_runtime_implementation_owner_pack_ready"
     assert payload["sdk"]["method"] == "runtime/evidence/read"
     runner = payload["sdk"]["read_only_runner_contract"]
     assert runner["available"] is True
@@ -745,7 +755,7 @@ def test_sdk_control_plane_stub_reads_persisted_dry_run_executor_runtime_evidenc
     assert response.status_code == 200
     payload = response.json()
     assert payload["ok"] is True
-    assert payload["status"] == "sdk_runtime_implementation_readiness_lock_workflow_ready"
+    assert payload["status"] == "sdk_runtime_implementation_owner_pack_ready"
     evidence = payload["control_plane"]["result"]["evidence"]
     assert evidence["evidence_type"] == "sdk_dry_run_executor_stub"
     assert evidence["available"] is True
@@ -796,7 +806,7 @@ def test_sdk_control_plane_stub_reads_owner_acceptance_runtime_evidence_contract
     assert response.status_code == 200
     payload = response.json()
     assert payload["ok"] is True
-    assert payload["status"] == "sdk_runtime_implementation_readiness_lock_workflow_ready"
+    assert payload["status"] == "sdk_runtime_implementation_owner_pack_ready"
     evidence = payload["control_plane"]["result"]["evidence"]
     assert evidence["evidence_type"] == "sdk_write_runner_owner_acceptance"
     assert evidence["available"] is True
@@ -1575,6 +1585,70 @@ def test_sdk_runtime_implementation_readiness_lock_records_audit_without_executi
     assert readiness_lock["mutation_performed"] is False
     assert approval_store.get(approval.id).status == "approved"
     assert approval_store.get(approval.id).executed_at is None
+
+
+def test_runtime_implementation_readiness_lock_readback_requires_strict_audit_query_keys() -> None:
+    approval_store = ApprovalStore()
+    audit_store = AuditStore(hmac_secret="test-secret")
+    lock_audit = audit_store.record(
+        action="sdk.write_runner.runtime_implementation_readiness_lock_recorded",
+        resource_type="sdk_write_runner_runtime_implementation_readiness_lock",
+        resource_id="lock-readback-1",
+        outcome="accepted",
+        tenant_id="default",
+        actor_id="operator",
+        details={
+            "approval_id": "approval-lock-readback",
+            "readiness_receipt_id": "readiness-lock-readback",
+            "owner_pack_decision_id": "decision-lock-readback",
+            "readiness_lock": {
+                "implementation_lock_id": "lock-readback-1",
+                "idempotency_key": "sdk-write-runner-lock-readback",
+                "idempotency_hash": "hash-idempotency",
+                "approval_id": "approval-lock-readback",
+                "readiness_receipt_id": "readiness-lock-readback",
+                "readiness_receipt_audit_id": "audit-readiness-lock-readback",
+                "owner_pack_decision_id": "decision-lock-readback",
+                "owner_pack_decision_audit_id": "audit-decision-lock-readback",
+                "operator_id": "operator",
+                "locked_at": "2026-06-08T02:00:00Z",
+                "lock_reason": "readback test",
+                "lock_hash": "hash-lock",
+            },
+        },
+    )
+    contract = ControlPlaneSDK(default_tenant_id="default", default_user_id="operator").read_runtime_evidence(
+        "sdk-write-runner-runtime-implementation-readiness-lock.json",
+        evidence_type="sdk_write_runner_runtime_implementation_readiness_lock",
+        implementation_lock_id="lock-readback-1",
+        approval_id="approval-lock-readback",
+        readiness_receipt_id="readiness-lock-readback",
+        owner_pack_decision_id="decision-lock-readback",
+        audit_id=lock_audit.id,
+    )
+
+    with _client_with_stores(RunStore(), TraceStore(), approval_store, audit_store) as client:
+        response = client.post(
+            "/api/v1/control-plane/sdk/invoke",
+            json=contract.to_dict(),
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["ok"] is True
+    assert payload["status"] == "sdk_runtime_implementation_owner_pack_ready"
+    evidence = payload["control_plane"]["result"]["evidence"]
+    assert evidence["evidence_type"] == "sdk_write_runner_runtime_implementation_readiness_lock"
+    assert evidence["implementation_lock_present"] is True
+    assert evidence["missing_required_query_keys"] == []
+    assert evidence["record"]["implementation_lock_id"] == "lock-readback-1"
+    assert evidence["record"]["audit_signature_present"] is True
+    assert evidence["validation"]["status"] == "valid"
+    assert evidence["audit_readback"]["record_persisted"] is True
+    assert evidence["control_plane_readback"]["params"]["implementation_lock_id"] == "lock-readback-1"
+    assert evidence["safety"]["write_runner_enabled"] is False
+    assert evidence["safety"]["runner_invoked"] is False
+    assert evidence["safety"]["mutation_performed"] is False
 
 
 def test_sdk_runtime_implementation_readiness_lock_rejects_rejected_owner_pack_decision() -> None:

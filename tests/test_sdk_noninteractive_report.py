@@ -16,7 +16,7 @@ def test_sdk_noninteractive_report_default_is_read_only() -> None:
     report = build_sdk_noninteractive_report()
     payload = report.to_dict()
 
-    assert report.status == "sdk_runtime_implementation_readiness_lock_workflow_ready"
+    assert report.status == "sdk_runtime_implementation_owner_pack_ready"
     assert report.evidence_type == "sdk_noninteractive_cli_contract"
     assert report.full_codex_parity_claimed is False
     assert report.dry_run is True
@@ -40,6 +40,7 @@ def test_sdk_noninteractive_report_covers_sdk_and_cli_methods() -> None:
         "runtime/evidence/read",
         "runtime/evidence/read",
         "runtime/evidence/read",
+        "runtime/evidence/read",
         "runtime_enablement_receipt_record",
         "runtime_enablement_owner_pack_decision_record",
         "runtime_implementation_readiness_lock_record",
@@ -52,6 +53,12 @@ def test_sdk_noninteractive_report_covers_sdk_and_cli_methods() -> None:
     )
     assert any(
         item["request"]["params"].get("evidence_type") == "sdk_write_runner_runtime_enablement_readiness"
+        for item in report.sdk_contracts
+        if item["request"].get("method") == "runtime/evidence/read"
+    )
+    assert any(
+        item["request"]["params"].get("evidence_type")
+        == "sdk_write_runner_runtime_implementation_readiness_lock"
         for item in report.sdk_contracts
         if item["request"].get("method") == "runtime/evidence/read"
     )
@@ -528,6 +535,34 @@ def test_sdk_noninteractive_report_covers_runtime_implementation_readiness_lock_
     assert workflow["mutation_performed"] is False
 
 
+def test_sdk_noninteractive_report_covers_runtime_implementation_owner_pack() -> None:
+    pack = build_sdk_noninteractive_report().runtime_implementation_owner_pack
+
+    assert pack["stage"] == "runtime_implementation_owner_acceptance_pack"
+    assert pack["pack_status"] == "ready_but_disabled"
+    assert pack["pack_type"] == "sdk_write_runner_runtime_implementation_owner_review_pack"
+    assert "runtime_implementation_readiness_lock_record" in pack["required_evidence"]
+    assert "runtime_implementation_readiness_lock_readback" in pack["required_evidence"]
+    assert (
+        pack["readback_contract"]["evidence_type"]
+        == "sdk_write_runner_runtime_implementation_readiness_lock"
+    )
+    assert pack["readback_contract"]["record_required_before_runtime_implementation"] is True
+    assert pack["audit_contract"]["review_action"] == "sdk.write_runner.runtime_implementation_owner_pack_reviewed"
+    assert pack["audit_contract"]["audit_event_recorded_now"] is False
+    assert pack["owner_decision_policy"]["manual_review_required"] is True
+    assert pack["owner_decision_policy"]["can_enable_runtime_flag_after_pack"] is False
+    assert pack["owner_decision_policy"]["can_invoke_write_runner_after_pack"] is False
+    assert pack["implementation_enabled"] is False
+    assert pack["runtime_flag_enabled"] is False
+    assert pack["write_runner_enabled"] is False
+    assert pack["adapter_execution_enabled"] is False
+    assert pack["agent_execution_enabled"] is False
+    assert pack["runner_invoked"] is False
+    assert pack["mark_executed"] is False
+    assert pack["mutation_performed"] is False
+
+
 def test_sdk_noninteractive_report_keeps_feishu_first_channel_strategy() -> None:
     strategy = build_sdk_noninteractive_report().channel_strategy
 
@@ -548,11 +583,12 @@ def test_write_sdk_noninteractive_report_json_and_markdown(tmp_path: Path) -> No
 
     payload = json.loads(json_output.read_text(encoding="utf-8"))
     markdown = markdown_output.read_text(encoding="utf-8")
-    assert payload["status"] == "sdk_runtime_implementation_readiness_lock_workflow_ready"
+    assert payload["status"] == "sdk_runtime_implementation_owner_pack_ready"
     assert payload["full_codex_parity_claimed"] is False
     assert payload["mutation_performed"] is False
     assert "# X-Agent SDK Non-Interactive Report" in markdown
     assert "## Runtime Implementation Readiness Lock Workflow" in markdown
+    assert "## Runtime Implementation Owner Pack" in markdown
     assert "## Write Runner Implementation Plan" in markdown
     assert "## Runtime Smoke Runbook" in markdown
     assert "## Runtime Enablement Receipt" in markdown
