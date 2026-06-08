@@ -131,6 +131,11 @@ DEFAULT_ARTIFACTS = (
         ROOT / "scripts" / "commercial_pilot_delivery_manifest.py",
         "source_script",
     ),
+    ArtifactSpec(
+        "final_gate_script",
+        ROOT / "scripts" / "commercial_pilot_final_gate.py",
+        "source_script",
+    ),
     ArtifactSpec("ops_status_script", ROOT / "scripts" / "commercial_pilot_ops_status.py", "source_script"),
     ArtifactSpec("handoff_status_script", ROOT / "scripts" / "commercial_pilot_handoff_status.py", "source_script"),
     ArtifactSpec(
@@ -148,6 +153,11 @@ DEFAULT_ARTIFACTS = (
     ArtifactSpec(
         "delivery_manifest_tests",
         ROOT / "tests" / "test_commercial_pilot_delivery_manifest.py",
+        "source_test",
+    ),
+    ArtifactSpec(
+        "final_gate_tests",
+        ROOT / "tests" / "test_commercial_pilot_final_gate.py",
         "source_test",
     ),
     ArtifactSpec(
