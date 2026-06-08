@@ -265,6 +265,30 @@ Expected: selected approval and sandbox tests pass.
 - [x] Keep agent runner invocation, channel send, file mutation, and network mutation disabled.
 - [ ] Implement real SDK HTTP adapters and long-running non-interactive execution after backend stub review.
 
+### Task 11: SDK HTTP Dry-Run Client Adapter
+
+**Target:** Let CLI `--execute` submit SDK envelopes to the backend SDK stub without enabling real agent execution.
+
+**Files:**
+- Modify: `cli/client.py`
+- Modify: `cli/commands/sdk_cmd.py`
+- Modify: `backend/app/sdk/control_plane.py`
+- Modify: `scripts/sdk_noninteractive_report.py`
+- Modify: `tests/test_cli_client.py`
+- Modify: `tests/test_xagent_sdk_contract.py`
+- Modify: `tests/test_sdk_noninteractive_report.py`
+- Modify: `scripts/latest_codex_alignment.py`
+- Modify: `tests/test_latest_codex_alignment.py`
+- Runtime evidence: `.xagent_runtime/reports/sdk-noninteractive-report.json`
+- Runtime evidence: `.xagent_runtime/reports/sdk-noninteractive-report.md`
+
+- [x] Add `HTTPClient.invoke_sdk_contract`.
+- [x] Keep local client SDK backend invocation unsupported.
+- [x] Make `xagent sdk <write-command> --execute` call `/api/v1/control-plane/sdk/invoke`.
+- [x] Keep commands without `--execute` as local envelope-only output.
+- [x] Keep `--execute` bounded to the owner-gated backend stub; no agent runner, channel send, file, or network mutation is enabled.
+- [ ] Implement owner-approved long-running SDK execution adapters after dry-run adapter review.
+
 ## Completion Criteria
 
 - `scripts/latest_codex_alignment.py` returns `latest_codex_alignment_plan_ready`.

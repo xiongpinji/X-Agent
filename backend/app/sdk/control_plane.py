@@ -185,7 +185,8 @@ class ControlPlaneSDK:
             },
             known_limits=[
                 "This SDK wrapper builds request envelopes only.",
-                "No control-plane HTTP request is sent by this contract object.",
+                "The CLI can submit this envelope to /api/v1/control-plane/sdk/invoke when --execute is set.",
+                "No control-plane HTTP request is sent by this contract object itself.",
                 "Thread write methods remain owner-gated by the control-plane adapter.",
                 "Feishu remains the first domestic V1 channel; no new channel send is performed.",
             ],

@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from typing import Optional
 
 import typer
 
 from backend.app.sdk import ControlPlaneSDK
+from cli.client import APIError, AuthError, ConnectionError, XAgentCLIError, create_client
+from cli.main import get_current_config
 
 sdk_app = typer.Typer(
     name="sdk",
@@ -27,6 +30,27 @@ def _emit(payload: dict[str, object]) -> None:
     typer.echo(json.dumps(payload, ensure_ascii=False, indent=2))
 
 
+def _emit_or_invoke(payload: dict[str, object], *, execute: bool) -> None:
+    if not execute:
+        _emit(payload)
+        return
+
+    config = get_current_config()
+    try:
+        client = create_client(config)
+        result = asyncio.run(client.invoke_sdk_contract(payload))
+    except NotImplementedError as e:
+        typer.echo(f"SDK backend invocation failed: {e}", err=True)
+        raise typer.Exit(code=1)
+    except (ConnectionError, AuthError, APIError) as e:
+        typer.echo(f"SDK backend invocation failed: {e}", err=True)
+        raise typer.Exit(code=1)
+    except XAgentCLIError as e:
+        typer.echo(f"SDK CLI error: {e}", err=True)
+        raise typer.Exit(code=1)
+    _emit(result)
+
+
 @sdk_app.command("thread-start")
 def thread_start(
     task: str = typer.Argument(..., help="Task text for the new thread."),
@@ -42,7 +66,7 @@ def thread_start(
         idempotency_key=idempotency_key,
         dry_run=not execute,
     )
-    _emit(contract.to_dict())
+    _emit_or_invoke(contract.to_dict(), execute=execute)
 
 
 @sdk_app.command("thread-resume")
@@ -60,7 +84,7 @@ def thread_resume(
         idempotency_key=idempotency_key,
         dry_run=not execute,
     )
-    _emit(contract.to_dict())
+    _emit_or_invoke(contract.to_dict(), execute=execute)
 
 
 @sdk_app.command("turn-run")
@@ -78,7 +102,7 @@ def turn_run(
         idempotency_key=idempotency_key,
         dry_run=not execute,
     )
-    _emit(contract.to_dict())
+    _emit_or_invoke(contract.to_dict(), execute=execute)
 
 
 @sdk_app.command("thread-read")

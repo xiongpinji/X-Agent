@@ -44,6 +44,7 @@ class SDKNonInteractiveReport:
     sdk_contracts: list[dict[str, Any]]
     cli_commands: list[dict[str, Any]]
     backend_stub: dict[str, Any]
+    http_client_adapter: dict[str, Any]
     channel_strategy: dict[str, Any]
     checks: list[SDKNonInteractiveCheck]
     official_sources: list[str]
@@ -72,24 +73,32 @@ def _cli_commands() -> list[dict[str, Any]]:
             "method": "thread/start",
             "non_interactive": True,
             "dry_run_default": True,
+            "execute_target": "/api/v1/control-plane/sdk/invoke",
+            "execute_starts_agent": False,
         },
         {
             "command": "xagent sdk thread-resume <thread_id> --input <text>",
             "method": "thread/resume",
             "non_interactive": True,
             "dry_run_default": True,
+            "execute_target": "/api/v1/control-plane/sdk/invoke",
+            "execute_starts_agent": False,
         },
         {
             "command": "xagent sdk turn-run <thread_id> <input>",
             "method": "turn/start",
             "non_interactive": True,
             "dry_run_default": True,
+            "execute_target": "/api/v1/control-plane/sdk/invoke",
+            "execute_starts_agent": False,
         },
         {
             "command": "xagent sdk thread-read <thread_id>",
             "method": "thread/read",
             "non_interactive": True,
             "dry_run_default": True,
+            "execute_target": None,
+            "execute_starts_agent": False,
         },
     ]
 
@@ -111,6 +120,12 @@ def _build_checks(report_payload: dict[str, Any]) -> list[SDKNonInteractiveCheck
     backend_stub = report_payload["backend_stub"]
     methods = [contract["request"]["method"] for contract in contracts]
     command_methods = [command["method"] for command in commands]
+    cli_execute_targets = [
+        command["method"]
+        for command in commands
+        if command["method"] != "thread/read"
+        and command.get("execute_target") != "/api/v1/control-plane/sdk/invoke"
+    ]
     mutating = [
         contract["operation"]
         for contract in contracts
@@ -153,6 +168,16 @@ def _build_checks(report_payload: dict[str, Any]) -> list[SDKNonInteractiveCheck
             else "SDK backend stub endpoint is missing",
         ),
         SDKNonInteractiveCheck(
+            name="cli_execute_calls_backend_stub_only",
+            status="passed" if not cli_execute_targets else "failed",
+            details={
+                "execute_target": "/api/v1/control-plane/sdk/invoke",
+                "mismatches": cli_execute_targets,
+                "starts_agent_execution": False,
+            },
+            error=None if not cli_execute_targets else "one or more CLI execute commands bypass the SDK stub",
+        ),
+        SDKNonInteractiveCheck(
             name="feishu_domestic_v1_primary",
             status="passed"
             if report_payload["channel_strategy"].get("domestic_v1_primary") == "feishu"
@@ -176,7 +201,7 @@ def _build_checks(report_payload: dict[str, Any]) -> list[SDKNonInteractiveCheck
 
 def build_sdk_noninteractive_report() -> SDKNonInteractiveReport:
     report_payload: dict[str, Any] = {
-        "status": "sdk_backend_stub_ready",
+        "status": "sdk_http_dry_run_adapter_ready",
         "generated_at": _utc_now(),
         "evidence_type": "sdk_noninteractive_cli_contract",
         "full_codex_parity_claimed": False,
@@ -189,7 +214,7 @@ def build_sdk_noninteractive_report() -> SDKNonInteractiveReport:
         "backend_stub": {
             "endpoint": "/api/v1/control-plane/sdk/invoke",
             "normalizes_to": "/api/v1/control-plane/invoke",
-            "status": "sdk_backend_stub_ready",
+            "status": "sdk_http_dry_run_adapter_ready",
             "approval_subject_type": "command",
             "owner_gate_required": True,
             "admin_policy_required": True,
@@ -198,11 +223,21 @@ def build_sdk_noninteractive_report() -> SDKNonInteractiveReport:
             "mutation_performed": False,
             "network_mutation_performed": False,
         },
+        "http_client_adapter": {
+            "cli_method": "HTTPClient.invoke_sdk_contract",
+            "endpoint": "/api/v1/control-plane/sdk/invoke",
+            "trigger": "xagent sdk <command> --execute",
+            "default_without_execute": "local_envelope_only",
+            "starts_agent_execution": False,
+            "adapter_execution_enabled": False,
+            "mutation_performed": False,
+            "network_mutation_performed": False,
+        },
         "channel_strategy": _channel_strategy(),
         "official_sources": list(CODEX_SDK_SOURCES),
         "known_limits": [
             "The backend SDK endpoint accepts envelopes and normalizes them into the control-plane contract.",
-            "The --execute CLI flag marks intent in the envelope; adapter execution remains owner-gated.",
+            "The --execute CLI flag can call the backend SDK stub; adapter execution remains owner-gated.",
             "No SDK HTTP adapter, agent runner, file mutation, channel send, or network mutation is enabled.",
             "Feishu remains the only domestic V1 pilot channel in this contract.",
             "Slack is tracked as a Codex reference surface, but it is non-blocking for the domestic first version.",
@@ -240,6 +275,10 @@ def render_markdown_report(report: SDKNonInteractiveReport) -> str:
         f"- Endpoint: `{report.backend_stub['endpoint']}`\n"
         f"- Normalizes to: `{report.backend_stub['normalizes_to']}`\n"
         f"- Adapter execution enabled: `{report.backend_stub['adapter_execution_enabled']}`\n\n"
+        "## HTTP Client Adapter\n\n"
+        f"- CLI method: `{report.http_client_adapter['cli_method']}`\n"
+        f"- Trigger: `{report.http_client_adapter['trigger']}`\n"
+        f"- Starts agent execution: `{report.http_client_adapter['starts_agent_execution']}`\n\n"
         "## Channel Strategy\n\n"
         f"- Domestic V1 primary: `{report.channel_strategy['domestic_v1_primary']}`\n"
         f"- Telegram required: `{report.channel_strategy['telegram_required']}`\n"
@@ -287,7 +326,7 @@ def main() -> int:
         print(f"- {check.name}: {check.status}")
         if check.error:
             print(f"  error: {check.error}")
-    return 0 if report.status == "sdk_backend_stub_ready" else 1
+    return 0 if report.status == "sdk_http_dry_run_adapter_ready" else 1
 
 
 if __name__ == "__main__":

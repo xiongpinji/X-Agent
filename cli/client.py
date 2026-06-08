@@ -290,6 +290,23 @@ class BaseClient(ABC):
         """
         pass
 
+    @abstractmethod
+    async def invoke_sdk_contract(self, contract: dict[str, Any]) -> dict[str, Any]:
+        """Invoke an SDK control-plane contract through the backend stub.
+
+        Args:
+            contract: SDK envelope produced by ``ControlPlaneSDK``.
+
+        Returns:
+            Backend SDK invoke response dictionary.
+
+        Raises:
+            ConnectionError: If unable to connect
+            AuthError: If authentication fails
+            APIError: If API returns error
+        """
+        pass
+
 
 class HTTPClient(BaseClient):
     """HTTP-based client for remote API calls.
@@ -526,6 +543,17 @@ class HTTPClient(BaseClient):
             "POST", f"/api/v1/approvals/{approval_id}/execute"
         )
 
+    async def invoke_sdk_contract(self, contract: dict[str, Any]) -> dict[str, Any]:
+        """Invoke SDK envelope through the owner-gated control-plane stub.
+
+        POST /api/v1/control-plane/sdk/invoke
+        """
+        return await self._request(
+            "POST",
+            "/api/v1/control-plane/sdk/invoke",
+            json=contract,
+        )
+
 
 class LocalClient(BaseClient):
     """Local client for direct backend module imports.
@@ -740,6 +768,17 @@ class LocalClient(BaseClient):
         raise NotImplementedError(
             "Approved execution not supported in local mode. "
             "Use HTTP mode to execute approved tools."
+        )
+
+    async def invoke_sdk_contract(self, contract: dict[str, Any]) -> dict[str, Any]:
+        """Invoke SDK envelope locally.
+
+        SDK backend invocation is HTTP-only so it stays behind the API audit
+        and approval/sandbox/admin contract.
+        """
+        raise NotImplementedError(
+            "SDK backend invocation is not supported in local mode. "
+            "Use HTTP mode to call the owner-gated control-plane stub."
         )
 
 

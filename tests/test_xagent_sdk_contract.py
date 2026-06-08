@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from unittest.mock import AsyncMock, patch
 
 from typer.testing import CliRunner
 
@@ -83,17 +84,42 @@ def test_cli_sdk_thread_start_outputs_non_interactive_json() -> None:
     assert payload["request"]["dry_run"] is True
 
 
-def test_cli_sdk_turn_run_execute_flag_only_marks_envelope_intent() -> None:
+def test_cli_sdk_turn_run_execute_flag_calls_backend_stub_without_agent_execution() -> None:
     set_current_config(CLIConfig(api_base_url="http://localhost:8000", output_format="json"))
-    result = CliRunner().invoke(
-        app,
-        ["sdk", "turn-run", "thread-1", "next instruction", "--execute", "--idempotency-key", "idem-2"],
-    )
+    mock_client = AsyncMock()
+    mock_client.invoke_sdk_contract.return_value = {
+        "status": "sdk_backend_stub_ready",
+        "sdk": {
+            "method": "turn/start",
+            "dry_run": False,
+            "adapter_execution_enabled": False,
+            "mutation_performed": False,
+            "network_mutation_performed": False,
+        },
+        "control_plane": {
+            "ok": False,
+            "error": {"code": "adapter_pending"},
+        },
+    }
+
+    with patch("cli.commands.sdk_cmd.create_client", return_value=mock_client):
+        result = CliRunner().invoke(
+            app,
+            ["sdk", "turn-run", "thread-1", "next instruction", "--execute", "--idempotency-key", "idem-2"],
+        )
 
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
-    assert payload["operation"] == "turn_start"
-    assert payload["request"]["dry_run"] is False
-    assert payload["request"]["idempotency_key"] == "idem-2"
-    assert payload["request"]["mutation_performed"] is False
-    assert payload["owner_gate"]["mutation_performed"] is False
+    assert payload["status"] == "sdk_backend_stub_ready"
+    assert payload["sdk"]["method"] == "turn/start"
+    assert payload["sdk"]["dry_run"] is False
+    assert payload["sdk"]["adapter_execution_enabled"] is False
+    assert payload["sdk"]["mutation_performed"] is False
+    assert payload["control_plane"]["error"]["code"] == "adapter_pending"
+
+    mock_client.invoke_sdk_contract.assert_awaited_once()
+    contract = mock_client.invoke_sdk_contract.await_args.args[0]
+    assert contract["operation"] == "turn_start"
+    assert contract["request"]["dry_run"] is False
+    assert contract["request"]["idempotency_key"] == "idem-2"
+    assert contract["request"]["mutation_performed"] is False

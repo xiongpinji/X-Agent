@@ -229,6 +229,37 @@ class TestHTTPClient:
             assert result["trace_id"] == "123"
 
     @pytest.mark.asyncio
+    async def test_http_client_invoke_sdk_contract_calls_control_plane_stub(self):
+        """Test SDK contract invoke uses the owner-gated backend stub."""
+        config = CLIConfig(api_base_url="http://localhost:8000")
+        client = HTTPClient(config)
+        contract = {
+            "operation": "turn_start",
+            "request": {"method": "turn/start", "params": {"thread_id": "thread-1"}},
+        }
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "status": "sdk_backend_stub_ready",
+            "sdk": {"adapter_execution_enabled": False, "mutation_performed": False},
+        }
+
+        with patch.object(
+            httpx.AsyncClient,
+            "request",
+            new_callable=AsyncMock,
+            return_value=mock_response,
+        ) as mock_request:
+            result = await client.invoke_sdk_contract(contract)
+
+            call_args = mock_request.call_args
+            assert call_args[0][0] == "POST"
+            assert call_args[0][1] == "/api/v1/control-plane/sdk/invoke"
+            assert call_args[1]["json"] == contract
+            assert result["sdk"]["adapter_execution_enabled"] is False
+
+    @pytest.mark.asyncio
     async def test_http_client_list_agents(self):
         """Test list_agents calls correct endpoint."""
         config = CLIConfig(api_base_url="http://localhost:8000")
@@ -521,6 +552,15 @@ class TestLocalClient:
 
         with pytest.raises(NotImplementedError):
             await client.get_workflow_status("wf123")
+
+    @pytest.mark.asyncio
+    async def test_local_client_invoke_sdk_contract_not_implemented(self):
+        """Test SDK backend invoke is HTTP-only."""
+        config = CLIConfig(mode="local")
+        client = LocalClient(config)
+
+        with pytest.raises(NotImplementedError, match="SDK backend invocation"):
+            await client.invoke_sdk_contract({"operation": "turn_start"})
 
     @pytest.mark.asyncio
     async def test_local_client_health_check_healthy(self):
