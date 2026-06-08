@@ -171,6 +171,11 @@ DEFAULT_ARTIFACTS = (
         "source_api",
     ),
     ArtifactSpec(
+        "customer_acceptance_pack_script",
+        ROOT / "scripts" / "commercial_pilot_customer_acceptance_pack.py",
+        "source_script",
+    ),
+    ArtifactSpec(
         "acceptance_gate_tests",
         ROOT / "tests" / "test_commercial_pilot_acceptance_gate.py",
         "source_test",
@@ -219,6 +224,11 @@ DEFAULT_ARTIFACTS = (
     ArtifactSpec(
         "commercial_pilot_api_tests",
         ROOT / "tests" / "test_commercial_pilot_api.py",
+        "source_test",
+    ),
+    ArtifactSpec(
+        "customer_acceptance_pack_tests",
+        ROOT / "tests" / "test_commercial_pilot_customer_acceptance_pack.py",
         "source_test",
     ),
 )

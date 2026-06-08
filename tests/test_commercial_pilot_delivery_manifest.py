@@ -235,3 +235,15 @@ def test_default_manifest_includes_commercial_pilot_api_contract() -> None:
     assert tests.path.name == "test_commercial_pilot_api.py"
     assert tests.category == "source_test"
     assert tests.required is True
+
+
+def test_default_manifest_includes_customer_acceptance_pack_artifacts() -> None:
+    script = next(artifact for artifact in DEFAULT_ARTIFACTS if artifact.name == "customer_acceptance_pack_script")
+    tests = next(artifact for artifact in DEFAULT_ARTIFACTS if artifact.name == "customer_acceptance_pack_tests")
+
+    assert script.path.name == "commercial_pilot_customer_acceptance_pack.py"
+    assert script.category == "source_script"
+    assert script.required is True
+    assert tests.path.name == "test_commercial_pilot_customer_acceptance_pack.py"
+    assert tests.category == "source_test"
+    assert tests.required is True

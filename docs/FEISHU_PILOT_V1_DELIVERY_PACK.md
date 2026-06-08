@@ -21,6 +21,8 @@ Current machine-readable handoff:
 - Acceptance gate: `.xagent_runtime/reports/commercial-pilot-acceptance-gate.json`
 - Handoff index: `.xagent_runtime/reports/commercial-pilot-handoff-index.json`
 - Handoff index markdown: `.xagent_runtime/reports/commercial-pilot-handoff-index.md`
+- Customer acceptance pack: `.xagent_runtime/reports/commercial-pilot-customer-acceptance-pack.json`
+- Customer acceptance pack markdown: `.xagent_runtime/reports/commercial-pilot-customer-acceptance-pack.md`
 - Final gate report: `.xagent_runtime/reports/commercial-pilot-final-gate.json`
 - Delivery receipt: `.xagent_runtime/reports/commercial-pilot-delivery-receipt.json`
 - Delivery receipt markdown: `.xagent_runtime/reports/commercial-pilot-delivery-receipt.md`
@@ -41,6 +43,10 @@ Known boundary:
 
 - This pack proves Feishu inbound pilot readiness only.
 - Outbound Feishu message send remains a separate owner-gated verification.
+- The final customer acceptance pack is the handoff entrypoint for Pilot V1.
+- Codex alignment is scoped to commercial pilot evidence, read-only operations
+  APIs, and Feishu channel handoff. It is not a full Codex platform parity
+  claim.
 - Telegram is not required for the first domestic pilot.
 - DingTalk and WeChat Work are not release blockers for Pilot V1.
 
@@ -53,6 +59,8 @@ Use these files as the canonical source of truth for this pilot:
 | `.xagent_runtime/reports/commercial-pilot-acceptance-gate.json` | Read-only operations acceptance gate over final handoff evidence. |
 | `.xagent_runtime/reports/commercial-pilot-handoff-index.json` | Customer-archivable handoff index with SHA-256 digests. |
 | `.xagent_runtime/reports/commercial-pilot-handoff-index.md` | Customer-readable Markdown handoff index. |
+| `.xagent_runtime/reports/commercial-pilot-customer-acceptance-pack.json` | Final customer acceptance pack with API checks, archive list, checklist, and Codex alignment boundary. |
+| `.xagent_runtime/reports/commercial-pilot-customer-acceptance-pack.md` | Customer-readable Markdown final acceptance pack. |
 | `.xagent_runtime/reports/commercial-pilot-final-gate.json` | Final pre-handoff gate; refreshes ops status before delivery manifest. |
 | `.xagent_runtime/reports/commercial-pilot-delivery-receipt.json` | Customer handoff receipt generated from final gate, ops status, and manifest. |
 | `.xagent_runtime/reports/commercial-pilot-delivery-receipt.md` | Customer-readable Markdown version of the delivery receipt. |
@@ -67,6 +75,7 @@ Use these files as the canonical source of truth for this pilot:
 | `.xagent_runtime/reports/rc-delivery-status.json` | Frozen commercial RC baseline proof. |
 | `scripts/commercial_pilot_acceptance_gate.py` | Read-only operations acceptance gate. |
 | `scripts/commercial_pilot_handoff_index.py` | Read-only customer handoff archive index generator. |
+| `scripts/commercial_pilot_customer_acceptance_pack.py` | Final customer acceptance pack generator. |
 | `scripts/commercial_pilot_final_gate.py` | One-command final delivery gate. |
 | `scripts/run_feishu_pilot_final_handoff.ps1` | Windows one-step final handoff wrapper; runs final gate before receipt. |
 | `scripts/commercial_pilot_delivery_receipt.py` | Customer delivery receipt generator. |
@@ -78,6 +87,7 @@ Use these files as the canonical source of truth for this pilot:
 | `tests/test_commercial_pilot_final_gate.py` | Final gate contract tests. |
 | `tests/test_commercial_pilot_acceptance_gate.py` | Operations acceptance gate contract tests. |
 | `tests/test_commercial_pilot_handoff_index.py` | Customer handoff index contract tests. |
+| `tests/test_commercial_pilot_customer_acceptance_pack.py` | Final customer acceptance pack contract tests. |
 | `tests/test_commercial_pilot_delivery_receipt.py` | Delivery receipt contract tests. |
 | `tests/test_commercial_pilot_delivery_manifest.py` | Delivery manifest contract tests. |
 | `backend/app/api/commercial_pilot.py` | Stable read-only Feishu pilot report API contract. |
@@ -249,6 +259,12 @@ Generate the customer handoff archive index:
 python scripts\commercial_pilot_handoff_index.py
 ```
 
+Generate the final customer acceptance pack:
+
+```powershell
+python scripts\commercial_pilot_customer_acceptance_pack.py
+```
+
 Read the stable Feishu pilot operations API:
 
 ```powershell
@@ -316,6 +332,23 @@ Commercial pilot handoff index status: handoff_index_ready
 - acceptance_gate_ready: passed
 - no_full_codex_parity_claim: passed
 - no_archive_mutation: passed
+```
+
+Expected customer acceptance pack output:
+
+```text
+Commercial pilot customer acceptance pack status: customer_acceptance_pack_ready
+- required_customer_artifacts: passed
+- customer_archive_digests: passed
+- operational_status_ready: passed
+- acceptance_gate_ready: passed
+- handoff_index_ready: passed
+- feishu_inbound_live_evidence: passed
+- read_only_api_contract: passed
+- codex_alignment_scope_declared: passed
+- customer_acceptance_checklist: passed
+- no_full_codex_parity_claim: passed
+- no_customer_handoff_mutation: passed
 ```
 
 Expected stable API status:
@@ -638,6 +671,9 @@ Suggested UI status mapping:
 
 | Report status | UI label | Meaning |
 | --- | --- | --- |
+| `customer_acceptance_pack_ready` | Ready | Final customer acceptance pack is complete for Feishu Pilot V1 handoff. |
+| `customer_acceptance_pack_action_required` | Action required | The final acceptance pack is missing required evidence or API readiness. |
+| `customer_acceptance_pack_blocked` | Blocked | The final acceptance pack found unsafe mutation or an unsupported Codex parity claim. |
 | `handoff_index_ready` | Ready | Customer archive index and required evidence digests are complete. |
 | `handoff_index_action_required` | Action required | A required archive artifact is missing or not ready. |
 | `handoff_index_blocked` | Blocked | Archive evidence contains an unsafe claim or mutation. |
