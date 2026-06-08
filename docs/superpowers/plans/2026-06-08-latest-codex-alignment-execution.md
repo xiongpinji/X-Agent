@@ -97,17 +97,21 @@ Expected: all new control-plane protocol tests pass.
 **Target:** Make X-Agent runs inspectable like durable Codex threads while preserving enterprise run/audit semantics.
 
 **Files:**
-- Modify: `backend/app/api/workbench.py`
-- Modify: existing thread/run service modules as needed
+- Modify: `backend/app/api/control_plane.py`
+- Keep untouched by this backend task: UI-facing `backend/app/api/workbench.py`
+- Modify: existing thread/run service modules only if needed
+- Test: `tests/test_control_plane_protocol.py`
 - Test: `tests/test_workbench_thread_loop.py`
 - Test: `tests/test_commercial_pilot_workbench_thread.py`
 
-- [ ] Expose durable run state for thread, turn, item, tool call, approval, artifact, channel event, and evidence link.
-- [ ] Add fork/resume/rollback metadata without claiming file rollback.
+- [x] Expose durable run state for thread, turn, item, tool call, approval, artifact, channel event, and evidence link through the control-plane read contract.
+- [x] Add fork/resume/rollback metadata without claiming file rollback.
+- [x] Expose worktree and automation state as metadata-only/evidence-only fields with no file mutation.
+- [ ] Promote metadata-only worktree and automation fields into real owner-gated adapters after cloud task and scheduler contracts land.
 - [ ] Validate with:
 
 ```powershell
-python -m pytest tests/test_workbench_thread_loop.py tests/test_commercial_pilot_workbench_thread.py -o addopts="" -p no:cov -p no:cacheprovider -q
+python -m pytest tests/test_control_plane_protocol.py tests/test_workbench_thread_loop.py tests/test_commercial_pilot_workbench_thread.py -o addopts="" -p no:cov -p no:cacheprovider -q
 ```
 
 Expected: selected workbench/thread tests pass.

@@ -1,12 +1,82 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
+
+import pytest
 from fastapi.testclient import TestClient
 
+from backend.app.core.approvals import ApprovalStore
+from backend.app.core.contracts import AgentRunResponse, RiskLevel, RunContext, RunStatus
+from backend.app.core.runs import RunStore
+from backend.app.core.tracing import TraceStore
+from backend.app.dependencies import get_approval_store, get_run_store, get_trace_store
 from backend.app.main import app
 
 
 def _client() -> TestClient:
     return TestClient(app, headers={"x-api-key": "bootstrap"})
+
+
+@contextmanager
+def _client_with_stores(
+    run_store: RunStore,
+    trace_store: TraceStore,
+    approval_store: ApprovalStore,
+):
+    previous = dict(app.dependency_overrides)
+    app.dependency_overrides[get_run_store] = lambda: run_store
+    app.dependency_overrides[get_trace_store] = lambda: trace_store
+    app.dependency_overrides[get_approval_store] = lambda: approval_store
+    try:
+        yield TestClient(app, headers={"x-api-key": "bootstrap"})
+    finally:
+        app.dependency_overrides.clear()
+        app.dependency_overrides.update(previous)
+
+
+@pytest.fixture()
+def durable_thread_state() -> tuple[RunStore, TraceStore, ApprovalStore, str]:
+    trace_id = "trace-control-thread"
+    run_store = RunStore()
+    trace_store = TraceStore()
+    approval_store = ApprovalStore()
+    context = RunContext(
+        trace_id=trace_id,
+        tenant_id="default",
+        user_id="bootstrap-admin",
+        agent_id="agent-control",
+        request_id="req-control",
+    )
+    trace_store.record(context, "agent.started", task="inspect durable thread")
+    trace_store.record(context, "tool.called", tool_name="search", status="ok")
+    trace_store.record(context, "agent.completed", status="completed")
+    approval_store.create_approval(
+        context=context,
+        resource_type="thread",
+        resource_id=trace_id,
+        action="thread.rollback",
+        risk_level=RiskLevel.MEDIUM,
+        reason="rollback metadata must remain owner gated",
+        arguments_preview={"thread_id": trace_id},
+    )
+    response = AgentRunResponse(
+        trace_id=trace_id,
+        agent_id="agent-control",
+        status=RunStatus.COMPLETED,
+        answer="durable thread inspected",
+        iterations=2,
+        memory_hits=1,
+        tool_calls=[],
+        events=[],
+        plan=[],
+        execution_summary={
+            "affected_files": ["backend/app/api/control_plane.py"],
+            "worktree": {"branch": "codex/codex-hermes-gap-closure"},
+        },
+        snapshot={"stage": "finalizing"},
+    )
+    run_store.save(context, "inspect durable thread", response)
+    return run_store, trace_store, approval_store, trace_id
 
 
 def test_control_plane_method_catalog_covers_p0_groups() -> None:
@@ -151,3 +221,122 @@ def test_control_plane_unknown_method_uses_protocol_error_envelope() -> None:
     assert payload["error"]["code"] == "method_not_found"
     assert payload["evidence"]["trace_id"] == "trace-unknown"
     assert payload["evidence"]["audit_id"]
+
+
+def test_control_plane_thread_read_returns_durable_run_state(
+    durable_thread_state: tuple[RunStore, TraceStore, ApprovalStore, str],
+) -> None:
+    run_store, trace_store, approval_store, trace_id = durable_thread_state
+
+    with _client_with_stores(run_store, trace_store, approval_store) as client:
+        response = client.post(
+            "/api/v1/control-plane/invoke",
+            json={
+                "id": "req-durable-read",
+                "method": "thread/read",
+                "params": {"thread_id": trace_id},
+                "context": {"trace_id": trace_id, "workspace_id": "workspace-control"},
+            },
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    thread = payload["result"]["thread"]
+    assert payload["ok"] is True
+    assert thread["thread_id"] == trace_id
+    assert thread["status"] == "completed"
+    assert thread["turns"][0]["event_count"] == 3
+    assert [item["role"] for item in thread["items"]] == ["user", "assistant"]
+    assert thread["tool_calls"]["count"] == 0
+    assert thread["approval_summary"]["pending"] == 1
+    assert thread["evidence_links"]["run"] == f"/api/v1/runs/{trace_id}"
+    assert thread["rollback"]["requires_approval"] is True
+    assert thread["rollback"]["file_system_rollback"] is False
+    assert thread["worktree"]["file_mutation_performed"] is False
+    assert thread["automations"]["scheduled_runs_supported"] is False
+
+
+def test_control_plane_thread_search_lists_thread_worktree_and_automation_state(
+    durable_thread_state: tuple[RunStore, TraceStore, ApprovalStore, str],
+) -> None:
+    run_store, trace_store, approval_store, trace_id = durable_thread_state
+
+    with _client_with_stores(run_store, trace_store, approval_store) as client:
+        response = client.post(
+            "/api/v1/control-plane/invoke",
+            json={
+                "id": "req-thread-search",
+                "method": "thread/search",
+                "params": {"limit": 5, "status": "completed"},
+                "context": {"trace_id": "trace-search"},
+            },
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    threads = payload["result"]["threads"]
+    assert threads["count"] == 1
+    assert threads["items"][0]["thread_id"] == trace_id
+    assert threads["items"][0]["approval_summary"]["pending"] == 1
+    assert threads["worktree"]["mode"] == "metadata_only"
+    assert threads["worktree"]["file_mutation_performed"] is False
+    assert threads["automations"]["evidence_only"] is True
+
+
+def test_control_plane_turn_events_list_normalizes_trace_events(
+    durable_thread_state: tuple[RunStore, TraceStore, ApprovalStore, str],
+) -> None:
+    run_store, trace_store, approval_store, trace_id = durable_thread_state
+
+    with _client_with_stores(run_store, trace_store, approval_store) as client:
+        response = client.post(
+            "/api/v1/control-plane/invoke",
+            json={
+                "id": "req-turn-events",
+                "method": "turn/events/list",
+                "params": {"thread_id": trace_id, "limit": 2},
+                "context": {"trace_id": trace_id},
+            },
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    events = payload["result"]["events"]
+    assert events["thread_id"] == trace_id
+    assert events["count"] == 2
+    assert events["items"][0]["event_id"] == f"{trace_id}:event:1"
+    assert events["items"][0]["type"] == "agent.started"
+    assert events["items"][0]["item_id"] == f"{trace_id}:item:1"
+    assert events["items"][0]["payload"]["task"] == "inspect durable thread"
+    assert events["items"][0]["created_at"]
+
+
+def test_control_plane_thread_rollback_is_metadata_only_and_owner_gated(
+    durable_thread_state: tuple[RunStore, TraceStore, ApprovalStore, str],
+) -> None:
+    run_store, trace_store, approval_store, trace_id = durable_thread_state
+
+    with _client_with_stores(run_store, trace_store, approval_store) as client:
+        response = client.post(
+            "/api/v1/control-plane/invoke",
+            json={
+                "id": "req-thread-rollback",
+                "method": "thread/rollback",
+                "params": {"thread_id": trace_id},
+                "context": {"trace_id": trace_id},
+            },
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    operation = payload["error"]["details"]["thread_operation"]
+    assert payload["ok"] is False
+    assert payload["error"]["code"] == "approval_required"
+    assert payload["error"]["details"]["mutation_performed"] is False
+    assert operation["operation"] == "rollback"
+    assert operation["source_exists"] is True
+    assert operation["metadata_only"] is True
+    assert operation["file_system_rollback"] is False
+    assert operation["file_rollback_claimed"] is False
+    assert operation["approval_summary"]["pending"] == 1
+    assert operation["trace_event_count"] == 3

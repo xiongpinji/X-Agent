@@ -12,12 +12,22 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from backend.app.core.audit import AuditStore
 from backend.app.core.security import Principal
-from backend.app.dependencies import enforce_scope, get_audit_store, get_current_principal
+from backend.app.dependencies import (
+    enforce_scope,
+    get_approval_store,
+    get_audit_store,
+    get_current_principal,
+    get_run_store,
+    get_trace_store,
+)
 
 router = APIRouter(prefix="/api/v1/control-plane", tags=["control-plane"])
 
 PrincipalDependency = Annotated[Principal, Depends(get_current_principal)]
 AuditStoreDependency = Annotated[AuditStore, Depends(get_audit_store)]
+ApprovalStoreDependency = Annotated[object, Depends(get_approval_store)]
+RunStoreDependency = Annotated[object, Depends(get_run_store)]
+TraceStoreDependency = Annotated[object, Depends(get_trace_store)]
 
 ROOT = Path(__file__).resolve().parents[3]
 REPORT_DIR = ROOT / ".xagent_runtime" / "reports"
@@ -649,6 +659,9 @@ async def invoke_control_plane(
     request: ControlPlaneInvokeRequest,
     principal: PrincipalDependency,
     audit_store: AuditStoreDependency,
+    run_store: RunStoreDependency,
+    trace_store: TraceStoreDependency,
+    approval_store: ApprovalStoreDependency,
 ) -> ControlPlaneInvokeResponse:
     enforce_scope(principal, "agent:read")
     trace_id = request.context.trace_id or principal.trace_id or f"trace_{uuid4().hex}"
@@ -701,7 +714,14 @@ async def invoke_control_plane(
         )
 
     if spec.operation_kind == "read" and spec.implementation_state == "read_only_contract":
-        result = _contract_result(spec, request)
+        result = _contract_result(
+            spec,
+            request,
+            principal=principal,
+            run_store=run_store,
+            trace_store=trace_store,
+            approval_store=approval_store,
+        )
         audit = _audit(
             audit_store,
             principal,
@@ -723,19 +743,20 @@ async def invoke_control_plane(
         if spec.requires_approval
         else "This control-plane method is registered but its concrete adapter is not implemented yet."
     )
+    adapter_details = _adapter_pending_details(
+        spec,
+        request,
+        run_store=run_store,
+        trace_store=trace_store,
+        approval_store=approval_store,
+    )
     audit = _audit(
         audit_store,
         principal,
         request=request,
         trace_id=trace_id,
         outcome="blocked",
-        details={
-            "method": spec.method,
-            "group": spec.group,
-            "requires_approval": spec.requires_approval,
-            "implementation_state": spec.implementation_state,
-            "mutation_performed": False,
-        },
+        details=adapter_details,
     )
     return ControlPlaneInvokeResponse(
         id=request.id,
@@ -744,19 +765,21 @@ async def invoke_control_plane(
             code=error_code,
             message=message,
             retryable=True,
-            details={
-                "method": spec.method,
-                "group": spec.group,
-                "operation_kind": spec.operation_kind,
-                "requires_approval": spec.requires_approval,
-                "mutation_performed": False,
-            },
+            details=adapter_details,
         ),
         evidence=ControlPlaneEvidence(trace_id=trace_id, audit_id=audit.id),
     )
 
 
-def _contract_result(spec: ControlPlaneMethodSpec, request: ControlPlaneInvokeRequest) -> dict[str, Any]:
+def _contract_result(
+    spec: ControlPlaneMethodSpec,
+    request: ControlPlaneInvokeRequest,
+    *,
+    principal: Principal,
+    run_store: object,
+    trace_store: object,
+    approval_store: object,
+) -> dict[str, Any]:
     result: dict[str, Any] = {
         **spec.to_payload(),
         "contract": {
@@ -774,9 +797,625 @@ def _contract_result(spec: ControlPlaneMethodSpec, request: ControlPlaneInvokeRe
             "workspace_id": request.context.workspace_id,
         },
     }
+    if spec.method == "thread/read":
+        result["thread"] = _thread_read_state(
+            request,
+            principal=principal,
+            run_store=run_store,
+            trace_store=trace_store,
+            approval_store=approval_store,
+        )
+    elif spec.method == "thread/search":
+        result["threads"] = _thread_search_state(
+            request,
+            principal=principal,
+            run_store=run_store,
+            trace_store=trace_store,
+            approval_store=approval_store,
+        )
+    elif spec.method == "turn/events/list":
+        result["events"] = _turn_events_state(request, trace_store=trace_store)
+    elif spec.method == "approval/list":
+        result["approvals"] = _approval_list_state(
+            request,
+            principal=principal,
+            approval_store=approval_store,
+        )
+    elif spec.method == "approval/read":
+        result["approval"] = _approval_read_state(request, approval_store=approval_store)
     if spec.method == "runtime/evidence/read":
         result["evidence"] = _runtime_evidence_metadata(request.params)
     return result
+
+
+def _adapter_pending_details(
+    spec: ControlPlaneMethodSpec,
+    request: ControlPlaneInvokeRequest,
+    *,
+    run_store: object,
+    trace_store: object,
+    approval_store: object,
+) -> dict[str, Any]:
+    details: dict[str, Any] = {
+        "method": spec.method,
+        "group": spec.group,
+        "operation_kind": spec.operation_kind,
+        "requires_approval": spec.requires_approval,
+        "implementation_state": spec.implementation_state,
+        "mutation_performed": False,
+    }
+    if spec.method in {"thread/fork", "thread/resume", "thread/rollback", "thread/compact"}:
+        details["thread_operation"] = _thread_operation_metadata(
+            spec,
+            request,
+            run_store=run_store,
+            trace_store=trace_store,
+            approval_store=approval_store,
+        )
+    return details
+
+
+def _thread_read_state(
+    request: ControlPlaneInvokeRequest,
+    *,
+    principal: Principal,
+    run_store: object,
+    trace_store: object,
+    approval_store: object,
+) -> dict[str, Any]:
+    thread_id = _thread_id_from_request(request)
+    if not thread_id:
+        return {
+            "status": "missing_thread_id",
+            "thread_id": None,
+            "error": "thread/read requires thread_id or trace_id.",
+        }
+
+    record = _store_get(run_store, thread_id)
+    if record is not None and getattr(record, "tenant_id", principal.tenant_id) != principal.tenant_id:
+        return {"status": "not_found", "thread_id": thread_id}
+
+    if record is not None:
+        return _thread_payload_from_run(record, trace_store, approval_store)
+
+    summary = _trace_summary(trace_store, thread_id)
+    if summary is not None and getattr(summary, "event_count", 0) > 0:
+        return _thread_payload_from_trace(summary, trace_store, approval_store)
+    return {"status": "not_found", "thread_id": thread_id}
+
+
+def _thread_search_state(
+    request: ControlPlaneInvokeRequest,
+    *,
+    principal: Principal,
+    run_store: object,
+    trace_store: object,
+    approval_store: object,
+) -> dict[str, Any]:
+    limit = _bounded_int(request.params.get("limit"), default=20, minimum=1, maximum=100)
+    status_filter = request.params.get("status")
+    records = [
+        record
+        for record in _store_list(run_store, limit=limit)
+        if getattr(record, "tenant_id", principal.tenant_id) == principal.tenant_id
+    ]
+    if isinstance(status_filter, str):
+        records = [
+            record
+            for record in records
+            if _status_value(getattr(record, "status", None)) == status_filter
+        ]
+    threads = [
+        _thread_summary_from_run(record, trace_store, approval_store)
+        for record in records[:limit]
+    ]
+    return {
+        "count": len(threads),
+        "limit": limit,
+        "items": threads,
+        "worktree": _worktree_metadata(request),
+        "automations": _automation_metadata(),
+    }
+
+
+def _turn_events_state(
+    request: ControlPlaneInvokeRequest,
+    *,
+    trace_store: object,
+) -> dict[str, Any]:
+    thread_id = _thread_id_from_request(request)
+    limit = _bounded_int(request.params.get("limit"), default=100, minimum=1, maximum=500)
+    if not thread_id:
+        return {
+            "thread_id": None,
+            "turn_id": request.params.get("turn_id"),
+            "count": 0,
+            "items": [],
+            "error": "turn/events/list requires thread_id or trace_id.",
+        }
+    events = _trace_events(trace_store, thread_id)[:limit]
+    turn_id = request.params.get("turn_id") or f"{thread_id}:turn:latest"
+    return {
+        "thread_id": thread_id,
+        "turn_id": turn_id,
+        "count": len(events),
+        "items": [
+            {
+                "event_id": f"{thread_id}:event:{index + 1}",
+                "type": getattr(event, "event", "unknown"),
+                "thread_id": thread_id,
+                "turn_id": turn_id,
+                "item_id": f"{thread_id}:item:{index + 1}",
+                "payload": getattr(event, "data", {}),
+                "created_at": _jsonable(getattr(event, "timestamp", None)),
+            }
+            for index, event in enumerate(events)
+        ],
+    }
+
+
+def _approval_list_state(
+    request: ControlPlaneInvokeRequest,
+    *,
+    principal: Principal,
+    approval_store: object,
+) -> dict[str, Any]:
+    limit = _bounded_int(request.params.get("limit"), default=50, minimum=1, maximum=200)
+    status_filter = request.params.get("status")
+    records = _approval_records(
+        approval_store,
+        tenant_id=principal.tenant_id,
+        status=status_filter if isinstance(status_filter, str) else None,
+        limit=limit,
+    )
+    return {
+        "count": len(records),
+        "limit": limit,
+        "items": [_approval_payload(record) for record in records],
+    }
+
+
+def _approval_read_state(
+    request: ControlPlaneInvokeRequest,
+    *,
+    approval_store: object,
+) -> dict[str, Any]:
+    approval_id = request.params.get("approval_id")
+    if not isinstance(approval_id, str) or not approval_id:
+        return {"status": "missing_approval_id", "approval_id": None}
+    record = getattr(approval_store, "get", lambda _approval_id: None)(approval_id)
+    if record is None:
+        return {"status": "not_found", "approval_id": approval_id}
+    return _approval_payload(record)
+
+
+def _thread_operation_metadata(
+    spec: ControlPlaneMethodSpec,
+    request: ControlPlaneInvokeRequest,
+    *,
+    run_store: object,
+    trace_store: object,
+    approval_store: object,
+) -> dict[str, Any]:
+    thread_id = _thread_id_from_request(request)
+    record = _store_get(run_store, thread_id) if thread_id else None
+    return {
+        "operation": spec.method.rsplit("/", 1)[-1],
+        "thread_id": thread_id,
+        "source_status": _status_value(getattr(record, "status", None)) if record else "unknown",
+        "source_exists": record is not None,
+        "metadata_only": True,
+        "mutation_performed": False,
+        "file_system_rollback": False,
+        "file_rollback_claimed": False,
+        "approval_required": spec.requires_approval,
+        "worktree": _worktree_metadata(request),
+        "automations": _automation_metadata(),
+        "evidence_links": _thread_evidence_links(thread_id) if thread_id else {},
+        "approval_summary": _approval_summary(thread_id, approval_store) if thread_id else {},
+        "trace_event_count": len(_trace_events(trace_store, thread_id)) if thread_id else 0,
+    }
+
+
+def _thread_payload_from_run(
+    record: Any,
+    trace_store: object,
+    approval_store: object,
+) -> dict[str, Any]:
+    trace_id = getattr(record, "trace_id", "")
+    events = _trace_events(trace_store, trace_id)
+    status = _status_value(getattr(record, "status", None))
+    return {
+        "status": status,
+        "thread_id": trace_id,
+        "trace_id": trace_id,
+        "task": getattr(record, "task", ""),
+        "agent_id": getattr(record, "agent_id", None),
+        "tenant_id": getattr(record, "tenant_id", None),
+        "user_id": getattr(record, "user_id", None),
+        "created_at": _jsonable(getattr(record, "created_at", None)),
+        "completed_at": _jsonable(getattr(record, "completed_at", None)),
+        "turns": [_turn_summary_from_run(record, events)],
+        "items": _thread_items_from_run(record),
+        "tool_calls": {
+            "count": getattr(record, "tool_call_count", 0),
+            "items": [_jsonable(item) for item in getattr(record, "tool_calls", [])],
+        },
+        "approval_summary": _approval_summary(trace_id, approval_store),
+        "artifacts": _artifact_metadata(record),
+        "channel_events": _channel_event_metadata(record),
+        "evidence_links": _thread_evidence_links(trace_id),
+        "fork": _thread_action_metadata("fork", trace_id),
+        "resume": _thread_action_metadata("resume", trace_id),
+        "rollback": _thread_action_metadata("rollback", trace_id),
+        "worktree": _worktree_metadata_from_record(record),
+        "automations": _automation_metadata(),
+    }
+
+
+def _thread_payload_from_trace(
+    summary: Any,
+    trace_store: object,
+    approval_store: object,
+) -> dict[str, Any]:
+    trace_id = getattr(summary, "trace_id", "")
+    events = _trace_events(trace_store, trace_id)
+    return {
+        "status": "trace_only",
+        "thread_id": trace_id,
+        "trace_id": trace_id,
+        "task": getattr(summary, "task", None),
+        "turns": [_turn_summary_from_trace(summary, events)],
+        "items": _thread_items_from_events(trace_id, events),
+        "tool_calls": {"count": 0, "items": []},
+        "approval_summary": _approval_summary(trace_id, approval_store),
+        "artifacts": [],
+        "channel_events": [],
+        "evidence_links": _thread_evidence_links(trace_id),
+        "fork": _thread_action_metadata("fork", trace_id),
+        "resume": _thread_action_metadata("resume", trace_id),
+        "rollback": _thread_action_metadata("rollback", trace_id),
+        "worktree": _worktree_metadata_from_trace(summary),
+        "automations": _automation_metadata(),
+    }
+
+
+def _thread_summary_from_run(
+    record: Any,
+    trace_store: object,
+    approval_store: object,
+) -> dict[str, Any]:
+    trace_id = getattr(record, "trace_id", "")
+    summary = _trace_summary(trace_store, trace_id)
+    return {
+        "thread_id": trace_id,
+        "trace_id": trace_id,
+        "task": getattr(record, "task", ""),
+        "status": _status_value(getattr(record, "status", None)),
+        "agent_id": getattr(record, "agent_id", None),
+        "created_at": _jsonable(getattr(record, "created_at", None)),
+        "completed_at": _jsonable(getattr(record, "completed_at", None)),
+        "event_count": getattr(summary, "event_count", 0) if summary else 0,
+        "tool_call_count": getattr(record, "tool_call_count", 0),
+        "approval_summary": _approval_summary(trace_id, approval_store),
+        "evidence_links": _thread_evidence_links(trace_id),
+        "worktree": _worktree_metadata_from_record(record),
+        "automations": _automation_metadata(),
+    }
+
+
+def _thread_id_from_request(request: ControlPlaneInvokeRequest) -> str | None:
+    value = (
+        request.params.get("thread_id")
+        or request.params.get("trace_id")
+        or request.context.trace_id
+    )
+    return value if isinstance(value, str) and value else None
+
+
+def _bounded_int(value: Any, *, default: int, minimum: int, maximum: int) -> int:
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        number = default
+    return max(minimum, min(maximum, number))
+
+
+def _store_get(store: object, trace_id: str | None) -> Any | None:
+    if not trace_id or not hasattr(store, "get"):
+        return None
+    try:
+        return store.get(trace_id)
+    except Exception:
+        return None
+
+
+def _store_list(store: object, *, limit: int) -> list[Any]:
+    if not hasattr(store, "list"):
+        return []
+    try:
+        records = store.list(limit=limit)
+    except TypeError:
+        records = store.list()
+    except Exception:
+        return []
+    return list(records or [])[:limit]
+
+
+def _trace_summary(trace_store: object, trace_id: str | None) -> Any | None:
+    if not trace_id or not hasattr(trace_store, "get_summary"):
+        return None
+    try:
+        return trace_store.get_summary(trace_id)
+    except Exception:
+        return None
+
+
+def _trace_events(trace_store: object, trace_id: str | None) -> list[Any]:
+    if not trace_id or not hasattr(trace_store, "list_events"):
+        return []
+    try:
+        return list(trace_store.list_events(trace_id) or [])
+    except Exception:
+        return []
+
+
+def _status_value(value: Any) -> str:
+    raw = getattr(value, "value", value)
+    if raw is None:
+        return "queued"
+    text = str(raw)
+    if text == "needs_approval":
+        return "waiting_for_approval"
+    return text if text in STATUS_VOCABULARY else text
+
+
+def _approval_records(
+    approval_store: object,
+    *,
+    tenant_id: str | None = None,
+    status: str | None = None,
+    limit: int = 50,
+) -> list[Any]:
+    if not hasattr(approval_store, "list"):
+        return []
+    try:
+        records = list(approval_store.list(limit=limit, tenant_id=tenant_id) or [])
+    except TypeError:
+        try:
+            records = list(approval_store.list(limit=limit) or [])
+        except Exception:
+            return []
+    except Exception:
+        return []
+
+    filtered = []
+    for record in records:
+        if tenant_id and getattr(record, "tenant_id", None) != tenant_id:
+            continue
+        if status and _status_value(getattr(record, "status", None)) != status:
+            continue
+        filtered.append(record)
+    return filtered[:limit]
+
+
+def _approval_payload(record: Any) -> dict[str, Any]:
+    return {
+        "approval_id": getattr(record, "id", None),
+        "tenant_id": getattr(record, "tenant_id", None),
+        "actor_id": getattr(record, "actor_id", None),
+        "trace_id": getattr(record, "trace_id", None),
+        "resource_type": getattr(record, "resource_type", None),
+        "resource_id": getattr(record, "resource_id", None),
+        "action": getattr(record, "action", None),
+        "risk_level": _status_value(getattr(record, "risk_level", None)),
+        "status": _status_value(getattr(record, "status", None)),
+        "reason": getattr(record, "reason", None),
+        "arguments_preview": _jsonable(getattr(record, "arguments_preview", {})),
+        "decided_by": getattr(record, "decided_by", None),
+        "decided_at": _jsonable(getattr(record, "decided_at", None)),
+        "executed_by": getattr(record, "executed_by", None),
+        "executed_at": _jsonable(getattr(record, "executed_at", None)),
+        "created_at": _jsonable(getattr(record, "created_at", None)),
+    }
+
+
+def _approval_summary(trace_id: str | None, approval_store: object) -> dict[str, Any]:
+    records = [
+        record
+        for record in _approval_records(approval_store, limit=200)
+        if trace_id and getattr(record, "trace_id", None) == trace_id
+    ]
+    statuses: dict[str, int] = {}
+    for record in records:
+        status = _status_value(getattr(record, "status", None))
+        statuses[status] = statuses.get(status, 0) + 1
+    return {
+        "trace_id": trace_id,
+        "count": len(records),
+        "pending": statuses.get("pending", 0),
+        "statuses": statuses,
+        "items": [_approval_payload(record) for record in records[:10]],
+    }
+
+
+def _thread_evidence_links(trace_id: str) -> dict[str, str]:
+    return {
+        "run": f"/api/v1/runs/{trace_id}",
+        "trace": f"/api/v1/traces/{trace_id}",
+        "timeline": f"/api/v1/runs/{trace_id}/timeline",
+        "agent_timeline": f"/api/v1/agents/runs/{trace_id}/timeline",
+        "control_plane": "/api/v1/control-plane/invoke",
+    }
+
+
+def _thread_action_metadata(action: str, trace_id: str) -> dict[str, Any]:
+    return {
+        "action": action,
+        "thread_id": trace_id,
+        "available": True,
+        "metadata_only": True,
+        "mutation_performed": False,
+        "requires_approval": action in {"fork", "rollback"},
+        "file_system_rollback": False,
+        "file_rollback_claimed": False,
+    }
+
+
+def _worktree_metadata(request: ControlPlaneInvokeRequest) -> dict[str, Any]:
+    return {
+        "mode": "metadata_only",
+        "workspace_id": request.context.workspace_id,
+        "workspace_root": str(ROOT),
+        "branch": request.params.get("branch"),
+        "commit_sha": request.params.get("commit_sha"),
+        "file_mutation_performed": False,
+        "file_system_rollback": False,
+    }
+
+
+def _worktree_metadata_from_record(record: Any) -> dict[str, Any]:
+    summary = getattr(record, "execution_summary", {}) or {}
+    worktree = summary.get("worktree") if isinstance(summary, dict) else {}
+    return {
+        "mode": "metadata_only",
+        "workspace_root": str(ROOT),
+        "branch": worktree.get("branch") if isinstance(worktree, dict) else None,
+        "commit_sha": worktree.get("commit_sha") if isinstance(worktree, dict) else None,
+        "file_mutation_performed": False,
+        "file_system_rollback": False,
+    }
+
+
+def _worktree_metadata_from_trace(summary: Any) -> dict[str, Any]:
+    snapshot = getattr(summary, "snapshot", {}) or {}
+    return {
+        "mode": "metadata_only",
+        "workspace_root": str(ROOT),
+        "branch": snapshot.get("branch") if isinstance(snapshot, dict) else None,
+        "commit_sha": snapshot.get("commit_sha") if isinstance(snapshot, dict) else None,
+        "file_mutation_performed": False,
+        "file_system_rollback": False,
+    }
+
+
+def _automation_metadata() -> dict[str, Any]:
+    return {
+        "scheduled_runs_supported": False,
+        "evidence_only": True,
+        "items": [],
+        "mutation_performed": False,
+    }
+
+
+def _turn_summary_from_run(record: Any, events: list[Any]) -> dict[str, Any]:
+    trace_id = getattr(record, "trace_id", "")
+    return {
+        "turn_id": f"{trace_id}:turn:latest",
+        "thread_id": trace_id,
+        "status": _status_value(getattr(record, "status", None)),
+        "task": getattr(record, "task", ""),
+        "created_at": _jsonable(getattr(record, "created_at", None)),
+        "completed_at": _jsonable(getattr(record, "completed_at", None)),
+        "event_count": len(events),
+        "item_count": 2 if getattr(record, "answer", "") else 1,
+        "latest_event": getattr(events[-1], "event", None) if events else None,
+    }
+
+
+def _turn_summary_from_trace(summary: Any, events: list[Any]) -> dict[str, Any]:
+    trace_id = getattr(summary, "trace_id", "")
+    return {
+        "turn_id": f"{trace_id}:turn:latest",
+        "thread_id": trace_id,
+        "status": "completed" if getattr(summary, "event_count", 0) else "queued",
+        "task": getattr(summary, "task", None),
+        "created_at": _jsonable(getattr(summary, "started_at", None)),
+        "completed_at": _jsonable(getattr(summary, "ended_at", None)),
+        "event_count": len(events),
+        "item_count": len(events),
+        "latest_event": getattr(summary, "last_event", None),
+    }
+
+
+def _thread_items_from_run(record: Any) -> list[dict[str, Any]]:
+    trace_id = getattr(record, "trace_id", "")
+    items = [
+        {
+            "item_id": f"{trace_id}:item:task",
+            "thread_id": trace_id,
+            "type": "message",
+            "role": "user",
+            "content": getattr(record, "task", ""),
+            "created_at": _jsonable(getattr(record, "created_at", None)),
+        }
+    ]
+    answer = getattr(record, "answer", "")
+    if answer:
+        items.append(
+            {
+                "item_id": f"{trace_id}:item:answer",
+                "thread_id": trace_id,
+                "type": "message",
+                "role": "assistant",
+                "content": answer,
+                "created_at": _jsonable(getattr(record, "completed_at", None)),
+            }
+        )
+    return items
+
+
+def _thread_items_from_events(trace_id: str, events: list[Any]) -> list[dict[str, Any]]:
+    return [
+        {
+            "item_id": f"{trace_id}:item:{index + 1}",
+            "thread_id": trace_id,
+            "type": "event",
+            "role": "system",
+            "content": getattr(event, "event", "unknown"),
+            "payload": _jsonable(getattr(event, "data", {})),
+            "created_at": _jsonable(getattr(event, "timestamp", None)),
+        }
+        for index, event in enumerate(events)
+    ]
+
+
+def _artifact_metadata(record: Any) -> list[dict[str, Any]]:
+    summary = getattr(record, "execution_summary", {}) or {}
+    artifacts = summary.get("artifacts", []) if isinstance(summary, dict) else []
+    if isinstance(artifacts, list):
+        return [_jsonable(item) for item in artifacts if isinstance(item, dict)]
+    affected_files = summary.get("affected_files", []) if isinstance(summary, dict) else []
+    return [
+        {"type": "file", "path": path, "mutation_performed": False}
+        for path in affected_files
+        if isinstance(path, str)
+    ]
+
+
+def _channel_event_metadata(record: Any) -> list[dict[str, Any]]:
+    summary = getattr(record, "execution_summary", {}) or {}
+    channel_events = summary.get("channel_events", []) if isinstance(summary, dict) else []
+    if isinstance(channel_events, list):
+        return [_jsonable(item) for item in channel_events if isinstance(item, dict)]
+    return []
+
+
+def _jsonable(value: Any) -> Any:
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if isinstance(value, dict):
+        return {str(key): _jsonable(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple, set)):
+        return [_jsonable(item) for item in value]
+    if hasattr(value, "model_dump"):
+        return _jsonable(value.model_dump(mode="json"))
+    raw = getattr(value, "value", None)
+    if raw is not None:
+        return raw
+    return str(value)
 
 
 def _runtime_evidence_metadata(params: dict[str, Any]) -> dict[str, Any]:

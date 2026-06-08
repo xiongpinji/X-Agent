@@ -33,6 +33,24 @@ CODEX_OFFICIAL_SOURCES = (
     "https://developers.openai.com/codex/enterprise/admin-setup",
 )
 
+READY_XAGENT_STATUSES = frozenset(
+    {
+        "aligned_for_pilot_v1",
+        "contract_first_ready",
+        "durable_thread_contract_ready",
+        "partial",
+        "domestic_feishu_first",
+    }
+)
+
+NEXT_TASK_DONE_STATUSES = frozenset(
+    {
+        "aligned_for_pilot_v1",
+        "contract_first_ready",
+        "durable_thread_contract_ready",
+    }
+)
+
 
 @dataclass(frozen=True)
 class AlignmentEvidenceSpec:
@@ -286,12 +304,17 @@ def _capabilities() -> list[CodexAlignmentCapability]:
             capability="threads_worktrees_and_automations",
             codex_surface="Codex app local/worktree/cloud threads and automations",
             priority="P0",
-            xagent_status="partial",
-            evidence=["workbench_thread_tests", "commercial_workbench_evidence_tests"],
-            next_task="Expose durable thread/run state, fork/resume/rollback metadata, and scheduled run evidence through backend APIs.",
-            acceptance_command="python -m pytest tests/test_workbench_thread_loop.py tests/test_commercial_pilot_workbench_thread.py -o addopts=\"\" -p no:cov -p no:cacheprovider -q",
+            xagent_status="durable_thread_contract_ready",
+            evidence=[
+                "control_plane_api",
+                "control_plane_protocol_tests",
+                "workbench_thread_tests",
+                "commercial_workbench_evidence_tests",
+            ],
+            next_task="Promote the metadata-only worktree and automation fields into real owner-gated adapters after cloud task and scheduler contracts land.",
+            acceptance_command="python -m pytest tests/test_control_plane_protocol.py tests/test_workbench_thread_loop.py tests/test_commercial_pilot_workbench_thread.py -o addopts=\"\" -p no:cov -p no:cacheprovider -q",
             official_sources=["https://developers.openai.com/codex/app/features"],
-            rationale="Workbench and commercial evidence tests exist, but Codex-style worktree/cloud task UX is not complete.",
+            rationale="Durable thread/read, search, turn-event, approval, evidence, and guarded rollback metadata now have backend contract coverage; real worktree mutation and scheduled automation remain explicitly owner-gated future work.",
         ),
         CodexAlignmentCapability(
             capability="cloud_task_environment",
@@ -528,8 +551,7 @@ def build_latest_codex_alignment_report(
     p0_ready = [
         item
         for item in p0_capabilities
-        if item.xagent_status
-        in {"aligned_for_pilot_v1", "contract_first_ready", "partial", "domestic_feishu_first"}
+        if item.xagent_status in READY_XAGENT_STATUSES
     ]
     checks = [
         _required_evidence_check(evidence_items),
@@ -543,7 +565,7 @@ def build_latest_codex_alignment_report(
     next_p0_tasks = [
         f"{item.capability}: {item.next_task}"
         for item in p0_capabilities
-        if item.xagent_status not in {"aligned_for_pilot_v1", "contract_first_ready"}
+        if item.xagent_status not in NEXT_TASK_DONE_STATUSES
     ]
 
     return LatestCodexAlignmentReport(

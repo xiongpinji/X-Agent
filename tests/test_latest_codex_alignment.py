@@ -116,6 +116,7 @@ def test_latest_codex_alignment_ready_with_current_evidence(tmp_path: Path) -> N
     assert report.full_codex_parity_claimed is False
     assert report.p0_ready_count < report.p0_total_count
     assert not any("app_server_control_plane" in item for item in report.next_p0_tasks)
+    assert not any("threads_worktrees_and_automations" in item for item in report.next_p0_tasks)
     control_plane = next(item for item in report.capabilities if item.capability == "app_server_control_plane")
     assert control_plane.xagent_status == "contract_first_ready"
     assert {
@@ -123,6 +124,14 @@ def test_latest_codex_alignment_ready_with_current_evidence(tmp_path: Path) -> N
         "control_plane_api",
         "control_plane_protocol_tests",
     }.issubset(set(control_plane.evidence))
+    threads = next(item for item in report.capabilities if item.capability == "threads_worktrees_and_automations")
+    assert threads.xagent_status == "durable_thread_contract_ready"
+    assert {
+        "control_plane_api",
+        "control_plane_protocol_tests",
+        "workbench_thread_tests",
+        "commercial_workbench_evidence_tests",
+    }.issubset(set(threads.evidence))
     assert {check.status for check in report.checks} == {"passed"}
     assert all(item.official_sources for item in report.capabilities)
 
