@@ -165,18 +165,27 @@ Expected: selected GitHub workflow tests pass.
 **Target:** Convert strong existing primitives into a commercial lifecycle.
 
 **Files:**
-- Modify: `backend/app/core/skill_curator/`
-- Modify: `backend/app/core/mcp/`
-- Modify: `backend/app/core/hooks/`
+- Create: `scripts/governance_lifecycle_report.py`
+- Create: `tests/test_governance_lifecycle_report.py`
+- Modify: `scripts/latest_codex_alignment.py`
+- Modify: `tests/test_latest_codex_alignment.py`
+- Runtime evidence: `.xagent_runtime/reports/governance-lifecycle-report.json`
+- Runtime evidence: `.xagent_runtime/reports/governance-lifecycle-report.md`
+- Future adapter scope: `backend/app/core/skill_curator/`
+- Future adapter scope: `backend/app/core/mcp/`
+- Future adapter scope: `backend/app/core/hooks/`
 - Test: `tests/test_skill_curator_api.py`
 - Test: `tests/test_mcp_manager.py`
 - Test: `tests/test_hooks_manager.py`
 
-- [ ] Add lifecycle states: draft, validate, review, approve, promote, rollback.
-- [ ] Attach permission, MCP dependency, data-access, test-command, and rollback metadata.
+- [x] Add lifecycle states: draft, validate, review, approve, promote, rollback.
+- [x] Attach permission, MCP dependency, data-access, test-command, and rollback metadata.
+- [x] Keep skill promotion, plugin enablement, MCP registration, hook persistence, and rollback as owner-gated future adapters.
+- [ ] Implement real owner-gated lifecycle adapters after governance evidence review.
 - [ ] Validate with:
 
 ```powershell
+python scripts\governance_lifecycle_report.py
 python -m pytest tests/test_skill_curator_api.py tests/test_mcp_manager.py tests/test_hooks_manager.py -o addopts="" -p no:cov -p no:cacheprovider -q
 ```
 

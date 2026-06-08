@@ -53,10 +53,26 @@ def _github_review_action_payload(
     }
 
 
+def _governance_lifecycle_payload(
+    *,
+    status: str = "governance_lifecycle_report_ready",
+    parity: bool = False,
+    mutation: bool = False,
+) -> dict[str, object]:
+    return {
+        "status": status,
+        "evidence_type": "skills_plugins_mcp_hooks_governance",
+        "full_codex_parity_claimed": parity,
+        "mutation_performed": mutation,
+        "network_mutation_performed": mutation,
+    }
+
+
 def _write_default_evidence(tmp_path: Path) -> dict[str, Path]:
     paths = {
         "customer_pack": tmp_path / "reports" / "commercial-pilot-customer-acceptance-pack.json",
         "github_report": tmp_path / "reports" / "github-review-action-report.json",
+        "governance_report": tmp_path / "reports" / "governance-lifecycle-report.json",
         "control_plane": tmp_path / "docs" / "specs" / "xagent-control-plane-protocol.md",
         "control_plane_api": tmp_path / "backend" / "app" / "api" / "control_plane.py",
         "control_plane_tests": tmp_path / "tests" / "test_control_plane_protocol.py",
@@ -73,6 +89,8 @@ def _write_default_evidence(tmp_path: Path) -> dict[str, Path]:
         "sandbox": tmp_path / "tests" / "test_security_sandbox.py",
         "github_report_script": tmp_path / "scripts" / "github_review_action_report.py",
         "github_report_tests": tmp_path / "tests" / "test_github_review_action_report.py",
+        "governance_report_script": tmp_path / "scripts" / "governance_lifecycle_report.py",
+        "governance_report_tests": tmp_path / "tests" / "test_governance_lifecycle_report.py",
         "github_api": tmp_path / "tests" / "test_issue_to_pr_api.py",
         "github_cli": tmp_path / "tests" / "test_cli_github.py",
         "workflow": tmp_path / ".github" / "workflows" / "commercial-rc.yml",
@@ -84,8 +102,9 @@ def _write_default_evidence(tmp_path: Path) -> dict[str, Path]:
     }
     _write_json(paths["customer_pack"], _customer_pack_payload())
     _write_json(paths["github_report"], _github_review_action_payload())
+    _write_json(paths["governance_report"], _governance_lifecycle_payload())
     for key, path in paths.items():
-        if key not in {"customer_pack", "github_report"}:
+        if key not in {"customer_pack", "github_report", "governance_report"}:
             _write_text(path)
     return paths
 
@@ -105,6 +124,13 @@ def _evidence_specs(paths: dict[str, Path]) -> tuple[AlignmentEvidenceSpec, ...]
             "runtime_report",
             expected_statuses=frozenset({"github_review_action_report_ready"}),
             expected_evidence_type="github_review_action",
+        ),
+        AlignmentEvidenceSpec(
+            "governance_lifecycle_report",
+            paths["governance_report"],
+            "runtime_report",
+            expected_statuses=frozenset({"governance_lifecycle_report_ready"}),
+            expected_evidence_type="skills_plugins_mcp_hooks_governance",
         ),
         AlignmentEvidenceSpec("control_plane_protocol", paths["control_plane"], "source_doc"),
         AlignmentEvidenceSpec("control_plane_api", paths["control_plane_api"], "source_api"),
@@ -128,6 +154,16 @@ def _evidence_specs(paths: dict[str, Path]) -> tuple[AlignmentEvidenceSpec, ...]
         AlignmentEvidenceSpec(
             "github_review_action_report_tests",
             paths["github_report_tests"],
+            "source_test",
+        ),
+        AlignmentEvidenceSpec(
+            "governance_lifecycle_report_script",
+            paths["governance_report_script"],
+            "source_script",
+        ),
+        AlignmentEvidenceSpec(
+            "governance_lifecycle_report_tests",
+            paths["governance_report_tests"],
             "source_test",
         ),
         AlignmentEvidenceSpec("github_issue_to_pr_tests", paths["github_api"], "source_test"),
@@ -155,7 +191,7 @@ def test_latest_codex_alignment_ready_with_current_evidence(tmp_path: Path) -> N
     assert not any("threads_worktrees_and_automations" in item for item in report.next_p0_tasks)
     assert not any("cloud_task_environment" in item for item in report.next_p0_tasks)
     assert not any("github_review_and_action_workflows" in item for item in report.next_p0_tasks)
-    assert any("skills_plugins_and_mcp" in item for item in report.next_p0_tasks)
+    assert not any("skills_plugins_and_mcp" in item for item in report.next_p0_tasks)
     assert any("approval_sandbox_and_enterprise_admin" in item for item in report.next_p0_tasks)
     control_plane = next(item for item in report.capabilities if item.capability == "app_server_control_plane")
     assert control_plane.xagent_status == "contract_first_ready"
@@ -189,6 +225,16 @@ def test_latest_codex_alignment_ready_with_current_evidence(tmp_path: Path) -> N
         "github_cli_tests",
         "commercial_rc_workflow",
     }.issubset(set(github.evidence))
+    governance = next(item for item in report.capabilities if item.capability == "skills_plugins_and_mcp")
+    assert governance.xagent_status == "governance_lifecycle_report_ready"
+    assert {
+        "governance_lifecycle_report",
+        "governance_lifecycle_report_script",
+        "governance_lifecycle_report_tests",
+        "skill_curator_api_tests",
+        "mcp_manager_tests",
+        "hooks_manager_tests",
+    }.issubset(set(governance.evidence))
     assert {check.status for check in report.checks} == {"passed"}
     assert all(item.official_sources for item in report.capabilities)
 
@@ -241,7 +287,7 @@ def test_latest_codex_alignment_blocks_mutation_boundary_break(tmp_path: Path) -
     assert report.status == "latest_codex_alignment_blocked"
     mutation = next(check for check in report.checks if check.name == "commercial_pilot_no_mutation_boundary")
     assert mutation.status == "failed"
-    assert "mutation_performed" in mutation.details["offenders"]
+    assert "feishu_customer_acceptance_pack.mutation_performed" in mutation.details["offenders"]
 
 
 def test_write_latest_codex_alignment_json_and_markdown(tmp_path: Path) -> None:

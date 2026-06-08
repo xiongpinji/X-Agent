@@ -39,6 +39,7 @@ READY_XAGENT_STATUSES = frozenset(
         "contract_first_ready",
         "cloud_task_contract_ready",
         "durable_thread_contract_ready",
+        "governance_lifecycle_report_ready",
         "github_review_action_report_ready",
         "partial",
         "domestic_feishu_first",
@@ -51,6 +52,7 @@ NEXT_TASK_DONE_STATUSES = frozenset(
         "cloud_task_contract_ready",
         "contract_first_ready",
         "durable_thread_contract_ready",
+        "governance_lifecycle_report_ready",
         "github_review_action_report_ready",
     }
 )
@@ -172,6 +174,13 @@ def build_evidence_specs(root: Path = ROOT, report_dir: Path = REPORT_DIR) -> tu
             expected_evidence_type="github_review_action",
         ),
         AlignmentEvidenceSpec(
+            "governance_lifecycle_report",
+            report_dir / "governance-lifecycle-report.json",
+            "runtime_report",
+            expected_statuses=frozenset({"governance_lifecycle_report_ready"}),
+            expected_evidence_type="skills_plugins_mcp_hooks_governance",
+        ),
+        AlignmentEvidenceSpec(
             "control_plane_protocol",
             root / "docs" / "specs" / "xagent-control-plane-protocol.md",
             "source_doc",
@@ -221,6 +230,16 @@ def build_evidence_specs(root: Path = ROOT, report_dir: Path = REPORT_DIR) -> tu
         AlignmentEvidenceSpec(
             "github_review_action_report_tests",
             root / "tests" / "test_github_review_action_report.py",
+            "source_test",
+        ),
+        AlignmentEvidenceSpec(
+            "governance_lifecycle_report_script",
+            root / "scripts" / "governance_lifecycle_report.py",
+            "source_script",
+        ),
+        AlignmentEvidenceSpec(
+            "governance_lifecycle_report_tests",
+            root / "tests" / "test_governance_lifecycle_report.py",
             "source_test",
         ),
         AlignmentEvidenceSpec("github_issue_to_pr_tests", root / "tests" / "test_issue_to_pr_api.py", "source_test"),
@@ -383,16 +402,23 @@ def _capabilities() -> list[CodexAlignmentCapability]:
             capability="skills_plugins_and_mcp",
             codex_surface="Codex Skills, plugins, and MCP customization",
             priority="P0",
-            xagent_status="partial",
-            evidence=["skill_curator_api_tests", "mcp_manager_tests", "hooks_manager_tests"],
-            next_task="Turn skill/plugin/MCP evidence into a governed lifecycle: validate, review, approve, promote, rollback.",
-            acceptance_command="python -m pytest tests/test_skill_curator_api.py tests/test_mcp_manager.py tests/test_hooks_manager.py -o addopts=\"\" -p no:cov -p no:cacheprovider -q",
+            xagent_status="governance_lifecycle_report_ready",
+            evidence=[
+                "governance_lifecycle_report",
+                "governance_lifecycle_report_script",
+                "governance_lifecycle_report_tests",
+                "skill_curator_api_tests",
+                "mcp_manager_tests",
+                "hooks_manager_tests",
+            ],
+            next_task="Implement real owner-gated lifecycle adapters for skill promotion, plugin enablement, MCP registration, hook policy persistence, and rollback after governance evidence review.",
+            acceptance_command="python scripts\\governance_lifecycle_report.py && python -m pytest tests/test_governance_lifecycle_report.py tests/test_skill_curator_api.py tests/test_mcp_manager.py tests/test_hooks_manager.py -o addopts=\"\" -p no:cov -p no:cacheprovider -q",
             official_sources=[
                 "https://developers.openai.com/codex/skills",
                 "https://developers.openai.com/codex/plugins/build",
                 "https://developers.openai.com/codex/mcp",
             ],
-            rationale="X-Agent has strong primitives, but commercial governance still needs one lifecycle gate.",
+            rationale="X-Agent now packages Skills, plugins, MCP servers, and hooks into a read-only commercial lifecycle report with draft, validate, review, approve, promote, rollback states; real lifecycle mutations remain owner-gated.",
         ),
         CodexAlignmentCapability(
             capability="approval_sandbox_and_enterprise_admin",
@@ -499,7 +525,8 @@ def _parity_claim_check(payloads: dict[str, dict[str, Any] | None]) -> Alignment
     )
 
 
-def _mutation_boundary_check(customer_pack: dict[str, Any] | None) -> AlignmentCheck:
+def _mutation_boundary_check(payloads: dict[str, dict[str, Any] | None]) -> AlignmentCheck:
+    customer_pack = payloads.get("feishu_customer_acceptance_pack")
     if customer_pack is None:
         return AlignmentCheck(
             name="commercial_pilot_no_mutation_boundary",
@@ -508,11 +535,26 @@ def _mutation_boundary_check(customer_pack: dict[str, Any] | None) -> AlignmentC
             error="commercial pilot mutation boundary cannot be checked until the customer acceptance pack is available",
         )
 
-    observed = {
-        "mutation_performed": customer_pack.get("mutation_performed"),
-        "outbound_message_sent": customer_pack.get("outbound_message_sent"),
+    observed: dict[str, dict[str, Any]] = {
+        "feishu_customer_acceptance_pack": {
+            "mutation_performed": customer_pack.get("mutation_performed"),
+            "outbound_message_sent": customer_pack.get("outbound_message_sent"),
+        }
     }
-    offenders = [key for key, value in observed.items() if value is not False]
+    for name, payload in payloads.items():
+        if name == "feishu_customer_acceptance_pack" or payload is None:
+            continue
+        if "mutation_performed" in payload or "network_mutation_performed" in payload:
+            observed[name] = {
+                "mutation_performed": payload.get("mutation_performed"),
+                "network_mutation_performed": payload.get("network_mutation_performed"),
+            }
+    offenders = [
+        f"{name}.{key}"
+        for name, values in observed.items()
+        for key, value in values.items()
+        if value is not False
+    ]
     if offenders:
         return AlignmentCheck(
             name="commercial_pilot_no_mutation_boundary",
@@ -595,7 +637,7 @@ def build_latest_codex_alignment_report(
         _required_evidence_check(evidence_items),
         _customer_pack_ready_check(customer_pack),
         _parity_claim_check(payloads),
-        _mutation_boundary_check(customer_pack),
+        _mutation_boundary_check(payloads),
         _source_coverage_check(capabilities),
         _p0_task_board_check(capabilities),
     ]
