@@ -124,8 +124,10 @@ Expected: selected workbench/thread tests pass.
 - Create: `docs/specs/xagent-cloud-task-environment.md`
 - Create: `tests/test_cloud_task_environment_contract.py`
 
-- [ ] Define checkout identity, setup script, maintenance script, runtime network policy, task loop, artifact diff, and evidence export.
-- [ ] Keep secrets available only to setup or owner-approved phases.
+- [x] Define checkout identity, setup script, maintenance script, runtime network policy, task loop, artifact diff, and evidence export.
+- [x] Keep secrets available only to setup or owner-approved phases.
+- [x] Keep hosted container, network, PR, and checkout mutation behind future owner-gated adapters.
+- [ ] Implement the owner-gated hosted runner adapter and smoke report after this contract stabilizes.
 - [ ] Validate with:
 
 ```powershell

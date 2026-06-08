@@ -50,6 +50,8 @@ def _write_default_evidence(tmp_path: Path) -> dict[str, Path]:
         "cli": tmp_path / "tests" / "test_cli_commands.py",
         "workbench": tmp_path / "tests" / "test_workbench_thread_loop.py",
         "commercial_workbench": tmp_path / "tests" / "test_commercial_pilot_workbench_thread.py",
+        "cloud_task_spec": tmp_path / "docs" / "specs" / "xagent-cloud-task-environment.md",
+        "cloud_task_tests": tmp_path / "tests" / "test_cloud_task_environment_contract.py",
         "skill": tmp_path / "tests" / "test_skill_curator_api.py",
         "approvals": tmp_path / "tests" / "test_approvals.py",
         "sandbox": tmp_path / "tests" / "test_security_sandbox.py",
@@ -91,6 +93,8 @@ def _evidence_specs(paths: dict[str, Path]) -> tuple[AlignmentEvidenceSpec, ...]
             paths["commercial_workbench"],
             "source_test",
         ),
+        AlignmentEvidenceSpec("cloud_task_environment_spec", paths["cloud_task_spec"], "source_doc"),
+        AlignmentEvidenceSpec("cloud_task_environment_tests", paths["cloud_task_tests"], "source_test"),
         AlignmentEvidenceSpec("skill_curator_api_tests", paths["skill"], "source_test"),
         AlignmentEvidenceSpec("approval_tests", paths["approvals"], "source_test"),
         AlignmentEvidenceSpec("sandbox_security_tests", paths["sandbox"], "source_test"),
@@ -114,9 +118,13 @@ def test_latest_codex_alignment_ready_with_current_evidence(tmp_path: Path) -> N
     assert report.evidence_type == "latest_codex_alignment"
     assert report.pilot_delivery_status == "customer_acceptance_pack_ready"
     assert report.full_codex_parity_claimed is False
-    assert report.p0_ready_count < report.p0_total_count
+    assert report.p0_ready_count == report.p0_total_count
     assert not any("app_server_control_plane" in item for item in report.next_p0_tasks)
     assert not any("threads_worktrees_and_automations" in item for item in report.next_p0_tasks)
+    assert not any("cloud_task_environment" in item for item in report.next_p0_tasks)
+    assert any("github_review_and_action_workflows" in item for item in report.next_p0_tasks)
+    assert any("skills_plugins_and_mcp" in item for item in report.next_p0_tasks)
+    assert any("approval_sandbox_and_enterprise_admin" in item for item in report.next_p0_tasks)
     control_plane = next(item for item in report.capabilities if item.capability == "app_server_control_plane")
     assert control_plane.xagent_status == "contract_first_ready"
     assert {
@@ -132,6 +140,13 @@ def test_latest_codex_alignment_ready_with_current_evidence(tmp_path: Path) -> N
         "workbench_thread_tests",
         "commercial_workbench_evidence_tests",
     }.issubset(set(threads.evidence))
+    cloud = next(item for item in report.capabilities if item.capability == "cloud_task_environment")
+    assert cloud.xagent_status == "cloud_task_contract_ready"
+    assert {
+        "cloud_task_environment_spec",
+        "cloud_task_environment_tests",
+        "commercial_rc_workflow",
+    }.issubset(set(cloud.evidence))
     assert {check.status for check in report.checks} == {"passed"}
     assert all(item.official_sources for item in report.capabilities)
 

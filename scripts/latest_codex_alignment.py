@@ -37,6 +37,7 @@ READY_XAGENT_STATUSES = frozenset(
     {
         "aligned_for_pilot_v1",
         "contract_first_ready",
+        "cloud_task_contract_ready",
         "durable_thread_contract_ready",
         "partial",
         "domestic_feishu_first",
@@ -46,6 +47,7 @@ READY_XAGENT_STATUSES = frozenset(
 NEXT_TASK_DONE_STATUSES = frozenset(
     {
         "aligned_for_pilot_v1",
+        "cloud_task_contract_ready",
         "contract_first_ready",
         "durable_thread_contract_ready",
     }
@@ -189,6 +191,16 @@ def build_evidence_specs(root: Path = ROOT, report_dir: Path = REPORT_DIR) -> tu
             root / "tests" / "test_commercial_pilot_workbench_thread.py",
             "source_test",
         ),
+        AlignmentEvidenceSpec(
+            "cloud_task_environment_spec",
+            root / "docs" / "specs" / "xagent-cloud-task-environment.md",
+            "source_doc",
+        ),
+        AlignmentEvidenceSpec(
+            "cloud_task_environment_tests",
+            root / "tests" / "test_cloud_task_environment_contract.py",
+            "source_test",
+        ),
         AlignmentEvidenceSpec("skill_curator_api_tests", root / "tests" / "test_skill_curator_api.py", "source_test"),
         AlignmentEvidenceSpec("approval_tests", root / "tests" / "test_approvals.py", "source_test"),
         AlignmentEvidenceSpec("sandbox_security_tests", root / "tests" / "test_security_sandbox.py", "source_test"),
@@ -320,12 +332,12 @@ def _capabilities() -> list[CodexAlignmentCapability]:
             capability="cloud_task_environment",
             codex_surface="Codex cloud environments with setup, cache, and controlled internet access",
             priority="P0",
-            xagent_status="planned_p0",
-            evidence=["commercial_rc_workflow"],
-            next_task="Add a hosted task-runner design and smoke gate for isolated repo checkout, setup, policy, task execution, and artifact diff.",
+            xagent_status="cloud_task_contract_ready",
+            evidence=["cloud_task_environment_spec", "cloud_task_environment_tests", "commercial_rc_workflow"],
+            next_task="Implement the owner-gated hosted runner adapter and smoke report behind this cloud task environment contract.",
             acceptance_command="python -m pytest tests/test_cloud_task_environment_contract.py -o addopts=\"\" -p no:cov -p no:cacheprovider -q",
             official_sources=["https://developers.openai.com/codex/cloud/environments"],
-            rationale="The repo has CI evidence, but not a Codex-cloud-style task environment contract.",
+            rationale="The cloud task environment contract now defines checkout identity, setup and maintenance phases, default-deny agent networking, secret boundaries, task loop events, artifact diffs, and evidence export without enabling hosted execution mutation.",
         ),
         CodexAlignmentCapability(
             capability="github_review_and_action_workflows",
