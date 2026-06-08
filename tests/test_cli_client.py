@@ -241,7 +241,7 @@ class TestHTTPClient:
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {
-            "status": "sdk_runtime_enablement_receipt_contract_ready",
+            "status": "sdk_runtime_implementation_preflight_contract_ready",
             "sdk": {
                 "adapter_execution_enabled": False,
                 "agent_execution_enabled": False,
@@ -342,6 +342,24 @@ class TestHTTPClient:
                     "mark_executed": False,
                     "mutation_performed": False,
                 },
+                "runtime_implementation_preflight": {
+                    "preflight_status": "ready_but_disabled",
+                    "adapter_module_boundary": {
+                        "module": "backend.app.core.agent.coordinator",
+                        "callable": "AgentCoordinator.run",
+                        "import_allowed": False,
+                    },
+                    "dependency_injection_contract": {"required": True, "default_factory_enabled": False},
+                    "idempotency_lock_contract": {"required": True, "lock_enabled": False},
+                    "receipt_persistence_interface": {"required": True, "persistence_enabled": False},
+                    "approval_postcondition_contract": {"mark_executed_enabled": False},
+                    "failure_handling_contract": {"mark_executed_on_failure": False},
+                    "write_runner_enabled": False,
+                    "agent_execution_enabled": False,
+                    "runner_invoked": False,
+                    "mark_executed": False,
+                    "mutation_performed": False,
+                },
             },
         }
 
@@ -357,7 +375,7 @@ class TestHTTPClient:
             assert call_args[0][0] == "POST"
             assert call_args[0][1] == "/api/v1/control-plane/sdk/invoke"
             assert call_args[1]["json"] == contract
-            assert result["status"] == "sdk_runtime_enablement_receipt_contract_ready"
+            assert result["status"] == "sdk_runtime_implementation_preflight_contract_ready"
             assert result["sdk"]["adapter_execution_enabled"] is False
             assert result["sdk"]["execution_adapter_contract"]["mark_executed"] is False
             assert result["sdk"]["read_only_runner_contract"]["write_execution_enabled"] is False
@@ -409,6 +427,31 @@ class TestHTTPClient:
             assert result["sdk"]["runtime_enablement_receipt"]["runner_invoked"] is False
             assert result["sdk"]["runtime_enablement_receipt"]["mark_executed"] is False
             assert result["sdk"]["runtime_enablement_receipt"]["mutation_performed"] is False
+            assert result["sdk"]["runtime_implementation_preflight"]["preflight_status"] == "ready_but_disabled"
+            assert (
+                result["sdk"]["runtime_implementation_preflight"]["adapter_module_boundary"]["module"]
+                == "backend.app.core.agent.coordinator"
+            )
+            assert (
+                result["sdk"]["runtime_implementation_preflight"]["adapter_module_boundary"]["import_allowed"]
+                is False
+            )
+            assert result["sdk"]["runtime_implementation_preflight"]["idempotency_lock_contract"]["lock_enabled"] is False
+            assert (
+                result["sdk"]["runtime_implementation_preflight"]["receipt_persistence_interface"]["persistence_enabled"]
+                is False
+            )
+            assert (
+                result["sdk"]["runtime_implementation_preflight"]["approval_postcondition_contract"][
+                    "mark_executed_enabled"
+                ]
+                is False
+            )
+            assert result["sdk"]["runtime_implementation_preflight"]["write_runner_enabled"] is False
+            assert result["sdk"]["runtime_implementation_preflight"]["agent_execution_enabled"] is False
+            assert result["sdk"]["runtime_implementation_preflight"]["runner_invoked"] is False
+            assert result["sdk"]["runtime_implementation_preflight"]["mark_executed"] is False
+            assert result["sdk"]["runtime_implementation_preflight"]["mutation_performed"] is False
 
     @pytest.mark.asyncio
     async def test_http_client_record_sdk_owner_acceptance_calls_owner_gated_stub(self):

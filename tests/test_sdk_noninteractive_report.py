@@ -16,7 +16,7 @@ def test_sdk_noninteractive_report_default_is_read_only() -> None:
     report = build_sdk_noninteractive_report()
     payload = report.to_dict()
 
-    assert report.status == "sdk_runtime_enablement_receipt_contract_ready"
+    assert report.status == "sdk_runtime_implementation_preflight_contract_ready"
     assert report.evidence_type == "sdk_noninteractive_cli_contract"
     assert report.full_codex_parity_claimed is False
     assert report.dry_run is True
@@ -359,6 +359,33 @@ def test_sdk_noninteractive_report_covers_runtime_enablement_receipt() -> None:
     assert receipt["mutation_performed"] is False
 
 
+def test_sdk_noninteractive_report_covers_runtime_implementation_preflight() -> None:
+    preflight = build_sdk_noninteractive_report().runtime_implementation_preflight
+
+    assert preflight["stage"] == "owner_approved_write_runner_runtime_implementation_preflight"
+    assert preflight["preflight_status"] == "ready_but_disabled"
+    assert preflight["adapter_module_boundary"]["module"] == "backend.app.core.agent.coordinator"
+    assert preflight["adapter_module_boundary"]["callable"] == "AgentCoordinator.run"
+    assert preflight["adapter_module_boundary"]["import_allowed"] is False
+    assert preflight["dependency_injection_contract"]["required"] is True
+    assert preflight["dependency_injection_contract"]["default_factory_enabled"] is False
+    assert preflight["idempotency_lock_contract"]["required"] is True
+    assert preflight["idempotency_lock_contract"]["lock_enabled"] is False
+    assert preflight["receipt_persistence_interface"]["required"] is True
+    assert preflight["receipt_persistence_interface"]["persistence_enabled"] is False
+    assert preflight["approval_postcondition_contract"]["mark_executed_enabled"] is False
+    assert preflight["failure_handling_contract"]["mark_executed_on_failure"] is False
+    assert preflight["implementation_enabled"] is False
+    assert preflight["runtime_flag_enabled"] is False
+    assert preflight["execute_enabled"] is False
+    assert preflight["write_runner_enabled"] is False
+    assert preflight["adapter_execution_enabled"] is False
+    assert preflight["agent_execution_enabled"] is False
+    assert preflight["runner_invoked"] is False
+    assert preflight["mark_executed"] is False
+    assert preflight["mutation_performed"] is False
+
+
 def test_sdk_noninteractive_report_keeps_feishu_first_channel_strategy() -> None:
     strategy = build_sdk_noninteractive_report().channel_strategy
 
@@ -379,13 +406,14 @@ def test_write_sdk_noninteractive_report_json_and_markdown(tmp_path: Path) -> No
 
     payload = json.loads(json_output.read_text(encoding="utf-8"))
     markdown = markdown_output.read_text(encoding="utf-8")
-    assert payload["status"] == "sdk_runtime_enablement_receipt_contract_ready"
+    assert payload["status"] == "sdk_runtime_implementation_preflight_contract_ready"
     assert payload["full_codex_parity_claimed"] is False
     assert payload["mutation_performed"] is False
     assert "# X-Agent SDK Non-Interactive Report" in markdown
     assert "## Write Runner Implementation Plan" in markdown
     assert "## Runtime Smoke Runbook" in markdown
     assert "## Runtime Enablement Receipt" in markdown
+    assert "## Runtime Implementation Preflight" in markdown
     assert "thread/start" in render_markdown_report(report)
 
 

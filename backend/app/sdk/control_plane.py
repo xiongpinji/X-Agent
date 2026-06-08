@@ -307,6 +307,8 @@ class ControlPlaneSDK:
                 "runtime_smoke_runbook_enabled": False,
                 "runtime_enablement_receipt_contract": method not in self._READ_ONLY_METHODS,
                 "runtime_enablement_receipt_enabled": False,
+                "runtime_implementation_preflight_contract": method not in self._READ_ONLY_METHODS,
+                "runtime_implementation_preflight_enabled": False,
                 "runtime_flag_enabled": False,
                 "runner_invoked": False,
                 "agent_execution_enabled": False,

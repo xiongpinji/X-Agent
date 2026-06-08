@@ -183,8 +183,8 @@ def test_sdk_control_plane_stub_accepts_thread_start_envelope_without_mutation()
     assert response.status_code == 200
     payload = response.json()
     assert payload["ok"] is False
-    assert payload["status"] == "sdk_runtime_enablement_receipt_contract_ready"
-    assert payload["sdk"]["status"] == "sdk_runtime_enablement_receipt_contract_ready"
+    assert payload["status"] == "sdk_runtime_implementation_preflight_contract_ready"
+    assert payload["sdk"]["status"] == "sdk_runtime_implementation_preflight_contract_ready"
     assert payload["sdk"]["method"] == "thread/start"
     assert payload["sdk"]["dry_run"] is False
     assert payload["sdk"]["idempotency_key_present"] is True
@@ -289,6 +289,21 @@ def test_sdk_control_plane_stub_accepts_thread_start_envelope_without_mutation()
     assert receipt["runner_invoked"] is False
     assert receipt["mark_executed"] is False
     assert receipt["mutation_performed"] is False
+    preflight = payload["sdk"]["runtime_implementation_preflight"]
+    assert preflight["stage"] == "owner_approved_write_runner_runtime_implementation_preflight"
+    assert preflight["preflight_status"] == "blocked"
+    assert preflight["checks"]["readiness_receipt_ready_but_disabled"] is False
+    assert preflight["adapter_module_boundary"]["import_allowed"] is False
+    assert preflight["dependency_injection_contract"]["required"] is True
+    assert preflight["idempotency_lock_contract"]["lock_enabled"] is False
+    assert preflight["receipt_persistence_interface"]["persistence_enabled"] is False
+    assert preflight["approval_postcondition_contract"]["mark_executed_enabled"] is False
+    assert preflight["failure_handling_contract"]["mark_executed_on_failure"] is False
+    assert preflight["write_runner_enabled"] is False
+    assert preflight["agent_execution_enabled"] is False
+    assert preflight["runner_invoked"] is False
+    assert preflight["mark_executed"] is False
+    assert preflight["mutation_performed"] is False
     handoff = payload["sdk"]["approval_handoff"]
     assert handoff["available"] is True
     assert handoff["approval_id"] == payload["sdk"]["approval_intent"]["approval_id"]
@@ -355,8 +370,8 @@ def test_sdk_control_plane_stub_reads_approved_execution_adapter_contract_withou
     assert response.status_code == 200
     payload = response.json()
     assert payload["ok"] is False
-    assert payload["status"] == "sdk_runtime_enablement_receipt_contract_ready"
-    assert payload["sdk"]["status"] == "sdk_runtime_enablement_receipt_contract_ready"
+    assert payload["status"] == "sdk_runtime_implementation_preflight_contract_ready"
+    assert payload["sdk"]["status"] == "sdk_runtime_implementation_preflight_contract_ready"
     assert payload["sdk"]["approval_intent"]["created"] is False
     assert payload["sdk"]["approval_intent"]["approval_id"] == approval.id
     adapter = payload["sdk"]["execution_adapter_contract"]
@@ -545,6 +560,30 @@ def test_sdk_control_plane_stub_reads_approved_execution_adapter_contract_withou
     assert receipt["runner_invoked"] is False
     assert receipt["mark_executed"] is False
     assert receipt["mutation_performed"] is False
+    preflight = payload["sdk"]["runtime_implementation_preflight"]
+    assert preflight["stage"] == "owner_approved_write_runner_runtime_implementation_preflight"
+    assert preflight["preflight_status"] == "ready_but_disabled"
+    assert preflight["checks"]["readiness_receipt_ready_but_disabled"] is True
+    assert preflight["checks"]["implementation_plan_ready_but_disabled"] is True
+    assert preflight["adapter_module_boundary"]["module"] == "backend.app.core.agent.coordinator"
+    assert preflight["adapter_module_boundary"]["callable"] == "AgentCoordinator.run"
+    assert preflight["adapter_module_boundary"]["import_allowed"] is False
+    assert preflight["dependency_injection_contract"]["required"] is True
+    assert preflight["dependency_injection_contract"]["default_factory_enabled"] is False
+    assert preflight["idempotency_lock_contract"]["required"] is True
+    assert preflight["idempotency_lock_contract"]["lock_enabled"] is False
+    assert preflight["receipt_persistence_interface"]["required"] is True
+    assert preflight["receipt_persistence_interface"]["persistence_enabled"] is False
+    assert preflight["approval_postcondition_contract"]["mark_executed_enabled"] is False
+    assert preflight["failure_handling_contract"]["mark_executed_on_failure"] is False
+    assert preflight["implementation_enabled"] is False
+    assert preflight["runtime_flag_enabled"] is False
+    assert preflight["execute_enabled"] is False
+    assert preflight["write_runner_enabled"] is False
+    assert preflight["agent_execution_enabled"] is False
+    assert preflight["runner_invoked"] is False
+    assert preflight["mark_executed"] is False
+    assert preflight["mutation_performed"] is False
     assert approval_store.pending_count() == 0
     assert approval_store.get(approval.id).status == "approved"
     audit_records = audit_store.list(action="sdk.write_runner.dry_run_planned")
@@ -569,8 +608,8 @@ def test_sdk_control_plane_stub_can_read_thread_through_existing_contract() -> N
     assert response.status_code == 200
     payload = response.json()
     assert payload["ok"] is True
-    assert payload["status"] == "sdk_runtime_enablement_receipt_contract_ready"
-    assert payload["sdk"]["status"] == "sdk_runtime_enablement_receipt_contract_ready"
+    assert payload["status"] == "sdk_runtime_implementation_preflight_contract_ready"
+    assert payload["sdk"]["status"] == "sdk_runtime_implementation_preflight_contract_ready"
     assert payload["sdk"]["method"] == "thread/read"
     assert payload["sdk"]["owner_gate_required"] is False
     assert payload["sdk"]["approval_intent"]["required"] is False
@@ -617,7 +656,7 @@ def test_sdk_control_plane_stub_reads_runtime_evidence_through_read_only_runner(
     assert response.status_code == 200
     payload = response.json()
     assert payload["ok"] is True
-    assert payload["status"] == "sdk_runtime_enablement_receipt_contract_ready"
+    assert payload["status"] == "sdk_runtime_implementation_preflight_contract_ready"
     assert payload["sdk"]["method"] == "runtime/evidence/read"
     runner = payload["sdk"]["read_only_runner_contract"]
     assert runner["available"] is True
@@ -682,7 +721,7 @@ def test_sdk_control_plane_stub_reads_persisted_dry_run_executor_runtime_evidenc
     assert response.status_code == 200
     payload = response.json()
     assert payload["ok"] is True
-    assert payload["status"] == "sdk_runtime_enablement_receipt_contract_ready"
+    assert payload["status"] == "sdk_runtime_implementation_preflight_contract_ready"
     evidence = payload["control_plane"]["result"]["evidence"]
     assert evidence["evidence_type"] == "sdk_dry_run_executor_stub"
     assert evidence["available"] is True
@@ -733,7 +772,7 @@ def test_sdk_control_plane_stub_reads_owner_acceptance_runtime_evidence_contract
     assert response.status_code == 200
     payload = response.json()
     assert payload["ok"] is True
-    assert payload["status"] == "sdk_runtime_enablement_receipt_contract_ready"
+    assert payload["status"] == "sdk_runtime_implementation_preflight_contract_ready"
     evidence = payload["control_plane"]["result"]["evidence"]
     assert evidence["evidence_type"] == "sdk_write_runner_owner_acceptance"
     assert evidence["available"] is True

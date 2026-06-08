@@ -910,6 +910,10 @@ async def invoke_sdk_control_plane(
     sdk_metadata["runtime_enablement_receipt"] = _sdk_runtime_enablement_receipt_contract(
         sdk_metadata["runtime_smoke_runbook"],
     )
+    sdk_metadata["runtime_implementation_preflight"] = _sdk_runtime_implementation_preflight_contract(
+        sdk_metadata["runtime_enablement_receipt"],
+        sdk_metadata["write_runner_implementation_plan"],
+    )
     return SDKControlPlaneInvokeResponse(
         id=control_request.id,
         ok=control_response.ok,
@@ -1122,7 +1126,7 @@ def _sdk_backend_stub_metadata(
     read_only_runner_contract = _sdk_read_only_runner_contract(original, request, response)
     write_runner_safety_contract = _sdk_write_runner_safety_contract(original, request, execution_adapter_contract)
     return {
-        "status": "sdk_runtime_enablement_receipt_contract_ready",
+        "status": "sdk_runtime_implementation_preflight_contract_ready",
         "operation": request.context.sdk_operation or original.operation,
         "method": request.method,
         "sdk_surface": request.context.sdk_surface or "python",
@@ -1157,6 +1161,7 @@ def _sdk_backend_stub_metadata(
             "The concrete SDK write runner implementation plan is declared but remains disabled.",
             "Runtime enablement smoke, rollback, and failure receipt contracts are declared but remain disabled.",
             "Runtime enablement readiness receipt is declared for owner review but remains disabled.",
+            "Runtime implementation preflight adapter boundaries are declared but remain disabled.",
             "No SDK HTTP adapter execution, agent runner invocation, channel send, file change, or network mutation is enabled.",
             "Write methods remain owner-gated behind the approval/sandbox/admin contract.",
             "Feishu remains the only domestic V1 pilot channel.",
@@ -2179,6 +2184,123 @@ def _sdk_runtime_enablement_receipt_contract(
             "This contract defines a readiness receipt schema and review policy only.",
             "No readiness receipt is recorded by /sdk/invoke.",
             "The runtime flag, runner invocation, approval execution marker, and all mutations remain disabled.",
+        ],
+    }
+
+
+def _sdk_runtime_implementation_preflight_contract(
+    runtime_enablement_receipt: dict[str, Any],
+    write_runner_implementation_plan: dict[str, Any],
+) -> dict[str, Any]:
+    adapter_target = write_runner_implementation_plan.get("adapter_target", {})
+    checks = {
+        "readiness_receipt_ready_but_disabled": runtime_enablement_receipt.get("receipt_status")
+        == "ready_but_disabled",
+        "readiness_receipt_review_readback_strict": runtime_enablement_receipt.get("review_readback", {}).get(
+            "query_keys"
+        )
+        == ["readiness_receipt_id", "approval_id", "owner_acceptance_id"],
+        "implementation_plan_ready_but_disabled": write_runner_implementation_plan.get("plan_status")
+        == "ready_but_disabled",
+        "adapter_module_boundary_declared": adapter_target.get("module")
+        == "backend.app.core.agent.coordinator",
+        "adapter_callable_declared": adapter_target.get("callable") == "AgentCoordinator.run",
+        "idempotency_required": write_runner_implementation_plan.get("idempotency_contract", {}).get("required")
+        is True,
+        "runtime_flag_still_disabled": runtime_enablement_receipt.get("runtime_flag_enabled") is False,
+        "runner_not_invoked": runtime_enablement_receipt.get("runner_invoked") is False,
+        "mutation_still_disabled": runtime_enablement_receipt.get("mutation_performed") is False,
+    }
+    ready = all(checks.values())
+    return {
+        "available": runtime_enablement_receipt.get("available") is True,
+        "stage": "owner_approved_write_runner_runtime_implementation_preflight",
+        "preflight_status": "ready_but_disabled" if ready else "blocked",
+        "adapter_module_boundary": {
+            "module": "backend.app.core.agent.coordinator",
+            "class": "AgentCoordinator",
+            "callable": "AgentCoordinator.run",
+            "import_allowed": False,
+            "instantiation_allowed": False,
+            "execution_allowed": False,
+        },
+        "dependency_injection_contract": {
+            "required": True,
+            "factory_name": "sdk_write_runner_factory",
+            "injects": [
+                "approval_store",
+                "audit_store",
+                "agent_coordinator",
+                "receipt_store",
+                "runtime_flag_reader",
+            ],
+            "default_factory_enabled": False,
+            "runtime_override_allowed": False,
+        },
+        "idempotency_lock_contract": {
+            "required": True,
+            "lock_scope": ["tenant_id", "approval_id", "owner_acceptance_id", "idempotency_key"],
+            "lock_action": "sdk.write_runner.idempotency_lock_acquired",
+            "duplicate_behavior": "return_existing_result_receipt_without_runner_invocation",
+            "lock_enabled": False,
+        },
+        "receipt_persistence_interface": {
+            "required": True,
+            "interface": "SDKWriteRunnerReceiptStore",
+            "success_action": "sdk.write_runner.executed",
+            "failure_action": "sdk.write_runner.failed",
+            "readback_method": "runtime/evidence/read",
+            "required_result_fields": [
+                "result_receipt_id",
+                "readiness_receipt_id",
+                "approval_id",
+                "owner_acceptance_id",
+                "agent_trace_id",
+                "runner_status",
+                "idempotency_key_hash",
+                "mutation_summary",
+            ],
+            "persistence_enabled": False,
+        },
+        "approval_postcondition_contract": {
+            "mark_executed_action": "approval.mark_executed",
+            "allowed_only_after": [
+                "runtime_flag_enabled",
+                "idempotency_lock_acquired",
+                "agent_runner_success",
+                "success_receipt_persisted",
+                "audit_success_recorded",
+            ],
+            "failure_postcondition": "mark_executed_must_remain_false",
+            "mark_executed_enabled": False,
+        },
+        "failure_handling_contract": {
+            "failure_action": "sdk.write_runner.failed",
+            "persist_failure_receipt": True,
+            "release_idempotency_lock_on_failure": True,
+            "disable_runtime_flag_on_operator_rollback": True,
+            "runner_reinvoke_allowed": False,
+            "mark_executed_on_failure": False,
+        },
+        "checks": checks,
+        "next_gate": "owner_approved_write_runner_runtime_implementation",
+        "implementation_enabled": False,
+        "runtime_flag_enabled": False,
+        "execute_enabled": False,
+        "write_runner_enabled": False,
+        "adapter_execution_enabled": False,
+        "agent_execution_enabled": False,
+        "write_execution_enabled": False,
+        "runner_invoked": False,
+        "mark_executed": False,
+        "mutation_performed": False,
+        "network_mutation_performed": False,
+        "file_mutation_performed": False,
+        "channel_mutation_performed": False,
+        "known_limits": [
+            "This contract declares runtime implementation adapter preflight boundaries only.",
+            "AgentCoordinator is not imported, instantiated, or invoked by /sdk/invoke.",
+            "Receipt persistence, idempotency locks, approval execution markers, and all mutations remain disabled.",
         ],
     }
 

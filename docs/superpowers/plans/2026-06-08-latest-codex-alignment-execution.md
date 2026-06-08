@@ -719,10 +719,34 @@ Expected: selected approval and sandbox tests pass.
 - [x] Promote SDK alignment status to `sdk_runtime_enablement_receipt_contract_ready`.
 - [ ] Implement the runtime write-runner only after an owner-reviewed readiness receipt is recorded and a separate runtime implementation preflight contract is accepted.
 
+### Task 30: Runtime Implementation Preflight Adapter Contract
+
+**Target:** Define the final disabled adapter preflight boundary before any concrete SDK write-runner runtime implementation is enabled.
+
+**Files:**
+- Modify: `backend/app/api/control_plane.py`
+- Modify: `backend/app/sdk/control_plane.py`
+- Modify: `scripts/sdk_noninteractive_report.py`
+- Modify: `scripts/latest_codex_alignment.py`
+- Modify: `tests/test_control_plane_protocol.py`
+- Modify: `tests/test_xagent_sdk_contract.py`
+- Modify: `tests/test_cli_client.py`
+- Modify: `tests/test_sdk_noninteractive_report.py`
+- Modify: `tests/test_latest_codex_alignment.py`
+- Runtime evidence: `.xagent_runtime/reports/sdk-noninteractive-report.json`
+- Runtime evidence: `.xagent_runtime/reports/latest-codex-alignment.json`
+
+- [x] Add `runtime_implementation_preflight` metadata to `/sdk/invoke` after the runtime enablement readiness receipt.
+- [x] Define adapter module boundary, dependency injection contract, idempotency lock contract, receipt persistence interface, approval `mark_executed` postcondition, and failure handling policy.
+- [x] Require readiness receipt ready-but-disabled, implementation plan ready-but-disabled, declared `AgentCoordinator.run` boundary, idempotency, runtime flag still disabled, runner not invoked, and mutation still disabled.
+- [x] Keep `implementation_enabled=false`, `runtime_flag_enabled=false`, `execute_enabled=false`, `write_runner_enabled=false`, `agent_execution_enabled=false`, `adapter_execution_enabled=false`, `runner_invoked=false`, `mark_executed=false`, and all mutation flags false.
+- [x] Promote SDK alignment status to `sdk_runtime_implementation_preflight_contract_ready`.
+- [ ] Implement the runtime write-runner only after this preflight adapter contract is owner-accepted and the owner explicitly requests runtime enablement.
+
 ## Completion Criteria
 
 - `scripts/latest_codex_alignment.py` returns `latest_codex_alignment_plan_ready`.
-- `scripts/sdk_noninteractive_report.py` returns `sdk_runtime_enablement_receipt_contract_ready`.
+- `scripts/sdk_noninteractive_report.py` returns `sdk_runtime_implementation_preflight_contract_ready`.
 - P0 task board is complete and machine-readable.
 - Feishu Pilot V1 remains `customer_acceptance_pack_ready`.
 - `full_codex_parity_claimed=false` remains true in all generated alignment and pilot reports.
