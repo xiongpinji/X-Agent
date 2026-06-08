@@ -142,16 +142,20 @@ Expected: cloud task environment contract tests pass.
 
 **Files:**
 - Modify or add under: `scripts/`
+- Test: `tests/test_github_review_action_report.py`
 - Test: `tests/test_issue_to_pr_api.py`
 - Test: `tests/test_issue_to_pr_pipeline.py`
 - Test: `tests/test_cli_github.py`
 
-- [ ] Add a read-only report that maps issue, PR, branch, patch, CI, and review evidence.
-- [ ] Keep network mutation behind explicit owner-approved execution.
+- [x] Add a read-only report that maps issue, PR, branch, patch, CI, and review evidence.
+- [x] Keep network mutation behind explicit owner-approved execution.
+- [x] Redact secret-like issue content from generated report evidence.
+- [ ] Implement owner-gated GitHub execute adapters for PR creation, review comments, issue comments, and GitHub Action dispatch after dry-run evidence review.
 - [ ] Validate with:
 
 ```powershell
-python -m pytest tests/test_issue_to_pr_api.py tests/test_issue_to_pr_pipeline.py tests/test_cli_github.py -o addopts="" -p no:cov -p no:cacheprovider -q
+python scripts\github_review_action_report.py
+python -m pytest tests/test_github_review_action_report.py tests/test_issue_to_pr_api.py tests/test_cli_github.py -o addopts="" -p no:cov -p no:cacheprovider -q
 ```
 
 Expected: selected GitHub workflow tests pass.

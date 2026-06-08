@@ -39,6 +39,7 @@ READY_XAGENT_STATUSES = frozenset(
         "contract_first_ready",
         "cloud_task_contract_ready",
         "durable_thread_contract_ready",
+        "github_review_action_report_ready",
         "partial",
         "domestic_feishu_first",
     }
@@ -50,6 +51,7 @@ NEXT_TASK_DONE_STATUSES = frozenset(
         "cloud_task_contract_ready",
         "contract_first_ready",
         "durable_thread_contract_ready",
+        "github_review_action_report_ready",
     }
 )
 
@@ -163,6 +165,13 @@ def build_evidence_specs(root: Path = ROOT, report_dir: Path = REPORT_DIR) -> tu
             expected_evidence_type="commercial_pilot_customer_acceptance_pack",
         ),
         AlignmentEvidenceSpec(
+            "github_review_action_report",
+            report_dir / "github-review-action-report.json",
+            "runtime_report",
+            expected_statuses=frozenset({"github_review_action_report_ready"}),
+            expected_evidence_type="github_review_action",
+        ),
+        AlignmentEvidenceSpec(
             "control_plane_protocol",
             root / "docs" / "specs" / "xagent-control-plane-protocol.md",
             "source_doc",
@@ -204,6 +213,16 @@ def build_evidence_specs(root: Path = ROOT, report_dir: Path = REPORT_DIR) -> tu
         AlignmentEvidenceSpec("skill_curator_api_tests", root / "tests" / "test_skill_curator_api.py", "source_test"),
         AlignmentEvidenceSpec("approval_tests", root / "tests" / "test_approvals.py", "source_test"),
         AlignmentEvidenceSpec("sandbox_security_tests", root / "tests" / "test_security_sandbox.py", "source_test"),
+        AlignmentEvidenceSpec(
+            "github_review_action_script",
+            root / "scripts" / "github_review_action_report.py",
+            "source_script",
+        ),
+        AlignmentEvidenceSpec(
+            "github_review_action_report_tests",
+            root / "tests" / "test_github_review_action_report.py",
+            "source_test",
+        ),
         AlignmentEvidenceSpec("github_issue_to_pr_tests", root / "tests" / "test_issue_to_pr_api.py", "source_test"),
         AlignmentEvidenceSpec("github_cli_tests", root / "tests" / "test_cli_github.py", "source_test"),
         AlignmentEvidenceSpec(
@@ -343,15 +362,22 @@ def _capabilities() -> list[CodexAlignmentCapability]:
             capability="github_review_and_action_workflows",
             codex_surface="Codex GitHub code review and Codex GitHub Action",
             priority="P0",
-            xagent_status="partial",
-            evidence=["github_issue_to_pr_tests", "github_cli_tests", "commercial_rc_workflow"],
-            next_task="Add a dry-run Codex-style review/action report that maps issue, PR, CI, and patch evidence without network mutation by default.",
-            acceptance_command="python -m pytest tests/test_issue_to_pr_api.py tests/test_cli_github.py -o addopts=\"\" -p no:cov -p no:cacheprovider -q",
+            xagent_status="github_review_action_report_ready",
+            evidence=[
+                "github_review_action_report",
+                "github_review_action_script",
+                "github_review_action_report_tests",
+                "github_issue_to_pr_tests",
+                "github_cli_tests",
+                "commercial_rc_workflow",
+            ],
+            next_task="Implement owner-gated GitHub execute adapters for PR creation, review comments, issue comments, and GitHub Action dispatch after dry-run evidence review.",
+            acceptance_command="python scripts\\github_review_action_report.py && python -m pytest tests/test_github_review_action_report.py tests/test_issue_to_pr_api.py tests/test_cli_github.py -o addopts=\"\" -p no:cov -p no:cacheprovider -q",
             official_sources=[
                 "https://developers.openai.com/codex/integrations/github",
                 "https://developers.openai.com/codex/github-action",
             ],
-            rationale="GitHub dry-run and CI pieces exist, but Codex-style code-review/action packaging is not yet a unified product loop.",
+            rationale="X-Agent now packages issue, branch, patch, PR draft, CI, review, and action-gate evidence into a read-only GitHub review/action report; all network mutations remain owner-gated.",
         ),
         CodexAlignmentCapability(
             capability="skills_plugins_and_mcp",
