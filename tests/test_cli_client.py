@@ -241,11 +241,16 @@ class TestHTTPClient:
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {
-            "status": "sdk_execution_adapter_contract_ready",
+            "status": "sdk_read_only_runner_contract_ready",
             "sdk": {
                 "adapter_execution_enabled": False,
                 "agent_execution_enabled": False,
                 "mutation_performed": False,
+                "read_only_runner_contract": {
+                    "read_only_runner_enabled": True,
+                    "agent_execution_enabled": False,
+                    "write_execution_enabled": False,
+                },
                 "execution_adapter_contract": {
                     "adapter_execution_enabled": False,
                     "mark_executed": False,
@@ -265,9 +270,10 @@ class TestHTTPClient:
             assert call_args[0][0] == "POST"
             assert call_args[0][1] == "/api/v1/control-plane/sdk/invoke"
             assert call_args[1]["json"] == contract
-            assert result["status"] == "sdk_execution_adapter_contract_ready"
+            assert result["status"] == "sdk_read_only_runner_contract_ready"
             assert result["sdk"]["adapter_execution_enabled"] is False
             assert result["sdk"]["execution_adapter_contract"]["mark_executed"] is False
+            assert result["sdk"]["read_only_runner_contract"]["write_execution_enabled"] is False
 
     @pytest.mark.asyncio
     async def test_http_client_list_agents(self):

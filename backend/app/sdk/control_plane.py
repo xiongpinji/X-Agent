@@ -47,6 +47,8 @@ class SDKThreadRunContract:
 class ControlPlaneSDK:
     """Build SDK-compatible control-plane request envelopes."""
 
+    _READ_ONLY_METHODS = {"thread/read", "thread/search", "runtime/evidence/read"}
+
     def __init__(
         self,
         *,
@@ -148,6 +150,24 @@ class ControlPlaneSDK:
             dry_run=True,
         )
 
+    def read_runtime_evidence(
+        self,
+        report_name: str,
+        *,
+        tenant_id: str | None = None,
+        user_id: str | None = None,
+    ) -> SDKThreadRunContract:
+        return self._thread_contract(
+            operation="runtime_evidence_read",
+            method="runtime/evidence/read",
+            params={"report_name": report_name},
+            tenant_id=tenant_id,
+            user_id=user_id,
+            idempotency_key=None,
+            approved_approval_id=None,
+            dry_run=True,
+        )
+
     def _thread_contract(
         self,
         *,
@@ -184,10 +204,11 @@ class ControlPlaneSDK:
                 "evidence_links": "object",
             },
             owner_gate={
-                "required_for_write_methods": method not in {"thread/read", "thread/search"},
+                "required_for_write_methods": method not in self._READ_ONLY_METHODS,
                 "approved_approval_id": approved_approval_id,
                 "owner_approved": bool(approved_approval_id),
                 "execution_adapter_contract": "owner_approved_preflight",
+                "read_only_runner_contract": method in self._READ_ONLY_METHODS,
                 "adapter_execution_enabled": False,
                 "mark_executed": False,
                 "mutation_performed": False,

@@ -915,8 +915,9 @@ def _sdk_backend_stub_metadata(
         approval_store=approval_store,
         principal=principal,
     )
+    read_only_runner_contract = _sdk_read_only_runner_contract(original, request, response)
     return {
-        "status": "sdk_execution_adapter_contract_ready",
+        "status": "sdk_read_only_runner_contract_ready",
         "operation": request.context.sdk_operation or original.operation,
         "method": request.method,
         "sdk_surface": request.context.sdk_surface or "python",
@@ -930,11 +931,13 @@ def _sdk_backend_stub_metadata(
         "approval_intent": approval_intent,
         "approval_handoff": _sdk_approval_handoff(approval_intent),
         "execution_adapter_contract": execution_adapter_contract,
+        "read_only_runner_contract": read_only_runner_contract,
         "approval_sandbox_admin": _sdk_approval_sandbox_admin_contract(request),
         "control_plane_ok": response.ok,
         "control_plane_error_code": response.error.code if response.error else None,
         "known_limits": [
             "This endpoint accepts SDK envelopes and normalizes them into the control-plane contract.",
+            "Read-only SDK methods can return backend read results through the control-plane contract.",
             "Write-method invocations create a pending owner approval intent but do not execute it.",
             "Approved SDK approval ids are read back for execution-adapter preflight only.",
             "No SDK HTTP adapter execution, agent runner invocation, channel send, file change, or network mutation is enabled.",
@@ -1091,6 +1094,49 @@ def _sdk_approved_approval_id(
         if isinstance(value, str) and value:
             return value
     return None
+
+
+def _sdk_read_only_runner_contract(
+    original: SDKControlPlaneInvokeRequest,
+    request: ControlPlaneInvokeRequest,
+    response: ControlPlaneInvokeResponse,
+) -> dict[str, Any]:
+    spec = METHODS_BY_NAME.get(request.method)
+    read_only = spec is not None and spec.operation_kind == "read"
+    available = read_only and response.ok and response.result is not None
+    runner_kind = "read_only_control_plane" if read_only else "write_methods_owner_gated"
+    return {
+        "available": available,
+        "runner_kind": runner_kind,
+        "contract_stage": "read_only_runner",
+        "method": request.method,
+        "operation": request.context.sdk_operation or original.operation,
+        "supported_methods": [
+            spec.method
+            for spec in METHOD_SPECS
+            if spec.operation_kind == "read" and spec.implementation_state == "read_only_contract"
+        ],
+        "result_available": response.result is not None,
+        "control_plane_ok": response.ok,
+        "control_plane_error_code": response.error.code if response.error else None,
+        "read_only_runner_enabled": available,
+        "agent_execution_enabled": False,
+        "write_execution_enabled": False,
+        "adapter_execution_enabled": False,
+        "adapter_mode": "read_only_contract" if available else "disabled",
+        "owner_approval_required": False if read_only else True,
+        "dry_run": request.dry_run,
+        "mutation_performed": False,
+        "network_mutation_performed": False,
+        "file_mutation_performed": False,
+        "channel_mutation_performed": False,
+        "mark_executed": False,
+        "known_limits": [
+            "Only read-only control-plane methods can use this runner contract.",
+            "Write methods remain owner-gated and do not reach the agent runner here.",
+            "Read-only runner availability does not claim full Codex SDK parity.",
+        ],
+    }
 
 
 def _sdk_approval_intent(

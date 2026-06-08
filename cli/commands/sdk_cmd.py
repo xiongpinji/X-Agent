@@ -116,6 +116,18 @@ def thread_read(
     thread_id: str = typer.Argument(..., help="Existing thread identifier."),
     tenant_id: Optional[str] = typer.Option(None, "--tenant-id"),
     user_id: Optional[str] = typer.Option(None, "--user-id"),
+    execute: bool = typer.Option(False, "--execute", help="Submit the read-only SDK envelope to the backend."),
 ) -> None:
     contract = _sdk(tenant_id, user_id).read_thread(thread_id)
-    _emit(contract.to_dict())
+    _emit_or_invoke(contract.to_dict(), execute=execute)
+
+
+@sdk_app.command("evidence-read")
+def evidence_read(
+    report_name: str = typer.Argument(..., help="Runtime evidence JSON report filename."),
+    tenant_id: Optional[str] = typer.Option(None, "--tenant-id"),
+    user_id: Optional[str] = typer.Option(None, "--user-id"),
+    execute: bool = typer.Option(False, "--execute", help="Submit the read-only SDK envelope to the backend."),
+) -> None:
+    contract = _sdk(tenant_id, user_id).read_runtime_evidence(report_name)
+    _emit_or_invoke(contract.to_dict(), execute=execute)

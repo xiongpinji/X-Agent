@@ -357,6 +357,31 @@ Expected: selected approval and sandbox tests pass.
 - [x] Keep `adapter_execution_enabled`, agent execution, `mark_executed`, file/network/channel mutation disabled.
 - [ ] Implement concrete owner-approved SDK runner after runtime safety review.
 
+### Task 15: SDK Read-Only Runner Contract
+
+**Target:** Let SDK/CLI read-only methods call the backend through `/sdk/invoke` and return control-plane read results, while write execution remains disabled.
+
+**Files:**
+- Modify: `backend/app/api/control_plane.py`
+- Modify: `backend/app/sdk/control_plane.py`
+- Modify: `cli/commands/sdk_cmd.py`
+- Modify: `scripts/sdk_noninteractive_report.py`
+- Modify: `scripts/latest_codex_alignment.py`
+- Modify: `tests/test_control_plane_protocol.py`
+- Modify: `tests/test_xagent_sdk_contract.py`
+- Modify: `tests/test_cli_client.py`
+- Modify: `tests/test_sdk_noninteractive_report.py`
+- Modify: `tests/test_latest_codex_alignment.py`
+- Runtime evidence: `.xagent_runtime/reports/sdk-noninteractive-report.json`
+- Runtime evidence: `.xagent_runtime/reports/latest-codex-alignment.json`
+
+- [x] Add SDK `runtime/evidence/read` wrapper.
+- [x] Allow `xagent sdk thread-read <thread_id> --execute` to call `/sdk/invoke`.
+- [x] Add `xagent sdk evidence-read <report_name> --execute` read-only command.
+- [x] Return `read_only_runner_contract` metadata from `/sdk/invoke`.
+- [x] Keep write SDK methods owner-gated; no agent runner, `mark_executed`, file/network/channel mutation.
+- [ ] Implement concrete owner-approved write SDK runner after runtime safety review.
+
 ## Completion Criteria
 
 - `scripts/latest_codex_alignment.py` returns `latest_codex_alignment_plan_ready`.

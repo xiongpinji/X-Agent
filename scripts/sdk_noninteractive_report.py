@@ -48,6 +48,7 @@ class SDKNonInteractiveReport:
     approval_intent_flow: dict[str, Any]
     approval_handoff: dict[str, Any]
     execution_adapter_contract: dict[str, Any]
+    read_only_runner_contract: dict[str, Any]
     channel_strategy: dict[str, Any]
     checks: list[SDKNonInteractiveCheck]
     official_sources: list[str]
@@ -66,6 +67,7 @@ def _sdk_contracts() -> list[dict[str, Any]]:
         sdk.resume_thread("thread-1", input_text="continue", idempotency_key="sdk-thread-resume").to_dict(),
         sdk.run_turn("thread-1", "next instruction", idempotency_key="sdk-turn-run").to_dict(),
         sdk.read_thread("thread-1").to_dict(),
+        sdk.read_runtime_evidence("latest-codex-alignment.json").to_dict(),
     ]
 
 
@@ -100,7 +102,15 @@ def _cli_commands() -> list[dict[str, Any]]:
             "method": "thread/read",
             "non_interactive": True,
             "dry_run_default": True,
-            "execute_target": None,
+            "execute_target": "/api/v1/control-plane/sdk/invoke",
+            "execute_starts_agent": False,
+        },
+        {
+            "command": "xagent sdk evidence-read <report_name>",
+            "method": "runtime/evidence/read",
+            "non_interactive": True,
+            "dry_run_default": True,
+            "execute_target": "/api/v1/control-plane/sdk/invoke",
             "execute_starts_agent": False,
         },
     ]
@@ -124,13 +134,13 @@ def _build_checks(report_payload: dict[str, Any]) -> list[SDKNonInteractiveCheck
     approval_flow = report_payload["approval_intent_flow"]
     handoff = report_payload["approval_handoff"]
     execution_adapter = report_payload["execution_adapter_contract"]
+    read_only_runner = report_payload["read_only_runner_contract"]
     methods = [contract["request"]["method"] for contract in contracts]
     command_methods = [command["method"] for command in commands]
     cli_execute_targets = [
         command["method"]
         for command in commands
-        if command["method"] != "thread/read"
-        and command.get("execute_target") != "/api/v1/control-plane/sdk/invoke"
+        if command.get("execute_target") != "/api/v1/control-plane/sdk/invoke"
     ]
     mutating = [
         contract["operation"]
@@ -143,10 +153,17 @@ def _build_checks(report_payload: dict[str, Any]) -> list[SDKNonInteractiveCheck
         SDKNonInteractiveCheck(
             name="sdk_thread_methods_complete",
             status="passed"
-            if methods == ["thread/start", "thread/resume", "turn/start", "thread/read"]
+            if methods
+            == [
+                "thread/start",
+                "thread/resume",
+                "turn/start",
+                "thread/read",
+                "runtime/evidence/read",
+            ]
             else "failed",
             details={"methods": methods},
-            error=None if len(methods) == 4 else "SDK methods are incomplete",
+            error=None if len(methods) == 5 else "SDK methods are incomplete",
         ),
         SDKNonInteractiveCheck(
             name="cli_non_interactive_commands_complete",
@@ -227,6 +244,21 @@ def _build_checks(report_payload: dict[str, Any]) -> list[SDKNonInteractiveCheck
             else "owner-approved SDK execution preflight is not described",
         ),
         SDKNonInteractiveCheck(
+            name="read_only_runner_contract_ready",
+            status="passed"
+            if read_only_runner.get("enabled_for_read_methods") is True
+            and set(read_only_runner.get("supported_methods", []))
+            >= {"thread/read", "runtime/evidence/read"}
+            and read_only_runner.get("agent_execution_enabled") is False
+            and read_only_runner.get("write_execution_enabled") is False
+            and read_only_runner.get("mutation_performed") is False
+            else "failed",
+            details=read_only_runner,
+            error=None
+            if read_only_runner.get("enabled_for_read_methods") is True
+            else "read-only SDK runner contract is not enabled",
+        ),
+        SDKNonInteractiveCheck(
             name="feishu_domestic_v1_primary",
             status="passed"
             if report_payload["channel_strategy"].get("domestic_v1_primary") == "feishu"
@@ -250,7 +282,7 @@ def _build_checks(report_payload: dict[str, Any]) -> list[SDKNonInteractiveCheck
 
 def build_sdk_noninteractive_report() -> SDKNonInteractiveReport:
     report_payload: dict[str, Any] = {
-        "status": "sdk_execution_adapter_contract_ready",
+        "status": "sdk_read_only_runner_contract_ready",
         "generated_at": _utc_now(),
         "evidence_type": "sdk_noninteractive_cli_contract",
         "full_codex_parity_claimed": False,
@@ -263,7 +295,7 @@ def build_sdk_noninteractive_report() -> SDKNonInteractiveReport:
         "backend_stub": {
             "endpoint": "/api/v1/control-plane/sdk/invoke",
             "normalizes_to": "/api/v1/control-plane/invoke",
-            "status": "sdk_execution_adapter_contract_ready",
+            "status": "sdk_read_only_runner_contract_ready",
             "approval_subject_type": "command",
             "approval_intent_created_for_write_methods": True,
             "owner_gate_required": True,
@@ -278,6 +310,7 @@ def build_sdk_noninteractive_report() -> SDKNonInteractiveReport:
             "endpoint": "/api/v1/control-plane/sdk/invoke",
             "trigger": "xagent sdk <command> --execute [--approved-approval-id <approval_id>]",
             "default_without_execute": "local_envelope_only",
+            "read_only_execute_supported": True,
             "starts_agent_execution": False,
             "adapter_execution_enabled": False,
             "mutation_performed": False,
@@ -328,6 +361,25 @@ def build_sdk_noninteractive_report() -> SDKNonInteractiveReport:
             "file_mutation_performed": False,
             "channel_mutation_performed": False,
         },
+        "read_only_runner_contract": {
+            "stage": "read_only_runner",
+            "enabled_for_read_methods": True,
+            "supported_methods": ["thread/read", "runtime/evidence/read"],
+            "cli_execute_commands": [
+                "xagent sdk thread-read <thread_id> --execute",
+                "xagent sdk evidence-read <report_name> --execute",
+            ],
+            "endpoint": "/api/v1/control-plane/sdk/invoke",
+            "returns_control_plane_result": True,
+            "agent_execution_enabled": False,
+            "write_execution_enabled": False,
+            "adapter_execution_enabled": False,
+            "mark_executed": False,
+            "mutation_performed": False,
+            "network_mutation_performed": False,
+            "file_mutation_performed": False,
+            "channel_mutation_performed": False,
+        },
         "channel_strategy": _channel_strategy(),
         "official_sources": list(CODEX_SDK_SOURCES),
         "known_limits": [
@@ -336,6 +388,7 @@ def build_sdk_noninteractive_report() -> SDKNonInteractiveReport:
             "SDK write methods create a pending owner approval intent; approving the intent still does not execute an agent in this task.",
             "SDK responses include approval handoff commands and readback links for the owner.",
             "Supplying --approved-approval-id enables owner-approved execution preflight/readback only.",
+            "Read-only SDK methods can be submitted with --execute and return backend read contracts.",
             "No SDK HTTP adapter, agent runner, file mutation, channel send, or network mutation is enabled.",
             "Feishu remains the only domestic V1 pilot channel in this contract.",
             "Slack is tracked as a Codex reference surface, but it is non-blocking for the domestic first version.",
@@ -391,6 +444,12 @@ def render_markdown_report(report: SDKNonInteractiveReport) -> str:
         f"- Ready status: `{report.execution_adapter_contract['ready_status']}`\n"
         f"- Adapter execution enabled: `{report.execution_adapter_contract['adapter_execution_enabled']}`\n"
         f"- Mark executed: `{report.execution_adapter_contract['mark_executed']}`\n\n"
+        "## Read-Only Runner Contract\n\n"
+        f"- Stage: `{report.read_only_runner_contract['stage']}`\n"
+        f"- Supported methods: `{', '.join(report.read_only_runner_contract['supported_methods'])}`\n"
+        f"- Returns control-plane result: `{report.read_only_runner_contract['returns_control_plane_result']}`\n"
+        f"- Agent execution enabled: `{report.read_only_runner_contract['agent_execution_enabled']}`\n"
+        f"- Write execution enabled: `{report.read_only_runner_contract['write_execution_enabled']}`\n\n"
         "## Channel Strategy\n\n"
         f"- Domestic V1 primary: `{report.channel_strategy['domestic_v1_primary']}`\n"
         f"- Telegram required: `{report.channel_strategy['telegram_required']}`\n"
@@ -438,7 +497,7 @@ def main() -> int:
         print(f"- {check.name}: {check.status}")
         if check.error:
             print(f"  error: {check.error}")
-    return 0 if report.status == "sdk_execution_adapter_contract_ready" else 1
+    return 0 if report.status == "sdk_read_only_runner_contract_ready" else 1
 
 
 if __name__ == "__main__":

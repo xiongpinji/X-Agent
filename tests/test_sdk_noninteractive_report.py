@@ -16,7 +16,7 @@ def test_sdk_noninteractive_report_default_is_read_only() -> None:
     report = build_sdk_noninteractive_report()
     payload = report.to_dict()
 
-    assert report.status == "sdk_execution_adapter_contract_ready"
+    assert report.status == "sdk_read_only_runner_contract_ready"
     assert report.evidence_type == "sdk_noninteractive_cli_contract"
     assert report.full_codex_parity_claimed is False
     assert report.dry_run is True
@@ -31,7 +31,13 @@ def test_sdk_noninteractive_report_covers_sdk_and_cli_methods() -> None:
     methods = [item["request"]["method"] for item in report.sdk_contracts]
     command_methods = [item["method"] for item in report.cli_commands]
 
-    assert methods == ["thread/start", "thread/resume", "turn/start", "thread/read"]
+    assert methods == [
+        "thread/start",
+        "thread/resume",
+        "turn/start",
+        "thread/read",
+        "runtime/evidence/read",
+    ]
     assert command_methods == methods
     assert all(item["request"]["context"]["non_interactive"] is True for item in report.sdk_contracts)
     assert all(item["request"]["mutation_performed"] is False for item in report.sdk_contracts)
@@ -60,6 +66,7 @@ def test_sdk_noninteractive_report_covers_cli_http_dry_run_adapter() -> None:
     assert "--execute" in adapter["trigger"]
     assert "--approved-approval-id <approval_id>" in adapter["trigger"]
     assert adapter["default_without_execute"] == "local_envelope_only"
+    assert adapter["read_only_execute_supported"] is True
     assert adapter["starts_agent_execution"] is False
     assert adapter["adapter_execution_enabled"] is False
     assert adapter["mutation_performed"] is False
@@ -104,6 +111,19 @@ def test_sdk_noninteractive_report_covers_owner_approved_execution_preflight() -
     assert contract["mutation_performed"] is False
 
 
+def test_sdk_noninteractive_report_covers_read_only_runner_contract() -> None:
+    contract = build_sdk_noninteractive_report().read_only_runner_contract
+
+    assert contract["stage"] == "read_only_runner"
+    assert contract["enabled_for_read_methods"] is True
+    assert {"thread/read", "runtime/evidence/read"}.issubset(set(contract["supported_methods"]))
+    assert "xagent sdk thread-read <thread_id> --execute" in contract["cli_execute_commands"]
+    assert contract["returns_control_plane_result"] is True
+    assert contract["agent_execution_enabled"] is False
+    assert contract["write_execution_enabled"] is False
+    assert contract["mutation_performed"] is False
+
+
 def test_sdk_noninteractive_report_keeps_feishu_first_channel_strategy() -> None:
     strategy = build_sdk_noninteractive_report().channel_strategy
 
@@ -124,7 +144,7 @@ def test_write_sdk_noninteractive_report_json_and_markdown(tmp_path: Path) -> No
 
     payload = json.loads(json_output.read_text(encoding="utf-8"))
     markdown = markdown_output.read_text(encoding="utf-8")
-    assert payload["status"] == "sdk_execution_adapter_contract_ready"
+    assert payload["status"] == "sdk_read_only_runner_contract_ready"
     assert payload["full_codex_parity_claimed"] is False
     assert payload["mutation_performed"] is False
     assert "# X-Agent SDK Non-Interactive Report" in markdown
