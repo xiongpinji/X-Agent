@@ -158,6 +158,8 @@ class ControlPlaneSDK:
         user_id: str | None = None,
         evidence_type: str | None = None,
         approval_id: str | None = None,
+        owner_acceptance_id: str | None = None,
+        audit_id: str | None = None,
         method: str | None = None,
     ) -> SDKThreadRunContract:
         params: dict[str, Any] = {"report_name": report_name}
@@ -165,6 +167,10 @@ class ControlPlaneSDK:
             params["evidence_type"] = evidence_type
         if approval_id:
             params["approval_id"] = approval_id
+        if owner_acceptance_id:
+            params["owner_acceptance_id"] = owner_acceptance_id
+        if audit_id:
+            params["audit_id"] = audit_id
         if method:
             params["method"] = method
         return self._thread_contract(
@@ -225,6 +231,9 @@ class ControlPlaneSDK:
                 "write_runner_adapter_review_enabled": False,
                 "write_runner_runtime_flag_contract": method not in self._READ_ONLY_METHODS,
                 "owner_acceptance_evidence_required": method not in self._READ_ONLY_METHODS,
+                "owner_acceptance_recording_contract": method not in self._READ_ONLY_METHODS,
+                "owner_acceptance_readback_contract": method not in self._READ_ONLY_METHODS,
+                "owner_acceptance_record_present": False,
                 "runtime_flag_enabled": False,
                 "runner_invoked": False,
                 "agent_execution_enabled": False,
@@ -249,6 +258,7 @@ class ControlPlaneSDK:
                 "Providing approved_approval_id enables backend readback/preflight only, not real execution.",
                 "The write runner adapter review contract declares the future runner target but remains disabled.",
                 "The runtime write-runner flag and owner acceptance evidence are declared but not enabled by this SDK wrapper.",
+                "Owner acceptance evidence recording/readback is contract-ready but no acceptance record is created by this SDK wrapper.",
                 "Feishu remains the first domestic V1 channel; no new channel send is performed.",
             ],
         )

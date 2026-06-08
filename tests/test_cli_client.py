@@ -241,7 +241,7 @@ class TestHTTPClient:
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {
-            "status": "sdk_write_runner_runtime_flag_ready",
+            "status": "sdk_write_runner_owner_acceptance_contract_ready",
             "sdk": {
                 "adapter_execution_enabled": False,
                 "agent_execution_enabled": False,
@@ -289,7 +289,9 @@ class TestHTTPClient:
                     "mutation_performed": False,
                 },
                 "owner_acceptance_evidence": {
-                    "evidence_status": "required_not_provided",
+                    "evidence_status": "recording_contract_ready_not_provided",
+                    "recording_contract_ready": True,
+                    "evidence_type": "sdk_write_runner_owner_acceptance",
                     "execute_enabled": False,
                     "write_runner_enabled": False,
                     "mutation_performed": False,
@@ -309,7 +311,7 @@ class TestHTTPClient:
             assert call_args[0][0] == "POST"
             assert call_args[0][1] == "/api/v1/control-plane/sdk/invoke"
             assert call_args[1]["json"] == contract
-            assert result["status"] == "sdk_write_runner_runtime_flag_ready"
+            assert result["status"] == "sdk_write_runner_owner_acceptance_contract_ready"
             assert result["sdk"]["adapter_execution_enabled"] is False
             assert result["sdk"]["execution_adapter_contract"]["mark_executed"] is False
             assert result["sdk"]["read_only_runner_contract"]["write_execution_enabled"] is False
@@ -320,7 +322,11 @@ class TestHTTPClient:
             assert result["sdk"]["write_runner_adapter_review"]["implementation_enabled"] is False
             assert result["sdk"]["write_runner_adapter_review"]["mark_executed"] is False
             assert result["sdk"]["write_runner_runtime_flag"]["runtime_flag_enabled"] is False
-            assert result["sdk"]["owner_acceptance_evidence"]["evidence_status"] == "required_not_provided"
+            assert (
+                result["sdk"]["owner_acceptance_evidence"]["evidence_status"]
+                == "recording_contract_ready_not_provided"
+            )
+            assert result["sdk"]["owner_acceptance_evidence"]["recording_contract_ready"] is True
 
     @pytest.mark.asyncio
     async def test_http_client_list_agents(self):

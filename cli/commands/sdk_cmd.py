@@ -129,6 +129,8 @@ def evidence_read(
     user_id: Optional[str] = typer.Option(None, "--user-id"),
     evidence_type: Optional[str] = typer.Option(None, "--evidence-type"),
     approval_id: Optional[str] = typer.Option(None, "--approval-id"),
+    owner_acceptance_id: Optional[str] = typer.Option(None, "--acceptance-id"),
+    audit_id: Optional[str] = typer.Option(None, "--audit-id"),
     method: Optional[str] = typer.Option(None, "--method"),
     execute: bool = typer.Option(False, "--execute", help="Submit the read-only SDK envelope to the backend."),
 ) -> None:
@@ -136,6 +138,8 @@ def evidence_read(
         report_name,
         evidence_type=evidence_type,
         approval_id=approval_id,
+        owner_acceptance_id=owner_acceptance_id,
+        audit_id=audit_id,
         method=method,
     )
     _emit_or_invoke(contract.to_dict(), execute=execute)

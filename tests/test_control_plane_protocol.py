@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from contextlib import contextmanager
 
 import pytest
@@ -182,8 +183,8 @@ def test_sdk_control_plane_stub_accepts_thread_start_envelope_without_mutation()
     assert response.status_code == 200
     payload = response.json()
     assert payload["ok"] is False
-    assert payload["status"] == "sdk_write_runner_runtime_flag_ready"
-    assert payload["sdk"]["status"] == "sdk_write_runner_runtime_flag_ready"
+    assert payload["status"] == "sdk_write_runner_owner_acceptance_contract_ready"
+    assert payload["sdk"]["status"] == "sdk_write_runner_owner_acceptance_contract_ready"
     assert payload["sdk"]["method"] == "thread/start"
     assert payload["sdk"]["dry_run"] is False
     assert payload["sdk"]["idempotency_key_present"] is True
@@ -240,7 +241,11 @@ def test_sdk_control_plane_stub_accepts_thread_start_envelope_without_mutation()
     assert runtime_flag["implementation_enabled"] is False
     assert runtime_flag["write_runner_enabled"] is False
     owner_evidence = payload["sdk"]["owner_acceptance_evidence"]
-    assert owner_evidence["evidence_status"] == "required_not_provided"
+    assert owner_evidence["evidence_status"] == "recording_contract_ready_not_provided"
+    assert owner_evidence["recording_contract_ready"] is True
+    assert owner_evidence["evidence_type"] == "sdk_write_runner_owner_acceptance"
+    assert owner_evidence["readback_contract"]["returns_record_if_present"] is True
+    assert owner_evidence["recording_contract"]["created_by_sdk_invoke"] is False
     assert owner_evidence["execute_enabled"] is False
     assert owner_evidence["mutation_performed"] is False
     handoff = payload["sdk"]["approval_handoff"]
@@ -309,8 +314,8 @@ def test_sdk_control_plane_stub_reads_approved_execution_adapter_contract_withou
     assert response.status_code == 200
     payload = response.json()
     assert payload["ok"] is False
-    assert payload["status"] == "sdk_write_runner_runtime_flag_ready"
-    assert payload["sdk"]["status"] == "sdk_write_runner_runtime_flag_ready"
+    assert payload["status"] == "sdk_write_runner_owner_acceptance_contract_ready"
+    assert payload["sdk"]["status"] == "sdk_write_runner_owner_acceptance_contract_ready"
     assert payload["sdk"]["approval_intent"]["created"] is False
     assert payload["sdk"]["approval_intent"]["approval_id"] == approval.id
     adapter = payload["sdk"]["execution_adapter_contract"]
@@ -411,10 +416,18 @@ def test_sdk_control_plane_stub_reads_approved_execution_adapter_contract_withou
     assert runtime_flag["mutation_performed"] is False
     owner_evidence = payload["sdk"]["owner_acceptance_evidence"]
     assert owner_evidence["stage"] == "owner_acceptance_evidence_record"
-    assert owner_evidence["evidence_status"] == "required_not_provided"
+    assert owner_evidence["evidence_status"] == "recording_contract_ready_not_provided"
+    assert owner_evidence["recording_contract_ready"] is True
+    assert owner_evidence["recording_action"] == "sdk.write_runner.owner_acceptance_recorded"
+    assert owner_evidence["evidence_type"] == "sdk_write_runner_owner_acceptance"
     assert "owner_acceptance_id" in owner_evidence["required_fields"]
     assert owner_evidence["acceptance_report_name"] == "sdk-write-runner-owner-acceptance.json"
+    assert owner_evidence["readback_contract"]["method"] == "runtime/evidence/read"
+    assert owner_evidence["readback_contract"]["returns_schema"] is True
+    assert owner_evidence["recording_contract"]["created_by_sdk_invoke"] is False
     assert owner_evidence["checks"]["runtime_flag_disabled"] is True
+    assert owner_evidence["checks"]["recording_contract_declared"] is True
+    assert owner_evidence["checks"]["readback_contract_declared"] is True
     assert owner_evidence["checks"]["acceptance_record_present"] is False
     assert owner_evidence["runtime_flag_enabled"] is False
     assert owner_evidence["execute_enabled"] is False
@@ -446,8 +459,8 @@ def test_sdk_control_plane_stub_can_read_thread_through_existing_contract() -> N
     assert response.status_code == 200
     payload = response.json()
     assert payload["ok"] is True
-    assert payload["status"] == "sdk_write_runner_runtime_flag_ready"
-    assert payload["sdk"]["status"] == "sdk_write_runner_runtime_flag_ready"
+    assert payload["status"] == "sdk_write_runner_owner_acceptance_contract_ready"
+    assert payload["sdk"]["status"] == "sdk_write_runner_owner_acceptance_contract_ready"
     assert payload["sdk"]["method"] == "thread/read"
     assert payload["sdk"]["owner_gate_required"] is False
     assert payload["sdk"]["approval_intent"]["required"] is False
@@ -494,7 +507,7 @@ def test_sdk_control_plane_stub_reads_runtime_evidence_through_read_only_runner(
     assert response.status_code == 200
     payload = response.json()
     assert payload["ok"] is True
-    assert payload["status"] == "sdk_write_runner_runtime_flag_ready"
+    assert payload["status"] == "sdk_write_runner_owner_acceptance_contract_ready"
     assert payload["sdk"]["method"] == "runtime/evidence/read"
     runner = payload["sdk"]["read_only_runner_contract"]
     assert runner["available"] is True
@@ -559,7 +572,7 @@ def test_sdk_control_plane_stub_reads_persisted_dry_run_executor_runtime_evidenc
     assert response.status_code == 200
     payload = response.json()
     assert payload["ok"] is True
-    assert payload["status"] == "sdk_write_runner_runtime_flag_ready"
+    assert payload["status"] == "sdk_write_runner_owner_acceptance_contract_ready"
     evidence = payload["control_plane"]["result"]["evidence"]
     assert evidence["evidence_type"] == "sdk_dry_run_executor_stub"
     assert evidence["available"] is True
@@ -588,6 +601,169 @@ def test_sdk_control_plane_stub_reads_persisted_dry_run_executor_runtime_evidenc
     assert review["mark_executed"] is False
     assert evidence["safety"]["runner_invoked"] is False
     assert evidence["safety"]["mutation_performed"] is False
+
+
+def test_sdk_control_plane_stub_reads_owner_acceptance_runtime_evidence_contract_without_mutation() -> None:
+    approval_store = ApprovalStore()
+    audit_store = AuditStore(hmac_secret="test-secret")
+    contract = ControlPlaneSDK(default_tenant_id="default", default_user_id="operator").read_runtime_evidence(
+        "sdk-write-runner-owner-acceptance.json",
+        evidence_type="sdk_write_runner_owner_acceptance",
+        approval_id="approval-1",
+        owner_acceptance_id="acceptance-1",
+        audit_id="audit-1",
+    )
+
+    with _client_with_stores(RunStore(), TraceStore(), approval_store, audit_store) as client:
+        response = client.post(
+            "/api/v1/control-plane/sdk/invoke",
+            json=contract.to_dict(),
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["ok"] is True
+    assert payload["status"] == "sdk_write_runner_owner_acceptance_contract_ready"
+    evidence = payload["control_plane"]["result"]["evidence"]
+    assert evidence["evidence_type"] == "sdk_write_runner_owner_acceptance"
+    assert evidence["available"] is True
+    assert evidence["evidence_status"] == "required_not_provided"
+    assert evidence["recording_contract_ready"] is True
+    assert evidence["readback_contract_ready"] is True
+    assert evidence["acceptance_record_present"] is False
+    assert evidence["validation"]["status"] == "invalid"
+    assert evidence["validation"]["checks"]["record_present"] is False
+    assert evidence["validation"]["checks"]["accepted_at_rfc3339"] is False
+    assert evidence["validation"]["checks"]["signature_or_hash_present"] is False
+    assert evidence["missing_required_query_keys"] == []
+    assert evidence["report_preview_only"] is True
+    assert evidence["schema"]["required"] == [
+        "owner_acceptance_id",
+        "accepted_by",
+        "accepted_at",
+        "approval_id",
+        "runbook_acknowledged",
+        "rollback_plan_acknowledged",
+    ]
+    assert evidence["audit_readback"]["action"] == "sdk.write_runner.owner_acceptance_recorded"
+    assert evidence["audit_readback"]["record_persisted"] is False
+    assert evidence["control_plane_readback"]["params"]["owner_acceptance_id"] == "acceptance-1"
+    assert evidence["safety"]["runtime_flag_enabled"] is False
+    assert evidence["safety"]["execute_enabled"] is False
+    assert evidence["safety"]["write_runner_enabled"] is False
+    assert evidence["safety"]["agent_execution_enabled"] is False
+    assert evidence["safety"]["mutation_performed"] is False
+    assert audit_store.list(action="sdk.write_runner.owner_acceptance_recorded") == []
+
+
+def test_owner_acceptance_readback_treats_json_report_as_preview_only(tmp_path, monkeypatch) -> None:
+    import backend.app.api.control_plane as control_plane
+
+    monkeypatch.setattr(control_plane, "REPORT_DIR", tmp_path)
+    (tmp_path / "sdk-write-runner-owner-acceptance.json").write_text(
+        json.dumps(
+            {
+                "owner_acceptance_id": "acceptance-1",
+                "accepted_by": "owner",
+                "accepted_at": "2026-06-08T00:00:00Z",
+                "approval_id": "approval-1",
+                "runbook_acknowledged": True,
+                "rollback_plan_acknowledged": True,
+                "acceptance_hash": "hash-preview-only",
+            }
+        ),
+        encoding="utf-8",
+    )
+    contract = ControlPlaneSDK(default_tenant_id="default", default_user_id="operator").read_runtime_evidence(
+        "sdk-write-runner-owner-acceptance.json",
+        evidence_type="sdk_write_runner_owner_acceptance",
+        approval_id="approval-1",
+        owner_acceptance_id="acceptance-1",
+        audit_id="audit-1",
+    )
+
+    with _client_with_stores(RunStore(), TraceStore(), ApprovalStore(), AuditStore(hmac_secret="test-secret")) as client:
+        response = client.post(
+            "/api/v1/control-plane/sdk/invoke",
+            json=contract.to_dict(),
+        )
+
+    assert response.status_code == 200
+    evidence = response.json()["control_plane"]["result"]["evidence"]
+    assert evidence["report"]["available"] is True
+    assert evidence["report_preview_only"] is True
+    assert evidence["acceptance_record_present"] is False
+    assert evidence["evidence_status"] == "required_not_provided"
+    assert evidence["validation"]["status"] == "invalid"
+    assert evidence["validation"]["checks"]["record_present"] is False
+    assert evidence["safety"]["write_runner_enabled"] is False
+    assert evidence["safety"]["mutation_performed"] is False
+
+
+def test_owner_acceptance_readback_requires_strict_audit_query_keys() -> None:
+    audit_store = AuditStore(hmac_secret="test-secret")
+    audit = audit_store.record(
+        action="sdk.write_runner.owner_acceptance_recorded",
+        resource_type="sdk_write_runner_owner_acceptance",
+        resource_id="acceptance-1",
+        outcome="accepted",
+        tenant_id="default",
+        actor_id="owner",
+        details={
+            "approval_id": "approval-1",
+            "owner_acceptance_evidence": {
+                "owner_acceptance_id": "acceptance-1",
+                "accepted_by": "owner",
+                "accepted_at": "2026-06-08T00:00:00Z",
+                "approval_id": "approval-1",
+                "runbook_acknowledged": True,
+                "rollback_plan_acknowledged": True,
+                "acceptance_hash": "hash-audit-backed",
+            },
+        },
+    )
+    sdk = ControlPlaneSDK(default_tenant_id="default", default_user_id="operator")
+    missing_key_contract = sdk.read_runtime_evidence(
+        "sdk-write-runner-owner-acceptance.json",
+        evidence_type="sdk_write_runner_owner_acceptance",
+        approval_id="approval-1",
+        owner_acceptance_id="acceptance-1",
+    )
+    strict_contract = sdk.read_runtime_evidence(
+        "sdk-write-runner-owner-acceptance.json",
+        evidence_type="sdk_write_runner_owner_acceptance",
+        approval_id="approval-1",
+        owner_acceptance_id="acceptance-1",
+        audit_id=audit.id,
+    )
+
+    with _client_with_stores(RunStore(), TraceStore(), ApprovalStore(), audit_store) as client:
+        missing_response = client.post(
+            "/api/v1/control-plane/sdk/invoke",
+            json=missing_key_contract.to_dict(),
+        )
+        strict_response = client.post(
+            "/api/v1/control-plane/sdk/invoke",
+            json=strict_contract.to_dict(),
+        )
+
+    assert missing_response.status_code == 200
+    missing_evidence = missing_response.json()["control_plane"]["result"]["evidence"]
+    assert missing_evidence["missing_required_query_keys"] == ["audit_id"]
+    assert missing_evidence["acceptance_record_present"] is False
+    assert missing_evidence["evidence_status"] == "required_not_provided"
+
+    assert strict_response.status_code == 200
+    strict_evidence = strict_response.json()["control_plane"]["result"]["evidence"]
+    assert strict_evidence["missing_required_query_keys"] == []
+    assert strict_evidence["acceptance_record_present"] is True
+    assert strict_evidence["evidence_status"] == "provided"
+    assert strict_evidence["record"]["owner_acceptance_id"] == "acceptance-1"
+    assert strict_evidence["record"]["audit_id"] == audit.id
+    assert strict_evidence["record"]["audit_signature_present"] is True
+    assert strict_evidence["validation"]["status"] == "valid"
+    assert strict_evidence["safety"]["write_runner_enabled"] is False
+    assert strict_evidence["safety"]["mutation_performed"] is False
 
 
 def test_control_plane_rejects_raw_secret_payloads() -> None:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -947,7 +948,7 @@ def _sdk_backend_stub_metadata(
     read_only_runner_contract = _sdk_read_only_runner_contract(original, request, response)
     write_runner_safety_contract = _sdk_write_runner_safety_contract(original, request, execution_adapter_contract)
     return {
-        "status": "sdk_write_runner_runtime_flag_ready",
+        "status": "sdk_write_runner_owner_acceptance_contract_ready",
         "operation": request.context.sdk_operation or original.operation,
         "method": request.method,
         "sdk_surface": request.context.sdk_surface or "python",
@@ -978,7 +979,7 @@ def _sdk_backend_stub_metadata(
             "Persisted dry-run receipts expose a read-only write-runner safety review gate.",
             "Owner-approved write dry-run receipts are consolidated into a disabled execute gate contract.",
             "Owner-approved write runner adapter implementation is represented as a disabled review contract.",
-            "Runtime feature flag and owner acceptance evidence contracts are present and disabled by default.",
+            "Runtime feature flag and owner acceptance evidence recording/readback contracts are present and disabled by default.",
             "No SDK HTTP adapter execution, agent runner invocation, channel send, file change, or network mutation is enabled.",
             "Write methods remain owner-gated behind the approval/sandbox/admin contract.",
             "Feishu remains the only domestic V1 pilot channel.",
@@ -1594,10 +1595,15 @@ def _sdk_owner_acceptance_evidence_contract(
     *,
     write_runner_runtime_flag: dict[str, Any],
 ) -> dict[str, Any]:
+    required_fields = list(write_runner_runtime_flag.get("required_owner_evidence", []))
+    schema = _sdk_owner_acceptance_evidence_schema(required_fields)
     checks = {
         "runtime_flag_contract_declared": write_runner_runtime_flag.get("flag_status") == "declared_disabled",
         "runtime_flag_disabled": write_runner_runtime_flag.get("runtime_flag_enabled") is False,
         "owner_acceptance_required": write_runner_runtime_flag.get("owner_acceptance_evidence_required") is True,
+        "recording_contract_declared": True,
+        "readback_contract_declared": True,
+        "schema_declared": True,
         "acceptance_record_present": False,
         "runbook_acknowledged": False,
         "rollback_plan_acknowledged": False,
@@ -1606,11 +1612,43 @@ def _sdk_owner_acceptance_evidence_contract(
     return {
         "available": write_runner_runtime_flag.get("available") is True,
         "stage": "owner_acceptance_evidence_record",
-        "evidence_status": "required_not_provided",
+        "evidence_status": "recording_contract_ready_not_provided",
+        "recording_contract_ready": True,
+        "recording_action": "sdk.write_runner.owner_acceptance_recorded",
+        "resource_type": "sdk_write_runner_owner_acceptance",
         "method": request.method,
-        "required_fields": list(write_runner_runtime_flag.get("required_owner_evidence", [])),
+        "required_fields": required_fields,
+        "schema": schema,
         "evidence_readback_method": "runtime/evidence/read",
+        "evidence_type": "sdk_write_runner_owner_acceptance",
         "acceptance_report_name": "sdk-write-runner-owner-acceptance.json",
+        "acceptance_report_path": str(REPORT_DIR / "sdk-write-runner-owner-acceptance.json"),
+        "readback_contract": {
+            "endpoint": "/api/v1/control-plane/invoke",
+            "method": "runtime/evidence/read",
+            "params": {
+                "evidence_type": "sdk_write_runner_owner_acceptance",
+                "report_name": "sdk-write-runner-owner-acceptance.json",
+                "approval_id": "<approval_id>",
+                "owner_acceptance_id": "<owner_acceptance_id>",
+                "audit_id": "<audit_id>",
+            },
+            "query_keys": ["approval_id", "owner_acceptance_id", "audit_id"],
+            "returns_schema": True,
+            "returns_record_if_present": True,
+        },
+        "recording_contract": {
+            "audit_action": "sdk.write_runner.owner_acceptance_recorded",
+            "resource_type": "sdk_write_runner_owner_acceptance",
+            "resource_id_field": "owner_acceptance_id",
+            "required_acknowledgements": [
+                "runbook_acknowledged",
+                "rollback_plan_acknowledged",
+            ],
+            "signature_or_hash_required": True,
+            "mutation_source": "owner_controlled_evidence",
+            "created_by_sdk_invoke": False,
+        },
         "checks": checks,
         "next_gate": "owner_approved_write_runner_runtime_enablement",
         "implementation_enabled": False,
@@ -1627,9 +1665,76 @@ def _sdk_owner_acceptance_evidence_contract(
         "channel_mutation_performed": False,
         "known_limits": [
             "No owner acceptance record is created by /sdk/invoke.",
+            "This contract defines the owner evidence schema and readback shape only.",
             "The concrete write runner remains disabled until this evidence is provided and reviewed.",
         ],
     }
+
+
+def _sdk_owner_acceptance_evidence_schema(required_fields: list[str]) -> dict[str, Any]:
+    return {
+        "type": "object",
+        "required": required_fields,
+        "properties": {
+            "owner_acceptance_id": "string",
+            "accepted_by": "string",
+            "accepted_at": "RFC3339 timestamp",
+            "approval_id": "string",
+            "runbook_acknowledged": "boolean true",
+            "rollback_plan_acknowledged": "boolean true",
+            "acceptance_signature": "string optional",
+            "acceptance_hash": "string optional",
+            "notes": "string optional",
+        },
+        "safety_invariants": {
+            "runtime_flag_enabled": False,
+            "execute_enabled": False,
+            "write_runner_enabled": False,
+            "agent_execution_enabled": False,
+            "mutation_performed": False,
+        },
+    }
+
+
+def _sdk_owner_acceptance_evidence_validation(record: dict[str, Any] | None) -> dict[str, Any]:
+    required_fields = [
+        "owner_acceptance_id",
+        "accepted_by",
+        "accepted_at",
+        "approval_id",
+        "runbook_acknowledged",
+        "rollback_plan_acknowledged",
+    ]
+    checks = {
+        "record_present": isinstance(record, dict),
+        "required_fields_present": bool(
+            isinstance(record, dict) and all(record.get(field) not in (None, "") for field in required_fields)
+        ),
+        "accepted_at_rfc3339": bool(
+            isinstance(record, dict) and _is_rfc3339_timestamp(record.get("accepted_at"))
+        ),
+        "runbook_acknowledged": bool(isinstance(record, dict) and record.get("runbook_acknowledged") is True),
+        "rollback_plan_acknowledged": bool(
+            isinstance(record, dict) and record.get("rollback_plan_acknowledged") is True
+        ),
+        "signature_or_hash_present": bool(
+            isinstance(record, dict) and (record.get("acceptance_signature") or record.get("acceptance_hash"))
+        ),
+    }
+    return {
+        "status": "valid" if all(checks.values()) else "invalid",
+        "checks": checks,
+    }
+
+
+def _is_rfc3339_timestamp(value: Any) -> bool:
+    if not isinstance(value, str) or not value.strip():
+        return False
+    try:
+        datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    return True
 
 
 def _sdk_approval_intent(
@@ -2444,6 +2549,12 @@ def _runtime_evidence_metadata(
             audit_store=audit_store,
             principal=principal,
         )
+    if evidence_type == "sdk_write_runner_owner_acceptance":
+        return _sdk_owner_acceptance_runtime_evidence(
+            params,
+            audit_store=audit_store,
+            principal=principal,
+        )
     report_name = params.get("report_name")
     if not isinstance(report_name, str) or not report_name:
         return {
@@ -2550,6 +2661,114 @@ def _sdk_dry_run_executor_runtime_evidence(
     }
 
 
+def _sdk_owner_acceptance_runtime_evidence(
+    params: dict[str, Any],
+    *,
+    audit_store: AuditStore | None = None,
+    principal: Principal | None = None,
+) -> dict[str, Any]:
+    approval_id = params.get("approval_id")
+    owner_acceptance_id = params.get("owner_acceptance_id")
+    audit_id = params.get("audit_id")
+    report_name = params.get("report_name")
+    safe_report_name = (
+        report_name
+        if isinstance(report_name, str)
+        and report_name == "sdk-write-runner-owner-acceptance.json"
+        else "sdk-write-runner-owner-acceptance.json"
+    )
+    required_query_keys = {
+        "approval_id": isinstance(approval_id, str) and bool(approval_id),
+        "owner_acceptance_id": isinstance(owner_acceptance_id, str) and bool(owner_acceptance_id),
+        "audit_id": isinstance(audit_id, str) and bool(audit_id),
+    }
+    missing_required_query_keys = [
+        key for key, present in required_query_keys.items() if present is not True
+    ]
+    report = _read_owner_acceptance_report(
+        safe_report_name,
+        approval_id=approval_id if isinstance(approval_id, str) else None,
+        owner_acceptance_id=owner_acceptance_id if isinstance(owner_acceptance_id, str) else None,
+    )
+    audit_record = (
+        _sdk_owner_acceptance_record_from_audit(
+            audit_store,
+            approval_id=approval_id if isinstance(approval_id, str) else None,
+            owner_acceptance_id=owner_acceptance_id if isinstance(owner_acceptance_id, str) else None,
+            audit_id=audit_id if isinstance(audit_id, str) else None,
+            tenant_id=principal.tenant_id if principal else None,
+        )
+        if not missing_required_query_keys
+        else None
+    )
+    record = audit_record
+    validation = _sdk_owner_acceptance_evidence_validation(record if isinstance(record, dict) else None)
+    record_present = validation["status"] == "valid"
+    return {
+        "evidence_type": "sdk_write_runner_owner_acceptance",
+        "available": True,
+        "evidence_status": "provided" if record_present else "required_not_provided",
+        "recording_contract_ready": True,
+        "readback_contract_ready": True,
+        "acceptance_record_present": record_present,
+        "missing_required_query_keys": missing_required_query_keys,
+        "validation": validation,
+        "record": record,
+        "approval_id": approval_id if isinstance(approval_id, str) and approval_id else None,
+        "owner_acceptance_id": owner_acceptance_id
+        if isinstance(owner_acceptance_id, str) and owner_acceptance_id
+        else None,
+        "audit_id": audit_id if isinstance(audit_id, str) and audit_id else None,
+        "report": report,
+        "report_preview_only": True,
+        "schema": _sdk_owner_acceptance_evidence_schema(
+            [
+                "owner_acceptance_id",
+                "accepted_by",
+                "accepted_at",
+                "approval_id",
+                "runbook_acknowledged",
+                "rollback_plan_acknowledged",
+            ]
+        ),
+        "audit_readback": {
+            "action": "sdk.write_runner.owner_acceptance_recorded",
+            "resource_type": "sdk_write_runner_owner_acceptance",
+            "control_plane_method": "runtime/evidence/read",
+            "query_keys": ["approval_id", "owner_acceptance_id", "audit_id"],
+            "record_persisted": audit_record is not None,
+        },
+        "control_plane_readback": {
+            "method": "runtime/evidence/read",
+            "params": {
+                "evidence_type": "sdk_write_runner_owner_acceptance",
+                "report_name": safe_report_name,
+                "approval_id": approval_id,
+                "owner_acceptance_id": owner_acceptance_id,
+                "audit_id": audit_id,
+            },
+            "endpoint": "/api/v1/control-plane/invoke",
+        },
+        "safety": {
+            "runtime_flag_enabled": False,
+            "execute_enabled": False,
+            "write_runner_enabled": False,
+            "adapter_execution_enabled": False,
+            "agent_execution_enabled": False,
+            "mark_executed": False,
+            "mutation_performed": False,
+            "network_mutation_performed": False,
+            "file_mutation_performed": False,
+            "channel_mutation_performed": False,
+        },
+        "known_limits": [
+            "This readback only inspects owner acceptance evidence if it already exists.",
+            "No owner acceptance evidence is recorded by runtime/evidence/read.",
+            "Concrete owner-approved write execution remains disabled.",
+        ],
+    }
+
+
 def _sdk_write_runner_safety_review(receipt: dict[str, Any] | None) -> dict[str, Any]:
     checks = {
         "receipt_available": receipt is not None,
@@ -2618,6 +2837,82 @@ def _sdk_dry_run_receipt_from_audit(
             "audit_hash": getattr(record, "hash", None),
             "audit_signature_present": bool(getattr(record, "signature", None)),
             "receipt_persisted": details.get("receipt_persisted") is True,
+        }
+    return None
+
+
+def _read_owner_acceptance_report(
+    report_name: str,
+    *,
+    approval_id: str | None,
+    owner_acceptance_id: str | None,
+) -> dict[str, Any]:
+    path = REPORT_DIR / report_name
+    if not path.exists():
+        return {
+            "report_name": report_name,
+            "available": False,
+            "path": str(path),
+            "record": None,
+        }
+    try:
+        payload = _jsonable(json.loads(path.read_text(encoding="utf-8")))
+    except (OSError, ValueError) as exc:
+        return {
+            "report_name": report_name,
+            "available": False,
+            "path": str(path),
+            "error": str(exc),
+            "record": None,
+        }
+    record = payload if isinstance(payload, dict) else None
+    if record and approval_id and record.get("approval_id") != approval_id:
+        record = None
+    if record and owner_acceptance_id and record.get("owner_acceptance_id") != owner_acceptance_id:
+        record = None
+    return {
+        "report_name": report_name,
+        "available": True,
+        "path": str(path),
+        "record": record,
+    }
+
+
+def _sdk_owner_acceptance_record_from_audit(
+    audit_store: AuditStore | None,
+    *,
+    approval_id: str | None,
+    owner_acceptance_id: str | None,
+    audit_id: str | None,
+    tenant_id: str | None,
+) -> dict[str, Any] | None:
+    if audit_store is None or not approval_id or not owner_acceptance_id or not audit_id:
+        return None
+    records = audit_store.list(
+        limit=200,
+        tenant_id=tenant_id,
+        action="sdk.write_runner.owner_acceptance_recorded",
+        resource_type="sdk_write_runner_owner_acceptance",
+        outcome="accepted",
+    )
+    for record in records:
+        if audit_id and getattr(record, "id", None) != audit_id:
+            continue
+        if owner_acceptance_id and getattr(record, "resource_id", None) != owner_acceptance_id:
+            continue
+        details = getattr(record, "details", {}) or {}
+        if approval_id and details.get("approval_id") != approval_id:
+            continue
+        evidence = details.get("owner_acceptance_evidence")
+        if not isinstance(evidence, dict):
+            continue
+        return {
+            **_jsonable(evidence),
+            "audit_id": getattr(record, "id", audit_id),
+            "audit_created_at": _jsonable(getattr(record, "created_at", None)),
+            "audit_hash": getattr(record, "hash", None),
+            "audit_signature_present": bool(getattr(record, "signature", None)),
+            "record_persisted": True,
         }
     return None
 

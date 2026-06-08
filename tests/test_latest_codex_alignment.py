@@ -85,7 +85,7 @@ def _approval_sandbox_admin_payload(
 
 def _sdk_noninteractive_payload(
     *,
-    status: str = "sdk_write_runner_runtime_flag_ready",
+    status: str = "sdk_write_runner_owner_acceptance_contract_ready",
     parity: bool = False,
     mutation: bool = False,
 ) -> dict[str, object]:
@@ -190,24 +190,7 @@ def _evidence_specs(paths: dict[str, Path]) -> tuple[AlignmentEvidenceSpec, ...]
             "sdk_noninteractive_report",
             paths["sdk_report"],
             "runtime_report",
-            expected_statuses=frozenset(
-                {
-                    "sdk_noninteractive_contract_ready",
-                    "sdk_backend_stub_ready",
-                    "sdk_http_dry_run_adapter_ready",
-                    "sdk_approval_intent_ready",
-                    "sdk_approval_handoff_ready",
-                    "sdk_execution_adapter_contract_ready",
-                    "sdk_read_only_runner_contract_ready",
-                    "sdk_write_runner_safety_contract_ready",
-                    "sdk_dry_run_executor_stub_ready",
-                    "sdk_runtime_evidence_readback_ready",
-                    "sdk_dry_run_receipt_persistence_ready",
-                    "sdk_write_runner_execute_gate_ready",
-                    "sdk_write_runner_adapter_review_ready",
-                    "sdk_write_runner_runtime_flag_ready",
-                }
-            ),
+            expected_statuses=frozenset({"sdk_write_runner_owner_acceptance_contract_ready"}),
             expected_evidence_type="sdk_noninteractive_cli_contract",
         ),
         AlignmentEvidenceSpec("control_plane_protocol", paths["control_plane"], "source_doc"),
@@ -338,7 +321,7 @@ def test_latest_codex_alignment_ready_with_current_evidence(tmp_path: Path) -> N
         "sandbox_security_tests",
     }.issubset(set(approval.evidence))
     sdk = next(item for item in report.capabilities if item.capability == "cli_and_programmatic_sdk")
-    assert sdk.xagent_status == "sdk_write_runner_runtime_flag_ready"
+    assert sdk.xagent_status == "sdk_write_runner_owner_acceptance_contract_ready"
     assert {
         "sdk_noninteractive_report",
         "sdk_contract_module",

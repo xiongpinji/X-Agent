@@ -567,7 +567,34 @@ Expected: selected approval and sandbox tests pass.
 - [x] Add `owner_acceptance_evidence` metadata with required fields and `evidence_status=required_not_provided`.
 - [x] Keep `implementation_enabled=false`, `execute_enabled=false`, `write_runner_enabled=false`, `agent_execution_enabled=false`, `adapter_execution_enabled=false`, `mark_executed=false`, and all mutation flags false.
 - [x] Promote SDK alignment status to `sdk_write_runner_runtime_flag_ready`.
-- [ ] Implement owner acceptance evidence recording/readback and only then consider runtime enablement.
+- [x] Implement owner acceptance evidence recording/readback contract and only then consider runtime enablement.
+
+### Task 24: Owner Acceptance Evidence Recording/Readback Contract
+
+**Target:** Make owner acceptance evidence machine-readable and inspectable through `runtime/evidence/read` before any concrete owner-approved write runner can be enabled.
+
+**Files:**
+- Modify: `backend/app/api/control_plane.py`
+- Modify: `backend/app/sdk/control_plane.py`
+- Modify: `cli/commands/sdk_cmd.py`
+- Modify: `scripts/sdk_noninteractive_report.py`
+- Modify: `scripts/latest_codex_alignment.py`
+- Modify: `tests/test_control_plane_protocol.py`
+- Modify: `tests/test_xagent_sdk_contract.py`
+- Modify: `tests/test_cli_client.py`
+- Modify: `tests/test_sdk_noninteractive_report.py`
+- Modify: `tests/test_latest_codex_alignment.py`
+- Runtime evidence: `.xagent_runtime/reports/sdk-noninteractive-report.json`
+- Runtime evidence: `.xagent_runtime/reports/latest-codex-alignment.json`
+
+- [x] Add owner acceptance evidence schema with `owner_acceptance_id`, `accepted_by`, `accepted_at`, `approval_id`, `runbook_acknowledged`, and `rollback_plan_acknowledged`.
+- [x] Declare audit recording contract for `sdk.write_runner.owner_acceptance_recorded` with `resource_type=sdk_write_runner_owner_acceptance`.
+- [x] Add readback contract through `runtime/evidence/read` using `evidence_type=sdk_write_runner_owner_acceptance`.
+- [x] Extend SDK/CLI evidence-read wrappers with `--acceptance-id` and `--audit-id` readback parameters.
+- [x] Keep `/sdk/invoke`, `runtime/evidence/read`, and SDK CLI readbacks non-mutating; no owner acceptance record is created by these paths.
+- [x] Keep `runtime_flag_enabled=false`, `execute_enabled=false`, `write_runner_enabled=false`, `agent_execution_enabled=false`, `adapter_execution_enabled=false`, `mark_executed=false`, and all mutation flags false.
+- [x] Promote SDK alignment status to `sdk_write_runner_owner_acceptance_contract_ready`.
+- [ ] Build the owner-controlled acceptance evidence creation/review workflow before enabling the concrete write runner.
 
 ## Completion Criteria
 

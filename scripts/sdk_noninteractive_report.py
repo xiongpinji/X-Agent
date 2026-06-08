@@ -82,6 +82,13 @@ def _sdk_contracts() -> list[dict[str, Any]]:
             approval_id="<approval_id>",
             method="turn/start",
         ).to_dict(),
+        sdk.read_runtime_evidence(
+            "sdk-write-runner-owner-acceptance.json",
+            evidence_type="sdk_write_runner_owner_acceptance",
+            approval_id="<approval_id>",
+            owner_acceptance_id="<owner_acceptance_id>",
+            audit_id="<audit_id>",
+        ).to_dict(),
     ]
 
 
@@ -129,6 +136,14 @@ def _cli_commands() -> list[dict[str, Any]]:
         },
         {
             "command": "xagent sdk evidence-read sdk-dry-run-executor-stub.json --evidence-type sdk_dry_run_executor_stub --approval-id <approval_id> --method turn/start --execute",
+            "method": "runtime/evidence/read",
+            "non_interactive": True,
+            "dry_run_default": True,
+            "execute_target": "/api/v1/control-plane/sdk/invoke",
+            "execute_starts_agent": False,
+        },
+        {
+            "command": "xagent sdk evidence-read sdk-write-runner-owner-acceptance.json --evidence-type sdk_write_runner_owner_acceptance --approval-id <approval_id> --acceptance-id <owner_acceptance_id> --audit-id <audit_id> --execute",
             "method": "runtime/evidence/read",
             "non_interactive": True,
             "dry_run_default": True,
@@ -191,10 +206,11 @@ def _build_checks(report_payload: dict[str, Any]) -> list[SDKNonInteractiveCheck
                 "thread/read",
                 "runtime/evidence/read",
                 "runtime/evidence/read",
+                "runtime/evidence/read",
             ]
             else "failed",
             details={"methods": methods},
-            error=None if len(methods) == 6 else "SDK methods are incomplete",
+            error=None if len(methods) == 7 else "SDK methods are incomplete",
         ),
         SDKNonInteractiveCheck(
             name="cli_non_interactive_commands_complete",
@@ -417,10 +433,15 @@ def _build_checks(report_payload: dict[str, Any]) -> list[SDKNonInteractiveCheck
             else "SDK write runner runtime flag is enabled before owner acceptance",
         ),
         SDKNonInteractiveCheck(
-            name="owner_acceptance_evidence_required",
+            name="owner_acceptance_evidence_recording_contract_ready",
             status="passed"
             if owner_acceptance.get("stage") == "owner_acceptance_evidence_record"
-            and owner_acceptance.get("evidence_status") == "required_not_provided"
+            and owner_acceptance.get("evidence_status") == "recording_contract_ready_not_provided"
+            and owner_acceptance.get("recording_contract_ready") is True
+            and owner_acceptance.get("recording_action") == "sdk.write_runner.owner_acceptance_recorded"
+            and owner_acceptance.get("evidence_type") == "sdk_write_runner_owner_acceptance"
+            and owner_acceptance.get("readback_contract", {}).get("returns_schema") is True
+            and owner_acceptance.get("recording_contract", {}).get("created_by_sdk_invoke") is False
             and "owner_acceptance_id" in owner_acceptance.get("required_fields", [])
             and owner_acceptance.get("runtime_flag_enabled") is False
             and owner_acceptance.get("execute_enabled") is False
@@ -430,7 +451,7 @@ def _build_checks(report_payload: dict[str, Any]) -> list[SDKNonInteractiveCheck
             else "failed",
             details=owner_acceptance,
             error=None
-            if owner_acceptance.get("evidence_status") == "required_not_provided"
+            if owner_acceptance.get("evidence_status") == "recording_contract_ready_not_provided"
             else "owner acceptance evidence unexpectedly enables execution",
         ),
         SDKNonInteractiveCheck(
@@ -457,7 +478,7 @@ def _build_checks(report_payload: dict[str, Any]) -> list[SDKNonInteractiveCheck
 
 def build_sdk_noninteractive_report() -> SDKNonInteractiveReport:
     report_payload: dict[str, Any] = {
-        "status": "sdk_write_runner_runtime_flag_ready",
+        "status": "sdk_write_runner_owner_acceptance_contract_ready",
         "generated_at": _utc_now(),
         "evidence_type": "sdk_noninteractive_cli_contract",
         "full_codex_parity_claimed": False,
@@ -470,7 +491,7 @@ def build_sdk_noninteractive_report() -> SDKNonInteractiveReport:
         "backend_stub": {
             "endpoint": "/api/v1/control-plane/sdk/invoke",
             "normalizes_to": "/api/v1/control-plane/invoke",
-            "status": "sdk_write_runner_runtime_flag_ready",
+            "status": "sdk_write_runner_owner_acceptance_contract_ready",
             "approval_subject_type": "command",
             "approval_intent_created_for_write_methods": True,
             "owner_gate_required": True,
@@ -763,7 +784,10 @@ def build_sdk_noninteractive_report() -> SDKNonInteractiveReport:
         },
         "owner_acceptance_evidence": {
             "stage": "owner_acceptance_evidence_record",
-            "evidence_status": "required_not_provided",
+            "evidence_status": "recording_contract_ready_not_provided",
+            "recording_contract_ready": True,
+            "recording_action": "sdk.write_runner.owner_acceptance_recorded",
+            "resource_type": "sdk_write_runner_owner_acceptance",
             "required_fields": [
                 "owner_acceptance_id",
                 "accepted_by",
@@ -772,8 +796,51 @@ def build_sdk_noninteractive_report() -> SDKNonInteractiveReport:
                 "runbook_acknowledged",
                 "rollback_plan_acknowledged",
             ],
+            "schema": {
+                "type": "object",
+                "required": [
+                    "owner_acceptance_id",
+                    "accepted_by",
+                    "accepted_at",
+                    "approval_id",
+                    "runbook_acknowledged",
+                    "rollback_plan_acknowledged",
+                ],
+                "properties": {
+                    "owner_acceptance_id": "string",
+                    "accepted_by": "string",
+                    "accepted_at": "RFC3339 timestamp",
+                    "approval_id": "string",
+                    "runbook_acknowledged": "boolean true",
+                    "rollback_plan_acknowledged": "boolean true",
+                    "acceptance_signature": "string optional",
+                    "acceptance_hash": "string optional",
+                    "notes": "string optional",
+                },
+            },
             "evidence_readback_method": "runtime/evidence/read",
+            "evidence_type": "sdk_write_runner_owner_acceptance",
             "acceptance_report_name": "sdk-write-runner-owner-acceptance.json",
+            "readback_contract": {
+                "endpoint": "/api/v1/control-plane/invoke",
+                "method": "runtime/evidence/read",
+                "query_keys": ["approval_id", "owner_acceptance_id", "audit_id"],
+                "returns_schema": True,
+                "returns_record_if_present": True,
+            },
+            "recording_contract": {
+                "audit_action": "sdk.write_runner.owner_acceptance_recorded",
+                "resource_type": "sdk_write_runner_owner_acceptance",
+                "signature_or_hash_required": True,
+                "valid_record_requires": [
+                    "all_required_fields_present",
+                    "accepted_at_rfc3339",
+                    "runbook_acknowledged_true",
+                    "rollback_plan_acknowledged_true",
+                    "acceptance_signature_or_hash_present",
+                ],
+                "created_by_sdk_invoke": False,
+            },
             "next_gate": "owner_approved_write_runner_runtime_enablement",
             "implementation_enabled": False,
             "runtime_flag_enabled": False,
@@ -803,7 +870,7 @@ def build_sdk_noninteractive_report() -> SDKNonInteractiveReport:
             "Persisted receipt safety review is read-only and does not enable the write runner.",
             "Owner-approved write execute gate is ready for review but remains disabled.",
             "Owner-approved write runner adapter implementation review declares the future AgentCoordinator.run target but remains disabled.",
-            "Runtime feature flag and owner acceptance evidence are declared but remain disabled/missing.",
+            "Runtime feature flag remains disabled; owner acceptance evidence recording/readback is contract-ready but no acceptance evidence is provided.",
             "No SDK HTTP adapter, agent runner, file mutation, channel send, or network mutation is enabled.",
             "Feishu remains the only domestic V1 pilot channel in this contract.",
             "Slack is tracked as a Codex reference surface, but it is non-blocking for the domestic first version.",
@@ -957,7 +1024,7 @@ def main() -> int:
         print(f"- {check.name}: {check.status}")
         if check.error:
             print(f"  error: {check.error}")
-    return 0 if report.status == "sdk_write_runner_runtime_flag_ready" else 1
+    return 0 if report.status == "sdk_write_runner_owner_acceptance_contract_ready" else 1
 
 
 if __name__ == "__main__":
