@@ -47,9 +47,11 @@ Use these files as the canonical source of truth for this pilot:
 | `.xagent_runtime/reports/commercial-pilot-readiness.json` | Aggregate pilot readiness evidence. |
 | `.xagent_runtime/reports/commercial-pilot-refresh-chain.json` | Rebuilt pilot evidence chain. |
 | `.xagent_runtime/reports/commercial-pilot-channel-readiness.json` | Channel matrix showing Feishu ready and other channels preview. |
+| `.xagent_runtime/reports/commercial-pilot-feishu-outbound-live.json` | Optional owner-approved outbound send evidence. |
 | `.xagent_runtime/reports/rc-delivery-status.json` | Frozen commercial RC baseline proof. |
 | `scripts/commercial_pilot_handoff_status.py` | Read-only handoff gate. |
 | `scripts/commercial_pilot_refresh_chain.py` | Readiness evidence refresh chain. |
+| `scripts/commercial_pilot_feishu_outbound_smoke.py` | Owner-gated outbound smoke; dry-run by default. |
 | `tests/test_feishu_channel_api.py` | Feishu callback contract and live-evidence tests. |
 
 Generated reports under `.xagent_runtime/` are runtime evidence and are not
@@ -282,11 +284,54 @@ Display inbound and outbound separately:
 
 ## 10. Outbound Owner-Gated Follow-Up
 
-Pilot V1 currently does not require outbound send. The next safe follow-up is a
-separate owner-controlled outbound smoke that:
+Pilot V1 currently does not require outbound send. A separate outbound smoke is
+available, but it is dry-run by default and must not be treated as part of the
+inbound handoff unless the owner explicitly approves a real send.
+
+Default non-mutating check:
+
+```powershell
+python scripts\commercial_pilot_feishu_outbound_smoke.py
+```
+
+Expected without owner configuration:
+
+```text
+Commercial pilot Feishu outbound smoke status: owner_action_required
+Mutation performed: False
+Outbound message sent: False
+```
+
+Configured dry-run before real send:
+
+```powershell
+python scripts\commercial_pilot_feishu_outbound_smoke.py `
+  --receive-id <disposable-feishu-chat-id>
+```
+
+Expected:
+
+```text
+Commercial pilot Feishu outbound smoke status: ready_to_execute
+Mutation performed: False
+Outbound message sent: False
+```
+
+Owner-approved real send:
+
+```powershell
+python scripts\commercial_pilot_feishu_outbound_smoke.py `
+  --receive-id <disposable-feishu-chat-id> `
+  --receive-id-type chat_id `
+  --text "X-Agent Feishu outbound owner-gated smoke" `
+  --execute `
+  --owner-approved
+```
+
+The real-send path:
 
 1. Requires explicit owner env vars and a disposable Feishu chat.
-2. Sends exactly one short test message.
+2. Requires both `--execute` and `--owner-approved`.
 3. Records `outbound_message_sent=true` in a separate outbound evidence file.
 4. Never overwrites `commercial-pilot-feishu-live.json`.
 5. Adds a new handoff check only after the owner approves outbound mutation.
