@@ -51,6 +51,7 @@ class SDKNonInteractiveReport:
     read_only_runner_contract: dict[str, Any]
     write_runner_safety_contract: dict[str, Any]
     dry_run_executor_stub: dict[str, Any]
+    runtime_evidence_readback: dict[str, Any]
     channel_strategy: dict[str, Any]
     checks: list[SDKNonInteractiveCheck]
     official_sources: list[str]
@@ -70,6 +71,12 @@ def _sdk_contracts() -> list[dict[str, Any]]:
         sdk.run_turn("thread-1", "next instruction", idempotency_key="sdk-turn-run").to_dict(),
         sdk.read_thread("thread-1").to_dict(),
         sdk.read_runtime_evidence("latest-codex-alignment.json").to_dict(),
+        sdk.read_runtime_evidence(
+            "sdk-dry-run-executor-stub.json",
+            evidence_type="sdk_dry_run_executor_stub",
+            approval_id="<approval_id>",
+            method="turn/start",
+        ).to_dict(),
     ]
 
 
@@ -115,6 +122,14 @@ def _cli_commands() -> list[dict[str, Any]]:
             "execute_target": "/api/v1/control-plane/sdk/invoke",
             "execute_starts_agent": False,
         },
+        {
+            "command": "xagent sdk evidence-read sdk-dry-run-executor-stub.json --evidence-type sdk_dry_run_executor_stub --approval-id <approval_id> --method turn/start --execute",
+            "method": "runtime/evidence/read",
+            "non_interactive": True,
+            "dry_run_default": True,
+            "execute_target": "/api/v1/control-plane/sdk/invoke",
+            "execute_starts_agent": False,
+        },
     ]
 
 
@@ -139,6 +154,7 @@ def _build_checks(report_payload: dict[str, Any]) -> list[SDKNonInteractiveCheck
     read_only_runner = report_payload["read_only_runner_contract"]
     write_runner = report_payload["write_runner_safety_contract"]
     dry_run_stub = report_payload["dry_run_executor_stub"]
+    evidence_readback = report_payload["runtime_evidence_readback"]
     methods = [contract["request"]["method"] for contract in contracts]
     command_methods = [command["method"] for command in commands]
     cli_execute_targets = [
@@ -164,10 +180,11 @@ def _build_checks(report_payload: dict[str, Any]) -> list[SDKNonInteractiveCheck
                 "turn/start",
                 "thread/read",
                 "runtime/evidence/read",
+                "runtime/evidence/read",
             ]
             else "failed",
             details={"methods": methods},
-            error=None if len(methods) == 5 else "SDK methods are incomplete",
+            error=None if len(methods) == 6 else "SDK methods are incomplete",
         ),
         SDKNonInteractiveCheck(
             name="cli_non_interactive_commands_complete",
@@ -295,6 +312,20 @@ def _build_checks(report_payload: dict[str, Any]) -> list[SDKNonInteractiveCheck
             else "dry-run executor audit event contract is missing",
         ),
         SDKNonInteractiveCheck(
+            name="runtime_evidence_readback_ready",
+            status="passed"
+            if evidence_readback.get("evidence_type") == "sdk_dry_run_executor_stub"
+            and evidence_readback.get("readback_method") == "runtime/evidence/read"
+            and evidence_readback.get("receipt_schema_available") is True
+            and evidence_readback.get("audit_readback_action") == "sdk.write_runner.dry_run_planned"
+            and evidence_readback.get("mutation_performed") is False
+            else "failed",
+            details=evidence_readback,
+            error=None
+            if evidence_readback.get("receipt_schema_available") is True
+            else "runtime evidence readback contract is missing receipt schema",
+        ),
+        SDKNonInteractiveCheck(
             name="feishu_domestic_v1_primary",
             status="passed"
             if report_payload["channel_strategy"].get("domestic_v1_primary") == "feishu"
@@ -318,7 +349,7 @@ def _build_checks(report_payload: dict[str, Any]) -> list[SDKNonInteractiveCheck
 
 def build_sdk_noninteractive_report() -> SDKNonInteractiveReport:
     report_payload: dict[str, Any] = {
-        "status": "sdk_dry_run_executor_stub_ready",
+        "status": "sdk_runtime_evidence_readback_ready",
         "generated_at": _utc_now(),
         "evidence_type": "sdk_noninteractive_cli_contract",
         "full_codex_parity_claimed": False,
@@ -331,7 +362,7 @@ def build_sdk_noninteractive_report() -> SDKNonInteractiveReport:
         "backend_stub": {
             "endpoint": "/api/v1/control-plane/sdk/invoke",
             "normalizes_to": "/api/v1/control-plane/invoke",
-            "status": "sdk_dry_run_executor_stub_ready",
+            "status": "sdk_runtime_evidence_readback_ready",
             "approval_subject_type": "command",
             "approval_intent_created_for_write_methods": True,
             "owner_gate_required": True,
@@ -468,6 +499,23 @@ def build_sdk_noninteractive_report() -> SDKNonInteractiveReport:
             "file_mutation_performed": False,
             "channel_mutation_performed": False,
         },
+        "runtime_evidence_readback": {
+            "evidence_type": "sdk_dry_run_executor_stub",
+            "readback_method": "runtime/evidence/read",
+            "readback_endpoint": "/api/v1/control-plane/invoke",
+            "sdk_command": "xagent sdk evidence-read sdk-dry-run-executor-stub.json --evidence-type sdk_dry_run_executor_stub --approval-id <approval_id> --method turn/start --execute",
+            "receipt_schema_available": True,
+            "audit_readback_action": "sdk.write_runner.dry_run_planned",
+            "control_plane_result_key": "evidence",
+            "runner_invoked": False,
+            "agent_execution_enabled": False,
+            "write_execution_enabled": False,
+            "mark_executed": False,
+            "mutation_performed": False,
+            "network_mutation_performed": False,
+            "file_mutation_performed": False,
+            "channel_mutation_performed": False,
+        },
         "channel_strategy": _channel_strategy(),
         "official_sources": list(CODEX_SDK_SOURCES),
         "known_limits": [
@@ -479,6 +527,7 @@ def build_sdk_noninteractive_report() -> SDKNonInteractiveReport:
             "Read-only SDK methods can be submitted with --execute and return backend read contracts.",
             "Owner-approved write SDK methods return a safety runner plan and receipt template only.",
             "Owner-approved write SDK dry-run executor stubs record audit events and receipts only.",
+            "Runtime evidence/read can return the SDK dry-run executor receipt schema and audit readback hints.",
             "No SDK HTTP adapter, agent runner, file mutation, channel send, or network mutation is enabled.",
             "Feishu remains the only domestic V1 pilot channel in this contract.",
             "Slack is tracked as a Codex reference surface, but it is non-blocking for the domestic first version.",
@@ -552,6 +601,11 @@ def render_markdown_report(report: SDKNonInteractiveReport) -> str:
         f"- Audit event recorded: `{report.dry_run_executor_stub['audit_event_recorded']}`\n"
         f"- Runner invoked: `{report.dry_run_executor_stub['runner_invoked']}`\n"
         f"- Mutation performed: `{report.dry_run_executor_stub['mutation_performed']}`\n\n"
+        "## Runtime Evidence Readback\n\n"
+        f"- Evidence type: `{report.runtime_evidence_readback['evidence_type']}`\n"
+        f"- Readback method: `{report.runtime_evidence_readback['readback_method']}`\n"
+        f"- SDK command: `{report.runtime_evidence_readback['sdk_command']}`\n"
+        f"- Receipt schema available: `{report.runtime_evidence_readback['receipt_schema_available']}`\n\n"
         "## Channel Strategy\n\n"
         f"- Domestic V1 primary: `{report.channel_strategy['domestic_v1_primary']}`\n"
         f"- Telegram required: `{report.channel_strategy['telegram_required']}`\n"
@@ -599,7 +653,7 @@ def main() -> int:
         print(f"- {check.name}: {check.status}")
         if check.error:
             print(f"  error: {check.error}")
-    return 0 if report.status == "sdk_dry_run_executor_stub_ready" else 1
+    return 0 if report.status == "sdk_runtime_evidence_readback_ready" else 1
 
 
 if __name__ == "__main__":

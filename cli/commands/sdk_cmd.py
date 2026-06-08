@@ -127,7 +127,15 @@ def evidence_read(
     report_name: str = typer.Argument(..., help="Runtime evidence JSON report filename."),
     tenant_id: Optional[str] = typer.Option(None, "--tenant-id"),
     user_id: Optional[str] = typer.Option(None, "--user-id"),
+    evidence_type: Optional[str] = typer.Option(None, "--evidence-type"),
+    approval_id: Optional[str] = typer.Option(None, "--approval-id"),
+    method: Optional[str] = typer.Option(None, "--method"),
     execute: bool = typer.Option(False, "--execute", help="Submit the read-only SDK envelope to the backend."),
 ) -> None:
-    contract = _sdk(tenant_id, user_id).read_runtime_evidence(report_name)
+    contract = _sdk(tenant_id, user_id).read_runtime_evidence(
+        report_name,
+        evidence_type=evidence_type,
+        approval_id=approval_id,
+        method=method,
+    )
     _emit_or_invoke(contract.to_dict(), execute=execute)

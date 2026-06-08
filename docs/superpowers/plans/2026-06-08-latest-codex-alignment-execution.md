@@ -427,6 +427,30 @@ Expected: selected approval and sandbox tests pass.
 - [x] Keep `runner_invoked=false`, agent/write execution disabled, `mark_executed=false`, and all mutation flags false.
 - [ ] Implement concrete owner-approved write SDK runner after runtime safety review.
 
+### Task 18: SDK Dry-Run Runtime Evidence Readback
+
+**Target:** Let SDK and CLI read back the dry-run executor receipt schema through `runtime/evidence/read` while keeping the backend owner-gated stub non-mutating.
+
+**Files:**
+- Modify: `backend/app/api/control_plane.py`
+- Modify: `backend/app/sdk/control_plane.py`
+- Modify: `cli/commands/sdk_cmd.py`
+- Modify: `scripts/sdk_noninteractive_report.py`
+- Modify: `scripts/latest_codex_alignment.py`
+- Modify: `tests/test_control_plane_protocol.py`
+- Modify: `tests/test_xagent_sdk_contract.py`
+- Modify: `tests/test_cli_client.py`
+- Modify: `tests/test_sdk_noninteractive_report.py`
+- Modify: `tests/test_latest_codex_alignment.py`
+- Runtime evidence: `.xagent_runtime/reports/sdk-noninteractive-report.json`
+- Runtime evidence: `.xagent_runtime/reports/latest-codex-alignment.json`
+
+- [x] Add dynamic `sdk_dry_run_executor_stub` evidence metadata to `runtime/evidence/read`.
+- [x] Add SDK and CLI parameters for `--evidence-type`, `--approval-id`, and `--method`.
+- [x] Include receipt schema and audit readback hints for `sdk.write_runner.dry_run_planned`.
+- [x] Keep `runner_invoked=false`, agent/write execution disabled, `mark_executed=false`, and all mutation flags false.
+- [ ] Persist concrete SDK dry-run receipts before enabling any owner-approved write runner.
+
 ## Completion Criteria
 
 - `scripts/latest_codex_alignment.py` returns `latest_codex_alignment_plan_ready`.

@@ -925,7 +925,7 @@ def _sdk_backend_stub_metadata(
     read_only_runner_contract = _sdk_read_only_runner_contract(original, request, response)
     write_runner_safety_contract = _sdk_write_runner_safety_contract(original, request, execution_adapter_contract)
     return {
-        "status": "sdk_dry_run_executor_stub_ready",
+        "status": "sdk_runtime_evidence_readback_ready",
         "operation": request.context.sdk_operation or original.operation,
         "method": request.method,
         "sdk_surface": request.context.sdk_surface or "python",
@@ -951,6 +951,7 @@ def _sdk_backend_stub_metadata(
             "Approved SDK approval ids are read back for execution-adapter preflight only.",
             "Owner-approved write methods expose a runner safety plan and receipt template only.",
             "Approved write methods can produce a dry-run executor stub receipt and audit event.",
+            "Runtime evidence/read can return the SDK dry-run executor receipt schema and audit readback hints.",
             "No SDK HTTP adapter execution, agent runner invocation, channel send, file change, or network mutation is enabled.",
             "Write methods remain owner-gated behind the approval/sandbox/admin contract.",
             "Feishu remains the only domestic V1 pilot channel.",
@@ -2113,6 +2114,9 @@ def _jsonable(value: Any) -> Any:
 
 
 def _runtime_evidence_metadata(params: dict[str, Any]) -> dict[str, Any]:
+    evidence_type = params.get("evidence_type")
+    if evidence_type == "sdk_dry_run_executor_stub":
+        return _sdk_dry_run_executor_runtime_evidence(params)
     report_name = params.get("report_name")
     if not isinstance(report_name, str) or not report_name:
         return {
@@ -2134,6 +2138,67 @@ def _runtime_evidence_metadata(params: dict[str, Any]) -> dict[str, Any]:
         "available": path.exists(),
         "path": str(path),
         "size_bytes": path.stat().st_size if path.exists() else None,
+    }
+
+
+def _sdk_dry_run_executor_runtime_evidence(params: dict[str, Any]) -> dict[str, Any]:
+    approval_id = params.get("approval_id")
+    method = params.get("method")
+    return {
+        "evidence_type": "sdk_dry_run_executor_stub",
+        "available": True,
+        "approval_id": approval_id if isinstance(approval_id, str) and approval_id else None,
+        "method": method if isinstance(method, str) and method else None,
+        "status_vocabulary": [
+            "blocked_before_dry_run_executor",
+            "dry_run_planned",
+            "planned_not_executed",
+        ],
+        "receipt_schema": {
+            "status": "dry_run_planned",
+            "dry_run_executor_invoked": "boolean",
+            "runner_invoked": "false",
+            "agent_trace_id": "null",
+            "audit_id": "string|null",
+            "approval_id": "string|null",
+            "method": "string",
+            "operation": "string|null",
+            "mark_executed": "false",
+            "mutation_performed": "false",
+            "network_mutation_performed": "false",
+            "file_mutation_performed": "false",
+            "channel_mutation_performed": "false",
+        },
+        "audit_readback": {
+            "action": "sdk.write_runner.dry_run_planned",
+            "resource_type": "sdk_write_runner",
+            "control_plane_method": "runtime/evidence/read",
+            "query_keys": ["approval_id", "method", "trace_id", "audit_id"],
+        },
+        "control_plane_readback": {
+            "method": "runtime/evidence/read",
+            "params": {
+                "evidence_type": "sdk_dry_run_executor_stub",
+                "approval_id": approval_id,
+                "method": method,
+            },
+            "endpoint": "/api/v1/control-plane/invoke",
+        },
+        "safety": {
+            "runner_invoked": False,
+            "agent_execution_enabled": False,
+            "write_execution_enabled": False,
+            "mark_executed": False,
+            "mutation_performed": False,
+            "network_mutation_performed": False,
+            "file_mutation_performed": False,
+            "channel_mutation_performed": False,
+        },
+        "known_limits": [
+            "This runtime evidence describes the dry-run executor receipt contract only.",
+            "It does not read a persisted execution receipt yet.",
+            "Concrete owner-approved write execution remains disabled.",
+        ],
     }
 
 

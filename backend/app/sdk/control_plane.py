@@ -156,11 +156,21 @@ class ControlPlaneSDK:
         *,
         tenant_id: str | None = None,
         user_id: str | None = None,
+        evidence_type: str | None = None,
+        approval_id: str | None = None,
+        method: str | None = None,
     ) -> SDKThreadRunContract:
+        params: dict[str, Any] = {"report_name": report_name}
+        if evidence_type:
+            params["evidence_type"] = evidence_type
+        if approval_id:
+            params["approval_id"] = approval_id
+        if method:
+            params["method"] = method
         return self._thread_contract(
             operation="runtime_evidence_read",
             method="runtime/evidence/read",
-            params={"report_name": report_name},
+            params=params,
             tenant_id=tenant_id,
             user_id=user_id,
             idempotency_key=None,

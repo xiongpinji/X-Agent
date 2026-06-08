@@ -178,8 +178,8 @@ def test_sdk_control_plane_stub_accepts_thread_start_envelope_without_mutation()
     assert response.status_code == 200
     payload = response.json()
     assert payload["ok"] is False
-    assert payload["status"] == "sdk_dry_run_executor_stub_ready"
-    assert payload["sdk"]["status"] == "sdk_dry_run_executor_stub_ready"
+    assert payload["status"] == "sdk_runtime_evidence_readback_ready"
+    assert payload["sdk"]["status"] == "sdk_runtime_evidence_readback_ready"
     assert payload["sdk"]["method"] == "thread/start"
     assert payload["sdk"]["dry_run"] is False
     assert payload["sdk"]["idempotency_key_present"] is True
@@ -273,8 +273,8 @@ def test_sdk_control_plane_stub_reads_approved_execution_adapter_contract_withou
     assert response.status_code == 200
     payload = response.json()
     assert payload["ok"] is False
-    assert payload["status"] == "sdk_dry_run_executor_stub_ready"
-    assert payload["sdk"]["status"] == "sdk_dry_run_executor_stub_ready"
+    assert payload["status"] == "sdk_runtime_evidence_readback_ready"
+    assert payload["sdk"]["status"] == "sdk_runtime_evidence_readback_ready"
     assert payload["sdk"]["approval_intent"]["created"] is False
     assert payload["sdk"]["approval_intent"]["approval_id"] == approval.id
     adapter = payload["sdk"]["execution_adapter_contract"]
@@ -330,8 +330,8 @@ def test_sdk_control_plane_stub_can_read_thread_through_existing_contract() -> N
     assert response.status_code == 200
     payload = response.json()
     assert payload["ok"] is True
-    assert payload["status"] == "sdk_dry_run_executor_stub_ready"
-    assert payload["sdk"]["status"] == "sdk_dry_run_executor_stub_ready"
+    assert payload["status"] == "sdk_runtime_evidence_readback_ready"
+    assert payload["sdk"]["status"] == "sdk_runtime_evidence_readback_ready"
     assert payload["sdk"]["method"] == "thread/read"
     assert payload["sdk"]["owner_gate_required"] is False
     assert payload["sdk"]["approval_intent"]["required"] is False
@@ -371,7 +371,7 @@ def test_sdk_control_plane_stub_reads_runtime_evidence_through_read_only_runner(
     assert response.status_code == 200
     payload = response.json()
     assert payload["ok"] is True
-    assert payload["status"] == "sdk_dry_run_executor_stub_ready"
+    assert payload["status"] == "sdk_runtime_evidence_readback_ready"
     assert payload["sdk"]["method"] == "runtime/evidence/read"
     runner = payload["sdk"]["read_only_runner_contract"]
     assert runner["available"] is True
@@ -382,6 +382,36 @@ def test_sdk_control_plane_stub_reads_runtime_evidence_through_read_only_runner(
     assert runner["mutation_performed"] is False
     assert payload["control_plane"]["result"]["evidence"]["report_name"] == "latest-codex-alignment.json"
     assert approval_store.pending_count() == 0
+
+
+def test_sdk_control_plane_stub_reads_dry_run_executor_runtime_evidence_contract() -> None:
+    approval_store = ApprovalStore()
+    contract = ControlPlaneSDK(default_tenant_id="default", default_user_id="operator").read_runtime_evidence(
+        "sdk-dry-run-executor-stub.json",
+        evidence_type="sdk_dry_run_executor_stub",
+        approval_id="approval-1",
+        method="turn/start",
+    )
+
+    with _client_with_stores(RunStore(), TraceStore(), approval_store) as client:
+        response = client.post(
+            "/api/v1/control-plane/sdk/invoke",
+            json=contract.to_dict(),
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["ok"] is True
+    assert payload["status"] == "sdk_runtime_evidence_readback_ready"
+    evidence = payload["control_plane"]["result"]["evidence"]
+    assert evidence["evidence_type"] == "sdk_dry_run_executor_stub"
+    assert evidence["available"] is True
+    assert evidence["approval_id"] == "approval-1"
+    assert evidence["method"] == "turn/start"
+    assert evidence["receipt_schema"]["status"] == "dry_run_planned"
+    assert evidence["audit_readback"]["action"] == "sdk.write_runner.dry_run_planned"
+    assert evidence["safety"]["runner_invoked"] is False
+    assert evidence["safety"]["mutation_performed"] is False
 
 
 def test_control_plane_rejects_raw_secret_payloads() -> None:
