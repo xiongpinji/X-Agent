@@ -183,8 +183,8 @@ def test_sdk_control_plane_stub_accepts_thread_start_envelope_without_mutation()
     assert response.status_code == 200
     payload = response.json()
     assert payload["ok"] is False
-    assert payload["status"] == "sdk_runtime_enablement_receipt_record_workflow_ready"
-    assert payload["sdk"]["status"] == "sdk_runtime_enablement_receipt_record_workflow_ready"
+    assert payload["status"] == "sdk_runtime_enablement_owner_pack_ready"
+    assert payload["sdk"]["status"] == "sdk_runtime_enablement_owner_pack_ready"
     assert payload["sdk"]["method"] == "thread/start"
     assert payload["sdk"]["dry_run"] is False
     assert payload["sdk"]["idempotency_key_present"] is True
@@ -370,8 +370,8 @@ def test_sdk_control_plane_stub_reads_approved_execution_adapter_contract_withou
     assert response.status_code == 200
     payload = response.json()
     assert payload["ok"] is False
-    assert payload["status"] == "sdk_runtime_enablement_receipt_record_workflow_ready"
-    assert payload["sdk"]["status"] == "sdk_runtime_enablement_receipt_record_workflow_ready"
+    assert payload["status"] == "sdk_runtime_enablement_owner_pack_ready"
+    assert payload["sdk"]["status"] == "sdk_runtime_enablement_owner_pack_ready"
     assert payload["sdk"]["approval_intent"]["created"] is False
     assert payload["sdk"]["approval_intent"]["approval_id"] == approval.id
     adapter = payload["sdk"]["execution_adapter_contract"]
@@ -584,6 +584,23 @@ def test_sdk_control_plane_stub_reads_approved_execution_adapter_contract_withou
     assert preflight["runner_invoked"] is False
     assert preflight["mark_executed"] is False
     assert preflight["mutation_performed"] is False
+    owner_pack = payload["sdk"]["runtime_enablement_owner_pack"]
+    assert owner_pack["stage"] == "runtime_enablement_owner_acceptance_pack"
+    assert owner_pack["pack_status"] == "ready_but_disabled"
+    assert owner_pack["readback_contract"]["query_keys"] == [
+        "readiness_receipt_id",
+        "approval_id",
+        "owner_acceptance_id",
+        "audit_id",
+    ]
+    assert owner_pack["owner_decision_policy"]["manual_review_required"] is True
+    assert owner_pack["owner_decision_policy"]["can_enable_runtime_flag_after_pack"] is False
+    assert owner_pack["audit_contract"]["audit_event_recorded_now"] is False
+    assert owner_pack["runtime_flag_enabled"] is False
+    assert owner_pack["write_runner_enabled"] is False
+    assert owner_pack["runner_invoked"] is False
+    assert owner_pack["mark_executed"] is False
+    assert owner_pack["mutation_performed"] is False
     assert approval_store.pending_count() == 0
     assert approval_store.get(approval.id).status == "approved"
     audit_records = audit_store.list(action="sdk.write_runner.dry_run_planned")
@@ -608,8 +625,8 @@ def test_sdk_control_plane_stub_can_read_thread_through_existing_contract() -> N
     assert response.status_code == 200
     payload = response.json()
     assert payload["ok"] is True
-    assert payload["status"] == "sdk_runtime_enablement_receipt_record_workflow_ready"
-    assert payload["sdk"]["status"] == "sdk_runtime_enablement_receipt_record_workflow_ready"
+    assert payload["status"] == "sdk_runtime_enablement_owner_pack_ready"
+    assert payload["sdk"]["status"] == "sdk_runtime_enablement_owner_pack_ready"
     assert payload["sdk"]["method"] == "thread/read"
     assert payload["sdk"]["owner_gate_required"] is False
     assert payload["sdk"]["approval_intent"]["required"] is False
@@ -656,7 +673,7 @@ def test_sdk_control_plane_stub_reads_runtime_evidence_through_read_only_runner(
     assert response.status_code == 200
     payload = response.json()
     assert payload["ok"] is True
-    assert payload["status"] == "sdk_runtime_enablement_receipt_record_workflow_ready"
+    assert payload["status"] == "sdk_runtime_enablement_owner_pack_ready"
     assert payload["sdk"]["method"] == "runtime/evidence/read"
     runner = payload["sdk"]["read_only_runner_contract"]
     assert runner["available"] is True
@@ -721,7 +738,7 @@ def test_sdk_control_plane_stub_reads_persisted_dry_run_executor_runtime_evidenc
     assert response.status_code == 200
     payload = response.json()
     assert payload["ok"] is True
-    assert payload["status"] == "sdk_runtime_enablement_receipt_record_workflow_ready"
+    assert payload["status"] == "sdk_runtime_enablement_owner_pack_ready"
     evidence = payload["control_plane"]["result"]["evidence"]
     assert evidence["evidence_type"] == "sdk_dry_run_executor_stub"
     assert evidence["available"] is True
@@ -772,7 +789,7 @@ def test_sdk_control_plane_stub_reads_owner_acceptance_runtime_evidence_contract
     assert response.status_code == 200
     payload = response.json()
     assert payload["ok"] is True
-    assert payload["status"] == "sdk_runtime_enablement_receipt_record_workflow_ready"
+    assert payload["status"] == "sdk_runtime_enablement_owner_pack_ready"
     evidence = payload["control_plane"]["result"]["evidence"]
     assert evidence["evidence_type"] == "sdk_write_runner_owner_acceptance"
     assert evidence["available"] is True

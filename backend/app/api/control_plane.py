@@ -946,6 +946,14 @@ async def invoke_sdk_control_plane(
             sdk_metadata["runtime_implementation_preflight"],
         )
     )
+    sdk_metadata["runtime_enablement_owner_pack"] = _sdk_runtime_enablement_owner_pack_contract(
+        sdk_metadata["runtime_enablement_receipt_record_workflow"],
+        runtime_enablement_receipt=sdk_metadata["runtime_enablement_receipt"],
+        runtime_smoke_runbook=sdk_metadata["runtime_smoke_runbook"],
+        owner_acceptance_evidence=sdk_metadata["owner_acceptance_evidence"],
+        runtime_enablement_review=sdk_metadata["runtime_enablement_review"],
+        runtime_implementation_preflight=sdk_metadata["runtime_implementation_preflight"],
+    )
     return SDKControlPlaneInvokeResponse(
         id=control_request.id,
         ok=control_response.ok,
@@ -1324,7 +1332,7 @@ def _sdk_backend_stub_metadata(
     read_only_runner_contract = _sdk_read_only_runner_contract(original, request, response)
     write_runner_safety_contract = _sdk_write_runner_safety_contract(original, request, execution_adapter_contract)
     return {
-        "status": "sdk_runtime_enablement_receipt_record_workflow_ready",
+        "status": "sdk_runtime_enablement_owner_pack_ready",
         "operation": request.context.sdk_operation or original.operation,
         "method": request.method,
         "sdk_surface": request.context.sdk_surface or "python",
@@ -1361,6 +1369,7 @@ def _sdk_backend_stub_metadata(
             "Runtime enablement readiness receipt is declared for owner review but remains disabled.",
             "Runtime implementation preflight adapter boundaries are declared but remain disabled.",
             "Runtime enablement readiness receipt recording/readback workflow is owner-gated and disabled for execution.",
+            "Runtime enablement owner review pack is ready for audit but disabled for execution.",
             "No SDK HTTP adapter execution, agent runner invocation, channel send, file change, or network mutation is enabled.",
             "Write methods remain owner-gated behind the approval/sandbox/admin contract.",
             "Feishu remains the only domestic V1 pilot channel.",
@@ -2560,6 +2569,102 @@ def _sdk_runtime_enablement_receipt_record_workflow_contract(
             "This workflow records readiness receipt evidence only.",
             "It does not enable the runtime flag or invoke the SDK write runner.",
             "The readiness receipt can be read back through runtime/evidence/read.",
+        ],
+    }
+
+
+def _sdk_runtime_enablement_owner_pack_contract(
+    receipt_record_workflow: dict[str, Any],
+    *,
+    runtime_enablement_receipt: dict[str, Any],
+    runtime_smoke_runbook: dict[str, Any],
+    owner_acceptance_evidence: dict[str, Any],
+    runtime_enablement_review: dict[str, Any],
+    runtime_implementation_preflight: dict[str, Any],
+) -> dict[str, Any]:
+    required_evidence = [
+        "approved_sdk_approval",
+        "owner_acceptance_audit_record",
+        "runtime_enablement_readiness_receipt_record",
+        "runtime_enablement_readiness_receipt_readback",
+        "smoke_runbook_acknowledgement",
+        "rollback_runbook_acknowledgement",
+        "failure_receipt_review",
+        "expiry_window",
+    ]
+    checks = {
+        "receipt_record_workflow_ready_but_disabled": receipt_record_workflow.get("workflow_status")
+        == "ready_but_disabled",
+        "readiness_receipt_schema_ready": runtime_enablement_receipt.get("receipt_status")
+        == "ready_but_disabled",
+        "strict_readback_keys_declared": receipt_record_workflow.get("readback_contract", {}).get("query_keys")
+        == ["readiness_receipt_id", "approval_id", "owner_acceptance_id", "audit_id"],
+        "owner_acceptance_recording_ready": owner_acceptance_evidence.get("recording_contract_ready") is True,
+        "runtime_enablement_review_ready": runtime_enablement_review.get("review_status")
+        == "ready_but_disabled",
+        "runtime_smoke_runbook_ready": runtime_smoke_runbook.get("contract_status") == "ready_but_disabled",
+        "runtime_implementation_preflight_ready": runtime_implementation_preflight.get("preflight_status")
+        == "ready_but_disabled",
+        "runtime_flag_still_disabled": receipt_record_workflow.get("runtime_flag_enabled") is False,
+        "runner_not_invoked": receipt_record_workflow.get("runner_invoked") is False,
+        "mark_executed_disabled": receipt_record_workflow.get("mark_executed") is False,
+        "mutation_still_disabled": receipt_record_workflow.get("mutation_performed") is False,
+    }
+    ready = all(checks.values())
+    return {
+        "available": receipt_record_workflow.get("available") is True,
+        "stage": "runtime_enablement_owner_acceptance_pack",
+        "pack_status": "ready_but_disabled" if ready else "blocked",
+        "pack_type": "sdk_write_runner_runtime_enablement_owner_review_pack",
+        "source_workflow": receipt_record_workflow.get("stage"),
+        "required_evidence": required_evidence,
+        "owner_review_sections": [
+            "approval",
+            "owner_acceptance",
+            "readiness_receipt",
+            "readback",
+            "smoke_runbook",
+            "rollback",
+            "failure_receipt",
+            "expiry",
+            "disabled_execution_invariants",
+        ],
+        "readback_contract": {
+            "method": "runtime/evidence/read",
+            "evidence_type": "sdk_write_runner_runtime_enablement_readiness",
+            "query_keys": ["readiness_receipt_id", "approval_id", "owner_acceptance_id", "audit_id"],
+            "record_required_before_runtime_flag": True,
+        },
+        "audit_contract": {
+            "review_action": "sdk.write_runner.runtime_enablement_owner_pack_reviewed",
+            "source_record_action": "sdk.write_runner.runtime_enablement_receipt_recorded",
+            "resource_type": "sdk_write_runner_runtime_enablement_owner_review_pack",
+            "audit_event_recorded_now": False,
+        },
+        "owner_decision_policy": {
+            "manual_review_required": True,
+            "can_enable_runtime_flag_after_pack": False,
+            "next_gate": "owner_approved_write_runner_runtime_implementation",
+            "rollback_required_before_any_smoke": True,
+        },
+        "checks": checks,
+        "implementation_enabled": False,
+        "runtime_flag_enabled": False,
+        "execute_enabled": False,
+        "write_runner_enabled": False,
+        "adapter_execution_enabled": False,
+        "agent_execution_enabled": False,
+        "write_execution_enabled": False,
+        "runner_invoked": False,
+        "mark_executed": False,
+        "mutation_performed": False,
+        "network_mutation_performed": False,
+        "file_mutation_performed": False,
+        "channel_mutation_performed": False,
+        "known_limits": [
+            "This pack aggregates owner review evidence only.",
+            "It does not record a new audit event by /sdk/invoke.",
+            "It does not enable the runtime flag or invoke the SDK write runner.",
         ],
     }
 
