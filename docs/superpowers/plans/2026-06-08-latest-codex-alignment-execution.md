@@ -449,7 +449,29 @@ Expected: selected approval and sandbox tests pass.
 - [x] Add SDK and CLI parameters for `--evidence-type`, `--approval-id`, and `--method`.
 - [x] Include receipt schema and audit readback hints for `sdk.write_runner.dry_run_planned`.
 - [x] Keep `runner_invoked=false`, agent/write execution disabled, `mark_executed=false`, and all mutation flags false.
-- [ ] Persist concrete SDK dry-run receipts before enabling any owner-approved write runner.
+- [x] Persist concrete SDK dry-run receipts before enabling any owner-approved write runner.
+
+### Task 19: SDK Dry-Run Receipt Persistence
+
+**Target:** Persist owner-approved SDK dry-run executor receipts in the audit log and read them back through `runtime/evidence/read`, without enabling real write execution.
+
+**Files:**
+- Modify: `backend/app/api/control_plane.py`
+- Modify: `scripts/sdk_noninteractive_report.py`
+- Modify: `scripts/latest_codex_alignment.py`
+- Modify: `tests/test_control_plane_protocol.py`
+- Modify: `tests/test_xagent_sdk_contract.py`
+- Modify: `tests/test_cli_client.py`
+- Modify: `tests/test_sdk_noninteractive_report.py`
+- Modify: `tests/test_latest_codex_alignment.py`
+- Runtime evidence: `.xagent_runtime/reports/sdk-noninteractive-report.json`
+- Runtime evidence: `.xagent_runtime/reports/latest-codex-alignment.json`
+
+- [x] Store the dry-run executor receipt on the `sdk.write_runner.dry_run_planned` audit event.
+- [x] Read back persisted receipts by `approval_id`, `method`, and optional `audit_id`.
+- [x] Surface `receipt_available`, `receipt_persisted`, audit hash, and signature presence in runtime evidence.
+- [x] Keep `runner_invoked=false`, agent/write execution disabled, `mark_executed=false`, and all mutation flags false.
+- [ ] Implement the concrete owner-approved write SDK runner only after persisted receipt safety review.
 
 ## Completion Criteria
 

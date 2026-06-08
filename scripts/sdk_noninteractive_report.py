@@ -301,6 +301,7 @@ def _build_checks(report_payload: dict[str, Any]) -> list[SDKNonInteractiveCheck
             if dry_run_stub.get("stub_stage") == "owner_approved_write_dry_run_executor"
             and dry_run_stub.get("audit_action") == "sdk.write_runner.dry_run_planned"
             and dry_run_stub.get("audit_event_recorded") is True
+            and dry_run_stub.get("receipt_persisted") is True
             and dry_run_stub.get("runner_invoked") is False
             and dry_run_stub.get("agent_execution_enabled") is False
             and dry_run_stub.get("mark_executed") is False
@@ -317,6 +318,7 @@ def _build_checks(report_payload: dict[str, Any]) -> list[SDKNonInteractiveCheck
             if evidence_readback.get("evidence_type") == "sdk_dry_run_executor_stub"
             and evidence_readback.get("readback_method") == "runtime/evidence/read"
             and evidence_readback.get("receipt_schema_available") is True
+            and evidence_readback.get("receipt_readback_supported") is True
             and evidence_readback.get("audit_readback_action") == "sdk.write_runner.dry_run_planned"
             and evidence_readback.get("mutation_performed") is False
             else "failed",
@@ -349,7 +351,7 @@ def _build_checks(report_payload: dict[str, Any]) -> list[SDKNonInteractiveCheck
 
 def build_sdk_noninteractive_report() -> SDKNonInteractiveReport:
     report_payload: dict[str, Any] = {
-        "status": "sdk_runtime_evidence_readback_ready",
+        "status": "sdk_dry_run_receipt_persistence_ready",
         "generated_at": _utc_now(),
         "evidence_type": "sdk_noninteractive_cli_contract",
         "full_codex_parity_claimed": False,
@@ -362,7 +364,7 @@ def build_sdk_noninteractive_report() -> SDKNonInteractiveReport:
         "backend_stub": {
             "endpoint": "/api/v1/control-plane/sdk/invoke",
             "normalizes_to": "/api/v1/control-plane/invoke",
-            "status": "sdk_runtime_evidence_readback_ready",
+            "status": "sdk_dry_run_receipt_persistence_ready",
             "approval_subject_type": "command",
             "approval_intent_created_for_write_methods": True,
             "owner_gate_required": True,
@@ -489,6 +491,8 @@ def build_sdk_noninteractive_report() -> SDKNonInteractiveReport:
             "audit_action": "sdk.write_runner.dry_run_planned",
             "receipt_status": "dry_run_planned",
             "receipt_includes_audit_id": True,
+            "receipt_persisted": True,
+            "receipt_readback_method": "runtime/evidence/read",
             "runner_invoked": False,
             "agent_execution_enabled": False,
             "write_execution_enabled": False,
@@ -505,6 +509,9 @@ def build_sdk_noninteractive_report() -> SDKNonInteractiveReport:
             "readback_endpoint": "/api/v1/control-plane/invoke",
             "sdk_command": "xagent sdk evidence-read sdk-dry-run-executor-stub.json --evidence-type sdk_dry_run_executor_stub --approval-id <approval_id> --method turn/start --execute",
             "receipt_schema_available": True,
+            "receipt_readback_supported": True,
+            "receipt_persisted": True,
+            "receipt_filter_keys": ["approval_id", "method", "audit_id"],
             "audit_readback_action": "sdk.write_runner.dry_run_planned",
             "control_plane_result_key": "evidence",
             "runner_invoked": False,
@@ -526,8 +533,8 @@ def build_sdk_noninteractive_report() -> SDKNonInteractiveReport:
             "Supplying --approved-approval-id enables owner-approved execution preflight/readback only.",
             "Read-only SDK methods can be submitted with --execute and return backend read contracts.",
             "Owner-approved write SDK methods return a safety runner plan and receipt template only.",
-            "Owner-approved write SDK dry-run executor stubs record audit events and receipts only.",
-            "Runtime evidence/read can return the SDK dry-run executor receipt schema and audit readback hints.",
+            "Owner-approved write SDK dry-run executor stubs persist audit events and dry-run receipts only.",
+            "Runtime evidence/read can return the SDK dry-run executor receipt schema and persisted receipt readback.",
             "No SDK HTTP adapter, agent runner, file mutation, channel send, or network mutation is enabled.",
             "Feishu remains the only domestic V1 pilot channel in this contract.",
             "Slack is tracked as a Codex reference surface, but it is non-blocking for the domestic first version.",
@@ -653,7 +660,7 @@ def main() -> int:
         print(f"- {check.name}: {check.status}")
         if check.error:
             print(f"  error: {check.error}")
-    return 0 if report.status == "sdk_runtime_evidence_readback_ready" else 1
+    return 0 if report.status == "sdk_dry_run_receipt_persistence_ready" else 1
 
 
 if __name__ == "__main__":

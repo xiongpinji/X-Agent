@@ -16,7 +16,7 @@ def test_sdk_noninteractive_report_default_is_read_only() -> None:
     report = build_sdk_noninteractive_report()
     payload = report.to_dict()
 
-    assert report.status == "sdk_runtime_evidence_readback_ready"
+    assert report.status == "sdk_dry_run_receipt_persistence_ready"
     assert report.evidence_type == "sdk_noninteractive_cli_contract"
     assert report.full_codex_parity_claimed is False
     assert report.dry_run is True
@@ -149,6 +149,8 @@ def test_sdk_noninteractive_report_covers_dry_run_executor_stub() -> None:
     assert stub["audit_action"] == "sdk.write_runner.dry_run_planned"
     assert stub["receipt_status"] == "dry_run_planned"
     assert stub["receipt_includes_audit_id"] is True
+    assert stub["receipt_persisted"] is True
+    assert stub["receipt_readback_method"] == "runtime/evidence/read"
     assert stub["runner_invoked"] is False
     assert stub["agent_execution_enabled"] is False
     assert stub["mark_executed"] is False
@@ -161,6 +163,9 @@ def test_sdk_noninteractive_report_covers_runtime_evidence_readback() -> None:
     assert readback["evidence_type"] == "sdk_dry_run_executor_stub"
     assert readback["readback_method"] == "runtime/evidence/read"
     assert readback["receipt_schema_available"] is True
+    assert readback["receipt_readback_supported"] is True
+    assert readback["receipt_persisted"] is True
+    assert "audit_id" in readback["receipt_filter_keys"]
     assert readback["audit_readback_action"] == "sdk.write_runner.dry_run_planned"
     assert "--evidence-type sdk_dry_run_executor_stub" in readback["sdk_command"]
     assert readback["mutation_performed"] is False
@@ -186,7 +191,7 @@ def test_write_sdk_noninteractive_report_json_and_markdown(tmp_path: Path) -> No
 
     payload = json.loads(json_output.read_text(encoding="utf-8"))
     markdown = markdown_output.read_text(encoding="utf-8")
-    assert payload["status"] == "sdk_runtime_evidence_readback_ready"
+    assert payload["status"] == "sdk_dry_run_receipt_persistence_ready"
     assert payload["full_codex_parity_claimed"] is False
     assert payload["mutation_performed"] is False
     assert "# X-Agent SDK Non-Interactive Report" in markdown

@@ -753,6 +753,7 @@ async def invoke_control_plane(
             spec,
             request,
             principal=principal,
+            audit_store=audit_store,
             run_store=run_store,
             trace_store=trace_store,
             approval_store=approval_store,
@@ -925,7 +926,7 @@ def _sdk_backend_stub_metadata(
     read_only_runner_contract = _sdk_read_only_runner_contract(original, request, response)
     write_runner_safety_contract = _sdk_write_runner_safety_contract(original, request, execution_adapter_contract)
     return {
-        "status": "sdk_runtime_evidence_readback_ready",
+        "status": "sdk_dry_run_receipt_persistence_ready",
         "operation": request.context.sdk_operation or original.operation,
         "method": request.method,
         "sdk_surface": request.context.sdk_surface or "python",
@@ -952,6 +953,7 @@ def _sdk_backend_stub_metadata(
             "Owner-approved write methods expose a runner safety plan and receipt template only.",
             "Approved write methods can produce a dry-run executor stub receipt and audit event.",
             "Runtime evidence/read can return the SDK dry-run executor receipt schema and audit readback hints.",
+            "Dry-run executor receipts are persisted in the audit log and can be read back through runtime evidence.",
             "No SDK HTTP adapter execution, agent runner invocation, channel send, file change, or network mutation is enabled.",
             "Write methods remain owner-gated behind the approval/sandbox/admin contract.",
             "Feishu remains the only domestic V1 pilot channel.",
@@ -1290,6 +1292,8 @@ def _sdk_dry_run_executor_stub(
             "operation": request.context.sdk_operation,
             "approval_id": write_runner_safety_contract.get("approved_approval_id"),
             "runner_plan": write_runner_safety_contract.get("runner_plan"),
+            "receipt": receipt,
+            "receipt_persisted": True,
             "runner_invoked": False,
             "agent_execution_enabled": False,
             "write_execution_enabled": False,
@@ -1306,6 +1310,8 @@ def _sdk_dry_run_executor_stub(
         "audit_event_recorded": True,
         "audit_action": "sdk.write_runner.dry_run_planned",
         "audit_id": audit.id,
+        "receipt_persisted": True,
+        "receipt_readback_method": "runtime/evidence/read",
         "receipt": receipt,
         "runner_invoked": False,
         "agent_execution_enabled": False,
@@ -1454,6 +1460,7 @@ def _contract_result(
     request: ControlPlaneInvokeRequest,
     *,
     principal: Principal,
+    audit_store: AuditStore,
     run_store: object,
     trace_store: object,
     approval_store: object,
@@ -1507,7 +1514,11 @@ def _contract_result(
     elif spec.method == "approval/read":
         result["approval"] = _approval_read_state(request, approval_store=approval_store)
     if spec.method == "runtime/evidence/read":
-        result["evidence"] = _runtime_evidence_metadata(request.params)
+        result["evidence"] = _runtime_evidence_metadata(
+            request.params,
+            audit_store=audit_store,
+            principal=principal,
+        )
     return result
 
 
@@ -2113,10 +2124,19 @@ def _jsonable(value: Any) -> Any:
     return str(value)
 
 
-def _runtime_evidence_metadata(params: dict[str, Any]) -> dict[str, Any]:
+def _runtime_evidence_metadata(
+    params: dict[str, Any],
+    *,
+    audit_store: AuditStore | None = None,
+    principal: Principal | None = None,
+) -> dict[str, Any]:
     evidence_type = params.get("evidence_type")
     if evidence_type == "sdk_dry_run_executor_stub":
-        return _sdk_dry_run_executor_runtime_evidence(params)
+        return _sdk_dry_run_executor_runtime_evidence(
+            params,
+            audit_store=audit_store,
+            principal=principal,
+        )
     report_name = params.get("report_name")
     if not isinstance(report_name, str) or not report_name:
         return {
@@ -2141,14 +2161,31 @@ def _runtime_evidence_metadata(params: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _sdk_dry_run_executor_runtime_evidence(params: dict[str, Any]) -> dict[str, Any]:
+def _sdk_dry_run_executor_runtime_evidence(
+    params: dict[str, Any],
+    *,
+    audit_store: AuditStore | None = None,
+    principal: Principal | None = None,
+) -> dict[str, Any]:
     approval_id = params.get("approval_id")
     method = params.get("method")
+    audit_id = params.get("audit_id")
+    receipt = _sdk_dry_run_receipt_from_audit(
+        audit_store,
+        approval_id=approval_id if isinstance(approval_id, str) else None,
+        method=method if isinstance(method, str) else None,
+        audit_id=audit_id if isinstance(audit_id, str) else None,
+        tenant_id=principal.tenant_id if principal else None,
+    )
     return {
         "evidence_type": "sdk_dry_run_executor_stub",
         "available": True,
+        "receipt_available": receipt is not None,
+        "receipt_persisted": receipt is not None,
+        "receipt": receipt,
         "approval_id": approval_id if isinstance(approval_id, str) and approval_id else None,
         "method": method if isinstance(method, str) and method else None,
+        "audit_id": audit_id if isinstance(audit_id, str) and audit_id else None,
         "status_vocabulary": [
             "blocked_before_dry_run_executor",
             "dry_run_planned",
@@ -2174,6 +2211,7 @@ def _sdk_dry_run_executor_runtime_evidence(params: dict[str, Any]) -> dict[str, 
             "resource_type": "sdk_write_runner",
             "control_plane_method": "runtime/evidence/read",
             "query_keys": ["approval_id", "method", "trace_id", "audit_id"],
+            "receipt_persisted": receipt is not None,
         },
         "control_plane_readback": {
             "method": "runtime/evidence/read",
@@ -2181,6 +2219,7 @@ def _sdk_dry_run_executor_runtime_evidence(params: dict[str, Any]) -> dict[str, 
                 "evidence_type": "sdk_dry_run_executor_stub",
                 "approval_id": approval_id,
                 "method": method,
+                "audit_id": audit_id,
             },
             "endpoint": "/api/v1/control-plane/invoke",
         },
@@ -2195,11 +2234,50 @@ def _sdk_dry_run_executor_runtime_evidence(params: dict[str, Any]) -> dict[str, 
             "channel_mutation_performed": False,
         },
         "known_limits": [
-            "This runtime evidence describes the dry-run executor receipt contract only.",
-            "It does not read a persisted execution receipt yet.",
+            "This runtime evidence reads SDK dry-run executor receipts persisted in the audit log.",
+            "It does not execute or replay the recorded receipt.",
             "Concrete owner-approved write execution remains disabled.",
         ],
     }
+
+
+def _sdk_dry_run_receipt_from_audit(
+    audit_store: AuditStore | None,
+    *,
+    approval_id: str | None,
+    method: str | None,
+    audit_id: str | None,
+    tenant_id: str | None,
+) -> dict[str, Any] | None:
+    if audit_store is None:
+        return None
+    records = audit_store.list(
+        limit=200,
+        tenant_id=tenant_id,
+        action="sdk.write_runner.dry_run_planned",
+        resource_type="sdk_write_runner",
+        outcome="planned",
+    )
+    for record in records:
+        if audit_id and getattr(record, "id", None) != audit_id:
+            continue
+        if method and getattr(record, "resource_id", None) != method:
+            continue
+        details = getattr(record, "details", {}) or {}
+        if approval_id and details.get("approval_id") != approval_id:
+            continue
+        receipt = details.get("receipt")
+        if not isinstance(receipt, dict):
+            continue
+        return {
+            **_jsonable(receipt),
+            "audit_id": getattr(record, "id", receipt.get("audit_id")),
+            "audit_created_at": _jsonable(getattr(record, "created_at", None)),
+            "audit_hash": getattr(record, "hash", None),
+            "audit_signature_present": bool(getattr(record, "signature", None)),
+            "receipt_persisted": details.get("receipt_persisted") is True,
+        }
+    return None
 
 
 def _audit(

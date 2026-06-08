@@ -6,10 +6,11 @@ import pytest
 from fastapi.testclient import TestClient
 
 from backend.app.core.approvals import ApprovalDecisionRequest, ApprovalStore
+from backend.app.core.audit import AuditStore
 from backend.app.core.contracts import AgentRunResponse, RiskLevel, RunContext, RunStatus
 from backend.app.core.runs import RunStore
 from backend.app.core.tracing import TraceStore
-from backend.app.dependencies import get_approval_store, get_run_store, get_trace_store
+from backend.app.dependencies import get_approval_store, get_audit_store, get_run_store, get_trace_store
 from backend.app.main import app
 from backend.app.sdk import ControlPlaneSDK
 
@@ -23,11 +24,14 @@ def _client_with_stores(
     run_store: RunStore,
     trace_store: TraceStore,
     approval_store: ApprovalStore,
+    audit_store: AuditStore | None = None,
 ):
     previous = dict(app.dependency_overrides)
     app.dependency_overrides[get_run_store] = lambda: run_store
     app.dependency_overrides[get_trace_store] = lambda: trace_store
     app.dependency_overrides[get_approval_store] = lambda: approval_store
+    if audit_store is not None:
+        app.dependency_overrides[get_audit_store] = lambda: audit_store
     try:
         yield TestClient(app, headers={"x-api-key": "bootstrap"})
     finally:
@@ -178,8 +182,8 @@ def test_sdk_control_plane_stub_accepts_thread_start_envelope_without_mutation()
     assert response.status_code == 200
     payload = response.json()
     assert payload["ok"] is False
-    assert payload["status"] == "sdk_runtime_evidence_readback_ready"
-    assert payload["sdk"]["status"] == "sdk_runtime_evidence_readback_ready"
+    assert payload["status"] == "sdk_dry_run_receipt_persistence_ready"
+    assert payload["sdk"]["status"] == "sdk_dry_run_receipt_persistence_ready"
     assert payload["sdk"]["method"] == "thread/start"
     assert payload["sdk"]["dry_run"] is False
     assert payload["sdk"]["idempotency_key_present"] is True
@@ -237,6 +241,7 @@ def test_sdk_control_plane_stub_accepts_thread_start_envelope_without_mutation()
 
 def test_sdk_control_plane_stub_reads_approved_execution_adapter_contract_without_mutation() -> None:
     approval_store = ApprovalStore()
+    audit_store = AuditStore(hmac_secret="test-secret")
     context = RunContext(
         trace_id="trace-sdk-approved",
         tenant_id="default",
@@ -264,7 +269,7 @@ def test_sdk_control_plane_stub_reads_approved_execution_adapter_contract_withou
         dry_run=False,
     )
 
-    with _client_with_stores(RunStore(), TraceStore(), approval_store) as client:
+    with _client_with_stores(RunStore(), TraceStore(), approval_store, audit_store) as client:
         response = client.post(
             "/api/v1/control-plane/sdk/invoke",
             json=contract.to_dict(),
@@ -273,8 +278,8 @@ def test_sdk_control_plane_stub_reads_approved_execution_adapter_contract_withou
     assert response.status_code == 200
     payload = response.json()
     assert payload["ok"] is False
-    assert payload["status"] == "sdk_runtime_evidence_readback_ready"
-    assert payload["sdk"]["status"] == "sdk_runtime_evidence_readback_ready"
+    assert payload["status"] == "sdk_dry_run_receipt_persistence_ready"
+    assert payload["sdk"]["status"] == "sdk_dry_run_receipt_persistence_ready"
     assert payload["sdk"]["approval_intent"]["created"] is False
     assert payload["sdk"]["approval_intent"]["approval_id"] == approval.id
     adapter = payload["sdk"]["execution_adapter_contract"]
@@ -306,6 +311,8 @@ def test_sdk_control_plane_stub_reads_approved_execution_adapter_contract_withou
     assert stub["available"] is True
     assert stub["audit_event_recorded"] is True
     assert stub["audit_action"] == "sdk.write_runner.dry_run_planned"
+    assert stub["receipt_persisted"] is True
+    assert stub["receipt_readback_method"] == "runtime/evidence/read"
     assert stub["receipt"]["status"] == "dry_run_planned"
     assert stub["receipt"]["audit_id"] == stub["audit_id"]
     assert stub["receipt"]["runner_invoked"] is False
@@ -313,6 +320,11 @@ def test_sdk_control_plane_stub_reads_approved_execution_adapter_contract_withou
     assert stub["mutation_performed"] is False
     assert approval_store.pending_count() == 0
     assert approval_store.get(approval.id).status == "approved"
+    audit_records = audit_store.list(action="sdk.write_runner.dry_run_planned")
+    assert len(audit_records) == 1
+    assert audit_records[0].details["approval_id"] == approval.id
+    assert audit_records[0].details["receipt_persisted"] is True
+    assert audit_records[0].details["receipt"]["audit_id"] == audit_records[0].id
 
 
 def test_sdk_control_plane_stub_can_read_thread_through_existing_contract() -> None:
@@ -330,8 +342,8 @@ def test_sdk_control_plane_stub_can_read_thread_through_existing_contract() -> N
     assert response.status_code == 200
     payload = response.json()
     assert payload["ok"] is True
-    assert payload["status"] == "sdk_runtime_evidence_readback_ready"
-    assert payload["sdk"]["status"] == "sdk_runtime_evidence_readback_ready"
+    assert payload["status"] == "sdk_dry_run_receipt_persistence_ready"
+    assert payload["sdk"]["status"] == "sdk_dry_run_receipt_persistence_ready"
     assert payload["sdk"]["method"] == "thread/read"
     assert payload["sdk"]["owner_gate_required"] is False
     assert payload["sdk"]["approval_intent"]["required"] is False
@@ -371,7 +383,7 @@ def test_sdk_control_plane_stub_reads_runtime_evidence_through_read_only_runner(
     assert response.status_code == 200
     payload = response.json()
     assert payload["ok"] is True
-    assert payload["status"] == "sdk_runtime_evidence_readback_ready"
+    assert payload["status"] == "sdk_dry_run_receipt_persistence_ready"
     assert payload["sdk"]["method"] == "runtime/evidence/read"
     runner = payload["sdk"]["read_only_runner_contract"]
     assert runner["available"] is True
@@ -384,32 +396,76 @@ def test_sdk_control_plane_stub_reads_runtime_evidence_through_read_only_runner(
     assert approval_store.pending_count() == 0
 
 
-def test_sdk_control_plane_stub_reads_dry_run_executor_runtime_evidence_contract() -> None:
+def test_sdk_control_plane_stub_reads_persisted_dry_run_executor_runtime_evidence() -> None:
     approval_store = ApprovalStore()
+    audit_store = AuditStore(hmac_secret="test-secret")
+    context = RunContext(
+        trace_id="trace-sdk-receipt-readback",
+        tenant_id="default",
+        user_id="operator",
+        request_id="req-sdk-receipt-readback",
+    )
+    approval = approval_store.create_approval(
+        context=context,
+        resource_type="command",
+        resource_id="sdk:turn/start",
+        action="command.execute",
+        risk_level=RiskLevel.HIGH,
+        reason="Owner approved SDK dry-run receipt persistence.",
+        arguments_preview={"method": "turn/start", "adapter_execution_enabled": False},
+    )
+    approval_store.approve(
+        approval.id,
+        ApprovalDecisionRequest(decided_by="owner", reason="receipt readback accepted"),
+    )
+    write_contract = ControlPlaneSDK(default_tenant_id="default", default_user_id="operator").run_turn(
+        "thread-1",
+        "continue",
+        idempotency_key="sdk-receipt-1",
+        approved_approval_id=approval.id,
+        dry_run=False,
+    )
     contract = ControlPlaneSDK(default_tenant_id="default", default_user_id="operator").read_runtime_evidence(
         "sdk-dry-run-executor-stub.json",
         evidence_type="sdk_dry_run_executor_stub",
-        approval_id="approval-1",
+        approval_id=approval.id,
         method="turn/start",
     )
 
-    with _client_with_stores(RunStore(), TraceStore(), approval_store) as client:
+    with _client_with_stores(RunStore(), TraceStore(), approval_store, audit_store) as client:
+        write_response = client.post(
+            "/api/v1/control-plane/sdk/invoke",
+            json=write_contract.to_dict(),
+        )
         response = client.post(
             "/api/v1/control-plane/sdk/invoke",
             json=contract.to_dict(),
         )
 
+    assert write_response.status_code == 200
+    write_payload = write_response.json()
+    assert write_payload["sdk"]["dry_run_executor_stub"]["receipt_persisted"] is True
     assert response.status_code == 200
     payload = response.json()
     assert payload["ok"] is True
-    assert payload["status"] == "sdk_runtime_evidence_readback_ready"
+    assert payload["status"] == "sdk_dry_run_receipt_persistence_ready"
     evidence = payload["control_plane"]["result"]["evidence"]
     assert evidence["evidence_type"] == "sdk_dry_run_executor_stub"
     assert evidence["available"] is True
-    assert evidence["approval_id"] == "approval-1"
+    assert evidence["approval_id"] == approval.id
     assert evidence["method"] == "turn/start"
+    assert evidence["receipt_available"] is True
+    assert evidence["receipt_persisted"] is True
+    assert evidence["receipt"]["approval_id"] == approval.id
+    assert evidence["receipt"]["method"] == "turn/start"
+    assert evidence["receipt"]["status"] == "dry_run_planned"
+    assert evidence["receipt"]["runner_invoked"] is False
+    assert evidence["receipt"]["mutation_performed"] is False
+    assert evidence["receipt"]["receipt_persisted"] is True
+    assert evidence["receipt"]["audit_signature_present"] is True
     assert evidence["receipt_schema"]["status"] == "dry_run_planned"
     assert evidence["audit_readback"]["action"] == "sdk.write_runner.dry_run_planned"
+    assert evidence["audit_readback"]["receipt_persisted"] is True
     assert evidence["safety"]["runner_invoked"] is False
     assert evidence["safety"]["mutation_performed"] is False
 
