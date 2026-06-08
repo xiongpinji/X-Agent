@@ -43,6 +43,7 @@ READY_XAGENT_STATUSES = frozenset(
         "governance_lifecycle_report_ready",
         "github_review_action_report_ready",
         "partial",
+        "sdk_backend_stub_ready",
         "sdk_noninteractive_contract_ready",
         "domestic_feishu_first",
     }
@@ -57,6 +58,7 @@ NEXT_TASK_DONE_STATUSES = frozenset(
         "durable_thread_contract_ready",
         "governance_lifecycle_report_ready",
         "github_review_action_report_ready",
+        "sdk_backend_stub_ready",
         "sdk_noninteractive_contract_ready",
     }
 )
@@ -195,7 +197,7 @@ def build_evidence_specs(root: Path = ROOT, report_dir: Path = REPORT_DIR) -> tu
             "sdk_noninteractive_report",
             report_dir / "sdk-noninteractive-report.json",
             "runtime_report",
-            expected_statuses=frozenset({"sdk_noninteractive_contract_ready"}),
+            expected_statuses=frozenset({"sdk_noninteractive_contract_ready", "sdk_backend_stub_ready"}),
             expected_evidence_type="sdk_noninteractive_cli_contract",
         ),
         AlignmentEvidenceSpec(
@@ -489,7 +491,7 @@ def _capabilities() -> list[CodexAlignmentCapability]:
             capability="cli_and_programmatic_sdk",
             codex_surface="Codex CLI, non-interactive mode, and Codex SDK",
             priority="P1",
-            xagent_status="sdk_noninteractive_contract_ready",
+            xagent_status="sdk_backend_stub_ready",
             evidence=[
                 "sdk_noninteractive_report",
                 "sdk_contract_module",
@@ -499,14 +501,15 @@ def _capabilities() -> list[CodexAlignmentCapability]:
                 "sdk_noninteractive_tests",
                 "cli_commands_tests",
                 "control_plane_protocol",
+                "control_plane_protocol_tests",
             ],
-            next_task="Implement real SDK HTTP adapters and long-running non-interactive execution after the contract report is reviewed.",
-            acceptance_command="python scripts\\sdk_noninteractive_report.py && python -m pytest tests/test_xagent_sdk_contract.py tests/test_sdk_noninteractive_report.py tests/test_cli_commands.py -o addopts=\"\" -p no:cov -p no:cacheprovider -q",
+            next_task="Implement real SDK HTTP adapters and long-running non-interactive execution after the backend stub is reviewed.",
+            acceptance_command="python scripts\\sdk_noninteractive_report.py && python -m pytest tests/test_xagent_sdk_contract.py tests/test_sdk_noninteractive_report.py tests/test_cli_commands.py tests/test_control_plane_protocol.py -o addopts=\"\" -p no:cov -p no:cacheprovider -q",
             official_sources=[
                 "https://developers.openai.com/codex/noninteractive",
                 "https://developers.openai.com/codex/sdk",
             ],
-            rationale="X-Agent now exposes SDK-style thread start/resume/run/read envelopes and non-interactive CLI JSON output over the control-plane contract; real HTTP execution remains a future owner-gated adapter.",
+            rationale="X-Agent now exposes SDK-style thread start/resume/run/read envelopes, non-interactive CLI JSON output, and an owner-gated backend SDK invoke stub over the control-plane contract; real HTTP execution remains a future adapter.",
         ),
         CodexAlignmentCapability(
             capability="slack_to_domestic_channel_strategy",

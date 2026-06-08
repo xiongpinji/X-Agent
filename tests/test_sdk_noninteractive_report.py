@@ -16,7 +16,7 @@ def test_sdk_noninteractive_report_default_is_read_only() -> None:
     report = build_sdk_noninteractive_report()
     payload = report.to_dict()
 
-    assert report.status == "sdk_noninteractive_contract_ready"
+    assert report.status == "sdk_backend_stub_ready"
     assert report.evidence_type == "sdk_noninteractive_cli_contract"
     assert report.full_codex_parity_claimed is False
     assert report.dry_run is True
@@ -35,6 +35,19 @@ def test_sdk_noninteractive_report_covers_sdk_and_cli_methods() -> None:
     assert command_methods == methods
     assert all(item["request"]["context"]["non_interactive"] is True for item in report.sdk_contracts)
     assert all(item["request"]["mutation_performed"] is False for item in report.sdk_contracts)
+
+
+def test_sdk_noninteractive_report_covers_owner_gated_backend_stub() -> None:
+    stub = build_sdk_noninteractive_report().backend_stub
+
+    assert stub["endpoint"] == "/api/v1/control-plane/sdk/invoke"
+    assert stub["normalizes_to"] == "/api/v1/control-plane/invoke"
+    assert stub["approval_subject_type"] == "command"
+    assert stub["owner_gate_required"] is True
+    assert stub["admin_policy_required"] is True
+    assert stub["audit_required"] is True
+    assert stub["adapter_execution_enabled"] is False
+    assert stub["mutation_performed"] is False
 
 
 def test_sdk_noninteractive_report_keeps_feishu_first_channel_strategy() -> None:
@@ -57,7 +70,7 @@ def test_write_sdk_noninteractive_report_json_and_markdown(tmp_path: Path) -> No
 
     payload = json.loads(json_output.read_text(encoding="utf-8"))
     markdown = markdown_output.read_text(encoding="utf-8")
-    assert payload["status"] == "sdk_noninteractive_contract_ready"
+    assert payload["status"] == "sdk_backend_stub_ready"
     assert payload["full_codex_parity_claimed"] is False
     assert payload["mutation_performed"] is False
     assert "# X-Agent SDK Non-Interactive Report" in markdown

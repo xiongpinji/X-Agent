@@ -244,6 +244,27 @@ Expected: selected approval and sandbox tests pass.
 - [x] Keep Slack non-blocking for the domestic first version.
 - [ ] Implement real SDK HTTP adapters and long-running non-interactive execution after the contract report is reviewed.
 
+### Task 10: SDK Backend Stub And Control-Plane Binding
+
+**Target:** Accept SDK/non-interactive envelopes through the backend control-plane without enabling real execution.
+
+**Files:**
+- Modify: `backend/app/api/control_plane.py`
+- Modify: `scripts/sdk_noninteractive_report.py`
+- Modify: `tests/test_control_plane_protocol.py`
+- Modify: `tests/test_sdk_noninteractive_report.py`
+- Modify: `scripts/latest_codex_alignment.py`
+- Modify: `tests/test_latest_codex_alignment.py`
+- Runtime evidence: `.xagent_runtime/reports/sdk-noninteractive-report.json`
+- Runtime evidence: `.xagent_runtime/reports/sdk-noninteractive-report.md`
+
+- [x] Add `/api/v1/control-plane/sdk/invoke` backend stub.
+- [x] Normalize SDK envelopes into `/api/v1/control-plane/invoke`.
+- [x] Preserve SDK `dry_run`, `idempotency_key`, `sdk_surface`, and `non_interactive` metadata.
+- [x] Bind SDK execution intent to the approval/sandbox/admin contract as an owner-gated `command` subject.
+- [x] Keep agent runner invocation, channel send, file mutation, and network mutation disabled.
+- [ ] Implement real SDK HTTP adapters and long-running non-interactive execution after backend stub review.
+
 ## Completion Criteria
 
 - `scripts/latest_codex_alignment.py` returns `latest_codex_alignment_plan_ready`.

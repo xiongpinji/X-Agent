@@ -43,6 +43,7 @@ class SDKNonInteractiveReport:
     owner_gate_required: bool
     sdk_contracts: list[dict[str, Any]]
     cli_commands: list[dict[str, Any]]
+    backend_stub: dict[str, Any]
     channel_strategy: dict[str, Any]
     checks: list[SDKNonInteractiveCheck]
     official_sources: list[str]
@@ -107,6 +108,7 @@ def _channel_strategy() -> dict[str, Any]:
 def _build_checks(report_payload: dict[str, Any]) -> list[SDKNonInteractiveCheck]:
     contracts = report_payload["sdk_contracts"]
     commands = report_payload["cli_commands"]
+    backend_stub = report_payload["backend_stub"]
     methods = [contract["request"]["method"] for contract in contracts]
     command_methods = [command["method"] for command in commands]
     mutating = [
@@ -138,6 +140,19 @@ def _build_checks(report_payload: dict[str, Any]) -> list[SDKNonInteractiveCheck
             error=None if not mutating else "one or more SDK contracts performed mutation",
         ),
         SDKNonInteractiveCheck(
+            name="backend_stub_owner_gated",
+            status="passed"
+            if backend_stub.get("endpoint") == "/api/v1/control-plane/sdk/invoke"
+            and backend_stub.get("adapter_execution_enabled") is False
+            and backend_stub.get("mutation_performed") is False
+            and backend_stub.get("approval_subject_type") == "command"
+            else "failed",
+            details=backend_stub,
+            error=None
+            if backend_stub.get("endpoint") == "/api/v1/control-plane/sdk/invoke"
+            else "SDK backend stub endpoint is missing",
+        ),
+        SDKNonInteractiveCheck(
             name="feishu_domestic_v1_primary",
             status="passed"
             if report_payload["channel_strategy"].get("domestic_v1_primary") == "feishu"
@@ -161,7 +176,7 @@ def _build_checks(report_payload: dict[str, Any]) -> list[SDKNonInteractiveCheck
 
 def build_sdk_noninteractive_report() -> SDKNonInteractiveReport:
     report_payload: dict[str, Any] = {
-        "status": "sdk_noninteractive_contract_ready",
+        "status": "sdk_backend_stub_ready",
         "generated_at": _utc_now(),
         "evidence_type": "sdk_noninteractive_cli_contract",
         "full_codex_parity_claimed": False,
@@ -171,11 +186,24 @@ def build_sdk_noninteractive_report() -> SDKNonInteractiveReport:
         "owner_gate_required": True,
         "sdk_contracts": _sdk_contracts(),
         "cli_commands": _cli_commands(),
+        "backend_stub": {
+            "endpoint": "/api/v1/control-plane/sdk/invoke",
+            "normalizes_to": "/api/v1/control-plane/invoke",
+            "status": "sdk_backend_stub_ready",
+            "approval_subject_type": "command",
+            "owner_gate_required": True,
+            "admin_policy_required": True,
+            "audit_required": True,
+            "adapter_execution_enabled": False,
+            "mutation_performed": False,
+            "network_mutation_performed": False,
+        },
         "channel_strategy": _channel_strategy(),
         "official_sources": list(CODEX_SDK_SOURCES),
         "known_limits": [
-            "This report builds SDK and CLI envelopes only; it does not call the control-plane API.",
+            "The backend SDK endpoint accepts envelopes and normalizes them into the control-plane contract.",
             "The --execute CLI flag marks intent in the envelope; adapter execution remains owner-gated.",
+            "No SDK HTTP adapter, agent runner, file mutation, channel send, or network mutation is enabled.",
             "Feishu remains the only domestic V1 pilot channel in this contract.",
             "Slack is tracked as a Codex reference surface, but it is non-blocking for the domestic first version.",
             "Full Codex SDK, CLI, or integrations parity is not claimed.",
@@ -208,6 +236,10 @@ def render_markdown_report(report: SDKNonInteractiveReport) -> str:
         f"{contracts}\n\n"
         "## CLI Commands\n\n"
         f"{commands}\n\n"
+        "## Backend Stub\n\n"
+        f"- Endpoint: `{report.backend_stub['endpoint']}`\n"
+        f"- Normalizes to: `{report.backend_stub['normalizes_to']}`\n"
+        f"- Adapter execution enabled: `{report.backend_stub['adapter_execution_enabled']}`\n\n"
         "## Channel Strategy\n\n"
         f"- Domestic V1 primary: `{report.channel_strategy['domestic_v1_primary']}`\n"
         f"- Telegram required: `{report.channel_strategy['telegram_required']}`\n"
@@ -255,7 +287,7 @@ def main() -> int:
         print(f"- {check.name}: {check.status}")
         if check.error:
             print(f"  error: {check.error}")
-    return 0 if report.status == "sdk_noninteractive_contract_ready" else 1
+    return 0 if report.status == "sdk_backend_stub_ready" else 1
 
 
 if __name__ == "__main__":

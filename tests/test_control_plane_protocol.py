@@ -11,6 +11,7 @@ from backend.app.core.runs import RunStore
 from backend.app.core.tracing import TraceStore
 from backend.app.dependencies import get_approval_store, get_run_store, get_trace_store
 from backend.app.main import app
+from backend.app.sdk import ControlPlaneSDK
 
 
 def _client() -> TestClient:
@@ -158,6 +159,58 @@ def test_control_plane_mutating_method_is_adapter_gated_without_mutation() -> No
     assert payload["error"]["details"]["requires_approval"] is True
     assert payload["error"]["details"]["mutation_performed"] is False
     assert payload["evidence"]["audit_id"]
+
+
+def test_sdk_control_plane_stub_accepts_thread_start_envelope_without_mutation() -> None:
+    contract = ControlPlaneSDK(default_tenant_id="tenant-a", default_user_id="operator").start_thread(
+        "ship sdk backend stub",
+        idempotency_key="sdk-stub-1",
+        dry_run=False,
+    )
+
+    response = _client().post(
+        "/api/v1/control-plane/sdk/invoke",
+        json=contract.to_dict(),
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["ok"] is False
+    assert payload["status"] == "sdk_backend_stub_ready"
+    assert payload["sdk"]["method"] == "thread/start"
+    assert payload["sdk"]["dry_run"] is False
+    assert payload["sdk"]["idempotency_key_present"] is True
+    assert payload["sdk"]["mutation_performed"] is False
+    assert payload["sdk"]["network_mutation_performed"] is False
+    assert payload["sdk"]["adapter_execution_enabled"] is False
+    assert payload["sdk"]["approval_sandbox_admin"]["subject_type"] == "command"
+    assert payload["sdk"]["approval_sandbox_admin"]["owner_gate_required"] is True
+    assert payload["control_plane"]["error"]["code"] == "adapter_pending"
+    assert payload["control_plane"]["error"]["details"]["sdk"]["non_interactive"] is True
+    assert payload["control_plane"]["error"]["details"]["thread_operation"]["operation"] == "start"
+    assert payload["evidence"]["audit_id"]
+
+
+def test_sdk_control_plane_stub_can_read_thread_through_existing_contract() -> None:
+    contract = ControlPlaneSDK(default_tenant_id="default", default_user_id="operator").read_thread(
+        "trace-demo"
+    )
+
+    response = _client().post(
+        "/api/v1/control-plane/sdk/invoke",
+        json=contract.to_dict(),
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["ok"] is True
+    assert payload["status"] == "sdk_backend_stub_ready"
+    assert payload["sdk"]["method"] == "thread/read"
+    assert payload["sdk"]["owner_gate_required"] is False
+    assert payload["sdk"]["mutation_performed"] is False
+    assert payload["control_plane"]["result"]["contract"]["dry_run"] is True
+    assert payload["control_plane"]["result"]["compatibility"]["sdk_surface"] == "python"
+    assert payload["control_plane"]["result"]["compatibility"]["non_interactive"] is True
 
 
 def test_control_plane_rejects_raw_secret_payloads() -> None:

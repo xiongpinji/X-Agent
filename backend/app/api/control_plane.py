@@ -11,6 +11,8 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict, Field
 
 from backend.app.core.audit import AuditStore
+from backend.app.core.approvals import APPROVAL_SUBJECT_ACTIONS, ApprovalSubjectType
+from backend.app.core.sandbox.security import get_enterprise_safety_policy
 from backend.app.core.security import Principal
 from backend.app.dependencies import (
     enforce_scope,
@@ -572,8 +574,12 @@ class ControlPlaneContext(BaseModel):
 
     tenant_id: str | None = None
     actor_id: str | None = None
+    user_id: str | None = None
     workspace_id: str | None = None
     trace_id: str | None = None
+    sdk_surface: str | None = None
+    sdk_operation: str | None = None
+    non_interactive: bool | None = None
 
 
 class ControlPlaneInvokeRequest(BaseModel):
@@ -581,6 +587,23 @@ class ControlPlaneInvokeRequest(BaseModel):
     method: str = Field(..., min_length=1, max_length=160)
     params: dict[str, Any] = Field(default_factory=dict)
     context: ControlPlaneContext = Field(default_factory=ControlPlaneContext)
+    idempotency_key: str | None = Field(default=None, max_length=240)
+    dry_run: bool = True
+
+
+class SDKControlPlaneInvokeRequest(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    operation: str | None = Field(default=None, max_length=160)
+    request: ControlPlaneInvokeRequest | None = None
+    id: str = Field(default_factory=lambda: f"sdk_req_{uuid4().hex}")
+    method: str | None = Field(default=None, min_length=1, max_length=160)
+    params: dict[str, Any] = Field(default_factory=dict)
+    context: ControlPlaneContext = Field(default_factory=ControlPlaneContext)
+    idempotency_key: str | None = Field(default=None, max_length=240)
+    dry_run: bool = True
+    mutation_performed: bool = False
+    network_mutation_performed: bool = False
 
 
 class ControlPlaneError(BaseModel):
@@ -601,6 +624,15 @@ class ControlPlaneInvokeResponse(BaseModel):
     ok: bool
     result: dict[str, Any] | None = None
     error: ControlPlaneError | None = None
+    evidence: ControlPlaneEvidence
+
+
+class SDKControlPlaneInvokeResponse(BaseModel):
+    id: str
+    ok: bool
+    status: str
+    sdk: dict[str, Any]
+    control_plane: ControlPlaneInvokeResponse
     evidence: ControlPlaneEvidence
 
 
@@ -771,6 +803,134 @@ async def invoke_control_plane(
     )
 
 
+@router.post("/sdk/invoke", response_model=SDKControlPlaneInvokeResponse)
+async def invoke_sdk_control_plane(
+    request: SDKControlPlaneInvokeRequest,
+    principal: PrincipalDependency,
+    audit_store: AuditStoreDependency,
+    run_store: RunStoreDependency,
+    trace_store: TraceStoreDependency,
+    approval_store: ApprovalStoreDependency,
+) -> SDKControlPlaneInvokeResponse:
+    """Accept SDK envelopes without enabling adapter execution."""
+    control_request = _sdk_control_plane_request(request)
+    control_response = await invoke_control_plane(
+        control_request,
+        principal,
+        audit_store,
+        run_store,
+        trace_store,
+        approval_store,
+    )
+    sdk_metadata = _sdk_backend_stub_metadata(request, control_request, control_response)
+    return SDKControlPlaneInvokeResponse(
+        id=control_request.id,
+        ok=control_response.ok,
+        status=sdk_metadata["status"],
+        sdk=sdk_metadata,
+        control_plane=control_response,
+        evidence=control_response.evidence,
+    )
+
+
+def _sdk_control_plane_request(request: SDKControlPlaneInvokeRequest) -> ControlPlaneInvokeRequest:
+    if request.request is not None:
+        payload = request.request
+        context = payload.context.model_copy(
+            update={
+                "sdk_surface": payload.context.sdk_surface or request.context.sdk_surface or "python",
+                "sdk_operation": payload.context.sdk_operation or request.operation,
+                "non_interactive": True
+                if payload.context.non_interactive is None
+                else payload.context.non_interactive,
+            }
+        )
+        return payload.model_copy(
+            update={
+                "context": context,
+                "idempotency_key": payload.idempotency_key or request.idempotency_key,
+                "dry_run": payload.dry_run and request.dry_run,
+            }
+        )
+    if not request.method:
+        return ControlPlaneInvokeRequest(
+            id=request.id,
+            method="sdk/missing-method",
+            params=request.params,
+            context=request.context.model_copy(
+                update={
+                    "sdk_surface": request.context.sdk_surface or "python",
+                    "sdk_operation": request.operation,
+                    "non_interactive": True,
+                }
+            ),
+            idempotency_key=request.idempotency_key,
+            dry_run=request.dry_run,
+        )
+    return ControlPlaneInvokeRequest(
+        id=request.id,
+        method=request.method,
+        params=request.params,
+        context=request.context.model_copy(
+            update={
+                "sdk_surface": request.context.sdk_surface or "python",
+                "sdk_operation": request.operation,
+                "non_interactive": True,
+            }
+        ),
+        idempotency_key=request.idempotency_key,
+        dry_run=request.dry_run,
+    )
+
+
+def _sdk_backend_stub_metadata(
+    original: SDKControlPlaneInvokeRequest,
+    request: ControlPlaneInvokeRequest,
+    response: ControlPlaneInvokeResponse,
+) -> dict[str, Any]:
+    return {
+        "status": "sdk_backend_stub_ready",
+        "operation": request.context.sdk_operation or original.operation,
+        "method": request.method,
+        "sdk_surface": request.context.sdk_surface or "python",
+        "non_interactive": request.context.non_interactive is not False,
+        "dry_run": request.dry_run,
+        "idempotency_key_present": bool(request.idempotency_key),
+        "owner_gate_required": request.method != "thread/read",
+        "mutation_performed": False,
+        "network_mutation_performed": False,
+        "adapter_execution_enabled": False,
+        "approval_sandbox_admin": _sdk_approval_sandbox_admin_contract(request),
+        "control_plane_ok": response.ok,
+        "control_plane_error_code": response.error.code if response.error else None,
+        "known_limits": [
+            "This endpoint accepts SDK envelopes and normalizes them into the control-plane contract.",
+            "No SDK HTTP adapter execution, agent runner invocation, channel send, file change, or network mutation is enabled.",
+            "Write methods remain owner-gated behind the approval/sandbox/admin contract.",
+            "Feishu remains the only domestic V1 pilot channel.",
+        ],
+    }
+
+
+def _sdk_approval_sandbox_admin_contract(request: ControlPlaneInvokeRequest) -> dict[str, Any]:
+    subject_type = ApprovalSubjectType.COMMAND
+    policy = get_enterprise_safety_policy(subject_type)
+    return {
+        "subject_type": subject_type.value,
+        "action": APPROVAL_SUBJECT_ACTIONS[subject_type],
+        "sandbox_profile": policy.default_sandbox_profile if policy else "command_locked",
+        "minimum_risk_level": policy.minimum_risk_level.value if policy else "high",
+        "owner_gate_required": True,
+        "admin_policy_required": True if policy is None else policy.admin_policy_required,
+        "audit_required": True if policy is None else policy.audit_required,
+        "blocked_without_approval": True if policy is None else policy.blocked_without_approval,
+        "adapter_execution_enabled": False,
+        "mutation_performed": False,
+        "decision_types": list(policy.allowed_decision_types) if policy else [],
+        "method": request.method,
+    }
+
+
 def _contract_result(
     spec: ControlPlaneMethodSpec,
     request: ControlPlaneInvokeRequest,
@@ -786,6 +946,8 @@ def _contract_result(
             "id": request.id,
             "method": request.method,
             "status_vocabulary": list(STATUS_VOCABULARY),
+            "dry_run": request.dry_run,
+            "idempotency_key_present": bool(request.idempotency_key),
             "mutation_performed": False,
             "adapter_execution_enabled": False,
         },
@@ -795,6 +957,9 @@ def _contract_result(
             "item_id": request.params.get("item_id"),
             "trace_id": request.context.trace_id or request.params.get("trace_id"),
             "workspace_id": request.context.workspace_id,
+            "actor_id": request.context.actor_id or request.context.user_id,
+            "sdk_surface": request.context.sdk_surface,
+            "non_interactive": request.context.non_interactive,
         },
     }
     if spec.method == "thread/read":
@@ -842,9 +1007,21 @@ def _adapter_pending_details(
         "operation_kind": spec.operation_kind,
         "requires_approval": spec.requires_approval,
         "implementation_state": spec.implementation_state,
+        "dry_run": request.dry_run,
+        "idempotency_key_present": bool(request.idempotency_key),
         "mutation_performed": False,
     }
-    if spec.method in {"thread/fork", "thread/resume", "thread/rollback", "thread/compact"}:
+    if request.context.non_interactive is True or request.context.sdk_surface:
+        details["sdk"] = {
+            "operation": request.context.sdk_operation,
+            "surface": request.context.sdk_surface,
+            "non_interactive": True,
+            "owner_gate_required": spec.operation_kind != "read",
+            "adapter_execution_enabled": False,
+            "mutation_performed": False,
+            "approval_sandbox_admin": _sdk_approval_sandbox_admin_contract(request),
+        }
+    if spec.method in {"thread/start", "thread/fork", "thread/resume", "thread/rollback", "thread/compact", "turn/start"}:
         details["thread_operation"] = _thread_operation_metadata(
             spec,
             request,
