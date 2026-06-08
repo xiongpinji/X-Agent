@@ -305,6 +305,8 @@ class ControlPlaneSDK:
                 "write_runner_implementation_plan_enabled": False,
                 "runtime_smoke_runbook_contract": method not in self._READ_ONLY_METHODS,
                 "runtime_smoke_runbook_enabled": False,
+                "runtime_enablement_receipt_contract": method not in self._READ_ONLY_METHODS,
+                "runtime_enablement_receipt_enabled": False,
                 "runtime_flag_enabled": False,
                 "runner_invoked": False,
                 "agent_execution_enabled": False,
@@ -333,6 +335,7 @@ class ControlPlaneSDK:
                 "Runtime enablement review is declared but remains disabled by this SDK wrapper.",
                 "The concrete write-runner implementation plan is declared but remains disabled by this SDK wrapper.",
                 "Runtime smoke/runbook enablement is declared but remains disabled by this SDK wrapper.",
+                "Runtime enablement readiness receipt is declared but remains disabled by this SDK wrapper.",
                 "Feishu remains the first domestic V1 channel; no new channel send is performed.",
             ],
         )

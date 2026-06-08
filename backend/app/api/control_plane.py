@@ -907,6 +907,9 @@ async def invoke_sdk_control_plane(
     sdk_metadata["runtime_smoke_runbook"] = _sdk_runtime_smoke_runbook_contract(
         sdk_metadata["write_runner_implementation_plan"],
     )
+    sdk_metadata["runtime_enablement_receipt"] = _sdk_runtime_enablement_receipt_contract(
+        sdk_metadata["runtime_smoke_runbook"],
+    )
     return SDKControlPlaneInvokeResponse(
         id=control_request.id,
         ok=control_response.ok,
@@ -1119,7 +1122,7 @@ def _sdk_backend_stub_metadata(
     read_only_runner_contract = _sdk_read_only_runner_contract(original, request, response)
     write_runner_safety_contract = _sdk_write_runner_safety_contract(original, request, execution_adapter_contract)
     return {
-        "status": "sdk_runtime_smoke_runbook_contract_ready",
+        "status": "sdk_runtime_enablement_receipt_contract_ready",
         "operation": request.context.sdk_operation or original.operation,
         "method": request.method,
         "sdk_surface": request.context.sdk_surface or "python",
@@ -1153,6 +1156,7 @@ def _sdk_backend_stub_metadata(
             "Runtime feature flag and owner acceptance evidence recording/readback contracts are present and disabled by default.",
             "The concrete SDK write runner implementation plan is declared but remains disabled.",
             "Runtime enablement smoke, rollback, and failure receipt contracts are declared but remain disabled.",
+            "Runtime enablement readiness receipt is declared for owner review but remains disabled.",
             "No SDK HTTP adapter execution, agent runner invocation, channel send, file change, or network mutation is enabled.",
             "Write methods remain owner-gated behind the approval/sandbox/admin contract.",
             "Feishu remains the only domestic V1 pilot channel.",
@@ -2096,6 +2100,85 @@ def _sdk_runtime_smoke_runbook_contract(
             "This contract defines the runtime enablement smoke and rollback runbook only.",
             "The runtime feature flag is not read as permission here and remains disabled.",
             "No smoke command, runner invocation, approval execution marker, or mutation is performed.",
+        ],
+    }
+
+
+def _sdk_runtime_enablement_receipt_contract(
+    runtime_smoke_runbook: dict[str, Any],
+) -> dict[str, Any]:
+    checks = {
+        "runtime_smoke_runbook_ready_but_disabled": runtime_smoke_runbook.get("contract_status")
+        == "ready_but_disabled",
+        "smoke_requires_runtime_flag": runtime_smoke_runbook.get("smoke_plan", {}).get("requires_runtime_flag")
+        == "XAGENT_SDK_WRITE_RUNNER_ENABLED=true",
+        "failure_receipt_required": runtime_smoke_runbook.get("rollback_plan", {}).get("failure_receipt_required")
+        is True,
+        "runtime_flag_still_disabled": runtime_smoke_runbook.get("runtime_flag_enabled") is False,
+        "runner_not_invoked": runtime_smoke_runbook.get("runner_invoked") is False,
+        "mutation_still_disabled": runtime_smoke_runbook.get("mutation_performed") is False,
+    }
+    ready = all(checks.values())
+    return {
+        "available": runtime_smoke_runbook.get("available") is True,
+        "stage": "owner_approved_write_runner_runtime_enablement_receipt",
+        "receipt_status": "ready_but_disabled" if ready else "blocked",
+        "receipt_type": "sdk_write_runner_runtime_enablement_readiness",
+        "receipt_schema": {
+            "required_fields": [
+                "readiness_receipt_id",
+                "approval_id",
+                "owner_acceptance_id",
+                "runtime_flag_name",
+                "smoke_runbook_version",
+                "rollback_runbook_version",
+                "expires_at",
+                "accepted_by",
+                "acceptance_hash",
+            ],
+            "runtime_flag_name": "XAGENT_SDK_WRITE_RUNNER_ENABLED",
+            "expires_at_required": True,
+            "acceptance_hash_required": True,
+        },
+        "review_readback": {
+            "method": "runtime/evidence/read",
+            "evidence_type": "sdk_write_runner_runtime_enablement_readiness",
+            "query_keys": ["readiness_receipt_id", "approval_id", "owner_acceptance_id"],
+            "returns_schema": True,
+            "returns_record_if_present": True,
+        },
+        "owner_review_policy": {
+            "requires_smoke_runbook_acknowledged": True,
+            "requires_rollback_runbook_acknowledged": True,
+            "requires_failure_receipt_review": True,
+            "requires_expiry": True,
+            "revoke_command": "xagent sdk runtime-enable revoke <readiness_receipt_id>",
+        },
+        "audit_contract": {
+            "planned_action": "sdk.write_runner.runtime_enablement_receipt_ready",
+            "future_record_action": "sdk.write_runner.runtime_enablement_receipt_recorded",
+            "future_revoke_action": "sdk.write_runner.runtime_enablement_receipt_revoked",
+            "resource_type": "sdk_write_runner_runtime_enablement_readiness",
+        },
+        "checks": checks,
+        "next_gate": "owner_approved_write_runner_runtime_implementation",
+        "implementation_enabled": False,
+        "runtime_flag_enabled": False,
+        "execute_enabled": False,
+        "write_runner_enabled": False,
+        "adapter_execution_enabled": False,
+        "agent_execution_enabled": False,
+        "write_execution_enabled": False,
+        "runner_invoked": False,
+        "mark_executed": False,
+        "mutation_performed": False,
+        "network_mutation_performed": False,
+        "file_mutation_performed": False,
+        "channel_mutation_performed": False,
+        "known_limits": [
+            "This contract defines a readiness receipt schema and review policy only.",
+            "No readiness receipt is recorded by /sdk/invoke.",
+            "The runtime flag, runner invocation, approval execution marker, and all mutations remain disabled.",
         ],
     }
 

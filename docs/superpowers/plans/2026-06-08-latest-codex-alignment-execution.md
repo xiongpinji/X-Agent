@@ -695,10 +695,34 @@ Expected: selected approval and sandbox tests pass.
 - [x] Promote SDK alignment status to `sdk_runtime_smoke_runbook_contract_ready`.
 - [ ] Implement the runtime write-runner only after owner explicitly accepts this smoke/runbook contract and performs controlled runtime enablement.
 
+### Task 29: Runtime Enablement Readiness Receipt Contract
+
+**Target:** Define the owner-reviewed runtime enablement readiness receipt required after the smoke/runbook contract, while still keeping the SDK write runner disabled.
+
+**Files:**
+- Modify: `backend/app/api/control_plane.py`
+- Modify: `backend/app/sdk/control_plane.py`
+- Modify: `scripts/sdk_noninteractive_report.py`
+- Modify: `scripts/latest_codex_alignment.py`
+- Modify: `tests/test_control_plane_protocol.py`
+- Modify: `tests/test_xagent_sdk_contract.py`
+- Modify: `tests/test_cli_client.py`
+- Modify: `tests/test_sdk_noninteractive_report.py`
+- Modify: `tests/test_latest_codex_alignment.py`
+- Runtime evidence: `.xagent_runtime/reports/sdk-noninteractive-report.json`
+- Runtime evidence: `.xagent_runtime/reports/latest-codex-alignment.json`
+
+- [x] Add `runtime_enablement_receipt` metadata to `/sdk/invoke` after the runtime smoke/runbook contract.
+- [x] Define owner readiness receipt schema, strict readback keys, expiry policy, revoke policy, and audit actions.
+- [x] Require smoke/runbook ready-but-disabled, runtime flag still disabled, runner not invoked, and mutation still disabled before the receipt contract reports ready.
+- [x] Keep `implementation_enabled=false`, `runtime_flag_enabled=false`, `execute_enabled=false`, `write_runner_enabled=false`, `agent_execution_enabled=false`, `adapter_execution_enabled=false`, `runner_invoked=false`, `mark_executed=false`, and all mutation flags false.
+- [x] Promote SDK alignment status to `sdk_runtime_enablement_receipt_contract_ready`.
+- [ ] Implement the runtime write-runner only after an owner-reviewed readiness receipt is recorded and a separate runtime implementation preflight contract is accepted.
+
 ## Completion Criteria
 
 - `scripts/latest_codex_alignment.py` returns `latest_codex_alignment_plan_ready`.
-- `scripts/sdk_noninteractive_report.py` returns `sdk_runtime_smoke_runbook_contract_ready`.
+- `scripts/sdk_noninteractive_report.py` returns `sdk_runtime_enablement_receipt_contract_ready`.
 - P0 task board is complete and machine-readable.
 - Feishu Pilot V1 remains `customer_acceptance_pack_ready`.
 - `full_codex_parity_claimed=false` remains true in all generated alignment and pilot reports.

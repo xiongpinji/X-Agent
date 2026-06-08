@@ -61,6 +61,7 @@ class SDKNonInteractiveReport:
     runtime_enablement_review: dict[str, Any]
     write_runner_implementation_plan: dict[str, Any]
     runtime_smoke_runbook: dict[str, Any]
+    runtime_enablement_receipt: dict[str, Any]
     channel_strategy: dict[str, Any]
     checks: list[SDKNonInteractiveCheck]
     official_sources: list[str]
@@ -188,6 +189,7 @@ def _build_checks(report_payload: dict[str, Any]) -> list[SDKNonInteractiveCheck
     runtime_enablement_review = report_payload["runtime_enablement_review"]
     implementation_plan = report_payload["write_runner_implementation_plan"]
     runtime_smoke = report_payload["runtime_smoke_runbook"]
+    enablement_receipt = report_payload["runtime_enablement_receipt"]
     methods = [contract["request"]["method"] for contract in contracts]
     command_methods = [command["method"] for command in commands]
     cli_execute_targets = [
@@ -551,6 +553,34 @@ def _build_checks(report_payload: dict[str, Any]) -> list[SDKNonInteractiveCheck
             else "runtime smoke/runbook contract is not ready but disabled",
         ),
         SDKNonInteractiveCheck(
+            name="runtime_enablement_receipt_contract_ready",
+            status="passed"
+            if enablement_receipt.get("stage") == "owner_approved_write_runner_runtime_enablement_receipt"
+            and enablement_receipt.get("receipt_status") == "ready_but_disabled"
+            and enablement_receipt.get("receipt_type") == "sdk_write_runner_runtime_enablement_readiness"
+            and enablement_receipt.get("receipt_schema", {}).get("runtime_flag_name")
+            == "XAGENT_SDK_WRITE_RUNNER_ENABLED"
+            and enablement_receipt.get("review_readback", {}).get("query_keys")
+            == ["readiness_receipt_id", "approval_id", "owner_acceptance_id"]
+            and enablement_receipt.get("owner_review_policy", {}).get("requires_expiry") is True
+            and enablement_receipt.get("audit_contract", {}).get("planned_action")
+            == "sdk.write_runner.runtime_enablement_receipt_ready"
+            and enablement_receipt.get("implementation_enabled") is False
+            and enablement_receipt.get("runtime_flag_enabled") is False
+            and enablement_receipt.get("execute_enabled") is False
+            and enablement_receipt.get("write_runner_enabled") is False
+            and enablement_receipt.get("adapter_execution_enabled") is False
+            and enablement_receipt.get("agent_execution_enabled") is False
+            and enablement_receipt.get("runner_invoked") is False
+            and enablement_receipt.get("mark_executed") is False
+            and enablement_receipt.get("mutation_performed") is False
+            else "failed",
+            details=enablement_receipt,
+            error=None
+            if enablement_receipt.get("receipt_status") == "ready_but_disabled"
+            else "runtime enablement readiness receipt contract is not ready but disabled",
+        ),
+        SDKNonInteractiveCheck(
             name="feishu_domestic_v1_primary",
             status="passed"
             if report_payload["channel_strategy"].get("domestic_v1_primary") == "feishu"
@@ -574,7 +604,7 @@ def _build_checks(report_payload: dict[str, Any]) -> list[SDKNonInteractiveCheck
 
 def build_sdk_noninteractive_report() -> SDKNonInteractiveReport:
     report_payload: dict[str, Any] = {
-        "status": "sdk_runtime_smoke_runbook_contract_ready",
+        "status": "sdk_runtime_enablement_receipt_contract_ready",
         "generated_at": _utc_now(),
         "evidence_type": "sdk_noninteractive_cli_contract",
         "full_codex_parity_claimed": False,
@@ -587,7 +617,7 @@ def build_sdk_noninteractive_report() -> SDKNonInteractiveReport:
         "backend_stub": {
             "endpoint": "/api/v1/control-plane/sdk/invoke",
             "normalizes_to": "/api/v1/control-plane/invoke",
-            "status": "sdk_runtime_smoke_runbook_contract_ready",
+            "status": "sdk_runtime_enablement_receipt_contract_ready",
             "approval_subject_type": "command",
             "approval_intent_created_for_write_methods": True,
             "owner_gate_required": True,
@@ -1143,6 +1173,61 @@ def build_sdk_noninteractive_report() -> SDKNonInteractiveReport:
             "file_mutation_performed": False,
             "channel_mutation_performed": False,
         },
+        "runtime_enablement_receipt": {
+            "stage": "owner_approved_write_runner_runtime_enablement_receipt",
+            "receipt_status": "ready_but_disabled",
+            "receipt_type": "sdk_write_runner_runtime_enablement_readiness",
+            "receipt_schema": {
+                "required_fields": [
+                    "readiness_receipt_id",
+                    "approval_id",
+                    "owner_acceptance_id",
+                    "runtime_flag_name",
+                    "smoke_runbook_version",
+                    "rollback_runbook_version",
+                    "expires_at",
+                    "accepted_by",
+                    "acceptance_hash",
+                ],
+                "runtime_flag_name": "XAGENT_SDK_WRITE_RUNNER_ENABLED",
+                "expires_at_required": True,
+                "acceptance_hash_required": True,
+            },
+            "review_readback": {
+                "method": "runtime/evidence/read",
+                "evidence_type": "sdk_write_runner_runtime_enablement_readiness",
+                "query_keys": ["readiness_receipt_id", "approval_id", "owner_acceptance_id"],
+                "returns_schema": True,
+                "returns_record_if_present": True,
+            },
+            "owner_review_policy": {
+                "requires_smoke_runbook_acknowledged": True,
+                "requires_rollback_runbook_acknowledged": True,
+                "requires_failure_receipt_review": True,
+                "requires_expiry": True,
+                "revoke_command": "xagent sdk runtime-enable revoke <readiness_receipt_id>",
+            },
+            "audit_contract": {
+                "planned_action": "sdk.write_runner.runtime_enablement_receipt_ready",
+                "future_record_action": "sdk.write_runner.runtime_enablement_receipt_recorded",
+                "future_revoke_action": "sdk.write_runner.runtime_enablement_receipt_revoked",
+                "resource_type": "sdk_write_runner_runtime_enablement_readiness",
+            },
+            "next_gate": "owner_approved_write_runner_runtime_implementation",
+            "implementation_enabled": False,
+            "runtime_flag_enabled": False,
+            "execute_enabled": False,
+            "write_runner_enabled": False,
+            "adapter_execution_enabled": False,
+            "agent_execution_enabled": False,
+            "write_execution_enabled": False,
+            "runner_invoked": False,
+            "mark_executed": False,
+            "mutation_performed": False,
+            "network_mutation_performed": False,
+            "file_mutation_performed": False,
+            "channel_mutation_performed": False,
+        },
         "channel_strategy": _channel_strategy(),
         "official_sources": list(CODEX_SDK_SOURCES),
         "known_limits": [
@@ -1163,6 +1248,7 @@ def build_sdk_noninteractive_report() -> SDKNonInteractiveReport:
             "Runtime enablement review is contract-ready but remains disabled and does not implement the concrete runner.",
             "Concrete write-runner implementation plan is ready for owner review but remains disabled.",
             "Runtime smoke/runbook, rollback, and failure receipt contracts are ready for owner review but remain disabled.",
+            "Runtime enablement readiness receipt contract is ready for owner review but remains disabled.",
             "No SDK HTTP adapter, agent runner, file mutation, channel send, or network mutation is enabled.",
             "Feishu remains the only domestic V1 pilot channel in this contract.",
             "Slack is tracked as a Codex reference surface, but it is non-blocking for the domestic first version.",
@@ -1295,6 +1381,13 @@ def render_markdown_report(report: SDKNonInteractiveReport) -> str:
         f"- Runtime flag enabled: `{report.runtime_smoke_runbook['runtime_flag_enabled']}`\n"
         f"- Write runner enabled: `{report.runtime_smoke_runbook['write_runner_enabled']}`\n"
         f"- Runner invoked: `{report.runtime_smoke_runbook['runner_invoked']}`\n\n"
+        "## Runtime Enablement Receipt\n\n"
+        f"- Stage: `{report.runtime_enablement_receipt['stage']}`\n"
+        f"- Receipt status: `{report.runtime_enablement_receipt['receipt_status']}`\n"
+        f"- Receipt type: `{report.runtime_enablement_receipt['receipt_type']}`\n"
+        f"- Runtime flag enabled: `{report.runtime_enablement_receipt['runtime_flag_enabled']}`\n"
+        f"- Write runner enabled: `{report.runtime_enablement_receipt['write_runner_enabled']}`\n"
+        f"- Runner invoked: `{report.runtime_enablement_receipt['runner_invoked']}`\n\n"
         "## Channel Strategy\n\n"
         f"- Domestic V1 primary: `{report.channel_strategy['domestic_v1_primary']}`\n"
         f"- Telegram required: `{report.channel_strategy['telegram_required']}`\n"
@@ -1342,7 +1435,7 @@ def main() -> int:
         print(f"- {check.name}: {check.status}")
         if check.error:
             print(f"  error: {check.error}")
-    return 0 if report.status == "sdk_runtime_smoke_runbook_contract_ready" else 1
+    return 0 if report.status == "sdk_runtime_enablement_receipt_contract_ready" else 1
 
 
 if __name__ == "__main__":

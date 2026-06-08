@@ -16,7 +16,7 @@ def test_sdk_noninteractive_report_default_is_read_only() -> None:
     report = build_sdk_noninteractive_report()
     payload = report.to_dict()
 
-    assert report.status == "sdk_runtime_smoke_runbook_contract_ready"
+    assert report.status == "sdk_runtime_enablement_receipt_contract_ready"
     assert report.evidence_type == "sdk_noninteractive_cli_contract"
     assert report.full_codex_parity_claimed is False
     assert report.dry_run is True
@@ -333,6 +333,32 @@ def test_sdk_noninteractive_report_covers_runtime_smoke_runbook() -> None:
     assert smoke["mutation_performed"] is False
 
 
+def test_sdk_noninteractive_report_covers_runtime_enablement_receipt() -> None:
+    receipt = build_sdk_noninteractive_report().runtime_enablement_receipt
+
+    assert receipt["stage"] == "owner_approved_write_runner_runtime_enablement_receipt"
+    assert receipt["receipt_status"] == "ready_but_disabled"
+    assert receipt["receipt_type"] == "sdk_write_runner_runtime_enablement_readiness"
+    assert receipt["receipt_schema"]["runtime_flag_name"] == "XAGENT_SDK_WRITE_RUNNER_ENABLED"
+    assert receipt["receipt_schema"]["expires_at_required"] is True
+    assert receipt["review_readback"]["query_keys"] == [
+        "readiness_receipt_id",
+        "approval_id",
+        "owner_acceptance_id",
+    ]
+    assert receipt["owner_review_policy"]["requires_expiry"] is True
+    assert receipt["audit_contract"]["planned_action"] == "sdk.write_runner.runtime_enablement_receipt_ready"
+    assert receipt["implementation_enabled"] is False
+    assert receipt["runtime_flag_enabled"] is False
+    assert receipt["execute_enabled"] is False
+    assert receipt["write_runner_enabled"] is False
+    assert receipt["adapter_execution_enabled"] is False
+    assert receipt["agent_execution_enabled"] is False
+    assert receipt["runner_invoked"] is False
+    assert receipt["mark_executed"] is False
+    assert receipt["mutation_performed"] is False
+
+
 def test_sdk_noninteractive_report_keeps_feishu_first_channel_strategy() -> None:
     strategy = build_sdk_noninteractive_report().channel_strategy
 
@@ -353,12 +379,13 @@ def test_write_sdk_noninteractive_report_json_and_markdown(tmp_path: Path) -> No
 
     payload = json.loads(json_output.read_text(encoding="utf-8"))
     markdown = markdown_output.read_text(encoding="utf-8")
-    assert payload["status"] == "sdk_runtime_smoke_runbook_contract_ready"
+    assert payload["status"] == "sdk_runtime_enablement_receipt_contract_ready"
     assert payload["full_codex_parity_claimed"] is False
     assert payload["mutation_performed"] is False
     assert "# X-Agent SDK Non-Interactive Report" in markdown
     assert "## Write Runner Implementation Plan" in markdown
     assert "## Runtime Smoke Runbook" in markdown
+    assert "## Runtime Enablement Receipt" in markdown
     assert "thread/start" in render_markdown_report(report)
 
 
