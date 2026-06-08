@@ -81,10 +81,10 @@ Expected: all selected tests pass.
 - Modify: `backend/app/api/`
 - Test: `tests/test_control_plane_protocol.py`
 
-- [ ] Add a thin control-plane API over these groups: `thread`, `turn`, `tool`, `approval`, `plugin`, `skill`, `mcp`, `channel`, and `runtime/evidence`.
-- [ ] Keep every operation auditable.
-- [ ] Reject raw production secrets in request payloads.
-- [ ] Validate with:
+- [x] Add a thin control-plane API over these groups: `thread`, `turn`, `tool`, `approval`, `plugin`, `skill`, `mcp`, `channel`, and `runtime/evidence`.
+- [x] Keep every operation auditable.
+- [x] Reject raw production secrets in request payloads.
+- [x] Validate with:
 
 ```powershell
 python -m pytest tests/test_control_plane_protocol.py -o addopts="" -p no:cov -p no:cacheprovider -q

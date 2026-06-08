@@ -148,6 +148,16 @@ def build_evidence_specs(root: Path = ROOT, report_dir: Path = REPORT_DIR) -> tu
             "source_doc",
         ),
         AlignmentEvidenceSpec(
+            "control_plane_api",
+            root / "backend" / "app" / "api" / "control_plane.py",
+            "source_api",
+        ),
+        AlignmentEvidenceSpec(
+            "control_plane_protocol_tests",
+            root / "tests" / "test_control_plane_protocol.py",
+            "source_test",
+        ),
+        AlignmentEvidenceSpec(
             "feishu_delivery_pack_doc",
             root / "docs" / "FEISHU_PILOT_V1_DELIVERY_PACK.md",
             "source_doc",
@@ -265,12 +275,12 @@ def _capabilities() -> list[CodexAlignmentCapability]:
             capability="app_server_control_plane",
             codex_surface="Codex app-server JSON-RPC protocol",
             priority="P0",
-            xagent_status="partial",
-            evidence=["control_plane_protocol"],
-            next_task="Implement a thin control-plane compatibility API over thread, turn, approval, tool, skill, channel, and evidence groups.",
+            xagent_status="contract_first_ready",
+            evidence=["control_plane_protocol", "control_plane_api", "control_plane_protocol_tests"],
+            next_task="Implement concrete adapters behind the control-plane contract, starting with read-only thread/run and runtime evidence adapters.",
             acceptance_command="python -m pytest tests/test_control_plane_protocol.py -o addopts=\"\" -p no:cov -p no:cacheprovider -q",
             official_sources=["https://developers.openai.com/codex/app-server"],
-            rationale="A protocol specification exists, but the app-server-style execution surface is not yet fully implemented.",
+            rationale="The first contract layer exposes auditable control-plane envelope endpoints while keeping mutating adapters gated.",
         ),
         CodexAlignmentCapability(
             capability="threads_worktrees_and_automations",
@@ -518,7 +528,8 @@ def build_latest_codex_alignment_report(
     p0_ready = [
         item
         for item in p0_capabilities
-        if item.xagent_status in {"aligned_for_pilot_v1", "partial", "domestic_feishu_first"}
+        if item.xagent_status
+        in {"aligned_for_pilot_v1", "contract_first_ready", "partial", "domestic_feishu_first"}
     ]
     checks = [
         _required_evidence_check(evidence_items),
@@ -532,7 +543,7 @@ def build_latest_codex_alignment_report(
     next_p0_tasks = [
         f"{item.capability}: {item.next_task}"
         for item in p0_capabilities
-        if item.xagent_status != "aligned_for_pilot_v1"
+        if item.xagent_status not in {"aligned_for_pilot_v1", "contract_first_ready"}
     ]
 
     return LatestCodexAlignmentReport(

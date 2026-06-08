@@ -21,6 +21,7 @@ from backend.app.api.browser import router as browser_router
 from backend.app.api.channels import router as channels_router
 from backend.app.api.collaboration import router as collaboration_router
 from backend.app.api.commercial_pilot import router as commercial_pilot_router
+from backend.app.api.control_plane import router as control_plane_router
 from backend.app.api.desktop import router as desktop_router
 from backend.app.api.dispatch import router as dispatch_router
 from backend.app.api.errors import (
@@ -512,6 +513,7 @@ app.include_router(browser_router)
 app.include_router(channels_router)
 app.include_router(collaboration_router)
 app.include_router(commercial_pilot_router)
+app.include_router(control_plane_router)
 app.include_router(desktop_router)
 app.include_router(dispatch_router)
 app.include_router(feishu_router)

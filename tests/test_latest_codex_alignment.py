@@ -42,6 +42,8 @@ def _write_default_evidence(tmp_path: Path) -> dict[str, Path]:
     paths = {
         "customer_pack": tmp_path / "reports" / "commercial-pilot-customer-acceptance-pack.json",
         "control_plane": tmp_path / "docs" / "specs" / "xagent-control-plane-protocol.md",
+        "control_plane_api": tmp_path / "backend" / "app" / "api" / "control_plane.py",
+        "control_plane_tests": tmp_path / "tests" / "test_control_plane_protocol.py",
         "delivery_doc": tmp_path / "docs" / "FEISHU_PILOT_V1_DELIVERY_PACK.md",
         "mcp": tmp_path / "tests" / "test_mcp_manager.py",
         "hooks": tmp_path / "tests" / "test_hooks_manager.py",
@@ -77,6 +79,8 @@ def _evidence_specs(paths: dict[str, Path]) -> tuple[AlignmentEvidenceSpec, ...]
             expected_evidence_type="commercial_pilot_customer_acceptance_pack",
         ),
         AlignmentEvidenceSpec("control_plane_protocol", paths["control_plane"], "source_doc"),
+        AlignmentEvidenceSpec("control_plane_api", paths["control_plane_api"], "source_api"),
+        AlignmentEvidenceSpec("control_plane_protocol_tests", paths["control_plane_tests"], "source_test"),
         AlignmentEvidenceSpec("feishu_delivery_pack_doc", paths["delivery_doc"], "source_doc"),
         AlignmentEvidenceSpec("mcp_manager_tests", paths["mcp"], "source_test"),
         AlignmentEvidenceSpec("hooks_manager_tests", paths["hooks"], "source_test"),
@@ -111,7 +115,14 @@ def test_latest_codex_alignment_ready_with_current_evidence(tmp_path: Path) -> N
     assert report.pilot_delivery_status == "customer_acceptance_pack_ready"
     assert report.full_codex_parity_claimed is False
     assert report.p0_ready_count < report.p0_total_count
-    assert any("app_server_control_plane" in item for item in report.next_p0_tasks)
+    assert not any("app_server_control_plane" in item for item in report.next_p0_tasks)
+    control_plane = next(item for item in report.capabilities if item.capability == "app_server_control_plane")
+    assert control_plane.xagent_status == "contract_first_ready"
+    assert {
+        "control_plane_protocol",
+        "control_plane_api",
+        "control_plane_protocol_tests",
+    }.issubset(set(control_plane.evidence))
     assert {check.status for check in report.checks} == {"passed"}
     assert all(item.official_sources for item in report.capabilities)
 
