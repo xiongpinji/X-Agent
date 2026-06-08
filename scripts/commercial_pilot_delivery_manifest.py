@@ -153,6 +153,7 @@ DEFAULT_ARTIFACTS = (
     ),
     ArtifactSpec("ops_status_script", ROOT / "scripts" / "commercial_pilot_ops_status.py", "source_script"),
     ArtifactSpec("handoff_status_script", ROOT / "scripts" / "commercial_pilot_handoff_status.py", "source_script"),
+    ArtifactSpec("handoff_index_script", ROOT / "scripts" / "commercial_pilot_handoff_index.py", "source_script"),
     ArtifactSpec(
         "channel_readiness_script",
         ROOT / "scripts" / "commercial_pilot_channel_readiness.py",
@@ -193,6 +194,11 @@ DEFAULT_ARTIFACTS = (
     ArtifactSpec(
         "handoff_status_tests",
         ROOT / "tests" / "test_commercial_pilot_handoff_status.py",
+        "source_test",
+    ),
+    ArtifactSpec(
+        "handoff_index_tests",
+        ROOT / "tests" / "test_commercial_pilot_handoff_index.py",
         "source_test",
     ),
     ArtifactSpec(

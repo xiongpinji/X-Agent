@@ -19,6 +19,8 @@ Current machine-readable handoff:
 - RC baseline commit: `592141f35520df62578a00cbb805eeaa7371a940`
 - Hosted CI run: `https://github.com/xiongpinji/X-Agent/actions/runs/27119766813`
 - Acceptance gate: `.xagent_runtime/reports/commercial-pilot-acceptance-gate.json`
+- Handoff index: `.xagent_runtime/reports/commercial-pilot-handoff-index.json`
+- Handoff index markdown: `.xagent_runtime/reports/commercial-pilot-handoff-index.md`
 - Final gate report: `.xagent_runtime/reports/commercial-pilot-final-gate.json`
 - Delivery receipt: `.xagent_runtime/reports/commercial-pilot-delivery-receipt.json`
 - Delivery receipt markdown: `.xagent_runtime/reports/commercial-pilot-delivery-receipt.md`
@@ -49,6 +51,8 @@ Use these files as the canonical source of truth for this pilot:
 | Artifact | Purpose |
 | --- | --- |
 | `.xagent_runtime/reports/commercial-pilot-acceptance-gate.json` | Read-only operations acceptance gate over final handoff evidence. |
+| `.xagent_runtime/reports/commercial-pilot-handoff-index.json` | Customer-archivable handoff index with SHA-256 digests. |
+| `.xagent_runtime/reports/commercial-pilot-handoff-index.md` | Customer-readable Markdown handoff index. |
 | `.xagent_runtime/reports/commercial-pilot-final-gate.json` | Final pre-handoff gate; refreshes ops status before delivery manifest. |
 | `.xagent_runtime/reports/commercial-pilot-delivery-receipt.json` | Customer handoff receipt generated from final gate, ops status, and manifest. |
 | `.xagent_runtime/reports/commercial-pilot-delivery-receipt.md` | Customer-readable Markdown version of the delivery receipt. |
@@ -62,6 +66,7 @@ Use these files as the canonical source of truth for this pilot:
 | `.xagent_runtime/reports/commercial-pilot-feishu-outbound-live.json` | Optional owner-approved outbound send evidence. |
 | `.xagent_runtime/reports/rc-delivery-status.json` | Frozen commercial RC baseline proof. |
 | `scripts/commercial_pilot_acceptance_gate.py` | Read-only operations acceptance gate. |
+| `scripts/commercial_pilot_handoff_index.py` | Read-only customer handoff archive index generator. |
 | `scripts/commercial_pilot_final_gate.py` | One-command final delivery gate. |
 | `scripts/run_feishu_pilot_final_handoff.ps1` | Windows one-step final handoff wrapper; runs final gate before receipt. |
 | `scripts/commercial_pilot_delivery_receipt.py` | Customer delivery receipt generator. |
@@ -72,6 +77,7 @@ Use these files as the canonical source of truth for this pilot:
 | `scripts/commercial_pilot_feishu_outbound_smoke.py` | Owner-gated outbound smoke; dry-run by default. |
 | `tests/test_commercial_pilot_final_gate.py` | Final gate contract tests. |
 | `tests/test_commercial_pilot_acceptance_gate.py` | Operations acceptance gate contract tests. |
+| `tests/test_commercial_pilot_handoff_index.py` | Customer handoff index contract tests. |
 | `tests/test_commercial_pilot_delivery_receipt.py` | Delivery receipt contract tests. |
 | `tests/test_commercial_pilot_delivery_manifest.py` | Delivery manifest contract tests. |
 | `tests/test_run_feishu_pilot_final_handoff.py` | Windows final handoff wrapper contract tests. |
@@ -235,6 +241,12 @@ Run the read-only operations acceptance gate:
 python scripts\commercial_pilot_acceptance_gate.py
 ```
 
+Generate the customer handoff archive index:
+
+```powershell
+python scripts\commercial_pilot_handoff_index.py
+```
+
 Refresh full pilot evidence:
 
 ```powershell
@@ -285,6 +297,17 @@ Commercial pilot acceptance gate status: pilot_acceptance_ready
 - no_acceptance_gate_mutation: passed
 ```
 
+Expected handoff index output:
+
+```text
+Commercial pilot handoff index status: handoff_index_ready
+- required_archive_artifacts: passed
+- archive_digests: passed
+- acceptance_gate_ready: passed
+- no_full_codex_parity_claim: passed
+- no_archive_mutation: passed
+```
+
 ## 8. Evidence Acceptance Criteria
 
 The live Feishu evidence report must contain:
@@ -320,6 +343,20 @@ The acceptance gate report must contain:
   "status": "pilot_acceptance_ready",
   "evidence_type": "commercial_pilot_acceptance_gate",
   "pilot_channel": "feishu",
+  "full_codex_parity_claimed": false,
+  "mutation_performed": false,
+  "outbound_message_sent": false
+}
+```
+
+The handoff index report must contain:
+
+```json
+{
+  "status": "handoff_index_ready",
+  "evidence_type": "commercial_pilot_handoff_index",
+  "pilot_channel": "feishu",
+  "acceptance_gate_status": "pilot_acceptance_ready",
   "full_codex_parity_claimed": false,
   "mutation_performed": false,
   "outbound_message_sent": false
@@ -522,6 +559,39 @@ From `.xagent_runtime/reports/commercial-pilot-acceptance-gate.json`:
 - `checks[].error`
 - `known_limits[]`
 
+From `.xagent_runtime/reports/commercial-pilot-handoff-index.json`:
+
+- `status`
+- `generated_at`
+- `evidence_type`
+- `pilot_channel`
+- `pilot_tag_name`
+- `pilot_commit_sha`
+- `rc_tag_name`
+- `rc_commit_sha`
+- `acceptance_gate_status`
+- `final_gate_status`
+- `delivery_receipt_status`
+- `handoff_status`
+- `ops_status`
+- `delivery_manifest_status`
+- `inbound_live_status`
+- `outbound_owner_gate_status`
+- `full_codex_parity_claimed`
+- `mutation_performed`
+- `outbound_message_sent`
+- `artifacts[].name`
+- `artifacts[].path`
+- `artifacts[].category`
+- `artifacts[].status`
+- `artifacts[].sha256`
+- `checks[].name`
+- `checks[].status`
+- `checks[].details`
+- `checks[].error`
+- `archive_files[]`
+- `known_limits[]`
+
 From `.xagent_runtime/reports/commercial-pilot-channel-readiness.json`:
 
 - `channels[].channel`
@@ -544,6 +614,9 @@ Suggested UI status mapping:
 
 | Report status | UI label | Meaning |
 | --- | --- | --- |
+| `handoff_index_ready` | Ready | Customer archive index and required evidence digests are complete. |
+| `handoff_index_action_required` | Action required | A required archive artifact is missing or not ready. |
+| `handoff_index_blocked` | Blocked | Archive evidence contains an unsafe claim or mutation. |
 | `pilot_acceptance_ready` | Ready | Operations acceptance gate has accepted final gate, receipt, handoff, ops, manifest, and Feishu live evidence. |
 | `pilot_acceptance_action_required` | Action required | Required acceptance evidence is missing or not ready. |
 | `pilot_acceptance_blocked` | Blocked | Acceptance evidence contains an unsafe claim, mutation, or identity mismatch. |
@@ -673,6 +746,7 @@ No live evidence file:
 
 Handoff status not ready:
 
+- Inspect `.xagent_runtime/reports/commercial-pilot-handoff-index.json`.
 - Inspect `.xagent_runtime/reports/commercial-pilot-acceptance-gate.json`.
 - Inspect `.xagent_runtime/reports/commercial-pilot-final-gate.json`.
 - Inspect `.xagent_runtime/reports/commercial-pilot-delivery-receipt.json`.
@@ -687,6 +761,7 @@ Handoff status not ready:
 - Rerun `scripts\commercial_pilot_final_gate.py`.
 - Rerun `scripts\commercial_pilot_delivery_receipt.py`.
 - Rerun `scripts\commercial_pilot_acceptance_gate.py`.
+- Rerun `scripts\commercial_pilot_handoff_index.py`.
 
 ## 13. Sign-Off Checklist
 
@@ -697,6 +772,7 @@ Handoff status not ready:
 - [ ] Final gate report is `final_gate_ready`.
 - [ ] Delivery receipt is `delivery_receipt_ready`.
 - [ ] Operations acceptance gate is `pilot_acceptance_ready`.
+- [ ] Customer handoff index is `handoff_index_ready`.
 - [ ] Operator status report is `pilot_ops_ready`.
 - [ ] Delivery manifest is `delivery_manifest_ready`.
 - [ ] `mutation_performed=false`.

@@ -211,3 +211,15 @@ def test_default_manifest_includes_acceptance_gate_artifacts() -> None:
     assert tests.path.name == "test_commercial_pilot_acceptance_gate.py"
     assert tests.category == "source_test"
     assert tests.required is True
+
+
+def test_default_manifest_includes_handoff_index_artifacts() -> None:
+    script = next(artifact for artifact in DEFAULT_ARTIFACTS if artifact.name == "handoff_index_script")
+    tests = next(artifact for artifact in DEFAULT_ARTIFACTS if artifact.name == "handoff_index_tests")
+
+    assert script.path.name == "commercial_pilot_handoff_index.py"
+    assert script.category == "source_script"
+    assert script.required is True
+    assert tests.path.name == "test_commercial_pilot_handoff_index.py"
+    assert tests.category == "source_test"
+    assert tests.required is True
