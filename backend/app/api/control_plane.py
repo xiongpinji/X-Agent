@@ -855,6 +855,12 @@ async def invoke_sdk_control_plane(
         write_runner_safety_contract=sdk_metadata["write_runner_safety_contract"],
         dry_run_executor_stub=sdk_metadata["dry_run_executor_stub"],
     )
+    sdk_metadata["write_runner_adapter_review"] = _sdk_write_runner_adapter_review(
+        request,
+        control_request,
+        execution_adapter_contract=sdk_metadata["execution_adapter_contract"],
+        write_runner_execute_gate=sdk_metadata["write_runner_execute_gate"],
+    )
     return SDKControlPlaneInvokeResponse(
         id=control_request.id,
         ok=control_response.ok,
@@ -933,7 +939,7 @@ def _sdk_backend_stub_metadata(
     read_only_runner_contract = _sdk_read_only_runner_contract(original, request, response)
     write_runner_safety_contract = _sdk_write_runner_safety_contract(original, request, execution_adapter_contract)
     return {
-        "status": "sdk_write_runner_execute_gate_ready",
+        "status": "sdk_write_runner_adapter_review_ready",
         "operation": request.context.sdk_operation or original.operation,
         "method": request.method,
         "sdk_surface": request.context.sdk_surface or "python",
@@ -963,6 +969,7 @@ def _sdk_backend_stub_metadata(
             "Dry-run executor receipts are persisted in the audit log and can be read back through runtime evidence.",
             "Persisted dry-run receipts expose a read-only write-runner safety review gate.",
             "Owner-approved write dry-run receipts are consolidated into a disabled execute gate contract.",
+            "Owner-approved write runner adapter implementation is represented as a disabled review contract.",
             "No SDK HTTP adapter execution, agent runner invocation, channel send, file change, or network mutation is enabled.",
             "Write methods remain owner-gated behind the approval/sandbox/admin contract.",
             "Feishu remains the only domestic V1 pilot channel.",
@@ -1426,6 +1433,87 @@ def _sdk_write_runner_execute_gate(
             "This gate proves the owner-approved write runner preconditions are machine-readable.",
             "It intentionally keeps execution disabled until a concrete runner adapter implementation is reviewed.",
             "No approval is marked executed and no agent, file, network, or channel mutation is performed.",
+        ],
+    }
+
+
+def _sdk_write_runner_adapter_review(
+    original: SDKControlPlaneInvokeRequest,
+    request: ControlPlaneInvokeRequest,
+    *,
+    execution_adapter_contract: dict[str, Any],
+    write_runner_execute_gate: dict[str, Any],
+) -> dict[str, Any]:
+    gate_checks = write_runner_execute_gate.get("checks", {})
+    checks = {
+        "execute_gate_ready_but_disabled": write_runner_execute_gate.get("gate_status") == "ready_but_disabled",
+        "approved_preflight_ready": gate_checks.get("approved_preflight_ready") is True,
+        "approval_id_bound": isinstance(write_runner_execute_gate.get("approved_approval_id"), str)
+        and bool(write_runner_execute_gate.get("approved_approval_id")),
+        "idempotency_key_present": gate_checks.get("idempotency_key_present") is True,
+        "receipt_persisted": gate_checks.get("receipt_persisted") is True,
+        "safety_review_passed": gate_checks.get("safety_review_passed") is True,
+        "adapter_target_declared": True,
+        "approval_mark_executed_deferred": True,
+        "runner_invocation_disabled": write_runner_execute_gate.get("write_runner_enabled") is False,
+        "agent_execution_disabled": write_runner_execute_gate.get("agent_execution_enabled") is False,
+        "mutation_disabled": write_runner_execute_gate.get("mutation_performed") is False,
+    }
+    review_ready = all(checks.values())
+    return {
+        "available": write_runner_execute_gate.get("available") is True,
+        "stage": "owner_approved_write_runner_adapter_implementation_review",
+        "review_status": "ready_but_disabled" if review_ready else "blocked",
+        "method": request.method,
+        "operation": request.context.sdk_operation or original.operation,
+        "approved_approval_id": write_runner_execute_gate.get("approved_approval_id"),
+        "adapter_target": {
+            "module": "backend.app.core.agent.coordinator",
+            "callable": "AgentCoordinator.run",
+            "request_mapping": {
+                "thread/start": "task",
+                "thread/resume": "input",
+                "turn/start": "input",
+            },
+            "expected_context_fields": [
+                "tenant_id",
+                "user_id",
+                "request_id",
+                "permission_scope",
+                "risk_level",
+            ],
+        },
+        "approval_execution_policy": {
+            "readback_method": execution_adapter_contract.get("approval_readback_method"),
+            "required_status": execution_adapter_contract.get("required_approval_status"),
+            "resource_id": execution_adapter_contract.get("expected_resource_id"),
+            "mark_executed_allowed_after_runner_success": True,
+            "mark_executed_called_now": False,
+        },
+        "audit_contract": {
+            "planned_action": "sdk.write_runner.adapter_review_ready",
+            "future_execute_action": "sdk.write_runner.executed",
+            "dry_run_receipt_required": True,
+            "idempotency_key_required": True,
+            "result_receipt_required": True,
+        },
+        "checks": checks,
+        "next_gate": "owner_approved_write_runner_runtime_feature_flag",
+        "implementation_enabled": False,
+        "execute_enabled": False,
+        "write_runner_enabled": False,
+        "agent_execution_enabled": False,
+        "adapter_execution_enabled": False,
+        "write_execution_enabled": False,
+        "mark_executed": False,
+        "mutation_performed": False,
+        "network_mutation_performed": False,
+        "file_mutation_performed": False,
+        "channel_mutation_performed": False,
+        "known_limits": [
+            "This is the adapter implementation review contract, not the implementation switch.",
+            "The future adapter target is declared, but AgentCoordinator.run is not called here.",
+            "Approvals are not marked executed until a future runner succeeds under an explicit runtime feature flag.",
         ],
     }
 

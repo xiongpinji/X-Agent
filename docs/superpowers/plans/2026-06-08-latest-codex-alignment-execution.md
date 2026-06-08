@@ -516,7 +516,33 @@ Expected: selected approval and sandbox tests pass.
 - [x] Require approved preflight, ready runner contract, persisted dry-run receipt, audit hash/signature, safety review pass, idempotency key, no runner invocation, no `mark_executed`, and no mutation flags.
 - [x] Keep `execute_enabled=false`, `write_runner_enabled=false`, `agent_execution_enabled=false`, `adapter_execution_enabled=false`, and all mutation flags false.
 - [x] Promote SDK alignment status to `sdk_write_runner_execute_gate_ready`.
-- [ ] Implement the concrete owner-approved write SDK runner adapter only after this execute gate contract is accepted.
+- [x] Feed the execute gate into a disabled adapter implementation review contract.
+- [ ] Enable the concrete owner-approved write SDK runner only after runtime feature flag and owner acceptance evidence.
+
+### Task 22: Owner-Approved Write Runner Adapter Implementation Review
+
+**Target:** Declare the concrete write-runner adapter target and execution policy while keeping the implementation disabled until a runtime feature flag and owner acceptance evidence exist.
+
+**Files:**
+- Modify: `backend/app/api/control_plane.py`
+- Modify: `backend/app/sdk/control_plane.py`
+- Modify: `scripts/sdk_noninteractive_report.py`
+- Modify: `scripts/latest_codex_alignment.py`
+- Modify: `tests/test_control_plane_protocol.py`
+- Modify: `tests/test_xagent_sdk_contract.py`
+- Modify: `tests/test_cli_client.py`
+- Modify: `tests/test_sdk_noninteractive_report.py`
+- Modify: `tests/test_latest_codex_alignment.py`
+- Runtime evidence: `.xagent_runtime/reports/sdk-noninteractive-report.json`
+- Runtime evidence: `.xagent_runtime/reports/latest-codex-alignment.json`
+
+- [x] Add `write_runner_adapter_review` to `/sdk/invoke` metadata after the execute gate is evaluated.
+- [x] Declare future adapter target `backend.app.core.agent.coordinator.AgentCoordinator.run` and request mapping.
+- [x] Declare approval execution policy: `mark_executed` is allowed only after future runner success and is not called now.
+- [x] Declare audit contract for future `sdk.write_runner.executed` receipts.
+- [x] Keep `implementation_enabled=false`, `execute_enabled=false`, `write_runner_enabled=false`, `agent_execution_enabled=false`, `adapter_execution_enabled=false`, `mark_executed=false`, and all mutation flags false.
+- [x] Promote SDK alignment status to `sdk_write_runner_adapter_review_ready`.
+- [ ] Add runtime feature flag plus owner acceptance evidence before enabling the concrete runner.
 
 ## Completion Criteria
 

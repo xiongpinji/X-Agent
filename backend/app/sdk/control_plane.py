@@ -220,6 +220,9 @@ class ControlPlaneSDK:
                 "execution_adapter_contract": "owner_approved_preflight",
                 "read_only_runner_contract": method in self._READ_ONLY_METHODS,
                 "write_runner_safety_contract": method not in self._READ_ONLY_METHODS,
+                "write_runner_execute_gate_contract": method not in self._READ_ONLY_METHODS,
+                "write_runner_adapter_review_contract": method not in self._READ_ONLY_METHODS,
+                "write_runner_adapter_review_enabled": False,
                 "runner_invoked": False,
                 "agent_execution_enabled": False,
                 "write_execution_enabled": False,
@@ -241,6 +244,7 @@ class ControlPlaneSDK:
                 "No control-plane HTTP request is sent by this contract object itself.",
                 "Thread write methods remain owner-gated by the control-plane adapter.",
                 "Providing approved_approval_id enables backend readback/preflight only, not real execution.",
+                "The write runner adapter review contract declares the future runner target but remains disabled.",
                 "Feishu remains the first domestic V1 channel; no new channel send is performed.",
             ],
         )

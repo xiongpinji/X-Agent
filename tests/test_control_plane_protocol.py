@@ -182,8 +182,8 @@ def test_sdk_control_plane_stub_accepts_thread_start_envelope_without_mutation()
     assert response.status_code == 200
     payload = response.json()
     assert payload["ok"] is False
-    assert payload["status"] == "sdk_write_runner_execute_gate_ready"
-    assert payload["sdk"]["status"] == "sdk_write_runner_execute_gate_ready"
+    assert payload["status"] == "sdk_write_runner_adapter_review_ready"
+    assert payload["sdk"]["status"] == "sdk_write_runner_adapter_review_ready"
     assert payload["sdk"]["method"] == "thread/start"
     assert payload["sdk"]["dry_run"] is False
     assert payload["sdk"]["idempotency_key_present"] is True
@@ -224,6 +224,15 @@ def test_sdk_control_plane_stub_accepts_thread_start_envelope_without_mutation()
     assert gate["adapter_execution_enabled"] is False
     assert gate["mark_executed"] is False
     assert gate["mutation_performed"] is False
+    review = payload["sdk"]["write_runner_adapter_review"]
+    assert review["stage"] == "owner_approved_write_runner_adapter_implementation_review"
+    assert review["review_status"] == "blocked"
+    assert review["checks"]["execute_gate_ready_but_disabled"] is False
+    assert review["implementation_enabled"] is False
+    assert review["write_runner_enabled"] is False
+    assert review["agent_execution_enabled"] is False
+    assert review["mark_executed"] is False
+    assert review["mutation_performed"] is False
     handoff = payload["sdk"]["approval_handoff"]
     assert handoff["available"] is True
     assert handoff["approval_id"] == payload["sdk"]["approval_intent"]["approval_id"]
@@ -290,8 +299,8 @@ def test_sdk_control_plane_stub_reads_approved_execution_adapter_contract_withou
     assert response.status_code == 200
     payload = response.json()
     assert payload["ok"] is False
-    assert payload["status"] == "sdk_write_runner_execute_gate_ready"
-    assert payload["sdk"]["status"] == "sdk_write_runner_execute_gate_ready"
+    assert payload["status"] == "sdk_write_runner_adapter_review_ready"
+    assert payload["sdk"]["status"] == "sdk_write_runner_adapter_review_ready"
     assert payload["sdk"]["approval_intent"]["created"] is False
     assert payload["sdk"]["approval_intent"]["approval_id"] == approval.id
     adapter = payload["sdk"]["execution_adapter_contract"]
@@ -358,6 +367,25 @@ def test_sdk_control_plane_stub_reads_approved_execution_adapter_contract_withou
     assert gate["mutation_performed"] is False
     assert gate["network_mutation_performed"] is False
     assert gate["next_gate"] == "owner_approved_write_runner_adapter_implementation"
+    review = payload["sdk"]["write_runner_adapter_review"]
+    assert review["stage"] == "owner_approved_write_runner_adapter_implementation_review"
+    assert review["review_status"] == "ready_but_disabled"
+    assert review["adapter_target"]["callable"] == "AgentCoordinator.run"
+    assert review["checks"]["execute_gate_ready_but_disabled"] is True
+    assert review["checks"]["approval_id_bound"] is True
+    assert review["checks"]["idempotency_key_present"] is True
+    assert review["checks"]["receipt_persisted"] is True
+    assert review["checks"]["safety_review_passed"] is True
+    assert review["approval_execution_policy"]["mark_executed_allowed_after_runner_success"] is True
+    assert review["approval_execution_policy"]["mark_executed_called_now"] is False
+    assert review["audit_contract"]["future_execute_action"] == "sdk.write_runner.executed"
+    assert review["implementation_enabled"] is False
+    assert review["execute_enabled"] is False
+    assert review["write_runner_enabled"] is False
+    assert review["agent_execution_enabled"] is False
+    assert review["adapter_execution_enabled"] is False
+    assert review["mark_executed"] is False
+    assert review["mutation_performed"] is False
     assert approval_store.pending_count() == 0
     assert approval_store.get(approval.id).status == "approved"
     audit_records = audit_store.list(action="sdk.write_runner.dry_run_planned")
@@ -382,8 +410,8 @@ def test_sdk_control_plane_stub_can_read_thread_through_existing_contract() -> N
     assert response.status_code == 200
     payload = response.json()
     assert payload["ok"] is True
-    assert payload["status"] == "sdk_write_runner_execute_gate_ready"
-    assert payload["sdk"]["status"] == "sdk_write_runner_execute_gate_ready"
+    assert payload["status"] == "sdk_write_runner_adapter_review_ready"
+    assert payload["sdk"]["status"] == "sdk_write_runner_adapter_review_ready"
     assert payload["sdk"]["method"] == "thread/read"
     assert payload["sdk"]["owner_gate_required"] is False
     assert payload["sdk"]["approval_intent"]["required"] is False
@@ -406,6 +434,8 @@ def test_sdk_control_plane_stub_can_read_thread_through_existing_contract() -> N
     assert gate["gate_status"] == "blocked"
     assert gate["execute_enabled"] is False
     assert gate["mutation_performed"] is False
+    assert payload["sdk"]["write_runner_adapter_review"]["available"] is False
+    assert payload["sdk"]["write_runner_adapter_review"]["implementation_enabled"] is False
     assert payload["sdk"]["mutation_performed"] is False
     assert payload["control_plane"]["result"]["contract"]["dry_run"] is True
     assert payload["control_plane"]["result"]["compatibility"]["sdk_surface"] == "python"
@@ -428,7 +458,7 @@ def test_sdk_control_plane_stub_reads_runtime_evidence_through_read_only_runner(
     assert response.status_code == 200
     payload = response.json()
     assert payload["ok"] is True
-    assert payload["status"] == "sdk_write_runner_execute_gate_ready"
+    assert payload["status"] == "sdk_write_runner_adapter_review_ready"
     assert payload["sdk"]["method"] == "runtime/evidence/read"
     runner = payload["sdk"]["read_only_runner_contract"]
     assert runner["available"] is True
@@ -493,7 +523,7 @@ def test_sdk_control_plane_stub_reads_persisted_dry_run_executor_runtime_evidenc
     assert response.status_code == 200
     payload = response.json()
     assert payload["ok"] is True
-    assert payload["status"] == "sdk_write_runner_execute_gate_ready"
+    assert payload["status"] == "sdk_write_runner_adapter_review_ready"
     evidence = payload["control_plane"]["result"]["evidence"]
     assert evidence["evidence_type"] == "sdk_dry_run_executor_stub"
     assert evidence["available"] is True

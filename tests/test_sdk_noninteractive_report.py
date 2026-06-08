@@ -16,7 +16,7 @@ def test_sdk_noninteractive_report_default_is_read_only() -> None:
     report = build_sdk_noninteractive_report()
     payload = report.to_dict()
 
-    assert report.status == "sdk_write_runner_execute_gate_ready"
+    assert report.status == "sdk_write_runner_adapter_review_ready"
     assert report.evidence_type == "sdk_noninteractive_cli_contract"
     assert report.full_codex_parity_claimed is False
     assert report.dry_run is True
@@ -201,6 +201,25 @@ def test_sdk_noninteractive_report_covers_write_runner_execute_gate() -> None:
     assert gate["mutation_performed"] is False
 
 
+def test_sdk_noninteractive_report_covers_write_runner_adapter_review() -> None:
+    review = build_sdk_noninteractive_report().write_runner_adapter_review
+
+    assert review["stage"] == "owner_approved_write_runner_adapter_implementation_review"
+    assert review["review_status"] == "ready_but_disabled"
+    assert review["adapter_target"]["callable"] == "AgentCoordinator.run"
+    assert review["approval_execution_policy"]["mark_executed_allowed_after_runner_success"] is True
+    assert review["approval_execution_policy"]["mark_executed_called_now"] is False
+    assert review["audit_contract"]["future_execute_action"] == "sdk.write_runner.executed"
+    assert review["next_gate"] == "owner_approved_write_runner_runtime_feature_flag"
+    assert review["implementation_enabled"] is False
+    assert review["execute_enabled"] is False
+    assert review["write_runner_enabled"] is False
+    assert review["adapter_execution_enabled"] is False
+    assert review["agent_execution_enabled"] is False
+    assert review["mark_executed"] is False
+    assert review["mutation_performed"] is False
+
+
 def test_sdk_noninteractive_report_keeps_feishu_first_channel_strategy() -> None:
     strategy = build_sdk_noninteractive_report().channel_strategy
 
@@ -221,7 +240,7 @@ def test_write_sdk_noninteractive_report_json_and_markdown(tmp_path: Path) -> No
 
     payload = json.loads(json_output.read_text(encoding="utf-8"))
     markdown = markdown_output.read_text(encoding="utf-8")
-    assert payload["status"] == "sdk_write_runner_execute_gate_ready"
+    assert payload["status"] == "sdk_write_runner_adapter_review_ready"
     assert payload["full_codex_parity_claimed"] is False
     assert payload["mutation_performed"] is False
     assert "# X-Agent SDK Non-Interactive Report" in markdown
