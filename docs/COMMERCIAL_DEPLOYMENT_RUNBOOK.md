@@ -23,11 +23,7 @@ provider, and hosted Actions gates for that exact SHA. Older owner-verified
 snapshots or earlier pushed tags are historical evidence only and must not be
 treated as current commercial handoff proof. This runbook does not claim full
 Codex/Hermes parity.
-When the owner-verified finalization command passes for the same selected
-commit, hosted Actions run, and RC tag, the current final gate status is
-`ready_for_rc_tag`; rerun `rc_delivery_status.py` immediately after that proof
-so the handoff report records `commercial_rc_ready` before any tag or deployment
-claim.
+When the owner-verified finalization command passes for the same selected commit, hosted Actions run, and RC tag, the final gate reports `ready_for_rc_tag`; rerun `rc_delivery_status.py` immediately after that proof so the handoff report records `commercial_rc_ready` before any tag or deployment claim.
 Current local provider smoke is verified with Ollama at
 `http://127.0.0.1:11435`, model `qwen2.5:1.5b`, after copying the required
 model blobs to the ASCII-only model directory `D:\ollama-models`. The direct

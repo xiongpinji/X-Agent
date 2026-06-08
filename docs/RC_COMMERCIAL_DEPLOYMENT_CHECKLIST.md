@@ -88,11 +88,7 @@ Observed status:
   `.xagent_runtime\reports\rc-delivery-status.json` and verified with
   `scripts\rc_tag_consistency_gate.py --require-match`. Before owner
   finalization, current local final gate status remains `ready_with_owner_gates`
-  and delivery status is `owner_finalize_pending`. After owner-controlled
-  Feishu, GitHub issue-to-PR, provider, and hosted Actions evidence passes for
-  the exact selected commit, current final gate status is `ready_for_rc_tag`;
-  rerun `scripts\rc_delivery_status.py` before making any commercial handoff
-  claim.
+  and delivery status is `owner_finalize_pending`. After owner-controlled Feishu, GitHub issue-to-PR, provider, and hosted Actions evidence passes for the exact selected commit, the final gate reports `ready_for_rc_tag`; rerun `scripts\rc_delivery_status.py` before making any commercial handoff claim.
 - RC final gate also enforces release receipt freshness: the receipt
   `generated_at` must not be older than the source bundle, artifact integrity,
   owner gate plan, owner handoff gate, `owner_env_template`,
