@@ -137,7 +137,7 @@ def main(
 # ============================================================================
 # Mount command apps implemented in Wave 2.
 
-from cli.commands import agent_app, init_app, tools_app, workflow_app, hooks_app, approvals_app, github_app, gateway_app
+from cli.commands import agent_app, init_app, tools_app, workflow_app, hooks_app, approvals_app, github_app, gateway_app, sdk_app
 
 app.add_typer(agent_app, name="agent", help="Agent management commands")
 app.add_typer(tools_app, name="tools", help="Tool management commands")
@@ -147,6 +147,7 @@ app.add_typer(hooks_app, name="hooks", help="Hook management commands")
 app.add_typer(approvals_app, name="approvals", help="Approval request management commands")
 app.add_typer(github_app, name="github", help="GitHub automation commands")
 app.add_typer(gateway_app, name="gateway", help="Gateway and scheduler commands")
+app.add_typer(sdk_app, name="sdk", help="SDK and non-interactive control-plane commands")
 
 # ============================================================================
 # STANDALONE COMMANDS

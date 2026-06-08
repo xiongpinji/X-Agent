@@ -1,0 +1,262 @@
+#!/usr/bin/env python3
+"""Build a read-only SDK and non-interactive CLI contract report."""
+
+from __future__ import annotations
+
+import argparse
+import json
+from dataclasses import asdict, dataclass, field
+from pathlib import Path
+from typing import Any
+
+from backend.app.sdk import ControlPlaneSDK
+from scripts.commercial_pilot_core_entrypoints import REPORT_DIR, _utc_now
+
+DEFAULT_OUTPUT = REPORT_DIR / "sdk-noninteractive-report.json"
+DEFAULT_MARKDOWN_OUTPUT = REPORT_DIR / "sdk-noninteractive-report.md"
+
+CODEX_SDK_SOURCES = (
+    "https://developers.openai.com/codex/noninteractive",
+    "https://developers.openai.com/codex/sdk",
+    "https://developers.openai.com/codex/app-server",
+    "https://developers.openai.com/codex/integrations/slack",
+)
+
+
+@dataclass(frozen=True)
+class SDKNonInteractiveCheck:
+    name: str
+    status: str
+    details: dict[str, Any] = field(default_factory=dict)
+    error: str | None = None
+
+
+@dataclass(frozen=True)
+class SDKNonInteractiveReport:
+    status: str
+    generated_at: str
+    evidence_type: str
+    full_codex_parity_claimed: bool
+    dry_run: bool
+    mutation_performed: bool
+    network_mutation_performed: bool
+    owner_gate_required: bool
+    sdk_contracts: list[dict[str, Any]]
+    cli_commands: list[dict[str, Any]]
+    channel_strategy: dict[str, Any]
+    checks: list[SDKNonInteractiveCheck]
+    official_sources: list[str]
+    known_limits: list[str]
+
+    def to_dict(self) -> dict[str, Any]:
+        payload = asdict(self)
+        payload["checks"] = [asdict(check) for check in self.checks]
+        return payload
+
+
+def _sdk_contracts() -> list[dict[str, Any]]:
+    sdk = ControlPlaneSDK(default_tenant_id="default", default_user_id="operator")
+    return [
+        sdk.start_thread("pilot task", idempotency_key="sdk-thread-start").to_dict(),
+        sdk.resume_thread("thread-1", input_text="continue", idempotency_key="sdk-thread-resume").to_dict(),
+        sdk.run_turn("thread-1", "next instruction", idempotency_key="sdk-turn-run").to_dict(),
+        sdk.read_thread("thread-1").to_dict(),
+    ]
+
+
+def _cli_commands() -> list[dict[str, Any]]:
+    return [
+        {
+            "command": "xagent sdk thread-start <task> --scope tools:read",
+            "method": "thread/start",
+            "non_interactive": True,
+            "dry_run_default": True,
+        },
+        {
+            "command": "xagent sdk thread-resume <thread_id> --input <text>",
+            "method": "thread/resume",
+            "non_interactive": True,
+            "dry_run_default": True,
+        },
+        {
+            "command": "xagent sdk turn-run <thread_id> <input>",
+            "method": "turn/start",
+            "non_interactive": True,
+            "dry_run_default": True,
+        },
+        {
+            "command": "xagent sdk thread-read <thread_id>",
+            "method": "thread/read",
+            "non_interactive": True,
+            "dry_run_default": True,
+        },
+    ]
+
+
+def _channel_strategy() -> dict[str, Any]:
+    return {
+        "pilot_channel": "feishu",
+        "domestic_v1_primary": "feishu",
+        "telegram_required": False,
+        "slack_blocking": False,
+        "dingtalk_or_wechat_work_next": "after_feishu_pilot_acceptance",
+        "channel_send_performed": False,
+    }
+
+
+def _build_checks(report_payload: dict[str, Any]) -> list[SDKNonInteractiveCheck]:
+    contracts = report_payload["sdk_contracts"]
+    commands = report_payload["cli_commands"]
+    methods = [contract["request"]["method"] for contract in contracts]
+    command_methods = [command["method"] for command in commands]
+    mutating = [
+        contract["operation"]
+        for contract in contracts
+        if contract["request"].get("mutation_performed") is not False
+        or contract["request"].get("network_mutation_performed") is not False
+        or contract["owner_gate"].get("mutation_performed") is not False
+    ]
+    return [
+        SDKNonInteractiveCheck(
+            name="sdk_thread_methods_complete",
+            status="passed"
+            if methods == ["thread/start", "thread/resume", "turn/start", "thread/read"]
+            else "failed",
+            details={"methods": methods},
+            error=None if len(methods) == 4 else "SDK methods are incomplete",
+        ),
+        SDKNonInteractiveCheck(
+            name="cli_non_interactive_commands_complete",
+            status="passed" if command_methods == methods else "failed",
+            details={"command_methods": command_methods, "sdk_methods": methods},
+            error=None if command_methods == methods else "CLI command methods do not match SDK contracts",
+        ),
+        SDKNonInteractiveCheck(
+            name="no_sdk_or_cli_mutation",
+            status="passed" if not mutating else "failed",
+            details={"mutating_contracts": mutating},
+            error=None if not mutating else "one or more SDK contracts performed mutation",
+        ),
+        SDKNonInteractiveCheck(
+            name="feishu_domestic_v1_primary",
+            status="passed"
+            if report_payload["channel_strategy"].get("domestic_v1_primary") == "feishu"
+            and report_payload["channel_strategy"].get("telegram_required") is False
+            else "failed",
+            details=report_payload["channel_strategy"],
+            error=None
+            if report_payload["channel_strategy"].get("domestic_v1_primary") == "feishu"
+            else "domestic V1 channel is not Feishu-first",
+        ),
+        SDKNonInteractiveCheck(
+            name="no_full_codex_parity_claim",
+            status="passed" if report_payload["full_codex_parity_claimed"] is False else "failed",
+            details={"full_codex_parity_claimed": report_payload["full_codex_parity_claimed"]},
+            error=None
+            if report_payload["full_codex_parity_claimed"] is False
+            else "report claims full Codex parity",
+        ),
+    ]
+
+
+def build_sdk_noninteractive_report() -> SDKNonInteractiveReport:
+    report_payload: dict[str, Any] = {
+        "status": "sdk_noninteractive_contract_ready",
+        "generated_at": _utc_now(),
+        "evidence_type": "sdk_noninteractive_cli_contract",
+        "full_codex_parity_claimed": False,
+        "dry_run": True,
+        "mutation_performed": False,
+        "network_mutation_performed": False,
+        "owner_gate_required": True,
+        "sdk_contracts": _sdk_contracts(),
+        "cli_commands": _cli_commands(),
+        "channel_strategy": _channel_strategy(),
+        "official_sources": list(CODEX_SDK_SOURCES),
+        "known_limits": [
+            "This report builds SDK and CLI envelopes only; it does not call the control-plane API.",
+            "The --execute CLI flag marks intent in the envelope; adapter execution remains owner-gated.",
+            "Feishu remains the only domestic V1 pilot channel in this contract.",
+            "Slack is tracked as a Codex reference surface, but it is non-blocking for the domestic first version.",
+            "Full Codex SDK, CLI, or integrations parity is not claimed.",
+        ],
+    }
+    checks = _build_checks(report_payload)
+    if any(check.status == "failed" for check in checks):
+        report_payload["status"] = "sdk_noninteractive_contract_blocked"
+    return SDKNonInteractiveReport(checks=checks, **report_payload)
+
+
+def render_markdown_report(report: SDKNonInteractiveReport) -> str:
+    contracts = "\n".join(
+        f"- `{item['operation']}` -> `{item['request']['method']}`"
+        for item in report.sdk_contracts
+    )
+    commands = "\n".join(f"- `{item['command']}`" for item in report.cli_commands)
+    checks = "\n".join(f"- {check.name}: `{check.status}`" for check in report.checks)
+    sources = "\n".join(f"- {source}" for source in report.official_sources)
+    limits = "\n".join(f"- {item}" for item in report.known_limits)
+    return (
+        "# X-Agent SDK Non-Interactive Report\n\n"
+        f"- Status: `{report.status}`\n"
+        f"- Generated at: `{report.generated_at}`\n"
+        f"- Dry run: `{report.dry_run}`\n"
+        f"- Mutation performed: `{report.mutation_performed}`\n"
+        f"- Network mutation performed: `{report.network_mutation_performed}`\n"
+        f"- Full Codex parity claimed: `{report.full_codex_parity_claimed}`\n\n"
+        "## SDK Contracts\n\n"
+        f"{contracts}\n\n"
+        "## CLI Commands\n\n"
+        f"{commands}\n\n"
+        "## Channel Strategy\n\n"
+        f"- Domestic V1 primary: `{report.channel_strategy['domestic_v1_primary']}`\n"
+        f"- Telegram required: `{report.channel_strategy['telegram_required']}`\n"
+        f"- Slack blocking: `{report.channel_strategy['slack_blocking']}`\n\n"
+        "## Checks\n\n"
+        f"{checks}\n\n"
+        "## Official Codex Sources\n\n"
+        f"{sources}\n\n"
+        "## Known Limits\n\n"
+        f"{limits}\n"
+    )
+
+
+def write_report(report: SDKNonInteractiveReport, output_path: Path = DEFAULT_OUTPUT) -> None:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(json.dumps(report.to_dict(), ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def write_markdown_report(
+    report: SDKNonInteractiveReport,
+    output_path: Path = DEFAULT_MARKDOWN_OUTPUT,
+) -> None:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(render_markdown_report(report), encoding="utf-8")
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument("--markdown-output", type=Path, default=DEFAULT_MARKDOWN_OUTPUT)
+    return parser.parse_args()
+
+
+def main() -> int:
+    args = parse_args()
+    report = build_sdk_noninteractive_report()
+    write_report(report, args.output)
+    write_markdown_report(report, args.markdown_output)
+    print(f"SDK non-interactive report status: {report.status}")
+    print(f"JSON report written to {args.output}")
+    print(f"Markdown report written to {args.markdown_output}")
+    print(f"Full Codex parity claimed: {report.full_codex_parity_claimed}")
+    print(f"Mutation performed: {report.mutation_performed}")
+    for check in report.checks:
+        print(f"- {check.name}: {check.status}")
+        if check.error:
+            print(f"  error: {check.error}")
+    return 0 if report.status == "sdk_noninteractive_contract_ready" else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

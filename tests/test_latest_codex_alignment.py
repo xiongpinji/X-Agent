@@ -83,12 +83,28 @@ def _approval_sandbox_admin_payload(
     }
 
 
+def _sdk_noninteractive_payload(
+    *,
+    status: str = "sdk_noninteractive_contract_ready",
+    parity: bool = False,
+    mutation: bool = False,
+) -> dict[str, object]:
+    return {
+        "status": status,
+        "evidence_type": "sdk_noninteractive_cli_contract",
+        "full_codex_parity_claimed": parity,
+        "mutation_performed": mutation,
+        "network_mutation_performed": mutation,
+    }
+
+
 def _write_default_evidence(tmp_path: Path) -> dict[str, Path]:
     paths = {
         "customer_pack": tmp_path / "reports" / "commercial-pilot-customer-acceptance-pack.json",
         "github_report": tmp_path / "reports" / "github-review-action-report.json",
         "governance_report": tmp_path / "reports" / "governance-lifecycle-report.json",
         "approval_sandbox_report": tmp_path / "reports" / "approval-sandbox-admin-report.json",
+        "sdk_report": tmp_path / "reports" / "sdk-noninteractive-report.json",
         "control_plane": tmp_path / "docs" / "specs" / "xagent-control-plane-protocol.md",
         "control_plane_api": tmp_path / "backend" / "app" / "api" / "control_plane.py",
         "control_plane_tests": tmp_path / "tests" / "test_control_plane_protocol.py",
@@ -111,6 +127,11 @@ def _write_default_evidence(tmp_path: Path) -> dict[str, Path]:
         "governance_report_tests": tmp_path / "tests" / "test_governance_lifecycle_report.py",
         "github_api": tmp_path / "tests" / "test_issue_to_pr_api.py",
         "github_cli": tmp_path / "tests" / "test_cli_github.py",
+        "sdk_module": tmp_path / "backend" / "app" / "sdk" / "control_plane.py",
+        "sdk_cli": tmp_path / "cli" / "commands" / "sdk_cmd.py",
+        "sdk_tests": tmp_path / "tests" / "test_xagent_sdk_contract.py",
+        "sdk_script": tmp_path / "scripts" / "sdk_noninteractive_report.py",
+        "sdk_report_tests": tmp_path / "tests" / "test_sdk_noninteractive_report.py",
         "workflow": tmp_path / ".github" / "workflows" / "commercial-rc.yml",
         "plan": tmp_path
         / "docs"
@@ -122,8 +143,15 @@ def _write_default_evidence(tmp_path: Path) -> dict[str, Path]:
     _write_json(paths["github_report"], _github_review_action_payload())
     _write_json(paths["governance_report"], _governance_lifecycle_payload())
     _write_json(paths["approval_sandbox_report"], _approval_sandbox_admin_payload())
+    _write_json(paths["sdk_report"], _sdk_noninteractive_payload())
     for key, path in paths.items():
-        if key not in {"customer_pack", "github_report", "governance_report", "approval_sandbox_report"}:
+        if key not in {
+            "customer_pack",
+            "github_report",
+            "governance_report",
+            "approval_sandbox_report",
+            "sdk_report",
+        }:
             _write_text(path)
     return paths
 
@@ -157,6 +185,13 @@ def _evidence_specs(paths: dict[str, Path]) -> tuple[AlignmentEvidenceSpec, ...]
             "runtime_report",
             expected_statuses=frozenset({"approval_sandbox_admin_contract_ready"}),
             expected_evidence_type="approval_sandbox_enterprise_admin_contract",
+        ),
+        AlignmentEvidenceSpec(
+            "sdk_noninteractive_report",
+            paths["sdk_report"],
+            "runtime_report",
+            expected_statuses=frozenset({"sdk_noninteractive_contract_ready"}),
+            expected_evidence_type="sdk_noninteractive_cli_contract",
         ),
         AlignmentEvidenceSpec("control_plane_protocol", paths["control_plane"], "source_doc"),
         AlignmentEvidenceSpec("control_plane_api", paths["control_plane_api"], "source_api"),
@@ -204,6 +239,11 @@ def _evidence_specs(paths: dict[str, Path]) -> tuple[AlignmentEvidenceSpec, ...]
         ),
         AlignmentEvidenceSpec("github_issue_to_pr_tests", paths["github_api"], "source_test"),
         AlignmentEvidenceSpec("github_cli_tests", paths["github_cli"], "source_test"),
+        AlignmentEvidenceSpec("sdk_contract_module", paths["sdk_module"], "source_sdk"),
+        AlignmentEvidenceSpec("sdk_cli_command", paths["sdk_cli"], "source_cli"),
+        AlignmentEvidenceSpec("sdk_contract_tests", paths["sdk_tests"], "source_test"),
+        AlignmentEvidenceSpec("sdk_noninteractive_script", paths["sdk_script"], "source_script"),
+        AlignmentEvidenceSpec("sdk_noninteractive_tests", paths["sdk_report_tests"], "source_test"),
         AlignmentEvidenceSpec("commercial_rc_workflow", paths["workflow"], "source_workflow"),
         AlignmentEvidenceSpec("latest_alignment_plan", paths["plan"], "source_doc"),
     )
@@ -280,6 +320,18 @@ def test_latest_codex_alignment_ready_with_current_evidence(tmp_path: Path) -> N
         "approval_tests",
         "sandbox_security_tests",
     }.issubset(set(approval.evidence))
+    sdk = next(item for item in report.capabilities if item.capability == "cli_and_programmatic_sdk")
+    assert sdk.xagent_status == "sdk_noninteractive_contract_ready"
+    assert {
+        "sdk_noninteractive_report",
+        "sdk_contract_module",
+        "sdk_cli_command",
+        "sdk_contract_tests",
+        "sdk_noninteractive_script",
+        "sdk_noninteractive_tests",
+        "cli_commands_tests",
+        "control_plane_protocol",
+    }.issubset(set(sdk.evidence))
     assert {check.status for check in report.checks} == {"passed"}
     assert all(item.official_sources for item in report.capabilities)
 

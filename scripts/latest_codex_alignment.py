@@ -43,6 +43,7 @@ READY_XAGENT_STATUSES = frozenset(
         "governance_lifecycle_report_ready",
         "github_review_action_report_ready",
         "partial",
+        "sdk_noninteractive_contract_ready",
         "domestic_feishu_first",
     }
 )
@@ -56,6 +57,7 @@ NEXT_TASK_DONE_STATUSES = frozenset(
         "durable_thread_contract_ready",
         "governance_lifecycle_report_ready",
         "github_review_action_report_ready",
+        "sdk_noninteractive_contract_ready",
     }
 )
 
@@ -190,6 +192,13 @@ def build_evidence_specs(root: Path = ROOT, report_dir: Path = REPORT_DIR) -> tu
             expected_evidence_type="approval_sandbox_enterprise_admin_contract",
         ),
         AlignmentEvidenceSpec(
+            "sdk_noninteractive_report",
+            report_dir / "sdk-noninteractive-report.json",
+            "runtime_report",
+            expected_statuses=frozenset({"sdk_noninteractive_contract_ready"}),
+            expected_evidence_type="sdk_noninteractive_cli_contract",
+        ),
+        AlignmentEvidenceSpec(
             "control_plane_protocol",
             root / "docs" / "specs" / "xagent-control-plane-protocol.md",
             "source_doc",
@@ -263,6 +272,23 @@ def build_evidence_specs(root: Path = ROOT, report_dir: Path = REPORT_DIR) -> tu
         ),
         AlignmentEvidenceSpec("github_issue_to_pr_tests", root / "tests" / "test_issue_to_pr_api.py", "source_test"),
         AlignmentEvidenceSpec("github_cli_tests", root / "tests" / "test_cli_github.py", "source_test"),
+        AlignmentEvidenceSpec(
+            "sdk_contract_module",
+            root / "backend" / "app" / "sdk" / "control_plane.py",
+            "source_sdk",
+        ),
+        AlignmentEvidenceSpec("sdk_cli_command", root / "cli" / "commands" / "sdk_cmd.py", "source_cli"),
+        AlignmentEvidenceSpec("sdk_contract_tests", root / "tests" / "test_xagent_sdk_contract.py", "source_test"),
+        AlignmentEvidenceSpec(
+            "sdk_noninteractive_script",
+            root / "scripts" / "sdk_noninteractive_report.py",
+            "source_script",
+        ),
+        AlignmentEvidenceSpec(
+            "sdk_noninteractive_tests",
+            root / "tests" / "test_sdk_noninteractive_report.py",
+            "source_test",
+        ),
         AlignmentEvidenceSpec(
             "commercial_rc_workflow",
             root / ".github" / "workflows" / "commercial-rc.yml",
@@ -463,15 +489,24 @@ def _capabilities() -> list[CodexAlignmentCapability]:
             capability="cli_and_programmatic_sdk",
             codex_surface="Codex CLI, non-interactive mode, and Codex SDK",
             priority="P1",
-            xagent_status="partial",
-            evidence=["cli_commands_tests", "control_plane_protocol"],
-            next_task="Add a stable SDK/non-interactive command contract over the control-plane protocol.",
-            acceptance_command="python -m pytest tests/test_cli_commands.py tests/test_xagent_sdk_contract.py -o addopts=\"\" -p no:cov -p no:cacheprovider -q",
+            xagent_status="sdk_noninteractive_contract_ready",
+            evidence=[
+                "sdk_noninteractive_report",
+                "sdk_contract_module",
+                "sdk_cli_command",
+                "sdk_contract_tests",
+                "sdk_noninteractive_script",
+                "sdk_noninteractive_tests",
+                "cli_commands_tests",
+                "control_plane_protocol",
+            ],
+            next_task="Implement real SDK HTTP adapters and long-running non-interactive execution after the contract report is reviewed.",
+            acceptance_command="python scripts\\sdk_noninteractive_report.py && python -m pytest tests/test_xagent_sdk_contract.py tests/test_sdk_noninteractive_report.py tests/test_cli_commands.py -o addopts=\"\" -p no:cov -p no:cacheprovider -q",
             official_sources=[
                 "https://developers.openai.com/codex/noninteractive",
                 "https://developers.openai.com/codex/sdk",
             ],
-            rationale="CLI exists; SDK-grade control over threads and approvals remains a later productization step.",
+            rationale="X-Agent now exposes SDK-style thread start/resume/run/read envelopes and non-interactive CLI JSON output over the control-plane contract; real HTTP execution remains a future owner-gated adapter.",
         ),
         CodexAlignmentCapability(
             capability="slack_to_domestic_channel_strategy",

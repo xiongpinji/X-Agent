@@ -227,12 +227,22 @@ Expected: selected approval and sandbox tests pass.
 
 **Files:**
 - Modify: `cli/`
-- Add future SDK contract tests under: `tests/`
-- Modify domestic channel docs after Pilot V1 acceptance.
+- Create: `backend/app/sdk/control_plane.py`
+- Create: `cli/commands/sdk_cmd.py`
+- Create: `tests/test_xagent_sdk_contract.py`
+- Create: `scripts/sdk_noninteractive_report.py`
+- Create: `tests/test_sdk_noninteractive_report.py`
+- Modify: `scripts/latest_codex_alignment.py`
+- Modify: `tests/test_latest_codex_alignment.py`
+- Runtime evidence: `.xagent_runtime/reports/sdk-noninteractive-report.json`
+- Runtime evidence: `.xagent_runtime/reports/sdk-noninteractive-report.md`
+- Modify domestic channel docs only after Pilot V1 acceptance.
 
-- [ ] Add SDK-style thread start/resume/run wrappers over the control plane.
-- [ ] Keep Feishu as first domestic channel; add DingTalk or WeChat Work after pilot acceptance.
-- [ ] Keep Slack non-blocking for the domestic first version.
+- [x] Add SDK-style thread start/resume/run wrappers over the control plane.
+- [x] Add non-interactive CLI JSON commands for thread start/resume/turn-run/read envelopes.
+- [x] Keep Feishu as first domestic channel; add DingTalk or WeChat Work after pilot acceptance.
+- [x] Keep Slack non-blocking for the domestic first version.
+- [ ] Implement real SDK HTTP adapters and long-running non-interactive execution after the contract report is reviewed.
 
 ## Completion Criteria
 
