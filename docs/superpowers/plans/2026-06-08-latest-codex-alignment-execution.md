@@ -289,6 +289,27 @@ Expected: selected approval and sandbox tests pass.
 - [x] Keep `--execute` bounded to the owner-gated backend stub; no agent runner, channel send, file, or network mutation is enabled.
 - [ ] Implement owner-approved long-running SDK execution adapters after dry-run adapter review.
 
+### Task 12: SDK Execution Approval Intent Flow
+
+**Target:** Convert SDK write-method `--execute` requests into owner approval intent records without running the agent.
+
+**Files:**
+- Modify: `backend/app/api/control_plane.py`
+- Modify: `scripts/sdk_noninteractive_report.py`
+- Modify: `tests/test_control_plane_protocol.py`
+- Modify: `tests/test_xagent_sdk_contract.py`
+- Modify: `tests/test_sdk_noninteractive_report.py`
+- Modify: `scripts/latest_codex_alignment.py`
+- Modify: `tests/test_latest_codex_alignment.py`
+- Runtime evidence: `.xagent_runtime/reports/sdk-noninteractive-report.json`
+- Runtime evidence: `.xagent_runtime/reports/sdk-noninteractive-report.md`
+
+- [x] Create pending approval intent for SDK write methods submitted to `/api/v1/control-plane/sdk/invoke`.
+- [x] Use normalized approval subject `command` with `sdk:<method>` resource ids.
+- [x] Keep SDK read methods approval-free.
+- [x] Keep approval creation separate from execution; no `mark_executed`, agent runner, channel send, file mutation, or network mutation.
+- [ ] Implement owner-approved long-running SDK execution adapters after approval intent evidence review.
+
 ## Completion Criteria
 
 - `scripts/latest_codex_alignment.py` returns `latest_codex_alignment_plan_ready`.

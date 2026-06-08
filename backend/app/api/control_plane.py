@@ -12,6 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from backend.app.core.audit import AuditStore
 from backend.app.core.approvals import APPROVAL_SUBJECT_ACTIONS, ApprovalSubjectType
+from backend.app.core.contracts import RiskLevel, RunContext
 from backend.app.core.sandbox.security import get_enterprise_safety_policy
 from backend.app.core.security import Principal
 from backend.app.dependencies import (
@@ -822,7 +823,17 @@ async def invoke_sdk_control_plane(
         trace_store,
         approval_store,
     )
-    sdk_metadata = _sdk_backend_stub_metadata(request, control_request, control_response)
+    approval_intent = _sdk_approval_intent(
+        control_request,
+        principal=principal,
+        approval_store=approval_store,
+    )
+    sdk_metadata = _sdk_backend_stub_metadata(
+        request,
+        control_request,
+        control_response,
+        approval_intent=approval_intent,
+    )
     return SDKControlPlaneInvokeResponse(
         id=control_request.id,
         ok=control_response.ok,
@@ -887,9 +898,11 @@ def _sdk_backend_stub_metadata(
     original: SDKControlPlaneInvokeRequest,
     request: ControlPlaneInvokeRequest,
     response: ControlPlaneInvokeResponse,
+    *,
+    approval_intent: dict[str, Any],
 ) -> dict[str, Any]:
     return {
-        "status": "sdk_backend_stub_ready",
+        "status": "sdk_approval_intent_ready",
         "operation": request.context.sdk_operation or original.operation,
         "method": request.method,
         "sdk_surface": request.context.sdk_surface or "python",
@@ -900,16 +913,116 @@ def _sdk_backend_stub_metadata(
         "mutation_performed": False,
         "network_mutation_performed": False,
         "adapter_execution_enabled": False,
+        "approval_intent": approval_intent,
         "approval_sandbox_admin": _sdk_approval_sandbox_admin_contract(request),
         "control_plane_ok": response.ok,
         "control_plane_error_code": response.error.code if response.error else None,
         "known_limits": [
             "This endpoint accepts SDK envelopes and normalizes them into the control-plane contract.",
+            "Write-method invocations create a pending owner approval intent but do not execute it.",
             "No SDK HTTP adapter execution, agent runner invocation, channel send, file change, or network mutation is enabled.",
             "Write methods remain owner-gated behind the approval/sandbox/admin contract.",
             "Feishu remains the only domestic V1 pilot channel.",
         ],
     }
+
+
+def _sdk_approval_intent(
+    request: ControlPlaneInvokeRequest,
+    *,
+    principal: Principal,
+    approval_store: object,
+) -> dict[str, Any]:
+    spec = METHODS_BY_NAME.get(request.method)
+    if spec is None or spec.operation_kind == "read":
+        return {
+            "required": False,
+            "created": False,
+            "approval_id": None,
+            "status": "not_required",
+            "mutation_performed": False,
+        }
+
+    approval_contract = _sdk_approval_sandbox_admin_contract(request)
+    context = RunContext(
+        trace_id=request.context.trace_id or principal.trace_id or f"trace_{uuid4().hex}",
+        tenant_id=request.context.tenant_id or principal.tenant_id,
+        user_id=request.context.user_id or request.context.actor_id or principal.user_id,
+        request_id=request.id,
+        permission_scope=_permission_scope_from_request(request),
+        risk_level=RiskLevel.HIGH,
+    )
+    create = getattr(approval_store, "create_approval", None)
+    if not callable(create):
+        return {
+            "required": True,
+            "created": False,
+            "approval_id": None,
+            "status": "approval_store_unavailable",
+            "mutation_performed": False,
+        }
+
+    record = create(
+        context=context,
+        resource_type="command",
+        resource_id=f"sdk:{request.method}",
+        action=approval_contract["action"],
+        risk_level=RiskLevel.HIGH,
+        reason=f"Owner approval required before SDK non-interactive execution for {request.method}.",
+        arguments_preview=_sdk_approval_arguments_preview(request),
+        arguments={},
+        subject_type=ApprovalSubjectType.COMMAND,
+        sandbox_profile=approval_contract["sandbox_profile"],
+        owner_gate_required=True,
+        audit_required=True,
+        policy_snapshot={
+            "source": "sdk_control_plane",
+            "method": request.method,
+            "operation": request.context.sdk_operation,
+            "idempotency_key_present": bool(request.idempotency_key),
+            "adapter_execution_enabled": False,
+            "mutation_performed": False,
+        },
+    )
+    return {
+        "required": True,
+        "created": True,
+        "approval_id": getattr(record, "id", None),
+        "status": _status_value(getattr(record, "status", None)),
+        "subject_type": _status_value(getattr(record, "subject_type", None)),
+        "resource_type": getattr(record, "resource_type", None),
+        "resource_id": getattr(record, "resource_id", None),
+        "action": getattr(record, "action", None),
+        "risk_level": _status_value(getattr(record, "risk_level", None)),
+        "sandbox_profile": getattr(record, "sandbox_profile", None),
+        "owner_gate_required": getattr(record, "owner_gate_required", True),
+        "audit_required": getattr(record, "audit_required", True),
+        "mutation_performed": False,
+        "adapter_execution_enabled": False,
+    }
+
+
+def _permission_scope_from_request(request: ControlPlaneInvokeRequest) -> list[str]:
+    scope = request.params.get("permission_scope")
+    if isinstance(scope, list) and all(isinstance(item, str) for item in scope):
+        return list(scope)
+    return ["tools:read", "memory:read"]
+
+
+def _sdk_approval_arguments_preview(request: ControlPlaneInvokeRequest) -> dict[str, Any]:
+    preview: dict[str, Any] = {
+        "method": request.method,
+        "operation": request.context.sdk_operation,
+        "dry_run": request.dry_run,
+        "idempotency_key_present": bool(request.idempotency_key),
+        "adapter_execution_enabled": False,
+        "mutation_performed": False,
+    }
+    for key in ("thread_id", "task", "input"):
+        value = request.params.get(key)
+        if isinstance(value, str):
+            preview[key] = value[:200]
+    return preview
 
 
 def _sdk_approval_sandbox_admin_contract(request: ControlPlaneInvokeRequest) -> dict[str, Any]:

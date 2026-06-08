@@ -88,13 +88,19 @@ def test_cli_sdk_turn_run_execute_flag_calls_backend_stub_without_agent_executio
     set_current_config(CLIConfig(api_base_url="http://localhost:8000", output_format="json"))
     mock_client = AsyncMock()
     mock_client.invoke_sdk_contract.return_value = {
-        "status": "sdk_backend_stub_ready",
+        "status": "sdk_approval_intent_ready",
         "sdk": {
             "method": "turn/start",
             "dry_run": False,
             "adapter_execution_enabled": False,
             "mutation_performed": False,
             "network_mutation_performed": False,
+            "approval_intent": {
+                "required": True,
+                "created": True,
+                "status": "pending",
+                "mutation_performed": False,
+            },
         },
         "control_plane": {
             "ok": False,
@@ -110,11 +116,13 @@ def test_cli_sdk_turn_run_execute_flag_calls_backend_stub_without_agent_executio
 
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
-    assert payload["status"] == "sdk_backend_stub_ready"
+    assert payload["status"] == "sdk_approval_intent_ready"
     assert payload["sdk"]["method"] == "turn/start"
     assert payload["sdk"]["dry_run"] is False
     assert payload["sdk"]["adapter_execution_enabled"] is False
     assert payload["sdk"]["mutation_performed"] is False
+    assert payload["sdk"]["approval_intent"]["created"] is True
+    assert payload["sdk"]["approval_intent"]["status"] == "pending"
     assert payload["control_plane"]["error"]["code"] == "adapter_pending"
 
     mock_client.invoke_sdk_contract.assert_awaited_once()

@@ -85,7 +85,7 @@ def _approval_sandbox_admin_payload(
 
 def _sdk_noninteractive_payload(
     *,
-    status: str = "sdk_http_dry_run_adapter_ready",
+    status: str = "sdk_approval_intent_ready",
     parity: bool = False,
     mutation: bool = False,
 ) -> dict[str, object]:
@@ -195,6 +195,7 @@ def _evidence_specs(paths: dict[str, Path]) -> tuple[AlignmentEvidenceSpec, ...]
                     "sdk_noninteractive_contract_ready",
                     "sdk_backend_stub_ready",
                     "sdk_http_dry_run_adapter_ready",
+                    "sdk_approval_intent_ready",
                 }
             ),
             expected_evidence_type="sdk_noninteractive_cli_contract",
@@ -327,7 +328,7 @@ def test_latest_codex_alignment_ready_with_current_evidence(tmp_path: Path) -> N
         "sandbox_security_tests",
     }.issubset(set(approval.evidence))
     sdk = next(item for item in report.capabilities if item.capability == "cli_and_programmatic_sdk")
-    assert sdk.xagent_status == "sdk_http_dry_run_adapter_ready"
+    assert sdk.xagent_status == "sdk_approval_intent_ready"
     assert {
         "sdk_noninteractive_report",
         "sdk_contract_module",
