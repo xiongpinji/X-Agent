@@ -23,6 +23,9 @@ def test_channel_readiness_matrix_marks_feishu_owner_gated_for_domestic_pilot(
     assert feishu.owner_gated is True
     assert feishu.recommended_for_first_pilot is True
     assert any(capability.name == "live_owner_evidence" for capability in feishu.capabilities)
+    outbound = next(capability for capability in feishu.capabilities if capability.name == "outbound_owner_gate")
+    assert outbound.status == "preview"
+    assert outbound.details["optional"] is True
 
 
 def test_channel_readiness_matrix_keeps_telegram_as_preview() -> None:
@@ -60,6 +63,8 @@ def test_channel_readiness_matrix_marks_feishu_ready_when_live_evidence_passes(
     def fake_read_json(path: str):
         if path == ".xagent_runtime/reports/commercial-pilot-feishu-live.json":
             return json.loads(report_path.read_text(encoding="utf-8"))
+        if path == ".xagent_runtime/reports/commercial-pilot-feishu-outbound-live.json":
+            return None
         return original_read_json(path)
 
     monkeypatch.setattr(channel_readiness, "_read_json", fake_read_json)
@@ -70,6 +75,128 @@ def test_channel_readiness_matrix_marks_feishu_ready_when_live_evidence_passes(
     assert live.status == "passed"
     assert live.details["event_id"] == "live-feishu-event"
     assert feishu.status == "ready"
+    outbound = next(capability for capability in feishu.capabilities if capability.name == "outbound_owner_gate")
+    assert outbound.status == "preview"
+
+
+def test_channel_readiness_matrix_marks_optional_feishu_outbound_ready_to_execute_as_preview(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake_read_json(path: str):
+        if path == ".xagent_runtime/reports/commercial-pilot-feishu-live.json":
+            return {
+                "status": "passed",
+                "channel": "feishu",
+                "evidence_type": "commercial_pilot_feishu_live",
+                "event_id": "live-feishu-event",
+                "event_type": "im.message.receive_v1",
+                "signature_mode": "lark_sha256",
+                "mutation_performed": False,
+                "outbound_message_sent": False,
+            }
+        if path == ".xagent_runtime/reports/commercial-pilot-feishu-outbound-live.json":
+            return {
+                "status": "ready_to_execute",
+                "channel": "feishu",
+                "evidence_type": "commercial_pilot_feishu_outbound_live",
+                "execute_requested": False,
+                "owner_approved": False,
+                "mutation_performed": False,
+                "outbound_message_sent": False,
+                "attempted_outbound_message_send": False,
+                "full_codex_parity_claimed": False,
+            }
+        return None
+
+    monkeypatch.setattr(channel_readiness, "_read_json", fake_read_json)
+    report = build_channel_readiness_matrix(pilot_channel="feishu")
+
+    feishu = next(channel for channel in report.channels if channel.channel == "feishu")
+    outbound = next(capability for capability in feishu.capabilities if capability.name == "outbound_owner_gate")
+    assert feishu.status == "ready"
+    assert outbound.status == "preview"
+    assert outbound.details["source_status"] == "ready_to_execute"
+    assert outbound.details["mutation_performed"] is False
+    assert outbound.details["outbound_message_sent"] is False
+
+
+def test_channel_readiness_matrix_marks_optional_feishu_outbound_passed_after_owner_send(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake_read_json(path: str):
+        if path == ".xagent_runtime/reports/commercial-pilot-feishu-live.json":
+            return {
+                "status": "passed",
+                "channel": "feishu",
+                "evidence_type": "commercial_pilot_feishu_live",
+                "event_id": "live-feishu-event",
+                "event_type": "im.message.receive_v1",
+                "signature_mode": "lark_sha256",
+                "mutation_performed": False,
+                "outbound_message_sent": False,
+            }
+        if path == ".xagent_runtime/reports/commercial-pilot-feishu-outbound-live.json":
+            return {
+                "status": "passed",
+                "channel": "feishu",
+                "evidence_type": "commercial_pilot_feishu_outbound_live",
+                "execute_requested": True,
+                "owner_approved": True,
+                "mutation_performed": True,
+                "outbound_message_sent": True,
+                "attempted_outbound_message_send": True,
+                "full_codex_parity_claimed": False,
+            }
+        return None
+
+    monkeypatch.setattr(channel_readiness, "_read_json", fake_read_json)
+    report = build_channel_readiness_matrix(pilot_channel="feishu")
+
+    feishu = next(channel for channel in report.channels if channel.channel == "feishu")
+    outbound = next(capability for capability in feishu.capabilities if capability.name == "outbound_owner_gate")
+    assert feishu.status == "ready"
+    assert outbound.status == "passed"
+    assert outbound.details["execute_requested"] is True
+    assert outbound.details["owner_approved"] is True
+
+
+def test_channel_readiness_matrix_rejects_unsafe_feishu_outbound_report_as_preview(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake_read_json(path: str):
+        if path == ".xagent_runtime/reports/commercial-pilot-feishu-live.json":
+            return {
+                "status": "passed",
+                "channel": "feishu",
+                "evidence_type": "commercial_pilot_feishu_live",
+                "event_id": "live-feishu-event",
+                "event_type": "im.message.receive_v1",
+                "signature_mode": "lark_sha256",
+                "mutation_performed": False,
+                "outbound_message_sent": False,
+            }
+        if path == ".xagent_runtime/reports/commercial-pilot-feishu-outbound-live.json":
+            return {
+                "status": "passed",
+                "channel": "feishu",
+                "evidence_type": "commercial_pilot_feishu_outbound_live",
+                "execute_requested": True,
+                "owner_approved": True,
+                "mutation_performed": True,
+                "outbound_message_sent": True,
+                "attempted_outbound_message_send": True,
+                "full_codex_parity_claimed": True,
+            }
+        return None
+
+    monkeypatch.setattr(channel_readiness, "_read_json", fake_read_json)
+    report = build_channel_readiness_matrix(pilot_channel="feishu")
+
+    feishu = next(channel for channel in report.channels if channel.channel == "feishu")
+    outbound = next(capability for capability in feishu.capabilities if capability.name == "outbound_owner_gate")
+    assert feishu.status == "ready"
+    assert outbound.status == "preview"
+    assert "not accepted" in str(outbound.error)
 
 
 def test_channel_readiness_matrix_marks_preview_channels() -> None:

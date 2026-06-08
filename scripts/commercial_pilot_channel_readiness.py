@@ -79,6 +79,17 @@ def _capability(name: str, passed: bool, *, details: dict[str, Any], required: b
     )
 
 
+def _optional_capability(name: str, *, passed: bool, details: dict[str, Any], error: str | None = None) -> ChannelCapability:
+    if passed:
+        return ChannelCapability(name=name, status="passed", details=details)
+    return ChannelCapability(
+        name=name,
+        status="preview",
+        details=details,
+        error=error or "optional channel capability is not complete",
+    )
+
+
 def _channel_status(capabilities: list[ChannelCapability], *, owner_gated: bool) -> str:
     statuses = {capability.status for capability in capabilities}
     if "action_required" in statuses:
@@ -86,6 +97,78 @@ def _channel_status(capabilities: list[ChannelCapability], *, owner_gated: bool)
     if statuses <= {"passed", "preview"} and "preview" in statuses:
         return "ready" if owner_gated else "preview"
     return "ready"
+
+
+def _feishu_outbound_owner_gate_capability() -> ChannelCapability:
+    outbound_evidence_path = ".xagent_runtime/reports/commercial-pilot-feishu-outbound-live.json"
+    outbound_evidence = _read_json(outbound_evidence_path)
+    details = {
+        "optional": True,
+        "required_report": outbound_evidence_path,
+        "source_status": outbound_evidence.get("status") if outbound_evidence else None,
+        "evidence_type": outbound_evidence.get("evidence_type") if outbound_evidence else None,
+        "execute_requested": outbound_evidence.get("execute_requested") if outbound_evidence else None,
+        "owner_approved": outbound_evidence.get("owner_approved") if outbound_evidence else None,
+        "mutation_performed": outbound_evidence.get("mutation_performed") if outbound_evidence else None,
+        "outbound_message_sent": outbound_evidence.get("outbound_message_sent") if outbound_evidence else None,
+        "attempted_outbound_message_send": (
+            outbound_evidence.get("attempted_outbound_message_send") if outbound_evidence else None
+        ),
+        "full_codex_parity_claimed": (
+            outbound_evidence.get("full_codex_parity_claimed") if outbound_evidence else None
+        ),
+    }
+    if outbound_evidence is None:
+        return _optional_capability(
+            "outbound_owner_gate",
+            passed=False,
+            details=details,
+            error="optional outbound Feishu owner gate has not been run",
+        )
+
+    outbound_passed = bool(
+        outbound_evidence.get("status") == "passed"
+        and outbound_evidence.get("channel") == "feishu"
+        and outbound_evidence.get("evidence_type") == "commercial_pilot_feishu_outbound_live"
+        and outbound_evidence.get("execute_requested") is True
+        and outbound_evidence.get("owner_approved") is True
+        and outbound_evidence.get("mutation_performed") is True
+        and outbound_evidence.get("outbound_message_sent") is True
+        and outbound_evidence.get("full_codex_parity_claimed") is False
+    )
+    if outbound_passed:
+        return _optional_capability("outbound_owner_gate", passed=True, details=details)
+
+    if (
+        outbound_evidence.get("status") == "ready_to_execute"
+        and outbound_evidence.get("mutation_performed") is False
+        and outbound_evidence.get("outbound_message_sent") is False
+    ):
+        return _optional_capability(
+            "outbound_owner_gate",
+            passed=False,
+            details=details,
+            error="optional outbound Feishu owner gate is ready to execute but has not sent a real message",
+        )
+
+    if (
+        outbound_evidence.get("status") == "owner_action_required"
+        and outbound_evidence.get("mutation_performed") is False
+        and outbound_evidence.get("outbound_message_sent") is False
+    ):
+        return _optional_capability(
+            "outbound_owner_gate",
+            passed=False,
+            details=details,
+            error="optional outbound Feishu owner gate still requires owner action",
+        )
+
+    return _optional_capability(
+        "outbound_owner_gate",
+        passed=False,
+        details=details,
+        error="optional outbound Feishu owner gate report is not accepted for pilot promotion",
+    )
 
 
 def _telegram_readiness() -> ChannelReadiness:
@@ -187,6 +270,7 @@ def _feishu_readiness() -> ChannelReadiness:
             details={"required_path": "backend/app/core/channels/feishu_adapter.py"},
             required=False,
         ),
+        _feishu_outbound_owner_gate_capability(),
         _capability(
             "live_owner_evidence",
             live_evidence_passed,
@@ -202,22 +286,26 @@ def _feishu_readiness() -> ChannelReadiness:
         next_actions = [
             "Use Feishu as the first domestic commercial pilot channel.",
             "Review commercial-pilot-feishu-live.json before making the production-pilot readiness claim.",
+            "Run commercial_pilot_feishu_outbound_smoke.py only if the owner approves a separate outbound send.",
             "Add a unified Feishu ChannelAdapter before promoting beyond owner-gated pilot.",
         ]
         known_limits = [
             "Feishu currently uses a dedicated bridge instead of the unified ChannelAdapter framework.",
             "Live app credentials remain owner-controlled; this evidence proves inbound event delivery only.",
+            "Outbound Feishu send is optional and separately owner-gated for Pilot V1.",
         ]
     else:
         next_actions = [
             "Use Feishu as the first domestic commercial pilot channel.",
             "Configure Feishu app_id, app_secret, and encrypt_key in the owner environment.",
             "Run a live Feishu event and capture commercial-pilot-feishu-live.json.",
+            "Keep outbound Feishu send separate until inbound live evidence is ready.",
             "Add a unified Feishu ChannelAdapter before promoting beyond owner-gated pilot.",
         ]
         known_limits = [
             "Feishu currently uses a dedicated bridge instead of the unified ChannelAdapter framework.",
             "Live app credentials and callback verification remain owner-gated.",
+            "Outbound Feishu send is optional and separately owner-gated for Pilot V1.",
         ]
     return ChannelReadiness(
         channel="feishu",

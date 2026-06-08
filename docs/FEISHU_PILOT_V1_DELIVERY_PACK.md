@@ -266,6 +266,24 @@ From `.xagent_runtime/reports/commercial-pilot-handoff-status.json`:
 - `checks[].error`
 - `known_limits[]`
 
+From `.xagent_runtime/reports/commercial-pilot-channel-readiness.json`:
+
+- `channels[].channel`
+- `channels[].status`
+- `channels[].capabilities[].name`
+- `channels[].capabilities[].status`
+- `channels[].capabilities[].details.optional`
+- `channels[].capabilities[].details.source_status`
+- `channels[].capabilities[].details.mutation_performed`
+- `channels[].capabilities[].details.outbound_message_sent`
+- `channels[].capabilities[].error`
+
+For Feishu, `outbound_owner_gate` is optional in Pilot V1:
+
+- `preview`: outbound send is not yet owner-approved or is only dry-run ready.
+- `passed`: one owner-approved outbound test send has completed.
+- It must not change inbound pilot readiness by itself.
+
 Suggested UI status mapping:
 
 | Report status | UI label | Meaning |
