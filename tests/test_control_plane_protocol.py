@@ -2135,6 +2135,183 @@ def test_sdk_runtime_flag_enablement_rejects_without_dry_run_guard() -> None:
     assert audit_store.list(action="sdk.write_runner.runtime_flag_enablement_requested") == []
 
 
+def test_sdk_runtime_flag_application_preflight_records_without_applying_flag() -> None:
+    approval_store = ApprovalStore()
+    audit_store = AuditStore(hmac_secret="test-secret")
+    context = RunContext(
+        trace_id="trace-flag-preflight",
+        tenant_id="default",
+        user_id="operator",
+        request_id="req-flag-preflight",
+    )
+    approval = approval_store.create_approval(
+        context=context,
+        resource_type="command",
+        resource_id="sdk:turn/start",
+        action="command.execute",
+        risk_level=RiskLevel.HIGH,
+        reason="Owner-approved SDK runtime flag application preflight.",
+        arguments_preview={"method": "turn/start", "adapter_execution_enabled": False},
+    )
+    approval_store.approve(
+        approval.id,
+        ApprovalDecisionRequest(decided_by="owner", reason="ready for runtime flag preflight"),
+    )
+    enablement_audit = audit_store.record(
+        action="sdk.write_runner.runtime_flag_enablement_requested",
+        resource_type="sdk_write_runner_runtime_flag_enablement_request",
+        resource_id="flag-enable-preflight-1",
+        outcome="accepted",
+        tenant_id="default",
+        actor_id="operator",
+        details={
+            "approval_id": approval.id,
+            "final_decision_id": "final-decision-preflight-1",
+            "runtime_flag_enablement": {
+                "runtime_flag_enablement_id": "flag-enable-preflight-1",
+                "approval_id": approval.id,
+                "final_decision_id": "final-decision-preflight-1",
+                "final_decision_audit_id": "audit-final-decision-preflight-1",
+                "implementation_lock_id": "lock-preflight-1",
+                "readiness_receipt_id": "readiness-preflight-1",
+                "runtime_flag_name": "XAGENT_SDK_WRITE_RUNNER_ENABLED",
+                "requested_by": "owner",
+                "requested_at": "2026-06-08T04:00:00Z",
+                "enablement_reason": "owner requested explicit runtime flag enablement",
+                "enablement_hash": "hash-flag-enable-preflight",
+            },
+        },
+    )
+
+    with _client_with_stores(RunStore(), TraceStore(), approval_store, audit_store) as client:
+        response = client.post(
+            "/api/v1/control-plane/sdk/runtime-flag/application-preflight/record",
+            json={
+                "runtime_flag_preflight_id": "flag-preflight-record-1",
+                "approval_id": approval.id,
+                "runtime_flag_enablement_id": "flag-enable-preflight-1",
+                "runtime_flag_enablement_audit_id": enablement_audit.id,
+                "final_decision_id": "final-decision-preflight-1",
+                "runtime_flag_name": "XAGENT_SDK_WRITE_RUNNER_ENABLED",
+                "target_state": "enabled",
+                "requested_by": "owner",
+                "requested_at": "2026-06-08T05:00:00Z",
+                "preflight_reason": "owner requested runtime flag application preflight",
+                "rollback_plan_ref": "runbooks/sdk-write-runner-rollback.md",
+                "smoke_runbook_ref": "runbooks/sdk-write-runner-smoke.md",
+                "preflight_hash": "hash-flag-preflight",
+                "dry_run": True,
+            },
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["ok"] is True
+    assert payload["status"] == "sdk_runtime_flag_application_preflight_workflow_ready"
+    preflight = payload["runtime_flag_preflight"]
+    assert preflight["record_status"] == "recorded"
+    assert preflight["audit_event_recorded"] is True
+    assert preflight["audit_action"] == "sdk.write_runner.runtime_flag_application_preflight_recorded"
+    assert preflight["checks"]["approval_status_approved"] is True
+    assert preflight["checks"]["runtime_flag_enablement_audit_record_present"] is True
+    assert preflight["checks"]["runtime_flag_enablement_validation_valid"] is True
+    assert preflight["checks"]["runtime_flag_preflight_valid"] is True
+    assert preflight["runtime_flag_enabled"] is False
+    assert preflight["flag_application_performed"] is False
+    assert preflight["implementation_enabled"] is False
+    assert preflight["write_runner_enabled"] is False
+    assert preflight["agent_execution_enabled"] is False
+    assert preflight["runner_invoked"] is False
+    assert preflight["mark_executed"] is False
+    assert preflight["mutation_performed"] is False
+    assert approval_store.get(approval.id).status == "approved"
+    assert approval_store.get(approval.id).executed_at is None
+
+
+def test_sdk_runtime_flag_application_preflight_rejects_without_dry_run_guard() -> None:
+    approval_store = ApprovalStore()
+    audit_store = AuditStore(hmac_secret="test-secret")
+    context = RunContext(
+        trace_id="trace-flag-preflight-reject",
+        tenant_id="default",
+        user_id="operator",
+        request_id="req-flag-preflight-reject",
+    )
+    approval = approval_store.create_approval(
+        context=context,
+        resource_type="command",
+        resource_id="sdk:turn/start",
+        action="command.execute",
+        risk_level=RiskLevel.HIGH,
+        reason="Owner-approved SDK runtime flag preflight reject.",
+        arguments_preview={"method": "turn/start", "adapter_execution_enabled": False},
+    )
+    approval_store.approve(
+        approval.id,
+        ApprovalDecisionRequest(decided_by="owner", reason="ready for runtime flag preflight reject"),
+    )
+    enablement_audit = audit_store.record(
+        action="sdk.write_runner.runtime_flag_enablement_requested",
+        resource_type="sdk_write_runner_runtime_flag_enablement_request",
+        resource_id="flag-enable-preflight-reject",
+        outcome="accepted",
+        tenant_id="default",
+        actor_id="operator",
+        details={
+            "approval_id": approval.id,
+            "final_decision_id": "final-decision-preflight-reject",
+            "runtime_flag_enablement": {
+                "runtime_flag_enablement_id": "flag-enable-preflight-reject",
+                "approval_id": approval.id,
+                "final_decision_id": "final-decision-preflight-reject",
+                "final_decision_audit_id": "audit-final-decision-preflight-reject",
+                "implementation_lock_id": "lock-preflight-reject",
+                "readiness_receipt_id": "readiness-preflight-reject",
+                "runtime_flag_name": "XAGENT_SDK_WRITE_RUNNER_ENABLED",
+                "requested_by": "owner",
+                "requested_at": "2026-06-08T04:00:00Z",
+                "enablement_reason": "owner requested explicit runtime flag enablement",
+                "enablement_hash": "hash-flag-enable-preflight-reject",
+            },
+        },
+    )
+
+    with _client_with_stores(RunStore(), TraceStore(), approval_store, audit_store) as client:
+        response = client.post(
+            "/api/v1/control-plane/sdk/runtime-flag/application-preflight/record",
+            json={
+                "runtime_flag_preflight_id": "flag-preflight-rejected-1",
+                "approval_id": approval.id,
+                "runtime_flag_enablement_id": "flag-enable-preflight-reject",
+                "runtime_flag_enablement_audit_id": enablement_audit.id,
+                "final_decision_id": "final-decision-preflight-reject",
+                "runtime_flag_name": "XAGENT_SDK_WRITE_RUNNER_ENABLED",
+                "target_state": "enabled",
+                "requested_by": "owner",
+                "requested_at": "2026-06-08T05:00:00Z",
+                "preflight_reason": "should not apply runtime flag without dry-run guard",
+                "rollback_plan_ref": "runbooks/sdk-write-runner-rollback.md",
+                "smoke_runbook_ref": "runbooks/sdk-write-runner-smoke.md",
+                "preflight_hash": "hash-flag-preflight-reject",
+                "dry_run": False,
+            },
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["ok"] is False
+    preflight = payload["runtime_flag_preflight"]
+    assert preflight["record_status"] == "rejected"
+    assert preflight["checks"]["dry_run_does_not_apply_flag"] is False
+    assert preflight["audit_event_recorded"] is False
+    assert preflight["runtime_flag_enabled"] is False
+    assert preflight["flag_application_performed"] is False
+    assert preflight["write_runner_enabled"] is False
+    assert preflight["runner_invoked"] is False
+    assert preflight["mutation_performed"] is False
+    assert audit_store.list(action="sdk.write_runner.runtime_flag_application_preflight_recorded") == []
+
+
 def test_control_plane_rejects_raw_secret_payloads() -> None:
     response = _client().post(
         "/api/v1/control-plane/invoke",

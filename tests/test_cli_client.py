@@ -816,6 +816,62 @@ class TestHTTPClient:
             assert result["runtime_flag_enablement"]["mutation_performed"] is False
 
     @pytest.mark.asyncio
+    async def test_http_client_record_sdk_runtime_flag_application_preflight_calls_owner_gated_stub(self):
+        """Test SDK runtime flag application preflight uses the backend evidence stub."""
+        config = CLIConfig(api_base_url="http://localhost:8000")
+        client = HTTPClient(config)
+        payload = {
+            "runtime_flag_preflight_id": "flag-preflight-1",
+            "approval_id": "approval-1",
+            "runtime_flag_enablement_id": "flag-enable-1",
+            "runtime_flag_enablement_audit_id": "audit-flag-enable-1",
+            "final_decision_id": "final-decision-1",
+            "runtime_flag_name": "XAGENT_SDK_WRITE_RUNNER_ENABLED",
+            "target_state": "enabled",
+            "requested_by": "owner",
+            "requested_at": "2026-06-08T00:00:00Z",
+            "preflight_reason": "owner requested runtime flag application preflight",
+            "rollback_plan_ref": "runbooks/sdk-write-runner-rollback.md",
+            "smoke_runbook_ref": "runbooks/sdk-write-runner-smoke.md",
+            "preflight_hash": "hash-flag-preflight-1",
+        }
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "ok": True,
+            "status": "sdk_runtime_flag_application_preflight_workflow_ready",
+            "runtime_flag_preflight": {
+                "audit_event_recorded": True,
+                "runtime_flag_enabled": False,
+                "flag_application_performed": False,
+                "implementation_enabled": False,
+                "write_runner_enabled": False,
+                "runner_invoked": False,
+                "mark_executed": False,
+                "mutation_performed": False,
+            },
+        }
+
+        with patch.object(
+            httpx.AsyncClient,
+            "request",
+            new_callable=AsyncMock,
+            return_value=mock_response,
+        ) as mock_request:
+            result = await client.record_sdk_runtime_flag_application_preflight(payload)
+
+            call_args = mock_request.call_args
+            assert call_args[0][0] == "POST"
+            assert call_args[0][1] == "/api/v1/control-plane/sdk/runtime-flag/application-preflight/record"
+            assert call_args[1]["json"] == payload
+            assert result["status"] == "sdk_runtime_flag_application_preflight_workflow_ready"
+            assert result["runtime_flag_preflight"]["runtime_flag_enabled"] is False
+            assert result["runtime_flag_preflight"]["flag_application_performed"] is False
+            assert result["runtime_flag_preflight"]["write_runner_enabled"] is False
+            assert result["runtime_flag_preflight"]["runner_invoked"] is False
+            assert result["runtime_flag_preflight"]["mutation_performed"] is False
+
+    @pytest.mark.asyncio
     async def test_http_client_list_agents(self):
         """Test list_agents calls correct endpoint."""
         config = CLIConfig(api_base_url="http://localhost:8000")
@@ -1171,6 +1227,15 @@ class TestLocalClient:
 
         with pytest.raises(NotImplementedError, match="SDK runtime flag enablement recording"):
             await client.record_sdk_runtime_flag_enablement({"approval_id": "approval-1"})
+
+    @pytest.mark.asyncio
+    async def test_local_client_record_sdk_runtime_flag_application_preflight_not_implemented(self):
+        """Test SDK runtime flag application preflight recording is HTTP-only."""
+        config = CLIConfig(mode="local")
+        client = LocalClient(config)
+
+        with pytest.raises(NotImplementedError, match="SDK runtime flag application preflight recording"):
+            await client.record_sdk_runtime_flag_application_preflight({"approval_id": "approval-1"})
 
     @pytest.mark.asyncio
     async def test_local_client_health_check_healthy(self):

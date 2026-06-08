@@ -308,6 +308,35 @@ def test_sdk_resume_run_and_read_thread_methods_are_stable() -> None:
     assert runtime_flag_enablement["owner_gate"]["write_runner_enabled"] is False
     assert runtime_flag_enablement["owner_gate"]["runner_invoked"] is False
     assert runtime_flag_enablement["mutation_performed"] is False
+    runtime_flag_preflight = sdk.record_runtime_flag_application_preflight(
+        runtime_flag_preflight_id="flag-preflight-1",
+        approval_id="approval-1",
+        runtime_flag_enablement_id="flag-enable-1",
+        runtime_flag_enablement_audit_id="audit-flag-enable-1",
+        final_decision_id="final-decision-1",
+        requested_by="owner",
+        requested_at="2026-06-08T00:00:00Z",
+        preflight_reason="owner requested live runtime flag application preflight",
+        rollback_plan_ref="runbooks/sdk-write-runner-rollback.md",
+        smoke_runbook_ref="runbooks/sdk-write-runner-smoke.md",
+        preflight_hash="hash-flag-preflight-1",
+    ).to_dict()
+    assert runtime_flag_preflight["operation"] == "runtime_flag_application_preflight_record"
+    assert (
+        runtime_flag_preflight["endpoint"]
+        == "/api/v1/control-plane/sdk/runtime-flag/application-preflight/record"
+    )
+    assert runtime_flag_preflight["request"]["target_state"] == "enabled"
+    assert runtime_flag_preflight["request"]["runtime_flag_name"] == "XAGENT_SDK_WRITE_RUNNER_ENABLED"
+    assert runtime_flag_preflight["owner_gate"]["requires_runtime_flag_enablement_intent"] is True
+    assert runtime_flag_preflight["owner_gate"]["requires_rollback_plan"] is True
+    assert runtime_flag_preflight["owner_gate"]["requires_smoke_runbook"] is True
+    assert runtime_flag_preflight["owner_gate"]["marks_approval_executed"] is False
+    assert runtime_flag_preflight["owner_gate"]["runtime_flag_enabled"] is False
+    assert runtime_flag_preflight["owner_gate"]["flag_application_performed"] is False
+    assert runtime_flag_preflight["owner_gate"]["write_runner_enabled"] is False
+    assert runtime_flag_preflight["owner_gate"]["runner_invoked"] is False
+    assert runtime_flag_preflight["mutation_performed"] is False
 
 
 def test_sdk_contract_keeps_feishu_domestic_v1_primary() -> None:
@@ -1516,5 +1545,81 @@ def test_cli_sdk_runtime_flag_enable_execute_flag_records_intent_only() -> None:
     assert request["readiness_receipt_id"] == "readiness-1"
     assert request["runtime_flag_name"] == "XAGENT_SDK_WRITE_RUNNER_ENABLED"
     assert request["enablement_hash"] == "hash-flag-enable-1"
+    assert request["dry_run"] is False
+    mock_client.invoke_sdk_contract.assert_not_called()
+
+
+def test_cli_sdk_runtime_flag_application_preflight_execute_flag_records_preflight_only() -> None:
+    set_current_config(CLIConfig(api_base_url="http://localhost:8000", output_format="json"))
+    mock_client = AsyncMock()
+    mock_client.record_sdk_runtime_flag_application_preflight.return_value = {
+        "ok": True,
+        "status": "sdk_runtime_flag_application_preflight_workflow_ready",
+        "runtime_flag_preflight": {
+            "record_status": "recorded",
+            "audit_event_recorded": True,
+            "runtime_flag_enabled": False,
+            "flag_application_performed": False,
+            "implementation_enabled": False,
+            "write_runner_enabled": False,
+            "agent_execution_enabled": False,
+            "runner_invoked": False,
+            "mark_executed": False,
+            "mutation_performed": False,
+        },
+    }
+
+    with patch("cli.commands.sdk_cmd.create_client", return_value=mock_client):
+        result = CliRunner().invoke(
+            app,
+            [
+                "sdk",
+                "runtime-flag-application-preflight-record",
+                "--runtime-flag-preflight-id",
+                "flag-preflight-1",
+                "--approval-id",
+                "approval-1",
+                "--runtime-flag-enablement-id",
+                "flag-enable-1",
+                "--runtime-flag-enablement-audit-id",
+                "audit-flag-enable-1",
+                "--final-decision-id",
+                "final-decision-1",
+                "--requested-by",
+                "owner",
+                "--requested-at",
+                "2026-06-08T00:00:00Z",
+                "--preflight-reason",
+                "owner requested runtime flag application preflight",
+                "--rollback-plan-ref",
+                "runbooks/sdk-write-runner-rollback.md",
+                "--smoke-runbook-ref",
+                "runbooks/sdk-write-runner-smoke.md",
+                "--preflight-hash",
+                "hash-flag-preflight-1",
+                "--execute",
+            ],
+        )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["status"] == "sdk_runtime_flag_application_preflight_workflow_ready"
+    assert payload["runtime_flag_preflight"]["record_status"] == "recorded"
+    assert payload["runtime_flag_preflight"]["runtime_flag_enabled"] is False
+    assert payload["runtime_flag_preflight"]["flag_application_performed"] is False
+    assert payload["runtime_flag_preflight"]["write_runner_enabled"] is False
+    assert payload["runtime_flag_preflight"]["runner_invoked"] is False
+    assert payload["runtime_flag_preflight"]["mutation_performed"] is False
+
+    mock_client.record_sdk_runtime_flag_application_preflight.assert_awaited_once()
+    request = mock_client.record_sdk_runtime_flag_application_preflight.await_args.args[0]
+    assert request["runtime_flag_preflight_id"] == "flag-preflight-1"
+    assert request["approval_id"] == "approval-1"
+    assert request["runtime_flag_enablement_id"] == "flag-enable-1"
+    assert request["runtime_flag_enablement_audit_id"] == "audit-flag-enable-1"
+    assert request["final_decision_id"] == "final-decision-1"
+    assert request["runtime_flag_name"] == "XAGENT_SDK_WRITE_RUNNER_ENABLED"
+    assert request["target_state"] == "enabled"
+    assert request["preflight_hash"] == "hash-flag-preflight-1"
     assert request["dry_run"] is False
     mock_client.invoke_sdk_contract.assert_not_called()

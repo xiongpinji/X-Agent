@@ -134,6 +134,21 @@ class SDKRuntimeFlagEnablementRecordContract:
         return payload
 
 
+@dataclass(frozen=True)
+class SDKRuntimeFlagApplicationPreflightRecordContract:
+    operation: str
+    endpoint: str
+    request: dict[str, Any]
+    owner_gate: dict[str, Any]
+    known_limits: list[str]
+
+    def to_dict(self) -> dict[str, Any]:
+        payload = asdict(self)
+        payload["mutation_performed"] = False
+        payload["network_mutation_performed"] = False
+        return payload
+
+
 class ControlPlaneSDK:
     """Build SDK-compatible control-plane request envelopes."""
 
@@ -586,6 +601,74 @@ class ControlPlaneSDK:
             },
             known_limits=[
                 "This SDK contract records explicit owner runtime flag enablement intent only.",
+                "It does not set XAGENT_SDK_WRITE_RUNNER_ENABLED or invoke the write runner.",
+                "It does not mark an approval executed.",
+            ],
+        )
+
+    def record_runtime_flag_application_preflight(
+        self,
+        *,
+        runtime_flag_preflight_id: str,
+        approval_id: str,
+        runtime_flag_enablement_id: str,
+        runtime_flag_enablement_audit_id: str,
+        final_decision_id: str,
+        requested_by: str,
+        requested_at: str,
+        preflight_reason: str,
+        rollback_plan_ref: str,
+        smoke_runbook_ref: str,
+        runtime_flag_name: str = "XAGENT_SDK_WRITE_RUNNER_ENABLED",
+        target_state: str = "enabled",
+        preflight_signature: str | None = None,
+        preflight_hash: str | None = None,
+        notes: str | None = None,
+        dry_run: bool = True,
+    ) -> SDKRuntimeFlagApplicationPreflightRecordContract:
+        return SDKRuntimeFlagApplicationPreflightRecordContract(
+            operation="runtime_flag_application_preflight_record",
+            endpoint="/api/v1/control-plane/sdk/runtime-flag/application-preflight/record",
+            request={
+                "runtime_flag_preflight_id": runtime_flag_preflight_id,
+                "approval_id": approval_id,
+                "runtime_flag_enablement_id": runtime_flag_enablement_id,
+                "runtime_flag_enablement_audit_id": runtime_flag_enablement_audit_id,
+                "final_decision_id": final_decision_id,
+                "runtime_flag_name": runtime_flag_name,
+                "target_state": target_state,
+                "requested_by": requested_by,
+                "requested_at": requested_at,
+                "preflight_reason": preflight_reason,
+                "rollback_plan_ref": rollback_plan_ref,
+                "smoke_runbook_ref": smoke_runbook_ref,
+                "preflight_signature": preflight_signature,
+                "preflight_hash": preflight_hash,
+                "notes": notes,
+                "dry_run": dry_run,
+            },
+            owner_gate={
+                "requires_approved_sdk_approval": True,
+                "requires_runtime_flag_enablement_intent": True,
+                "requires_runtime_flag_name": "XAGENT_SDK_WRITE_RUNNER_ENABLED",
+                "requires_target_state": "enabled",
+                "requires_rollback_plan": True,
+                "requires_smoke_runbook": True,
+                "requires_signature_or_hash": True,
+                "marks_approval_executed": False,
+                "runtime_flag_enabled": False,
+                "flag_application_performed": False,
+                "implementation_enabled": False,
+                "execute_enabled": False,
+                "write_runner_enabled": False,
+                "agent_execution_enabled": False,
+                "runner_invoked": False,
+                "mark_executed": False,
+                "mutation_performed": False,
+                "network_mutation_performed": False,
+            },
+            known_limits=[
+                "This SDK contract records runtime flag application preflight evidence only.",
                 "It does not set XAGENT_SDK_WRITE_RUNNER_ENABLED or invoke the write runner.",
                 "It does not mark an approval executed.",
             ],
