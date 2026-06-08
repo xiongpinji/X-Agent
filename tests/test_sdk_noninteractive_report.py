@@ -16,7 +16,7 @@ def test_sdk_noninteractive_report_default_is_read_only() -> None:
     report = build_sdk_noninteractive_report()
     payload = report.to_dict()
 
-    assert report.status == "sdk_approval_intent_ready"
+    assert report.status == "sdk_approval_handoff_ready"
     assert report.evidence_type == "sdk_noninteractive_cli_contract"
     assert report.full_codex_parity_claimed is False
     assert report.dry_run is True
@@ -77,6 +77,18 @@ def test_sdk_noninteractive_report_covers_approval_intent_flow() -> None:
     assert flow["mutation_performed"] is False
 
 
+def test_sdk_noninteractive_report_covers_approval_handoff() -> None:
+    handoff = build_sdk_noninteractive_report().approval_handoff
+
+    assert handoff["approval_id_returned"] is True
+    assert handoff["show_command"] == "xagent approvals show <approval_id>"
+    assert handoff["approve_command"] == "xagent approvals approve <approval_id> --by <owner> --reason <reason>"
+    assert handoff["blocked_execute_command"] == "xagent approvals execute <approval_id>"
+    assert handoff["execute_disabled"] is True
+    assert handoff["readback_method"] == "approval/read"
+    assert handoff["mutation_performed"] is False
+
+
 def test_sdk_noninteractive_report_keeps_feishu_first_channel_strategy() -> None:
     strategy = build_sdk_noninteractive_report().channel_strategy
 
@@ -97,7 +109,7 @@ def test_write_sdk_noninteractive_report_json_and_markdown(tmp_path: Path) -> No
 
     payload = json.loads(json_output.read_text(encoding="utf-8"))
     markdown = markdown_output.read_text(encoding="utf-8")
-    assert payload["status"] == "sdk_approval_intent_ready"
+    assert payload["status"] == "sdk_approval_handoff_ready"
     assert payload["full_codex_parity_claimed"] is False
     assert payload["mutation_performed"] is False
     assert "# X-Agent SDK Non-Interactive Report" in markdown

@@ -88,8 +88,9 @@ def test_cli_sdk_turn_run_execute_flag_calls_backend_stub_without_agent_executio
     set_current_config(CLIConfig(api_base_url="http://localhost:8000", output_format="json"))
     mock_client = AsyncMock()
     mock_client.invoke_sdk_contract.return_value = {
-        "status": "sdk_approval_intent_ready",
+        "status": "sdk_approval_handoff_ready",
         "sdk": {
+            "status": "sdk_approval_handoff_ready",
             "method": "turn/start",
             "dry_run": False,
             "adapter_execution_enabled": False,
@@ -98,8 +99,22 @@ def test_cli_sdk_turn_run_execute_flag_calls_backend_stub_without_agent_executio
             "approval_intent": {
                 "required": True,
                 "created": True,
+                "approval_id": "approval-1",
                 "status": "pending",
                 "mutation_performed": False,
+            },
+            "approval_handoff": {
+                "available": True,
+                "approval_id": "approval-1",
+                "next_commands": [
+                    "xagent approvals show approval-1",
+                    "xagent approvals approve approval-1 --by <owner> --reason <reason>",
+                ],
+                "blocked_command": "xagent approvals execute approval-1",
+                "execute_disabled": True,
+                "mark_executed": False,
+                "mutation_performed": False,
+                "network_mutation_performed": False,
             },
         },
         "control_plane": {
@@ -116,13 +131,19 @@ def test_cli_sdk_turn_run_execute_flag_calls_backend_stub_without_agent_executio
 
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
-    assert payload["status"] == "sdk_approval_intent_ready"
+    assert payload["status"] == "sdk_approval_handoff_ready"
+    assert payload["sdk"]["status"] == "sdk_approval_handoff_ready"
     assert payload["sdk"]["method"] == "turn/start"
     assert payload["sdk"]["dry_run"] is False
     assert payload["sdk"]["adapter_execution_enabled"] is False
     assert payload["sdk"]["mutation_performed"] is False
     assert payload["sdk"]["approval_intent"]["created"] is True
     assert payload["sdk"]["approval_intent"]["status"] == "pending"
+    assert payload["sdk"]["approval_handoff"]["available"] is True
+    assert payload["sdk"]["approval_handoff"]["next_commands"][0] == "xagent approvals show approval-1"
+    assert payload["sdk"]["approval_handoff"]["execute_disabled"] is True
+    assert payload["sdk"]["approval_handoff"]["mark_executed"] is False
+    assert payload["sdk"]["approval_handoff"]["network_mutation_performed"] is False
     assert payload["control_plane"]["error"]["code"] == "adapter_pending"
 
     mock_client.invoke_sdk_contract.assert_awaited_once()

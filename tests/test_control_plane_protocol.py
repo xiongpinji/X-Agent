@@ -178,7 +178,8 @@ def test_sdk_control_plane_stub_accepts_thread_start_envelope_without_mutation()
     assert response.status_code == 200
     payload = response.json()
     assert payload["ok"] is False
-    assert payload["status"] == "sdk_approval_intent_ready"
+    assert payload["status"] == "sdk_approval_handoff_ready"
+    assert payload["sdk"]["status"] == "sdk_approval_handoff_ready"
     assert payload["sdk"]["method"] == "thread/start"
     assert payload["sdk"]["dry_run"] is False
     assert payload["sdk"]["idempotency_key_present"] is True
@@ -191,6 +192,18 @@ def test_sdk_control_plane_stub_accepts_thread_start_envelope_without_mutation()
     assert payload["sdk"]["approval_intent"]["subject_type"] == "command"
     assert payload["sdk"]["approval_intent"]["resource_id"] == "sdk:thread/start"
     assert payload["sdk"]["approval_intent"]["mutation_performed"] is False
+    handoff = payload["sdk"]["approval_handoff"]
+    assert handoff["available"] is True
+    assert handoff["approval_id"] == payload["sdk"]["approval_intent"]["approval_id"]
+    assert handoff["next_commands"][0] == f"xagent approvals show {handoff['approval_id']}"
+    assert handoff["next_commands"][1].startswith(f"xagent approvals approve {handoff['approval_id']}")
+    assert handoff["blocked_command"] == f"xagent approvals execute {handoff['approval_id']}"
+    assert handoff["execute_disabled"] is True
+    assert handoff["mark_executed"] is False
+    assert handoff["api_links"]["show"] == f"/api/v1/approvals/{handoff['approval_id']}"
+    assert handoff["readback"]["method"] == "approval/read"
+    assert handoff["mutation_performed"] is False
+    assert handoff["network_mutation_performed"] is False
     assert payload["sdk"]["approval_sandbox_admin"]["subject_type"] == "command"
     assert payload["sdk"]["approval_sandbox_admin"]["owner_gate_required"] is True
     assert payload["control_plane"]["error"]["code"] == "adapter_pending"
@@ -221,11 +234,16 @@ def test_sdk_control_plane_stub_can_read_thread_through_existing_contract() -> N
     assert response.status_code == 200
     payload = response.json()
     assert payload["ok"] is True
-    assert payload["status"] == "sdk_approval_intent_ready"
+    assert payload["status"] == "sdk_approval_handoff_ready"
+    assert payload["sdk"]["status"] == "sdk_approval_handoff_ready"
     assert payload["sdk"]["method"] == "thread/read"
     assert payload["sdk"]["owner_gate_required"] is False
     assert payload["sdk"]["approval_intent"]["required"] is False
     assert payload["sdk"]["approval_intent"]["created"] is False
+    assert payload["sdk"]["approval_handoff"]["available"] is False
+    assert payload["sdk"]["approval_handoff"]["execute_disabled"] is True
+    assert payload["sdk"]["approval_handoff"]["mark_executed"] is False
+    assert payload["sdk"]["approval_handoff"]["network_mutation_performed"] is False
     assert payload["sdk"]["mutation_performed"] is False
     assert payload["control_plane"]["result"]["contract"]["dry_run"] is True
     assert payload["control_plane"]["result"]["compatibility"]["sdk_surface"] == "python"

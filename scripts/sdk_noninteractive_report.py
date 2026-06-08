@@ -46,6 +46,7 @@ class SDKNonInteractiveReport:
     backend_stub: dict[str, Any]
     http_client_adapter: dict[str, Any]
     approval_intent_flow: dict[str, Any]
+    approval_handoff: dict[str, Any]
     channel_strategy: dict[str, Any]
     checks: list[SDKNonInteractiveCheck]
     official_sources: list[str]
@@ -120,6 +121,7 @@ def _build_checks(report_payload: dict[str, Any]) -> list[SDKNonInteractiveCheck
     commands = report_payload["cli_commands"]
     backend_stub = report_payload["backend_stub"]
     approval_flow = report_payload["approval_intent_flow"]
+    handoff = report_payload["approval_handoff"]
     methods = [contract["request"]["method"] for contract in contracts]
     command_methods = [command["method"] for command in commands]
     cli_execute_targets = [
@@ -193,6 +195,20 @@ def _build_checks(report_payload: dict[str, Any]) -> list[SDKNonInteractiveCheck
             else "SDK write methods do not create owner approval intent",
         ),
         SDKNonInteractiveCheck(
+            name="approval_handoff_readback_ready",
+            status="passed"
+            if handoff.get("approval_id_returned") is True
+            and handoff.get("show_command") == "xagent approvals show <approval_id>"
+            and handoff.get("approve_command") == "xagent approvals approve <approval_id> --by <owner> --reason <reason>"
+            and handoff.get("execute_disabled") is True
+            and handoff.get("mutation_performed") is False
+            else "failed",
+            details=handoff,
+            error=None
+            if handoff.get("approval_id_returned") is True
+            else "approval handoff does not return approval id",
+        ),
+        SDKNonInteractiveCheck(
             name="feishu_domestic_v1_primary",
             status="passed"
             if report_payload["channel_strategy"].get("domestic_v1_primary") == "feishu"
@@ -216,7 +232,7 @@ def _build_checks(report_payload: dict[str, Any]) -> list[SDKNonInteractiveCheck
 
 def build_sdk_noninteractive_report() -> SDKNonInteractiveReport:
     report_payload: dict[str, Any] = {
-        "status": "sdk_approval_intent_ready",
+        "status": "sdk_approval_handoff_ready",
         "generated_at": _utc_now(),
         "evidence_type": "sdk_noninteractive_cli_contract",
         "full_codex_parity_claimed": False,
@@ -229,7 +245,7 @@ def build_sdk_noninteractive_report() -> SDKNonInteractiveReport:
         "backend_stub": {
             "endpoint": "/api/v1/control-plane/sdk/invoke",
             "normalizes_to": "/api/v1/control-plane/invoke",
-            "status": "sdk_approval_intent_ready",
+            "status": "sdk_approval_handoff_ready",
             "approval_subject_type": "command",
             "approval_intent_created_for_write_methods": True,
             "owner_gate_required": True,
@@ -262,12 +278,25 @@ def build_sdk_noninteractive_report() -> SDKNonInteractiveReport:
             "mutation_performed": False,
             "network_mutation_performed": False,
         },
+        "approval_handoff": {
+            "approval_id_returned": True,
+            "show_command": "xagent approvals show <approval_id>",
+            "approve_command": "xagent approvals approve <approval_id> --by <owner> --reason <reason>",
+            "blocked_execute_command": "xagent approvals execute <approval_id>",
+            "execute_disabled": True,
+            "readback_method": "approval/read",
+            "readback_endpoint": "/api/v1/control-plane/invoke",
+            "approval_api_link": "/api/v1/approvals/<approval_id>",
+            "mutation_performed": False,
+            "network_mutation_performed": False,
+        },
         "channel_strategy": _channel_strategy(),
         "official_sources": list(CODEX_SDK_SOURCES),
         "known_limits": [
             "The backend SDK endpoint accepts envelopes and normalizes them into the control-plane contract.",
             "The --execute CLI flag can call the backend SDK stub; adapter execution remains owner-gated.",
             "SDK write methods create a pending owner approval intent; approving the intent still does not execute an agent in this task.",
+            "SDK responses include approval handoff commands and readback links for the owner.",
             "No SDK HTTP adapter, agent runner, file mutation, channel send, or network mutation is enabled.",
             "Feishu remains the only domestic V1 pilot channel in this contract.",
             "Slack is tracked as a Codex reference surface, but it is non-blocking for the domestic first version.",
@@ -313,6 +342,10 @@ def render_markdown_report(report: SDKNonInteractiveReport) -> str:
         f"- Write methods create pending approval: `{report.approval_intent_flow['write_methods_create_pending_approval']}`\n"
         f"- Subject type: `{report.approval_intent_flow['approval_subject_type']}`\n"
         f"- Starts agent execution: `{report.approval_intent_flow['starts_agent_execution']}`\n\n"
+        "## Approval Handoff\n\n"
+        f"- Show command: `{report.approval_handoff['show_command']}`\n"
+        f"- Approve command: `{report.approval_handoff['approve_command']}`\n"
+        f"- Execute disabled: `{report.approval_handoff['execute_disabled']}`\n\n"
         "## Channel Strategy\n\n"
         f"- Domestic V1 primary: `{report.channel_strategy['domestic_v1_primary']}`\n"
         f"- Telegram required: `{report.channel_strategy['telegram_required']}`\n"
@@ -360,7 +393,7 @@ def main() -> int:
         print(f"- {check.name}: {check.status}")
         if check.error:
             print(f"  error: {check.error}")
-    return 0 if report.status == "sdk_approval_intent_ready" else 1
+    return 0 if report.status == "sdk_approval_handoff_ready" else 1
 
 
 if __name__ == "__main__":

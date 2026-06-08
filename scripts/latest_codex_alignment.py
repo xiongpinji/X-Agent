@@ -43,6 +43,7 @@ READY_XAGENT_STATUSES = frozenset(
         "governance_lifecycle_report_ready",
         "github_review_action_report_ready",
         "partial",
+        "sdk_approval_handoff_ready",
         "sdk_approval_intent_ready",
         "sdk_backend_stub_ready",
         "sdk_http_dry_run_adapter_ready",
@@ -60,6 +61,7 @@ NEXT_TASK_DONE_STATUSES = frozenset(
         "durable_thread_contract_ready",
         "governance_lifecycle_report_ready",
         "github_review_action_report_ready",
+        "sdk_approval_handoff_ready",
         "sdk_approval_intent_ready",
         "sdk_backend_stub_ready",
         "sdk_http_dry_run_adapter_ready",
@@ -207,6 +209,7 @@ def build_evidence_specs(root: Path = ROOT, report_dir: Path = REPORT_DIR) -> tu
                     "sdk_backend_stub_ready",
                     "sdk_http_dry_run_adapter_ready",
                     "sdk_approval_intent_ready",
+                    "sdk_approval_handoff_ready",
                 }
             ),
             expected_evidence_type="sdk_noninteractive_cli_contract",
@@ -502,7 +505,7 @@ def _capabilities() -> list[CodexAlignmentCapability]:
             capability="cli_and_programmatic_sdk",
             codex_surface="Codex CLI, non-interactive mode, and Codex SDK",
             priority="P1",
-            xagent_status="sdk_approval_intent_ready",
+            xagent_status="sdk_approval_handoff_ready",
             evidence=[
                 "sdk_noninteractive_report",
                 "sdk_contract_module",
@@ -514,13 +517,13 @@ def _capabilities() -> list[CodexAlignmentCapability]:
                 "control_plane_protocol",
                 "control_plane_protocol_tests",
             ],
-            next_task="Implement owner-approved long-running SDK execution adapters after approval-intent evidence is reviewed.",
+            next_task="Implement owner-approved long-running SDK execution adapters after approval handoff evidence is reviewed.",
             acceptance_command="python scripts\\sdk_noninteractive_report.py && python -m pytest tests/test_xagent_sdk_contract.py tests/test_sdk_noninteractive_report.py tests/test_cli_commands.py tests/test_control_plane_protocol.py -o addopts=\"\" -p no:cov -p no:cacheprovider -q",
             official_sources=[
                 "https://developers.openai.com/codex/noninteractive",
                 "https://developers.openai.com/codex/sdk",
             ],
-            rationale="X-Agent now exposes SDK-style thread start/resume/run/read envelopes, non-interactive CLI JSON output, an owner-gated backend SDK invoke stub, a CLI HTTP dry-run adapter for --execute, and pending owner approval intent creation for write methods; real agent execution remains disabled.",
+            rationale="X-Agent now exposes SDK-style thread start/resume/run/read envelopes, non-interactive CLI JSON output, an owner-gated backend SDK invoke stub, a CLI HTTP dry-run adapter for --execute, pending owner approval intent creation for write methods, and approval handoff/readback commands; real agent execution remains disabled.",
         ),
         CodexAlignmentCapability(
             capability="slack_to_domestic_channel_strategy",

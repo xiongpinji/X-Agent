@@ -902,7 +902,7 @@ def _sdk_backend_stub_metadata(
     approval_intent: dict[str, Any],
 ) -> dict[str, Any]:
     return {
-        "status": "sdk_approval_intent_ready",
+        "status": "sdk_approval_handoff_ready",
         "operation": request.context.sdk_operation or original.operation,
         "method": request.method,
         "sdk_surface": request.context.sdk_surface or "python",
@@ -914,6 +914,7 @@ def _sdk_backend_stub_metadata(
         "network_mutation_performed": False,
         "adapter_execution_enabled": False,
         "approval_intent": approval_intent,
+        "approval_handoff": _sdk_approval_handoff(approval_intent),
         "approval_sandbox_admin": _sdk_approval_sandbox_admin_contract(request),
         "control_plane_ok": response.ok,
         "control_plane_error_code": response.error.code if response.error else None,
@@ -924,6 +925,45 @@ def _sdk_backend_stub_metadata(
             "Write methods remain owner-gated behind the approval/sandbox/admin contract.",
             "Feishu remains the only domestic V1 pilot channel.",
         ],
+    }
+
+
+def _sdk_approval_handoff(approval_intent: dict[str, Any]) -> dict[str, Any]:
+    approval_id = approval_intent.get("approval_id")
+    if not approval_intent.get("created") or not isinstance(approval_id, str) or not approval_id:
+        return {
+            "available": False,
+            "approval_id": None,
+            "next_commands": [],
+            "api_links": {},
+            "execute_disabled": True,
+            "mark_executed": False,
+            "mutation_performed": False,
+            "network_mutation_performed": False,
+        }
+    return {
+        "available": True,
+        "approval_id": approval_id,
+        "next_commands": [
+            f"xagent approvals show {approval_id}",
+            f"xagent approvals approve {approval_id} --by <owner> --reason <reason>",
+        ],
+        "blocked_command": f"xagent approvals execute {approval_id}",
+        "blocked_reason": "Approval execution remains disabled for SDK long-running runs in this task.",
+        "api_links": {
+            "show": f"/api/v1/approvals/{approval_id}",
+            "approve": f"/api/v1/approvals/{approval_id}/approve",
+            "control_plane": "/api/v1/control-plane/sdk/invoke",
+        },
+        "readback": {
+            "method": "approval/read",
+            "params": {"approval_id": approval_id},
+            "control_plane": "/api/v1/control-plane/invoke",
+        },
+        "execute_disabled": True,
+        "mark_executed": False,
+        "mutation_performed": False,
+        "network_mutation_performed": False,
     }
 
 

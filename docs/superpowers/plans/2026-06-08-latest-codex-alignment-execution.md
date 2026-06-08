@@ -310,6 +310,28 @@ Expected: selected approval and sandbox tests pass.
 - [x] Keep approval creation separate from execution; no `mark_executed`, agent runner, channel send, file mutation, or network mutation.
 - [ ] Implement owner-approved long-running SDK execution adapters after approval intent evidence review.
 
+### Task 13: SDK Approval Handoff And Readback
+
+**Target:** Return actionable owner handoff metadata after SDK approval intent creation without executing the approved work.
+
+**Files:**
+- Modify: `backend/app/api/control_plane.py`
+- Modify: `scripts/sdk_noninteractive_report.py`
+- Modify: `tests/test_control_plane_protocol.py`
+- Modify: `tests/test_xagent_sdk_contract.py`
+- Modify: `tests/test_sdk_noninteractive_report.py`
+- Modify: `scripts/latest_codex_alignment.py`
+- Modify: `tests/test_latest_codex_alignment.py`
+- Runtime evidence: `.xagent_runtime/reports/sdk-noninteractive-report.json`
+- Runtime evidence: `.xagent_runtime/reports/sdk-noninteractive-report.md`
+
+- [x] Include approval id in SDK handoff metadata.
+- [x] Include `xagent approvals show <approval_id>` and `xagent approvals approve <approval_id>` next commands.
+- [x] Include approval API links and `approval/read` control-plane readback metadata.
+- [x] Keep `xagent approvals execute <approval_id>` explicitly blocked for SDK long-running runs in this task.
+- [x] Keep agent runner invocation, `mark_executed`, channel send, file mutation, and network mutation disabled.
+- [ ] Implement owner-approved long-running SDK execution adapters after approval handoff evidence review.
+
 ## Completion Criteria
 
 - `scripts/latest_codex_alignment.py` returns `latest_codex_alignment_plan_ready`.
