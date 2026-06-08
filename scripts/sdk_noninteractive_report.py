@@ -73,6 +73,7 @@ class SDKNonInteractiveReport:
     runtime_flag_application_preflight_workflow: dict[str, Any]
     runtime_flag_application_owner_approval_workflow: dict[str, Any]
     runtime_flag_application_execute_contract_workflow: dict[str, Any]
+    runtime_flag_application_execute_contract_owner_review: dict[str, Any]
     channel_strategy: dict[str, Any]
     checks: list[SDKNonInteractiveCheck]
     official_sources: list[str]
@@ -438,6 +439,9 @@ def _build_checks(report_payload: dict[str, Any]) -> list[SDKNonInteractiveCheck
     runtime_flag_preflight = report_payload["runtime_flag_application_preflight_workflow"]
     runtime_flag_approval = report_payload["runtime_flag_application_owner_approval_workflow"]
     runtime_flag_execute_contract = report_payload["runtime_flag_application_execute_contract_workflow"]
+    runtime_flag_execute_contract_review = report_payload[
+        "runtime_flag_application_execute_contract_owner_review"
+    ]
     methods = [_sdk_contract_method(contract) for contract in contracts]
     command_methods = [command["method"] for command in commands]
     allowed_execute_targets = {
@@ -1218,6 +1222,53 @@ def _build_checks(report_payload: dict[str, Any]) -> list[SDKNonInteractiveCheck
             else "runtime flag application execute contract workflow is not ready but disabled",
         ),
         SDKNonInteractiveCheck(
+            name="runtime_flag_application_execute_contract_owner_review_ready",
+            status="passed"
+            if runtime_flag_execute_contract_review.get("stage")
+            == "runtime_flag_application_execute_contract_owner_review"
+            and runtime_flag_execute_contract_review.get("review_status") == "ready_but_disabled"
+            and runtime_flag_execute_contract_review.get("review_pack_type")
+            == "sdk_write_runner_runtime_flag_application_execute_contract_owner_review"
+            and runtime_flag_execute_contract_review.get("source_workflow")
+            == "runtime_flag_application_execute_contract_record_workflow"
+            and runtime_flag_execute_contract_review.get("owner_review_policy", {}).get(
+                "manual_review_required"
+            )
+            is True
+            and runtime_flag_execute_contract_review.get("owner_review_policy", {}).get(
+                "independent_review_required"
+            )
+            is True
+            and runtime_flag_execute_contract_review.get("owner_review_policy", {}).get(
+                "requires_live_application_request"
+            )
+            is True
+            and runtime_flag_execute_contract_review.get("owner_review_policy", {}).get(
+                "can_apply_runtime_flag_after_review"
+            )
+            is False
+            and runtime_flag_execute_contract_review.get("owner_review_policy", {}).get(
+                "can_invoke_write_runner_after_review"
+            )
+            is False
+            and runtime_flag_execute_contract_review.get("review_readback", {}).get("method")
+            == "runtime/evidence/read"
+            and runtime_flag_execute_contract_review.get("runtime_flag_enabled") is False
+            and runtime_flag_execute_contract_review.get("flag_application_performed") is False
+            and runtime_flag_execute_contract_review.get("execute_enabled") is False
+            and runtime_flag_execute_contract_review.get("write_runner_enabled") is False
+            and runtime_flag_execute_contract_review.get("adapter_execution_enabled") is False
+            and runtime_flag_execute_contract_review.get("agent_execution_enabled") is False
+            and runtime_flag_execute_contract_review.get("runner_invoked") is False
+            and runtime_flag_execute_contract_review.get("mark_executed") is False
+            and runtime_flag_execute_contract_review.get("mutation_performed") is False
+            else "failed",
+            details=runtime_flag_execute_contract_review,
+            error=None
+            if runtime_flag_execute_contract_review.get("review_status") == "ready_but_disabled"
+            else "runtime flag application execute contract owner review is not ready but disabled",
+        ),
+        SDKNonInteractiveCheck(
             name="feishu_domestic_v1_primary",
             status="passed"
             if report_payload["channel_strategy"].get("domestic_v1_primary") == "feishu"
@@ -1241,7 +1292,7 @@ def _build_checks(report_payload: dict[str, Any]) -> list[SDKNonInteractiveCheck
 
 def build_sdk_noninteractive_report() -> SDKNonInteractiveReport:
     report_payload: dict[str, Any] = {
-        "status": "sdk_runtime_flag_application_execute_contract_workflow_ready",
+        "status": "sdk_runtime_flag_application_execute_contract_owner_review_ready",
         "generated_at": _utc_now(),
         "evidence_type": "sdk_noninteractive_cli_contract",
         "full_codex_parity_claimed": False,
@@ -1254,7 +1305,7 @@ def build_sdk_noninteractive_report() -> SDKNonInteractiveReport:
         "backend_stub": {
             "endpoint": "/api/v1/control-plane/sdk/invoke",
             "normalizes_to": "/api/v1/control-plane/invoke",
-            "status": "sdk_runtime_flag_application_execute_contract_workflow_ready",
+            "status": "sdk_runtime_flag_application_execute_contract_owner_review_ready",
             "approval_subject_type": "command",
             "approval_intent_created_for_write_methods": True,
             "owner_gate_required": True,
@@ -2357,6 +2408,62 @@ def build_sdk_noninteractive_report() -> SDKNonInteractiveReport:
             "file_mutation_performed": False,
             "channel_mutation_performed": False,
         },
+        "runtime_flag_application_execute_contract_owner_review": {
+            "stage": "runtime_flag_application_execute_contract_owner_review",
+            "review_status": "ready_but_disabled",
+            "review_pack_type": "sdk_write_runner_runtime_flag_application_execute_contract_owner_review",
+            "source_workflow": "runtime_flag_application_execute_contract_record_workflow",
+            "required_evidence": [
+                "approved_sdk_approval",
+                "runtime_flag_application_preflight_record",
+                "runtime_flag_application_owner_approval_record",
+                "runtime_flag_application_execute_contract_record",
+                "idempotency_key_hash",
+                "rollback_plan_ref",
+                "smoke_runbook_ref",
+                "audit_hash",
+            ],
+            "required_audit_actions": [
+                "sdk.write_runner.runtime_flag_application_preflight_recorded",
+                "sdk.write_runner.runtime_flag_application_owner_approval_recorded",
+                "sdk.write_runner.runtime_flag_application_execute_contract_recorded",
+            ],
+            "owner_review_policy": {
+                "manual_review_required": True,
+                "independent_review_required": True,
+                "requires_live_application_request": True,
+                "can_apply_runtime_flag_after_review": False,
+                "can_invoke_write_runner_after_review": False,
+                "next_required_owner_request": "implement_live_runtime_flag_application",
+            },
+            "review_readback": {
+                "method": "runtime/evidence/read",
+                "evidence_type": "sdk_write_runner_runtime_flag_application_execute_contract",
+                "query_keys": [
+                    "runtime_flag_execute_contract_id",
+                    "approval_id",
+                    "runtime_flag_approval_id",
+                    "audit_id",
+                ],
+                "returns_schema": True,
+                "returns_record_if_present": False,
+            },
+            "next_gate": "owner_requested_live_runtime_flag_application_implementation",
+            "implementation_enabled": False,
+            "runtime_flag_enabled": False,
+            "flag_application_performed": False,
+            "execute_enabled": False,
+            "write_runner_enabled": False,
+            "adapter_execution_enabled": False,
+            "agent_execution_enabled": False,
+            "write_execution_enabled": False,
+            "runner_invoked": False,
+            "mark_executed": False,
+            "mutation_performed": False,
+            "network_mutation_performed": False,
+            "file_mutation_performed": False,
+            "channel_mutation_performed": False,
+        },
         "channel_strategy": _channel_strategy(),
         "official_sources": list(CODEX_SDK_SOURCES),
         "known_limits": [
@@ -2388,6 +2495,7 @@ def build_sdk_noninteractive_report() -> SDKNonInteractiveReport:
             "Runtime flag application preflight can be recorded, but it does not apply the runtime flag.",
             "Runtime flag application owner approval can be recorded, but it does not apply the runtime flag.",
             "Runtime flag application execute contract can be recorded, but it does not apply the runtime flag or invoke the write runner.",
+            "Runtime flag application execute contract owner review is ready, but it does not enable runtime effects.",
             "No SDK HTTP adapter, agent runner, file mutation, channel send, or network mutation is enabled.",
             "Feishu remains the only domestic V1 pilot channel in this contract.",
             "Slack is tracked as a Codex reference surface, but it is non-blocking for the domestic first version.",
@@ -2613,6 +2721,13 @@ def render_markdown_report(report: SDKNonInteractiveReport) -> str:
         f"- Runtime flag enabled: `{report.runtime_flag_application_execute_contract_workflow['runtime_flag_enabled']}`\n"
         f"- Flag application performed: `{report.runtime_flag_application_execute_contract_workflow['flag_application_performed']}`\n"
         f"- Runner invoked: `{report.runtime_flag_application_execute_contract_workflow['runner_invoked']}`\n\n"
+        "## Runtime Flag Application Execute Contract Owner Review\n\n"
+        f"- Stage: `{report.runtime_flag_application_execute_contract_owner_review['stage']}`\n"
+        f"- Review status: `{report.runtime_flag_application_execute_contract_owner_review['review_status']}`\n"
+        f"- Review pack type: `{report.runtime_flag_application_execute_contract_owner_review['review_pack_type']}`\n"
+        f"- Manual review required: `{report.runtime_flag_application_execute_contract_owner_review['owner_review_policy']['manual_review_required']}`\n"
+        f"- Can apply runtime flag after review: `{report.runtime_flag_application_execute_contract_owner_review['owner_review_policy']['can_apply_runtime_flag_after_review']}`\n"
+        f"- Runner invoked: `{report.runtime_flag_application_execute_contract_owner_review['runner_invoked']}`\n\n"
         "## Channel Strategy\n\n"
         f"- Domestic V1 primary: `{report.channel_strategy['domestic_v1_primary']}`\n"
         f"- Telegram required: `{report.channel_strategy['telegram_required']}`\n"
@@ -2660,7 +2775,7 @@ def main() -> int:
         print(f"- {check.name}: {check.status}")
         if check.error:
             print(f"  error: {check.error}")
-    return 0 if report.status == "sdk_runtime_flag_application_execute_contract_workflow_ready" else 1
+    return 0 if report.status == "sdk_runtime_flag_application_execute_contract_owner_review_ready" else 1
 
 
 if __name__ == "__main__":

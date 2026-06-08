@@ -1004,12 +1004,33 @@ Expected: selected approval and sandbox tests pass.
 - [x] Require approved SDK approval, recorded accepted runtime flag application owner approval, runtime flag name, idempotency key/hash, rollback plan, smoke runbook, timestamp, reason, signature/hash, and dry-run mode before recording.
 - [x] Keep execute contract recording read-only with respect to runtime effects: it does not apply `XAGENT_SDK_WRITE_RUNNER_ENABLED`, invoke the write runner, mark approvals executed, or perform file/network/channel mutation.
 - [x] Add `/sdk/invoke` runtime flag application execute contract metadata and promote SDK alignment status to `sdk_runtime_flag_application_execute_contract_workflow_ready`.
-- [ ] Implement live runtime flag application only after this execute contract is independently reviewed and explicitly requested; keep write-runner wiring as a separate follow-up gate.
+- [x] Add independent owner review metadata for the execute contract before any live runtime flag application implementation.
+
+### Task 41: Runtime Flag Application Execute Contract Owner Review
+
+**Target:** Aggregate the runtime flag application execute contract into a read-only owner review pack, so live runtime flag application remains blocked until independently accepted and explicitly requested.
+
+**Files:**
+- Modify: `backend/app/api/control_plane.py`
+- Modify: `scripts/sdk_noninteractive_report.py`
+- Modify: `scripts/latest_codex_alignment.py`
+- Modify: `tests/test_control_plane_protocol.py`
+- Modify: `tests/test_sdk_noninteractive_report.py`
+- Modify: `tests/test_latest_codex_alignment.py`
+- Runtime evidence: `.xagent_runtime/reports/sdk-noninteractive-report.json`
+- Runtime evidence: `.xagent_runtime/reports/latest-codex-alignment.json`
+
+- [x] Add `/sdk/invoke` runtime flag application execute contract owner review metadata.
+- [x] Require the execute contract workflow to be ready-but-disabled before the owner review pack reports ready.
+- [x] Include required evidence, audit actions, readback keys, and independent review policy.
+- [x] Keep owner review read-only: it does not apply `XAGENT_SDK_WRITE_RUNNER_ENABLED`, invoke the write runner, mark approvals executed, or perform file/network/channel mutation.
+- [x] Promote SDK alignment status to `sdk_runtime_flag_application_execute_contract_owner_review_ready`.
+- [ ] Implement live runtime flag application only after this owner review is independently accepted and explicitly requested; keep write-runner wiring as a separate follow-up gate.
 
 ## Completion Criteria
 
 - `scripts/latest_codex_alignment.py` returns `latest_codex_alignment_plan_ready`.
-- `scripts/sdk_noninteractive_report.py` returns `sdk_runtime_flag_application_execute_contract_workflow_ready`.
+- `scripts/sdk_noninteractive_report.py` returns `sdk_runtime_flag_application_execute_contract_owner_review_ready`.
 - P0 task board is complete and machine-readable.
 - Feishu Pilot V1 remains `customer_acceptance_pack_ready`.
 - `full_codex_parity_claimed=false` remains true in all generated alignment and pilot reports.
