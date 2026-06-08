@@ -39,6 +39,8 @@ def test_sdk_start_thread_builds_control_plane_envelope() -> None:
     assert payload["owner_gate"]["owner_acceptance_record_present"] is False
     assert payload["owner_gate"]["runtime_enablement_review_contract"] is True
     assert payload["owner_gate"]["runtime_enablement_review_enabled"] is False
+    assert payload["owner_gate"]["write_runner_implementation_plan_contract"] is True
+    assert payload["owner_gate"]["write_runner_implementation_plan_enabled"] is False
     assert payload["owner_gate"]["runtime_flag_enabled"] is False
     assert payload["owner_gate"]["runner_invoked"] is False
     assert payload["owner_gate"]["agent_execution_enabled"] is False
@@ -79,6 +81,8 @@ def test_sdk_resume_run_and_read_thread_methods_are_stable() -> None:
     assert turn["owner_gate"]["owner_acceptance_readback_contract"] is True
     assert turn["owner_gate"]["runtime_enablement_review_contract"] is True
     assert turn["owner_gate"]["runtime_enablement_review_enabled"] is False
+    assert turn["owner_gate"]["write_runner_implementation_plan_contract"] is True
+    assert turn["owner_gate"]["write_runner_implementation_plan_enabled"] is False
     assert turn["owner_gate"]["runtime_flag_enabled"] is False
     assert turn["owner_gate"]["runner_invoked"] is False
     assert turn["owner_gate"]["adapter_execution_enabled"] is False
@@ -93,6 +97,7 @@ def test_sdk_resume_run_and_read_thread_methods_are_stable() -> None:
     assert read["owner_gate"]["owner_acceptance_recording_contract"] is False
     assert read["owner_gate"]["owner_acceptance_readback_contract"] is False
     assert read["owner_gate"]["runtime_enablement_review_contract"] is False
+    assert read["owner_gate"]["write_runner_implementation_plan_contract"] is False
     assert evidence["operation"] == "runtime_evidence_read"
     assert evidence["request"]["method"] == "runtime/evidence/read"
     assert evidence["request"]["params"]["report_name"] == "latest-codex-alignment.json"
@@ -169,9 +174,9 @@ def test_cli_sdk_turn_run_execute_flag_calls_backend_stub_without_agent_executio
     set_current_config(CLIConfig(api_base_url="http://localhost:8000", output_format="json"))
     mock_client = AsyncMock()
     mock_client.invoke_sdk_contract.return_value = {
-        "status": "sdk_runtime_enablement_review_contract_ready",
+        "status": "sdk_write_runner_implementation_plan_ready",
         "sdk": {
-            "status": "sdk_runtime_enablement_review_contract_ready",
+            "status": "sdk_write_runner_implementation_plan_ready",
             "method": "turn/start",
             "dry_run": False,
             "adapter_execution_enabled": False,
@@ -299,6 +304,22 @@ def test_cli_sdk_turn_run_execute_flag_calls_backend_stub_without_agent_executio
                 "mark_executed": False,
                 "mutation_performed": False,
             },
+            "write_runner_implementation_plan": {
+                "stage": "owner_approved_write_runner_concrete_implementation_plan",
+                "plan_status": "ready_but_disabled",
+                "adapter_target": {"callable": "AgentCoordinator.run"},
+                "idempotency_contract": {"required": True},
+                "rollback_plan": {"disable_runtime_flag": True},
+                "audit_result_shape": {"planned_action": "sdk.write_runner.implementation_plan_ready"},
+                "implementation_enabled": False,
+                "runtime_flag_enabled": False,
+                "execute_enabled": False,
+                "write_runner_enabled": False,
+                "agent_execution_enabled": False,
+                "runner_invoked": False,
+                "mark_executed": False,
+                "mutation_performed": False,
+            },
         },
         "control_plane": {
             "ok": False,
@@ -324,8 +345,8 @@ def test_cli_sdk_turn_run_execute_flag_calls_backend_stub_without_agent_executio
 
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
-    assert payload["status"] == "sdk_runtime_enablement_review_contract_ready"
-    assert payload["sdk"]["status"] == "sdk_runtime_enablement_review_contract_ready"
+    assert payload["status"] == "sdk_write_runner_implementation_plan_ready"
+    assert payload["sdk"]["status"] == "sdk_write_runner_implementation_plan_ready"
     assert payload["sdk"]["method"] == "turn/start"
     assert payload["sdk"]["dry_run"] is False
     assert payload["sdk"]["adapter_execution_enabled"] is False
@@ -370,6 +391,20 @@ def test_cli_sdk_turn_run_execute_flag_calls_backend_stub_without_agent_executio
     assert payload["sdk"]["runtime_enablement_review"]["write_runner_enabled"] is False
     assert payload["sdk"]["runtime_enablement_review"]["agent_execution_enabled"] is False
     assert payload["sdk"]["runtime_enablement_review"]["mutation_performed"] is False
+    assert payload["sdk"]["write_runner_implementation_plan"]["plan_status"] == "ready_but_disabled"
+    assert (
+        payload["sdk"]["write_runner_implementation_plan"]["adapter_target"]["callable"]
+        == "AgentCoordinator.run"
+    )
+    assert payload["sdk"]["write_runner_implementation_plan"]["idempotency_contract"]["required"] is True
+    assert payload["sdk"]["write_runner_implementation_plan"]["rollback_plan"]["disable_runtime_flag"] is True
+    assert payload["sdk"]["write_runner_implementation_plan"]["implementation_enabled"] is False
+    assert payload["sdk"]["write_runner_implementation_plan"]["runtime_flag_enabled"] is False
+    assert payload["sdk"]["write_runner_implementation_plan"]["write_runner_enabled"] is False
+    assert payload["sdk"]["write_runner_implementation_plan"]["agent_execution_enabled"] is False
+    assert payload["sdk"]["write_runner_implementation_plan"]["runner_invoked"] is False
+    assert payload["sdk"]["write_runner_implementation_plan"]["mark_executed"] is False
+    assert payload["sdk"]["write_runner_implementation_plan"]["mutation_performed"] is False
     assert payload["control_plane"]["error"]["code"] == "adapter_pending"
 
     mock_client.invoke_sdk_contract.assert_awaited_once()
@@ -386,9 +421,9 @@ def test_cli_sdk_thread_read_execute_flag_calls_read_only_runner_contract() -> N
     set_current_config(CLIConfig(api_base_url="http://localhost:8000", output_format="json"))
     mock_client = AsyncMock()
     mock_client.invoke_sdk_contract.return_value = {
-        "status": "sdk_runtime_enablement_review_contract_ready",
+        "status": "sdk_write_runner_implementation_plan_ready",
         "sdk": {
-            "status": "sdk_runtime_enablement_review_contract_ready",
+            "status": "sdk_write_runner_implementation_plan_ready",
             "method": "thread/read",
             "read_only_runner_contract": {
                 "available": True,
@@ -409,7 +444,7 @@ def test_cli_sdk_thread_read_execute_flag_calls_read_only_runner_contract() -> N
 
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
-    assert payload["status"] == "sdk_runtime_enablement_review_contract_ready"
+    assert payload["status"] == "sdk_write_runner_implementation_plan_ready"
     assert payload["sdk"]["method"] == "thread/read"
     assert payload["sdk"]["read_only_runner_contract"]["available"] is True
     assert payload["sdk"]["read_only_runner_contract"]["agent_execution_enabled"] is False
@@ -428,9 +463,9 @@ def test_cli_sdk_evidence_read_execute_flag_supports_dry_run_receipt_readback() 
     set_current_config(CLIConfig(api_base_url="http://localhost:8000", output_format="json"))
     mock_client = AsyncMock()
     mock_client.invoke_sdk_contract.return_value = {
-        "status": "sdk_runtime_enablement_review_contract_ready",
+        "status": "sdk_write_runner_implementation_plan_ready",
         "sdk": {
-            "status": "sdk_runtime_enablement_review_contract_ready",
+            "status": "sdk_write_runner_implementation_plan_ready",
             "method": "runtime/evidence/read",
             "read_only_runner_contract": {"available": True, "read_only_runner_enabled": True},
         },
@@ -465,7 +500,7 @@ def test_cli_sdk_evidence_read_execute_flag_supports_dry_run_receipt_readback() 
 
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
-    assert payload["status"] == "sdk_runtime_enablement_review_contract_ready"
+    assert payload["status"] == "sdk_write_runner_implementation_plan_ready"
     assert payload["control_plane"]["result"]["evidence"]["evidence_type"] == "sdk_dry_run_executor_stub"
 
     mock_client.invoke_sdk_contract.assert_awaited_once()
@@ -480,9 +515,9 @@ def test_cli_sdk_evidence_read_execute_flag_supports_owner_acceptance_readback()
     set_current_config(CLIConfig(api_base_url="http://localhost:8000", output_format="json"))
     mock_client = AsyncMock()
     mock_client.invoke_sdk_contract.return_value = {
-        "status": "sdk_runtime_enablement_review_contract_ready",
+        "status": "sdk_write_runner_implementation_plan_ready",
         "sdk": {
-            "status": "sdk_runtime_enablement_review_contract_ready",
+            "status": "sdk_write_runner_implementation_plan_ready",
             "method": "runtime/evidence/read",
             "read_only_runner_contract": {"available": True, "read_only_runner_enabled": True},
         },
@@ -520,7 +555,7 @@ def test_cli_sdk_evidence_read_execute_flag_supports_owner_acceptance_readback()
 
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
-    assert payload["status"] == "sdk_runtime_enablement_review_contract_ready"
+    assert payload["status"] == "sdk_write_runner_implementation_plan_ready"
     evidence = payload["control_plane"]["result"]["evidence"]
     assert evidence["evidence_type"] == "sdk_write_runner_owner_acceptance"
     assert evidence["acceptance_record_present"] is False

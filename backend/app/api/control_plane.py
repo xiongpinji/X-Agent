@@ -897,6 +897,13 @@ async def invoke_sdk_control_plane(
         write_runner_execute_gate=sdk_metadata["write_runner_execute_gate"],
         write_runner_adapter_review=sdk_metadata["write_runner_adapter_review"],
     )
+    sdk_metadata["write_runner_implementation_plan"] = _sdk_write_runner_implementation_plan_contract(
+        control_request,
+        runtime_enablement_review=sdk_metadata["runtime_enablement_review"],
+        write_runner_adapter_review=sdk_metadata["write_runner_adapter_review"],
+        write_runner_execute_gate=sdk_metadata["write_runner_execute_gate"],
+        owner_acceptance_evidence=sdk_metadata["owner_acceptance_evidence"],
+    )
     return SDKControlPlaneInvokeResponse(
         id=control_request.id,
         ok=control_response.ok,
@@ -1109,7 +1116,7 @@ def _sdk_backend_stub_metadata(
     read_only_runner_contract = _sdk_read_only_runner_contract(original, request, response)
     write_runner_safety_contract = _sdk_write_runner_safety_contract(original, request, execution_adapter_contract)
     return {
-        "status": "sdk_runtime_enablement_review_contract_ready",
+        "status": "sdk_write_runner_implementation_plan_ready",
         "operation": request.context.sdk_operation or original.operation,
         "method": request.method,
         "sdk_surface": request.context.sdk_surface or "python",
@@ -1141,6 +1148,7 @@ def _sdk_backend_stub_metadata(
             "Owner-approved write dry-run receipts are consolidated into a disabled execute gate contract.",
             "Owner-approved write runner adapter implementation is represented as a disabled review contract.",
             "Runtime feature flag and owner acceptance evidence recording/readback contracts are present and disabled by default.",
+            "The concrete SDK write runner implementation plan is declared but remains disabled.",
             "No SDK HTTP adapter execution, agent runner invocation, channel send, file change, or network mutation is enabled.",
             "Write methods remain owner-gated behind the approval/sandbox/admin contract.",
             "Feishu remains the only domestic V1 pilot channel.",
@@ -1894,6 +1902,110 @@ def _sdk_runtime_enablement_review_contract(
             "This review consumes owner acceptance contracts only; it does not read a runtime flag as permission.",
             "A valid audit-backed owner acceptance record remains necessary before implementation work.",
             "The concrete SDK write runner remains disabled.",
+        ],
+    }
+
+
+def _sdk_write_runner_implementation_plan_contract(
+    request: ControlPlaneInvokeRequest,
+    *,
+    runtime_enablement_review: dict[str, Any],
+    write_runner_adapter_review: dict[str, Any],
+    write_runner_execute_gate: dict[str, Any],
+    owner_acceptance_evidence: dict[str, Any],
+) -> dict[str, Any]:
+    adapter_target = write_runner_adapter_review.get("adapter_target", {})
+    checks = {
+        "write_method": request.method not in {"thread/read", "thread/search", "runtime/evidence/read"},
+        "runtime_enablement_ready_but_disabled": runtime_enablement_review.get("review_status")
+        == "ready_but_disabled",
+        "adapter_target_declared": adapter_target.get("callable") == "AgentCoordinator.run",
+        "execute_gate_ready_but_disabled": write_runner_execute_gate.get("gate_status") == "ready_but_disabled",
+        "owner_acceptance_readback_required": owner_acceptance_evidence.get("readback_contract", {}).get(
+            "query_keys"
+        )
+        == ["approval_id", "owner_acceptance_id", "audit_id"],
+        "runtime_flag_disabled": runtime_enablement_review.get("runtime_flag_enabled") is False,
+        "execution_still_disabled": runtime_enablement_review.get("execute_enabled") is False,
+        "mutation_still_disabled": runtime_enablement_review.get("mutation_performed") is False,
+    }
+    plan_ready = all(checks.values())
+    return {
+        "available": runtime_enablement_review.get("available") is True,
+        "stage": "owner_approved_write_runner_concrete_implementation_plan",
+        "plan_status": "ready_but_disabled" if plan_ready else "blocked",
+        "adapter_target": {
+            "module": adapter_target.get("module"),
+            "callable": adapter_target.get("callable"),
+            "request_mapping": adapter_target.get("request_mapping", {}),
+            "expected_context_fields": adapter_target.get("expected_context_fields", []),
+        },
+        "implementation_steps": [
+            "resolve_owner_acceptance_record_by_strict_keys",
+            "read_approved_sdk_approval",
+            "verify_runtime_flag_enabled",
+            "build_agent_run_request_from_sdk_envelope",
+            "invoke_agent_runner_once_with_idempotency_key",
+            "persist_result_receipt_and_audit_hash",
+            "mark_approval_executed_after_runner_success",
+            "return_control_plane_result_receipt",
+        ],
+        "rollback_plan": {
+            "disable_runtime_flag": True,
+            "do_not_mark_approval_executed_on_failure": True,
+            "persist_failure_receipt": True,
+            "restore_owner_gate_required": True,
+            "operator_runbook": "docs/runbooks/sdk-write-runner-runtime-enable.md",
+        },
+        "idempotency_contract": {
+            "required": True,
+            "key_source": "ControlPlaneInvokeRequest.idempotency_key",
+            "dedupe_scope": ["tenant_id", "method", "approved_approval_id", "idempotency_key"],
+            "duplicate_behavior": "return_existing_result_receipt_without_reinvoking_runner",
+        },
+        "audit_result_shape": {
+            "planned_action": "sdk.write_runner.implementation_plan_ready",
+            "future_start_action": "sdk.write_runner.execution_started",
+            "future_success_action": "sdk.write_runner.executed",
+            "future_failure_action": "sdk.write_runner.failed",
+            "required_result_fields": [
+                "result_receipt_id",
+                "approval_id",
+                "owner_acceptance_id",
+                "audit_id",
+                "agent_trace_id",
+                "idempotency_key_hash",
+                "runner_status",
+                "mutation_summary",
+            ],
+        },
+        "owner_enablement_steps": [
+            "approve_sdk_command",
+            "record_owner_acceptance_evidence",
+            "verify_runtime_enablement_review",
+            "set_XAGENT_SDK_WRITE_RUNNER_ENABLED_true",
+            "run_sdk_write_runner_smoke",
+            "review_result_receipt_before_general_availability",
+        ],
+        "checks": checks,
+        "next_gate": "owner_approved_write_runner_runtime_implementation",
+        "implementation_enabled": False,
+        "runtime_flag_enabled": False,
+        "execute_enabled": False,
+        "write_runner_enabled": False,
+        "adapter_execution_enabled": False,
+        "agent_execution_enabled": False,
+        "write_execution_enabled": False,
+        "runner_invoked": False,
+        "mark_executed": False,
+        "mutation_performed": False,
+        "network_mutation_performed": False,
+        "file_mutation_performed": False,
+        "channel_mutation_performed": False,
+        "known_limits": [
+            "This is a concrete implementation plan contract, not a runtime implementation.",
+            "The AgentCoordinator.run target is declared for review only and is not imported or called here.",
+            "The runtime flag, runner invocation, approval execution marker, and all mutations remain disabled.",
         ],
     }
 

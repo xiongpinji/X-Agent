@@ -241,7 +241,7 @@ class TestHTTPClient:
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {
-            "status": "sdk_runtime_enablement_review_contract_ready",
+            "status": "sdk_write_runner_implementation_plan_ready",
             "sdk": {
                 "adapter_execution_enabled": False,
                 "agent_execution_enabled": False,
@@ -303,6 +303,19 @@ class TestHTTPClient:
                     "agent_execution_enabled": False,
                     "mutation_performed": False,
                 },
+                "write_runner_implementation_plan": {
+                    "plan_status": "ready_but_disabled",
+                    "adapter_target": {"callable": "AgentCoordinator.run"},
+                    "idempotency_contract": {"required": True},
+                    "rollback_plan": {"disable_runtime_flag": True},
+                    "implementation_enabled": False,
+                    "runtime_flag_enabled": False,
+                    "write_runner_enabled": False,
+                    "agent_execution_enabled": False,
+                    "runner_invoked": False,
+                    "mark_executed": False,
+                    "mutation_performed": False,
+                },
             },
         }
 
@@ -318,7 +331,7 @@ class TestHTTPClient:
             assert call_args[0][0] == "POST"
             assert call_args[0][1] == "/api/v1/control-plane/sdk/invoke"
             assert call_args[1]["json"] == contract
-            assert result["status"] == "sdk_runtime_enablement_review_contract_ready"
+            assert result["status"] == "sdk_write_runner_implementation_plan_ready"
             assert result["sdk"]["adapter_execution_enabled"] is False
             assert result["sdk"]["execution_adapter_contract"]["mark_executed"] is False
             assert result["sdk"]["read_only_runner_contract"]["write_execution_enabled"] is False
@@ -337,6 +350,17 @@ class TestHTTPClient:
             assert result["sdk"]["runtime_enablement_review"]["review_status"] == "ready_but_disabled"
             assert result["sdk"]["runtime_enablement_review"]["write_runner_enabled"] is False
             assert result["sdk"]["runtime_enablement_review"]["mutation_performed"] is False
+            assert result["sdk"]["write_runner_implementation_plan"]["plan_status"] == "ready_but_disabled"
+            assert (
+                result["sdk"]["write_runner_implementation_plan"]["adapter_target"]["callable"]
+                == "AgentCoordinator.run"
+            )
+            assert result["sdk"]["write_runner_implementation_plan"]["idempotency_contract"]["required"] is True
+            assert result["sdk"]["write_runner_implementation_plan"]["write_runner_enabled"] is False
+            assert result["sdk"]["write_runner_implementation_plan"]["agent_execution_enabled"] is False
+            assert result["sdk"]["write_runner_implementation_plan"]["runner_invoked"] is False
+            assert result["sdk"]["write_runner_implementation_plan"]["mark_executed"] is False
+            assert result["sdk"]["write_runner_implementation_plan"]["mutation_performed"] is False
 
     @pytest.mark.asyncio
     async def test_http_client_record_sdk_owner_acceptance_calls_owner_gated_stub(self):

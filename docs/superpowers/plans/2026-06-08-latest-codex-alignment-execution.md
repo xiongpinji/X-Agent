@@ -644,11 +644,36 @@ Expected: selected approval and sandbox tests pass.
 - [x] Require disabled runtime flag declaration, strict acceptance readback keys, approval execute remaining disabled, and mutation boundary still false.
 - [x] Keep `runtime_flag_enabled=false`, `execute_enabled=false`, `write_runner_enabled=false`, `agent_execution_enabled=false`, `adapter_execution_enabled=false`, `mark_executed=false`, and all mutation flags false.
 - [x] Promote SDK alignment status to `sdk_runtime_enablement_review_contract_ready`.
-- [ ] Add the concrete write-runner implementation plan behind this disabled review; do not enable it until owner explicitly requests runtime enablement.
+- [x] Add the concrete write-runner implementation plan behind this disabled review; do not enable it until owner explicitly requests runtime enablement.
+
+### Task 27: Concrete Write-Runner Implementation Plan Contract
+
+**Target:** Define the concrete owner-approved SDK write-runner implementation plan behind the disabled runtime enablement review without importing, calling, or enabling the real runner.
+
+**Files:**
+- Modify: `backend/app/api/control_plane.py`
+- Modify: `backend/app/sdk/control_plane.py`
+- Modify: `scripts/sdk_noninteractive_report.py`
+- Modify: `scripts/latest_codex_alignment.py`
+- Modify: `tests/test_control_plane_protocol.py`
+- Modify: `tests/test_xagent_sdk_contract.py`
+- Modify: `tests/test_cli_client.py`
+- Modify: `tests/test_sdk_noninteractive_report.py`
+- Modify: `tests/test_latest_codex_alignment.py`
+- Runtime evidence: `.xagent_runtime/reports/sdk-noninteractive-report.json`
+- Runtime evidence: `.xagent_runtime/reports/latest-codex-alignment.json`
+
+- [x] Add `write_runner_implementation_plan` metadata to `/sdk/invoke` after the disabled runtime enablement review.
+- [x] Declare adapter target, implementation steps, rollback plan, idempotency contract, audit result shape, and owner enablement steps.
+- [x] Require ready-but-disabled runtime enablement review, ready execute gate, declared adapter target, and strict owner acceptance readback keys.
+- [x] Keep `implementation_enabled=false`, `runtime_flag_enabled=false`, `execute_enabled=false`, `write_runner_enabled=false`, `agent_execution_enabled=false`, `adapter_execution_enabled=false`, `runner_invoked=false`, `mark_executed=false`, and all mutation flags false.
+- [x] Promote SDK alignment status to `sdk_write_runner_implementation_plan_ready`.
+- [ ] Implement the runtime write-runner only after owner acceptance evidence, explicit `XAGENT_SDK_WRITE_RUNNER_ENABLED=true`, and smoke validation are present.
 
 ## Completion Criteria
 
 - `scripts/latest_codex_alignment.py` returns `latest_codex_alignment_plan_ready`.
+- `scripts/sdk_noninteractive_report.py` returns `sdk_write_runner_implementation_plan_ready`.
 - P0 task board is complete and machine-readable.
 - Feishu Pilot V1 remains `customer_acceptance_pack_ready`.
 - `full_codex_parity_claimed=false` remains true in all generated alignment and pilot reports.
