@@ -37,6 +37,10 @@ class SDKThreadRunContract:
     def to_dict(self) -> dict[str, Any]:
         payload = asdict(self)
         payload["request"] = self.request.to_dict()
+        approved_approval_id = self.owner_gate.get("approved_approval_id")
+        if approved_approval_id:
+            payload["approved_approval_id"] = approved_approval_id
+            payload["owner_approved"] = True
         return payload
 
 
@@ -61,6 +65,7 @@ class ControlPlaneSDK:
         permission_scope: list[str] | None = None,
         extra_context: dict[str, Any] | None = None,
         idempotency_key: str | None = None,
+        approved_approval_id: str | None = None,
         dry_run: bool = True,
     ) -> SDKThreadRunContract:
         return self._thread_contract(
@@ -74,6 +79,7 @@ class ControlPlaneSDK:
             tenant_id=tenant_id,
             user_id=user_id,
             idempotency_key=idempotency_key,
+            approved_approval_id=approved_approval_id,
             dry_run=dry_run,
         )
 
@@ -85,6 +91,7 @@ class ControlPlaneSDK:
         tenant_id: str | None = None,
         user_id: str | None = None,
         idempotency_key: str | None = None,
+        approved_approval_id: str | None = None,
         dry_run: bool = True,
     ) -> SDKThreadRunContract:
         params: dict[str, Any] = {"thread_id": thread_id}
@@ -97,6 +104,7 @@ class ControlPlaneSDK:
             tenant_id=tenant_id,
             user_id=user_id,
             idempotency_key=idempotency_key,
+            approved_approval_id=approved_approval_id,
             dry_run=dry_run,
         )
 
@@ -108,6 +116,7 @@ class ControlPlaneSDK:
         tenant_id: str | None = None,
         user_id: str | None = None,
         idempotency_key: str | None = None,
+        approved_approval_id: str | None = None,
         dry_run: bool = True,
     ) -> SDKThreadRunContract:
         return self._thread_contract(
@@ -117,6 +126,7 @@ class ControlPlaneSDK:
             tenant_id=tenant_id,
             user_id=user_id,
             idempotency_key=idempotency_key,
+            approved_approval_id=approved_approval_id,
             dry_run=dry_run,
         )
 
@@ -134,6 +144,7 @@ class ControlPlaneSDK:
             tenant_id=tenant_id,
             user_id=user_id,
             idempotency_key=None,
+            approved_approval_id=None,
             dry_run=True,
         )
 
@@ -146,6 +157,7 @@ class ControlPlaneSDK:
         tenant_id: str | None,
         user_id: str | None,
         idempotency_key: str | None,
+        approved_approval_id: str | None,
         dry_run: bool,
     ) -> SDKThreadRunContract:
         request = SDKControlPlaneRequest(
@@ -173,6 +185,11 @@ class ControlPlaneSDK:
             },
             owner_gate={
                 "required_for_write_methods": method not in {"thread/read", "thread/search"},
+                "approved_approval_id": approved_approval_id,
+                "owner_approved": bool(approved_approval_id),
+                "execution_adapter_contract": "owner_approved_preflight",
+                "adapter_execution_enabled": False,
+                "mark_executed": False,
                 "mutation_performed": False,
                 "network_mutation_performed": False,
             },
@@ -188,6 +205,7 @@ class ControlPlaneSDK:
                 "The CLI can submit this envelope to /api/v1/control-plane/sdk/invoke when --execute is set.",
                 "No control-plane HTTP request is sent by this contract object itself.",
                 "Thread write methods remain owner-gated by the control-plane adapter.",
+                "Providing approved_approval_id enables backend readback/preflight only, not real execution.",
                 "Feishu remains the first domestic V1 channel; no new channel send is performed.",
             ],
         )

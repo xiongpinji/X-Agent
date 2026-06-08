@@ -58,12 +58,14 @@ def thread_start(
     user_id: Optional[str] = typer.Option(None, "--user-id"),
     scope: list[str] = typer.Option([], "--scope", help="Permission scope."),
     idempotency_key: Optional[str] = typer.Option(None, "--idempotency-key"),
+    approved_approval_id: Optional[str] = typer.Option(None, "--approved-approval-id"),
     execute: bool = typer.Option(False, "--execute", help="Build an execute-intent envelope instead of dry-run."),
 ) -> None:
     contract = _sdk(tenant_id, user_id).start_thread(
         task,
         permission_scope=scope or None,
         idempotency_key=idempotency_key,
+        approved_approval_id=approved_approval_id,
         dry_run=not execute,
     )
     _emit_or_invoke(contract.to_dict(), execute=execute)
@@ -76,12 +78,14 @@ def thread_resume(
     tenant_id: Optional[str] = typer.Option(None, "--tenant-id"),
     user_id: Optional[str] = typer.Option(None, "--user-id"),
     idempotency_key: Optional[str] = typer.Option(None, "--idempotency-key"),
+    approved_approval_id: Optional[str] = typer.Option(None, "--approved-approval-id"),
     execute: bool = typer.Option(False, "--execute", help="Build an execute-intent envelope instead of dry-run."),
 ) -> None:
     contract = _sdk(tenant_id, user_id).resume_thread(
         thread_id,
         input_text=input_text,
         idempotency_key=idempotency_key,
+        approved_approval_id=approved_approval_id,
         dry_run=not execute,
     )
     _emit_or_invoke(contract.to_dict(), execute=execute)
@@ -94,12 +98,14 @@ def turn_run(
     tenant_id: Optional[str] = typer.Option(None, "--tenant-id"),
     user_id: Optional[str] = typer.Option(None, "--user-id"),
     idempotency_key: Optional[str] = typer.Option(None, "--idempotency-key"),
+    approved_approval_id: Optional[str] = typer.Option(None, "--approved-approval-id"),
     execute: bool = typer.Option(False, "--execute", help="Build an execute-intent envelope instead of dry-run."),
 ) -> None:
     contract = _sdk(tenant_id, user_id).run_turn(
         thread_id,
         input_text,
         idempotency_key=idempotency_key,
+        approved_approval_id=approved_approval_id,
         dry_run=not execute,
     )
     _emit_or_invoke(contract.to_dict(), execute=execute)

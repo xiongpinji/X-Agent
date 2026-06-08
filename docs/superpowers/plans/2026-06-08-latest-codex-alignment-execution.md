@@ -332,6 +332,31 @@ Expected: selected approval and sandbox tests pass.
 - [x] Keep agent runner invocation, `mark_executed`, channel send, file mutation, and network mutation disabled.
 - [ ] Implement owner-approved long-running SDK execution adapters after approval handoff evidence review.
 
+### Task 14: Owner-Approved SDK Execution Adapter Contract
+
+**Target:** Let SDK/CLI submit an approved approval id for backend readback/preflight while still preventing real execution.
+
+**Files:**
+- Modify: `backend/app/api/control_plane.py`
+- Modify: `backend/app/sdk/control_plane.py`
+- Modify: `cli/commands/sdk_cmd.py`
+- Modify: `scripts/sdk_noninteractive_report.py`
+- Modify: `scripts/latest_codex_alignment.py`
+- Modify: `tests/test_control_plane_protocol.py`
+- Modify: `tests/test_xagent_sdk_contract.py`
+- Modify: `tests/test_cli_client.py`
+- Modify: `tests/test_sdk_noninteractive_report.py`
+- Modify: `tests/test_latest_codex_alignment.py`
+- Runtime evidence: `.xagent_runtime/reports/sdk-noninteractive-report.json`
+- Runtime evidence: `.xagent_runtime/reports/latest-codex-alignment.json`
+
+- [x] Add SDK envelope support for `approved_approval_id` / owner-approved preflight metadata.
+- [x] Add CLI `--approved-approval-id <approval_id>` on SDK write commands.
+- [x] Add backend approval readback/preflight contract for approved SDK ids.
+- [x] Return `approved_ready` only when approval exists, is approved, matches `sdk:<method>`, and passes tenant checks.
+- [x] Keep `adapter_execution_enabled`, agent execution, `mark_executed`, file/network/channel mutation disabled.
+- [ ] Implement concrete owner-approved SDK runner after runtime safety review.
+
 ## Completion Criteria
 
 - `scripts/latest_codex_alignment.py` returns `latest_codex_alignment_plan_ready`.

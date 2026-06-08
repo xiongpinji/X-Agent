@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict, Field
 
 from backend.app.core.audit import AuditStore
-from backend.app.core.approvals import APPROVAL_SUBJECT_ACTIONS, ApprovalSubjectType
+from backend.app.core.approvals import APPROVAL_SUBJECT_ACTIONS, ApprovalStatus, ApprovalSubjectType
 from backend.app.core.contracts import RiskLevel, RunContext
 from backend.app.core.sandbox.security import get_enterprise_safety_policy
 from backend.app.core.security import Principal
@@ -597,6 +597,8 @@ class SDKControlPlaneInvokeRequest(BaseModel):
 
     operation: str | None = Field(default=None, max_length=160)
     request: ControlPlaneInvokeRequest | None = None
+    approved_approval_id: str | None = Field(default=None, max_length=240)
+    owner_approved: bool = False
     id: str = Field(default_factory=lambda: f"sdk_req_{uuid4().hex}")
     method: str | None = Field(default=None, min_length=1, max_length=160)
     params: dict[str, Any] = Field(default_factory=dict)
@@ -823,16 +825,20 @@ async def invoke_sdk_control_plane(
         trace_store,
         approval_store,
     )
+    approved_approval_id = _sdk_approved_approval_id(request, control_request)
     approval_intent = _sdk_approval_intent(
         control_request,
         principal=principal,
         approval_store=approval_store,
+        approved_approval_id=approved_approval_id,
     )
     sdk_metadata = _sdk_backend_stub_metadata(
         request,
         control_request,
         control_response,
         approval_intent=approval_intent,
+        approval_store=approval_store,
+        principal=principal,
     )
     return SDKControlPlaneInvokeResponse(
         id=control_request.id,
@@ -900,9 +906,17 @@ def _sdk_backend_stub_metadata(
     response: ControlPlaneInvokeResponse,
     *,
     approval_intent: dict[str, Any],
+    approval_store: object,
+    principal: Principal,
 ) -> dict[str, Any]:
+    execution_adapter_contract = _sdk_execution_adapter_contract(
+        original,
+        request,
+        approval_store=approval_store,
+        principal=principal,
+    )
     return {
-        "status": "sdk_approval_handoff_ready",
+        "status": "sdk_execution_adapter_contract_ready",
         "operation": request.context.sdk_operation or original.operation,
         "method": request.method,
         "sdk_surface": request.context.sdk_surface or "python",
@@ -915,12 +929,14 @@ def _sdk_backend_stub_metadata(
         "adapter_execution_enabled": False,
         "approval_intent": approval_intent,
         "approval_handoff": _sdk_approval_handoff(approval_intent),
+        "execution_adapter_contract": execution_adapter_contract,
         "approval_sandbox_admin": _sdk_approval_sandbox_admin_contract(request),
         "control_plane_ok": response.ok,
         "control_plane_error_code": response.error.code if response.error else None,
         "known_limits": [
             "This endpoint accepts SDK envelopes and normalizes them into the control-plane contract.",
             "Write-method invocations create a pending owner approval intent but do not execute it.",
+            "Approved SDK approval ids are read back for execution-adapter preflight only.",
             "No SDK HTTP adapter execution, agent runner invocation, channel send, file change, or network mutation is enabled.",
             "Write methods remain owner-gated behind the approval/sandbox/admin contract.",
             "Feishu remains the only domestic V1 pilot channel.",
@@ -967,11 +983,122 @@ def _sdk_approval_handoff(approval_intent: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _sdk_execution_adapter_contract(
+    original: SDKControlPlaneInvokeRequest,
+    request: ControlPlaneInvokeRequest,
+    *,
+    approval_store: object,
+    principal: Principal,
+) -> dict[str, Any]:
+    approved_approval_id = _sdk_approved_approval_id(original, request)
+    base: dict[str, Any] = {
+        "available": True,
+        "contract_stage": "owner_approved_preflight",
+        "approved_approval_id": approved_approval_id,
+        "owner_approved_requested": bool(original.owner_approved or approved_approval_id),
+        "approval_readback_method": "approval/read",
+        "approval_readback_params": {"approval_id": approved_approval_id} if approved_approval_id else {},
+        "approval_readback_endpoint": "/api/v1/control-plane/invoke",
+        "required_approval_status": ApprovalStatus.APPROVED.value,
+        "expected_resource_id": f"sdk:{request.method}",
+        "preflight_status": "approval_id_required",
+        "ready_for_owner_approved_adapter": False,
+        "adapter_execution_enabled": False,
+        "agent_execution_enabled": False,
+        "execute_disabled": True,
+        "mark_executed": False,
+        "mutation_performed": False,
+        "network_mutation_performed": False,
+        "file_mutation_performed": False,
+        "channel_mutation_performed": False,
+        "next_commands": [
+            "xagent sdk turn-run <thread_id> <input> --execute --approved-approval-id <approval_id>"
+        ],
+        "known_limits": [
+            "This contract verifies approval readiness only.",
+            "The SDK execution adapter remains disabled until a concrete owner-approved runner is implemented.",
+            "No approval is marked executed by /api/v1/control-plane/sdk/invoke.",
+        ],
+    }
+    if request.method == "thread/read":
+        return {
+            **base,
+            "preflight_status": "not_required_for_read",
+            "owner_approved_requested": False,
+            "ready_for_owner_approved_adapter": False,
+        }
+    if not approved_approval_id:
+        return base
+
+    record = getattr(approval_store, "get", lambda _approval_id: None)(approved_approval_id)
+    if record is None:
+        return {**base, "preflight_status": "approval_not_found"}
+
+    record_status = _status_value(getattr(record, "status", None))
+    record_resource_id = getattr(record, "resource_id", None)
+    tenant_id = getattr(record, "tenant_id", None)
+    tenant_matches = (
+        not principal.authenticated
+        or principal.tenant_id is None
+        or tenant_id is None
+        or principal.tenant_id == tenant_id
+    )
+    checks = {
+        "approval_exists": True,
+        "approval_status": record_status,
+        "approval_status_ok": record_status == ApprovalStatus.APPROVED.value,
+        "resource_id": record_resource_id,
+        "resource_id_ok": record_resource_id == f"sdk:{request.method}",
+        "tenant_id": tenant_id,
+        "tenant_ok": tenant_matches,
+        "subject_type": _status_value(getattr(record, "subject_type", None)),
+        "decision_type": _status_value(getattr(record, "decision_type", None)),
+        "decision_scope": getattr(record, "decision_scope", None),
+    }
+    ready = (
+        checks["approval_status_ok"] is True
+        and checks["resource_id_ok"] is True
+        and checks["tenant_ok"] is True
+    )
+    if ready:
+        preflight_status = "approved_ready"
+    elif checks["approval_status_ok"] is not True:
+        preflight_status = "approval_not_approved"
+    elif checks["resource_id_ok"] is not True:
+        preflight_status = "approval_resource_mismatch"
+    else:
+        preflight_status = "approval_tenant_mismatch"
+    return {
+        **base,
+        **checks,
+        "preflight_status": preflight_status,
+        "ready_for_owner_approved_adapter": ready,
+    }
+
+
+def _sdk_approved_approval_id(
+    original: SDKControlPlaneInvokeRequest,
+    request: ControlPlaneInvokeRequest,
+) -> str | None:
+    if isinstance(original.approved_approval_id, str) and original.approved_approval_id:
+        return original.approved_approval_id
+    value = request.params.get("approved_approval_id")
+    if isinstance(value, str) and value:
+        return value
+    owner_gate = getattr(original, "owner_gate", None)
+    if isinstance(owner_gate, dict):
+        value = owner_gate.get("approved_approval_id")
+        if isinstance(value, str) and value:
+            return value
+    return None
+
+
 def _sdk_approval_intent(
     request: ControlPlaneInvokeRequest,
     *,
     principal: Principal,
     approval_store: object,
+    approved_approval_id: str | None = None,
 ) -> dict[str, Any]:
     spec = METHODS_BY_NAME.get(request.method)
     if spec is None or spec.operation_kind == "read":
@@ -981,6 +1108,18 @@ def _sdk_approval_intent(
             "approval_id": None,
             "status": "not_required",
             "mutation_performed": False,
+        }
+    if approved_approval_id:
+        return {
+            "required": True,
+            "created": False,
+            "approval_id": approved_approval_id,
+            "status": "provided_for_preflight",
+            "subject_type": ApprovalSubjectType.COMMAND.value,
+            "resource_type": "command",
+            "resource_id": f"sdk:{request.method}",
+            "mutation_performed": False,
+            "adapter_execution_enabled": False,
         }
 
     approval_contract = _sdk_approval_sandbox_admin_contract(request)

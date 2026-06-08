@@ -5,7 +5,7 @@ from contextlib import contextmanager
 import pytest
 from fastapi.testclient import TestClient
 
-from backend.app.core.approvals import ApprovalStore
+from backend.app.core.approvals import ApprovalDecisionRequest, ApprovalStore
 from backend.app.core.contracts import AgentRunResponse, RiskLevel, RunContext, RunStatus
 from backend.app.core.runs import RunStore
 from backend.app.core.tracing import TraceStore
@@ -178,8 +178,8 @@ def test_sdk_control_plane_stub_accepts_thread_start_envelope_without_mutation()
     assert response.status_code == 200
     payload = response.json()
     assert payload["ok"] is False
-    assert payload["status"] == "sdk_approval_handoff_ready"
-    assert payload["sdk"]["status"] == "sdk_approval_handoff_ready"
+    assert payload["status"] == "sdk_execution_adapter_contract_ready"
+    assert payload["sdk"]["status"] == "sdk_execution_adapter_contract_ready"
     assert payload["sdk"]["method"] == "thread/start"
     assert payload["sdk"]["dry_run"] is False
     assert payload["sdk"]["idempotency_key_present"] is True
@@ -192,6 +192,9 @@ def test_sdk_control_plane_stub_accepts_thread_start_envelope_without_mutation()
     assert payload["sdk"]["approval_intent"]["subject_type"] == "command"
     assert payload["sdk"]["approval_intent"]["resource_id"] == "sdk:thread/start"
     assert payload["sdk"]["approval_intent"]["mutation_performed"] is False
+    assert payload["sdk"]["execution_adapter_contract"]["preflight_status"] == "approval_id_required"
+    assert payload["sdk"]["execution_adapter_contract"]["ready_for_owner_approved_adapter"] is False
+    assert payload["sdk"]["execution_adapter_contract"]["adapter_execution_enabled"] is False
     handoff = payload["sdk"]["approval_handoff"]
     assert handoff["available"] is True
     assert handoff["approval_id"] == payload["sdk"]["approval_intent"]["approval_id"]
@@ -219,6 +222,65 @@ def test_sdk_control_plane_stub_accepts_thread_start_envelope_without_mutation()
     assert approval_store.pending_count() == 1
 
 
+def test_sdk_control_plane_stub_reads_approved_execution_adapter_contract_without_mutation() -> None:
+    approval_store = ApprovalStore()
+    context = RunContext(
+        trace_id="trace-sdk-approved",
+        tenant_id="default",
+        user_id="operator",
+        request_id="req-sdk-approved",
+    )
+    approval = approval_store.create_approval(
+        context=context,
+        resource_type="command",
+        resource_id="sdk:turn/start",
+        action="command.execute",
+        risk_level=RiskLevel.HIGH,
+        reason="Owner approved SDK turn preflight.",
+        arguments_preview={"method": "turn/start", "adapter_execution_enabled": False},
+    )
+    approval_store.approve(
+        approval.id,
+        ApprovalDecisionRequest(decided_by="owner", reason="preflight accepted"),
+    )
+    contract = ControlPlaneSDK(default_tenant_id="default", default_user_id="operator").run_turn(
+        "thread-1",
+        "continue",
+        idempotency_key="sdk-approved-1",
+        approved_approval_id=approval.id,
+        dry_run=False,
+    )
+
+    with _client_with_stores(RunStore(), TraceStore(), approval_store) as client:
+        response = client.post(
+            "/api/v1/control-plane/sdk/invoke",
+            json=contract.to_dict(),
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["ok"] is False
+    assert payload["status"] == "sdk_execution_adapter_contract_ready"
+    assert payload["sdk"]["status"] == "sdk_execution_adapter_contract_ready"
+    assert payload["sdk"]["approval_intent"]["created"] is False
+    assert payload["sdk"]["approval_intent"]["approval_id"] == approval.id
+    adapter = payload["sdk"]["execution_adapter_contract"]
+    assert adapter["approved_approval_id"] == approval.id
+    assert adapter["preflight_status"] == "approved_ready"
+    assert adapter["ready_for_owner_approved_adapter"] is True
+    assert adapter["approval_status"] == "approved"
+    assert adapter["resource_id_ok"] is True
+    assert adapter["tenant_ok"] is True
+    assert adapter["adapter_execution_enabled"] is False
+    assert adapter["agent_execution_enabled"] is False
+    assert adapter["execute_disabled"] is True
+    assert adapter["mark_executed"] is False
+    assert adapter["mutation_performed"] is False
+    assert adapter["network_mutation_performed"] is False
+    assert approval_store.pending_count() == 0
+    assert approval_store.get(approval.id).status == "approved"
+
+
 def test_sdk_control_plane_stub_can_read_thread_through_existing_contract() -> None:
     approval_store = ApprovalStore()
     contract = ControlPlaneSDK(default_tenant_id="default", default_user_id="operator").read_thread(
@@ -234,8 +296,8 @@ def test_sdk_control_plane_stub_can_read_thread_through_existing_contract() -> N
     assert response.status_code == 200
     payload = response.json()
     assert payload["ok"] is True
-    assert payload["status"] == "sdk_approval_handoff_ready"
-    assert payload["sdk"]["status"] == "sdk_approval_handoff_ready"
+    assert payload["status"] == "sdk_execution_adapter_contract_ready"
+    assert payload["sdk"]["status"] == "sdk_execution_adapter_contract_ready"
     assert payload["sdk"]["method"] == "thread/read"
     assert payload["sdk"]["owner_gate_required"] is False
     assert payload["sdk"]["approval_intent"]["required"] is False
@@ -244,6 +306,8 @@ def test_sdk_control_plane_stub_can_read_thread_through_existing_contract() -> N
     assert payload["sdk"]["approval_handoff"]["execute_disabled"] is True
     assert payload["sdk"]["approval_handoff"]["mark_executed"] is False
     assert payload["sdk"]["approval_handoff"]["network_mutation_performed"] is False
+    assert payload["sdk"]["execution_adapter_contract"]["preflight_status"] == "not_required_for_read"
+    assert payload["sdk"]["execution_adapter_contract"]["adapter_execution_enabled"] is False
     assert payload["sdk"]["mutation_performed"] is False
     assert payload["control_plane"]["result"]["contract"]["dry_run"] is True
     assert payload["control_plane"]["result"]["compatibility"]["sdk_surface"] == "python"

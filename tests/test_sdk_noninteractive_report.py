@@ -16,7 +16,7 @@ def test_sdk_noninteractive_report_default_is_read_only() -> None:
     report = build_sdk_noninteractive_report()
     payload = report.to_dict()
 
-    assert report.status == "sdk_approval_handoff_ready"
+    assert report.status == "sdk_execution_adapter_contract_ready"
     assert report.evidence_type == "sdk_noninteractive_cli_contract"
     assert report.full_codex_parity_claimed is False
     assert report.dry_run is True
@@ -57,7 +57,8 @@ def test_sdk_noninteractive_report_covers_cli_http_dry_run_adapter() -> None:
 
     assert adapter["cli_method"] == "HTTPClient.invoke_sdk_contract"
     assert adapter["endpoint"] == "/api/v1/control-plane/sdk/invoke"
-    assert adapter["trigger"] == "xagent sdk <command> --execute"
+    assert "--execute" in adapter["trigger"]
+    assert "--approved-approval-id <approval_id>" in adapter["trigger"]
     assert adapter["default_without_execute"] == "local_envelope_only"
     assert adapter["starts_agent_execution"] is False
     assert adapter["adapter_execution_enabled"] is False
@@ -89,6 +90,20 @@ def test_sdk_noninteractive_report_covers_approval_handoff() -> None:
     assert handoff["mutation_performed"] is False
 
 
+def test_sdk_noninteractive_report_covers_owner_approved_execution_preflight() -> None:
+    contract = build_sdk_noninteractive_report().execution_adapter_contract
+
+    assert contract["stage"] == "owner_approved_preflight"
+    assert contract["approved_approval_id_supported"] is True
+    assert contract["owner_approved_cli_flag"] == "--approved-approval-id <approval_id>"
+    assert contract["approval_readback_method"] == "approval/read"
+    assert contract["ready_status"] == "approved_ready"
+    assert contract["adapter_execution_enabled"] is False
+    assert contract["agent_execution_enabled"] is False
+    assert contract["mark_executed"] is False
+    assert contract["mutation_performed"] is False
+
+
 def test_sdk_noninteractive_report_keeps_feishu_first_channel_strategy() -> None:
     strategy = build_sdk_noninteractive_report().channel_strategy
 
@@ -109,7 +124,7 @@ def test_write_sdk_noninteractive_report_json_and_markdown(tmp_path: Path) -> No
 
     payload = json.loads(json_output.read_text(encoding="utf-8"))
     markdown = markdown_output.read_text(encoding="utf-8")
-    assert payload["status"] == "sdk_approval_handoff_ready"
+    assert payload["status"] == "sdk_execution_adapter_contract_ready"
     assert payload["full_codex_parity_claimed"] is False
     assert payload["mutation_performed"] is False
     assert "# X-Agent SDK Non-Interactive Report" in markdown
