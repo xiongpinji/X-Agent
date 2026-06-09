@@ -85,6 +85,7 @@ class SDKNonInteractiveReport:
     live_runtime_flag_application_adapter_runtime_preflight_workflow: dict[str, Any]
     live_runtime_flag_application_adapter_execution_dry_run_workflow: dict[str, Any]
     live_runtime_flag_application_adapter_execution_gate_workflow: dict[str, Any]
+    live_write_runner_execution_acceptance_workflow: dict[str, Any]
     channel_strategy: dict[str, Any]
     checks: list[SDKNonInteractiveCheck]
     official_sources: list[str]
@@ -474,6 +475,45 @@ def _sdk_contracts() -> list[dict[str, Any]]:
             idempotency_hash="<idempotency_hash>",
             execution_gate_hash="<execution_gate_hash>",
         ).to_dict(),
+        sdk.record_live_write_runner_execution_acceptance(
+            execution_acceptance_id="<execution_acceptance_id>",
+            approval_id="<approval_id>",
+            adapter_execution_gate_id="<adapter_execution_gate_id>",
+            adapter_execution_gate_audit_id="<adapter_execution_gate_audit_id>",
+            adapter_execution_dry_run_id="<adapter_execution_dry_run_id>",
+            adapter_runtime_preflight_id="<adapter_runtime_preflight_id>",
+            adapter_wiring_id="<adapter_wiring_id>",
+            adapter_code_change_id="<adapter_code_change_id>",
+            adapter_implementation_preflight_id="<adapter_implementation_preflight_id>",
+            adapter_design_review_id="<adapter_design_review_id>",
+            adapter_implementation_request_id="<adapter_implementation_request_id>",
+            readiness_plan_decision_id="<readiness_plan_decision_id>",
+            runtime_flag_execute_contract_id="<runtime_flag_execute_contract_id>",
+            runtime_flag_approval_id="<runtime_flag_approval_id>",
+            runtime_flag_preflight_id="<runtime_flag_preflight_id>",
+            runtime_flag_enablement_id="<runtime_flag_enablement_id>",
+            final_decision_id="<final_decision_id>",
+            accepted_by="<owner>",
+            accepted_at="2026-06-08T00:00:00Z",
+            execution_acceptance_plan_ref="<execution_acceptance_plan_ref>",
+            execution_gate_plan_ref="<execution_gate_plan_ref>",
+            execution_dry_run_plan_ref="<execution_dry_run_plan_ref>",
+            runtime_preflight_plan_ref="<runtime_preflight_plan_ref>",
+            wiring_plan_ref="<wiring_plan_ref>",
+            implementation_branch_ref="<implementation_branch_ref>",
+            implementation_plan_ref="<implementation_plan_ref>",
+            adapter_design_ref="<adapter_design_ref>",
+            security_review_ref="<security_review_ref>",
+            test_plan_ref="<test_plan_ref>",
+            rollback_plan_ref="<rollback_plan_ref>",
+            smoke_runbook_ref="<smoke_runbook_ref>",
+            runbook_acknowledged=True,
+            rollback_plan_acknowledged=True,
+            smoke_runbook_acknowledged=True,
+            idempotency_key="<idempotency_key>",
+            idempotency_hash="<idempotency_hash>",
+            acceptance_hash="<acceptance_hash>",
+        ).to_dict(),
     ]
 
 
@@ -687,6 +727,14 @@ def _cli_commands() -> list[dict[str, Any]]:
             "execute_target": "/api/v1/control-plane/sdk/runtime-flag/application-adapter/execution-gate/record",
             "execute_starts_agent": False,
         },
+        {
+            "command": "xagent sdk live-write-runner-execution-acceptance-record --execution-acceptance-id <execution_acceptance_id> --adapter-execution-gate-id <adapter_execution_gate_id> --adapter-execution-gate-audit-id <adapter_execution_gate_audit_id> --execute",
+            "method": "live_write_runner_execution_acceptance_record",
+            "non_interactive": True,
+            "dry_run_default": True,
+            "execute_target": "/api/v1/control-plane/sdk/live-write-runner/execution-acceptance/record",
+            "execute_starts_agent": False,
+        },
     ]
 
 
@@ -788,6 +836,9 @@ def _build_checks(report_payload: dict[str, Any]) -> list[SDKNonInteractiveCheck
     live_flag_adapter_execution_gate = report_payload[
         "live_runtime_flag_application_adapter_execution_gate_workflow"
     ]
+    live_write_runner_execution_acceptance = report_payload[
+        "live_write_runner_execution_acceptance_workflow"
+    ]
     methods = [_sdk_contract_method(contract) for contract in contracts]
     command_methods = [command["method"] for command in commands]
     allowed_execute_targets = {
@@ -809,6 +860,7 @@ def _build_checks(report_payload: dict[str, Any]) -> list[SDKNonInteractiveCheck
         "/api/v1/control-plane/sdk/runtime-flag/application-adapter/runtime-preflight/record",
         "/api/v1/control-plane/sdk/runtime-flag/application-adapter/execution-dry-run/record",
         "/api/v1/control-plane/sdk/runtime-flag/application-adapter/execution-gate/record",
+        "/api/v1/control-plane/sdk/live-write-runner/execution-acceptance/record",
     }
     cli_execute_targets = [
         command["method"]
@@ -852,10 +904,11 @@ def _build_checks(report_payload: dict[str, Any]) -> list[SDKNonInteractiveCheck
                 "runtime_flag_application_adapter_runtime_preflight_record",
                 "runtime_flag_application_adapter_execution_dry_run_record",
                 "runtime_flag_application_adapter_execution_gate_record",
+                "live_write_runner_execution_acceptance_record",
             ]
             else "failed",
             details={"methods": methods},
-            error=None if len(methods) == 26 else "SDK methods are incomplete",
+            error=None if len(methods) == 27 else "SDK methods are incomplete",
         ),
         SDKNonInteractiveCheck(
             name="cli_non_interactive_commands_complete",
@@ -2199,6 +2252,75 @@ def _build_checks(report_payload: dict[str, Any]) -> list[SDKNonInteractiveCheck
             else "live runtime flag application adapter execution gate workflow is not ready but disabled",
         ),
         SDKNonInteractiveCheck(
+            name="live_write_runner_execution_acceptance_workflow_ready",
+            status="passed"
+            if live_write_runner_execution_acceptance.get("stage")
+            == "live_write_runner_execution_acceptance_workflow"
+            and live_write_runner_execution_acceptance.get("workflow_status") == "ready_but_disabled"
+            and live_write_runner_execution_acceptance.get("endpoint")
+            == "/api/v1/control-plane/sdk/live-write-runner/execution-acceptance/record"
+            and live_write_runner_execution_acceptance.get("audit_action")
+            == "sdk.write_runner.live_write_runner_execution_acceptance_recorded"
+            and live_write_runner_execution_acceptance.get("requires_approved_sdk_approval") is True
+            and live_write_runner_execution_acceptance.get("requires_accepted_adapter_execution_gate")
+            is True
+            and live_write_runner_execution_acceptance.get("requires_adapter_execution_gate_audit")
+            is True
+            and live_write_runner_execution_acceptance.get("requires_adapter_module")
+            == "backend.app.sdk.runtime_flag_application_adapter"
+            and live_write_runner_execution_acceptance.get("requires_adapter_class")
+            == "SDKRuntimeFlagApplicationAdapter"
+            and live_write_runner_execution_acceptance.get("requires_execution_acceptance_plan_ref")
+            is True
+            and live_write_runner_execution_acceptance.get("requires_runbook_acknowledged") is True
+            and live_write_runner_execution_acceptance.get("requires_rollback_plan_acknowledged")
+            is True
+            and live_write_runner_execution_acceptance.get("requires_smoke_runbook_acknowledged")
+            is True
+            and live_write_runner_execution_acceptance.get("execution_acceptance_effect", {}).get(
+                "execution_acceptance_recorded"
+            )
+            is True
+            and live_write_runner_execution_acceptance.get("execution_acceptance_effect", {}).get(
+                "execution_gate_opened"
+            )
+            is False
+            and live_write_runner_execution_acceptance.get("execution_acceptance_effect", {}).get(
+                "wired_into_sdk_invoke"
+            )
+            is False
+            and live_write_runner_execution_acceptance.get("execution_acceptance_effect", {}).get(
+                "invokes_write_runner"
+            )
+            is False
+            and live_write_runner_execution_acceptance.get("execution_acceptance_effect", {}).get(
+                "live_execution_started"
+            )
+            is False
+            and live_write_runner_execution_acceptance.get("implementation_enabled") is False
+            and live_write_runner_execution_acceptance.get("runtime_flag_enabled") is False
+            and live_write_runner_execution_acceptance.get("flag_application_performed") is False
+            and live_write_runner_execution_acceptance.get("write_runner_enabled") is False
+            and live_write_runner_execution_acceptance.get("adapter_execution_enabled") is False
+            and live_write_runner_execution_acceptance.get("agent_execution_enabled") is False
+            and live_write_runner_execution_acceptance.get("runner_invoked") is False
+            and live_write_runner_execution_acceptance.get("write_runner_invoked") is False
+            and live_write_runner_execution_acceptance.get("live_execution_started") is False
+            and live_write_runner_execution_acceptance.get("mutation_performed") is False
+            and live_write_runner_execution_acceptance.get("file_mutation_performed") is False
+            and live_write_runner_execution_acceptance.get("adapter_import_allowed") is False
+            and live_write_runner_execution_acceptance.get("adapter_execution_allowed") is False
+            and live_write_runner_execution_acceptance.get("wired_into_sdk_invoke") is False
+            and live_write_runner_execution_acceptance.get("adapter_runtime_wired") is False
+            and live_write_runner_execution_acceptance.get("execution_dry_run_invoked") is False
+            and live_write_runner_execution_acceptance.get("execution_gate_opened") is False
+            else "failed",
+            details=live_write_runner_execution_acceptance,
+            error=None
+            if live_write_runner_execution_acceptance.get("workflow_status") == "ready_but_disabled"
+            else "live write-runner execution acceptance workflow is not ready but disabled",
+        ),
+        SDKNonInteractiveCheck(
             name="feishu_domestic_v1_primary",
             status="passed"
             if report_payload["channel_strategy"].get("domestic_v1_primary") == "feishu"
@@ -2222,7 +2344,7 @@ def _build_checks(report_payload: dict[str, Any]) -> list[SDKNonInteractiveCheck
 
 def build_sdk_noninteractive_report() -> SDKNonInteractiveReport:
     report_payload: dict[str, Any] = {
-        "status": "sdk_live_runtime_flag_application_adapter_execution_gate_workflow_ready",
+        "status": "sdk_live_write_runner_execution_acceptance_workflow_ready",
         "generated_at": _utc_now(),
         "evidence_type": "sdk_noninteractive_cli_contract",
         "full_codex_parity_claimed": False,
@@ -2235,7 +2357,7 @@ def build_sdk_noninteractive_report() -> SDKNonInteractiveReport:
         "backend_stub": {
             "endpoint": "/api/v1/control-plane/sdk/invoke",
             "normalizes_to": "/api/v1/control-plane/invoke",
-            "status": "sdk_live_runtime_flag_application_adapter_execution_gate_workflow_ready",
+            "status": "sdk_live_write_runner_execution_acceptance_workflow_ready",
             "approval_subject_type": "command",
             "approval_intent_created_for_write_methods": True,
             "owner_gate_required": True,
@@ -3987,6 +4109,81 @@ def build_sdk_noninteractive_report() -> SDKNonInteractiveReport:
             "execution_dry_run_invoked": False,
             "execution_gate_opened": False,
         },
+        "live_write_runner_execution_acceptance_workflow": {
+            "stage": "live_write_runner_execution_acceptance_workflow",
+            "workflow_status": "ready_but_disabled",
+            "endpoint": "/api/v1/control-plane/sdk/live-write-runner/execution-acceptance/record",
+            "sdk_operation": "live_write_runner_execution_acceptance_record",
+            "cli_command": "xagent sdk live-write-runner-execution-acceptance-record --execute",
+            "requires_approved_sdk_approval": True,
+            "requires_accepted_adapter_execution_gate": True,
+            "requires_adapter_execution_gate_audit": True,
+            "requires_runtime_flag_name": "XAGENT_SDK_WRITE_RUNNER_ENABLED",
+            "requires_adapter_module": "backend.app.sdk.runtime_flag_application_adapter",
+            "requires_adapter_class": "SDKRuntimeFlagApplicationAdapter",
+            "requires_execution_acceptance_plan_ref": True,
+            "requires_execution_gate_plan_ref": True,
+            "requires_execution_dry_run_plan_ref": True,
+            "requires_runtime_preflight_plan_ref": True,
+            "requires_wiring_plan_ref": True,
+            "requires_implementation_branch_ref": True,
+            "requires_implementation_plan_ref": True,
+            "requires_adapter_design_ref": True,
+            "requires_security_review_ref": True,
+            "requires_test_plan_ref": True,
+            "requires_rollback_plan_ref": True,
+            "requires_smoke_runbook_ref": True,
+            "requires_runbook_acknowledged": True,
+            "requires_rollback_plan_acknowledged": True,
+            "requires_smoke_runbook_acknowledged": True,
+            "requires_idempotency_key": True,
+            "requires_idempotency_hash": True,
+            "requires_signature_or_hash": True,
+            "audit_action": "sdk.write_runner.live_write_runner_execution_acceptance_recorded",
+            "resource_type": "sdk_write_runner_live_write_runner_execution_acceptance",
+            "audit_event_recorded_by_sdk_invoke": False,
+            "execution_acceptance_effect": {
+                "execution_acceptance_recorded": True,
+                "execution_gate_opened": False,
+                "wired_into_sdk_invoke": False,
+                "adapter_runtime_wired": False,
+                "imports_adapter_in_sdk_invoke": False,
+                "instantiates_adapter_in_sdk_invoke": False,
+                "applies_runtime_flag": False,
+                "invokes_write_runner": False,
+                "starts_agent_execution": False,
+                "marks_approval_executed": False,
+                "execution_dry_run_invoked": False,
+                "live_execution_started": False,
+                "write_runner_invoked": False,
+            },
+            "next_gate": "explicit_owner_live_write_runner_invocation_review",
+            "implementation_enabled": False,
+            "runtime_flag_enabled": False,
+            "flag_application_performed": False,
+            "execute_enabled": False,
+            "write_runner_enabled": False,
+            "adapter_execution_enabled": False,
+            "agent_execution_enabled": False,
+            "write_execution_enabled": False,
+            "runner_invoked": False,
+            "write_runner_invoked": False,
+            "live_execution_started": False,
+            "mark_executed": False,
+            "mutation_performed": False,
+            "network_mutation_performed": False,
+            "file_mutation_performed": False,
+            "channel_mutation_performed": False,
+            "runtime_flag_writer_enabled": False,
+            "adapter_import_allowed": False,
+            "adapter_execution_allowed": False,
+            "wired_into_sdk_invoke": False,
+            "adapter_runtime_wired": False,
+            "imports_adapter_in_sdk_invoke": False,
+            "instantiates_adapter_in_sdk_invoke": False,
+            "execution_dry_run_invoked": False,
+            "execution_gate_opened": False,
+        },
         "channel_strategy": _channel_strategy(),
         "official_sources": list(CODEX_SDK_SOURCES),
         "known_limits": [
@@ -4027,6 +4224,7 @@ def build_sdk_noninteractive_report() -> SDKNonInteractiveReport:
             "A disabled runtime flag application adapter module exists, but it is not wired into /sdk/invoke.",
             "Live runtime flag application adapter code-change gates can be recorded, but they do not enable adapter execution.",
             "Live runtime flag application adapter execution dry-run gates can be recorded, but they do not invoke adapter execution.",
+            "Live write-runner execution acceptance can be recorded, but it does not invoke adapter execution or the write runner.",
             "No SDK HTTP adapter, agent runner, file mutation, channel send, or network mutation is enabled.",
             "Feishu remains the only domestic V1 pilot channel in this contract.",
             "Slack is tracked as a Codex reference surface, but it is non-blocking for the domestic first version.",
@@ -4354,6 +4552,17 @@ def render_markdown_report(report: SDKNonInteractiveReport) -> str:
         f"- Adapter execution allowed: `{report.live_runtime_flag_application_adapter_execution_gate_workflow['adapter_execution_allowed']}`\n"
         f"- Execution gate opened: `{report.live_runtime_flag_application_adapter_execution_gate_workflow['execution_gate_opened']}`\n"
         f"- Runner invoked: `{report.live_runtime_flag_application_adapter_execution_gate_workflow['runner_invoked']}`\n\n"
+        "## Live Write Runner Execution Acceptance Workflow\n\n"
+        f"- Stage: `{report.live_write_runner_execution_acceptance_workflow['stage']}`\n"
+        f"- Workflow status: `{report.live_write_runner_execution_acceptance_workflow['workflow_status']}`\n"
+        f"- Endpoint: `{report.live_write_runner_execution_acceptance_workflow['endpoint']}`\n"
+        f"- Audit action: `{report.live_write_runner_execution_acceptance_workflow['audit_action']}`\n"
+        f"- Wired into sdk invoke: `{report.live_write_runner_execution_acceptance_workflow['wired_into_sdk_invoke']}`\n"
+        f"- Adapter runtime wired: `{report.live_write_runner_execution_acceptance_workflow['adapter_runtime_wired']}`\n"
+        f"- Adapter execution allowed: `{report.live_write_runner_execution_acceptance_workflow['adapter_execution_allowed']}`\n"
+        f"- Execution gate opened: `{report.live_write_runner_execution_acceptance_workflow['execution_gate_opened']}`\n"
+        f"- Write runner invoked: `{report.live_write_runner_execution_acceptance_workflow['write_runner_invoked']}`\n"
+        f"- Live execution started: `{report.live_write_runner_execution_acceptance_workflow['live_execution_started']}`\n\n"
         "## Channel Strategy\n\n"
         f"- Domestic V1 primary: `{report.channel_strategy['domestic_v1_primary']}`\n"
         f"- Telegram required: `{report.channel_strategy['telegram_required']}`\n"
@@ -4401,7 +4610,7 @@ def main() -> int:
         print(f"- {check.name}: {check.status}")
         if check.error:
             print(f"  error: {check.error}")
-    return 0 if report.status == "sdk_live_runtime_flag_application_adapter_execution_gate_workflow_ready" else 1
+    return 0 if report.status == "sdk_live_write_runner_execution_acceptance_workflow_ready" else 1
 
 
 if __name__ == "__main__":

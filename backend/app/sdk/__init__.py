@@ -3,6 +3,7 @@
 from backend.app.sdk.control_plane import (
     ControlPlaneSDK,
     SDKControlPlaneRequest,
+    SDKLiveWriteRunnerExecutionAcceptanceRecordContract,
     SDKRuntimeFlagApplicationAdapterCodeChangeRecordContract,
     SDKRuntimeFlagApplicationAdapterDesignReviewRecordContract,
     SDKRuntimeFlagApplicationAdapterExecutionDryRunRecordContract,
@@ -26,6 +27,7 @@ from backend.app.sdk.control_plane import (
 __all__ = [
     "ControlPlaneSDK",
     "SDKControlPlaneRequest",
+    "SDKLiveWriteRunnerExecutionAcceptanceRecordContract",
     "SDKRuntimeFlagApplicationAdapterCodeChangeRecordContract",
     "SDKRuntimeFlagApplicationAdapterDesignReviewRecordContract",
     "SDKRuntimeFlagApplicationAdapterExecutionDryRunRecordContract",

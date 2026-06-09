@@ -183,8 +183,8 @@ def test_sdk_control_plane_stub_accepts_thread_start_envelope_without_mutation()
     assert response.status_code == 200
     payload = response.json()
     assert payload["ok"] is False
-    assert payload["status"] == "sdk_live_runtime_flag_application_adapter_execution_gate_workflow_ready"
-    assert payload["sdk"]["status"] == "sdk_live_runtime_flag_application_adapter_execution_gate_workflow_ready"
+    assert payload["status"] == "sdk_live_write_runner_execution_acceptance_workflow_ready"
+    assert payload["sdk"]["status"] == "sdk_live_write_runner_execution_acceptance_workflow_ready"
     assert payload["sdk"]["method"] == "thread/start"
     assert payload["sdk"]["dry_run"] is False
     assert payload["sdk"]["idempotency_key_present"] is True
@@ -459,8 +459,8 @@ def test_sdk_control_plane_stub_reads_approved_execution_adapter_contract_withou
     assert response.status_code == 200
     payload = response.json()
     assert payload["ok"] is False
-    assert payload["status"] == "sdk_live_runtime_flag_application_adapter_execution_gate_workflow_ready"
-    assert payload["sdk"]["status"] == "sdk_live_runtime_flag_application_adapter_execution_gate_workflow_ready"
+    assert payload["status"] == "sdk_live_write_runner_execution_acceptance_workflow_ready"
+    assert payload["sdk"]["status"] == "sdk_live_write_runner_execution_acceptance_workflow_ready"
     assert payload["sdk"]["approval_intent"]["created"] is False
     assert payload["sdk"]["approval_intent"]["approval_id"] == approval.id
     adapter = payload["sdk"]["execution_adapter_contract"]
@@ -724,8 +724,8 @@ def test_sdk_control_plane_stub_can_read_thread_through_existing_contract() -> N
     assert response.status_code == 200
     payload = response.json()
     assert payload["ok"] is True
-    assert payload["status"] == "sdk_live_runtime_flag_application_adapter_execution_gate_workflow_ready"
-    assert payload["sdk"]["status"] == "sdk_live_runtime_flag_application_adapter_execution_gate_workflow_ready"
+    assert payload["status"] == "sdk_live_write_runner_execution_acceptance_workflow_ready"
+    assert payload["sdk"]["status"] == "sdk_live_write_runner_execution_acceptance_workflow_ready"
     assert payload["sdk"]["method"] == "thread/read"
     assert payload["sdk"]["owner_gate_required"] is False
     assert payload["sdk"]["approval_intent"]["required"] is False
@@ -772,7 +772,7 @@ def test_sdk_control_plane_stub_reads_runtime_evidence_through_read_only_runner(
     assert response.status_code == 200
     payload = response.json()
     assert payload["ok"] is True
-    assert payload["status"] == "sdk_live_runtime_flag_application_adapter_execution_gate_workflow_ready"
+    assert payload["status"] == "sdk_live_write_runner_execution_acceptance_workflow_ready"
     assert payload["sdk"]["method"] == "runtime/evidence/read"
     runner = payload["sdk"]["read_only_runner_contract"]
     assert runner["available"] is True
@@ -837,7 +837,7 @@ def test_sdk_control_plane_stub_reads_persisted_dry_run_executor_runtime_evidenc
     assert response.status_code == 200
     payload = response.json()
     assert payload["ok"] is True
-    assert payload["status"] == "sdk_live_runtime_flag_application_adapter_execution_gate_workflow_ready"
+    assert payload["status"] == "sdk_live_write_runner_execution_acceptance_workflow_ready"
     evidence = payload["control_plane"]["result"]["evidence"]
     assert evidence["evidence_type"] == "sdk_dry_run_executor_stub"
     assert evidence["available"] is True
@@ -888,7 +888,7 @@ def test_sdk_control_plane_stub_reads_owner_acceptance_runtime_evidence_contract
     assert response.status_code == 200
     payload = response.json()
     assert payload["ok"] is True
-    assert payload["status"] == "sdk_live_runtime_flag_application_adapter_execution_gate_workflow_ready"
+    assert payload["status"] == "sdk_live_write_runner_execution_acceptance_workflow_ready"
     evidence = payload["control_plane"]["result"]["evidence"]
     assert evidence["evidence_type"] == "sdk_write_runner_owner_acceptance"
     assert evidence["available"] is True
@@ -1718,7 +1718,7 @@ def test_runtime_implementation_readiness_lock_readback_requires_strict_audit_qu
     assert response.status_code == 200
     payload = response.json()
     assert payload["ok"] is True
-    assert payload["status"] == "sdk_live_runtime_flag_application_adapter_execution_gate_workflow_ready"
+    assert payload["status"] == "sdk_live_write_runner_execution_acceptance_workflow_ready"
     evidence = payload["control_plane"]["result"]["evidence"]
     assert evidence["evidence_type"] == "sdk_write_runner_runtime_implementation_readiness_lock"
     assert evidence["implementation_lock_present"] is True
@@ -3934,6 +3934,98 @@ def _adapter_execution_gate_payload(
     }
 
 
+def _seed_adapter_execution_gate_audit(suffix: str) -> tuple[ApprovalStore, AuditStore, object, object]:
+    approval_store, audit_store, approval, dry_run_audit = _seed_adapter_execution_dry_run_audit(suffix)
+    gate_payload = _adapter_execution_gate_payload(
+        suffix,
+        approval_id=approval.id,
+        adapter_execution_dry_run_audit_id=dry_run_audit.id,
+    )
+    gate_audit = audit_store.record(
+        action="sdk.write_runner.runtime_flag_application_adapter_execution_gate_recorded",
+        resource_type="sdk_write_runner_runtime_flag_application_adapter_execution_gate",
+        resource_id=f"adapter-execution-gate-{suffix}",
+        outcome="accepted",
+        tenant_id="default",
+        actor_id="operator",
+        details={
+            "approval_id": approval.id,
+            "adapter_execution_dry_run_id": f"adapter-execution-dry-run-{suffix}",
+            "adapter_execution_dry_run_audit_id": dry_run_audit.id,
+            "adapter_runtime_preflight_id": f"adapter-runtime-preflight-{suffix}",
+            "adapter_wiring_id": f"adapter-wiring-{suffix}",
+            "adapter_code_change_id": f"adapter-code-change-{suffix}",
+            "adapter_implementation_preflight_id": f"adapter-implementation-preflight-{suffix}",
+            "adapter_design_review_id": f"adapter-design-review-{suffix}",
+            "adapter_implementation_request_id": f"adapter-implementation-request-{suffix}",
+            "readiness_plan_decision_id": f"readiness-plan-decision-{suffix}",
+            "runtime_flag_execute_contract_id": f"flag-execute-contract-{suffix}",
+            "runtime_flag_approval_id": f"flag-approval-{suffix}",
+            "runtime_flag_preflight_id": f"flag-preflight-{suffix}",
+            "runtime_flag_enablement_id": f"flag-enable-{suffix}",
+            "final_decision_id": f"final-decision-{suffix}",
+            "runtime_flag_name": "XAGENT_SDK_WRITE_RUNNER_ENABLED",
+            "adapter_execution_gate": {
+                **gate_payload,
+                "execution_gate_opened": False,
+            },
+        },
+    )
+    return approval_store, audit_store, approval, gate_audit
+
+
+def _live_write_runner_execution_acceptance_payload(
+    suffix: str,
+    *,
+    approval_id: str,
+    adapter_execution_gate_audit_id: str,
+    dry_run: bool = True,
+) -> dict[str, object]:
+    return {
+        "execution_acceptance_id": f"execution-acceptance-{suffix}",
+        "approval_id": approval_id,
+        "adapter_execution_gate_id": f"adapter-execution-gate-{suffix}",
+        "adapter_execution_gate_audit_id": adapter_execution_gate_audit_id,
+        "adapter_execution_dry_run_id": f"adapter-execution-dry-run-{suffix}",
+        "adapter_runtime_preflight_id": f"adapter-runtime-preflight-{suffix}",
+        "adapter_wiring_id": f"adapter-wiring-{suffix}",
+        "adapter_code_change_id": f"adapter-code-change-{suffix}",
+        "adapter_implementation_preflight_id": f"adapter-implementation-preflight-{suffix}",
+        "adapter_design_review_id": f"adapter-design-review-{suffix}",
+        "adapter_implementation_request_id": f"adapter-implementation-request-{suffix}",
+        "readiness_plan_decision_id": f"readiness-plan-decision-{suffix}",
+        "runtime_flag_execute_contract_id": f"flag-execute-contract-{suffix}",
+        "runtime_flag_approval_id": f"flag-approval-{suffix}",
+        "runtime_flag_preflight_id": f"flag-preflight-{suffix}",
+        "runtime_flag_enablement_id": f"flag-enable-{suffix}",
+        "final_decision_id": f"final-decision-{suffix}",
+        "runtime_flag_name": "XAGENT_SDK_WRITE_RUNNER_ENABLED",
+        "accepted_by": "owner",
+        "accepted_at": "2026-06-08T17:00:00Z",
+        "adapter_module": "backend.app.sdk.runtime_flag_application_adapter",
+        "adapter_class": "SDKRuntimeFlagApplicationAdapter",
+        "execution_acceptance_plan_ref": "docs/runbooks/sdk-write-runner-live-execution-acceptance.md",
+        "execution_gate_plan_ref": "docs/runbooks/sdk-write-runner-runtime-flag-adapter-execution-gate.md",
+        "execution_dry_run_plan_ref": "docs/runbooks/sdk-write-runner-runtime-flag-adapter-execution-dry-run.md",
+        "runtime_preflight_plan_ref": "docs/runbooks/sdk-write-runner-runtime-flag-adapter-runtime-preflight.md",
+        "wiring_plan_ref": "docs/runbooks/sdk-write-runner-runtime-flag-adapter-wiring.md",
+        "implementation_branch_ref": "codex/runtime-flag-adapter-execution-acceptance",
+        "implementation_plan_ref": "docs/runbooks/sdk-write-runner-runtime-flag-adapter-implementation.md",
+        "adapter_design_ref": "docs/runbooks/sdk-write-runner-runtime-flag-adapter-design.md",
+        "security_review_ref": "docs/security/sdk-write-runner-runtime-flag-adapter-review.md",
+        "test_plan_ref": "tests/test_control_plane_protocol.py",
+        "rollback_plan_ref": "docs/runbooks/sdk-write-runner-rollback.md",
+        "smoke_runbook_ref": "docs/runbooks/sdk-write-runner-smoke.md",
+        "runbook_acknowledged": True,
+        "rollback_plan_acknowledged": True,
+        "smoke_runbook_acknowledged": True,
+        "idempotency_key": f"execution-acceptance-{suffix}",
+        "idempotency_hash": f"hash-idempotency-execution-acceptance-{suffix}",
+        "acceptance_hash": f"hash-execution-acceptance-{suffix}",
+        "dry_run": dry_run,
+    }
+
+
 def test_sdk_runtime_flag_application_adapter_code_change_records_without_enabling_adapter() -> None:
     approval_store, audit_store, approval, preflight_audit = _seed_adapter_implementation_preflight_audit(
         "code-change-1"
@@ -4640,6 +4732,143 @@ def test_sdk_runtime_flag_application_adapter_execution_gate_rejects_without_exe
     assert gate["execution_gate_opened"] is False
     assert audit_store.list(
         action="sdk.write_runner.runtime_flag_application_adapter_execution_gate_recorded"
+    ) == []
+
+
+def test_sdk_live_write_runner_execution_acceptance_records_without_execution() -> None:
+    approval_store, audit_store, approval, gate_audit = _seed_adapter_execution_gate_audit(
+        "execution-acceptance-1"
+    )
+
+    with _client_with_stores(RunStore(), TraceStore(), approval_store, audit_store) as client:
+        response = client.post(
+            "/api/v1/control-plane/sdk/live-write-runner/execution-acceptance/record",
+            json=_live_write_runner_execution_acceptance_payload(
+                "execution-acceptance-1",
+                approval_id=approval.id,
+                adapter_execution_gate_audit_id=gate_audit.id,
+            ),
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["ok"] is True
+    assert payload["status"] == "sdk_live_write_runner_execution_acceptance_workflow_ready"
+    acceptance = payload["execution_acceptance"]
+    assert acceptance["record_status"] == "recorded"
+    assert acceptance["audit_event_recorded"] is True
+    assert acceptance["audit_action"] == "sdk.write_runner.live_write_runner_execution_acceptance_recorded"
+    assert acceptance["checks"]["approval_status_approved"] is True
+    assert acceptance["checks"]["adapter_execution_gate_audit_record_present"] is True
+    assert acceptance["checks"]["adapter_execution_gate_validation_valid"] is True
+    assert acceptance["checks"]["adapter_execution_gate_outcome_accepted"] is True
+    assert acceptance["checks"]["adapter_execution_gate_not_opened"] is True
+    assert acceptance["checks"]["execution_acceptance_valid"] is True
+    assert acceptance["runtime_flag_enabled"] is False
+    assert acceptance["flag_application_performed"] is False
+    assert acceptance["implementation_enabled"] is False
+    assert acceptance["execute_enabled"] is False
+    assert acceptance["write_runner_enabled"] is False
+    assert acceptance["adapter_execution_enabled"] is False
+    assert acceptance["agent_execution_enabled"] is False
+    assert acceptance["write_execution_enabled"] is False
+    assert acceptance["runner_invoked"] is False
+    assert acceptance["write_runner_invoked"] is False
+    assert acceptance["live_execution_started"] is False
+    assert acceptance["mark_executed"] is False
+    assert acceptance["mutation_performed"] is False
+    assert acceptance["network_mutation_performed"] is False
+    assert acceptance["file_mutation_performed"] is False
+    assert acceptance["channel_mutation_performed"] is False
+    assert acceptance["runtime_flag_writer_enabled"] is False
+    assert acceptance["adapter_import_allowed"] is False
+    assert acceptance["adapter_execution_allowed"] is False
+    assert acceptance["wired_into_sdk_invoke"] is False
+    assert acceptance["adapter_runtime_wired"] is False
+    assert acceptance["imports_adapter_in_sdk_invoke"] is False
+    assert acceptance["instantiates_adapter_in_sdk_invoke"] is False
+    assert acceptance["execution_dry_run_invoked"] is False
+    assert acceptance["execution_gate_opened"] is False
+    assert approval_store.get(approval.id).status == "approved"
+    assert approval_store.get(approval.id).executed_at is None
+
+
+def test_sdk_live_write_runner_execution_acceptance_rejects_without_dry_run_guard() -> None:
+    approval_store, audit_store, approval, gate_audit = _seed_adapter_execution_gate_audit(
+        "execution-acceptance-reject"
+    )
+
+    with _client_with_stores(RunStore(), TraceStore(), approval_store, audit_store) as client:
+        response = client.post(
+            "/api/v1/control-plane/sdk/live-write-runner/execution-acceptance/record",
+            json=_live_write_runner_execution_acceptance_payload(
+                "execution-acceptance-reject",
+                approval_id=approval.id,
+                adapter_execution_gate_audit_id=gate_audit.id,
+                dry_run=False,
+            ),
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["ok"] is False
+    acceptance = payload["execution_acceptance"]
+    assert acceptance["record_status"] == "rejected"
+    assert acceptance["checks"]["dry_run_does_not_start_live_execution"] is False
+    assert acceptance["audit_event_recorded"] is False
+    assert acceptance["runtime_flag_enabled"] is False
+    assert acceptance["write_runner_enabled"] is False
+    assert acceptance["adapter_execution_enabled"] is False
+    assert acceptance["runner_invoked"] is False
+    assert acceptance["write_runner_invoked"] is False
+    assert acceptance["live_execution_started"] is False
+    assert acceptance["mutation_performed"] is False
+    assert acceptance["adapter_import_allowed"] is False
+    assert acceptance["adapter_execution_allowed"] is False
+    assert acceptance["wired_into_sdk_invoke"] is False
+    assert acceptance["adapter_runtime_wired"] is False
+    assert acceptance["execution_dry_run_invoked"] is False
+    assert acceptance["execution_gate_opened"] is False
+    assert audit_store.list(
+        action="sdk.write_runner.live_write_runner_execution_acceptance_recorded"
+    ) == []
+
+
+def test_sdk_live_write_runner_execution_acceptance_rejects_without_execution_gate_audit() -> None:
+    approval_store, audit_store, approval, _dry_run_audit = _seed_adapter_execution_dry_run_audit(
+        "execution-acceptance-missing-audit"
+    )
+
+    with _client_with_stores(RunStore(), TraceStore(), approval_store, audit_store) as client:
+        response = client.post(
+            "/api/v1/control-plane/sdk/live-write-runner/execution-acceptance/record",
+            json=_live_write_runner_execution_acceptance_payload(
+                "execution-acceptance-missing-audit",
+                approval_id=approval.id,
+                adapter_execution_gate_audit_id="missing-audit",
+            ),
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["ok"] is False
+    acceptance = payload["execution_acceptance"]
+    assert acceptance["record_status"] == "rejected"
+    assert acceptance["checks"]["adapter_execution_gate_audit_record_present"] is False
+    assert acceptance["checks"]["adapter_execution_gate_validation_valid"] is False
+    assert acceptance["checks"]["adapter_execution_gate_outcome_accepted"] is False
+    assert acceptance["audit_event_recorded"] is False
+    assert acceptance["runtime_flag_enabled"] is False
+    assert acceptance["write_runner_enabled"] is False
+    assert acceptance["adapter_execution_enabled"] is False
+    assert acceptance["runner_invoked"] is False
+    assert acceptance["write_runner_invoked"] is False
+    assert acceptance["live_execution_started"] is False
+    assert acceptance["mutation_performed"] is False
+    assert acceptance["execution_dry_run_invoked"] is False
+    assert acceptance["execution_gate_opened"] is False
+    assert audit_store.list(
+        action="sdk.write_runner.live_write_runner_execution_acceptance_recorded"
     ) == []
 
 

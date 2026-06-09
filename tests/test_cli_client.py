@@ -1754,6 +1754,115 @@ class TestHTTPClient:
             assert result["adapter_execution_gate"]["execution_gate_opened"] is False
 
     @pytest.mark.asyncio
+    async def test_http_client_record_sdk_live_write_runner_execution_acceptance_calls_owner_gated_stub(self):
+        """Test SDK live write-runner execution acceptance uses the backend evidence stub."""
+        config = CLIConfig(api_base_url="http://localhost:8000")
+        client = HTTPClient(config)
+        payload = {
+            "execution_acceptance_id": "execution-acceptance-1",
+            "approval_id": "approval-1",
+            "adapter_execution_gate_id": "adapter-execution-gate-1",
+            "adapter_execution_gate_audit_id": "audit-adapter-execution-gate-1",
+            "adapter_execution_dry_run_id": "adapter-execution-dry-run-1",
+            "adapter_runtime_preflight_id": "adapter-runtime-preflight-1",
+            "adapter_wiring_id": "adapter-wiring-1",
+            "adapter_code_change_id": "adapter-code-change-1",
+            "adapter_implementation_preflight_id": "adapter-implementation-preflight-1",
+            "adapter_design_review_id": "adapter-design-review-1",
+            "adapter_implementation_request_id": "adapter-implementation-request-1",
+            "readiness_plan_decision_id": "readiness-plan-decision-1",
+            "runtime_flag_execute_contract_id": "flag-execute-contract-1",
+            "runtime_flag_approval_id": "flag-approval-1",
+            "runtime_flag_preflight_id": "flag-preflight-1",
+            "runtime_flag_enablement_id": "flag-enable-1",
+            "final_decision_id": "final-decision-1",
+            "runtime_flag_name": "XAGENT_SDK_WRITE_RUNNER_ENABLED",
+            "accepted_by": "owner",
+            "accepted_at": "2026-06-08T00:00:00Z",
+            "adapter_module": "backend.app.sdk.runtime_flag_application_adapter",
+            "adapter_class": "SDKRuntimeFlagApplicationAdapter",
+            "execution_acceptance_plan_ref": "docs/runbooks/sdk-write-runner-live-execution-acceptance.md",
+            "execution_gate_plan_ref": "docs/runbooks/sdk-write-runner-runtime-flag-adapter-execution-gate.md",
+            "execution_dry_run_plan_ref": "docs/runbooks/sdk-write-runner-runtime-flag-adapter-execution-dry-run.md",
+            "runtime_preflight_plan_ref": "docs/runbooks/sdk-write-runner-runtime-flag-adapter-runtime-preflight.md",
+            "wiring_plan_ref": "docs/runbooks/sdk-write-runner-runtime-flag-adapter-wiring.md",
+            "implementation_branch_ref": "codex/runtime-flag-adapter-execution-acceptance",
+            "implementation_plan_ref": "docs/runbooks/sdk-write-runner-runtime-flag-adapter-implementation.md",
+            "adapter_design_ref": "docs/runbooks/sdk-write-runner-runtime-flag-adapter-design.md",
+            "security_review_ref": "docs/security/sdk-write-runner-runtime-flag-adapter-review.md",
+            "test_plan_ref": "tests/test_control_plane_protocol.py",
+            "rollback_plan_ref": "docs/runbooks/sdk-write-runner-rollback.md",
+            "smoke_runbook_ref": "docs/runbooks/sdk-write-runner-smoke.md",
+            "runbook_acknowledged": True,
+            "rollback_plan_acknowledged": True,
+            "smoke_runbook_acknowledged": True,
+            "idempotency_key": "execution-acceptance-1",
+            "idempotency_hash": "hash-idempotency-execution-acceptance-1",
+            "acceptance_hash": "hash-execution-acceptance-1",
+            "dry_run": True,
+        }
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "ok": True,
+            "status": "sdk_live_write_runner_execution_acceptance_workflow_ready",
+            "execution_acceptance": {
+                "record_status": "recorded",
+                "audit_event_recorded": True,
+                "runtime_flag_enabled": False,
+                "flag_application_performed": False,
+                "implementation_enabled": False,
+                "execute_enabled": False,
+                "write_runner_enabled": False,
+                "adapter_execution_enabled": False,
+                "agent_execution_enabled": False,
+                "write_execution_enabled": False,
+                "runner_invoked": False,
+                "write_runner_invoked": False,
+                "live_execution_started": False,
+                "mark_executed": False,
+                "mutation_performed": False,
+                "adapter_import_allowed": False,
+                "adapter_execution_allowed": False,
+                "wired_into_sdk_invoke": False,
+                "adapter_runtime_wired": False,
+                "execution_dry_run_invoked": False,
+                "execution_gate_opened": False,
+            },
+        }
+
+        with patch.object(
+            httpx.AsyncClient,
+            "request",
+            new_callable=AsyncMock,
+            return_value=mock_response,
+        ) as mock_request:
+            result = await client.record_sdk_live_write_runner_execution_acceptance(payload)
+
+            call_args = mock_request.call_args
+            assert call_args[0][0] == "POST"
+            assert call_args[0][1] == (
+                "/api/v1/control-plane/sdk/live-write-runner/execution-acceptance/record"
+            )
+            assert call_args[1]["json"] == payload
+            assert result["status"] == "sdk_live_write_runner_execution_acceptance_workflow_ready"
+            assert result["execution_acceptance"]["runtime_flag_enabled"] is False
+            assert result["execution_acceptance"]["flag_application_performed"] is False
+            assert result["execution_acceptance"]["implementation_enabled"] is False
+            assert result["execution_acceptance"]["write_runner_enabled"] is False
+            assert result["execution_acceptance"]["adapter_execution_enabled"] is False
+            assert result["execution_acceptance"]["runner_invoked"] is False
+            assert result["execution_acceptance"]["write_runner_invoked"] is False
+            assert result["execution_acceptance"]["live_execution_started"] is False
+            assert result["execution_acceptance"]["mutation_performed"] is False
+            assert result["execution_acceptance"]["adapter_import_allowed"] is False
+            assert result["execution_acceptance"]["adapter_execution_allowed"] is False
+            assert result["execution_acceptance"]["wired_into_sdk_invoke"] is False
+            assert result["execution_acceptance"]["adapter_runtime_wired"] is False
+            assert result["execution_acceptance"]["execution_dry_run_invoked"] is False
+            assert result["execution_acceptance"]["execution_gate_opened"] is False
+
+    @pytest.mark.asyncio
     async def test_http_client_list_agents(self):
         """Test list_agents calls correct endpoint."""
         config = CLIConfig(api_base_url="http://localhost:8000")
@@ -2241,6 +2350,18 @@ class TestLocalClient:
             match="SDK runtime flag application adapter execution gate recording",
         ):
             await client.record_sdk_runtime_flag_application_adapter_execution_gate({"approval_id": "approval-1"})
+
+    @pytest.mark.asyncio
+    async def test_local_client_record_sdk_live_write_runner_execution_acceptance_not_implemented(self):
+        """Test SDK live write-runner execution acceptance recording is HTTP-only."""
+        config = CLIConfig(mode="local")
+        client = LocalClient(config)
+
+        with pytest.raises(
+            NotImplementedError,
+            match="SDK live write-runner execution acceptance recording",
+        ):
+            await client.record_sdk_live_write_runner_execution_acceptance({"approval_id": "approval-1"})
 
     @pytest.mark.asyncio
     async def test_local_client_health_check_healthy(self):

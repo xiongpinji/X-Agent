@@ -415,6 +415,12 @@ class BaseClient(ABC):
         """Record SDK runtime flag adapter execution gate through the backend stub."""
         pass
 
+    async def record_sdk_live_write_runner_execution_acceptance(
+        self, payload: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Record SDK live write-runner execution acceptance through the backend stub."""
+        pass
+
 
 class HTTPClient(BaseClient):
     """HTTP-based client for remote API calls.
@@ -878,6 +884,19 @@ class HTTPClient(BaseClient):
             json=payload,
         )
 
+    async def record_sdk_live_write_runner_execution_acceptance(
+        self, payload: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Record SDK live write-runner execution acceptance evidence only.
+
+        POST /api/v1/control-plane/sdk/live-write-runner/execution-acceptance/record
+        """
+        return await self._request(
+            "POST",
+            "/api/v1/control-plane/sdk/live-write-runner/execution-acceptance/record",
+            json=payload,
+        )
+
 
 class LocalClient(BaseClient):
     """Local client for direct backend module imports.
@@ -1318,6 +1337,19 @@ class LocalClient(BaseClient):
         """
         raise NotImplementedError(
             "SDK runtime flag application adapter execution gate recording is not supported in local mode. "
+            "Use HTTP mode to call the owner-gated control-plane stub."
+        )
+
+    async def record_sdk_live_write_runner_execution_acceptance(
+        self, payload: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Record SDK live write-runner execution acceptance locally.
+
+        Live write-runner execution acceptance recording is HTTP-only so it
+        stays behind the API audit and approval/sandbox/admin contract.
+        """
+        raise NotImplementedError(
+            "SDK live write-runner execution acceptance recording is not supported in local mode. "
             "Use HTTP mode to call the owner-gated control-plane stub."
         )
 
