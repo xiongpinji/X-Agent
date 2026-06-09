@@ -1184,12 +1184,39 @@ Expected: selected approval and sandbox tests pass.
 - [x] Require approved SDK approval, recorded accepted adapter implementation preflight audit, runtime flag name, adapter module/class, implementation branch reference, implementation plan reference, security/test/rollback/smoke refs, idempotency key/hash, signature/hash, and dry-run mode before recording.
 - [x] Keep adapter code-change recording read-only with respect to runtime effects: it does not wire `/sdk/invoke`, import/instantiate/execute the adapter in runtime path, read/write/apply `XAGENT_SDK_WRITE_RUNNER_ENABLED`, invoke the write runner, mark approvals executed, or perform network/channel mutation.
 - [x] Add `/sdk/invoke` adapter code-change workflow metadata and promote SDK alignment status to `sdk_live_runtime_flag_application_adapter_code_change_workflow_ready`.
-- [ ] Wire the disabled live runtime flag application adapter behind a separate owner-approved wiring gate; keep write-runner invocation as a later follow-up.
+- [x] Wire the disabled live runtime flag application adapter behind a separate owner-approved wiring gate; keep write-runner invocation as a later follow-up.
+
+### Task 48: Live Runtime Flag Application Adapter Wiring Gate Workflow
+
+**Target:** Record the owner-approved wiring intent for the disabled live runtime flag application adapter after accepted adapter code-change evidence, while still keeping `/sdk/invoke` unwired from the adapter and preserving disabled runtime flag application and write-runner execution.
+
+**Files:**
+- Modify: `backend/app/api/control_plane.py`
+- Modify: `backend/app/sdk/control_plane.py`
+- Modify: `backend/app/sdk/__init__.py`
+- Modify: `cli/client.py`
+- Modify: `cli/commands/sdk_cmd.py`
+- Modify: `scripts/sdk_noninteractive_report.py`
+- Modify: `scripts/latest_codex_alignment.py`
+- Modify: `tests/test_control_plane_protocol.py`
+- Modify: `tests/test_xagent_sdk_contract.py`
+- Modify: `tests/test_cli_client.py`
+- Modify: `tests/test_sdk_noninteractive_report.py`
+- Modify: `tests/test_latest_codex_alignment.py`
+- Runtime evidence: `.xagent_runtime/reports/sdk-noninteractive-report.json`
+- Runtime evidence: `.xagent_runtime/reports/latest-codex-alignment.json`
+
+- [x] Add `/api/v1/control-plane/sdk/runtime-flag/application-adapter/wiring/record` as an owner-gated adapter wiring gate endpoint.
+- [x] Add SDK wrapper, HTTP client adapter, and non-interactive CLI command `xagent sdk runtime-flag-application-adapter-wiring-record --execute`.
+- [x] Require approved SDK approval, recorded accepted adapter code-change audit, runtime flag name, adapter module/class, wiring plan reference, implementation branch/plan refs, security/test/rollback/smoke refs, idempotency key/hash, signature/hash, and dry-run mode before recording.
+- [x] Keep adapter wiring recording read-only with respect to runtime effects: it does not wire `/sdk/invoke`, import/instantiate/execute the adapter in runtime path, read/write/apply `XAGENT_SDK_WRITE_RUNNER_ENABLED`, invoke the write runner, mark approvals executed, or perform file/network/channel mutation.
+- [x] Add `/sdk/invoke` adapter wiring workflow metadata and promote SDK alignment status to `sdk_live_runtime_flag_application_adapter_wiring_workflow_ready`.
+- [ ] Add a separate owner-approved runtime preflight gate for the disabled live runtime flag application adapter; keep write-runner invocation as a later follow-up.
 
 ## Completion Criteria
 
 - `scripts/latest_codex_alignment.py` returns `latest_codex_alignment_plan_ready`.
-- `scripts/sdk_noninteractive_report.py` returns `sdk_live_runtime_flag_application_adapter_code_change_workflow_ready`.
+- `scripts/sdk_noninteractive_report.py` returns `sdk_live_runtime_flag_application_adapter_wiring_workflow_ready`.
 - P0 task board is complete and machine-readable.
 - Feishu Pilot V1 remains `customer_acceptance_pack_ready`.
 - `full_codex_parity_claimed=false` remains true in all generated alignment and pilot reports.
