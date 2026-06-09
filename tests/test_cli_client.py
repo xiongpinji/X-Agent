@@ -1863,6 +1863,79 @@ class TestHTTPClient:
             assert result["execution_acceptance"]["execution_gate_opened"] is False
 
     @pytest.mark.asyncio
+    async def test_http_client_record_sdk_live_write_runner_invocation_review_calls_owner_gated_stub(self):
+        """Test SDK live write-runner invocation review uses the backend evidence stub."""
+        config = CLIConfig(api_base_url="http://localhost:8000")
+        client = HTTPClient(config)
+        payload = {
+            "invocation_review_id": "invocation-review-1",
+            "approval_id": "approval-1",
+            "execution_acceptance_id": "execution-acceptance-1",
+            "execution_acceptance_audit_id": "audit-execution-acceptance-1",
+            "dry_run": True,
+        }
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "ok": True,
+            "status": "sdk_live_write_runner_invocation_review_workflow_ready",
+            "invocation_review": {
+                "record_status": "recorded",
+                "audit_event_recorded": True,
+                "runtime_flag_enabled": False,
+                "flag_application_performed": False,
+                "implementation_enabled": False,
+                "execute_enabled": False,
+                "write_runner_enabled": False,
+                "adapter_execution_enabled": False,
+                "agent_execution_enabled": False,
+                "write_execution_enabled": False,
+                "runner_invoked": False,
+                "write_runner_invoked": False,
+                "live_execution_started": False,
+                "mark_executed": False,
+                "mutation_performed": False,
+                "adapter_import_allowed": False,
+                "adapter_execution_allowed": False,
+                "wired_into_sdk_invoke": False,
+                "adapter_runtime_wired": False,
+                "execution_dry_run_invoked": False,
+                "execution_gate_opened": False,
+            },
+        }
+
+        with patch.object(
+            httpx.AsyncClient,
+            "request",
+            new_callable=AsyncMock,
+            return_value=mock_response,
+        ) as mock_request:
+            result = await client.record_sdk_live_write_runner_invocation_review(payload)
+
+            call_args = mock_request.call_args
+            assert call_args[0][0] == "POST"
+            assert call_args[0][1] == (
+                "/api/v1/control-plane/sdk/live-write-runner/invocation-review/record"
+            )
+            assert call_args[1]["json"] == payload
+            assert result["status"] == "sdk_live_write_runner_invocation_review_workflow_ready"
+            assert result["invocation_review"]["runtime_flag_enabled"] is False
+            assert result["invocation_review"]["flag_application_performed"] is False
+            assert result["invocation_review"]["implementation_enabled"] is False
+            assert result["invocation_review"]["write_runner_enabled"] is False
+            assert result["invocation_review"]["adapter_execution_enabled"] is False
+            assert result["invocation_review"]["runner_invoked"] is False
+            assert result["invocation_review"]["write_runner_invoked"] is False
+            assert result["invocation_review"]["live_execution_started"] is False
+            assert result["invocation_review"]["mutation_performed"] is False
+            assert result["invocation_review"]["adapter_import_allowed"] is False
+            assert result["invocation_review"]["adapter_execution_allowed"] is False
+            assert result["invocation_review"]["wired_into_sdk_invoke"] is False
+            assert result["invocation_review"]["adapter_runtime_wired"] is False
+            assert result["invocation_review"]["execution_dry_run_invoked"] is False
+            assert result["invocation_review"]["execution_gate_opened"] is False
+
+    @pytest.mark.asyncio
     async def test_http_client_list_agents(self):
         """Test list_agents calls correct endpoint."""
         config = CLIConfig(api_base_url="http://localhost:8000")
@@ -2362,6 +2435,18 @@ class TestLocalClient:
             match="SDK live write-runner execution acceptance recording",
         ):
             await client.record_sdk_live_write_runner_execution_acceptance({"approval_id": "approval-1"})
+
+    @pytest.mark.asyncio
+    async def test_local_client_record_sdk_live_write_runner_invocation_review_not_implemented(self):
+        """Test SDK live write-runner invocation review recording is HTTP-only."""
+        config = CLIConfig(mode="local")
+        client = LocalClient(config)
+
+        with pytest.raises(
+            NotImplementedError,
+            match="SDK live write-runner invocation review recording",
+        ):
+            await client.record_sdk_live_write_runner_invocation_review({"approval_id": "approval-1"})
 
     @pytest.mark.asyncio
     async def test_local_client_health_check_healthy(self):

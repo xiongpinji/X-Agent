@@ -16,7 +16,7 @@ def test_sdk_noninteractive_report_default_is_read_only() -> None:
     report = build_sdk_noninteractive_report()
     payload = report.to_dict()
 
-    assert report.status == "sdk_live_write_runner_execution_acceptance_workflow_ready"
+    assert report.status == "sdk_live_write_runner_invocation_review_workflow_ready"
     assert report.evidence_type == "sdk_noninteractive_cli_contract"
     assert report.full_codex_parity_claimed is False
     assert report.dry_run is True
@@ -59,6 +59,7 @@ def test_sdk_noninteractive_report_covers_sdk_and_cli_methods() -> None:
         "runtime_flag_application_adapter_execution_dry_run_record",
         "runtime_flag_application_adapter_execution_gate_record",
         "live_write_runner_execution_acceptance_record",
+        "live_write_runner_invocation_review_record",
     ]
     assert command_methods == methods
     assert any(
@@ -1282,6 +1283,55 @@ def test_sdk_noninteractive_report_covers_live_write_runner_execution_acceptance
     assert workflow["execution_gate_opened"] is False
 
 
+def test_sdk_noninteractive_report_covers_live_write_runner_invocation_review_workflow() -> None:
+    workflow = build_sdk_noninteractive_report().live_write_runner_invocation_review_workflow
+
+    assert workflow["stage"] == "live_write_runner_invocation_review_workflow"
+    assert workflow["workflow_status"] == "ready_but_disabled"
+    assert workflow["endpoint"] == "/api/v1/control-plane/sdk/live-write-runner/invocation-review/record"
+    assert workflow["sdk_operation"] == "live_write_runner_invocation_review_record"
+    assert workflow["audit_action"] == "sdk.write_runner.live_write_runner_invocation_review_recorded"
+    assert workflow["requires_approved_sdk_approval"] is True
+    assert workflow["requires_accepted_execution_acceptance"] is True
+    assert workflow["requires_execution_acceptance_audit"] is True
+    assert workflow["requires_adapter_module"] == "backend.app.sdk.runtime_flag_application_adapter"
+    assert workflow["requires_adapter_class"] == "SDKRuntimeFlagApplicationAdapter"
+    assert workflow["requires_invocation_review_plan_ref"] is True
+    assert workflow["requires_execution_acceptance_plan_ref"] is True
+    assert workflow["requires_runbook_acknowledged"] is True
+    assert workflow["requires_rollback_plan_acknowledged"] is True
+    assert workflow["requires_smoke_runbook_acknowledged"] is True
+    assert workflow["invocation_review_effect"]["invocation_review_recorded"] is True
+    assert workflow["invocation_review_effect"]["execution_gate_opened"] is False
+    assert workflow["invocation_review_effect"]["wired_into_sdk_invoke"] is False
+    assert workflow["invocation_review_effect"]["adapter_runtime_wired"] is False
+    assert workflow["invocation_review_effect"]["imports_adapter_in_sdk_invoke"] is False
+    assert workflow["invocation_review_effect"]["instantiates_adapter_in_sdk_invoke"] is False
+    assert workflow["invocation_review_effect"]["invokes_write_runner"] is False
+    assert workflow["invocation_review_effect"]["live_execution_started"] is False
+    assert workflow["invocation_review_effect"]["write_runner_invoked"] is False
+    assert workflow["implementation_enabled"] is False
+    assert workflow["runtime_flag_enabled"] is False
+    assert workflow["flag_application_performed"] is False
+    assert workflow["execute_enabled"] is False
+    assert workflow["write_runner_enabled"] is False
+    assert workflow["adapter_execution_enabled"] is False
+    assert workflow["agent_execution_enabled"] is False
+    assert workflow["write_execution_enabled"] is False
+    assert workflow["runner_invoked"] is False
+    assert workflow["write_runner_invoked"] is False
+    assert workflow["live_execution_started"] is False
+    assert workflow["mark_executed"] is False
+    assert workflow["mutation_performed"] is False
+    assert workflow["file_mutation_performed"] is False
+    assert workflow["adapter_import_allowed"] is False
+    assert workflow["adapter_execution_allowed"] is False
+    assert workflow["wired_into_sdk_invoke"] is False
+    assert workflow["adapter_runtime_wired"] is False
+    assert workflow["execution_dry_run_invoked"] is False
+    assert workflow["execution_gate_opened"] is False
+
+
 def test_sdk_noninteractive_report_keeps_feishu_first_channel_strategy() -> None:
     strategy = build_sdk_noninteractive_report().channel_strategy
 
@@ -1302,7 +1352,7 @@ def test_write_sdk_noninteractive_report_json_and_markdown(tmp_path: Path) -> No
 
     payload = json.loads(json_output.read_text(encoding="utf-8"))
     markdown = markdown_output.read_text(encoding="utf-8")
-    assert payload["status"] == "sdk_live_write_runner_execution_acceptance_workflow_ready"
+    assert payload["status"] == "sdk_live_write_runner_invocation_review_workflow_ready"
     assert payload["full_codex_parity_claimed"] is False
     assert payload["mutation_performed"] is False
     assert "# X-Agent SDK Non-Interactive Report" in markdown
@@ -1326,6 +1376,7 @@ def test_write_sdk_noninteractive_report_json_and_markdown(tmp_path: Path) -> No
     assert "## Live Runtime Flag Application Adapter Execution Dry-Run Workflow" in markdown
     assert "## Live Runtime Flag Application Adapter Execution Gate Workflow" in markdown
     assert "## Live Write Runner Execution Acceptance Workflow" in markdown
+    assert "## Live Write Runner Invocation Review Workflow" in markdown
     assert "## Write Runner Implementation Plan" in markdown
     assert "## Runtime Smoke Runbook" in markdown
     assert "## Runtime Enablement Receipt" in markdown

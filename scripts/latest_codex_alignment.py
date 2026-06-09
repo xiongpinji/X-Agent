@@ -43,6 +43,7 @@ READY_XAGENT_STATUSES = frozenset(
         "governance_lifecycle_report_ready",
         "github_review_action_report_ready",
         "partial",
+        "sdk_live_write_runner_invocation_review_workflow_ready",
         "sdk_live_write_runner_execution_acceptance_workflow_ready",
         "sdk_live_runtime_flag_application_adapter_execution_gate_workflow_ready",
         "sdk_live_runtime_flag_application_adapter_execution_dry_run_workflow_ready",
@@ -98,6 +99,7 @@ NEXT_TASK_DONE_STATUSES = frozenset(
         "durable_thread_contract_ready",
         "governance_lifecycle_report_ready",
         "github_review_action_report_ready",
+        "sdk_live_write_runner_invocation_review_workflow_ready",
         "sdk_live_write_runner_execution_acceptance_workflow_ready",
         "sdk_live_runtime_flag_application_adapter_execution_gate_workflow_ready",
         "sdk_live_runtime_flag_application_adapter_execution_dry_run_workflow_ready",
@@ -278,7 +280,7 @@ def build_evidence_specs(root: Path = ROOT, report_dir: Path = REPORT_DIR) -> tu
             report_dir / "sdk-noninteractive-report.json",
             "runtime_report",
             expected_statuses=frozenset(
-                {"sdk_live_write_runner_execution_acceptance_workflow_ready"}
+                {"sdk_live_write_runner_invocation_review_workflow_ready"}
             ),
             expected_evidence_type="sdk_noninteractive_cli_contract",
         ),
@@ -573,7 +575,7 @@ def _capabilities() -> list[CodexAlignmentCapability]:
             capability="cli_and_programmatic_sdk",
             codex_surface="Codex CLI, non-interactive mode, and Codex SDK",
             priority="P1",
-            xagent_status="sdk_live_write_runner_execution_acceptance_workflow_ready",
+            xagent_status="sdk_live_write_runner_invocation_review_workflow_ready",
             evidence=[
                 "sdk_noninteractive_report",
                 "sdk_contract_module",
@@ -585,13 +587,13 @@ def _capabilities() -> list[CodexAlignmentCapability]:
                 "control_plane_protocol",
                 "control_plane_protocol_tests",
             ],
-            next_task="Add a separate explicit live write-runner invocation review after owner acceptance evidence; keep adapter import, instantiation, and invocation disabled until that review is accepted.",
+            next_task="Add a separate explicit live write-runner invocation execute gate after owner invocation review; keep adapter import, instantiation, and invocation disabled until that gate is accepted.",
             acceptance_command="python scripts\\sdk_noninteractive_report.py && python -m pytest tests/test_xagent_sdk_contract.py tests/test_sdk_noninteractive_report.py tests/test_cli_commands.py tests/test_control_plane_protocol.py -o addopts=\"\" -p no:cov -p no:cacheprovider -q",
             official_sources=[
                 "https://developers.openai.com/codex/noninteractive",
                 "https://developers.openai.com/codex/sdk",
             ],
-            rationale="X-Agent now exposes SDK-style thread start/resume/run/read/evidence-read envelopes, non-interactive CLI JSON output, an owner-gated backend SDK invoke stub, a CLI HTTP adapter for read-only --execute, pending owner approval intent creation for write methods, approval handoff/readback commands, owner-approved write preflight, a write runner safety plan/receipt contract, an audited dry-run executor stub, runtime evidence/readback for persisted SDK dry-run receipts, a read-only persisted-receipt safety review gate, a disabled execute gate contract, a disabled adapter implementation review contract targeting AgentCoordinator.run, a disabled runtime feature flag, strict audit-backed owner acceptance evidence readback, an owner-controlled acceptance evidence recording workflow, a disabled runtime enablement review contract, a readiness receipt record/readback workflow, a disabled owner review pack, an owner pack accept/reject decision recording workflow, a runtime implementation readiness lock/idempotency receipt workflow, a runtime implementation owner review pack, a final implementation decision workflow, an explicit runtime flag enablement intent record workflow, a runtime flag application preflight workflow, an owner approval workflow for runtime flag application, a live runtime flag application execute contract record workflow, an execute contract owner review pack, a live runtime flag application implementation readiness plan, a readiness plan decision workflow, an explicit adapter implementation request recording workflow, an owner-gated adapter design review workflow, an owner-gated adapter implementation preflight workflow, a disabled live runtime flag application adapter module, an owner-gated adapter code-change workflow, an owner-gated adapter wiring workflow, an owner-gated adapter runtime preflight workflow, an owner-gated adapter execution dry-run workflow, an owner-gated adapter execution gate workflow, and owner acceptance evidence for future live write-runner execution; real write agent execution remains disabled.",
+            rationale="X-Agent now exposes SDK-style thread start/resume/run/read/evidence-read envelopes, non-interactive CLI JSON output, an owner-gated backend SDK invoke stub, a CLI HTTP adapter for read-only --execute, pending owner approval intent creation for write methods, approval handoff/readback commands, owner-approved write preflight, a write runner safety plan/receipt contract, an audited dry-run executor stub, runtime evidence/readback for persisted SDK dry-run receipts, a read-only persisted-receipt safety review gate, a disabled execute gate contract, a disabled adapter implementation review contract targeting AgentCoordinator.run, a disabled runtime feature flag, strict audit-backed owner acceptance evidence readback, an owner-controlled acceptance evidence recording workflow, a disabled runtime enablement review contract, a readiness receipt record/readback workflow, a disabled owner review pack, an owner pack accept/reject decision recording workflow, a runtime implementation readiness lock/idempotency receipt workflow, a runtime implementation owner review pack, a final implementation decision workflow, an explicit runtime flag enablement intent record workflow, a runtime flag application preflight workflow, an owner approval workflow for runtime flag application, a live runtime flag application execute contract record workflow, an execute contract owner review pack, a live runtime flag application implementation readiness plan, a readiness plan decision workflow, an explicit adapter implementation request recording workflow, an owner-gated adapter design review workflow, an owner-gated adapter implementation preflight workflow, a disabled live runtime flag application adapter module, an owner-gated adapter code-change workflow, an owner-gated adapter wiring workflow, an owner-gated adapter runtime preflight workflow, an owner-gated adapter execution dry-run workflow, an owner-gated adapter execution gate workflow, owner acceptance evidence for future live write-runner execution, and owner invocation review evidence before any live write-runner invocation; real write agent execution remains disabled.",
         ),
         CodexAlignmentCapability(
             capability="slack_to_domestic_channel_strategy",

@@ -357,6 +357,35 @@ class SDKLiveWriteRunnerExecutionAcceptanceRecordContract:
         return payload
 
 
+@dataclass(frozen=True)
+class SDKLiveWriteRunnerInvocationReviewRecordContract:
+    operation: str
+    endpoint: str
+    request: dict[str, Any]
+    owner_gate: dict[str, Any]
+    known_limits: list[str]
+
+    def to_dict(self) -> dict[str, Any]:
+        payload = asdict(self)
+        payload["mutation_performed"] = False
+        payload["network_mutation_performed"] = False
+        payload["file_mutation_performed"] = False
+        payload["channel_mutation_performed"] = False
+        payload["wired_into_sdk_invoke"] = False
+        payload["adapter_runtime_wired"] = False
+        payload["execution_dry_run_invoked"] = False
+        payload["execution_gate_opened"] = False
+        payload["write_runner_invoked"] = False
+        payload["live_execution_started"] = False
+        payload["adapter_execution_allowed"] = False
+        payload["adapter_execution_enabled"] = False
+        payload["runtime_flag_enabled"] = False
+        payload["write_runner_enabled"] = False
+        payload["execute_enabled"] = False
+        payload["agent_execution_enabled"] = False
+        return payload
+
+
 class ControlPlaneSDK:
     """Build SDK-compatible control-plane request envelopes."""
 
@@ -2160,6 +2189,167 @@ class ControlPlaneSDK:
             },
             known_limits=[
                 "This SDK contract records owner acceptance evidence for future live write-runner execution only.",
+                "It does not wire the adapter into /sdk/invoke or apply XAGENT_SDK_WRITE_RUNNER_ENABLED.",
+                "It does not import, instantiate, execute the adapter, or invoke the SDK write runner.",
+            ],
+        )
+
+    def record_live_write_runner_invocation_review(
+        self,
+        *,
+        invocation_review_id: str,
+        approval_id: str,
+        execution_acceptance_id: str,
+        execution_acceptance_audit_id: str,
+        adapter_execution_gate_id: str,
+        adapter_execution_gate_audit_id: str,
+        adapter_execution_dry_run_id: str,
+        adapter_runtime_preflight_id: str,
+        adapter_wiring_id: str,
+        adapter_code_change_id: str,
+        adapter_implementation_preflight_id: str,
+        adapter_design_review_id: str,
+        adapter_implementation_request_id: str,
+        readiness_plan_decision_id: str,
+        runtime_flag_execute_contract_id: str,
+        runtime_flag_approval_id: str,
+        runtime_flag_preflight_id: str,
+        runtime_flag_enablement_id: str,
+        final_decision_id: str,
+        reviewed_by: str,
+        reviewed_at: str,
+        invocation_review_plan_ref: str,
+        execution_acceptance_plan_ref: str,
+        execution_gate_plan_ref: str,
+        execution_dry_run_plan_ref: str,
+        runtime_preflight_plan_ref: str,
+        wiring_plan_ref: str,
+        implementation_branch_ref: str,
+        implementation_plan_ref: str,
+        adapter_design_ref: str,
+        security_review_ref: str,
+        test_plan_ref: str,
+        rollback_plan_ref: str,
+        smoke_runbook_ref: str,
+        runbook_acknowledged: bool,
+        rollback_plan_acknowledged: bool,
+        smoke_runbook_acknowledged: bool,
+        idempotency_key: str,
+        idempotency_hash: str,
+        runtime_flag_name: str = "XAGENT_SDK_WRITE_RUNNER_ENABLED",
+        adapter_module: str = "backend.app.sdk.runtime_flag_application_adapter",
+        adapter_class: str = "SDKRuntimeFlagApplicationAdapter",
+        review_signature: str | None = None,
+        review_hash: str | None = None,
+        notes: str | None = None,
+        dry_run: bool = True,
+    ) -> SDKLiveWriteRunnerInvocationReviewRecordContract:
+        return SDKLiveWriteRunnerInvocationReviewRecordContract(
+            operation="live_write_runner_invocation_review_record",
+            endpoint="/api/v1/control-plane/sdk/live-write-runner/invocation-review/record",
+            request={
+                "invocation_review_id": invocation_review_id,
+                "approval_id": approval_id,
+                "execution_acceptance_id": execution_acceptance_id,
+                "execution_acceptance_audit_id": execution_acceptance_audit_id,
+                "adapter_execution_gate_id": adapter_execution_gate_id,
+                "adapter_execution_gate_audit_id": adapter_execution_gate_audit_id,
+                "adapter_execution_dry_run_id": adapter_execution_dry_run_id,
+                "adapter_runtime_preflight_id": adapter_runtime_preflight_id,
+                "adapter_wiring_id": adapter_wiring_id,
+                "adapter_code_change_id": adapter_code_change_id,
+                "adapter_implementation_preflight_id": adapter_implementation_preflight_id,
+                "adapter_design_review_id": adapter_design_review_id,
+                "adapter_implementation_request_id": adapter_implementation_request_id,
+                "readiness_plan_decision_id": readiness_plan_decision_id,
+                "runtime_flag_execute_contract_id": runtime_flag_execute_contract_id,
+                "runtime_flag_approval_id": runtime_flag_approval_id,
+                "runtime_flag_preflight_id": runtime_flag_preflight_id,
+                "runtime_flag_enablement_id": runtime_flag_enablement_id,
+                "final_decision_id": final_decision_id,
+                "runtime_flag_name": runtime_flag_name,
+                "reviewed_by": reviewed_by,
+                "reviewed_at": reviewed_at,
+                "adapter_module": adapter_module,
+                "adapter_class": adapter_class,
+                "invocation_review_plan_ref": invocation_review_plan_ref,
+                "execution_acceptance_plan_ref": execution_acceptance_plan_ref,
+                "execution_gate_plan_ref": execution_gate_plan_ref,
+                "execution_dry_run_plan_ref": execution_dry_run_plan_ref,
+                "runtime_preflight_plan_ref": runtime_preflight_plan_ref,
+                "wiring_plan_ref": wiring_plan_ref,
+                "implementation_branch_ref": implementation_branch_ref,
+                "implementation_plan_ref": implementation_plan_ref,
+                "adapter_design_ref": adapter_design_ref,
+                "security_review_ref": security_review_ref,
+                "test_plan_ref": test_plan_ref,
+                "rollback_plan_ref": rollback_plan_ref,
+                "smoke_runbook_ref": smoke_runbook_ref,
+                "runbook_acknowledged": runbook_acknowledged,
+                "rollback_plan_acknowledged": rollback_plan_acknowledged,
+                "smoke_runbook_acknowledged": smoke_runbook_acknowledged,
+                "idempotency_key": idempotency_key,
+                "idempotency_hash": idempotency_hash,
+                "review_signature": review_signature,
+                "review_hash": review_hash,
+                "notes": notes,
+                "dry_run": dry_run,
+            },
+            owner_gate={
+                "requires_approved_sdk_approval": True,
+                "requires_accepted_execution_acceptance": True,
+                "requires_execution_acceptance_audit": True,
+                "requires_runtime_flag_name": "XAGENT_SDK_WRITE_RUNNER_ENABLED",
+                "requires_adapter_module": "backend.app.sdk.runtime_flag_application_adapter",
+                "requires_adapter_class": "SDKRuntimeFlagApplicationAdapter",
+                "requires_invocation_review_plan_ref": True,
+                "requires_execution_acceptance_plan_ref": True,
+                "requires_execution_gate_plan_ref": True,
+                "requires_execution_dry_run_plan_ref": True,
+                "requires_runtime_preflight_plan_ref": True,
+                "requires_wiring_plan_ref": True,
+                "requires_implementation_branch_ref": True,
+                "requires_implementation_plan_ref": True,
+                "requires_adapter_design_ref": True,
+                "requires_security_review_ref": True,
+                "requires_test_plan_ref": True,
+                "requires_rollback_plan_ref": True,
+                "requires_smoke_runbook_ref": True,
+                "requires_runbook_acknowledged": True,
+                "requires_rollback_plan_acknowledged": True,
+                "requires_smoke_runbook_acknowledged": True,
+                "requires_idempotency_key": True,
+                "requires_idempotency_hash": True,
+                "requires_signature_or_hash": True,
+                "marks_approval_executed": False,
+                "runtime_flag_enabled": False,
+                "flag_application_performed": False,
+                "implementation_enabled": False,
+                "execute_enabled": False,
+                "write_runner_enabled": False,
+                "adapter_execution_enabled": False,
+                "agent_execution_enabled": False,
+                "write_execution_enabled": False,
+                "runner_invoked": False,
+                "write_runner_invoked": False,
+                "live_execution_started": False,
+                "mark_executed": False,
+                "mutation_performed": False,
+                "network_mutation_performed": False,
+                "file_mutation_performed": False,
+                "channel_mutation_performed": False,
+                "runtime_flag_writer_enabled": False,
+                "adapter_import_allowed": False,
+                "adapter_execution_allowed": False,
+                "wired_into_sdk_invoke": False,
+                "adapter_runtime_wired": False,
+                "imports_adapter_in_sdk_invoke": False,
+                "instantiates_adapter_in_sdk_invoke": False,
+                "execution_dry_run_invoked": False,
+                "execution_gate_opened": False,
+            },
+            known_limits=[
+                "This SDK contract records owner review evidence before future live write-runner invocation only.",
                 "It does not wire the adapter into /sdk/invoke or apply XAGENT_SDK_WRITE_RUNNER_ENABLED.",
                 "It does not import, instantiate, execute the adapter, or invoke the SDK write runner.",
             ],
