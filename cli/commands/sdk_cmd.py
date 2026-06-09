@@ -371,6 +371,38 @@ def _emit_or_record_runtime_flag_application_adapter_design_review(
     _emit(result)
 
 
+def _emit_or_record_runtime_flag_application_adapter_implementation_preflight(
+    payload: dict[str, object],
+    *,
+    execute: bool,
+) -> None:
+    if not execute:
+        _emit(payload)
+        return
+
+    config = get_current_config()
+    try:
+        client = create_client(config)
+        request_payload = payload.get("request")
+        if not isinstance(request_payload, dict):
+            raise XAgentCLIError(
+                "SDK runtime flag application adapter implementation preflight envelope is missing request payload."
+            )
+        result = asyncio.run(
+            client.record_sdk_runtime_flag_application_adapter_implementation_preflight(request_payload)
+        )
+    except NotImplementedError as e:
+        typer.echo(f"SDK runtime flag application adapter implementation preflight recording failed: {e}", err=True)
+        raise typer.Exit(code=1)
+    except (ConnectionError, AuthError, APIError) as e:
+        typer.echo(f"SDK runtime flag application adapter implementation preflight recording failed: {e}", err=True)
+        raise typer.Exit(code=1)
+    except XAgentCLIError as e:
+        typer.echo(f"SDK CLI error: {e}", err=True)
+        raise typer.Exit(code=1)
+    _emit(result)
+
+
 @sdk_app.command("thread-start")
 def thread_start(
     task: str = typer.Argument(..., help="Task text for the new thread."),
@@ -958,6 +990,71 @@ def runtime_flag_application_adapter_design_review_record(
         dry_run=True,
     )
     _emit_or_record_runtime_flag_application_adapter_design_review(
+        contract.to_dict(),
+        execute=execute,
+    )
+
+
+@sdk_app.command("runtime-flag-application-adapter-implementation-preflight-record")
+def runtime_flag_application_adapter_implementation_preflight_record(
+    adapter_implementation_preflight_id: str = typer.Option(..., "--adapter-implementation-preflight-id"),
+    approval_id: str = typer.Option(..., "--approval-id"),
+    adapter_design_review_id: str = typer.Option(..., "--adapter-design-review-id"),
+    adapter_design_review_audit_id: str = typer.Option(..., "--adapter-design-review-audit-id"),
+    adapter_implementation_request_id: str = typer.Option(..., "--adapter-implementation-request-id"),
+    readiness_plan_decision_id: str = typer.Option(..., "--readiness-plan-decision-id"),
+    runtime_flag_execute_contract_id: str = typer.Option(..., "--runtime-flag-execute-contract-id"),
+    runtime_flag_approval_id: str = typer.Option(..., "--runtime-flag-approval-id"),
+    runtime_flag_preflight_id: str = typer.Option(..., "--runtime-flag-preflight-id"),
+    runtime_flag_enablement_id: str = typer.Option(..., "--runtime-flag-enablement-id"),
+    final_decision_id: str = typer.Option(..., "--final-decision-id"),
+    runtime_flag_name: str = typer.Option("XAGENT_SDK_WRITE_RUNNER_ENABLED", "--runtime-flag-name"),
+    operator_id: str = typer.Option(..., "--operator-id"),
+    locked_at: str = typer.Option(..., "--locked-at"),
+    implementation_branch_ref: str = typer.Option(..., "--implementation-branch-ref"),
+    implementation_plan_ref: str = typer.Option(..., "--implementation-plan-ref"),
+    adapter_design_ref: str = typer.Option(..., "--adapter-design-ref"),
+    security_review_ref: str = typer.Option(..., "--security-review-ref"),
+    test_plan_ref: str = typer.Option(..., "--test-plan-ref"),
+    rollback_plan_ref: str = typer.Option(..., "--rollback-plan-ref"),
+    smoke_runbook_ref: str = typer.Option(..., "--smoke-runbook-ref"),
+    idempotency_key: str = typer.Option(..., "--idempotency-key"),
+    idempotency_hash: str = typer.Option(..., "--idempotency-hash"),
+    preflight_signature: Optional[str] = typer.Option(None, "--preflight-signature"),
+    preflight_hash: Optional[str] = typer.Option(None, "--preflight-hash"),
+    notes: Optional[str] = typer.Option(None, "--notes"),
+    execute: bool = typer.Option(False, "--execute", help="Call the owner-gated adapter preflight stub."),
+) -> None:
+    contract = ControlPlaneSDK().record_runtime_flag_application_adapter_implementation_preflight(
+        adapter_implementation_preflight_id=adapter_implementation_preflight_id,
+        approval_id=approval_id,
+        adapter_design_review_id=adapter_design_review_id,
+        adapter_design_review_audit_id=adapter_design_review_audit_id,
+        adapter_implementation_request_id=adapter_implementation_request_id,
+        readiness_plan_decision_id=readiness_plan_decision_id,
+        runtime_flag_execute_contract_id=runtime_flag_execute_contract_id,
+        runtime_flag_approval_id=runtime_flag_approval_id,
+        runtime_flag_preflight_id=runtime_flag_preflight_id,
+        runtime_flag_enablement_id=runtime_flag_enablement_id,
+        final_decision_id=final_decision_id,
+        runtime_flag_name=runtime_flag_name,
+        operator_id=operator_id,
+        locked_at=locked_at,
+        implementation_branch_ref=implementation_branch_ref,
+        implementation_plan_ref=implementation_plan_ref,
+        adapter_design_ref=adapter_design_ref,
+        security_review_ref=security_review_ref,
+        test_plan_ref=test_plan_ref,
+        rollback_plan_ref=rollback_plan_ref,
+        smoke_runbook_ref=smoke_runbook_ref,
+        idempotency_key=idempotency_key,
+        idempotency_hash=idempotency_hash,
+        preflight_signature=preflight_signature,
+        preflight_hash=preflight_hash,
+        notes=notes,
+        dry_run=True,
+    )
+    _emit_or_record_runtime_flag_application_adapter_implementation_preflight(
         contract.to_dict(),
         execute=execute,
     )

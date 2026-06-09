@@ -955,6 +955,43 @@ class SDKRuntimeFlagApplicationAdapterDesignReviewRecordResponse(BaseModel):
     evidence: ControlPlaneEvidence
 
 
+class SDKRuntimeFlagApplicationAdapterImplementationPreflightRecordRequest(BaseModel):
+    adapter_implementation_preflight_id: str = Field(..., min_length=1, max_length=240)
+    approval_id: str = Field(..., min_length=1, max_length=240)
+    adapter_design_review_id: str = Field(..., min_length=1, max_length=240)
+    adapter_design_review_audit_id: str = Field(..., min_length=1, max_length=240)
+    adapter_implementation_request_id: str = Field(..., min_length=1, max_length=240)
+    readiness_plan_decision_id: str = Field(..., min_length=1, max_length=240)
+    runtime_flag_execute_contract_id: str = Field(..., min_length=1, max_length=240)
+    runtime_flag_approval_id: str = Field(..., min_length=1, max_length=240)
+    runtime_flag_preflight_id: str = Field(..., min_length=1, max_length=240)
+    runtime_flag_enablement_id: str = Field(..., min_length=1, max_length=240)
+    final_decision_id: str = Field(..., min_length=1, max_length=240)
+    runtime_flag_name: str = Field(..., min_length=1, max_length=240)
+    operator_id: str = Field(..., min_length=1, max_length=240)
+    locked_at: str = Field(..., min_length=1, max_length=80)
+    implementation_branch_ref: str = Field(..., min_length=1, max_length=500)
+    implementation_plan_ref: str = Field(..., min_length=1, max_length=500)
+    adapter_design_ref: str = Field(..., min_length=1, max_length=500)
+    security_review_ref: str = Field(..., min_length=1, max_length=500)
+    test_plan_ref: str = Field(..., min_length=1, max_length=500)
+    rollback_plan_ref: str = Field(..., min_length=1, max_length=500)
+    smoke_runbook_ref: str = Field(..., min_length=1, max_length=500)
+    idempotency_key: str = Field(..., min_length=1, max_length=240)
+    idempotency_hash: str = Field(..., min_length=1, max_length=500)
+    preflight_signature: str | None = Field(default=None, max_length=500)
+    preflight_hash: str | None = Field(default=None, max_length=500)
+    notes: str | None = Field(default=None, max_length=2000)
+    dry_run: bool = True
+
+
+class SDKRuntimeFlagApplicationAdapterImplementationPreflightRecordResponse(BaseModel):
+    ok: bool
+    status: str
+    adapter_implementation_preflight: dict[str, Any]
+    evidence: ControlPlaneEvidence
+
+
 def _method_catalog() -> list[dict[str, object]]:
     return [spec.to_payload() for spec in METHOD_SPECS]
 
@@ -1283,6 +1320,11 @@ async def invoke_sdk_control_plane(
     sdk_metadata["live_runtime_flag_application_adapter_design_review_workflow"] = (
         _sdk_live_runtime_flag_application_adapter_design_review_workflow_contract(
             sdk_metadata["live_runtime_flag_application_adapter_implementation_request_workflow"],
+        )
+    )
+    sdk_metadata["live_runtime_flag_application_adapter_implementation_preflight_workflow"] = (
+        _sdk_live_runtime_flag_application_adapter_implementation_preflight_workflow_contract(
+            sdk_metadata["live_runtime_flag_application_adapter_design_review_workflow"],
         )
     )
     return SDKControlPlaneInvokeResponse(
@@ -1688,6 +1730,42 @@ async def record_sdk_runtime_flag_application_adapter_design_review(
         ok=adapter_design_review["record_status"] == "recorded",
         status="sdk_live_runtime_flag_application_adapter_design_review_workflow_ready",
         adapter_design_review=adapter_design_review,
+        evidence=evidence,
+    )
+
+
+@router.post(
+    "/sdk/runtime-flag/application-adapter/implementation-preflight/record",
+    response_model=SDKRuntimeFlagApplicationAdapterImplementationPreflightRecordResponse,
+)
+async def record_sdk_runtime_flag_application_adapter_implementation_preflight(
+    request: SDKRuntimeFlagApplicationAdapterImplementationPreflightRecordRequest,
+    principal: PrincipalDependency,
+    audit_store: AuditStoreDependency,
+    approval_store: ApprovalStoreDependency,
+) -> SDKRuntimeFlagApplicationAdapterImplementationPreflightRecordResponse:
+    """Record owner-gated implementation preflight without enabling the adapter."""
+    enforce_scope(principal, "workflow:control")
+    trace_id = principal.trace_id or f"trace_{uuid4().hex}"
+    adapter_implementation_preflight = (
+        _sdk_record_runtime_flag_application_adapter_implementation_preflight(
+            request,
+            principal=principal,
+            approval_store=approval_store,
+            audit_store=audit_store,
+            trace_id=trace_id,
+        )
+    )
+    evidence = ControlPlaneEvidence(
+        trace_id=trace_id,
+        audit_id=adapter_implementation_preflight.get("audit_id")
+        if adapter_implementation_preflight.get("audit_event_recorded")
+        else None,
+    )
+    return SDKRuntimeFlagApplicationAdapterImplementationPreflightRecordResponse(
+        ok=adapter_implementation_preflight["record_status"] == "recorded",
+        status="sdk_live_runtime_flag_application_adapter_implementation_preflight_workflow_ready",
+        adapter_implementation_preflight=adapter_implementation_preflight,
         evidence=evidence,
     )
 
@@ -3847,6 +3925,255 @@ def _sdk_record_runtime_flag_application_adapter_design_review(
     }
 
 
+def _sdk_runtime_flag_application_adapter_implementation_preflight_validation(
+    record: dict[str, Any] | None,
+) -> dict[str, Any]:
+    required_fields = [
+        "adapter_implementation_preflight_id",
+        "approval_id",
+        "adapter_design_review_id",
+        "adapter_design_review_audit_id",
+        "adapter_implementation_request_id",
+        "readiness_plan_decision_id",
+        "runtime_flag_execute_contract_id",
+        "runtime_flag_approval_id",
+        "runtime_flag_preflight_id",
+        "runtime_flag_enablement_id",
+        "final_decision_id",
+        "runtime_flag_name",
+        "operator_id",
+        "locked_at",
+        "implementation_branch_ref",
+        "implementation_plan_ref",
+        "adapter_design_ref",
+        "security_review_ref",
+        "test_plan_ref",
+        "rollback_plan_ref",
+        "smoke_runbook_ref",
+        "idempotency_key",
+        "idempotency_hash",
+    ]
+    checks = {
+        "record_present": isinstance(record, dict),
+        "required_fields_present": bool(
+            isinstance(record, dict) and all(record.get(field) not in (None, "") for field in required_fields)
+        ),
+        "locked_at_rfc3339": bool(
+            isinstance(record, dict) and _is_rfc3339_timestamp(record.get("locked_at"))
+        ),
+        "runtime_flag_name_allowed": bool(
+            isinstance(record, dict)
+            and record.get("runtime_flag_name") == "XAGENT_SDK_WRITE_RUNNER_ENABLED"
+        ),
+        "implementation_branch_ref_present": bool(
+            isinstance(record, dict) and record.get("implementation_branch_ref")
+        ),
+        "implementation_plan_ref_present": bool(
+            isinstance(record, dict) and record.get("implementation_plan_ref")
+        ),
+        "adapter_design_ref_present": bool(isinstance(record, dict) and record.get("adapter_design_ref")),
+        "security_review_ref_present": bool(isinstance(record, dict) and record.get("security_review_ref")),
+        "test_plan_ref_present": bool(isinstance(record, dict) and record.get("test_plan_ref")),
+        "rollback_plan_ref_present": bool(isinstance(record, dict) and record.get("rollback_plan_ref")),
+        "smoke_runbook_ref_present": bool(isinstance(record, dict) and record.get("smoke_runbook_ref")),
+        "idempotency_present": bool(
+            isinstance(record, dict) and record.get("idempotency_key") and record.get("idempotency_hash")
+        ),
+        "signature_or_hash_present": bool(
+            isinstance(record, dict) and (record.get("preflight_signature") or record.get("preflight_hash"))
+        ),
+    }
+    return {
+        "status": "valid" if all(checks.values()) else "invalid",
+        "checks": checks,
+    }
+
+
+def _sdk_record_runtime_flag_application_adapter_implementation_preflight(
+    request: SDKRuntimeFlagApplicationAdapterImplementationPreflightRecordRequest,
+    *,
+    principal: Principal,
+    approval_store: object,
+    audit_store: AuditStore,
+    trace_id: str,
+) -> dict[str, Any]:
+    approval = approval_store.get(request.approval_id) if hasattr(approval_store, "get") else None
+    design_review = _sdk_runtime_flag_application_adapter_design_review_record_from_audit(
+        audit_store,
+        adapter_design_review_id=request.adapter_design_review_id,
+        approval_id=request.approval_id,
+        adapter_implementation_request_id=request.adapter_implementation_request_id,
+        readiness_plan_decision_id=request.readiness_plan_decision_id,
+        runtime_flag_execute_contract_id=request.runtime_flag_execute_contract_id,
+        runtime_flag_approval_id=request.runtime_flag_approval_id,
+        runtime_flag_preflight_id=request.runtime_flag_preflight_id,
+        runtime_flag_enablement_id=request.runtime_flag_enablement_id,
+        final_decision_id=request.final_decision_id,
+        runtime_flag_name=request.runtime_flag_name,
+        audit_id=request.adapter_design_review_audit_id,
+        tenant_id=principal.tenant_id if principal else None,
+    )
+    raw_preflight = {
+        "adapter_implementation_preflight_id": request.adapter_implementation_preflight_id,
+        "approval_id": request.approval_id,
+        "adapter_design_review_id": request.adapter_design_review_id,
+        "adapter_design_review_audit_id": request.adapter_design_review_audit_id,
+        "adapter_implementation_request_id": request.adapter_implementation_request_id,
+        "readiness_plan_decision_id": request.readiness_plan_decision_id,
+        "runtime_flag_execute_contract_id": request.runtime_flag_execute_contract_id,
+        "runtime_flag_approval_id": request.runtime_flag_approval_id,
+        "runtime_flag_preflight_id": request.runtime_flag_preflight_id,
+        "runtime_flag_enablement_id": request.runtime_flag_enablement_id,
+        "final_decision_id": request.final_decision_id,
+        "runtime_flag_name": request.runtime_flag_name,
+        "operator_id": request.operator_id,
+        "locked_at": request.locked_at,
+        "implementation_branch_ref": request.implementation_branch_ref,
+        "implementation_plan_ref": request.implementation_plan_ref,
+        "adapter_design_ref": request.adapter_design_ref,
+        "security_review_ref": request.security_review_ref,
+        "test_plan_ref": request.test_plan_ref,
+        "rollback_plan_ref": request.rollback_plan_ref,
+        "smoke_runbook_ref": request.smoke_runbook_ref,
+        "idempotency_key": request.idempotency_key,
+        "idempotency_hash": request.idempotency_hash,
+        "preflight_signature": request.preflight_signature,
+        "preflight_hash": request.preflight_hash,
+        "notes": request.notes,
+    }
+    validation = _sdk_runtime_flag_application_adapter_implementation_preflight_validation(raw_preflight)
+    approval_status = getattr(approval, "status", None)
+    approval_status_value = getattr(approval_status, "value", approval_status)
+    approval_resource_id = getattr(approval, "resource_id", None)
+    approval_tenant_id = getattr(approval, "tenant_id", None)
+    checks = {
+        "approval_found": approval is not None,
+        "approval_status_approved": approval_status == ApprovalStatus.APPROVED or approval_status_value == "approved",
+        "approval_resource_sdk_command": isinstance(approval_resource_id, str)
+        and approval_resource_id.startswith("sdk:"),
+        "tenant_matches": not principal.authenticated or approval_tenant_id == principal.tenant_id,
+        "adapter_design_review_audit_record_present": isinstance(design_review, dict),
+        "adapter_design_review_validation_valid": bool(
+            isinstance(design_review, dict)
+            and _sdk_runtime_flag_application_adapter_design_review_validation(design_review)["status"]
+            == "valid"
+        ),
+        "adapter_design_review_outcome_accepted": bool(
+            isinstance(design_review, dict)
+            and design_review.get("record_outcome") == "accepted"
+            and design_review.get("review_decision") == "accepted"
+        ),
+        "adapter_implementation_preflight_valid": validation["status"] == "valid",
+        "dry_run_does_not_enable_adapter": request.dry_run is True,
+    }
+    can_record = all(checks.values())
+    preflight_payload = {
+        key: value
+        for key, value in raw_preflight.items()
+        if value is not None
+    }
+    audit_record = None
+    if can_record:
+        audit_record = audit_store.record(
+            action="sdk.write_runner.runtime_flag_application_adapter_implementation_preflight_recorded",
+            resource_type="sdk_write_runner_runtime_flag_application_adapter_implementation_preflight",
+            resource_id=request.adapter_implementation_preflight_id,
+            outcome="accepted",
+            tenant_id=approval_tenant_id or principal.tenant_id,
+            actor_id=principal.user_id if principal.authenticated else request.operator_id,
+            trace_id=trace_id,
+            details={
+                "approval_id": request.approval_id,
+                "adapter_design_review_id": request.adapter_design_review_id,
+                "adapter_design_review_audit_id": request.adapter_design_review_audit_id,
+                "adapter_implementation_request_id": request.adapter_implementation_request_id,
+                "readiness_plan_decision_id": request.readiness_plan_decision_id,
+                "runtime_flag_execute_contract_id": request.runtime_flag_execute_contract_id,
+                "runtime_flag_approval_id": request.runtime_flag_approval_id,
+                "runtime_flag_preflight_id": request.runtime_flag_preflight_id,
+                "runtime_flag_enablement_id": request.runtime_flag_enablement_id,
+                "final_decision_id": request.final_decision_id,
+                "runtime_flag_name": request.runtime_flag_name,
+                "adapter_implementation_preflight": preflight_payload,
+                "adapter_design_review_record": design_review,
+                "validation": validation,
+                "dry_run": request.dry_run,
+                "runtime_flag_enabled": False,
+                "flag_application_performed": False,
+                "implementation_enabled": False,
+                "execute_enabled": False,
+                "write_runner_enabled": False,
+                "adapter_execution_enabled": False,
+                "agent_execution_enabled": False,
+                "write_execution_enabled": False,
+                "runner_invoked": False,
+                "mark_executed": False,
+                "mutation_performed": False,
+                "network_mutation_performed": False,
+                "file_mutation_performed": False,
+                "channel_mutation_performed": False,
+                "runtime_flag_writer_enabled": False,
+                "adapter_import_allowed": False,
+                "adapter_execution_allowed": False,
+            },
+        )
+    return {
+        "stage": "runtime_flag_application_adapter_implementation_preflight_workflow",
+        "record_status": "recorded" if audit_record else "rejected",
+        "recording_endpoint": "/api/v1/control-plane/sdk/runtime-flag/application-adapter/implementation-preflight/record",
+        "adapter_implementation_preflight_id": request.adapter_implementation_preflight_id,
+        "approval_id": request.approval_id,
+        "adapter_design_review_id": request.adapter_design_review_id,
+        "adapter_design_review_audit_id": request.adapter_design_review_audit_id,
+        "adapter_implementation_request_id": request.adapter_implementation_request_id,
+        "readiness_plan_decision_id": request.readiness_plan_decision_id,
+        "runtime_flag_execute_contract_id": request.runtime_flag_execute_contract_id,
+        "runtime_flag_approval_id": request.runtime_flag_approval_id,
+        "runtime_flag_preflight_id": request.runtime_flag_preflight_id,
+        "runtime_flag_enablement_id": request.runtime_flag_enablement_id,
+        "final_decision_id": request.final_decision_id,
+        "runtime_flag_name": request.runtime_flag_name,
+        "implementation_branch_ref": request.implementation_branch_ref,
+        "implementation_plan_ref": request.implementation_plan_ref,
+        "adapter_design_ref": request.adapter_design_ref,
+        "security_review_ref": request.security_review_ref,
+        "test_plan_ref": request.test_plan_ref,
+        "rollback_plan_ref": request.rollback_plan_ref,
+        "smoke_runbook_ref": request.smoke_runbook_ref,
+        "approval_status": approval_status_value,
+        "approval_resource_id": approval_resource_id,
+        "checks": checks,
+        "validation": validation,
+        "audit_event_recorded": audit_record is not None,
+        "audit_action": "sdk.write_runner.runtime_flag_application_adapter_implementation_preflight_recorded",
+        "audit_id": getattr(audit_record, "id", None) if audit_record else None,
+        "audit_hash": getattr(audit_record, "hash", None) if audit_record else None,
+        "audit_signature_present": bool(getattr(audit_record, "signature", None)) if audit_record else False,
+        "runtime_flag_enabled": False,
+        "flag_application_performed": False,
+        "implementation_enabled": False,
+        "execute_enabled": False,
+        "write_runner_enabled": False,
+        "adapter_execution_enabled": False,
+        "agent_execution_enabled": False,
+        "write_execution_enabled": False,
+        "runner_invoked": False,
+        "mark_executed": False,
+        "mutation_performed": False,
+        "network_mutation_performed": False,
+        "file_mutation_performed": False,
+        "channel_mutation_performed": False,
+        "runtime_flag_writer_enabled": False,
+        "adapter_import_allowed": False,
+        "adapter_execution_allowed": False,
+        "known_limits": [
+            "This endpoint records owner-gated implementation preflight for the future adapter only.",
+            "It does not implement, import, instantiate, enable, or execute the adapter.",
+            "Runtime flag application and SDK write-runner execution remain separate owner-gated follow-ups.",
+        ],
+    }
+
+
 def _sdk_backend_stub_metadata(
     original: SDKControlPlaneInvokeRequest,
     request: ControlPlaneInvokeRequest,
@@ -3865,7 +4192,7 @@ def _sdk_backend_stub_metadata(
     read_only_runner_contract = _sdk_read_only_runner_contract(original, request, response)
     write_runner_safety_contract = _sdk_write_runner_safety_contract(original, request, execution_adapter_contract)
     return {
-        "status": "sdk_live_runtime_flag_application_adapter_design_review_workflow_ready",
+        "status": "sdk_live_runtime_flag_application_adapter_implementation_preflight_workflow_ready",
         "operation": request.context.sdk_operation or original.operation,
         "method": request.method,
         "sdk_surface": request.context.sdk_surface or "python",
@@ -3911,6 +4238,7 @@ def _sdk_backend_stub_metadata(
             "Live runtime flag application readiness plan owner decision workflow is ready but disabled for execution.",
             "Live runtime flag application adapter implementation requests can be recorded, but they do not enable or import the adapter.",
             "Live runtime flag application adapter design reviews can be recorded, but they do not implement, enable, import, or execute the adapter.",
+            "Live runtime flag application adapter implementation preflight can be recorded, but it does not write adapter code or enable execution.",
             "No SDK HTTP adapter execution, agent runner invocation, channel send, file change, or network mutation is enabled.",
             "Write methods remain owner-gated behind the approval/sandbox/admin contract.",
             "Feishu remains the only domestic V1 pilot channel.",
@@ -6183,6 +6511,96 @@ def _sdk_live_runtime_flag_application_adapter_design_review_workflow_contract(
     }
 
 
+def _sdk_live_runtime_flag_application_adapter_implementation_preflight_workflow_contract(
+    adapter_design_review_workflow: dict[str, Any],
+) -> dict[str, Any]:
+    checks = {
+        "adapter_design_review_workflow_ready": (
+            adapter_design_review_workflow.get("workflow_status") == "ready_but_disabled"
+        ),
+        "adapter_design_review_requires_owner_approval": (
+            adapter_design_review_workflow.get("requires_approved_sdk_approval") is True
+        ),
+        "adapter_design_review_requires_accepted_request": (
+            adapter_design_review_workflow.get("requires_accepted_adapter_implementation_request") is True
+        ),
+        "accepted_review_does_not_implement_adapter": (
+            adapter_design_review_workflow.get("review_effect", {}).get("accepted_implements_adapter")
+            is False
+        ),
+        "accepted_review_does_not_import_adapter": (
+            adapter_design_review_workflow.get("review_effect", {}).get("accepted_imports_adapter")
+            is False
+        ),
+        "runtime_flag_still_disabled": adapter_design_review_workflow.get("runtime_flag_enabled") is False,
+        "adapter_execution_still_disabled": (
+            adapter_design_review_workflow.get("adapter_execution_enabled") is False
+        ),
+        "runner_not_invoked": adapter_design_review_workflow.get("runner_invoked") is False,
+        "mutation_still_disabled": adapter_design_review_workflow.get("mutation_performed") is False,
+    }
+    ready = all(checks.values())
+    return {
+        "available": adapter_design_review_workflow.get("available") is True,
+        "stage": "runtime_flag_application_adapter_implementation_preflight_workflow",
+        "workflow_status": "ready_but_disabled" if ready else "blocked",
+        "endpoint": "/api/v1/control-plane/sdk/runtime-flag/application-adapter/implementation-preflight/record",
+        "sdk_operation": "runtime_flag_application_adapter_implementation_preflight_record",
+        "cli_command": "xagent sdk runtime-flag-application-adapter-implementation-preflight-record --execute",
+        "requires_approved_sdk_approval": True,
+        "requires_accepted_adapter_design_review": True,
+        "requires_adapter_design_review_audit": True,
+        "requires_runtime_flag_name": "XAGENT_SDK_WRITE_RUNNER_ENABLED",
+        "requires_implementation_branch_ref": True,
+        "requires_implementation_plan_ref": True,
+        "requires_adapter_design_ref": True,
+        "requires_security_review_ref": True,
+        "requires_test_plan_ref": True,
+        "requires_rollback_plan_ref": True,
+        "requires_smoke_runbook_ref": True,
+        "requires_idempotency_key": True,
+        "requires_idempotency_hash": True,
+        "requires_signature_or_hash": True,
+        "audit_action": "sdk.write_runner.runtime_flag_application_adapter_implementation_preflight_recorded",
+        "resource_type": "sdk_write_runner_runtime_flag_application_adapter_implementation_preflight",
+        "audit_event_recorded_by_sdk_invoke": False,
+        "preflight_effect": {
+            "implements_adapter": False,
+            "imports_adapter": False,
+            "instantiates_adapter": False,
+            "applies_runtime_flag": False,
+            "invokes_write_runner": False,
+            "starts_agent_execution": False,
+            "marks_approval_executed": False,
+            "writes_adapter_files": False,
+        },
+        "next_gate": "owner_approved_live_runtime_flag_application_adapter_code_change",
+        "checks": checks,
+        "implementation_enabled": False,
+        "runtime_flag_enabled": False,
+        "flag_application_performed": False,
+        "execute_enabled": False,
+        "write_runner_enabled": False,
+        "adapter_execution_enabled": False,
+        "agent_execution_enabled": False,
+        "write_execution_enabled": False,
+        "runner_invoked": False,
+        "mark_executed": False,
+        "mutation_performed": False,
+        "network_mutation_performed": False,
+        "file_mutation_performed": False,
+        "channel_mutation_performed": False,
+        "runtime_flag_writer_enabled": False,
+        "adapter_import_allowed": False,
+        "adapter_execution_allowed": False,
+        "known_limits": [
+            "This workflow records implementation preflight for the future live runtime flag adapter only.",
+            "Accepted preflight records do not implement, import, instantiate, or execute the adapter.",
+            "Actual adapter code changes and write-runner wiring remain separate owner-gated follow-ups.",
+        ],
+    }
+
+
 def _sdk_owner_acceptance_evidence_schema(required_fields: list[str]) -> dict[str, Any]:
     return {
         "type": "object",
@@ -8423,6 +8841,85 @@ def _sdk_runtime_flag_application_adapter_implementation_request_record_from_aud
             continue
         return {
             **_jsonable(implementation_request),
+            "record_outcome": getattr(record, "outcome", None),
+            "audit_id": getattr(record, "id", audit_id),
+            "audit_created_at": _jsonable(getattr(record, "created_at", None)),
+            "audit_hash": getattr(record, "hash", None),
+            "audit_signature_present": bool(getattr(record, "signature", None)),
+            "record_persisted": True,
+        }
+    return None
+
+
+def _sdk_runtime_flag_application_adapter_design_review_record_from_audit(
+    audit_store: AuditStore | None,
+    *,
+    adapter_design_review_id: str | None,
+    approval_id: str | None,
+    adapter_implementation_request_id: str | None,
+    readiness_plan_decision_id: str | None,
+    runtime_flag_execute_contract_id: str | None,
+    runtime_flag_approval_id: str | None,
+    runtime_flag_preflight_id: str | None,
+    runtime_flag_enablement_id: str | None,
+    final_decision_id: str | None,
+    runtime_flag_name: str | None,
+    audit_id: str | None,
+    tenant_id: str | None,
+) -> dict[str, Any] | None:
+    if (
+        audit_store is None
+        or not adapter_design_review_id
+        or not approval_id
+        or not adapter_implementation_request_id
+        or not readiness_plan_decision_id
+        or not runtime_flag_execute_contract_id
+        or not runtime_flag_approval_id
+        or not runtime_flag_preflight_id
+        or not runtime_flag_enablement_id
+        or not final_decision_id
+        or not runtime_flag_name
+        or not audit_id
+    ):
+        return None
+    records = audit_store.list(
+        limit=200,
+        tenant_id=tenant_id,
+        action="sdk.write_runner.runtime_flag_application_adapter_design_review_recorded",
+        resource_type="sdk_write_runner_runtime_flag_application_adapter_design_review",
+        outcome="accepted",
+    )
+    for record in records:
+        if audit_id and getattr(record, "id", None) != audit_id:
+            continue
+        if adapter_design_review_id and getattr(record, "resource_id", None) != adapter_design_review_id:
+            continue
+        details = getattr(record, "details", {}) or {}
+        if approval_id and details.get("approval_id") != approval_id:
+            continue
+        if adapter_implementation_request_id and details.get("adapter_implementation_request_id") != adapter_implementation_request_id:
+            continue
+        if readiness_plan_decision_id and details.get("readiness_plan_decision_id") != readiness_plan_decision_id:
+            continue
+        if runtime_flag_execute_contract_id and details.get("runtime_flag_execute_contract_id") != runtime_flag_execute_contract_id:
+            continue
+        if runtime_flag_approval_id and details.get("runtime_flag_approval_id") != runtime_flag_approval_id:
+            continue
+        if runtime_flag_preflight_id and details.get("runtime_flag_preflight_id") != runtime_flag_preflight_id:
+            continue
+        if runtime_flag_enablement_id and details.get("runtime_flag_enablement_id") != runtime_flag_enablement_id:
+            continue
+        if final_decision_id and details.get("final_decision_id") != final_decision_id:
+            continue
+        review = details.get("adapter_design_review")
+        if not isinstance(review, dict):
+            continue
+        if runtime_flag_name and review.get("runtime_flag_name") != runtime_flag_name:
+            continue
+        if review.get("review_decision") != "accepted":
+            continue
+        return {
+            **_jsonable(review),
             "record_outcome": getattr(record, "outcome", None),
             "audit_id": getattr(record, "id", audit_id),
             "audit_created_at": _jsonable(getattr(record, "created_at", None)),
