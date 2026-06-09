@@ -239,6 +239,22 @@ class SDKRuntimeFlagApplicationAdapterImplementationPreflightRecordContract:
         return payload
 
 
+@dataclass(frozen=True)
+class SDKRuntimeFlagApplicationAdapterCodeChangeRecordContract:
+    operation: str
+    endpoint: str
+    request: dict[str, Any]
+    owner_gate: dict[str, Any]
+    known_limits: list[str]
+
+    def to_dict(self) -> dict[str, Any]:
+        payload = asdict(self)
+        payload["mutation_performed"] = False
+        payload["network_mutation_performed"] = False
+        payload["file_mutation_performed"] = False
+        return payload
+
+
 class ControlPlaneSDK:
     """Build SDK-compatible control-plane request envelopes."""
 
@@ -1261,6 +1277,118 @@ class ControlPlaneSDK:
                 "This SDK contract records implementation preflight for the future adapter only.",
                 "It does not apply XAGENT_SDK_WRITE_RUNNER_ENABLED or enable adapter execution.",
                 "It does not implement, import, instantiate, or invoke the SDK write runner.",
+            ],
+        )
+
+    def record_runtime_flag_application_adapter_code_change(
+        self,
+        *,
+        adapter_code_change_id: str,
+        approval_id: str,
+        adapter_implementation_preflight_id: str,
+        adapter_implementation_preflight_audit_id: str,
+        adapter_design_review_id: str,
+        adapter_implementation_request_id: str,
+        readiness_plan_decision_id: str,
+        runtime_flag_execute_contract_id: str,
+        runtime_flag_approval_id: str,
+        runtime_flag_preflight_id: str,
+        runtime_flag_enablement_id: str,
+        final_decision_id: str,
+        operator_id: str,
+        changed_at: str,
+        implementation_branch_ref: str,
+        implementation_plan_ref: str,
+        adapter_design_ref: str,
+        security_review_ref: str,
+        test_plan_ref: str,
+        rollback_plan_ref: str,
+        smoke_runbook_ref: str,
+        idempotency_key: str,
+        idempotency_hash: str,
+        runtime_flag_name: str = "XAGENT_SDK_WRITE_RUNNER_ENABLED",
+        adapter_module: str = "backend.app.sdk.runtime_flag_application_adapter",
+        adapter_class: str = "SDKRuntimeFlagApplicationAdapter",
+        code_change_signature: str | None = None,
+        code_change_hash: str | None = None,
+        notes: str | None = None,
+        dry_run: bool = True,
+    ) -> SDKRuntimeFlagApplicationAdapterCodeChangeRecordContract:
+        return SDKRuntimeFlagApplicationAdapterCodeChangeRecordContract(
+            operation="runtime_flag_application_adapter_code_change_record",
+            endpoint="/api/v1/control-plane/sdk/runtime-flag/application-adapter/code-change/record",
+            request={
+                "adapter_code_change_id": adapter_code_change_id,
+                "approval_id": approval_id,
+                "adapter_implementation_preflight_id": adapter_implementation_preflight_id,
+                "adapter_implementation_preflight_audit_id": adapter_implementation_preflight_audit_id,
+                "adapter_design_review_id": adapter_design_review_id,
+                "adapter_implementation_request_id": adapter_implementation_request_id,
+                "readiness_plan_decision_id": readiness_plan_decision_id,
+                "runtime_flag_execute_contract_id": runtime_flag_execute_contract_id,
+                "runtime_flag_approval_id": runtime_flag_approval_id,
+                "runtime_flag_preflight_id": runtime_flag_preflight_id,
+                "runtime_flag_enablement_id": runtime_flag_enablement_id,
+                "final_decision_id": final_decision_id,
+                "runtime_flag_name": runtime_flag_name,
+                "operator_id": operator_id,
+                "changed_at": changed_at,
+                "adapter_module": adapter_module,
+                "adapter_class": adapter_class,
+                "implementation_branch_ref": implementation_branch_ref,
+                "implementation_plan_ref": implementation_plan_ref,
+                "adapter_design_ref": adapter_design_ref,
+                "security_review_ref": security_review_ref,
+                "test_plan_ref": test_plan_ref,
+                "rollback_plan_ref": rollback_plan_ref,
+                "smoke_runbook_ref": smoke_runbook_ref,
+                "idempotency_key": idempotency_key,
+                "idempotency_hash": idempotency_hash,
+                "code_change_signature": code_change_signature,
+                "code_change_hash": code_change_hash,
+                "notes": notes,
+                "dry_run": dry_run,
+            },
+            owner_gate={
+                "requires_approved_sdk_approval": True,
+                "requires_accepted_adapter_implementation_preflight": True,
+                "requires_adapter_implementation_preflight_audit": True,
+                "requires_runtime_flag_name": "XAGENT_SDK_WRITE_RUNNER_ENABLED",
+                "requires_adapter_module": "backend.app.sdk.runtime_flag_application_adapter",
+                "requires_adapter_class": "SDKRuntimeFlagApplicationAdapter",
+                "requires_implementation_branch_ref": True,
+                "requires_implementation_plan_ref": True,
+                "requires_adapter_design_ref": True,
+                "requires_security_review_ref": True,
+                "requires_test_plan_ref": True,
+                "requires_rollback_plan_ref": True,
+                "requires_smoke_runbook_ref": True,
+                "requires_idempotency_key": True,
+                "requires_idempotency_hash": True,
+                "requires_signature_or_hash": True,
+                "marks_approval_executed": False,
+                "runtime_flag_enabled": False,
+                "flag_application_performed": False,
+                "implementation_enabled": False,
+                "execute_enabled": False,
+                "write_runner_enabled": False,
+                "adapter_execution_enabled": False,
+                "agent_execution_enabled": False,
+                "write_execution_enabled": False,
+                "runner_invoked": False,
+                "mark_executed": False,
+                "mutation_performed": False,
+                "network_mutation_performed": False,
+                "file_mutation_performed": False,
+                "channel_mutation_performed": False,
+                "runtime_flag_writer_enabled": False,
+                "adapter_import_allowed": False,
+                "adapter_execution_allowed": False,
+            },
+            known_limits=[
+                "This SDK contract records the disabled adapter code-change gate only.",
+                "It does not wire the adapter into /sdk/invoke or apply XAGENT_SDK_WRITE_RUNNER_ENABLED.",
+                "It does not instantiate the adapter or invoke the SDK write runner.",
             ],
         )
 

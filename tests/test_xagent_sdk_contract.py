@@ -2012,6 +2012,80 @@ def test_sdk_runtime_flag_application_adapter_implementation_preflight_is_safe()
     assert payload["network_mutation_performed"] is False
 
 
+def test_sdk_runtime_flag_application_adapter_code_change_is_safe() -> None:
+    payload = ControlPlaneSDK().record_runtime_flag_application_adapter_code_change(
+        adapter_code_change_id="adapter-code-change-1",
+        approval_id="approval-1",
+        adapter_implementation_preflight_id="adapter-implementation-preflight-1",
+        adapter_implementation_preflight_audit_id="audit-adapter-implementation-preflight-1",
+        adapter_design_review_id="adapter-design-review-1",
+        adapter_implementation_request_id="adapter-implementation-request-1",
+        readiness_plan_decision_id="readiness-plan-decision-1",
+        runtime_flag_execute_contract_id="flag-execute-contract-1",
+        runtime_flag_approval_id="flag-approval-1",
+        runtime_flag_preflight_id="flag-preflight-1",
+        runtime_flag_enablement_id="flag-enable-1",
+        final_decision_id="final-decision-1",
+        operator_id="operator",
+        changed_at="2026-06-08T00:00:00Z",
+        implementation_branch_ref="codex/runtime-flag-adapter-code-change",
+        implementation_plan_ref="docs/runbooks/sdk-write-runner-runtime-flag-adapter-implementation.md",
+        adapter_design_ref="docs/runbooks/sdk-write-runner-runtime-flag-adapter-design.md",
+        security_review_ref="docs/security/sdk-write-runner-runtime-flag-adapter-review.md",
+        test_plan_ref="tests/test_control_plane_protocol.py",
+        rollback_plan_ref="docs/runbooks/sdk-write-runner-rollback.md",
+        smoke_runbook_ref="docs/runbooks/sdk-write-runner-smoke.md",
+        idempotency_key="adapter-code-change-1",
+        idempotency_hash="hash-idempotency-code-change-1",
+        code_change_hash="hash-adapter-code-change-1",
+    ).to_dict()
+
+    assert payload["operation"] == "runtime_flag_application_adapter_code_change_record"
+    assert payload["endpoint"] == (
+        "/api/v1/control-plane/sdk/runtime-flag/application-adapter/code-change/record"
+    )
+    assert payload["request"]["adapter_code_change_id"] == "adapter-code-change-1"
+    assert payload["request"]["approval_id"] == "approval-1"
+    assert payload["request"]["adapter_implementation_preflight_id"] == (
+        "adapter-implementation-preflight-1"
+    )
+    assert payload["request"]["adapter_implementation_preflight_audit_id"] == (
+        "audit-adapter-implementation-preflight-1"
+    )
+    assert payload["request"]["runtime_flag_name"] == "XAGENT_SDK_WRITE_RUNNER_ENABLED"
+    assert payload["request"]["adapter_module"] == "backend.app.sdk.runtime_flag_application_adapter"
+    assert payload["request"]["adapter_class"] == "SDKRuntimeFlagApplicationAdapter"
+    assert payload["request"]["code_change_hash"] == "hash-adapter-code-change-1"
+    assert payload["request"]["dry_run"] is True
+    assert payload["owner_gate"]["requires_approved_sdk_approval"] is True
+    assert payload["owner_gate"]["requires_accepted_adapter_implementation_preflight"] is True
+    assert payload["owner_gate"]["requires_adapter_implementation_preflight_audit"] is True
+    assert payload["owner_gate"]["requires_runtime_flag_name"] == "XAGENT_SDK_WRITE_RUNNER_ENABLED"
+    assert payload["owner_gate"]["requires_adapter_module"] == "backend.app.sdk.runtime_flag_application_adapter"
+    assert payload["owner_gate"]["requires_adapter_class"] == "SDKRuntimeFlagApplicationAdapter"
+    assert payload["owner_gate"]["requires_signature_or_hash"] is True
+    assert payload["owner_gate"]["runtime_flag_enabled"] is False
+    assert payload["owner_gate"]["flag_application_performed"] is False
+    assert payload["owner_gate"]["implementation_enabled"] is False
+    assert payload["owner_gate"]["execute_enabled"] is False
+    assert payload["owner_gate"]["write_runner_enabled"] is False
+    assert payload["owner_gate"]["adapter_execution_enabled"] is False
+    assert payload["owner_gate"]["agent_execution_enabled"] is False
+    assert payload["owner_gate"]["write_execution_enabled"] is False
+    assert payload["owner_gate"]["runner_invoked"] is False
+    assert payload["owner_gate"]["mark_executed"] is False
+    assert payload["owner_gate"]["mutation_performed"] is False
+    assert payload["owner_gate"]["network_mutation_performed"] is False
+    assert payload["owner_gate"]["file_mutation_performed"] is False
+    assert payload["owner_gate"]["channel_mutation_performed"] is False
+    assert payload["owner_gate"]["runtime_flag_writer_enabled"] is False
+    assert payload["owner_gate"]["adapter_import_allowed"] is False
+    assert payload["owner_gate"]["adapter_execution_allowed"] is False
+    assert payload["mutation_performed"] is False
+    assert payload["network_mutation_performed"] is False
+    assert payload["file_mutation_performed"] is False
+
+
 def test_cli_sdk_runtime_flag_application_owner_approval_execute_flag_records_approval_only() -> None:
     set_current_config(CLIConfig(api_base_url="http://localhost:8000", output_format="json"))
     mock_client = AsyncMock()
@@ -2502,6 +2576,119 @@ def test_cli_sdk_runtime_flag_application_adapter_implementation_preflight_execu
     assert request["idempotency_key"] == "adapter-implementation-preflight-1"
     assert request["idempotency_hash"] == "hash-idempotency-preflight-1"
     assert request["preflight_hash"] == "hash-adapter-implementation-preflight-1"
+    assert request["dry_run"] is True
+    mock_client.invoke_sdk_contract.assert_not_called()
+
+
+def test_cli_sdk_runtime_flag_application_adapter_code_change_execute_flag_records_code_change_only() -> None:
+    set_current_config(CLIConfig(api_base_url="http://localhost:8000", output_format="json"))
+    mock_client = AsyncMock()
+    mock_client.record_sdk_runtime_flag_application_adapter_code_change.return_value = {
+        "ok": True,
+        "status": "sdk_live_runtime_flag_application_adapter_code_change_workflow_ready",
+        "adapter_code_change": {
+            "record_status": "recorded",
+            "audit_event_recorded": True,
+            "runtime_flag_enabled": False,
+            "flag_application_performed": False,
+            "implementation_enabled": False,
+            "execute_enabled": False,
+            "write_runner_enabled": False,
+            "adapter_execution_enabled": False,
+            "agent_execution_enabled": False,
+            "write_execution_enabled": False,
+            "runner_invoked": False,
+            "mark_executed": False,
+            "mutation_performed": False,
+            "adapter_import_allowed": False,
+            "adapter_execution_allowed": False,
+        },
+    }
+
+    with patch("cli.commands.sdk_cmd.create_client", return_value=mock_client):
+        result = CliRunner().invoke(
+            app,
+            [
+                "sdk",
+                "runtime-flag-application-adapter-code-change-record",
+                "--adapter-code-change-id",
+                "adapter-code-change-1",
+                "--approval-id",
+                "approval-1",
+                "--adapter-implementation-preflight-id",
+                "adapter-implementation-preflight-1",
+                "--adapter-implementation-preflight-audit-id",
+                "audit-adapter-implementation-preflight-1",
+                "--adapter-design-review-id",
+                "adapter-design-review-1",
+                "--adapter-implementation-request-id",
+                "adapter-implementation-request-1",
+                "--readiness-plan-decision-id",
+                "readiness-plan-decision-1",
+                "--runtime-flag-execute-contract-id",
+                "flag-execute-contract-1",
+                "--runtime-flag-approval-id",
+                "flag-approval-1",
+                "--runtime-flag-preflight-id",
+                "flag-preflight-1",
+                "--runtime-flag-enablement-id",
+                "flag-enable-1",
+                "--final-decision-id",
+                "final-decision-1",
+                "--operator-id",
+                "operator",
+                "--changed-at",
+                "2026-06-08T00:00:00Z",
+                "--implementation-branch-ref",
+                "codex/runtime-flag-adapter-code-change",
+                "--implementation-plan-ref",
+                "docs/runbooks/sdk-write-runner-runtime-flag-adapter-implementation.md",
+                "--adapter-design-ref",
+                "docs/runbooks/sdk-write-runner-runtime-flag-adapter-design.md",
+                "--security-review-ref",
+                "docs/security/sdk-write-runner-runtime-flag-adapter-review.md",
+                "--test-plan-ref",
+                "tests/test_control_plane_protocol.py",
+                "--rollback-plan-ref",
+                "docs/runbooks/sdk-write-runner-rollback.md",
+                "--smoke-runbook-ref",
+                "docs/runbooks/sdk-write-runner-smoke.md",
+                "--idempotency-key",
+                "adapter-code-change-1",
+                "--idempotency-hash",
+                "hash-idempotency-code-change-1",
+                "--code-change-hash",
+                "hash-adapter-code-change-1",
+                "--execute",
+            ],
+        )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["status"] == "sdk_live_runtime_flag_application_adapter_code_change_workflow_ready"
+    assert payload["adapter_code_change"]["record_status"] == "recorded"
+    assert payload["adapter_code_change"]["runtime_flag_enabled"] is False
+    assert payload["adapter_code_change"]["flag_application_performed"] is False
+    assert payload["adapter_code_change"]["implementation_enabled"] is False
+    assert payload["adapter_code_change"]["write_runner_enabled"] is False
+    assert payload["adapter_code_change"]["adapter_execution_enabled"] is False
+    assert payload["adapter_code_change"]["runner_invoked"] is False
+    assert payload["adapter_code_change"]["mutation_performed"] is False
+    assert payload["adapter_code_change"]["adapter_import_allowed"] is False
+    assert payload["adapter_code_change"]["adapter_execution_allowed"] is False
+
+    mock_client.record_sdk_runtime_flag_application_adapter_code_change.assert_awaited_once()
+    request = mock_client.record_sdk_runtime_flag_application_adapter_code_change.await_args.args[0]
+    assert request["adapter_code_change_id"] == "adapter-code-change-1"
+    assert request["approval_id"] == "approval-1"
+    assert request["adapter_implementation_preflight_id"] == "adapter-implementation-preflight-1"
+    assert request["adapter_implementation_preflight_audit_id"] == "audit-adapter-implementation-preflight-1"
+    assert request["runtime_flag_name"] == "XAGENT_SDK_WRITE_RUNNER_ENABLED"
+    assert request["adapter_module"] == "backend.app.sdk.runtime_flag_application_adapter"
+    assert request["adapter_class"] == "SDKRuntimeFlagApplicationAdapter"
+    assert request["idempotency_key"] == "adapter-code-change-1"
+    assert request["idempotency_hash"] == "hash-idempotency-code-change-1"
+    assert request["code_change_hash"] == "hash-adapter-code-change-1"
     assert request["dry_run"] is True
     mock_client.invoke_sdk_contract.assert_not_called()
 
