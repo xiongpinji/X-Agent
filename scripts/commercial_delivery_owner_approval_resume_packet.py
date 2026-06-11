@@ -188,6 +188,26 @@ def _count_values_match(values: dict[str, int | None]) -> bool:
     return bool(present) and len(present) == len(values) and len(set(present)) == 1
 
 
+def _stage_counts_consistent(values: dict[str, int | None]) -> bool:
+    handoff_include_count = values.get("handoff_stage_include_count")
+    delivery_include_count = values.get("delivery_stage_include_count")
+    delivery_command_count = values.get("delivery_owner_stage_command_count")
+    runbook_command_count = values.get("runbook_stage_command_count")
+    execution_command_count = values.get("execution_plan_stage_command_count")
+    if (
+        handoff_include_count is None
+        or delivery_include_count is None
+        or delivery_command_count is None
+        or runbook_command_count is None
+        or execution_command_count is None
+    ):
+        return False
+    if handoff_include_count != delivery_include_count:
+        return False
+    command_counts = {delivery_command_count, runbook_command_count, execution_command_count}
+    return len(command_counts) == 1 and 0 < delivery_command_count <= delivery_include_count
+
+
 def build_owner_approval_resume_packet(
     *,
     owner_approval_handoff_path: Path = DEFAULT_OWNER_APPROVAL_HANDOFF,
@@ -431,9 +451,9 @@ def build_owner_approval_resume_packet(
         ),
         _check(
             "stage_counts_consistent",
-            _count_values_match(stage_counts),
+            _stage_counts_consistent(stage_counts),
             details={"stage_counts": stage_counts},
-            error="stage counts differ across handoff, delivery, runbook, and execution plan",
+            error="stage include counts or owner stage command counts differ across resume inputs",
         ),
         _check(
             "stage_path_digest_consistent",

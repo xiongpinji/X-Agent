@@ -471,6 +471,8 @@ def build_commercial_delivery_closure_snapshot(
     post_commit_accounted_refresh_steps = {
         "closure_snapshot",
         "owner_approval_handoff",
+        "owner_delivery_packet",
+        "owner_delivery_packet_before_owner_approval",
         "owner_pre_stage_readiness_gate",
         "owner_staging_preflight",
     }
@@ -519,6 +521,8 @@ def build_commercial_delivery_closure_snapshot(
         in {
             ("owner_staging_preflight",),
             ("owner_pre_stage_readiness_gate",),
+            ("owner_delivery_packet",),
+            ("owner_delivery_packet_before_owner_approval",),
             ("closure_snapshot",),
             ("owner_approval_handoff",),
         }

@@ -51,6 +51,7 @@ class OwnerPostStagingVerification:
     generated_at: str
     evidence_type: str
     owner_gated: bool
+    post_commit_noop_accounted_for: bool
     mutation_performed: bool
     git_stage_performed: bool
     git_commit_performed: bool
@@ -162,6 +163,17 @@ def _stage_paths_from_staging_review(staging_review: dict[str, Any]) -> list[str
     return paths
 
 
+def _stage_paths_by_status(staging_review: dict[str, Any], status: str) -> list[str]:
+    rows = staging_review.get("paths")
+    if not isinstance(rows, list):
+        return []
+    paths: list[str] = []
+    for item in rows:
+        if isinstance(item, dict) and item.get("status") == status and item.get("path"):
+            paths.append(_normalize_path(str(item["path"])))
+    return paths
+
+
 def _stage_paths_from_manifest(manifest: dict[str, Any]) -> list[str]:
     values = manifest.get("stage_include_paths")
     if not isinstance(values, list):
@@ -202,6 +214,48 @@ def _digest_field(payload: dict[str, Any], field: str) -> str | None:
     return str(value) if isinstance(value, str) and value else None
 
 
+def _int_field(payload: dict[str, Any], field: str) -> int:
+    try:
+        return int(payload.get(field) or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _post_commit_noop_accounted_for(
+    *,
+    owner_packet: dict[str, Any],
+    staging_review: dict[str, Any],
+    manifest: dict[str, Any],
+    packet_stage_paths: list[str],
+    packet_stage_commands: list[str],
+    cached_paths: list[str],
+) -> bool:
+    packet_summary = owner_packet.get("summary")
+    packet_summary = packet_summary if isinstance(packet_summary, dict) else {}
+    manifest_stage_paths = _stage_paths_from_manifest(manifest)
+    unchanged_paths = _stage_paths_by_status(staging_review, "unchanged")
+    manifest_stage_count = _int_field(manifest, "stage_include_count") or len(manifest_stage_paths)
+    staging_stage_count = _int_field(staging_review, "stage_include_count")
+    return (
+        packet_summary.get("post_commit_noop_accounted_for") is True
+        and _status(owner_packet) == "owner_staging_packet_ready"
+        and _status(staging_review) == "staging_review_ready"
+        and _status(manifest) == "original_kernel_delivery_manifest_ready"
+        and owner_packet.get("owner_gated") is True
+        and staging_review.get("owner_gated") is True
+        and not packet_stage_paths
+        and not packet_stage_commands
+        and not cached_paths
+        and _int_field(owner_packet, "blocked_stage_count") == 0
+        and _int_field(staging_review, "blocked_stage_count") == 0
+        and _int_field(owner_packet, "eligible_stage_count") == 0
+        and _int_field(staging_review, "eligible_stage_count") == 0
+        and manifest_stage_count > 0
+        and staging_stage_count == manifest_stage_count
+        and len(unchanged_paths) == manifest_stage_count
+    )
+
+
 def build_owner_post_staging_verification(
     *,
     owner_packet_path: Path = DEFAULT_OWNER_PACKET,
@@ -218,14 +272,24 @@ def build_owner_post_staging_verification(
     staging_eligible_paths = _stage_paths_from_staging_review(staging_review)
     manifest_stage_paths = _stage_paths_from_manifest(manifest)
     cached_paths = _cached_paths(cached_diff_lines if cached_diff_lines is not None else _git_cached_diff_lines())
-    stage_path_digest = _digest_values(packet_stage_paths) if packet_stage_paths else None
-    stage_command_digest = _digest_values(packet_stage_commands) if packet_stage_commands else None
+    post_commit_noop_accounted_for = _post_commit_noop_accounted_for(
+        owner_packet=owner_packet,
+        staging_review=staging_review,
+        manifest=manifest,
+        packet_stage_paths=packet_stage_paths,
+        packet_stage_commands=packet_stage_commands,
+        cached_paths=cached_paths,
+    )
+    stage_path_digest = _digest_values(packet_stage_paths) if packet_stage_paths or post_commit_noop_accounted_for else None
+    stage_command_digest = _digest_values(packet_stage_commands) if packet_stage_commands or post_commit_noop_accounted_for else None
     packet_stage_path_digest = _digest_field(owner_packet, "stage_path_digest")
     packet_stage_command_digest = _digest_field(owner_packet, "stage_command_digest")
     packet_summary = owner_packet.get("summary")
     packet_summary = packet_summary if isinstance(packet_summary, dict) else {}
-    expected_stage_path_set_digest = _path_set_digest(packet_stage_paths)
-    cached_staged_path_set_digest = _path_set_digest(cached_paths)
+    expected_stage_path_set_digest = (
+        _digest_values([]) if post_commit_noop_accounted_for else _path_set_digest(packet_stage_paths)
+    )
+    cached_staged_path_set_digest = _digest_values([]) if post_commit_noop_accounted_for else _path_set_digest(cached_paths)
 
     missing_cached_paths = sorted(set(packet_stage_paths).difference(cached_paths))
     unexpected_cached_paths = sorted(set(cached_paths).difference(packet_stage_paths))
@@ -302,28 +366,35 @@ def build_owner_post_staging_verification(
         ),
         _check(
             "packet_stage_path_digest_matches_stage_paths",
-            stage_path_digest is not None and packet_stage_path_digest == stage_path_digest,
+            (post_commit_noop_accounted_for and packet_stage_path_digest == stage_path_digest)
+            or (stage_path_digest is not None and packet_stage_path_digest == stage_path_digest),
             details={
                 "computed_stage_path_digest": stage_path_digest,
                 "packet_stage_path_digest": packet_stage_path_digest,
+                "post_commit_noop_accounted_for": post_commit_noop_accounted_for,
             },
             error="owner packet stage_path_digest does not match its ordered stage_paths",
         ),
         _check(
             "packet_stage_command_digest_matches_stage_commands",
-            stage_command_digest is not None and packet_stage_command_digest == stage_command_digest,
+            (post_commit_noop_accounted_for and packet_stage_command_digest == stage_command_digest)
+            or (stage_command_digest is not None and packet_stage_command_digest == stage_command_digest),
             details={
                 "computed_stage_command_digest": stage_command_digest,
                 "packet_stage_command_digest": packet_stage_command_digest,
                 "stage_command_count": len(packet_stage_commands),
                 "stage_path_count": len(packet_stage_paths),
+                "post_commit_noop_accounted_for": post_commit_noop_accounted_for,
             },
             error="owner packet stage_command_digest does not match its ordered stage_commands",
         ),
         _check(
             "cached_paths_present_after_owner_staging",
-            bool(cached_paths),
-            details={"cached_staged_path_count": len(cached_paths)},
+            bool(cached_paths) or post_commit_noop_accounted_for,
+            details={
+                "cached_staged_path_count": len(cached_paths),
+                "post_commit_noop_accounted_for": post_commit_noop_accounted_for,
+            },
             error="git index is empty; owner staging commands have not been applied",
         ),
         _check(
@@ -344,6 +415,7 @@ def build_owner_post_staging_verification(
             details={
                 "expected_stage_path_set_digest": expected_stage_path_set_digest,
                 "cached_staged_path_set_digest": cached_staged_path_set_digest,
+                "post_commit_noop_accounted_for": post_commit_noop_accounted_for,
             },
             error="cached staged path set digest does not match the owner staging packet",
         ),
@@ -389,6 +461,7 @@ def build_owner_post_staging_verification(
         generated_at=_utc_now(),
         evidence_type="commercial_delivery_owner_post_staging_verification",
         owner_gated=True,
+        post_commit_noop_accounted_for=post_commit_noop_accounted_for,
         mutation_performed=False,
         git_stage_performed=False,
         git_commit_performed=False,
@@ -412,6 +485,7 @@ def build_owner_post_staging_verification(
         summary={
             "blocking_reasons": blocking_reasons,
             "owner_action_required": not ready,
+            "post_commit_noop_accounted_for": post_commit_noop_accounted_for,
             "secondary_pending_count": packet_summary.get("secondary_pending_count"),
             "secondary_handoff_next_count": packet_summary.get("secondary_handoff_next_count"),
             "secondary_handoff_next_queue": packet_summary.get("secondary_handoff_next_queue"),

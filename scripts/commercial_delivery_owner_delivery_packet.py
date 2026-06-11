@@ -326,30 +326,32 @@ def build_owner_delivery_packet(
         and _summary(approval_request).get("stage_command_digest") == stage_command_digest
         and _summary(approval_request).get("expected_stage_path_set_digest") == expected_stage_path_set_digest
     )
+    approval_request_blocked_by_post_stage_commit = (
+        commit_ready
+        and _status(approval_request) == "owner_stage_approval_request_blocked"
+        and _failed_check_names(approval_request).issubset(
+            {
+                "owner_delivery_packet_ready",
+                "owner_delivery_packet_requires_approval",
+            }
+        )
+        and _summary(approval_request).get("stage_include_count") == stage_include_count
+        and _summary(approval_request).get("eligible_stage_count") == eligible_stage_count
+        and _summary(approval_request).get("owner_stage_command_count") == owner_stage_command_count
+        and _summary(approval_request).get("stage_path_digest") == stage_path_digest
+        and _summary(approval_request).get("stage_command_digest") == stage_command_digest
+        and _summary(approval_request).get("expected_stage_path_set_digest") == expected_stage_path_set_digest
+    )
     approval_request_accounted_for = (
         approval_request_ready
         or approval_request_missing
         or approval_request_blocked_by_delivery_bootstrap
+        or approval_request_blocked_by_post_stage_commit
     )
     approval_payload_audit_summary = _summary(approval_payload_audit)
     approval_payload_audit_failed_checks = _failed_check_names(approval_payload_audit)
-    approval_payload_audit_blocked_by_delivery_bootstrap = (
-        _status(approval_payload_audit) == "owner_approval_payload_blocked"
-        and approval_payload_audit.get("approval_payload_present") is True
-        and approval_payload_audit.get("ready_for_approval_gate") is False
-        and approval_payload_audit.get("mutation_performed") is not True
-        and approval_payload_audit.get("git_stage_performed") is not True
-        and approval_payload_audit.get("git_commit_performed") is not True
-        and approval_payload_audit.get("git_push_performed") is not True
-        and approval_payload_audit.get("network_mutation_performed") is not True
-        and approval_payload_audit.get("agent_execution_enabled") is not True
-        and approval_payload_audit.get("full_codex_parity_claimed") is not True
-        and approval_payload_audit_failed_checks
-        == {
-            "owner_delivery_packet_ready",
-            "owner_stage_approval_request_ready",
-        }
-        and approval_payload_audit_summary.get("stage_include_count") == stage_include_count
+    approval_payload_audit_has_matched_payload = (
+        approval_payload_audit_summary.get("stage_include_count") == stage_include_count
         and approval_payload_audit_summary.get("owner_stage_command_count") == owner_stage_command_count
         and approval_payload_audit_summary.get("approval_stage_include_count") == stage_include_count
         and approval_payload_audit_summary.get("approval_owner_stage_command_count") == owner_stage_command_count
@@ -364,10 +366,52 @@ def build_owner_delivery_packet(
         and approval_payload_audit_summary.get("approval_expected_stage_path_set_digest")
         == expected_stage_path_set_digest
     )
+    approval_payload_audit_blocked_by_delivery_bootstrap = (
+        _status(approval_payload_audit) == "owner_approval_payload_blocked"
+        and approval_payload_audit.get("approval_payload_present") is True
+        and approval_payload_audit.get("ready_for_approval_gate") is False
+        and approval_payload_audit.get("mutation_performed") is not True
+        and approval_payload_audit.get("git_stage_performed") is not True
+        and approval_payload_audit.get("git_commit_performed") is not True
+        and approval_payload_audit.get("git_push_performed") is not True
+        and approval_payload_audit.get("network_mutation_performed") is not True
+        and approval_payload_audit.get("agent_execution_enabled") is not True
+        and approval_payload_audit.get("full_codex_parity_claimed") is not True
+        and approval_payload_audit_failed_checks.issubset(
+            {
+                "owner_delivery_packet_ready",
+                "owner_stage_approval_request_ready",
+            }
+        )
+        and "owner_delivery_packet_ready" in approval_payload_audit_failed_checks
+        and approval_payload_audit_has_matched_payload
+    )
+    approval_payload_audit_blocked_by_post_stage_commit = (
+        commit_ready
+        and _status(approval_payload_audit) == "owner_approval_payload_blocked"
+        and approval_payload_audit.get("approval_payload_present") is True
+        and approval_payload_audit.get("ready_for_approval_gate") is False
+        and approval_payload_audit.get("mutation_performed") is not True
+        and approval_payload_audit.get("git_stage_performed") is not True
+        and approval_payload_audit.get("git_commit_performed") is not True
+        and approval_payload_audit.get("git_push_performed") is not True
+        and approval_payload_audit.get("network_mutation_performed") is not True
+        and approval_payload_audit.get("agent_execution_enabled") is not True
+        and approval_payload_audit.get("full_codex_parity_claimed") is not True
+        and approval_payload_audit_failed_checks.issubset(
+            {
+                "owner_delivery_packet_ready",
+                "owner_stage_approval_request_ready",
+            }
+        )
+        and "owner_delivery_packet_ready" in approval_payload_audit_failed_checks
+        and approval_payload_audit_has_matched_payload
+    )
     approval_payload_audit_accounted_for = (
         _status(approval_payload_audit) == "owner_approval_payload_ready"
         or approval_payload_audit_missing
         or approval_payload_audit_blocked_by_delivery_bootstrap
+        or approval_payload_audit_blocked_by_post_stage_commit
     )
     stage_execution_ready = _status(stage_execution_plan) == "owner_stage_execution_ready"
     stage_execution_expected_blocked = (
@@ -574,6 +618,7 @@ def build_owner_delivery_packet(
                 "owner_stage_approval_request_status": _status(approval_request),
                 "owner_stage_approval_request_missing": approval_request_missing,
                 "approval_request_blocked_by_delivery_bootstrap": approval_request_blocked_by_delivery_bootstrap,
+                "approval_request_blocked_by_post_stage_commit": approval_request_blocked_by_post_stage_commit,
             },
             error="owner stage approval request is present but not ready",
         ),
@@ -585,6 +630,9 @@ def build_owner_delivery_packet(
                 "owner_approval_payload_audit_missing": approval_payload_audit_missing,
                 "approval_payload_audit_blocked_by_delivery_bootstrap": (
                     approval_payload_audit_blocked_by_delivery_bootstrap
+                ),
+                "approval_payload_audit_blocked_by_post_stage_commit": (
+                    approval_payload_audit_blocked_by_post_stage_commit
                 ),
                 "failed_checks": sorted(approval_payload_audit_failed_checks),
             },
@@ -765,6 +813,9 @@ def build_owner_delivery_packet(
             "owner_approval_payload_audit_status": _status(approval_payload_audit),
             "approval_payload_audit_blocked_by_delivery_bootstrap": (
                 approval_payload_audit_blocked_by_delivery_bootstrap
+            ),
+            "approval_payload_audit_blocked_by_post_stage_commit": (
+                approval_payload_audit_blocked_by_post_stage_commit
             ),
             "owner_stage_execution_plan_status": _status(stage_execution_plan),
             "owner_staging_rollback_plan_status": _status(rollback_plan),

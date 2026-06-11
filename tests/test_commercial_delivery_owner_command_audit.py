@@ -68,6 +68,55 @@ def _write_inputs(tmp_path: Path, *, commands: list[str] | None = None) -> dict[
     }
 
 
+def _write_post_commit_noop_inputs(tmp_path: Path) -> dict[str, Path]:
+    owner_packet = tmp_path / "owner-packet.json"
+    staging_review = tmp_path / "staging-review.json"
+    manifest = tmp_path / "manifest.json"
+    stage_paths = _stage_paths()
+    _write_json(
+        owner_packet,
+        {
+            "status": "owner_staging_packet_ready",
+            "owner_gated": True,
+            "stage_paths": [],
+            "stage_path_digest": _digest_values([]),
+            "stage_commands": [],
+            "stage_command_digest": _digest_values([]),
+            "eligible_stage_count": 0,
+            "blocked_stage_count": 0,
+            "summary": {"post_commit_noop_accounted_for": True},
+            "full_codex_parity_claimed": False,
+        },
+    )
+    _write_json(
+        staging_review,
+        {
+            "status": "staging_review_ready",
+            "owner_gated": True,
+            "stage_include_count": len(stage_paths),
+            "eligible_stage_count": 0,
+            "blocked_stage_count": 0,
+            "unchanged_stage_count": len(stage_paths),
+            "paths": [{"path": path, "status": "unchanged"} for path in stage_paths],
+            "full_codex_parity_claimed": False,
+        },
+    )
+    _write_json(
+        manifest,
+        {
+            "status": "original_kernel_delivery_manifest_ready",
+            "stage_include_count": len(stage_paths),
+            "stage_include_paths": stage_paths,
+            "full_codex_parity_claimed": False,
+        },
+    )
+    return {
+        "owner_packet_path": owner_packet,
+        "staging_review_path": staging_review,
+        "manifest_path": manifest,
+    }
+
+
 def test_owner_command_audit_ready_for_exact_commands(tmp_path: Path) -> None:
     paths = _write_inputs(tmp_path)
 
@@ -91,6 +140,43 @@ def test_owner_command_audit_ready_for_exact_commands(tmp_path: Path) -> None:
     assert report.command_digest == _digest_values([f"git add -- '{path}'" for path in _stage_paths()])
     assert report.owner_packet_stage_command_digest == report.command_digest
     assert {check.status for check in report.checks} == {"passed"}
+
+
+def test_owner_command_audit_ready_for_post_commit_noop(tmp_path: Path) -> None:
+    paths = _write_post_commit_noop_inputs(tmp_path)
+
+    report = build_owner_command_audit(**paths)
+
+    assert report.status == "owner_command_audit_ready"
+    assert report.post_commit_noop_accounted_for is True
+    assert report.summary["post_commit_noop_accounted_for"] is True
+    assert report.command_count == 0
+    assert report.expected_path_count == 0
+    assert report.command_paths == []
+    assert report.expected_paths == []
+    assert report.command_path_digest == _digest_values([])
+    assert report.expected_path_digest == _digest_values([])
+    assert report.command_digest == _digest_values([])
+    assert report.owner_packet_stage_path_digest == _digest_values([])
+    assert report.owner_packet_stage_command_digest == _digest_values([])
+    assert {check.status for check in report.checks} == {"passed"}
+    commands_present = next(check for check in report.checks if check.name == "commands_present")
+    assert commands_present.details["post_commit_noop_accounted_for"] is True
+
+
+def test_owner_command_audit_blocks_zero_commands_without_post_commit_noop(tmp_path: Path) -> None:
+    paths = _write_inputs(tmp_path, commands=[])
+
+    report = build_owner_command_audit(**paths)
+
+    assert report.status == "owner_command_audit_blocked"
+    assert report.post_commit_noop_accounted_for is False
+    assert report.command_count == 0
+    assert report.expected_path_count == 2
+    commands_present = next(check for check in report.checks if check.name == "commands_present")
+    assert commands_present.status == "failed"
+    exact_paths = next(check for check in report.checks if check.name == "command_paths_match_expected_paths")
+    assert exact_paths.status == "failed"
 
 
 def test_owner_command_audit_blocks_broad_command(tmp_path: Path) -> None:

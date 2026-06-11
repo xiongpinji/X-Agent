@@ -315,6 +315,50 @@ def test_resume_packet_accounts_for_post_stage_superseded_handoff_and_runbook(tm
     assert runbook_check.details["post_stage_accounted_for"] is True
 
 
+def test_resume_packet_accepts_subset_stage_commands_after_post_stage_evidence(tmp_path: Path) -> None:
+    paths = _write_inputs(tmp_path, approved=True)
+    _update_json(
+        paths["owner_approval_handoff_path"],
+        status="owner_approval_handoff_blocked",
+        summary={
+            "stage_include_count": 100,
+            "owner_stage_command_count": 8,
+            "stage_path_digest": _digest_values(_stage_paths()),
+            "stage_command_digest": _digest_values(_stage_commands()),
+            "expected_stage_path_set_digest": _path_set_digest(_stage_paths()),
+        },
+    )
+    _update_json(paths["owner_staging_runbook_path"], status="owner_staging_runbook_blocked", summary={"stage_command_count": 8})
+    _update_json(paths["owner_stage_execution_plan_path"], stage_command_count=8)
+    _update_json(
+        paths["owner_delivery_packet_path"],
+        summary={
+            "stage_include_count": 100,
+            "owner_stage_command_count": 8,
+            "stage_path_digest": _digest_values(_stage_paths()),
+            "stage_command_digest": _digest_values(_stage_commands()),
+            "expected_stage_path_set_digest": _path_set_digest(_stage_paths()),
+            "control_modes_preservation_status": "control_modes_preservation_ready",
+            "control_modes_plan_only_default": True,
+            "control_modes_loop_phases": ["explore", "plan", "edit", "verify", "deliver"],
+            "commit_command_preview": "git commit -m test",
+        },
+    )
+    _update_json(paths["owner_post_staging_verifier_path"], status="owner_post_staging_verification_ready")
+    _update_json(paths["owner_post_stage_commit_gate_path"], status="owner_post_stage_commit_gate_ready")
+    _update_json(paths["owner_commit_packet_path"], status="owner_commit_packet_ready", commit_allowed=True)
+
+    packet = build_owner_approval_resume_packet(**paths)
+
+    assert packet.status == "owner_approval_resume_packet_ready"
+    assert packet.resume_ready is True
+    assert next(check for check in packet.checks if check.name == "stage_counts_consistent").status == "passed"
+    assert packet.summary["stage_include_count"] == 100
+    assert packet.summary["owner_stage_command_count"] == 8
+    assert packet.summary["runbook_stage_command_count"] == 8
+    assert packet.summary["execution_plan_stage_command_count"] == 8
+
+
 def test_resume_packet_keeps_blocked_superseded_inputs_without_post_stage_evidence(tmp_path: Path) -> None:
     paths = _write_inputs(tmp_path, approved=True)
     _update_json(paths["owner_approval_handoff_path"], status="owner_approval_handoff_blocked")

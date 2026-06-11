@@ -467,6 +467,45 @@ def test_closure_snapshot_accounts_for_stale_operator_checklist_during_post_stag
         assert check.details["post_stage_accounted_for"] is True
 
 
+def test_closure_snapshot_accounts_for_delivery_packet_refresh_bootstrap_after_post_stage(
+    tmp_path: Path,
+) -> None:
+    paths = _write_inputs(tmp_path, complete=True)
+    refresh_payload = json.loads(paths["refresh_chain_path"].read_text(encoding="utf-8"))
+    refresh_payload["status"] = "commercial_delivery_refresh_chain_receipt_blocked"
+    refresh_payload["summary"]["failed_step_count"] = 1
+    refresh_payload["steps"] = [
+        {"name": "owner_delivery_packet_before_owner_approval", "status": "failed"},
+    ]
+    paths["refresh_chain_path"].write_text(json.dumps(refresh_payload), encoding="utf-8")
+    resume_payload = json.loads(paths["owner_approval_resume_packet_path"].read_text(encoding="utf-8"))
+    resume_payload["status"] = "owner_approval_resume_packet_blocked"
+    resume_payload["waiting_for_owner"] = False
+    resume_payload["resume_ready"] = False
+    resume_payload["real_owner_approval_present"] = True
+    paths["owner_approval_resume_packet_path"].write_text(json.dumps(resume_payload), encoding="utf-8")
+    checklist_payload = json.loads(paths["owner_post_approval_operator_checklist_path"].read_text(encoding="utf-8"))
+    checklist_payload["status"] = "owner_post_approval_operator_checklist_blocked"
+    checklist_payload["waiting_for_owner"] = False
+    checklist_payload["operator_ready"] = False
+    checklist_payload["real_owner_approval_present"] = True
+    paths["owner_post_approval_operator_checklist_path"].write_text(json.dumps(checklist_payload), encoding="utf-8")
+
+    snapshot = build_commercial_delivery_closure_snapshot(**paths)
+
+    assert snapshot.status == "commercial_delivery_complete"
+    assert snapshot.delivery_complete is True
+    assert snapshot.summary["refresh_chain_failed_steps"] == ["owner_delivery_packet_before_owner_approval"]
+    assert snapshot.summary["owner_approval_resume_packet_post_stage_accounted_for"] is True
+    assert snapshot.summary["owner_post_approval_operator_checklist_post_stage_accounted_for"] is True
+    assert next(
+        check for check in snapshot.checks if check.name == "owner_approval_resume_packet_accounted_for"
+    ).status == "passed"
+    assert next(
+        check for check in snapshot.checks if check.name == "owner_post_approval_operator_checklist_accounted_for"
+    ).status == "passed"
+
+
 def test_closure_snapshot_blocks_unrelated_failed_refresh_receipt(tmp_path: Path) -> None:
     paths = _write_inputs(tmp_path)
     payload = json.loads(paths["refresh_chain_path"].read_text(encoding="utf-8"))

@@ -77,6 +77,42 @@ def _owner_packet(paths: list[str] | None = None) -> dict[str, object]:
     }
 
 
+def _post_commit_noop_staging_review() -> dict[str, object]:
+    stage_paths = _stage_paths()
+    return {
+        "status": "staging_review_ready",
+        "owner_gated": True,
+        "stage_include_count": len(stage_paths),
+        "eligible_stage_count": 0,
+        "blocked_stage_count": 0,
+        "unchanged_stage_count": len(stage_paths),
+        "full_codex_parity_claimed": False,
+        "paths": [{"path": path, "status": "unchanged", "exists": True, "dirty": False} for path in stage_paths],
+    }
+
+
+def _post_commit_noop_owner_packet() -> dict[str, object]:
+    return {
+        "status": "owner_staging_packet_ready",
+        "owner_gated": True,
+        "stage_paths": [],
+        "stage_path_digest": _digest_values([]),
+        "stage_commands": [],
+        "stage_command_digest": _digest_values([]),
+        "eligible_stage_count": 0,
+        "blocked_stage_count": 0,
+        "summary": {
+            "post_commit_noop_accounted_for": True,
+            "secondary_pending_count": 0,
+            "secondary_handoff_next_count": 1,
+            "secondary_handoff_next_queue": ["integration_review_action_status_board.py"],
+            "secondary_handoff_completed_count": 44,
+            "secondary_handoff_latest_completed_candidate": "integration_review_answer_action_matrix.py",
+        },
+        "full_codex_parity_claimed": False,
+    }
+
+
 def _write_inputs(tmp_path: Path, *, paths: list[str] | None = None) -> tuple[Path, Path, Path]:
     packet = tmp_path / "packet.json"
     staging = tmp_path / "staging.json"
@@ -84,6 +120,16 @@ def _write_inputs(tmp_path: Path, *, paths: list[str] | None = None) -> tuple[Pa
     _write_json(packet, _owner_packet(paths))
     _write_json(staging, _staging_review(paths))
     _write_json(manifest, _manifest(paths))
+    return packet, staging, manifest
+
+
+def _write_post_commit_noop_inputs(tmp_path: Path) -> tuple[Path, Path, Path]:
+    packet = tmp_path / "packet.json"
+    staging = tmp_path / "staging.json"
+    manifest = tmp_path / "manifest.json"
+    _write_json(packet, _post_commit_noop_owner_packet())
+    _write_json(staging, _post_commit_noop_staging_review())
+    _write_json(manifest, _manifest())
     return packet, staging, manifest
 
 
@@ -123,6 +169,32 @@ def test_owner_post_staging_verifier_ready_for_exact_cached_paths(tmp_path: Path
     assert report.missing_cached_paths == []
     assert report.unexpected_cached_paths == []
     assert {check.status for check in report.checks} == {"passed"}
+
+
+def test_owner_post_staging_verifier_ready_for_post_commit_noop(tmp_path: Path) -> None:
+    packet, staging, manifest = _write_post_commit_noop_inputs(tmp_path)
+
+    report = build_owner_post_staging_verification(
+        owner_packet_path=packet,
+        staging_review_path=staging,
+        manifest_path=manifest,
+        cached_diff_lines=[],
+    )
+
+    assert report.status == "owner_post_staging_verification_ready"
+    assert report.post_commit_noop_accounted_for is True
+    assert report.expected_stage_path_count == 0
+    assert report.cached_staged_path_count == 0
+    assert report.stage_path_digest == _digest_values([])
+    assert report.stage_command_digest == _digest_values([])
+    assert report.expected_stage_path_set_digest == _digest_values([])
+    assert report.cached_staged_path_set_digest == _digest_values([])
+    assert report.summary["post_commit_noop_accounted_for"] is True
+    assert report.summary["owner_action_required"] is False
+    assert report.summary["blocking_reasons"] == []
+    assert {check.status for check in report.checks} == {"passed"}
+    cached_present = next(check for check in report.checks if check.name == "cached_paths_present_after_owner_staging")
+    assert cached_present.details["post_commit_noop_accounted_for"] is True
 
 
 def test_owner_post_staging_verifier_blocks_empty_index(tmp_path: Path) -> None:

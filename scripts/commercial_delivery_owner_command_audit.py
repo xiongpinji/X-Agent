@@ -53,6 +53,7 @@ class OwnerCommandAudit:
     generated_at: str
     evidence_type: str
     owner_gated: bool
+    post_commit_noop_accounted_for: bool
     mutation_performed: bool
     git_stage_performed: bool
     git_commit_performed: bool
@@ -78,6 +79,7 @@ class OwnerCommandAudit:
     unexpected_command_paths: list[str]
     duplicate_command_paths: list[str]
     protected_command_paths: list[str]
+    summary: dict[str, Any]
     checks: list[OwnerCommandAuditCheck]
     next_actions: list[str]
     known_limits: list[str]
@@ -152,6 +154,17 @@ def _staging_paths(staging_review: dict[str, Any]) -> list[str]:
     return paths
 
 
+def _staging_paths_by_status(staging_review: dict[str, Any], status: str) -> list[str]:
+    rows = staging_review.get("paths")
+    if not isinstance(rows, list):
+        return []
+    paths: list[str] = []
+    for row in rows:
+        if isinstance(row, dict) and row.get("status") == status and row.get("path"):
+            paths.append(_normalize_path(str(row["path"])))
+    return paths
+
+
 def _manifest_paths(manifest: dict[str, Any]) -> list[str]:
     values = manifest.get("stage_include_paths")
     if not isinstance(values, list):
@@ -198,6 +211,50 @@ def _digest_field(payload: dict[str, Any], field: str) -> str | None:
     return str(value) if isinstance(value, str) and value else None
 
 
+def _int_field(payload: dict[str, Any], field: str) -> int:
+    try:
+        return int(payload.get(field) or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _packet_summary(payload: dict[str, Any]) -> dict[str, Any]:
+    summary = payload.get("summary")
+    return summary if isinstance(summary, dict) else {}
+
+
+def _post_commit_noop_accounted_for(
+    *,
+    owner_packet: dict[str, Any],
+    staging_review: dict[str, Any],
+    manifest: dict[str, Any],
+    commands: list[str],
+    packet_paths: list[str],
+) -> bool:
+    summary = _packet_summary(owner_packet)
+    manifest_stage_paths = _manifest_paths(manifest)
+    unchanged_paths = _staging_paths_by_status(staging_review, "unchanged")
+    manifest_stage_count = _int_field(manifest, "stage_include_count") or len(manifest_stage_paths)
+    staging_stage_count = _int_field(staging_review, "stage_include_count")
+    return (
+        summary.get("post_commit_noop_accounted_for") is True
+        and _status(owner_packet) == "owner_staging_packet_ready"
+        and _status(staging_review) == "staging_review_ready"
+        and _status(manifest) == "original_kernel_delivery_manifest_ready"
+        and owner_packet.get("owner_gated") is True
+        and staging_review.get("owner_gated") is True
+        and not commands
+        and not packet_paths
+        and _int_field(owner_packet, "blocked_stage_count") == 0
+        and _int_field(staging_review, "blocked_stage_count") == 0
+        and _int_field(owner_packet, "eligible_stage_count") == 0
+        and _int_field(staging_review, "eligible_stage_count") == 0
+        and manifest_stage_count > 0
+        and staging_stage_count == manifest_stage_count
+        and len(unchanged_paths) == manifest_stage_count
+    )
+
+
 def build_owner_command_audit(
     *,
     owner_packet_path: Path = DEFAULT_OWNER_PACKET,
@@ -214,18 +271,25 @@ def build_owner_command_audit(
     malformed_commands = [command for command, path in zip(commands, command_paths) if path is None]
     broad_commands = [command for command in commands if _is_broad_command(command)]
     packet_paths = _packet_paths(owner_packet)
+    post_commit_noop_accounted_for = _post_commit_noop_accounted_for(
+        owner_packet=owner_packet,
+        staging_review=staging_review,
+        manifest=manifest,
+        commands=commands,
+        packet_paths=packet_paths,
+    )
     fallback_paths = _staging_paths(staging_review) or _manifest_paths(manifest)
-    digest_expected_paths = packet_paths or fallback_paths
+    digest_expected_paths = [] if post_commit_noop_accounted_for else packet_paths or fallback_paths
     expected_paths = sorted(set(digest_expected_paths))
     missing_command_paths = sorted(set(expected_paths).difference(parsed_command_paths))
     unexpected_command_paths = sorted(set(parsed_command_paths).difference(expected_paths))
     duplicate_command_paths = _duplicates(parsed_command_paths)
     protected_command_paths = sorted(path for path in parsed_command_paths if _is_protected(path))
     sorted_command_paths = sorted(parsed_command_paths)
-    command_path_digest = _digest_values(parsed_command_paths) if parsed_command_paths else None
-    expected_path_digest = _digest_values(digest_expected_paths) if digest_expected_paths else None
+    command_path_digest = _digest_values(parsed_command_paths) if parsed_command_paths or post_commit_noop_accounted_for else None
+    expected_path_digest = _digest_values(digest_expected_paths) if digest_expected_paths or post_commit_noop_accounted_for else None
     owner_packet_stage_path_digest = _digest_field(owner_packet, "stage_path_digest")
-    command_digest = _digest_values(commands) if commands else None
+    command_digest = _digest_values(commands) if commands or post_commit_noop_accounted_for else None
     owner_packet_stage_command_digest = _digest_field(owner_packet, "stage_command_digest")
     full_codex_parity_claimed = (
         owner_packet.get("full_codex_parity_claimed") is True
@@ -265,8 +329,11 @@ def build_owner_command_audit(
         ),
         _check(
             "commands_present",
-            bool(commands),
-            details={"command_count": len(commands)},
+            bool(commands) or post_commit_noop_accounted_for,
+            details={
+                "command_count": len(commands),
+                "post_commit_noop_accounted_for": post_commit_noop_accounted_for,
+            },
             error="owner staging packet has no stage commands",
         ),
         _check(
@@ -300,6 +367,7 @@ def build_owner_command_audit(
                 "command_path_digest": command_path_digest,
                 "expected_path_digest": expected_path_digest,
                 "owner_packet_stage_path_digest": owner_packet_stage_path_digest,
+                "post_commit_noop_accounted_for": post_commit_noop_accounted_for,
             },
             error="owner staging path digest does not match parsed command and expected path sets",
         ),
@@ -311,6 +379,7 @@ def build_owner_command_audit(
             details={
                 "command_digest": command_digest,
                 "owner_packet_stage_command_digest": owner_packet_stage_command_digest,
+                "post_commit_noop_accounted_for": post_commit_noop_accounted_for,
             },
             error="owner staging command digest does not match owner packet stage commands",
         ),
@@ -352,6 +421,7 @@ def build_owner_command_audit(
         generated_at=_utc_now(),
         evidence_type="commercial_delivery_owner_command_audit",
         owner_gated=owner_gated,
+        post_commit_noop_accounted_for=post_commit_noop_accounted_for,
         mutation_performed=False,
         git_stage_performed=False,
         git_commit_performed=False,
@@ -377,6 +447,16 @@ def build_owner_command_audit(
         unexpected_command_paths=unexpected_command_paths,
         duplicate_command_paths=duplicate_command_paths,
         protected_command_paths=protected_command_paths,
+        summary={
+            "post_commit_noop_accounted_for": post_commit_noop_accounted_for,
+            "manifest_stage_include_count": _int_field(manifest, "stage_include_count"),
+            "staging_review_stage_include_count": _int_field(staging_review, "stage_include_count"),
+            "staging_review_eligible_stage_count": _int_field(staging_review, "eligible_stage_count"),
+            "staging_review_blocked_stage_count": _int_field(staging_review, "blocked_stage_count"),
+            "staging_review_unchanged_stage_count": len(_staging_paths_by_status(staging_review, "unchanged")),
+            "owner_packet_eligible_stage_count": _int_field(owner_packet, "eligible_stage_count"),
+            "owner_packet_blocked_stage_count": _int_field(owner_packet, "blocked_stage_count"),
+        },
         checks=checks,
         next_actions=[
             "Run this audit before owner-approved staging and after any owner packet regeneration.",
