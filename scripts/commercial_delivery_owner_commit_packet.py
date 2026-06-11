@@ -128,6 +128,14 @@ def _path_set_digest(paths: list[str]) -> str | None:
     return _digest_values(sorted(set(paths))) if paths else None
 
 
+def _post_commit_noop_accounted_for(*payloads: dict[str, Any]) -> bool:
+    return all(
+        payload.get("post_commit_noop_accounted_for") is True
+        or _summary(payload).get("post_commit_noop_accounted_for") is True
+        for payload in payloads
+    )
+
+
 def _digest_field(payload: dict[str, Any], field: str) -> str | None:
     value = payload.get(field)
     return str(value) if isinstance(value, str) and value else None
@@ -203,17 +211,36 @@ def build_owner_commit_packet(
         and owner_command_audit.get("owner_gated") is True
         and commit_gate.get("owner_gated") is True
     )
-    staged_paths_match = bool(stage_paths) and stage_paths == cached_paths == gate_cached_paths
-    command_paths_match = bool(stage_paths) and command_paths == stage_paths
-    gate_paths_match = bool(stage_paths) and gate_expected_paths == stage_paths
+    post_commit_noop_accounted_for = _post_commit_noop_accounted_for(
+        owner_packet,
+        owner_post_staging,
+        owner_command_audit,
+        commit_gate,
+    )
+    staged_paths_match = (bool(stage_paths) and stage_paths == cached_paths == gate_cached_paths) or (
+        post_commit_noop_accounted_for and not stage_paths and not cached_paths and not gate_cached_paths
+    )
+    command_paths_match = (bool(stage_paths) and command_paths == stage_paths) or (
+        post_commit_noop_accounted_for and not command_paths and not stage_paths
+    )
+    gate_paths_match = (bool(stage_paths) and gate_expected_paths == stage_paths) or (
+        post_commit_noop_accounted_for and not gate_expected_paths and not stage_paths
+    )
     commit_preview_consistent = (
         isinstance(commit_command_preview, str)
         and commit_command_preview.strip().startswith("git commit ")
         and gate_commit_preview == commit_command_preview
     )
-    expected_stage_path_set_digest = _path_set_digest(stage_paths)
-    cached_staged_path_set_digest = _path_set_digest(cached_paths)
-    command_path_set_digest = _path_set_digest(command_paths)
+    empty_digest = _digest_values([])
+    expected_stage_path_set_digest = (
+        empty_digest if post_commit_noop_accounted_for and not stage_paths else _path_set_digest(stage_paths)
+    )
+    cached_staged_path_set_digest = (
+        empty_digest if post_commit_noop_accounted_for and not cached_paths else _path_set_digest(cached_paths)
+    )
+    command_path_set_digest = (
+        empty_digest if post_commit_noop_accounted_for and not command_paths else _path_set_digest(command_paths)
+    )
     gate_expected_stage_path_set_digest = _digest_field(commit_gate, "expected_stage_path_set_digest")
     gate_cached_staged_path_set_digest = _digest_field(commit_gate, "cached_staged_path_set_digest")
     gate_command_path_set_digest = _digest_field(commit_gate, "command_path_set_digest")
@@ -454,6 +481,7 @@ def build_owner_commit_packet(
         summary={
             "blocking_reasons": blocking_reasons,
             "owner_action_required": not ready,
+            "post_commit_noop_accounted_for": post_commit_noop_accounted_for,
             "stage_path_count": len(stage_paths),
             "cached_staged_path_count": len(cached_paths),
             "gate_cached_staged_path_count": len(gate_cached_paths),

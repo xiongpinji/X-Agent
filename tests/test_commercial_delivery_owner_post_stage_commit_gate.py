@@ -352,3 +352,59 @@ def test_owner_post_stage_commit_gate_accounts_for_stale_decision_brief_from_pos
     assert decision.details["status"] == "blocked_before_owner_staging_decision"
     assert decision.details["post_staging_status"] == "owner_post_staging_verification_ready"
     assert decision.details["cached_staged_path_count"] == len(_stage_paths())
+
+
+def test_owner_post_stage_commit_gate_accepts_post_commit_noop_evidence(tmp_path: Path) -> None:
+    paths = _write_reports(tmp_path)
+    empty_digest = _digest_values([])
+    for key in ("owner_packet_path", "owner_command_audit_path"):
+        payload = json.loads(paths[key].read_text(encoding="utf-8"))
+        payload.update(
+            {
+                "stage_paths": [],
+                "stage_path_digest": empty_digest,
+                "stage_commands": [],
+                "stage_command_digest": empty_digest,
+                "command_count": 0,
+                "expected_path_count": 0,
+                "command_paths": [],
+                "expected_paths": [],
+                "command_path_digest": empty_digest,
+                "expected_path_digest": empty_digest,
+                "owner_packet_stage_path_digest": empty_digest,
+                "command_digest": empty_digest,
+                "owner_packet_stage_command_digest": empty_digest,
+                "summary": {"post_commit_noop_accounted_for": True},
+            }
+        )
+        paths[key].write_text(json.dumps(payload), encoding="utf-8")
+    post_staging = json.loads(paths["owner_post_staging_path"].read_text(encoding="utf-8"))
+    post_staging.update(
+        {
+            "expected_stage_path_count": 0,
+            "cached_staged_path_count": 0,
+            "cached_staged_paths": [],
+            "expected_stage_path_set_digest": empty_digest,
+            "cached_staged_path_set_digest": empty_digest,
+            "summary": {"post_commit_noop_accounted_for": True},
+        }
+    )
+    paths["owner_post_staging_path"].write_text(json.dumps(post_staging), encoding="utf-8")
+    brief = json.loads(paths["owner_decision_brief_path"].read_text(encoding="utf-8"))
+    brief.update(
+        {
+            "status": "blocked_before_owner_staging_decision",
+            "summary": {},
+            "checks": [{"name": "post_staging_not_yet_applied", "status": "failed"}],
+        }
+    )
+    paths["owner_decision_brief_path"].write_text(json.dumps(brief), encoding="utf-8")
+
+    gate = build_owner_post_stage_commit_gate(**paths)
+
+    assert gate.status == "owner_post_stage_commit_gate_ready"
+    assert gate.commit_allowed is True
+    assert gate.summary["post_commit_noop_accounted_for"] is True
+    assert gate.summary["expected_stage_path_set_digest"] == empty_digest
+    assert gate.summary["cached_staged_path_set_digest"] == empty_digest
+    assert next(check for check in gate.checks if check.name == "stage_counts_agree").status == "passed"

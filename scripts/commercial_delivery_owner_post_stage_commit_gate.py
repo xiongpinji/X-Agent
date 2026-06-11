@@ -146,15 +146,20 @@ def _decision_brief_ready_or_post_staging_accounted(
     summary = _summary(payload)
     post_staging_status = summary.get("post_staging_status")
     cached_staged_path_count = _int_or_none(summary.get("cached_staged_path_count"))
+    post_commit_noop_accounted_for = False
     if owner_post_staging:
         post_staging_status = post_staging_status or _status(owner_post_staging)
-        cached_staged_path_count = cached_staged_path_count or _int_or_none(
-            owner_post_staging.get("cached_staged_path_count")
+        if cached_staged_path_count is None:
+            cached_staged_path_count = _int_or_none(owner_post_staging.get("cached_staged_path_count"))
+        post_commit_noop_accounted_for = (
+            owner_post_staging.get("post_commit_noop_accounted_for") is True
+            or _summary(owner_post_staging).get("post_commit_noop_accounted_for") is True
         )
     return _status(payload) == "ready_for_owner_staging_decision" or (
         _status(payload) == "blocked_before_owner_staging_decision"
         and post_staging_status == "owner_post_staging_verification_ready"
-        and cached_staged_path_count not in {None, 0}
+        and cached_staged_path_count is not None
+        and (cached_staged_path_count > 0 or post_commit_noop_accounted_for)
         and payload.get("mutation_performed") is not True
         and payload.get("git_stage_performed") is not True
         and payload.get("git_commit_performed") is not True
@@ -183,6 +188,14 @@ def _digest_values(values: list[str]) -> str:
 
 def _path_set_digest(paths: list[str]) -> str | None:
     return _digest_values(sorted(set(paths))) if paths else None
+
+
+def _post_commit_noop_accounted_for(*payloads: dict[str, Any]) -> bool:
+    return all(
+        payload.get("post_commit_noop_accounted_for") is True
+        or _summary(payload).get("post_commit_noop_accounted_for") is True
+        for payload in payloads
+    )
 
 
 def _digest_field(payload: dict[str, Any], field: str) -> str | None:
@@ -264,12 +277,17 @@ def build_owner_post_stage_commit_gate(
     actual_stage_count_values = [int(value) for value in actual_stage_counts if value is not None]
     actual_stage_count = actual_stage_count_values[0] if actual_stage_count_values else None
     stage_include_count = stage_counts["owner_packet_stage_include_count"]
+    post_commit_noop_accounted_for = _post_commit_noop_accounted_for(
+        owner_packet,
+        owner_post_staging,
+        owner_command_audit,
+    )
     stage_counts_agree = (
         actual_stage_counts_present
         and bool(actual_stage_count_values)
         and len(set(actual_stage_count_values)) == 1
         and actual_stage_count is not None
-        and actual_stage_count > 0
+        and (actual_stage_count > 0 or post_commit_noop_accounted_for)
         and stage_include_count is not None
         and actual_stage_count <= stage_include_count
     )
@@ -280,12 +298,25 @@ def build_owner_post_stage_commit_gate(
         and owner_command_audit.get("owner_gated") is True
         and owner_decision_brief.get("owner_gated") is True
     )
-    cached_paths_match_packet = bool(packet_paths) and packet_paths == cached_paths
-    command_paths_match_packet = bool(command_paths) and command_paths == packet_paths
-    expected_stage_path_set_digest = _path_set_digest(packet_paths)
-    cached_staged_path_set_digest = _path_set_digest(cached_paths)
-    command_path_set_digest = _path_set_digest(command_paths)
-    owner_packet_stage_path_set_digest = _path_set_digest(packet_paths)
+    empty_digest = _digest_values([])
+    cached_paths_match_packet = (bool(packet_paths) and packet_paths == cached_paths) or (
+        post_commit_noop_accounted_for and not packet_paths and not cached_paths
+    )
+    command_paths_match_packet = (bool(command_paths) and command_paths == packet_paths) or (
+        post_commit_noop_accounted_for and not command_paths and not packet_paths
+    )
+    expected_stage_path_set_digest = (
+        empty_digest if post_commit_noop_accounted_for and not packet_paths else _path_set_digest(packet_paths)
+    )
+    cached_staged_path_set_digest = (
+        empty_digest if post_commit_noop_accounted_for and not cached_paths else _path_set_digest(cached_paths)
+    )
+    command_path_set_digest = (
+        empty_digest if post_commit_noop_accounted_for and not command_paths else _path_set_digest(command_paths)
+    )
+    owner_packet_stage_path_set_digest = (
+        empty_digest if post_commit_noop_accounted_for and not packet_paths else _path_set_digest(packet_paths)
+    )
     owner_packet_stage_path_digest = _digest_field(owner_packet, "stage_path_digest")
     owner_packet_stage_command_digest = _digest_field(owner_packet, "stage_command_digest")
     command_audit_path_digest = _digest_field(owner_command_audit, "command_path_digest")
@@ -372,7 +403,7 @@ def build_owner_post_stage_commit_gate(
         _check(
             "stage_counts_agree",
             stage_counts_agree,
-            details=stage_counts,
+            details={**stage_counts, "post_commit_noop_accounted_for": post_commit_noop_accounted_for},
             error="owner packet, post-staging verifier, and command audit stage counts disagree",
         ),
         _check(
@@ -424,11 +455,17 @@ def build_owner_post_stage_commit_gate(
         ),
         _check(
             "post_staging_has_no_path_drift",
-            not missing_cached_paths and not unexpected_cached_paths and not protected_cached_paths,
+            (
+                not missing_cached_paths
+                and not unexpected_cached_paths
+                and not protected_cached_paths
+            )
+            or post_commit_noop_accounted_for,
             details={
                 "missing_cached_paths": missing_cached_paths,
                 "unexpected_cached_paths": unexpected_cached_paths,
                 "protected_cached_paths": protected_cached_paths,
+                "post_commit_noop_accounted_for": post_commit_noop_accounted_for,
             },
             error="post-staging verifier reports missing, unexpected, or protected cached paths",
         ),
@@ -507,6 +544,7 @@ def build_owner_post_stage_commit_gate(
         summary={
             "blocking_reasons": blocking_reasons,
             "owner_action_required": not ready,
+            "post_commit_noop_accounted_for": post_commit_noop_accounted_for,
             "stage_include_count": stage_counts["owner_packet_stage_include_count"],
             "expected_stage_path_count": len(packet_paths),
             "cached_staged_path_count": len(cached_paths),

@@ -181,6 +181,58 @@ def test_owner_commit_packet_ready_after_post_stage_gate(tmp_path: Path) -> None
     assert {check.status for check in packet.checks} == {"passed"}
 
 
+def test_owner_commit_packet_accepts_post_commit_noop_evidence(tmp_path: Path) -> None:
+    paths = _write_reports(tmp_path)
+    empty_digest = _digest_values([])
+    for key in ("owner_packet_path", "owner_command_audit_path", "owner_post_stage_commit_gate_path"):
+        payload = json.loads(paths[key].read_text(encoding="utf-8"))
+        payload.update(
+            {
+                "stage_paths": [],
+                "stage_path_digest": empty_digest,
+                "stage_commands": [],
+                "stage_command_digest": empty_digest,
+                "command_count": 0,
+                "expected_path_count": 0,
+                "command_paths": [],
+                "expected_paths": [],
+                "expected_stage_paths": [],
+                "cached_staged_paths": [],
+                "expected_stage_path_set_digest": empty_digest,
+                "cached_staged_path_set_digest": empty_digest,
+                "command_path_set_digest": empty_digest,
+                "command_path_digest": empty_digest,
+                "expected_path_digest": empty_digest,
+                "owner_packet_stage_path_digest": empty_digest,
+                "command_digest": empty_digest,
+                "owner_packet_stage_command_digest": empty_digest,
+                "summary": {"cached_staged_path_count": 0, "post_commit_noop_accounted_for": True},
+            }
+        )
+        paths[key].write_text(json.dumps(payload), encoding="utf-8")
+    post_staging = json.loads(paths["owner_post_staging_path"].read_text(encoding="utf-8"))
+    post_staging.update(
+        {
+            "expected_stage_path_count": 0,
+            "cached_staged_path_count": 0,
+            "cached_staged_paths": [],
+            "expected_stage_path_set_digest": empty_digest,
+            "cached_staged_path_set_digest": empty_digest,
+            "summary": {"post_commit_noop_accounted_for": True},
+        }
+    )
+    paths["owner_post_staging_path"].write_text(json.dumps(post_staging), encoding="utf-8")
+
+    packet = build_owner_commit_packet(**paths)
+
+    assert packet.status == "owner_commit_packet_ready"
+    assert packet.commit_allowed is True
+    assert packet.summary["post_commit_noop_accounted_for"] is True
+    assert packet.expected_stage_path_set_digest == empty_digest
+    assert packet.cached_staged_path_set_digest == empty_digest
+    assert next(check for check in packet.checks if check.name == "staged_paths_match_owner_packet").status == "passed"
+
+
 def test_owner_commit_packet_blocks_when_commit_gate_is_not_ready(tmp_path: Path) -> None:
     paths = _write_reports(tmp_path)
     payload = json.loads(paths["owner_post_stage_commit_gate_path"].read_text(encoding="utf-8"))
