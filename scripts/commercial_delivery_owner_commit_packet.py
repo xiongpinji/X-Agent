@@ -155,7 +155,10 @@ def _task_board_post_commit_noop_accounted_for(
         post_commit_noop_accounted_for
         and _status(task_board) == "commercial_delivery_blocked"
         and task_summary.get("secondary_pending_blocks_owner_staging") is False
-        and task_summary.get("staging_review_status") == "staging_review_ready"
+        and (
+            task_summary.get("staging_review_status") == "staging_review_ready"
+            or _report_check_passed(task_board, "staging_review_ready")
+        )
         and task_summary.get("owner_staging_packet_status") == "owner_staging_packet_ready"
         and task_summary.get("owner_staging_preflight_accounted_for") is True
         and task_summary.get("owner_post_staging_verifier_status") == "owner_post_staging_verification_ready"
@@ -197,6 +200,18 @@ def _failed_report_check_names(payload: dict[str, Any]) -> set[str]:
         if isinstance(check, dict) and check.get("status") == "failed" and check.get("name") is not None:
             failed.add(str(check.get("name")))
     return failed
+
+
+def _report_check_passed(payload: dict[str, Any], name: str) -> bool:
+    checks = payload.get("checks")
+    if not isinstance(checks, list):
+        return False
+    return any(
+        isinstance(check, dict)
+        and check.get("name") == name
+        and check.get("status") == "passed"
+        for check in checks
+    )
 
 
 def _digest_field(payload: dict[str, Any], field: str) -> str | None:

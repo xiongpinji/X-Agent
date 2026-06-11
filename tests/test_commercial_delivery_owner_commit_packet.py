@@ -228,7 +228,6 @@ def test_owner_commit_packet_accepts_post_commit_noop_evidence(tmp_path: Path) -
             "status": "commercial_delivery_blocked",
             "summary": {
                 **task_board["summary"],
-                "staging_review_status": "staging_review_ready",
                 "owner_staging_packet_status": "owner_staging_packet_ready",
                 "owner_staging_preflight_accounted_for": True,
                 "owner_post_staging_verifier_status": "owner_post_staging_verification_ready",
@@ -238,6 +237,10 @@ def test_owner_commit_packet_accepts_post_commit_noop_evidence(tmp_path: Path) -
                 "owner_post_stage_commit_gate_status": "owner_post_stage_commit_gate_ready",
                 "owner_commit_packet_status": "owner_commit_packet_blocked",
             },
+            "checks": [
+                {"name": "staging_review_ready", "status": "passed"},
+                {"name": "pre_approval_drift_guard_ready", "status": "failed"},
+            ],
         }
     )
     paths["task_board_path"].write_text(json.dumps(task_board), encoding="utf-8")
