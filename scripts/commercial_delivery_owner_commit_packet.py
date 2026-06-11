@@ -128,12 +128,75 @@ def _path_set_digest(paths: list[str]) -> str | None:
     return _digest_values(sorted(set(paths))) if paths else None
 
 
+def _int_or_none(value: object) -> int | None:
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def _post_commit_noop_accounted_for(*payloads: dict[str, Any]) -> bool:
     return all(
         payload.get("post_commit_noop_accounted_for") is True
         or _summary(payload).get("post_commit_noop_accounted_for") is True
         for payload in payloads
     )
+
+
+def _task_board_post_commit_noop_accounted_for(
+    task_board: dict[str, Any],
+    task_summary: dict[str, Any],
+    *,
+    post_commit_noop_accounted_for: bool,
+) -> bool:
+    return (
+        post_commit_noop_accounted_for
+        and _status(task_board) == "commercial_delivery_blocked"
+        and task_summary.get("secondary_pending_blocks_owner_staging") is False
+        and task_summary.get("staging_review_status") == "staging_review_ready"
+        and task_summary.get("owner_staging_packet_status") == "owner_staging_packet_ready"
+        and task_summary.get("owner_staging_preflight_accounted_for") is True
+        and task_summary.get("owner_post_staging_verifier_status") == "owner_post_staging_verification_ready"
+        and _int_or_none(task_summary.get("eligible_stage_count")) == 0
+        and _int_or_none(task_summary.get("owner_stage_command_count")) == 0
+        and _int_or_none(task_summary.get("post_staging_cached_path_count")) == 0
+    )
+
+
+def _task_board_post_staging_accounted_for(
+    task_board: dict[str, Any],
+    task_summary: dict[str, Any],
+) -> bool:
+    eligible_stage_count = _int_or_none(task_summary.get("eligible_stage_count"))
+    owner_stage_command_count = _int_or_none(task_summary.get("owner_stage_command_count"))
+    post_staging_cached_path_count = _int_or_none(task_summary.get("post_staging_cached_path_count"))
+    task_board_failed_checks = _failed_report_check_names(task_board)
+    return (
+        _status(task_board) == "commercial_delivery_blocked"
+        and bool(task_board_failed_checks)
+        and task_board_failed_checks.issubset({"pre_approval_drift_guard_ready"})
+        and task_summary.get("secondary_pending_blocks_owner_staging") is False
+        and task_summary.get("owner_staging_preflight_accounted_for") is True
+        and task_summary.get("owner_post_staging_verifier_status") == "owner_post_staging_verification_ready"
+        and eligible_stage_count is not None
+        and owner_stage_command_count is not None
+        and post_staging_cached_path_count is not None
+        and eligible_stage_count > 0
+        and eligible_stage_count == owner_stage_command_count == post_staging_cached_path_count
+    )
+
+
+def _failed_report_check_names(payload: dict[str, Any]) -> set[str]:
+    checks = payload.get("checks")
+    if not isinstance(checks, list):
+        return set()
+    failed: set[str] = set()
+    for check in checks:
+        if isinstance(check, dict) and check.get("status") == "failed" and check.get("name") is not None:
+            failed.add(str(check.get("name")))
+    return failed
 
 
 def _digest_field(payload: dict[str, Any], field: str) -> str | None:
@@ -245,13 +308,12 @@ def build_owner_commit_packet(
     gate_cached_staged_path_set_digest = _digest_field(commit_gate, "cached_staged_path_set_digest")
     gate_command_path_set_digest = _digest_field(commit_gate, "command_path_set_digest")
     task_board_ready = _status(task_board) == "commercial_delivery_ready_for_owner_staging_review"
-    task_board_post_commit_noop_accounted_for = (
-        post_commit_noop_accounted_for
-        and _status(task_board) == "commercial_delivery_blocked"
-        and task_summary.get("owner_post_stage_commit_gate_status") == "owner_post_stage_commit_gate_ready"
-        and task_summary.get("owner_commit_packet_status") == "owner_commit_packet_ready"
-        and task_summary.get("secondary_pending_blocks_owner_staging") is False
+    task_board_post_commit_noop_accounted_for = _task_board_post_commit_noop_accounted_for(
+        task_board,
+        task_summary,
+        post_commit_noop_accounted_for=post_commit_noop_accounted_for,
     )
+    task_board_post_staging_accounted_for = _task_board_post_staging_accounted_for(task_board, task_summary)
     owner_packet_stage_path_digest = _digest_field(owner_packet, "stage_path_digest")
     owner_packet_stage_command_digest = _digest_field(owner_packet, "stage_command_digest")
     command_audit_path_digest = _digest_field(owner_command_audit, "command_path_digest")
@@ -319,11 +381,12 @@ def build_owner_commit_packet(
         ),
         _check(
             "task_board_ready",
-            task_board_ready or task_board_post_commit_noop_accounted_for,
+            task_board_ready or task_board_post_commit_noop_accounted_for or task_board_post_staging_accounted_for,
             details={
                 "status": _status(task_board),
                 "post_commit_noop_accounted_for": post_commit_noop_accounted_for,
                 "task_board_post_commit_noop_accounted_for": task_board_post_commit_noop_accounted_for,
+                "task_board_post_staging_accounted_for": task_board_post_staging_accounted_for,
                 "owner_post_stage_commit_gate_status": task_summary.get("owner_post_stage_commit_gate_status"),
                 "owner_commit_packet_status": task_summary.get("owner_commit_packet_status"),
             },
@@ -504,6 +567,7 @@ def build_owner_commit_packet(
             "owner_post_stage_commit_gate_status": _status(commit_gate),
             "task_board_status": _status(task_board),
             "task_board_post_commit_noop_accounted_for": task_board_post_commit_noop_accounted_for,
+            "task_board_post_staging_accounted_for": task_board_post_staging_accounted_for,
             "commit_gate_decision": commit_gate.get("decision"),
             "commit_gate_summary_cached_staged_path_count": gate_summary.get("cached_staged_path_count"),
             "secondary_pending_count": task_summary.get("secondary_pending_count"),

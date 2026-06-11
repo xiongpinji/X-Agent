@@ -289,6 +289,30 @@ def _failed_check_names(report_payload: dict[str, Any]) -> set[str]:
     return failed
 
 
+def _failed_digest_check_has_matching_present_values(
+    report_payload: dict[str, Any],
+    *,
+    check_name: str,
+    detail_key: str,
+) -> bool:
+    checks = report_payload.get("checks")
+    if not isinstance(checks, list):
+        return False
+    for check in checks:
+        if not isinstance(check, dict) or check.get("name") != check_name or check.get("status") != "failed":
+            continue
+        details = check.get("details")
+        if not isinstance(details, dict):
+            return False
+        sources = details.get(detail_key)
+        if not isinstance(sources, dict):
+            return False
+        present = [str(value) for value in sources.values() if isinstance(value, str) and value]
+        missing_count = sum(1 for value in sources.values() if not value)
+        return bool(present) and missing_count > 0 and len(set(present)) == 1
+    return False
+
+
 def _pre_approval_drift_guard_accounted_for(reports: dict[str, dict[str, Any]]) -> bool:
     drift_guard = reports.get("pre_approval_drift_guard", {})
     if _report_status(drift_guard) == "pre_approval_drift_guard_ready":
@@ -339,6 +363,12 @@ def _pre_approval_drift_guard_accounted_for(reports: dict[str, dict[str, Any]]) 
         "closure_blocked_before_owner",
     }
     post_commit_allowed_failed_checks = post_commit_required_failed_checks | {"secondary_handoff_summary_stable"}
+    if _failed_digest_check_has_matching_present_values(
+        drift_guard,
+        check_name="stage_command_digest_stable",
+        detail_key="stage_command_digest_sources",
+    ):
+        post_commit_allowed_failed_checks.add("stage_command_digest_stable")
     stage_path_digest = _read_summary_value(drift_guard, "stage_path_digest")
     stage_command_digest = _read_summary_value(drift_guard, "stage_command_digest")
     expected_stage_path_set_digest = _read_summary_value(drift_guard, "expected_stage_path_set_digest")

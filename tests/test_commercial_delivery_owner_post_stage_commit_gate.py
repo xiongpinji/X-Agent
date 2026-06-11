@@ -405,8 +405,15 @@ def test_owner_post_stage_commit_gate_accepts_post_commit_noop_evidence(tmp_path
             "status": "commercial_delivery_blocked",
             "summary": {
                 **task_board["summary"],
-                "owner_post_stage_commit_gate_status": "owner_post_stage_commit_gate_ready",
-                "owner_commit_packet_status": "owner_commit_packet_ready",
+                "staging_review_status": "staging_review_ready",
+                "owner_staging_packet_status": "owner_staging_packet_ready",
+                "owner_staging_preflight_accounted_for": True,
+                "owner_post_staging_verifier_status": "owner_post_staging_verification_ready",
+                "eligible_stage_count": 0,
+                "owner_stage_command_count": 0,
+                "post_staging_cached_path_count": 0,
+                "owner_post_stage_commit_gate_status": "owner_post_stage_commit_gate_blocked",
+                "owner_commit_packet_status": "owner_commit_packet_blocked",
             },
         }
     )
@@ -424,3 +431,37 @@ def test_owner_post_stage_commit_gate_accepts_post_commit_noop_evidence(tmp_path
     task_board_check = next(check for check in gate.checks if check.name == "task_board_ready")
     assert task_board_check.status == "passed"
     assert task_board_check.details["task_board_post_commit_noop_accounted_for"] is True
+
+
+def test_owner_post_stage_commit_gate_accepts_post_staging_task_board_cycle(tmp_path: Path) -> None:
+    paths = _write_reports(tmp_path)
+    task_board = json.loads(paths["task_board_path"].read_text(encoding="utf-8"))
+    task_board.update(
+        {
+            "status": "commercial_delivery_blocked",
+            "summary": {
+                **task_board["summary"],
+                "staging_review_status": "staging_review_ready",
+                "owner_staging_packet_status": "owner_staging_packet_ready",
+                "owner_staging_preflight_accounted_for": True,
+                "owner_post_staging_verifier_status": "owner_post_staging_verification_ready",
+                "eligible_stage_count": len(_stage_paths()),
+                "owner_stage_command_count": len(_stage_paths()),
+                "post_staging_cached_path_count": len(_stage_paths()),
+                "owner_post_stage_commit_gate_status": "owner_post_stage_commit_gate_blocked",
+                "owner_commit_packet_status": "owner_commit_packet_blocked",
+            },
+            "checks": [
+                {"name": "pre_approval_drift_guard_ready", "status": "failed"},
+            ],
+        }
+    )
+    paths["task_board_path"].write_text(json.dumps(task_board), encoding="utf-8")
+
+    gate = build_owner_post_stage_commit_gate(**paths)
+
+    assert gate.status == "owner_post_stage_commit_gate_ready"
+    assert gate.summary["task_board_post_staging_accounted_for"] is True
+    task_board_check = next(check for check in gate.checks if check.name == "task_board_ready")
+    assert task_board_check.status == "passed"
+    assert task_board_check.details["task_board_post_staging_accounted_for"] is True
