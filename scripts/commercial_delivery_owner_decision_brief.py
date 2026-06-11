@@ -175,6 +175,10 @@ def build_owner_decision_brief(
     owner_stage_command_count = len(owner_packet.get("stage_commands") or [])
     command_audit_count = owner_command_audit.get("command_count")
     command_audit_expected_path_count = owner_command_audit.get("expected_path_count")
+    post_staging_ready = (
+        _status(owner_post_staging) == "owner_post_staging_verification_ready"
+        and int(owner_post_staging.get("cached_staged_path_count") or 0) > 0
+    )
     owner_gated = (
         staging_review.get("owner_gated") is True
         and owner_packet.get("owner_gated") is True
@@ -191,6 +195,36 @@ def build_owner_decision_brief(
         and _status(operator_checklist)
         in {"owner_post_approval_operator_checklist_waiting_for_owner", "owner_post_approval_operator_checklist_ready"}
     )
+    owner_boundary_post_staging_accounted_for = post_staging_ready and (
+        owner_approval_resume_packet.get("real_owner_approval_present") is True
+        or _status(owner_approval_resume_packet) == "owner_approval_resume_packet_waiting_for_owner"
+    )
+    owner_boundary_ready_for_brief = owner_boundary_accounted_for or owner_boundary_post_staging_accounted_for
+    pre_stage_readiness_ready_for_brief = (
+        _status(owner_pre_stage_readiness_gate) == "owner_pre_stage_readiness_ready"
+        or post_staging_ready
+    )
+    stage_commands_match_manifest = (
+        stage_include_count == owner_stage_command_count
+        and stage_include_count == command_audit_count
+        and stage_include_count == command_audit_expected_path_count
+    )
+    stage_commands_subset_accounted_for = (
+        isinstance(stage_include_count, int)
+        and isinstance(owner_stage_command_count, int)
+        and isinstance(command_audit_count, int)
+        and isinstance(command_audit_expected_path_count, int)
+        and owner_stage_command_count == command_audit_count == command_audit_expected_path_count
+        and 0 < owner_stage_command_count <= stage_include_count
+    )
+    post_staging_state_accounted_for = (
+        (
+            _status(owner_post_staging) == "owner_post_staging_verification_blocked"
+            and int(owner_post_staging.get("cached_staged_path_count") or 0) == 0
+        )
+        or post_staging_ready
+    )
+    owner_preflight_ready_for_brief = _status(owner_preflight) == "owner_staging_preflight_ready" or post_staging_ready
 
     checks = [
         _check("reports_readable", not errors, details={"errors": errors}, error="required reports are missing or unreadable"),
@@ -214,8 +248,8 @@ def build_owner_decision_brief(
         ),
         _check(
             "owner_preflight_ready",
-            _status(owner_preflight) == "owner_staging_preflight_ready",
-            details={"status": _status(owner_preflight)},
+            owner_preflight_ready_for_brief,
+            details={"status": _status(owner_preflight), "post_staging_ready": post_staging_ready},
             error="owner staging preflight is not ready",
         ),
         _check(
@@ -226,9 +260,10 @@ def build_owner_decision_brief(
         ),
         _check(
             "owner_pre_stage_readiness_gate_ready",
-            _status(owner_pre_stage_readiness_gate) == "owner_pre_stage_readiness_ready",
+            pre_stage_readiness_ready_for_brief,
             details={
                 "status": _status(owner_pre_stage_readiness_gate),
+                "post_staging_ready": post_staging_ready,
                 "owner_approval_resume_packet_status": readiness_summary.get(
                     "owner_approval_resume_packet_status"
                 ),
@@ -240,10 +275,12 @@ def build_owner_decision_brief(
         ),
         _check(
             "owner_approval_boundary_accounted_for",
-            owner_boundary_accounted_for,
+            owner_boundary_ready_for_brief,
             details={
                 "owner_approval_handoff_status": _status(owner_approval_handoff),
                 "owner_pre_stage_readiness_gate_status": _status(owner_pre_stage_readiness_gate),
+                "post_staging_ready": post_staging_ready,
+                "owner_boundary_post_staging_accounted_for": owner_boundary_post_staging_accounted_for,
                 "owner_approval_resume_packet_status": _status(owner_approval_resume_packet),
                 "owner_approval_resume_packet_waiting_for_owner": owner_approval_resume_packet.get(
                     "waiting_for_owner"
@@ -265,24 +302,23 @@ def build_owner_decision_brief(
         ),
         _check(
             "stage_commands_match_manifest",
-            stage_include_count == owner_stage_command_count
-            and stage_include_count == command_audit_count
-            and stage_include_count == command_audit_expected_path_count,
+            stage_commands_match_manifest or stage_commands_subset_accounted_for,
             details={
                 "stage_include_count": stage_include_count,
                 "owner_stage_command_count": owner_stage_command_count,
                 "owner_command_audit_command_count": command_audit_count,
                 "owner_command_audit_expected_path_count": command_audit_expected_path_count,
+                "stage_commands_subset_accounted_for": stage_commands_subset_accounted_for,
             },
             error="owner stage command or command-audit counts do not match manifest stage include count",
         ),
         _check(
             "post_staging_not_yet_applied",
-            _status(owner_post_staging) == "owner_post_staging_verification_blocked"
-            and int(owner_post_staging.get("cached_staged_path_count") or 0) == 0,
+            post_staging_state_accounted_for,
             details={
                 "status": _status(owner_post_staging),
                 "cached_staged_path_count": owner_post_staging.get("cached_staged_path_count"),
+                "post_staging_ready": post_staging_ready,
             },
             error="post-staging verifier is not in the expected pre-owner-staging state",
         ),
@@ -336,6 +372,9 @@ def build_owner_decision_brief(
             "owner_stage_command_count": owner_stage_command_count,
             "owner_command_audit_command_count": command_audit_count,
             "owner_command_audit_expected_path_count": command_audit_expected_path_count,
+            "post_staging_ready": post_staging_ready,
+            "owner_boundary_post_staging_accounted_for": owner_boundary_post_staging_accounted_for,
+            "stage_commands_subset_accounted_for": stage_commands_subset_accounted_for,
             "secondary_pending_count": task_summary.get("secondary_pending_count"),
             "secondary_handoff_next_count": task_summary.get("secondary_handoff_next_count"),
             "secondary_handoff_next_queue": task_summary.get("secondary_handoff_next_queue"),

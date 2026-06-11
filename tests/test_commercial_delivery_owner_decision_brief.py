@@ -251,6 +251,40 @@ def test_owner_decision_brief_blocks_when_command_audit_count_drifts(tmp_path: P
     assert count_check.details["owner_command_audit_expected_path_count"] == 1
 
 
+def test_owner_decision_brief_accounts_for_post_staging_subset_commands(tmp_path: Path) -> None:
+    paths = _write_reports(tmp_path)
+    manifest = json.loads(paths["manifest_path"].read_text(encoding="utf-8"))
+    manifest["stage_include_count"] = 100
+    paths["manifest_path"].write_text(json.dumps(manifest), encoding="utf-8")
+    pre_stage = json.loads(paths["owner_pre_stage_readiness_gate_path"].read_text(encoding="utf-8"))
+    pre_stage["status"] = "owner_pre_stage_readiness_blocked"
+    paths["owner_pre_stage_readiness_gate_path"].write_text(json.dumps(pre_stage), encoding="utf-8")
+    resume = json.loads(paths["owner_approval_resume_packet_path"].read_text(encoding="utf-8"))
+    resume["status"] = "owner_approval_resume_packet_blocked"
+    resume["waiting_for_owner"] = False
+    resume["real_owner_approval_present"] = True
+    paths["owner_approval_resume_packet_path"].write_text(json.dumps(resume), encoding="utf-8")
+    operator = json.loads(paths["owner_post_approval_operator_checklist_path"].read_text(encoding="utf-8"))
+    operator["status"] = "owner_post_approval_operator_checklist_blocked"
+    operator["waiting_for_owner"] = False
+    paths["owner_post_approval_operator_checklist_path"].write_text(json.dumps(operator), encoding="utf-8")
+    post_staging = json.loads(paths["owner_post_staging_path"].read_text(encoding="utf-8"))
+    post_staging["status"] = "owner_post_staging_verification_ready"
+    post_staging["cached_staged_path_count"] = 2
+    paths["owner_post_staging_path"].write_text(json.dumps(post_staging), encoding="utf-8")
+
+    brief = build_owner_decision_brief(**paths)
+
+    assert brief.status == "ready_for_owner_staging_decision"
+    assert brief.summary["post_staging_ready"] is True
+    assert brief.summary["owner_boundary_post_staging_accounted_for"] is True
+    assert brief.summary["stage_commands_subset_accounted_for"] is True
+    assert next(check for check in brief.checks if check.name == "owner_pre_stage_readiness_gate_ready").status == "passed"
+    assert next(check for check in brief.checks if check.name == "owner_approval_boundary_accounted_for").status == "passed"
+    assert next(check for check in brief.checks if check.name == "stage_commands_match_manifest").status == "passed"
+    assert next(check for check in brief.checks if check.name == "post_staging_not_yet_applied").status == "passed"
+
+
 def test_owner_decision_brief_blocks_unknown_owner_boundary(tmp_path: Path) -> None:
     paths = _write_reports(tmp_path)
     packet = json.loads(paths["owner_approval_resume_packet_path"].read_text(encoding="utf-8"))

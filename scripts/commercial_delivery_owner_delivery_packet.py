@@ -132,6 +132,7 @@ def _failed_check_names(payload: dict[str, Any]) -> set[str]:
 
 REFRESH_RECEIPT_SELF_BOOTSTRAP_STEPS = {
     "owner_pre_stage_readiness_gate",
+    "owner_staging_preflight",
     "owner_staging_rollback_plan",
     "owner_delivery_packet_before_owner_approval",
     "owner_delivery_packet",
@@ -378,6 +379,41 @@ def build_owner_delivery_packet(
     rollback_plan_ready = _status(rollback_plan) == "owner_staging_rollback_plan_ready"
     rollback_plan_missing = "owner_staging_rollback_plan" in optional_missing
     rollback_plan_accounted_for = rollback_plan_ready or rollback_plan_missing
+    approval_gate_summary = _summary(approval_gate)
+    stage_execution_summary = _summary(stage_execution_plan)
+    rollback_summary = _summary(rollback_plan)
+    post_commit_stage_approval_accounted_for = stage_approval_ready or (
+        commit_ready
+        and stage_approval_expected_blocked
+        and approval_request_accounted_for
+        and approval_payload_audit_accounted_for
+        and approval_gate_summary.get("stage_path_digest") == stage_path_digest
+        and approval_gate_summary.get("stage_command_digest") == stage_command_digest
+        and approval_gate_summary.get("expected_stage_path_set_digest") == expected_stage_path_set_digest
+    )
+    post_commit_stage_execution_accounted_for = stage_execution_ready or (
+        commit_ready
+        and stage_execution_expected_blocked
+        and approval_request_accounted_for
+        and approval_payload_audit_accounted_for
+        and stage_execution_summary.get("stage_path_digest") == stage_path_digest
+        and stage_execution_summary.get("stage_command_digest") == stage_command_digest
+        and stage_execution_summary.get("expected_stage_path_set_digest") == expected_stage_path_set_digest
+        and int(stage_execution_plan.get("stage_command_count") or stage_execution_summary.get("stage_command_count") or -1)
+        == owner_stage_command_count
+    )
+    post_commit_owner_gate_accounted_for = (
+        commit_ready
+        and post_commit_stage_approval_accounted_for
+        and post_commit_stage_execution_accounted_for
+        and approval_request_accounted_for
+        and approval_payload_audit_accounted_for
+        and rollback_plan_ready
+        and (
+            rollback_summary.get("owner_staging_preflight_accounted_for") is True
+            or "owner_staging_preflight" not in _failed_step_names(refresh_chain)
+        )
+    )
     post_stage_chain_accounted_for = (
         _status(manifest) == "original_kernel_delivery_manifest_ready"
         and _status(staging_packet) == "owner_staging_packet_ready"
@@ -393,8 +429,7 @@ def build_owner_delivery_packet(
             or refresh_delivery_bootstrap
         )
         and commit_ready
-        and stage_approval_ready
-        and stage_execution_ready
+        and post_commit_owner_gate_accounted_for
         and rollback_plan_ready
     )
     pre_approval_bootstrap_accounted_for = (
@@ -743,7 +778,11 @@ def build_owner_delivery_packet(
             "rollback_reset_command_count": rollback_plan.get("reset_command_count"),
             "strict_stage_ready": strict_stage_ready,
             "post_stage_chain_accounted_for": post_stage_chain_accounted_for,
+            "post_commit_owner_gate_accounted_for": post_commit_owner_gate_accounted_for,
+            "post_commit_stage_approval_accounted_for": post_commit_stage_approval_accounted_for,
+            "post_commit_stage_execution_accounted_for": post_commit_stage_execution_accounted_for,
             "pre_approval_bootstrap_accounted_for": pre_approval_bootstrap_accounted_for,
+            "refresh_delivery_bootstrap": refresh_delivery_bootstrap,
             "stage_path_digest": stage_path_digest,
             "stage_command_digest": stage_command_digest,
             "expected_stage_path_set_digest": expected_stage_path_set_digest,

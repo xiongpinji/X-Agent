@@ -258,9 +258,23 @@ def _check(
 def _owner_staging_preflight_accounted_for(reports: dict[str, dict[str, Any]]) -> bool:
     if _report_status(reports.get("owner_staging_preflight", {})) == "owner_staging_preflight_ready":
         return True
-    return (
+    owner_packet = reports.get("owner_staging_packet", {})
+    owner_stage_command_count = len(owner_packet.get("stage_commands") or [])
+    post_staging_cached_count = _read_summary_value(
+        reports.get("owner_post_staging_verifier", {}),
+        "cached_staged_path_count",
+    )
+    if post_staging_cached_count is None:
+        post_staging_cached_count = reports.get("owner_post_staging_verifier", {}).get("cached_staged_path_count")
+    post_staging_accounted_for = (
         _report_status(reports.get("owner_post_staging_verifier", {})) == "owner_post_staging_verification_ready"
-        and _report_status(reports.get("owner_commit_packet", {})) == "owner_commit_packet_ready"
+        and owner_stage_command_count > 0
+        and int(post_staging_cached_count or 0) == owner_stage_command_count
+    )
+    return (
+        post_staging_accounted_for
+        and _report_status(reports.get("owner_commit_packet", {}))
+        in {"owner_commit_packet_ready", "owner_commit_packet_blocked"}
     )
 
 

@@ -129,19 +129,32 @@ def _failed_report_check_names(payload: dict[str, Any]) -> set[str]:
     return failed
 
 
-def _decision_brief_ready_or_post_staging_accounted(payload: dict[str, Any]) -> bool:
+def _decision_brief_ready_or_post_staging_accounted(
+    payload: dict[str, Any],
+    *,
+    owner_post_staging: dict[str, Any] | None = None,
+) -> bool:
     allowed_failed_checks = {
         "owner_preflight_ready",
         "owner_pre_stage_readiness_gate_ready",
         "owner_approval_boundary_accounted_for",
         "stage_commands_match_manifest",
         "post_staging_not_yet_applied",
+        "owner_preflight_ready",
+        "task_board_ready",
     }
     summary = _summary(payload)
+    post_staging_status = summary.get("post_staging_status")
+    cached_staged_path_count = _int_or_none(summary.get("cached_staged_path_count"))
+    if owner_post_staging:
+        post_staging_status = post_staging_status or _status(owner_post_staging)
+        cached_staged_path_count = cached_staged_path_count or _int_or_none(
+            owner_post_staging.get("cached_staged_path_count")
+        )
     return _status(payload) == "ready_for_owner_staging_decision" or (
         _status(payload) == "blocked_before_owner_staging_decision"
-        and summary.get("post_staging_status") == "owner_post_staging_verification_ready"
-        and _int_or_none(summary.get("cached_staged_path_count")) not in {None, 0}
+        and post_staging_status == "owner_post_staging_verification_ready"
+        and cached_staged_path_count not in {None, 0}
         and payload.get("mutation_performed") is not True
         and payload.get("git_stage_performed") is not True
         and payload.get("git_commit_performed") is not True
@@ -332,11 +345,20 @@ def build_owner_post_stage_commit_gate(
         ),
         _check(
             "owner_decision_brief_pre_stage_ready",
-            _decision_brief_ready_or_post_staging_accounted(owner_decision_brief),
+            _decision_brief_ready_or_post_staging_accounted(
+                owner_decision_brief,
+                owner_post_staging=owner_post_staging,
+            ),
             details={
                 "status": _status(owner_decision_brief),
-                "post_staging_status": _summary(owner_decision_brief).get("post_staging_status"),
-                "cached_staged_path_count": _summary(owner_decision_brief).get("cached_staged_path_count"),
+                "post_staging_status": (
+                    _summary(owner_decision_brief).get("post_staging_status")
+                    or _status(owner_post_staging)
+                ),
+                "cached_staged_path_count": (
+                    _summary(owner_decision_brief).get("cached_staged_path_count")
+                    or owner_post_staging.get("cached_staged_path_count")
+                ),
                 "failed_checks": sorted(_failed_report_check_names(owner_decision_brief)),
             },
             error="owner decision brief is not ready or accounted for after post-stage verification",

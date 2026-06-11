@@ -525,6 +525,86 @@ def test_closure_snapshot_complete_when_all_owner_gates_ready(tmp_path: Path) ->
     assert snapshot.summary["owner_post_approval_operator_checklist_operator_ready"] is True
 
 
+def test_closure_snapshot_completes_with_post_commit_accounted_blocked_owner_gates(tmp_path: Path) -> None:
+    paths = _write_inputs(tmp_path, complete=True)
+    delivery_packet = json.loads(paths["owner_delivery_packet_path"].read_text(encoding="utf-8"))
+    delivery_packet["summary"].update(
+        {
+            "post_stage_chain_accounted_for": True,
+            "post_commit_owner_gate_accounted_for": True,
+            "post_commit_stage_approval_accounted_for": True,
+            "post_commit_stage_execution_accounted_for": True,
+        }
+    )
+    paths["owner_delivery_packet_path"].write_text(json.dumps(delivery_packet), encoding="utf-8")
+    approval_payload = json.loads(paths["owner_approval_payload_audit_path"].read_text(encoding="utf-8"))
+    approval_payload["status"] = "owner_approval_payload_blocked"
+    approval_payload["approval_payload_present"] = True
+    approval_payload["approval_payload_valid"] = False
+    approval_payload["ready_for_approval_gate"] = False
+    approval_payload["summary"]["blocking_reasons"] = [
+        "owner_delivery_packet_ready",
+        "owner_stage_approval_request_ready",
+    ]
+    paths["owner_approval_payload_audit_path"].write_text(json.dumps(approval_payload), encoding="utf-8")
+    approval_gate = json.loads(paths["owner_stage_approval_gate_path"].read_text(encoding="utf-8"))
+    approval_gate["status"] = "owner_stage_approval_blocked"
+    approval_gate["stage_allowed"] = False
+    approval_gate["summary"]["blocking_reasons"] = [
+        "owner_delivery_packet_ready",
+        "owner_approval_payload_audit_ready",
+        "owner_delivery_packet_pre_stage_ready",
+    ]
+    paths["owner_stage_approval_gate_path"].write_text(json.dumps(approval_gate), encoding="utf-8")
+    execution_plan = json.loads(paths["owner_stage_execution_plan_path"].read_text(encoding="utf-8"))
+    execution_plan["status"] = "owner_stage_execution_blocked"
+    execution_plan["stage_allowed"] = False
+    execution_plan["summary"]["blocking_reasons"] = [
+        "owner_staging_preflight_accounted_for",
+        "owner_delivery_packet_ready",
+        "approval_gate_ready",
+        "no_cached_staged_paths_before_stage_execution_or_accounted",
+    ]
+    paths["owner_stage_execution_plan_path"].write_text(json.dumps(execution_plan), encoding="utf-8")
+    refresh = json.loads(paths["refresh_chain_path"].read_text(encoding="utf-8"))
+    refresh["status"] = "commercial_delivery_refresh_chain_receipt_blocked"
+    refresh["summary"]["failed_step_count"] = 1
+    refresh["steps"] = [{"name": "owner_staging_preflight", "status": "failed"}]
+    paths["refresh_chain_path"].write_text(json.dumps(refresh), encoding="utf-8")
+    resume_packet = json.loads(paths["owner_approval_resume_packet_path"].read_text(encoding="utf-8"))
+    resume_packet["status"] = "owner_approval_resume_packet_blocked"
+    resume_packet["waiting_for_owner"] = False
+    resume_packet["resume_ready"] = False
+    resume_packet["real_owner_approval_present"] = True
+    paths["owner_approval_resume_packet_path"].write_text(json.dumps(resume_packet), encoding="utf-8")
+    operator_checklist = json.loads(paths["owner_post_approval_operator_checklist_path"].read_text(encoding="utf-8"))
+    operator_checklist["status"] = "owner_post_approval_operator_checklist_blocked"
+    operator_checklist["waiting_for_owner"] = False
+    operator_checklist["operator_ready"] = False
+    operator_checklist["real_owner_approval_present"] = True
+    paths["owner_post_approval_operator_checklist_path"].write_text(json.dumps(operator_checklist), encoding="utf-8")
+
+    snapshot = build_commercial_delivery_closure_snapshot(**paths)
+
+    assert snapshot.status == "commercial_delivery_complete"
+    assert snapshot.delivery_complete is True
+    assert snapshot.stage_ready is True
+    assert snapshot.approval_ready is True
+    assert snapshot.stage_execution_ready is True
+    assert snapshot.summary["post_commit_closure_accounted_for"] is True
+    assert snapshot.summary["delivery_post_stage_chain_accounted_for"] is True
+    assert snapshot.summary["delivery_post_commit_owner_gate_accounted_for"] is True
+    assert snapshot.summary["post_commit_refresh_accounted_for"] is True
+    assert snapshot.summary["owner_approval_resume_packet_post_stage_accounted_for"] is True
+    assert snapshot.summary["owner_post_approval_operator_checklist_post_stage_accounted_for"] is True
+    assert snapshot.summary["owner_blocking_reason_count"] == 0
+    assert snapshot.summary["owner_blocking_reasons_by_report"] == {}
+    assert snapshot.summary["owner_action_required"] is False
+    assert next(check for check in snapshot.checks if check.name == "owner_approval_ready").status == "passed"
+    assert next(check for check in snapshot.checks if check.name == "stage_execution_ready").status == "passed"
+    assert next(check for check in snapshot.checks if check.name == "refresh_chain_ready").status == "passed"
+
+
 def test_closure_snapshot_completes_when_post_approval_drift_guard_is_accounted_for(tmp_path: Path) -> None:
     paths = _write_inputs(tmp_path, complete=True)
     _write_json(

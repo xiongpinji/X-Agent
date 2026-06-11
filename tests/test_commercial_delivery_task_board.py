@@ -584,6 +584,48 @@ def test_task_board_tracks_secondary_pending_without_blocking_owner_staging(tmp_
     ]
 
 
+def test_task_board_accounts_for_post_staging_preflight_with_commit_packet_pending(tmp_path: Path) -> None:
+    reports_dir = tmp_path / "reports"
+    handoff = tmp_path / "handoff.md"
+    _write_reports(reports_dir)
+    _write_handoff(handoff)
+    preflight = json.loads((reports_dir / "commercial-delivery-owner-staging-preflight.json").read_text(encoding="utf-8"))
+    preflight["status"] = "owner_staging_preflight_blocked"
+    preflight["cached_staged_path_count"] = 2
+    (reports_dir / "commercial-delivery-owner-staging-preflight.json").write_text(
+        json.dumps(preflight),
+        encoding="utf-8",
+    )
+    post_staging = json.loads(
+        (reports_dir / "commercial-delivery-owner-post-staging-verifier.json").read_text(encoding="utf-8")
+    )
+    post_staging["status"] = "owner_post_staging_verification_ready"
+    post_staging["cached_staged_path_count"] = 2
+    post_staging["summary"] = {"cached_staged_path_count": 2}
+    (reports_dir / "commercial-delivery-owner-post-staging-verifier.json").write_text(
+        json.dumps(post_staging),
+        encoding="utf-8",
+    )
+    commit_packet = json.loads((reports_dir / "commercial-delivery-owner-commit-packet.json").read_text(encoding="utf-8"))
+    commit_packet["status"] = "owner_commit_packet_blocked"
+    (reports_dir / "commercial-delivery-owner-commit-packet.json").write_text(
+        json.dumps(commit_packet),
+        encoding="utf-8",
+    )
+
+    report = build_task_board(
+        reports_dir=reports_dir,
+        secondary_handoff_path=handoff,
+        git_status_lines=[],
+    )
+
+    assert report.status == "commercial_delivery_ready_for_owner_staging_review"
+    check = next(check for check in report.checks if check.name == "owner_staging_preflight_accounted_for")
+    assert check.status == "passed"
+    assert report.summary["owner_staging_preflight_accounted_for"] is True
+    assert report.summary["owner_post_staging_verifier_status"] == "owner_post_staging_verification_ready"
+
+
 def test_task_board_normalizes_manifest_paths_for_secondary_pending(tmp_path: Path) -> None:
     reports_dir = tmp_path / "reports"
     handoff = tmp_path / "handoff.md"
