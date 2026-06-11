@@ -74,6 +74,57 @@ class BaseClient(ABC):
         """
         pass
 
+    async def draft_control_plan(
+        self,
+        task: str,
+        root: str = ".",
+        context: dict[str, Any] | None = None,
+        require_approval: bool = True,
+    ) -> dict[str, Any]:
+        """Create a plan-mode draft."""
+        raise NotImplementedError("Plan mode is not supported by this client.")
+
+    async def approve_control_plan(self, plan_id: str, reason: str = "") -> dict[str, Any]:
+        """Approve a plan-mode draft."""
+        raise NotImplementedError("Plan approval is not supported by this client.")
+
+    async def reject_control_plan(self, plan_id: str, reason: str = "") -> dict[str, Any]:
+        """Reject a plan-mode draft."""
+        raise NotImplementedError("Plan rejection is not supported by this client.")
+
+    async def create_control_goal(
+        self,
+        objective: str,
+        title: str = "",
+        context: dict[str, Any] | None = None,
+        policy: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Create a loop-engineering goal."""
+        raise NotImplementedError("Goal mode is not supported by this client.")
+
+    async def advance_control_goal(
+        self,
+        goal_id: str,
+        execute: bool = False,
+        force: bool = False,
+        user_feedback: str = "",
+        context: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Advance a loop-engineering goal by one iteration."""
+        raise NotImplementedError("Goal advancement is not supported by this client.")
+
+    async def get_control_goal(self, goal_id: str) -> dict[str, Any]:
+        """Get a loop-engineering goal."""
+        raise NotImplementedError("Goal lookup is not supported by this client.")
+
+    async def list_control_goals(self, limit: int = 50) -> list[dict[str, Any]]:
+        """List loop-engineering goals."""
+        raise NotImplementedError("Goal listing is not supported by this client.")
+
+    async def cancel_control_goal(self, goal_id: str, reason: str = "") -> dict[str, Any]:
+        """Cancel a loop-engineering goal."""
+        raise NotImplementedError("Goal cancellation is not supported by this client.")
+
     @abstractmethod
     async def list_agents(self) -> dict[str, Any]:
         """List all available agents.
@@ -537,6 +588,84 @@ class HTTPClient(BaseClient):
         }
         return await self._request("POST", "/api/v1/agents/run", json=payload)
 
+    async def draft_control_plan(
+        self,
+        task: str,
+        root: str = ".",
+        context: dict[str, Any] | None = None,
+        require_approval: bool = True,
+    ) -> dict[str, Any]:
+        payload = {
+            "task": task,
+            "root": root,
+            "context": context or {},
+            "require_approval": require_approval,
+        }
+        return await self._request("POST", "/api/v1/control/plans", json=payload)
+
+    async def approve_control_plan(self, plan_id: str, reason: str = "") -> dict[str, Any]:
+        return await self._request(
+            "POST",
+            f"/api/v1/control/plans/{plan_id}/approve",
+            json={"reason": reason},
+        )
+
+    async def reject_control_plan(self, plan_id: str, reason: str = "") -> dict[str, Any]:
+        return await self._request(
+            "POST",
+            f"/api/v1/control/plans/{plan_id}/reject",
+            json={"reason": reason},
+        )
+
+    async def create_control_goal(
+        self,
+        objective: str,
+        title: str = "",
+        context: dict[str, Any] | None = None,
+        policy: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        payload = {
+            "objective": objective,
+            "title": title,
+            "context": context or {},
+            "policy": policy or {},
+        }
+        return await self._request("POST", "/api/v1/control/goals", json=payload)
+
+    async def advance_control_goal(
+        self,
+        goal_id: str,
+        execute: bool = False,
+        force: bool = False,
+        user_feedback: str = "",
+        context: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        payload = {
+            "execute": execute,
+            "force": force,
+            "user_feedback": user_feedback,
+            "context": context or {},
+        }
+        return await self._request(
+            "POST",
+            f"/api/v1/control/goals/{goal_id}/advance",
+            json=payload,
+        )
+
+    async def get_control_goal(self, goal_id: str) -> dict[str, Any]:
+        return await self._request("GET", f"/api/v1/control/goals/{goal_id}")
+
+    async def list_control_goals(self, limit: int = 50) -> list[dict[str, Any]]:
+        result = await self._request("GET", "/api/v1/control/goals", params={"limit": limit})
+        return result if isinstance(result, list) else result.get("data", [])
+
+    async def cancel_control_goal(self, goal_id: str, reason: str = "") -> dict[str, Any]:
+        return await self._request(
+            "POST",
+            f"/api/v1/control/goals/{goal_id}/cancel",
+            json={"reason": reason},
+        )
+
     async def list_agents(self) -> dict[str, Any]:
         """List agents via HTTP API.
 
@@ -984,6 +1113,157 @@ class LocalClient(BaseClient):
             }
         except Exception as e:
             raise APIError(f"Agent execution failed: {e}") from e
+
+    async def draft_control_plan(
+        self,
+        task: str,
+        root: str = ".",
+        context: dict[str, Any] | None = None,
+        require_approval: bool = True,
+    ) -> dict[str, Any]:
+        await self._ensure_initialized()
+        from backend.app.core.control_modes import PlanModeDraftRequest, PlanModeService
+        from backend.app.dependencies import get_control_mode_store
+
+        record = PlanModeService().draft(
+            PlanModeDraftRequest(
+                task=task,
+                root=root,
+                context=context or {},
+                require_approval=require_approval,
+            ),
+            tenant_id="default",
+            user_id="local",
+        )
+        get_control_mode_store().save_plan(record)
+        return record.model_dump(mode="json")
+
+    async def approve_control_plan(self, plan_id: str, reason: str = "") -> dict[str, Any]:
+        from backend.app.dependencies import get_control_mode_store
+
+        record = get_control_mode_store().approve_plan(plan_id, actor_id="local", reason=reason)
+        if record is None:
+            raise APIError(f"Plan not found: {plan_id}")
+        return record.model_dump(mode="json")
+
+    async def reject_control_plan(self, plan_id: str, reason: str = "") -> dict[str, Any]:
+        from backend.app.dependencies import get_control_mode_store
+
+        record = get_control_mode_store().reject_plan(plan_id, actor_id="local", reason=reason)
+        if record is None:
+            raise APIError(f"Plan not found: {plan_id}")
+        return record.model_dump(mode="json")
+
+    async def create_control_goal(
+        self,
+        objective: str,
+        title: str = "",
+        context: dict[str, Any] | None = None,
+        policy: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        await self._ensure_initialized()
+        from backend.app.core.control_modes import GoalCreateRequest, GoalLoopPolicy, GoalLoopService
+        from backend.app.dependencies import get_control_mode_store
+
+        goal, plan = GoalLoopService().create(
+            GoalCreateRequest(
+                objective=objective,
+                title=title,
+                context=context or {},
+                policy=GoalLoopPolicy.model_validate(policy or {}),
+            ),
+            tenant_id="default",
+            user_id="local",
+        )
+        store = get_control_mode_store()
+        store.save_plan(plan)
+        store.save_goal(goal)
+        return goal.model_dump(mode="json")
+
+    async def advance_control_goal(
+        self,
+        goal_id: str,
+        execute: bool = False,
+        force: bool = False,
+        user_feedback: str = "",
+        context: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        await self._ensure_initialized()
+        from backend.app.core.contracts import RunContext
+        from backend.app.core.control_modes import GoalLoopService
+        from backend.app.dependencies import get_control_mode_store, get_run_store
+
+        store = get_control_mode_store()
+        goal = store.get_goal(goal_id)
+        if goal is None:
+            raise APIError(f"Goal not found: {goal_id}")
+        plan = store.get_plan(goal.plan_id) if goal.plan_id else None
+        service = GoalLoopService()
+        merged_context = {**goal.context, **(context or {})}
+        if not execute:
+            goal = service.advance_without_execution(
+                goal,
+                plan,
+                force=force,
+                user_feedback=user_feedback,
+            )
+            goal.context = merged_context
+            store.save_goal(goal)
+            return goal.model_dump(mode="json")
+        if self._agent is None:
+            raise ConnectionError("Agent not initialized")
+        planned = service.advance_without_execution(
+            goal.model_copy(deep=True),
+            plan,
+            force=force,
+            user_feedback=user_feedback,
+        )
+        if planned.status == "waiting_approval" and not force:
+            store.save_goal(planned)
+            return planned.model_dump(mode="json")
+        if planned.status != "active" or not planned.iterations:
+            store.save_goal(planned)
+            return planned.model_dump(mode="json")
+        task = planned.iterations[-1].task if planned.iterations else goal.objective
+        run_context = RunContext(tenant_id=goal.tenant_id, user_id=goal.user_id)
+        result = await self._agent.run(
+            run_context,
+            task,
+            {**merged_context, "goal_id": goal.goal_id, "plan_id": goal.plan_id},
+        )
+        get_run_store().save(run_context, task, result)
+        goal = service.record_execution_result(goal, task=task, result=result, plan=plan)
+        goal.context = merged_context
+        store.save_goal(goal)
+        return goal.model_dump(mode="json")
+
+    async def get_control_goal(self, goal_id: str) -> dict[str, Any]:
+        from backend.app.dependencies import get_control_mode_store
+
+        record = get_control_mode_store().get_goal(goal_id)
+        if record is None:
+            raise APIError(f"Goal not found: {goal_id}")
+        return record.model_dump(mode="json")
+
+    async def list_control_goals(self, limit: int = 50) -> list[dict[str, Any]]:
+        from backend.app.dependencies import get_control_mode_store
+
+        return [
+            record.model_dump(mode="json")
+            for record in get_control_mode_store().list_goals(limit=limit)
+        ]
+
+    async def cancel_control_goal(self, goal_id: str, reason: str = "") -> dict[str, Any]:
+        from backend.app.core.control_modes import GoalLoopService
+        from backend.app.dependencies import get_control_mode_store
+
+        store = get_control_mode_store()
+        record = store.get_goal(goal_id)
+        if record is None:
+            raise APIError(f"Goal not found: {goal_id}")
+        record = GoalLoopService().cancel(record, reason=reason)
+        store.save_goal(record)
+        return record.model_dump(mode="json")
 
     async def list_agents(self) -> dict[str, Any]:
         """List agents locally.

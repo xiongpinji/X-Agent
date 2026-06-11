@@ -50,6 +50,7 @@ class Settings(BaseSettings):
     workflow_store_path: Path = PROJECT_ROOT / "data" / "workflows.json"
     workflow_run_store_path: Path = PROJECT_ROOT / "data" / "workflow_runs.jsonl"
     workflow_schedule_store_path: Path = PROJECT_ROOT / "data" / "workflow_schedules.json"
+    control_mode_store_path: Path = PROJECT_ROOT / "data" / "control_modes.json"
     approval_store_path: Path = PROJECT_ROOT / "data" / "approvals.json"
     api_key_store_path: Path = PROJECT_ROOT / "data" / "api_keys.json"
     audit_store_path: Path = PROJECT_ROOT / "data" / "audit.jsonl"
