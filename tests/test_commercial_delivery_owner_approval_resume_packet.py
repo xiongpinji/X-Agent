@@ -296,7 +296,10 @@ def test_resume_packet_accounts_for_post_stage_superseded_handoff_and_runbook(tm
     paths = _write_inputs(tmp_path, approved=True)
     _update_json(paths["owner_approval_handoff_path"], status="owner_approval_handoff_blocked")
     _update_json(paths["owner_staging_runbook_path"], status="owner_staging_runbook_blocked")
-    _update_json(paths["owner_post_staging_verifier_path"], status="owner_post_staging_verification_ready")
+    _update_json(
+        paths["owner_post_staging_verifier_path"],
+        status="owner_post_staging_verification_ready",
+    )
     _update_json(paths["owner_post_stage_commit_gate_path"], status="owner_post_stage_commit_gate_ready")
     _update_json(paths["owner_commit_packet_path"], status="owner_commit_packet_ready", commit_allowed=True)
 
@@ -344,7 +347,13 @@ def test_resume_packet_accepts_subset_stage_commands_after_post_stage_evidence(t
             "commit_command_preview": "git commit -m test",
         },
     )
-    _update_json(paths["owner_post_staging_verifier_path"], status="owner_post_staging_verification_ready")
+    _update_json(
+        paths["owner_post_staging_verifier_path"],
+        status="owner_post_staging_verification_ready",
+        stage_path_digest=_digest_values(_stage_paths()),
+        stage_command_digest=_digest_values(_stage_commands()),
+        expected_stage_path_set_digest=_path_set_digest(_stage_paths()),
+    )
     _update_json(paths["owner_post_stage_commit_gate_path"], status="owner_post_stage_commit_gate_ready")
     _update_json(paths["owner_commit_packet_path"], status="owner_commit_packet_ready", commit_allowed=True)
 
@@ -385,6 +394,125 @@ def test_resume_packet_blocks_digest_drift(tmp_path: Path) -> None:
     assert packet.status == "owner_approval_resume_packet_blocked"
     assert next(check for check in packet.checks if check.name == "stage_command_digest_consistent").status == "failed"
     assert "stage_command_digest_consistent" in packet.summary["blocking_reasons"]
+
+
+def test_resume_packet_accepts_post_commit_noop_without_reopening_owner_gates(tmp_path: Path) -> None:
+    paths = _write_inputs(tmp_path, approved=True)
+    empty_digest = _digest_values([])
+    for key in ("owner_approval_handoff_path", "owner_staging_runbook_path"):
+        _update_json(
+            paths[key],
+            status="owner_approval_handoff_blocked" if key == "owner_approval_handoff_path" else "owner_staging_runbook_blocked",
+            summary={
+                "stage_include_count": 100,
+                "owner_stage_command_count": 0,
+                "stage_command_count": 0,
+                "stage_path_digest": empty_digest,
+                "stage_command_digest": empty_digest,
+                "expected_stage_path_set_digest": empty_digest,
+                "secondary_pending_count": 0,
+                "secondary_handoff_next_count": 1,
+                "secondary_handoff_next_queue": ["integration_review_action_status_board.py"],
+                "secondary_handoff_completed_count": 44,
+                "secondary_handoff_latest_completed_candidate": "integration_review_answer_action_matrix.py",
+            },
+        )
+    _update_json(
+        paths["pre_approval_drift_guard_path"],
+        status="pre_approval_drift_guard_blocked",
+        real_owner_approval_present=True,
+        summary={
+            "stage_path_digest": empty_digest,
+            "stage_command_digest": empty_digest,
+            "expected_stage_path_set_digest": empty_digest,
+            "secondary_pending_count": 0,
+            "secondary_handoff_next_count": 1,
+            "secondary_handoff_next_queue": ["integration_review_action_status_board.py"],
+            "secondary_handoff_completed_count": 44,
+            "secondary_handoff_latest_completed_candidate": "integration_review_answer_action_matrix.py",
+        },
+    )
+    _update_json(
+        paths["owner_approval_payload_audit_path"],
+        status="owner_approval_payload_blocked",
+        approval_payload_present=True,
+        approval_payload_valid=False,
+        ready_for_approval_gate=False,
+    )
+    _update_json(
+        paths["owner_stage_approval_gate_path"],
+        status="owner_stage_approval_blocked",
+        stage_allowed=False,
+        summary={
+            "stage_include_count": 100,
+            "owner_stage_command_count": 0,
+            "stage_path_digest": empty_digest,
+            "stage_command_digest": empty_digest,
+            "expected_stage_path_set_digest": empty_digest,
+        },
+    )
+    _update_json(
+        paths["owner_stage_execution_plan_path"],
+        status="owner_stage_execution_blocked",
+        stage_allowed=False,
+        stage_command_count=0,
+        stage_path_digest=empty_digest,
+        stage_command_digest=empty_digest,
+        planned_stage_commands=[],
+        summary={"expected_stage_path_set_digest": empty_digest},
+    )
+    _update_json(
+        paths["owner_delivery_packet_path"],
+        summary={
+            "stage_include_count": 100,
+            "owner_stage_command_count": 0,
+            "post_commit_noop_accounted_for": True,
+            "stage_path_digest": empty_digest,
+            "stage_command_digest": empty_digest,
+            "expected_stage_path_set_digest": empty_digest,
+            "control_modes_preservation_status": "control_modes_preservation_ready",
+            "control_modes_plan_only_default": True,
+            "control_modes_loop_phases": ["explore", "plan", "edit", "verify", "deliver"],
+            "commit_command_preview": "git commit -m test",
+        },
+    )
+    _update_json(
+        paths["owner_post_staging_verifier_path"],
+        status="owner_post_staging_verification_ready",
+        stage_path_digest=empty_digest,
+        stage_command_digest=empty_digest,
+        expected_stage_path_set_digest=empty_digest,
+    )
+    _update_json(
+        paths["owner_post_stage_commit_gate_path"],
+        status="owner_post_stage_commit_gate_ready",
+        stage_path_digest=empty_digest,
+        stage_command_digest=empty_digest,
+        expected_stage_path_set_digest=empty_digest,
+    )
+    _update_json(
+        paths["owner_commit_packet_path"],
+        status="owner_commit_packet_ready",
+        commit_allowed=True,
+        stage_path_digest=empty_digest,
+        stage_command_digest=empty_digest,
+        expected_stage_path_set_digest=empty_digest,
+    )
+    _update_json(paths["task_board_path"], status="commercial_delivery_blocked", summary={
+        "secondary_pending_count": 0,
+        "owner_commit_packet_status": "owner_commit_packet_ready",
+        "owner_post_stage_commit_gate_status": "owner_post_stage_commit_gate_ready",
+    })
+
+    packet = build_owner_approval_resume_packet(**paths)
+
+    assert packet.status == "owner_approval_resume_packet_ready"
+    assert packet.resume_ready is True
+    assert packet.stage_allowed is False
+    assert packet.stage_execution_ready is False
+    assert packet.summary["post_commit_noop_resume_ready"] is True
+    assert packet.summary["task_board_post_commit_accounted_for"] is True
+    assert next(check for check in packet.checks if check.name == "stage_counts_consistent").status == "passed"
 
 
 def test_resume_packet_writes_json_and_markdown(tmp_path: Path) -> None:

@@ -209,6 +209,11 @@ def build_post_approval_operator_checklist(
         and resume_packet.get("resume_ready") is True
         and real_owner_approval_present
     )
+    post_commit_noop_resume_ready = (
+        resume_ready
+        and resume_summary.get("post_commit_noop_resume_ready") is True
+        and resume_summary.get("post_commit_noop_accounted_for") is True
+    )
     stage_allowed = _status(approval_gate) == "owner_stage_approval_ready" and approval_gate.get("stage_allowed") is True
     stage_execution_ready = (
         _status(execution_plan) == "owner_stage_execution_ready"
@@ -228,8 +233,16 @@ def build_post_approval_operator_checklist(
         and commit_gate_ready
         and commit_packet_ready
     )
+    post_commit_noop_sequence_accounted_for = (
+        post_commit_noop_resume_ready
+        and _status(preflight) == "owner_staging_preflight_ready"
+        and int(preflight.get("cached_staged_path_count") or 0) == 0
+        and post_staging_ready
+        and commit_gate_ready
+        and commit_packet_ready
+    )
     pre_stage_ready = resume_ready and stage_allowed and stage_execution_ready and preflight_ready
-    operator_ready = pre_stage_ready or post_stage_sequence_accounted_for
+    operator_ready = pre_stage_ready or post_stage_sequence_accounted_for or post_commit_noop_sequence_accounted_for
 
     checklist = [
         _group_item(
@@ -265,7 +278,13 @@ def build_post_approval_operator_checklist(
             group=groups.get("pre_stage_verification"),
             item_id="pre_stage_verification",
             title="Run pre-stage verification",
-            status="ready" if pre_stage_ready else "complete" if post_stage_sequence_accounted_for else "waiting",
+            status=(
+                "ready"
+                if pre_stage_ready
+                else "complete"
+                if post_stage_sequence_accounted_for or post_commit_noop_sequence_accounted_for
+                else "waiting"
+            ),
             executable_now=pre_stage_ready,
             default_notes=["Run immediately before any git add command."],
         ),
@@ -273,7 +292,13 @@ def build_post_approval_operator_checklist(
             group=groups.get("owner_stage_commands"),
             item_id="owner_stage_commands",
             title="Run owner-approved stage commands",
-            status="ready" if pre_stage_ready else "complete" if post_stage_sequence_accounted_for else "waiting",
+            status=(
+                "ready"
+                if pre_stage_ready
+                else "complete"
+                if post_stage_sequence_accounted_for or post_commit_noop_sequence_accounted_for
+                else "waiting"
+            ),
             executable_now=pre_stage_ready,
             default_notes=["Run only exact git add commands; never use git add ., git add -A, or git add --all."],
         ),
@@ -316,31 +341,44 @@ def build_post_approval_operator_checklist(
         ),
         _check(
             "operator_sequence_present",
-            bool(checklist) and stage_command_count > 0,
-            details={"checklist_count": len(checklist), "stage_command_count": stage_command_count},
+            bool(checklist) and (stage_command_count > 0 or post_commit_noop_sequence_accounted_for),
+            details={
+                "checklist_count": len(checklist),
+                "stage_command_count": stage_command_count,
+                "post_commit_noop_sequence_accounted_for": post_commit_noop_sequence_accounted_for,
+            },
             error="operator checklist is missing stage commands",
         ),
         _check(
             "approval_gate_matches_resume",
-            waiting_for_owner or stage_allowed,
-            details={"owner_stage_approval_gate_status": _status(approval_gate), "stage_allowed": approval_gate.get("stage_allowed")},
+            waiting_for_owner or stage_allowed or post_commit_noop_sequence_accounted_for,
+            details={
+                "owner_stage_approval_gate_status": _status(approval_gate),
+                "stage_allowed": approval_gate.get("stage_allowed"),
+                "post_commit_noop_sequence_accounted_for": post_commit_noop_sequence_accounted_for,
+            },
             error="approval gate is not ready after resume readiness",
         ),
         _check(
             "stage_execution_matches_resume",
-            waiting_for_owner or stage_execution_ready,
+            waiting_for_owner or stage_execution_ready or post_commit_noop_sequence_accounted_for,
             details={
                 "owner_stage_execution_plan_status": _status(execution_plan),
                 "stage_allowed": execution_plan.get("stage_allowed"),
+                "post_commit_noop_sequence_accounted_for": post_commit_noop_sequence_accounted_for,
             },
             error="stage execution plan is not ready after resume readiness",
         ),
         _check(
             "operator_state_accounted_for",
-            waiting_for_owner or pre_stage_ready or post_stage_sequence_accounted_for,
+            waiting_for_owner
+            or pre_stage_ready
+            or post_stage_sequence_accounted_for
+            or post_commit_noop_sequence_accounted_for,
             details={
                 "pre_stage_ready": pre_stage_ready,
                 "post_stage_sequence_accounted_for": post_stage_sequence_accounted_for,
+                "post_commit_noop_sequence_accounted_for": post_commit_noop_sequence_accounted_for,
                 "owner_staging_preflight_status": _status(preflight),
                 "owner_staging_preflight_cached_staged_path_count": preflight.get("cached_staged_path_count"),
                 "owner_post_staging_verifier_status": _status(post_staging),
@@ -431,6 +469,7 @@ def build_post_approval_operator_checklist(
             "owner_commit_packet_status": _status(commit_packet),
             "pre_stage_ready": pre_stage_ready,
             "post_stage_sequence_accounted_for": post_stage_sequence_accounted_for,
+            "post_commit_noop_sequence_accounted_for": post_commit_noop_sequence_accounted_for,
             "secondary_handoff_completed_count": resume_summary.get("secondary_handoff_completed_count"),
             "secondary_handoff_latest_completed_candidate": resume_summary.get(
                 "secondary_handoff_latest_completed_candidate"

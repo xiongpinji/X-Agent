@@ -165,6 +165,10 @@ REFRESH_RECEIPT_SELF_BOOTSTRAP_STEPS = {
     "owner_stage_execution_plan",
     "closure_snapshot",
     "owner_approval_handoff",
+    "pre_approval_drift_guard",
+    "owner_approval_resume_packet",
+    "owner_post_approval_operator_checklist",
+    "task_board_after_owner_decision",
 }
 
 
@@ -173,11 +177,12 @@ def _refresh_receipt_ready_or_bootstrap(refresh_chain: dict[str, Any]) -> bool:
     if _status(refresh_chain) == "commercial_delivery_refresh_chain_receipt_ready":
         return True
     failed_steps = _failed_step_names(refresh_chain)
+    failed_step_count = int(refresh_summary.get("failed_step_count") or 0)
     return (
         _status(refresh_chain) == "commercial_delivery_refresh_chain_receipt_blocked"
-        and int(refresh_summary.get("failed_step_count") or 0) == 1
-        and len(failed_steps) == 1
-        and failed_steps[0] in REFRESH_RECEIPT_SELF_BOOTSTRAP_STEPS
+        and failed_step_count > 0
+        and len(failed_steps) == failed_step_count
+        and set(failed_steps).issubset(REFRESH_RECEIPT_SELF_BOOTSTRAP_STEPS)
     )
 
 
@@ -500,10 +505,11 @@ def build_commercial_delivery_closure_snapshot(
         "owner_approval_resume_packet",
         "owner_post_approval_operator_checklist",
     }
+    failed_refresh_steps = set(_failed_step_names(refresh_chain))
     post_commit_refresh_accounted_for = (
         _status(refresh_chain) == "commercial_delivery_refresh_chain_receipt_blocked"
-        and len(_failed_step_names(refresh_chain)) == 1
-        and _failed_step_names(refresh_chain)[0] in post_commit_accounted_refresh_steps
+        and bool(failed_refresh_steps)
+        and failed_refresh_steps.issubset(post_commit_accounted_refresh_steps)
     )
     pre_approval_drift_guard_ready = _status(pre_approval_drift_guard) == "pre_approval_drift_guard_ready"
     pre_approval_drift_guard_accounted_for = _pre_approval_drift_guard_accounted_for(pre_approval_drift_guard)
@@ -572,9 +578,23 @@ def build_commercial_delivery_closure_snapshot(
         and pre_approval_drift_guard_accounted_for
         and owner_approval_resume_packet_accounted_for
     )
+    owner_post_approval_operator_checklist_post_commit_noop_accounted_for = (
+        delivery_post_commit_noop_accounted_for
+        and _status(owner_post_approval_operator_checklist)
+        == "owner_post_approval_operator_checklist_blocked"
+        and owner_post_approval_operator_checklist.get("real_owner_approval_present") is True
+        and owner_post_approval_operator_checklist.get("waiting_for_owner") is not True
+        and owner_post_approval_operator_checklist.get("operator_ready") is not True
+        and post_commit_refresh_accounted_for
+        and closure_gate_evidence_ready
+        and (task_board_ready or task_board_post_commit_accounted_for)
+        and pre_approval_drift_guard_accounted_for
+        and owner_approval_resume_packet_accounted_for
+    )
     owner_post_approval_operator_checklist_accounted_for = (
         owner_post_approval_operator_checklist_accounted_for
         or owner_post_approval_operator_checklist_post_stage_accounted_for
+        or owner_post_approval_operator_checklist_post_commit_noop_accounted_for
     )
     full_codex_parity_claimed = _claims_parity(list(reports.values()))
     owner_gated = (
@@ -765,14 +785,17 @@ def build_commercial_delivery_closure_snapshot(
         _check(
             "stage_counts_consistent",
             (
-                int(delivery_summary.get("stage_include_count") or 0) > 0
-                and int(delivery_summary.get("owner_stage_command_count") or -1)
-                == int(delivery_summary.get("owner_stage_execution_stage_command_count") or -2)
-                == int(delivery_summary.get("rollback_reset_command_count") or -3)
-                and int(delivery_summary.get("owner_stage_command_count") or 0)
-                <= int(delivery_summary.get("stage_include_count") or -1)
+                (
+                    int(delivery_summary.get("stage_include_count") or 0) > 0
+                    or delivery_post_commit_noop_accounted_for
+                )
+                and int(delivery_summary.get("owner_stage_command_count", -1))
+                == int(delivery_summary.get("owner_stage_execution_stage_command_count", -2))
+                == int(delivery_summary.get("rollback_reset_command_count", -3))
+                and int(delivery_summary.get("owner_stage_command_count", -1))
+                <= int(delivery_summary.get("stage_include_count", -1))
                 and (
-                    int(delivery_summary.get("owner_stage_command_count") or 0) > 0
+                    int(delivery_summary.get("owner_stage_command_count", -1)) > 0
                     or delivery_post_commit_noop_accounted_for
                 )
             ),
@@ -930,6 +953,9 @@ def build_commercial_delivery_closure_snapshot(
             ),
             "owner_post_approval_operator_checklist_post_stage_accounted_for": (
                 owner_post_approval_operator_checklist_post_stage_accounted_for
+            ),
+            "owner_post_approval_operator_checklist_post_commit_noop_accounted_for": (
+                owner_post_approval_operator_checklist_post_commit_noop_accounted_for
             ),
             "refresh_chain_raw_ready": refresh_ready,
             "refresh_chain_ready_for_snapshot": refresh_ready_for_snapshot,

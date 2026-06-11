@@ -131,6 +131,8 @@ def _failed_check_names(payload: dict[str, Any]) -> set[str]:
 
 
 REFRESH_RECEIPT_SELF_BOOTSTRAP_STEPS = {
+    "task_board_before_owner_decision",
+    "owner_decision_brief",
     "owner_pre_stage_readiness_gate",
     "owner_staging_preflight",
     "owner_staging_rollback_plan",
@@ -142,8 +144,10 @@ REFRESH_RECEIPT_SELF_BOOTSTRAP_STEPS = {
     "owner_stage_approval_brief",
     "closure_snapshot",
     "owner_approval_handoff",
+    "pre_approval_drift_guard",
     "owner_approval_resume_packet",
     "owner_post_approval_operator_checklist",
+    "task_board_after_owner_decision",
 }
 
 
@@ -573,7 +577,16 @@ def build_owner_delivery_packet(
     post_stage_chain_accounted_for = (
         _status(manifest) == "original_kernel_delivery_manifest_ready"
         and _status(staging_packet) == "owner_staging_packet_ready"
-        and _status(task_board) == "commercial_delivery_ready_for_owner_staging_review"
+        and (
+            _status(task_board) == "commercial_delivery_ready_for_owner_staging_review"
+            or (
+                post_commit_noop_accounted_for
+                and _status(task_board) == "commercial_delivery_blocked"
+                and task_summary.get("owner_commit_packet_status") == "owner_commit_packet_ready"
+                and task_summary.get("owner_post_stage_commit_gate_status")
+                == "owner_post_stage_commit_gate_ready"
+            )
+        )
         and _status(control_modes_preservation) == "control_modes_preservation_ready"
         and _status(staging_runbook) == "owner_staging_runbook_blocked"
         and _status(pre_stage_gate) == "owner_pre_stage_readiness_blocked"
@@ -583,6 +596,12 @@ def build_owner_delivery_packet(
                 and "owner_pre_stage_readiness_gate" in expected_nonzero_steps
             )
             or refresh_delivery_bootstrap
+            or (
+                post_commit_noop_accounted_for
+                and set(_failed_step_names(refresh_chain)).issubset(
+                    REFRESH_RECEIPT_SELF_BOOTSTRAP_STEPS
+                )
+            )
         )
         and commit_ready
         and post_commit_owner_gate_accounted_for

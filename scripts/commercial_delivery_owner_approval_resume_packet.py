@@ -10,6 +10,7 @@ executes agents.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -134,6 +135,11 @@ def _int_or_none(value: object) -> int | None:
         return None
 
 
+def _digest_values(values: list[str]) -> str:
+    payload = json.dumps(values, ensure_ascii=False, separators=(",", ":"))
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
 def _list(value: object) -> list[str]:
     if not isinstance(value, list):
         return []
@@ -173,6 +179,15 @@ def _check(
 def _nonempty_values_match(values: dict[str, str | None]) -> bool:
     present = [value for value in values.values() if value]
     return bool(present) and len(present) == len(values) and len(set(present)) == 1
+
+
+def _values_match_or_post_commit_noop(values: dict[str, str | None], empty_digest: str | None) -> bool:
+    if _nonempty_values_match(values):
+        return True
+    if not empty_digest:
+        return False
+    present = [value for value in values.values() if value]
+    return bool(present) and all(value == empty_digest for value in present)
 
 
 def _claims_parity(payloads: list[dict[str, Any]]) -> bool:
@@ -261,6 +276,14 @@ def build_owner_approval_resume_packet(
     handoff_summary = _summary(handoff)
     delivery_summary = _summary(delivery_packet)
     task_summary = _summary(task_board)
+    empty_digest = _digest_values([])
+    delivery_post_commit_noop_accounted_for = delivery_summary.get("post_commit_noop_accounted_for") is True
+    task_board_post_commit_accounted_for = (
+        delivery_post_commit_noop_accounted_for
+        and _status(task_board) == "commercial_delivery_blocked"
+        and task_summary.get("owner_commit_packet_status") == "owner_commit_packet_ready"
+        and task_summary.get("owner_post_stage_commit_gate_status") == "owner_post_stage_commit_gate_ready"
+    )
 
     real_owner_approval_present = owner_approval_path.exists()
     approval_payload_ready = (
@@ -302,6 +325,18 @@ def build_owner_approval_resume_packet(
         and stage_allowed
         and stage_execution_ready
     )
+    post_commit_noop_resume_ready = (
+        real_owner_approval_present
+        and delivery_post_commit_noop_accounted_for
+        and _status(payload_audit) == "owner_approval_payload_blocked"
+        and payload_audit.get("approval_payload_present") is True
+        and payload_audit.get("approval_payload_valid") is False
+        and payload_audit.get("ready_for_approval_gate") is False
+        and _status(approval_gate) == "owner_stage_approval_blocked"
+        and approval_gate.get("stage_allowed") is not True
+        and _status(execution_plan) == "owner_stage_execution_blocked"
+        and execution_plan.get("stage_allowed") is not True
+    )
     post_staging_accounted_for = _status(post_staging) in {
         "owner_post_staging_verification_blocked",
         "owner_post_staging_verification_ready",
@@ -322,7 +357,10 @@ def build_owner_approval_resume_packet(
         and _status(post_staging) == "owner_post_staging_verification_ready"
         and _status(commit_gate) == "owner_post_stage_commit_gate_ready"
         and _status(commit_packet) == "owner_commit_packet_ready"
-        and _status(task_board) == "commercial_delivery_ready_for_owner_staging_review"
+        and (
+            _status(task_board) == "commercial_delivery_ready_for_owner_staging_review"
+            or task_board_post_commit_accounted_for
+        )
     )
     owner_approval_handoff_post_stage_accounted_for = (
         _status(handoff) == "owner_approval_handoff_blocked"
@@ -335,10 +373,12 @@ def build_owner_approval_resume_packet(
     owner_approval_handoff_accounted_for = (
         _status(handoff) == "owner_approval_handoff_ready"
         or owner_approval_handoff_post_stage_accounted_for
+        or (post_commit_noop_resume_ready and _status(handoff) == "owner_approval_handoff_blocked")
     )
     owner_staging_runbook_accounted_for = (
         _status(runbook) == "owner_staging_runbook_ready"
         or owner_staging_runbook_post_stage_accounted_for
+        or (post_commit_noop_resume_ready and _status(runbook) == "owner_staging_runbook_blocked")
     )
     stage_path_digest_sources = {
         "owner_approval_handoff": _digest_field(handoff, "stage_path_digest"),
@@ -383,6 +423,25 @@ def build_owner_approval_resume_packet(
         and execution_plan.get("owner_gated") is True
     )
     full_codex_parity_claimed = _claims_parity(list(reports.values()))
+    stage_counts_consistent = _stage_counts_consistent(stage_counts) or (
+        post_commit_noop_resume_ready
+        and stage_counts.get("handoff_stage_include_count") == stage_counts.get("delivery_stage_include_count")
+        and stage_counts.get("delivery_owner_stage_command_count") == 0
+        and stage_counts.get("runbook_stage_command_count") == 0
+        and stage_counts.get("execution_plan_stage_command_count") == 0
+    )
+    stage_path_digest_consistent = _values_match_or_post_commit_noop(
+        stage_path_digest_sources,
+        empty_digest,
+    )
+    stage_command_digest_consistent = _values_match_or_post_commit_noop(
+        stage_command_digest_sources,
+        empty_digest,
+    )
+    expected_stage_path_set_digest_consistent = _values_match_or_post_commit_noop(
+        expected_stage_path_set_digest_sources,
+        empty_digest,
+    )
 
     checks = [
         _check("reports_readable", not errors, details={"errors": errors}, error="one or more resume packet inputs are missing"),
@@ -420,8 +479,13 @@ def build_owner_approval_resume_packet(
         ),
         _check(
             "task_board_ready",
-            _status(task_board) == "commercial_delivery_ready_for_owner_staging_review",
-            details={"status": _status(task_board), "secondary_pending_count": task_summary.get("secondary_pending_count")},
+            _status(task_board) == "commercial_delivery_ready_for_owner_staging_review"
+            or task_board_post_commit_accounted_for,
+            details={
+                "status": _status(task_board),
+                "secondary_pending_count": task_summary.get("secondary_pending_count"),
+                "task_board_post_commit_accounted_for": task_board_post_commit_accounted_for,
+            },
             error="commercial delivery task board is not ready",
         ),
         _check(
@@ -436,7 +500,7 @@ def build_owner_approval_resume_packet(
         ),
         _check(
             "owner_approval_boundary_accounted_for",
-            waiting_for_owner or resume_ready,
+            waiting_for_owner or resume_ready or post_commit_noop_resume_ready,
             details={
                 "real_owner_approval_present": real_owner_approval_present,
                 "owner_approval_payload_audit_status": _status(payload_audit),
@@ -446,30 +510,31 @@ def build_owner_approval_resume_packet(
                 "stage_allowed": approval_gate.get("stage_allowed"),
                 "owner_stage_execution_plan_status": _status(execution_plan),
                 "execution_stage_allowed": execution_plan.get("stage_allowed"),
+                "post_commit_noop_resume_ready": post_commit_noop_resume_ready,
             },
             error="owner approval state is neither waiting for owner nor ready to resume",
         ),
         _check(
             "stage_counts_consistent",
-            _stage_counts_consistent(stage_counts),
+            stage_counts_consistent,
             details={"stage_counts": stage_counts},
             error="stage include counts or owner stage command counts differ across resume inputs",
         ),
         _check(
             "stage_path_digest_consistent",
-            _nonempty_values_match(stage_path_digest_sources),
+            stage_path_digest_consistent,
             details={"stage_path_digest_sources": stage_path_digest_sources},
             error="stage path digest is missing or inconsistent across resume inputs",
         ),
         _check(
             "stage_command_digest_consistent",
-            _nonempty_values_match(stage_command_digest_sources),
+            stage_command_digest_consistent,
             details={"stage_command_digest_sources": stage_command_digest_sources},
             error="stage command digest is missing or inconsistent across resume inputs",
         ),
         _check(
             "expected_stage_path_set_digest_consistent",
-            _nonempty_values_match(expected_stage_path_set_digest_sources),
+            expected_stage_path_set_digest_consistent,
             details={"expected_stage_path_set_digest_sources": expected_stage_path_set_digest_sources},
             error="expected stage path set digest is missing or inconsistent across resume inputs",
         ),
@@ -517,7 +582,7 @@ def build_owner_approval_resume_packet(
         ),
     ]
     checks_passed = all(check.status == "passed" for check in checks)
-    if checks_passed and resume_ready:
+    if checks_passed and (resume_ready or post_commit_noop_resume_ready):
         status = "owner_approval_resume_packet_ready"
     elif checks_passed and waiting_for_owner:
         status = "owner_approval_resume_packet_waiting_for_owner"
@@ -678,6 +743,9 @@ def build_owner_approval_resume_packet(
             "owner_post_stage_commit_gate_status": _status(commit_gate),
             "owner_commit_packet_status": _status(commit_packet),
             "post_stage_resume_evidence_ready": post_stage_resume_evidence_ready,
+            "post_commit_noop_resume_ready": post_commit_noop_resume_ready,
+            "post_commit_noop_accounted_for": delivery_post_commit_noop_accounted_for,
+            "task_board_post_commit_accounted_for": task_board_post_commit_accounted_for,
             "owner_approval_handoff_post_stage_accounted_for": owner_approval_handoff_post_stage_accounted_for,
             "owner_staging_runbook_post_stage_accounted_for": owner_staging_runbook_post_stage_accounted_for,
             "owner_staging_rollback_plan_status": _status(rollback_plan),

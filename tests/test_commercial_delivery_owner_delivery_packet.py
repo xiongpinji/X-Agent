@@ -1125,3 +1125,146 @@ def test_owner_delivery_packet_writes_json_and_markdown(tmp_path: Path) -> None:
     assert payload["status"] == "owner_delivery_packet_ready"
     assert "Commercial Delivery Owner Delivery Packet" in markdown
     assert "Owner-approved stage commands" in render_markdown_packet(packet)
+
+
+def test_owner_delivery_packet_accepts_post_commit_noop_with_blocked_task_board(
+    tmp_path: Path,
+) -> None:
+    paths = _write_reports(tmp_path, post_stage=True)
+    empty_digest = _digest_values([])
+    staging_packet = json.loads(paths["owner_staging_packet_path"].read_text(encoding="utf-8"))
+    staging_packet.update(
+        {
+            "stage_include_count": 100,
+            "eligible_stage_count": 0,
+            "stage_paths": [],
+            "stage_commands": [],
+            "stage_path_digest": empty_digest,
+            "stage_command_digest": empty_digest,
+            "summary": {"post_commit_noop_accounted_for": True},
+        }
+    )
+    paths["owner_staging_packet_path"].write_text(json.dumps(staging_packet), encoding="utf-8")
+    manifest = json.loads(paths["manifest_path"].read_text(encoding="utf-8"))
+    manifest["stage_include_count"] = 100
+    paths["manifest_path"].write_text(json.dumps(manifest), encoding="utf-8")
+    for key, status in [
+        ("owner_post_stage_commit_gate_path", "owner_post_stage_commit_gate_ready"),
+        ("owner_commit_packet_path", "owner_commit_packet_ready"),
+    ]:
+        payload = json.loads(paths[key].read_text(encoding="utf-8"))
+        payload.update(
+            {
+                "status": status,
+                "commit_allowed": True,
+                "stage_path_digest": empty_digest,
+                "stage_command_digest": empty_digest,
+                "expected_stage_path_set_digest": empty_digest,
+                "cached_staged_path_set_digest": empty_digest,
+                "summary": {"post_commit_noop_accounted_for": True},
+            }
+        )
+        paths[key].write_text(json.dumps(payload), encoding="utf-8")
+    for key in ("owner_stage_approval_request_path", "owner_approval_payload_audit_path"):
+        payload = json.loads(paths[key].read_text(encoding="utf-8"))
+        payload["status"] = (
+            "owner_stage_approval_request_blocked"
+            if key == "owner_stage_approval_request_path"
+            else "owner_approval_payload_blocked"
+        )
+        payload["checks"] = [
+            {"name": "owner_delivery_packet_ready", "status": "failed"},
+            {"name": "owner_delivery_packet_requires_approval", "status": "failed"},
+        ]
+        payload["summary"].update(
+            {
+                "stage_include_count": 100,
+                "eligible_stage_count": 0,
+                "owner_stage_command_count": 0,
+                "stage_path_digest": empty_digest,
+                "stage_command_digest": empty_digest,
+                "expected_stage_path_set_digest": empty_digest,
+            }
+        )
+        if key == "owner_approval_payload_audit_path":
+            payload.update(
+                {
+                    "approval_payload_present": True,
+                    "approval_payload_valid": False,
+                    "ready_for_approval_gate": False,
+                }
+            )
+            payload["checks"] = [
+                {"name": "owner_delivery_packet_ready", "status": "failed"},
+                {"name": "owner_stage_approval_request_ready", "status": "failed"},
+                {"name": "approval_counts_match_request_and_delivery_packet", "status": "failed"},
+                {"name": "approval_digests_match_request_and_delivery_packet", "status": "failed"},
+            ]
+        paths[key].write_text(json.dumps(payload), encoding="utf-8")
+    for key in ("owner_stage_approval_gate_path", "owner_stage_execution_plan_path"):
+        payload = json.loads(paths[key].read_text(encoding="utf-8"))
+        payload["status"] = (
+            "owner_stage_approval_blocked"
+            if key == "owner_stage_approval_gate_path"
+            else "owner_stage_execution_blocked"
+        )
+        payload["stage_allowed"] = False
+        payload["summary"] = {
+            "stage_path_digest": empty_digest,
+            "stage_command_digest": empty_digest,
+            "expected_stage_path_set_digest": empty_digest,
+            "stage_command_count": 0,
+        }
+        if key == "owner_stage_execution_plan_path":
+            payload["stage_command_count"] = 0
+        paths[key].write_text(json.dumps(payload), encoding="utf-8")
+    rollback = json.loads(paths["owner_staging_rollback_plan_path"].read_text(encoding="utf-8"))
+    rollback.update(
+        {
+            "rollback_available": False,
+            "rollback_required": False,
+            "reset_command_count": 0,
+            "summary": {
+                "post_commit_noop_accounted_for": True,
+                "owner_staging_preflight_accounted_for": True,
+            },
+        }
+    )
+    paths["owner_staging_rollback_plan_path"].write_text(json.dumps(rollback), encoding="utf-8")
+    refresh = json.loads(paths["refresh_chain_path"].read_text(encoding="utf-8"))
+    refresh["status"] = "commercial_delivery_refresh_chain_receipt_blocked"
+    refresh["summary"]["failed_step_count"] = 4
+    refresh["steps"] = [
+        {"name": "owner_delivery_packet", "status": "failed"},
+        {"name": "closure_snapshot", "status": "failed"},
+        {"name": "pre_approval_drift_guard", "status": "failed"},
+        {"name": "task_board_after_owner_decision", "status": "failed"},
+    ]
+    paths["refresh_chain_path"].write_text(json.dumps(refresh), encoding="utf-8")
+    task_board = json.loads(paths["task_board_path"].read_text(encoding="utf-8"))
+    task_board.update(
+        {
+            "status": "commercial_delivery_blocked",
+            "summary": {
+                "secondary_pending_blocks_owner_staging": False,
+                "owner_commit_packet_status": "owner_commit_packet_ready",
+                "owner_post_stage_commit_gate_status": "owner_post_stage_commit_gate_ready",
+            },
+        }
+    )
+    paths["task_board_path"].write_text(json.dumps(task_board), encoding="utf-8")
+
+    packet = build_owner_delivery_packet(**paths)
+
+    assert packet.status == "owner_delivery_packet_ready"
+    assert packet.stage_ready is True
+    assert packet.summary["post_stage_chain_accounted_for"] is True
+    assert packet.summary["post_commit_noop_accounted_for"] is True
+    refresh_check = next(check for check in packet.checks if check.name == "refresh_chain_ready")
+    assert refresh_check.status == "passed"
+    assert refresh_check.details["failed_steps"] == [
+        "owner_delivery_packet",
+        "closure_snapshot",
+        "pre_approval_drift_guard",
+        "task_board_after_owner_decision",
+    ]

@@ -369,6 +369,18 @@ def _pre_approval_drift_guard_accounted_for(reports: dict[str, dict[str, Any]]) 
         detail_key="stage_command_digest_sources",
     ):
         post_commit_allowed_failed_checks.add("stage_command_digest_stable")
+    if _failed_digest_check_has_matching_present_values(
+        drift_guard,
+        check_name="stage_path_digest_stable",
+        detail_key="stage_path_digest_sources",
+    ):
+        post_commit_allowed_failed_checks.add("stage_path_digest_stable")
+    if _failed_digest_check_has_matching_present_values(
+        drift_guard,
+        check_name="expected_stage_path_set_digest_stable",
+        detail_key="expected_stage_path_set_digest_sources",
+    ):
+        post_commit_allowed_failed_checks.add("expected_stage_path_set_digest_stable")
     stage_path_digest = _read_summary_value(drift_guard, "stage_path_digest")
     stage_command_digest = _read_summary_value(drift_guard, "stage_command_digest")
     expected_stage_path_set_digest = _read_summary_value(drift_guard, "expected_stage_path_set_digest")

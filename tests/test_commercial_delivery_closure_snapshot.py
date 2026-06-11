@@ -849,6 +849,125 @@ def test_closure_snapshot_allows_subset_eligible_stage_commands(tmp_path: Path) 
     assert count_check.details["owner_stage_command_count"] == 2
 
 
+def test_closure_snapshot_completes_post_commit_noop_with_zero_stage_commands(tmp_path: Path) -> None:
+    paths = _write_inputs(tmp_path, complete=True)
+    empty_digest = _digest_values([])
+    delivery_packet = json.loads(paths["owner_delivery_packet_path"].read_text(encoding="utf-8"))
+    delivery_packet["summary"].update(
+        {
+            "stage_include_count": 100,
+            "owner_stage_command_count": 0,
+            "owner_stage_execution_stage_command_count": 0,
+            "rollback_reset_command_count": 0,
+            "post_stage_chain_accounted_for": True,
+            "post_commit_owner_gate_accounted_for": True,
+            "post_commit_stage_approval_accounted_for": True,
+            "post_commit_stage_execution_accounted_for": True,
+            "post_commit_noop_accounted_for": True,
+            "stage_path_digest": empty_digest,
+            "stage_command_digest": empty_digest,
+        }
+    )
+    paths["owner_delivery_packet_path"].write_text(json.dumps(delivery_packet), encoding="utf-8")
+    for key in ("owner_stage_approval_brief_path", "owner_stage_approval_gate_path"):
+        payload = json.loads(paths[key].read_text(encoding="utf-8"))
+        payload["status"] = (
+            "owner_stage_approval_brief_blocked"
+            if key == "owner_stage_approval_brief_path"
+            else "owner_stage_approval_blocked"
+        )
+        payload["stage_allowed"] = False
+        payload["summary"].update(
+            {
+                "stage_path_digest": empty_digest,
+                "stage_command_digest": empty_digest,
+                "blocking_reasons": ["owner_delivery_packet_ready"],
+            }
+        )
+        paths[key].write_text(json.dumps(payload), encoding="utf-8")
+    payload = json.loads(paths["owner_approval_payload_audit_path"].read_text(encoding="utf-8"))
+    payload.update(
+        {
+            "status": "owner_approval_payload_blocked",
+            "approval_payload_present": True,
+            "approval_payload_valid": False,
+            "ready_for_approval_gate": False,
+        }
+    )
+    payload["summary"]["blocking_reasons"] = ["owner_delivery_packet_ready"]
+    paths["owner_approval_payload_audit_path"].write_text(json.dumps(payload), encoding="utf-8")
+    execution_plan = json.loads(paths["owner_stage_execution_plan_path"].read_text(encoding="utf-8"))
+    execution_plan.update(
+        {
+            "status": "owner_stage_execution_blocked",
+            "stage_allowed": False,
+            "stage_command_count": 0,
+            "stage_path_digest": empty_digest,
+            "stage_command_digest": empty_digest,
+        }
+    )
+    execution_plan["summary"]["blocking_reasons"] = ["owner_delivery_packet_ready"]
+    paths["owner_stage_execution_plan_path"].write_text(json.dumps(execution_plan), encoding="utf-8")
+    for key in ("owner_post_staging_verifier_path", "owner_post_stage_commit_gate_path", "owner_commit_packet_path"):
+        payload = json.loads(paths[key].read_text(encoding="utf-8"))
+        payload.update(
+            {
+                "stage_path_digest": empty_digest,
+                "stage_command_digest": empty_digest,
+                "expected_stage_path_set_digest": empty_digest,
+                "cached_staged_path_set_digest": empty_digest,
+            }
+        )
+        paths[key].write_text(json.dumps(payload), encoding="utf-8")
+    rollback = json.loads(paths["owner_staging_rollback_plan_path"].read_text(encoding="utf-8"))
+    rollback.update({"reset_command_count": 0, "rollback_available": False, "rollback_required": False})
+    paths["owner_staging_rollback_plan_path"].write_text(json.dumps(rollback), encoding="utf-8")
+    refresh = json.loads(paths["refresh_chain_path"].read_text(encoding="utf-8"))
+    refresh["status"] = "commercial_delivery_refresh_chain_receipt_blocked"
+    refresh["summary"]["failed_step_count"] = 4
+    refresh["steps"] = [
+        {"name": "owner_delivery_packet", "status": "failed"},
+        {"name": "closure_snapshot", "status": "failed"},
+        {"name": "owner_approval_resume_packet", "status": "failed"},
+        {"name": "owner_post_approval_operator_checklist", "status": "failed"},
+    ]
+    paths["refresh_chain_path"].write_text(json.dumps(refresh), encoding="utf-8")
+    pre_approval = json.loads(paths["pre_approval_drift_guard_path"].read_text(encoding="utf-8"))
+    pre_approval.update({"status": "pre_approval_drift_guard_blocked", "real_owner_approval_present": True})
+    pre_approval["summary"].update(
+        {
+            "stage_path_digest": empty_digest,
+            "stage_command_digest": empty_digest,
+            "expected_stage_path_set_digest": empty_digest,
+        }
+    )
+    paths["pre_approval_drift_guard_path"].write_text(json.dumps(pre_approval), encoding="utf-8")
+    resume_packet = json.loads(paths["owner_approval_resume_packet_path"].read_text(encoding="utf-8"))
+    resume_packet["status"] = "owner_approval_resume_packet_blocked"
+    resume_packet["waiting_for_owner"] = False
+    resume_packet["resume_ready"] = False
+    resume_packet["real_owner_approval_present"] = True
+    paths["owner_approval_resume_packet_path"].write_text(json.dumps(resume_packet), encoding="utf-8")
+    operator_checklist = json.loads(paths["owner_post_approval_operator_checklist_path"].read_text(encoding="utf-8"))
+    operator_checklist["status"] = "owner_post_approval_operator_checklist_blocked"
+    operator_checklist["waiting_for_owner"] = False
+    operator_checklist["operator_ready"] = False
+    operator_checklist["real_owner_approval_present"] = True
+    paths["owner_post_approval_operator_checklist_path"].write_text(json.dumps(operator_checklist), encoding="utf-8")
+
+    snapshot = build_commercial_delivery_closure_snapshot(**paths)
+
+    assert snapshot.status == "commercial_delivery_complete"
+    assert snapshot.delivery_complete is True
+    assert snapshot.summary["post_commit_noop_accounted_for"] is True
+    assert snapshot.summary["post_commit_refresh_accounted_for"] is True
+    assert snapshot.summary["owner_approval_resume_packet_post_stage_accounted_for"] is True
+    assert snapshot.summary["owner_post_approval_operator_checklist_post_commit_noop_accounted_for"] is True
+    count_check = next(check for check in snapshot.checks if check.name == "stage_counts_consistent")
+    assert count_check.status == "passed"
+    assert count_check.details["owner_stage_command_count"] == 0
+
+
 def test_closure_snapshot_blocks_stage_digest_drift(tmp_path: Path) -> None:
     paths = _write_inputs(tmp_path, complete=True)
     payload = json.loads(paths["owner_commit_packet_path"].read_text(encoding="utf-8"))
