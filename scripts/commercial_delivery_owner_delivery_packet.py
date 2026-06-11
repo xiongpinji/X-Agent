@@ -134,6 +134,7 @@ REFRESH_RECEIPT_SELF_BOOTSTRAP_STEPS = {
     "task_board_before_owner_decision",
     "owner_decision_brief",
     "owner_pre_stage_readiness_gate",
+    "owner_staging_runbook",
     "owner_staging_preflight",
     "owner_staging_rollback_plan",
     "owner_delivery_packet_before_owner_approval",
