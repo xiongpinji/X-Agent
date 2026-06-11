@@ -1,0 +1,748 @@
+#!/usr/bin/env python3
+"""Build the final owner-facing commercial delivery packet.
+
+The packet summarizes the pre-stage and post-stage owner gates into one
+handoff artifact. It never stages files, creates commits, pushes branches,
+runs tests, calls external services, or executes agents.
+"""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+from dataclasses import asdict, dataclass, field
+from pathlib import Path
+from typing import Any
+
+from scripts.commercial_delivery_task_board import _display_path
+from scripts.commercial_pilot_core_entrypoints import REPORT_DIR, _utc_now
+
+DEFAULT_MANIFEST = REPORT_DIR / "original-kernel-delivery-manifest.json"
+DEFAULT_OWNER_STAGING_PACKET = REPORT_DIR / "commercial-delivery-owner-staging-packet.json"
+DEFAULT_OWNER_STAGING_RUNBOOK = REPORT_DIR / "commercial-delivery-owner-staging-runbook.json"
+DEFAULT_OWNER_PRE_STAGE_GATE = REPORT_DIR / "commercial-delivery-owner-pre-stage-readiness-gate.json"
+DEFAULT_OWNER_POST_STAGE_COMMIT_GATE = REPORT_DIR / "commercial-delivery-owner-post-stage-commit-gate.json"
+DEFAULT_OWNER_COMMIT_PACKET = REPORT_DIR / "commercial-delivery-owner-commit-packet.json"
+DEFAULT_OWNER_STAGE_APPROVAL_GATE = REPORT_DIR / "commercial-delivery-owner-stage-approval-gate.json"
+DEFAULT_OWNER_STAGE_APPROVAL_REQUEST = REPORT_DIR / "commercial-delivery-owner-stage-approval-request.json"
+DEFAULT_OWNER_STAGE_EXECUTION_PLAN = REPORT_DIR / "commercial-delivery-owner-stage-execution-plan.json"
+DEFAULT_OWNER_STAGING_ROLLBACK_PLAN = REPORT_DIR / "commercial-delivery-owner-staging-rollback-plan.json"
+DEFAULT_REFRESH_CHAIN = REPORT_DIR / "commercial-delivery-refresh-chain-receipt.json"
+DEFAULT_TASK_BOARD = REPORT_DIR / "commercial-delivery-task-board.json"
+DEFAULT_CONTROL_MODES_PRESERVATION = REPORT_DIR / "commercial-delivery-control-modes-preservation.json"
+DEFAULT_OUTPUT = REPORT_DIR / "commercial-delivery-owner-delivery-packet.json"
+DEFAULT_MARKDOWN_OUTPUT = REPORT_DIR / "commercial-delivery-owner-delivery-packet.md"
+
+
+@dataclass(frozen=True)
+class OwnerDeliveryPacketCheck:
+    name: str
+    status: str
+    details: dict[str, Any] = field(default_factory=dict)
+    error: str | None = None
+
+
+@dataclass(frozen=True)
+class OwnerDeliveryPacketSection:
+    name: str
+    title: str
+    commands: list[str]
+    notes: list[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class OwnerDeliveryPacket:
+    status: str
+    generated_at: str
+    evidence_type: str
+    owner_gated: bool
+    mutation_performed: bool
+    git_stage_performed: bool
+    git_commit_performed: bool
+    git_push_performed: bool
+    network_mutation_performed: bool
+    agent_execution_enabled: bool
+    full_codex_parity_claimed: bool
+    stage_ready: bool
+    commit_ready: bool
+    owner_approval_required: bool
+    reports: dict[str, str]
+    report_statuses: dict[str, str | None]
+    summary: dict[str, Any]
+    sections: list[OwnerDeliveryPacketSection]
+    checks: list[OwnerDeliveryPacketCheck]
+    next_actions: list[str]
+    known_limits: list[str]
+
+    def to_dict(self) -> dict[str, Any]:
+        payload = asdict(self)
+        payload["sections"] = [asdict(section) for section in self.sections]
+        payload["checks"] = [asdict(check) for check in self.checks]
+        for name, value in asdict(self).items():
+            if isinstance(value, list):
+                payload[f"{name}_count"] = len(value)
+        return payload
+
+
+def _read_json(path: Path) -> tuple[dict[str, Any], str | None]:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return {}, f"report not found: {_display_path(path)}"
+    except (OSError, json.JSONDecodeError) as exc:
+        return {}, f"could not read report {_display_path(path)}: {exc}"
+    if not isinstance(payload, dict):
+        return {}, f"report is not a JSON object: {_display_path(path)}"
+    return payload, None
+
+
+def _status(payload: dict[str, Any]) -> str | None:
+    value = payload.get("status")
+    return str(value) if value is not None else None
+
+
+def _summary(payload: dict[str, Any]) -> dict[str, Any]:
+    value = payload.get("summary")
+    return value if isinstance(value, dict) else {}
+
+
+def _failed_step_names(payload: dict[str, Any]) -> list[str]:
+    steps = payload.get("steps")
+    if not isinstance(steps, list):
+        return []
+    names: list[str] = []
+    for step in steps:
+        if isinstance(step, dict) and step.get("status") == "failed" and step.get("name") is not None:
+            names.append(str(step.get("name")))
+    return names
+
+
+REFRESH_RECEIPT_SELF_BOOTSTRAP_STEPS = {
+    "owner_pre_stage_readiness_gate",
+    "owner_staging_rollback_plan",
+    "owner_delivery_packet_before_owner_approval",
+    "owner_delivery_packet",
+    "owner_stage_execution_plan",
+    "owner_stage_approval_brief",
+    "closure_snapshot",
+    "owner_approval_handoff",
+}
+
+
+def _refresh_receipt_delivery_bootstrap(refresh_chain: dict[str, Any]) -> bool:
+    summary = _summary(refresh_chain)
+    failed_steps = _failed_step_names(refresh_chain)
+    return (
+        _status(refresh_chain) == "commercial_delivery_refresh_chain_receipt_blocked"
+        and int(summary.get("failed_step_count") or 0) == 1
+        and len(failed_steps) == 1
+        and failed_steps[0] in REFRESH_RECEIPT_SELF_BOOTSTRAP_STEPS
+    )
+
+
+def _refresh_receipt_ready_or_delivery_bootstrap(refresh_chain: dict[str, Any]) -> bool:
+    return (
+        _status(refresh_chain) == "commercial_delivery_refresh_chain_receipt_ready"
+        or _refresh_receipt_delivery_bootstrap(refresh_chain)
+    )
+
+
+def _list(value: object) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [str(item) for item in value if str(item).strip()]
+
+
+def _digest_values(values: list[str]) -> str | None:
+    if not values:
+        return None
+    payload = json.dumps(values, ensure_ascii=False, separators=(",", ":"))
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _path_set_digest(paths: list[str]) -> str | None:
+    return _digest_values(sorted(set(paths))) if paths else None
+
+
+def _claims_parity(payloads: list[dict[str, Any]]) -> bool:
+    return any(payload.get("full_codex_parity_claimed") is True for payload in payloads)
+
+
+def _check(
+    name: str,
+    passed: bool,
+    *,
+    details: dict[str, Any] | None = None,
+    error: str | None = None,
+) -> OwnerDeliveryPacketCheck:
+    return OwnerDeliveryPacketCheck(
+        name=name,
+        status="passed" if passed else "failed",
+        details=details or {},
+        error=None if passed else error,
+    )
+
+
+def build_owner_delivery_packet(
+    *,
+    manifest_path: Path = DEFAULT_MANIFEST,
+    owner_staging_packet_path: Path = DEFAULT_OWNER_STAGING_PACKET,
+    owner_staging_runbook_path: Path = DEFAULT_OWNER_STAGING_RUNBOOK,
+    owner_pre_stage_gate_path: Path = DEFAULT_OWNER_PRE_STAGE_GATE,
+    owner_post_stage_commit_gate_path: Path = DEFAULT_OWNER_POST_STAGE_COMMIT_GATE,
+    owner_commit_packet_path: Path = DEFAULT_OWNER_COMMIT_PACKET,
+    owner_stage_approval_gate_path: Path = DEFAULT_OWNER_STAGE_APPROVAL_GATE,
+    owner_stage_approval_request_path: Path = DEFAULT_OWNER_STAGE_APPROVAL_REQUEST,
+    owner_stage_execution_plan_path: Path = DEFAULT_OWNER_STAGE_EXECUTION_PLAN,
+    owner_staging_rollback_plan_path: Path = DEFAULT_OWNER_STAGING_ROLLBACK_PLAN,
+    refresh_chain_path: Path = DEFAULT_REFRESH_CHAIN,
+    task_board_path: Path = DEFAULT_TASK_BOARD,
+    control_modes_preservation_path: Path = DEFAULT_CONTROL_MODES_PRESERVATION,
+) -> OwnerDeliveryPacket:
+    required_report_paths = {
+        "manifest": manifest_path,
+        "owner_staging_packet": owner_staging_packet_path,
+        "owner_staging_runbook": owner_staging_runbook_path,
+        "owner_pre_stage_gate": owner_pre_stage_gate_path,
+        "owner_post_stage_commit_gate": owner_post_stage_commit_gate_path,
+        "owner_commit_packet": owner_commit_packet_path,
+        "owner_stage_approval_gate": owner_stage_approval_gate_path,
+        "refresh_chain": refresh_chain_path,
+        "task_board": task_board_path,
+        "control_modes_preservation": control_modes_preservation_path,
+    }
+    optional_report_paths = {
+        "owner_stage_approval_request": owner_stage_approval_request_path,
+        "owner_stage_execution_plan": owner_stage_execution_plan_path,
+        "owner_staging_rollback_plan": owner_staging_rollback_plan_path,
+    }
+    report_paths = {**required_report_paths, **optional_report_paths}
+    reports: dict[str, dict[str, Any]] = {}
+    errors: dict[str, str] = {}
+    optional_missing: list[str] = []
+    optional_errors: dict[str, str] = {}
+    for name, path in required_report_paths.items():
+        payload, error = _read_json(path)
+        reports[name] = payload
+        if error:
+            errors[name] = error
+    for name, path in optional_report_paths.items():
+        payload, error = _read_json(path)
+        reports[name] = payload
+        if error:
+            if path.exists():
+                optional_errors[name] = error
+            else:
+                optional_missing.append(name)
+
+    manifest = reports["manifest"]
+    staging_packet = reports["owner_staging_packet"]
+    staging_runbook = reports["owner_staging_runbook"]
+    pre_stage_gate = reports["owner_pre_stage_gate"]
+    commit_gate = reports["owner_post_stage_commit_gate"]
+    commit_packet = reports["owner_commit_packet"]
+    approval_gate = reports["owner_stage_approval_gate"]
+    approval_request = reports["owner_stage_approval_request"]
+    stage_execution_plan = reports["owner_stage_execution_plan"]
+    rollback_plan = reports["owner_staging_rollback_plan"]
+    refresh_chain = reports["refresh_chain"]
+    task_board = reports["task_board"]
+    control_modes_preservation = reports["control_modes_preservation"]
+    task_summary = _summary(task_board)
+    refresh_summary = _summary(refresh_chain)
+    control_modes_summary = _summary(control_modes_preservation)
+    refresh_receipt_ok = _refresh_receipt_ready_or_delivery_bootstrap(refresh_chain)
+    refresh_delivery_bootstrap = _refresh_receipt_delivery_bootstrap(refresh_chain)
+
+    stage_commands = _list(staging_packet.get("stage_commands"))
+    pre_stage_commands = _list(staging_packet.get("pre_stage_verification_commands"))
+    post_stage_commands = _list(staging_packet.get("post_stage_verification_commands"))
+    commit_preview = staging_packet.get("commit_command_preview") or commit_packet.get("commit_command_preview")
+    stage_path_digest = staging_packet.get("stage_path_digest")
+    stage_command_digest = staging_packet.get("stage_command_digest")
+    stage_paths = _list(staging_packet.get("stage_paths"))
+    expected_stage_path_set_digest = _path_set_digest(stage_paths)
+    expected_nonzero_steps = _list(refresh_summary.get("expected_nonzero_steps"))
+    stage_include_count = manifest.get("stage_include_count")
+    owner_stage_command_count = len(stage_commands)
+    strict_stage_ready = (
+        _status(manifest) == "original_kernel_delivery_manifest_ready"
+        and _status(staging_packet) == "owner_staging_packet_ready"
+        and _status(staging_runbook) == "owner_staging_runbook_ready"
+        and _status(pre_stage_gate) == "owner_pre_stage_readiness_ready"
+        and _status(task_board) == "commercial_delivery_ready_for_owner_staging_review"
+        and _status(control_modes_preservation) == "control_modes_preservation_ready"
+    )
+    commit_ready = (
+        _status(commit_gate) == "owner_post_stage_commit_gate_ready"
+        and _status(commit_packet) == "owner_commit_packet_ready"
+        and commit_packet.get("commit_allowed") is True
+    )
+    stage_approval_ready = _status(approval_gate) == "owner_stage_approval_ready"
+    stage_approval_expected_blocked = (
+        _status(approval_gate) in {None, "owner_stage_approval_blocked"}
+        and approval_gate.get("stage_allowed") is not True
+    )
+    approval_request_ready = _status(approval_request) == "owner_stage_approval_request_ready"
+    approval_request_missing = "owner_stage_approval_request" in optional_missing
+    approval_request_accounted_for = approval_request_ready or approval_request_missing
+    stage_execution_ready = _status(stage_execution_plan) == "owner_stage_execution_ready"
+    stage_execution_expected_blocked = (
+        _status(stage_execution_plan) == "owner_stage_execution_blocked"
+        and stage_execution_plan.get("stage_allowed") is not True
+    )
+    stage_execution_missing = "owner_stage_execution_plan" in optional_missing
+    stage_execution_accounted_for = stage_execution_ready or stage_execution_expected_blocked or stage_execution_missing
+    rollback_plan_ready = _status(rollback_plan) == "owner_staging_rollback_plan_ready"
+    rollback_plan_missing = "owner_staging_rollback_plan" in optional_missing
+    rollback_plan_accounted_for = rollback_plan_ready or rollback_plan_missing
+    post_stage_chain_accounted_for = (
+        _status(manifest) == "original_kernel_delivery_manifest_ready"
+        and _status(staging_packet) == "owner_staging_packet_ready"
+        and _status(task_board) == "commercial_delivery_ready_for_owner_staging_review"
+        and _status(control_modes_preservation) == "control_modes_preservation_ready"
+        and _status(staging_runbook) == "owner_staging_runbook_blocked"
+        and _status(pre_stage_gate) == "owner_pre_stage_readiness_blocked"
+        and (
+            (
+                "owner_staging_runbook" in expected_nonzero_steps
+                and "owner_pre_stage_readiness_gate" in expected_nonzero_steps
+            )
+            or refresh_delivery_bootstrap
+        )
+        and commit_ready
+        and stage_approval_ready
+        and stage_execution_ready
+        and rollback_plan_ready
+    )
+    stage_ready = strict_stage_ready or post_stage_chain_accounted_for
+    full_codex_parity_claimed = _claims_parity(list(reports.values()))
+    owner_gated = (
+        staging_packet.get("owner_gated") is True
+        and staging_runbook.get("owner_gated") is True
+        and pre_stage_gate.get("owner_gated") is True
+        and (approval_request_missing or approval_request.get("owner_gated") is True)
+        and (stage_execution_missing or stage_execution_plan.get("owner_gated") is True)
+        and (rollback_plan_missing or rollback_plan.get("owner_gated") is True)
+        and task_summary.get("secondary_pending_blocks_owner_staging") is False
+    )
+
+    checks = [
+        _check(
+            "reports_readable",
+            not errors and not optional_errors,
+            details={
+                "errors": errors,
+                "optional_errors": optional_errors,
+                "optional_missing": optional_missing,
+            },
+            error="one or more owner delivery packet inputs are missing or unreadable",
+        ),
+        _check(
+            "manifest_ready",
+            _status(manifest) == "original_kernel_delivery_manifest_ready",
+            details={"status": _status(manifest), "stage_include_count": stage_include_count},
+            error="original-kernel delivery manifest is not ready",
+        ),
+        _check(
+            "owner_pre_stage_chain_ready",
+            stage_ready,
+            details={
+                "owner_staging_packet_status": _status(staging_packet),
+                "owner_staging_runbook_status": _status(staging_runbook),
+                "owner_pre_stage_gate_status": _status(pre_stage_gate),
+                "task_board_status": _status(task_board),
+                "control_modes_preservation_status": _status(control_modes_preservation),
+                "strict_stage_ready": strict_stage_ready,
+                "post_stage_chain_accounted_for": post_stage_chain_accounted_for,
+                "owner_post_stage_commit_gate_status": _status(commit_gate),
+                "owner_commit_packet_status": _status(commit_packet),
+                "owner_stage_approval_gate_status": _status(approval_gate),
+                "owner_stage_execution_plan_status": _status(stage_execution_plan),
+                "owner_staging_rollback_plan_status": _status(rollback_plan),
+                "expected_nonzero_steps": expected_nonzero_steps,
+                "refresh_delivery_bootstrap": refresh_delivery_bootstrap,
+            },
+            error="pre-stage owner delivery chain is not ready",
+        ),
+        _check(
+            "stage_command_count_matches_manifest",
+            bool(stage_commands) and owner_stage_command_count == stage_include_count,
+            details={
+                "owner_stage_command_count": owner_stage_command_count,
+                "manifest_stage_include_count": stage_include_count,
+            },
+            error="owner stage command count does not match manifest stage include count",
+        ),
+        _check(
+            "stage_digests_present",
+            isinstance(stage_path_digest, str)
+            and len(stage_path_digest) == 64
+            and isinstance(stage_command_digest, str)
+            and len(stage_command_digest) == 64
+            and isinstance(expected_stage_path_set_digest, str)
+            and len(expected_stage_path_set_digest) == 64,
+            details={
+                "stage_path_digest": stage_path_digest,
+                "stage_command_digest": stage_command_digest,
+                "expected_stage_path_set_digest": expected_stage_path_set_digest,
+            },
+            error="owner staging packet does not include stage path, command, and path-set digests",
+        ),
+        _check(
+            "refresh_chain_ready",
+            refresh_receipt_ok,
+            details={
+                "status": _status(refresh_chain),
+                "step_count": refresh_summary.get("step_count"),
+                "failed_step_count": refresh_summary.get("failed_step_count"),
+                "failed_steps": _failed_step_names(refresh_chain),
+                "expected_nonzero_steps": expected_nonzero_steps,
+            },
+            error="commercial delivery refresh chain is not ready or recoverable from a delivery-packet self-bootstrap state",
+        ),
+        _check(
+            "post_stage_commit_packet_accounted_for",
+            _status(commit_packet) in {"owner_commit_packet_ready", "owner_commit_packet_blocked"},
+            details={
+                "owner_post_stage_commit_gate_status": _status(commit_gate),
+                "owner_commit_packet_status": _status(commit_packet),
+                "commit_allowed": commit_packet.get("commit_allowed"),
+            },
+            error="owner commit packet is missing or in an unknown state",
+        ),
+        _check(
+            "pre_stage_post_stage_blockers_are_expected",
+            commit_ready or "owner_commit_packet" in expected_nonzero_steps or refresh_delivery_bootstrap,
+            details={
+                "commit_ready": commit_ready,
+                "refresh_delivery_bootstrap": refresh_delivery_bootstrap,
+                "expected_nonzero_steps": expected_nonzero_steps,
+            },
+            error="owner commit packet is blocked but not recorded as an expected pre-staging state",
+        ),
+        _check(
+            "owner_stage_approval_gate_accounted_for",
+            stage_approval_ready or stage_approval_expected_blocked,
+            details={
+                "owner_stage_approval_gate_status": _status(approval_gate),
+                "stage_allowed": approval_gate.get("stage_allowed"),
+            },
+            error="owner stage approval gate is missing or in an unknown state",
+        ),
+        _check(
+            "owner_stage_approval_request_accounted_for",
+            approval_request_accounted_for,
+            details={
+                "owner_stage_approval_request_status": _status(approval_request),
+                "owner_stage_approval_request_missing": approval_request_missing,
+            },
+            error="owner stage approval request is present but not ready",
+        ),
+        _check(
+            "owner_stage_execution_plan_accounted_for",
+            stage_execution_accounted_for,
+            details={
+                "owner_stage_execution_plan_status": _status(stage_execution_plan),
+                "stage_allowed": stage_execution_plan.get("stage_allowed"),
+                "owner_stage_execution_plan_missing": stage_execution_missing,
+            },
+            error=(
+                "owner stage execution plan is present but neither ready nor in the expected "
+                "pre-approval blocked state"
+            ),
+        ),
+        _check(
+            "owner_staging_rollback_plan_accounted_for",
+            rollback_plan_accounted_for,
+            details={
+                "owner_staging_rollback_plan_status": _status(rollback_plan),
+                "rollback_available": rollback_plan.get("rollback_available"),
+                "owner_staging_rollback_plan_missing": rollback_plan_missing,
+            },
+            error="owner staging rollback plan is present but not ready",
+        ),
+        _check(
+            "owner_gate_present",
+            owner_gated,
+            details={
+                "owner_staging_packet_owner_gated": staging_packet.get("owner_gated"),
+                "owner_staging_runbook_owner_gated": staging_runbook.get("owner_gated"),
+                "owner_pre_stage_gate_owner_gated": pre_stage_gate.get("owner_gated"),
+                "owner_stage_approval_request_owner_gated": approval_request.get("owner_gated"),
+                "owner_stage_execution_plan_owner_gated": stage_execution_plan.get("owner_gated"),
+                "owner_staging_rollback_plan_owner_gated": rollback_plan.get("owner_gated"),
+                "owner_stage_approval_request_missing": approval_request_missing,
+                "owner_stage_execution_plan_missing": stage_execution_missing,
+                "owner_staging_rollback_plan_missing": rollback_plan_missing,
+                "secondary_pending_blocks_owner_staging": task_summary.get("secondary_pending_blocks_owner_staging"),
+            },
+            error="one or more owner gate markers are missing",
+        ),
+        _check(
+            "secondary_pending_does_not_block_owner_review",
+            task_summary.get("secondary_pending_blocks_owner_staging") is False,
+            details={
+                "secondary_pending_count": task_summary.get("secondary_pending_count"),
+                "secondary_handoff_next_count": task_summary.get("secondary_handoff_next_count"),
+                "secondary_handoff_next_queue": task_summary.get("secondary_handoff_next_queue"),
+                "secondary_handoff_completed_count": task_summary.get("secondary_handoff_completed_count"),
+                "secondary_handoff_latest_completed_candidate": task_summary.get(
+                    "secondary_handoff_latest_completed_candidate"
+                ),
+                "secondary_pending_blocks_owner_staging": task_summary.get("secondary_pending_blocks_owner_staging"),
+            },
+            error="secondary pending candidates are blocking owner review",
+        ),
+        _check(
+            "control_modes_preservation_ready",
+            _status(control_modes_preservation) == "control_modes_preservation_ready"
+            and control_modes_summary.get("plan_only_default") is True
+            and control_modes_summary.get("loop_phases") == ["explore", "plan", "edit", "verify", "deliver"],
+            details={
+                "control_modes_preservation_status": _status(control_modes_preservation),
+                "plan_only_default": control_modes_summary.get("plan_only_default"),
+                "loop_phases": control_modes_summary.get("loop_phases"),
+                "control_surface_file_count": control_modes_summary.get("control_surface_file_count"),
+            },
+            error="control mode preservation evidence is missing or no longer preserves plan-only defaults",
+        ),
+        _check(
+            "no_full_codex_parity_claim",
+            not full_codex_parity_claimed,
+            details={"full_codex_parity_claimed": full_codex_parity_claimed},
+            error="one or more owner delivery packet inputs claim full Codex parity",
+        ),
+        _check(
+            "no_delivery_packet_mutation",
+            True,
+            details={
+                "mutation_performed": False,
+                "git_stage_performed": False,
+                "git_commit_performed": False,
+                "git_push_performed": False,
+                "network_mutation_performed": False,
+                "agent_execution_enabled": False,
+            },
+        ),
+    ]
+    ready = all(check.status == "passed" for check in checks)
+    status = "owner_delivery_packet_ready" if ready else "owner_delivery_packet_blocked"
+
+    sections = [
+        OwnerDeliveryPacketSection(
+            name="pre_stage_verification",
+            title="Pre-stage verification",
+            commands=pre_stage_commands,
+            notes=[
+                "Run these immediately before owner-approved staging.",
+                "Stop if the cached index is not empty or any report becomes blocked.",
+            ],
+        ),
+        OwnerDeliveryPacketSection(
+            name="owner_stage_commands",
+            title="Owner-approved stage commands",
+            commands=stage_commands,
+            notes=[
+                "Run only these exact git add commands after explicit owner approval.",
+                "Never replace these with git add ., git add -A, or git add --all.",
+            ],
+        ),
+        OwnerDeliveryPacketSection(
+            name="post_stage_verification",
+            title="Post-stage verification",
+            commands=post_stage_commands,
+            notes=[
+                "Run these after staging and before commit.",
+                "Commit only if the owner commit packet becomes owner_commit_packet_ready.",
+            ],
+        ),
+        OwnerDeliveryPacketSection(
+            name="commit_preview",
+            title="Commit preview",
+            commands=[str(commit_preview or "")],
+            notes=["Run only after post-stage gates are ready and the owner approves the staged diff."],
+        ),
+    ]
+
+    return OwnerDeliveryPacket(
+        status=status,
+        generated_at=_utc_now(),
+        evidence_type="commercial_delivery_owner_delivery_packet",
+        owner_gated=owner_gated,
+        mutation_performed=False,
+        git_stage_performed=False,
+        git_commit_performed=False,
+        git_push_performed=False,
+        network_mutation_performed=False,
+        agent_execution_enabled=False,
+        full_codex_parity_claimed=full_codex_parity_claimed,
+        stage_ready=stage_ready,
+        commit_ready=commit_ready,
+        owner_approval_required=True,
+        reports={name: _display_path(path) for name, path in report_paths.items()},
+        report_statuses={name: _status(payload) for name, payload in reports.items()},
+        summary={
+            "stage_include_count": stage_include_count,
+            "owner_stage_command_count": owner_stage_command_count,
+            "pre_stage_verification_command_count": len(pre_stage_commands),
+            "post_stage_verification_command_count": len(post_stage_commands),
+            "refresh_chain_step_count": refresh_summary.get("step_count"),
+            "expected_nonzero_steps": expected_nonzero_steps,
+            "secondary_pending_count": task_summary.get("secondary_pending_count"),
+            "secondary_handoff_next_count": task_summary.get("secondary_handoff_next_count"),
+            "secondary_handoff_next_queue": task_summary.get("secondary_handoff_next_queue"),
+            "secondary_handoff_completed_count": task_summary.get("secondary_handoff_completed_count"),
+            "secondary_handoff_latest_completed_candidate": task_summary.get(
+                "secondary_handoff_latest_completed_candidate"
+            ),
+            "control_modes_preservation_status": _status(control_modes_preservation),
+            "control_modes_plan_only_default": control_modes_summary.get("plan_only_default"),
+            "control_modes_loop_phases": control_modes_summary.get("loop_phases"),
+            "control_modes_surface_file_count": control_modes_summary.get("control_surface_file_count"),
+            "owner_staging_runbook_status": _status(staging_runbook),
+            "owner_pre_stage_gate_status": _status(pre_stage_gate),
+            "owner_commit_packet_status": _status(commit_packet),
+            "owner_stage_approval_gate_status": _status(approval_gate),
+            "owner_stage_approval_request_status": _status(approval_request),
+            "owner_stage_execution_plan_status": _status(stage_execution_plan),
+            "owner_staging_rollback_plan_status": _status(rollback_plan),
+            "owner_post_stage_commit_gate_status": _status(commit_gate),
+            "commit_allowed": commit_packet.get("commit_allowed"),
+            "stage_allowed": approval_gate.get("stage_allowed"),
+            "owner_stage_execution_allowed": stage_execution_plan.get("stage_allowed"),
+            "owner_stage_execution_stage_command_count": stage_execution_plan.get("stage_command_count"),
+            "rollback_available": rollback_plan.get("rollback_available"),
+            "rollback_required": rollback_plan.get("rollback_required"),
+            "rollback_reset_command_count": rollback_plan.get("reset_command_count"),
+            "strict_stage_ready": strict_stage_ready,
+            "post_stage_chain_accounted_for": post_stage_chain_accounted_for,
+            "stage_path_digest": stage_path_digest,
+            "stage_command_digest": stage_command_digest,
+            "expected_stage_path_set_digest": expected_stage_path_set_digest,
+            "owner_stage_approval_request_missing": approval_request_missing,
+            "owner_stage_execution_plan_missing": stage_execution_missing,
+            "owner_staging_rollback_plan_missing": rollback_plan_missing,
+            "commit_command_preview": commit_preview,
+        },
+        sections=sections,
+        checks=checks,
+        next_actions=[
+            "Review this owner delivery packet before any git staging.",
+            "Run pre-stage verification immediately before owner-approved staging.",
+            "Require owner_stage_approval_ready before executing any stage command.",
+            "Run only the explicit stage commands after owner approval.",
+            "After staging, regenerate post-stage verifier, commit gate, commit packet, delivery packet, and task board.",
+            "Commit only after the owner commit packet reports owner_commit_packet_ready.",
+        ],
+        known_limits=[
+            "This packet is read-only except writing local evidence files.",
+            "It does not stage, reset, commit, push, run tests, call network services, or execute agents.",
+            "It does not claim full Codex parity.",
+            "It does not replace human owner review of the staged diff.",
+        ],
+    )
+
+
+def render_markdown_packet(packet: OwnerDeliveryPacket) -> str:
+    lines = [
+        "# Commercial Delivery Owner Delivery Packet",
+        "",
+        f"- Status: `{packet.status}`",
+        f"- Generated at: `{packet.generated_at}`",
+        f"- Stage ready: `{str(packet.stage_ready).lower()}`",
+        f"- Commit ready: `{str(packet.commit_ready).lower()}`",
+        f"- Owner approval required: `{str(packet.owner_approval_required).lower()}`",
+        f"- Stage include count: `{packet.summary.get('stage_include_count')}`",
+        f"- Owner stage command count: `{packet.summary.get('owner_stage_command_count')}`",
+        f"- Owner commit packet status: `{packet.summary.get('owner_commit_packet_status')}`",
+        f"- Owner stage approval request status: `{packet.summary.get('owner_stage_approval_request_status')}`",
+        f"- Owner stage execution plan status: `{packet.summary.get('owner_stage_execution_plan_status')}`",
+        f"- Owner staging rollback plan status: `{packet.summary.get('owner_staging_rollback_plan_status')}`",
+        f"- Secondary handoff next queue: `{', '.join(packet.summary.get('secondary_handoff_next_queue') or [])}`",
+        f"- Secondary handoff completed count: `{packet.summary.get('secondary_handoff_completed_count')}`",
+        f"- Secondary latest completed candidate: `{packet.summary.get('secondary_handoff_latest_completed_candidate')}`",
+        f"- Control modes preservation: `{packet.summary.get('control_modes_preservation_status')}`",
+        f"- Control modes plan-only default: `{packet.summary.get('control_modes_plan_only_default')}`",
+        "",
+        "## Checks",
+        "",
+    ]
+    for check in packet.checks:
+        lines.append(f"- `{check.name}`: `{check.status}`")
+        if check.error:
+            lines.append(f"  - Error: {check.error}")
+    for section in packet.sections:
+        lines.extend(["", f"## {section.title}", ""])
+        lines.extend(f"- `{command}`" for command in section.commands if command)
+        if section.notes:
+            lines.append("")
+            lines.extend(f"- {note}" for note in section.notes)
+    lines.append("")
+    return "\n".join(lines)
+
+
+def write_report(packet: OwnerDeliveryPacket, output_path: Path = DEFAULT_OUTPUT) -> None:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(json.dumps(packet.to_dict(), ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def write_markdown_packet(packet: OwnerDeliveryPacket, output_path: Path = DEFAULT_MARKDOWN_OUTPUT) -> None:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(render_markdown_packet(packet), encoding="utf-8")
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--manifest", type=Path, default=DEFAULT_MANIFEST)
+    parser.add_argument("--owner-staging-packet", type=Path, default=DEFAULT_OWNER_STAGING_PACKET)
+    parser.add_argument("--owner-staging-runbook", type=Path, default=DEFAULT_OWNER_STAGING_RUNBOOK)
+    parser.add_argument("--owner-pre-stage-gate", type=Path, default=DEFAULT_OWNER_PRE_STAGE_GATE)
+    parser.add_argument("--owner-post-stage-commit-gate", type=Path, default=DEFAULT_OWNER_POST_STAGE_COMMIT_GATE)
+    parser.add_argument("--owner-commit-packet", type=Path, default=DEFAULT_OWNER_COMMIT_PACKET)
+    parser.add_argument("--owner-stage-approval-gate", type=Path, default=DEFAULT_OWNER_STAGE_APPROVAL_GATE)
+    parser.add_argument("--owner-stage-approval-request", type=Path, default=DEFAULT_OWNER_STAGE_APPROVAL_REQUEST)
+    parser.add_argument("--owner-stage-execution-plan", type=Path, default=DEFAULT_OWNER_STAGE_EXECUTION_PLAN)
+    parser.add_argument("--owner-staging-rollback-plan", type=Path, default=DEFAULT_OWNER_STAGING_ROLLBACK_PLAN)
+    parser.add_argument("--refresh-chain", type=Path, default=DEFAULT_REFRESH_CHAIN)
+    parser.add_argument("--task-board", type=Path, default=DEFAULT_TASK_BOARD)
+    parser.add_argument("--control-modes-preservation", type=Path, default=DEFAULT_CONTROL_MODES_PRESERVATION)
+    parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument("--markdown-output", type=Path, default=DEFAULT_MARKDOWN_OUTPUT)
+    return parser.parse_args()
+
+
+def main() -> int:
+    args = parse_args()
+    packet = build_owner_delivery_packet(
+        manifest_path=args.manifest,
+        owner_staging_packet_path=args.owner_staging_packet,
+        owner_staging_runbook_path=args.owner_staging_runbook,
+        owner_pre_stage_gate_path=args.owner_pre_stage_gate,
+        owner_post_stage_commit_gate_path=args.owner_post_stage_commit_gate,
+        owner_commit_packet_path=args.owner_commit_packet,
+        owner_stage_approval_gate_path=args.owner_stage_approval_gate,
+        owner_stage_approval_request_path=args.owner_stage_approval_request,
+        owner_stage_execution_plan_path=args.owner_stage_execution_plan,
+        owner_staging_rollback_plan_path=args.owner_staging_rollback_plan,
+        refresh_chain_path=args.refresh_chain,
+        task_board_path=args.task_board,
+        control_modes_preservation_path=args.control_modes_preservation,
+    )
+    write_report(packet, args.output)
+    write_markdown_packet(packet, args.markdown_output)
+    print(f"Commercial delivery owner delivery packet status: {packet.status}")
+    print(f"Report written to {args.output}")
+    print(f"Markdown written to {args.markdown_output}")
+    print(f"Stage ready: {packet.stage_ready}")
+    print(f"Commit ready: {packet.commit_ready}")
+    for check in packet.checks:
+        print(f"- {check.name}: {check.status}")
+        if check.error:
+            print(f"  error: {check.error}")
+    return 0 if packet.status == "owner_delivery_packet_ready" else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
