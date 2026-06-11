@@ -122,7 +122,18 @@ def _digest_path_set(values: list[str]) -> str | None:
 
 def _digest_field(payload: dict[str, Any], field: str) -> str | None:
     value = payload.get(field)
+    if isinstance(value, str) and value:
+        return value
+    value = _summary(payload).get(field)
     return str(value) if isinstance(value, str) and value else None
+
+
+def _post_commit_noop_accounted_for(*payloads: dict[str, Any]) -> bool:
+    return all(
+        payload.get("post_commit_noop_accounted_for") is True
+        or _summary(payload).get("post_commit_noop_accounted_for") is True
+        for payload in payloads
+    )
 
 
 def _check(
@@ -203,6 +214,13 @@ def build_owner_staging_rollback_plan(
     verifier_cached_path_set_digest = _digest_field(post_staging, "cached_staged_path_set_digest")
     unexpected_cached_paths = _list(post_staging.get("unexpected_cached_paths"))
     protected_cached_paths = _list(post_staging.get("protected_cached_paths"))
+    empty_digest = _digest_values([])
+    post_commit_noop_accounted_for = _post_commit_noop_accounted_for(
+        staging_packet,
+        post_staging,
+        commit_gate,
+        commit_packet,
+    )
     rollback_required = (
         cached_path_count > 0
         and (
@@ -218,6 +236,11 @@ def build_owner_staging_rollback_plan(
         post_staging,
         stage_paths,
     )
+    if post_commit_noop_accounted_for and not stage_paths and not cached_paths:
+        preflight_accounted_for = True
+        stage_path_digest = empty_digest
+        reset_path_digest = empty_digest
+        reset_path_set_digest = empty_digest
 
     commands = _reset_commands(reset_paths)
     checks = [
@@ -248,29 +271,40 @@ def build_owner_staging_rollback_plan(
         ),
         _check(
             "rollback_paths_known",
-            bool(stage_paths) and set(reset_paths) == set(stage_paths),
+            (bool(stage_paths) and set(reset_paths) == set(stage_paths))
+            or (post_commit_noop_accounted_for and not stage_paths and not reset_paths),
             details={
                 "stage_path_count": len(stage_paths),
                 "reset_path_count": len(reset_paths),
                 "missing_reset_paths": sorted(set(stage_paths).difference(reset_paths)),
                 "unexpected_reset_paths": sorted(set(reset_paths).difference(stage_paths)),
+                "post_commit_noop_accounted_for": post_commit_noop_accounted_for,
             },
             error="rollback reset paths are missing or do not exactly match the owner staging packet",
         ),
         _check(
             "rollback_path_digest_matches_owner_packet",
-            owner_packet_stage_path_digest is not None
-            and stage_path_digest is not None
-            and reset_path_digest is not None
-            and stage_path_digest == owner_packet_stage_path_digest
-            and (
-                not cached_paths
-                or reset_path_digest == owner_packet_stage_path_digest
-                or (
-                    reset_path_set_digest is not None
-                    and verifier_cached_path_set_digest is not None
-                    and reset_path_set_digest == verifier_cached_path_set_digest
+            (
+                owner_packet_stage_path_digest is not None
+                and stage_path_digest is not None
+                and reset_path_digest is not None
+                and stage_path_digest == owner_packet_stage_path_digest
+                and (
+                    not cached_paths
+                    or reset_path_digest == owner_packet_stage_path_digest
+                    or (
+                        reset_path_set_digest is not None
+                        and verifier_cached_path_set_digest is not None
+                        and reset_path_set_digest == verifier_cached_path_set_digest
+                    )
                 )
+            )
+            or (
+                post_commit_noop_accounted_for
+                and owner_packet_stage_path_digest == empty_digest
+                and stage_path_digest == empty_digest
+                and reset_path_digest == empty_digest
+                and verifier_cached_path_set_digest == empty_digest
             ),
             details={
                 "stage_path_digest": stage_path_digest,
@@ -278,6 +312,7 @@ def build_owner_staging_rollback_plan(
                 "reset_path_set_digest": reset_path_set_digest,
                 "owner_packet_stage_path_digest": owner_packet_stage_path_digest,
                 "verifier_cached_staged_path_set_digest": verifier_cached_path_set_digest,
+                "post_commit_noop_accounted_for": post_commit_noop_accounted_for,
             },
             error="rollback path digest does not match owner staging packet path digest",
         ),
@@ -363,6 +398,7 @@ def build_owner_staging_rollback_plan(
             "commit_allowed": commit_packet.get("commit_allowed"),
             "preflight_cached_staged_path_count": preflight.get("cached_staged_path_count"),
             "owner_staging_preflight_accounted_for": preflight_accounted_for,
+            "post_commit_noop_accounted_for": post_commit_noop_accounted_for,
         },
         checks=checks,
         next_actions=[

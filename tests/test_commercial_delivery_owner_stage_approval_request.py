@@ -159,6 +159,38 @@ def test_owner_stage_approval_request_allows_subset_eligible_stage_commands(tmp_
     assert count_check.status == "passed"
 
 
+def test_owner_stage_approval_request_accepts_post_commit_noop_packet(tmp_path: Path) -> None:
+    paths = _write_inputs(tmp_path, count=0)
+    empty_digest = hashlib.sha256(json.dumps([], ensure_ascii=False, separators=(",", ":")).encode("utf-8")).hexdigest()
+    payload = json.loads(paths["owner_delivery_packet_path"].read_text(encoding="utf-8"))
+    payload["summary"].update(
+        {
+            "stage_include_count": 100,
+            "eligible_stage_count": 0,
+            "owner_stage_command_count": 0,
+            "stage_path_digest": empty_digest,
+            "stage_command_digest": empty_digest,
+            "expected_stage_path_set_digest": empty_digest,
+            "post_commit_noop_accounted_for": True,
+            "post_commit_owner_gate_accounted_for": True,
+        }
+    )
+    payload["sections"] = [{"name": "owner_stage_commands", "commands": []}]
+    paths["owner_delivery_packet_path"].write_text(json.dumps(payload), encoding="utf-8")
+
+    request = build_owner_stage_approval_request(**paths)
+
+    assert request.status == "owner_stage_approval_request_ready"
+    assert request.summary["post_commit_noop_accounted_for"] is True
+    assert request.summary["eligible_stage_count"] == 0
+    assert request.summary["owner_stage_command_count"] == 0
+    assert request.summary["stage_command_digest"] == empty_digest
+    assert request.summary["expected_stage_path_set_digest"] == empty_digest
+    assert request.suggested_owner_approval_payload["owner_stage_command_count"] == 0
+    assert request.suggested_owner_approval_payload["stage_command_digest"] == empty_digest
+    assert next(check for check in request.checks if check.name == "stage_counts_match_delivery_packet").status == "passed"
+
+
 def test_owner_stage_approval_request_writes_report_markdown_and_template(tmp_path: Path) -> None:
     paths = _write_inputs(tmp_path)
     request = build_owner_stage_approval_request(**paths)

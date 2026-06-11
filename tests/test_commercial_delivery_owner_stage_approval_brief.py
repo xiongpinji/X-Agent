@@ -213,10 +213,20 @@ def test_owner_stage_approval_brief_ready_before_real_approval(tmp_path: Path) -
 
 def test_owner_stage_approval_brief_accepts_refresh_self_bootstrap(tmp_path: Path) -> None:
     paths = _write_inputs(tmp_path)
+    bootstrap_steps = [
+        "owner_stage_approval_brief",
+        "closure_snapshot",
+        "owner_approval_handoff",
+        "pre_approval_drift_guard",
+        "task_board_after_owner_decision",
+    ]
     payload = json.loads(paths["refresh_chain_path"].read_text(encoding="utf-8"))
     payload["status"] = "commercial_delivery_refresh_chain_receipt_blocked"
-    payload["summary"]["failed_step_count"] = 1
-    payload["steps"] = [{"name": "owner_stage_approval_brief", "status": "failed"}]
+    payload["summary"]["failed_step_count"] = len(bootstrap_steps)
+    payload["steps"] = [
+        {"name": step, "status": "failed"}
+        for step in bootstrap_steps
+    ]
     paths["refresh_chain_path"].write_text(json.dumps(payload), encoding="utf-8")
 
     brief = build_owner_stage_approval_brief(**paths)
@@ -224,7 +234,7 @@ def test_owner_stage_approval_brief_accepts_refresh_self_bootstrap(tmp_path: Pat
     assert brief.status == "owner_stage_approval_brief_ready"
     check = next(check for check in brief.checks if check.name == "refresh_chain_ready")
     assert check.status == "passed"
-    assert check.details["failed_steps"] == ["owner_stage_approval_brief"]
+    assert check.details["failed_steps"] == bootstrap_steps
 
 
 def test_owner_stage_approval_brief_blocks_unrelated_failed_refresh_receipt(tmp_path: Path) -> None:

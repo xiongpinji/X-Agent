@@ -132,8 +132,6 @@ def _section_commands(packet: dict[str, Any], section_name: str) -> list[str]:
 
 
 def _digest_values(values: list[str]) -> str | None:
-    if not values:
-        return None
     payload = json.dumps(values, ensure_ascii=False, separators=(",", ":"))
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
@@ -201,6 +199,17 @@ def build_owner_stage_approval_request(
     summary_stage_command_digest = delivery_summary.get("stage_command_digest")
     expected_stage_path_set_digest = delivery_summary.get("expected_stage_path_set_digest")
     stage_command_digest = _stage_command_digest(delivery_packet)
+    post_commit_noop_accounted_for = (
+        delivery_summary.get("post_commit_noop_accounted_for") is True
+        and delivery_summary.get("post_commit_owner_gate_accounted_for") is True
+        and owner_stage_command_count == 0
+        and eligible_stage_count == 0
+    )
+    empty_digest = _digest_values([])
+    if post_commit_noop_accounted_for and not stage_command_digest:
+        stage_command_digest = empty_digest
+    if post_commit_noop_accounted_for and not isinstance(expected_stage_path_set_digest, str):
+        expected_stage_path_set_digest = empty_digest
     approval_gate_status = _status(approval_gate)
     approval_gate_stage_allowed = approval_gate.get("stage_allowed")
     full_codex_parity_claimed = (
@@ -212,7 +221,7 @@ def build_owner_stage_approval_request(
         and eligible_stage_count is not None
         and owner_stage_command_count is not None
         and stage_include_count > 0
-        and owner_stage_command_count > 0
+        and (owner_stage_command_count > 0 or post_commit_noop_accounted_for)
         and owner_stage_command_count == eligible_stage_count
         and owner_stage_command_count <= stage_include_count
     )
@@ -270,6 +279,7 @@ def build_owner_stage_approval_request(
                 "stage_include_count": stage_include_count,
                 "eligible_stage_count": eligible_stage_count,
                 "owner_stage_command_count": owner_stage_command_count,
+                "post_commit_noop_accounted_for": post_commit_noop_accounted_for,
             },
             error="owner delivery packet stage counts are missing or do not match eligible staging commands",
         ),
@@ -293,6 +303,7 @@ def build_owner_stage_approval_request(
             details={
                 "stage_command_digest": stage_command_digest,
                 "summary_stage_command_digest": summary_stage_command_digest,
+                "post_commit_noop_accounted_for": post_commit_noop_accounted_for,
             },
             error="owner delivery packet does not include digestable owner stage commands",
         ),
@@ -393,6 +404,7 @@ def build_owner_stage_approval_request(
             "stage_path_digest": stage_path_digest,
             "stage_command_digest": stage_command_digest,
             "expected_stage_path_set_digest": expected_stage_path_set_digest,
+            "post_commit_noop_accounted_for": post_commit_noop_accounted_for,
             "secondary_pending_count": delivery_summary.get("secondary_pending_count"),
             "secondary_handoff_next_count": delivery_summary.get("secondary_handoff_next_count"),
             "secondary_handoff_next_queue": delivery_summary.get("secondary_handoff_next_queue"),

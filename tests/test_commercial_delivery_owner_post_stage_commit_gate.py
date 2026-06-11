@@ -399,12 +399,28 @@ def test_owner_post_stage_commit_gate_accepts_post_commit_noop_evidence(tmp_path
         }
     )
     paths["owner_decision_brief_path"].write_text(json.dumps(brief), encoding="utf-8")
+    task_board = json.loads(paths["task_board_path"].read_text(encoding="utf-8"))
+    task_board.update(
+        {
+            "status": "commercial_delivery_blocked",
+            "summary": {
+                **task_board["summary"],
+                "owner_post_stage_commit_gate_status": "owner_post_stage_commit_gate_ready",
+                "owner_commit_packet_status": "owner_commit_packet_ready",
+            },
+        }
+    )
+    paths["task_board_path"].write_text(json.dumps(task_board), encoding="utf-8")
 
     gate = build_owner_post_stage_commit_gate(**paths)
 
     assert gate.status == "owner_post_stage_commit_gate_ready"
     assert gate.commit_allowed is True
     assert gate.summary["post_commit_noop_accounted_for"] is True
+    assert gate.summary["task_board_post_commit_noop_accounted_for"] is True
     assert gate.summary["expected_stage_path_set_digest"] == empty_digest
     assert gate.summary["cached_staged_path_set_digest"] == empty_digest
     assert next(check for check in gate.checks if check.name == "stage_counts_agree").status == "passed"
+    task_board_check = next(check for check in gate.checks if check.name == "task_board_ready")
+    assert task_board_check.status == "passed"
+    assert task_board_check.details["task_board_post_commit_noop_accounted_for"] is True

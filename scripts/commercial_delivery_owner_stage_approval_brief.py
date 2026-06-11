@@ -108,9 +108,17 @@ REFRESH_RECEIPT_SELF_BOOTSTRAP_STEPS = {
     "owner_pre_stage_readiness_gate",
     "owner_delivery_packet_before_owner_approval",
     "owner_delivery_packet",
+    "owner_stage_approval_request",
+    "owner_approval_payload_audit",
+    "owner_stage_approval_gate",
     "owner_stage_approval_brief",
+    "owner_stage_execution_plan",
     "closure_snapshot",
     "owner_approval_handoff",
+    "pre_approval_drift_guard",
+    "owner_approval_resume_packet",
+    "owner_post_approval_operator_checklist",
+    "task_board_after_owner_decision",
 }
 
 
@@ -119,11 +127,12 @@ def _refresh_receipt_ready_or_bootstrap(refresh_chain: dict[str, Any]) -> bool:
     if _status(refresh_chain) == "commercial_delivery_refresh_chain_receipt_ready":
         return True
     failed_steps = _failed_step_names(refresh_chain)
+    failed_step_count = int(refresh_summary.get("failed_step_count") or 0)
     return (
         _status(refresh_chain) == "commercial_delivery_refresh_chain_receipt_blocked"
-        and int(refresh_summary.get("failed_step_count") or 0) == 1
-        and len(failed_steps) == 1
-        and failed_steps[0] in REFRESH_RECEIPT_SELF_BOOTSTRAP_STEPS
+        and failed_step_count > 0
+        and len(failed_steps) == failed_step_count
+        and set(failed_steps).issubset(REFRESH_RECEIPT_SELF_BOOTSTRAP_STEPS)
     )
 
 

@@ -810,6 +810,144 @@ def test_owner_delivery_packet_accepts_post_stage_commit_bootstrap(
     assert audit_check.details["approval_payload_audit_blocked_by_post_stage_commit"] is True
 
 
+def test_owner_delivery_packet_accepts_post_commit_noop_evidence(
+    tmp_path: Path,
+) -> None:
+    paths = _write_reports(tmp_path, post_stage=True)
+    empty_digest = _digest_values([])
+    staging_packet = json.loads(paths["owner_staging_packet_path"].read_text(encoding="utf-8"))
+    staging_packet.update(
+        {
+            "stage_include_count": 100,
+            "eligible_stage_count": 0,
+            "stage_paths": [],
+            "stage_commands": [],
+            "stage_path_digest": empty_digest,
+            "stage_command_digest": empty_digest,
+            "summary": {"post_commit_noop_accounted_for": True},
+        }
+    )
+    paths["owner_staging_packet_path"].write_text(json.dumps(staging_packet), encoding="utf-8")
+    manifest = json.loads(paths["manifest_path"].read_text(encoding="utf-8"))
+    manifest["stage_include_count"] = 100
+    paths["manifest_path"].write_text(json.dumps(manifest), encoding="utf-8")
+    for key, status in [
+        ("owner_post_stage_commit_gate_path", "owner_post_stage_commit_gate_ready"),
+        ("owner_commit_packet_path", "owner_commit_packet_ready"),
+    ]:
+        payload = json.loads(paths[key].read_text(encoding="utf-8"))
+        payload.update(
+            {
+                "status": status,
+                "commit_allowed": True,
+                "stage_path_digest": empty_digest,
+                "stage_command_digest": empty_digest,
+                "expected_stage_path_set_digest": empty_digest,
+                "cached_staged_path_set_digest": empty_digest,
+                "summary": {"post_commit_noop_accounted_for": True},
+            }
+        )
+        paths[key].write_text(json.dumps(payload), encoding="utf-8")
+    approval_request = json.loads(paths["owner_stage_approval_request_path"].read_text(encoding="utf-8"))
+    approval_request.update(
+        {
+            "status": "owner_stage_approval_request_blocked",
+            "checks": [
+                {"name": "owner_delivery_packet_ready", "status": "failed"},
+                {"name": "owner_delivery_packet_requires_approval", "status": "failed"},
+                {"name": "stage_counts_match_delivery_packet", "status": "failed"},
+                {"name": "stage_command_digest_present", "status": "failed"},
+                {"name": "expected_stage_path_set_digest_present", "status": "failed"},
+            ],
+        }
+    )
+    approval_request["summary"].update(
+        {
+            "stage_include_count": 100,
+            "eligible_stage_count": 0,
+            "owner_stage_command_count": 0,
+            "stage_path_digest": empty_digest,
+        }
+    )
+    paths["owner_stage_approval_request_path"].write_text(json.dumps(approval_request), encoding="utf-8")
+    audit = json.loads(paths["owner_approval_payload_audit_path"].read_text(encoding="utf-8"))
+    audit.update(
+        {
+            "status": "owner_approval_payload_blocked",
+            "approval_payload_present": True,
+            "approval_payload_valid": False,
+            "ready_for_approval_gate": False,
+            "checks": [
+                {"name": "owner_delivery_packet_ready", "status": "failed"},
+                {"name": "owner_stage_approval_request_ready", "status": "failed"},
+                {"name": "approval_counts_match_request_and_delivery_packet", "status": "failed"},
+                {"name": "approval_digests_match_request_and_delivery_packet", "status": "failed"},
+            ],
+        }
+    )
+    audit["summary"].update(
+        {
+            "stage_include_count": 100,
+            "owner_stage_command_count": 0,
+            "stage_path_digest": empty_digest,
+        }
+    )
+    paths["owner_approval_payload_audit_path"].write_text(json.dumps(audit), encoding="utf-8")
+    for key in ("owner_stage_approval_gate_path", "owner_stage_execution_plan_path"):
+        payload = json.loads(paths[key].read_text(encoding="utf-8"))
+        payload["status"] = (
+            "owner_stage_approval_blocked"
+            if key == "owner_stage_approval_gate_path"
+            else "owner_stage_execution_blocked"
+        )
+        payload["stage_allowed"] = False
+        payload["summary"] = {
+            "stage_path_digest": empty_digest,
+            "stage_command_digest": empty_digest,
+            "expected_stage_path_set_digest": empty_digest,
+            "stage_command_count": 0,
+        }
+        if key == "owner_stage_execution_plan_path":
+            payload["stage_command_count"] = 0
+        paths[key].write_text(json.dumps(payload), encoding="utf-8")
+    rollback = json.loads(paths["owner_staging_rollback_plan_path"].read_text(encoding="utf-8"))
+    rollback.update(
+        {
+            "status": "owner_staging_rollback_plan_ready",
+            "rollback_available": False,
+            "rollback_required": False,
+            "reset_command_count": 0,
+            "summary": {
+                "post_commit_noop_accounted_for": True,
+                "owner_staging_preflight_accounted_for": True,
+            },
+        }
+    )
+    paths["owner_staging_rollback_plan_path"].write_text(json.dumps(rollback), encoding="utf-8")
+    refresh = json.loads(paths["refresh_chain_path"].read_text(encoding="utf-8"))
+    refresh["status"] = "commercial_delivery_refresh_chain_receipt_blocked"
+    refresh["summary"]["failed_step_count"] = 1
+    refresh["summary"]["expected_nonzero_steps"] = [
+        "owner_staging_runbook",
+        "owner_pre_stage_readiness_gate",
+    ]
+    refresh["steps"] = [{"name": "owner_delivery_packet", "status": "failed"}]
+    paths["refresh_chain_path"].write_text(json.dumps(refresh), encoding="utf-8")
+
+    packet = build_owner_delivery_packet(**paths)
+
+    assert packet.status == "owner_delivery_packet_ready"
+    assert packet.summary["post_commit_noop_accounted_for"] is True
+    assert packet.summary["post_commit_owner_gate_accounted_for"] is True
+    assert packet.summary["expected_stage_path_set_digest"] == empty_digest
+    assert next(check for check in packet.checks if check.name == "stage_command_count_matches_manifest").status == "passed"
+    assert next(check for check in packet.checks if check.name == "stage_digests_present").status == "passed"
+    request_check = next(check for check in packet.checks if check.name == "owner_stage_approval_request_accounted_for")
+    assert request_check.details["approval_request_post_commit_noop_accounted_for"] is True
+    audit_check = next(check for check in packet.checks if check.name == "owner_approval_payload_audit_accounted_for")
+    assert audit_check.details["approval_payload_audit_post_commit_noop_accounted_for"] is True
+
+
 def test_owner_delivery_packet_accepts_post_stage_audit_delivery_bootstrap(
     tmp_path: Path,
 ) -> None:
@@ -829,6 +967,36 @@ def test_owner_delivery_packet_accepts_post_stage_audit_delivery_bootstrap(
     audit_check = next(check for check in packet.checks if check.name == "owner_approval_payload_audit_accounted_for")
     assert audit_check.status == "passed"
     assert audit_check.details["approval_payload_audit_blocked_by_post_stage_commit"] is True
+
+
+def test_owner_delivery_packet_accepts_multi_step_refresh_bootstrap(
+    tmp_path: Path,
+) -> None:
+    paths = _write_reports(tmp_path, post_stage=True)
+    refresh = json.loads(paths["refresh_chain_path"].read_text(encoding="utf-8"))
+    bootstrap_steps = [
+        "owner_delivery_packet_before_owner_approval",
+        "owner_stage_approval_request",
+        "owner_delivery_packet",
+        "closure_snapshot",
+        "owner_approval_handoff",
+        "owner_approval_resume_packet",
+        "owner_post_approval_operator_checklist",
+    ]
+    refresh["status"] = "commercial_delivery_refresh_chain_receipt_blocked"
+    refresh["summary"]["failed_step_count"] = len(bootstrap_steps)
+    refresh["steps"] = [
+        {"name": step, "status": "failed"}
+        for step in bootstrap_steps
+    ]
+    paths["refresh_chain_path"].write_text(json.dumps(refresh), encoding="utf-8")
+
+    packet = build_owner_delivery_packet(**paths)
+
+    assert packet.status == "owner_delivery_packet_ready"
+    refresh_check = next(check for check in packet.checks if check.name == "refresh_chain_ready")
+    assert refresh_check.status == "passed"
+    assert refresh_check.details["failed_steps"] == bootstrap_steps
 
 
 def test_owner_delivery_packet_blocks_other_failed_refresh_receipt(tmp_path: Path) -> None:

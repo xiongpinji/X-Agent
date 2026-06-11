@@ -204,6 +204,61 @@ def test_stage_execution_plan_ready_after_stage_execution_with_verified_cached_i
     ).status == "passed"
 
 
+def test_stage_execution_plan_accepts_post_commit_noop(tmp_path: Path) -> None:
+    paths = _write_inputs(tmp_path, approval_ready=False)
+    empty_digest = _digest_values([])
+    packet = json.loads(paths["owner_staging_packet_path"].read_text(encoding="utf-8"))
+    packet.update(
+        {
+            "stage_commands": [],
+            "stage_paths": [],
+            "stage_path_digest": empty_digest,
+            "stage_command_digest": empty_digest,
+        }
+    )
+    paths["owner_staging_packet_path"].write_text(json.dumps(packet), encoding="utf-8")
+    preflight = json.loads(paths["owner_staging_preflight_path"].read_text(encoding="utf-8"))
+    preflight.update({"stage_command_count": 0, "cached_staged_path_count": 0})
+    paths["owner_staging_preflight_path"].write_text(json.dumps(preflight), encoding="utf-8")
+    approval_gate = json.loads(paths["owner_stage_approval_gate_path"].read_text(encoding="utf-8"))
+    approval_gate["summary"].update(
+        {
+            "stage_include_count": 100,
+            "owner_stage_command_count": 0,
+            "stage_path_digest": empty_digest,
+            "stage_command_digest": empty_digest,
+            "expected_stage_path_set_digest": empty_digest,
+        }
+    )
+    paths["owner_stage_approval_gate_path"].write_text(json.dumps(approval_gate), encoding="utf-8")
+    delivery_packet = json.loads(paths["owner_delivery_packet_path"].read_text(encoding="utf-8"))
+    delivery_packet["summary"].update(
+        {
+            "stage_include_count": 100,
+            "owner_stage_command_count": 0,
+            "stage_path_digest": empty_digest,
+            "stage_command_digest": empty_digest,
+            "expected_stage_path_set_digest": empty_digest,
+            "post_commit_noop_accounted_for": True,
+            "post_commit_owner_gate_accounted_for": True,
+        }
+    )
+    paths["owner_delivery_packet_path"].write_text(json.dumps(delivery_packet), encoding="utf-8")
+
+    plan = build_owner_stage_execution_plan(**paths)
+
+    assert plan.status == "owner_stage_execution_ready"
+    assert plan.stage_allowed is False
+    assert plan.stage_command_count == 0
+    assert plan.planned_stage_commands == []
+    assert plan.stage_path_digest == empty_digest
+    assert plan.stage_command_digest == empty_digest
+    assert plan.summary["post_commit_noop_accounted_for"] is True
+    assert plan.summary["post_stage_accounted_for"] is True
+    assert next(check for check in plan.checks if check.name == "approval_gate_ready").status == "passed"
+    assert next(check for check in plan.checks if check.name == "stage_command_counts_match").status == "passed"
+
+
 def test_stage_execution_plan_blocks_post_stage_cached_index_without_approval(tmp_path: Path) -> None:
     paths = _write_inputs(tmp_path, approval_ready=False, post_stage=True)
 

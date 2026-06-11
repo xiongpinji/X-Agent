@@ -105,9 +105,16 @@ def _optional_str(value: object) -> str | None:
     return text or None
 
 
-def _digest_values(values: list[str]) -> str | None:
-    if not values:
+def _int_or_none(value: object) -> int | None:
+    if value is None:
         return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _digest_values(values: list[str]) -> str | None:
     payload = json.dumps(values, ensure_ascii=False, separators=(",", ":"))
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
@@ -167,6 +174,14 @@ def build_owner_stage_execution_plan(
     computed_stage_path_digest = _digest_values(stage_paths)
     computed_stage_command_digest = _digest_values(stage_commands)
     computed_expected_stage_path_set_digest = _path_set_digest(stage_paths)
+    delivery_post_commit_noop_accounted_for = (
+        delivery_summary.get("post_commit_noop_accounted_for") is True
+        and delivery_summary.get("post_commit_owner_gate_accounted_for") is True
+        and delivery_summary.get("owner_stage_command_count") == 0
+    )
+    empty_digest = _digest_values([])
+    if delivery_post_commit_noop_accounted_for and not stage_paths and not stage_commands:
+        computed_expected_stage_path_set_digest = empty_digest
     packet_stage_path_digest = _optional_str(staging_packet.get("stage_path_digest"))
     packet_stage_command_digest = _optional_str(staging_packet.get("stage_command_digest"))
     delivery_stage_path_digest = _optional_str(delivery_summary.get("stage_path_digest"))
@@ -192,6 +207,10 @@ def build_owner_stage_execution_plan(
         delivery_expected_stage_path_set_digest,
         approval_expected_stage_path_set_digest,
     ]
+    if delivery_post_commit_noop_accounted_for and not stage_paths and not stage_commands:
+        stage_path_digests = [value or empty_digest for value in stage_path_digests]
+        stage_command_digests = [value or empty_digest for value in stage_command_digests]
+        expected_stage_path_set_digests = [value or empty_digest for value in expected_stage_path_set_digests]
     stage_path_digest_matches = all(stage_path_digests) and len(set(stage_path_digests)) == 1
     stage_command_digest_matches = all(stage_command_digests) and len(set(stage_command_digests)) == 1
     expected_stage_path_set_digest_matches = (
@@ -202,6 +221,9 @@ def build_owner_stage_execution_plan(
     delivery_stage_command_count = delivery_summary.get("owner_stage_command_count")
     approval_stage_include_count = approval_summary.get("stage_include_count")
     approval_stage_command_count = approval_summary.get("owner_stage_command_count")
+    preflight_stage_count_int = _int_or_none(preflight_stage_count)
+    delivery_stage_command_count_int = _int_or_none(delivery_stage_command_count)
+    approval_stage_command_count_int = _int_or_none(approval_stage_command_count)
     full_codex_parity_claimed = any(report.get("full_codex_parity_claimed") is True for report in reports.values())
     stage_allowed = (
         _status(approval_gate) == "owner_stage_approval_ready"
@@ -213,10 +235,12 @@ def build_owner_stage_execution_plan(
         and _status(delivery_packet) == "owner_delivery_packet_ready"
     )
     command_counts_match = (
-        bool(stage_commands)
-        and len(stage_commands) == len(stage_paths)
-        and len(stage_commands) == int(preflight_stage_count or -1)
-        and len(stage_commands) == int(delivery_stage_command_count or -1)
+        len(stage_commands) == len(stage_paths)
+        and (bool(stage_commands) or delivery_post_commit_noop_accounted_for)
+        and len(stage_commands) == (preflight_stage_count_int if preflight_stage_count_int is not None else -1)
+        and len(stage_commands) == (
+            delivery_stage_command_count_int if delivery_stage_command_count_int is not None else -1
+        )
     )
     approval_count_matches = (
         (
@@ -228,13 +252,23 @@ def build_owner_stage_execution_plan(
             and int(approval_stage_command_count or -1) == len(stage_commands)
         )
     )
+    if delivery_post_commit_noop_accounted_for and len(stage_commands) == 0:
+        command_counts_match = (
+            len(stage_commands) == len(stage_paths)
+            and (preflight_stage_count_int or 0) == 0
+            and (delivery_stage_command_count_int or 0) == 0
+        )
+        approval_count_matches = (
+            approval_stage_include_count in {None, delivery_stage_include_count}
+            and (approval_stage_command_count_int or 0) == 0
+        )
     cached_staged_path_count = int(preflight.get("cached_staged_path_count") or 0)
     post_stage_accounted_for = (
-        _status(preflight) == "owner_staging_preflight_blocked"
+        _status(preflight) in {"owner_staging_preflight_blocked", "owner_staging_preflight_ready"}
         and _status(delivery_packet) == "owner_delivery_packet_ready"
         and delivery_packet.get("stage_ready") is True
-        and stage_allowed
-        and bool(stage_commands)
+        and (stage_allowed or delivery_post_commit_noop_accounted_for)
+        and (bool(stage_commands) or delivery_post_commit_noop_accounted_for)
         and cached_staged_path_count == len(stage_commands)
         and stage_path_digest_matches
         and stage_command_digest_matches
@@ -276,10 +310,11 @@ def build_owner_stage_execution_plan(
         ),
         _check(
             "approval_gate_ready",
-            stage_allowed,
+            stage_allowed or delivery_post_commit_noop_accounted_for,
             details={
                 "owner_stage_approval_gate_status": _status(approval_gate),
                 "stage_allowed": approval_gate.get("stage_allowed"),
+                "delivery_post_commit_noop_accounted_for": delivery_post_commit_noop_accounted_for,
             },
             error="owner stage approval gate must be ready before staging",
         ),
@@ -292,6 +327,7 @@ def build_owner_stage_execution_plan(
                 "preflight_stage_command_count": preflight_stage_count,
                 "delivery_stage_include_count": delivery_stage_include_count,
                 "delivery_owner_stage_command_count": delivery_stage_command_count,
+                "delivery_post_commit_noop_accounted_for": delivery_post_commit_noop_accounted_for,
             },
             error="stage command counts do not match staging packet, preflight, and delivery packet",
         ),
@@ -423,6 +459,7 @@ def build_owner_stage_execution_plan(
             "cached_staged_path_count": cached_staged_path_count,
             "strict_stage_ready": strict_stage_ready,
             "post_stage_accounted_for": post_stage_accounted_for,
+            "post_commit_noop_accounted_for": delivery_post_commit_noop_accounted_for,
         },
         checks=checks,
         next_actions=[

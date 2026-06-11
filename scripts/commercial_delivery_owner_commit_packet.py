@@ -244,6 +244,14 @@ def build_owner_commit_packet(
     gate_expected_stage_path_set_digest = _digest_field(commit_gate, "expected_stage_path_set_digest")
     gate_cached_staged_path_set_digest = _digest_field(commit_gate, "cached_staged_path_set_digest")
     gate_command_path_set_digest = _digest_field(commit_gate, "command_path_set_digest")
+    task_board_ready = _status(task_board) == "commercial_delivery_ready_for_owner_staging_review"
+    task_board_post_commit_noop_accounted_for = (
+        post_commit_noop_accounted_for
+        and _status(task_board) == "commercial_delivery_blocked"
+        and task_summary.get("owner_post_stage_commit_gate_status") == "owner_post_stage_commit_gate_ready"
+        and task_summary.get("owner_commit_packet_status") == "owner_commit_packet_ready"
+        and task_summary.get("secondary_pending_blocks_owner_staging") is False
+    )
     owner_packet_stage_path_digest = _digest_field(owner_packet, "stage_path_digest")
     owner_packet_stage_command_digest = _digest_field(owner_packet, "stage_command_digest")
     command_audit_path_digest = _digest_field(owner_command_audit, "command_path_digest")
@@ -311,8 +319,14 @@ def build_owner_commit_packet(
         ),
         _check(
             "task_board_ready",
-            _status(task_board) == "commercial_delivery_ready_for_owner_staging_review",
-            details={"status": _status(task_board)},
+            task_board_ready or task_board_post_commit_noop_accounted_for,
+            details={
+                "status": _status(task_board),
+                "post_commit_noop_accounted_for": post_commit_noop_accounted_for,
+                "task_board_post_commit_noop_accounted_for": task_board_post_commit_noop_accounted_for,
+                "owner_post_stage_commit_gate_status": task_summary.get("owner_post_stage_commit_gate_status"),
+                "owner_commit_packet_status": task_summary.get("owner_commit_packet_status"),
+            },
             error="commercial delivery task board is not ready",
         ),
         _check(
@@ -489,6 +503,7 @@ def build_owner_commit_packet(
             "owner_command_audit_status": _status(owner_command_audit),
             "owner_post_stage_commit_gate_status": _status(commit_gate),
             "task_board_status": _status(task_board),
+            "task_board_post_commit_noop_accounted_for": task_board_post_commit_noop_accounted_for,
             "commit_gate_decision": commit_gate.get("decision"),
             "commit_gate_summary_cached_staged_path_count": gate_summary.get("cached_staged_path_count"),
             "secondary_pending_count": task_summary.get("secondary_pending_count"),

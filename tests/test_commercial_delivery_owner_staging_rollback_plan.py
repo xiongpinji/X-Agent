@@ -137,6 +137,62 @@ def test_rollback_plan_marks_required_after_failed_post_stage_gate(tmp_path: Pat
     assert plan.summary["cached_staged_path_count"] == 2
 
 
+def test_rollback_plan_accepts_post_commit_noop_empty_paths(tmp_path: Path) -> None:
+    paths = _write_inputs(tmp_path, staged=False, preflight_status="owner_staging_preflight_blocked")
+    empty_digest = _digest_values([])
+    packet = json.loads(paths["owner_staging_packet_path"].read_text(encoding="utf-8"))
+    packet.update(
+        {
+            "stage_paths": [],
+            "stage_path_digest": empty_digest,
+            "summary": {"post_commit_noop_accounted_for": True},
+        }
+    )
+    paths["owner_staging_packet_path"].write_text(json.dumps(packet), encoding="utf-8")
+    post_staging = json.loads(paths["owner_post_staging_verifier_path"].read_text(encoding="utf-8"))
+    post_staging.update(
+        {
+            "status": "owner_post_staging_verification_ready",
+            "post_commit_noop_accounted_for": True,
+            "cached_staged_path_count": 0,
+            "cached_staged_paths": [],
+            "stage_path_digest": empty_digest,
+            "stage_command_digest": empty_digest,
+            "expected_stage_path_set_digest": empty_digest,
+            "cached_staged_path_set_digest": empty_digest,
+        }
+    )
+    paths["owner_post_staging_verifier_path"].write_text(json.dumps(post_staging), encoding="utf-8")
+    for key, status in [
+        ("owner_post_stage_commit_gate_path", "owner_post_stage_commit_gate_ready"),
+        ("owner_commit_packet_path", "owner_commit_packet_ready"),
+    ]:
+        payload = json.loads(paths[key].read_text(encoding="utf-8"))
+        payload.update(
+            {
+                "status": status,
+                "commit_allowed": True,
+                "stage_path_digest": empty_digest,
+                "stage_command_digest": empty_digest,
+                "expected_stage_path_set_digest": empty_digest,
+                "cached_staged_path_set_digest": empty_digest,
+                "summary": {"post_commit_noop_accounted_for": True},
+            }
+        )
+        paths[key].write_text(json.dumps(payload), encoding="utf-8")
+
+    plan = build_owner_staging_rollback_plan(**paths)
+
+    assert plan.status == "owner_staging_rollback_plan_ready"
+    assert plan.rollback_available is False
+    assert plan.reset_command_count == 0
+    assert plan.stage_path_digest == empty_digest
+    assert plan.reset_path_digest == empty_digest
+    assert plan.summary["post_commit_noop_accounted_for"] is True
+    assert next(check for check in plan.checks if check.name == "rollback_paths_known").status == "passed"
+    assert next(check for check in plan.checks if check.name == "rollback_path_digest_matches_owner_packet").status == "passed"
+
+
 def test_rollback_plan_accepts_post_staging_preflight_blocked_with_verified_cached_paths(tmp_path: Path) -> None:
     paths = _write_inputs(
         tmp_path,

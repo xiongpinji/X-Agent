@@ -148,8 +148,6 @@ def _section_commands(packet: dict[str, Any], section_name: str) -> list[str]:
 
 
 def _digest_values(values: list[str]) -> str | None:
-    if not values:
-        return None
     payload = json.dumps(values, ensure_ascii=False, separators=(",", ":"))
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
@@ -185,6 +183,17 @@ def build_owner_approval_payload_audit(
     expected_stage_command_digest = _stage_command_digest(delivery_packet)
     expected_summary_stage_command_digest = delivery_summary.get("stage_command_digest")
     expected_path_set_digest = delivery_summary.get("expected_stage_path_set_digest")
+    post_commit_noop_accounted_for = (
+        delivery_summary.get("post_commit_noop_accounted_for") is True
+        and delivery_summary.get("post_commit_owner_gate_accounted_for") is True
+        and delivery_summary.get("owner_stage_command_count") == 0
+        and request_summary.get("owner_stage_command_count") == 0
+    )
+    empty_digest = _digest_values([])
+    if post_commit_noop_accounted_for and not expected_stage_command_digest:
+        expected_stage_command_digest = empty_digest
+    if post_commit_noop_accounted_for and not isinstance(expected_path_set_digest, str):
+        expected_path_set_digest = empty_digest
 
     owner = approval.get("owner")
     approval_id = approval.get("approval_id")
@@ -301,6 +310,7 @@ def build_owner_approval_payload_audit(
                 "template_stage_include_count": template.get("stage_include_count"),
                 "delivery_stage_include_count": expected_stage_count,
                 "delivery_owner_stage_command_count": expected_command_count,
+                "post_commit_noop_accounted_for": post_commit_noop_accounted_for,
             },
             error="owner approval payload counts do not match request/template/delivery packet",
         ),
@@ -320,6 +330,7 @@ def build_owner_approval_payload_audit(
                 "delivery_stage_path_digest": expected_stage_path_digest,
                 "delivery_stage_command_digest": expected_stage_command_digest,
                 "delivery_expected_stage_path_set_digest": expected_path_set_digest,
+                "post_commit_noop_accounted_for": post_commit_noop_accounted_for,
             },
             error="owner approval payload digests do not match request/template/delivery packet",
         ),
@@ -422,6 +433,7 @@ def build_owner_approval_payload_audit(
             "approval_stage_command_digest": approval.get("stage_command_digest"),
             "expected_stage_path_set_digest": expected_path_set_digest,
             "approval_expected_stage_path_set_digest": approval.get("expected_stage_path_set_digest"),
+            "post_commit_noop_accounted_for": post_commit_noop_accounted_for,
         },
         checks=checks,
         next_actions=[
