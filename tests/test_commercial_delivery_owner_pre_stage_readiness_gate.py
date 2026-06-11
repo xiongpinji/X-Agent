@@ -243,6 +243,34 @@ def test_owner_pre_stage_readiness_gate_ready(tmp_path: Path) -> None:
     assert {check.status for check in gate.checks} == {"passed"}
 
 
+def test_owner_pre_stage_readiness_gate_allows_subset_eligible_stage_commands(
+    tmp_path: Path,
+) -> None:
+    paths = _write_reports(tmp_path)
+    manifest = json.loads(paths["manifest_path"].read_text(encoding="utf-8"))
+    manifest["stage_include_count"] = 100
+    paths["manifest_path"].write_text(json.dumps(manifest), encoding="utf-8")
+    staging_review = json.loads(paths["staging_review_path"].read_text(encoding="utf-8"))
+    staging_review["stage_include_count"] = 100
+    staging_review["eligible_stage_count"] = 2
+    paths["staging_review_path"].write_text(json.dumps(staging_review), encoding="utf-8")
+    owner_packet = json.loads(paths["owner_packet_path"].read_text(encoding="utf-8"))
+    owner_packet["stage_include_count"] = 100
+    owner_packet["eligible_stage_count"] = 2
+    paths["owner_packet_path"].write_text(json.dumps(owner_packet), encoding="utf-8")
+
+    gate = build_owner_pre_stage_readiness_gate(**paths)
+
+    assert gate.status == "owner_pre_stage_readiness_ready"
+    assert gate.summary["stage_include_count"] == 100
+    assert gate.summary["stage_command_count"] == 2
+    count_check = next(check for check in gate.checks if check.name == "stage_counts_agree")
+    assert count_check.status == "passed"
+    assert count_check.details["manifest_stage_include_count"] == 100
+    assert count_check.details["staging_review_eligible_stage_count"] == 2
+    assert count_check.details["owner_packet_stage_command_count"] == 2
+
+
 def test_owner_pre_stage_readiness_gate_blocks_missing_report(tmp_path: Path) -> None:
     paths = _write_reports(tmp_path)
     paths["refresh_receipt_path"].unlink()

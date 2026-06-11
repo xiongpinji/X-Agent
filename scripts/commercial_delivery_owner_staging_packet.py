@@ -239,11 +239,24 @@ def build_owner_staging_packet(
     expected_eligible = staging_review.get("eligible_stage_count")
     manifest_stage_count = manifest.get("stage_include_count")
     staging_stage_count = staging_review.get("stage_include_count")
+    owner_gated = staging_review.get("owner_gated") is True
+    post_commit_noop_accounted_for = (
+        staging_review.get("status") == "staging_review_ready"
+        and owner_gated
+        and int(staging_review.get("blocked_stage_count") or 0) == 0
+        and int(expected_eligible or 0) == 0
+        and not stage_paths
+        and not blocked_paths
+        and manifest_stage_count == staging_stage_count
+        and len(unchanged_paths) == int(staging_stage_count or 0)
+        and int(staging_stage_count or 0) > 0
+    )
     full_codex_parity_claimed = (
         staging_review.get("full_codex_parity_claimed") is True
         or manifest.get("full_codex_parity_claimed") is True
     )
-    owner_gated = staging_review.get("owner_gated") is True
+    summary["post_commit_noop_accounted_for"] = post_commit_noop_accounted_for
+    summary["unchanged_stage_count"] = len(unchanged_paths)
 
     checks = [
         _check(
@@ -278,8 +291,12 @@ def build_owner_staging_packet(
         ),
         _check(
             "eligible_paths_present",
-            bool(stage_paths),
-            details={"eligible_stage_count": len(stage_paths)},
+            bool(stage_paths) or post_commit_noop_accounted_for,
+            details={
+                "eligible_stage_count": len(stage_paths),
+                "post_commit_noop_accounted_for": post_commit_noop_accounted_for,
+                "unchanged_stage_count": len(unchanged_paths),
+            },
             error="no eligible stage paths are available",
         ),
         _check(
@@ -293,8 +310,13 @@ def build_owner_staging_packet(
         ),
         _check(
             "stage_path_count_matches_review",
-            len(stage_paths) == int(expected_eligible or -1),
-            details={"eligible_stage_count": expected_eligible, "stage_path_count": len(stage_paths)},
+            len(stage_paths) == int(expected_eligible or -1) or post_commit_noop_accounted_for,
+            details={
+                "eligible_stage_count": expected_eligible,
+                "stage_path_count": len(stage_paths),
+                "post_commit_noop_accounted_for": post_commit_noop_accounted_for,
+                "unchanged_stage_count": len(unchanged_paths),
+            },
             error="eligible stage path count does not match staging review",
         ),
         _check(

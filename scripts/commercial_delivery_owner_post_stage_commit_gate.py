@@ -134,6 +134,7 @@ def _decision_brief_ready_or_post_staging_accounted(payload: dict[str, Any]) -> 
         "owner_preflight_ready",
         "owner_pre_stage_readiness_gate_ready",
         "owner_approval_boundary_accounted_for",
+        "stage_commands_match_manifest",
         "post_staging_not_yet_applied",
     }
     summary = _summary(payload)
@@ -239,8 +240,26 @@ def build_owner_post_stage_commit_gate(
         "owner_command_audit_command_count": _int_or_none(owner_command_audit.get("command_count")),
         "owner_command_audit_expected_path_count": _int_or_none(owner_command_audit.get("expected_path_count")),
     }
-    non_none_counts = [value for value in stage_counts.values() if value is not None]
-    stage_counts_agree = bool(non_none_counts) and len(set(non_none_counts)) == 1
+    actual_stage_counts = [
+        stage_counts["owner_packet_stage_path_count"],
+        stage_counts["owner_post_staging_expected_stage_path_count"],
+        stage_counts["owner_post_staging_cached_staged_path_count"],
+        stage_counts["owner_command_audit_command_count"],
+        stage_counts["owner_command_audit_expected_path_count"],
+    ]
+    actual_stage_counts_present = all(value is not None for value in actual_stage_counts)
+    actual_stage_count_values = [int(value) for value in actual_stage_counts if value is not None]
+    actual_stage_count = actual_stage_count_values[0] if actual_stage_count_values else None
+    stage_include_count = stage_counts["owner_packet_stage_include_count"]
+    stage_counts_agree = (
+        actual_stage_counts_present
+        and bool(actual_stage_count_values)
+        and len(set(actual_stage_count_values)) == 1
+        and actual_stage_count is not None
+        and actual_stage_count > 0
+        and stage_include_count is not None
+        and actual_stage_count <= stage_include_count
+    )
     full_codex_parity_claimed = _claims_parity(list(reports.values()))
     owner_gated = (
         owner_packet.get("owner_gated") is True

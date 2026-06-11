@@ -26,6 +26,7 @@ DEFAULT_OWNER_POST_STAGE_COMMIT_GATE = REPORT_DIR / "commercial-delivery-owner-p
 DEFAULT_OWNER_COMMIT_PACKET = REPORT_DIR / "commercial-delivery-owner-commit-packet.json"
 DEFAULT_OWNER_STAGE_APPROVAL_GATE = REPORT_DIR / "commercial-delivery-owner-stage-approval-gate.json"
 DEFAULT_OWNER_STAGE_APPROVAL_REQUEST = REPORT_DIR / "commercial-delivery-owner-stage-approval-request.json"
+DEFAULT_OWNER_APPROVAL_PAYLOAD_AUDIT = REPORT_DIR / "commercial-delivery-owner-approval-payload-audit.json"
 DEFAULT_OWNER_STAGE_EXECUTION_PLAN = REPORT_DIR / "commercial-delivery-owner-stage-execution-plan.json"
 DEFAULT_OWNER_STAGING_ROLLBACK_PLAN = REPORT_DIR / "commercial-delivery-owner-staging-rollback-plan.json"
 DEFAULT_REFRESH_CHAIN = REPORT_DIR / "commercial-delivery-refresh-chain-receipt.json"
@@ -134,6 +135,7 @@ REFRESH_RECEIPT_SELF_BOOTSTRAP_STEPS = {
     "owner_staging_rollback_plan",
     "owner_delivery_packet_before_owner_approval",
     "owner_delivery_packet",
+    "owner_approval_payload_audit",
     "owner_stage_execution_plan",
     "owner_stage_approval_brief",
     "closure_snapshot",
@@ -205,6 +207,7 @@ def build_owner_delivery_packet(
     owner_commit_packet_path: Path = DEFAULT_OWNER_COMMIT_PACKET,
     owner_stage_approval_gate_path: Path = DEFAULT_OWNER_STAGE_APPROVAL_GATE,
     owner_stage_approval_request_path: Path = DEFAULT_OWNER_STAGE_APPROVAL_REQUEST,
+    owner_approval_payload_audit_path: Path = DEFAULT_OWNER_APPROVAL_PAYLOAD_AUDIT,
     owner_stage_execution_plan_path: Path = DEFAULT_OWNER_STAGE_EXECUTION_PLAN,
     owner_staging_rollback_plan_path: Path = DEFAULT_OWNER_STAGING_ROLLBACK_PLAN,
     refresh_chain_path: Path = DEFAULT_REFRESH_CHAIN,
@@ -225,6 +228,7 @@ def build_owner_delivery_packet(
     }
     optional_report_paths = {
         "owner_stage_approval_request": owner_stage_approval_request_path,
+        "owner_approval_payload_audit": owner_approval_payload_audit_path,
         "owner_stage_execution_plan": owner_stage_execution_plan_path,
         "owner_staging_rollback_plan": owner_staging_rollback_plan_path,
     }
@@ -255,6 +259,7 @@ def build_owner_delivery_packet(
     commit_packet = reports["owner_commit_packet"]
     approval_gate = reports["owner_stage_approval_gate"]
     approval_request = reports["owner_stage_approval_request"]
+    approval_payload_audit = reports["owner_approval_payload_audit"]
     stage_execution_plan = reports["owner_stage_execution_plan"]
     rollback_plan = reports["owner_staging_rollback_plan"]
     refresh_chain = reports["refresh_chain"]
@@ -304,6 +309,7 @@ def build_owner_delivery_packet(
     )
     approval_request_ready = _status(approval_request) == "owner_stage_approval_request_ready"
     approval_request_missing = "owner_stage_approval_request" in optional_missing
+    approval_payload_audit_missing = "owner_approval_payload_audit" in optional_missing
     approval_request_blocked_by_delivery_bootstrap = (
         _status(approval_request) == "owner_stage_approval_request_blocked"
         and _failed_check_names(approval_request).issubset(
@@ -323,6 +329,44 @@ def build_owner_delivery_packet(
         approval_request_ready
         or approval_request_missing
         or approval_request_blocked_by_delivery_bootstrap
+    )
+    approval_payload_audit_summary = _summary(approval_payload_audit)
+    approval_payload_audit_failed_checks = _failed_check_names(approval_payload_audit)
+    approval_payload_audit_blocked_by_delivery_bootstrap = (
+        _status(approval_payload_audit) == "owner_approval_payload_blocked"
+        and approval_payload_audit.get("approval_payload_present") is True
+        and approval_payload_audit.get("ready_for_approval_gate") is False
+        and approval_payload_audit.get("mutation_performed") is not True
+        and approval_payload_audit.get("git_stage_performed") is not True
+        and approval_payload_audit.get("git_commit_performed") is not True
+        and approval_payload_audit.get("git_push_performed") is not True
+        and approval_payload_audit.get("network_mutation_performed") is not True
+        and approval_payload_audit.get("agent_execution_enabled") is not True
+        and approval_payload_audit.get("full_codex_parity_claimed") is not True
+        and approval_payload_audit_failed_checks
+        == {
+            "owner_delivery_packet_ready",
+            "owner_stage_approval_request_ready",
+        }
+        and approval_payload_audit_summary.get("stage_include_count") == stage_include_count
+        and approval_payload_audit_summary.get("owner_stage_command_count") == owner_stage_command_count
+        and approval_payload_audit_summary.get("approval_stage_include_count") == stage_include_count
+        and approval_payload_audit_summary.get("approval_owner_stage_command_count") == owner_stage_command_count
+        and approval_payload_audit_summary.get("commit_command_preview") == commit_preview
+        and approval_payload_audit_summary.get("approval_commit_command_preview") == commit_preview
+        and approval_payload_audit_summary.get("stage_path_digest") == stage_path_digest
+        and approval_payload_audit_summary.get("approval_stage_path_digest") == stage_path_digest
+        and approval_payload_audit_summary.get("stage_command_digest") == stage_command_digest
+        and approval_payload_audit_summary.get("approval_stage_command_digest") == stage_command_digest
+        and approval_payload_audit_summary.get("expected_stage_path_set_digest")
+        == expected_stage_path_set_digest
+        and approval_payload_audit_summary.get("approval_expected_stage_path_set_digest")
+        == expected_stage_path_set_digest
+    )
+    approval_payload_audit_accounted_for = (
+        _status(approval_payload_audit) == "owner_approval_payload_ready"
+        or approval_payload_audit_missing
+        or approval_payload_audit_blocked_by_delivery_bootstrap
     )
     stage_execution_ready = _status(stage_execution_plan) == "owner_stage_execution_ready"
     stage_execution_expected_blocked = (
@@ -353,13 +397,30 @@ def build_owner_delivery_packet(
         and stage_execution_ready
         and rollback_plan_ready
     )
-    stage_ready = strict_stage_ready or post_stage_chain_accounted_for
+    pre_approval_bootstrap_accounted_for = (
+        refresh_delivery_bootstrap
+        and approval_request_blocked_by_delivery_bootstrap
+        and approval_payload_audit_blocked_by_delivery_bootstrap
+        and stage_approval_expected_blocked
+        and stage_execution_expected_blocked
+        and rollback_plan_ready
+        and _status(manifest) == "original_kernel_delivery_manifest_ready"
+        and _status(staging_packet) == "owner_staging_packet_ready"
+        and _status(task_board) == "commercial_delivery_ready_for_owner_staging_review"
+        and _status(control_modes_preservation) == "control_modes_preservation_ready"
+    )
+    stage_ready = strict_stage_ready or post_stage_chain_accounted_for or pre_approval_bootstrap_accounted_for
     full_codex_parity_claimed = _claims_parity(list(reports.values()))
     owner_gated = (
         staging_packet.get("owner_gated") is True
         and staging_runbook.get("owner_gated") is True
         and pre_stage_gate.get("owner_gated") is True
         and (approval_request_missing or approval_request.get("owner_gated") is True)
+        and (
+            approval_payload_audit_missing
+            or approval_payload_audit.get("owner_gated") is True
+            or approval_payload_audit_blocked_by_delivery_bootstrap
+        )
         and (stage_execution_missing or stage_execution_plan.get("owner_gated") is True)
         and (rollback_plan_missing or rollback_plan.get("owner_gated") is True)
         and task_summary.get("secondary_pending_blocks_owner_staging") is False
@@ -393,6 +454,7 @@ def build_owner_delivery_packet(
                 "control_modes_preservation_status": _status(control_modes_preservation),
                 "strict_stage_ready": strict_stage_ready,
                 "post_stage_chain_accounted_for": post_stage_chain_accounted_for,
+                "pre_approval_bootstrap_accounted_for": pre_approval_bootstrap_accounted_for,
                 "owner_post_stage_commit_gate_status": _status(commit_gate),
                 "owner_commit_packet_status": _status(commit_packet),
                 "owner_stage_approval_gate_status": _status(approval_gate),
@@ -481,6 +543,19 @@ def build_owner_delivery_packet(
             error="owner stage approval request is present but not ready",
         ),
         _check(
+            "owner_approval_payload_audit_accounted_for",
+            approval_payload_audit_accounted_for,
+            details={
+                "owner_approval_payload_audit_status": _status(approval_payload_audit),
+                "owner_approval_payload_audit_missing": approval_payload_audit_missing,
+                "approval_payload_audit_blocked_by_delivery_bootstrap": (
+                    approval_payload_audit_blocked_by_delivery_bootstrap
+                ),
+                "failed_checks": sorted(approval_payload_audit_failed_checks),
+            },
+            error="owner approval payload audit is present but not ready or accounted for",
+        ),
+        _check(
             "owner_stage_execution_plan_accounted_for",
             stage_execution_accounted_for,
             details={
@@ -511,9 +586,14 @@ def build_owner_delivery_packet(
                 "owner_staging_runbook_owner_gated": staging_runbook.get("owner_gated"),
                 "owner_pre_stage_gate_owner_gated": pre_stage_gate.get("owner_gated"),
                 "owner_stage_approval_request_owner_gated": approval_request.get("owner_gated"),
+                "owner_approval_payload_audit_owner_gated": approval_payload_audit.get("owner_gated"),
                 "owner_stage_execution_plan_owner_gated": stage_execution_plan.get("owner_gated"),
                 "owner_staging_rollback_plan_owner_gated": rollback_plan.get("owner_gated"),
                 "owner_stage_approval_request_missing": approval_request_missing,
+                "owner_approval_payload_audit_missing": approval_payload_audit_missing,
+                "approval_payload_audit_blocked_by_delivery_bootstrap": (
+                    approval_payload_audit_blocked_by_delivery_bootstrap
+                ),
                 "owner_stage_execution_plan_missing": stage_execution_missing,
                 "owner_staging_rollback_plan_missing": rollback_plan_missing,
                 "secondary_pending_blocks_owner_staging": task_summary.get("secondary_pending_blocks_owner_staging"),
@@ -647,6 +727,10 @@ def build_owner_delivery_packet(
             "owner_commit_packet_status": _status(commit_packet),
             "owner_stage_approval_gate_status": _status(approval_gate),
             "owner_stage_approval_request_status": _status(approval_request),
+            "owner_approval_payload_audit_status": _status(approval_payload_audit),
+            "approval_payload_audit_blocked_by_delivery_bootstrap": (
+                approval_payload_audit_blocked_by_delivery_bootstrap
+            ),
             "owner_stage_execution_plan_status": _status(stage_execution_plan),
             "owner_staging_rollback_plan_status": _status(rollback_plan),
             "owner_post_stage_commit_gate_status": _status(commit_gate),
@@ -659,10 +743,12 @@ def build_owner_delivery_packet(
             "rollback_reset_command_count": rollback_plan.get("reset_command_count"),
             "strict_stage_ready": strict_stage_ready,
             "post_stage_chain_accounted_for": post_stage_chain_accounted_for,
+            "pre_approval_bootstrap_accounted_for": pre_approval_bootstrap_accounted_for,
             "stage_path_digest": stage_path_digest,
             "stage_command_digest": stage_command_digest,
             "expected_stage_path_set_digest": expected_stage_path_set_digest,
             "owner_stage_approval_request_missing": approval_request_missing,
+            "owner_approval_payload_audit_missing": approval_payload_audit_missing,
             "owner_stage_execution_plan_missing": stage_execution_missing,
             "owner_staging_rollback_plan_missing": rollback_plan_missing,
             "commit_command_preview": commit_preview,
@@ -744,6 +830,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--owner-commit-packet", type=Path, default=DEFAULT_OWNER_COMMIT_PACKET)
     parser.add_argument("--owner-stage-approval-gate", type=Path, default=DEFAULT_OWNER_STAGE_APPROVAL_GATE)
     parser.add_argument("--owner-stage-approval-request", type=Path, default=DEFAULT_OWNER_STAGE_APPROVAL_REQUEST)
+    parser.add_argument("--owner-approval-payload-audit", type=Path, default=DEFAULT_OWNER_APPROVAL_PAYLOAD_AUDIT)
     parser.add_argument("--owner-stage-execution-plan", type=Path, default=DEFAULT_OWNER_STAGE_EXECUTION_PLAN)
     parser.add_argument("--owner-staging-rollback-plan", type=Path, default=DEFAULT_OWNER_STAGING_ROLLBACK_PLAN)
     parser.add_argument("--refresh-chain", type=Path, default=DEFAULT_REFRESH_CHAIN)
@@ -765,6 +852,7 @@ def main() -> int:
         owner_commit_packet_path=args.owner_commit_packet,
         owner_stage_approval_gate_path=args.owner_stage_approval_gate,
         owner_stage_approval_request_path=args.owner_stage_approval_request,
+        owner_approval_payload_audit_path=args.owner_approval_payload_audit,
         owner_stage_execution_plan_path=args.owner_stage_execution_plan,
         owner_staging_rollback_plan_path=args.owner_staging_rollback_plan,
         refresh_chain_path=args.refresh_chain,

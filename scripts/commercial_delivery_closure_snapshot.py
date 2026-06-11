@@ -151,7 +151,11 @@ REFRESH_RECEIPT_SELF_BOOTSTRAP_STEPS = {
     "owner_pre_stage_readiness_gate",
     "owner_delivery_packet_before_owner_approval",
     "owner_delivery_packet",
+    "owner_stage_approval_request",
+    "owner_approval_payload_audit",
+    "owner_stage_approval_gate",
     "owner_stage_approval_brief",
+    "owner_stage_execution_plan",
     "closure_snapshot",
     "owner_approval_handoff",
 }

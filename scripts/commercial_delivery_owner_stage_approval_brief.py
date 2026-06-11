@@ -236,7 +236,10 @@ def build_owner_stage_approval_brief(
         ),
         _check(
             "approval_request_counts_match_delivery_packet",
-            stage_include_count == owner_stage_command_count == requested_stage_count == requested_stage_command_count,
+            stage_include_count == requested_stage_count
+            and owner_stage_command_count == requested_stage_command_count
+            and int(owner_stage_command_count or 0) > 0
+            and int(owner_stage_command_count or 0) <= int(stage_include_count or -1),
             details={
                 "stage_include_count": stage_include_count,
                 "owner_stage_command_count": owner_stage_command_count,

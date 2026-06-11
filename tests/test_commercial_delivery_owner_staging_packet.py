@@ -56,6 +56,33 @@ def _staging_review() -> dict[str, object]:
     }
 
 
+def _post_commit_staging_review() -> dict[str, object]:
+    payload = _staging_review()
+    payload.update(
+        {
+            "eligible_stage_count": 0,
+            "unchanged_stage_count": 2,
+            "paths": [
+                {
+                    "path": "backend/app/core/storage.py",
+                    "status": "unchanged",
+                    "exists": True,
+                    "dirty": False,
+                    "category": "backend_core",
+                },
+                {
+                    "path": "tests/test_storage.py",
+                    "status": "unchanged",
+                    "exists": True,
+                    "dirty": False,
+                    "category": "test",
+                },
+            ],
+        }
+    )
+    return payload
+
+
 def _task_board() -> dict[str, object]:
     return {
         "status": "commercial_delivery_ready_for_owner_staging_review",
@@ -139,6 +166,36 @@ def test_owner_staging_packet_ready_for_owner_review(tmp_path: Path) -> None:
         {"path": "frontend/src/App.tsx", "scope": "frontend", "reason": "ui session"}
     ]
     assert {check.status for check in packet.checks} == {"passed"}
+
+
+def test_owner_staging_packet_accounts_for_post_commit_noop(tmp_path: Path) -> None:
+    staging_review = tmp_path / "staging.json"
+    manifest = tmp_path / "manifest.json"
+    task_board = tmp_path / "task-board.json"
+    _write_json(staging_review, _post_commit_staging_review())
+    _write_json(manifest, _manifest())
+    _write_json(task_board, _task_board())
+
+    packet = build_owner_staging_packet(
+        staging_review_path=staging_review,
+        manifest_path=manifest,
+        task_board_path=task_board,
+    )
+
+    assert packet.status == "owner_staging_packet_ready"
+    assert packet.eligible_stage_count == 0
+    assert packet.unchanged_stage_count == 2
+    assert packet.stage_paths == []
+    assert packet.stage_commands == []
+    assert packet.stage_path_digest == _digest_values([])
+    assert packet.stage_command_digest == _digest_values([])
+    assert packet.summary["post_commit_noop_accounted_for"] is True
+    assert packet.summary["unchanged_stage_count"] == 2
+    assert {check.status for check in packet.checks} == {"passed"}
+    eligible = next(check for check in packet.checks if check.name == "eligible_paths_present")
+    assert eligible.details["post_commit_noop_accounted_for"] is True
+    count = next(check for check in packet.checks if check.name == "stage_path_count_matches_review")
+    assert count.details["post_commit_noop_accounted_for"] is True
 
 
 def test_owner_staging_packet_blocks_when_staging_review_not_ready(tmp_path: Path) -> None:

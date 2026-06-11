@@ -267,6 +267,30 @@ def test_owner_stage_approval_brief_blocks_count_drift(tmp_path: Path) -> None:
     ).status == "failed"
 
 
+def test_owner_stage_approval_brief_allows_subset_owner_stage_commands(tmp_path: Path) -> None:
+    paths = _write_inputs(tmp_path)
+    delivery = json.loads(paths["owner_delivery_packet_path"].read_text(encoding="utf-8"))
+    delivery["summary"]["stage_include_count"] = 100
+    delivery["summary"]["owner_stage_command_count"] = 2
+    paths["owner_delivery_packet_path"].write_text(json.dumps(delivery), encoding="utf-8")
+    request = json.loads(paths["owner_stage_approval_request_path"].read_text(encoding="utf-8"))
+    request["summary"]["stage_include_count"] = 100
+    request["summary"]["owner_stage_command_count"] = 2
+    request["suggested_owner_approval_payload"]["stage_include_count"] = 100
+    request["suggested_owner_approval_payload"]["owner_stage_command_count"] = 2
+    paths["owner_stage_approval_request_path"].write_text(json.dumps(request), encoding="utf-8")
+
+    brief = build_owner_stage_approval_brief(**paths)
+
+    assert brief.status == "owner_stage_approval_brief_ready"
+    count_check = next(
+        check for check in brief.checks if check.name == "approval_request_counts_match_delivery_packet"
+    )
+    assert count_check.status == "passed"
+    assert brief.summary["stage_include_count"] == 100
+    assert brief.summary["owner_stage_command_count"] == 2
+
+
 def test_owner_stage_approval_brief_blocks_digest_drift(tmp_path: Path) -> None:
     paths = _write_inputs(tmp_path)
     payload = json.loads(paths["owner_stage_approval_request_path"].read_text(encoding="utf-8"))

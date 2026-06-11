@@ -201,6 +201,21 @@ def test_owner_post_stage_commit_gate_blocks_unexpected_cached_path(tmp_path: Pa
     assert next(check for check in gate.checks if check.name == "post_staging_has_no_path_drift").status == "failed"
 
 
+def test_owner_post_stage_commit_gate_allows_stage_path_subset_of_manifest_count(tmp_path: Path) -> None:
+    paths = _write_reports(tmp_path)
+    payload = json.loads(paths["owner_packet_path"].read_text(encoding="utf-8"))
+    payload["stage_include_count"] = 100
+    paths["owner_packet_path"].write_text(json.dumps(payload), encoding="utf-8")
+
+    gate = build_owner_post_stage_commit_gate(**paths)
+
+    assert gate.status == "owner_post_stage_commit_gate_ready"
+    stage_count = next(check for check in gate.checks if check.name == "stage_counts_agree")
+    assert stage_count.status == "passed"
+    assert stage_count.details["owner_packet_stage_include_count"] == 100
+    assert stage_count.details["owner_packet_stage_path_count"] == len(_stage_paths())
+
+
 def test_owner_post_stage_commit_gate_blocks_full_codex_parity_claim(tmp_path: Path) -> None:
     paths = _write_reports(tmp_path)
     payload = json.loads(paths["task_board_path"].read_text(encoding="utf-8"))
@@ -284,6 +299,7 @@ def test_owner_post_stage_commit_gate_accepts_post_staging_decision_brief_refres
                 {"name": "owner_preflight_ready", "status": "failed"},
                 {"name": "owner_pre_stage_readiness_gate_ready", "status": "failed"},
                 {"name": "owner_approval_boundary_accounted_for", "status": "failed"},
+                {"name": "stage_commands_match_manifest", "status": "failed"},
                 {"name": "post_staging_not_yet_applied", "status": "failed"},
             ],
         }

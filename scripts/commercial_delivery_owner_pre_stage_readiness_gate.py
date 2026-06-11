@@ -237,8 +237,37 @@ def build_owner_pre_stage_readiness_gate(
         "owner_command_audit_command_count": owner_command_audit.get("command_count"),
         "owner_command_audit_expected_path_count": owner_command_audit.get("expected_path_count"),
     }
-    non_none_counts = [value for value in stage_counts.values() if value is not None]
-    stage_counts_agree = bool(non_none_counts) and len({int(value) for value in non_none_counts}) == 1
+    stage_include_counts = [
+        stage_counts["manifest_stage_include_count"],
+        stage_counts["staging_review_stage_include_count"],
+        stage_counts["owner_packet_stage_include_count"],
+    ]
+    stage_command_counts = [
+        stage_counts["staging_review_eligible_stage_count"],
+        stage_counts["owner_packet_eligible_stage_count"],
+        stage_counts["owner_packet_stage_command_count"],
+        stage_counts["owner_preflight_stage_command_count"],
+        stage_counts["owner_preflight_stage_path_count"],
+        stage_counts["owner_command_audit_command_count"],
+        stage_counts["owner_command_audit_expected_path_count"],
+    ]
+    non_none_stage_include_counts = [int(value) for value in stage_include_counts if value is not None]
+    non_none_stage_command_counts = [int(value) for value in stage_command_counts if value is not None]
+    stage_include_count_agrees = (
+        bool(non_none_stage_include_counts)
+        and len(set(non_none_stage_include_counts)) == 1
+        and non_none_stage_include_counts[0] > 0
+    )
+    stage_command_count_agrees = (
+        bool(non_none_stage_command_counts)
+        and len(set(non_none_stage_command_counts)) == 1
+        and non_none_stage_command_counts[0] > 0
+    )
+    stage_counts_agree = (
+        stage_include_count_agrees
+        and stage_command_count_agrees
+        and non_none_stage_command_counts[0] <= non_none_stage_include_counts[0]
+    )
     pending_paths = _secondary_pending_paths(manifest)
     full_codex_parity_claimed = _claims_parity(list(reports.values()))
     owner_gated = (
