@@ -198,8 +198,10 @@ def build_owner_stage_execution_plan(
         all(expected_stage_path_set_digests) and len(set(expected_stage_path_set_digests)) == 1
     )
     preflight_stage_count = preflight.get("stage_command_count")
-    delivery_stage_count = delivery_summary.get("stage_include_count")
-    approval_stage_count = approval_summary.get("stage_include_count")
+    delivery_stage_include_count = delivery_summary.get("stage_include_count")
+    delivery_stage_command_count = delivery_summary.get("owner_stage_command_count")
+    approval_stage_include_count = approval_summary.get("stage_include_count")
+    approval_stage_command_count = approval_summary.get("owner_stage_command_count")
     full_codex_parity_claimed = any(report.get("full_codex_parity_claimed") is True for report in reports.values())
     stage_allowed = (
         _status(approval_gate) == "owner_stage_approval_ready"
@@ -214,11 +216,17 @@ def build_owner_stage_execution_plan(
         bool(stage_commands)
         and len(stage_commands) == len(stage_paths)
         and len(stage_commands) == int(preflight_stage_count or -1)
-        and len(stage_commands) == int(delivery_stage_count or -1)
+        and len(stage_commands) == int(delivery_stage_command_count or -1)
     )
     approval_count_matches = (
-        approval_stage_count is None
-        or int(approval_stage_count or -1) == len(stage_commands)
+        (
+            approval_stage_include_count is None
+            and approval_stage_command_count is None
+        )
+        or (
+            int(approval_stage_include_count or -1) == int(delivery_stage_include_count or -2)
+            and int(approval_stage_command_count or -1) == len(stage_commands)
+        )
     )
     cached_staged_path_count = int(preflight.get("cached_staged_path_count") or 0)
     post_stage_accounted_for = (
@@ -282,7 +290,8 @@ def build_owner_stage_execution_plan(
                 "stage_command_count": len(stage_commands),
                 "stage_path_count": len(stage_paths),
                 "preflight_stage_command_count": preflight_stage_count,
-                "delivery_stage_include_count": delivery_stage_count,
+                "delivery_stage_include_count": delivery_stage_include_count,
+                "delivery_owner_stage_command_count": delivery_stage_command_count,
             },
             error="stage command counts do not match staging packet, preflight, and delivery packet",
         ),
@@ -290,10 +299,12 @@ def build_owner_stage_execution_plan(
             "approval_count_matches_stage_commands",
             approval_count_matches,
             details={
-                "approval_stage_include_count": approval_stage_count,
+                "approval_stage_include_count": approval_stage_include_count,
+                "approval_owner_stage_command_count": approval_stage_command_count,
+                "delivery_stage_include_count": delivery_stage_include_count,
                 "stage_command_count": len(stage_commands),
             },
-            error="approval gate stage count does not match stage command count",
+            error="approval gate stage counts do not match delivery coverage and stage command count",
         ),
         _check(
             "stage_path_digest_matches_execution_surface",
@@ -385,8 +396,10 @@ def build_owner_stage_execution_plan(
             "stage_command_count": len(stage_commands),
             "stage_path_count": len(stage_paths),
             "preflight_stage_command_count": preflight_stage_count,
-            "delivery_stage_include_count": delivery_stage_count,
-            "approval_stage_include_count": approval_stage_count,
+            "delivery_stage_include_count": delivery_stage_include_count,
+            "delivery_owner_stage_command_count": delivery_stage_command_count,
+            "approval_stage_include_count": approval_stage_include_count,
+            "approval_owner_stage_command_count": approval_stage_command_count,
             "secondary_pending_count": delivery_summary.get("secondary_pending_count"),
             "secondary_handoff_next_count": delivery_summary.get("secondary_handoff_next_count"),
             "secondary_handoff_next_queue": delivery_summary.get("secondary_handoff_next_queue"),

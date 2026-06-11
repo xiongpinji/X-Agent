@@ -118,6 +118,17 @@ def _failed_step_names(payload: dict[str, Any]) -> list[str]:
     return names
 
 
+def _failed_check_names(payload: dict[str, Any]) -> set[str]:
+    checks = payload.get("checks")
+    if not isinstance(checks, list):
+        return set()
+    names: set[str] = set()
+    for check in checks:
+        if isinstance(check, dict) and check.get("status") == "failed" and check.get("name") is not None:
+            names.add(str(check.get("name")))
+    return names
+
+
 REFRESH_RECEIPT_SELF_BOOTSTRAP_STEPS = {
     "owner_pre_stage_readiness_gate",
     "owner_staging_rollback_plan",
@@ -265,7 +276,14 @@ def build_owner_delivery_packet(
     expected_stage_path_set_digest = _path_set_digest(stage_paths)
     expected_nonzero_steps = _list(refresh_summary.get("expected_nonzero_steps"))
     stage_include_count = manifest.get("stage_include_count")
+    staging_stage_include_count = staging_packet.get("stage_include_count")
+    eligible_stage_count = int(staging_packet.get("eligible_stage_count") or len(stage_paths))
     owner_stage_command_count = len(stage_commands)
+    stage_command_count_accounted_for = (
+        bool(stage_commands)
+        and owner_stage_command_count == eligible_stage_count
+        and int(staging_stage_include_count or -1) == int(stage_include_count or -2)
+    )
     strict_stage_ready = (
         _status(manifest) == "original_kernel_delivery_manifest_ready"
         and _status(staging_packet) == "owner_staging_packet_ready"
@@ -286,7 +304,26 @@ def build_owner_delivery_packet(
     )
     approval_request_ready = _status(approval_request) == "owner_stage_approval_request_ready"
     approval_request_missing = "owner_stage_approval_request" in optional_missing
-    approval_request_accounted_for = approval_request_ready or approval_request_missing
+    approval_request_blocked_by_delivery_bootstrap = (
+        _status(approval_request) == "owner_stage_approval_request_blocked"
+        and _failed_check_names(approval_request).issubset(
+            {
+                "owner_delivery_packet_ready",
+                "owner_delivery_packet_requires_approval",
+            }
+        )
+        and _summary(approval_request).get("stage_include_count") == stage_include_count
+        and _summary(approval_request).get("eligible_stage_count") == eligible_stage_count
+        and _summary(approval_request).get("owner_stage_command_count") == owner_stage_command_count
+        and _summary(approval_request).get("stage_path_digest") == stage_path_digest
+        and _summary(approval_request).get("stage_command_digest") == stage_command_digest
+        and _summary(approval_request).get("expected_stage_path_set_digest") == expected_stage_path_set_digest
+    )
+    approval_request_accounted_for = (
+        approval_request_ready
+        or approval_request_missing
+        or approval_request_blocked_by_delivery_bootstrap
+    )
     stage_execution_ready = _status(stage_execution_plan) == "owner_stage_execution_ready"
     stage_execution_expected_blocked = (
         _status(stage_execution_plan) == "owner_stage_execution_blocked"
@@ -368,12 +405,14 @@ def build_owner_delivery_packet(
         ),
         _check(
             "stage_command_count_matches_manifest",
-            bool(stage_commands) and owner_stage_command_count == stage_include_count,
+            stage_command_count_accounted_for,
             details={
                 "owner_stage_command_count": owner_stage_command_count,
+                "eligible_stage_count": eligible_stage_count,
+                "staging_stage_include_count": staging_stage_include_count,
                 "manifest_stage_include_count": stage_include_count,
             },
-            error="owner stage command count does not match manifest stage include count",
+            error="owner stage command count does not match eligible paths or manifest/review stage counts",
         ),
         _check(
             "stage_digests_present",
@@ -437,6 +476,7 @@ def build_owner_delivery_packet(
             details={
                 "owner_stage_approval_request_status": _status(approval_request),
                 "owner_stage_approval_request_missing": approval_request_missing,
+                "approval_request_blocked_by_delivery_bootstrap": approval_request_blocked_by_delivery_bootstrap,
             },
             error="owner stage approval request is present but not ready",
         ),
@@ -585,6 +625,7 @@ def build_owner_delivery_packet(
         report_statuses={name: _status(payload) for name, payload in reports.items()},
         summary={
             "stage_include_count": stage_include_count,
+            "eligible_stage_count": eligible_stage_count,
             "owner_stage_command_count": owner_stage_command_count,
             "pre_stage_verification_command_count": len(pre_stage_commands),
             "post_stage_verification_command_count": len(post_stage_commands),

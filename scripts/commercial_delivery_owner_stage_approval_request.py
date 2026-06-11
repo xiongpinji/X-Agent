@@ -189,7 +189,13 @@ def build_owner_stage_approval_request(
     approval_gate, approval_gate_error = _read_json(owner_stage_approval_gate_path)
     delivery_summary = _summary(delivery_packet)
     stage_include_count = _int_or_none(delivery_summary.get("stage_include_count"))
+    raw_eligible_stage_count = _int_or_none(delivery_summary.get("eligible_stage_count"))
     owner_stage_command_count = _int_or_none(delivery_summary.get("owner_stage_command_count"))
+    eligible_stage_count = (
+        raw_eligible_stage_count
+        if raw_eligible_stage_count is not None
+        else owner_stage_command_count
+    )
     commit_preview = delivery_summary.get("commit_command_preview")
     stage_path_digest = delivery_summary.get("stage_path_digest")
     summary_stage_command_digest = delivery_summary.get("stage_command_digest")
@@ -203,9 +209,12 @@ def build_owner_stage_approval_request(
     )
     counts_match = (
         stage_include_count is not None
+        and eligible_stage_count is not None
         and owner_stage_command_count is not None
         and stage_include_count > 0
-        and stage_include_count == owner_stage_command_count
+        and owner_stage_command_count > 0
+        and owner_stage_command_count == eligible_stage_count
+        and owner_stage_command_count <= stage_include_count
     )
     approval_gate_accounted_for = (
         approval_gate_status == "owner_stage_approval_ready"
@@ -259,9 +268,10 @@ def build_owner_stage_approval_request(
             counts_match,
             details={
                 "stage_include_count": stage_include_count,
+                "eligible_stage_count": eligible_stage_count,
                 "owner_stage_command_count": owner_stage_command_count,
             },
-            error="owner delivery packet stage counts are missing or mismatched",
+            error="owner delivery packet stage counts are missing or do not match eligible staging commands",
         ),
         _check(
             "commit_preview_present",
@@ -369,6 +379,7 @@ def build_owner_stage_approval_request(
         },
         summary={
             "stage_include_count": stage_include_count,
+            "eligible_stage_count": eligible_stage_count,
             "owner_stage_command_count": owner_stage_command_count,
             "owner_stage_approval_gate_status": approval_gate_status,
             "stage_allowed": approval_gate_stage_allowed,

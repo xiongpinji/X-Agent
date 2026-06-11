@@ -160,6 +160,28 @@ def test_stage_execution_plan_ready_with_approved_gate(tmp_path: Path) -> None:
     assert {check.status for check in plan.checks} == {"passed"}
 
 
+def test_stage_execution_plan_allows_subset_eligible_stage_commands(tmp_path: Path) -> None:
+    paths = _write_inputs(tmp_path, approval_ready=True)
+    delivery_packet = json.loads(paths["owner_delivery_packet_path"].read_text(encoding="utf-8"))
+    delivery_packet["summary"]["stage_include_count"] = 100
+    delivery_packet["summary"]["owner_stage_command_count"] = 2
+    paths["owner_delivery_packet_path"].write_text(json.dumps(delivery_packet), encoding="utf-8")
+    approval_gate = json.loads(paths["owner_stage_approval_gate_path"].read_text(encoding="utf-8"))
+    approval_gate["summary"]["stage_include_count"] = 100
+    approval_gate["summary"]["owner_stage_command_count"] = 2
+    paths["owner_stage_approval_gate_path"].write_text(json.dumps(approval_gate), encoding="utf-8")
+
+    plan = build_owner_stage_execution_plan(**paths)
+
+    assert plan.status == "owner_stage_execution_ready"
+    assert plan.summary["delivery_stage_include_count"] == 100
+    assert plan.summary["delivery_owner_stage_command_count"] == 2
+    assert plan.summary["approval_stage_include_count"] == 100
+    assert plan.summary["approval_owner_stage_command_count"] == 2
+    assert next(check for check in plan.checks if check.name == "stage_command_counts_match").status == "passed"
+    assert next(check for check in plan.checks if check.name == "approval_count_matches_stage_commands").status == "passed"
+
+
 def test_stage_execution_plan_ready_after_stage_execution_with_verified_cached_index(tmp_path: Path) -> None:
     paths = _write_inputs(tmp_path, approval_ready=True, post_stage=True)
 

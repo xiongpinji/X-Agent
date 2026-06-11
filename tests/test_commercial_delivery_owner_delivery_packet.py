@@ -281,6 +281,63 @@ def test_owner_delivery_packet_ready_for_pre_stage_owner_review(tmp_path: Path) 
     assert {check.status for check in packet.checks} == {"passed"}
 
 
+def test_owner_delivery_packet_allows_subset_eligible_stage_commands(tmp_path: Path) -> None:
+    paths = _write_reports(tmp_path)
+    manifest = json.loads(paths["manifest_path"].read_text(encoding="utf-8"))
+    manifest["stage_include_count"] = 100
+    paths["manifest_path"].write_text(json.dumps(manifest), encoding="utf-8")
+    staging_packet = json.loads(paths["owner_staging_packet_path"].read_text(encoding="utf-8"))
+    staging_packet["stage_include_count"] = 100
+    staging_packet["eligible_stage_count"] = 2
+    paths["owner_staging_packet_path"].write_text(json.dumps(staging_packet), encoding="utf-8")
+
+    packet = build_owner_delivery_packet(**paths)
+
+    assert packet.status == "owner_delivery_packet_ready"
+    assert packet.summary["stage_include_count"] == 100
+    assert packet.summary["eligible_stage_count"] == 2
+    assert packet.summary["owner_stage_command_count"] == 2
+    count_check = next(check for check in packet.checks if check.name == "stage_command_count_matches_manifest")
+    assert count_check.status == "passed"
+    assert count_check.details["manifest_stage_include_count"] == 100
+    assert count_check.details["eligible_stage_count"] == 2
+
+
+def test_owner_delivery_packet_allows_bootstrap_blocked_approval_request(tmp_path: Path) -> None:
+    paths = _write_reports(tmp_path)
+    approval_request = json.loads(paths["owner_stage_approval_request_path"].read_text(encoding="utf-8"))
+    approval_request["status"] = "owner_stage_approval_request_blocked"
+    approval_request["summary"].update(
+        {
+            "eligible_stage_count": 2,
+            "stage_path_digest": _digest_values([
+                "backend/app/core/storage.py",
+                "tests/test_storage.py",
+            ]),
+            "stage_command_digest": _digest_values([
+                "git add -- 'backend/app/core/storage.py'",
+                "git add -- 'tests/test_storage.py'",
+            ]),
+            "expected_stage_path_set_digest": _path_set_digest([
+                "backend/app/core/storage.py",
+                "tests/test_storage.py",
+            ]),
+        }
+    )
+    approval_request["checks"] = [
+        {"name": "owner_delivery_packet_ready", "status": "failed"},
+        {"name": "owner_delivery_packet_requires_approval", "status": "failed"},
+    ]
+    paths["owner_stage_approval_request_path"].write_text(json.dumps(approval_request), encoding="utf-8")
+
+    packet = build_owner_delivery_packet(**paths)
+
+    assert packet.status == "owner_delivery_packet_ready"
+    request_check = next(check for check in packet.checks if check.name == "owner_stage_approval_request_accounted_for")
+    assert request_check.status == "passed"
+    assert request_check.details["approval_request_blocked_by_delivery_bootstrap"] is True
+
+
 def test_owner_delivery_packet_ready_after_owner_staging_with_post_stage_evidence(tmp_path: Path) -> None:
     paths = _write_reports(tmp_path, post_stage=True, secondary_pending_count=2)
 

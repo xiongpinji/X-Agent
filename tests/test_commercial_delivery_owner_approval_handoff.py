@@ -47,7 +47,8 @@ def _stage_command_digest(count: int = 2) -> str:
     ).hexdigest()
 
 
-def _approval_template(count: int = 2) -> dict[str, object]:
+def _approval_template(count: int = 2, command_count: int | None = None) -> dict[str, object]:
+    command_count = count if command_count is None else command_count
     return {
         "status": "owner_stage_approval_submitted",
         "decision": "approve_owner_stage",
@@ -57,9 +58,9 @@ def _approval_template(count: int = 2) -> dict[str, object]:
         "approved_at": "<ISO-8601 UTC timestamp>",
         "rationale": "Owner reviewed the delivery packet and approves explicit staging commands.",
         "stage_include_count": count,
-        "owner_stage_command_count": count,
+        "owner_stage_command_count": command_count,
         "stage_path_digest": _stage_path_digest(count),
-        "stage_command_digest": _stage_command_digest(count),
+        "stage_command_digest": _stage_command_digest(command_count),
         "expected_stage_path_set_digest": _path_set_digest(count),
         "commit_command_preview": _commit_preview(),
         "acknowledge_pre_stage_verification": True,
@@ -69,7 +70,8 @@ def _approval_template(count: int = 2) -> dict[str, object]:
     }
 
 
-def _write_inputs(tmp_path: Path, *, count: int = 2) -> dict[str, Path]:
+def _write_inputs(tmp_path: Path, *, count: int = 2, command_count: int | None = None) -> dict[str, Path]:
+    command_count = count if command_count is None else command_count
     paths = {
         "owner_delivery_packet_path": tmp_path / "owner-delivery-packet.json",
         "owner_stage_approval_request_path": tmp_path / "owner-stage-approval-request.json",
@@ -84,7 +86,7 @@ def _write_inputs(tmp_path: Path, *, count: int = 2) -> dict[str, Path]:
         "task_board_path": tmp_path / "task-board.json",
         "owner_approval_path": tmp_path / "owner-stage-approval.json",
     }
-    template = _approval_template(count)
+    template = _approval_template(count, command_count)
     _write_json(
         paths["owner_delivery_packet_path"],
         {
@@ -95,11 +97,11 @@ def _write_inputs(tmp_path: Path, *, count: int = 2) -> dict[str, Path]:
             "full_codex_parity_claimed": False,
             "summary": {
                 "stage_include_count": count,
-                "owner_stage_command_count": count,
-                "rollback_reset_command_count": count,
+                "owner_stage_command_count": command_count,
+                "rollback_reset_command_count": command_count,
                 "commit_command_preview": _commit_preview(),
                 "stage_path_digest": _stage_path_digest(count),
-                "stage_command_digest": _stage_command_digest(count),
+                "stage_command_digest": _stage_command_digest(command_count),
                 "expected_stage_path_set_digest": _path_set_digest(count),
                 "control_modes_preservation_status": "control_modes_preservation_ready",
                 "control_modes_plan_only_default": True,
@@ -109,7 +111,7 @@ def _write_inputs(tmp_path: Path, *, count: int = 2) -> dict[str, Path]:
             "sections": [
                 {
                     "name": "owner_stage_commands",
-                    "commands": _stage_commands(count),
+                    "commands": _stage_commands(command_count),
                 }
             ],
         },
@@ -124,10 +126,10 @@ def _write_inputs(tmp_path: Path, *, count: int = 2) -> dict[str, Path]:
             "full_codex_parity_claimed": False,
             "summary": {
                 "stage_include_count": count,
-                "owner_stage_command_count": count,
+                "owner_stage_command_count": command_count,
                 "commit_command_preview": _commit_preview(),
                 "stage_path_digest": _stage_path_digest(count),
-                "stage_command_digest": _stage_command_digest(count),
+                "stage_command_digest": _stage_command_digest(command_count),
                 "expected_stage_path_set_digest": _path_set_digest(count),
                 "control_modes_preservation_status": "control_modes_preservation_ready",
                 "control_modes_plan_only_default": True,
@@ -144,10 +146,10 @@ def _write_inputs(tmp_path: Path, *, count: int = 2) -> dict[str, Path]:
             "full_codex_parity_claimed": False,
             "summary": {
                 "stage_include_count": count,
-                "owner_stage_command_count": count,
+                "owner_stage_command_count": command_count,
                 "commit_command_preview": _commit_preview(),
                 "stage_path_digest": _stage_path_digest(count),
-                "stage_command_digest": _stage_command_digest(count),
+                "stage_command_digest": _stage_command_digest(command_count),
                 "expected_stage_path_set_digest": _path_set_digest(count),
                 "control_modes_preservation_status": "control_modes_preservation_ready",
                 "control_modes_plan_only_default": True,
@@ -166,10 +168,10 @@ def _write_inputs(tmp_path: Path, *, count: int = 2) -> dict[str, Path]:
             "full_codex_parity_claimed": False,
             "summary": {
                 "stage_include_count": count,
-                "owner_stage_command_count": count,
+                "owner_stage_command_count": command_count,
                 "commit_command_preview": _commit_preview(),
                 "stage_path_digest": _stage_path_digest(count),
-                "stage_command_digest": _stage_command_digest(count),
+                "stage_command_digest": _stage_command_digest(command_count),
                 "expected_stage_path_set_digest": _path_set_digest(count),
             },
         },
@@ -181,7 +183,7 @@ def _write_inputs(tmp_path: Path, *, count: int = 2) -> dict[str, Path]:
             "owner_gated": True,
             "stage_allowed": False,
             "full_codex_parity_claimed": False,
-            "summary": {"stage_include_count": count, "owner_stage_command_count": count},
+            "summary": {"stage_include_count": count, "owner_stage_command_count": command_count},
         },
     )
     _write_json(
@@ -192,7 +194,7 @@ def _write_inputs(tmp_path: Path, *, count: int = 2) -> dict[str, Path]:
             "stage_allowed": False,
             "full_codex_parity_claimed": False,
             "summary": {
-                "stage_command_count": count,
+                "stage_command_count": command_count,
                 "delivery_stage_include_count": count,
                 "approval_stage_include_count": count,
             },
@@ -205,7 +207,7 @@ def _write_inputs(tmp_path: Path, *, count: int = 2) -> dict[str, Path]:
             "owner_gated": True,
             "rollback_available": True,
             "rollback_required": False,
-            "reset_command_count": count,
+            "reset_command_count": command_count,
             "full_codex_parity_claimed": False,
         },
     )
@@ -226,7 +228,7 @@ def _write_inputs(tmp_path: Path, *, count: int = 2) -> dict[str, Path]:
             "full_codex_parity_claimed": False,
             "summary": {
                 "stage_include_count": count,
-                "stage_command_count": count,
+                "stage_command_count": command_count,
                 "owner_approval_resume_packet_status": "owner_approval_resume_packet_waiting_for_owner",
             },
         },
@@ -245,8 +247,8 @@ def _write_inputs(tmp_path: Path, *, count: int = 2) -> dict[str, Path]:
             ],
             "summary": {
                 "stage_include_count": count,
-                "owner_stage_command_count": count,
-                "rollback_reset_command_count": count,
+                "owner_stage_command_count": command_count,
+                "rollback_reset_command_count": command_count,
                 "expected_stage_path_set_digest": _path_set_digest(count),
                 "cached_staged_path_set_digest": None,
             },
@@ -336,6 +338,34 @@ def test_owner_approval_handoff_ready_before_real_owner_approval(tmp_path: Path)
     assert handoff.owner_action_payload_template["decision"] == "approve_owner_stage"
     assert handoff.owner_action_payload_template["expected_stage_path_set_digest"] == _path_set_digest()
     assert {check.status for check in handoff.checks} == {"passed"}
+
+
+def test_owner_approval_handoff_allows_subset_owner_stage_commands(tmp_path: Path) -> None:
+    paths = _write_inputs(tmp_path, count=3, command_count=2)
+
+    handoff = build_owner_approval_handoff(**paths)
+
+    assert handoff.status == "owner_approval_handoff_ready"
+    assert handoff.summary["stage_include_count"] == 3
+    assert handoff.summary["owner_stage_command_count"] == 2
+    assert handoff.summary["rollback_reset_command_count"] == 2
+    assert handoff.summary["approval_template_stage_include_count"] == 3
+    assert handoff.summary["approval_template_owner_stage_command_count"] == 2
+    assert handoff.summary["approval_request_stage_include_count"] == 3
+    assert handoff.summary["approval_request_owner_stage_command_count"] == 2
+    assert handoff.summary["approval_brief_stage_include_count"] == 3
+    assert handoff.summary["approval_brief_owner_stage_command_count"] == 2
+    assert handoff.summary["closure_snapshot_stage_include_count"] == 3
+    assert handoff.summary["closure_snapshot_owner_stage_command_count"] == 2
+    counts_check = next(check for check in handoff.checks if check.name == "current_counts_match")
+    assert counts_check.status == "passed"
+    assert counts_check.details["stage_coverage_counts_match"] is True
+    assert counts_check.details["owner_command_counts_match"] is True
+    assert counts_check.details["owner_command_count_within_stage_coverage"] is True
+    assert handoff.summary["stage_path_digest"] == _stage_path_digest(3)
+    assert handoff.summary["stage_command_digest"] == _stage_command_digest(2)
+    assert handoff.owner_action_payload_template["stage_include_count"] == 3
+    assert handoff.owner_action_payload_template["owner_stage_command_count"] == 2
 
 
 def test_owner_approval_handoff_allows_missing_optional_operator_checklist(tmp_path: Path) -> None:

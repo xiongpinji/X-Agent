@@ -362,6 +362,24 @@ def test_closure_snapshot_accepts_refresh_self_bootstrap_before_owner_approval(t
     assert check.details["failed_steps"] == ["owner_delivery_packet_before_owner_approval"]
 
 
+def test_closure_snapshot_accepts_task_board_refresh_self_bootstrap(tmp_path: Path) -> None:
+    paths = _write_inputs(tmp_path)
+    payload = json.loads(paths["refresh_chain_path"].read_text(encoding="utf-8"))
+    payload["status"] = "commercial_delivery_refresh_chain_receipt_blocked"
+    payload["summary"]["failed_step_count"] = 1
+    payload["steps"] = [
+        {"name": "task_board_before_owner_decision", "status": "failed"},
+    ]
+    paths["refresh_chain_path"].write_text(json.dumps(payload), encoding="utf-8")
+
+    snapshot = build_commercial_delivery_closure_snapshot(**paths)
+
+    assert snapshot.status == "commercial_delivery_closure_blocked"
+    check = next(check for check in snapshot.checks if check.name == "refresh_chain_ready")
+    assert check.status == "passed"
+    assert check.details["failed_steps"] == ["task_board_before_owner_decision"]
+
+
 def test_closure_snapshot_completes_with_closure_refresh_self_bootstrap(tmp_path: Path) -> None:
     paths = _write_inputs(tmp_path, complete=True)
     payload = json.loads(paths["refresh_chain_path"].read_text(encoding="utf-8"))
@@ -561,6 +579,127 @@ def test_closure_snapshot_completes_when_post_approval_drift_guard_is_accounted_
     assert snapshot.summary["pre_approval_drift_guard_accounted_for"] is True
 
 
+def test_closure_snapshot_accounts_for_post_commit_pre_approval_drift_guard(tmp_path: Path) -> None:
+    paths = _write_inputs(tmp_path, complete=False)
+    _write_json(
+        paths["pre_approval_drift_guard_path"],
+        {
+            "status": "pre_approval_drift_guard_blocked",
+            "real_owner_approval_present": True,
+            "mutation_performed": False,
+            "git_stage_performed": False,
+            "git_commit_performed": False,
+            "git_push_performed": False,
+            "network_mutation_performed": False,
+            "agent_execution_enabled": False,
+            "full_codex_parity_claimed": False,
+            "report_statuses": {
+                "owner_stage_approval_request": "owner_stage_approval_request_blocked",
+                "owner_approval_handoff": "owner_approval_handoff_blocked",
+                "owner_approval_payload_audit": "owner_approval_payload_blocked",
+                "owner_stage_approval_gate": "owner_stage_approval_blocked",
+                "owner_stage_execution_plan": "owner_stage_execution_blocked",
+                "owner_post_approval_operator_checklist": "owner_post_approval_operator_checklist_ready",
+                "closure_snapshot": "commercial_delivery_closure_blocked",
+            },
+            "summary": {
+                "stage_path_digest": _digest_values(_stage_paths()),
+                "stage_command_digest": _digest_values(_stage_commands()),
+                "expected_stage_path_set_digest": _path_set_digest(_stage_paths()),
+                "owner_approval_payload_present": True,
+                "owner_approval_payload_valid": False,
+                "owner_approval_payload_ready_for_gate": False,
+                "owner_stage_approval_gate_status": "owner_stage_approval_blocked",
+                "owner_stage_execution_plan_status": "owner_stage_execution_blocked",
+                "owner_post_approval_operator_checklist_status": "owner_post_approval_operator_checklist_ready",
+                "owner_post_approval_operator_checklist_operator_ready": True,
+                "owner_post_approval_operator_checklist_real_owner_approval_present": True,
+                "closure_snapshot_status": "commercial_delivery_closure_blocked",
+                "closure_delivery_complete": False,
+            },
+            "checks": [
+                {"name": "real_owner_approval_absent", "status": "failed"},
+                {"name": "approval_request_ready", "status": "failed"},
+                {"name": "approval_handoff_ready", "status": "failed"},
+                {"name": "approval_payload_blocked_before_owner", "status": "failed"},
+                {"name": "operator_checklist_waiting_before_owner", "status": "failed"},
+                {"name": "closure_blocked_before_owner", "status": "failed"},
+            ],
+        },
+    )
+
+    snapshot = build_commercial_delivery_closure_snapshot(**paths)
+
+    assert snapshot.status == "commercial_delivery_closure_blocked"
+    drift_check = next(check for check in snapshot.checks if check.name == "pre_approval_drift_guard_ready")
+    assert drift_check.status == "passed"
+    assert drift_check.details["pre_approval_drift_guard_accounted_for"] is True
+    assert snapshot.summary["pre_approval_drift_guard_accounted_for"] is True
+
+
+def test_closure_snapshot_accounts_for_post_commit_pre_approval_drift_guard_with_blocked_operator_checklist(
+    tmp_path: Path,
+) -> None:
+    paths = _write_inputs(tmp_path, complete=False)
+    _write_json(
+        paths["pre_approval_drift_guard_path"],
+        {
+            "status": "pre_approval_drift_guard_blocked",
+            "real_owner_approval_present": True,
+            "mutation_performed": False,
+            "git_stage_performed": False,
+            "git_commit_performed": False,
+            "git_push_performed": False,
+            "network_mutation_performed": False,
+            "agent_execution_enabled": False,
+            "full_codex_parity_claimed": False,
+            "report_statuses": {
+                "owner_stage_approval_request": "owner_stage_approval_request_blocked",
+                "owner_approval_handoff": "owner_approval_handoff_blocked",
+                "owner_approval_payload_audit": "owner_approval_payload_blocked",
+                "owner_stage_approval_gate": "owner_stage_approval_blocked",
+                "owner_stage_execution_plan": "owner_stage_execution_blocked",
+                "owner_post_approval_operator_checklist": "owner_post_approval_operator_checklist_blocked",
+                "closure_snapshot": "commercial_delivery_closure_blocked",
+            },
+            "summary": {
+                "stage_path_digest": _digest_values(_stage_paths()),
+                "stage_command_digest": _digest_values(_stage_commands()),
+                "expected_stage_path_set_digest": _path_set_digest(_stage_paths()),
+                "owner_approval_payload_present": True,
+                "owner_approval_payload_valid": False,
+                "owner_approval_payload_ready_for_gate": False,
+                "owner_stage_approval_gate_status": "owner_stage_approval_blocked",
+                "owner_stage_execution_plan_status": "owner_stage_execution_blocked",
+                "owner_post_approval_operator_checklist_status": (
+                    "owner_post_approval_operator_checklist_blocked"
+                ),
+                "owner_post_approval_operator_checklist_waiting_for_owner": False,
+                "owner_post_approval_operator_checklist_operator_ready": False,
+                "owner_post_approval_operator_checklist_real_owner_approval_present": True,
+                "closure_snapshot_status": "commercial_delivery_closure_blocked",
+                "closure_delivery_complete": False,
+            },
+            "checks": [
+                {"name": "real_owner_approval_absent", "status": "failed"},
+                {"name": "approval_request_ready", "status": "failed"},
+                {"name": "approval_handoff_ready", "status": "failed"},
+                {"name": "approval_payload_blocked_before_owner", "status": "failed"},
+                {"name": "operator_checklist_waiting_before_owner", "status": "failed"},
+                {"name": "closure_blocked_before_owner", "status": "failed"},
+            ],
+        },
+    )
+
+    snapshot = build_commercial_delivery_closure_snapshot(**paths)
+
+    assert snapshot.status == "commercial_delivery_closure_blocked"
+    drift_check = next(check for check in snapshot.checks if check.name == "pre_approval_drift_guard_ready")
+    assert drift_check.status == "passed"
+    assert drift_check.details["pre_approval_drift_guard_accounted_for"] is True
+    assert snapshot.summary["pre_approval_drift_guard_accounted_for"] is True
+
+
 def test_closure_snapshot_blocks_count_drift(tmp_path: Path) -> None:
     paths = _write_inputs(tmp_path, complete=True)
     payload = json.loads(paths["owner_delivery_packet_path"].read_text(encoding="utf-8"))
@@ -571,6 +710,24 @@ def test_closure_snapshot_blocks_count_drift(tmp_path: Path) -> None:
 
     assert snapshot.status == "commercial_delivery_closure_blocked"
     assert next(check for check in snapshot.checks if check.name == "stage_counts_consistent").status == "failed"
+
+
+def test_closure_snapshot_allows_subset_eligible_stage_commands(tmp_path: Path) -> None:
+    paths = _write_inputs(tmp_path, complete=True)
+    payload = json.loads(paths["owner_delivery_packet_path"].read_text(encoding="utf-8"))
+    payload["summary"]["stage_include_count"] = 100
+    payload["summary"]["owner_stage_command_count"] = 2
+    payload["summary"]["owner_stage_execution_stage_command_count"] = 2
+    payload["summary"]["rollback_reset_command_count"] = 2
+    paths["owner_delivery_packet_path"].write_text(json.dumps(payload), encoding="utf-8")
+
+    snapshot = build_commercial_delivery_closure_snapshot(**paths)
+
+    assert snapshot.status == "commercial_delivery_complete"
+    count_check = next(check for check in snapshot.checks if check.name == "stage_counts_consistent")
+    assert count_check.status == "passed"
+    assert count_check.details["stage_include_count"] == 100
+    assert count_check.details["owner_stage_command_count"] == 2
 
 
 def test_closure_snapshot_blocks_stage_digest_drift(tmp_path: Path) -> None:

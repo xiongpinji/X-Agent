@@ -140,6 +140,25 @@ def test_owner_stage_approval_request_ready_with_blocked_gate(tmp_path: Path) ->
     assert {check.status for check in request.checks} == {"passed"}
 
 
+def test_owner_stage_approval_request_allows_subset_eligible_stage_commands(tmp_path: Path) -> None:
+    paths = _write_inputs(tmp_path, count=2)
+    payload = json.loads(paths["owner_delivery_packet_path"].read_text(encoding="utf-8"))
+    payload["summary"]["stage_include_count"] = 100
+    payload["summary"]["eligible_stage_count"] = 2
+    paths["owner_delivery_packet_path"].write_text(json.dumps(payload), encoding="utf-8")
+
+    request = build_owner_stage_approval_request(**paths)
+
+    assert request.status == "owner_stage_approval_request_ready"
+    assert request.summary["stage_include_count"] == 100
+    assert request.summary["eligible_stage_count"] == 2
+    assert request.summary["owner_stage_command_count"] == 2
+    assert request.suggested_owner_approval_payload["stage_include_count"] == 100
+    assert request.suggested_owner_approval_payload["owner_stage_command_count"] == 2
+    count_check = next(check for check in request.checks if check.name == "stage_counts_match_delivery_packet")
+    assert count_check.status == "passed"
+
+
 def test_owner_stage_approval_request_writes_report_markdown_and_template(tmp_path: Path) -> None:
     paths = _write_inputs(tmp_path)
     request = build_owner_stage_approval_request(**paths)

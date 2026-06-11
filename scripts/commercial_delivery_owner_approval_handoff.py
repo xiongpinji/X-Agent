@@ -267,19 +267,40 @@ def build_owner_approval_handoff(
     command_count = _int_or_none(delivery_summary.get("owner_stage_command_count"))
     rollback_count = _int_or_none(delivery_summary.get("rollback_reset_command_count"))
     template_count = _int_or_none(approval_template.get("stage_include_count"))
+    template_command_count = _int_or_none(approval_template.get("owner_stage_command_count"))
     request_count = _int_or_none(request_summary.get("stage_include_count"))
+    request_command_count = _int_or_none(request_summary.get("owner_stage_command_count"))
     brief_count = _int_or_none(brief_summary.get("stage_include_count"))
+    brief_command_count = _int_or_none(brief_summary.get("owner_stage_command_count"))
     snapshot_count = _int_or_none(snapshot_summary.get("stage_include_count"))
-    counts = [
+    snapshot_command_count = _int_or_none(snapshot_summary.get("owner_stage_command_count"))
+    stage_coverage_counts = [
         delivery_count,
-        command_count,
-        rollback_count,
         template_count,
         request_count,
         brief_count,
         snapshot_count,
     ]
-    counts_match = all(value == delivery_count for value in counts if value is not None) and delivery_count is not None
+    owner_command_counts = [
+        command_count,
+        rollback_count,
+        template_command_count,
+        request_command_count,
+        brief_command_count,
+        snapshot_command_count,
+    ]
+    stage_coverage_counts_match = (
+        delivery_count is not None and all(value == delivery_count for value in stage_coverage_counts if value is not None)
+    )
+    owner_command_counts_match = command_count is not None and all(
+        value == command_count for value in owner_command_counts if value is not None
+    )
+    owner_command_count_within_stage_coverage = (
+        delivery_count is not None and command_count is not None and command_count <= delivery_count
+    )
+    counts_match = (
+        stage_coverage_counts_match and owner_command_counts_match and owner_command_count_within_stage_coverage
+    )
     commit_preview = delivery_summary.get("commit_command_preview")
     template_commit_preview = approval_template.get("commit_command_preview")
     request_commit_preview = request_summary.get("commit_command_preview")
@@ -377,9 +398,16 @@ def build_owner_approval_handoff(
                 "owner_stage_command_count": command_count,
                 "rollback_reset_command_count": rollback_count,
                 "template_stage_include_count": template_count,
+                "template_owner_stage_command_count": template_command_count,
                 "request_stage_include_count": request_count,
+                "request_owner_stage_command_count": request_command_count,
                 "brief_stage_include_count": brief_count,
+                "brief_owner_stage_command_count": brief_command_count,
                 "snapshot_stage_include_count": snapshot_count,
+                "snapshot_owner_stage_command_count": snapshot_command_count,
+                "stage_coverage_counts_match": stage_coverage_counts_match,
+                "owner_command_counts_match": owner_command_counts_match,
+                "owner_command_count_within_stage_coverage": owner_command_count_within_stage_coverage,
             },
             error="owner approval handoff counts do not match the current delivery packet",
         ),
@@ -620,9 +648,13 @@ def build_owner_approval_handoff(
             "owner_stage_command_count": command_count,
             "rollback_reset_command_count": rollback_count,
             "approval_template_stage_include_count": template_count,
+            "approval_template_owner_stage_command_count": template_command_count,
             "approval_request_stage_include_count": request_count,
+            "approval_request_owner_stage_command_count": request_command_count,
             "approval_brief_stage_include_count": brief_count,
+            "approval_brief_owner_stage_command_count": brief_command_count,
             "closure_snapshot_stage_include_count": snapshot_count,
+            "closure_snapshot_owner_stage_command_count": snapshot_command_count,
             "owner_stage_approval_gate_status": _status(approval_gate),
             "owner_approval_payload_audit_status": _status(approval_payload_audit),
             "owner_approval_payload_present": approval_payload_audit.get("approval_payload_present"),

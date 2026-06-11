@@ -146,6 +146,8 @@ def _failed_check_names(payload: dict[str, Any]) -> set[str]:
 
 
 REFRESH_RECEIPT_SELF_BOOTSTRAP_STEPS = {
+    "task_board_before_owner_decision",
+    "owner_decision_brief",
     "owner_pre_stage_readiness_gate",
     "owner_delivery_packet_before_owner_approval",
     "owner_delivery_packet",
@@ -210,9 +212,12 @@ def _pre_approval_drift_guard_accounted_for(pre_approval_drift_guard: dict[str, 
         "stage_execution_blocked_before_owner",
         "closure_blocked_before_owner",
     }
-    allowed_failed_checks = core_failed_checks | {"operator_checklist_waiting_before_owner"}
+    allowed_failed_checks = core_failed_checks | {
+        "operator_checklist_waiting_before_owner",
+        "secondary_handoff_summary_stable",
+    }
     failed_checks = _failed_check_names(pre_approval_drift_guard)
-    return (
+    post_approval_ready = (
         _status(pre_approval_drift_guard) == "pre_approval_drift_guard_blocked"
         and pre_approval_drift_guard.get("real_owner_approval_present") is True
         and pre_approval_drift_guard.get("mutation_performed") is not True
@@ -239,6 +244,74 @@ def _pre_approval_drift_guard_accounted_for(pre_approval_drift_guard: dict[str, 
         and core_failed_checks.issubset(failed_checks)
         and failed_checks.issubset(allowed_failed_checks)
     )
+    post_commit_required_failed_checks = {
+        "real_owner_approval_absent",
+        "approval_request_ready",
+        "approval_handoff_ready",
+        "approval_payload_blocked_before_owner",
+        "operator_checklist_waiting_before_owner",
+        "closure_blocked_before_owner",
+    }
+    post_commit_allowed_failed_checks = post_commit_required_failed_checks | {"secondary_handoff_summary_stable"}
+    stage_path_digest = guard_summary.get("stage_path_digest")
+    stage_command_digest = guard_summary.get("stage_command_digest")
+    expected_stage_path_set_digest = guard_summary.get("expected_stage_path_set_digest")
+    operator_checklist_accounted_for = (
+        _read_report_status_value(pre_approval_drift_guard, "owner_post_approval_operator_checklist")
+        == "owner_post_approval_operator_checklist_ready"
+        and guard_summary.get("owner_post_approval_operator_checklist_status")
+        == "owner_post_approval_operator_checklist_ready"
+        and guard_summary.get("owner_post_approval_operator_checklist_operator_ready") is True
+        and guard_summary.get("owner_post_approval_operator_checklist_real_owner_approval_present") is True
+    ) or (
+        _read_report_status_value(pre_approval_drift_guard, "owner_post_approval_operator_checklist")
+        == "owner_post_approval_operator_checklist_blocked"
+        and guard_summary.get("owner_post_approval_operator_checklist_status")
+        == "owner_post_approval_operator_checklist_blocked"
+        and guard_summary.get("owner_post_approval_operator_checklist_waiting_for_owner") is False
+        and guard_summary.get("owner_post_approval_operator_checklist_operator_ready") is False
+        and guard_summary.get("owner_post_approval_operator_checklist_real_owner_approval_present") is True
+    )
+    post_commit_blocked = (
+        _status(pre_approval_drift_guard) == "pre_approval_drift_guard_blocked"
+        and pre_approval_drift_guard.get("real_owner_approval_present") is True
+        and pre_approval_drift_guard.get("mutation_performed") is not True
+        and pre_approval_drift_guard.get("git_stage_performed") is not True
+        and pre_approval_drift_guard.get("git_commit_performed") is not True
+        and pre_approval_drift_guard.get("git_push_performed") is not True
+        and pre_approval_drift_guard.get("network_mutation_performed") is not True
+        and pre_approval_drift_guard.get("agent_execution_enabled") is not True
+        and pre_approval_drift_guard.get("full_codex_parity_claimed") is not True
+        and _read_report_status_value(pre_approval_drift_guard, "owner_stage_approval_request")
+        == "owner_stage_approval_request_blocked"
+        and _read_report_status_value(pre_approval_drift_guard, "owner_approval_handoff")
+        == "owner_approval_handoff_blocked"
+        and _read_report_status_value(pre_approval_drift_guard, "owner_approval_payload_audit")
+        == "owner_approval_payload_blocked"
+        and guard_summary.get("owner_approval_payload_present") is True
+        and guard_summary.get("owner_approval_payload_valid") is False
+        and guard_summary.get("owner_approval_payload_ready_for_gate") is False
+        and _read_report_status_value(pre_approval_drift_guard, "owner_stage_approval_gate")
+        == "owner_stage_approval_blocked"
+        and guard_summary.get("owner_stage_approval_gate_status") == "owner_stage_approval_blocked"
+        and _read_report_status_value(pre_approval_drift_guard, "owner_stage_execution_plan")
+        == "owner_stage_execution_blocked"
+        and guard_summary.get("owner_stage_execution_plan_status") == "owner_stage_execution_blocked"
+        and operator_checklist_accounted_for
+        and _read_report_status_value(pre_approval_drift_guard, "closure_snapshot")
+        == "commercial_delivery_closure_blocked"
+        and guard_summary.get("closure_snapshot_status") == "commercial_delivery_closure_blocked"
+        and guard_summary.get("closure_delivery_complete") is False
+        and isinstance(stage_path_digest, str)
+        and len(stage_path_digest) == 64
+        and isinstance(stage_command_digest, str)
+        and len(stage_command_digest) == 64
+        and isinstance(expected_stage_path_set_digest, str)
+        and len(expected_stage_path_set_digest) == 64
+        and post_commit_required_failed_checks.issubset(failed_checks)
+        and failed_checks.issubset(post_commit_allowed_failed_checks)
+    )
+    return post_approval_ready or post_commit_blocked
 
 
 def build_commercial_delivery_closure_snapshot(
@@ -581,17 +654,19 @@ def build_commercial_delivery_closure_snapshot(
         ),
         _check(
             "stage_counts_consistent",
-            delivery_summary.get("stage_include_count")
-            == delivery_summary.get("owner_stage_command_count")
-            == delivery_summary.get("owner_stage_execution_stage_command_count")
-            == delivery_summary.get("rollback_reset_command_count"),
+            int(delivery_summary.get("stage_include_count") or 0) > 0
+            and int(delivery_summary.get("owner_stage_command_count") or -1)
+            == int(delivery_summary.get("owner_stage_execution_stage_command_count") or -2)
+            == int(delivery_summary.get("rollback_reset_command_count") or -3)
+            and int(delivery_summary.get("owner_stage_command_count") or 0)
+            <= int(delivery_summary.get("stage_include_count") or -1),
             details={
                 "stage_include_count": delivery_summary.get("stage_include_count"),
                 "owner_stage_command_count": delivery_summary.get("owner_stage_command_count"),
                 "owner_stage_execution_stage_command_count": delivery_summary.get("owner_stage_execution_stage_command_count"),
                 "rollback_reset_command_count": delivery_summary.get("rollback_reset_command_count"),
             },
-            error="owner delivery counts are inconsistent",
+            error="owner delivery command counts are inconsistent or exceed stage include count",
         ),
         _check(
             "stage_path_digest_consistent",
