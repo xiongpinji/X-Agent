@@ -209,7 +209,19 @@ def _handoff_candidate_name(value: str) -> str:
 
 def _handoff_completed_candidate_items(text: str) -> list[str]:
     items: list[str] = []
+    in_completed_section = False
     for line in text.splitlines():
+        if re.match(r"\s*#{2,6}\s+.+\(#\d+\s+completed\)\s*$", line, re.IGNORECASE):
+            in_completed_section = True
+            continue
+        if in_completed_section:
+            file_match = re.match(r"\s*-\s+`([^`]+)`", line)
+            if file_match:
+                items.append(_handoff_candidate_name(file_match.group(1)))
+                in_completed_section = False
+                continue
+            if re.match(r"\s*#{2,6}\s+", line):
+                in_completed_section = False
         completed_match = re.search(r"\bCompleted\s+`([^`]+)`\s+as\b", line, re.IGNORECASE)
         if completed_match:
             items.append(_handoff_candidate_name(completed_match.group(1)))

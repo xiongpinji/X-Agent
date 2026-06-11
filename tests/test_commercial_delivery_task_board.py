@@ -514,6 +514,53 @@ def test_task_board_ready_with_current_delivery_evidence(tmp_path: Path) -> None
     )
 
 
+def test_task_board_tracks_completed_handoff_heading_sections(tmp_path: Path) -> None:
+    reports_dir = tmp_path / "reports"
+    handoff = tmp_path / "handoff.md"
+    _write_reports(reports_dir)
+    heading_candidate = (
+        "integration_review_manifest_adoption_tracker_notification_notification_notification_notification_"
+        "notification_notification_notification_notification_notification_owner_handoff.py"
+    )
+    handoff.parent.mkdir(parents=True, exist_ok=True)
+    handoff.write_text(
+        "\n".join(
+            [
+                "## Secondary task queue",
+                "",
+                "Queue:",
+                "1. `integration_review_action_status_board.py` - next",
+                "- Completed `backend/app/core/integration_review_answer_action_matrix.py` as a detached candidate.",
+                "",
+                "### 2026-06-11: Integration review manifest adoption tracker notification notification "
+                "notification notification notification notification notification notification notification owner handoff "
+                "(#102 completed)",
+                "",
+                "Files:",
+                f"- `backend/app/core/{heading_candidate}`",
+                f"- `tests/test_{heading_candidate}`",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    report = build_task_board(
+        reports_dir=reports_dir,
+        secondary_handoff_path=handoff,
+        git_status_lines=[],
+    )
+
+    assert report.status == "commercial_delivery_ready_for_owner_staging_review"
+    assert report.summary["secondary_handoff_completed_count"] == 2
+    assert report.summary["secondary_handoff_latest_completed_candidate"] == heading_candidate
+    secondary = next(task for task in report.tasks if task.id == "secondary_handoff_sync")
+    assert secondary.details["handoff_completed_candidates"] == [
+        "integration_review_answer_action_matrix.py",
+        heading_candidate,
+    ]
+    assert secondary.details["handoff_latest_completed_candidate"] == heading_candidate
+
+
 def test_task_board_tracks_secondary_pending_without_blocking_owner_staging(tmp_path: Path) -> None:
     reports_dir = tmp_path / "reports"
     handoff = tmp_path / "handoff.md"
