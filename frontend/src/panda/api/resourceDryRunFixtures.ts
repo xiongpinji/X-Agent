@@ -1,0 +1,93 @@
+import type { ApiPandaResourceSnapshot } from './adapters'
+import { runtimeFixture } from './resourceRuntimeFixtures'
+
+export const aggregateResourcesBffDryRunFixture: ApiPandaResourceSnapshot = {
+  tasks: [{
+    id: 'task-api-1',
+    title: '接入资源 BFF dry-run',
+    project: 'Panda Agent',
+    priority: 'P1',
+    ...runtimeFixture({ status: 'running', riskLevel: 'warning', progress: 88, ownerAgent: 'Panda Planner', updatedAt: '2026-06-10T06:00:00+08:00', evidenceRef: 'ev-task-1' }),
+  }],
+  projects: [{
+    id: 'project-api-1',
+    name: 'Panda Console',
+    type: 'frontend-workbench',
+    ...runtimeFixture({ status: 'active', riskLevel: 'success', progress: 64, ownerAgent: 'Panda Builder', updatedAt: '2026-06-10T06:05:00+08:00', evidenceRef: 'ev-project-1' }),
+  }],
+  threads: [{
+    id: 'thread-api-1',
+    title: '前端资源契约 dry-run',
+    project: 'Panda Console',
+    ...runtimeFixture({ status: 'running', riskLevel: 'neutral', progress: 72, ownerAgent: 'Panda Reviewer', updatedAt: '2026-06-10T06:10:00+08:00', evidenceRef: 'ev-thread-1' }),
+  }],
+  workflows: [{
+    id: 'workflow-api-1',
+    name: '资源 BFF 验证',
+    state: 'executing',
+    ...runtimeFixture({ status: 'executing', riskLevel: 'warning', progress: 93, ownerAgent: 'Workflow Captain', updatedAt: '2026-06-10T06:15:00+08:00', evidenceRef: 'ev-workflow-1' }),
+  }],
+  workflow_nodes: [{
+    id: 'node-api-1',
+    title: 'Validation',
+    role: 'contract gate',
+    x: 25,
+    y: 35,
+    ...runtimeFixture({ status: 'ready', riskLevel: 'success', progress: 100, ownerAgent: 'Gate Agent', updatedAt: '2026-06-10T06:20:00+08:00', evidenceRef: 'ev-node-1' }),
+  }],
+  agents: [{
+    id: 'agent-api-1',
+    name: 'Panda Architect',
+    role: 'frontend architect',
+    model: 'X-Agent Router',
+    load: 41,
+    permissions: ['workflow', 'audit'],
+    ...runtimeFixture({ status: 'online', riskLevel: 'success', progress: 41, ownerAgent: 'Platform', updatedAt: '2026-06-10T06:25:00+08:00', evidenceRef: 'ev-agent-1' }),
+  }],
+  knowledge_sources: [{
+    id: 'knowledge-api-1',
+    name: 'X-Agent Docs',
+    kind: 'docs',
+    documents: 128,
+    last_sync: '2026-06-10T06:30:00+08:00',
+    ...runtimeFixture({ status: 'indexed', riskLevel: 'success', progress: 100, ownerAgent: 'Memory Agent', updatedAt: '2026-06-10T06:30:00+08:00', evidenceRef: 'ev-knowledge-1' }),
+  }],
+  tools: [{
+    id: 'tool-api-1',
+    name: 'MCP Browser',
+    provider: 'MCP',
+    permission: 'approval-required',
+    invocations: 42,
+    ...runtimeFixture({ status: 'enabled', riskLevel: 'warning', progress: 90, ownerAgent: 'Tool Agent', updatedAt: '2026-06-10T06:35:00+08:00', evidenceRef: 'ev-tool-1' }),
+  }],
+  data_sources: [{
+    id: 'data-api-1',
+    name: 'Audit Warehouse',
+    source: 'PostgreSQL',
+    records: 2048,
+    sync_state: 'incremental',
+    ...runtimeFixture({ status: 'syncing', riskLevel: 'neutral', progress: 67, ownerAgent: 'Data Agent', updatedAt: '2026-06-10T06:40:00+08:00', evidenceRef: 'ev-data-1' }),
+  }],
+  audit_events: [{
+    id: 'audit-api-1',
+    title: 'Dry-run contract accepted',
+    actor: 'Panda QA',
+    time: '2026-06-10T06:45:00+08:00',
+    summary: '资源 dry-run fixture 映射通过。',
+    ...runtimeFixture({ status: 'recorded', riskLevel: 'success', progress: 100, ownerAgent: 'Audit Agent', updatedAt: '2026-06-10T06:45:00+08:00', evidenceRef: 'ev-audit-1' }),
+  }],
+  automation_rules: [{
+    id: 'automation-api-1',
+    name: 'Strict Gate Monitor',
+    trigger: 'report:panda:strict',
+    destination: 'Frontend Handoff',
+    last_run: '2026-06-10T06:50:00+08:00',
+    ...runtimeFixture({ status: 'enabled', riskLevel: 'warning', progress: 80, ownerAgent: 'Automation Agent', updatedAt: '2026-06-10T06:50:00+08:00', evidenceRef: 'ev-automation-1' }),
+  }],
+  settings_sections: [{
+    id: 'settings-api-1',
+    title: 'X-Agent Core',
+    description: '只读策略边界',
+    ...runtimeFixture({ status: 'readonly', riskLevel: 'neutral', progress: 100, ownerAgent: 'Platform', updatedAt: '2026-06-10T06:55:00+08:00', evidenceRef: 'ev-settings-1' }),
+  }],
+}

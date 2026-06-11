@@ -35,6 +35,8 @@
   "include": [
     "src/main.tsx",
     "src/App.tsx",
+    "src/panda/**/*.ts",
+    "src/panda/**/*.tsx",
     "src/pages/ChatPage.tsx",
     "src/services/api.ts",
     "src/store/appStore.ts",

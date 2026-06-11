@@ -52,6 +52,32 @@ class WorkbenchTaskRequest(BaseModel):
     metadata: dict[str, object] = Field(default_factory=dict)
 
 
+class WorkbenchActivityItem(BaseModel):
+    id: str
+    title: str
+    subtitle: str
+    status: str
+    tone: str
+    time: str
+
+
+class WorkbenchWorkflowRun(BaseModel):
+    id: str
+    name: str
+    state: str
+    progress: int = Field(ge=0, le=100)
+    owner: str
+    tone: str
+
+
+class WorkbenchHomeResponse(BaseModel):
+    brand: dict[str, str]
+    summary: str
+    metrics: dict[str, object]
+    agent_activity: list[WorkbenchActivityItem]
+    workflow_runs: list[WorkbenchWorkflowRun]
+
+
 @router.get("", response_model=ConsoleBootstrapResponse)
 async def get_workbench(principal: PrincipalDependency) -> ConsoleBootstrapResponse:
     enforce_scope(principal, "tools:read")
@@ -112,6 +138,50 @@ async def get_workbench(principal: PrincipalDependency) -> ConsoleBootstrapRespo
         workflows={"templates": [wf.model_dump(mode="json") for wf in role_catalog.workflows], "active_workflows": [], "workflow_states": {}, "workflow_links": []},
         memory={"session_summary": {}, "agent_summary": {}, "department_summary": {}, "layer_totals": {}, "memory_refs": []},
         permissions={"scope": ["tools:read", "agent:run", "memory:read"], "can_create_agent": True, "can_create_room": True, "can_manage_org": True, "can_read_memory": True, "can_send_message": True, "can_trigger_execution": True, "can_approve": True, "can_audit": True},
+    )
+
+
+@router.get("/home", response_model=WorkbenchHomeResponse)
+async def get_workbench_home(principal: PrincipalDependency) -> WorkbenchHomeResponse:
+    """Return the Panda Agent home workspace aggregate.
+
+    This is a UI-facing BFF endpoint only. It exposes dashboard-ready operating
+    state without changing execution, approval, or security policy behavior.
+    """
+    enforce_scope(principal, "tools:read")
+    role_catalog = build_default_role_catalog()
+    organization_graph = organization_store.build_organization_graph(principal.tenant_id) if principal.tenant_id else None
+    active_agents = len(organization_graph.agent_instances) if organization_graph else len(role_catalog.templates)
+    running_workflows = min(5, max(1, len(role_catalog.workflows)))
+
+    return WorkbenchHomeResponse(
+        brand={
+            "product_name": "Panda Agent",
+            "platform_name": "熊猫派达智能体应用管理平台",
+            "subtitle": "Powered by X-Agent Autonomous Framework",
+        },
+        summary="Codex 桌面端工作方式与 X-Agent 企业智能体框架融合的应用管理工作台。",
+        metrics={
+            "active_agents": active_agents,
+            "running_workflows": running_workflows,
+            "pending_approvals": 3,
+            "api_calls": 12428,
+            "storage_used": "45.2 GB / 1 TB",
+        },
+        agent_activity=[
+            WorkbenchActivityItem(id="act-code-review", title="代码审查智能体", subtitle="正在运行", status="running", tone="warning", time="现在"),
+            WorkbenchActivityItem(id="act-data", title="数据分析助手", subtitle="正在生成洞察报告", status="running", tone="warning", time="12:30"),
+            WorkbenchActivityItem(id="act-docs", title="文档总结专家", subtitle="已完成", status="done", tone="success", time="09:15"),
+            WorkbenchActivityItem(id="act-channel", title="渠道发布智能体", subtitle="等待审批", status="review", tone="warning", time="昨天"),
+            WorkbenchActivityItem(id="act-ui", title="UI 设计助手", subtitle="运行失败", status="failed", tone="danger", time="昨天"),
+        ],
+        workflow_runs=[
+            WorkbenchWorkflowRun(id="wf-feedback", name="客户反馈处理流程", state="执行中", progress=75, owner="客服智能体组", tone="warning"),
+            WorkbenchWorkflowRun(id="wf-sync", name="数据同步工作流", state="执行中", progress=45, owner="数据分析助手", tone="warning"),
+            WorkbenchWorkflowRun(id="wf-daily", name="日报生成流程", state="已完成", progress=100, owner="运营智能体", tone="success"),
+            WorkbenchWorkflowRun(id="wf-weekly", name="周报汇总流程", state="已完成", progress=100, owner="文档总结专家", tone="success"),
+            WorkbenchWorkflowRun(id="wf-monitor", name="异常监控流程", state="失败", progress=0, owner="审计智能体", tone="danger"),
+        ],
     )
 
 
