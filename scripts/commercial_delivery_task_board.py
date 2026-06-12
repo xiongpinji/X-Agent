@@ -313,6 +313,44 @@ def _failed_digest_check_has_matching_present_values(
     return False
 
 
+def _failed_digest_check_has_only_task_board_stale_value(
+    report_payload: dict[str, Any],
+    *,
+    check_name: str,
+    detail_key: str,
+    summary_key: str,
+) -> bool:
+    checks = report_payload.get("checks")
+    if not isinstance(checks, list):
+        return False
+    for check in checks:
+        if not isinstance(check, dict) or check.get("name") != check_name or check.get("status") != "failed":
+            continue
+        details = check.get("details")
+        if not isinstance(details, dict):
+            return False
+        sources = details.get(detail_key)
+        if not isinstance(sources, dict):
+            return False
+        task_board_value = sources.get("task_board")
+        if not isinstance(task_board_value, str) or not task_board_value:
+            return False
+        non_task_board_values = [
+            str(value)
+            for key, value in sources.items()
+            if key != "task_board" and isinstance(value, str) and value
+        ]
+        non_task_board_missing = [key for key, value in sources.items() if key != "task_board" and not value]
+        if non_task_board_missing or not non_task_board_values:
+            return False
+        stable_values = set(non_task_board_values)
+        if len(stable_values) != 1:
+            return False
+        stable_value = next(iter(stable_values))
+        return task_board_value != stable_value and _read_summary_value(report_payload, summary_key) == stable_value
+    return False
+
+
 def _pre_approval_drift_guard_accounted_for(reports: dict[str, dict[str, Any]]) -> bool:
     drift_guard = reports.get("pre_approval_drift_guard", {})
     if _report_status(drift_guard) == "pre_approval_drift_guard_ready":
@@ -363,22 +401,49 @@ def _pre_approval_drift_guard_accounted_for(reports: dict[str, dict[str, Any]]) 
         "closure_blocked_before_owner",
     }
     post_commit_allowed_failed_checks = post_commit_required_failed_checks | {"secondary_handoff_summary_stable"}
+    refresh_chain_receipt_ready = (
+        _report_status(reports.get("refresh_chain_receipt", {})) == "commercial_delivery_refresh_chain_receipt_ready"
+    )
     if _failed_digest_check_has_matching_present_values(
         drift_guard,
         check_name="stage_command_digest_stable",
         detail_key="stage_command_digest_sources",
+    ) or (
+        refresh_chain_receipt_ready
+        and _failed_digest_check_has_only_task_board_stale_value(
+            drift_guard,
+            check_name="stage_command_digest_stable",
+            detail_key="stage_command_digest_sources",
+            summary_key="stage_command_digest",
+        )
     ):
         post_commit_allowed_failed_checks.add("stage_command_digest_stable")
     if _failed_digest_check_has_matching_present_values(
         drift_guard,
         check_name="stage_path_digest_stable",
         detail_key="stage_path_digest_sources",
+    ) or (
+        refresh_chain_receipt_ready
+        and _failed_digest_check_has_only_task_board_stale_value(
+            drift_guard,
+            check_name="stage_path_digest_stable",
+            detail_key="stage_path_digest_sources",
+            summary_key="stage_path_digest",
+        )
     ):
         post_commit_allowed_failed_checks.add("stage_path_digest_stable")
     if _failed_digest_check_has_matching_present_values(
         drift_guard,
         check_name="expected_stage_path_set_digest_stable",
         detail_key="expected_stage_path_set_digest_sources",
+    ) or (
+        refresh_chain_receipt_ready
+        and _failed_digest_check_has_only_task_board_stale_value(
+            drift_guard,
+            check_name="expected_stage_path_set_digest_stable",
+            detail_key="expected_stage_path_set_digest_sources",
+            summary_key="expected_stage_path_set_digest",
+        )
     ):
         post_commit_allowed_failed_checks.add("expected_stage_path_set_digest_stable")
     stage_path_digest = _read_summary_value(drift_guard, "stage_path_digest")

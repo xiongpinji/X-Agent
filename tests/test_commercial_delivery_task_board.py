@@ -1489,6 +1489,131 @@ def test_task_board_accounts_for_post_commit_drift_guard_with_all_missing_digest
     assert drift_check.details["pre_approval_drift_guard_accounted_for"] is True
 
 
+def test_task_board_accounts_for_post_commit_drift_guard_with_stale_task_board_digest(
+    tmp_path: Path,
+) -> None:
+    reports_dir = tmp_path / "reports"
+    handoff = tmp_path / "handoff.md"
+    _write_reports(reports_dir)
+    _write_handoff(handoff)
+
+    drift_guard_payload = {
+        "status": "pre_approval_drift_guard_blocked",
+        "real_owner_approval_present": True,
+        "mutation_performed": False,
+        "git_stage_performed": False,
+        "git_commit_performed": False,
+        "git_push_performed": False,
+        "network_mutation_performed": False,
+        "agent_execution_enabled": False,
+        "full_codex_parity_claimed": False,
+        "report_statuses": {
+            "owner_stage_approval_request": "owner_stage_approval_request_blocked",
+            "owner_approval_handoff": "owner_approval_handoff_blocked",
+            "owner_approval_payload_audit": "owner_approval_payload_blocked",
+            "owner_stage_approval_gate": "owner_stage_approval_blocked",
+            "owner_stage_execution_plan": "owner_stage_execution_blocked",
+            "owner_post_approval_operator_checklist": "owner_post_approval_operator_checklist_blocked",
+            "closure_snapshot": "commercial_delivery_closure_blocked",
+        },
+        "summary": {
+            "stage_path_digest": "a" * 64,
+            "stage_command_digest": "b" * 64,
+            "expected_stage_path_set_digest": "c" * 64,
+            "owner_approval_payload_present": True,
+            "owner_approval_payload_valid": False,
+            "owner_approval_payload_ready_for_gate": False,
+            "owner_stage_approval_gate_status": "owner_stage_approval_blocked",
+            "owner_stage_execution_plan_status": "owner_stage_execution_blocked",
+            "owner_post_approval_operator_checklist_status": (
+                "owner_post_approval_operator_checklist_blocked"
+            ),
+            "owner_post_approval_operator_checklist_waiting_for_owner": False,
+            "owner_post_approval_operator_checklist_operator_ready": False,
+            "owner_post_approval_operator_checklist_real_owner_approval_present": True,
+            "closure_snapshot_status": "commercial_delivery_closure_blocked",
+            "closure_delivery_complete": False,
+        },
+        "checks": [
+            {"name": "real_owner_approval_absent", "status": "failed"},
+            {"name": "approval_request_ready", "status": "failed"},
+            {"name": "approval_handoff_ready", "status": "failed"},
+            {
+                "name": "stage_path_digest_stable",
+                "status": "failed",
+                "details": {
+                    "stage_path_digest_sources": {
+                        "owner_stage_approval_request": "a" * 64,
+                        "owner_approval_handoff": "a" * 64,
+                        "owner_stage_approval_gate": "a" * 64,
+                        "owner_stage_execution_plan": "a" * 64,
+                        "closure_snapshot": "a" * 64,
+                        "task_board": "d" * 64,
+                    }
+                },
+            },
+            {
+                "name": "stage_command_digest_stable",
+                "status": "failed",
+                "details": {
+                    "stage_command_digest_sources": {
+                        "owner_stage_approval_request": "b" * 64,
+                        "owner_approval_handoff": "b" * 64,
+                        "owner_stage_approval_gate": "b" * 64,
+                        "owner_stage_execution_plan": "b" * 64,
+                        "closure_snapshot": "b" * 64,
+                        "task_board": "e" * 64,
+                    }
+                },
+            },
+            {
+                "name": "expected_stage_path_set_digest_stable",
+                "status": "failed",
+                "details": {
+                    "expected_stage_path_set_digest_sources": {
+                        "owner_stage_approval_request": "c" * 64,
+                        "owner_approval_handoff": "c" * 64,
+                        "closure_snapshot": "c" * 64,
+                        "task_board": "f" * 64,
+                    }
+                },
+            },
+            {"name": "approval_payload_blocked_before_owner", "status": "failed"},
+            {"name": "operator_checklist_waiting_before_owner", "status": "failed"},
+            {"name": "closure_blocked_before_owner", "status": "failed"},
+        ],
+    }
+    _write_json(reports_dir / "commercial-delivery-pre-approval-drift-guard.json", drift_guard_payload)
+
+    report = build_task_board(
+        reports_dir=reports_dir,
+        secondary_handoff_path=handoff,
+        git_status_lines=[],
+    )
+
+    drift_check = next(check for check in report.checks if check.name == "pre_approval_drift_guard_ready")
+    assert report.status == "commercial_delivery_ready_for_owner_staging_review"
+    assert drift_check.status == "passed"
+    assert drift_check.details["pre_approval_drift_guard_accounted_for"] is True
+
+    _write_json(
+        reports_dir / "commercial-delivery-refresh-chain-receipt.json",
+        {"status": "commercial_delivery_refresh_chain_receipt_blocked", "full_codex_parity_claimed": False},
+    )
+    blocked_report = build_task_board(
+        reports_dir=reports_dir,
+        secondary_handoff_path=handoff,
+        git_status_lines=[],
+    )
+
+    blocked_drift_check = next(
+        check for check in blocked_report.checks if check.name == "pre_approval_drift_guard_ready"
+    )
+    assert blocked_report.status == "commercial_delivery_blocked"
+    assert blocked_drift_check.status == "failed"
+    assert blocked_drift_check.details["pre_approval_drift_guard_accounted_for"] is False
+
+
 def test_task_board_accounts_for_post_approval_noop_drift_guard(
     tmp_path: Path,
 ) -> None:
