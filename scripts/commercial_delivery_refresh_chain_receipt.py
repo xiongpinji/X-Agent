@@ -702,6 +702,26 @@ def _post_commit_noop_stale_operator_boundary(report_payload: dict[str, Any]) ->
     )
 
 
+def _post_commit_noop_owner_approval_stale_task_board_state(report_payload: dict[str, Any]) -> bool:
+    failed_checks = _failed_check_names(report_payload)
+    task_board_blocked = (
+        _status(report_payload) == "commercial_delivery_blocked"
+        or _read_summary_value(report_payload, "task_board_status") == "commercial_delivery_blocked"
+        or "task_board_ready" in failed_checks
+        or "task_board_ready_for_owner_review" in failed_checks
+    )
+    return (
+        _is_post_commit_noop_count_context(report_payload)
+        and task_board_blocked
+        and _historical_approval_payload_present(report_payload)
+        and _read_summary_value(report_payload, "post_commit_noop_accounted_for") is True
+        and _read_summary_value(report_payload, "pre_approval_drift_guard_status")
+        == "pre_approval_drift_guard_blocked"
+        and _read_summary_value(report_payload, "pre_approval_drift_guard_real_owner_approval_present") is True
+        and _post_commit_noop_stale_operator_boundary(report_payload)
+    )
+
+
 def _is_expected_refresh_bootstrap_task_board_state(
     *,
     step_name: str,
@@ -1272,6 +1292,9 @@ def _is_expected_post_commit_pre_stage_readiness_gate_state(
         "owner_approval_boundary_waiting_or_ready",
         "stage_counts_agree",
     }
+    post_commit_noop_stale_task_board_checks = (
+        post_commit_noop_failed_checks - {"refresh_chain_receipt_ready"}
+    ) | {"task_board_ready"}
     return (
         step_name == "owner_pre_stage_readiness_gate"
         and command_result.returncode != 0
@@ -1485,6 +1508,19 @@ def _is_expected_post_commit_pre_stage_readiness_gate_state(
             and _post_commit_noop_stale_operator_boundary(report_payload)
             and _read_summary_value(report_payload, "post_commit_noop_stage_counts_agree") is True
             and failed_checks == (post_commit_noop_failed_checks - {"refresh_chain_receipt_ready"})
+        )
+        or (
+            noop_command_counts_accounted_for
+            and _read_summary_value(report_payload, "owner_post_staging_status")
+            == "owner_post_staging_verification_ready"
+            and int(_read_summary_value(report_payload, "owner_post_staging_cached_staged_path_count") or 0) == 0
+            and _read_summary_value(report_payload, "owner_approval_handoff_status")
+            == "owner_approval_handoff_blocked"
+            and _read_summary_value(report_payload, "owner_approval_handoff_owner_action_required") is True
+            and _read_summary_value(report_payload, "owner_approval_handoff_stage_allowed") is False
+            and _post_commit_noop_owner_approval_stale_task_board_state(report_payload)
+            and _read_summary_value(report_payload, "post_commit_noop_stage_counts_agree") is True
+            and failed_checks == post_commit_noop_stale_task_board_checks
         )
     )
     )
@@ -2814,6 +2850,10 @@ def _is_expected_post_commit_owner_approval_resume_packet_state(
             or failed_checks == owner_approved_ready_gate_failed_checks
             or failed_checks == task_board_bootstrap_failed_checks
             or failed_checks == pre_approval_boundary_failed_checks
+            or (
+                failed_checks == {"task_board_ready"}
+                and _post_commit_noop_owner_approval_stale_task_board_state(report_payload)
+            )
         )
         and failed_checks.issubset(allowed_failed_checks)
         and (

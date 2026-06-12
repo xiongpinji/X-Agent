@@ -3526,7 +3526,7 @@ def test_refresh_chain_receipt_accounts_for_post_commit_noop_owner_approval_stal
                 "owner_post_staging_status": "owner_post_staging_verification_ready",
                 "owner_post_staging_cached_staged_path_count": 0,
                 "owner_preflight_cached_staged_path_count": 0,
-                "task_board_status": "commercial_delivery_ready_for_owner_staging_review",
+                "task_board_status": "commercial_delivery_blocked",
                 "owner_approval_handoff_status": "owner_approval_handoff_blocked",
                 "owner_approval_handoff_owner_action_required": True,
                 "owner_approval_handoff_stage_allowed": False,
@@ -3540,6 +3540,7 @@ def test_refresh_chain_receipt_accounts_for_post_commit_noop_owner_approval_stal
                 {"name": "owner_approval_resume_packet_accounted_for", "status": "failed"},
                 {"name": "operator_checklist_accounted_for", "status": "failed"},
                 {"name": "owner_approval_boundary_waiting_or_ready", "status": "failed"},
+                {"name": "task_board_ready", "status": "failed"},
                 {"name": "stage_counts_agree", "status": "failed"},
             ],
         ),
@@ -3719,6 +3720,43 @@ def test_refresh_chain_receipt_accounts_for_post_commit_noop_owner_approval_stal
                 ),
             )
             return CommandRunResult(command, 1, 0.01, "", "", False)
+        if name == "commercial_delivery_owner_approval_resume_packet":
+            _write_json(
+                reports_dir / "commercial-delivery-owner-approval-resume-packet.json",
+                _post_commit_noop_non_mutating_payload(
+                    status="owner_approval_resume_packet_blocked",
+                    real_owner_approval_present=True,
+                    waiting_for_owner=False,
+                    resume_ready=False,
+                    stage_allowed=False,
+                    stage_execution_ready=False,
+                    summary={
+                        **summary,
+                        "runbook_stage_command_count": 0,
+                        "execution_plan_stage_command_count": 0,
+                        "stage_commands_preview_count": 0,
+                        "task_board_status": "commercial_delivery_blocked",
+                        "owner_approval_handoff_post_stage_accounted_for": False,
+                        "owner_staging_runbook_post_stage_accounted_for": False,
+                        "post_stage_resume_evidence_ready": False,
+                    },
+                    report_statuses={
+                        "owner_approval_handoff": "owner_approval_handoff_blocked",
+                        "pre_approval_drift_guard": "pre_approval_drift_guard_blocked",
+                        "owner_approval_payload_audit": "owner_approval_payload_blocked",
+                        "owner_stage_approval_gate": "owner_stage_approval_blocked",
+                        "owner_stage_execution_plan": "owner_stage_execution_blocked",
+                        "owner_staging_runbook": "owner_staging_runbook_blocked",
+                        "owner_staging_rollback_plan": "owner_staging_rollback_plan_ready",
+                        "owner_post_staging_verifier": "owner_post_staging_verification_ready",
+                        "owner_post_stage_commit_gate": "owner_post_stage_commit_gate_blocked",
+                        "owner_commit_packet": "owner_commit_packet_blocked",
+                        "owner_delivery_packet": "owner_delivery_packet_ready",
+                    },
+                    checks=[{"name": "task_board_ready", "status": "failed"}],
+                ),
+            )
+            return CommandRunResult(command, 1, 0.01, "", "", False)
         return CommandRunResult(command, 1 if name in {
             "commercial_delivery_owner_pre_stage_readiness_gate",
             "commercial_delivery_owner_stage_approval_brief",
@@ -3747,6 +3785,7 @@ def test_refresh_chain_receipt_accounts_for_post_commit_noop_owner_approval_stal
         "owner_stage_approval_brief",
         "closure_snapshot",
         "owner_approval_handoff",
+        "owner_approval_resume_packet",
         "task_board_after_owner_decision",
     }:
         step = next(step for step in receipt.steps if step.name == name)
