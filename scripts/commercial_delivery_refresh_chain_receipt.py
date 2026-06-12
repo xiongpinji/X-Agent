@@ -1246,6 +1246,22 @@ def _is_expected_post_commit_pre_stage_readiness_gate_state(
             )
             or (
                 _read_summary_value(report_payload, "owner_post_staging_status")
+                == "owner_post_staging_verification_blocked"
+                and int(_read_summary_value(report_payload, "owner_post_staging_cached_staged_path_count") or 0) == 0
+                and _read_summary_value(report_payload, "task_board_status")
+                == "commercial_delivery_ready_for_owner_staging_review"
+                and command_counts_accounted_for
+                and _read_summary_value(report_payload, "owner_approval_handoff_status")
+                == "owner_approval_handoff_ready"
+                and _read_summary_value(report_payload, "owner_approval_handoff_owner_action_required") is True
+                and _read_summary_value(report_payload, "owner_approval_handoff_stage_allowed") is True
+                and _read_summary_value(report_payload, "pre_approval_drift_guard_status")
+                == "pre_approval_drift_guard_ready"
+                and _read_summary_value(report_payload, "pre_approval_drift_guard_real_owner_approval_present") is True
+                and failed_checks == {"owner_decision_brief_ready"}
+            )
+            or (
+                _read_summary_value(report_payload, "owner_post_staging_status")
                 == "owner_post_staging_verification_ready"
                 and int(_read_summary_value(report_payload, "owner_post_staging_cached_staged_path_count") or 0) == 0
                 and _read_summary_value(report_payload, "task_board_status")
@@ -1339,6 +1355,33 @@ def _is_expected_post_commit_pre_stage_readiness_gate_state(
                 and _read_summary_value(report_payload, "owner_post_approval_operator_checklist_operator_ready")
                 is False
                 and failed_checks == post_commit_noop_failed_checks
+            )
+            or (
+                noop_command_counts_accounted_for
+                and _read_summary_value(report_payload, "owner_post_staging_status")
+                == "owner_post_staging_verification_ready"
+                and int(_read_summary_value(report_payload, "owner_post_staging_cached_staged_path_count") or 0) == 0
+                and _read_summary_value(report_payload, "task_board_status")
+                == "commercial_delivery_ready_for_owner_staging_review"
+                and _read_summary_value(report_payload, "owner_approval_handoff_status")
+                == "owner_approval_handoff_ready"
+                and _read_summary_value(report_payload, "owner_approval_handoff_owner_action_required") is True
+                and _read_summary_value(report_payload, "owner_approval_handoff_stage_allowed") is True
+                and _read_summary_value(report_payload, "pre_approval_drift_guard_status")
+                == "pre_approval_drift_guard_blocked"
+                and _read_summary_value(report_payload, "pre_approval_drift_guard_real_owner_approval_present")
+                is True
+                and _read_summary_value(report_payload, "owner_approval_resume_packet_status")
+                == "owner_approval_resume_packet_ready"
+                and _read_summary_value(report_payload, "owner_approval_resume_packet_waiting_for_owner") is False
+                and _read_summary_value(report_payload, "owner_approval_resume_packet_resume_ready") is True
+                and _read_summary_value(report_payload, "owner_post_approval_operator_checklist_status")
+                == "owner_post_approval_operator_checklist_ready"
+                and _read_summary_value(report_payload, "owner_post_approval_operator_checklist_waiting_for_owner")
+                is False
+                and _read_summary_value(report_payload, "owner_post_approval_operator_checklist_operator_ready")
+                is True
+                and failed_checks == (noop_failed_checks - {"owner_approval_handoff_ready"})
             )
             or (
                 noop_command_counts_accounted_for
