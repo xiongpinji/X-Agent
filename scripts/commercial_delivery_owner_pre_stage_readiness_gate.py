@@ -132,6 +132,44 @@ def _failed_step_names(payload: dict[str, Any]) -> list[str]:
     return names
 
 
+def _failed_check_names(payload: dict[str, Any]) -> set[str]:
+    checks = payload.get("checks")
+    if not isinstance(checks, list):
+        return set()
+    names: set[str] = set()
+    for check in checks:
+        if isinstance(check, dict) and check.get("status") == "failed" and check.get("name") is not None:
+            names.add(str(check.get("name")))
+    return names
+
+
+def _has_no_mutation_side_effects(payload: dict[str, Any]) -> bool:
+    return (
+        payload.get("mutation_performed") is not True
+        and payload.get("git_stage_performed") is not True
+        and payload.get("git_commit_performed") is not True
+        and payload.get("git_push_performed") is not True
+        and payload.get("network_mutation_performed") is not True
+        and payload.get("agent_execution_enabled") is not True
+    )
+
+
+def _refresh_step_accounted_for(refresh_receipt: dict[str, Any], step_name: str) -> bool:
+    summary = _summary(refresh_receipt)
+    expected_nonzero_steps = summary.get("expected_nonzero_steps")
+    if isinstance(expected_nonzero_steps, list) and step_name in {str(name) for name in expected_nonzero_steps}:
+        return True
+    steps = refresh_receipt.get("steps")
+    if not isinstance(steps, list):
+        return False
+    return any(
+        isinstance(step, dict)
+        and step.get("name") == step_name
+        and step.get("status") == "expected_nonzero_accepted"
+        for step in steps
+    )
+
+
 REFRESH_RECEIPT_SELF_BOOTSTRAP_STEPS = {
     "owner_pre_stage_readiness_gate",
     "owner_delivery_packet_before_owner_approval",
@@ -155,6 +193,74 @@ def _refresh_receipt_ready_or_bootstrap(refresh_receipt: dict[str, Any]) -> bool
         and int(refresh_summary.get("failed_step_count") or 0) == 1
         and len(failed_steps) == 1
         and failed_steps[0] in REFRESH_RECEIPT_SELF_BOOTSTRAP_STEPS
+    )
+
+
+def _owner_approval_handoff_ready_or_noop_accounted(
+    owner_approval_handoff: dict[str, Any],
+    *,
+    refresh_receipt: dict[str, Any],
+    refresh_receipt_accounted_for: bool,
+) -> bool:
+    if _status(owner_approval_handoff) == "owner_approval_handoff_ready":
+        return True
+    summary = _summary(owner_approval_handoff)
+    failed_checks = _failed_check_names(owner_approval_handoff)
+    return (
+        refresh_receipt_accounted_for
+        and _refresh_step_accounted_for(refresh_receipt, "owner_approval_handoff")
+        and _status(owner_approval_handoff) == "owner_approval_handoff_blocked"
+        and owner_approval_handoff.get("stage_allowed") is True
+        and owner_approval_handoff.get("delivery_complete") is True
+        and _has_no_mutation_side_effects(owner_approval_handoff)
+        and summary.get("post_approval_noop_accounted_for") is True
+        and summary.get("owner_approval_payload_present") is True
+        and summary.get("owner_approval_payload_valid") is True
+        and summary.get("owner_approval_payload_ready_for_gate") is True
+        and summary.get("owner_stage_approval_gate_status") == "owner_stage_approval_ready"
+        and summary.get("owner_stage_execution_plan_status") == "owner_stage_execution_ready"
+        and summary.get("closure_snapshot_status") == "commercial_delivery_complete"
+        and failed_checks == {"approval_brief_ready"}
+    )
+
+
+def _pre_approval_drift_guard_ready_or_noop_accounted(
+    pre_approval_drift_guard: dict[str, Any],
+    *,
+    refresh_receipt: dict[str, Any],
+    refresh_receipt_accounted_for: bool,
+) -> bool:
+    if _status(pre_approval_drift_guard) == "pre_approval_drift_guard_ready":
+        return True
+    summary = _summary(pre_approval_drift_guard)
+    allowed_failed_checks = {
+        "real_owner_approval_absent",
+        "approval_handoff_ready",
+        "approval_payload_blocked_before_owner",
+        "approval_gate_blocked_before_owner",
+        "stage_execution_blocked_before_owner",
+        "operator_checklist_waiting_before_owner",
+        "closure_blocked_before_owner",
+    }
+    failed_checks = _failed_check_names(pre_approval_drift_guard)
+    return (
+        refresh_receipt_accounted_for
+        and _refresh_step_accounted_for(refresh_receipt, "pre_approval_drift_guard")
+        and _status(pre_approval_drift_guard) == "pre_approval_drift_guard_blocked"
+        and pre_approval_drift_guard.get("real_owner_approval_present") is True
+        and _has_no_mutation_side_effects(pre_approval_drift_guard)
+        and summary.get("owner_approval_payload_present") is True
+        and summary.get("owner_approval_payload_valid") is True
+        and summary.get("owner_approval_payload_ready_for_gate") is True
+        and summary.get("owner_stage_approval_gate_status") == "owner_stage_approval_ready"
+        and summary.get("owner_stage_execution_plan_status") == "owner_stage_execution_ready"
+        and summary.get("owner_post_approval_operator_checklist_status")
+        == "owner_post_approval_operator_checklist_ready"
+        and summary.get("owner_post_approval_operator_checklist_operator_ready") is True
+        and summary.get("owner_post_approval_operator_checklist_real_owner_approval_present") is True
+        and summary.get("closure_snapshot_status") == "commercial_delivery_complete"
+        and summary.get("closure_delivery_complete") is True
+        and failed_checks == allowed_failed_checks
     )
 
 
@@ -313,14 +419,23 @@ def build_owner_pre_stage_readiness_gate(
             or _summary(owner_post_staging).get("post_commit_noop_accounted_for") is True
         )
     )
+    refresh_receipt_accounted_for = _refresh_receipt_ready_or_bootstrap(refresh_receipt)
+    owner_approval_handoff_accounted_for = _owner_approval_handoff_ready_or_noop_accounted(
+        owner_approval_handoff,
+        refresh_receipt=refresh_receipt,
+        refresh_receipt_accounted_for=refresh_receipt_accounted_for,
+    )
+    pre_approval_drift_guard_accounted_for = _pre_approval_drift_guard_ready_or_noop_accounted(
+        pre_approval_drift_guard,
+        refresh_receipt=refresh_receipt,
+        refresh_receipt_accounted_for=refresh_receipt_accounted_for,
+    )
     post_commit_noop_accounted_for = (
         _summary(owner_packet).get("post_commit_noop_accounted_for") is True
         and post_commit_noop_stage_counts_agree
         and owner_post_staging_post_commit_noop_accounted_for
-        and _status(owner_approval_handoff) == "owner_approval_handoff_ready"
-        and owner_approval_handoff.get("stage_allowed") is True
-        and _status(pre_approval_drift_guard) == "pre_approval_drift_guard_ready"
-        and pre_approval_drift_guard.get("real_owner_approval_present") is True
+        and owner_approval_handoff_accounted_for
+        and pre_approval_drift_guard_accounted_for
         and _status(owner_approval_resume_packet) == "owner_approval_resume_packet_ready"
         and owner_approval_resume_packet.get("resume_ready") is True
         and _status(operator_checklist) == "owner_post_approval_operator_checklist_ready"
@@ -377,7 +492,7 @@ def build_owner_pre_stage_readiness_gate(
         ),
         _check(
             "refresh_chain_receipt_ready",
-            _refresh_receipt_ready_or_bootstrap(refresh_receipt),
+            refresh_receipt_accounted_for,
             details={
                 "status": _status(refresh_receipt),
                 "failed_step_count": refresh_summary.get("failed_step_count"),
@@ -407,20 +522,30 @@ def build_owner_pre_stage_readiness_gate(
         ),
         _check(
             "owner_approval_handoff_ready",
-            _status(owner_approval_handoff) == "owner_approval_handoff_ready",
+            owner_approval_handoff_accounted_for,
             details={
                 "status": _status(owner_approval_handoff),
                 "owner_action_required": owner_approval_handoff.get("owner_action_required"),
                 "stage_allowed": owner_approval_handoff.get("stage_allowed"),
+                "post_commit_noop_accounted_for": post_commit_noop_accounted_for,
+                "refresh_chain_step_accounted_for": _refresh_step_accounted_for(
+                    refresh_receipt,
+                    "owner_approval_handoff",
+                ),
             },
             error="owner approval handoff is not ready",
         ),
         _check(
             "pre_approval_drift_guard_ready",
-            _status(pre_approval_drift_guard) == "pre_approval_drift_guard_ready",
+            pre_approval_drift_guard_accounted_for,
             details={
                 "status": _status(pre_approval_drift_guard),
                 "real_owner_approval_present": pre_approval_drift_guard.get("real_owner_approval_present"),
+                "post_commit_noop_accounted_for": post_commit_noop_accounted_for,
+                "refresh_chain_step_accounted_for": _refresh_step_accounted_for(
+                    refresh_receipt,
+                    "pre_approval_drift_guard",
+                ),
             },
             error="pre-approval drift guard is not ready",
         ),

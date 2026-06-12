@@ -358,6 +358,132 @@ def test_owner_pre_stage_readiness_gate_accepts_post_commit_noop_stage(
     assert count_check.details["post_commit_noop_stage_counts_agree"] is True
 
 
+def test_owner_pre_stage_readiness_gate_accepts_accounted_noop_handoff_and_guard(
+    tmp_path: Path,
+) -> None:
+    paths = _write_reports(tmp_path)
+    noop_digest = "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+
+    refresh_receipt = json.loads(paths["refresh_receipt_path"].read_text(encoding="utf-8"))
+    refresh_receipt["summary"]["expected_nonzero_steps"] = [
+        "owner_approval_handoff",
+        "pre_approval_drift_guard",
+    ]
+    paths["refresh_receipt_path"].write_text(json.dumps(refresh_receipt), encoding="utf-8")
+
+    staging_review = json.loads(paths["staging_review_path"].read_text(encoding="utf-8"))
+    staging_review["stage_include_count"] = 100
+    staging_review["eligible_stage_count"] = 0
+    paths["staging_review_path"].write_text(json.dumps(staging_review), encoding="utf-8")
+
+    manifest = json.loads(paths["manifest_path"].read_text(encoding="utf-8"))
+    manifest["stage_include_count"] = 100
+    paths["manifest_path"].write_text(json.dumps(manifest), encoding="utf-8")
+
+    owner_packet = json.loads(paths["owner_packet_path"].read_text(encoding="utf-8"))
+    owner_packet["stage_include_count"] = 100
+    owner_packet["eligible_stage_count"] = 0
+    owner_packet["stage_commands"] = []
+    owner_packet["summary"] = {
+        "post_commit_noop_accounted_for": True,
+        "stage_path_digest": noop_digest,
+        "stage_command_digest": noop_digest,
+        "expected_stage_path_set_digest": noop_digest,
+    }
+    paths["owner_packet_path"].write_text(json.dumps(owner_packet), encoding="utf-8")
+
+    owner_preflight = json.loads(paths["owner_preflight_path"].read_text(encoding="utf-8"))
+    owner_preflight["stage_command_count"] = 0
+    owner_preflight["stage_path_count"] = 0
+    owner_preflight["cached_staged_path_count"] = 0
+    paths["owner_preflight_path"].write_text(json.dumps(owner_preflight), encoding="utf-8")
+
+    owner_post_staging = json.loads(paths["owner_post_staging_path"].read_text(encoding="utf-8"))
+    owner_post_staging["status"] = "owner_post_staging_verification_ready"
+    owner_post_staging["cached_staged_path_count"] = 0
+    owner_post_staging["post_commit_noop_accounted_for"] = True
+    owner_post_staging["summary"] = {"post_commit_noop_accounted_for": True}
+    paths["owner_post_staging_path"].write_text(json.dumps(owner_post_staging), encoding="utf-8")
+
+    owner_command_audit = json.loads(paths["owner_command_audit_path"].read_text(encoding="utf-8"))
+    owner_command_audit["command_count"] = 0
+    owner_command_audit["expected_path_count"] = 0
+    owner_command_audit["post_commit_noop_accounted_for"] = True
+    paths["owner_command_audit_path"].write_text(json.dumps(owner_command_audit), encoding="utf-8")
+
+    decision_brief = json.loads(paths["owner_decision_brief_path"].read_text(encoding="utf-8"))
+    decision_brief["status"] = "blocked_before_owner_staging_decision"
+    paths["owner_decision_brief_path"].write_text(json.dumps(decision_brief), encoding="utf-8")
+
+    owner_approval_handoff = json.loads(paths["owner_approval_handoff_path"].read_text(encoding="utf-8"))
+    owner_approval_handoff["status"] = "owner_approval_handoff_blocked"
+    owner_approval_handoff["stage_allowed"] = True
+    owner_approval_handoff["delivery_complete"] = True
+    owner_approval_handoff["owner_action_required"] = True
+    owner_approval_handoff["checks"] = [{"name": "approval_brief_ready", "status": "failed"}]
+    owner_approval_handoff["summary"] = {
+        "post_approval_noop_accounted_for": True,
+        "owner_approval_payload_present": True,
+        "owner_approval_payload_valid": True,
+        "owner_approval_payload_ready_for_gate": True,
+        "owner_stage_approval_gate_status": "owner_stage_approval_ready",
+        "owner_stage_execution_plan_status": "owner_stage_execution_ready",
+        "closure_snapshot_status": "commercial_delivery_complete",
+        "owner_post_approval_operator_checklist_status": "owner_post_approval_operator_checklist_ready",
+    }
+    paths["owner_approval_handoff_path"].write_text(json.dumps(owner_approval_handoff), encoding="utf-8")
+
+    pre_approval_guard = json.loads(paths["pre_approval_drift_guard_path"].read_text(encoding="utf-8"))
+    pre_approval_guard["status"] = "pre_approval_drift_guard_blocked"
+    pre_approval_guard["real_owner_approval_present"] = True
+    pre_approval_guard["checks"] = [
+        {"name": "real_owner_approval_absent", "status": "failed"},
+        {"name": "approval_handoff_ready", "status": "failed"},
+        {"name": "approval_payload_blocked_before_owner", "status": "failed"},
+        {"name": "approval_gate_blocked_before_owner", "status": "failed"},
+        {"name": "stage_execution_blocked_before_owner", "status": "failed"},
+        {"name": "operator_checklist_waiting_before_owner", "status": "failed"},
+        {"name": "closure_blocked_before_owner", "status": "failed"},
+    ]
+    pre_approval_guard["summary"] = {
+        "owner_approval_payload_present": True,
+        "owner_approval_payload_valid": True,
+        "owner_approval_payload_ready_for_gate": True,
+        "owner_stage_approval_gate_status": "owner_stage_approval_ready",
+        "owner_stage_execution_plan_status": "owner_stage_execution_ready",
+        "owner_post_approval_operator_checklist_status": "owner_post_approval_operator_checklist_ready",
+        "owner_post_approval_operator_checklist_operator_ready": True,
+        "owner_post_approval_operator_checklist_real_owner_approval_present": True,
+        "closure_snapshot_status": "commercial_delivery_complete",
+        "closure_delivery_complete": True,
+    }
+    paths["pre_approval_drift_guard_path"].write_text(json.dumps(pre_approval_guard), encoding="utf-8")
+
+    resume_packet = json.loads(paths["owner_approval_resume_packet_path"].read_text(encoding="utf-8"))
+    resume_packet["status"] = "owner_approval_resume_packet_ready"
+    resume_packet["waiting_for_owner"] = False
+    resume_packet["resume_ready"] = True
+    paths["owner_approval_resume_packet_path"].write_text(json.dumps(resume_packet), encoding="utf-8")
+
+    operator_checklist = json.loads(paths["owner_post_approval_operator_checklist_path"].read_text(encoding="utf-8"))
+    operator_checklist["status"] = "owner_post_approval_operator_checklist_ready"
+    operator_checklist["waiting_for_owner"] = False
+    operator_checklist["operator_ready"] = True
+    paths["owner_post_approval_operator_checklist_path"].write_text(json.dumps(operator_checklist), encoding="utf-8")
+
+    gate = build_owner_pre_stage_readiness_gate(**paths)
+
+    assert gate.status == "owner_pre_stage_readiness_ready"
+    assert gate.summary["post_commit_noop_accounted_for"] is True
+    assert gate.summary["owner_approval_handoff_status"] == "owner_approval_handoff_blocked"
+    assert gate.summary["pre_approval_drift_guard_status"] == "pre_approval_drift_guard_blocked"
+    assert {check.status for check in gate.checks} == {"passed"}
+    handoff_check = next(check for check in gate.checks if check.name == "owner_approval_handoff_ready")
+    assert handoff_check.details["refresh_chain_step_accounted_for"] is True
+    guard_check = next(check for check in gate.checks if check.name == "pre_approval_drift_guard_ready")
+    assert guard_check.details["refresh_chain_step_accounted_for"] is True
+
+
 def test_owner_pre_stage_readiness_gate_blocks_missing_report(tmp_path: Path) -> None:
     paths = _write_reports(tmp_path)
     paths["refresh_receipt_path"].unlink()
