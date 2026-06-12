@@ -104,6 +104,23 @@ def _npm_executable() -> str:
     return "npm.cmd" if os.name == "nt" else "npm"
 
 
+def _targeted_tests_cwd() -> Path:
+    if os.name != "nt":
+        return ROOT
+
+    candidates = [os.environ.get("XAGENT_SHORT_REPO_ROOT"), "X:\\"]
+    for value in candidates:
+        if not value:
+            continue
+        candidate = Path(value)
+        try:
+            if candidate.exists() and candidate.samefile(ROOT):
+                return candidate
+        except OSError:
+            continue
+    return ROOT
+
+
 def _sanitize_output_text(text: str) -> str:
     text = SECRET_KEY_OUTPUT_RE.sub(r"\1<redacted-output>", text)
     return SECRET_VALUE_OUTPUT_RE.sub("<redacted-secret>", text)
@@ -343,7 +360,7 @@ def run_targeted_tests(*, timeout_seconds: float) -> SingleUserCheck:
         "--no-header",
         "-q",
     ]
-    run = _run_command(command, timeout_seconds=timeout_seconds)
+    run = _run_command(command, cwd=_targeted_tests_cwd(), timeout_seconds=timeout_seconds)
     return _report_status_check(
         name="targeted_single_user_tests",
         run=run,

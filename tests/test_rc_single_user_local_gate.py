@@ -162,14 +162,16 @@ def test_single_user_gate_can_stop_on_failure(tmp_path: Path, monkeypatch) -> No
     ]
 
 
-def test_targeted_tests_command_disables_repo_coverage(monkeypatch) -> None:
+def test_targeted_tests_command_disables_repo_coverage(tmp_path: Path, monkeypatch) -> None:
     captured: dict[str, object] = {}
 
     def fake_run(command: list[str], **kwargs: object) -> CommandRun:
         captured["command"] = command
+        captured["cwd"] = kwargs.get("cwd")
         return _command_run(command)
 
     monkeypatch.setattr(gate, "_run_command", fake_run)
+    monkeypatch.setattr(gate, "_targeted_tests_cwd", lambda: tmp_path)
 
     check = gate.run_targeted_tests(timeout_seconds=5)
 
@@ -180,6 +182,7 @@ def test_targeted_tests_command_disables_repo_coverage(monkeypatch) -> None:
     assert "-p" in command
     assert "no:cov" in command
     assert "addopts=" in command
+    assert captured["cwd"] == tmp_path
 
 
 def test_output_tail_redacts_secret_like_values() -> None:
