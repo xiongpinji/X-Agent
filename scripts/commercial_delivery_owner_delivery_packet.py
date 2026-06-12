@@ -344,6 +344,15 @@ def build_owner_delivery_packet(
         and commit_packet.get("commit_allowed") is True
     )
     commit_or_noop_accounted_for = commit_ready or post_commit_noop_accounted_for
+    task_board_noop_accounted_for = (
+        post_commit_noop_accounted_for
+        and _status(task_board) == "commercial_delivery_blocked"
+        and (
+            _int_or_none(task_summary.get("owner_stage_command_count")) == 0
+            or task_summary.get("owner_stage_command_count") is None
+        )
+        and task_summary.get("secondary_pending_blocks_owner_staging") is False
+    )
     stage_approval_ready = _status(approval_gate) == "owner_stage_approval_ready"
     stage_approval_expected_blocked = (
         _status(approval_gate) in {None, "owner_stage_approval_blocked"}
@@ -582,13 +591,7 @@ def build_owner_delivery_packet(
         and _status(staging_packet) == "owner_staging_packet_ready"
         and (
             _status(task_board) == "commercial_delivery_ready_for_owner_staging_review"
-            or (
-                post_commit_noop_accounted_for
-                and _status(task_board) == "commercial_delivery_blocked"
-                and task_summary.get("owner_commit_packet_status") == "owner_commit_packet_ready"
-                and task_summary.get("owner_post_stage_commit_gate_status")
-                == "owner_post_stage_commit_gate_ready"
-            )
+            or task_board_noop_accounted_for
         )
         and _status(control_modes_preservation) == "control_modes_preservation_ready"
         and _status(staging_runbook) == "owner_staging_runbook_blocked"
@@ -667,6 +670,7 @@ def build_owner_delivery_packet(
                 "control_modes_preservation_status": _status(control_modes_preservation),
                 "strict_stage_ready": strict_stage_ready,
                 "post_stage_chain_accounted_for": post_stage_chain_accounted_for,
+                "task_board_noop_accounted_for": task_board_noop_accounted_for,
                 "pre_approval_bootstrap_accounted_for": pre_approval_bootstrap_accounted_for,
                 "owner_post_stage_commit_gate_status": _status(commit_gate),
                 "owner_commit_packet_status": _status(commit_packet),
@@ -977,6 +981,7 @@ def build_owner_delivery_packet(
             "post_commit_stage_approval_accounted_for": post_commit_stage_approval_accounted_for,
             "post_commit_stage_execution_accounted_for": post_commit_stage_execution_accounted_for,
             "post_commit_noop_accounted_for": post_commit_noop_accounted_for,
+            "task_board_noop_accounted_for": task_board_noop_accounted_for,
             "pre_approval_bootstrap_accounted_for": pre_approval_bootstrap_accounted_for,
             "refresh_delivery_bootstrap": refresh_delivery_bootstrap,
             "stage_path_digest": stage_path_digest,
