@@ -223,6 +223,16 @@ def build_post_approval_operator_checklist(
     post_staging_ready = _status(post_staging) == "owner_post_staging_verification_ready"
     commit_gate_ready = _status(commit_gate) == "owner_post_stage_commit_gate_ready"
     commit_packet_ready = _status(commit_packet) == "owner_commit_packet_ready" and commit_packet.get("commit_allowed") is True
+    commit_gate_noop_accounted_for = (
+        _status(commit_gate) == "owner_post_stage_commit_gate_blocked"
+        and _summary(commit_gate).get("post_commit_noop_accounted_for") is True
+        and commit_gate.get("commit_allowed") is not True
+    )
+    commit_packet_noop_accounted_for = (
+        _status(commit_packet) == "owner_commit_packet_blocked"
+        and _summary(commit_packet).get("post_commit_noop_accounted_for") is True
+        and commit_packet.get("commit_allowed") is not True
+    )
     post_stage_sequence_accounted_for = (
         resume_ready
         and stage_allowed
@@ -238,8 +248,8 @@ def build_post_approval_operator_checklist(
         and _status(preflight) == "owner_staging_preflight_ready"
         and int(preflight.get("cached_staged_path_count") or 0) == 0
         and post_staging_ready
-        and commit_gate_ready
-        and commit_packet_ready
+        and (commit_gate_ready or commit_gate_noop_accounted_for)
+        and (commit_packet_ready or commit_packet_noop_accounted_for)
     )
     pre_stage_ready = resume_ready and stage_allowed and stage_execution_ready and preflight_ready
     operator_ready = pre_stage_ready or post_stage_sequence_accounted_for or post_commit_noop_sequence_accounted_for
@@ -384,6 +394,8 @@ def build_post_approval_operator_checklist(
                 "owner_post_staging_verifier_status": _status(post_staging),
                 "owner_post_stage_commit_gate_status": _status(commit_gate),
                 "owner_commit_packet_status": _status(commit_packet),
+                "commit_gate_noop_accounted_for": commit_gate_noop_accounted_for,
+                "commit_packet_noop_accounted_for": commit_packet_noop_accounted_for,
             },
             error="operator state is neither waiting, pre-stage ready, nor accounted for after staging",
         ),
@@ -470,6 +482,8 @@ def build_post_approval_operator_checklist(
             "pre_stage_ready": pre_stage_ready,
             "post_stage_sequence_accounted_for": post_stage_sequence_accounted_for,
             "post_commit_noop_sequence_accounted_for": post_commit_noop_sequence_accounted_for,
+            "commit_gate_noop_accounted_for": commit_gate_noop_accounted_for,
+            "commit_packet_noop_accounted_for": commit_packet_noop_accounted_for,
             "secondary_handoff_completed_count": resume_summary.get("secondary_handoff_completed_count"),
             "secondary_handoff_latest_completed_candidate": resume_summary.get(
                 "secondary_handoff_latest_completed_candidate"

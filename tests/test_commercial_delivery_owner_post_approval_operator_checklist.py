@@ -291,6 +291,54 @@ def test_operator_checklist_accepts_post_commit_noop_without_stage_commands(tmp_
     assert stage_item.commands == []
 
 
+def test_operator_checklist_accepts_post_commit_noop_with_blocked_commit_reports(tmp_path: Path) -> None:
+    paths = _write_inputs(tmp_path, approved=True)
+    payload = json.loads(paths["owner_approval_resume_packet_path"].read_text(encoding="utf-8"))
+    payload["summary"].update(
+        {
+            "stage_include_count": 100,
+            "post_commit_noop_resume_ready": True,
+            "post_commit_noop_accounted_for": True,
+        }
+    )
+    for group in payload["command_groups"]:
+        if group["name"] == "owner_stage_commands":
+            group["commands"] = []
+        if group["name"] in {"pre_stage_verification", "owner_stage_commands"}:
+            group["executable_now"] = False
+    paths["owner_approval_resume_packet_path"].write_text(json.dumps(payload), encoding="utf-8")
+    _write_json(
+        paths["owner_post_staging_verifier_path"],
+        {"status": "owner_post_staging_verification_ready", "full_codex_parity_claimed": False},
+    )
+    _write_json(
+        paths["owner_post_stage_commit_gate_path"],
+        {
+            "status": "owner_post_stage_commit_gate_blocked",
+            "commit_allowed": False,
+            "summary": {"post_commit_noop_accounted_for": True},
+            "full_codex_parity_claimed": False,
+        },
+    )
+    _write_json(
+        paths["owner_commit_packet_path"],
+        {
+            "status": "owner_commit_packet_blocked",
+            "commit_allowed": False,
+            "summary": {"post_commit_noop_accounted_for": True},
+            "full_codex_parity_claimed": False,
+        },
+    )
+
+    checklist = build_post_approval_operator_checklist(**paths)
+
+    assert checklist.status == "owner_post_approval_operator_checklist_ready"
+    assert checklist.summary["post_commit_noop_sequence_accounted_for"] is True
+    assert checklist.summary["commit_gate_noop_accounted_for"] is True
+    assert checklist.summary["commit_packet_noop_accounted_for"] is True
+    assert next(check for check in checklist.checks if check.name == "operator_sequence_present").status == "passed"
+
+
 def test_operator_checklist_writes_json_and_markdown(tmp_path: Path) -> None:
     paths = _write_inputs(tmp_path)
     checklist = build_post_approval_operator_checklist(**paths)
