@@ -384,6 +384,14 @@ def _pre_approval_drift_guard_accounted_for(reports: dict[str, dict[str, Any]]) 
     stage_path_digest = _read_summary_value(drift_guard, "stage_path_digest")
     stage_command_digest = _read_summary_value(drift_guard, "stage_command_digest")
     expected_stage_path_set_digest = _read_summary_value(drift_guard, "expected_stage_path_set_digest")
+
+    def _failed_digest_is_accounted_for(check_name: str, detail_key: str) -> bool:
+        return check_name not in failed_checks or _failed_digest_check_has_matching_present_values(
+            drift_guard,
+            check_name=check_name,
+            detail_key=detail_key,
+        )
+
     operator_checklist_accounted_for = (
         _read_report_status_value(drift_guard, "owner_post_approval_operator_checklist")
         == "owner_post_approval_operator_checklist_ready"
@@ -436,7 +444,59 @@ def _pre_approval_drift_guard_accounted_for(reports: dict[str, dict[str, Any]]) 
         and post_commit_required_failed_checks.issubset(failed_checks)
         and failed_checks.issubset(post_commit_allowed_failed_checks)
     )
-    return post_approval_ready or post_commit_blocked
+    post_approval_noop_allowed_failed_checks = {
+        "real_owner_approval_absent",
+        "approval_handoff_ready",
+        "approval_payload_blocked_before_owner",
+        "approval_gate_blocked_before_owner",
+        "stage_execution_blocked_before_owner",
+        "operator_checklist_waiting_before_owner",
+        "closure_blocked_before_owner",
+        "secondary_handoff_summary_stable",
+        "stage_command_digest_stable",
+        "stage_path_digest_stable",
+        "expected_stage_path_set_digest_stable",
+    }
+    post_approval_noop_blocked = (
+        _report_status(drift_guard) == "pre_approval_drift_guard_blocked"
+        and drift_guard.get("real_owner_approval_present") is True
+        and drift_guard.get("mutation_performed") is not True
+        and drift_guard.get("git_stage_performed") is not True
+        and drift_guard.get("git_commit_performed") is not True
+        and drift_guard.get("git_push_performed") is not True
+        and drift_guard.get("network_mutation_performed") is not True
+        and drift_guard.get("agent_execution_enabled") is not True
+        and drift_guard.get("full_codex_parity_claimed") is not True
+        and _read_report_status_value(drift_guard, "owner_stage_approval_request")
+        == "owner_stage_approval_request_ready"
+        and _read_report_status_value(drift_guard, "owner_approval_handoff") == "owner_approval_handoff_blocked"
+        and _read_report_status_value(drift_guard, "owner_approval_payload_audit") == "owner_approval_payload_ready"
+        and _read_summary_value(drift_guard, "owner_approval_payload_present") is True
+        and _read_summary_value(drift_guard, "owner_approval_payload_valid") is True
+        and _read_summary_value(drift_guard, "owner_approval_payload_ready_for_gate") is True
+        and _read_report_status_value(drift_guard, "owner_stage_approval_gate") == "owner_stage_approval_ready"
+        and _read_summary_value(drift_guard, "owner_stage_approval_gate_status") == "owner_stage_approval_ready"
+        and _read_report_status_value(drift_guard, "owner_stage_execution_plan") == "owner_stage_execution_ready"
+        and _read_summary_value(drift_guard, "owner_stage_execution_plan_status") == "owner_stage_execution_ready"
+        and operator_checklist_accounted_for
+        and _read_report_status_value(drift_guard, "closure_snapshot") == "commercial_delivery_closure_blocked"
+        and _read_summary_value(drift_guard, "closure_snapshot_status") == "commercial_delivery_closure_blocked"
+        and _read_summary_value(drift_guard, "closure_delivery_complete") is False
+        and isinstance(stage_path_digest, str)
+        and len(stage_path_digest) == 64
+        and isinstance(stage_command_digest, str)
+        and len(stage_command_digest) == 64
+        and isinstance(expected_stage_path_set_digest, str)
+        and len(expected_stage_path_set_digest) == 64
+        and _failed_digest_is_accounted_for("stage_path_digest_stable", "stage_path_digest_sources")
+        and _failed_digest_is_accounted_for("stage_command_digest_stable", "stage_command_digest_sources")
+        and _failed_digest_is_accounted_for(
+            "expected_stage_path_set_digest_stable",
+            "expected_stage_path_set_digest_sources",
+        )
+        and failed_checks.issubset(post_approval_noop_allowed_failed_checks)
+    )
+    return post_approval_ready or post_commit_blocked or post_approval_noop_blocked
 
 
 def _build_tasks(
