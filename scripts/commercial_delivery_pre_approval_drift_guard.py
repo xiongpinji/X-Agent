@@ -289,12 +289,36 @@ def build_pre_approval_drift_guard(
         and closure.get("stage_ready") is True
         and closure.get("approval_ready") is False
     )
+    post_approval_accounted_for = (
+        owner_approval_present
+        and _status(handoff) == "owner_approval_handoff_ready"
+        and _status(payload_audit) == "owner_approval_payload_ready"
+        and payload_audit.get("approval_payload_present") is True
+        and payload_audit.get("approval_payload_valid") is True
+        and payload_audit.get("ready_for_approval_gate") is True
+        and _status(approval_gate) == "owner_stage_approval_ready"
+        and approval_gate.get("stage_allowed") is True
+        and _status(execution_plan) == "owner_stage_execution_ready"
+        and execution_plan.get("stage_allowed") is True
+        and (
+            not operator_checklist_present
+            or (
+                _status(operator_checklist) == "owner_post_approval_operator_checklist_ready"
+                and operator_checklist.get("operator_ready") is True
+                and operator_checklist.get("real_owner_approval_present") is True
+            )
+        )
+        and _status(closure) == "commercial_delivery_complete"
+        and closure.get("delivery_complete") is True
+        and closure.get("stage_ready") is True
+        and closure.get("approval_ready") is True
+    )
 
     checks = [
         _check("reports_readable", not errors, details={"errors": errors}, error="one or more guard inputs are missing"),
         _check(
             "real_owner_approval_absent",
-            not owner_approval_present,
+            not owner_approval_present or post_approval_accounted_for,
             details={"approval_payload_path": _display_path(owner_approval_path), "present": owner_approval_present},
             error="real owner approval payload exists before this guard expected it",
         ),
@@ -342,7 +366,7 @@ def build_pre_approval_drift_guard(
         ),
         _check(
             "approval_payload_blocked_before_owner",
-            approval_payload_blocked_before_owner,
+            approval_payload_blocked_before_owner or post_approval_accounted_for,
             details={
                 "status": _status(payload_audit),
                 "approval_payload_present": payload_audit.get("approval_payload_present"),
@@ -353,19 +377,19 @@ def build_pre_approval_drift_guard(
         ),
         _check(
             "approval_gate_blocked_before_owner",
-            approval_gate_blocked_before_owner,
+            approval_gate_blocked_before_owner or post_approval_accounted_for,
             details={"status": _status(approval_gate), "stage_allowed": approval_gate.get("stage_allowed")},
             error="approval gate is not in the expected pre-owner blocked state",
         ),
         _check(
             "stage_execution_blocked_before_owner",
-            execution_blocked_before_owner,
+            execution_blocked_before_owner or post_approval_accounted_for,
             details={"status": _status(execution_plan), "stage_allowed": execution_plan.get("stage_allowed")},
             error="stage execution plan is not in the expected pre-owner blocked state",
         ),
         _check(
             "operator_checklist_waiting_before_owner",
-            operator_checklist_waiting_before_owner,
+            operator_checklist_waiting_before_owner or post_approval_accounted_for,
             details={
                 "operator_checklist_present": operator_checklist_present,
                 "operator_checklist_status": _status(operator_checklist),
@@ -377,7 +401,7 @@ def build_pre_approval_drift_guard(
         ),
         _check(
             "closure_blocked_before_owner",
-            closure_blocked_before_owner,
+            closure_blocked_before_owner or post_approval_accounted_for,
             details={
                 "status": _status(closure),
                 "delivery_complete": closure.get("delivery_complete"),
@@ -419,6 +443,7 @@ def build_pre_approval_drift_guard(
         "closure_snapshot_status": _status(closure),
         "closure_delivery_complete": closure.get("delivery_complete"),
         "closure_blockers": closure.get("blockers") if isinstance(closure.get("blockers"), list) else [],
+        "post_approval_accounted_for": post_approval_accounted_for,
     }
     return PreApprovalDriftGuard(
         status="pre_approval_drift_guard_ready" if checks_passed else "pre_approval_drift_guard_blocked",

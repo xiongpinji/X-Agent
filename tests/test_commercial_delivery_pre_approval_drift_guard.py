@@ -234,6 +234,51 @@ def test_pre_approval_drift_guard_blocks_if_owner_approval_payload_exists(tmp_pa
     assert guard.real_owner_approval_present is True
 
 
+def test_pre_approval_drift_guard_accounts_for_post_approval_completion(tmp_path: Path) -> None:
+    paths = _write_inputs(tmp_path)
+    paths["owner_approval_path"].write_text("{}", encoding="utf-8")
+    audit = json.loads(paths["owner_approval_payload_audit_path"].read_text(encoding="utf-8"))
+    audit.update(
+        {
+            "status": "owner_approval_payload_ready",
+            "approval_payload_present": True,
+            "approval_payload_valid": True,
+            "ready_for_approval_gate": True,
+        }
+    )
+    paths["owner_approval_payload_audit_path"].write_text(json.dumps(audit), encoding="utf-8")
+    gate = json.loads(paths["owner_stage_approval_gate_path"].read_text(encoding="utf-8"))
+    gate["status"] = "owner_stage_approval_ready"
+    gate["stage_allowed"] = True
+    paths["owner_stage_approval_gate_path"].write_text(json.dumps(gate), encoding="utf-8")
+    execution = json.loads(paths["owner_stage_execution_plan_path"].read_text(encoding="utf-8"))
+    execution["status"] = "owner_stage_execution_ready"
+    execution["stage_allowed"] = True
+    paths["owner_stage_execution_plan_path"].write_text(json.dumps(execution), encoding="utf-8")
+    checklist = json.loads(paths["owner_post_approval_operator_checklist_path"].read_text(encoding="utf-8"))
+    checklist["status"] = "owner_post_approval_operator_checklist_ready"
+    checklist["waiting_for_owner"] = False
+    checklist["operator_ready"] = True
+    checklist["real_owner_approval_present"] = True
+    paths["owner_post_approval_operator_checklist_path"].write_text(json.dumps(checklist), encoding="utf-8")
+    closure = json.loads(paths["closure_snapshot_path"].read_text(encoding="utf-8"))
+    closure["status"] = "commercial_delivery_complete"
+    closure["delivery_complete"] = True
+    closure["approval_ready"] = True
+    closure["blockers"] = []
+    paths["closure_snapshot_path"].write_text(json.dumps(closure), encoding="utf-8")
+
+    guard = build_pre_approval_drift_guard(**paths)
+
+    assert guard.status == "pre_approval_drift_guard_ready"
+    assert guard.real_owner_approval_present is True
+    assert guard.summary["post_approval_accounted_for"] is True
+    assert next(check for check in guard.checks if check.name == "real_owner_approval_absent").status == "passed"
+    assert next(
+        check for check in guard.checks if check.name == "operator_checklist_waiting_before_owner"
+    ).status == "passed"
+
+
 def test_pre_approval_drift_guard_blocks_on_stage_digest_drift(tmp_path: Path) -> None:
     paths = _write_inputs(tmp_path)
     payload = json.loads(paths["task_board_path"].read_text(encoding="utf-8"))
