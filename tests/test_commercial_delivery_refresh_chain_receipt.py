@@ -1823,6 +1823,48 @@ def test_refresh_chain_receipt_accounts_for_post_commit_staging_runbook(
     assert next(check for check in receipt.checks if check.name == "owner_staging_runbook_accounted_for").status == "passed"
 
 
+def test_refresh_chain_receipt_accounts_for_post_commit_noop_staging_runbook_after_gate_ready(
+    tmp_path: Path,
+) -> None:
+    reports_dir = tmp_path / "reports"
+    _write_ready_reports(reports_dir, post_staging_status="owner_post_staging_verification_ready")
+    _write_json(
+        reports_dir / "commercial-delivery-owner-staging-runbook.json",
+        {
+            "status": "owner_staging_runbook_blocked",
+            "mutation_performed": False,
+            "git_stage_performed": False,
+            "git_commit_performed": False,
+            "git_push_performed": False,
+            "network_mutation_performed": False,
+            "agent_execution_enabled": False,
+            "full_codex_parity_claimed": False,
+            "summary": {
+                "pre_stage_gate_status": "owner_pre_stage_readiness_ready",
+                "task_board_status": "commercial_delivery_ready_for_owner_staging_review",
+                "stage_command_count": 0,
+                "commit_command_preview": 'git commit -m "chore: prepare X-Agent commercial delivery package"',
+            },
+            "checks": [
+                {"name": "stage_command_count_matches_gate", "status": "failed"},
+                {"name": "stage_commands_are_explicit_path_adds", "status": "failed"},
+            ],
+        },
+    )
+
+    receipt = build_refresh_chain_receipt(
+        reports_dir=reports_dir,
+        command_runner=_runner({"commercial_delivery_owner_staging_runbook": 1}),
+    )
+
+    assert receipt.status == "commercial_delivery_refresh_chain_receipt_ready"
+    assert receipt.summary["expected_nonzero_steps"] == ["owner_staging_runbook"]
+    runbook = next(step for step in receipt.steps if step.name == "owner_staging_runbook")
+    assert runbook.status == "expected_nonzero_accepted"
+    assert runbook.expected_nonzero_accepted is True
+    assert next(check for check in receipt.checks if check.name == "owner_staging_runbook_accounted_for").status == "passed"
+
+
 def test_refresh_chain_receipt_accounts_for_post_commit_delivery_packet(
     tmp_path: Path,
 ) -> None:

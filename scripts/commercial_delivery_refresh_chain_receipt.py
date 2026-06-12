@@ -1437,35 +1437,45 @@ def _is_expected_post_commit_runbook_state(
     task_board_bootstrap_failed_checks = allowed_failed_checks | {"task_board_ready"}
     failed_checks = _failed_check_names(report_payload)
     stage_command_count = int(_read_summary_value(report_payload, "stage_command_count") or 0)
+    pre_stage_gate_status = _read_summary_value(report_payload, "pre_stage_gate_status")
     return (
         step_name == "owner_staging_runbook"
         and command_result.returncode != 0
         and _status(report_payload) == "owner_staging_runbook_blocked"
         and _has_no_mutation_side_effects(report_payload)
-        and _read_summary_value(report_payload, "pre_stage_gate_status")
-        == "owner_pre_stage_readiness_blocked"
         and isinstance(_read_summary_value(report_payload, "commit_command_preview"), str)
         and (
             (
-                _read_summary_value(report_payload, "task_board_status")
+                pre_stage_gate_status == "owner_pre_stage_readiness_blocked"
+                and _read_summary_value(report_payload, "task_board_status")
                 == "commercial_delivery_ready_for_owner_staging_review"
                 and stage_command_count > 0
                 and {"pre_stage_gate_ready", "stage_command_count_matches_gate"}.issubset(failed_checks)
                 and failed_checks.issubset(allowed_failed_checks)
             )
             or (
-                _read_summary_value(report_payload, "task_board_status")
+                pre_stage_gate_status == "owner_pre_stage_readiness_blocked"
+                and _read_summary_value(report_payload, "task_board_status")
                 == "commercial_delivery_ready_for_owner_staging_review"
                 and stage_command_count == 0
                 and failed_checks == noop_failed_checks
             )
             or (
-                stage_command_count > 0
+                pre_stage_gate_status == "owner_pre_stage_readiness_ready"
+                and _read_summary_value(report_payload, "task_board_status")
+                == "commercial_delivery_ready_for_owner_staging_review"
+                and stage_command_count == 0
+                and failed_checks == {"stage_command_count_matches_gate", "stage_commands_are_explicit_path_adds"}
+            )
+            or (
+                pre_stage_gate_status == "owner_pre_stage_readiness_blocked"
+                and stage_command_count > 0
                 and _read_summary_value(report_payload, "task_board_status") == "commercial_delivery_blocked"
                 and failed_checks == task_board_bootstrap_failed_checks
             )
             or (
-                stage_command_count == 0
+                pre_stage_gate_status == "owner_pre_stage_readiness_blocked"
+                and stage_command_count == 0
                 and _read_summary_value(report_payload, "task_board_status") == "commercial_delivery_blocked"
                 and failed_checks == task_board_bootstrap_failed_checks | {"stage_commands_are_explicit_path_adds"}
             )
