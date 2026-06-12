@@ -328,14 +328,23 @@ def build_owner_approval_resume_packet(
     post_commit_noop_resume_ready = (
         real_owner_approval_present
         and delivery_post_commit_noop_accounted_for
-        and _status(payload_audit) == "owner_approval_payload_blocked"
-        and payload_audit.get("approval_payload_present") is True
-        and payload_audit.get("approval_payload_valid") is False
-        and payload_audit.get("ready_for_approval_gate") is False
-        and _status(approval_gate) == "owner_stage_approval_blocked"
-        and approval_gate.get("stage_allowed") is not True
-        and _status(execution_plan) == "owner_stage_execution_blocked"
-        and execution_plan.get("stage_allowed") is not True
+        and (
+            (
+                _status(payload_audit) == "owner_approval_payload_blocked"
+                and payload_audit.get("approval_payload_present") is True
+                and payload_audit.get("approval_payload_valid") is False
+                and payload_audit.get("ready_for_approval_gate") is False
+                and _status(approval_gate) == "owner_stage_approval_blocked"
+                and approval_gate.get("stage_allowed") is not True
+                and _status(execution_plan) == "owner_stage_execution_blocked"
+                and execution_plan.get("stage_allowed") is not True
+            )
+            or (
+                approval_payload_ready
+                and stage_allowed
+                and stage_execution_ready
+            )
+        )
     )
     post_staging_accounted_for = _status(post_staging) in {
         "owner_post_staging_verification_blocked",
