@@ -129,6 +129,17 @@ def _digest_values(values: list[str]) -> str:
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
+def _summary_flag(payload: dict[str, Any], field: str) -> bool:
+    return payload.get(field) is True or _summary(payload).get(field) is True
+
+
+def _int_or_none(value: object) -> int | None:
+    try:
+        return int(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
+
+
 def _failed_step_names(payload: dict[str, Any]) -> list[str]:
     steps = payload.get("steps")
     if not isinstance(steps, list):
@@ -392,7 +403,7 @@ def build_commercial_delivery_closure_snapshot(
     approval_brief_summary = _summary(approval_brief)
     task_summary = _summary(task_board)
     empty_digest = _digest_values([])
-    delivery_post_commit_noop_accounted_for = delivery_summary.get("post_commit_noop_accounted_for") is True
+    delivery_post_commit_noop_accounted_for = _summary_flag(delivery_packet, "post_commit_noop_accounted_for")
     stage_path_digest_sources = {
         "owner_delivery_packet": _digest_field(delivery_packet, "stage_path_digest"),
         "owner_stage_approval_brief": _digest_field(approval_brief, "stage_path_digest"),
@@ -452,6 +463,35 @@ def build_commercial_delivery_closure_snapshot(
         and _status(commit_packet) == "owner_commit_packet_ready"
         and commit_packet.get("commit_allowed") is True
     )
+    delivery_noop_stage_counts_accounted_for = (
+        delivery_post_commit_noop_accounted_for
+        and _int_or_none(delivery_summary.get("owner_stage_command_count")) == 0
+        and _int_or_none(delivery_summary.get("owner_stage_execution_stage_command_count")) == 0
+        and _int_or_none(delivery_summary.get("rollback_reset_command_count")) == 0
+        and _int_or_none(delivery_summary.get("stage_include_count")) is not None
+    )
+    commit_gate_noop_accounted_for = (
+        delivery_noop_stage_counts_accounted_for
+        and _status(commit_gate) == "owner_post_stage_commit_gate_blocked"
+        and commit_gate.get("commit_allowed") is not True
+        and _summary_flag(commit_gate, "post_commit_noop_accounted_for")
+        and _digest_field(commit_gate, "stage_path_digest") == empty_digest
+        and _digest_field(commit_gate, "stage_command_digest") == empty_digest
+        and _digest_field(commit_gate, "expected_stage_path_set_digest") == empty_digest
+        and _digest_field(commit_gate, "cached_staged_path_set_digest") == empty_digest
+    )
+    commit_packet_noop_accounted_for = (
+        delivery_noop_stage_counts_accounted_for
+        and _status(commit_packet) == "owner_commit_packet_blocked"
+        and commit_packet.get("commit_allowed") is not True
+        and _summary_flag(commit_packet, "post_commit_noop_accounted_for")
+        and _digest_field(commit_packet, "stage_path_digest") == empty_digest
+        and _digest_field(commit_packet, "stage_command_digest") == empty_digest
+        and _digest_field(commit_packet, "expected_stage_path_set_digest") == empty_digest
+        and _digest_field(commit_packet, "cached_staged_path_set_digest") == empty_digest
+    )
+    commit_noop_accounted_for = commit_gate_noop_accounted_for and commit_packet_noop_accounted_for
+    commit_ready = commit_ready or commit_noop_accounted_for
     rollback_ready = _status(rollback_plan) == "owner_staging_rollback_plan_ready"
     refresh_ready = _status(refresh_chain) == "commercial_delivery_refresh_chain_receipt_ready"
     refresh_ready_for_snapshot = _refresh_receipt_ready_or_bootstrap(refresh_chain)
@@ -493,24 +533,14 @@ def build_commercial_delivery_closure_snapshot(
         closure_gate_evidence_ready
         and delivery_post_stage_chain_accounted_for
     )
-    post_commit_accounted_refresh_steps = {
-        "closure_snapshot",
-        "owner_approval_handoff",
-        "owner_delivery_packet",
-        "owner_delivery_packet_before_owner_approval",
-        "owner_pre_stage_readiness_gate",
-        "owner_staging_preflight",
-        "task_board_after_owner_decision",
-        "pre_approval_drift_guard",
-        "owner_approval_resume_packet",
-        "owner_post_approval_operator_checklist",
-    }
+    post_commit_accounted_refresh_steps = REFRESH_RECEIPT_SELF_BOOTSTRAP_STEPS | {"owner_staging_runbook"}
     failed_refresh_steps = set(_failed_step_names(refresh_chain))
     post_commit_refresh_accounted_for = (
         _status(refresh_chain) == "commercial_delivery_refresh_chain_receipt_blocked"
         and bool(failed_refresh_steps)
         and failed_refresh_steps.issubset(post_commit_accounted_refresh_steps)
     )
+    refresh_ready_for_snapshot = refresh_ready_for_snapshot or post_commit_refresh_accounted_for
     pre_approval_drift_guard_ready = _status(pre_approval_drift_guard) == "pre_approval_drift_guard_ready"
     pre_approval_drift_guard_accounted_for = _pre_approval_drift_guard_accounted_for(pre_approval_drift_guard)
     pre_approval_drift_guard_post_commit_noop_accounted_for = (
@@ -639,15 +669,22 @@ def build_commercial_delivery_closure_snapshot(
         if reasons
     }
     if post_commit_closure_accounted_for:
+        accounted_blocking_reason_reports = {
+            "owner_stage_approval_gate",
+            "owner_approval_payload_audit",
+            "owner_stage_execution_plan",
+        }
+        if commit_noop_accounted_for:
+            accounted_blocking_reason_reports.update(
+                {
+                    "owner_post_stage_commit_gate",
+                    "owner_commit_packet",
+                }
+            )
         owner_blocking_reasons_by_report = {
             name: reasons
             for name, reasons in owner_blocking_reasons_by_report.items()
-            if name
-            not in {
-                "owner_stage_approval_gate",
-                "owner_approval_payload_audit",
-                "owner_stage_execution_plan",
-            }
+            if name not in accounted_blocking_reason_reports
         }
     owner_blocking_reason_count = sum(len(reasons) for reasons in owner_blocking_reasons_by_report.values())
 
@@ -694,6 +731,9 @@ def build_commercial_delivery_closure_snapshot(
                 "owner_post_stage_commit_gate_status": _status(commit_gate),
                 "owner_commit_packet_status": _status(commit_packet),
                 "commit_allowed": commit_packet.get("commit_allowed"),
+                "commit_noop_accounted_for": commit_noop_accounted_for,
+                "commit_gate_noop_accounted_for": commit_gate_noop_accounted_for,
+                "commit_packet_noop_accounted_for": commit_packet_noop_accounted_for,
             },
             error="owner commit packet is not ready",
         ),
@@ -899,6 +939,10 @@ def build_commercial_delivery_closure_snapshot(
             ),
             "post_commit_refresh_accounted_for": post_commit_refresh_accounted_for,
             "post_commit_noop_accounted_for": delivery_post_commit_noop_accounted_for,
+            "commit_noop_accounted_for": commit_noop_accounted_for,
+            "commit_gate_noop_accounted_for": commit_gate_noop_accounted_for,
+            "commit_packet_noop_accounted_for": commit_packet_noop_accounted_for,
+            "delivery_noop_stage_counts_accounted_for": delivery_noop_stage_counts_accounted_for,
             "stage_include_count": delivery_summary.get("stage_include_count"),
             "owner_stage_command_count": delivery_summary.get("owner_stage_command_count"),
             "owner_stage_execution_stage_command_count": delivery_summary.get("owner_stage_execution_stage_command_count"),
