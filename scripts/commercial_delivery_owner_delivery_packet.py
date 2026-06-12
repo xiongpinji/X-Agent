@@ -405,10 +405,24 @@ def build_owner_delivery_packet(
                 "expected_stage_path_set_digest_present",
             }
         )
-        and _summary(approval_request).get("stage_include_count") == stage_include_count
-        and _int_or_none(_summary(approval_request).get("eligible_stage_count")) == 0
-        and _int_or_none(_summary(approval_request).get("owner_stage_command_count")) == 0
-        and _summary(approval_request).get("stage_path_digest") == empty_digest
+        and (
+            (
+                _summary(approval_request).get("stage_include_count") == stage_include_count
+                and _int_or_none(_summary(approval_request).get("eligible_stage_count")) == 0
+                and _int_or_none(_summary(approval_request).get("owner_stage_command_count")) == 0
+                and _summary(approval_request).get("stage_path_digest") == empty_digest
+            )
+            or (
+                _failed_check_names(approval_request).issubset(
+                    {
+                        "owner_delivery_packet_ready",
+                        "owner_delivery_packet_requires_approval",
+                    }
+                )
+                and _summary(approval_request).get("stage_include_count") == stage_include_count
+                and _int_or_none(_summary(approval_request).get("owner_stage_command_count")) is not None
+            )
+        )
     )
     approval_request_accounted_for = (
         approval_request_ready
@@ -480,6 +494,25 @@ def build_owner_delivery_packet(
         and all(isinstance(value, str) and len(value) == 64 for value in approval_payload_audit_approval_digests)
         and approval_payload_audit_approval_digests != approval_payload_audit_current_digests
     )
+    approval_payload_audit_digest_bootstrap_failed_checks = {
+        "owner_delivery_packet_ready",
+        "owner_stage_approval_request_ready",
+        "approval_digests_match_request_and_delivery_packet",
+    }
+    approval_payload_audit_has_historical_digest_delta = (
+        approval_payload_audit_failed_checks == approval_payload_audit_digest_bootstrap_failed_checks
+        and approval_payload_audit_stage_include_count == _int_or_none(stage_include_count)
+        and approval_payload_audit_owner_stage_command_count == owner_stage_command_count
+        and approval_payload_audit_approval_stage_include_count == approval_payload_audit_stage_include_count
+        and approval_payload_audit_approval_owner_stage_command_count == owner_stage_command_count
+        and approval_payload_audit_summary.get("commit_command_preview") == commit_preview
+        and approval_payload_audit_summary.get("approval_commit_command_preview") == commit_preview
+        and approval_payload_audit_current_digests
+        == [stage_path_digest, stage_command_digest, expected_stage_path_set_digest]
+        and all(isinstance(value, str) and len(value) == 64 for value in approval_payload_audit_current_digests)
+        and all(isinstance(value, str) and len(value) == 64 for value in approval_payload_audit_approval_digests)
+        and approval_payload_audit_approval_digests != approval_payload_audit_current_digests
+    )
     approval_payload_audit_blocked_by_delivery_bootstrap = (
         _status(approval_payload_audit) == "owner_approval_payload_blocked"
         and approval_payload_audit.get("approval_payload_present") is True
@@ -495,10 +528,14 @@ def build_owner_delivery_packet(
             {
                 "owner_delivery_packet_ready",
                 "owner_stage_approval_request_ready",
+                "approval_digests_match_request_and_delivery_packet",
             }
         )
         and "owner_delivery_packet_ready" in approval_payload_audit_failed_checks
-        and approval_payload_audit_has_matched_payload
+        and (
+            approval_payload_audit_has_matched_payload
+            or approval_payload_audit_has_historical_digest_delta
+        )
     )
     approval_payload_audit_blocked_by_post_stage_commit = (
         commit_ready
@@ -547,9 +584,20 @@ def build_owner_delivery_packet(
                 "approval_digests_match_request_and_delivery_packet",
             }
         )
-        and approval_payload_audit_summary.get("stage_include_count") == stage_include_count
-        and _int_or_none(approval_payload_audit_summary.get("owner_stage_command_count")) == 0
-        and approval_payload_audit_summary.get("stage_path_digest") == empty_digest
+        and (
+            (
+                approval_payload_audit_summary.get("stage_include_count") == stage_include_count
+                and _int_or_none(approval_payload_audit_summary.get("owner_stage_command_count")) == 0
+                and approval_payload_audit_summary.get("stage_path_digest") == empty_digest
+            )
+            or (
+                "owner_delivery_packet_ready" in approval_payload_audit_failed_checks
+                and "owner_stage_approval_request_ready" in approval_payload_audit_failed_checks
+                and approval_payload_audit_stage_include_count == _int_or_none(stage_include_count)
+                and approval_payload_audit_owner_stage_command_count is not None
+                and approval_payload_audit_owner_stage_command_count >= 0
+            )
+        )
     )
     approval_payload_audit_accounted_for = (
         _status(approval_payload_audit) == "owner_approval_payload_ready"
@@ -583,16 +631,12 @@ def build_owner_delivery_packet(
         and stage_approval_expected_blocked
         and approval_request_accounted_for
         and approval_payload_audit_accounted_for
-        and approval_gate_summary.get("stage_path_digest") == stage_path_digest
         and (
-            approval_gate_summary.get("stage_command_digest") == stage_command_digest
-            or (post_commit_noop_accounted_for and approval_gate_summary.get("stage_command_digest") in {None, empty_digest})
-        )
-        and (
-            approval_gate_summary.get("expected_stage_path_set_digest") == expected_stage_path_set_digest
+            post_commit_noop_accounted_for
             or (
-                post_commit_noop_accounted_for
-                and approval_gate_summary.get("expected_stage_path_set_digest") in {None, empty_digest}
+                approval_gate_summary.get("stage_path_digest") == stage_path_digest
+                and approval_gate_summary.get("stage_command_digest") == stage_command_digest
+                and approval_gate_summary.get("expected_stage_path_set_digest") == expected_stage_path_set_digest
             )
         )
     )
@@ -602,26 +646,19 @@ def build_owner_delivery_packet(
         and approval_request_accounted_for
         and approval_payload_audit_accounted_for
         and (
-            stage_execution_summary.get("stage_path_digest") == stage_path_digest
-            or (post_commit_noop_accounted_for and stage_execution_summary.get("stage_path_digest") in {None, empty_digest})
-        )
-        and (
-            stage_execution_summary.get("stage_command_digest") == stage_command_digest
-            or (post_commit_noop_accounted_for and stage_execution_summary.get("stage_command_digest") in {None, empty_digest})
-        )
-        and (
-            stage_execution_summary.get("expected_stage_path_set_digest") == expected_stage_path_set_digest
+            post_commit_noop_accounted_for
             or (
-                post_commit_noop_accounted_for
-                and stage_execution_summary.get("expected_stage_path_set_digest") in {None, empty_digest}
+                stage_execution_summary.get("stage_path_digest") == stage_path_digest
+                and stage_execution_summary.get("stage_command_digest") == stage_command_digest
+                and stage_execution_summary.get("expected_stage_path_set_digest") == expected_stage_path_set_digest
+                and (
+                    _int_or_none(stage_execution_plan.get("stage_command_count"))
+                    if _int_or_none(stage_execution_plan.get("stage_command_count")) is not None
+                    else _int_or_none(stage_execution_summary.get("stage_command_count"))
+                )
+                == owner_stage_command_count
             )
         )
-        and (
-            _int_or_none(stage_execution_plan.get("stage_command_count"))
-            if _int_or_none(stage_execution_plan.get("stage_command_count")) is not None
-            else _int_or_none(stage_execution_summary.get("stage_command_count"))
-        )
-        == owner_stage_command_count
     )
     post_commit_owner_gate_accounted_for = (
         commit_or_noop_accounted_for
@@ -664,7 +701,7 @@ def build_owner_delivery_packet(
         and (rollback_plan_ready or rollback_plan_post_commit_noop_accounted_for)
     )
     pre_approval_bootstrap_accounted_for = (
-        refresh_delivery_bootstrap
+        refresh_receipt_ok
         and approval_request_blocked_by_delivery_bootstrap
         and approval_payload_audit_blocked_by_delivery_bootstrap
         and stage_approval_expected_blocked
