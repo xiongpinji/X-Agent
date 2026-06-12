@@ -2571,16 +2571,6 @@ def test_refresh_chain_receipt_accounts_for_owner_approved_pre_stage_closure_sna
                 "pre_approval_drift_guard_accounted_for": True,
                 "pre_approval_drift_guard_real_owner_approval_present": True,
                 "refresh_chain_ready_for_snapshot": True,
-                "owner_approval_resume_packet_status": "owner_approval_resume_packet_blocked",
-                "owner_approval_resume_packet_waiting_for_owner": False,
-                "owner_approval_resume_packet_resume_ready": False,
-                "owner_approval_resume_packet_real_owner_approval_present": True,
-                "owner_approval_resume_packet_post_stage_accounted_for": False,
-                "owner_post_approval_operator_checklist_status": "owner_post_approval_operator_checklist_blocked",
-                "owner_post_approval_operator_checklist_waiting_for_owner": False,
-                "owner_post_approval_operator_checklist_operator_ready": False,
-                "owner_post_approval_operator_checklist_real_owner_approval_present": True,
-                "owner_post_approval_operator_checklist_post_stage_accounted_for": False,
                 "control_modes_preservation_status": "control_modes_preservation_ready",
                 "control_modes_plan_only_default": True,
                 "control_modes_loop_phases": ["explore", "plan", "edit", "verify", "deliver"],
@@ -2590,8 +2580,68 @@ def test_refresh_chain_receipt_accounts_for_owner_approved_pre_stage_closure_sna
                 {"name": "stage_execution_ready", "status": "failed"},
                 {"name": "post_stage_ready", "status": "failed"},
                 {"name": "commit_ready", "status": "failed"},
-                {"name": "owner_approval_resume_packet_accounted_for", "status": "failed"},
-                {"name": "owner_post_approval_operator_checklist_accounted_for", "status": "failed"},
+                {"name": "cached_staged_path_set_digest_consistent", "status": "failed"},
+            ],
+        },
+    )
+
+    receipt = build_refresh_chain_receipt(
+        reports_dir=reports_dir,
+        command_runner=_runner({"commercial_delivery_closure_snapshot": 1}),
+    )
+
+    assert receipt.status == "commercial_delivery_refresh_chain_receipt_ready"
+    assert receipt.summary["expected_nonzero_steps"] == ["closure_snapshot"]
+    closure = next(step for step in receipt.steps if step.name == "closure_snapshot")
+    assert closure.status == "expected_nonzero_accepted"
+    assert closure.expected_nonzero_accepted is True
+
+
+def test_refresh_chain_receipt_accounts_for_owner_approved_pre_stage_closure_snapshot_with_post_approval_blockers(
+    tmp_path: Path,
+) -> None:
+    reports_dir = tmp_path / "reports"
+    _write_ready_reports(reports_dir, post_staging_status="owner_post_staging_verification_ready")
+    _write_json(
+        reports_dir / "commercial-delivery-closure-snapshot.json",
+        {
+            "status": "commercial_delivery_closure_blocked",
+            "delivery_complete": False,
+            "stage_ready": True,
+            "approval_ready": False,
+            "stage_execution_ready": False,
+            "post_stage_ready": False,
+            "commit_ready": False,
+            "rollback_ready": True,
+            "mutation_performed": False,
+            "git_stage_performed": False,
+            "git_commit_performed": False,
+            "git_push_performed": False,
+            "network_mutation_performed": False,
+            "agent_execution_enabled": False,
+            "full_codex_parity_claimed": False,
+            "blockers": [
+                "post_staging_verifier_not_ready",
+                "owner_commit_packet_not_ready",
+                "cached_staged_path_set_digest_not_ready",
+            ],
+            "summary": {
+                "stage_include_count": 100,
+                "owner_stage_command_count": 9,
+                "owner_stage_execution_stage_command_count": 9,
+                "rollback_reset_command_count": 9,
+                "pre_approval_drift_guard_accounted_for": True,
+                "pre_approval_drift_guard_real_owner_approval_present": True,
+                "refresh_chain_ready_for_snapshot": True,
+                "control_modes_preservation_status": "control_modes_preservation_ready",
+                "control_modes_plan_only_default": True,
+                "control_modes_loop_phases": ["explore", "plan", "edit", "verify", "deliver"],
+            },
+            "checks": [
+                {"name": "owner_approval_ready", "status": "failed"},
+                {"name": "stage_execution_ready", "status": "failed"},
+                {"name": "post_stage_ready", "status": "failed"},
+                {"name": "commit_ready", "status": "failed"},
                 {"name": "cached_staged_path_set_digest_consistent", "status": "failed"},
             ],
         },

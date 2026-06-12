@@ -1289,6 +1289,11 @@ def _is_expected_pre_staging_closure_snapshot_state(
         "owner_commit_packet_not_ready",
         "cached_staged_path_set_digest_not_ready",
     }
+    post_approval_expected_blockers = {
+        "post_staging_verifier_not_ready",
+        "owner_commit_packet_not_ready",
+        "cached_staged_path_set_digest_not_ready",
+    }
     blockers = report_payload.get("blockers")
     blocker_set = {str(item) for item in blockers} if isinstance(blockers, list) else set()
     allowed_failed_checks = {
