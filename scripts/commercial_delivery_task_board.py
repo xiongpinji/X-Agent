@@ -457,6 +457,18 @@ def _pre_approval_drift_guard_accounted_for(reports: dict[str, dict[str, Any]]) 
         "stage_path_digest_stable",
         "expected_stage_path_set_digest_stable",
     }
+    post_approval_noop_closure_accounted_for = (
+        (
+            _read_report_status_value(drift_guard, "closure_snapshot") == "commercial_delivery_closure_blocked"
+            and _read_summary_value(drift_guard, "closure_snapshot_status") == "commercial_delivery_closure_blocked"
+            and _read_summary_value(drift_guard, "closure_delivery_complete") is False
+        )
+        or (
+            _read_report_status_value(drift_guard, "closure_snapshot") == "commercial_delivery_complete"
+            and _read_summary_value(drift_guard, "closure_snapshot_status") == "commercial_delivery_complete"
+            and _read_summary_value(drift_guard, "closure_delivery_complete") is True
+        )
+    )
     post_approval_noop_blocked = (
         _report_status(drift_guard) == "pre_approval_drift_guard_blocked"
         and drift_guard.get("real_owner_approval_present") is True
@@ -479,9 +491,7 @@ def _pre_approval_drift_guard_accounted_for(reports: dict[str, dict[str, Any]]) 
         and _read_report_status_value(drift_guard, "owner_stage_execution_plan") == "owner_stage_execution_ready"
         and _read_summary_value(drift_guard, "owner_stage_execution_plan_status") == "owner_stage_execution_ready"
         and operator_checklist_accounted_for
-        and _read_report_status_value(drift_guard, "closure_snapshot") == "commercial_delivery_closure_blocked"
-        and _read_summary_value(drift_guard, "closure_snapshot_status") == "commercial_delivery_closure_blocked"
-        and _read_summary_value(drift_guard, "closure_delivery_complete") is False
+        and post_approval_noop_closure_accounted_for
         and isinstance(stage_path_digest, str)
         and len(stage_path_digest) == 64
         and isinstance(stage_command_digest, str)

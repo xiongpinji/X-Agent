@@ -1515,7 +1515,7 @@ def test_task_board_accounts_for_post_approval_noop_drift_guard(
                 "owner_stage_approval_gate": "owner_stage_approval_ready",
                 "owner_stage_execution_plan": "owner_stage_execution_ready",
                 "owner_post_approval_operator_checklist": "owner_post_approval_operator_checklist_blocked",
-                "closure_snapshot": "commercial_delivery_closure_blocked",
+                "closure_snapshot": "commercial_delivery_complete",
             },
             "summary": {
                 "stage_path_digest": "a" * 64,
@@ -1532,8 +1532,8 @@ def test_task_board_accounts_for_post_approval_noop_drift_guard(
                 "owner_post_approval_operator_checklist_waiting_for_owner": False,
                 "owner_post_approval_operator_checklist_operator_ready": False,
                 "owner_post_approval_operator_checklist_real_owner_approval_present": True,
-                "closure_snapshot_status": "commercial_delivery_closure_blocked",
-                "closure_delivery_complete": False,
+                "closure_snapshot_status": "commercial_delivery_complete",
+                "closure_delivery_complete": True,
             },
             "checks": [
                 {"name": "real_owner_approval_absent", "status": "failed"},
