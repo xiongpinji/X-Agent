@@ -343,6 +343,7 @@ def build_owner_delivery_packet(
         and _status(commit_packet) == "owner_commit_packet_ready"
         and commit_packet.get("commit_allowed") is True
     )
+    commit_or_noop_accounted_for = commit_ready or post_commit_noop_accounted_for
     stage_approval_ready = _status(approval_gate) == "owner_stage_approval_ready"
     stage_approval_expected_blocked = (
         _status(approval_gate) in {None, "owner_stage_approval_blocked"}
@@ -384,7 +385,7 @@ def build_owner_delivery_packet(
     )
     approval_request_post_commit_noop_accounted_for = (
         post_commit_noop_accounted_for
-        and commit_ready
+        and commit_or_noop_accounted_for
         and _status(approval_request) == "owner_stage_approval_request_blocked"
         and _failed_check_names(approval_request).issubset(
             {
@@ -468,7 +469,7 @@ def build_owner_delivery_packet(
     )
     approval_payload_audit_post_commit_noop_accounted_for = (
         post_commit_noop_accounted_for
-        and commit_ready
+        and commit_or_noop_accounted_for
         and _status(approval_payload_audit) == "owner_approval_payload_blocked"
         and approval_payload_audit.get("approval_payload_present") is True
         and approval_payload_audit.get("ready_for_approval_gate") is False
@@ -519,7 +520,7 @@ def build_owner_delivery_packet(
     stage_execution_summary = _summary(stage_execution_plan)
     rollback_summary = _summary(rollback_plan)
     post_commit_stage_approval_accounted_for = stage_approval_ready or (
-        commit_ready
+        commit_or_noop_accounted_for
         and stage_approval_expected_blocked
         and approval_request_accounted_for
         and approval_payload_audit_accounted_for
@@ -537,7 +538,7 @@ def build_owner_delivery_packet(
         )
     )
     post_commit_stage_execution_accounted_for = stage_execution_ready or (
-        commit_ready
+        commit_or_noop_accounted_for
         and stage_execution_expected_blocked
         and approval_request_accounted_for
         and approval_payload_audit_accounted_for
@@ -564,7 +565,7 @@ def build_owner_delivery_packet(
         == owner_stage_command_count
     )
     post_commit_owner_gate_accounted_for = (
-        commit_ready
+        commit_or_noop_accounted_for
         and post_commit_stage_approval_accounted_for
         and post_commit_stage_execution_accounted_for
         and approval_request_accounted_for
@@ -573,6 +574,7 @@ def build_owner_delivery_packet(
         and (
             rollback_summary.get("owner_staging_preflight_accounted_for") is True
             or "owner_staging_preflight" not in _failed_step_names(refresh_chain)
+            or post_commit_noop_accounted_for
         )
     )
     post_stage_chain_accounted_for = (
@@ -604,7 +606,7 @@ def build_owner_delivery_packet(
                 )
             )
         )
-        and commit_ready
+        and commit_or_noop_accounted_for
         and post_commit_owner_gate_accounted_for
         and (rollback_plan_ready or rollback_plan_post_commit_noop_accounted_for)
     )
