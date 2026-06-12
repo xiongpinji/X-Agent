@@ -268,6 +268,11 @@ def build_owner_pre_stage_readiness_gate(
         and stage_command_count_agrees
         and non_none_stage_command_counts[0] <= non_none_stage_include_counts[0]
     )
+    post_commit_noop_stage_counts_agree = (
+        stage_include_count_agrees
+        and bool(non_none_stage_command_counts)
+        and set(non_none_stage_command_counts) == {0}
+    )
     pending_paths = _secondary_pending_paths(manifest)
     full_codex_parity_claimed = _claims_parity(list(reports.values()))
     owner_gated = (
@@ -298,6 +303,27 @@ def build_owner_pre_stage_readiness_gate(
         resume_packet_accounted_for
         and operator_checklist_accounted_for
         and owner_approval_resume_packet.get("resume_ready") is True
+        and operator_checklist.get("operator_ready") is True
+    )
+    owner_post_staging_post_commit_noop_accounted_for = (
+        _status(owner_post_staging) == "owner_post_staging_verification_ready"
+        and int(owner_post_staging.get("cached_staged_path_count") or 0) == 0
+        and (
+            owner_post_staging.get("post_commit_noop_accounted_for") is True
+            or _summary(owner_post_staging).get("post_commit_noop_accounted_for") is True
+        )
+    )
+    post_commit_noop_accounted_for = (
+        _summary(owner_packet).get("post_commit_noop_accounted_for") is True
+        and post_commit_noop_stage_counts_agree
+        and owner_post_staging_post_commit_noop_accounted_for
+        and _status(owner_approval_handoff) == "owner_approval_handoff_ready"
+        and owner_approval_handoff.get("stage_allowed") is True
+        and _status(pre_approval_drift_guard) == "pre_approval_drift_guard_ready"
+        and pre_approval_drift_guard.get("real_owner_approval_present") is True
+        and _status(owner_approval_resume_packet) == "owner_approval_resume_packet_ready"
+        and owner_approval_resume_packet.get("resume_ready") is True
+        and _status(operator_checklist) == "owner_post_approval_operator_checklist_ready"
         and operator_checklist.get("operator_ready") is True
     )
 
@@ -337,11 +363,15 @@ def build_owner_pre_stage_readiness_gate(
         ),
         _check(
             "owner_post_staging_expected_pre_stage_state",
-            _status(owner_post_staging) == "owner_post_staging_verification_blocked"
-            and int(owner_post_staging.get("cached_staged_path_count") or 0) == 0,
+            (
+                _status(owner_post_staging) == "owner_post_staging_verification_blocked"
+                and int(owner_post_staging.get("cached_staged_path_count") or 0) == 0
+            )
+            or post_commit_noop_accounted_for,
             details={
                 "status": _status(owner_post_staging),
                 "cached_staged_path_count": owner_post_staging.get("cached_staged_path_count"),
+                "post_commit_noop_accounted_for": post_commit_noop_accounted_for,
             },
             error="post-staging verifier is not in the expected pre-stage blocked state",
         ),
@@ -364,8 +394,15 @@ def build_owner_pre_stage_readiness_gate(
         ),
         _check(
             "owner_decision_brief_ready",
-            _status(owner_decision_brief) == "ready_for_owner_staging_decision",
-            details={"status": _status(owner_decision_brief)},
+            _status(owner_decision_brief) == "ready_for_owner_staging_decision"
+            or (
+                post_commit_noop_accounted_for
+                and _status(owner_decision_brief) == "blocked_before_owner_staging_decision"
+            ),
+            details={
+                "status": _status(owner_decision_brief),
+                "post_commit_noop_accounted_for": post_commit_noop_accounted_for,
+            },
             error="owner decision brief is not ready",
         ),
         _check(
@@ -434,8 +471,12 @@ def build_owner_pre_stage_readiness_gate(
         ),
         _check(
             "stage_counts_agree",
-            stage_counts_agree,
-            details=stage_counts,
+            stage_counts_agree or post_commit_noop_accounted_for,
+            details={
+                **stage_counts,
+                "post_commit_noop_stage_counts_agree": post_commit_noop_stage_counts_agree,
+                "post_commit_noop_accounted_for": post_commit_noop_accounted_for,
+            },
             error="manifest, staging, owner packet, preflight, or command audit stage counts disagree",
         ),
         _check(
@@ -567,6 +608,8 @@ def build_owner_pre_stage_readiness_gate(
             "owner_preflight_cached_staged_path_count": owner_preflight.get("cached_staged_path_count"),
             "owner_post_staging_status": _status(owner_post_staging),
             "owner_post_staging_cached_staged_path_count": owner_post_staging.get("cached_staged_path_count"),
+            "post_commit_noop_accounted_for": post_commit_noop_accounted_for,
+            "post_commit_noop_stage_counts_agree": post_commit_noop_stage_counts_agree,
         },
         checks=checks,
         next_actions=[
