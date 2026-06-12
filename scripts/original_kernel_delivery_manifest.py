@@ -337,6 +337,7 @@ SECONDARY_INTEGRATION_CANDIDATES = {
 SECONDARY_HANDOFF_FILES = {
     "docs/original-kernel-secondary-handoff.md",
     "docs/codex-gap-open-source-fill-report-2026-06-09.md",
+    "docs/codex-capability-alignment-matrix-2026-06-12.md",
 }
 SECONDARY_PENDING_CANDIDATES = {
     "backend/app/core/integration_review_action_status_board.py",
@@ -486,9 +487,20 @@ def _is_forbidden_stage_path(path: str) -> bool:
     )
 
 
+def _is_codex_gap_readiness_candidate(path: str) -> bool:
+    normalized = _normalize_path(path)
+    return (
+        normalized.startswith("backend/app/core/codex_")
+        and normalized.endswith("_readiness_packet.py")
+    ) or (
+        normalized.startswith("tests/test_codex_")
+        and normalized.endswith("_readiness_packet.py")
+    )
+
+
 def _excluded_scope(path: str) -> str:
     normalized = _normalize_path(path)
-    if normalized in SECONDARY_INTEGRATION_CANDIDATES:
+    if normalized in SECONDARY_INTEGRATION_CANDIDATES or _is_codex_gap_readiness_candidate(normalized):
         return "secondary_integration_candidate"
     if normalized in SECONDARY_HANDOFF_FILES:
         return "secondary_handoff"

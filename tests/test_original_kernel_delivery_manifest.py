@@ -80,6 +80,10 @@ def test_original_kernel_delivery_manifest_ready_with_excluded_dirty_paths(tmp_p
         "?? backend/app/core/integration_review_answer_brief.py",
         "?? backend/app/core/integration_review_answer_action_matrix.py",
         "?? backend/app/core/integration_review_action_status_board.py",
+        "?? backend/app/core/codex_tool_runtime_readiness_packet.py",
+        "?? backend/app/core/codex_permission_sandbox_readiness_packet.py",
+        "?? backend/app/core/codex_memory_context_readiness_packet.py",
+        "?? backend/app/core/codex_background_task_readiness_packet.py",
         "?? tests/test_workflow_events.py",
         "?? tests/test_long_tasks_recovery_audit.py",
         "?? tests/test_skill_bundles.py",
@@ -139,8 +143,13 @@ def test_original_kernel_delivery_manifest_ready_with_excluded_dirty_paths(tmp_p
         "?? tests/test_integration_review_answer_brief.py",
         "?? tests/test_integration_review_answer_action_matrix.py",
         "?? tests/test_integration_review_action_status_board.py",
+        "?? tests/test_codex_tool_runtime_readiness_packet.py",
+        "?? tests/test_codex_permission_sandbox_readiness_packet.py",
+        "?? tests/test_codex_memory_context_readiness_packet.py",
+        "?? tests/test_codex_background_task_readiness_packet.py",
         "?? docs/original-kernel-secondary-handoff.md",
         "?? docs/codex-gap-open-source-fill-report-2026-06-09.md",
+        "?? docs/codex-capability-alignment-matrix-2026-06-12.md",
         "?? .agents/",
     ]
 
@@ -234,6 +243,16 @@ def test_original_kernel_delivery_manifest_ready_with_excluded_dirty_paths(tmp_p
     assert excluded["backend/app/core/integration_review_answer_brief.py"]["scope"] == "secondary_integration_candidate"
     assert excluded["backend/app/core/integration_review_answer_action_matrix.py"]["scope"] == "secondary_integration_candidate"
     assert excluded["backend/app/core/integration_review_action_status_board.py"]["scope"] == "secondary_pending_candidate"
+    assert excluded["backend/app/core/codex_tool_runtime_readiness_packet.py"]["scope"] == "secondary_integration_candidate"
+    assert excluded["backend/app/core/codex_permission_sandbox_readiness_packet.py"]["scope"] == (
+        "secondary_integration_candidate"
+    )
+    assert excluded["backend/app/core/codex_memory_context_readiness_packet.py"]["scope"] == (
+        "secondary_integration_candidate"
+    )
+    assert excluded["backend/app/core/codex_background_task_readiness_packet.py"]["scope"] == (
+        "secondary_integration_candidate"
+    )
     assert excluded["tests/test_workflow_events.py"]["scope"] == "secondary_integration_candidate"
     assert excluded["tests/test_long_tasks_recovery_audit.py"]["scope"] == "secondary_integration_candidate"
     assert excluded["tests/test_skill_bundles.py"]["scope"] == "secondary_integration_candidate"
@@ -293,8 +312,17 @@ def test_original_kernel_delivery_manifest_ready_with_excluded_dirty_paths(tmp_p
     assert excluded["tests/test_integration_review_answer_brief.py"]["scope"] == "secondary_integration_candidate"
     assert excluded["tests/test_integration_review_answer_action_matrix.py"]["scope"] == "secondary_integration_candidate"
     assert excluded["tests/test_integration_review_action_status_board.py"]["scope"] == "secondary_pending_candidate"
+    assert excluded["tests/test_codex_tool_runtime_readiness_packet.py"]["scope"] == "secondary_integration_candidate"
+    assert excluded["tests/test_codex_permission_sandbox_readiness_packet.py"]["scope"] == (
+        "secondary_integration_candidate"
+    )
+    assert excluded["tests/test_codex_memory_context_readiness_packet.py"]["scope"] == "secondary_integration_candidate"
+    assert excluded["tests/test_codex_background_task_readiness_packet.py"]["scope"] == (
+        "secondary_integration_candidate"
+    )
     assert excluded["docs/original-kernel-secondary-handoff.md"]["scope"] == "secondary_handoff"
     assert excluded["docs/codex-gap-open-source-fill-report-2026-06-09.md"]["scope"] == "secondary_handoff"
+    assert excluded["docs/codex-capability-alignment-matrix-2026-06-12.md"]["scope"] == "secondary_handoff"
     assert excluded[".agents/"]["scope"] == "agent_workspace_config"
 
     checks = {check["name"]: check for check in report["checks"]}
