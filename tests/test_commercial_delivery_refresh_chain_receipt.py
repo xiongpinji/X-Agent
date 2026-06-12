@@ -605,6 +605,80 @@ def test_refresh_chain_receipt_accounts_for_post_commit_owner_approval_resume_pa
     )
 
 
+def test_refresh_chain_receipt_accounts_for_pre_approval_owner_resume_boundary(
+    tmp_path: Path,
+) -> None:
+    reports_dir = tmp_path / "reports"
+    _write_ready_reports(reports_dir, post_staging_status="owner_post_staging_verification_ready")
+    _write_json(
+        reports_dir / "commercial-delivery-owner-approval-resume-packet.json",
+        {
+            "status": "owner_approval_resume_packet_blocked",
+            "real_owner_approval_present": True,
+            "waiting_for_owner": False,
+            "resume_ready": False,
+            "stage_allowed": False,
+            "stage_execution_ready": False,
+            "mutation_performed": False,
+            "git_stage_performed": False,
+            "git_commit_performed": False,
+            "git_push_performed": False,
+            "network_mutation_performed": False,
+            "agent_execution_enabled": False,
+            "full_codex_parity_claimed": False,
+            "report_statuses": {
+                "owner_approval_handoff": "owner_approval_handoff_blocked",
+                "pre_approval_drift_guard": "pre_approval_drift_guard_blocked",
+                "owner_approval_payload_audit": "owner_approval_payload_blocked",
+                "owner_stage_approval_gate": "owner_stage_approval_blocked",
+                "owner_stage_execution_plan": "owner_stage_execution_blocked",
+                "owner_staging_runbook": "owner_staging_runbook_blocked",
+                "owner_staging_rollback_plan": "owner_staging_rollback_plan_ready",
+                "owner_post_staging_verifier": "owner_post_staging_verification_blocked",
+                "owner_post_stage_commit_gate": "owner_post_stage_commit_gate_blocked",
+                "owner_commit_packet": "owner_commit_packet_blocked",
+                "owner_delivery_packet": "owner_delivery_packet_blocked",
+                "task_board": "commercial_delivery_ready_for_owner_staging_review",
+            },
+            "summary": {
+                "stage_include_count": 100,
+                "owner_stage_command_count": 2,
+                "runbook_stage_command_count": 2,
+                "execution_plan_stage_command_count": 2,
+                "stage_commands_preview_count": 2,
+                "owner_approval_payload_audit_status": "owner_approval_payload_blocked",
+                "owner_stage_approval_gate_status": "owner_stage_approval_blocked",
+                "owner_stage_execution_plan_status": "owner_stage_execution_blocked",
+                "post_stage_resume_evidence_ready": False,
+                "owner_approval_handoff_post_stage_accounted_for": False,
+                "owner_staging_runbook_post_stage_accounted_for": False,
+                "task_board_status": "commercial_delivery_ready_for_owner_staging_review",
+                "stage_path_digest": "a" * 64,
+                "stage_command_digest": "b" * 64,
+                "expected_stage_path_set_digest": "c" * 64,
+            },
+            "checks": [
+                {"name": "owner_approval_handoff_ready", "status": "failed"},
+                {"name": "owner_delivery_packet_ready", "status": "failed"},
+                {"name": "owner_staging_runbook_ready", "status": "failed"},
+                {"name": "owner_approval_boundary_accounted_for", "status": "failed"},
+                {"name": "stage_counts_consistent", "status": "passed"},
+            ],
+        },
+    )
+
+    receipt = build_refresh_chain_receipt(
+        reports_dir=reports_dir,
+        command_runner=_runner({"commercial_delivery_owner_approval_resume_packet": 1}),
+    )
+
+    assert receipt.status == "commercial_delivery_refresh_chain_receipt_ready"
+    assert receipt.summary["expected_nonzero_steps"] == ["owner_approval_resume_packet"]
+    resume_packet = next(step for step in receipt.steps if step.name == "owner_approval_resume_packet")
+    assert resume_packet.status == "expected_nonzero_accepted"
+    assert resume_packet.expected_nonzero_accepted is True
+
+
 def test_refresh_chain_receipt_accounts_for_owner_approved_resume_packet_bootstrap(
     tmp_path: Path,
 ) -> None:
@@ -1900,6 +1974,77 @@ def test_refresh_chain_receipt_accounts_for_post_commit_delivery_packet_refresh_
     assert final_packet.expected_nonzero_accepted is True
 
 
+def test_refresh_chain_receipt_accounts_for_pre_approval_bootstrap_delivery_packet(
+    tmp_path: Path,
+) -> None:
+    reports_dir = tmp_path / "reports"
+    _write_ready_reports(reports_dir, post_staging_status="owner_post_staging_verification_ready")
+    _write_json(
+        reports_dir / "commercial-delivery-owner-delivery-packet.json",
+        {
+            "status": "owner_delivery_packet_blocked",
+            "mutation_performed": False,
+            "git_stage_performed": False,
+            "git_commit_performed": False,
+            "git_push_performed": False,
+            "network_mutation_performed": False,
+            "agent_execution_enabled": False,
+            "full_codex_parity_claimed": False,
+            "summary": {
+                "stage_include_count": 100,
+                "eligible_stage_count": 1,
+                "owner_stage_command_count": 1,
+                "owner_stage_execution_stage_command_count": 1,
+                "rollback_reset_command_count": 1,
+                "expected_nonzero_steps": [
+                    "owner_post_stage_commit_gate",
+                    "owner_commit_packet",
+                    "owner_stage_approval_gate",
+                ],
+                "owner_staging_runbook_status": "owner_staging_runbook_blocked",
+                "owner_pre_stage_gate_status": "owner_pre_stage_readiness_blocked",
+                "owner_post_stage_commit_gate_status": "owner_post_stage_commit_gate_blocked",
+                "owner_commit_packet_status": "owner_commit_packet_blocked",
+                "owner_stage_approval_gate_status": "owner_stage_approval_blocked",
+                "owner_stage_approval_request_status": "owner_stage_approval_request_blocked",
+                "owner_approval_payload_audit_status": "owner_approval_payload_blocked",
+                "owner_stage_execution_plan_status": "owner_stage_execution_blocked",
+                "owner_staging_rollback_plan_status": "owner_staging_rollback_plan_ready",
+                "commit_allowed": False,
+                "stage_allowed": False,
+                "owner_stage_execution_allowed": False,
+                "rollback_available": True,
+                "rollback_required": False,
+                "strict_stage_ready": False,
+                "post_stage_chain_accounted_for": False,
+                "refresh_delivery_bootstrap": True,
+                "stage_path_digest": "a" * 64,
+                "stage_command_digest": "b" * 64,
+                "expected_stage_path_set_digest": "c" * 64,
+            },
+            "checks": [
+                {"name": "owner_pre_stage_chain_ready", "status": "failed"},
+                {
+                    "name": "owner_approval_payload_audit_accounted_for",
+                    "status": "failed",
+                },
+            ],
+        },
+    )
+
+    receipt = build_refresh_chain_receipt(
+        reports_dir=reports_dir,
+        command_runner=_runner({"commercial_delivery_owner_delivery_packet": 1}),
+    )
+
+    assert receipt.status == "commercial_delivery_refresh_chain_receipt_ready"
+    before_owner_packet = next(
+        step for step in receipt.steps if step.name == "owner_delivery_packet_before_owner_approval"
+    )
+    assert before_owner_packet.status == "expected_nonzero_accepted"
+    assert before_owner_packet.expected_nonzero_accepted is True
+
+
 def test_refresh_chain_receipt_accounts_for_post_commit_stage_approval_request(
     tmp_path: Path,
 ) -> None:
@@ -2242,6 +2387,60 @@ def test_refresh_chain_receipt_accounts_for_post_commit_approval_payload_audit(
         next(check for check in receipt.checks if check.name == "owner_approval_payload_audit_accounted_for").status
         == "passed"
     )
+
+
+def test_refresh_chain_receipt_accounts_for_pre_approval_audit_digest_delta(
+    tmp_path: Path,
+) -> None:
+    reports_dir = tmp_path / "reports"
+    _write_ready_reports(reports_dir, post_staging_status="owner_post_staging_verification_ready")
+    _write_json(
+        reports_dir / "commercial-delivery-owner-approval-payload-audit.json",
+        {
+            "status": "owner_approval_payload_blocked",
+            "approval_payload_present": True,
+            "ready_for_approval_gate": False,
+            "mutation_performed": False,
+            "git_stage_performed": False,
+            "git_commit_performed": False,
+            "git_push_performed": False,
+            "network_mutation_performed": False,
+            "agent_execution_enabled": False,
+            "full_codex_parity_claimed": False,
+            "summary": {
+                "stage_include_count": 100,
+                "owner_stage_command_count": 2,
+                "approval_stage_include_count": 100,
+                "approval_owner_stage_command_count": 2,
+                "commit_command_preview": 'git commit -m "chore: prepare X-Agent commercial delivery package"',
+                "approval_commit_command_preview": 'git commit -m "chore: prepare X-Agent commercial delivery package"',
+                "stage_path_digest": "a" * 64,
+                "stage_command_digest": "b" * 64,
+                "expected_stage_path_set_digest": "a" * 64,
+                "approval_stage_path_digest": "c" * 64,
+                "approval_stage_command_digest": "d" * 64,
+                "approval_expected_stage_path_set_digest": "c" * 64,
+                "post_commit_noop_accounted_for": False,
+            },
+            "checks": [
+                {"name": "owner_delivery_packet_ready", "status": "failed"},
+                {"name": "owner_stage_approval_request_ready", "status": "failed"},
+                {"name": "approval_counts_match_request_and_delivery_packet", "status": "passed"},
+                {"name": "approval_digests_match_request_and_delivery_packet", "status": "failed"},
+            ],
+        },
+    )
+
+    receipt = build_refresh_chain_receipt(
+        reports_dir=reports_dir,
+        command_runner=_runner({"commercial_delivery_owner_approval_payload_audit": 1}),
+    )
+
+    assert receipt.status == "commercial_delivery_refresh_chain_receipt_ready"
+    assert receipt.summary["expected_nonzero_steps"] == ["owner_approval_payload_audit"]
+    audit = next(step for step in receipt.steps if step.name == "owner_approval_payload_audit")
+    assert audit.status == "expected_nonzero_accepted"
+    assert audit.expected_nonzero_accepted is True
 
 
 def test_refresh_chain_receipt_accounts_for_pre_approval_audit_bootstrap(
