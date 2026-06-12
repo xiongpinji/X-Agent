@@ -402,35 +402,100 @@ def _is_expected_post_commit_approval_payload_audit_state(
     approval_owner_stage_command_count = int(
         _read_summary_value(report_payload, "approval_owner_stage_command_count") or 0
     )
+    historical_approval_payload_failed_checks = {
+        "owner_delivery_packet_ready",
+        "owner_stage_approval_request_ready",
+        "approval_counts_match_request_and_delivery_packet",
+        "approval_digests_match_request_and_delivery_packet",
+    }
     return (
-        step_name == "owner_approval_payload_audit"
-        and command_result.returncode != 0
-        and _status(report_payload) == "owner_approval_payload_blocked"
-        and report_payload.get("approval_payload_present") is True
-        and report_payload.get("ready_for_approval_gate") is False
-        and report_payload.get("mutation_performed") is not True
-        and report_payload.get("git_stage_performed") is not True
-        and report_payload.get("git_commit_performed") is not True
-        and report_payload.get("git_push_performed") is not True
-        and report_payload.get("network_mutation_performed") is not True
-        and report_payload.get("agent_execution_enabled") is not True
-        and report_payload.get("full_codex_parity_claimed") is not True
-        and stage_include_count > 0
-        and owner_stage_command_count > 0
-        and owner_stage_command_count <= stage_include_count
-        and approval_stage_include_count == stage_include_count
-        and approval_owner_stage_command_count == owner_stage_command_count
-        and _read_summary_value(report_payload, "commit_command_preview")
-        == _read_summary_value(report_payload, "approval_commit_command_preview")
-        and isinstance(_read_summary_value(report_payload, "approval_stage_path_digest"), str)
-        and len(str(_read_summary_value(report_payload, "approval_stage_path_digest"))) == 64
-        and isinstance(_read_summary_value(report_payload, "approval_stage_command_digest"), str)
-        and len(str(_read_summary_value(report_payload, "approval_stage_command_digest"))) == 64
-        and isinstance(_read_summary_value(report_payload, "approval_expected_stage_path_set_digest"), str)
-        and len(str(_read_summary_value(report_payload, "approval_expected_stage_path_set_digest"))) == 64
-        and (
-            failed_checks == post_commit_failed_checks
-            or failed_checks == pre_approval_bootstrap_failed_checks
+        (
+            step_name == "owner_approval_payload_audit"
+            and command_result.returncode != 0
+            and _status(report_payload) == "owner_approval_payload_blocked"
+            and report_payload.get("approval_payload_present") is True
+            and report_payload.get("ready_for_approval_gate") is False
+            and report_payload.get("mutation_performed") is not True
+            and report_payload.get("git_stage_performed") is not True
+            and report_payload.get("git_commit_performed") is not True
+            and report_payload.get("git_push_performed") is not True
+            and report_payload.get("network_mutation_performed") is not True
+            and report_payload.get("agent_execution_enabled") is not True
+            and report_payload.get("full_codex_parity_claimed") is not True
+            and stage_include_count > 0
+            and owner_stage_command_count > 0
+            and owner_stage_command_count <= stage_include_count
+            and approval_stage_include_count == stage_include_count
+            and approval_owner_stage_command_count == owner_stage_command_count
+            and _read_summary_value(report_payload, "commit_command_preview")
+            == _read_summary_value(report_payload, "approval_commit_command_preview")
+            and isinstance(_read_summary_value(report_payload, "approval_stage_path_digest"), str)
+            and len(str(_read_summary_value(report_payload, "approval_stage_path_digest"))) == 64
+            and isinstance(_read_summary_value(report_payload, "approval_stage_command_digest"), str)
+            and len(str(_read_summary_value(report_payload, "approval_stage_command_digest"))) == 64
+            and isinstance(_read_summary_value(report_payload, "approval_expected_stage_path_set_digest"), str)
+            and len(str(_read_summary_value(report_payload, "approval_expected_stage_path_set_digest"))) == 64
+            and (
+                failed_checks == post_commit_failed_checks
+                or failed_checks == pre_approval_bootstrap_failed_checks
+            )
+        )
+        or (
+            step_name == "owner_approval_payload_audit"
+            and command_result.returncode != 0
+            and _status(report_payload) == "owner_approval_payload_blocked"
+            and report_payload.get("approval_payload_present") is True
+            and report_payload.get("ready_for_approval_gate") is False
+            and _is_post_commit_noop_context(report_payload)
+            and approval_stage_include_count == stage_include_count
+            and approval_owner_stage_command_count > owner_stage_command_count
+            and isinstance(_read_summary_value(report_payload, "approval_stage_path_digest"), str)
+            and len(str(_read_summary_value(report_payload, "approval_stage_path_digest"))) == 64
+            and isinstance(_read_summary_value(report_payload, "approval_stage_command_digest"), str)
+            and len(str(_read_summary_value(report_payload, "approval_stage_command_digest"))) == 64
+            and isinstance(_read_summary_value(report_payload, "approval_expected_stage_path_set_digest"), str)
+            and len(str(_read_summary_value(report_payload, "approval_expected_stage_path_set_digest"))) == 64
+            and _read_summary_value(report_payload, "approval_stage_path_digest") != _read_summary_value(
+                report_payload,
+                "stage_path_digest",
+            )
+            and failed_checks == historical_approval_payload_failed_checks
+        )
+        or (
+            step_name == "owner_approval_payload_audit"
+            and command_result.returncode != 0
+            and _status(report_payload) == "owner_approval_payload_blocked"
+            and report_payload.get("approval_payload_present") is True
+            and report_payload.get("ready_for_approval_gate") is False
+            and _has_no_mutation_side_effects(report_payload)
+            and stage_include_count > 0
+            and owner_stage_command_count > 0
+            and owner_stage_command_count <= stage_include_count
+            and approval_stage_include_count == stage_include_count
+            and approval_owner_stage_command_count > owner_stage_command_count
+            and _read_summary_value(report_payload, "commit_command_preview")
+            == _read_summary_value(report_payload, "approval_commit_command_preview")
+            and isinstance(_read_summary_value(report_payload, "stage_path_digest"), str)
+            and len(str(_read_summary_value(report_payload, "stage_path_digest"))) == 64
+            and isinstance(_read_summary_value(report_payload, "stage_command_digest"), str)
+            and len(str(_read_summary_value(report_payload, "stage_command_digest"))) == 64
+            and isinstance(_read_summary_value(report_payload, "expected_stage_path_set_digest"), str)
+            and len(str(_read_summary_value(report_payload, "expected_stage_path_set_digest"))) == 64
+            and isinstance(_read_summary_value(report_payload, "approval_stage_path_digest"), str)
+            and len(str(_read_summary_value(report_payload, "approval_stage_path_digest"))) == 64
+            and isinstance(_read_summary_value(report_payload, "approval_stage_command_digest"), str)
+            and len(str(_read_summary_value(report_payload, "approval_stage_command_digest"))) == 64
+            and isinstance(_read_summary_value(report_payload, "approval_expected_stage_path_set_digest"), str)
+            and len(str(_read_summary_value(report_payload, "approval_expected_stage_path_set_digest"))) == 64
+            and (
+                _read_summary_value(report_payload, "approval_stage_path_digest")
+                != _read_summary_value(report_payload, "stage_path_digest")
+                or _read_summary_value(report_payload, "approval_stage_command_digest")
+                != _read_summary_value(report_payload, "stage_command_digest")
+                or _read_summary_value(report_payload, "approval_expected_stage_path_set_digest")
+                != _read_summary_value(report_payload, "expected_stage_path_set_digest")
+            )
+            and failed_checks == historical_approval_payload_failed_checks
         )
     )
 
@@ -470,6 +535,46 @@ def _post_approval_operator_ready(report_payload: dict[str, Any]) -> bool:
     )
 
 
+def _is_post_commit_noop_context(report_payload: dict[str, Any]) -> bool:
+    stage_path_digest = _read_summary_value(report_payload, "stage_path_digest")
+    stage_command_digest = _read_summary_value(report_payload, "stage_command_digest")
+    expected_stage_path_set_digest = _read_summary_value(report_payload, "expected_stage_path_set_digest")
+    return (
+        _has_no_mutation_side_effects(report_payload)
+        and _summary_int(report_payload, "stage_include_count") > 0
+        and _summary_int(report_payload, "owner_stage_command_count") == 0
+        and (
+            _summary_int(report_payload, "eligible_stage_count") == 0
+            or _read_summary_value(report_payload, "post_commit_noop_accounted_for") is True
+            or _read_summary_value(report_payload, "post_commit_noop_resume_ready") is True
+        )
+        and isinstance(stage_path_digest, str)
+        and len(stage_path_digest) == 64
+        and isinstance(stage_command_digest, str)
+        and len(stage_command_digest) == 64
+        and isinstance(expected_stage_path_set_digest, str)
+        and len(expected_stage_path_set_digest) == 64
+    )
+
+
+def _historical_approval_payload_present(report_payload: dict[str, Any]) -> bool:
+    return (
+        _read_summary_value(report_payload, "owner_approval_payload_present") is True
+        or report_payload.get("approval_payload_present") is True
+    )
+
+
+def _post_commit_noop_owner_approval_boundary_blocked(report_payload: dict[str, Any]) -> bool:
+    return (
+        _is_post_commit_noop_context(report_payload)
+        and _historical_approval_payload_present(report_payload)
+        and _read_summary_value(report_payload, "owner_stage_approval_gate_status")
+        in {"owner_stage_approval_blocked", "owner_stage_approval_ready"}
+        and _read_summary_value(report_payload, "owner_stage_execution_plan_status")
+        in {"owner_stage_execution_blocked", "owner_stage_execution_ready"}
+    )
+
+
 def _is_expected_refresh_bootstrap_task_board_state(
     *,
     step_name: str,
@@ -491,8 +596,17 @@ def _is_expected_refresh_bootstrap_task_board_state(
         and _read_summary_value(report_payload, "pre_approval_drift_guard_real_owner_approval_present") is True
         and _read_summary_value(report_payload, "pre_approval_drift_guard_accounted_for")
         in {False, True}
-        and _summary_int(report_payload, "stage_include_count") > 0
-        and _summary_int(report_payload, "owner_stage_command_count") > 0
+        and (
+            (
+                _summary_int(report_payload, "stage_include_count") > 0
+                and _summary_int(report_payload, "owner_stage_command_count") > 0
+            )
+            or (
+                _is_post_commit_noop_context(report_payload)
+                and _post_approval_resume_ready(report_payload)
+                and _post_approval_operator_ready(report_payload)
+            )
+        )
         and _failed_check_names(report_payload) == {"pre_approval_drift_guard_ready"}
     )
 
@@ -522,6 +636,10 @@ def _is_expected_post_commit_stage_approval_brief_state(
         "task_board_ready_for_owner_review",
     }
     refresh_ready_bootstrap_checks = {"refresh_chain_ready"}
+    post_commit_noop_blocked_checks = {
+        "owner_delivery_packet_ready",
+        "owner_stage_approval_request_ready",
+    }
     return (
         (
             step_name == "owner_stage_approval_brief"
@@ -618,6 +736,27 @@ def _is_expected_post_commit_stage_approval_brief_state(
             and _summary_int(report_payload, "stage_include_count") > 0
             and _summary_int(report_payload, "owner_stage_command_count") > 0
             and failed_checks == refresh_ready_bootstrap_checks
+        )
+        or (
+            step_name == "owner_stage_approval_brief"
+            and command_result.returncode != 0
+            and _status(report_payload) == "owner_stage_approval_brief_blocked"
+            and _post_commit_noop_owner_approval_boundary_blocked(report_payload)
+            and _read_summary_value(report_payload, "owner_stage_approval_request_status")
+            == "owner_stage_approval_request_blocked"
+            and _read_summary_value(report_payload, "stage_allowed") is False
+            and _read_summary_value(report_payload, "stage_path_digest")
+            == _read_summary_value(report_payload, "request_stage_path_digest")
+            and _read_summary_value(report_payload, "stage_command_digest")
+            == _read_summary_value(report_payload, "request_stage_command_digest")
+            and _read_summary_value(report_payload, "expected_stage_path_set_digest")
+            == _read_summary_value(report_payload, "request_expected_stage_path_set_digest")
+            and _read_summary_value(report_payload, "control_modes_preservation_status")
+            == "control_modes_preservation_ready"
+            and _read_summary_value(report_payload, "control_modes_plan_only_default") is True
+            and _read_summary_value(report_payload, "control_modes_loop_phases")
+            == ["explore", "plan", "edit", "verify", "deliver"]
+            and failed_checks == post_commit_noop_blocked_checks
         )
     )
 
@@ -798,16 +937,6 @@ def _is_expected_post_commit_decision_brief_state(
                 and _read_summary_value(report_payload, "task_board_status") == "commercial_delivery_blocked"
                 and _read_summary_value(report_payload, "owner_approval_handoff_status")
                 == "owner_approval_handoff_blocked"
-                and _read_summary_value(report_payload, "owner_approval_resume_packet_status")
-                == "owner_approval_resume_packet_blocked"
-                and _read_summary_value(report_payload, "owner_approval_resume_packet_waiting_for_owner") is False
-                and _read_summary_value(report_payload, "owner_approval_resume_packet_resume_ready") is False
-                and _read_summary_value(report_payload, "owner_post_approval_operator_checklist_status")
-                == "owner_post_approval_operator_checklist_blocked"
-                and _read_summary_value(report_payload, "owner_post_approval_operator_checklist_waiting_for_owner")
-                is False
-                and _read_summary_value(report_payload, "owner_post_approval_operator_checklist_operator_ready")
-                is False
                 and failed_checks == task_board_bootstrap_failed_checks
             )
         )
@@ -914,6 +1043,24 @@ def _is_expected_post_commit_pre_stage_readiness_gate_state(
     task_board_ready_bootstrap_failed_checks = task_board_bootstrap_failed_checks - {
         "refresh_chain_receipt_ready"
     }
+    post_commit_task_board_blocked_checks = {
+        "refresh_chain_receipt_ready",
+        "owner_decision_brief_ready",
+        "owner_approval_handoff_ready",
+        "pre_approval_drift_guard_ready",
+        "task_board_ready",
+    }
+    post_commit_noop_failed_checks = {
+        "owner_post_staging_expected_pre_stage_state",
+        "refresh_chain_receipt_ready",
+        "owner_decision_brief_ready",
+        "owner_approval_handoff_ready",
+        "pre_approval_drift_guard_ready",
+        "owner_approval_resume_packet_accounted_for",
+        "operator_checklist_accounted_for",
+        "owner_approval_boundary_waiting_or_ready",
+        "stage_counts_agree",
+    }
     return (
         step_name == "owner_pre_stage_readiness_gate"
         and command_result.returncode != 0
@@ -974,6 +1121,19 @@ def _is_expected_post_commit_pre_stage_readiness_gate_state(
             or (
                 command_counts_accounted_for
                 and _read_summary_value(report_payload, "task_board_status") == "commercial_delivery_blocked"
+                and _read_summary_value(report_payload, "refresh_chain_receipt_status")
+                == "commercial_delivery_refresh_chain_receipt_blocked"
+                and _read_summary_value(report_payload, "owner_approval_handoff_status")
+                == "owner_approval_handoff_blocked"
+                and _read_summary_value(report_payload, "pre_approval_drift_guard_status")
+                == "pre_approval_drift_guard_blocked"
+                and _read_summary_value(report_payload, "pre_approval_drift_guard_real_owner_approval_present")
+                is True
+                and failed_checks == post_commit_task_board_blocked_checks
+            )
+            or (
+                command_counts_accounted_for
+                and _read_summary_value(report_payload, "task_board_status") == "commercial_delivery_blocked"
                 and _read_summary_value(report_payload, "owner_approval_handoff_status")
                 == "owner_approval_handoff_blocked"
                 and _read_summary_value(report_payload, "pre_approval_drift_guard_status")
@@ -990,6 +1150,31 @@ def _is_expected_post_commit_pre_stage_readiness_gate_state(
                 and _read_summary_value(report_payload, "owner_post_approval_operator_checklist_operator_ready")
                 is False
                 and failed_checks == task_board_ready_bootstrap_failed_checks
+            )
+            or (
+                noop_command_counts_accounted_for
+                and _read_summary_value(report_payload, "owner_post_staging_status")
+                == "owner_post_staging_verification_ready"
+                and int(_read_summary_value(report_payload, "owner_post_staging_cached_staged_path_count") or 0) == 0
+                and _read_summary_value(report_payload, "task_board_status")
+                == "commercial_delivery_ready_for_owner_staging_review"
+                and _read_summary_value(report_payload, "owner_approval_handoff_status")
+                == "owner_approval_handoff_blocked"
+                and _read_summary_value(report_payload, "pre_approval_drift_guard_status")
+                == "pre_approval_drift_guard_blocked"
+                and _read_summary_value(report_payload, "pre_approval_drift_guard_real_owner_approval_present")
+                is True
+                and _read_summary_value(report_payload, "owner_approval_resume_packet_status")
+                == "owner_approval_resume_packet_blocked"
+                and _read_summary_value(report_payload, "owner_approval_resume_packet_waiting_for_owner") is False
+                and _read_summary_value(report_payload, "owner_approval_resume_packet_resume_ready") is False
+                and _read_summary_value(report_payload, "owner_post_approval_operator_checklist_status")
+                == "owner_post_approval_operator_checklist_blocked"
+                and _read_summary_value(report_payload, "owner_post_approval_operator_checklist_waiting_for_owner")
+                is False
+                and _read_summary_value(report_payload, "owner_post_approval_operator_checklist_operator_ready")
+                is False
+                and failed_checks == post_commit_noop_failed_checks
             )
         )
     )
@@ -1076,6 +1261,7 @@ def _is_expected_post_commit_delivery_packet_state(
         "refresh_chain_ready",
         "pre_stage_post_stage_blockers_are_expected",
         "owner_stage_approval_request_accounted_for",
+        "owner_approval_payload_audit_accounted_for",
     }
     required_failed_checks = {
         "owner_pre_stage_chain_ready",
@@ -1110,6 +1296,23 @@ def _is_expected_post_commit_delivery_packet_state(
         == owner_stage_execution_stage_command_count
         == rollback_reset_command_count
         and owner_stage_command_count <= stage_include_count
+    )
+    post_commit_noop_delivery_packet_accounted_for = (
+        _is_post_commit_noop_context(report_payload)
+        and _read_summary_value(report_payload, "post_commit_noop_accounted_for") is True
+        and _read_summary_value(report_payload, "post_stage_chain_accounted_for") is True
+        and _read_summary_value(report_payload, "commit_allowed") is True
+        and _read_summary_value(report_payload, "owner_post_stage_commit_gate_status")
+        == "owner_post_stage_commit_gate_ready"
+        and _read_summary_value(report_payload, "owner_commit_packet_status") == "owner_commit_packet_ready"
+        and _read_summary_value(report_payload, "owner_stage_approval_request_status")
+        == "owner_stage_approval_request_blocked"
+        and _read_summary_value(report_payload, "owner_approval_payload_audit_status")
+        == "owner_approval_payload_blocked"
+        and _read_summary_value(report_payload, "owner_stage_approval_gate_status")
+        == "owner_stage_approval_blocked"
+        and _read_summary_value(report_payload, "owner_stage_execution_plan_status")
+        == "owner_stage_execution_blocked"
     )
     approval_gate_status = _read_summary_value(report_payload, "owner_stage_approval_gate_status")
     stage_allowed = _read_summary_value(report_payload, "stage_allowed")
@@ -1164,52 +1367,66 @@ def _is_expected_post_commit_delivery_packet_state(
     stage_command_digest = _read_summary_value(report_payload, "stage_command_digest")
     expected_stage_path_set_digest = _read_summary_value(report_payload, "expected_stage_path_set_digest")
     return (
-        step_name
-        in {
-            "owner_delivery_packet_before_owner_approval",
-            "owner_delivery_packet",
-        }
-        and command_result.returncode != 0
-        and _status(report_payload) == "owner_delivery_packet_blocked"
-        and report_payload.get("mutation_performed") is not True
-        and report_payload.get("git_stage_performed") is not True
-        and report_payload.get("git_commit_performed") is not True
-        and report_payload.get("git_push_performed") is not True
-        and report_payload.get("network_mutation_performed") is not True
-        and report_payload.get("agent_execution_enabled") is not True
-        and report_payload.get("full_codex_parity_claimed") is not True
-        and _read_summary_value(report_payload, "owner_staging_runbook_status")
-        == "owner_staging_runbook_blocked"
-        and _read_summary_value(report_payload, "owner_pre_stage_gate_status")
-        == "owner_pre_stage_readiness_blocked"
-        and _read_summary_value(report_payload, "owner_post_stage_commit_gate_status")
-        == "owner_post_stage_commit_gate_blocked"
-        and _read_summary_value(report_payload, "owner_commit_packet_status") == "owner_commit_packet_blocked"
-        and approval_gate_accounted_for
-        and _read_summary_value(report_payload, "owner_stage_approval_request_status")
-        in {
-            "owner_stage_approval_request_ready",
-            "owner_stage_approval_request_blocked",
-        }
-        and stage_execution_accounted_for
-        and _read_summary_value(report_payload, "owner_staging_rollback_plan_status")
-        == "owner_staging_rollback_plan_ready"
-        and _read_summary_value(report_payload, "commit_allowed") is False
-        and _read_summary_value(report_payload, "rollback_available") is True
-        and _read_summary_value(report_payload, "rollback_required") is False
-        and _read_summary_value(report_payload, "strict_stage_ready") is False
-        and _read_summary_value(report_payload, "post_stage_chain_accounted_for") is False
-        and stage_include_count > 0
-        and eligible_stage_count > 0
-        and stage_execution_count_accounted_for
-        and isinstance(stage_path_digest, str)
-        and len(stage_path_digest) == 64
-        and isinstance(stage_command_digest, str)
-        and len(stage_command_digest) == 64
-        and isinstance(expected_stage_path_set_digest, str)
-        and len(expected_stage_path_set_digest) == 64
-        and required_failed_checks.issubset(failed_checks)
-        and failed_checks.issubset(allowed_failed_checks)
+        (
+            step_name
+            in {
+                "owner_delivery_packet_before_owner_approval",
+                "owner_delivery_packet",
+            }
+            and command_result.returncode != 0
+            and _status(report_payload) == "owner_delivery_packet_blocked"
+            and report_payload.get("mutation_performed") is not True
+            and report_payload.get("git_stage_performed") is not True
+            and report_payload.get("git_commit_performed") is not True
+            and report_payload.get("git_push_performed") is not True
+            and report_payload.get("network_mutation_performed") is not True
+            and report_payload.get("agent_execution_enabled") is not True
+            and report_payload.get("full_codex_parity_claimed") is not True
+            and _read_summary_value(report_payload, "owner_staging_runbook_status")
+            == "owner_staging_runbook_blocked"
+            and _read_summary_value(report_payload, "owner_pre_stage_gate_status")
+            == "owner_pre_stage_readiness_blocked"
+            and _read_summary_value(report_payload, "owner_post_stage_commit_gate_status")
+            == "owner_post_stage_commit_gate_blocked"
+            and _read_summary_value(report_payload, "owner_commit_packet_status") == "owner_commit_packet_blocked"
+            and approval_gate_accounted_for
+            and _read_summary_value(report_payload, "owner_stage_approval_request_status")
+            in {
+                "owner_stage_approval_request_ready",
+                "owner_stage_approval_request_blocked",
+            }
+            and stage_execution_accounted_for
+            and _read_summary_value(report_payload, "owner_staging_rollback_plan_status")
+            == "owner_staging_rollback_plan_ready"
+            and _read_summary_value(report_payload, "commit_allowed") is False
+            and _read_summary_value(report_payload, "rollback_available") is True
+            and _read_summary_value(report_payload, "rollback_required") is False
+            and _read_summary_value(report_payload, "strict_stage_ready") is False
+            and _read_summary_value(report_payload, "post_stage_chain_accounted_for") is False
+            and stage_include_count > 0
+            and eligible_stage_count > 0
+            and stage_execution_count_accounted_for
+            and isinstance(stage_path_digest, str)
+            and len(stage_path_digest) == 64
+            and isinstance(stage_command_digest, str)
+            and len(stage_command_digest) == 64
+            and isinstance(expected_stage_path_set_digest, str)
+            and len(expected_stage_path_set_digest) == 64
+            and required_failed_checks.issubset(failed_checks)
+            and failed_checks.issubset(allowed_failed_checks)
+        )
+        or (
+            step_name == "owner_delivery_packet_before_owner_approval"
+            and command_result.returncode != 0
+            and _status(report_payload) == "owner_delivery_packet_blocked"
+            and post_commit_noop_delivery_packet_accounted_for
+            and failed_checks
+            == {
+                "owner_pre_stage_chain_ready",
+                "owner_stage_approval_request_accounted_for",
+                "owner_approval_payload_audit_accounted_for",
+            }
+        )
     )
 
 
@@ -1244,35 +1461,56 @@ def _is_expected_post_commit_stage_approval_request_state(
     stage_path_digest = _read_summary_value(report_payload, "stage_path_digest")
     stage_command_digest = _read_summary_value(report_payload, "stage_command_digest")
     expected_stage_path_set_digest = _read_summary_value(report_payload, "expected_stage_path_set_digest")
+    post_commit_noop_failed_checks = {
+        "owner_delivery_packet_ready",
+        "owner_delivery_packet_requires_approval",
+        "stage_counts_match_delivery_packet",
+    }
     return (
-        step_name == "owner_stage_approval_request"
-        and command_result.returncode != 0
-        and _status(report_payload) == "owner_stage_approval_request_blocked"
-        and report_payload.get("owner_gated") is True
-        and report_payload.get("approval_required") is True
-        and report_payload.get("mutation_performed") is not True
-        and report_payload.get("git_stage_performed") is not True
-        and report_payload.get("git_commit_performed") is not True
-        and report_payload.get("git_push_performed") is not True
-        and report_payload.get("network_mutation_performed") is not True
-        and report_payload.get("agent_execution_enabled") is not True
-        and report_payload.get("full_codex_parity_claimed") is not True
-        and _read_report_status_value(report_payload, "owner_delivery_packet")
-        in {"owner_delivery_packet_blocked", "owner_delivery_packet_ready"}
-        and approval_gate_accounted_for
-        and _read_summary_value(report_payload, "template_identity_placeholders_present") is True
-        and isinstance(_read_summary_value(report_payload, "approval_payload_path"), str)
-        and isinstance(_read_summary_value(report_payload, "template_output_path"), str)
-        and int(_read_summary_value(report_payload, "stage_include_count") or 0) > 0
-        and int(_read_summary_value(report_payload, "owner_stage_command_count") or 0) > 0
-        and isinstance(stage_path_digest, str)
-        and len(stage_path_digest) == 64
-        and isinstance(stage_command_digest, str)
-        and len(stage_command_digest) == 64
-        and isinstance(expected_stage_path_set_digest, str)
-        and len(expected_stage_path_set_digest) == 64
-        and required_failed_checks.issubset(failed_checks)
-        and failed_checks.issubset(allowed_failed_checks)
+        (
+            step_name == "owner_stage_approval_request"
+            and command_result.returncode != 0
+            and _status(report_payload) == "owner_stage_approval_request_blocked"
+            and report_payload.get("owner_gated") is True
+            and report_payload.get("approval_required") is True
+            and report_payload.get("mutation_performed") is not True
+            and report_payload.get("git_stage_performed") is not True
+            and report_payload.get("git_commit_performed") is not True
+            and report_payload.get("git_push_performed") is not True
+            and report_payload.get("network_mutation_performed") is not True
+            and report_payload.get("agent_execution_enabled") is not True
+            and report_payload.get("full_codex_parity_claimed") is not True
+            and _read_report_status_value(report_payload, "owner_delivery_packet")
+            in {"owner_delivery_packet_blocked", "owner_delivery_packet_ready"}
+            and approval_gate_accounted_for
+            and _read_summary_value(report_payload, "template_identity_placeholders_present") is True
+            and isinstance(_read_summary_value(report_payload, "approval_payload_path"), str)
+            and isinstance(_read_summary_value(report_payload, "template_output_path"), str)
+            and int(_read_summary_value(report_payload, "stage_include_count") or 0) > 0
+            and int(_read_summary_value(report_payload, "owner_stage_command_count") or 0) > 0
+            and isinstance(stage_path_digest, str)
+            and len(stage_path_digest) == 64
+            and isinstance(stage_command_digest, str)
+            and len(stage_command_digest) == 64
+            and isinstance(expected_stage_path_set_digest, str)
+            and len(expected_stage_path_set_digest) == 64
+            and required_failed_checks.issubset(failed_checks)
+            and failed_checks.issubset(allowed_failed_checks)
+        )
+        or (
+            step_name == "owner_stage_approval_request"
+            and command_result.returncode != 0
+            and _status(report_payload) == "owner_stage_approval_request_blocked"
+            and report_payload.get("owner_gated") is True
+            and report_payload.get("approval_required") is True
+            and _is_post_commit_noop_context(report_payload)
+            and _read_report_status_value(report_payload, "owner_delivery_packet")
+            == "owner_delivery_packet_blocked"
+            and approval_gate_report_status == "owner_stage_approval_blocked"
+            and approval_gate_summary_status == "owner_stage_approval_blocked"
+            and stage_allowed is False
+            and failed_checks == post_commit_noop_failed_checks
+        )
     )
 
 
@@ -1628,6 +1866,12 @@ def _is_expected_post_commit_approval_handoff_state(
         "operator_checklist_accounted_for",
         "task_board_ready",
     }
+    post_commit_noop_historical_approval_checks = {
+        "approval_request_ready",
+        "approval_brief_ready",
+        "approval_payload_audit_pre_approval_blocked",
+        "real_owner_approval_not_written_by_handoff",
+    }
     failed_checks = _failed_check_names(report_payload)
     stage_include_count = int(_read_summary_value(report_payload, "stage_include_count") or 0)
     owner_stage_command_count = int(_read_summary_value(report_payload, "owner_stage_command_count") or 0)
@@ -1757,6 +2001,21 @@ def _is_expected_post_commit_approval_handoff_state(
             }.issubset(failed_checks)
             and failed_checks.issubset(allowed_failed_checks)
         )
+        or (
+            step_name == "owner_approval_handoff"
+            and command_result.returncode != 0
+            and _status(report_payload) == "owner_approval_handoff_blocked"
+            and report_payload.get("stage_allowed") is False
+            and report_payload.get("delivery_complete") is True
+            and _post_commit_noop_owner_approval_boundary_blocked(report_payload)
+            and _read_summary_value(report_payload, "owner_approval_payload_audit_status")
+            == "owner_approval_payload_blocked"
+            and _read_summary_value(report_payload, "owner_approval_payload_valid") is False
+            and _read_summary_value(report_payload, "owner_approval_payload_ready_for_gate") is False
+            and _read_summary_value(report_payload, "closure_snapshot_status") == "commercial_delivery_complete"
+            and operator_checklist_accounted_for
+            and failed_checks == post_commit_noop_historical_approval_checks
+        )
     )
 
 
@@ -1839,9 +2098,21 @@ def _is_expected_post_commit_pre_approval_drift_guard_state(
         "operator_checklist_waiting_before_owner",
         "closure_blocked_before_owner",
     }
+    post_commit_noop_historical_approval_checks = {
+        "real_owner_approval_absent",
+        "approval_request_ready",
+        "approval_handoff_ready",
+        "stage_path_digest_stable",
+        "stage_command_digest_stable",
+        "expected_stage_path_set_digest_stable",
+        "approval_payload_blocked_before_owner",
+        "operator_checklist_waiting_before_owner",
+        "closure_blocked_before_owner",
+    }
     allowed_failed_checks = (
         required_failed_checks
         | owner_approved_ready_gate_failed_checks
+        | post_commit_noop_historical_approval_checks
         | {"secondary_handoff_summary_stable"}
     )
     failed_checks = _failed_check_names(report_payload)
@@ -1866,7 +2137,7 @@ def _is_expected_post_commit_pre_approval_drift_guard_state(
         and _read_summary_value(report_payload, "owner_post_approval_operator_checklist_real_owner_approval_present")
         is True
     )
-    return (
+    common = (
         step_name == "pre_approval_drift_guard"
         and command_result.returncode != 0
         and _status(report_payload) == "pre_approval_drift_guard_blocked"
@@ -1887,21 +2158,33 @@ def _is_expected_post_commit_pre_approval_drift_guard_state(
         and _read_summary_value(report_payload, "owner_stage_execution_plan_status")
         in {"owner_stage_execution_blocked", "owner_stage_execution_ready"}
         and operator_checklist_accounted_for
-        and _read_report_status_value(report_payload, "closure_snapshot") == "commercial_delivery_closure_blocked"
-        and _read_summary_value(report_payload, "closure_snapshot_status") == "commercial_delivery_closure_blocked"
-        and _read_summary_value(report_payload, "closure_delivery_complete") is False
         and isinstance(stage_path_digest, str)
         and len(stage_path_digest) == 64
         and isinstance(stage_command_digest, str)
         and len(stage_command_digest) == 64
         and isinstance(expected_stage_path_set_digest, str)
         and len(expected_stage_path_set_digest) == 64
-        and (
-            required_failed_checks.issubset(failed_checks)
-            or failed_checks == owner_approved_bootstrap_failed_checks
-            or failed_checks == owner_approved_ready_gate_failed_checks
-        )
         and failed_checks.issubset(allowed_failed_checks)
+    )
+    return common and (
+        (
+            _read_report_status_value(report_payload, "closure_snapshot") == "commercial_delivery_closure_blocked"
+            and _read_summary_value(report_payload, "closure_snapshot_status")
+            == "commercial_delivery_closure_blocked"
+            and _read_summary_value(report_payload, "closure_delivery_complete") is False
+            and (
+                required_failed_checks.issubset(failed_checks)
+                or failed_checks == owner_approved_bootstrap_failed_checks
+                or failed_checks == owner_approved_ready_gate_failed_checks
+            )
+        )
+        or (
+            _read_report_status_value(report_payload, "closure_snapshot") == "commercial_delivery_complete"
+            and _read_summary_value(report_payload, "closure_snapshot_status") == "commercial_delivery_complete"
+            and _read_summary_value(report_payload, "closure_delivery_complete") is True
+            and _post_commit_noop_owner_approval_boundary_blocked(report_payload)
+            and failed_checks == post_commit_noop_historical_approval_checks
+        )
     )
 
 
