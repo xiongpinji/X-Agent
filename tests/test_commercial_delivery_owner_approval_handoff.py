@@ -368,6 +368,99 @@ def test_owner_approval_handoff_allows_subset_owner_stage_commands(tmp_path: Pat
     assert handoff.owner_action_payload_template["owner_stage_command_count"] == 2
 
 
+def test_owner_approval_handoff_accounts_for_post_approval_noop(tmp_path: Path) -> None:
+    paths = _write_inputs(tmp_path, count=100, command_count=0)
+    empty_digest = hashlib.sha256(json.dumps([], ensure_ascii=False, separators=(",", ":")).encode("utf-8")).hexdigest()
+    for key in (
+        "owner_delivery_packet_path",
+        "owner_stage_approval_request_path",
+        "owner_stage_approval_brief_path",
+        "closure_snapshot_path",
+    ):
+        payload = json.loads(paths[key].read_text(encoding="utf-8"))
+        payload.setdefault("summary", {}).update(
+            {
+                "stage_path_digest": empty_digest,
+                "stage_command_digest": empty_digest,
+                "expected_stage_path_set_digest": empty_digest,
+                "post_commit_noop_accounted_for": True,
+            }
+        )
+        if key == "owner_delivery_packet_path":
+            payload["sections"] = [{"name": "owner_stage_commands", "commands": []}]
+        if key == "closure_snapshot_path":
+            payload["status"] = "commercial_delivery_complete"
+            payload["delivery_complete"] = True
+            payload["blockers"] = []
+        paths[key].write_text(json.dumps(payload), encoding="utf-8")
+    template = _approval_template(100, 0)
+    template.update(
+        {
+            "stage_path_digest": empty_digest,
+            "stage_command_digest": empty_digest,
+            "expected_stage_path_set_digest": empty_digest,
+        }
+    )
+    _write_json(paths["owner_stage_approval_template_path"], template)
+    request = json.loads(paths["owner_stage_approval_request_path"].read_text(encoding="utf-8"))
+    request["suggested_owner_approval_payload"] = template
+    paths["owner_stage_approval_request_path"].write_text(json.dumps(request), encoding="utf-8")
+    brief = json.loads(paths["owner_stage_approval_brief_path"].read_text(encoding="utf-8"))
+    brief["owner_action_payload_template"] = template
+    paths["owner_stage_approval_brief_path"].write_text(json.dumps(brief), encoding="utf-8")
+    audit = json.loads(paths["owner_approval_payload_audit_path"].read_text(encoding="utf-8"))
+    audit.update(
+        {
+            "status": "owner_approval_payload_ready",
+            "approval_payload_present": True,
+            "approval_payload_valid": True,
+            "ready_for_approval_gate": True,
+        }
+    )
+    audit["summary"].update(
+        {
+            "stage_path_digest": empty_digest,
+            "stage_command_digest": empty_digest,
+            "expected_stage_path_set_digest": empty_digest,
+            "post_commit_noop_accounted_for": True,
+        }
+    )
+    paths["owner_approval_payload_audit_path"].write_text(json.dumps(audit), encoding="utf-8")
+    for key, status in [
+        ("owner_stage_approval_gate_path", "owner_stage_approval_ready"),
+        ("owner_stage_execution_plan_path", "owner_stage_execution_ready"),
+    ]:
+        payload = json.loads(paths[key].read_text(encoding="utf-8"))
+        payload["status"] = status
+        payload["stage_allowed"] = True
+        paths[key].write_text(json.dumps(payload), encoding="utf-8")
+    checklist = json.loads(paths["owner_post_approval_operator_checklist_path"].read_text(encoding="utf-8"))
+    checklist.update(
+        {
+            "status": "owner_post_approval_operator_checklist_blocked",
+            "waiting_for_owner": False,
+            "operator_ready": False,
+            "real_owner_approval_present": True,
+        }
+    )
+    paths["owner_post_approval_operator_checklist_path"].write_text(json.dumps(checklist), encoding="utf-8")
+    _write_json(paths["owner_approval_path"], {"decision": "approve_owner_stage"})
+
+    handoff = build_owner_approval_handoff(**paths)
+
+    assert handoff.status == "owner_approval_handoff_ready"
+    assert handoff.delivery_complete is True
+    assert handoff.summary["post_approval_noop_accounted_for"] is True
+    assert handoff.summary["stage_command_digest"] == empty_digest
+    assert next(
+        check for check in handoff.checks if check.name == "real_owner_approval_not_written_by_handoff"
+    ).status == "passed"
+    assert next(
+        check for check in handoff.checks if check.name == "stage_not_allowed_before_owner_approval"
+    ).status == "passed"
+    assert next(check for check in handoff.checks if check.name == "operator_checklist_accounted_for").status == "passed"
+
+
 def test_owner_approval_handoff_allows_missing_optional_operator_checklist(tmp_path: Path) -> None:
     paths = _write_inputs(tmp_path)
     paths["owner_post_approval_operator_checklist_path"].unlink()

@@ -301,6 +301,67 @@ def test_owner_stage_approval_brief_allows_subset_owner_stage_commands(tmp_path:
     assert brief.summary["owner_stage_command_count"] == 2
 
 
+def test_owner_stage_approval_brief_allows_post_commit_noop_counts(tmp_path: Path) -> None:
+    paths = _write_inputs(tmp_path, approved=True)
+    empty_digest = hashlib.sha256(json.dumps([], ensure_ascii=False, separators=(",", ":")).encode("utf-8")).hexdigest()
+    delivery = json.loads(paths["owner_delivery_packet_path"].read_text(encoding="utf-8"))
+    delivery["summary"].update(
+        {
+            "stage_include_count": 100,
+            "owner_stage_command_count": 0,
+            "stage_path_digest": empty_digest,
+            "stage_command_digest": empty_digest,
+            "expected_stage_path_set_digest": empty_digest,
+            "post_commit_noop_accounted_for": True,
+        }
+    )
+    paths["owner_delivery_packet_path"].write_text(json.dumps(delivery), encoding="utf-8")
+    request = json.loads(paths["owner_stage_approval_request_path"].read_text(encoding="utf-8"))
+    request["summary"].update(
+        {
+            "stage_include_count": 100,
+            "owner_stage_command_count": 0,
+            "stage_path_digest": empty_digest,
+            "stage_command_digest": empty_digest,
+            "expected_stage_path_set_digest": empty_digest,
+        }
+    )
+    request["suggested_owner_approval_payload"].update(
+        {
+            "stage_include_count": 100,
+            "owner_stage_command_count": 0,
+            "stage_path_digest": empty_digest,
+            "stage_command_digest": empty_digest,
+            "expected_stage_path_set_digest": empty_digest,
+        }
+    )
+    paths["owner_stage_approval_request_path"].write_text(json.dumps(request), encoding="utf-8")
+    refresh = json.loads(paths["refresh_chain_path"].read_text(encoding="utf-8"))
+    failed_steps = [
+        "owner_decision_brief",
+        "owner_pre_stage_readiness_gate",
+        "owner_staging_runbook",
+        "owner_stage_approval_brief",
+        "owner_approval_handoff",
+        "pre_approval_drift_guard",
+        "task_board_after_owner_decision",
+    ]
+    refresh["status"] = "commercial_delivery_refresh_chain_receipt_blocked"
+    refresh["summary"]["failed_step_count"] = len(failed_steps)
+    refresh["steps"] = [{"name": step, "status": "failed"} for step in failed_steps]
+    paths["refresh_chain_path"].write_text(json.dumps(refresh), encoding="utf-8")
+
+    brief = build_owner_stage_approval_brief(**paths)
+
+    assert brief.status == "owner_stage_approval_brief_ready"
+    count_check = next(
+        check for check in brief.checks if check.name == "approval_request_counts_match_delivery_packet"
+    )
+    assert count_check.status == "passed"
+    refresh_check = next(check for check in brief.checks if check.name == "refresh_chain_ready")
+    assert refresh_check.status == "passed"
+
+
 def test_owner_stage_approval_brief_blocks_digest_drift(tmp_path: Path) -> None:
     paths = _write_inputs(tmp_path)
     payload = json.loads(paths["owner_stage_approval_request_path"].read_text(encoding="utf-8"))

@@ -105,7 +105,9 @@ def _failed_step_names(payload: dict[str, Any]) -> list[str]:
 
 
 REFRESH_RECEIPT_SELF_BOOTSTRAP_STEPS = {
+    "owner_decision_brief",
     "owner_pre_stage_readiness_gate",
+    "owner_staging_runbook",
     "owner_delivery_packet_before_owner_approval",
     "owner_delivery_packet",
     "owner_stage_approval_request",
@@ -207,6 +209,7 @@ def build_owner_stage_approval_brief(
     request_stage_command_digest = request_summary.get("stage_command_digest")
     expected_stage_path_set_digest = delivery_summary.get("expected_stage_path_set_digest")
     request_expected_stage_path_set_digest = request_summary.get("expected_stage_path_set_digest")
+    post_commit_noop_accounted_for = delivery_summary.get("post_commit_noop_accounted_for") is True
     stage_allowed = approval_gate.get("stage_allowed") is True
     approval_ready = _status(approval_gate) == "owner_stage_approval_ready" and stage_allowed
     approval_required = delivery_packet.get("owner_approval_required") is True
@@ -247,7 +250,7 @@ def build_owner_stage_approval_brief(
             "approval_request_counts_match_delivery_packet",
             stage_include_count == requested_stage_count
             and owner_stage_command_count == requested_stage_command_count
-            and int(owner_stage_command_count or 0) > 0
+            and (int(owner_stage_command_count or 0) > 0 or post_commit_noop_accounted_for)
             and int(owner_stage_command_count or 0) <= int(stage_include_count or -1),
             details={
                 "stage_include_count": stage_include_count,
