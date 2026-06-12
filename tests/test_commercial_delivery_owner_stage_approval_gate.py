@@ -50,6 +50,10 @@ def _stage_command_digest() -> str:
     ).hexdigest()
 
 
+def _empty_digest() -> str:
+    return hashlib.sha256(json.dumps([], separators=(",", ":")).encode("utf-8")).hexdigest()
+
+
 def _write_inputs(tmp_path: Path) -> dict[str, Path]:
     paths = {
         "owner_delivery_packet_path": tmp_path / "owner-delivery-packet.json",
@@ -172,6 +176,41 @@ def test_owner_stage_approval_gate_ready_with_matching_owner_approval(tmp_path: 
     assert gate.summary["owner_approval_payload_ready_for_gate"] is True
     assert gate.summary["owner_action_required"] is False
     assert gate.summary["blocking_reasons"] == []
+    assert {check.status for check in gate.checks} == {"passed"}
+
+
+def test_owner_stage_approval_gate_ready_with_empty_stage_commands(tmp_path: Path) -> None:
+    paths = _write_inputs(tmp_path)
+    empty_digest = _empty_digest()
+    delivery_packet = json.loads(paths["owner_delivery_packet_path"].read_text(encoding="utf-8"))
+    delivery_packet["summary"]["owner_stage_command_count"] = 0
+    delivery_packet["summary"]["stage_command_digest"] = empty_digest
+    delivery_packet["summary"]["expected_stage_path_set_digest"] = empty_digest
+    delivery_packet["sections"] = [{"name": "owner_stage_commands", "commands": []}]
+    paths["owner_delivery_packet_path"].write_text(json.dumps(delivery_packet), encoding="utf-8")
+
+    approval = json.loads(paths["owner_approval_path"].read_text(encoding="utf-8"))
+    approval["owner_stage_command_count"] = 0
+    approval["stage_command_digest"] = empty_digest
+    approval["expected_stage_path_set_digest"] = empty_digest
+    paths["owner_approval_path"].write_text(json.dumps(approval), encoding="utf-8")
+
+    audit = json.loads(paths["owner_approval_payload_audit_path"].read_text(encoding="utf-8"))
+    audit["summary"]["owner_stage_command_count"] = 0
+    audit["summary"]["approval_owner_stage_command_count"] = 0
+    audit["summary"]["stage_command_digest"] = empty_digest
+    audit["summary"]["approval_stage_command_digest"] = empty_digest
+    audit["summary"]["expected_stage_path_set_digest"] = empty_digest
+    audit["summary"]["approval_expected_stage_path_set_digest"] = empty_digest
+    paths["owner_approval_payload_audit_path"].write_text(json.dumps(audit), encoding="utf-8")
+
+    gate = build_owner_stage_approval_gate(**paths)
+
+    assert gate.status == "owner_stage_approval_ready"
+    assert gate.stage_allowed is True
+    assert gate.summary["stage_command_digest"] == empty_digest
+    assert gate.summary["approval_stage_command_digest"] == empty_digest
+    assert gate.summary["expected_stage_path_set_digest"] == empty_digest
     assert {check.status for check in gate.checks} == {"passed"}
 
 

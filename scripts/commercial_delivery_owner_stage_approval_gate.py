@@ -161,8 +161,6 @@ def _section_commands(packet: dict[str, Any], section_name: str) -> list[str]:
 
 
 def _digest_values(values: list[str]) -> str | None:
-    if not values:
-        return None
     payload = json.dumps(values, ensure_ascii=False, separators=(",", ":"))
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
