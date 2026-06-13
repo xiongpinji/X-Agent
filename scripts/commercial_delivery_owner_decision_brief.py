@@ -175,6 +175,19 @@ def build_owner_decision_brief(
     owner_stage_command_count = len(owner_packet.get("stage_commands") or [])
     command_audit_count = owner_command_audit.get("command_count")
     command_audit_expected_path_count = owner_command_audit.get("expected_path_count")
+    staging_review_eligible_count = staging_review.get("eligible_stage_count")
+    post_commit_noop_accounted_for = (
+        isinstance(stage_include_count, int)
+        and stage_include_count > 0
+        and staging_review_eligible_count == 0
+        and owner_stage_command_count == 0
+        and command_audit_count == 0
+        and command_audit_expected_path_count == 0
+        and _status(owner_post_staging) == "owner_post_staging_verification_ready"
+        and int(owner_post_staging.get("cached_staged_path_count") or 0) == 0
+        and readiness_summary.get("post_commit_noop_accounted_for") is True
+        and readiness_summary.get("post_commit_noop_stage_counts_agree") is True
+    )
     post_staging_ready = (
         _status(owner_post_staging) == "owner_post_staging_verification_ready"
         and int(owner_post_staging.get("cached_staged_path_count") or 0) > 0
@@ -223,6 +236,7 @@ def build_owner_decision_brief(
             and int(owner_post_staging.get("cached_staged_path_count") or 0) == 0
         )
         or post_staging_ready
+        or post_commit_noop_accounted_for
     )
     owner_preflight_ready_for_brief = _status(owner_preflight) == "owner_staging_preflight_ready" or post_staging_ready
 
@@ -302,13 +316,17 @@ def build_owner_decision_brief(
         ),
         _check(
             "stage_commands_match_manifest",
-            stage_commands_match_manifest or stage_commands_subset_accounted_for,
+            stage_commands_match_manifest
+            or stage_commands_subset_accounted_for
+            or post_commit_noop_accounted_for,
             details={
                 "stage_include_count": stage_include_count,
+                "staging_review_eligible_count": staging_review_eligible_count,
                 "owner_stage_command_count": owner_stage_command_count,
                 "owner_command_audit_command_count": command_audit_count,
                 "owner_command_audit_expected_path_count": command_audit_expected_path_count,
                 "stage_commands_subset_accounted_for": stage_commands_subset_accounted_for,
+                "post_commit_noop_accounted_for": post_commit_noop_accounted_for,
             },
             error="owner stage command or command-audit counts do not match manifest stage include count",
         ),
@@ -319,6 +337,7 @@ def build_owner_decision_brief(
                 "status": _status(owner_post_staging),
                 "cached_staged_path_count": owner_post_staging.get("cached_staged_path_count"),
                 "post_staging_ready": post_staging_ready,
+                "post_commit_noop_accounted_for": post_commit_noop_accounted_for,
             },
             error="post-staging verifier is not in the expected pre-owner-staging state",
         ),
@@ -373,8 +392,10 @@ def build_owner_decision_brief(
             "owner_command_audit_command_count": command_audit_count,
             "owner_command_audit_expected_path_count": command_audit_expected_path_count,
             "post_staging_ready": post_staging_ready,
+            "post_commit_noop_accounted_for": post_commit_noop_accounted_for,
             "owner_boundary_post_staging_accounted_for": owner_boundary_post_staging_accounted_for,
             "stage_commands_subset_accounted_for": stage_commands_subset_accounted_for,
+            "staging_review_eligible_count": staging_review_eligible_count,
             "secondary_pending_count": task_summary.get("secondary_pending_count"),
             "secondary_handoff_next_count": task_summary.get("secondary_handoff_next_count"),
             "secondary_handoff_next_queue": task_summary.get("secondary_handoff_next_queue"),
