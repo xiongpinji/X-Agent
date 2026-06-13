@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import subprocess
 import sys
@@ -19,6 +20,11 @@ import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Sequence
+
+CURRENT_REPO_ROOT = Path(__file__).resolve().parents[1]
+CURRENT_REPO_ROOT_TEXT = str(CURRENT_REPO_ROOT)
+if CURRENT_REPO_ROOT_TEXT not in sys.path:
+    sys.path.insert(0, CURRENT_REPO_ROOT_TEXT)
 
 from scripts.commercial_pilot_core_entrypoints import REPORT_DIR, ROOT, _utc_now
 
@@ -96,6 +102,16 @@ class RefreshChainReceipt:
 
 
 CommandRunner = Callable[[list[str], float], CommandRunResult]
+
+
+def _repo_pythonpath_env() -> dict[str, str]:
+    env = os.environ.copy()
+    root_text = str(ROOT)
+    existing_entries = [
+        entry for entry in env.get("PYTHONPATH", "").split(os.pathsep) if entry and entry != root_text
+    ]
+    env["PYTHONPATH"] = os.pathsep.join([root_text, *existing_entries])
+    return env
 
 
 def _display_path(path: Path) -> str:
@@ -282,6 +298,7 @@ def _run_command(command: list[str], timeout_seconds: float) -> CommandRunResult
         completed = subprocess.run(
             actual_command,
             cwd=ROOT,
+            env=_repo_pythonpath_env(),
             capture_output=True,
             text=True,
             encoding="utf-8",

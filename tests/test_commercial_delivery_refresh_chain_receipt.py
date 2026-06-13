@@ -1,11 +1,16 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
+from types import SimpleNamespace
 
+import scripts.commercial_delivery_refresh_chain_receipt as receipt_module
 from scripts.commercial_delivery_refresh_chain_receipt import (
     CommandRunResult,
+    ROOT,
     _is_expected_post_commit_pre_stage_readiness_gate_state,
+    _run_command,
     build_refresh_chain_receipt,
     render_markdown_receipt,
     write_markdown_receipt,
@@ -425,6 +430,31 @@ def _post_commit_noop_non_mutating_payload(
     }
     payload.update(extra)
     return payload
+
+
+def test_run_command_prepends_repo_root_to_pythonpath(monkeypatch) -> None:
+    captured: dict[str, object] = {}
+    external_path = str(ROOT.parent)
+    monkeypatch.setenv("PYTHONPATH", os.pathsep.join([external_path, str(ROOT)]))
+
+    def fake_run(command: list[str], **kwargs: object) -> SimpleNamespace:
+        captured["command"] = command
+        captured["cwd"] = kwargs["cwd"]
+        captured["env"] = kwargs["env"]
+        return SimpleNamespace(returncode=0, stdout="ok", stderr="")
+
+    monkeypatch.setattr(receipt_module.subprocess, "run", fake_run)
+
+    result = _run_command(["python", "scripts\\commercial_delivery_task_board.py"], 30.0)
+
+    assert result.returncode == 0
+    assert captured["cwd"] == ROOT
+    env = captured["env"]
+    assert isinstance(env, dict)
+    pythonpath_entries = str(env["PYTHONPATH"]).split(os.pathsep)
+    assert pythonpath_entries[0] == str(ROOT)
+    assert pythonpath_entries.count(str(ROOT)) == 1
+    assert external_path in pythonpath_entries
 
 
 def test_refresh_chain_receipt_ready_with_expected_pre_staging_nonzero(tmp_path: Path) -> None:
