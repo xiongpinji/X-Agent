@@ -1,0 +1,64 @@
+name: code_review
+version: "1.0"
+description: Review code files for security, performance, and style issues
+author: x-agent
+
+triggers:
+  - command: review-code
+    event: pull_request
+
+inputs:
+  - name: file_path
+    type: string
+    description: Path to the file to review
+    required: true
+  - name: review_type
+    type: string
+    description: Type of review (security, performance, style, comprehensive)
+    default: comprehensive
+    required: false
+  - name: max_issues
+    type: integer
+    description: Maximum number of issues to report
+    default: 10
+    required: false
+
+steps:
+  - id: read_file
+    tool: file_reader
+    args:
+      path: "{{inputs.file_path}}"
+    output_var: file_content
+
+  - id: analyze_code
+    tool: code_analyzer
+    args:
+      content: "{{steps.read_file.output}}"
+      file_path: "{{inputs.file_path}}"
+      analysis_type: "{{inputs.review_type}}"
+    output_var: analysis_result
+
+  - id: format_review
+    tool: markdown_formatter
+    args:
+      content: "{{steps.analyze_code.output}}"
+      title: "Code Review: {{inputs.file_path}}"
+      format: markdown
+    output_var: formatted_review
+
+  - id: filter_issues
+    tool: filter_processor
+    args:
+      issues: "{{steps.analyze_code.output.issues}}"
+      limit: "{{inputs.max_issues}}"
+    output_var: top_issues
+
+outputs:
+  - name: review_summary
+    value: "{{steps.analyze_code.output.summary}}"
+  - name: review_detail
+    value: "{{steps.format_review.output}}"
+  - name: top_issues
+    value: "{{steps.filter_issues.output}}"
+  - name: total_issues_found
+    value: "{{steps.analyze_code.output.issue_count}}"

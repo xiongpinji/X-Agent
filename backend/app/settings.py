@@ -3,11 +3,14 @@ from __future__ import annotations
 import os
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_LITE_HOME = Path.home() / ".xagent"
+DEFAULT_LITE_DATABASE_URL = f"sqlite+aiosqlite:///{(DEFAULT_LITE_HOME / 'data.db').as_posix()}"
 
 
 class Settings(BaseSettings):
@@ -15,6 +18,7 @@ class Settings(BaseSettings):
 
     app_name: str = "X-Agent"
     app_mode: str = "development"
+    mode: Literal["lite", "standard", "production"] = "lite"
     static_dir: Path = PROJECT_ROOT / "frontend"
     cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
     require_api_key: bool = False
@@ -71,6 +75,29 @@ class Settings(BaseSettings):
     default_cost_budget_usd: float = 1.0
     enable_high_risk_tools: bool = False
     github_webhook_secret: str | None = None
+
+    @model_validator(mode="after")
+    def _apply_lite_mode_defaults(self) -> "Settings":
+        """Apply no-Docker defaults for local lite mode.
+
+        Explicit environment values are still honored in standard/production
+        modes. In lite mode, X-Agent must not try to contact PostgreSQL,
+        Redis, or Qdrant by default.
+        """
+        if self.mode != "lite":
+            if self.mode == "production" and self.app_mode != "production":
+                self.app_mode = "production"
+            return self
+
+        self.app_mode = "development"
+        self.require_api_key = False
+        self.database_url = DEFAULT_LITE_DATABASE_URL
+        self.redis_url = None
+        self.qdrant_url = ""
+        self.memory_backend = "memory"
+        if self.trace_backend == "postgres":
+            self.trace_backend = "jsonl"
+        return self
 
     # Security settings - CRITICAL: Must be set via environment variables in production
     jwt_secret: str = Field(

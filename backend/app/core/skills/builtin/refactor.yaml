@@ -1,0 +1,106 @@
+name: refactor
+version: "1.0"
+description: Suggest and apply refactoring to improve code quality and maintainability
+author: x-agent
+
+triggers:
+  - command: refactor-code
+  - schedule: "0 0 * * 1"  # Weekly on Monday at midnight
+
+inputs:
+  - name: file_path
+    type: string
+    description: Path to the file to refactor
+    required: true
+  - name: refactoring_types
+    type: string
+    description: Comma-separated list of refactoring types (naming, duplication, complexity, performance)
+    default: naming,duplication,complexity
+    required: false
+  - name: auto_apply
+    type: boolean
+    description: Automatically apply suggested refactorings
+    default: false
+    required: false
+  - name: preserve_tests
+    type: boolean
+    description: Ensure existing tests still pass after refactoring
+    default: true
+    required: false
+
+steps:
+  - id: read_source
+    tool: file_reader
+    args:
+      path: "{{inputs.file_path}}"
+    output_var: source_code
+
+  - id: run_metrics
+    tool: code_metrics
+    args:
+      code: "{{steps.read_source.output}}"
+    output_var: metrics
+
+  - id: detect_smells
+    tool: code_smell_detector
+    args:
+      code: "{{steps.read_source.output}}"
+      metrics: "{{steps.run_metrics.output}}"
+      refactoring_types: "{{inputs.refactoring_types}}"
+    output_var: code_smells
+
+  - id: generate_suggestions
+    tool: refactoring_suggester
+    args:
+      code: "{{steps.read_source.output}}"
+      smells: "{{steps.detect_smells.output}}"
+      preserve_tests: "{{inputs.preserve_tests}}"
+    output_var: refactoring_suggestions
+
+  - id: should_apply
+    tool: conditional
+    condition: "{{inputs.auto_apply}}"
+    args:
+      suggestions: "{{steps.generate_suggestions.output}}"
+
+  - id: apply_refactoring
+    tool: code_refactorer
+    condition: "{{inputs.auto_apply}}"
+    args:
+      code: "{{steps.read_source.output}}"
+      suggestions: "{{steps.generate_suggestions.output}}"
+    output_var: refactored_code
+
+  - id: verify_changes
+    tool: code_verifier
+    condition: "{{inputs.auto_apply}}"
+    args:
+      original: "{{steps.read_source.output}}"
+      refactored: "{{steps.apply_refactoring.output}}"
+      preserve_tests: "{{inputs.preserve_tests}}"
+    output_var: verification_result
+
+  - id: format_output
+    tool: markdown_formatter
+    args:
+      title: "Refactoring Report: {{inputs.file_path}}"
+      sections:
+        - name: "Original Metrics"
+          content: "{{steps.run_metrics.output}}"
+        - name: "Detected Code Smells"
+          content: "{{steps.detect_smells.output}}"
+        - name: "Refactoring Suggestions"
+          content: "{{steps.generate_suggestions.output}}"
+    output_var: report
+
+outputs:
+  - name: refactoring_report
+    value: "{{steps.format_output.output}}"
+  - name: suggestions
+    value: "{{steps.generate_suggestions.output}}"
+  - name: original_metrics
+    value: "{{steps.run_metrics.output}}"
+  - name: refactored_code
+    value: "{{steps.apply_refactoring.output}}"
+  - name: verification_result
+    value: "{{steps.verify_changes.output}}"

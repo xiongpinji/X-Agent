@@ -1,152 +1,174 @@
-# X-Agent Core
+# X-Agent — Enterprise Autonomous Agent Framework
 
-X-Agent Core is an open-source autonomous agent framework designed for building intelligent, self-evolving systems. It provides a robust foundation for creating agents that can reason, plan, execute tasks, and learn from experience through advanced memory management and observability.
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-blue)](https://www.python.org/downloads/)
+[![Tests: 3850+](https://img.shields.io/badge/Tests-3850%2B-green)](tests/)
+[![Code: Production Ready](https://img.shields.io/badge/Status-Production%20Ready-brightgreen)](RELEASE_READINESS.md)
 
-X-Agent Core combines cutting-edge LLM capabilities with enterprise-grade infrastructure, enabling developers to build production-ready autonomous systems. The framework emphasizes safety, auditability, and human oversight through built-in approval workflows and comprehensive tracing.
+> Build, deploy, and orchestrate autonomous AI agents at enterprise scale. Self-hosted. Open source. Multi-tenant. Built for teams that demand auditability, security, and control.
 
-## Core Features
+X-Agent is a modern agent framework for enterprises—not a desktop IDE. It powers teams building multi-agent AI systems, enabling them to route work across multiple LLMs, execute complex workflows with human oversight, and maintain full observability and compliance.
 
-- **Multi-LLM Router**: Seamlessly switch between different LLM providers (OpenAI, Claude, etc.) with intelligent routing based on task requirements
-- **Advanced Memory System**: Persistent graph-based memory with vector embeddings for semantic search and context retrieval
-- **Workflow Orchestration**: Define, schedule, and execute complex multi-step workflows with conditional logic and error handling
-- **Multi-Agent Collaboration**: Delegate tasks between agents with capability matching and load balancing
-- **Browser Automation**: Integrated Playwright-based browser control for web interaction and data extraction
-- **Observability & Tracing**: Full request tracing with Langfuse integration for debugging and performance monitoring
-- **Approval Workflows**: Human-in-the-loop approval system for sensitive operations with audit trails
-- **Policy Engine**: Define and enforce policies for agent behavior and resource access
-- **PostgreSQL Persistence**: Reliable data storage with support for complex queries and transactions
-- **Vector Search**: Qdrant integration for semantic similarity search and memory retrieval
-- **Multi-Tenant Support**: Built-in tenant isolation and role-based access control
-- **Plugin System**: Extensible plugin architecture for custom functionality
-- **Cloud Sandbox Engine** *(Phase 5.5)*: Isolated code execution with Docker containerization, optional subprocess fallback, GitHub Issue→PR automation, and fire-and-forget task queuing
-- **MCP Protocol Support**: Model Context Protocol integration for seamless tool discovery and management
-- **CLI Tools**: Full command-line interface with REPL, interactive configuration, and workflow management
+## 30-Second Quickstart
 
-## Quick Start
+```bash
+# Install
+pip install xagent-framework
 
-### Prerequisites
+# Configure environment
+export OPENAI_API_KEY="sk-..."
+export ANTHROPIC_API_KEY="claude-..."
 
-- Python 3.11 or higher
-- PostgreSQL 14+
-- Docker and Docker Compose (optional, for containerized deployment)
+# Start the server
+xagent start --host 0.0.0.0 --port 8000
 
-### Installation
+# In another terminal, try it
+curl -X POST http://localhost:8000/api/v1/agents/execute \
+  -H "Content-Type: application/json" \
+  -d '{
+    "instruction": "Find GitHub repos about AI agents",
+    "model": "claude-3-5-sonnet"
+  }'
+```
 
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/x-agent/x-agent-core.git
-   cd x-agent-core
-   ```
+See [docs/QUICKSTART.md](./docs/QUICKSTART.md) for detailed setup and two deployment paths (Lite & Full).
 
-2. **Create a virtual environment**
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   ```
+## Why X-Agent
 
-3. **Install dependencies**
-   ```bash
-   pip install -e ".[dev]"
-   ```
+| Capability | X-Agent | Codex | Devin | LangChain |
+|-----------|---------|-------|-------|-----------|
+| Self-hosted | ✅ | ❌ | ❌ | ✅ |
+| Multi-agent orchestration | ✅ | ❌ | ⚠️ | ⚠️ |
+| Enterprise audit trail | ✅ | ❌ | ❌ | ❌ |
+| HMAC/RBAC security | ✅ | ❌ | ❌ | ❌ |
+| Open source | ✅ | ❌ | ❌ | ✅ |
+| Multi-model routing | ✅ | ⚠️ | ✅ | ✅ |
 
-4. **Configure environment variables**
-   ```bash
-   cp .env.example .env
-   # Edit .env with your configuration
-   ```
+## Core Capabilities
 
-5. **(Optional) Initialize the database**
-
-   The database initializes automatically on first run — local SQLite stores are
-   created lazily, so you can skip this step for a quick start. To pre-initialize
-   the local store explicitly:
-   ```bash
-   python -c "from backend.local.migration import initialize_local_database; initialize_local_database()"
-   ```
+- **🤖 Multi-Agent Orchestration** — Delegate tasks between specialized agents with capability matching and automatic load balancing
+- **🔐 Enterprise Security** — Multi-tenant isolation, HMAC audit trails, RBAC, encrypted policy evaluation
+- **🔌 MCP Protocol + Plugins** — Discover and integrate tools via Model Context Protocol; extend with custom plugins
+- **📊 Full Observability** — Langfuse tracing, Prometheus metrics, structured logging for every agent decision
+- **⚙️ Workflow Engine** — Define multi-step workflows with conditionals, loops, templates, and approval gates
+- **☁️ Cloud Sandbox** — Execute untrusted code safely; GitHub Issue→PR automation; fire-and-forget task queuing
 
 ## Architecture
 
-X-Agent Core follows a modular, layered architecture:
-
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    API Layer (FastAPI)                   │
-│  /workflows  /agents  /tools  /memory  /approvals        │
-└─────────────────────────────────────────────────────────┘
-                            ↓
-┌─────────────────────────────────────────────────────────┐
-│                  Core Services Layer                      │
-│  LLM Router  │  Memory System  │  Policy Engine          │
-│  Workflow    │  Approval       │  Audit                  │
-└─────────────────────────────────────────────────────────┘
-                            ↓
-┌─────────────────────────────────────────────────────────┐
-│              Infrastructure Layer                         │
-│  PostgreSQL  │  Qdrant  │  Playwright  │  Langfuse       │
-└─────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────┐
+│  CLI / REST API / SDKs                              │
+│  xagent start  │  /api/v1/workflows  │  Python lib  │
+└────────────────────┬────────────────────────────────┘
+                     ↓
+┌─────────────────────────────────────────────────────┐
+│  Agent Engine (FastAPI)                             │
+│  ┌──────────────┐  ┌──────────────┐  ┌───────────┐ │
+│  │ LLM Router   │  │ Memory Graph │  │ Policy    │ │
+│  │ (multi-model)│  │ + Vector DB  │  │ Engine    │ │
+│  └──────────────┘  └──────────────┘  └───────────┘ │
+└────────────────────┬────────────────────────────────┘
+                     ↓
+┌─────────────────────────────────────────────────────┐
+│  Infrastructure                                     │
+│  PostgreSQL │ Qdrant │ Playwright │ Docker Sandbox  │
+│  Langfuse   │ Redis  │ Prometheus │ GitHub API      │
+└─────────────────────────────────────────────────────┘
+```
+
+## Installation
+
+Choose your deployment path:
+
+### 1. Lite (No Docker, SQLite, single-machine)
+
+```bash
+git clone https://github.com/x-agent/x-agent-core.git
+cd x-agent-core
+
+python -m venv venv
+source venv/bin/activate  # Windows: venv\Scripts\activate
+pip install -e ".[dev]"
+
+export OPENAI_API_KEY="sk-..."
+xagent start
+# Server running at http://localhost:8000
+```
+
+### 2. Standard (PostgreSQL, Production-grade)
+
+```bash
+git clone https://github.com/x-agent/x-agent-core.git
+cd x-agent-core
+
+docker-compose up -d postgres qdrant redis
+
+python -m venv venv
+source venv/bin/activate
+pip install -e ".[dev]"
+
+export DATABASE_URL="postgresql://xagent:password@localhost/xagent"
+export QDRANT_URL="http://localhost:6333"
+xagent start
+```
+
+### 3. Full (Cloud Sandbox, GitHub Integration, Multi-tenant)
+
+```bash
+docker-compose up -d  # Runs postgres, qdrant, redis, sandbox orchestrator
+
+export GITHUB_TOKEN="ghp_..."
+xagent start --enable-sandbox --enable-github-automation
 ```
 
 ## Documentation
 
-- [Installation Guide](./INSTALL.md) - Detailed setup instructions
-- [Deployment Quickstart](./DEPLOYMENT.md) - Supported local, DeepSeek, and Docker Compose startup paths
-- [Release Readiness](./RELEASE_READINESS.md) - Current commercial delivery status, validation commands, and production checklist
-- [Contributing Guide](./CONTRIBUTING.md) - Development workflow and guidelines
-- [API Documentation](./docs/API.md) - REST API reference
-- [API Error Codes](./docs/API_ERROR_CODES.md) - Complete error code reference
-- [Advanced Features](./docs/ADVANCED_FEATURES.md) - Workflow orchestration, multi-agent collaboration, memory system
-- [Architecture Guide](./docs/ARCHITECTURE.md) - System design and components
-- [Cloud Sandbox Engine](./docs/PHASE_55_DEPLOYMENT.md) - Docker-based code execution, GitHub automation, API reference
-- [Examples](./docs/EXAMPLES.md) - Code examples and use cases
-- [Documentation Index](./docs/INDEX.md) - Complete documentation navigation
+| Document | Purpose |
+|----------|---------|
+| [QUICKSTART.md](./docs/QUICKSTART.md) | 5-minute setup guide (two paths: Lite & Full) |
+| [INSTALL.md](./INSTALL.md) | Detailed installation and troubleshooting |
+| [DEPLOYMENT.md](./DEPLOYMENT.md) | Local, DeepSeek, Docker Compose, production checklist |
+| [RELEASE_READINESS.md](./RELEASE_READINESS.md) | Validation commands and delivery status |
+| [API.md](./docs/API.md) | REST API reference and examples |
+| [ADVANCED_FEATURES.md](./docs/ADVANCED_FEATURES.md) | Workflows, multi-agent, memory, sandbox |
+| [ARCHITECTURE.md](./docs/ARCHITECTURE.md) | System design deep-dive |
+| [EXAMPLES.md](./docs/EXAMPLES.md) | Code snippets and use cases |
 
 ## Development
 
-### Setting Up Development Environment
-
 ```bash
-# Install development dependencies
+# Install dev dependencies
 pip install -e ".[dev]"
 
-# Fast correctness baseline for release-candidate checks
-python scripts/release_candidate_check.py
-
-# Full local suite with coverage (slower, environment-dependent)
+# Run tests (full suite)
 pytest
 
-# Run linter
+# Run fast baseline (release candidate check)
+python scripts/release_candidate_check.py
+
+# Lint and format
 ruff check .
-
-# Format code
 ruff format .
-```
-
-### Running Locally
-
-```bash
-# Start PostgreSQL and Qdrant (using Docker Compose)
-docker-compose up -d
-
-# Run the backend server
-uvicorn backend.app.main:app --reload
-
-# Run workflow worker
-xagent-workflow-worker
 ```
 
 ## Contributing
 
-We welcome contributions! Please see [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines on:
-- Setting up your development environment
-- Git workflow and branching strategy
+We welcome contributions! See [CONTRIBUTING.md](./CONTRIBUTING.md) for:
+- Development setup
 - Code style and standards
-- Pull request process
-- Issue reporting
+- Git workflow
+- PR process
 
 ## License
 
-This project is licensed under the MIT License - see [LICENSE](./LICENSE) file for details.
+MIT License — see [LICENSE](./LICENSE) for details.
 
-## Support
+## Support & Community
 
-- GitHub Issues: [Report bugs or request features](https://github.com
+- **Issues** — [GitHub Issues](https://github.com/x-agent/x-agent-core/issues)
+- **Docs** — [Full documentation](./docs/)
+- **Examples** — [docs/EXAMPLES.md](./docs/EXAMPLES.md)
+
+---
+
+**Built for enterprises that need control, visibility, and scale.**

@@ -7,7 +7,7 @@ services:
     container_name: xagent-postgres
     environment:
       POSTGRES_USER: ${DB_USER:-xagent}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-xagent_secure_password}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
       POSTGRES_DB: ${DB_NAME:-xagent_db}
       POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=en_US.UTF-8"
     ports:
@@ -33,7 +33,7 @@ services:
   redis:
     image: redis:7-alpine
     container_name: xagent-redis
-    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-redis_secure_password}
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
     ports:
       - "${REDIS_PORT:-6379}:6379"
     volumes:
@@ -57,7 +57,7 @@ services:
     image: qdrant/qdrant:latest
     container_name: xagent-qdrant
     environment:
-      QDRANT_API_KEY: ${QDRANT_API_KEY:-qdrant_secure_key}
+      QDRANT_API_KEY: ${QDRANT_API_KEY:?Set QDRANT_API_KEY in .env}
     ports:
       - "${QDRANT_PORT:-6333}:6333"
       - "6334:6334"
@@ -82,7 +82,7 @@ services:
     image: neo4j:5-community
     container_name: xagent-neo4j
     environment:
-      NEO4J_AUTH: ${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD:-neo4j_secure_password}
+      NEO4J_AUTH: ${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD:?Set NEO4J_PASSWORD in .env}
       NEO4J_server_memory_heap_initial__size: 512m
       NEO4J_server_memory_heap_max__size: 1g
     ports:
@@ -114,10 +114,10 @@ services:
     environment:
       # Core settings read by backend.app.settings.Settings (env_prefix = XAGENT_)
       XAGENT_APP_MODE: ${XAGENT_APP_MODE:-development}
-      XAGENT_DATABASE_URL: postgresql+asyncpg://${DB_USER:-xagent}:${DB_PASSWORD:-xagent_secure_password}@postgres:5432/${DB_NAME:-xagent_db}
-      XAGENT_REDIS_URL: redis://:${REDIS_PASSWORD:-redis_secure_password}@redis:6379/0
+      XAGENT_DATABASE_URL: postgresql+asyncpg://${DB_USER:-xagent}:${DB_PASSWORD:?Set DB_PASSWORD in .env}@postgres:5432/${DB_NAME:-xagent_db}
+      XAGENT_REDIS_URL: redis://:${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}@redis:6379/0
       XAGENT_QDRANT_URL: http://qdrant:6333
-      XAGENT_QDRANT_API_KEY: ${QDRANT_API_KEY:-qdrant_secure_key}
+      XAGENT_QDRANT_API_KEY: ${QDRANT_API_KEY:?Set QDRANT_API_KEY in .env}
       XAGENT_MEMORY_BACKEND: ${XAGENT_MEMORY_BACKEND:-postgres}
       XAGENT_TRACE_BACKEND: ${XAGENT_TRACE_BACKEND:-jsonl}
       XAGENT_LLM_BACKEND: ${XAGENT_LLM_BACKEND:-mock}
@@ -133,7 +133,7 @@ services:
       XAGENT_AUDIT_HMAC_SECRET: ${XAGENT_AUDIT_HMAC_SECRET:-}
       XAGENT_JWT_SECRET: ${XAGENT_JWT_SECRET:-}
       XAGENT_ENCRYPTION_KEY: ${XAGENT_ENCRYPTION_KEY:-}
-      XAGENT_REQUIRE_API_KEY: ${XAGENT_REQUIRE_API_KEY:-false}
+      XAGENT_REQUIRE_API_KEY: ${XAGENT_REQUIRE_API_KEY:-true}
       XAGENT_BOOTSTRAP_API_KEY: ${XAGENT_BOOTSTRAP_API_KEY:-}
       XAGENT_CORS_ORIGINS: ${XAGENT_CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
       XAGENT_ENABLE_HIGH_RISK_TOOLS: ${XAGENT_ENABLE_HIGH_RISK_TOOLS:-false}
@@ -147,8 +147,8 @@ services:
       XAGENT_TELEGRAM_WEBHOOK_SECRET: ${XAGENT_TELEGRAM_WEBHOOK_SECRET:-}
       XAGENT_TELEGRAM_BASE_URL: ${XAGENT_TELEGRAM_BASE_URL:-}
       # Celery still reads its conventional variables directly.
-      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:-redis_secure_password}@redis:6379/1
-      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:-redis_secure_password}@redis:6379/2
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}@redis:6379/1
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}@redis:6379/2
       API_HOST: 0.0.0.0
       API_PORT: 8000
       API_WORKERS: ${API_WORKERS:-4}
@@ -189,10 +189,10 @@ services:
     command: celery -A backend.app.workflow_worker worker --loglevel=info --concurrency=4
     environment:
       XAGENT_APP_MODE: ${XAGENT_APP_MODE:-development}
-      XAGENT_DATABASE_URL: postgresql+asyncpg://${DB_USER:-xagent}:${DB_PASSWORD:-xagent_secure_password}@postgres:5432/${DB_NAME:-xagent_db}
-      XAGENT_REDIS_URL: redis://:${REDIS_PASSWORD:-redis_secure_password}@redis:6379/0
+      XAGENT_DATABASE_URL: postgresql+asyncpg://${DB_USER:-xagent}:${DB_PASSWORD:?Set DB_PASSWORD in .env}@postgres:5432/${DB_NAME:-xagent_db}
+      XAGENT_REDIS_URL: redis://:${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}@redis:6379/0
       XAGENT_QDRANT_URL: http://qdrant:6333
-      XAGENT_QDRANT_API_KEY: ${QDRANT_API_KEY:-qdrant_secure_key}
+      XAGENT_QDRANT_API_KEY: ${QDRANT_API_KEY:?Set QDRANT_API_KEY in .env}
       XAGENT_MEMORY_BACKEND: ${XAGENT_MEMORY_BACKEND:-postgres}
       XAGENT_TRACE_BACKEND: ${XAGENT_TRACE_BACKEND:-jsonl}
       XAGENT_LLM_BACKEND: ${XAGENT_LLM_BACKEND:-mock}
@@ -208,12 +208,12 @@ services:
       XAGENT_AUDIT_HMAC_SECRET: ${XAGENT_AUDIT_HMAC_SECRET:-}
       XAGENT_JWT_SECRET: ${XAGENT_JWT_SECRET:-}
       XAGENT_ENCRYPTION_KEY: ${XAGENT_ENCRYPTION_KEY:-}
-      XAGENT_REQUIRE_API_KEY: ${XAGENT_REQUIRE_API_KEY:-false}
+      XAGENT_REQUIRE_API_KEY: ${XAGENT_REQUIRE_API_KEY:-true}
       XAGENT_ENABLE_HIGH_RISK_TOOLS: ${XAGENT_ENABLE_HIGH_RISK_TOOLS:-false}
       XAGENT_PLAYWRIGHT_HEADLESS: ${XAGENT_PLAYWRIGHT_HEADLESS:-true}
       XAGENT_GITHUB_TOKEN: ${XAGENT_GITHUB_TOKEN:-}
-      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:-redis_secure_password}@redis:6379/1
-      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:-redis_secure_password}@redis:6379/2
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}@redis:6379/1
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}@redis:6379/2
     depends_on:
       - postgres
       - redis
@@ -240,15 +240,15 @@ services:
     command: celery -A backend.app.workflow_worker beat --loglevel=info
     environment:
       XAGENT_APP_MODE: ${XAGENT_APP_MODE:-development}
-      XAGENT_DATABASE_URL: postgresql+asyncpg://${DB_USER:-xagent}:${DB_PASSWORD:-xagent_secure_password}@postgres:5432/${DB_NAME:-xagent_db}
-      XAGENT_REDIS_URL: redis://:${REDIS_PASSWORD:-redis_secure_password}@redis:6379/0
+      XAGENT_DATABASE_URL: postgresql+asyncpg://${DB_USER:-xagent}:${DB_PASSWORD:?Set DB_PASSWORD in .env}@postgres:5432/${DB_NAME:-xagent_db}
+      XAGENT_REDIS_URL: redis://:${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}@redis:6379/0
       XAGENT_MEMORY_BACKEND: ${XAGENT_MEMORY_BACKEND:-postgres}
       XAGENT_TRACE_BACKEND: ${XAGENT_TRACE_BACKEND:-jsonl}
       XAGENT_AUDIT_HMAC_SECRET: ${XAGENT_AUDIT_HMAC_SECRET:-}
       XAGENT_JWT_SECRET: ${XAGENT_JWT_SECRET:-}
       XAGENT_ENCRYPTION_KEY: ${XAGENT_ENCRYPTION_KEY:-}
-      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:-redis_secure_password}@redis:6379/1
-      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:-redis_secure_password}@redis:6379/2
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}@redis:6379/1
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}@redis:6379/2
     depends_on:
       - postgres
       - redis
