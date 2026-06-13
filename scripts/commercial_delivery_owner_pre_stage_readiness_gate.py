@@ -172,11 +172,14 @@ def _refresh_step_accounted_for(refresh_receipt: dict[str, Any], step_name: str)
 
 REFRESH_RECEIPT_SELF_BOOTSTRAP_STEPS = {
     "owner_pre_stage_readiness_gate",
+    "owner_staging_runbook",
     "owner_delivery_packet_before_owner_approval",
     "owner_delivery_packet",
+    "owner_approval_payload_audit",
     "owner_stage_approval_brief",
     "closure_snapshot",
     "owner_approval_handoff",
+    "pre_approval_drift_guard",
 }
 
 

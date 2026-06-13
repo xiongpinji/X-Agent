@@ -279,6 +279,80 @@ def test_pre_approval_drift_guard_accounts_for_post_approval_completion(tmp_path
     ).status == "passed"
 
 
+def test_pre_approval_drift_guard_accounts_for_post_approval_stage_ready_with_task_board_lag(tmp_path: Path) -> None:
+    paths = _write_inputs(tmp_path)
+    current_stage_digest = "current-path-digest"
+    current_command_digest = "current-command-digest"
+    current_set_digest = "current-path-set-digest"
+    paths["owner_approval_path"].write_text("{}", encoding="utf-8")
+    for key in (
+        "owner_stage_approval_request_path",
+        "owner_approval_handoff_path",
+        "closure_snapshot_path",
+    ):
+        payload = json.loads(paths[key].read_text(encoding="utf-8"))
+        payload["summary"].update(
+            {
+                "stage_path_digest": current_stage_digest,
+                "stage_command_digest": current_command_digest,
+                "expected_stage_path_set_digest": current_set_digest,
+            }
+        )
+        paths[key].write_text(json.dumps(payload), encoding="utf-8")
+    for key, status in (
+        ("owner_stage_approval_gate_path", "owner_stage_approval_ready"),
+        ("owner_stage_execution_plan_path", "owner_stage_execution_ready"),
+    ):
+        payload = json.loads(paths[key].read_text(encoding="utf-8"))
+        payload["status"] = status
+        payload["stage_allowed"] = True
+        payload["summary"].update(
+            {
+                "stage_path_digest": current_stage_digest,
+                "stage_command_digest": current_command_digest,
+            }
+        )
+        paths[key].write_text(json.dumps(payload), encoding="utf-8")
+    audit = json.loads(paths["owner_approval_payload_audit_path"].read_text(encoding="utf-8"))
+    audit.update(
+        {
+            "status": "owner_approval_payload_ready",
+            "approval_payload_present": True,
+            "approval_payload_valid": True,
+            "ready_for_approval_gate": True,
+        }
+    )
+    paths["owner_approval_payload_audit_path"].write_text(json.dumps(audit), encoding="utf-8")
+    checklist = json.loads(paths["owner_post_approval_operator_checklist_path"].read_text(encoding="utf-8"))
+    checklist["status"] = "owner_post_approval_operator_checklist_ready"
+    checklist["waiting_for_owner"] = False
+    checklist["operator_ready"] = True
+    checklist["real_owner_approval_present"] = True
+    paths["owner_post_approval_operator_checklist_path"].write_text(json.dumps(checklist), encoding="utf-8")
+    closure = json.loads(paths["closure_snapshot_path"].read_text(encoding="utf-8"))
+    closure["approval_ready"] = True
+    closure["blockers"] = [
+        "post_staging_verifier_not_ready",
+        "owner_commit_packet_not_ready",
+        "cached_staged_path_set_digest_not_ready",
+    ]
+    paths["closure_snapshot_path"].write_text(json.dumps(closure), encoding="utf-8")
+
+    guard = build_pre_approval_drift_guard(**paths)
+
+    assert guard.status == "pre_approval_drift_guard_ready"
+    assert guard.real_owner_approval_present is True
+    assert guard.summary["post_approval_accounted_for"] is False
+    assert guard.summary["post_approval_stage_execution_ready"] is True
+    digest_check = next(check for check in guard.checks if check.name == "stage_path_digest_stable")
+    assert digest_check.status == "passed"
+    assert digest_check.details["excluded_sources"] == ["task_board"]
+    assert next(
+        check for check in guard.checks if check.name == "approval_payload_blocked_before_owner"
+    ).status == "passed"
+    assert next(check for check in guard.checks if check.name == "closure_blocked_before_owner").status == "passed"
+
+
 def test_pre_approval_drift_guard_blocks_on_stage_digest_drift(tmp_path: Path) -> None:
     paths = _write_inputs(tmp_path)
     payload = json.loads(paths["task_board_path"].read_text(encoding="utf-8"))

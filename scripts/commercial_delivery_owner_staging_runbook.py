@@ -151,15 +151,65 @@ def build_owner_staging_runbook(
     post_stage_commands = _list(owner_packet.get("post_stage_verification_commands"))
     verification_commands = _list(owner_packet.get("verification_commands"))
     full_codex_parity_claimed = _claims_parity(list(reports.values()))
+    owner_summary = _summary(owner_packet)
+    pre_gate_summary = _summary(pre_stage_gate)
     stage_count = owner_packet.get("stage_include_count")
-    pre_gate_stage_count = _summary(pre_stage_gate).get("stage_include_count")
+    owner_eligible_stage_count = owner_packet.get("eligible_stage_count")
+    pre_gate_stage_count = pre_gate_summary.get("stage_include_count")
     stage_command_count = len(stage_commands)
+    pre_gate_stage_command_count = pre_gate_summary.get("stage_command_count")
+    owner_unchanged_stage_count = owner_packet.get("unchanged_stage_count", owner_summary.get("unchanged_stage_count"))
+    post_commit_noop_accounted_for = (
+        stage_command_count == 0
+        and owner_summary.get("post_commit_noop_accounted_for") is True
+        and pre_gate_summary.get("post_commit_noop_accounted_for") is True
+        and pre_gate_summary.get("post_commit_noop_stage_counts_agree") is True
+        and stage_count == pre_gate_stage_count
+        and pre_gate_stage_command_count == 0
+        and owner_packet.get("eligible_stage_count") == 0
+        and owner_packet.get("blocked_stage_count") == 0
+        and owner_unchanged_stage_count == stage_count
+    )
+    active_stage_count_matches_gate = (
+        stage_count == pre_gate_stage_count
+        and (
+            stage_command_count == stage_count
+            or (
+                owner_eligible_stage_count is not None
+                and stage_command_count == owner_eligible_stage_count
+                and stage_command_count == pre_gate_stage_command_count
+                and isinstance(stage_count, int)
+                and stage_command_count <= stage_count
+            )
+        )
+    )
+    stage_command_count_matches_gate = (
+        active_stage_count_matches_gate
+        or post_commit_noop_accounted_for
+    )
     commands_are_split = (
         bool(pre_stage_commands)
         and bool(post_stage_commands)
         and verification_commands == post_stage_commands
         and "python scripts\\commercial_delivery_owner_staging_preflight.py" not in post_stage_commands
     )
+    stage_commands_are_explicit = (
+        post_commit_noop_accounted_for
+        or (
+            bool(stage_commands)
+            and all(command.startswith("git add -- '") and command.endswith("'") for command in stage_commands)
+            and not _has_broad_stage_command(stage_commands)
+        )
+    )
+    owner_stage_notes = [
+        "Run only these exact commands after explicit owner approval.",
+        "Do not use git add ., git add -A, or git add --all.",
+    ]
+    if post_commit_noop_accounted_for:
+        owner_stage_notes = [
+            "No stage commands are required because this post-commit/noop state is already accounted for.",
+            "Do not run broad staging commands or stage additional paths.",
+        ]
 
     checks = [
         _check(
@@ -191,11 +241,16 @@ def build_owner_staging_runbook(
         ),
         _check(
             "stage_command_count_matches_gate",
-            stage_command_count == stage_count == pre_gate_stage_count,
+            stage_command_count_matches_gate,
             details={
                 "stage_command_count": stage_command_count,
                 "owner_packet_stage_include_count": stage_count,
+                "owner_packet_eligible_stage_count": owner_eligible_stage_count,
                 "pre_stage_gate_stage_include_count": pre_gate_stage_count,
+                "pre_stage_gate_stage_command_count": pre_gate_stage_command_count,
+                "owner_packet_unchanged_stage_count": owner_unchanged_stage_count,
+                "active_stage_count_matches_gate": active_stage_count_matches_gate,
+                "post_commit_noop_accounted_for": post_commit_noop_accounted_for,
             },
             error="stage command count does not match owner packet and pre-stage gate counts",
         ),
@@ -212,10 +267,11 @@ def build_owner_staging_runbook(
         ),
         _check(
             "stage_commands_are_explicit_path_adds",
-            bool(stage_commands)
-            and all(command.startswith("git add -- '") and command.endswith("'") for command in stage_commands)
-            and not _has_broad_stage_command(stage_commands),
-            details={"stage_command_count": stage_command_count},
+            stage_commands_are_explicit,
+            details={
+                "stage_command_count": stage_command_count,
+                "post_commit_noop_accounted_for": post_commit_noop_accounted_for,
+            },
             error="stage commands must be explicit git add -- '<path>' commands",
         ),
         _check(
@@ -263,10 +319,7 @@ def build_owner_staging_runbook(
             name="owner_stage_commands",
             title="Owner-approved stage commands",
             commands=stage_commands,
-            notes=[
-                "Run only these exact commands after explicit owner approval.",
-                "Do not use git add ., git add -A, or git add --all.",
-            ],
+            notes=owner_stage_notes,
         ),
         OwnerStagingRunbookSection(
             name="post_stage_verification",
@@ -303,6 +356,10 @@ def build_owner_staging_runbook(
             "pre_stage_verification_command_count": len(pre_stage_commands),
             "post_stage_verification_command_count": len(post_stage_commands),
             "verification_alias_matches_post": verification_commands == post_stage_commands,
+            "post_commit_noop_accounted_for": post_commit_noop_accounted_for,
+            "owner_packet_eligible_stage_count": owner_eligible_stage_count,
+            "owner_packet_unchanged_stage_count": owner_unchanged_stage_count,
+            "pre_stage_gate_stage_command_count": pre_gate_stage_command_count,
             "pre_stage_gate_status": _status(pre_stage_gate),
             "task_board_status": _status(task_board),
             "secondary_pending_count": task_summary.get("secondary_pending_count"),

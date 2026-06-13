@@ -111,6 +111,74 @@ def test_owner_staging_runbook_ready(tmp_path: Path) -> None:
     assert {check.status for check in runbook.checks} == {"passed"}
 
 
+def test_owner_staging_runbook_accepts_post_commit_noop_accounting(tmp_path: Path) -> None:
+    paths = _write_reports(tmp_path)
+    owner_packet = json.loads(paths["owner_packet_path"].read_text(encoding="utf-8"))
+    owner_packet.update(
+        {
+            "stage_include_count": 100,
+            "eligible_stage_count": 0,
+            "blocked_stage_count": 0,
+            "unchanged_stage_count": 100,
+            "stage_commands": [],
+            "summary": {
+                "post_commit_noop_accounted_for": True,
+                "unchanged_stage_count": 100,
+            },
+        }
+    )
+    paths["owner_packet_path"].write_text(json.dumps(owner_packet), encoding="utf-8")
+    pre_stage_gate = json.loads(paths["pre_stage_gate_path"].read_text(encoding="utf-8"))
+    pre_stage_gate["summary"] = {
+        "stage_include_count": 100,
+        "stage_command_count": 0,
+        "post_commit_noop_accounted_for": True,
+        "post_commit_noop_stage_counts_agree": True,
+    }
+    paths["pre_stage_gate_path"].write_text(json.dumps(pre_stage_gate), encoding="utf-8")
+
+    runbook = build_owner_staging_runbook(**paths)
+
+    assert runbook.status == "owner_staging_runbook_ready"
+    assert runbook.summary["stage_command_count"] == 0
+    assert runbook.summary["post_commit_noop_accounted_for"] is True
+    assert {check.status for check in runbook.checks} == {"passed"}
+    stage_check = next(check for check in runbook.checks if check.name == "stage_commands_are_explicit_path_adds")
+    assert stage_check.details["post_commit_noop_accounted_for"] is True
+    stage_section = next(section for section in runbook.sections if section.name == "owner_stage_commands")
+    assert stage_section.commands == []
+    assert "post-commit/noop" in stage_section.notes[0]
+
+
+def test_owner_staging_runbook_accepts_active_subset_stage_count(tmp_path: Path) -> None:
+    paths = _write_reports(tmp_path)
+    owner_packet = json.loads(paths["owner_packet_path"].read_text(encoding="utf-8"))
+    owner_packet.update(
+        {
+            "stage_include_count": 100,
+            "eligible_stage_count": 2,
+            "blocked_stage_count": 0,
+            "unchanged_stage_count": 98,
+        }
+    )
+    paths["owner_packet_path"].write_text(json.dumps(owner_packet), encoding="utf-8")
+    pre_stage_gate = json.loads(paths["pre_stage_gate_path"].read_text(encoding="utf-8"))
+    pre_stage_gate["summary"] = {
+        "stage_include_count": 100,
+        "stage_command_count": 2,
+    }
+    paths["pre_stage_gate_path"].write_text(json.dumps(pre_stage_gate), encoding="utf-8")
+
+    runbook = build_owner_staging_runbook(**paths)
+
+    assert runbook.status == "owner_staging_runbook_ready"
+    stage_count_check = next(check for check in runbook.checks if check.name == "stage_command_count_matches_gate")
+    assert stage_count_check.details["owner_packet_stage_include_count"] == 100
+    assert stage_count_check.details["owner_packet_eligible_stage_count"] == 2
+    assert stage_count_check.details["pre_stage_gate_stage_command_count"] == 2
+    assert stage_count_check.details["active_stage_count_matches_gate"] is True
+
+
 def test_owner_staging_runbook_blocks_missing_gate(tmp_path: Path) -> None:
     paths = _write_reports(tmp_path)
     paths["pre_stage_gate_path"].unlink()

@@ -157,6 +157,17 @@ def _expected_pre_approval_blockers(snapshot: dict[str, Any]) -> bool:
     return expected.issubset(blocker_set)
 
 
+def _expected_post_approval_stage_blockers(snapshot: dict[str, Any]) -> bool:
+    required = {
+        "post_staging_verifier_not_ready",
+        "owner_commit_packet_not_ready",
+    }
+    allowed = required | {"cached_staged_path_set_digest_not_ready"}
+    blockers = snapshot.get("blockers")
+    blocker_set = {str(item) for item in blockers} if isinstance(blockers, list) else set()
+    return required.issubset(blocker_set) and blocker_set.issubset(allowed)
+
+
 def _payload_count_values(payloads: list[dict[str, Any]]) -> list[int | None]:
     values: list[int | None] = []
     for payload in payloads:
@@ -347,6 +358,11 @@ def build_owner_approval_handoff(
         and closure_snapshot.get("delivery_complete") is False
         and _expected_pre_approval_blockers(closure_snapshot)
     )
+    post_approval_stage_closure_expected = (
+        _status(closure_snapshot) == "commercial_delivery_closure_blocked"
+        and closure_snapshot.get("delivery_complete") is False
+        and _expected_post_approval_stage_blockers(closure_snapshot)
+    )
     delivery_complete = closure_snapshot.get("delivery_complete") is True
     post_approval_operator_checklist_accounted_for = (
         operator_checklist_status in {
@@ -372,6 +388,20 @@ def build_owner_approval_handoff(
         and _status(stage_execution_plan) == "owner_stage_execution_ready"
         and stage_execution_plan.get("stage_allowed") is True
         and delivery_complete
+        and post_approval_operator_checklist_accounted_for
+    )
+    post_approval_stage_execution_ready = (
+        real_owner_approval_written
+        and delivery_summary.get("post_commit_noop_accounted_for") is not True
+        and _status(approval_payload_audit) == "owner_approval_payload_ready"
+        and approval_payload_audit.get("approval_payload_present") is True
+        and approval_payload_audit.get("approval_payload_valid") is True
+        and approval_payload_audit.get("ready_for_approval_gate") is True
+        and _status(approval_gate) == "owner_stage_approval_ready"
+        and stage_allowed
+        and _status(stage_execution_plan) == "owner_stage_execution_ready"
+        and stage_execution_plan.get("stage_allowed") is True
+        and post_approval_stage_closure_expected
         and post_approval_operator_checklist_accounted_for
     )
     approval_payload_audit_pre_approval_blocked = (
@@ -502,12 +532,15 @@ def build_owner_approval_handoff(
         ),
         _check(
             "approval_payload_audit_pre_approval_blocked",
-            approval_payload_audit_pre_approval_blocked or post_approval_noop_accounted_for,
+            approval_payload_audit_pre_approval_blocked
+            or post_approval_noop_accounted_for
+            or post_approval_stage_execution_ready,
             details={
                 "owner_approval_payload_audit_status": _status(approval_payload_audit),
                 "approval_payload_present": approval_payload_audit.get("approval_payload_present"),
                 "approval_payload_valid": approval_payload_audit.get("approval_payload_valid"),
                 "ready_for_approval_gate": approval_payload_audit.get("ready_for_approval_gate"),
+                "post_approval_stage_execution_ready": post_approval_stage_execution_ready,
             },
             error="owner approval payload audit must show a pre-approval blocked state before handoff",
         ),
@@ -555,17 +588,23 @@ def build_owner_approval_handoff(
         ),
         _check(
             "real_owner_approval_not_written_by_handoff",
-            not real_owner_approval_written or post_approval_noop_accounted_for,
-            details={"owner_approval_path": _display_path(owner_approval_path)},
+            not real_owner_approval_written
+            or post_approval_noop_accounted_for
+            or post_approval_stage_execution_ready,
+            details={
+                "owner_approval_path": _display_path(owner_approval_path),
+                "post_approval_stage_execution_ready": post_approval_stage_execution_ready,
+            },
             error="real owner approval payload already exists; run approval gate instead of handoff",
         ),
         _check(
             "pre_approval_blockers_accounted_for",
-            closure_expected or delivery_complete,
+            closure_expected or delivery_complete or post_approval_stage_execution_ready,
             details={
                 "closure_snapshot_status": _status(closure_snapshot),
                 "delivery_complete": closure_snapshot.get("delivery_complete"),
                 "blockers": closure_snapshot.get("blockers"),
+                "post_approval_stage_execution_ready": post_approval_stage_execution_ready,
             },
             error="closure snapshot does not show the expected pre-approval blockers",
         ),
@@ -576,11 +615,13 @@ def build_owner_approval_handoff(
                 and _status(approval_gate) == "owner_stage_approval_blocked"
                 and _status(stage_execution_plan) == "owner_stage_execution_blocked"
             )
-            or post_approval_noop_accounted_for,
+            or post_approval_noop_accounted_for
+            or post_approval_stage_execution_ready,
             details={
                 "owner_stage_approval_gate_status": _status(approval_gate),
                 "owner_stage_execution_plan_status": _status(stage_execution_plan),
                 "stage_allowed": approval_gate.get("stage_allowed"),
+                "post_approval_stage_execution_ready": post_approval_stage_execution_ready,
             },
             error="stage appears allowed before explicit owner approval",
         ),
@@ -740,6 +781,7 @@ def build_owner_approval_handoff(
                 "expected_stage_path_set_digest"
             ),
             "post_approval_noop_accounted_for": post_approval_noop_accounted_for,
+            "post_approval_stage_execution_ready": post_approval_stage_execution_ready,
         },
         owner_action_payload_template=dict(template_payload),
         checks=checks,

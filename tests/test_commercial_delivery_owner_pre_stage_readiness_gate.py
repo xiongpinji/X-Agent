@@ -575,11 +575,14 @@ def test_owner_pre_stage_readiness_gate_accepts_self_bootstrap_refresh_receipt(t
 def test_owner_pre_stage_readiness_gate_accepts_downstream_self_bootstrap_refresh_receipt(tmp_path: Path) -> None:
     paths = _write_reports(tmp_path)
     allowed_steps = [
+        "owner_staging_runbook",
         "owner_delivery_packet_before_owner_approval",
         "owner_delivery_packet",
+        "owner_approval_payload_audit",
         "owner_stage_approval_brief",
         "closure_snapshot",
         "owner_approval_handoff",
+        "pre_approval_drift_guard",
     ]
 
     for step_name in allowed_steps:
