@@ -561,6 +561,63 @@ def test_task_board_tracks_completed_handoff_heading_sections(tmp_path: Path) ->
     assert secondary.details["handoff_latest_completed_candidate"] == heading_candidate
 
 
+def test_task_board_tracks_dated_packet_handoff_sections_without_completed_marker(tmp_path: Path) -> None:
+    reports_dir = tmp_path / "reports"
+    handoff = tmp_path / "handoff.md"
+    _write_reports(reports_dir)
+    dated_candidate = (
+        "codex_secondary_integration_adoption_decision_archive_followup_"
+        "disposition_preview_packet.py"
+    )
+    next_candidate = (
+        "backend/app/core/codex_secondary_integration_adoption_decision_archive_followup_"
+        "closure_readiness_packet.py"
+    )
+    handoff.parent.mkdir(parents=True, exist_ok=True)
+    handoff.write_text(
+        "\n".join(
+            [
+                "## Secondary task queue",
+                "",
+                "Queue:",
+                "1. `integration_review_action_status_board.py` - next",
+                "- Completed `backend/app/core/integration_review_answer_action_matrix.py` as a detached candidate.",
+                "",
+                "### 2026-06-13: Codex secondary integration adoption decision archive "
+                "followup disposition preview packet",
+                "",
+                "Files:",
+                f"- `backend/app/core/{dated_candidate}`",
+                f"- `tests/test_{dated_candidate}`",
+                "",
+                "Validation commands and results:",
+                "- Result: `543 passed`",
+                "",
+                "Next planned Codex-gap secondary candidate:",
+                f"- `{next_candidate}`",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    report = build_task_board(
+        reports_dir=reports_dir,
+        secondary_handoff_path=handoff,
+        git_status_lines=[],
+    )
+
+    assert report.status == "commercial_delivery_ready_for_owner_staging_review"
+    assert report.summary["secondary_handoff_next_queue"] == [next_candidate]
+    assert report.summary["secondary_handoff_completed_count"] == 2
+    assert report.summary["secondary_handoff_latest_completed_candidate"] == dated_candidate
+    secondary = next(task for task in report.tasks if task.id == "secondary_handoff_sync")
+    assert secondary.details["handoff_completed_candidates"] == [
+        "integration_review_answer_action_matrix.py",
+        dated_candidate,
+    ]
+    assert secondary.details["handoff_latest_completed_candidate"] == dated_candidate
+
+
 def test_task_board_tracks_secondary_pending_without_blocking_owner_staging(tmp_path: Path) -> None:
     reports_dir = tmp_path / "reports"
     handoff = tmp_path / "handoff.md"

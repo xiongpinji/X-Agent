@@ -192,12 +192,26 @@ def _handoff_queue_items(text: str) -> list[str]:
 
 
 def _handoff_next_queue_items(text: str) -> list[str]:
-    items: list[str] = []
+    legacy_items: list[str] = []
+    latest_planned_items: list[str] = []
+    in_next_planned_section = False
     for line in text.splitlines():
         match = re.match(r"\s*\d+\.\s+`([^`]+)`\s+-\s+next\b", line, re.IGNORECASE)
         if match:
-            items.append(match.group(1))
-    return items
+            legacy_items.append(match.group(1))
+        if re.match(r"\s*Next planned\b.*candidate:\s*$", line, re.IGNORECASE):
+            latest_planned_items = []
+            in_next_planned_section = True
+            continue
+        if in_next_planned_section:
+            planned_match = re.match(r"\s*-\s+`([^`]+)`", line)
+            if planned_match:
+                latest_planned_items.append(planned_match.group(1))
+                in_next_planned_section = False
+                continue
+            if line.strip() and not line.startswith((" ", "\t", "-")):
+                in_next_planned_section = False
+    return latest_planned_items or legacy_items
 
 
 def _handoff_candidate_name(value: str) -> str:
@@ -211,7 +225,11 @@ def _handoff_completed_candidate_items(text: str) -> list[str]:
     items: list[str] = []
     in_completed_section = False
     for line in text.splitlines():
-        if re.match(r"\s*#{2,6}\s+.+\(#\d+\s+completed\)\s*$", line, re.IGNORECASE):
+        if re.match(r"\s*#{2,6}\s+.+\(#\d+\s+completed\)\s*$", line, re.IGNORECASE) or re.match(
+            r"\s*#{2,6}\s+\d{4}-\d{2}-\d{2}:\s+.+\bpacket\b.*$",
+            line,
+            re.IGNORECASE,
+        ):
             in_completed_section = True
             continue
         if in_completed_section:
