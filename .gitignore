@@ -194,3 +194,6 @@ backend/PERFORMANCE_OPTIMIZATION_REPORT.py
 !.claude/skills/**
 
 data/api_keys.json
+
+# Codex recursive scaffold (orphaned, path too long to delete)
+backend/app/core/integration_review_manifest_adoption_tracker_notif*
