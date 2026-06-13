@@ -450,11 +450,20 @@ def _pre_approval_drift_guard_accounted_for(reports: dict[str, dict[str, Any]]) 
     stage_command_digest = _read_summary_value(drift_guard, "stage_command_digest")
     expected_stage_path_set_digest = _read_summary_value(drift_guard, "expected_stage_path_set_digest")
 
-    def _failed_digest_is_accounted_for(check_name: str, detail_key: str) -> bool:
-        return check_name not in failed_checks or _failed_digest_check_has_matching_present_values(
+    def _failed_digest_is_accounted_for(check_name: str, detail_key: str, summary_key: str) -> bool:
+        if check_name not in failed_checks:
+            return True
+        if _failed_digest_check_has_matching_present_values(
             drift_guard,
             check_name=check_name,
             detail_key=detail_key,
+        ):
+            return True
+        return refresh_chain_receipt_ready and _failed_digest_check_has_only_task_board_stale_value(
+            drift_guard,
+            check_name=check_name,
+            detail_key=detail_key,
+            summary_key=summary_key,
         )
 
     operator_checklist_accounted_for = (
@@ -522,6 +531,16 @@ def _pre_approval_drift_guard_accounted_for(reports: dict[str, dict[str, Any]]) 
         "stage_path_digest_stable",
         "expected_stage_path_set_digest_stable",
     }
+    post_approval_pre_stage_task_board_drift_checks = {
+        "real_owner_approval_absent",
+        "approval_request_ready",
+        "approval_handoff_ready",
+        "stage_command_digest_stable",
+        "stage_path_digest_stable",
+        "expected_stage_path_set_digest_stable",
+        "approval_payload_blocked_before_owner",
+        "operator_checklist_waiting_before_owner",
+    }
     post_approval_noop_closure_accounted_for = (
         (
             _read_report_status_value(drift_guard, "closure_snapshot") == "commercial_delivery_closure_blocked"
@@ -563,13 +582,82 @@ def _pre_approval_drift_guard_accounted_for(reports: dict[str, dict[str, Any]]) 
         and len(stage_command_digest) == 64
         and isinstance(expected_stage_path_set_digest, str)
         and len(expected_stage_path_set_digest) == 64
-        and _failed_digest_is_accounted_for("stage_path_digest_stable", "stage_path_digest_sources")
-        and _failed_digest_is_accounted_for("stage_command_digest_stable", "stage_command_digest_sources")
+        and _failed_digest_is_accounted_for(
+            "stage_path_digest_stable",
+            "stage_path_digest_sources",
+            "stage_path_digest",
+        )
+        and _failed_digest_is_accounted_for(
+            "stage_command_digest_stable",
+            "stage_command_digest_sources",
+            "stage_command_digest",
+        )
         and _failed_digest_is_accounted_for(
             "expected_stage_path_set_digest_stable",
             "expected_stage_path_set_digest_sources",
+            "expected_stage_path_set_digest",
         )
         and failed_checks.issubset(post_approval_noop_allowed_failed_checks)
+    )
+    post_staging_cached_count = _read_summary_value(
+        reports.get("owner_post_staging_verifier", {}),
+        "cached_staged_path_count",
+    )
+    if post_staging_cached_count is None:
+        post_staging_cached_count = reports.get("owner_post_staging_verifier", {}).get("cached_staged_path_count")
+    post_approval_pre_stage_task_board_drift_blocked = (
+        _report_status(drift_guard) == "pre_approval_drift_guard_blocked"
+        and drift_guard.get("real_owner_approval_present") is True
+        and drift_guard.get("mutation_performed") is not True
+        and drift_guard.get("git_stage_performed") is not True
+        and drift_guard.get("git_commit_performed") is not True
+        and drift_guard.get("git_push_performed") is not True
+        and drift_guard.get("network_mutation_performed") is not True
+        and drift_guard.get("agent_execution_enabled") is not True
+        and drift_guard.get("full_codex_parity_claimed") is not True
+        and _report_status(reports.get("owner_post_staging_verifier", {}))
+        == "owner_post_staging_verification_ready"
+        and int(post_staging_cached_count or 0) > 0
+        and _read_report_status_value(drift_guard, "owner_stage_approval_request")
+        == "owner_stage_approval_request_blocked"
+        and _read_report_status_value(drift_guard, "owner_approval_handoff") == "owner_approval_handoff_blocked"
+        and _read_report_status_value(drift_guard, "owner_approval_payload_audit") == "owner_approval_payload_blocked"
+        and _read_summary_value(drift_guard, "owner_approval_payload_present") is True
+        and _read_summary_value(drift_guard, "owner_approval_payload_valid") is False
+        and _read_summary_value(drift_guard, "owner_approval_payload_ready_for_gate") is False
+        and _read_report_status_value(drift_guard, "owner_stage_approval_gate") == "owner_stage_approval_blocked"
+        and _read_summary_value(drift_guard, "owner_stage_approval_gate_status") == "owner_stage_approval_blocked"
+        and _read_report_status_value(drift_guard, "owner_stage_execution_plan") == "owner_stage_execution_blocked"
+        and _read_summary_value(drift_guard, "owner_stage_execution_plan_status") == "owner_stage_execution_blocked"
+        and operator_checklist_accounted_for
+        and _read_report_status_value(drift_guard, "closure_snapshot") == "commercial_delivery_closure_blocked"
+        and _read_summary_value(drift_guard, "closure_snapshot_status") == "commercial_delivery_closure_blocked"
+        and _read_summary_value(drift_guard, "closure_delivery_complete") is False
+        and isinstance(stage_path_digest, str)
+        and len(stage_path_digest) == 64
+        and isinstance(stage_command_digest, str)
+        and len(stage_command_digest) == 64
+        and isinstance(expected_stage_path_set_digest, str)
+        and len(expected_stage_path_set_digest) == 64
+        and _failed_digest_check_has_only_task_board_stale_value(
+            drift_guard,
+            check_name="stage_path_digest_stable",
+            detail_key="stage_path_digest_sources",
+            summary_key="stage_path_digest",
+        )
+        and _failed_digest_check_has_only_task_board_stale_value(
+            drift_guard,
+            check_name="stage_command_digest_stable",
+            detail_key="stage_command_digest_sources",
+            summary_key="stage_command_digest",
+        )
+        and _failed_digest_check_has_only_task_board_stale_value(
+            drift_guard,
+            check_name="expected_stage_path_set_digest_stable",
+            detail_key="expected_stage_path_set_digest_sources",
+            summary_key="expected_stage_path_set_digest",
+        )
+        and failed_checks == post_approval_pre_stage_task_board_drift_checks
     )
     post_approval_boundary_required_failed_checks = {
         "real_owner_approval_absent",
@@ -659,6 +747,7 @@ def _pre_approval_drift_guard_accounted_for(reports: dict[str, dict[str, Any]]) 
         post_approval_ready
         or post_commit_blocked
         or post_approval_noop_blocked
+        or post_approval_pre_stage_task_board_drift_blocked
         or post_approval_boundary_blocked
         or refresh_accounted_for_drift_guard
     )
