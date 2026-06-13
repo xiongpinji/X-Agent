@@ -104,6 +104,19 @@ def _status(payload: dict[str, Any]) -> str | None:
     return str(value) if value is not None else None
 
 
+def _summary(payload: dict[str, Any]) -> dict[str, Any]:
+    value = payload.get("summary")
+    return value if isinstance(value, dict) else {}
+
+
+def _int_or_none(value: Any) -> int | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    return None
+
+
 def _claims_parity(payloads: list[dict[str, Any]]) -> bool:
     return any(payload.get("full_codex_parity_claimed") is True for payload in payloads)
 
@@ -164,11 +177,11 @@ def build_owner_decision_brief(
     owner_approval_resume_packet = reports["owner_approval_resume_packet"]
     operator_checklist = reports["owner_post_approval_operator_checklist"]
     task_board = reports["task_board"]
-    task_summary = task_board.get("summary") if isinstance(task_board.get("summary"), dict) else {}
-    readiness_summary = owner_pre_stage_readiness_gate.get("summary") if isinstance(
-        owner_pre_stage_readiness_gate.get("summary"),
-        dict,
-    ) else {}
+    task_summary = _summary(task_board)
+    readiness_summary = _summary(owner_pre_stage_readiness_gate)
+    owner_packet_summary = _summary(owner_packet)
+    owner_post_staging_summary = _summary(owner_post_staging)
+    owner_command_audit_summary = _summary(owner_command_audit)
     pending_paths = _pending_paths(manifest)
     full_codex_parity_claimed = _claims_parity(list(reports.values()))
     stage_include_count = manifest.get("stage_include_count")
@@ -176,18 +189,25 @@ def build_owner_decision_brief(
     command_audit_count = owner_command_audit.get("command_count")
     command_audit_expected_path_count = owner_command_audit.get("expected_path_count")
     staging_review_eligible_count = staging_review.get("eligible_stage_count")
-    post_commit_noop_accounted_for = (
-        isinstance(stage_include_count, int)
-        and stage_include_count > 0
-        and staging_review_eligible_count == 0
-        and owner_stage_command_count == 0
-        and command_audit_count == 0
-        and command_audit_expected_path_count == 0
-        and _status(owner_post_staging) == "owner_post_staging_verification_ready"
-        and int(owner_post_staging.get("cached_staged_path_count") or 0) == 0
-        and readiness_summary.get("post_commit_noop_accounted_for") is True
+    pre_stage_summary_accounts_for_noop = (
+        readiness_summary.get("post_commit_noop_accounted_for") is True
         and readiness_summary.get("post_commit_noop_stage_counts_agree") is True
     )
+    direct_reports_account_for_noop = (
+        isinstance(stage_include_count, int)
+        and stage_include_count > 0
+        and _int_or_none(staging_review_eligible_count) == 0
+        and owner_stage_command_count == 0
+        and _int_or_none(command_audit_count) == 0
+        and _int_or_none(command_audit_expected_path_count) == 0
+        and _status(owner_post_staging) == "owner_post_staging_verification_ready"
+        and int(owner_post_staging.get("cached_staged_path_count") or 0) == 0
+        and (owner_packet.get("blocked_paths") in (None, []) or len(owner_packet.get("blocked_paths") or []) == 0)
+        and owner_packet_summary.get("post_commit_noop_accounted_for") is True
+        and owner_post_staging_summary.get("post_commit_noop_accounted_for") is True
+        and owner_command_audit_summary.get("post_commit_noop_accounted_for") is True
+    )
+    post_commit_noop_accounted_for = pre_stage_summary_accounts_for_noop or direct_reports_account_for_noop
     post_staging_ready = (
         _status(owner_post_staging) == "owner_post_staging_verification_ready"
         and int(owner_post_staging.get("cached_staged_path_count") or 0) > 0

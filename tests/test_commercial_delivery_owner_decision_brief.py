@@ -336,6 +336,53 @@ def test_owner_decision_brief_accounts_for_post_commit_noop(tmp_path: Path) -> N
     assert post_staging_check.details["post_commit_noop_accounted_for"] is True
 
 
+def test_owner_decision_brief_accounts_for_direct_noop_when_pre_stage_summary_is_stale(
+    tmp_path: Path,
+) -> None:
+    paths = _write_reports(tmp_path)
+    manifest = json.loads(paths["manifest_path"].read_text(encoding="utf-8"))
+    manifest["stage_include_count"] = 100
+    paths["manifest_path"].write_text(json.dumps(manifest), encoding="utf-8")
+    staging_review = json.loads(paths["staging_review_path"].read_text(encoding="utf-8"))
+    staging_review["eligible_stage_count"] = 0
+    paths["staging_review_path"].write_text(json.dumps(staging_review), encoding="utf-8")
+    owner_packet = json.loads(paths["owner_packet_path"].read_text(encoding="utf-8"))
+    owner_packet["stage_commands"] = []
+    owner_packet["blocked_paths"] = []
+    owner_packet["summary"] = {"post_commit_noop_accounted_for": True}
+    paths["owner_packet_path"].write_text(json.dumps(owner_packet), encoding="utf-8")
+    command_audit = json.loads(paths["owner_command_audit_path"].read_text(encoding="utf-8"))
+    command_audit["command_count"] = 0
+    command_audit["expected_path_count"] = 0
+    command_audit["summary"] = {"post_commit_noop_accounted_for": True}
+    paths["owner_command_audit_path"].write_text(json.dumps(command_audit), encoding="utf-8")
+    pre_stage = json.loads(paths["owner_pre_stage_readiness_gate_path"].read_text(encoding="utf-8"))
+    pre_stage["summary"].update(
+        {
+            "post_commit_noop_accounted_for": False,
+            "post_commit_noop_stage_counts_agree": False,
+            "stage_command_count": 2,
+            "owner_post_staging_status": "owner_post_staging_verification_blocked",
+        }
+    )
+    paths["owner_pre_stage_readiness_gate_path"].write_text(json.dumps(pre_stage), encoding="utf-8")
+    post_staging = json.loads(paths["owner_post_staging_path"].read_text(encoding="utf-8"))
+    post_staging["status"] = "owner_post_staging_verification_ready"
+    post_staging["cached_staged_path_count"] = 0
+    post_staging["summary"] = {"post_commit_noop_accounted_for": True}
+    paths["owner_post_staging_path"].write_text(json.dumps(post_staging), encoding="utf-8")
+
+    brief = build_owner_decision_brief(**paths)
+
+    assert brief.status == "ready_for_owner_staging_decision"
+    assert brief.summary["post_commit_noop_accounted_for"] is True
+    count_check = next(check for check in brief.checks if check.name == "stage_commands_match_manifest")
+    assert count_check.status == "passed"
+    assert count_check.details["post_commit_noop_accounted_for"] is True
+    post_staging_check = next(check for check in brief.checks if check.name == "post_staging_not_yet_applied")
+    assert post_staging_check.status == "passed"
+
+
 def test_owner_decision_brief_blocks_unknown_owner_boundary(tmp_path: Path) -> None:
     paths = _write_reports(tmp_path)
     packet = json.loads(paths["owner_approval_resume_packet_path"].read_text(encoding="utf-8"))
