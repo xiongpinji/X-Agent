@@ -779,7 +779,6 @@ def build_commercial_delivery_closure_snapshot(
         and failed_refresh_steps.issubset(post_commit_accounted_refresh_steps)
     )
     refresh_ready_for_snapshot = refresh_ready_for_snapshot or post_commit_refresh_accounted_for
-    pre_approval_drift_guard_ready = _status(pre_approval_drift_guard) == "pre_approval_drift_guard_ready"
     pre_approval_drift_guard_accounted_for = _pre_approval_drift_guard_accounted_for(
         pre_approval_drift_guard,
         refresh_expected_nonzero_ready=refresh_expected_nonzero_ready,

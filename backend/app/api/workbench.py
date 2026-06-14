@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 
 from backend.app.api.workbench_resources_bff import router as workbench_resources_router
 from backend.app.core.dispatch import DispatchRequest, dispatch
-from backend.app.core.org import ConsoleBootstrapResponse, ConsoleContext, RoleAvatar, build_default_role_catalog, organization_store
+from backend.app.core.org import ConsoleBootstrapResponse, RoleAvatar, build_default_role_catalog, organization_store
 from backend.app.core.security import ROLE_SCOPES, Principal
 from backend.app.dependencies import enforce_scope, get_control_mode_store, get_current_principal
 from backend.app.settings import get_settings

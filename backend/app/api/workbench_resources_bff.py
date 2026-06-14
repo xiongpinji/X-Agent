@@ -82,8 +82,6 @@ def _build_tasks_snapshot() -> list[dict[str, Any]]:
 def _build_agents_snapshot() -> list[dict[str, Any]]:
     """Gather registered agents."""
     try:
-        from backend.app.core.tool_registry import ToolCatalog
-        catalog = ToolCatalog()
         return [
             {
                 "id": "agent-primary",
@@ -134,8 +132,6 @@ def _build_tools_snapshot() -> list[dict[str, Any]]:
 def _build_workflows_snapshot() -> list[dict[str, Any]]:
     """Gather workflow runs."""
     try:
-        from backend.app.dependencies import get_workflow_repository
-        repo = get_workflow_repository()
         return [
             {
                 "id": "wf-code-review",
@@ -166,8 +162,6 @@ def _build_workflows_snapshot() -> list[dict[str, Any]]:
 def _build_knowledge_snapshot() -> list[dict[str, Any]]:
     """Gather knowledge sources (memory/vector stores)."""
     try:
-        from backend.app.dependencies import get_memory
-        memory = get_memory()
         return [
             {
                 "id": "ks-memory",

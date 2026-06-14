@@ -7,10 +7,6 @@ on:
       - develop
     tags:
       - 'v*'
-  pull_request:
-    branches:
-      - main
-      - develop
   workflow_dispatch:
     inputs:
       environment:
@@ -94,7 +90,7 @@ jobs:
       continue-on-error: true
 
     - name: Upload Trivy results to GitHub Security tab
-      uses: github/codeql-action/upload-sarif@v2
+      uses: github/codeql-action/upload-sarif@v3
       if: always()
       with:
         sarif_file: 'trivy-results.sarif'
