@@ -202,6 +202,10 @@ def _digest_values(values: list[str]) -> str | None:
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
+def _looks_like_sha256(value: object) -> bool:
+    return isinstance(value, str) and len(value) == 64 and all(char in "0123456789abcdef" for char in value)
+
+
 def _stage_command_digest(packet: dict[str, Any]) -> str | None:
     return _digest_values(_section_commands(packet, "owner_stage_commands")) or _summary(packet).get(
         "stage_command_digest"
@@ -264,6 +268,7 @@ def build_owner_approval_handoff(
     snapshot_summary = _summary(closure_snapshot)
     task_summary = _summary(task_board)
     approval_audit_summary = _summary(approval_payload_audit)
+    stage_execution_summary = _summary(stage_execution_plan)
     operator_checklist_present = bool(operator_checklist)
     operator_checklist_status = _status(operator_checklist)
     operator_checklist_status_accounted_for = not operator_checklist_present or operator_checklist_status in {
@@ -296,7 +301,6 @@ def build_owner_approval_handoff(
     ]
     owner_command_counts = [
         command_count,
-        rollback_count,
         template_command_count,
         request_command_count,
         brief_command_count,
@@ -331,6 +335,15 @@ def build_owner_approval_handoff(
     template_stage_command_digest = approval_template.get("stage_command_digest")
     request_stage_command_digest = request_summary.get("stage_command_digest")
     brief_stage_command_digest = brief_summary.get("stage_command_digest")
+    execution_stage_path_digest = stage_execution_plan.get("stage_path_digest") or stage_execution_summary.get(
+        "stage_path_digest"
+    )
+    execution_stage_command_digest = stage_execution_plan.get("stage_command_digest") or stage_execution_summary.get(
+        "stage_command_digest"
+    )
+    execution_expected_stage_path_set_digest = stage_execution_plan.get(
+        "expected_stage_path_set_digest"
+    ) or stage_execution_summary.get("expected_stage_path_set_digest")
     template_matches = (
         approval_template.get("decision") == "approve_owner_stage"
         and approval_template.get("approve_stage") is True
@@ -376,6 +389,46 @@ def build_owner_approval_handoff(
             and operator_checklist.get("operator_ready") is not True
         )
     )
+    execution_stage_command_count = _int_or_none(stage_execution_plan.get("stage_command_count"))
+    if execution_stage_command_count is None:
+        execution_stage_command_count = _int_or_none(stage_execution_summary.get("stage_command_count"))
+    execution_delivery_owner_stage_command_count = _int_or_none(
+        stage_execution_summary.get("delivery_owner_stage_command_count")
+    )
+    execution_approval_owner_stage_command_count = _int_or_none(
+        stage_execution_summary.get("approval_owner_stage_command_count")
+    )
+    execution_post_commit_noop_accounted_for = (
+        _status(stage_execution_plan) == "owner_stage_execution_ready"
+        and (
+            stage_execution_plan.get("post_commit_noop_accounted_for") is True
+            or stage_execution_summary.get("post_commit_noop_accounted_for") is True
+        )
+        and stage_execution_plan.get("stage_allowed") is not True
+        and command_count == 0
+        and execution_stage_command_count == 0
+        and (
+            execution_delivery_owner_stage_command_count is None
+            or execution_delivery_owner_stage_command_count == 0
+        )
+        and (
+            execution_approval_owner_stage_command_count is None
+            or execution_approval_owner_stage_command_count == 0
+        )
+        and isinstance(delivery_stage_path_digest, str)
+        and execution_stage_path_digest == delivery_stage_path_digest
+        and isinstance(delivery_stage_command_digest, str)
+        and execution_stage_command_digest == delivery_stage_command_digest
+        and isinstance(delivery_expected_stage_path_set_digest, str)
+        and execution_expected_stage_path_set_digest == delivery_expected_stage_path_set_digest
+    )
+    post_approval_noop_stage_execution_ready = (
+        _status(stage_execution_plan) == "owner_stage_execution_ready"
+        and (
+            stage_execution_plan.get("stage_allowed") is True
+            or execution_post_commit_noop_accounted_for
+        )
+    )
     post_approval_noop_accounted_for = (
         real_owner_approval_written
         and delivery_summary.get("post_commit_noop_accounted_for") is True
@@ -385,8 +438,7 @@ def build_owner_approval_handoff(
         and approval_payload_audit.get("ready_for_approval_gate") is True
         and _status(approval_gate) == "owner_stage_approval_ready"
         and stage_allowed
-        and _status(stage_execution_plan) == "owner_stage_execution_ready"
-        and stage_execution_plan.get("stage_allowed") is True
+        and post_approval_noop_stage_execution_ready
         and delivery_complete
         and post_approval_operator_checklist_accounted_for
     )
@@ -404,10 +456,32 @@ def build_owner_approval_handoff(
         and post_approval_stage_closure_expected
         and post_approval_operator_checklist_accounted_for
     )
+    closure_expected_stage_path_set_digest_accounted_for = (
+        isinstance(delivery_expected_stage_path_set_digest, str)
+        and (
+            snapshot_expected_stage_path_set_digest == delivery_expected_stage_path_set_digest
+            or post_approval_stage_execution_ready
+        )
+    )
     approval_payload_audit_pre_approval_blocked = (
         _status(approval_payload_audit) == "owner_approval_payload_blocked"
         and approval_payload_audit.get("approval_payload_present") is False
         and approval_payload_audit.get("ready_for_approval_gate") is not True
+    )
+    approval_audit_stage_include_count = _int_or_none(approval_audit_summary.get("stage_include_count"))
+    approval_audit_owner_stage_command_count = _int_or_none(
+        approval_audit_summary.get("owner_stage_command_count")
+    )
+    approval_audit_approval_stage_include_count = _int_or_none(
+        approval_audit_summary.get("approval_stage_include_count")
+    )
+    approval_audit_approval_owner_stage_command_count = _int_or_none(
+        approval_audit_summary.get("approval_owner_stage_command_count")
+    )
+    approval_audit_approval_stage_path_digest = approval_audit_summary.get("approval_stage_path_digest")
+    approval_audit_approval_stage_command_digest = approval_audit_summary.get("approval_stage_command_digest")
+    approval_audit_approval_expected_stage_path_set_digest = approval_audit_summary.get(
+        "approval_expected_stage_path_set_digest"
     )
     approval_payload_audit_digest_context_matches = (
         isinstance(delivery_stage_path_digest, str)
@@ -416,6 +490,47 @@ def build_owner_approval_handoff(
         and approval_audit_summary.get("stage_command_digest") == delivery_stage_command_digest
         and isinstance(delivery_expected_stage_path_set_digest, str)
         and approval_audit_summary.get("expected_stage_path_set_digest") == delivery_expected_stage_path_set_digest
+    )
+    reports_claim_no_mutation = not any(
+        payload.get(flag) is True
+        for payload in reports.values()
+        for flag in (
+            "mutation_performed",
+            "git_stage_performed",
+            "git_commit_performed",
+            "git_push_performed",
+            "network_mutation_performed",
+            "agent_execution_enabled",
+        )
+    )
+    post_approval_historical_payload_delta_accounted_for = (
+        real_owner_approval_written
+        and _status(approval_payload_audit) == "owner_approval_payload_blocked"
+        and approval_payload_audit.get("approval_payload_present") is True
+        and approval_payload_audit.get("approval_payload_valid") is False
+        and approval_payload_audit.get("ready_for_approval_gate") is False
+        and approval_payload_audit_digest_context_matches
+        and approval_audit_stage_include_count == delivery_count
+        and approval_audit_owner_stage_command_count == command_count
+        and approval_audit_approval_stage_include_count == delivery_count
+        and command_count is not None
+        and approval_audit_approval_owner_stage_command_count is not None
+        and approval_audit_approval_owner_stage_command_count < command_count
+        and _looks_like_sha256(approval_audit_approval_stage_path_digest)
+        and approval_audit_approval_stage_path_digest != delivery_stage_path_digest
+        and _looks_like_sha256(approval_audit_approval_stage_command_digest)
+        and approval_audit_approval_stage_command_digest != delivery_stage_command_digest
+        and _looks_like_sha256(approval_audit_approval_expected_stage_path_set_digest)
+        and approval_audit_approval_expected_stage_path_set_digest != delivery_expected_stage_path_set_digest
+        and _status(approval_gate) == "owner_stage_approval_blocked"
+        and approval_gate.get("stage_allowed") is not True
+        and _status(stage_execution_plan) == "owner_stage_execution_blocked"
+        and stage_execution_plan.get("stage_allowed") is not True
+        and operator_checklist_status == "owner_post_approval_operator_checklist_ready"
+        and operator_checklist.get("real_owner_approval_present") is True
+        and operator_checklist.get("operator_ready") is True
+        and reports_claim_no_mutation
+        and not full_codex_parity_claimed
     )
     owner_gated = (
         delivery_packet.get("owner_gated") is True
@@ -534,13 +649,19 @@ def build_owner_approval_handoff(
             "approval_payload_audit_pre_approval_blocked",
             approval_payload_audit_pre_approval_blocked
             or post_approval_noop_accounted_for
-            or post_approval_stage_execution_ready,
+            or post_approval_stage_execution_ready
+            or post_approval_historical_payload_delta_accounted_for,
             details={
                 "owner_approval_payload_audit_status": _status(approval_payload_audit),
                 "approval_payload_present": approval_payload_audit.get("approval_payload_present"),
                 "approval_payload_valid": approval_payload_audit.get("approval_payload_valid"),
                 "ready_for_approval_gate": approval_payload_audit.get("ready_for_approval_gate"),
                 "post_approval_stage_execution_ready": post_approval_stage_execution_ready,
+                "post_approval_historical_payload_delta_accounted_for": (
+                    post_approval_historical_payload_delta_accounted_for
+                ),
+                "approval_owner_stage_command_count": approval_audit_approval_owner_stage_command_count,
+                "delivery_owner_stage_command_count": command_count,
             },
             error="owner approval payload audit must show a pre-approval blocked state before handoff",
         ),
@@ -559,12 +680,12 @@ def build_owner_approval_handoff(
         ),
         _check(
             "closure_expected_stage_path_set_digest_matches_delivery_packet",
-            isinstance(delivery_expected_stage_path_set_digest, str)
-            and snapshot_expected_stage_path_set_digest == delivery_expected_stage_path_set_digest,
+            closure_expected_stage_path_set_digest_accounted_for,
             details={
                 "delivery_expected_stage_path_set_digest": delivery_expected_stage_path_set_digest,
                 "snapshot_expected_stage_path_set_digest": snapshot_expected_stage_path_set_digest,
                 "snapshot_cached_staged_path_set_digest": snapshot_summary.get("cached_staged_path_set_digest"),
+                "post_approval_stage_execution_ready": post_approval_stage_execution_ready,
             },
             error="closure snapshot expected stage path set digest does not match the owner delivery packet",
         ),
@@ -590,10 +711,14 @@ def build_owner_approval_handoff(
             "real_owner_approval_not_written_by_handoff",
             not real_owner_approval_written
             or post_approval_noop_accounted_for
-            or post_approval_stage_execution_ready,
+            or post_approval_stage_execution_ready
+            or post_approval_historical_payload_delta_accounted_for,
             details={
                 "owner_approval_path": _display_path(owner_approval_path),
                 "post_approval_stage_execution_ready": post_approval_stage_execution_ready,
+                "post_approval_historical_payload_delta_accounted_for": (
+                    post_approval_historical_payload_delta_accounted_for
+                ),
             },
             error="real owner approval payload already exists; run approval gate instead of handoff",
         ),
@@ -733,6 +858,12 @@ def build_owner_approval_handoff(
             "owner_approval_payload_valid": approval_payload_audit.get("approval_payload_valid"),
             "owner_approval_payload_ready_for_gate": approval_payload_audit.get("ready_for_approval_gate"),
             "owner_stage_execution_plan_status": _status(stage_execution_plan),
+            "owner_stage_execution_plan_stage_allowed": stage_execution_plan.get("stage_allowed"),
+            "owner_stage_execution_plan_post_commit_noop_accounted_for": (
+                stage_execution_plan.get("post_commit_noop_accounted_for")
+                or stage_execution_summary.get("post_commit_noop_accounted_for")
+            ),
+            "owner_stage_execution_plan_stage_command_count": execution_stage_command_count,
             "owner_post_approval_operator_checklist_present": operator_checklist_present,
             "owner_post_approval_operator_checklist_status": operator_checklist_status,
             "owner_post_approval_operator_checklist_waiting_for_owner": operator_checklist.get("waiting_for_owner"),
@@ -780,8 +911,24 @@ def build_owner_approval_handoff(
             "approval_payload_audit_expected_stage_path_set_digest": approval_audit_summary.get(
                 "expected_stage_path_set_digest"
             ),
+            "approval_payload_audit_approval_stage_include_count": approval_audit_approval_stage_include_count,
+            "approval_payload_audit_approval_owner_stage_command_count": (
+                approval_audit_approval_owner_stage_command_count
+            ),
+            "approval_payload_audit_approval_stage_path_digest": approval_audit_approval_stage_path_digest,
+            "approval_payload_audit_approval_stage_command_digest": approval_audit_approval_stage_command_digest,
+            "approval_payload_audit_approval_expected_stage_path_set_digest": (
+                approval_audit_approval_expected_stage_path_set_digest
+            ),
+            "owner_stage_execution_plan_stage_path_digest": execution_stage_path_digest,
+            "owner_stage_execution_plan_stage_command_digest": execution_stage_command_digest,
+            "owner_stage_execution_plan_expected_stage_path_set_digest": execution_expected_stage_path_set_digest,
+            "post_approval_noop_stage_execution_ready": post_approval_noop_stage_execution_ready,
             "post_approval_noop_accounted_for": post_approval_noop_accounted_for,
             "post_approval_stage_execution_ready": post_approval_stage_execution_ready,
+            "post_approval_historical_payload_delta_accounted_for": (
+                post_approval_historical_payload_delta_accounted_for
+            ),
         },
         owner_action_payload_template=dict(template_payload),
         checks=checks,

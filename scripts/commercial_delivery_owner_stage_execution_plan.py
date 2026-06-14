@@ -22,6 +22,8 @@ DEFAULT_OWNER_STAGING_PACKET = REPORT_DIR / "commercial-delivery-owner-staging-p
 DEFAULT_OWNER_STAGING_PREFLIGHT = REPORT_DIR / "commercial-delivery-owner-staging-preflight.json"
 DEFAULT_OWNER_STAGE_APPROVAL_GATE = REPORT_DIR / "commercial-delivery-owner-stage-approval-gate.json"
 DEFAULT_OWNER_DELIVERY_PACKET = REPORT_DIR / "commercial-delivery-owner-delivery-packet.json"
+DEFAULT_OWNER_POST_STAGING_VERIFIER = REPORT_DIR / "commercial-delivery-owner-post-staging-verifier.json"
+DEFAULT_OWNER_POST_STAGE_COMMIT_GATE = REPORT_DIR / "commercial-delivery-owner-post-stage-commit-gate.json"
 DEFAULT_OUTPUT = REPORT_DIR / "commercial-delivery-owner-stage-execution-plan.json"
 DEFAULT_MARKDOWN_OUTPUT = REPORT_DIR / "commercial-delivery-owner-stage-execution-plan.md"
 
@@ -148,12 +150,16 @@ def build_owner_stage_execution_plan(
     owner_staging_preflight_path: Path = DEFAULT_OWNER_STAGING_PREFLIGHT,
     owner_stage_approval_gate_path: Path = DEFAULT_OWNER_STAGE_APPROVAL_GATE,
     owner_delivery_packet_path: Path = DEFAULT_OWNER_DELIVERY_PACKET,
+    owner_post_staging_verifier_path: Path = DEFAULT_OWNER_POST_STAGING_VERIFIER,
+    owner_post_stage_commit_gate_path: Path = DEFAULT_OWNER_POST_STAGE_COMMIT_GATE,
 ) -> OwnerStageExecutionPlan:
     report_paths = {
         "owner_staging_packet": owner_staging_packet_path,
         "owner_staging_preflight": owner_staging_preflight_path,
         "owner_stage_approval_gate": owner_stage_approval_gate_path,
         "owner_delivery_packet": owner_delivery_packet_path,
+        "owner_post_staging_verifier": owner_post_staging_verifier_path,
+        "owner_post_stage_commit_gate": owner_post_stage_commit_gate_path,
     }
     reports: dict[str, dict[str, Any]] = {}
     errors: dict[str, str] = {}
@@ -167,8 +173,11 @@ def build_owner_stage_execution_plan(
     preflight = reports["owner_staging_preflight"]
     approval_gate = reports["owner_stage_approval_gate"]
     delivery_packet = reports["owner_delivery_packet"]
+    post_staging_verifier = reports["owner_post_staging_verifier"]
+    post_stage_commit_gate = reports["owner_post_stage_commit_gate"]
     delivery_summary = _summary(delivery_packet)
     approval_summary = _summary(approval_gate)
+    post_stage_commit_summary = _summary(post_stage_commit_gate)
     stage_commands = _list(staging_packet.get("stage_commands"))
     stage_paths = _list(staging_packet.get("stage_paths"))
     computed_stage_path_digest = _digest_values(stage_paths)
@@ -262,7 +271,26 @@ def build_owner_stage_execution_plan(
             approval_stage_include_count in {None, delivery_stage_include_count}
             and (approval_stage_command_count_int or 0) == 0
         )
-    cached_staged_path_count = int(preflight.get("cached_staged_path_count") or 0)
+    preflight_cached_staged_path_count = int(preflight.get("cached_staged_path_count") or 0)
+    post_stage_cached_staged_path_count = _int_or_none(post_staging_verifier.get("cached_staged_path_count"))
+    if post_stage_cached_staged_path_count is None:
+        post_stage_cached_staged_path_count = _int_or_none(post_stage_commit_summary.get("cached_staged_path_count"))
+    post_stage_verifier_accounted_for = (
+        _status(post_staging_verifier) == "owner_post_staging_verification_ready"
+        and _status(post_stage_commit_gate) == "owner_post_stage_commit_gate_ready"
+        and post_stage_commit_gate.get("commit_allowed") is True
+        and post_stage_cached_staged_path_count == len(stage_commands)
+        and post_staging_verifier.get("stage_path_digest") == computed_stage_path_digest
+        and post_staging_verifier.get("expected_stage_path_set_digest") == computed_expected_stage_path_set_digest
+        and post_stage_commit_summary.get("stage_path_digest") == computed_stage_path_digest
+        and post_stage_commit_summary.get("stage_command_digest") == computed_stage_command_digest
+        and post_stage_commit_summary.get("cached_staged_path_set_digest") == computed_expected_stage_path_set_digest
+    )
+    cached_staged_path_count = (
+        post_stage_cached_staged_path_count
+        if post_stage_verifier_accounted_for and post_stage_cached_staged_path_count is not None
+        else preflight_cached_staged_path_count
+    )
     post_stage_accounted_for = (
         _status(preflight) in {"owner_staging_preflight_blocked", "owner_staging_preflight_ready"}
         and _status(delivery_packet) == "owner_delivery_packet_ready"
@@ -270,6 +298,7 @@ def build_owner_stage_execution_plan(
         and (stage_allowed or delivery_post_commit_noop_accounted_for)
         and (bool(stage_commands) or delivery_post_commit_noop_accounted_for)
         and cached_staged_path_count == len(stage_commands)
+        and (post_stage_verifier_accounted_for or delivery_post_commit_noop_accounted_for)
         and stage_path_digest_matches
         and stage_command_digest_matches
         and expected_stage_path_set_digest_matches
@@ -296,7 +325,11 @@ def build_owner_stage_execution_plan(
             _status(preflight) == "owner_staging_preflight_ready" or post_stage_accounted_for,
             details={
                 "status": _status(preflight),
+                "preflight_cached_staged_path_count": preflight_cached_staged_path_count,
+                "post_stage_cached_staged_path_count": post_stage_cached_staged_path_count,
                 "cached_staged_path_count": cached_staged_path_count,
+                "owner_post_staging_verifier_status": _status(post_staging_verifier),
+                "owner_post_stage_commit_gate_status": _status(post_stage_commit_gate),
                 "strict_stage_ready": strict_stage_ready,
                 "post_stage_accounted_for": post_stage_accounted_for,
             },
@@ -379,6 +412,11 @@ def build_owner_stage_execution_plan(
             cached_staged_path_count == 0 or post_stage_accounted_for,
             details={
                 "cached_staged_path_count": cached_staged_path_count,
+                "preflight_cached_staged_path_count": preflight_cached_staged_path_count,
+                "post_stage_cached_staged_path_count": post_stage_cached_staged_path_count,
+                "owner_post_staging_verifier_status": _status(post_staging_verifier),
+                "owner_post_stage_commit_gate_status": _status(post_stage_commit_gate),
+                "post_stage_verifier_accounted_for": post_stage_verifier_accounted_for,
                 "post_stage_accounted_for": post_stage_accounted_for,
             },
             error="git index is not empty before stage execution and is not accounted for by post-stage evidence",
@@ -455,9 +493,14 @@ def build_owner_stage_execution_plan(
             "delivery_expected_stage_path_set_digest": delivery_expected_stage_path_set_digest,
             "approval_expected_stage_path_set_digest": approval_expected_stage_path_set_digest,
             "owner_stage_approval_gate_status": _status(approval_gate),
+            "owner_post_staging_verifier_status": _status(post_staging_verifier),
+            "owner_post_stage_commit_gate_status": _status(post_stage_commit_gate),
             "stage_allowed": approval_gate.get("stage_allowed"),
             "cached_staged_path_count": cached_staged_path_count,
+            "preflight_cached_staged_path_count": preflight_cached_staged_path_count,
+            "post_stage_cached_staged_path_count": post_stage_cached_staged_path_count,
             "strict_stage_ready": strict_stage_ready,
+            "post_stage_verifier_accounted_for": post_stage_verifier_accounted_for,
             "post_stage_accounted_for": post_stage_accounted_for,
             "post_commit_noop_accounted_for": delivery_post_commit_noop_accounted_for,
         },
@@ -528,6 +571,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--owner-staging-preflight", type=Path, default=DEFAULT_OWNER_STAGING_PREFLIGHT)
     parser.add_argument("--owner-stage-approval-gate", type=Path, default=DEFAULT_OWNER_STAGE_APPROVAL_GATE)
     parser.add_argument("--owner-delivery-packet", type=Path, default=DEFAULT_OWNER_DELIVERY_PACKET)
+    parser.add_argument("--owner-post-staging-verifier", type=Path, default=DEFAULT_OWNER_POST_STAGING_VERIFIER)
+    parser.add_argument("--owner-post-stage-commit-gate", type=Path, default=DEFAULT_OWNER_POST_STAGE_COMMIT_GATE)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--markdown-output", type=Path, default=DEFAULT_MARKDOWN_OUTPUT)
     return parser.parse_args()
@@ -540,6 +585,8 @@ def main() -> int:
         owner_staging_preflight_path=args.owner_staging_preflight,
         owner_stage_approval_gate_path=args.owner_stage_approval_gate,
         owner_delivery_packet_path=args.owner_delivery_packet,
+        owner_post_staging_verifier_path=args.owner_post_staging_verifier,
+        owner_post_stage_commit_gate_path=args.owner_post_stage_commit_gate,
     )
     write_report(plan, args.output)
     write_markdown_plan(plan, args.markdown_output)

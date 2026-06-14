@@ -233,12 +233,24 @@ def build_post_approval_operator_checklist(
         and _summary(commit_packet).get("post_commit_noop_accounted_for") is True
         and commit_packet.get("commit_allowed") is not True
     )
+    post_staging_cached_path_count = int(
+        post_staging.get("cached_staged_path_count")
+        or _summary(post_staging).get("cached_staged_path_count")
+        or 0
+    )
+    preflight_post_stage_accounted_for = (
+        _status(preflight) == "owner_staging_preflight_blocked"
+        and int(preflight.get("cached_staged_path_count") or 0) > 0
+    ) or (
+        _status(preflight) == "owner_staging_preflight_ready"
+        and int(preflight.get("cached_staged_path_count") or 0) == 0
+        and post_staging_cached_path_count > 0
+    )
     post_stage_sequence_accounted_for = (
         resume_ready
         and stage_allowed
         and stage_execution_ready
-        and _status(preflight) == "owner_staging_preflight_blocked"
-        and int(preflight.get("cached_staged_path_count") or 0) > 0
+        and preflight_post_stage_accounted_for
         and post_staging_ready
         and commit_gate_ready
         and commit_packet_ready
@@ -391,7 +403,9 @@ def build_post_approval_operator_checklist(
                 "post_commit_noop_sequence_accounted_for": post_commit_noop_sequence_accounted_for,
                 "owner_staging_preflight_status": _status(preflight),
                 "owner_staging_preflight_cached_staged_path_count": preflight.get("cached_staged_path_count"),
+                "preflight_post_stage_accounted_for": preflight_post_stage_accounted_for,
                 "owner_post_staging_verifier_status": _status(post_staging),
+                "owner_post_staging_verifier_cached_staged_path_count": post_staging_cached_path_count,
                 "owner_post_stage_commit_gate_status": _status(commit_gate),
                 "owner_commit_packet_status": _status(commit_packet),
                 "commit_gate_noop_accounted_for": commit_gate_noop_accounted_for,
@@ -476,7 +490,9 @@ def build_post_approval_operator_checklist(
             "owner_stage_execution_plan_status": _status(execution_plan),
             "owner_staging_preflight_status": _status(preflight),
             "owner_staging_preflight_cached_staged_path_count": preflight.get("cached_staged_path_count"),
+            "preflight_post_stage_accounted_for": preflight_post_stage_accounted_for,
             "owner_post_staging_verifier_status": _status(post_staging),
+            "owner_post_staging_verifier_cached_staged_path_count": post_staging_cached_path_count,
             "owner_post_stage_commit_gate_status": _status(commit_gate),
             "owner_commit_packet_status": _status(commit_packet),
             "pre_stage_ready": pre_stage_ready,

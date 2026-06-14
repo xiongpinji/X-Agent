@@ -156,6 +156,19 @@ def _stage_command_digest(packet: dict[str, Any]) -> str | None:
     return _digest_values(_section_commands(packet, "owner_stage_commands"))
 
 
+def _failed_report_check_names(payload: dict[str, Any]) -> set[str]:
+    checks = payload.get("checks")
+    if not isinstance(checks, list):
+        return set()
+    names: set[str] = set()
+    for check in checks:
+        if isinstance(check, dict) and check.get("status") == "failed":
+            name = check.get("name")
+            if name is not None:
+                names.add(str(name))
+    return names
+
+
 def build_owner_approval_payload_audit(
     *,
     owner_delivery_packet_path: Path = DEFAULT_OWNER_DELIVERY_PACKET,
@@ -249,6 +262,44 @@ def build_owner_approval_payload_audit(
         delivery_packet.get("owner_gated") is True
         and approval_request.get("owner_gated") is True
     )
+    delivery_failed_check_names = _failed_report_check_names(delivery_packet)
+    request_failed_check_names = _failed_report_check_names(approval_request)
+    payload_matches_current_request_and_delivery = (
+        approval_payload_present
+        and delivery_error is None
+        and request_error is None
+        and stage_approved
+        and owner_identity_present
+        and counts_match
+        and digests_match
+        and commit_preview_matches
+        and acknowledgements_present
+        and owner_gated
+        and not full_codex_parity_claimed
+    )
+    delivery_packet_bootstrap_accounted_for = (
+        _status(delivery_packet) == "owner_delivery_packet_blocked"
+        and delivery_failed_check_names == {"owner_approval_payload_audit_accounted_for"}
+        and payload_matches_current_request_and_delivery
+    )
+    request_bootstrap_accounted_for = (
+        _status(approval_request) == "owner_stage_approval_request_blocked"
+        and (
+            request_failed_check_names == {"owner_delivery_packet_ready"}
+            or request_failed_check_names
+            == {
+                "owner_delivery_packet_ready",
+                "owner_delivery_packet_requires_approval",
+            }
+        )
+        and payload_matches_current_request_and_delivery
+    )
+    delivery_packet_status_accounted_for = (
+        _status(delivery_packet) == "owner_delivery_packet_ready" or delivery_packet_bootstrap_accounted_for
+    )
+    approval_request_status_accounted_for = (
+        _status(approval_request) == "owner_stage_approval_request_ready" or request_bootstrap_accounted_for
+    )
 
     checks = [
         _check(
@@ -271,14 +322,22 @@ def build_owner_approval_payload_audit(
         ),
         _check(
             "owner_delivery_packet_ready",
-            _status(delivery_packet) == "owner_delivery_packet_ready",
-            details={"status": _status(delivery_packet)},
+            delivery_packet_status_accounted_for,
+            details={
+                "status": _status(delivery_packet),
+                "failed_check_names": sorted(delivery_failed_check_names),
+                "bootstrap_accounted_for": delivery_packet_bootstrap_accounted_for,
+            },
             error="owner delivery packet is not ready",
         ),
         _check(
             "owner_stage_approval_request_ready",
-            _status(approval_request) == "owner_stage_approval_request_ready",
-            details={"status": _status(approval_request)},
+            approval_request_status_accounted_for,
+            details={
+                "status": _status(approval_request),
+                "failed_check_names": sorted(request_failed_check_names),
+                "bootstrap_accounted_for": request_bootstrap_accounted_for,
+            },
             error="owner stage approval request is not ready",
         ),
         _check(
@@ -434,6 +493,12 @@ def build_owner_approval_payload_audit(
             "expected_stage_path_set_digest": expected_path_set_digest,
             "approval_expected_stage_path_set_digest": approval.get("expected_stage_path_set_digest"),
             "post_commit_noop_accounted_for": post_commit_noop_accounted_for,
+            "owner_delivery_packet_status_accounted_for": delivery_packet_status_accounted_for,
+            "owner_delivery_packet_bootstrap_accounted_for": delivery_packet_bootstrap_accounted_for,
+            "owner_delivery_packet_failed_check_names": sorted(delivery_failed_check_names),
+            "owner_stage_approval_request_status_accounted_for": approval_request_status_accounted_for,
+            "owner_stage_approval_request_bootstrap_accounted_for": request_bootstrap_accounted_for,
+            "owner_stage_approval_request_failed_check_names": sorted(request_failed_check_names),
         },
         checks=checks,
         next_actions=[

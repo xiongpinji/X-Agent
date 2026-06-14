@@ -369,6 +369,64 @@ def test_original_kernel_delivery_manifest_includes_post_approval_owner_gates(tm
     assert owner_gate_paths.isdisjoint(excluded_paths)
 
 
+def test_original_kernel_delivery_manifest_includes_pre_approval_drift_guard_gate(tmp_path: Path) -> None:
+    reports_dir = tmp_path / ".xagent_runtime" / "reports"
+    _write_stage_files(tmp_path, DEFAULT_STAGE_FILES)
+    _write_evidence_reports(reports_dir)
+    drift_guard_paths = {
+        "scripts/commercial_delivery_pre_approval_drift_guard.py",
+        "tests/test_commercial_delivery_pre_approval_drift_guard.py",
+    }
+
+    report = build_report(
+        workspace_root=tmp_path,
+        reports_dir=reports_dir,
+        git_status_lines=[f" M {path}" for path in sorted(drift_guard_paths)],
+    )
+
+    assert report["status"] == "original_kernel_delivery_manifest_ready"
+    assert drift_guard_paths <= set(report["stage_include_paths"])
+
+    files = {item["path"]: item for item in report["files"]}
+    assert files["scripts/commercial_delivery_pre_approval_drift_guard.py"]["category"] == (
+        "commercial_delivery_gate_script"
+    )
+    assert files["tests/test_commercial_delivery_pre_approval_drift_guard.py"]["category"] == (
+        "commercial_delivery_gate_test"
+    )
+    excluded_paths = {item["path"] for item in report["excluded_dirty_paths"]}
+    assert drift_guard_paths.isdisjoint(excluded_paths)
+
+
+def test_original_kernel_delivery_manifest_includes_owner_approval_payload_audit_gate(tmp_path: Path) -> None:
+    reports_dir = tmp_path / ".xagent_runtime" / "reports"
+    _write_stage_files(tmp_path, DEFAULT_STAGE_FILES)
+    _write_evidence_reports(reports_dir)
+    audit_paths = {
+        "scripts/commercial_delivery_owner_approval_payload_audit.py",
+        "tests/test_commercial_delivery_owner_approval_payload_audit.py",
+    }
+
+    report = build_report(
+        workspace_root=tmp_path,
+        reports_dir=reports_dir,
+        git_status_lines=[f" M {path}" for path in sorted(audit_paths)],
+    )
+
+    assert report["status"] == "original_kernel_delivery_manifest_ready"
+    assert audit_paths <= set(report["stage_include_paths"])
+
+    files = {item["path"]: item for item in report["files"]}
+    assert files["scripts/commercial_delivery_owner_approval_payload_audit.py"]["category"] == (
+        "commercial_delivery_gate_script"
+    )
+    assert files["tests/test_commercial_delivery_owner_approval_payload_audit.py"]["category"] == (
+        "commercial_delivery_gate_test"
+    )
+    excluded_paths = {item["path"] for item in report["excluded_dirty_paths"]}
+    assert audit_paths.isdisjoint(excluded_paths)
+
+
 def test_original_kernel_delivery_manifest_blocks_missing_required_file(tmp_path: Path) -> None:
     reports_dir = tmp_path / ".xagent_runtime" / "reports"
     _write_stage_files(tmp_path, DEFAULT_STAGE_FILES, omit={"backend/app/core/storage.py"})

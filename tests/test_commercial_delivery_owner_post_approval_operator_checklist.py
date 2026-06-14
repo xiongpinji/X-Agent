@@ -210,6 +210,37 @@ def test_operator_checklist_ready_after_owner_staging_without_reexecutable_stage
     assert stage_item.executable_now is False
 
 
+def test_operator_checklist_accepts_ready_preflight_with_post_staging_cached_paths(tmp_path: Path) -> None:
+    paths = _write_inputs(tmp_path, approved=True, post_stage=True)
+    _write_json(
+        paths["owner_staging_preflight_path"],
+        {
+            "status": "owner_staging_preflight_ready",
+            "cached_staged_path_count": 0,
+            "full_codex_parity_claimed": False,
+        },
+    )
+    _write_json(
+        paths["owner_post_staging_verifier_path"],
+        {
+            "status": "owner_post_staging_verification_ready",
+            "cached_staged_path_count": 2,
+            "full_codex_parity_claimed": False,
+        },
+    )
+
+    checklist = build_post_approval_operator_checklist(**paths)
+
+    assert checklist.status == "owner_post_approval_operator_checklist_ready"
+    assert checklist.operator_ready is True
+    assert checklist.summary["pre_stage_ready"] is True
+    assert checklist.summary["post_stage_sequence_accounted_for"] is True
+    assert checklist.summary["preflight_post_stage_accounted_for"] is True
+    assert checklist.summary["owner_staging_preflight_cached_staged_path_count"] == 0
+    assert checklist.summary["owner_post_staging_verifier_cached_staged_path_count"] == 2
+    assert next(check for check in checklist.checks if check.name == "operator_state_accounted_for").status == "passed"
+
+
 def test_operator_checklist_blocks_post_stage_preflight_without_post_stage_evidence(tmp_path: Path) -> None:
     paths = _write_inputs(tmp_path, approved=True, post_stage=True)
     _write_json(

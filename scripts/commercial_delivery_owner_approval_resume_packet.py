@@ -198,6 +198,17 @@ def _failed_check_names(checks: list[OwnerApprovalResumePacketCheck]) -> list[st
     return [check.name for check in checks if check.status != "passed"]
 
 
+def _failed_report_check_names(payload: dict[str, Any]) -> set[str]:
+    checks = payload.get("checks")
+    if not isinstance(checks, list):
+        return set()
+    failed: set[str] = set()
+    for check in checks:
+        if isinstance(check, dict) and check.get("status") == "failed" and check.get("name") is not None:
+            failed.add(str(check["name"]))
+    return failed
+
+
 def _count_values_match(values: dict[str, int | None]) -> bool:
     present = [value for value in values.values() if value is not None]
     return bool(present) and len(present) == len(values) and len(set(present)) == 1
@@ -284,6 +295,20 @@ def build_owner_approval_resume_packet(
         and task_summary.get("owner_commit_packet_status") == "owner_commit_packet_ready"
         and task_summary.get("owner_post_stage_commit_gate_status") == "owner_post_stage_commit_gate_ready"
     )
+    task_board_failed_checks = _failed_report_check_names(task_board)
+    task_board_post_staging_accounted_for = (
+        _status(task_board) == "commercial_delivery_blocked"
+        and bool(task_board_failed_checks)
+        and task_board_failed_checks.issubset({"pre_approval_drift_guard_ready"})
+        and task_summary.get("secondary_pending_blocks_owner_staging") is False
+        and task_summary.get("owner_staging_preflight_accounted_for") is True
+        and task_summary.get("owner_post_staging_verifier_status") == "owner_post_staging_verification_ready"
+        and _int_or_none(task_summary.get("eligible_stage_count"))
+        == _int_or_none(task_summary.get("owner_stage_command_count"))
+        == _int_or_none(task_summary.get("post_staging_cached_path_count"))
+        and _int_or_none(task_summary.get("post_staging_cached_path_count")) is not None
+        and _int_or_none(task_summary.get("post_staging_cached_path_count")) > 0
+    )
 
     real_owner_approval_present = owner_approval_path.exists()
     approval_payload_ready = (
@@ -369,6 +394,7 @@ def build_owner_approval_resume_packet(
         and (
             _status(task_board) == "commercial_delivery_ready_for_owner_staging_review"
             or task_board_post_commit_accounted_for
+            or task_board_post_staging_accounted_for
         )
     )
     owner_approval_handoff_post_stage_accounted_for = (
@@ -423,6 +449,13 @@ def build_owner_approval_resume_packet(
         "runbook_stage_command_count": _int_or_none(_summary(runbook).get("stage_command_count")),
         "execution_plan_stage_command_count": _int_or_none(execution_plan.get("stage_command_count")),
     }
+    post_stage_stage_counts = {
+        "delivery_stage_include_count": _int_or_none(delivery_summary.get("stage_include_count")),
+        "delivery_owner_stage_command_count": _int_or_none(delivery_summary.get("owner_stage_command_count")),
+        "execution_plan_stage_command_count": _int_or_none(execution_plan.get("stage_command_count")),
+        "planned_stage_commands_count": len(_list(execution_plan.get("planned_stage_commands"))),
+        "post_staging_cached_path_count": _int_or_none(post_staging.get("cached_staged_path_count")),
+    }
     common_owner_gated = (
         handoff.get("owner_gated") is True
         and delivery_packet.get("owner_gated") is True
@@ -438,18 +471,77 @@ def build_owner_approval_resume_packet(
         and stage_counts.get("delivery_owner_stage_command_count") == 0
         and stage_counts.get("runbook_stage_command_count") == 0
         and stage_counts.get("execution_plan_stage_command_count") == 0
+    ) or (
+        post_stage_resume_evidence_ready
+        and post_stage_stage_counts["delivery_stage_include_count"] is not None
+        and post_stage_stage_counts["delivery_owner_stage_command_count"] is not None
+        and post_stage_stage_counts["execution_plan_stage_command_count"] is not None
+        and post_stage_stage_counts["planned_stage_commands_count"] is not None
+        and post_stage_stage_counts["post_staging_cached_path_count"] is not None
+        and post_stage_stage_counts["delivery_stage_include_count"]
+        >= post_stage_stage_counts["delivery_owner_stage_command_count"]
+        > 0
+        and post_stage_stage_counts["delivery_owner_stage_command_count"]
+        == post_stage_stage_counts["execution_plan_stage_command_count"]
+        == post_stage_stage_counts["planned_stage_commands_count"]
+        == post_stage_stage_counts["post_staging_cached_path_count"]
     )
+    post_stage_stage_path_digest_sources = {
+        key: value
+        for key, value in stage_path_digest_sources.items()
+        if key
+        in {
+            "owner_stage_approval_gate",
+            "owner_stage_execution_plan",
+            "owner_post_staging_verifier",
+            "owner_post_stage_commit_gate",
+            "owner_commit_packet",
+            "owner_delivery_packet",
+        }
+    }
+    post_stage_stage_command_digest_sources = {
+        key: value
+        for key, value in stage_command_digest_sources.items()
+        if key
+        in {
+            "owner_stage_approval_gate",
+            "owner_stage_execution_plan",
+            "owner_post_stage_commit_gate",
+            "owner_commit_packet",
+            "owner_delivery_packet",
+        }
+    }
+    post_stage_expected_stage_path_set_digest_sources = {
+        key: value
+        for key, value in expected_stage_path_set_digest_sources.items()
+        if key
+        in {
+            "owner_delivery_packet",
+            "owner_post_staging_verifier",
+            "owner_post_stage_commit_gate",
+            "owner_commit_packet",
+        }
+    }
     stage_path_digest_consistent = _values_match_or_post_commit_noop(
         stage_path_digest_sources,
         empty_digest,
+    ) or (
+        post_stage_resume_evidence_ready
+        and _nonempty_values_match(post_stage_stage_path_digest_sources)
     )
     stage_command_digest_consistent = _values_match_or_post_commit_noop(
         stage_command_digest_sources,
         empty_digest,
+    ) or (
+        post_stage_resume_evidence_ready
+        and _nonempty_values_match(post_stage_stage_command_digest_sources)
     )
     expected_stage_path_set_digest_consistent = _values_match_or_post_commit_noop(
         expected_stage_path_set_digest_sources,
         empty_digest,
+    ) or (
+        post_stage_resume_evidence_ready
+        and _nonempty_values_match(post_stage_expected_stage_path_set_digest_sources)
     )
 
     checks = [
@@ -489,11 +581,13 @@ def build_owner_approval_resume_packet(
         _check(
             "task_board_ready",
             _status(task_board) == "commercial_delivery_ready_for_owner_staging_review"
-            or task_board_post_commit_accounted_for,
+            or task_board_post_commit_accounted_for
+            or task_board_post_staging_accounted_for,
             details={
                 "status": _status(task_board),
                 "secondary_pending_count": task_summary.get("secondary_pending_count"),
                 "task_board_post_commit_accounted_for": task_board_post_commit_accounted_for,
+                "task_board_post_staging_accounted_for": task_board_post_staging_accounted_for,
             },
             error="commercial delivery task board is not ready",
         ),
@@ -526,25 +620,41 @@ def build_owner_approval_resume_packet(
         _check(
             "stage_counts_consistent",
             stage_counts_consistent,
-            details={"stage_counts": stage_counts},
+            details={
+                "stage_counts": stage_counts,
+                "post_stage_stage_counts": post_stage_stage_counts,
+                "post_stage_resume_evidence_ready": post_stage_resume_evidence_ready,
+            },
             error="stage include counts or owner stage command counts differ across resume inputs",
         ),
         _check(
             "stage_path_digest_consistent",
             stage_path_digest_consistent,
-            details={"stage_path_digest_sources": stage_path_digest_sources},
+            details={
+                "stage_path_digest_sources": stage_path_digest_sources,
+                "post_stage_stage_path_digest_sources": post_stage_stage_path_digest_sources,
+                "post_stage_resume_evidence_ready": post_stage_resume_evidence_ready,
+            },
             error="stage path digest is missing or inconsistent across resume inputs",
         ),
         _check(
             "stage_command_digest_consistent",
             stage_command_digest_consistent,
-            details={"stage_command_digest_sources": stage_command_digest_sources},
+            details={
+                "stage_command_digest_sources": stage_command_digest_sources,
+                "post_stage_stage_command_digest_sources": post_stage_stage_command_digest_sources,
+                "post_stage_resume_evidence_ready": post_stage_resume_evidence_ready,
+            },
             error="stage command digest is missing or inconsistent across resume inputs",
         ),
         _check(
             "expected_stage_path_set_digest_consistent",
             expected_stage_path_set_digest_consistent,
-            details={"expected_stage_path_set_digest_sources": expected_stage_path_set_digest_sources},
+            details={
+                "expected_stage_path_set_digest_sources": expected_stage_path_set_digest_sources,
+                "post_stage_expected_stage_path_set_digest_sources": post_stage_expected_stage_path_set_digest_sources,
+                "post_stage_resume_evidence_ready": post_stage_resume_evidence_ready,
+            },
             error="expected stage path set digest is missing or inconsistent across resume inputs",
         ),
         _check(
@@ -755,6 +865,7 @@ def build_owner_approval_resume_packet(
             "post_commit_noop_resume_ready": post_commit_noop_resume_ready,
             "post_commit_noop_accounted_for": delivery_post_commit_noop_accounted_for,
             "task_board_post_commit_accounted_for": task_board_post_commit_accounted_for,
+            "task_board_post_staging_accounted_for": task_board_post_staging_accounted_for,
             "owner_approval_handoff_post_stage_accounted_for": owner_approval_handoff_post_stage_accounted_for,
             "owner_staging_runbook_post_stage_accounted_for": owner_staging_runbook_post_stage_accounted_for,
             "owner_staging_rollback_plan_status": _status(rollback_plan),

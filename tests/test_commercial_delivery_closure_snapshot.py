@@ -698,6 +698,99 @@ def test_closure_snapshot_completes_when_post_approval_drift_guard_is_accounted_
     assert snapshot.summary["pre_approval_drift_guard_accounted_for"] is True
 
 
+def test_closure_snapshot_completes_after_post_stage_task_board_drift_guard_only_blocker(tmp_path: Path) -> None:
+    paths = _write_inputs(tmp_path, complete=True)
+    stage_path_digest = _digest_values(_stage_paths())
+    stage_command_digest = _digest_values(_stage_commands())
+    expected_stage_path_set_digest = _path_set_digest(_stage_paths())
+    _write_json(
+        paths["task_board_path"],
+        {
+            "status": "commercial_delivery_blocked",
+            "summary": {
+                "secondary_pending_count": 1,
+                "secondary_pending_blocks_owner_staging": False,
+                "owner_staging_preflight_accounted_for": True,
+                "owner_post_staging_verifier_status": "owner_post_staging_verification_ready",
+                "owner_post_stage_commit_gate_status": "owner_post_stage_commit_gate_ready",
+                "owner_commit_packet_status": "owner_commit_packet_ready",
+                "eligible_stage_count": 2,
+                "owner_stage_command_count": 2,
+                "post_staging_cached_path_count": 2,
+                "control_modes_preservation_status": "control_modes_preservation_ready",
+            },
+            "checks": [
+                {
+                    "name": "pre_approval_drift_guard_ready",
+                    "status": "failed",
+                }
+            ],
+            "full_codex_parity_claimed": False,
+        },
+    )
+    _write_json(
+        paths["pre_approval_drift_guard_path"],
+        {
+            "status": "pre_approval_drift_guard_blocked",
+            "real_owner_approval_present": True,
+            "mutation_performed": False,
+            "git_stage_performed": False,
+            "git_commit_performed": False,
+            "git_push_performed": False,
+            "network_mutation_performed": False,
+            "agent_execution_enabled": False,
+            "full_codex_parity_claimed": False,
+            "report_statuses": {
+                "owner_stage_approval_request": "owner_stage_approval_request_blocked",
+                "owner_approval_handoff": "owner_approval_handoff_blocked",
+                "owner_approval_payload_audit": "owner_approval_payload_ready",
+                "owner_stage_approval_gate": "owner_stage_approval_ready",
+                "owner_stage_execution_plan": "owner_stage_execution_ready",
+                "owner_post_approval_operator_checklist": "owner_post_approval_operator_checklist_ready",
+                "closure_snapshot": "commercial_delivery_closure_blocked",
+            },
+            "summary": {
+                "stage_path_digest": stage_path_digest,
+                "stage_command_digest": stage_command_digest,
+                "expected_stage_path_set_digest": expected_stage_path_set_digest,
+                "owner_approval_payload_present": True,
+                "owner_approval_payload_valid": True,
+                "owner_approval_payload_ready_for_gate": True,
+                "owner_stage_approval_gate_status": "owner_stage_approval_ready",
+                "owner_stage_execution_plan_status": "owner_stage_execution_ready",
+                "owner_post_approval_operator_checklist_status": "owner_post_approval_operator_checklist_ready",
+                "owner_post_approval_operator_checklist_operator_ready": True,
+                "owner_post_approval_operator_checklist_real_owner_approval_present": True,
+                "closure_snapshot_status": "commercial_delivery_closure_blocked",
+                "closure_delivery_complete": False,
+            },
+            "checks": [
+                {"name": "real_owner_approval_absent", "status": "failed"},
+                {"name": "approval_request_ready", "status": "failed"},
+                {"name": "approval_handoff_ready", "status": "failed"},
+                {"name": "approval_payload_blocked_before_owner", "status": "failed"},
+                {"name": "approval_gate_blocked_before_owner", "status": "failed"},
+                {"name": "stage_execution_blocked_before_owner", "status": "failed"},
+                {"name": "operator_checklist_waiting_before_owner", "status": "failed"},
+                {"name": "closure_blocked_before_owner", "status": "failed"},
+            ],
+        },
+    )
+
+    snapshot = build_commercial_delivery_closure_snapshot(**paths)
+
+    assert snapshot.status == "commercial_delivery_complete"
+    assert snapshot.delivery_complete is True
+    assert snapshot.summary["task_board_post_stage_accounted_for"] is True
+    assert snapshot.summary["task_board_ready_for_snapshot"] is True
+    assert snapshot.summary["pre_approval_drift_guard_post_stage_accounted_for"] is True
+    assert snapshot.summary["pre_approval_drift_guard_accounted_for"] is True
+    assert next(check for check in snapshot.checks if check.name == "task_board_ready").status == "passed"
+    drift_check = next(check for check in snapshot.checks if check.name == "pre_approval_drift_guard_ready")
+    assert drift_check.status == "passed"
+    assert drift_check.details["pre_approval_drift_guard_post_stage_accounted_for"] is True
+
+
 def test_closure_snapshot_accounts_for_post_commit_pre_approval_drift_guard(tmp_path: Path) -> None:
     paths = _write_inputs(tmp_path, complete=False)
     _write_json(
@@ -880,7 +973,7 @@ def test_closure_snapshot_accounts_for_post_approval_boundary_drift_guard(tmp_pa
     assert snapshot.summary["pre_approval_drift_guard_accounted_for"] is True
 
 
-def test_closure_snapshot_accounts_for_expected_nonzero_owner_stage_boundary(
+def test_closure_snapshot_blocks_expected_nonzero_owner_stage_boundary_until_real_gates_pass(
     tmp_path: Path,
 ) -> None:
     paths = _write_inputs(tmp_path, complete=False)
@@ -1080,8 +1173,8 @@ def test_closure_snapshot_accounts_for_expected_nonzero_owner_stage_boundary(
 
     snapshot = build_commercial_delivery_closure_snapshot(**paths)
 
-    assert snapshot.status == "commercial_delivery_complete"
-    assert snapshot.delivery_complete is True
+    assert snapshot.status == "commercial_delivery_closure_blocked"
+    assert snapshot.delivery_complete is False
     assert snapshot.summary["refresh_expected_nonzero_ready"] is True
     assert snapshot.summary["owner_delivery_packet_expected_nonzero_accounted_for"] is True
     assert snapshot.summary["owner_approval_expected_nonzero_accounted_for"] is True
@@ -1089,19 +1182,23 @@ def test_closure_snapshot_accounts_for_expected_nonzero_owner_stage_boundary(
     assert snapshot.summary["post_stage_expected_nonzero_accounted_for"] is True
     assert snapshot.summary["commit_expected_nonzero_accounted_for"] is True
     assert snapshot.summary["cached_staged_path_set_digest_pre_stage_accounted_for"] is True
-    assert snapshot.summary["owner_approval_resume_packet_post_stage_accounted_for"] is True
-    assert snapshot.summary["owner_post_approval_operator_checklist_post_stage_accounted_for"] is True
-    assert snapshot.summary["owner_blocking_reasons_by_report"] == {}
-    assert snapshot.blockers == []
-    assert next(check for check in snapshot.checks if check.name == "stage_ready").status == "passed"
-    assert next(check for check in snapshot.checks if check.name == "owner_approval_ready").status == "passed"
-    assert next(check for check in snapshot.checks if check.name == "stage_execution_ready").status == "passed"
-    assert next(check for check in snapshot.checks if check.name == "post_stage_ready").status == "passed"
-    assert next(check for check in snapshot.checks if check.name == "commit_ready").status == "passed"
+    assert snapshot.summary["owner_approval_resume_packet_post_stage_accounted_for"] is False
+    assert snapshot.summary["owner_post_approval_operator_checklist_post_stage_accounted_for"] is False
+    assert snapshot.summary["owner_blocking_reasons_by_report"]
+    assert "owner_stage_approval_gate_not_ready" in snapshot.blockers
+    assert "owner_stage_execution_plan_not_ready" in snapshot.blockers
+    assert "post_staging_verifier_not_ready" in snapshot.blockers
+    assert "owner_commit_packet_not_ready" in snapshot.blockers
+    assert "cached_staged_path_set_digest_not_ready" in snapshot.blockers
+    assert next(check for check in snapshot.checks if check.name == "stage_ready").status == "failed"
+    assert next(check for check in snapshot.checks if check.name == "owner_approval_ready").status == "failed"
+    assert next(check for check in snapshot.checks if check.name == "stage_execution_ready").status == "failed"
+    assert next(check for check in snapshot.checks if check.name == "post_stage_ready").status == "failed"
+    assert next(check for check in snapshot.checks if check.name == "commit_ready").status == "failed"
     cached_check = next(
         check for check in snapshot.checks if check.name == "cached_staged_path_set_digest_consistent"
     )
-    assert cached_check.status == "passed"
+    assert cached_check.status == "failed"
     assert cached_check.details["cached_staged_path_set_digest_pre_stage_accounted_for"] is True
 
 
@@ -1464,6 +1561,30 @@ def test_closure_snapshot_completes_ready_resume_after_noop_commit_accounting(tm
     assert commit_check.status == "passed"
     assert commit_check.details["commit_allowed"] is False
     assert commit_check.details["commit_noop_accounted_for"] is True
+
+
+def test_closure_snapshot_accepts_superseded_approval_brief_after_post_stage_evidence(
+    tmp_path: Path,
+) -> None:
+    paths = _write_inputs(tmp_path, complete=True)
+    old_stage_paths = ["backend/app/core/old_storage.py"]
+    old_stage_commands = ["git add -- 'backend/app/core/old_storage.py'"]
+    approval_brief = json.loads(paths["owner_stage_approval_brief_path"].read_text(encoding="utf-8"))
+    approval_brief["summary"].update(
+        {
+            "stage_path_digest": _digest_values(old_stage_paths),
+            "stage_command_digest": _digest_values(old_stage_commands),
+        }
+    )
+    paths["owner_stage_approval_brief_path"].write_text(json.dumps(approval_brief), encoding="utf-8")
+    snapshot = build_commercial_delivery_closure_snapshot(**paths)
+
+    assert snapshot.status == "commercial_delivery_complete"
+    assert next(check for check in snapshot.checks if check.name == "stage_counts_consistent").status == "passed"
+    assert next(check for check in snapshot.checks if check.name == "stage_path_digest_consistent").status == "passed"
+    assert next(check for check in snapshot.checks if check.name == "stage_command_digest_consistent").status == "passed"
+    path_check = next(check for check in snapshot.checks if check.name == "stage_path_digest_consistent")
+    assert path_check.details["current_post_stage_ready_for_digest"] is True
 
 
 def test_closure_snapshot_blocks_stage_digest_drift(tmp_path: Path) -> None:

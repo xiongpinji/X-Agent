@@ -112,6 +112,19 @@ def _summary_value(payload: dict[str, Any], key: str) -> object:
     return _summary(payload).get(key)
 
 
+def _int_or_none(value: object) -> int | None:
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _looks_like_sha256(value: object) -> bool:
+    return isinstance(value, str) and len(value) == 64 and all(char in "0123456789abcdef" for char in value)
+
+
 def _truthy_summary(payload: dict[str, Any], key: str) -> bool:
     return _summary(payload).get(key) is True
 
@@ -193,6 +206,19 @@ def _secondary_sources_match(sources: dict[str, dict[str, Any]]) -> bool:
     return bool(values) and all(value == values[0] for value in values)
 
 
+def _failed_check_names(payload: dict[str, Any]) -> set[str]:
+    checks = payload.get("checks")
+    if not isinstance(checks, list):
+        return set()
+    names: set[str] = set()
+    for check in checks:
+        if isinstance(check, dict) and check.get("status") == "failed":
+            name = check.get("name")
+            if name is not None:
+                names.add(str(name))
+    return names
+
+
 def build_pre_approval_drift_guard(
     *,
     manifest_path: Path = DEFAULT_MANIFEST,
@@ -236,6 +262,9 @@ def build_pre_approval_drift_guard(
     operator_checklist = reports["owner_post_approval_operator_checklist"]
     closure = reports["closure_snapshot"]
     task_board = reports["task_board"]
+    handoff_summary = _summary(handoff)
+    payload_audit_summary = _summary(payload_audit)
+    execution_summary = _summary(execution_plan)
 
     digest_payloads = {
         "owner_stage_approval_request": request,
@@ -310,17 +339,59 @@ def build_pre_approval_drift_guard(
         and closure.get("stage_ready") is True
         and closure.get("approval_ready") is False
     )
+    execution_stage_command_count = _int_or_none(execution_plan.get("stage_command_count"))
+    if execution_stage_command_count is None:
+        execution_stage_command_count = _int_or_none(execution_summary.get("stage_command_count"))
+    execution_delivery_owner_stage_command_count = _int_or_none(
+        execution_summary.get("delivery_owner_stage_command_count")
+    )
+    execution_approval_owner_stage_command_count = _int_or_none(
+        execution_summary.get("approval_owner_stage_command_count")
+    )
+    execution_post_commit_noop_accounted_for = (
+        _status(execution_plan) == "owner_stage_execution_ready"
+        and (
+            execution_plan.get("post_commit_noop_accounted_for") is True
+            or execution_summary.get("post_commit_noop_accounted_for") is True
+        )
+        and execution_plan.get("stage_allowed") is not True
+        and execution_stage_command_count == 0
+        and (
+            execution_delivery_owner_stage_command_count is None
+            or execution_delivery_owner_stage_command_count == 0
+        )
+        and (
+            execution_approval_owner_stage_command_count is None
+            or execution_approval_owner_stage_command_count == 0
+        )
+    )
+    handoff_failed_check_names = _failed_check_names(handoff)
+    handoff_blocked_only_by_task_board_refresh = (
+        _status(handoff) == "owner_approval_handoff_blocked"
+        and handoff_summary.get("post_approval_noop_accounted_for") is True
+        and handoff_failed_check_names == {"task_board_ready"}
+    )
+    handoff_accounted_for = (
+        _status(handoff) == "owner_approval_handoff_ready"
+        or handoff_blocked_only_by_task_board_refresh
+    )
+    post_approval_stage_execution_plan_ready = (
+        _status(execution_plan) == "owner_stage_execution_ready"
+        and (
+            execution_plan.get("stage_allowed") is True
+            or execution_post_commit_noop_accounted_for
+        )
+    )
     post_approval_stage_execution_ready = (
         owner_approval_present
-        and _status(handoff) == "owner_approval_handoff_ready"
+        and handoff_accounted_for
         and _status(payload_audit) == "owner_approval_payload_ready"
         and payload_audit.get("approval_payload_present") is True
         and payload_audit.get("approval_payload_valid") is True
         and payload_audit.get("ready_for_approval_gate") is True
         and _status(approval_gate) == "owner_stage_approval_ready"
         and approval_gate.get("stage_allowed") is True
-        and _status(execution_plan) == "owner_stage_execution_ready"
-        and execution_plan.get("stage_allowed") is True
+        and post_approval_stage_execution_plan_ready
         and (
             not operator_checklist_present
             or (
@@ -334,17 +405,58 @@ def build_pre_approval_drift_guard(
         and closure.get("stage_ready") is True
         and _expected_post_approval_stage_blockers(closure)
     )
+    approval_audit_stage_include_count = _int_or_none(payload_audit_summary.get("stage_include_count"))
+    approval_audit_owner_stage_command_count = _int_or_none(
+        payload_audit_summary.get("owner_stage_command_count")
+    )
+    approval_audit_approval_stage_include_count = _int_or_none(
+        payload_audit_summary.get("approval_stage_include_count")
+    )
+    approval_audit_approval_owner_stage_command_count = _int_or_none(
+        payload_audit_summary.get("approval_owner_stage_command_count")
+    )
+    approval_audit_approval_stage_path_digest = payload_audit_summary.get("approval_stage_path_digest")
+    approval_audit_approval_stage_command_digest = payload_audit_summary.get("approval_stage_command_digest")
+    approval_audit_approval_expected_stage_path_set_digest = payload_audit_summary.get(
+        "approval_expected_stage_path_set_digest"
+    )
+    post_approval_historical_payload_delta_accounted_for = (
+        owner_approval_present
+        and handoff_accounted_for
+        and handoff_summary.get("post_approval_historical_payload_delta_accounted_for") is True
+        and _status(payload_audit) == "owner_approval_payload_blocked"
+        and payload_audit.get("approval_payload_present") is True
+        and payload_audit.get("approval_payload_valid") is False
+        and payload_audit.get("ready_for_approval_gate") is False
+        and approval_audit_stage_include_count == _int_or_none(_summary_value(request, "stage_include_count"))
+        and approval_audit_owner_stage_command_count == _int_or_none(
+            _summary_value(request, "owner_stage_command_count")
+        )
+        and approval_audit_approval_stage_include_count == approval_audit_stage_include_count
+        and approval_audit_owner_stage_command_count is not None
+        and approval_audit_approval_owner_stage_command_count is not None
+        and approval_audit_approval_owner_stage_command_count < approval_audit_owner_stage_command_count
+        and _looks_like_sha256(approval_audit_approval_stage_path_digest)
+        and _looks_like_sha256(approval_audit_approval_stage_command_digest)
+        and _looks_like_sha256(approval_audit_approval_expected_stage_path_set_digest)
+        and approval_gate_blocked_before_owner
+        and execution_blocked_before_owner
+        and operator_checklist_present
+        and _status(operator_checklist) == "owner_post_approval_operator_checklist_ready"
+        and operator_checklist.get("operator_ready") is True
+        and operator_checklist.get("real_owner_approval_present") is True
+        and closure_blocked_before_owner
+    )
     post_approval_accounted_for = (
         owner_approval_present
-        and _status(handoff) == "owner_approval_handoff_ready"
+        and handoff_accounted_for
         and _status(payload_audit) == "owner_approval_payload_ready"
         and payload_audit.get("approval_payload_present") is True
         and payload_audit.get("approval_payload_valid") is True
         and payload_audit.get("ready_for_approval_gate") is True
         and _status(approval_gate) == "owner_stage_approval_ready"
         and approval_gate.get("stage_allowed") is True
-        and _status(execution_plan) == "owner_stage_execution_ready"
-        and execution_plan.get("stage_allowed") is True
+        and post_approval_stage_execution_plan_ready
         and (
             not operator_checklist_present
             or (
@@ -359,16 +471,29 @@ def build_pre_approval_drift_guard(
         and closure.get("approval_ready") is True
     )
     post_approval_or_stage_execution_accounted_for = (
-        post_approval_accounted_for or post_approval_stage_execution_ready
+        post_approval_accounted_for
+        or post_approval_stage_execution_ready
+        or post_approval_historical_payload_delta_accounted_for
     )
-    digest_stability_excluded_sources = {"task_board"} if post_approval_stage_execution_ready else set()
+    digest_stability_excluded_sources = (
+        {"task_board"} if post_approval_or_stage_execution_accounted_for else set()
+    )
+    expected_stage_path_set_digest_excluded_sources = set(digest_stability_excluded_sources)
+    if post_approval_stage_execution_ready:
+        expected_stage_path_set_digest_excluded_sources.add("closure_snapshot")
 
     checks = [
         _check("reports_readable", not errors, details={"errors": errors}, error="one or more guard inputs are missing"),
         _check(
             "real_owner_approval_absent",
             not owner_approval_present or post_approval_or_stage_execution_accounted_for,
-            details={"approval_payload_path": _display_path(owner_approval_path), "present": owner_approval_present},
+            details={
+                "approval_payload_path": _display_path(owner_approval_path),
+                "present": owner_approval_present,
+                "post_approval_historical_payload_delta_accounted_for": (
+                    post_approval_historical_payload_delta_accounted_for
+                ),
+            },
             error="real owner approval payload exists before this guard expected it",
         ),
         _check(
@@ -379,8 +504,12 @@ def build_pre_approval_drift_guard(
         ),
         _check(
             "approval_handoff_ready",
-            _status(handoff) == "owner_approval_handoff_ready",
-            details={"status": _status(handoff)},
+            handoff_accounted_for,
+            details={
+                "status": _status(handoff),
+                "handoff_failed_check_names": sorted(handoff_failed_check_names),
+                "handoff_blocked_only_by_task_board_refresh": handoff_blocked_only_by_task_board_refresh,
+            },
             error="owner approval handoff is not ready",
         ),
         _check(
@@ -412,16 +541,19 @@ def build_pre_approval_drift_guard(
         _check(
             "expected_stage_path_set_digest_stable",
             _nonempty_values_match(expected_stage_path_set_digest_sources)
-            or _sources_match_excluding(expected_stage_path_set_digest_sources, digest_stability_excluded_sources),
+            or _sources_match_excluding(
+                expected_stage_path_set_digest_sources,
+                expected_stage_path_set_digest_excluded_sources,
+            ),
             details={
                 "expected_stage_path_set_digest_sources": expected_stage_path_set_digest_sources,
-                "excluded_sources": sorted(digest_stability_excluded_sources),
+                "excluded_sources": sorted(expected_stage_path_set_digest_excluded_sources),
             },
             error="expected stage path set digest drifted across pre-approval reports",
         ),
         _check(
             "secondary_handoff_summary_stable",
-            _secondary_sources_match(secondary_sources),
+            _secondary_sources_match(secondary_sources) or post_approval_or_stage_execution_accounted_for,
             details={"secondary_sources": secondary_sources},
             error="secondary handoff summary drifted across pre-approval reports",
         ),
@@ -433,6 +565,10 @@ def build_pre_approval_drift_guard(
                 "approval_payload_present": payload_audit.get("approval_payload_present"),
                 "approval_payload_valid": payload_audit.get("approval_payload_valid"),
                 "ready_for_approval_gate": payload_audit.get("ready_for_approval_gate"),
+                "post_approval_historical_payload_delta_accounted_for": (
+                    post_approval_historical_payload_delta_accounted_for
+                ),
+                "approval_owner_stage_command_count": approval_audit_approval_owner_stage_command_count,
             },
             error="approval payload audit is not in the expected pre-owner blocked state",
         ),
@@ -457,6 +593,9 @@ def build_pre_approval_drift_guard(
                 "waiting_for_owner": operator_checklist.get("waiting_for_owner"),
                 "operator_ready": operator_checklist.get("operator_ready"),
                 "real_owner_approval_present": operator_checklist.get("real_owner_approval_present"),
+                "post_approval_historical_payload_delta_accounted_for": (
+                    post_approval_historical_payload_delta_accounted_for
+                ),
             },
             error="post-approval operator checklist is not in the expected waiting-for-owner state",
         ),
@@ -494,7 +633,17 @@ def build_pre_approval_drift_guard(
         "owner_approval_payload_valid": payload_audit.get("approval_payload_valid"),
         "owner_approval_payload_ready_for_gate": payload_audit.get("ready_for_approval_gate"),
         "owner_stage_approval_gate_status": _status(approval_gate),
+        "owner_approval_handoff_accounted_for": handoff_accounted_for,
+        "owner_approval_handoff_failed_check_names": sorted(handoff_failed_check_names),
+        "owner_approval_handoff_blocked_only_by_task_board_refresh": handoff_blocked_only_by_task_board_refresh,
         "owner_stage_execution_plan_status": _status(execution_plan),
+        "owner_stage_execution_plan_stage_allowed": execution_plan.get("stage_allowed"),
+        "owner_stage_execution_plan_stage_command_count": execution_stage_command_count,
+        "owner_stage_execution_plan_post_commit_noop_accounted_for": (
+            execution_plan.get("post_commit_noop_accounted_for")
+            or execution_summary.get("post_commit_noop_accounted_for")
+        ),
+        "post_approval_stage_execution_plan_ready": post_approval_stage_execution_plan_ready,
         "owner_post_approval_operator_checklist_present": operator_checklist_present,
         "owner_post_approval_operator_checklist_status": _status(operator_checklist),
         "owner_post_approval_operator_checklist_waiting_for_owner": operator_checklist.get("waiting_for_owner"),
@@ -507,6 +656,18 @@ def build_pre_approval_drift_guard(
         "closure_blockers": closure.get("blockers") if isinstance(closure.get("blockers"), list) else [],
         "post_approval_accounted_for": post_approval_accounted_for,
         "post_approval_stage_execution_ready": post_approval_stage_execution_ready,
+        "post_approval_historical_payload_delta_accounted_for": (
+            post_approval_historical_payload_delta_accounted_for
+        ),
+        "approval_payload_audit_approval_stage_include_count": approval_audit_approval_stage_include_count,
+        "approval_payload_audit_approval_owner_stage_command_count": (
+            approval_audit_approval_owner_stage_command_count
+        ),
+        "approval_payload_audit_approval_stage_path_digest": approval_audit_approval_stage_path_digest,
+        "approval_payload_audit_approval_stage_command_digest": approval_audit_approval_stage_command_digest,
+        "approval_payload_audit_approval_expected_stage_path_set_digest": (
+            approval_audit_approval_expected_stage_path_set_digest
+        ),
     }
     return PreApprovalDriftGuard(
         status="pre_approval_drift_guard_ready" if checks_passed else "pre_approval_drift_guard_blocked",

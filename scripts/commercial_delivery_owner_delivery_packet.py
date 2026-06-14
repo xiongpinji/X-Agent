@@ -353,6 +353,19 @@ def build_owner_delivery_packet(
         )
         and task_summary.get("secondary_pending_blocks_owner_staging") is False
     )
+    task_board_failed_checks = _failed_check_names(task_board)
+    task_board_post_staging_accounted_for = (
+        _status(task_board) == "commercial_delivery_blocked"
+        and bool(task_board_failed_checks)
+        and task_board_failed_checks.issubset({"pre_approval_drift_guard_ready"})
+        and task_summary.get("secondary_pending_blocks_owner_staging") is False
+        and task_summary.get("owner_staging_preflight_accounted_for") is True
+        and task_summary.get("owner_post_staging_verifier_status") == "owner_post_staging_verification_ready"
+        and _int_or_none(task_summary.get("eligible_stage_count")) == owner_stage_command_count
+        and _int_or_none(task_summary.get("owner_stage_command_count")) == owner_stage_command_count
+        and _int_or_none(task_summary.get("post_staging_cached_path_count")) == owner_stage_command_count
+        and owner_stage_command_count > 0
+    )
     stage_approval_ready = _status(approval_gate) == "owner_stage_approval_ready"
     stage_approval_expected_blocked = (
         _status(approval_gate) in {None, "owner_stage_approval_blocked"}
@@ -494,6 +507,71 @@ def build_owner_delivery_packet(
         and all(isinstance(value, str) and len(value) == 64 for value in approval_payload_audit_approval_digests)
         and approval_payload_audit_approval_digests != approval_payload_audit_current_digests
     )
+    approval_payload_audit_current_ready_historical_delta_failed_checks = {
+        "approval_counts_match_request_and_delivery_packet",
+        "approval_digests_match_request_and_delivery_packet",
+    }
+    approval_payload_audit_has_current_ready_historical_payload_delta = (
+        _status(approval_payload_audit) == "owner_approval_payload_blocked"
+        and approval_payload_audit.get("approval_payload_present") is True
+        and approval_payload_audit.get("ready_for_approval_gate") is False
+        and approval_payload_audit.get("mutation_performed") is not True
+        and approval_payload_audit.get("git_stage_performed") is not True
+        and approval_payload_audit.get("git_commit_performed") is not True
+        and approval_payload_audit.get("git_push_performed") is not True
+        and approval_payload_audit.get("network_mutation_performed") is not True
+        and approval_payload_audit.get("agent_execution_enabled") is not True
+        and approval_payload_audit.get("full_codex_parity_claimed") is not True
+        and approval_payload_audit_failed_checks == approval_payload_audit_current_ready_historical_delta_failed_checks
+        and ("owner_approval_payload_audit" in expected_nonzero_steps or refresh_delivery_bootstrap)
+        and approval_payload_audit_stage_include_count is not None
+        and approval_payload_audit_stage_include_count == _int_or_none(stage_include_count)
+        and approval_payload_audit_owner_stage_command_count == owner_stage_command_count
+        and approval_payload_audit_approval_stage_include_count == approval_payload_audit_stage_include_count
+        and approval_payload_audit_approval_owner_stage_command_count is not None
+        and 0 <= approval_payload_audit_approval_owner_stage_command_count < owner_stage_command_count
+        and approval_payload_audit_summary.get("commit_command_preview") == commit_preview
+        and approval_payload_audit_summary.get("approval_commit_command_preview") == commit_preview
+        and approval_payload_audit_current_digests
+        == [stage_path_digest, stage_command_digest, expected_stage_path_set_digest]
+        and all(isinstance(value, str) and len(value) == 64 for value in approval_payload_audit_current_digests)
+        and all(isinstance(value, str) and len(value) == 64 for value in approval_payload_audit_approval_digests)
+        and approval_payload_audit_approval_digests != approval_payload_audit_current_digests
+    )
+    approval_payload_audit_delivery_bootstrap_historical_delta_failed_checks = {
+        "owner_delivery_packet_ready",
+        "approval_counts_match_request_and_delivery_packet",
+        "approval_digests_match_request_and_delivery_packet",
+    }
+    approval_payload_audit_has_delivery_bootstrap_historical_payload_delta = (
+        _status(approval_payload_audit) == "owner_approval_payload_blocked"
+        and approval_payload_audit.get("approval_payload_present") is True
+        and approval_payload_audit.get("ready_for_approval_gate") is False
+        and approval_payload_audit.get("mutation_performed") is not True
+        and approval_payload_audit.get("git_stage_performed") is not True
+        and approval_payload_audit.get("git_commit_performed") is not True
+        and approval_payload_audit.get("git_push_performed") is not True
+        and approval_payload_audit.get("network_mutation_performed") is not True
+        and approval_payload_audit.get("agent_execution_enabled") is not True
+        and approval_payload_audit.get("full_codex_parity_claimed") is not True
+        and approval_payload_audit_failed_checks
+        == approval_payload_audit_delivery_bootstrap_historical_delta_failed_checks
+        and refresh_delivery_bootstrap
+        and approval_request_accounted_for
+        and approval_payload_audit_stage_include_count is not None
+        and approval_payload_audit_stage_include_count == _int_or_none(stage_include_count)
+        and approval_payload_audit_owner_stage_command_count == owner_stage_command_count
+        and approval_payload_audit_approval_stage_include_count == approval_payload_audit_stage_include_count
+        and approval_payload_audit_approval_owner_stage_command_count is not None
+        and 0 <= approval_payload_audit_approval_owner_stage_command_count < owner_stage_command_count
+        and approval_payload_audit_summary.get("commit_command_preview") == commit_preview
+        and approval_payload_audit_summary.get("approval_commit_command_preview") == commit_preview
+        and approval_payload_audit_current_digests
+        == [stage_path_digest, stage_command_digest, expected_stage_path_set_digest]
+        and all(isinstance(value, str) and len(value) == 64 for value in approval_payload_audit_current_digests)
+        and all(isinstance(value, str) and len(value) == 64 for value in approval_payload_audit_approval_digests)
+        and approval_payload_audit_approval_digests != approval_payload_audit_current_digests
+    )
     approval_payload_audit_digest_bootstrap_failed_checks = {
         "owner_delivery_packet_ready",
         "owner_stage_approval_request_ready",
@@ -605,14 +683,52 @@ def build_owner_delivery_packet(
         or approval_payload_audit_blocked_by_delivery_bootstrap
         or approval_payload_audit_blocked_by_post_stage_commit
         or approval_payload_audit_post_commit_noop_accounted_for
+        or approval_payload_audit_has_current_ready_historical_payload_delta
+        or approval_payload_audit_has_delivery_bootstrap_historical_payload_delta
     )
+    approval_gate_summary = _summary(approval_gate)
+    stage_execution_summary = _summary(stage_execution_plan)
+    rollback_summary = _summary(rollback_plan)
     stage_execution_ready = _status(stage_execution_plan) == "owner_stage_execution_ready"
     stage_execution_expected_blocked = (
         _status(stage_execution_plan) == "owner_stage_execution_blocked"
         and stage_execution_plan.get("stage_allowed") is not True
     )
+    stage_execution_failed_checks = set(_failed_check_names(stage_execution_plan))
+    stage_execution_post_stage_bootstrap_accounted_for = (
+        commit_or_noop_accounted_for
+        and _status(stage_execution_plan) == "owner_stage_execution_blocked"
+        and stage_execution_plan.get("stage_allowed") is True
+        and stage_execution_failed_checks.issubset(
+            {
+                "owner_staging_preflight_accounted_for",
+                "owner_delivery_packet_ready",
+                "no_cached_staged_paths_before_stage_execution_or_accounted",
+            }
+        )
+        and stage_execution_summary.get("post_stage_verifier_accounted_for") is True
+        and stage_execution_summary.get("owner_post_staging_verifier_status")
+        == "owner_post_staging_verification_ready"
+        and stage_execution_summary.get("owner_post_stage_commit_gate_status")
+        == "owner_post_stage_commit_gate_ready"
+        and _int_or_none(stage_execution_summary.get("cached_staged_path_count")) == owner_stage_command_count
+        and stage_execution_summary.get("stage_path_digest") == stage_path_digest
+        and stage_execution_summary.get("stage_command_digest") == stage_command_digest
+        and stage_execution_summary.get("expected_stage_path_set_digest") == expected_stage_path_set_digest
+        and (
+            _int_or_none(stage_execution_plan.get("stage_command_count"))
+            if _int_or_none(stage_execution_plan.get("stage_command_count")) is not None
+            else _int_or_none(stage_execution_summary.get("stage_command_count"))
+        )
+        == owner_stage_command_count
+    )
     stage_execution_missing = "owner_stage_execution_plan" in optional_missing
-    stage_execution_accounted_for = stage_execution_ready or stage_execution_expected_blocked or stage_execution_missing
+    stage_execution_accounted_for = (
+        stage_execution_ready
+        or stage_execution_expected_blocked
+        or stage_execution_post_stage_bootstrap_accounted_for
+        or stage_execution_missing
+    )
     rollback_plan_ready = _status(rollback_plan) == "owner_staging_rollback_plan_ready"
     rollback_plan_missing = "owner_staging_rollback_plan" in optional_missing
     rollback_plan_accounted_for = rollback_plan_ready or rollback_plan_missing
@@ -623,9 +739,6 @@ def build_owner_delivery_packet(
         and _int_or_none(rollback_plan.get("reset_command_count")) == 0
         and _summary(rollback_plan).get("post_commit_noop_accounted_for") is True
     )
-    approval_gate_summary = _summary(approval_gate)
-    stage_execution_summary = _summary(stage_execution_plan)
-    rollback_summary = _summary(rollback_plan)
     post_commit_stage_approval_accounted_for = stage_approval_ready or (
         commit_or_noop_accounted_for
         and stage_approval_expected_blocked
@@ -640,7 +753,7 @@ def build_owner_delivery_packet(
             )
         )
     )
-    post_commit_stage_execution_accounted_for = stage_execution_ready or (
+    post_commit_stage_execution_accounted_for = stage_execution_ready or stage_execution_post_stage_bootstrap_accounted_for or (
         commit_or_noop_accounted_for
         and stage_execution_expected_blocked
         and approval_request_accounted_for
@@ -679,6 +792,7 @@ def build_owner_delivery_packet(
         and (
             _status(task_board) == "commercial_delivery_ready_for_owner_staging_review"
             or task_board_noop_accounted_for
+            or task_board_post_staging_accounted_for
         )
         and _status(control_modes_preservation) == "control_modes_preservation_ready"
         and _status(staging_runbook) == "owner_staging_runbook_blocked"
@@ -758,6 +872,7 @@ def build_owner_delivery_packet(
                 "strict_stage_ready": strict_stage_ready,
                 "post_stage_chain_accounted_for": post_stage_chain_accounted_for,
                 "task_board_noop_accounted_for": task_board_noop_accounted_for,
+                "task_board_post_staging_accounted_for": task_board_post_staging_accounted_for,
                 "pre_approval_bootstrap_accounted_for": pre_approval_bootstrap_accounted_for,
                 "owner_post_stage_commit_gate_status": _status(commit_gate),
                 "owner_commit_packet_status": _status(commit_packet),
@@ -867,6 +982,12 @@ def build_owner_delivery_packet(
                 ),
                 "approval_payload_audit_has_historical_payload_delta": (
                     approval_payload_audit_has_historical_payload_delta
+                ),
+                "approval_payload_audit_has_current_ready_historical_payload_delta": (
+                    approval_payload_audit_has_current_ready_historical_payload_delta
+                ),
+                "approval_payload_audit_has_delivery_bootstrap_historical_payload_delta": (
+                    approval_payload_audit_has_delivery_bootstrap_historical_payload_delta
                 ),
                 "failed_checks": sorted(approval_payload_audit_failed_checks),
             },
@@ -1058,6 +1179,12 @@ def build_owner_delivery_packet(
             "approval_payload_audit_has_historical_payload_delta": (
                 approval_payload_audit_has_historical_payload_delta
             ),
+            "approval_payload_audit_has_current_ready_historical_payload_delta": (
+                approval_payload_audit_has_current_ready_historical_payload_delta
+            ),
+            "approval_payload_audit_has_delivery_bootstrap_historical_payload_delta": (
+                approval_payload_audit_has_delivery_bootstrap_historical_payload_delta
+            ),
             "owner_stage_execution_plan_status": _status(stage_execution_plan),
             "owner_staging_rollback_plan_status": _status(rollback_plan),
             "owner_post_stage_commit_gate_status": _status(commit_gate),
@@ -1075,6 +1202,7 @@ def build_owner_delivery_packet(
             "post_commit_stage_execution_accounted_for": post_commit_stage_execution_accounted_for,
             "post_commit_noop_accounted_for": post_commit_noop_accounted_for,
             "task_board_noop_accounted_for": task_board_noop_accounted_for,
+            "task_board_post_staging_accounted_for": task_board_post_staging_accounted_for,
             "pre_approval_bootstrap_accounted_for": pre_approval_bootstrap_accounted_for,
             "refresh_delivery_bootstrap": refresh_delivery_bootstrap,
             "stage_path_digest": stage_path_digest,

@@ -294,11 +294,24 @@ def test_resume_packet_ready_after_owner_approval(tmp_path: Path) -> None:
 
 def test_resume_packet_accounts_for_post_stage_superseded_handoff_and_runbook(tmp_path: Path) -> None:
     paths = _write_inputs(tmp_path, approved=True)
-    _update_json(paths["owner_approval_handoff_path"], status="owner_approval_handoff_blocked")
-    _update_json(paths["owner_staging_runbook_path"], status="owner_staging_runbook_blocked")
+    old_stage_paths = ["backend/app/core/old_storage.py"]
+    old_stage_commands = ["git add -- 'backend/app/core/old_storage.py'"]
+    _update_json(
+        paths["owner_approval_handoff_path"],
+        status="owner_approval_handoff_blocked",
+        summary={
+            "stage_include_count": 2,
+            "owner_stage_command_count": 1,
+            "stage_path_digest": _digest_values(old_stage_paths),
+            "stage_command_digest": _digest_values(old_stage_commands),
+            "expected_stage_path_set_digest": _path_set_digest(old_stage_paths),
+        },
+    )
+    _update_json(paths["owner_staging_runbook_path"], status="owner_staging_runbook_blocked", summary={"stage_command_count": 1})
     _update_json(
         paths["owner_post_staging_verifier_path"],
         status="owner_post_staging_verification_ready",
+        cached_staged_path_count=2,
     )
     _update_json(paths["owner_post_stage_commit_gate_path"], status="owner_post_stage_commit_gate_ready")
     _update_json(paths["owner_commit_packet_path"], status="owner_commit_packet_ready", commit_allowed=True)
@@ -312,10 +325,51 @@ def test_resume_packet_accounts_for_post_stage_superseded_handoff_and_runbook(tm
     assert packet.report_statuses["owner_staging_runbook"] == "owner_staging_runbook_blocked"
     assert packet.summary["owner_approval_handoff_post_stage_accounted_for"] is True
     assert packet.summary["owner_staging_runbook_post_stage_accounted_for"] is True
+    assert next(check for check in packet.checks if check.name == "stage_counts_consistent").status == "passed"
+    assert next(check for check in packet.checks if check.name == "stage_path_digest_consistent").status == "passed"
+    assert next(check for check in packet.checks if check.name == "stage_command_digest_consistent").status == "passed"
+    assert next(check for check in packet.checks if check.name == "expected_stage_path_set_digest_consistent").status == "passed"
     handoff_check = next(check for check in packet.checks if check.name == "owner_approval_handoff_ready")
     runbook_check = next(check for check in packet.checks if check.name == "owner_staging_runbook_ready")
     assert handoff_check.details["post_stage_accounted_for"] is True
     assert runbook_check.details["post_stage_accounted_for"] is True
+
+
+def test_resume_packet_accounts_for_post_stage_task_board_drift_guard_only_blocker(tmp_path: Path) -> None:
+    paths = _write_inputs(tmp_path, approved=True)
+    _update_json(paths["owner_approval_handoff_path"], status="owner_approval_handoff_blocked")
+    _update_json(paths["owner_staging_runbook_path"], status="owner_staging_runbook_blocked")
+    _update_json(paths["owner_post_staging_verifier_path"], status="owner_post_staging_verification_ready")
+    _update_json(paths["owner_post_stage_commit_gate_path"], status="owner_post_stage_commit_gate_ready")
+    _update_json(paths["owner_commit_packet_path"], status="owner_commit_packet_ready", commit_allowed=True)
+    _update_json(
+        paths["task_board_path"],
+        status="commercial_delivery_blocked",
+        summary={
+            "secondary_pending_count": 0,
+            "secondary_pending_blocks_owner_staging": False,
+            "owner_staging_preflight_accounted_for": True,
+            "owner_post_staging_verifier_status": "owner_post_staging_verification_ready",
+            "eligible_stage_count": 2,
+            "owner_stage_command_count": 2,
+            "post_staging_cached_path_count": 2,
+        },
+        checks=[
+            {
+                "name": "pre_approval_drift_guard_ready",
+                "status": "failed",
+            }
+        ],
+    )
+
+    packet = build_owner_approval_resume_packet(**paths)
+
+    assert packet.status == "owner_approval_resume_packet_ready"
+    assert packet.resume_ready is True
+    assert packet.summary["task_board_post_staging_accounted_for"] is True
+    task_board_check = next(check for check in packet.checks if check.name == "task_board_ready")
+    assert task_board_check.status == "passed"
+    assert task_board_check.details["task_board_post_staging_accounted_for"] is True
 
 
 def test_resume_packet_accepts_subset_stage_commands_after_post_stage_evidence(tmp_path: Path) -> None:

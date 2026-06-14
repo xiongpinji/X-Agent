@@ -37,6 +37,8 @@ def _write_inputs(
         "owner_staging_preflight_path": tmp_path / "owner-staging-preflight.json",
         "owner_stage_approval_gate_path": tmp_path / "owner-stage-approval-gate.json",
         "owner_delivery_packet_path": tmp_path / "owner-delivery-packet.json",
+        "owner_post_staging_verifier_path": tmp_path / "owner-post-staging-verifier.json",
+        "owner_post_stage_commit_gate_path": tmp_path / "owner-post-stage-commit-gate.json",
     }
     stage_commands = [
         "git add -- 'backend/app/core/storage.py'",
@@ -99,6 +101,30 @@ def _write_inputs(
                 "stage_path_digest": stage_path_digest,
                 "stage_command_digest": stage_command_digest,
                 "expected_stage_path_set_digest": expected_stage_path_set_digest,
+            },
+        },
+    )
+    _write_json(
+        paths["owner_post_staging_verifier_path"],
+        {
+            "status": "owner_post_staging_verification_ready" if post_stage else "owner_post_staging_verification_blocked",
+            "cached_staged_path_count": 2 if post_stage else 0,
+            "stage_path_digest": stage_path_digest,
+            "expected_stage_path_set_digest": expected_stage_path_set_digest,
+            "full_codex_parity_claimed": False,
+        },
+    )
+    _write_json(
+        paths["owner_post_stage_commit_gate_path"],
+        {
+            "status": "owner_post_stage_commit_gate_ready" if post_stage else "owner_post_stage_commit_gate_blocked",
+            "commit_allowed": post_stage,
+            "full_codex_parity_claimed": False,
+            "summary": {
+                "cached_staged_path_count": 2 if post_stage else 0,
+                "stage_path_digest": stage_path_digest,
+                "stage_command_digest": stage_command_digest,
+                "cached_staged_path_set_digest": expected_stage_path_set_digest,
             },
         },
     )
@@ -191,6 +217,7 @@ def test_stage_execution_plan_ready_after_stage_execution_with_verified_cached_i
     assert plan.stage_allowed is True
     assert plan.stage_ready is True
     assert plan.summary["strict_stage_ready"] is False
+    assert plan.summary["post_stage_verifier_accounted_for"] is True
     assert plan.summary["post_stage_accounted_for"] is True
     assert plan.planned_stage_commands == [
         "git add -- 'backend/app/core/storage.py'",
@@ -220,6 +247,27 @@ def test_stage_execution_plan_accepts_post_commit_noop(tmp_path: Path) -> None:
     preflight = json.loads(paths["owner_staging_preflight_path"].read_text(encoding="utf-8"))
     preflight.update({"stage_command_count": 0, "cached_staged_path_count": 0})
     paths["owner_staging_preflight_path"].write_text(json.dumps(preflight), encoding="utf-8")
+    verifier = json.loads(paths["owner_post_staging_verifier_path"].read_text(encoding="utf-8"))
+    verifier.update(
+        {
+            "status": "owner_post_staging_verification_blocked",
+            "cached_staged_path_count": 0,
+            "stage_path_digest": empty_digest,
+            "expected_stage_path_set_digest": empty_digest,
+        }
+    )
+    paths["owner_post_staging_verifier_path"].write_text(json.dumps(verifier), encoding="utf-8")
+    commit_gate = json.loads(paths["owner_post_stage_commit_gate_path"].read_text(encoding="utf-8"))
+    commit_gate.update({"status": "owner_post_stage_commit_gate_blocked", "commit_allowed": False})
+    commit_gate["summary"].update(
+        {
+            "cached_staged_path_count": 0,
+            "stage_path_digest": empty_digest,
+            "stage_command_digest": empty_digest,
+            "cached_staged_path_set_digest": empty_digest,
+        }
+    )
+    paths["owner_post_stage_commit_gate_path"].write_text(json.dumps(commit_gate), encoding="utf-8")
     approval_gate = json.loads(paths["owner_stage_approval_gate_path"].read_text(encoding="utf-8"))
     approval_gate["summary"].update(
         {

@@ -557,8 +557,55 @@ def build_commercial_delivery_closure_snapshot(
         values = [value for value in sources.values() if value is not None]
         return bool(values) and all(value == empty_digest for value in values)
 
-    stage_path_digest_consistent = _sources_match_or_noop(stage_path_digest_sources)
-    stage_command_digest_consistent = _sources_match_or_noop(stage_command_digest_sources)
+    current_post_stage_path_digest_sources = {
+        key: value
+        for key, value in stage_path_digest_sources.items()
+        if key
+        in {
+            "owner_delivery_packet",
+            "owner_stage_approval_gate",
+            "owner_stage_execution_plan",
+            "owner_post_staging_verifier",
+            "owner_post_stage_commit_gate",
+            "owner_commit_packet",
+        }
+    }
+    current_post_stage_command_digest_sources = {
+        key: value
+        for key, value in stage_command_digest_sources.items()
+        if key
+        in {
+            "owner_delivery_packet",
+            "owner_stage_approval_gate",
+            "owner_stage_execution_plan",
+            "owner_post_stage_commit_gate",
+            "owner_commit_packet",
+        }
+    }
+    current_post_stage_ready_for_digest = (
+        _status(delivery_packet) == "owner_delivery_packet_ready"
+        and _status(post_staging) == "owner_post_staging_verification_ready"
+        and _status(commit_gate) == "owner_post_stage_commit_gate_ready"
+        and _status(commit_packet) == "owner_commit_packet_ready"
+        and (
+            (
+                _status(approval_gate) == "owner_stage_approval_ready"
+                and _status(execution_plan) == "owner_stage_execution_ready"
+            )
+            or (
+                delivery_summary.get("post_stage_chain_accounted_for") is True
+                and delivery_summary.get("post_commit_owner_gate_accounted_for") is True
+                and delivery_summary.get("post_commit_stage_approval_accounted_for") is True
+                and delivery_summary.get("post_commit_stage_execution_accounted_for") is True
+            )
+        )
+    )
+    stage_path_digest_consistent = _sources_match_or_noop(stage_path_digest_sources) or (
+        current_post_stage_ready_for_digest and _sources_match(current_post_stage_path_digest_sources)
+    )
+    stage_command_digest_consistent = _sources_match_or_noop(stage_command_digest_sources) or (
+        current_post_stage_ready_for_digest and _sources_match(current_post_stage_command_digest_sources)
+    )
     expected_stage_path_set_digest_consistent = _sources_match_or_noop(expected_stage_path_set_digest_sources)
     cached_staged_path_set_digest_consistent = _sources_match_or_noop(cached_staged_path_set_digest_sources)
 
@@ -662,16 +709,36 @@ def build_commercial_delivery_closure_snapshot(
         and _digest_field(commit_gate, "cached_staged_path_set_digest") is None
         and _digest_field(commit_packet, "cached_staged_path_set_digest") is None
     )
-    cached_staged_path_set_digest_consistent = (
-        cached_staged_path_set_digest_consistent
-        or cached_staged_path_set_digest_pre_stage_accounted_for
-    )
+    # Expected-nonzero refresh steps explain accepted owner-gated failures in
+    # the receipt, but they must not satisfy delivery completion before actual
+    # owner approval, staging, post-stage verification, and commit gates pass.
     task_board_ready = _status(task_board) == "commercial_delivery_ready_for_owner_staging_review"
     task_board_post_commit_accounted_for = (
         delivery_post_commit_noop_accounted_for
         and _status(task_board) == "commercial_delivery_blocked"
         and _summary(task_board).get("owner_commit_packet_status") == "owner_commit_packet_ready"
         and _summary(task_board).get("owner_post_stage_commit_gate_status") == "owner_post_stage_commit_gate_ready"
+    )
+    task_board_failed_checks = _failed_check_names(task_board)
+    task_board_post_stage_accounted_for = (
+        _status(task_board) == "commercial_delivery_blocked"
+        and bool(task_board_failed_checks)
+        and task_board_failed_checks.issubset({"pre_approval_drift_guard_ready"})
+        and _summary(task_board).get("secondary_pending_blocks_owner_staging") is False
+        and _summary(task_board).get("owner_staging_preflight_accounted_for") is True
+        and _summary(task_board).get("owner_post_staging_verifier_status") == "owner_post_staging_verification_ready"
+        and _summary(task_board).get("owner_post_stage_commit_gate_status") == "owner_post_stage_commit_gate_ready"
+        and _summary(task_board).get("owner_commit_packet_status") == "owner_commit_packet_ready"
+        and _int_or_none(_summary(task_board).get("eligible_stage_count"))
+        == _int_or_none(_summary(task_board).get("owner_stage_command_count"))
+        == _int_or_none(_summary(task_board).get("post_staging_cached_path_count"))
+        and _int_or_none(_summary(task_board).get("post_staging_cached_path_count")) is not None
+        and _int_or_none(_summary(task_board).get("post_staging_cached_path_count")) > 0
+    )
+    task_board_ready_for_snapshot = (
+        task_board_ready
+        or task_board_post_commit_accounted_for
+        or task_board_post_stage_accounted_for
     )
     delivery_post_commit_owner_gate_accounted_for = delivery_summary.get("post_commit_owner_gate_accounted_for") is True
     delivery_post_commit_stage_approval_accounted_for = (
@@ -681,19 +748,17 @@ def build_commercial_delivery_closure_snapshot(
         delivery_summary.get("post_commit_stage_execution_accounted_for") is True
     )
     delivery_post_stage_chain_accounted_for = delivery_summary.get("post_stage_chain_accounted_for") is True
-    stage_ready_for_snapshot = stage_ready or owner_delivery_packet_expected_nonzero_accounted_for
+    stage_ready_for_snapshot = stage_ready
     approval_ready = approval_gate_ready or (
         commit_ready
         and delivery_post_commit_owner_gate_accounted_for
         and delivery_post_commit_stage_approval_accounted_for
-    ) or owner_approval_expected_nonzero_accounted_for
+    )
     stage_execution_ready = stage_execution_gate_ready or (
         commit_ready
         and delivery_post_commit_owner_gate_accounted_for
         and delivery_post_commit_stage_execution_accounted_for
-    ) or stage_execution_expected_nonzero_accounted_for
-    post_stage_ready = post_stage_ready or post_stage_expected_nonzero_accounted_for
-    commit_ready = commit_ready or commit_expected_nonzero_accounted_for
+    )
     closure_gate_evidence_ready = (
         stage_ready_for_snapshot
         and approval_ready
@@ -728,9 +793,68 @@ def build_commercial_delivery_closure_snapshot(
         and _summary(pre_approval_drift_guard).get("stage_command_digest") == empty_digest
         and _summary(pre_approval_drift_guard).get("expected_stage_path_set_digest") == empty_digest
     )
+    pre_approval_failed_checks = _failed_check_names(pre_approval_drift_guard)
+    pre_approval_post_stage_required_failed_checks = {
+        "real_owner_approval_absent",
+        "approval_request_ready",
+        "approval_handoff_ready",
+        "approval_payload_blocked_before_owner",
+        "approval_gate_blocked_before_owner",
+        "stage_execution_blocked_before_owner",
+        "operator_checklist_waiting_before_owner",
+        "closure_blocked_before_owner",
+    }
+    pre_approval_post_stage_accounted_for = (
+        closure_gate_evidence_ready
+        and task_board_ready_for_snapshot
+        and _status(pre_approval_drift_guard) == "pre_approval_drift_guard_blocked"
+        and pre_approval_drift_guard.get("real_owner_approval_present") is True
+        and pre_approval_drift_guard.get("mutation_performed") is not True
+        and pre_approval_drift_guard.get("git_stage_performed") is not True
+        and pre_approval_drift_guard.get("git_commit_performed") is not True
+        and pre_approval_drift_guard.get("git_push_performed") is not True
+        and pre_approval_drift_guard.get("network_mutation_performed") is not True
+        and pre_approval_drift_guard.get("agent_execution_enabled") is not True
+        and pre_approval_drift_guard.get("full_codex_parity_claimed") is not True
+        and _read_report_status_value(pre_approval_drift_guard, "owner_approval_payload_audit")
+        == "owner_approval_payload_ready"
+        and _read_report_status_value(pre_approval_drift_guard, "owner_stage_approval_gate")
+        == "owner_stage_approval_ready"
+        and _read_report_status_value(pre_approval_drift_guard, "owner_stage_execution_plan")
+        == "owner_stage_execution_ready"
+        and _read_report_status_value(pre_approval_drift_guard, "owner_post_approval_operator_checklist")
+        == "owner_post_approval_operator_checklist_ready"
+        and _read_report_status_value(pre_approval_drift_guard, "closure_snapshot")
+        == "commercial_delivery_closure_blocked"
+        and _summary(pre_approval_drift_guard).get("owner_approval_payload_present") is True
+        and _summary(pre_approval_drift_guard).get("owner_approval_payload_valid") is True
+        and _summary(pre_approval_drift_guard).get("owner_approval_payload_ready_for_gate") is True
+        and _summary(pre_approval_drift_guard).get("owner_stage_approval_gate_status") == "owner_stage_approval_ready"
+        and _summary(pre_approval_drift_guard).get("owner_stage_execution_plan_status")
+        == "owner_stage_execution_ready"
+        and _summary(pre_approval_drift_guard).get("owner_post_approval_operator_checklist_status")
+        == "owner_post_approval_operator_checklist_ready"
+        and _summary(pre_approval_drift_guard).get("owner_post_approval_operator_checklist_operator_ready") is True
+        and _summary(pre_approval_drift_guard).get("owner_post_approval_operator_checklist_real_owner_approval_present")
+        is True
+        and _summary(pre_approval_drift_guard).get("closure_snapshot_status")
+        == "commercial_delivery_closure_blocked"
+        and _summary(pre_approval_drift_guard).get("closure_delivery_complete") is False
+        and isinstance(_summary(pre_approval_drift_guard).get("stage_path_digest"), str)
+        and len(str(_summary(pre_approval_drift_guard).get("stage_path_digest"))) == 64
+        and isinstance(_summary(pre_approval_drift_guard).get("stage_command_digest"), str)
+        and len(str(_summary(pre_approval_drift_guard).get("stage_command_digest"))) == 64
+        and isinstance(_summary(pre_approval_drift_guard).get("expected_stage_path_set_digest"), str)
+        and len(str(_summary(pre_approval_drift_guard).get("expected_stage_path_set_digest"))) == 64
+        and pre_approval_post_stage_required_failed_checks.issubset(pre_approval_failed_checks)
+        and pre_approval_failed_checks.issubset(
+            pre_approval_post_stage_required_failed_checks | {"secondary_handoff_summary_stable"}
+        )
+    )
     pre_approval_drift_guard_accounted_for = (
         pre_approval_drift_guard_accounted_for
         or pre_approval_drift_guard_post_commit_noop_accounted_for
+        or pre_approval_post_stage_accounted_for
     )
     owner_approval_resume_packet_post_stage_accounted_for = (
         _status(owner_approval_resume_packet) == "owner_approval_resume_packet_blocked"
@@ -748,7 +872,7 @@ def build_commercial_delivery_closure_snapshot(
             )
         )
         and closure_gate_evidence_ready
-        and (task_board_ready or task_board_post_commit_accounted_for)
+        and task_board_ready_for_snapshot
         and pre_approval_drift_guard_accounted_for
     )
     owner_approval_resume_packet_accounted_for = (
@@ -797,7 +921,7 @@ def build_commercial_delivery_closure_snapshot(
         and post_stage_ready
         and commit_ready
         and rollback_ready
-        and (task_board_ready or task_board_post_commit_accounted_for)
+        and task_board_ready_for_snapshot
         and pre_approval_drift_guard_accounted_for
         and owner_approval_resume_packet_accounted_for
     )
@@ -810,7 +934,7 @@ def build_commercial_delivery_closure_snapshot(
         and owner_post_approval_operator_checklist.get("operator_ready") is not True
         and post_commit_refresh_accounted_for
         and closure_gate_evidence_ready
-        and (task_board_ready or task_board_post_commit_accounted_for)
+        and task_board_ready_for_snapshot
         and pre_approval_drift_guard_accounted_for
         and owner_approval_resume_packet_accounted_for
     )
@@ -836,7 +960,7 @@ def build_commercial_delivery_closure_snapshot(
             commit_ready,
             rollback_ready,
             refresh_ready_for_snapshot,
-            task_board_ready or task_board_post_commit_accounted_for,
+            task_board_ready_for_snapshot,
             pre_approval_drift_guard_accounted_for,
             owner_approval_resume_packet_accounted_for,
             owner_post_approval_operator_checklist_accounted_for,
@@ -861,27 +985,20 @@ def build_commercial_delivery_closure_snapshot(
         }.items()
         if reasons
     }
-    if post_commit_closure_accounted_for or refresh_expected_nonzero_ready:
+    if post_commit_closure_accounted_for:
         accounted_blocking_reason_reports: set[str] = set()
-        if post_commit_closure_accounted_for or owner_approval_expected_nonzero_accounted_for:
+        if post_commit_closure_accounted_for:
             accounted_blocking_reason_reports.update(
                 {
                     "owner_stage_approval_gate",
                     "owner_approval_payload_audit",
                 }
             )
-        if post_commit_closure_accounted_for or stage_execution_expected_nonzero_accounted_for:
+        if post_commit_closure_accounted_for:
             accounted_blocking_reason_reports.add("owner_stage_execution_plan")
         if post_stage_expected_nonzero_accounted_for:
             accounted_blocking_reason_reports.add("owner_post_staging_verifier")
         if commit_noop_accounted_for:
-            accounted_blocking_reason_reports.update(
-                {
-                    "owner_post_stage_commit_gate",
-                    "owner_commit_packet",
-                }
-            )
-        if commit_expected_nonzero_accounted_for:
             accounted_blocking_reason_reports.update(
                 {
                     "owner_post_stage_commit_gate",
@@ -978,10 +1095,12 @@ def build_commercial_delivery_closure_snapshot(
         ),
         _check(
             "task_board_ready",
-            task_board_ready or task_board_post_commit_accounted_for,
+            task_board_ready_for_snapshot,
             details={
                 "task_board_status": _status(task_board),
                 "task_board_post_commit_accounted_for": task_board_post_commit_accounted_for,
+                "task_board_post_stage_accounted_for": task_board_post_stage_accounted_for,
+                "task_board_ready_for_snapshot": task_board_ready_for_snapshot,
             },
             error="commercial delivery task board is not ready",
         ),
@@ -994,6 +1113,7 @@ def build_commercial_delivery_closure_snapshot(
                 "pre_approval_drift_guard_post_commit_noop_accounted_for": (
                     pre_approval_drift_guard_post_commit_noop_accounted_for
                 ),
+                "pre_approval_drift_guard_post_stage_accounted_for": pre_approval_post_stage_accounted_for,
                 "real_owner_approval_present": pre_approval_drift_guard.get("real_owner_approval_present"),
                 "stage_path_digest": _summary(pre_approval_drift_guard).get("stage_path_digest"),
                 "stage_command_digest": _summary(pre_approval_drift_guard).get("stage_command_digest"),
@@ -1047,25 +1167,36 @@ def build_commercial_delivery_closure_snapshot(
         _check(
             "stage_counts_consistent",
             (
-                (
-                    int(delivery_summary.get("stage_include_count") or 0) > 0
-                    or delivery_post_commit_noop_accounted_for
-                )
+                current_post_stage_ready_for_digest
+                and int(delivery_summary.get("stage_include_count") or 0) > 0
                 and int(delivery_summary.get("owner_stage_command_count", -1))
                 == int(delivery_summary.get("owner_stage_execution_stage_command_count", -2))
                 == int(delivery_summary.get("rollback_reset_command_count", -3))
                 and int(delivery_summary.get("owner_stage_command_count", -1))
                 <= int(delivery_summary.get("stage_include_count", -1))
-                and (
-                    int(delivery_summary.get("owner_stage_command_count", -1)) > 0
-                    or delivery_post_commit_noop_accounted_for
-                )
+                and int(delivery_summary.get("owner_stage_command_count", -1)) > 0
+            )
+            or (
+                delivery_post_commit_noop_accounted_for
+                and int(delivery_summary.get("stage_include_count") or 0) > 0
+                and int(delivery_summary.get("owner_stage_command_count", -1))
+                == int(delivery_summary.get("owner_stage_execution_stage_command_count", -2))
+                == int(delivery_summary.get("rollback_reset_command_count", -3))
+            )
+            or (
+                post_commit_refresh_accounted_for
+                and int(delivery_summary.get("stage_include_count") or 0) > 0
+                and int(delivery_summary.get("owner_stage_command_count", -1))
+                == int(delivery_summary.get("owner_stage_execution_stage_command_count", -2))
+                == int(delivery_summary.get("rollback_reset_command_count", -3))
+                and int(delivery_summary.get("owner_stage_command_count", -1)) > 0
             ),
             details={
                 "stage_include_count": delivery_summary.get("stage_include_count"),
                 "owner_stage_command_count": delivery_summary.get("owner_stage_command_count"),
                 "owner_stage_execution_stage_command_count": delivery_summary.get("owner_stage_execution_stage_command_count"),
                 "rollback_reset_command_count": delivery_summary.get("rollback_reset_command_count"),
+                "current_post_stage_ready_for_digest": current_post_stage_ready_for_digest,
                 "post_commit_noop_accounted_for": delivery_post_commit_noop_accounted_for,
             },
             error="owner delivery command counts are inconsistent or exceed stage include count",
@@ -1073,13 +1204,21 @@ def build_commercial_delivery_closure_snapshot(
         _check(
             "stage_path_digest_consistent",
             stage_path_digest_consistent,
-            details={"stage_path_digest_sources": stage_path_digest_sources},
+            details={
+                "stage_path_digest_sources": stage_path_digest_sources,
+                "current_post_stage_path_digest_sources": current_post_stage_path_digest_sources,
+                "current_post_stage_ready_for_digest": current_post_stage_ready_for_digest,
+            },
             error="stage path digest is missing or inconsistent across owner delivery evidence",
         ),
         _check(
             "stage_command_digest_consistent",
             stage_command_digest_consistent,
-            details={"stage_command_digest_sources": stage_command_digest_sources},
+            details={
+                "stage_command_digest_sources": stage_command_digest_sources,
+                "current_post_stage_command_digest_sources": current_post_stage_command_digest_sources,
+                "current_post_stage_ready_for_digest": current_post_stage_ready_for_digest,
+            },
             error="stage command digest is missing or inconsistent across owner delivery evidence",
         ),
         _check(
@@ -1198,6 +1337,7 @@ def build_commercial_delivery_closure_snapshot(
             "pre_approval_drift_guard_post_commit_noop_accounted_for": (
                 pre_approval_drift_guard_post_commit_noop_accounted_for
             ),
+            "pre_approval_drift_guard_post_stage_accounted_for": pre_approval_post_stage_accounted_for,
             "pre_approval_drift_guard_real_owner_approval_present": pre_approval_drift_guard.get(
                 "real_owner_approval_present"
             ),
@@ -1233,6 +1373,8 @@ def build_commercial_delivery_closure_snapshot(
             "refresh_chain_failed_steps": _failed_step_names(refresh_chain),
             "refresh_chain_step_count": _summary(refresh_chain).get("step_count"),
             "task_board_post_commit_accounted_for": task_board_post_commit_accounted_for,
+            "task_board_post_stage_accounted_for": task_board_post_stage_accounted_for,
+            "task_board_ready_for_snapshot": task_board_ready_for_snapshot,
             "expected_nonzero_step_count": _summary(refresh_chain).get("expected_nonzero_step_count"),
             "expected_nonzero_steps": list(expected_nonzero_steps),
             "refresh_expected_nonzero_ready": refresh_expected_nonzero_ready,
