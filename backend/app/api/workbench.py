@@ -196,3 +196,11 @@ async def create_workbench_task(request: WorkbenchTaskRequest, principal: Princi
         "metadata": request.metadata,
         "status": "accepted",
     }
+
+
+# --- BFF Resources endpoint (connects Panda frontend) ---
+try:
+    from backend.app.api.workbench_resources_bff import router as _bff_router
+    router.include_router(_bff_router)
+except Exception:
+    pass  # Non-fatal: BFF is optional
