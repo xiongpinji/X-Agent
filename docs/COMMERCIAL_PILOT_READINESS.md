@@ -6,6 +6,13 @@ This document defines the post-RC commercial pilot path for X-Agent. It is
 intended for a controlled pilot, not general availability and not a full Codex
 parity claim.
 
+> Boundary note (2026-06-14): The RC and pilot proof below is historical
+> handoff evidence for the listed branch, tag, and commits. It must not be used
+> as current `feat/commercial-delivery-v1` delivery-complete or release-ready
+> proof without rerunning the current gates. The current closure snapshot is
+> `.xagent_runtime/reports/commercial-delivery-closure-snapshot.json` and is
+> owner-gated/blocked.
+
 Current RC proof:
 
 - Status: `commercial_rc_ready`.

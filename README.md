@@ -3,9 +3,14 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-blue)](https://www.python.org/downloads/)
 [![Tests: 3850+](https://img.shields.io/badge/Tests-3850%2B-green)](tests/)
-[![Code: Production Ready](https://img.shields.io/badge/Status-Production%20Ready-brightgreen)](RELEASE_READINESS.md)
+[![Delivery: Owner-Gated](https://img.shields.io/badge/Delivery-Owner--Gated-orange)](RELEASE_READINESS.md)
 
 > Build, deploy, and orchestrate autonomous AI agents at enterprise scale. Self-hosted. Open source. Multi-tenant. Built for teams that demand auditability, security, and control.
+
+> Delivery boundary (2026-06-14): this README does not claim current
+> commercial delivery completion, GA readiness, or full Codex parity. The
+> current release boundary is owner-gated and tracked in
+> `.xagent_runtime/reports/commercial-delivery-closure-snapshot.json`.
 
 X-Agent is a modern agent framework for enterprises—not a desktop IDE. It powers teams building multi-agent AI systems, enabling them to route work across multiple LLMs, execute complex workflows with human oversight, and maintain full observability and compliance.
 
