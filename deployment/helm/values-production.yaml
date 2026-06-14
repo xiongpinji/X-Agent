@@ -1,167 +1,140 @@
-# Helm values for production environment
-global:
-  environment: production
-  logLevel: WARNING
-  debug: false
+# X-Agent Helm Chart - Production Environment Values
+# Production: 3+ replicas, strict limits, real domain, external secrets, high availability
+
+replicaCount: 3
 
 image:
-  repository: your-registry/xagent
-  tag: latest
-  pullPolicy: Always
+  repository: x-agent/x-agent
+  pullPolicy: IfNotPresent
+  tag: "1.0.0"
 
-api:
-  enabled: true
-  replicas: 5
-  port: 8000
-  workers: 4
-  resources:
-    requests:
-      memory: "512Mi"
-      cpu: "250m"
-    limits:
-      memory: "1Gi"
-      cpu: "500m"
-  autoscaling:
-    enabled: true
-    minReplicas: 5
-    maxReplicas: 20
-    targetCPUUtilizationPercentage: 70
-    targetMemoryUtilizationPercentage: 80
-
-worker:
-  enabled: true
-  replicas: 4
-  concurrency: 4
-  resources:
-    requests:
-      memory: "512Mi"
-      cpu: "250m"
-    limits:
-      memory: "1Gi"
-      cpu: "500m"
-  autoscaling:
-    enabled: true
-    minReplicas: 4
-    maxReplicas: 12
-    targetCPUUtilizationPercentage: 75
-    targetMemoryUtilizationPercentage: 80
-
-beat:
-  enabled: true
-  replicas: 1
-  resources:
-    requests:
-      memory: "256Mi"
-      cpu: "100m"
-    limits:
-      memory: "512Mi"
-      cpu: "200m"
-
-postgres:
-  enabled: true
-  image: postgres:16-alpine
-  port: 5432
-  storage: 50Gi
-  resources:
-    requests:
-      memory: "512Mi"
-      cpu: "500m"
-    limits:
-      memory: "1Gi"
-      cpu: "1000m"
-
-redis:
-  enabled: true
-  image: redis:7-alpine
-  port: 6379
-  storage: 10Gi
-  resources:
-    requests:
-      memory: "256Mi"
-      cpu: "100m"
-    limits:
-      memory: "512Mi"
-      cpu: "200m"
-
-qdrant:
-  enabled: true
-  image: qdrant/qdrant:latest
-  port: 6333
-  storage: 50Gi
-  resources:
-    requests:
-      memory: "1Gi"
-      cpu: "500m"
-    limits:
-      memory: "2Gi"
-      cpu: "1000m"
-
-neo4j:
-  enabled: true
-  image: neo4j:5-community
-  port: 7687
-  storage: 50Gi
-  resources:
-    requests:
-      memory: "2Gi"
-      cpu: "1000m"
-    limits:
-      memory: "4Gi"
-      cpu: "2000m"
+imagePullSecrets:
+  - name: registry-credentials
 
 ingress:
   enabled: true
-  className: nginx
+  className: "nginx"
   annotations:
     cert-manager.io/cluster-issuer: "letsencrypt-prod"
-    nginx.ingress.kubernetes.io/rate-limit: "100"
+    nginx.ingress.kubernetes.io/rate-limit: "1000"
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
   hosts:
-    - host: api.xagent.example.com
+    - host: api.x-agent.dev
       paths:
         - path: /
           pathType: Prefix
   tls:
-    - secretName: xagent-tls
+    - secretName: x-agent-prod-tls
       hosts:
-        - api.xagent.example.com
+        - api.x-agent.dev
 
-service:
-  type: ClusterIP
-  port: 8000
+resources:
+  limits:
+    cpu: 2000m
+    memory: 2Gi
+  requests:
+    cpu: 500m
+    memory: 1Gi
 
-secrets:
-  dbUser: xagent
-  dbPassword: CHANGE_ME_IN_PRODUCTION
-  redisPassword: CHANGE_ME_IN_PRODUCTION
-  qdrantApiKey: CHANGE_ME_IN_PRODUCTION
-  neo4jPassword: CHANGE_ME_IN_PRODUCTION
-  secretKey: CHANGE_ME_IN_PRODUCTION_USE_STRONG_RANDOM_KEY
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+affinity:
+  podAntiAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      - labelSelector:
+          matchExpressions:
+            - key: app
+              operator: In
+              values:
+                - xagent
+        topologyKey: kubernetes.io/hostname
+
+env:
+  LOG_LEVEL: warn
+  DEBUG: "false"
+  ENVIRONMENT: production
+
+livenessProbe:
+  httpGet:
+    path: /health
+    port: 8000
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /health
+    port: 8000
+  initialDelaySeconds: 10
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 3
 
 database:
-  name: xagent_db
+  host: postgres.production.svc.cluster.local
   port: 5432
+  name: xagent_prod
+  poolSize: 20
+  maxOverflow: 40
+  sslMode: require
 
 redis:
-  port: 6379
+  host: redis.production.svc.cluster.local
+  password: null  # Set via secrets
 
-qdrant:
-  port: 6333
+observability:
+  enabled: true
+  metrics:
+    enabled: true
+    retention: 30d
+  traces:
+    enabled: true
+    endpoint: "https://api.langfuse.com"
+    samplingRate: 0.1
+  logs:
+    level: warn
+    format: json
 
-neo4j:
-  user: neo4j
-  port: 7687
+persistence:
+  enabled: true
+  size: 100Gi
+  storageClassName: "fast-ssd"
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 2
+
+networkPolicy:
+  enabled: true
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 8000
+
+secrets:
+  enabled: true
+  externalSecrets:
+    enabled: true
+    backend: vault
+    vaultServer: https://vault.production.example.com
+    vaultPath: secret/xagent/prod
 
 monitoring:
   enabled: true
-  prometheus:
+  alerts:
     enabled: true
-    port: 9090
-  grafana:
-    enabled: true
-    port: 3000
-
-backup:
-  enabled: true
-  schedule: "0 2 * * *"
-  retention: 30
+  slo:
+    availability: 99.9
+    latency_p99: 500
