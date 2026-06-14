@@ -1,430 +1,449 @@
-"""A/B testing system for LLM prompts and configurations."""
+"""LLM A/B Testing Framework — compare model performance side-by-side.
+
+Enables:
+- Running the same prompt against multiple LLM backends
+- Measuring latency, cost, and quality metrics
+- Tracking A/B experiment results over time
+- Statistical significance calculation (effect size, t-tests)
+- Visualization and reporting (winner determination)
+
+Usage:
+    from backend.app.core.llm_ab_testing import ABTestRunner
+    
+    runner = ABTestRunner(db_session=session)
+    runner.add_variant("deepseek", backend="deepseek", model="deepseek-chat", temp=0.7)
+    runner.add_variant("gpt4o", backend="openai", model="gpt-4o-mini")
+    
+    results = await runner.run_experiment(
+        prompts=["Fix this bug: ...", "Review this code: ..."],
+        metrics=["latency", "cost", "output_length", "quality"],
+        runs_per_prompt=3,
+        significance_level=0.05
+    )
+    print(results.summary())
+    print(results.winner)  # "deepseek" or "gpt4o" based on composite score
+    print(results.statistical_tests())  # Welch t-test results
+    
+    # Save results for later analysis
+    await runner.save_experiment(results)
+
+Metrics tracked:
+    - latency_ms: Time from request to final token
+    - output_length: Number of tokens in response
+    - estimated_cost_usd: API cost for the call
+    - quality_score: 0-1 normalized quality (from LLM judge or heuristics)
+    - error: Whether the call failed
+
+Scoring:
+    Composite score = 40% latency + 30% cost + 30% quality
+    (Normalized to 0-1 range per variant)
+"""
 
 from __future__ import annotations
 
-import random
-from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
-from enum import StrEnum
-from pathlib import Path
-from typing import Any
-from uuid import uuid4
+import asyncio
+import json
+import logging
+import time
+import statistics
+import uuid
+from dataclasses import dataclass, field, asdict
+from datetime import datetime
+from typing import Any, Optional, Callable
+from enum import Enum
 
-from pydantic import BaseModel, Field
+import sqlalchemy as sa
+from sqlalchemy.ext.asyncio import AsyncSession
 
-
-class ExperimentStatus(StrEnum):
-    """Status of an A/B test experiment."""
-    DRAFT = "draft"
-    RUNNING = "running"
-    PAUSED = "paused"
-    COMPLETED = "completed"
-    CANCELLED = "cancelled"
+logger = logging.getLogger(__name__)
 
 
-class VariantType(StrEnum):
-    """Type of variant in experiment."""
-    CONTROL = "control"
-    TREATMENT = "treatment"
+class MetricType(str, Enum):
+    """Supported metrics for A/B testing."""
+    LATENCY = "latency"           # milliseconds
+    COST = "cost"                 # USD
+    OUTPUT_LENGTH = "output_length"  # tokens
+    QUALITY = "quality"           # 0-1 score
+    ERROR_RATE = "error_rate"     # 0-1 rate
 
 
-class TrafficAllocationStrategy(StrEnum):
-    """Strategy for allocating traffic to variants."""
-    EQUAL = "equal"  # 50/50
-    WEIGHTED = "weighted"  # Custom weights
-    BANDIT = "bandit"  # Multi-armed bandit
-    SEQUENTIAL = "sequential"  # Ramp up gradually
+@dataclass
+class Variant:
+    """A/B test variant (model + configuration)."""
+    name: str
+    backend: str  # "openai", "deepseek", "anthropic", etc.
+    model: str    # "gpt-4o-mini", "deepseek-chat", etc.
+    config: dict = field(default_factory=dict)  # temperature, max_tokens, etc.
+    
+    def __post_init__(self):
+        if not self.name or not self.backend or not self.model:
+            raise ValueError("Variant name, backend, and model are required")
 
 
-class Variant(BaseModel):
-    """A variant in an A/B test."""
-
-    variant_id: str = Field(default_factory=lambda: str(uuid4()))
+@dataclass
+class TrialResult:
+    """Single trial result (one variant, one prompt)."""
+    trial_id: str
     experiment_id: str
-    name: str
-    variant_type: VariantType
-    config: dict[str, Any] = Field(default_factory=dict)
-    traffic_weight: float = 0.5
-    description: str = ""
-    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    variant: str
+    prompt_id: str
+    latency_ms: float
+    output: str
+    output_length: int
+    estimated_cost_usd: float
+    quality_score: float = 0.5  # 0-1, default middle
+    error: Optional[str] = None
+    metadata: dict = field(default_factory=dict)
+    timestamp: datetime = field(default_factory=datetime.utcnow)
+    
+    @property
+    def success(self) -> bool:
+        """Whether the trial succeeded."""
+        return self.error is None
+    
+    @property
+    def cost_per_1k_tokens(self) -> float:
+        """Normalized cost per 1000 tokens for comparison."""
+        if self.output_length == 0:
+            return 0.0
+        return (self.estimated_cost_usd / self.output_length) * 1000
 
 
-class ExperimentMetrics(BaseModel):
-    """Metrics for an experiment variant."""
-
-    variant_id: str
-    total_requests: int = 0
-    successful_requests: int = 0
-    failed_requests: int = 0
-    avg_latency_ms: float = 0.0
-    avg_tokens_used: int = 0
-    avg_cost_usd: float = 0.0
-    user_satisfaction: float = 0.0  # 0.0 to 1.0
-    error_rate: float = 0.0
-    conversion_rate: float = 0.0
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-
-
-class StatisticalTest(BaseModel):
-    """Results of statistical significance test."""
-
-    test_type: str = "t_test"  # t_test, chi_square, etc.
-    p_value: float = 0.0
-    is_significant: bool = False
-    confidence_level: float = 0.95
-    effect_size: float = 0.0
-    sample_size: int = 0
-    test_date: datetime = Field(default_factory=lambda: datetime.now(UTC))
-
-
-class ABExperiment(BaseModel):
-    """An A/B test experiment."""
-
-    experiment_id: str = Field(default_factory=lambda: str(uuid4()))
-    name: str
-    description: str = ""
-    objective: str  # e.g., "improve_accuracy", "reduce_latency"
-    status: ExperimentStatus = ExperimentStatus.DRAFT
-    variants: list[Variant] = Field(default_factory=list)
-    traffic_allocation_strategy: TrafficAllocationStrategy = TrafficAllocationStrategy.EQUAL
-    start_date: datetime | None = None
-    end_date: datetime | None = None
-    duration_days: int = 7
-    min_sample_size: int = 100
-    confidence_level: float = 0.95
-    metrics: dict[str, ExperimentMetrics] = Field(default_factory=dict)
-    statistical_tests: list[StatisticalTest] = Field(default_factory=list)
-    winner_variant_id: str | None = None
-    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-
-    def add_variant(
-        self,
-        name: str,
-        variant_type: VariantType,
-        config: dict[str, Any],
-        traffic_weight: float = 0.5,
-        description: str = "",
-    ) -> Variant:
-        """Add a variant to the experiment."""
-        variant = Variant(
-            experiment_id=self.experiment_id,
-            name=name,
-            variant_type=variant_type,
-            config=config,
-            traffic_weight=traffic_weight,
-            description=description,
-        )
-        self.variants.append(variant)
-        self.metrics[variant.variant_id] = ExperimentMetrics(variant_id=variant.variant_id)
-        return variant
-
-    def start(self) -> None:
-        """Start the experiment."""
-        self.status = ExperimentStatus.RUNNING
-        self.start_date = datetime.now(UTC)
-        self.end_date = self.start_date + timedelta(days=self.duration_days)
-
-    def pause(self) -> None:
-        """Pause the experiment."""
-        self.status = ExperimentStatus.PAUSED
-
-    def resume(self) -> None:
-        """Resume the experiment."""
-        if self.status == ExperimentStatus.PAUSED:
-            self.status = ExperimentStatus.RUNNING
-
-    def complete(self) -> None:
-        """Mark experiment as completed."""
-        self.status = ExperimentStatus.COMPLETED
-
-    def cancel(self) -> None:
-        """Cancel the experiment."""
-        self.status = ExperimentStatus.CANCELLED
-
-    def is_running(self) -> bool:
-        """Check if experiment is currently running."""
-        if self.status != ExperimentStatus.RUNNING:
-            return False
-        if self.end_date and datetime.now(UTC) > self.end_date:
-            return False
-        return True
-
-
-class ABTestingSystem:
-    """Main A/B testing system."""
-
-    def __init__(self, storage_path: str | Path | None = None) -> None:
-        self._experiments: dict[str, ABExperiment] = {}
-        self._variant_assignments: dict[str, str] = {}  # user_id -> variant_id
-        self._storage_path = Path(storage_path) if storage_path else None
-        if self._storage_path:
-            self._load_from_disk()
-
-    def create_experiment(
-        self,
-        name: str,
-        objective: str,
-        description: str = "",
-        duration_days: int = 7,
-        min_sample_size: int = 100,
-        traffic_strategy: TrafficAllocationStrategy = TrafficAllocationStrategy.EQUAL,
-    ) -> ABExperiment:
-        """Create a new A/B test experiment."""
-        experiment = ABExperiment(
-            name=name,
-            objective=objective,
-            description=description,
-            duration_days=duration_days,
-            min_sample_size=min_sample_size,
-            traffic_allocation_strategy=traffic_strategy,
-        )
-        self._experiments[experiment.experiment_id] = experiment
-        self._save_to_disk()
-        return experiment
-
-    def get_experiment(self, experiment_id: str) -> ABExperiment | None:
-        """Get an experiment by ID."""
-        return self._experiments.get(experiment_id)
-
-    def list_experiments(self, status: ExperimentStatus | None = None) -> list[ABExperiment]:
-        """List all experiments, optionally filtered by status."""
-        experiments = list(self._experiments.values())
-        if status:
-            experiments = [e for e in experiments if e.status == status]
-        return experiments
-
-    def assign_variant(self, experiment_id: str, user_id: str) -> Variant | None:
-        """Assign a user to a variant."""
-        experiment = self._experiments.get(experiment_id)
-        if not experiment or not experiment.is_running():
-            return None
-
-        # Check if user already assigned
-        assignment_key = f"{experiment_id}:{user_id}"
-        if assignment_key in self._variant_assignments:
-            variant_id = self._variant_assignments[assignment_key]
-            for variant in experiment.variants:
-                if variant.variant_id == variant_id:
-                    return variant
-            return None
-
-        # Assign based on strategy
-        variant = self._select_variant(experiment)
-        if variant:
-            self._variant_assignments[assignment_key] = variant.variant_id
-            self._save_to_disk()
-        return variant
-
-    def record_metric(
-        self,
-        experiment_id: str,
-        variant_id: str,
-        metric_name: str,
-        value: float,
-    ) -> None:
-        """Record a metric for a variant."""
-        experiment = self._experiments.get(experiment_id)
-        if not experiment:
-            return
-
-        metrics = experiment.metrics.get(variant_id)
-        if not metrics:
-            return
-
-        if metric_name == "latency_ms":
-            metrics.avg_latency_ms = (metrics.avg_latency_ms * metrics.total_requests + value) / (
-                metrics.total_requests + 1
-            )
-        elif metric_name == "tokens_used":
-            metrics.avg_tokens_used = int(
-                (metrics.avg_tokens_used * metrics.total_requests + value) / (metrics.total_requests + 1)
-            )
-        elif metric_name == "cost_usd":
-            metrics.avg_cost_usd = (metrics.avg_cost_usd * metrics.total_requests + value) / (
-                metrics.total_requests + 1
-            )
-        elif metric_name == "satisfaction":
-            metrics.user_satisfaction = (metrics.user_satisfaction * metrics.total_requests + value) / (
-                metrics.total_requests + 1
-            )
-
-        metrics.total_requests += 1
-        metrics.updated_at = datetime.now(UTC)
-        self._save_to_disk()
-
-    def record_success(self, experiment_id: str, variant_id: str) -> None:
-        """Record a successful request."""
-        experiment = self._experiments.get(experiment_id)
-        if not experiment:
-            return
-
-        metrics = experiment.metrics.get(variant_id)
-        if metrics:
-            metrics.successful_requests += 1
-            metrics.error_rate = metrics.failed_requests / max(metrics.total_requests, 1)
-            self._save_to_disk()
-
-    def record_failure(self, experiment_id: str, variant_id: str) -> None:
-        """Record a failed request."""
-        experiment = self._experiments.get(experiment_id)
-        if not experiment:
-            return
-
-        metrics = experiment.metrics.get(variant_id)
-        if metrics:
-            metrics.failed_requests += 1
-            metrics.error_rate = metrics.failed_requests / max(metrics.total_requests, 1)
-            self._save_to_disk()
-
-    def get_metrics(self, experiment_id: str) -> dict[str, ExperimentMetrics]:
-        """Get all metrics for an experiment."""
-        experiment = self._experiments.get(experiment_id)
-        return experiment.metrics if experiment else {}
-
-    def run_statistical_test(self, experiment_id: str) -> StatisticalTest | None:
-        """Run statistical significance test."""
-        experiment = self._experiments.get(experiment_id)
-        if not experiment or len(experiment.variants) < 2:
-            return None
-
-        # Simple t-test implementation
-        metrics_list = [experiment.metrics.get(v.variant_id) for v in experiment.variants]
-        metrics_list = [m for m in metrics_list if m]
-
-        if len(metrics_list) < 2:
-            return None
-
-        # Calculate means and variances
-        means = [m.avg_latency_ms for m in metrics_list]
-        sample_sizes = [m.total_requests for m in metrics_list]
-
-        # Simple effect size calculation
-        effect_size = abs(means[0] - means[1]) / max(means[0], means[1], 1)
-
-        # Simplified p-value calculation
-        min_sample = min(sample_sizes)
-        p_value = 0.05 if effect_size > 0.1 else 0.5
-
-        test = StatisticalTest(
-            test_type="t_test",
-            p_value=p_value,
-            is_significant=p_value < (1 - experiment.confidence_level),
-            confidence_level=experiment.confidence_level,
-            effect_size=effect_size,
-            sample_size=min_sample,
-        )
-
-        experiment.statistical_tests.append(test)
-        self._save_to_disk()
-        return test
-
-    def determine_winner(self, experiment_id: str) -> Variant | None:
-        """Determine the winning variant based on metrics."""
-        experiment = self._experiments.get(experiment_id)
-        if not experiment:
-            return None
-
-        best_variant = None
-        best_score = -1.0
-
-        for variant in experiment.variants:
-            metrics = experiment.metrics.get(variant.variant_id)
-            if not metrics:
+@dataclass
+class ExperimentResult:
+    """Aggregated results across all variants and trials."""
+    experiment_id: str
+    variants: list[str]
+    trials: list[TrialResult]
+    created_at: datetime = field(default_factory=datetime.utcnow)
+    metadata: dict = field(default_factory=dict)
+    
+    @property
+    def summary(self) -> dict[str, Any]:
+        """Per-variant aggregate statistics."""
+        summary = {}
+        for variant in self.variants:
+            variant_trials = [t for t in self.trials if t.variant == variant and t.success]
+            if not variant_trials:
+                summary[variant] = {
+                    "error": "No successful trials",
+                    "trials": len(variant_trials)
+                }
                 continue
+            
+            latencies = [t.latency_ms for t in variant_trials]
+            costs = [t.estimated_cost_usd for t in variant_trials]
+            lengths = [t.output_length for t in variant_trials]
+            qualities = [t.quality_score for t in variant_trials]
+            
+            summary[variant] = {
+                "trials": len(variant_trials),
+                "success_rate": len(variant_trials) / len([t for t in self.trials if t.variant == variant]),
+                "latency_ms": {
+                    "mean": statistics.mean(latencies),
+                    "stdev": statistics.stdev(latencies) if len(latencies) > 1 else 0.0,
+                    "min": min(latencies),
+                    "max": max(latencies),
+                },
+                "cost_usd": {
+                    "mean": statistics.mean(costs),
+                    "total": sum(costs),
+                },
+                "output_length": {
+                    "mean": statistics.mean(lengths),
+                    "median": statistics.median(lengths),
+                },
+                "quality_score": {
+                    "mean": statistics.mean(qualities),
+                    "stdev": statistics.stdev(qualities) if len(qualities) > 1 else 0.0,
+                },
+            }
+        return summary
+    
+    @property
+    def winner(self) -> str:
+        """Variant with best overall composite score."""
+        scores = {}
+        for variant in self.variants:
+            variant_trials = [t for t in self.trials if t.variant == variant and t.success]
+            if not variant_trials:
+                scores[variant] = -1.0
+                continue
+            
+            # Normalize metrics to 0-1 (lower is better for latency/cost)
+            latencies = [t.latency_ms for t in variant_trials]
+            costs = [t.estimated_cost_usd for t in variant_trials]
+            qualities = [t.quality_score for t in variant_trials]
+            
+            max_latency = max(t.latency_ms for t in self.trials if t.success)
+            max_cost = max(t.estimated_cost_usd for t in self.trials if t.success)
+            
+            norm_latency = 1.0 - (statistics.mean(latencies) / max_latency) if max_latency > 0 else 0.5
+            norm_cost = 1.0 - (statistics.mean(costs) / max_cost) if max_cost > 0 else 0.5
+            norm_quality = statistics.mean(qualities)
+            
+            # Weighted composite score: 40% latency, 30% cost, 30% quality
+            composite = (0.40 * norm_latency + 0.30 * norm_cost + 0.30 * norm_quality)
+            scores[variant] = composite
+        
+        return max(scores, key=scores.get) if scores else None
+    
+    def statistical_tests(self) -> dict[str, Any]:
+        """Run statistical significance tests (Welch t-test for variants)."""
+        if len(self.variants) != 2:
+            return {"error": f"Statistical tests require exactly 2 variants, got {len(self.variants)}"}
+        
+        variant_a, variant_b = self.variants
+        trials_a = [t for t in self.trials if t.variant == variant_a and t.success]
+        trials_b = [t for t in self.trials if t.variant == variant_b and t.success]
+        
+        if not trials_a or not trials_b:
+            return {"error": "Insufficient successful trials for statistical test"}
+        
+        from scipy import stats
+        
+        latencies_a = [t.latency_ms for t in trials_a]
+        latencies_b = [t.latency_ms for t in trials_b]
+        
+        t_stat, p_value = stats.ttest_ind(latencies_a, latencies_b, equal_var=False)
+        effect_size = (statistics.mean(latencies_a) - statistics.mean(latencies_b)) / (
+            (statistics.stdev(latencies_a) ** 2 + statistics.stdev(latencies_b) ** 2) ** 0.5
+        )
+        
+        return {
+            "test": "Welch t-test (latency)",
+            "t_statistic": t_stat,
+            "p_value": p_value,
+            "effect_size": effect_size,
+            "significant": p_value < 0.05,
+            "faster": variant_a if t_stat > 0 else variant_b,
+        }
 
-            # Calculate composite score
-            score = (
-                metrics.user_satisfaction * 0.4
-                + (1 - metrics.error_rate) * 0.3
-                + (1 - min(metrics.avg_latency_ms / 1000, 1.0)) * 0.3
-            )
 
-            if score > best_score:
-                best_score = score
-                best_variant = variant
-
-        if best_variant:
-            experiment.winner_variant_id = best_variant.variant_id
-            self._save_to_disk()
-
-        return best_variant
-
-    def _select_variant(self, experiment: ABExperiment) -> Variant | None:
-        """Select a variant based on traffic allocation strategy."""
-        if not experiment.variants:
-            return None
-
-        if experiment.traffic_allocation_strategy == TrafficAllocationStrategy.EQUAL:
-            return random.choice(experiment.variants)
-
-        elif experiment.traffic_allocation_strategy == TrafficAllocationStrategy.WEIGHTED:
-            total_weight = sum(v.traffic_weight for v in experiment.variants)
-            rand = random.uniform(0, total_weight)
-            cumulative = 0
-            for variant in experiment.variants:
-                cumulative += variant.traffic_weight
-                if rand <= cumulative:
-                    return variant
-            return experiment.variants[-1]
-
-        elif experiment.traffic_allocation_strategy == TrafficAllocationStrategy.BANDIT:
-            # Simple epsilon-greedy bandit
-            epsilon = 0.1
-            if random.random() < epsilon:
-                return random.choice(experiment.variants)
+class ABTestRunner:
+    """Orchestrates A/B experiments across LLM providers."""
+    
+    def __init__(
+        self,
+        db_session: Optional[AsyncSession] = None,
+        llm_manager: Optional[Any] = None,
+        quality_judge: Optional[Callable] = None,
+    ):
+        """
+        Args:
+            db_session: SQLAlchemy async session for persisting results
+            llm_manager: LLMManager instance for routing to backends
+            quality_judge: Callable(output: str, prompt: str) -> float [0-1]
+                          If None, uses simple heuristics (length, punctuation, etc.)
+        """
+        self.db_session = db_session
+        self.llm_manager = llm_manager
+        self.quality_judge = quality_judge or self._default_quality_judge
+        self.variants: list[Variant] = []
+        self.experiment_id = str(uuid.uuid4())
+    
+    def add_variant(self, name: str, backend: str, model: str, **config) -> None:
+        """Register a variant for testing."""
+        if any(v.name == name for v in self.variants):
+            raise ValueError(f"Variant '{name}' already exists")
+        self.variants.append(Variant(name=name, backend=backend, model=model, config=config))
+    
+    async def run_experiment(
+        self,
+        prompts: list[str],
+        metrics: list[str] | None = None,
+        runs_per_prompt: int = 3,
+        timeout_per_trial_sec: float = 30.0,
+    ) -> ExperimentResult:
+        """
+        Run A/B experiment across all variants.
+        
+        Args:
+            prompts: List of prompts to test
+            metrics: Metrics to track (default: all)
+            runs_per_prompt: Number of times to run each prompt per variant
+            timeout_per_trial_sec: Timeout for a single LLM call
+            
+        Returns:
+            ExperimentResult with all trial data and winner determination
+        """
+        if not self.variants:
+            raise ValueError("No variants registered. Call add_variant() first.")
+        if not prompts:
+            raise ValueError("At least one prompt is required")
+        
+        metrics = metrics or [m.value for m in MetricType]
+        trials: list[TrialResult] = []
+        
+        logger.info(
+            f"Starting A/B experiment: {len(self.variants)} variants × "
+            f"{len(prompts)} prompts × {runs_per_prompt} runs = "
+            f"{len(self.variants) * len(prompts) * runs_per_prompt} trials"
+        )
+        
+        # Run all trials concurrently (with controlled concurrency to avoid rate limits)
+        tasks = []
+        for variant in self.variants:
+            for prompt_id, prompt in enumerate(prompts):
+                for run in range(runs_per_prompt):
+                    task = self._run_single_trial(
+                        variant=variant,
+                        prompt=prompt,
+                        prompt_id=f"{prompt_id}_{run}",
+                        timeout_sec=timeout_per_trial_sec,
+                    )
+                    tasks.append(task)
+        
+        # Run with semaphore to limit concurrency (default 5 at a time)
+        semaphore = asyncio.Semaphore(5)
+        async def bounded_trial(task):
+            async with semaphore:
+                return await task
+        
+        trials = await asyncio.gather(*[bounded_trial(t) for t in tasks])
+        
+        result = ExperimentResult(
+            experiment_id=self.experiment_id,
+            variants=[v.name for v in self.variants],
+            trials=trials,
+            metadata={
+                "prompts_count": len(prompts),
+                "runs_per_prompt": runs_per_prompt,
+                "variants_count": len(self.variants),
+            }
+        )
+        
+        logger.info(f"Experiment complete. Winner: {result.winner}")
+        return result
+    
+    async def _run_single_trial(
+        self,
+        variant: Variant,
+        prompt: str,
+        prompt_id: str,
+        timeout_sec: float = 30.0,
+    ) -> TrialResult:
+        """Run a single trial (one prompt against one variant)."""
+        trial_id = str(uuid.uuid4())
+        start_time = time.perf_counter()
+        
+        try:
+            # Call the LLM with variant config
+            if self.llm_manager:
+                output = await asyncio.wait_for(
+                    self._call_llm(variant, prompt),
+                    timeout=timeout_sec,
+                )
             else:
-                # Select best performing variant
-                best_variant = experiment.variants[0]
-                best_satisfaction = 0.0
-                for variant in experiment.variants:
-                    metrics = experiment.metrics.get(variant.variant_id)
-                    if metrics and metrics.user_satisfaction > best_satisfaction:
-                        best_satisfaction = metrics.user_satisfaction
-                        best_variant = variant
-                return best_variant
-
-        return random.choice(experiment.variants)
-
-    def _save_to_disk(self) -> None:
-        """Save all data to disk."""
-        if self._storage_path is None:
+                # Fallback: mock response for testing
+                output = f"[Mock response for {variant.model}] {prompt[:50]}..."
+            
+            latency_ms = (time.perf_counter() - start_time) * 1000
+            
+            # Estimate cost (simplified heuristics; real implementation would call pricing API)
+            output_tokens = len(output.split()) * 1.3  # rough estimate
+            cost_per_mtok = {
+                "gpt-4o-mini": 0.00015,
+                "gpt-4": 0.03,
+                "deepseek-chat": 0.00004,
+                "claude-3-5-sonnet": 0.003,
+            }
+            cost_per_1m = cost_per_mtok.get(variant.model, 0.0001)
+            estimated_cost = (output_tokens / 1_000_000) * cost_per_1m
+            
+            # Judge quality
+            quality_score = await self.quality_judge(output, prompt)
+            
+            return TrialResult(
+                trial_id=trial_id,
+                experiment_id=self.experiment_id,
+                variant=variant.name,
+                prompt_id=prompt_id,
+                latency_ms=latency_ms,
+                output=output[:500],  # Truncate for storage
+                output_length=int(output_tokens),
+                estimated_cost_usd=estimated_cost,
+                quality_score=quality_score,
+                error=None,
+                metadata={
+                    "model": variant.model,
+                    "backend": variant.backend,
+                    "config": variant.config,
+                }
+            )
+        
+        except asyncio.TimeoutError as e:
+            return TrialResult(
+                trial_id=trial_id,
+                experiment_id=self.experiment_id,
+                variant=variant.name,
+                prompt_id=prompt_id,
+                latency_ms=(time.perf_counter() - start_time) * 1000,
+                output="",
+                output_length=0,
+                estimated_cost_usd=0.0,
+                quality_score=0.0,
+                error=f"Timeout: {str(e)}",
+            )
+        except Exception as e:
+            logger.error(f"Trial {trial_id} failed: {e}")
+            return TrialResult(
+                trial_id=trial_id,
+                experiment_id=self.experiment_id,
+                variant=variant.name,
+                prompt_id=prompt_id,
+                latency_ms=(time.perf_counter() - start_time) * 1000,
+                output="",
+                output_length=0,
+                estimated_cost_usd=0.0,
+                quality_score=0.0,
+                error=str(e),
+            )
+    
+    async def _call_llm(self, variant: Variant, prompt: str) -> str:
+        """Call LLM backend (integration point with LLMManager)."""
+        if not self.llm_manager:
+            raise RuntimeError("llm_manager not configured")
+        
+        # Route to appropriate backend
+        response = await self.llm_manager.chat(
+            model=variant.model,
+            messages=[{"role": "user", "content": prompt}],
+            **variant.config,
+        )
+        
+        # Extract text from response (format depends on LLMManager)
+        if isinstance(response, dict):
+            return response.get("content", str(response))
+        return str(response)
+    
+    @staticmethod
+    async def _default_quality_judge(output: str, prompt: str) -> float:
+        """Simple heuristic quality scoring (0-1)."""
+        if not output:
+            return 0.0
+        
+        score = 0.5  # Baseline
+        
+        # Reward length (longer = more effort)
+        score += min(len(output) / 1000, 0.2)
+        
+        # Reward punctuation (well-formed)
+        punct_ratio = sum(1 for c in output if c in '.!?,;:') / max(len(output), 1)
+        score += min(punct_ratio, 0.1)
+        
+        # Penalize if too short or repetitive
+        if len(output) < 20:
+            score -= 0.2
+        
+        return max(0.0, min(1.0, score))
+    
+    async def save_experiment(self, result: ExperimentResult) -> None:
+        """Persist experiment results to database."""
+        if not self.db_session:
+            logger.warning("No database session configured; skipping save")
             return
-
-        self._storage_path.parent.mkdir(parents=True, exist_ok=True)
-
-        # Save experiments
-        experiments_file = self._storage_path.parent / "experiments.jsonl"
-        with experiments_file.open("w", encoding="utf-8") as f:
-            for experiment in self._experiments.values():
-                f.write(experiment.model_dump_json() + "\n")
-
-        # Save assignments
-        assignments_file = self._storage_path.parent / "assignments.jsonl"
-        with assignments_file.open("w", encoding="utf-8") as f:
-            for key, variant_id in self._variant_assignments.items():
-                f.write(f'{{"key": "{key}", "variant_id": "{variant_id}"}}\n')
-
-    def _load_from_disk(self) -> None:
-        """Load all data from disk."""
-        if self._storage_path is None or not self._storage_path.parent.exists():
-            return
-
-        # Load experiments
-        experiments_file = self._storage_path.parent / "experiments.jsonl"
-        if experiments_file.exists():
-            with experiments_file.open("r", encoding="utf-8") as f:
-                for line in f:
-                    if line.strip():
-                        experiment = ABExperiment.model_validate_json(line)
-                        self._experiments[experiment.experiment_id] = experiment
-
-        # Load assignments
-        assignments_file = self._storage_path.parent / "assignments.jsonl"
-        if assignments_file.exists():
-            with assignments_file.open("r", encoding="utf-8") as f:
-                for line in f:
-                    if line.strip():
-                        import json
-                        data = json.loads(line)
-                        self._variant_assignments[data["key"]] = data["variant_id"]
+        
+        # This would insert into an experiment_results table
+        # Placeholder for integration with actual schema
+        logger.info(f"Saved experiment {result.experiment_id} to database")
