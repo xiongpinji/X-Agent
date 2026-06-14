@@ -34,16 +34,26 @@ helm install xagent ./deployment/helm \
 ### Staging
 
 ```bash
-helm install xagent ./deployment/helm -f values-staging.yaml \
+helm install xagent ./deployment/helm -f ./deployment/helm/values-staging.yaml \
   --namespace xagent-staging --create-namespace \
   --set-string secrets.databaseUrl="postgresql://user:pass@postgres-staging:5432/xagent" \
   --set-string secrets.apiKey="staging-api-key"
 ```
 
+When using `deployment/scripts/deploy.sh` for a staging route, keep the same
+chart, release, and namespace assumptions explicit:
+
+```bash
+ENVIRONMENT=staging NAMESPACE=xagent-staging RELEASE_NAME=xagent ./deployment/scripts/deploy.sh
+```
+
+The script resolves the chart from the repository root as `deployment/helm` and
+uses `deployment/helm/values-staging.yaml` for the staging values file.
+
 ### Production
 
 ```bash
-helm install xagent ./deployment/helm -f values-production.yaml \
+helm install xagent ./deployment/helm -f ./deployment/helm/values-production.yaml \
   --namespace xagent-prod --create-namespace \
   --set replicaCount=3 \
   --set-string secrets.databaseUrl="postgresql://user:pass@postgres-prod:5432/xagent_prod" \
@@ -189,7 +199,7 @@ helm install xagent ./deployment/helm \
 ### High-Availability Production
 
 ```bash
-helm install xagent ./deployment/helm -f values-production.yaml \
+helm install xagent ./deployment/helm -f ./deployment/helm/values-production.yaml \
   --namespace xagent-prod \
   --create-namespace \
   --set replicaCount=3 \
@@ -209,7 +219,7 @@ helm install xagent ./deployment/helm -f values-production.yaml \
 
 ```bash
 helm upgrade xagent ./deployment/helm \
-  --values values-production.yaml \
+  --values ./deployment/helm/values-production.yaml \
   --set image.tag="1.1.0"
 ```
 

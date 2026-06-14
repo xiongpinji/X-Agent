@@ -268,9 +268,12 @@ jobs:
             --namespace staging \
             --values deployment/helm/values-staging.yaml \
             --set image.tag=${{ needs.build.outputs.image-tag }} \
-            --set secrets.secretKey=${{ secrets.STAGING_SECRET_KEY }} \
-            --set secrets.dbPassword=${{ secrets.STAGING_DB_PASSWORD }} \
-            --set secrets.redisPassword=${{ secrets.STAGING_REDIS_PASSWORD }} \
+            --set secrets.enabled=true \
+            --set-string secrets.databaseUrl="${{ secrets.STAGING_DATABASE_URL }}" \
+            --set-string secrets.redisUrl="${{ secrets.STAGING_REDIS_URL }}" \
+            --set-string secrets.apiKey="${{ secrets.STAGING_API_KEY }}" \
+            --set-string secrets.langfusePublicKey="${{ secrets.STAGING_LANGFUSE_PUBLIC_KEY }}" \
+            --set-string secrets.langfuseSecretKey="${{ secrets.STAGING_LANGFUSE_SECRET_KEY }}" \
             --wait \
             --timeout 10m
 

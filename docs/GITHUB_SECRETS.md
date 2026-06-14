@@ -14,9 +14,32 @@ This document outlines all required GitHub Secrets for the X-Agent CI/CD pipelin
 
 ### 3. Kubernetes & Helm Secrets
 - **HELM_REPO_URL**: URL to Helm repository
-- **STAGING_SECRET_KEY**: Secret key for staging environment
-- **STAGING_DB_PASSWORD**: Database password for staging
-- **STAGING_REDIS_PASSWORD**: Redis password for staging
+
+The Helm chart consumes these values keys:
+
+- `secrets.databaseUrl`
+- `secrets.redisUrl`
+- `secrets.apiKey`
+- `secrets.langfusePublicKey`
+- `secrets.langfuseSecretKey`
+
+The CI/CD workflows must pass those keys with `secrets.enabled=true`. Do not use the legacy Helm values keys `secrets.secretKey`, `secrets.dbPassword`, or `secrets.redisPassword`.
+
+Staging:
+
+- **STAGING_DATABASE_URL**: Staging database connection URL
+- **STAGING_REDIS_URL**: Staging Redis connection URL
+- **STAGING_API_KEY**: Staging API key
+- **STAGING_LANGFUSE_PUBLIC_KEY**: Staging Langfuse public key
+- **STAGING_LANGFUSE_SECRET_KEY**: Staging Langfuse secret key
+
+Production:
+
+- **PROD_DATABASE_URL**: Production database connection URL
+- **PROD_REDIS_URL**: Production Redis connection URL
+- **PROD_API_KEY**: Production API key
+- **PROD_LANGFUSE_PUBLIC_KEY**: Production Langfuse public key
+- **PROD_LANGFUSE_SECRET_KEY**: Production Langfuse secret key
 
 ### 4. Notification Secrets
 - **SLACK_WEBHOOK**: Slack webhook URL for CI/CD notifications
@@ -54,14 +77,35 @@ Value: us-east-1  # or your preferred region
 Name: HELM_REPO_URL
 Value: https://your-helm-repo.example.com
 
-Name: STAGING_SECRET_KEY
-Value: <generate-a-secure-random-key>
+Name: STAGING_DATABASE_URL
+Value: <staging-database-url>
 
-Name: STAGING_DB_PASSWORD
-Value: <generate-a-secure-random-password>
+Name: STAGING_REDIS_URL
+Value: <staging-redis-url>
 
-Name: STAGING_REDIS_PASSWORD
-Value: <generate-a-secure-random-password>
+Name: STAGING_API_KEY
+Value: <staging-api-key>
+
+Name: STAGING_LANGFUSE_PUBLIC_KEY
+Value: <staging-langfuse-public-key>
+
+Name: STAGING_LANGFUSE_SECRET_KEY
+Value: <staging-langfuse-secret-key>
+
+Name: PROD_DATABASE_URL
+Value: <production-database-url>
+
+Name: PROD_REDIS_URL
+Value: <production-redis-url>
+
+Name: PROD_API_KEY
+Value: <production-api-key>
+
+Name: PROD_LANGFUSE_PUBLIC_KEY
+Value: <production-langfuse-public-key>
+
+Name: PROD_LANGFUSE_SECRET_KEY
+Value: <production-langfuse-secret-key>
 ```
 
 #### Notifications

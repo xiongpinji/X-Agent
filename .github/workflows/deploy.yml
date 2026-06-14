@@ -96,48 +96,51 @@ jobs:
         sarif_file: 'trivy-results.sarif'
 
   deploy-staging:
+    name: Staging advisory (no deployment)
     needs: [build, scan-image]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/develop' || github.event.inputs.environment == 'staging'
-    environment:
-      name: staging
-      url: https://staging.xagent.example.com
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
 
     steps:
     - uses: actions/checkout@v4
 
-    - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@v4
-      with:
-        role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME_STAGING }}
-        aws-region: us-east-1
-      continue-on-error: true
-
-    - name: Deploy to staging
+    - name: Staging advisory only
       run: |
-        echo "Deploying to staging environment..."
+        echo "::notice title=Staging advisory::This workflow does not deploy to staging."
         echo "Image: ${{ needs.build.outputs.image-tag }}"
-        # kubectl set image deployment/xagent-api xagent-api=${{ needs.build.outputs.image-tag }} -n staging
-        # kubectl rollout status deployment/xagent-api -n staging
-      env:
-        DEPLOY_KEY: ${{ secrets.STAGING_DEPLOY_KEY }}
+        echo "No cloud credentials are configured and no deploy secrets are read."
+        echo "Do not treat this job as staging deployment proof."
 
-    - name: Run smoke tests
+    - name: Staging smoke advisory only
       run: |
-        echo "Running smoke tests..."
-        # curl -f https://staging.xagent.example.com/health || exit 1
-      continue-on-error: true
+        echo "::notice title=Staging smoke advisory::No live staging smoke request is executed."
+        echo "A separate guarded deployment and authenticated smoke check are required before claiming staging proven."
 
-    - name: Notify deployment
+    - name: Notify staging advisory
       if: always()
       uses: actions/github-script@v7
       with:
         script: |
-          github.rest.issues.createComment({
-            issue_number: context.issue.number,
+          const issueNumber = context.payload.pull_request?.number || context.payload.issue?.number;
+          if (!issueNumber) {
+            core.notice('No pull request or issue context; skipping staging advisory comment.');
+            return;
+          }
+
+          await github.rest.issues.createComment({
+            issue_number: issueNumber,
             owner: context.repo.owner,
             repo: context.repo.repo,
-            body: '✅ Deployed to staging: ${{ needs.build.outputs.image-tag }}'
+            body: [
+              'Staging advisory only.',
+              '',
+              'No staging deployment or live smoke test was executed by this workflow.',
+              'Image candidate: ${{ needs.build.outputs.image-tag }}'
+            ].join('\n')
           });
       continue-on-error: true
 
@@ -189,8 +192,14 @@ jobs:
       uses: actions/github-script@v7
       with:
         script: |
-          github.rest.issues.createComment({
-            issue_number: context.issue.number,
+          const issueNumber = context.payload.pull_request?.number || context.payload.issue?.number;
+          if (!issueNumber) {
+            core.notice('No pull request or issue context; skipping production deployment comment.');
+            return;
+          }
+
+          await github.rest.issues.createComment({
+            issue_number: issueNumber,
             owner: context.repo.owner,
             repo: context.repo.repo,
             body: '🚀 Deployed to production: ${{ needs.build.outputs.image-tag }}'
@@ -224,8 +233,14 @@ jobs:
       uses: actions/github-script@v7
       with:
         script: |
-          github.rest.issues.createComment({
-            issue_number: context.issue.number,
+          const issueNumber = context.payload.pull_request?.number || context.payload.issue?.number;
+          if (!issueNumber) {
+            core.notice('No pull request or issue context; skipping rollback comment.');
+            return;
+          }
+
+          await github.rest.issues.createComment({
+            issue_number: issueNumber,
             owner: context.repo.owner,
             repo: context.repo.repo,
             body: '⚠️ Production deployment rolled back due to failure'

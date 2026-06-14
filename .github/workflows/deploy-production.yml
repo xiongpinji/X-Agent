@@ -154,9 +154,12 @@ jobs:
             --namespace production \
             --values deployment/helm/values-production.yaml \
             --set image.tag=${{ needs.build.outputs.image-tag }} \
-            --set secrets.secretKey=${{ secrets.SECRET_KEY }} \
-            --set secrets.dbPassword=${{ secrets.DB_PASSWORD }} \
-            --set secrets.redisPassword=${{ secrets.REDIS_PASSWORD }} \
+            --set secrets.enabled=true \
+            --set-string secrets.databaseUrl="${{ secrets.PROD_DATABASE_URL }}" \
+            --set-string secrets.redisUrl="${{ secrets.PROD_REDIS_URL }}" \
+            --set-string secrets.apiKey="${{ secrets.PROD_API_KEY }}" \
+            --set-string secrets.langfusePublicKey="${{ secrets.PROD_LANGFUSE_PUBLIC_KEY }}" \
+            --set-string secrets.langfuseSecretKey="${{ secrets.PROD_LANGFUSE_SECRET_KEY }}" \
             --wait \
             --timeout 10m
 
