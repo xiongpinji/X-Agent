@@ -3,21 +3,15 @@ import { getPandaResourcesBffConfig } from '../api/resourcesBffConfig'
 import type { PandaWorkbenchHome } from '../types'
 import { PandaErrorState, PandaLoadingState, RailCard } from './common'
 import { AgentActivityCard, ApprovalRiskCard, ResourceSnapshotCard, SystemStatusCard, WorkflowRunsCard } from './rightRailCards'
+import { resolveRightRailAgentActivities, resolveRightRailWorkflowRuns } from './rightRailFallbacks'
 
 export function RightRail({ home, isLoading, error }: { home: PandaWorkbenchHome | null; isLoading: boolean; error: string | null }) {
   const { status, source, refreshedAt, refresh, error: resourceError } = usePandaWorkspaceLifecycle()
   const resourcesBffConfig = getPandaResourcesBffConfig()
   const agents = usePandaWorkspaceResource('agents')
   const workflowFallback = usePandaWorkspaceResource('workflows')
-  const activityFallback = agents.map((agent) => ({
-    id: agent.id,
-    title: agent.name,
-    subtitle: agent.status,
-    status: agent.status,
-    tone: agent.tone,
-    time: '现在',
-    runtime: agent.runtime,
-  }))
+  const activities = resolveRightRailAgentActivities({ homeActivities: home?.agentActivity, agents })
+  const workflows = resolveRightRailWorkflowRuns({ homeWorkflows: home?.workflowRuns, fallbackWorkflows: workflowFallback })
 
   return (
     <aside className="panda-right-rail">
@@ -31,8 +25,8 @@ export function RightRail({ home, isLoading, error }: { home: PandaWorkbenchHome
         resourcesBffConfig={resourcesBffConfig}
         onRefresh={refresh}
       />
-      <AgentActivityCard activities={home?.agentActivity.length ? home.agentActivity : activityFallback} />
-      <WorkflowRunsCard workflows={home?.workflowRuns.length ? home.workflowRuns : workflowFallback} />
+      <AgentActivityCard activities={activities} />
+      <WorkflowRunsCard workflows={workflows} />
       <ApprovalRiskCard />
       <SystemStatusCard />
     </aside>

@@ -1,6 +1,7 @@
 import { Database } from 'lucide-react'
 import type { DataSource } from '../types'
 import { CapabilityMetricCard, ResourceCardGrid } from './common'
+import { buildDataSourceCardViewModel } from './dataCenterViewModel'
 
 export function DataSourceGrid({ dataSources }: { dataSources: readonly DataSource[] }) {
   return (
@@ -13,17 +14,15 @@ export function DataSourceGrid({ dataSources }: { dataSources: readonly DataSour
 }
 
 export function DataSourceCard({ source }: { source: DataSource }) {
+  const card = buildDataSourceCardViewModel(source)
+
   return (
     <CapabilityMetricCard
       icon={<Database size={18} />}
-      title={source.name}
-      subtitle={source.source}
+      title={card.title}
+      subtitle={card.subtitle}
       tone={source.tone}
-      metrics={[
-        { label: '状态', value: source.status },
-        { label: '记录', value: source.records },
-        { label: '同步', value: source.syncState },
-      ]}
+      metrics={card.metrics}
     />
   )
 }

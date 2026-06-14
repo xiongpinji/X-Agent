@@ -1,4 +1,6 @@
 export { ProgressMeter, ProgressSummary } from './progressPrimitives'
+export { buildStatusDotViewModel } from './statusDotViewModel'
+export type { StatusDotViewModel } from './statusDotViewModel'
 export { StatusDot } from './statusPrimitives'
 export {
   MetricStrip,

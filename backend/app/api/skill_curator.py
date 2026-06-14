@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from fastapi import APIRouter
@@ -32,7 +33,8 @@ def _draft_root_from_request(request: SkillCuratorDraftRequest) -> Path:
         return default_root
 
     settings = get_settings()
-    if settings.require_api_key or settings.app_mode == "production":
+    require_api_key_requested = os.getenv("XAGENT_REQUIRE_API_KEY", "").strip().lower() in {"1", "true", "yes", "on"}
+    if settings.require_api_key or require_api_key_requested or settings.app_mode == "production":
         raise api_error(
             403,
             ErrorCode.AUTHORIZATION_FAILED,

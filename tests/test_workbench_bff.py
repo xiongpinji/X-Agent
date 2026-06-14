@@ -22,6 +22,28 @@ from backend.app.api.workbench_resources_bff import (
 )
 
 
+EXPECTED_SNAPSHOT_KEYS = {
+    "tasks", "projects", "threads", "workflows",
+    "workflow_nodes", "agents", "knowledge_sources",
+    "tools", "data_sources", "audit_events",
+    "automation_rules", "settings_sections",
+}
+
+PAGE_SLICE_KEYS = {
+    "threads": {"threads"},
+    "tasks": {"tasks"},
+    "projects": {"projects"},
+    "workflows": {"workflows", "workflow_nodes"},
+    "agents": {"agents"},
+    "knowledge": {"knowledge_sources"},
+    "tools": {"tools"},
+    "data": {"data_sources"},
+    "audit": {"audit_events"},
+    "automation": {"automation_rules"},
+    "settings": {"settings_sections"},
+}
+
+
 class TestResourceSnapshotBuilders:
     """Test individual snapshot builder functions."""
 
@@ -126,14 +148,7 @@ class TestBFFEndpointContract:
         assert resp.status_code == 200
         data = resp.json()
 
-        # These are the keys defined in snapshotApiContracts.ts
-        expected_keys = {
-            "tasks", "projects", "threads", "workflows",
-            "workflow_nodes", "agents", "knowledge_sources",
-            "tools", "data_sources", "audit_events",
-            "automation_rules", "settings_sections",
-        }
-        assert set(data.keys()) == expected_keys
+        assert set(data.keys()) == EXPECTED_SNAPSHOT_KEYS
 
     def test_all_values_are_lists(self):
         """Every field in the snapshot must be a list."""
@@ -176,3 +191,50 @@ class TestBFFEndpointContract:
         resp = client.get("/api/v1/workbench/resources/health")
         assert resp.status_code == 200
         assert resp.json()["status"] == "ok"
+
+    def test_resources_endpoint_is_mounted_on_main_app(self):
+        from fastapi.testclient import TestClient
+
+        from backend.app.main import app
+
+        client = TestClient(app)
+        resp = client.get("/api/v1/workbench/resources")
+
+        assert resp.status_code == 200
+        assert set(resp.json().keys()) == EXPECTED_SNAPSHOT_KEYS
+
+    def test_resources_endpoint_requires_valid_credentials_when_api_key_required(self, monkeypatch):
+        from fastapi.testclient import TestClient
+
+        from backend.app.main import app
+        from backend.app.settings import get_settings
+
+        monkeypatch.setenv("XAGENT_MODE", "standard")
+        monkeypatch.setenv("XAGENT_REQUIRE_API_KEY", "true")
+        monkeypatch.setenv("XAGENT_BOOTSTRAP_API_KEY", "bootstrap")
+        get_settings.cache_clear()
+        try:
+            client = TestClient(app)
+
+            anon = client.get("/api/v1/workbench/resources")
+            authed = client.get("/api/v1/workbench/resources", headers={"x-api-key": "bootstrap"})
+
+            assert anon.status_code == 401
+            assert authed.status_code == 200
+            assert set(authed.json().keys()) == EXPECTED_SNAPSHOT_KEYS
+        finally:
+            get_settings.cache_clear()
+
+    @pytest.mark.parametrize(("page", "keys"), PAGE_SLICE_KEYS.items())
+    def test_page_slice_endpoints_return_resource_snapshots(self, page, keys):
+        from fastapi.testclient import TestClient
+
+        from backend.app.main import app
+
+        client = TestClient(app)
+        resp = client.get(f"/api/v1/workbench/{page}")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert set(data.keys()) == keys
+        assert all(isinstance(value, list) for value in data.values())

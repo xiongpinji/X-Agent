@@ -32,4 +32,29 @@ export type ApiWorkbenchHome = {
   }
   agent_activity?: readonly ApiWorkbenchActivityItem[]
   workflow_runs?: readonly ApiWorkbenchWorkflowRun[]
+  control_summary?: {
+    source?: string
+    status?: string
+    read_only?: boolean
+    execute_enabled?: boolean
+    count_scope?: string
+    limit?: number
+    plan_count?: number
+    goal_count?: number
+    status_counts?: Record<string, Record<string, number>>
+    latest_updated_at?: string | null
+    boundary?: string
+  }
+  runtime_capability_summary?: {
+    source?: string
+    source_status?: string
+    status?: string
+    read_only?: boolean
+    execute_enabled?: boolean
+    ok?: boolean
+    summary?: Record<string, number>
+    issue_codes?: readonly string[]
+    next_actions?: readonly string[]
+    boundary?: string
+  }
 }

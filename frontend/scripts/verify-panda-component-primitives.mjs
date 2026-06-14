@@ -18,14 +18,19 @@ export function verifyPandaComponentPrimitives({ assert, read }) {
   const common = read('src/panda/components/common.tsx')
   const pageChromePrimitives = read('src/panda/components/pageChromePrimitives.tsx')
   const pageContractPrimitives = read('src/panda/components/pageContractPrimitives.tsx')
+  const pageContractViewModel = read('src/panda/components/pageContractViewModel.ts')
   const resourceState = read('src/panda/components/resourceState.tsx')
+  const resourceStateViewModel = read('src/panda/components/resourceStateViewModel.ts')
   const statePanelPrimitives = read('src/panda/components/statePanelPrimitives.tsx')
+  const statePanelBasePrimitives = read('src/panda/components/statePanelBasePrimitives.tsx')
   const modulePagePrimitives = read('src/panda/components/modulePagePrimitives.tsx')
   const modulePageActionPrimitives = read('src/panda/components/modulePageActionPrimitives.tsx')
   const runtimePrimitives = read('src/panda/components/runtimePrimitives.tsx')
   const metricPrimitives = read('src/panda/components/metricPrimitives.tsx')
   const runtimeMetaPrimitives = read('src/panda/components/runtimeMetaPrimitives.tsx')
+  const runtimeMetaViewModel = read('src/panda/components/runtimeMetaViewModel.ts')
   const tagListPrimitives = read('src/panda/components/tagListPrimitives.tsx')
+  const statusDotViewModel = read('src/panda/components/statusDotViewModel.ts')
   const statusPrimitives = read('src/panda/components/statusPrimitives.tsx')
   const progressPrimitives = read('src/panda/components/progressPrimitives.tsx')
   const workspacePrimitives = read('src/panda/components/workspacePrimitives.tsx')
@@ -40,6 +45,7 @@ export function verifyPandaComponentPrimitives({ assert, read }) {
   const workspaceRailPrimitives = read('src/panda/components/workspaceRailPrimitives.tsx')
   const workflowPrimitives = read('src/panda/components/workflowPrimitives.tsx')
   const workflowEvidencePrimitives = read('src/panda/components/workflowEvidencePrimitives.tsx')
+  const workflowExecutionStepPrimitives = read('src/panda/components/workflowExecutionStepPrimitives.tsx')
   const workflowNodePrimitives = read('src/panda/components/workflowNodePrimitives.tsx')
   const workflowActionPrimitives = read('src/panda/components/workflowActionPrimitives.tsx')
 
@@ -82,11 +88,13 @@ export function verifyPandaComponentPrimitives({ assert, read }) {
   assert(common.includes("from './resourceState'"), 'common.tsx must preserve compatibility exports from resourceState')
   assert(common.includes("from './workspacePrimitives'"), 'common.tsx must preserve compatibility exports from workspacePrimitives')
   assert(common.includes("from './pageChromePrimitives'"), 'common.tsx must preserve compatibility exports from pageChromePrimitives')
+  assert(common.includes("from './pageContractViewModel'"), 'common.tsx must preserve compatibility exports from pageContractViewModel')
   assert(common.includes("from './pageContractPrimitives'"), 'common.tsx must preserve compatibility exports from pageContractPrimitives')
   assert(common.includes("from './modulePagePrimitives'"), 'common.tsx must preserve compatibility exports from modulePagePrimitives')
   assert(runtimePrimitives.includes("from './progressPrimitives'"), 'runtimePrimitives must preserve compatibility exports from progressPrimitives')
   assert(runtimePrimitives.includes("from './metricPrimitives'"), 'runtimePrimitives must preserve compatibility exports from metricPrimitives')
   assert(runtimePrimitives.includes("from './statusPrimitives'"), 'runtimePrimitives must preserve compatibility exports from statusPrimitives')
+  assert(runtimePrimitives.includes("from './statusDotViewModel'"), 'runtimePrimitives must preserve compatibility exports from statusDotViewModel')
   assert(metricPrimitives.includes("from './runtimeMetaPrimitives'"), 'metricPrimitives must preserve compatibility exports from runtimeMetaPrimitives')
   assert(workspacePrimitives.includes("from './workflowPrimitives'"), 'workspacePrimitives must preserve compatibility exports from workflowPrimitives')
   assert(workspacePrimitives.includes("from './workspaceCardPrimitives'"), 'workspacePrimitives must preserve compatibility exports from workspaceCardPrimitives')
@@ -97,7 +105,12 @@ export function verifyPandaComponentPrimitives({ assert, read }) {
   assert(workflowPrimitives.includes("from './workflowNodePrimitives'"), 'workflowPrimitives must preserve compatibility exports from workflowNodePrimitives')
   assert(workflowPrimitives.includes("from './workflowActionPrimitives'"), 'workflowPrimitives must preserve compatibility exports from workflowActionPrimitives')
 
-  for (const symbol of ['AuditEventRow', 'ExecutionStepRow']) {
+  assert(workspacePrimitives.includes('ExecutionStepRow'), 'workspacePrimitives must re-export workflow execution step component: ExecutionStepRow')
+  assert(workflowPrimitives.includes('ExecutionStepRow'), 'workflowPrimitives must preserve compatibility export for workflow execution step component: ExecutionStepRow')
+  assert(workflowEvidencePrimitives.includes("from './workflowExecutionStepPrimitives'"), 'workflowEvidencePrimitives must preserve ExecutionStepRow compatibility export')
+  assert(!workflowEvidencePrimitives.includes('export function ExecutionStepRow'), 'workflowEvidencePrimitives must keep ExecutionStepRow implementation in workflowExecutionStepPrimitives')
+  assert(workflowExecutionStepPrimitives.includes('export function ExecutionStepRow'), 'workflowExecutionStepPrimitives must own shared workflow execution step component: ExecutionStepRow')
+  for (const symbol of ['AuditEventRow']) {
     assert(workspacePrimitives.includes(symbol), `workspacePrimitives must re-export workflow component: ${symbol}`)
     assert(workflowPrimitives.includes(symbol), `workflowPrimitives must preserve compatibility export for workflow evidence component: ${symbol}`)
     assert(workflowEvidencePrimitives.includes(`export function ${symbol}`), `workflowEvidencePrimitives must own shared workflow evidence component: ${symbol}`)
@@ -174,15 +187,15 @@ export function verifyPandaComponentPrimitives({ assert, read }) {
   assert(workspaceInfoPrimitives.includes('InfoPairItem'), 'InfoPairGrid must expose typed info pair items')
   assert(workspaceInfoPrimitives.includes('grid grid-cols-2 gap-3 text-sm'), 'InfoPairGrid must own the shared two-column info layout')
   assert(workflowEvidencePrimitives.includes('panda-audit-event'), 'AuditEventRow must own the shared audit event shell')
-  assert(workflowEvidencePrimitives.includes('owner_agent: {ownerAgent}'), 'ExecutionStepRow must surface owner_agent for execution evidence')
-  assert(workflowEvidencePrimitives.includes('evidence_refs: {evidenceRef}'), 'ExecutionStepRow must surface evidence_refs for execution evidence')
+  assert(workflowExecutionStepPrimitives.includes('owner_agent: {ownerAgent}'), 'ExecutionStepRow must surface owner_agent for execution evidence')
+  assert(workflowExecutionStepPrimitives.includes('evidence_refs: {evidenceRef}'), 'ExecutionStepRow must surface evidence_refs for execution evidence')
   assert(workflowNodePrimitives.includes('panda-flow-node'), 'FlowNodeCard must own the shared workflow node shell')
   assert(workspaceActivityPrimitives.includes('panda-avatar h-9 w-9'), 'ActivitySummaryRow must own the shared activity avatar layout')
   assert(workspaceActivityPrimitives.includes('toneLabel'), 'ActivitySummaryRow must own readable tone labels for activity status')
   assert(workspaceActivityPrimitives.includes('StatusDot'), 'ActivitySummaryRow must render the shared status dot primitive')
   assert(workspaceRailPrimitives.includes('panda-card p-4'), 'RailCard must own the shared right-rail card shell')
   assert(workspaceRailPrimitives.includes('aria-label={`${title}：${action}`}'), 'RailCard must expose contextual action labels')
-  assert(runtimeMetaPrimitives.includes('evidence_refs'), 'RuntimeMetaStrip must surface evidence_refs metadata')
+  assert(runtimeMetaViewModel.includes('evidence_refs'), 'RuntimeMetaStrip view model must surface evidence_refs metadata')
   assert(workflowActionPrimitives.includes('<PanelActionButton key={item} label={item} group={title} />'), 'ActionPanel must compose PanelActionButton for action items')
   assert(workflowActionPrimitives.includes('aria-label={`${group}：${label}`}'), 'PanelActionButton must expose contextual action labels')
   assert(workflowActionPrimitives.includes('className="rounded-lg bg-white/[0.04] px-3 py-2 text-left text-sm text-slate-300"'), 'PanelActionButton must own the shared panel action button styling')
@@ -202,7 +215,14 @@ export function verifyPandaComponentPrimitives({ assert, read }) {
   assert(pageContractPrimitives.includes('pandaPageResourceContracts'), 'PageContractStrip must render Panda resource contracts')
   assert(pageContractPrimitives.includes('usePandaWorkspaceLifecycle'), 'PageContractStrip must show Panda workspace lifecycle metadata through the lifecycle hook')
   assert(!pageContractPrimitives.includes('usePandaWorkspace()'), 'Page contract primitives must not consume the full workspace context directly')
-  assert(pageContractPrimitives.includes('contract.runtimeFields.join'), 'PageContractStrip must show Panda runtime field contracts')
+  assert(pageContractPrimitives.includes('buildPageContractViewModel'), 'PageContractStrip must delegate contract labels to the page contract view model')
+  assert(pageContractPrimitives.includes('contractView.runtimeFieldsLabel'), 'PageContractStrip must render runtime field contracts from the view model')
+  assert(!pageContractPrimitives.includes('contract.runtimeFields.join'), 'PageContractStrip must not own runtime field label formatting')
+  assert(pageContractViewModel.includes('export function buildPageContractViewModel'), 'pageContractViewModel must own the visible contract view model builder')
+  assert(pageContractViewModel.includes("contract.readiness === 'api-wired' ? 'API 已接入' : 'Mock 待对齐'"), 'pageContractViewModel must own readiness label mapping')
+  assert(pageContractViewModel.includes("source === 'api' ? '实时 API' : '本地演示数据'"), 'pageContractViewModel must own workspace source label mapping')
+  assert(pageContractViewModel.includes('runtimeFieldsLabel: contract.runtimeFields.join'), 'pageContractViewModel must own runtime field label formatting')
+  assert(pageContractViewModel.includes("refreshLabel: status === 'loading' ? '同步中' : refreshedAt"), 'pageContractViewModel must own refresh label formatting')
   assert(modulePagePrimitives.includes("from './modulePageActionPrimitives'"), 'modulePagePrimitives must preserve compatibility exports from modulePageActionPrimitives')
   assert(!modulePagePrimitives.includes('export function ModulePageActions'), 'modulePagePrimitives must keep ModulePageActions implementation in modulePageActionPrimitives')
   assert(modulePageActionPrimitives.includes('export type ModulePageAction'), 'modulePageActionPrimitives must own the module page action type')
@@ -211,15 +231,22 @@ export function verifyPandaComponentPrimitives({ assert, read }) {
   assert(modulePageActionPrimitives.includes('actions: readonly ModulePageAction[]'), 'ModulePageActions must keep readonly action props')
   assert(modulePagePrimitives.includes('<PageHeading'), 'ModuleResourcePage must render the shared page heading')
   assert(modulePagePrimitives.includes('<PandaResourceState'), 'ModuleResourcePage must render shared resource state handling')
+  assert(statePanelPrimitives.includes("from './statePanelBasePrimitives'"), 'statePanelPrimitives must preserve compatibility exports from statePanelBasePrimitives')
+  assert(!statePanelPrimitives.includes('export function PandaStatePanel'), 'statePanelPrimitives must keep PandaStatePanel implementation in statePanelBasePrimitives')
+  assert(statePanelBasePrimitives.includes('export function PandaStatePanel'), 'statePanelBasePrimitives must own the pure state panel shell')
   for (const symbol of ['PandaStatePanel', 'PandaLoadingState', 'PandaEmptyState', 'PandaErrorState']) {
-    assert(statePanelPrimitives.includes(`export function ${symbol}`), `statePanelPrimitives must own pure state panel component: ${symbol}`)
+    if (symbol !== 'PandaStatePanel') {
+      assert(statePanelPrimitives.includes(`export function ${symbol}`), `statePanelPrimitives must own semantic state panel component: ${symbol}`)
+    }
     assert(resourceState.includes(symbol), `resourceState must preserve compatibility export for state panel component: ${symbol}`)
   }
   assert(resourceState.includes('export function PandaResourceState'), 'resourceState must own shared resource lifecycle component: PandaResourceState')
   assert((statePanelPrimitives.match(/<PandaStatePanel/g) ?? []).length === 3, 'Loading, empty, and error states must compose PandaStatePanel')
-  assert(resourceState.includes("status === 'loading'"), 'PandaResourceState must render loading state from workspace lifecycle')
-  assert(resourceState.includes("status === 'error'"), 'PandaResourceState must render error state from workspace lifecycle')
-  assert(resourceState.includes('count === 0'), 'PandaResourceState must render empty state for empty resource slices')
+  assert(resourceState.includes("from './resourceStateViewModel'"), 'PandaResourceState must delegate lifecycle branching to resourceStateViewModel')
+  assert(resourceStateViewModel.includes("status === 'loading'"), 'resourceStateViewModel must render loading state from workspace lifecycle')
+  assert(resourceStateViewModel.includes("status === 'error'"), 'resourceStateViewModel must render error state from workspace lifecycle')
+  assert(resourceStateViewModel.includes('count === 0'), 'resourceStateViewModel must render empty state for empty resource slices')
+  assert(statePanelBasePrimitives.includes('action?: React.ReactNode'), 'PandaStatePanel must support an optional recovery action')
   assert(statePanelPrimitives.includes('action?: React.ReactNode'), 'PandaErrorState must support an optional recovery action')
   assert(resourceState.includes('const { status, error, refresh } = usePandaWorkspaceLifecycle()'), 'PandaResourceState must read refresh from the workspace lifecycle hook')
   assert(resourceState.includes('onClick={() => void refresh()}'), 'PandaResourceState error action must retry the resource refresh')
@@ -236,7 +263,9 @@ export function verifyPandaComponentPrimitives({ assert, read }) {
   assert(metricPrimitives.includes('MiniTagList'), 'metricPrimitives must preserve compatibility export for MiniTagList')
   assert(runtimePrimitives.includes('MiniTagList'), 'runtimePrimitives must preserve compatibility export for MiniTagList')
   assert(statusPrimitives.includes('export function StatusDot'), 'statusPrimitives must own StatusDot')
+  assert(statusPrimitives.includes('buildStatusDotViewModel'), 'StatusDot must delegate tone class and labels to statusDotViewModel')
   assert(runtimePrimitives.includes('StatusDot'), 'runtimePrimitives must preserve compatibility export for StatusDot')
+  assert(runtimePrimitives.includes('buildStatusDotViewModel'), 'runtimePrimitives must preserve compatibility export for status dot view model')
   for (const symbol of ['SummaryMetricList', 'RuntimeMetaStrip', 'MetricStrip', 'MiniTagList', 'StatusDot']) {
     assert(runtimePrimitives.includes(symbol), `Missing Panda runtime compatibility export: ${symbol}`)
   }
@@ -247,12 +276,13 @@ export function verifyPandaComponentPrimitives({ assert, read }) {
 
   assert(metricPrimitives.includes('SummaryMetricItem'), 'SummaryMetricList must expose typed summary metric items')
   assert(metricPrimitives.includes('space-y-4 text-sm'), 'SummaryMetricList must own the shared summary metric layout')
-  assert(runtimeMetaPrimitives.includes('owner_agent'), 'RuntimeMetaStrip must surface owner_agent metadata')
-  assert(runtimeMetaPrimitives.includes('updated_at'), 'RuntimeMetaStrip must surface updated_at metadata')
-  assert(runtimeMetaPrimitives.includes('risk_level'), 'RuntimeMetaStrip must surface risk_level metadata')
-  assert(runtimeMetaPrimitives.includes('evidence_refs'), 'RuntimeMetaStrip must surface evidence_refs metadata')
-  assert(runtimeMetaPrimitives.includes('runtime?.ownerAgent ?? owner'), 'RuntimeMetaStrip must support mock fallback owner data')
-  assert(runtimeMetaPrimitives.includes('runtime?.updatedAt ?? updatedAt'), 'RuntimeMetaStrip must support mock fallback updated data')
+  assert(runtimeMetaPrimitives.includes("from './runtimeMetaViewModel'"), 'RuntimeMetaStrip must delegate runtime tag display to runtimeMetaViewModel')
+  assert(runtimeMetaViewModel.includes('owner_agent'), 'RuntimeMetaStrip view model must surface owner_agent metadata')
+  assert(runtimeMetaViewModel.includes('updated_at'), 'RuntimeMetaStrip view model must surface updated_at metadata')
+  assert(runtimeMetaViewModel.includes('risk_level'), 'RuntimeMetaStrip view model must surface risk_level metadata')
+  assert(runtimeMetaViewModel.includes('evidence_refs'), 'RuntimeMetaStrip view model must surface evidence_refs metadata')
+  assert(runtimeMetaViewModel.includes('runtime?.ownerAgent ?? owner'), 'RuntimeMetaStrip view model must support mock fallback owner data')
+  assert(runtimeMetaViewModel.includes('runtime?.updatedAt ?? updatedAt'), 'RuntimeMetaStrip view model must support mock fallback updated data')
   assert(progressPrimitives.includes('ProgressMeter value={value}'), 'ProgressSummary must compose the accessible ProgressMeter')
   assert(tagListPrimitives.includes('panda-mini-tag'), 'MiniTagList must own the shared mini tag layout')
   assert(metricPrimitives.includes("from './tagListPrimitives'"), 'metricPrimitives must preserve compatibility exports from tagListPrimitives')
@@ -264,7 +294,12 @@ export function verifyPandaComponentPrimitives({ assert, read }) {
   assert(progressPrimitives.includes('aria-label={ariaLabel}'), 'ProgressMeter must expose a caller-provided accessible label')
   assert(progressPrimitives.includes('aria-valuetext={`${clampedValue}%`}'), 'ProgressMeter must expose readable progress value text')
   assert(statusPrimitives.includes('role="img"'), 'StatusDot must expose status tone as an accessible status image')
-  assert(statusPrimitives.includes('aria-label={readableLabel}'), 'StatusDot must expose a readable status label')
+  assert(statusPrimitives.includes('aria-label={statusDot.ariaLabel}'), 'StatusDot must expose a readable status label from the view model')
+  assert(!statusPrimitives.includes("tone === 'danger'"), 'StatusDot must not own tone class branching')
+  assert(statusDotViewModel.includes('export function buildStatusDotViewModel'), 'statusDotViewModel must own the status dot view model builder')
+  assert(statusDotViewModel.includes("tone === 'danger' ? 'danger' : tone === 'warning' ? 'warn' : ''"), 'statusDotViewModel must own tone class branching')
+  assert(statusDotViewModel.includes('ariaLabel: label ?? `风险等级：${title}`'), 'statusDotViewModel must own default readable risk labels')
+  assert(statusDotViewModel.includes('className: `panda-status-dot ${toneClassName}`'), 'statusDotViewModel must own status dot class composition')
   assert(!runtimePrimitives.includes('usePandaWorkspace'), 'Runtime primitives must stay independent from workspace context')
   assert(workflowEvidencePrimitives.includes('MiniTagList items={evidenceRefs} prefix="#"'), 'AuditEventRow must render audit evidence refs through MiniTagList')
 
@@ -279,8 +314,10 @@ export function verifyPandaComponentPrimitives({ assert, read }) {
     tagListPrimitives,
     progressPrimitives,
     resourceState,
+    statePanelBasePrimitives,
     statePanelPrimitives,
     runtimePrimitives,
+    statusDotViewModel,
     statusPrimitives,
     workspaceCardPrimitives,
     workspaceResourceCardPrimitives,
@@ -293,6 +330,7 @@ export function verifyPandaComponentPrimitives({ assert, read }) {
     workspaceLayoutPrimitives,
     workflowActionPrimitives,
     workflowEvidencePrimitives,
+    workflowExecutionStepPrimitives,
     workflowNodePrimitives,
     workspacePrimitives,
     workflowPrimitives,

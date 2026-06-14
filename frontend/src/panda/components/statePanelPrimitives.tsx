@@ -1,30 +1,8 @@
 import React from 'react'
 import { AlertTriangle, Inbox, Loader2 } from 'lucide-react'
+import { PandaStatePanel } from './statePanelBasePrimitives'
 
-export function PandaStatePanel({
-  icon,
-  title,
-  description,
-  action,
-  warning = false,
-}: {
-  icon: React.ReactNode
-  title: string
-  description: string
-  action?: React.ReactNode
-  warning?: boolean
-}) {
-  return (
-    <div className={warning ? 'panda-state-panel panda-state-warning' : 'panda-state-panel'}>
-      {icon}
-      <div>
-        <h3>{title}</h3>
-        <p>{description}</p>
-        {action ? <div className="mt-3">{action}</div> : null}
-      </div>
-    </div>
-  )
-}
+export { PandaStatePanel } from './statePanelBasePrimitives'
 
 export function PandaLoadingState({
   title = '正在加载工作台',

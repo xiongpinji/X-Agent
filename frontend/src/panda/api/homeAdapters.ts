@@ -1,4 +1,10 @@
-import type { ActivityItem, PandaWorkbenchHome, WorkflowItem } from '../types'
+import type {
+  ActivityItem,
+  PandaControlSummary,
+  PandaRuntimeCapabilitySummary,
+  PandaWorkbenchHome,
+  WorkflowItem,
+} from '../types'
 import type {
   ApiWorkbenchActivityItem,
   ApiWorkbenchHome,
@@ -34,6 +40,54 @@ export function mapWorkflowRun(item: ApiWorkbenchWorkflowRun): WorkflowItem {
   }
 }
 
+export function mapControlSummary(summary: ApiWorkbenchHome['control_summary']): PandaControlSummary {
+  return {
+    source: stringValue(summary?.source, 'missing'),
+    status: stringValue(summary?.status, 'unknown'),
+    readOnly: summary?.read_only !== false,
+    executeEnabled: summary?.execute_enabled === true,
+    countScope: stringValue(summary?.count_scope, 'unknown'),
+    limit: summary?.limit ?? 0,
+    planCount: summary?.plan_count ?? 0,
+    goalCount: summary?.goal_count ?? 0,
+    latestUpdatedAt: summary?.latest_updated_at ?? null,
+    boundary: stringValue(
+      summary?.boundary,
+      'Control plan/goal state is unavailable in this view; no execution controls are exposed.',
+    ),
+  }
+}
+
+export function mapRuntimeCapabilitySummary(
+  summary: ApiWorkbenchHome['runtime_capability_summary'],
+): PandaRuntimeCapabilitySummary {
+  const counts = summary?.summary ?? {}
+  return {
+    source: stringValue(summary?.source, 'missing'),
+    sourceStatus: stringValue(summary?.source_status, 'unknown'),
+    status: stringValue(summary?.status, 'unknown'),
+    readOnly: summary?.read_only !== false,
+    executeEnabled: summary?.execute_enabled === true,
+    ok: summary?.ok === true,
+    mainlineWiredCount: counts.mainline_wired_count ?? 0,
+    apiCliEvidenceCount: counts.api_cli_evidence_count ?? 0,
+    frontendVerifiedCount: counts.frontend_verified_count ?? 0,
+    detachedCandidateCount: counts.detached_candidate_count ?? 0,
+    staleEvidenceCount: counts.stale_evidence_count ?? 0,
+    overclaimFindingCount: counts.overclaim_finding_count ?? 0,
+    readyCount: 0,
+    needsReviewCount: counts.needs_review_count ?? 0,
+    blockedCount: counts.blocked_count ?? 0,
+    missingEvidenceCount: counts.missing_evidence_count ?? 0,
+    issueCodes: Array.isArray(summary?.issue_codes) ? summary.issue_codes : [],
+    nextActions: Array.isArray(summary?.next_actions) ? summary.next_actions : [],
+    boundary: stringValue(
+      summary?.boundary,
+      'Runtime capability status is not available from the backend; detached candidates are not treated as delivered mainline capability.',
+    ),
+  }
+}
+
 export function mapWorkbenchHome(home: ApiWorkbenchHome): PandaWorkbenchHome {
   return {
     brand: {
@@ -51,5 +105,7 @@ export function mapWorkbenchHome(home: ApiWorkbenchHome): PandaWorkbenchHome {
     },
     agentActivity: Array.isArray(home.agent_activity) ? home.agent_activity.map(mapActivityItem) : [],
     workflowRuns: Array.isArray(home.workflow_runs) ? home.workflow_runs.map(mapWorkflowRun) : [],
+    controlSummary: mapControlSummary(home.control_summary),
+    runtimeCapabilitySummary: mapRuntimeCapabilitySummary(home.runtime_capability_summary),
   }
 }

@@ -1,5 +1,6 @@
 import React from 'react'
 import { usePandaWorkspaceLifecycle } from '../state/PandaWorkspaceContext'
+import { buildPandaResourceStateViewModel } from './resourceStateViewModel'
 import { PandaEmptyState, PandaErrorState, PandaLoadingState } from './statePanelPrimitives'
 
 export { PandaEmptyState, PandaErrorState, PandaLoadingState, PandaStatePanel } from './statePanelPrimitives'
@@ -20,16 +21,17 @@ export function PandaResourceState({
   children: React.ReactNode
 }) {
   const { status, error, refresh } = usePandaWorkspaceLifecycle()
+  const state = buildPandaResourceStateViewModel({ count, status, error })
 
-  if (status === 'loading' && count === 0) {
+  if (state.kind === 'loading') {
     return <PandaLoadingState title={loadingTitle} description={loadingDescription} />
   }
 
-  if (status === 'error' && count === 0) {
+  if (state.kind === 'error') {
     return (
       <PandaErrorState
         title="资源暂不可用"
-        description={error?.message ?? '当前资源切片加载失败，等待后端接口或本地回退数据恢复。'}
+        description={state.errorDescription}
         action={
           <button className="panda-state-action" type="button" onClick={() => void refresh()}>
             重新同步资源
@@ -39,7 +41,7 @@ export function PandaResourceState({
     )
   }
 
-  if (count === 0) {
+  if (state.kind === 'empty') {
     return <PandaEmptyState title={emptyTitle} description={emptyDescription} />
   }
 

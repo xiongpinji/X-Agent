@@ -19,6 +19,41 @@ export type PandaWorkbenchMetrics = {
   storageUsed: string
 }
 
+export type PandaControlSummary = {
+  source: string
+  status: string
+  readOnly: boolean
+  executeEnabled: boolean
+  countScope: string
+  limit: number
+  planCount: number
+  goalCount: number
+  latestUpdatedAt: string | null
+  boundary: string
+}
+
+export type PandaRuntimeCapabilitySummary = {
+  source: string
+  sourceStatus: string
+  status: string
+  readOnly: boolean
+  executeEnabled: boolean
+  ok: boolean
+  mainlineWiredCount: number
+  apiCliEvidenceCount: number
+  frontendVerifiedCount: number
+  detachedCandidateCount: number
+  staleEvidenceCount: number
+  overclaimFindingCount: number
+  readyCount: number
+  needsReviewCount: number
+  blockedCount: number
+  missingEvidenceCount: number
+  issueCodes: readonly string[]
+  nextActions: readonly string[]
+  boundary: string
+}
+
 export type PandaWorkbenchHome = {
   brand: {
     productName: string
@@ -29,4 +64,6 @@ export type PandaWorkbenchHome = {
   metrics: PandaWorkbenchMetrics
   agentActivity: readonly ActivityItem[]
   workflowRuns: readonly WorkflowItem[]
+  controlSummary: PandaControlSummary
+  runtimeCapabilitySummary: PandaRuntimeCapabilitySummary
 }

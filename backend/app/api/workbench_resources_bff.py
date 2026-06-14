@@ -15,14 +15,41 @@ from __future__ import annotations
 
 import logging
 import time
+from typing import Annotated
 from typing import Any
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 
+from backend.app.core.security import ROLE_SCOPES, Principal
+from backend.app.dependencies import enforce_scope, get_current_principal
+from backend.app.settings import get_settings
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["workbench-bff"])
+
+
+def get_panda_workbench_principal(request: Request) -> Principal:
+    """Resolve the Panda workbench BFF principal with local bootstrap parity."""
+    settings = get_settings()
+    has_credentials = bool(request.headers.get("x-api-key") or request.headers.get("authorization"))
+    if (
+        not has_credentials
+        and not settings.require_api_key
+        and getattr(settings, "app_mode", "development") != "production"
+    ):
+        return Principal(
+            tenant_id="default",
+            user_id="anonymous",
+            role="user",
+            scopes=list(ROLE_SCOPES.get("user", [])),
+            authenticated=True,
+        )
+    return get_current_principal(request)
+
+
+PrincipalDependency = Annotated[Principal, Depends(get_panda_workbench_principal)]
 
 
 # ============================================================================
@@ -296,8 +323,44 @@ def _status_to_tone(status: str) -> str:
 # BFF Endpoint
 # ============================================================================
 
+def build_panda_resource_snapshot(principal: Principal) -> dict[str, list[dict[str, Any]]]:
+    """Build the aggregate Panda resource snapshot for a resolved principal."""
+    return {
+        "tasks": _build_tasks_snapshot(),
+        "projects": _build_projects_snapshot(),
+        "threads": _build_threads_snapshot(),
+        "workflows": _build_workflows_snapshot(),
+        "workflow_nodes": [],
+        "agents": _build_agents_snapshot(),
+        "knowledge_sources": _build_knowledge_snapshot(),
+        "tools": _build_tools_snapshot(),
+        "data_sources": _build_data_sources_snapshot(),
+        "audit_events": _build_audit_snapshot(),
+        "automation_rules": _build_automation_rules_snapshot(),
+        "settings_sections": _build_settings_snapshot(),
+    }
+
+
+def _resource_response(snapshot: dict[str, list[dict[str, Any]]], start: float) -> JSONResponse:
+    elapsed_ms = (time.time() - start) * 1000
+    logger.debug("Workbench resources BFF responded in %.1fms", elapsed_ms)
+
+    return JSONResponse(
+        content=snapshot,
+        headers={
+            "X-Response-Time": f"{elapsed_ms:.0f}ms",
+            "Cache-Control": "private, max-age=5",
+        },
+    )
+
+
+def _slice_response(principal: Principal, resource_key: str, start: float) -> JSONResponse:
+    snapshot = build_panda_resource_snapshot(principal)
+    return _resource_response({resource_key: snapshot[resource_key]}, start)
+
+
 @router.get("/resources")
-async def get_workbench_resources(request: Request) -> JSONResponse:
+async def get_workbench_resources(request: Request, principal: PrincipalDependency) -> JSONResponse:
     """Return the full resource snapshot for the Panda frontend.
 
     This is the BFF (Backend-for-Frontend) endpoint that provides all
@@ -310,33 +373,81 @@ async def get_workbench_resources(request: Request) -> JSONResponse:
     Response format matches `ApiPandaResourceSnapshot` in:
     `frontend/src/panda/api/snapshotApiContracts.ts`
     """
-    start = time.time()
+    enforce_scope(principal, "tools:read")
+    return _resource_response(build_panda_resource_snapshot(principal), time.time())
 
-    snapshot = {
-        "tasks": _build_tasks_snapshot(),
-        "projects": _build_projects_snapshot(),
-        "threads": _build_threads_snapshot(),
-        "workflows": _build_workflows_snapshot(),
-        "workflow_nodes": [],  # Populated when workflows are running
-        "agents": _build_agents_snapshot(),
-        "knowledge_sources": _build_knowledge_snapshot(),
-        "tools": _build_tools_snapshot(),
-        "data_sources": _build_data_sources_snapshot(),
-        "audit_events": _build_audit_snapshot(),
-        "automation_rules": _build_automation_rules_snapshot(),
-        "settings_sections": _build_settings_snapshot(),
-    }
 
-    elapsed_ms = (time.time() - start) * 1000
-    logger.debug("Workbench resources BFF responded in %.1fms", elapsed_ms)
+@router.get("/threads")
+async def get_workbench_threads(principal: PrincipalDependency) -> JSONResponse:
+    enforce_scope(principal, "tools:read")
+    return _slice_response(principal, "threads", time.time())
 
-    return JSONResponse(
-        content=snapshot,
-        headers={
-            "X-Response-Time": f"{elapsed_ms:.0f}ms",
-            "Cache-Control": "private, max-age=5",
+
+@router.get("/tasks")
+async def list_workbench_tasks(principal: PrincipalDependency) -> JSONResponse:
+    enforce_scope(principal, "tools:read")
+    return _slice_response(principal, "tasks", time.time())
+
+
+@router.get("/projects")
+async def get_workbench_projects(principal: PrincipalDependency) -> JSONResponse:
+    enforce_scope(principal, "tools:read")
+    return _slice_response(principal, "projects", time.time())
+
+
+@router.get("/workflows")
+async def get_workbench_workflows(principal: PrincipalDependency) -> JSONResponse:
+    enforce_scope(principal, "tools:read")
+    snapshot = build_panda_resource_snapshot(principal)
+    return _resource_response(
+        {
+            "workflows": snapshot["workflows"],
+            "workflow_nodes": snapshot["workflow_nodes"],
         },
+        time.time(),
     )
+
+
+@router.get("/agents")
+async def get_workbench_agents(principal: PrincipalDependency) -> JSONResponse:
+    enforce_scope(principal, "tools:read")
+    return _slice_response(principal, "agents", time.time())
+
+
+@router.get("/knowledge")
+async def get_workbench_knowledge(principal: PrincipalDependency) -> JSONResponse:
+    enforce_scope(principal, "tools:read")
+    return _slice_response(principal, "knowledge_sources", time.time())
+
+
+@router.get("/tools")
+async def get_workbench_tools(principal: PrincipalDependency) -> JSONResponse:
+    enforce_scope(principal, "tools:read")
+    return _slice_response(principal, "tools", time.time())
+
+
+@router.get("/data")
+async def get_workbench_data(principal: PrincipalDependency) -> JSONResponse:
+    enforce_scope(principal, "tools:read")
+    return _slice_response(principal, "data_sources", time.time())
+
+
+@router.get("/audit")
+async def get_workbench_audit(principal: PrincipalDependency) -> JSONResponse:
+    enforce_scope(principal, "tools:read")
+    return _slice_response(principal, "audit_events", time.time())
+
+
+@router.get("/automation")
+async def get_workbench_automation(principal: PrincipalDependency) -> JSONResponse:
+    enforce_scope(principal, "tools:read")
+    return _slice_response(principal, "automation_rules", time.time())
+
+
+@router.get("/settings")
+async def get_workbench_settings(principal: PrincipalDependency) -> JSONResponse:
+    enforce_scope(principal, "tools:read")
+    return _slice_response(principal, "settings_sections", time.time())
 
 
 @router.get("/resources/health")

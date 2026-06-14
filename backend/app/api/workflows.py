@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from datetime import UTC, datetime
 from typing import Annotated, Any
 from uuid import uuid4
@@ -60,6 +61,7 @@ def get_chat_principal(request: Request) -> Principal:
     """
 
     settings = get_settings()
+    require_api_key_requested = os.getenv("XAGENT_REQUIRE_API_KEY", "").strip().lower() in {"1", "true", "yes", "on"}
     has_credentials = bool(
         request.headers.get("x-api-key")
         or request.headers.get("authorization")
@@ -67,6 +69,7 @@ def get_chat_principal(request: Request) -> Principal:
     if (
         not has_credentials
         and not settings.require_api_key
+        and not require_api_key_requested
         and getattr(settings, "app_mode", "development") != "production"
     ):
         return Principal(

@@ -1,6 +1,7 @@
 import React from 'react'
 import { loadPandaWorkbenchHome, type PandaWorkbenchDataSource } from '../api/workbenchClient'
 import type { PandaWorkbenchHome } from '../types'
+import { buildPandaHomeWorkbenchViewModel } from './homeWorkbenchViewModel'
 
 export function usePandaHomeWorkbench() {
   const [home, setHome] = React.useState<PandaWorkbenchHome | null>(null)
@@ -16,9 +17,10 @@ export function usePandaHomeWorkbench() {
         setIsLoading(true)
         const result = await loadPandaWorkbenchHome()
         if (!cancelled) {
-          setHome(result.home)
-          setHomeSource(result.source)
-          setError(result.source === 'mock' ? result.error?.message ?? '本地演示数据已接管' : null)
+          const viewModel = buildPandaHomeWorkbenchViewModel(result)
+          setHome(viewModel.home)
+          setHomeSource(viewModel.homeSource)
+          setError(viewModel.error)
         }
       } finally {
         if (!cancelled) {

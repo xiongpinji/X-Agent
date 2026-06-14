@@ -114,14 +114,14 @@ function extractReadinessRouteKeys(source) {
   if (!source.includes('Object.values(pandaPageResourceContracts)')) {
     return []
   }
-  return extractResourceContractRoutes(read('src/panda/pageResourceContracts.ts'))
+  return extractResourceContractRoutes(read('src/panda/pageResourceContractCatalog.ts'))
 }
 
 function extractReadinessResourceKeys(source) {
   if (!source.includes('resources: contract.resourceKeys')) {
     return []
   }
-  return extractResourceContractKeys(read('src/panda/pageResourceContracts.ts'))
+  return extractResourceContractKeys(read('src/panda/pageResourceContractCatalog.ts'))
 }
 
 function extractReadinessApiResourceKeys(source) {
@@ -129,21 +129,21 @@ function extractReadinessApiResourceKeys(source) {
     return []
   }
   const apiKeyByViewKey = new Map(extractResourceKeyPairs(read('src/panda/api/resourceKeys.ts')).map((pair) => [pair.viewKey, pair.apiKey]))
-  return unique(extractResourceContractKeys(read('src/panda/pageResourceContracts.ts')).map((key) => apiKeyByViewKey.get(key) ?? key))
+  return unique(extractResourceContractKeys(read('src/panda/pageResourceContractCatalog.ts')).map((key) => apiKeyByViewKey.get(key) ?? key))
 }
 
 function extractReadinessEndpoints(source) {
   if (!source.includes('endpoint: contract.bffEndpoint')) {
     return []
   }
-  return extractResourceContractEndpoints(read('src/panda/pageResourceContracts.ts'))
+  return extractResourceContractEndpoints(read('src/panda/pageResourceContractCatalog.ts'))
 }
 
 function extractReadinessPendingRoutes(source) {
   if (!source.includes('pendingRoutes: pandaRouteReadiness.filter((item) => item.backendOwned)')) {
     return []
   }
-  return extractMockReadyContractRoutes(read('src/panda/pageResourceContracts.ts'))
+  return extractMockReadyContractRoutes(read('src/panda/pageResourceContractCatalog.ts'))
 }
 
 function check(name, leftName, rightName, left, right, detail) {
@@ -201,6 +201,7 @@ const resourcesApiLoader = read('src/panda/api/resourcesApiLoader.ts')
 const resourcesClient = read('src/panda/api/resourcesClient.ts')
 const resourcesValidation = read('src/panda/api/resourcesValidation.ts')
 const resourceContracts = read('src/panda/resourceContracts.ts')
+const pageResourceContractCatalog = read('src/panda/pageResourceContractCatalog.ts')
 const pageResourceContracts = read('src/panda/pageResourceContracts.ts')
 const resourceRuntimeFields = read('src/panda/resourceRuntimeFields.ts')
 const resourceContractTypes = read('src/panda/resourceContractTypes.ts')
@@ -212,7 +213,7 @@ const modulePageTypes = read('src/panda/data/modulePageTypes.ts')
 const modulePageActions = read('src/panda/data/modulePageActions.tsx')
 const modulePageContentCatalog = read('src/panda/data/modulePageContentCatalog.tsx')
 const manifest = readJson('src/panda/pandaFrontendManifest.json')
-const parsedPageContracts = [...extractPandaPageResourceContracts(pageResourceContracts).values()]
+const parsedPageContracts = [...extractPandaPageResourceContracts(pageResourceContractCatalog).values()]
 const pandaAlignmentContext = getPandaAlignmentContext()
 const resourceKeyBoundary = buildResourceKeyBoundary(resourceKeys)
 const closeoutEvidence = buildPandaCloseoutEvidence({
@@ -226,10 +227,10 @@ const apiSnapshotKeys = extractApiSnapshotKeys(snapshotApiContracts)
 const mapperApiKeys = extractMapperApiKeys(resourceSnapshotAdapter)
 const viewSnapshotKeys = extractViewSnapshotKeys(resourceSnapshotTypes)
 const getSnapshotKeys = extractGetSnapshotKeys(resourceFallbackSnapshot)
-const contractKeys = extractResourceContractKeys(pageResourceContracts)
-const contractRoutes = extractResourceContractRoutes(pageResourceContracts)
-const contractEndpoints = extractResourceContractEndpoints(pageResourceContracts)
-const contractMockReadyRoutes = extractMockReadyContractRoutes(pageResourceContracts)
+const contractKeys = extractResourceContractKeys(pageResourceContractCatalog)
+const contractRoutes = extractResourceContractRoutes(pageResourceContractCatalog)
+const contractEndpoints = extractResourceContractEndpoints(pageResourceContractCatalog)
+const contractMockReadyRoutes = extractMockReadyContractRoutes(pageResourceContractCatalog)
 const readinessRoutes = extractReadinessRouteKeys(resourceReadiness)
 const readinessResourceKeys = extractReadinessResourceKeys(resourceReadiness)
 const readinessApiResourceKeys = extractReadinessApiResourceKeys(resourceReadiness)

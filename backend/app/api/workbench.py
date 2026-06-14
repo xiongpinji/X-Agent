@@ -1,14 +1,17 @@
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, Field
 
+from backend.app.api.workbench_resources_bff import router as workbench_resources_router
 from backend.app.core.dispatch import DispatchRequest, dispatch
 from backend.app.core.org import ConsoleBootstrapResponse, ConsoleContext, RoleAvatar, build_default_role_catalog, organization_store
 from backend.app.core.security import ROLE_SCOPES, Principal
-from backend.app.dependencies import enforce_scope, get_current_principal
+from backend.app.dependencies import enforce_scope, get_control_mode_store, get_current_principal
 from backend.app.settings import get_settings
 
 router = APIRouter(prefix="/api/v1/workbench", tags=["workbench"])
@@ -76,6 +79,139 @@ class WorkbenchHomeResponse(BaseModel):
     metrics: dict[str, object]
     agent_activity: list[WorkbenchActivityItem]
     workflow_runs: list[WorkbenchWorkflowRun]
+    control_summary: dict[str, object] = Field(default_factory=dict)
+    runtime_capability_summary: dict[str, object] = Field(default_factory=dict)
+
+
+def _token(value: object) -> str:
+    raw = getattr(value, "value", value)
+    return str(raw or "unknown")
+
+
+def _count_statuses(records: list[object]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for record in records:
+        status = _token(getattr(record, "status", None))
+        counts[status] = counts.get(status, 0) + 1
+    return counts
+
+
+def _latest_updated_at(records: list[object]) -> str | None:
+    values = [getattr(record, "updated_at", None) for record in records]
+    values = [value for value in values if value is not None]
+    if not values:
+        return None
+    latest = max(values)
+    isoformat = getattr(latest, "isoformat", None)
+    return isoformat() if callable(isoformat) else str(latest)
+
+
+def build_control_summary(control_store: object, tenant_id: str | None) -> dict[str, object]:
+    """Build a read-only summary of plan/goal control state for Panda."""
+    try:
+        plans = list(control_store.list_plans(tenant_id=tenant_id, limit=100))  # type: ignore[attr-defined]
+        goals = list(control_store.list_goals(tenant_id=tenant_id, limit=100))  # type: ignore[attr-defined]
+    except Exception as exc:
+        return {
+            "source": "control_mode_store",
+            "status": "unavailable",
+            "read_only": True,
+            "execute_enabled": False,
+            "count_scope": "latest_100",
+            "limit": 100,
+            "error": str(exc),
+            "boundary": "Control summary could not be loaded; no execution controls are exposed.",
+        }
+
+    latest = _latest_updated_at([*plans, *goals])
+    return {
+        "source": "control_mode_store",
+        "status": "empty" if not plans and not goals else "available",
+        "read_only": True,
+        "execute_enabled": False,
+        "count_scope": "latest_100",
+        "limit": 100,
+        "plan_count": len(plans),
+        "goal_count": len(goals),
+        "status_counts": {
+            "plans": _count_statuses(plans),
+            "goals": _count_statuses(goals),
+        },
+        "latest_updated_at": latest,
+        "boundary": "Plan and goal state is displayed read-only; executing goals still requires explicit control API approval and is not exposed from Panda home.",
+    }
+
+
+def build_runtime_capability_summary() -> dict[str, object]:
+    """Expose runtime capability gaps without promoting candidates to ready."""
+    source_path = Path(".xagent_runtime/reports/current-mainline-runtime-vs-detached-candidates.json")
+    if not source_path.exists():
+        return {
+            "source": "current-mainline-runtime-vs-detached-candidates",
+            "source_status": "missing",
+            "status": "unknown",
+            "read_only": True,
+            "execute_enabled": False,
+            "ok": False,
+            "summary": {},
+            "issue_codes": ["runtime_capability_boundary_report_missing"],
+            "next_actions": ["refresh_runtime_capability_boundary_report"],
+            "boundary": "Runtime capability boundary report is missing; detached candidates are not treated as delivered mainline capability.",
+        }
+
+    try:
+        payload = json.loads(source_path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        return {
+            "source": "current-mainline-runtime-vs-detached-candidates",
+            "source_status": "error",
+            "status": "unknown",
+            "read_only": True,
+            "execute_enabled": False,
+            "ok": False,
+            "summary": {},
+            "issue_codes": ["runtime_capability_boundary_report_unreadable"],
+            "next_actions": ["refresh_runtime_capability_boundary_report"],
+            "error": str(exc),
+            "boundary": "Runtime capability boundary report could not be read; no detached candidate is promoted to mainline capability.",
+        }
+
+    current = payload.get("current_boundary") if isinstance(payload, dict) else {}
+    current = current if isinstance(current, dict) else {}
+    mainline = current.get("mainline_runtime_wired") if isinstance(current.get("mainline_runtime_wired"), list) else []
+    tested = current.get("api_cli_tested_or_evidence_backed") if isinstance(current.get("api_cli_tested_or_evidence_backed"), list) else []
+    frontend = current.get("frontend_verified") if isinstance(current.get("frontend_verified"), list) else []
+    detached = current.get("detached_or_pure_payload_candidates") if isinstance(current.get("detached_or_pure_payload_candidates"), list) else []
+    stale = current.get("stale_or_non_current_evidence") if isinstance(current.get("stale_or_non_current_evidence"), list) else []
+    overclaims = payload.get("overclaim_findings") if isinstance(payload.get("overclaim_findings"), list) else []
+    detached_count = sum(int(item.get("count") or 0) for item in detached if isinstance(item, dict))
+    issue_codes: list[str] = []
+    if detached_count:
+        issue_codes.append("runtime_capability_not_integrated")
+    if stale:
+        issue_codes.append("runtime_capability_stale_evidence")
+    if overclaims:
+        issue_codes.append("runtime_capability_overclaim_risk")
+    status = "needs_review" if issue_codes else "unknown"
+    return {
+        "source": "current-mainline-runtime-vs-detached-candidates",
+        "source_status": str(payload.get("status") or "unknown"),
+        "status": status,
+        "read_only": True,
+        "execute_enabled": False,
+        "ok": False,
+        "summary": {
+            "mainline_wired_count": len(mainline),
+            "api_cli_evidence_count": len(tested),
+            "frontend_verified_count": len(frontend),
+            "detached_candidate_count": detached_count,
+            "stale_evidence_count": len(stale),
+            "overclaim_finding_count": len(overclaims),
+        },
+        "issue_codes": issue_codes,
+        "next_actions": list(payload.get("next_actions", [])) if isinstance(payload.get("next_actions"), list) else [],
+        "boundary": "This summary is read from the current mainline-vs-detached boundary report. Detached or stale candidates are not delivered runtime capability until mainline adoption and current validation are verified.",
+    }
 
 
 @router.get("", response_model=ConsoleBootstrapResponse)
@@ -142,7 +278,10 @@ async def get_workbench(principal: PrincipalDependency) -> ConsoleBootstrapRespo
 
 
 @router.get("/home", response_model=WorkbenchHomeResponse)
-async def get_workbench_home(principal: PrincipalDependency) -> WorkbenchHomeResponse:
+async def get_workbench_home(
+    principal: PrincipalDependency,
+    control_store: Annotated[object, Depends(get_control_mode_store)],
+) -> WorkbenchHomeResponse:
     """Return the Panda Agent home workspace aggregate.
 
     This is a UI-facing BFF endpoint only. It exposes dashboard-ready operating
@@ -182,6 +321,8 @@ async def get_workbench_home(principal: PrincipalDependency) -> WorkbenchHomeRes
             WorkbenchWorkflowRun(id="wf-weekly", name="周报汇总流程", state="已完成", progress=100, owner="文档总结专家", tone="success"),
             WorkbenchWorkflowRun(id="wf-monitor", name="异常监控流程", state="失败", progress=0, owner="审计智能体", tone="danger"),
         ],
+        control_summary=build_control_summary(control_store, principal.tenant_id),
+        runtime_capability_summary=build_runtime_capability_summary(),
     )
 
 
@@ -199,8 +340,4 @@ async def create_workbench_task(request: WorkbenchTaskRequest, principal: Princi
 
 
 # --- BFF Resources endpoint (connects Panda frontend) ---
-try:
-    from backend.app.api.workbench_resources_bff import router as _bff_router
-    router.include_router(_bff_router)
-except Exception:
-    pass  # Non-fatal: BFF is optional
+router.include_router(workbench_resources_router)

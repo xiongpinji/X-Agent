@@ -138,6 +138,31 @@ export interface WorkbenchHome {
   }
   agent_activity: WorkbenchActivityItem[]
   workflow_runs: WorkbenchWorkflowRun[]
+  control_summary?: {
+    source?: string
+    status?: string
+    read_only?: boolean
+    execute_enabled?: boolean
+    count_scope?: string
+    limit?: number
+    plan_count?: number
+    goal_count?: number
+    status_counts?: Record<string, Record<string, number>>
+    latest_updated_at?: string | null
+    boundary?: string
+  }
+  runtime_capability_summary?: {
+    source?: string
+    source_status?: string
+    status?: string
+    read_only?: boolean
+    execute_enabled?: boolean
+    ok?: boolean
+    summary?: Record<string, number>
+    issue_codes?: string[]
+    next_actions?: string[]
+    boundary?: string
+  }
 }
 
 class ApiClient {

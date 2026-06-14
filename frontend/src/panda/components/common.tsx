@@ -46,6 +46,12 @@ export {
   PageHeading,
 } from './pageChromePrimitives'
 export {
+  buildPageContractViewModel,
+} from './pageContractViewModel'
+export type {
+  PageContractViewModel,
+} from './pageContractViewModel'
+export {
   PageContractStrip,
 } from './pageContractPrimitives'
 export {

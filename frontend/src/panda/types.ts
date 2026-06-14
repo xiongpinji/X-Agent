@@ -32,6 +32,8 @@ export type {
 } from './types/resourceTypes'
 export type {
   ActivityItem,
+  PandaControlSummary,
+  PandaRuntimeCapabilitySummary,
   PandaWorkbenchHome,
   PandaWorkbenchMetrics,
 } from './types/workbenchTypes'

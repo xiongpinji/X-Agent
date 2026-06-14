@@ -1,6 +1,11 @@
 import React from 'react'
 import { getPandaResourceSnapshot, loadPandaResources } from '../api/resourcesClient'
 import type { PandaResourceSnapshot, PandaResourceSource } from '../api/resourceSnapshotTypes'
+import {
+  buildPandaWorkspaceRefreshViewModel,
+  formatPandaWorkspaceRefreshTime,
+  normalizePandaWorkspaceRefreshError,
+} from './workspaceLifecycleViewModel'
 import type { PandaWorkspaceLifecycle, PandaWorkspaceStatus } from './workspaceTypes'
 
 export const PandaWorkspaceResourcesContext = React.createContext<Readonly<PandaResourceSnapshot> | null>(null)
@@ -11,7 +16,7 @@ export function PandaWorkspaceProvider({ children }: { children: React.ReactNode
   const [status, setStatus] = React.useState<PandaWorkspaceStatus>('ready')
   const [source, setSource] = React.useState<PandaResourceSource>('mock')
   const [error, setError] = React.useState<Error | null>(null)
-  const [refreshedAt, setRefreshedAt] = React.useState(() => new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }))
+  const [refreshedAt, setRefreshedAt] = React.useState(() => formatPandaWorkspaceRefreshTime())
   const refreshSeqRef = React.useRef(0)
   const isMountedRef = React.useRef(false)
 
@@ -34,16 +39,17 @@ export function PandaWorkspaceProvider({ children }: { children: React.ReactNode
       if (!isCurrentRefresh()) {
         return
       }
-      setResources(result.resources)
-      setSource(result.source)
-      setError(result.error ?? null)
-      setRefreshedAt(new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }))
-      setStatus(result.error ? 'error' : 'ready')
+      const viewModel = buildPandaWorkspaceRefreshViewModel(result)
+      setResources(viewModel.resources)
+      setSource(viewModel.source)
+      setError(viewModel.error)
+      setRefreshedAt(viewModel.refreshedAt)
+      setStatus(viewModel.status)
     } catch (refreshError) {
       if (!isCurrentRefresh()) {
         return
       }
-      setError(refreshError instanceof Error ? refreshError : new Error('无法刷新 Panda 工作台资源'))
+      setError(normalizePandaWorkspaceRefreshError(refreshError))
       setStatus('error')
     }
   }, [])

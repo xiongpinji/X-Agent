@@ -90,7 +90,7 @@ export function buildPandaCloseoutEvidence({ manifest, routeRollover, resourceKe
       id: 'resources-dry-run-fixture',
       status: manifest.resourceBoundary?.dryRunProbe ? 'passed' : 'missing',
       detail: manifest.resourceBoundary?.dryRunProbe
-        ? `${manifest.resourceBoundary.dryRunProbe} reuses the shared API fixture layer to validate representative aggregate cross-resource runtime metadata, shared pandaCoreRuntimeFields core runtime API field coverage, runtime shape stability, home activity runtime metadata, default import safety, default-disabled BFF config, explicit opt-in config, bootstrap loader behavior, and loadPandaResources mock/api/error fallback behavior without enabling the real BFF flag by default.`
+        ? `${manifest.resourceBoundary.dryRunProbe} reuses the shared API fixture layer to validate representative aggregate cross-resource runtime metadata, shared pandaCoreRuntimeFields core runtime API field coverage, runtime shape stability, home activity runtime metadata, default import safety, explicit disable/enable BFF config, bootstrap loader behavior, and loadPandaResources mock/api/error fallback behavior.`
         : 'Executable resources dry-run fixture probe is missing.',
     },
     {

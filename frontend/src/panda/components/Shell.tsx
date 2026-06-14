@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import type { PandaPage } from '../types'
 import { MobileStatusRow, Sidebar, TopBar } from './shellChrome'
+import { buildShellConnectionViewModel } from './shellConnectionViewModel'
 export {
   BrandLockup,
   MobileStatusRow,
@@ -12,6 +13,8 @@ export {
   WorkspaceSwitcher,
 } from './shellChrome'
 export type { ShellNavigationProps } from './shellChrome'
+export { buildShellConnectionViewModel } from './shellConnectionViewModel'
+export type { ShellConnectionViewModel } from './shellConnectionViewModel'
 
 type PandaShellFrameProps = {
   activePage: PandaPage
@@ -23,14 +26,6 @@ type PandaShellFrameProps = {
   children: ReactNode
 }
 
-function getWorkbenchConnectionLabel(isLoading: boolean, error: string | null) {
-  if (isLoading) {
-    return '同步工作台数据中'
-  }
-
-  return error ? '本地演示数据已接管' : '已连接 X-Agent Core'
-}
-
 export function PandaShellFrame({
   activePage,
   pageLabel,
@@ -40,7 +35,7 @@ export function PandaShellFrame({
   rightRail,
   children,
 }: PandaShellFrameProps) {
-  const connectionLabel = getWorkbenchConnectionLabel(isLoading, error)
+  const { connectionLabel } = buildShellConnectionViewModel({ isLoading, error })
 
   return (
     <div className="panda-shell">

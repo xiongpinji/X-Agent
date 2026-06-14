@@ -1,7 +1,7 @@
 import { apiClient } from '@/services/api'
-import { mockWorkbenchHome } from '../data/mockHome'
 import type { PandaWorkbenchHome } from '../types'
 import { mapWorkbenchHome } from './adapters'
+import { buildPandaWorkbenchHomeApiResult, buildPandaWorkbenchHomeMockResult } from './workbenchHomeLoadResult'
 
 export type PandaWorkbenchDataSource = 'api' | 'mock'
 
@@ -14,15 +14,8 @@ export type PandaWorkbenchHomeResult = {
 export async function loadPandaWorkbenchHome(): Promise<PandaWorkbenchHomeResult> {
   try {
     const response = await apiClient.getWorkbenchHome()
-    return {
-      home: mapWorkbenchHome(response),
-      source: 'api',
-    }
+    return buildPandaWorkbenchHomeApiResult(mapWorkbenchHome(response))
   } catch (error) {
-    return {
-      home: mockWorkbenchHome,
-      source: 'mock',
-      error: error instanceof Error ? error : new Error('无法加载工作台数据'),
-    }
+    return buildPandaWorkbenchHomeMockResult(error)
   }
 }

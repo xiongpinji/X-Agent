@@ -1,7 +1,7 @@
 {
   "productName": "Panda Agent",
   "technicalCore": "X-Agent Autonomous Framework",
-  "status": "frontend-ready-for-backend-alignment",
+  "status": "frontend-backend-resources-bff-wired",
   "defaultLanguage": "zh-CN",
   "theme": "dark",
   "entry": "src/panda/PandaAgentApp.tsx",
@@ -23,11 +23,15 @@
     "provider": "src/panda/state/PandaWorkspaceContext.tsx",
     "providerTypes": "src/panda/state/workspaceTypes.ts",
     "providerRuntime": "src/panda/state/workspaceProvider.tsx",
+    "providerLifecycleViewModel": "src/panda/state/workspaceLifecycleViewModel.ts",
     "providerHooks": "src/panda/state/workspaceHooks.ts",
     "hashRouteHook": "src/panda/state/usePandaHashRoute.ts",
     "homeWorkbenchHook": "src/panda/state/usePandaHomeWorkbench.ts",
+    "homeWorkbenchLoadResult": "src/panda/api/workbenchHomeLoadResult.ts",
     "client": "src/panda/api/resourcesClient.ts",
+    "resourceLoadResult": "src/panda/api/resourcesLoadResult.ts",
     "contracts": "src/panda/resourceContracts.ts",
+    "pageContractCatalog": "src/panda/pageResourceContractCatalog.ts",
     "pageContracts": "src/panda/pageResourceContracts.ts",
     "runtimeFields": "src/panda/resourceRuntimeFields.ts",
     "contractTypes": "src/panda/resourceContractTypes.ts",
@@ -103,7 +107,7 @@
     "homeEndpoint": "/api/v1/workbench/home",
     "resourcesEndpoint": "/api/v1/workbench/resources",
     "resourcesFlag": "VITE_PANDA_RESOURCES_BFF",
-    "resourcesFlagDefault": "false"
+    "resourcesFlagDefault": "true"
   },
   "deliveryReadiness": {
     "frontendShell": "ready",
@@ -111,12 +115,12 @@
     "mockFallback": "ready",
     "apiAdapters": "ready",
     "visibleContractStrip": "ready",
-    "strictBackendGate": "pending-backend",
+    "strictBackendGate": "ready",
     "visualReviewTarget": "http://127.0.0.1:3000/#threads"
   },
   "frontendCloseout": {
-    "currentPhase": "non-blocking-frontend-closeout",
-    "backendDependency": "resources-bff-and-page-specific-data",
+    "currentPhase": "backend-resources-bff-wired",
+    "backendDependency": "resources-bff-page-slices-wired",
     "safeScope": [
       "frontend/src/panda/**",
       "frontend/src/panda/data/homeActionContent.ts",
@@ -143,9 +147,14 @@
       "frontend/src/panda/types/runtimeTypes.ts",
       "frontend/src/panda/types/agentRoleTypes.ts",
       "frontend/src/panda/types/resourceTypes.ts",
+      "frontend/src/panda/types/executionResourceTypes.ts",
+      "frontend/src/panda/types/organizationResourceTypes.ts",
+      "frontend/src/panda/types/knowledgeResourceTypes.ts",
+      "frontend/src/panda/types/governanceResourceTypes.ts",
       "frontend/src/panda/types/workbenchTypes.ts",
       "frontend/src/panda/resourceContractTypes.ts",
       "frontend/src/panda/resourceRuntimeFields.ts",
+      "frontend/src/panda/pageResourceContractCatalog.ts",
       "frontend/src/panda/pageResourceContracts.ts",
       "frontend/src/panda/api/apiContracts.ts",
       "frontend/src/panda/api/homeApiContracts.ts",
@@ -166,6 +175,8 @@
       "frontend/src/panda/api/resourceSnapshotTypes.ts",
       "frontend/src/panda/api/resourceFallbackSnapshot.ts",
       "frontend/src/panda/api/resourcesApiLoader.ts",
+      "frontend/src/panda/api/resourcesLoadResult.ts",
+      "frontend/src/panda/api/workbenchHomeLoadResult.ts",
       "frontend/src/panda/api/adapterOutputFixtures.ts",
       "frontend/src/panda/api/resourceSnapshotFixtures.ts",
       "frontend/src/panda/api/resourceRuntimeFixtures.ts",
@@ -175,9 +186,11 @@
       "frontend/src/panda/api/resourceClientFixtures.ts",
       "frontend/src/panda/state/workspaceTypes.ts",
       "frontend/src/panda/state/workspaceProvider.tsx",
+      "frontend/src/panda/state/workspaceLifecycleViewModel.ts",
       "frontend/src/panda/state/workspaceHooks.ts",
       "frontend/src/panda/state/usePandaHashRoute.ts",
       "frontend/src/panda/state/usePandaHomeWorkbench.ts",
+      "frontend/src/panda/state/homeWorkbenchViewModel.ts",
       "frontend/src/panda/state/modulePageResourceTypes.ts",
       "frontend/src/panda/state/useCountedModulePageResource.ts",
       "frontend/src/panda/state/modulePageResourceHooks.ts",
@@ -191,25 +204,34 @@
       "frontend/src/panda/components/homeTaskComposer.tsx",
       "frontend/src/panda/components/homeActionSections.tsx",
       "frontend/src/panda/components/homeNavigationSections.tsx",
+      "frontend/src/panda/components/homeProjectSectionsViewModel.ts",
       "frontend/src/panda/components/homeProjectSections.tsx",
+      "frontend/src/panda/components/homeStatusSectionsViewModel.ts",
       "frontend/src/panda/components/homeStatusSections.tsx",
       "frontend/src/panda/components/shellBranding.tsx",
       "frontend/src/panda/components/shellChrome.tsx",
       "frontend/src/panda/components/shellControls.tsx",
       "frontend/src/panda/components/shellActionControls.tsx",
       "frontend/src/panda/components/shellTopbar.tsx",
+      "frontend/src/panda/components/shellConnectionViewModel.ts",
       "frontend/src/panda/components/pageChromePrimitives.tsx",
+      "frontend/src/panda/components/pageContractViewModel.ts",
       "frontend/src/panda/components/pageContractPrimitives.tsx",
+      "frontend/src/panda/components/resourceStateViewModel.ts",
       "frontend/src/panda/components/resourceState.tsx",
+      "frontend/src/panda/components/statePanelBasePrimitives.tsx",
       "frontend/src/panda/components/statePanelPrimitives.tsx",
       "frontend/src/panda/components/moduleFallbackSurface.tsx",
+      "frontend/src/panda/components/moduleDeliverySurfaceViewModel.ts",
       "frontend/src/panda/components/moduleDeliverySurface.tsx",
       "frontend/src/panda/components/modulePageActionPrimitives.tsx",
       "frontend/src/panda/components/modulePagePrimitives.tsx",
       "frontend/src/panda/components/progressPrimitives.tsx",
       "frontend/src/panda/components/metricPrimitives.tsx",
+      "frontend/src/panda/components/runtimeMetaViewModel.ts",
       "frontend/src/panda/components/runtimeMetaPrimitives.tsx",
       "frontend/src/panda/components/tagListPrimitives.tsx",
+      "frontend/src/panda/components/statusDotViewModel.ts",
       "frontend/src/panda/components/statusPrimitives.tsx",
       "frontend/src/panda/components/workspacePrimitives.tsx",
       "frontend/src/panda/components/workspaceInfoPrimitives.tsx",
@@ -223,15 +245,38 @@
       "frontend/src/panda/components/workspaceRailPrimitives.tsx",
       "frontend/src/panda/components/workflowPrimitives.tsx",
       "frontend/src/panda/components/workflowEvidencePrimitives.tsx",
+      "frontend/src/panda/components/workflowExecutionStepPrimitives.tsx",
       "frontend/src/panda/components/workflowNodePrimitives.tsx",
       "frontend/src/panda/components/workflowActionPrimitives.tsx",
+      "frontend/src/panda/components/workflowCanvasViewModel.ts",
+      "frontend/src/panda/components/auditReplayViewModel.ts",
+      "frontend/src/panda/components/taskQueueViewModel.ts",
+      "frontend/src/panda/components/automationRulesViewModel.ts",
+      "frontend/src/panda/components/knowledgeBaseViewModel.ts",
+      "frontend/src/panda/components/dataCenterViewModel.ts",
+      "frontend/src/panda/components/toolCenterViewModel.ts",
+      "frontend/src/panda/components/settingsCenterViewModel.ts",
+      "frontend/src/panda/components/agentProfileCardViewModel.ts",
+      "frontend/src/panda/components/projectWorkspaceViewModel.ts",
+      "frontend/src/panda/components/agentRolePresetViewModel.ts",
+      "frontend/src/panda/components/rightRailResourceCardViewModel.ts",
+      "frontend/src/panda/components/rightRailActivityCardViewModel.ts",
       "frontend/src/panda/components/rightRailActivityCard.tsx",
       "frontend/src/panda/components/rightRailWorkflowCard.tsx",
+      "frontend/src/panda/components/rightRailWorkflowCardViewModel.ts",
       "frontend/src/panda/components/rightRailResourceCard.tsx",
+      "frontend/src/panda/components/rightRailStatusCardsViewModel.tsx",
       "frontend/src/panda/components/rightRailStatusCards.tsx",
+      "frontend/src/panda/components/rightRailFallbacks.ts",
+      "frontend/src/panda/components/threadWorkspaceViewModel.ts",
+      "frontend/src/panda/components/threadWorkspace.tsx",
+      "frontend/src/panda/components/threadExecutionWorkspaceViewModel.ts",
       "frontend/src/panda/components/threadExecutionWorkspace.tsx",
+      "frontend/src/panda/components/agentOrganization.tsx",
+      "frontend/src/panda/components/agentOrganizationViewModel.ts",
       "frontend/src/panda/components/agentProfileCards.tsx",
       "frontend/src/panda/components/agentRolePresetCards.tsx",
+      "frontend/src/panda/components/agentRolePresetDetail.tsx",
       "frontend/src/panda/components/agentRolePresetSelector.tsx",
       "frontend/scripts/panda-frontend-closeout-plan.mjs",
       "frontend/scripts/panda-alignment-context.mjs",
@@ -300,9 +345,9 @@
     },
     {
       "id": "resource-bff-dry-run",
-      "status": "pending-backend",
+      "status": "passed",
       "owner": "frontend-backend",
-      "description": "Enable VITE_PANDA_RESOURCES_BFF in a local dry run only after GET /api/v1/workbench/resources returns ApiPandaResourceSnapshot."
+      "description": "VITE_PANDA_RESOURCES_BFF is enabled by default after GET /api/v1/workbench/resources and page slice endpoints returned ApiPandaResourceSnapshot-compatible payloads in backend tests."
     },
     {
       "id": "scripted-qa-smoke",
@@ -332,7 +377,7 @@
       "id": "resources-dry-run-fixture",
       "status": "passed",
       "owner": "frontend",
-      "description": "Added representative aggregate resources and home activity dry-run fixtures in the shared API fixture layer that validate cross-resource runtime fields, shared pandaCoreRuntimeFields core runtime API field coverage, runtime shape stability, default import safety, default-disabled BFF config, explicit opt-in config, bootstrap loader behavior, and loadPandaResources mock/api/error fallback behavior without enabling VITE_PANDA_RESOURCES_BFF by default."
+      "description": "Added representative aggregate resources and home activity dry-run fixtures in the shared API fixture layer that validate cross-resource runtime fields, shared pandaCoreRuntimeFields core runtime API field coverage, runtime shape stability, default import safety, explicit disable/enable BFF config, bootstrap loader behavior, and loadPandaResources mock/api/error fallback behavior with VITE_PANDA_RESOURCES_BFF enabled by default in the environment template."
     },
     {
       "id": "adapter-behavior-executable",
@@ -348,9 +393,9 @@
     },
     {
       "id": "page-api-rollover",
-      "status": "pending-backend",
+      "status": "passed",
       "owner": "frontend-backend",
-      "description": "Move non-home modules from mock-ready to api-wired one resource slice at a time while preserving Panda view models."
+      "description": "Non-home modules moved from mock-ready to api-wired through GET /api/v1/workbench/{page} slice endpoints while preserving Panda view models."
     },
     {
       "id": "accessibility-pass",
@@ -420,10 +465,9 @@
     "python -m py_compile backend\\app\\api\\workbench.py"
   ],
   "backendAlignmentPending": [
-    "Implement aggregate resources BFF or map page-specific BFF endpoints into ApiPandaResourceSnapshot.",
-    "Return status, risk_level, progress, owner_agent, updated_at, and evidence_refs where relevant.",
     "Keep approval, sandbox, auth, secret, and execution policy enforced by backend services.",
-    "Enable VITE_PANDA_RESOURCES_BFF only after the resources endpoint passes the Panda verification gate."
+    "Continue replacing placeholder resource rows with deeper domain data as stores mature.",
+    "Run npm run report:panda:strict and tests/test_workbench_bff.py before commercial pilot release handoff."
   ],
   "scriptedQaEvidence": {
     "status": "passed",
@@ -457,7 +501,7 @@
   },
   "frontendHandoffGates": {
     "frontendEvidenceGate": "passed",
-    "strictBackendGate": "pending-backend",
+    "strictBackendGate": "ready",
     "frontendOwnedCommands": [
       "npm run verify:panda",
       "npm run plan:panda:json",
@@ -475,6 +519,6 @@
       "npm run report:panda:strict",
       "python -m py_compile backend\\app\\api\\workbench.py"
     ],
-    "handoffRule": "Frontend closeout can pass while strictBackendGate remains pending-backend; strict mode turns green only after resources BFF/page APIs are wired."
+    "handoffRule": "Strict mode is green after the aggregate resources BFF and page slice APIs are wired and validated; high-risk execution policy remains backend-owned."
   }
 }

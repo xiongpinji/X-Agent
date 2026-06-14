@@ -1,16 +1,19 @@
 import type { AgentProfile } from '../types'
 import { MiniTagList, ProgressSummary, ResourceRuntimeCard, RuntimeMetaStrip } from './common'
+import { buildAgentProfileCardViewModel } from './agentProfileCardViewModel'
 
 export function AgentProfileCard({ agent }: { agent: AgentProfile }) {
+  const card = buildAgentProfileCardViewModel(agent)
+
   return (
     <ResourceRuntimeCard
-      title={agent.name}
+      title={card.title}
       tone={agent.tone}
-      description={`${agent.role} · ${agent.model} · ${agent.status}`}
+      description={card.description}
     >
-      <ProgressSummary value={agent.load} />
-      <RuntimeMetaStrip runtime={agent.runtime} owner={agent.name} risk={agent.tone} />
-      <MiniTagList items={agent.permissions} />
+      <ProgressSummary value={card.progress} />
+      <RuntimeMetaStrip runtime={agent.runtime} owner={card.runtimeOwner} risk={card.runtimeRisk} />
+      <MiniTagList items={card.permissions} />
     </ResourceRuntimeCard>
   )
 }

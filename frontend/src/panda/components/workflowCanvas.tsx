@@ -1,19 +1,22 @@
 import { ShieldCheck } from 'lucide-react'
 import type { WorkflowItem, WorkflowNode } from '../types'
 import { FlowNodeCard, ProgressSummary, ResourceCardGrid, ResourceRuntimeCard, RuntimeMetaStrip } from './common'
+import { buildWorkflowCanvasSummary, buildWorkflowRunCardViewModel } from './workflowCanvasViewModel'
 
 export function WorkflowCanvas({ workflowNodes }: { workflowNodes: readonly WorkflowNode[] }) {
+  const summary = buildWorkflowCanvasSummary(workflowNodes)
+
   return (
     <section className="panda-card panda-workflow-canvas">
       <div className="panda-canvas-toolbar">
         <div>
-          <h2>客户反馈处理流程</h2>
-          <p>运行中 · 7 个节点 · 1 个待审批网关 · evidence_refs 自动记录</p>
+          <h2>{summary.title}</h2>
+          <p>{summary.subtitle}</p>
         </div>
-        <div className="panda-risk-chip"><ShieldCheck size={16} aria-hidden="true" />策略由后端返回</div>
+        <div className="panda-risk-chip"><ShieldCheck size={16} aria-hidden="true" />{summary.policyLabel}</div>
       </div>
       <div className="panda-canvas-stage">
-        {workflowNodes.map((node) => (
+        {summary.nodes.map((node) => (
           <FlowNodeCard
             key={node.id}
             title={node.title}
@@ -40,10 +43,12 @@ export function WorkflowRunGrid({ workflows }: { workflows: readonly WorkflowIte
 }
 
 export function WorkflowRunCard({ workflow }: { workflow: WorkflowItem }) {
+  const card = buildWorkflowRunCardViewModel(workflow)
+
   return (
-    <ResourceRuntimeCard title={workflow.name} tone={workflow.tone} description={`${workflow.owner} · ${workflow.state}`}>
-      <ProgressSummary value={workflow.progress} />
-      <RuntimeMetaStrip runtime={workflow.runtime} owner={workflow.owner} risk={workflow.tone} />
+    <ResourceRuntimeCard title={card.title} tone={workflow.tone} description={card.description}>
+      <ProgressSummary value={card.progress} />
+      <RuntimeMetaStrip runtime={workflow.runtime} owner={card.runtimeOwner} risk={card.runtimeRisk} />
     </ResourceRuntimeCard>
   )
 }

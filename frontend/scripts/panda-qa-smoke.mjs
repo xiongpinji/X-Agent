@@ -23,6 +23,7 @@ function probeStaticContracts() {
   const css = read('src/panda/PandaAgentApp.css')
   const common = read('src/panda/components/common.tsx')
   const statusPrimitives = read('src/panda/components/statusPrimitives.tsx')
+  const statusDotViewModel = read('src/panda/components/statusDotViewModel.ts')
   const progressPrimitives = read('src/panda/components/progressPrimitives.tsx')
   const report = read('scripts/panda-alignment-report.mjs')
   const packageJson = JSON.parse(read('package.json'))
@@ -77,7 +78,10 @@ function probeStaticContracts() {
     },
     {
       id: 'status-semantics',
-      passed: statusPrimitives.includes('role="img"') && statusPrimitives.includes('aria-label={readableLabel}'),
+      passed:
+        statusPrimitives.includes('role="img"') &&
+        statusPrimitives.includes('aria-label={statusDot.ariaLabel}') &&
+        statusDotViewModel.includes('ariaLabel: label ?? `风险等级：${title}`'),
       detail: 'Status dots expose readable labels for non-visual users.',
     },
     {
@@ -200,7 +204,7 @@ function probeStaticContracts() {
         resourceDryRunScript.includes('workflow-node-runtime-fields') &&
         resourceDryRunScript.includes('audit-evidence-fields') &&
         resourceDryRunScript.includes('resources-bootstrap-import-safe-default-env') &&
-        resourceDryRunScript.includes('resources-bff-default-disabled') &&
+        resourceDryRunScript.includes('resources-bff-explicit-disabled') &&
         resourceDryRunScript.includes('resources-bff-explicit-enabled') &&
         resourceDryRunScript.includes('resources-bootstrap-disabled-clears-loader') &&
         resourceDryRunScript.includes('resources-bootstrap-enabled-registers-loader') &&
@@ -209,7 +213,7 @@ function probeStaticContracts() {
         resourceDryRunScript.includes('resources-client-invalid-api-fallback') &&
         resourceDryRunScript.includes('aggregateResourcesBffDryRunFixture') &&
         resourceDryRunScript.includes('PANDA_RESOURCE_DRY_RUN_RESULT_PATH'),
-      detail: 'Aggregate resources BFF dry-run fixture is shared from the API fixture layer and validates cross-resource runtime fields, shared pandaCoreRuntimeFields core runtime API field coverage, runtime shape stability, home activity runtime metadata, default import safety, default-disabled config, explicit opt-in config, bootstrap loader behavior, and loadPandaResources mock/api/error fallback behavior without enabling the real BFF flag by default.',
+      detail: 'Aggregate resources BFF dry-run fixture is shared from the API fixture layer and validates cross-resource runtime fields, shared pandaCoreRuntimeFields core runtime API field coverage, runtime shape stability, home activity runtime metadata, default import safety, explicit disable/enable config, bootstrap loader behavior, and loadPandaResources mock/api/error fallback behavior.',
     },
   ]
 }

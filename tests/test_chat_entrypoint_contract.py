@@ -82,6 +82,22 @@ def test_workbench_home_returns_panda_dashboard_contract() -> None:
     assert payload["metrics"]["running_workflows"] >= 1
     assert isinstance(payload["agent_activity"], list)
     assert isinstance(payload["workflow_runs"], list)
+    control_summary = payload["control_summary"]
+    assert control_summary["source"] == "control_mode_store"
+    assert control_summary["read_only"] is True
+    assert control_summary["execute_enabled"] is False
+    assert isinstance(control_summary["plan_count"], int)
+    assert isinstance(control_summary["goal_count"], int)
+
+    runtime_summary = payload["runtime_capability_summary"]
+    assert runtime_summary["source"] == "current-mainline-runtime-vs-detached-candidates"
+    assert runtime_summary["read_only"] is True
+    assert runtime_summary["execute_enabled"] is False
+    assert runtime_summary["ok"] is False
+    assert runtime_summary["status"] in {"needs_review", "unknown"}
+    assert runtime_summary["status"] != "ready"
+    assert "runtime_capability" in " ".join(runtime_summary["issue_codes"])
+    assert "detached" in runtime_summary["boundary"]
     assert {item["tone"] for item in payload["agent_activity"]} <= {
         "success",
         "warning",

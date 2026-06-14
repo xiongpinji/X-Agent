@@ -43,6 +43,7 @@ async function loadDryRunModules() {
     'resourcesBffConfig.ts',
     'resourcesHttpClient.ts',
     'resourcesApiLoader.ts',
+    'resourcesLoadResult.ts',
     'resourceFallbackSnapshot.ts',
     'resourcesClient.ts',
     'bootstrapResources.ts',
@@ -92,7 +93,11 @@ async function loadDryRunModules() {
   ])
   rewriteProbeImports(tempDir, 'resourcesClient.mjs', [
     [/from ['"]\.\/resourceFallbackSnapshot['"]/g, "from './resourceFallbackSnapshot.mjs'"],
+    [/from ['"]\.\/resourcesLoadResult['"]/g, "from './resourcesLoadResult.mjs'"],
     [/from ['"]\.\/resourcesApiLoader['"]/g, "from './resourcesApiLoader.mjs'"],
+  ])
+  rewriteProbeImports(tempDir, 'resourcesLoadResult.mjs', [
+    [/from ['"]\.\/resourceFallbackSnapshot['"]/g, "from './resourceFallbackSnapshot.mjs'"],
   ])
   rewriteProbeImports(tempDir, 'bootstrapResources.mjs', [
     [/from ['"]\.\/resourcesBffConfig['"]/g, "from './resourcesBffConfig.mjs'"],
@@ -188,13 +193,13 @@ const checkRuns = [
       throw new Error('Resources bootstrap module did not import safely with default env handling.')
     }
   }],
-  ['resources-bff-default-disabled', () => {
+  ['resources-bff-explicit-disabled', () => {
     const config = modules.getPandaResourcesBffConfig({
       VITE_PANDA_RESOURCES_BFF: 'false',
       VITE_PANDA_RESOURCES_BFF_ENDPOINT: '',
     })
     if (config.enabled || config.endpoint !== '/api/v1/workbench/resources') {
-      throw new Error('Resources BFF must stay disabled by default and use the aggregate endpoint fallback.')
+      throw new Error('Resources BFF must honor explicit disable and use the aggregate endpoint fallback.')
     }
   }],
   ['resources-bff-explicit-enabled', () => {

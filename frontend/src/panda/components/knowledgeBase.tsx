@@ -1,6 +1,7 @@
 import { Brain } from 'lucide-react'
 import type { KnowledgeSource } from '../types'
 import { ResourceCardGrid, ResourceInfoCard } from './common'
+import { buildKnowledgeSourceCardViewModel } from './knowledgeBaseViewModel'
 
 export function KnowledgeSourceGrid({ knowledgeSources }: { knowledgeSources: readonly KnowledgeSource[] }) {
   return (
@@ -13,16 +14,15 @@ export function KnowledgeSourceGrid({ knowledgeSources }: { knowledgeSources: re
 }
 
 export function KnowledgeSourceCard({ source }: { source: KnowledgeSource }) {
+  const card = buildKnowledgeSourceCardViewModel(source)
+
   return (
     <ResourceInfoCard
       icon={<Brain className="text-rose-300" size={19} />}
-      title={source.name}
+      title={card.title}
       tone={source.tone}
-      description={`${source.kind} · ${source.status}`}
-      items={[
-        { label: '文档', value: source.documents },
-        { label: '同步', value: source.lastSync },
-      ]}
+      description={card.description}
+      items={card.items}
     />
   )
 }

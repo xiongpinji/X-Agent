@@ -1,5 +1,12 @@
 import { usePandaWorkspaceResource } from '../state/PandaWorkspaceContext'
+import type { ProjectItem } from '../types'
 import { PandaResourceState, RuntimeMetaStrip, WorkspaceTable } from './common'
+import {
+  buildRecentProjectTableRowViewModel,
+  recentProjectsHeader,
+  recentProjectsResourceState,
+  recentProjectsTableColumns,
+} from './homeProjectSectionsViewModel'
 
 export function RecentProjects() {
   const projects = usePandaWorkspaceResource('projects')
@@ -7,33 +14,41 @@ export function RecentProjects() {
   return (
     <section className="panda-card p-3">
       <div className="flex items-center justify-between px-1 pb-2">
-        <h2 className="font-semibold">最近项目</h2>
-        <button className="text-sm text-slate-400" type="button">查看全部 →</button>
+        <h2 className="font-semibold">{recentProjectsHeader.title}</h2>
+        <button className="text-sm text-slate-400" type="button">{recentProjectsHeader.actionLabel}</button>
       </div>
       <PandaResourceState
         count={projects.length}
-        emptyTitle="暂无最近项目"
-        emptyDescription="后续接入项目 BFF 后，这里会展示工作区、智能体应用和工作流的最近更新。"
-        loadingTitle="正在同步最近项目"
-        loadingDescription="正在读取项目、智能体应用和工作流的最近更新。"
+        emptyTitle={recentProjectsResourceState.emptyTitle}
+        emptyDescription={recentProjectsResourceState.emptyDescription}
+        loadingTitle={recentProjectsResourceState.loadingTitle}
+        loadingDescription={recentProjectsResourceState.loadingDescription}
       >
-        <WorkspaceTable columns={['名称', '类型', '运行态']}>
+        <WorkspaceTable columns={recentProjectsTableColumns}>
           {projects.map((project) => (
-            <tr key={project.id}>
-              <td className="text-sm text-slate-100">{project.name}</td>
-              <td className="text-sm text-slate-400">{project.type}</td>
-              <td>
-                <RuntimeMetaStrip
-                  runtime={project.runtime}
-                  owner={project.ownerAgent}
-                  updatedAt={project.updatedAt}
-                  risk={project.risk}
-                />
-              </td>
-            </tr>
+            <RecentProjectRow key={project.id} project={project} />
           ))}
         </WorkspaceTable>
       </PandaResourceState>
     </section>
+  )
+}
+
+export function RecentProjectRow({ project }: { project: ProjectItem }) {
+  const row = buildRecentProjectTableRowViewModel(project)
+
+  return (
+    <tr>
+      <td className="text-sm text-slate-100">{row.name}</td>
+      <td className="text-sm text-slate-400">{row.type}</td>
+      <td>
+        <RuntimeMetaStrip
+          runtime={row.runtime}
+          owner={row.runtimeOwner}
+          updatedAt={row.runtimeUpdatedAt}
+          risk={row.runtimeRisk}
+        />
+      </td>
+    </tr>
   )
 }

@@ -4,10 +4,12 @@ import { getPandaModulePageStructure } from './panda-module-page-structure.mjs'
 import { buildPandaRouteRolloverPlan } from './panda-route-rollover-plan.mjs'
 
 export const PANDA_ALIGNMENT_CONTEXT_SOURCE = 'frontend/scripts/panda-alignment-context.mjs'
+export const PANDA_PAGE_RESOURCE_CONTRACT_CATALOG_SOURCE = 'src/panda/pageResourceContractCatalog.ts'
+export const PANDA_PAGE_RESOURCE_CONTRACT_COMPAT_SOURCE = 'src/panda/pageResourceContracts.ts'
 
 export function getPandaAlignmentContext() {
   const manifest = readJson('src/panda/pandaFrontendManifest.json')
-  const contracts = extractPandaPageResourceContracts(read('src/panda/pageResourceContracts.ts'))
+  const contracts = extractPandaPageResourceContracts(read(PANDA_PAGE_RESOURCE_CONTRACT_CATALOG_SOURCE))
   const resourceKeyPairs = extractResourceKeyPairs(read('src/panda/api/resourceKeys.ts'))
   const apiKeyByViewKey = new Map(resourceKeyPairs.map((pair) => [pair.viewKey, pair.apiKey]))
   const routeRollover = buildPandaRouteRolloverPlan({ manifest, contracts, apiKeyByViewKey })
@@ -15,6 +17,8 @@ export function getPandaAlignmentContext() {
 
   return {
     sourceScript: PANDA_ALIGNMENT_CONTEXT_SOURCE,
+    pageContractCatalogSource: PANDA_PAGE_RESOURCE_CONTRACT_CATALOG_SOURCE,
+    pageContractCompatibilitySource: PANDA_PAGE_RESOURCE_CONTRACT_COMPAT_SOURCE,
     manifest,
     contracts,
     resourceKeyPairs,

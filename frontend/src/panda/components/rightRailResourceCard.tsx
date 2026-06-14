@@ -1,5 +1,6 @@
 import { getPandaResourcesBffConfig } from '../api/resourcesBffConfig'
 import { KeyValueList, PandaErrorState, RailCard } from './common'
+import { buildRightRailResourceSnapshotRows } from './rightRailResourceCardViewModel'
 
 export type ResourceSnapshotCardProps = {
   source: 'mock' | 'api'
@@ -18,13 +19,7 @@ export function ResourceSnapshotCard({
   resourcesBffConfig,
   onRefresh,
 }: ResourceSnapshotCardProps) {
-  const rows = [
-    { label: '页面资源', value: source === 'mock' ? '本地快照' : '后端 API' },
-    { label: 'Resources BFF', value: resourcesBffConfig.enabled ? '已启用' : '关闭' },
-    { label: 'BFF Endpoint', value: resourcesBffConfig.endpoint, valueClassName: 'truncate text-right' },
-    { label: '状态', value: status === 'loading' ? '刷新中' : status === 'error' ? '异常' : '可用' },
-    { label: '刷新时间', value: refreshedAt },
-  ] as const
+  const rows = buildRightRailResourceSnapshotRows({ source, status, refreshedAt, resourcesBffConfig })
 
   return (
     <RailCard title="资源快照">

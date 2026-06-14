@@ -1,4 +1,9 @@
 import { getPandaResourceSnapshot, pandaResources } from './resourceFallbackSnapshot'
+import {
+  buildPandaApiResourceLoadResult,
+  buildPandaMockResourceErrorResult,
+  buildPandaMockResourceLoadResult,
+} from './resourcesLoadResult'
 import { loadPandaResourcesFromApi } from './resourcesApiLoader'
 import type { PandaResourceLoadResult } from './resourceSnapshotTypes'
 
@@ -16,21 +21,11 @@ export async function loadPandaResources(): Promise<PandaResourceLoadResult> {
   try {
     const apiResources = await loadPandaResourcesFromApi()
     if (apiResources) {
-      return {
-        resources: apiResources,
-        source: 'api',
-      }
+      return buildPandaApiResourceLoadResult(apiResources)
     }
 
-    return {
-      resources: getPandaResourceSnapshot(),
-      source: 'mock',
-    }
+    return buildPandaMockResourceLoadResult()
   } catch (error) {
-    return {
-      resources: getPandaResourceSnapshot(),
-      source: 'mock',
-      error: error instanceof Error ? error : new Error('无法加载 Panda 工作台资源'),
-    }
+    return buildPandaMockResourceErrorResult(error)
   }
 }

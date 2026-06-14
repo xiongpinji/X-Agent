@@ -1,6 +1,7 @@
 import { Settings } from 'lucide-react'
 import type { SettingsSection } from '../types'
 import { ResourceCardGrid, ResourceInfoCard } from './common'
+import { buildSettingsSectionCardViewModel } from './settingsCenterViewModel'
 
 export function SettingsSectionGrid({ settingsSections }: { settingsSections: readonly SettingsSection[] }) {
   return (
@@ -13,16 +14,15 @@ export function SettingsSectionGrid({ settingsSections }: { settingsSections: re
 }
 
 export function SettingsSectionCard({ section }: { section: SettingsSection }) {
+  const card = buildSettingsSectionCardViewModel(section)
+
   return (
     <ResourceInfoCard
       icon={<Settings className="text-rose-300" size={19} />}
-      title={section.title}
+      title={card.title}
       tone={section.tone}
-      description={section.description}
-      items={[
-        { label: '状态', value: section.status },
-        { label: '策略', value: 'X-Agent Core' },
-      ]}
+      description={card.description}
+      items={card.items}
     />
   )
 }
