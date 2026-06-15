@@ -1,6 +1,9 @@
 # X-Agent Helm Chart - Development/Default Values
 # For other environments, use values-staging.yaml or values-production.yaml
 
+global:
+  environment: development
+
 replicaCount: 1
 
 image:
@@ -41,6 +44,24 @@ service:
   port: 80
   targetPort: 8000
   annotations: {}
+
+api:
+  enabled: false
+  replicas: 1
+  port: 8000
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
 
 ingress:
   enabled: false

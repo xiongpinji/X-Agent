@@ -1,6 +1,9 @@
 # X-Agent Helm Chart - Staging Environment Values
 # Staging: 2 replicas, resource relaxation, staging domain, staging secrets
 
+global:
+  environment: staging
+
 replicaCount: 2
 
 image:

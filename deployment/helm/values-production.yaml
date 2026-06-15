@@ -1,6 +1,9 @@
 # X-Agent Helm Chart - Production Environment Values
 # Production: 3+ replicas, strict limits, real domain, external secrets, high availability
 
+global:
+  environment: production
+
 replicaCount: 3
 
 image:
