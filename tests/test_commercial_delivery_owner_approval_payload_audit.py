@@ -202,6 +202,39 @@ def test_owner_approval_payload_audit_accounts_for_matching_payload_bootstrap_cy
     assert next(check for check in audit.checks if check.name == "owner_stage_approval_request_ready").status == "passed"
 
 
+def test_owner_approval_payload_audit_accounts_for_post_stage_delivery_packet_cycle(
+    tmp_path: Path,
+) -> None:
+    paths = _write_inputs(tmp_path)
+    delivery = json.loads(paths["owner_delivery_packet_path"].read_text(encoding="utf-8"))
+    delivery["status"] = "owner_delivery_packet_blocked"
+    delivery["commit_ready"] = True
+    delivery["summary"].update(
+        {
+            "owner_commit_packet_status": "owner_commit_packet_ready",
+            "owner_post_stage_commit_gate_status": "owner_post_stage_commit_gate_ready",
+        }
+    )
+    delivery["checks"] = [
+        {"name": "owner_pre_stage_chain_ready", "status": "failed"},
+        {"name": "owner_approval_payload_audit_accounted_for", "status": "failed"},
+    ]
+    paths["owner_delivery_packet_path"].write_text(json.dumps(delivery), encoding="utf-8")
+
+    audit = build_owner_approval_payload_audit(**paths)
+
+    assert audit.status == "owner_approval_payload_ready"
+    assert audit.approval_payload_valid is True
+    assert audit.summary["owner_delivery_packet_status_accounted_for"] is True
+    assert audit.summary["owner_delivery_packet_bootstrap_accounted_for"] is True
+    assert audit.summary["post_stage_delivery_packet_bootstrap_accounted_for"] is True
+    assert audit.summary["owner_delivery_packet_failed_check_names"] == [
+        "owner_approval_payload_audit_accounted_for",
+        "owner_pre_stage_chain_ready",
+    ]
+    assert next(check for check in audit.checks if check.name == "owner_delivery_packet_ready").status == "passed"
+
+
 def test_owner_approval_payload_audit_accounts_for_request_blocked_by_delivery_approval_boundary(
     tmp_path: Path,
 ) -> None:
@@ -235,6 +268,67 @@ def test_owner_approval_payload_audit_accounts_for_request_blocked_by_delivery_a
         "owner_delivery_packet_requires_approval",
     ]
     assert next(check for check in audit.checks if check.name == "owner_stage_approval_request_ready").status == "passed"
+
+
+def test_owner_approval_payload_audit_accounts_for_post_stage_stale_request_template(
+    tmp_path: Path,
+) -> None:
+    paths = _write_inputs(tmp_path)
+    delivery = json.loads(paths["owner_delivery_packet_path"].read_text(encoding="utf-8"))
+    delivery["status"] = "owner_delivery_packet_blocked"
+    delivery["commit_ready"] = True
+    delivery["summary"].update(
+        {
+            "owner_commit_packet_status": "owner_commit_packet_ready",
+            "owner_post_stage_commit_gate_status": "owner_post_stage_commit_gate_ready",
+        }
+    )
+    delivery["checks"] = [
+        {
+            "name": "owner_approval_payload_audit_accounted_for",
+            "status": "failed",
+            "details": {},
+            "error": "owner approval payload audit is present but not ready or accounted for",
+        }
+    ]
+    paths["owner_delivery_packet_path"].write_text(json.dumps(delivery), encoding="utf-8")
+    request = json.loads(paths["owner_stage_approval_request_path"].read_text(encoding="utf-8"))
+    stale_digest = "0" * 64
+    request["summary"].update(
+        {
+            "owner_stage_command_count": 1,
+            "stage_path_digest": stale_digest,
+            "stage_command_digest": stale_digest,
+            "expected_stage_path_set_digest": stale_digest,
+        }
+    )
+    request["suggested_owner_approval_payload"].update(
+        {
+            "owner_stage_command_count": 1,
+            "stage_path_digest": stale_digest,
+            "stage_command_digest": stale_digest,
+            "expected_stage_path_set_digest": stale_digest,
+        }
+    )
+    request["status"] = "owner_stage_approval_request_blocked"
+    request["checks"] = [
+        {"name": "owner_delivery_packet_ready", "status": "failed"},
+        {"name": "owner_delivery_packet_requires_approval", "status": "failed"},
+    ]
+    paths["owner_stage_approval_request_path"].write_text(json.dumps(request), encoding="utf-8")
+
+    audit = build_owner_approval_payload_audit(**paths)
+
+    assert audit.status == "owner_approval_payload_ready"
+    assert audit.approval_payload_valid is True
+    assert audit.summary["post_stage_stale_request_accounted_for"] is True
+    assert audit.summary["request_or_template_is_stale"] is True
+    assert next(
+        check for check in audit.checks if check.name == "approval_counts_match_request_and_delivery_packet"
+    ).status == "passed"
+    assert next(
+        check for check in audit.checks if check.name == "approval_digests_match_request_and_delivery_packet"
+    ).status == "passed"
 
 
 def test_owner_approval_payload_audit_blocks_missing_payload(tmp_path: Path) -> None:

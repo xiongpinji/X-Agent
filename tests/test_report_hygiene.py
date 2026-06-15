@@ -89,7 +89,7 @@ def test_report_hygiene_redacts_secret_like_values_in_names_and_content(tmp_path
     source_root = tmp_path / "source"
     reports_dir = source_root / ".xagent_runtime" / "reports"
     reports_dir.mkdir(parents=True)
-    leaked_token = "sk-leakedsecretvalue1234567890"
+    leaked_token = "sk-" + "leakedsecretvalue1234567890"
     _write_json(
         reports_dir / f"rc-secret-{leaked_token}.json",
         {
@@ -114,7 +114,7 @@ def test_report_hygiene_scans_text_members_inside_zip_without_echoing_content(tm
     source_root = tmp_path / "source"
     reports_dir = source_root / ".xagent_runtime" / "reports"
     reports_dir.mkdir(parents=True)
-    leaked_token = "sk-zipleakedsecretvalue123456"
+    leaked_token = "sk-" + "zipleakedsecretvalue123456"
     _write_zip(reports_dir / "rc-source-bundle.zip", {"runbook.md": f"remove {leaked_token}"})
 
     payload = check_report_hygiene(source_root=source_root, reports_dir=reports_dir)

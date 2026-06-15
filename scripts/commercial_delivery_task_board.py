@@ -761,12 +761,57 @@ def _pre_approval_drift_guard_accounted_for(reports: dict[str, dict[str, Any]]) 
         and post_approval_boundary_required_failed_checks.issubset(failed_checks)
         and failed_checks.issubset(post_approval_noop_allowed_failed_checks)
     )
+    post_approval_complete_required_failed_checks = {
+        "real_owner_approval_absent",
+        "approval_request_ready",
+        "approval_handoff_ready",
+        "approval_payload_blocked_before_owner",
+        "approval_gate_blocked_before_owner",
+        "stage_execution_blocked_before_owner",
+        "operator_checklist_waiting_before_owner",
+        "closure_blocked_before_owner",
+    }
+    post_approval_complete_accounted_for = (
+        _report_status(drift_guard) == "pre_approval_drift_guard_blocked"
+        and drift_guard.get("real_owner_approval_present") is True
+        and drift_guard.get("mutation_performed") is not True
+        and drift_guard.get("git_stage_performed") is not True
+        and drift_guard.get("git_commit_performed") is not True
+        and drift_guard.get("git_push_performed") is not True
+        and drift_guard.get("network_mutation_performed") is not True
+        and drift_guard.get("agent_execution_enabled") is not True
+        and drift_guard.get("full_codex_parity_claimed") is not True
+        and _read_report_status_value(drift_guard, "owner_approval_payload_audit")
+        == "owner_approval_payload_ready"
+        and _read_summary_value(drift_guard, "owner_approval_payload_present") is True
+        and _read_summary_value(drift_guard, "owner_approval_payload_valid") is True
+        and _read_summary_value(drift_guard, "owner_approval_payload_ready_for_gate") is True
+        and _read_report_status_value(drift_guard, "owner_stage_approval_gate") == "owner_stage_approval_ready"
+        and _read_summary_value(drift_guard, "owner_stage_approval_gate_status") == "owner_stage_approval_ready"
+        and _read_report_status_value(drift_guard, "owner_stage_execution_plan") == "owner_stage_execution_ready"
+        and _read_summary_value(drift_guard, "owner_stage_execution_plan_status") == "owner_stage_execution_ready"
+        and operator_checklist_accounted_for
+        and _read_report_status_value(drift_guard, "closure_snapshot")
+        in {"commercial_delivery_closure_blocked", "commercial_delivery_complete"}
+        and _read_summary_value(drift_guard, "closure_snapshot_status")
+        in {"commercial_delivery_closure_blocked", "commercial_delivery_complete"}
+        and isinstance(_read_summary_value(drift_guard, "closure_delivery_complete"), bool)
+        and isinstance(stage_path_digest, str)
+        and len(stage_path_digest) == 64
+        and isinstance(stage_command_digest, str)
+        and len(stage_command_digest) == 64
+        and isinstance(expected_stage_path_set_digest, str)
+        and len(expected_stage_path_set_digest) == 64
+        and post_approval_complete_required_failed_checks.issubset(failed_checks)
+        and failed_checks.issubset(post_approval_complete_required_failed_checks)
+    )
     return (
         post_approval_ready
         or post_commit_blocked
         or post_approval_noop_blocked
         or post_approval_pre_stage_task_board_drift_blocked
         or post_approval_boundary_blocked
+        or post_approval_complete_accounted_for
         or refresh_accounted_for_drift_guard
     )
 

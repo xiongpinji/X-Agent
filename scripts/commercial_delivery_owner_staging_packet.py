@@ -65,6 +65,7 @@ class OwnerStagingPacket:
     stage_path_digest: str
     stage_commands: list[str]
     stage_command_digest: str
+    expected_stage_path_set_digest: str
     pre_stage_verification_commands: list[str]
     post_stage_verification_commands: list[str]
     verification_commands: list[str]
@@ -186,6 +187,10 @@ def _stage_commands(paths: list[str]) -> list[str]:
 def _digest_values(values: list[str]) -> str:
     payload = json.dumps(values, ensure_ascii=False, separators=(",", ":"))
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _path_set_digest(paths: list[str]) -> str:
+    return _digest_values(sorted(set(paths)))
 
 
 def _pre_stage_verification_commands() -> list[str]:
@@ -381,6 +386,7 @@ def build_owner_staging_packet(
         stage_path_digest=_digest_values(stage_paths),
         stage_commands=stage_commands,
         stage_command_digest=_digest_values(stage_commands),
+        expected_stage_path_set_digest=_path_set_digest(stage_paths),
         pre_stage_verification_commands=pre_stage_verification_commands,
         post_stage_verification_commands=post_stage_verification_commands,
         verification_commands=post_stage_verification_commands,

@@ -354,6 +354,42 @@ def test_owner_post_stage_commit_gate_accounts_for_stale_decision_brief_from_pos
     assert decision.details["cached_staged_path_count"] == len(_stage_paths())
 
 
+def test_owner_post_stage_commit_gate_prefers_current_post_staging_over_stale_brief_snapshot(
+    tmp_path: Path,
+) -> None:
+    paths = _write_reports(tmp_path)
+    payload = json.loads(paths["owner_decision_brief_path"].read_text(encoding="utf-8"))
+    payload.update(
+        {
+            "status": "blocked_before_owner_staging_decision",
+            "mutation_performed": False,
+            "git_stage_performed": False,
+            "git_commit_performed": False,
+            "git_push_performed": False,
+            "network_mutation_performed": False,
+            "agent_execution_enabled": False,
+            "summary": {
+                "post_staging_status": "owner_post_staging_verification_blocked",
+                "cached_staged_path_count": 0,
+            },
+            "checks": [
+                {"name": "owner_pre_stage_readiness_gate_ready", "status": "failed"},
+                {"name": "owner_approval_boundary_accounted_for", "status": "failed"},
+                {"name": "task_board_ready", "status": "failed"},
+            ],
+        }
+    )
+    paths["owner_decision_brief_path"].write_text(json.dumps(payload), encoding="utf-8")
+
+    gate = build_owner_post_stage_commit_gate(**paths)
+
+    assert gate.status == "owner_post_stage_commit_gate_ready"
+    decision = next(check for check in gate.checks if check.name == "owner_decision_brief_pre_stage_ready")
+    assert decision.status == "passed"
+    assert decision.details["post_staging_status"] == "owner_post_staging_verification_ready"
+    assert decision.details["cached_staged_path_count"] == len(_stage_paths())
+
+
 def test_owner_post_stage_commit_gate_accepts_post_commit_noop_evidence(tmp_path: Path) -> None:
     paths = _write_reports(tmp_path)
     empty_digest = _digest_values([])

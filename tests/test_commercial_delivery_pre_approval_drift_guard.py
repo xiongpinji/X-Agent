@@ -337,8 +337,8 @@ def test_pre_approval_drift_guard_accounts_for_post_approval_noop_with_task_boar
     task_board["summary"].update(
         {
             "stage_path_digest": "stale-task-board-path-digest",
-            "stage_command_digest": "stale-task-board-command-digest",
-            "expected_stage_path_set_digest": "stale-task-board-path-set-digest",
+            "stage_command_digest": "stale-task_example_token_redacted",
+            "expected_stage_path_set_digest": "stale-task_example_token_redacted",
             "secondary_handoff_next_queue": ["new-secondary-candidate.py"],
             "secondary_handoff_completed_count": 45,
             "secondary_handoff_latest_completed_candidate": "newly-completed-candidate.py",

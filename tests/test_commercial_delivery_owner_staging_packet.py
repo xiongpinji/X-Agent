@@ -130,6 +130,7 @@ def test_owner_staging_packet_ready_for_owner_review(tmp_path: Path) -> None:
     ]
     assert packet.stage_path_digest == _digest_values(packet.stage_paths)
     assert packet.stage_command_digest == _digest_values(packet.stage_commands)
+    assert packet.expected_stage_path_set_digest == _digest_values(sorted(set(packet.stage_paths)))
     assert packet.summary["task_board_readable"] is True
     assert packet.summary["secondary_pending_count"] == 0
     assert packet.summary["secondary_handoff_next_count"] == 1
@@ -189,6 +190,7 @@ def test_owner_staging_packet_accounts_for_post_commit_noop(tmp_path: Path) -> N
     assert packet.stage_commands == []
     assert packet.stage_path_digest == _digest_values([])
     assert packet.stage_command_digest == _digest_values([])
+    assert packet.expected_stage_path_set_digest == _digest_values([])
     assert packet.summary["post_commit_noop_accounted_for"] is True
     assert packet.summary["unchanged_stage_count"] == 2
     assert {check.status for check in packet.checks} == {"passed"}

@@ -169,6 +169,30 @@ def _failed_report_check_names(payload: dict[str, Any]) -> set[str]:
     return names
 
 
+def _current_owner_approval_matches_delivery(
+    approval: dict[str, Any],
+    *,
+    expected_stage_count: object,
+    expected_command_count: object,
+    expected_commit_preview: object,
+    expected_stage_path_digest: object,
+    expected_stage_command_digest: object,
+    expected_path_set_digest: object,
+) -> bool:
+    return (
+        approval.get("stage_include_count") == expected_stage_count
+        and approval.get("owner_stage_command_count") == expected_command_count
+        and isinstance(expected_commit_preview, str)
+        and approval.get("commit_command_preview") == expected_commit_preview
+        and isinstance(expected_stage_path_digest, str)
+        and approval.get("stage_path_digest") == expected_stage_path_digest
+        and isinstance(expected_stage_command_digest, str)
+        and approval.get("stage_command_digest") == expected_stage_command_digest
+        and isinstance(expected_path_set_digest, str)
+        and approval.get("expected_stage_path_set_digest") == expected_path_set_digest
+    )
+
+
 def build_owner_approval_payload_audit(
     *,
     owner_delivery_packet_path: Path = DEFAULT_OWNER_DELIVERY_PACKET,
@@ -223,35 +247,81 @@ def build_owner_approval_payload_audit(
         or approval_request.get("full_codex_parity_claimed") is True
         or approval.get("full_codex_parity_claimed") is True
     )
+    current_owner_approval_matches_delivery = _current_owner_approval_matches_delivery(
+        approval,
+        expected_stage_count=expected_stage_count,
+        expected_command_count=expected_command_count,
+        expected_commit_preview=expected_commit_preview,
+        expected_stage_path_digest=expected_stage_path_digest,
+        expected_stage_command_digest=expected_stage_command_digest,
+        expected_path_set_digest=expected_path_set_digest,
+    )
+    request_or_template_is_stale = (
+        template.get("stage_include_count") != expected_stage_count
+        or template.get("owner_stage_command_count") != expected_command_count
+        or template.get("stage_path_digest") != expected_stage_path_digest
+        or template.get("stage_command_digest") != expected_stage_command_digest
+        or template.get("expected_stage_path_set_digest") != expected_path_set_digest
+        or request_summary.get("stage_include_count") != expected_stage_count
+        or request_summary.get("owner_stage_command_count") != expected_command_count
+        or request_summary.get("stage_path_digest") != expected_stage_path_digest
+        or request_summary.get("stage_command_digest") != expected_stage_command_digest
+        or request_summary.get("expected_stage_path_set_digest") != expected_path_set_digest
+    )
+    post_stage_stale_request_accounted_for = (
+        _status(delivery_packet) == "owner_delivery_packet_blocked"
+        and delivery_packet.get("commit_ready") is True
+        and delivery_summary.get("owner_commit_packet_status") == "owner_commit_packet_ready"
+        and delivery_summary.get("owner_post_stage_commit_gate_status")
+        == "owner_post_stage_commit_gate_ready"
+        and delivery_summary.get("owner_stage_command_count") == expected_command_count
+        and current_owner_approval_matches_delivery
+        and request_or_template_is_stale
+    )
     counts_match = (
         approval.get("stage_include_count") == expected_stage_count
         and approval.get("owner_stage_command_count") == expected_command_count
-        and template.get("stage_include_count") == expected_stage_count
-        and template.get("owner_stage_command_count") == expected_command_count
-        and request_summary.get("stage_include_count") == expected_stage_count
-        and request_summary.get("owner_stage_command_count") == expected_command_count
+        and (
+            post_stage_stale_request_accounted_for
+            or (
+                template.get("stage_include_count") == expected_stage_count
+                and template.get("owner_stage_command_count") == expected_command_count
+                and request_summary.get("stage_include_count") == expected_stage_count
+                and request_summary.get("owner_stage_command_count") == expected_command_count
+            )
+        )
     )
     digests_match = (
         isinstance(expected_stage_path_digest, str)
         and approval.get("stage_path_digest") == expected_stage_path_digest
-        and template.get("stage_path_digest") == expected_stage_path_digest
-        and request_summary.get("stage_path_digest") == expected_stage_path_digest
         and isinstance(expected_stage_command_digest, str)
         and expected_stage_command_digest == expected_summary_stage_command_digest
         and approval.get("stage_command_digest") == expected_stage_command_digest
-        and template.get("stage_command_digest") == expected_stage_command_digest
-        and request_summary.get("stage_command_digest") == expected_stage_command_digest
         and isinstance(expected_path_set_digest, str)
         and approval.get("expected_stage_path_set_digest") == expected_path_set_digest
-        and template.get("expected_stage_path_set_digest") == expected_path_set_digest
-        and request_summary.get("expected_stage_path_set_digest") == expected_path_set_digest
+        and (
+            post_stage_stale_request_accounted_for
+            or (
+                template.get("stage_path_digest") == expected_stage_path_digest
+                and request_summary.get("stage_path_digest") == expected_stage_path_digest
+                and template.get("stage_command_digest") == expected_stage_command_digest
+                and request_summary.get("stage_command_digest") == expected_stage_command_digest
+                and template.get("expected_stage_path_set_digest") == expected_path_set_digest
+                and request_summary.get("expected_stage_path_set_digest") == expected_path_set_digest
+            )
+        )
     )
     commit_preview_matches = (
         isinstance(expected_commit_preview, str)
         and expected_commit_preview.startswith("git commit ")
         and approval.get("commit_command_preview") == expected_commit_preview
-        and template.get("commit_command_preview") == expected_commit_preview
-        and request_summary.get("commit_command_preview") == expected_commit_preview
+        and (
+            post_stage_stale_request_accounted_for
+            or (
+                template.get("commit_command_preview") == expected_commit_preview
+                and request_summary.get("commit_command_preview") == expected_commit_preview
+            )
+        )
     )
     acknowledgements_present = (
         approval.get("acknowledge_pre_stage_verification") is True
@@ -277,9 +347,26 @@ def build_owner_approval_payload_audit(
         and owner_gated
         and not full_codex_parity_claimed
     )
+    post_stage_delivery_packet_bootstrap_accounted_for = (
+        _status(delivery_packet) == "owner_delivery_packet_blocked"
+        and delivery_failed_check_names
+        == {
+            "owner_pre_stage_chain_ready",
+            "owner_approval_payload_audit_accounted_for",
+        }
+        and delivery_packet.get("commit_ready") is True
+        and delivery_summary.get("owner_commit_packet_status") == "owner_commit_packet_ready"
+        and delivery_summary.get("owner_post_stage_commit_gate_status")
+        == "owner_post_stage_commit_gate_ready"
+        and current_owner_approval_matches_delivery
+        and payload_matches_current_request_and_delivery
+    )
     delivery_packet_bootstrap_accounted_for = (
         _status(delivery_packet) == "owner_delivery_packet_blocked"
-        and delivery_failed_check_names == {"owner_approval_payload_audit_accounted_for"}
+        and (
+            delivery_failed_check_names == {"owner_approval_payload_audit_accounted_for"}
+            or post_stage_delivery_packet_bootstrap_accounted_for
+        )
         and payload_matches_current_request_and_delivery
     )
     request_bootstrap_accounted_for = (
@@ -495,10 +582,15 @@ def build_owner_approval_payload_audit(
             "post_commit_noop_accounted_for": post_commit_noop_accounted_for,
             "owner_delivery_packet_status_accounted_for": delivery_packet_status_accounted_for,
             "owner_delivery_packet_bootstrap_accounted_for": delivery_packet_bootstrap_accounted_for,
+            "post_stage_delivery_packet_bootstrap_accounted_for": (
+                post_stage_delivery_packet_bootstrap_accounted_for
+            ),
             "owner_delivery_packet_failed_check_names": sorted(delivery_failed_check_names),
             "owner_stage_approval_request_status_accounted_for": approval_request_status_accounted_for,
             "owner_stage_approval_request_bootstrap_accounted_for": request_bootstrap_accounted_for,
             "owner_stage_approval_request_failed_check_names": sorted(request_failed_check_names),
+            "post_stage_stale_request_accounted_for": post_stage_stale_request_accounted_for,
+            "request_or_template_is_stale": request_or_template_is_stale,
         },
         checks=checks,
         next_actions=[

@@ -160,8 +160,12 @@ def _decision_brief_ready_or_post_staging_accounted(
     cached_staged_path_count = _int_or_none(summary.get("cached_staged_path_count"))
     post_commit_noop_accounted_for = False
     if owner_post_staging:
-        post_staging_status = post_staging_status or _status(owner_post_staging)
-        if cached_staged_path_count is None:
+        owner_post_staging_status = _status(owner_post_staging)
+        owner_post_staging_ready = owner_post_staging_status == "owner_post_staging_verification_ready"
+        post_staging_status = (
+            owner_post_staging_status if owner_post_staging_ready else post_staging_status or owner_post_staging_status
+        )
+        if cached_staged_path_count is None or owner_post_staging_ready:
             cached_staged_path_count = _int_or_none(owner_post_staging.get("cached_staged_path_count"))
         post_commit_noop_accounted_for = (
             owner_post_staging.get("post_commit_noop_accounted_for") is True
@@ -448,11 +452,15 @@ def build_owner_post_stage_commit_gate(
             details={
                 "status": _status(owner_decision_brief),
                 "post_staging_status": (
-                    _summary(owner_decision_brief).get("post_staging_status")
+                    _status(owner_post_staging)
+                    if _status(owner_post_staging) == "owner_post_staging_verification_ready"
+                    else _summary(owner_decision_brief).get("post_staging_status")
                     or _status(owner_post_staging)
                 ),
                 "cached_staged_path_count": (
-                    _summary(owner_decision_brief).get("cached_staged_path_count")
+                    owner_post_staging.get("cached_staged_path_count")
+                    if _status(owner_post_staging) == "owner_post_staging_verification_ready"
+                    else _summary(owner_decision_brief).get("cached_staged_path_count")
                     or owner_post_staging.get("cached_staged_path_count")
                 ),
                 "failed_checks": sorted(_failed_report_check_names(owner_decision_brief)),

@@ -791,6 +791,66 @@ def test_closure_snapshot_completes_after_post_stage_task_board_drift_guard_only
     assert drift_check.details["pre_approval_drift_guard_post_stage_accounted_for"] is True
 
 
+def test_closure_snapshot_accounts_for_post_approval_complete_pre_approval_drift_guard(
+    tmp_path: Path,
+) -> None:
+    paths = _write_inputs(tmp_path, complete=True)
+    _write_json(
+        paths["pre_approval_drift_guard_path"],
+        {
+            "status": "pre_approval_drift_guard_blocked",
+            "real_owner_approval_present": True,
+            "mutation_performed": False,
+            "git_stage_performed": False,
+            "git_commit_performed": False,
+            "git_push_performed": False,
+            "network_mutation_performed": False,
+            "agent_execution_enabled": False,
+            "full_codex_parity_claimed": False,
+            "report_statuses": {
+                "owner_approval_payload_audit": "owner_approval_payload_ready",
+                "owner_stage_approval_gate": "owner_stage_approval_ready",
+                "owner_stage_execution_plan": "owner_stage_execution_ready",
+                "owner_post_approval_operator_checklist": "owner_post_approval_operator_checklist_ready",
+                "closure_snapshot": "commercial_delivery_closure_blocked",
+            },
+            "summary": {
+                "stage_path_digest": _digest_values(_stage_paths()),
+                "stage_command_digest": _digest_values(_stage_commands()),
+                "expected_stage_path_set_digest": _path_set_digest(_stage_paths()),
+                "owner_approval_payload_present": True,
+                "owner_approval_payload_valid": True,
+                "owner_approval_payload_ready_for_gate": True,
+                "owner_stage_approval_gate_status": "owner_stage_approval_ready",
+                "owner_stage_execution_plan_status": "owner_stage_execution_ready",
+                "owner_post_approval_operator_checklist_status": "owner_post_approval_operator_checklist_ready",
+                "owner_post_approval_operator_checklist_operator_ready": True,
+                "owner_post_approval_operator_checklist_real_owner_approval_present": True,
+                "closure_snapshot_status": "commercial_delivery_closure_blocked",
+                "closure_delivery_complete": False,
+            },
+            "checks": [
+                {"name": "real_owner_approval_absent", "status": "failed"},
+                {"name": "approval_request_ready", "status": "failed"},
+                {"name": "approval_handoff_ready", "status": "failed"},
+                {"name": "approval_payload_blocked_before_owner", "status": "failed"},
+                {"name": "approval_gate_blocked_before_owner", "status": "failed"},
+                {"name": "stage_execution_blocked_before_owner", "status": "failed"},
+                {"name": "operator_checklist_waiting_before_owner", "status": "failed"},
+                {"name": "closure_blocked_before_owner", "status": "failed"},
+            ],
+        },
+    )
+
+    snapshot = build_commercial_delivery_closure_snapshot(**paths)
+
+    assert snapshot.status == "commercial_delivery_complete"
+    assert snapshot.delivery_complete is True
+    drift_check = next(check for check in snapshot.checks if check.name == "pre_approval_drift_guard_ready")
+    assert drift_check.status == "passed"
+    assert drift_check.details["pre_approval_drift_guard_accounted_for"] is True
+
+
 def test_closure_snapshot_accounts_for_post_commit_pre_approval_drift_guard(tmp_path: Path) -> None:
     paths = _write_inputs(tmp_path, complete=False)
     _write_json(
