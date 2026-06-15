@@ -9,18 +9,33 @@ WORKFLOWS = {
         "secrets.databaseUrl": "STAGING_DATABASE_URL",
         "secrets.redisUrl": "STAGING_REDIS_URL",
         "secrets.apiKey": "STAGING_API_KEY",
+        "secrets.jwtSecret": "STAGING_JWT_SECRET",
+        "secrets.encryptionKey": "STAGING_ENCRYPTION_KEY",
+        "secrets.auditHmacSecret": "STAGING_AUDIT_HMAC_SECRET",
         "secrets.langfusePublicKey": "STAGING_LANGFUSE_PUBLIC_KEY",
         "secrets.langfuseSecretKey": "STAGING_LANGFUSE_SECRET_KEY",
+        "secrets.sentryDsn": "STAGING_SENTRY_DSN",
+        "secrets.workflowEventRabbitmqUrl": "STAGING_WORKFLOW_EVENT_RABBITMQ_URL",
     },
     Path(".github/workflows/deploy-production.yml"): {
         "secrets.databaseUrl": "PROD_DATABASE_URL",
         "secrets.redisUrl": "PROD_REDIS_URL",
         "secrets.apiKey": "PROD_API_KEY",
+        "secrets.jwtSecret": "PROD_JWT_SECRET",
+        "secrets.encryptionKey": "PROD_ENCRYPTION_KEY",
+        "secrets.auditHmacSecret": "PROD_AUDIT_HMAC_SECRET",
         "secrets.langfusePublicKey": "PROD_LANGFUSE_PUBLIC_KEY",
         "secrets.langfuseSecretKey": "PROD_LANGFUSE_SECRET_KEY",
+        "secrets.sentryDsn": "PROD_SENTRY_DSN",
+        "secrets.workflowEventRabbitmqUrl": "PROD_WORKFLOW_EVENT_RABBITMQ_URL",
     },
 }
 HELM_SECRET_TEMPLATE = Path("deployment/helm/templates/secret.yaml")
+HELM_DEPLOYMENT_TEMPLATE = Path("deployment/helm/templates/deployment.yaml")
+HELM_VALUES = Path("deployment/helm/values.yaml")
+HELM_STAGING_VALUES = Path("deployment/helm/values-staging.yaml")
+HELM_PRODUCTION_VALUES = Path("deployment/helm/values-production.yaml")
+HELM_README = Path("deployment/helm/README.md")
 SECRETS_DOC = Path("docs/GITHUB_SECRETS.md")
 
 FORBIDDEN_LEGACY_KEYS = {
@@ -64,6 +79,46 @@ def test_deployment_workflow_helm_keys_match_secret_template_consumers() -> None
     for helm_key in next(iter(WORKFLOWS.values())):
         assert f".Values.{helm_key}" in template
         assert helm_key in workflow_text
+
+
+def test_helm_runtime_observability_env_uses_xagent_prefixes() -> None:
+    template = _text(HELM_DEPLOYMENT_TEMPLATE)
+
+    assert "- name: XAGENT_LANGFUSE_PUBLIC_KEY" in template
+    assert "- name: XAGENT_LANGFUSE_SECRET_KEY" in template
+    assert "- name: XAGENT_LANGFUSE_HOST" in template
+    assert "- name: XAGENT_DATABASE_URL" in template
+    assert "- name: XAGENT_REDIS_URL" in template
+    assert "- name: XAGENT_BOOTSTRAP_API_KEY" in template
+    assert "- name: XAGENT_JWT_SECRET" in template
+    assert "- name: XAGENT_ENCRYPTION_KEY" in template
+    assert "- name: XAGENT_AUDIT_HMAC_SECRET" in template
+    assert "- name: XAGENT_SENTRY_DSN" in template
+    assert "- name: XAGENT_WORKFLOW_EVENT_BROKER_BACKEND" in template
+    assert "- name: XAGENT_WORKFLOW_EVENT_RABBITMQ_URL" in template
+    assert "- name: DATABASE_URL" not in template
+    assert "- name: REDIS_URL" not in template
+    assert "- name: API_KEY" not in template
+    assert "- name: LANGFUSE_PUBLIC_KEY" not in template
+    assert "- name: LANGFUSE_SECRET_KEY" not in template
+
+
+def test_helm_prometheus_scrape_path_matches_backend_metrics_route() -> None:
+    values = "\n".join(
+        _text(path)
+        for path in (
+            HELM_VALUES,
+            HELM_STAGING_VALUES,
+            HELM_PRODUCTION_VALUES,
+            HELM_README,
+        )
+    )
+
+    assert 'prometheus.io/path: "/api/v1/metrics/prometheus"' in values
+    assert "path: /api/v1/metrics/prometheus" in values
+    assert "metrics_path: /api/v1/metrics/prometheus" in values
+    assert 'prometheus.io/path: "/metrics"' not in values
+    assert "metrics_path: /metrics" not in values
 
 
 def test_github_secrets_doc_tracks_ci_helm_secret_contract() -> None:

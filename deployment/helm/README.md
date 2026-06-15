@@ -164,7 +164,7 @@ scrape_configs:
   - job_name: xagent
     static_configs:
       - targets: ['xagent:8000']
-    metrics_path: /metrics
+    metrics_path: /api/v1/metrics/prometheus
 ```
 
 #### Traces (Langfuse)

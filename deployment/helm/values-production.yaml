@@ -62,6 +62,10 @@ env:
   LOG_LEVEL: warn
   DEBUG: "false"
   ENVIRONMENT: production
+  XAGENT_MODE: production
+  XAGENT_APP_MODE: production
+  XAGENT_DEPLOYMENT_ENVIRONMENT: production
+  XAGENT_REQUIRE_API_KEY: "true"
 
 livenessProbe:
   httpGet:
@@ -97,14 +101,21 @@ observability:
   enabled: true
   metrics:
     enabled: true
+    path: /api/v1/metrics/prometheus
     retention: 30d
   traces:
     enabled: true
     endpoint: "https://api.langfuse.com"
     samplingRate: 0.1
+  errors:
+    enabled: true
   logs:
     level: warn
     format: json
+
+workflowEvents:
+  backend: rabbitmq
+  exchange: xagent.workflow
 
 persistence:
   enabled: true

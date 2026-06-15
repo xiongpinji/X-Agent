@@ -65,6 +65,10 @@ class Settings(BaseSettings):
     langfuse_public_key: str | None = None
     langfuse_secret_key: str | None = None
     langfuse_host: str | None = None
+    sentry_dsn: str | None = None
+    workflow_event_broker_backend: str = "local"
+    workflow_event_rabbitmq_url: str | None = None
+    workflow_event_exchange: str = "xagent.workflow"
     feishu_app_id: str | None = None
     feishu_app_secret: str | None = None
     feishu_encrypt_key: str | None = None

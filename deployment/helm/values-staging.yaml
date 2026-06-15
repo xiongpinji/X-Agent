@@ -59,6 +59,10 @@ env:
   LOG_LEVEL: debug
   DEBUG: "true"
   ENVIRONMENT: staging
+  XAGENT_MODE: standard
+  XAGENT_APP_MODE: staging
+  XAGENT_DEPLOYMENT_ENVIRONMENT: staging
+  XAGENT_REQUIRE_API_KEY: "true"
 
 livenessProbe:
   httpGet:
@@ -90,11 +94,18 @@ observability:
   enabled: true
   metrics:
     enabled: true
+    path: /api/v1/metrics/prometheus
   traces:
     enabled: true
     endpoint: "https://staging-api.langfuse.com"
+  errors:
+    enabled: true
   logs:
     level: debug
+
+workflowEvents:
+  backend: rabbitmq
+  exchange: xagent.workflow
 
 persistence:
   enabled: true

@@ -158,8 +158,13 @@ jobs:
             --set-string secrets.databaseUrl="${{ secrets.PROD_DATABASE_URL }}" \
             --set-string secrets.redisUrl="${{ secrets.PROD_REDIS_URL }}" \
             --set-string secrets.apiKey="${{ secrets.PROD_API_KEY }}" \
+            --set-string secrets.jwtSecret="${{ secrets.PROD_JWT_SECRET }}" \
+            --set-string secrets.encryptionKey="${{ secrets.PROD_ENCRYPTION_KEY }}" \
+            --set-string secrets.auditHmacSecret="${{ secrets.PROD_AUDIT_HMAC_SECRET }}" \
             --set-string secrets.langfusePublicKey="${{ secrets.PROD_LANGFUSE_PUBLIC_KEY }}" \
             --set-string secrets.langfuseSecretKey="${{ secrets.PROD_LANGFUSE_SECRET_KEY }}" \
+            --set-string secrets.sentryDsn="${{ secrets.PROD_SENTRY_DSN }}" \
+            --set-string secrets.workflowEventRabbitmqUrl="${{ secrets.PROD_WORKFLOW_EVENT_RABBITMQ_URL }}" \
             --wait \
             --timeout 10m
 

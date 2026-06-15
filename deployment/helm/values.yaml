@@ -23,7 +23,7 @@ serviceAccount:
 podAnnotations:
   prometheus.io/scrape: "true"
   prometheus.io/port: "8000"
-  prometheus.io/path: "/metrics"
+  prometheus.io/path: "/api/v1/metrics/prometheus"
 
 podSecurityContext:
   runAsNonRoot: true
@@ -123,6 +123,10 @@ env:
   LOG_LEVEL: info
   DEBUG: "false"
   ENVIRONMENT: development
+  XAGENT_MODE: standard
+  XAGENT_APP_MODE: development
+  XAGENT_DEPLOYMENT_ENVIRONMENT: development
+  XAGENT_REQUIRE_API_KEY: "false"
 
 # Configuration from ConfigMap
 configMap:
@@ -139,6 +143,11 @@ configMap:
 # Secrets (create externally in production)
 secrets:
   enabled: false
+  jwtSecret: ""
+  encryptionKey: ""
+  auditHmacSecret: ""
+  sentryDsn: ""
+  workflowEventRabbitmqUrl: ""
   # In production, use external secret management
   # externalSecrets:
   #   enabled: true
@@ -170,12 +179,19 @@ observability:
   metrics:
     enabled: true
     port: 8000
+    path: /api/v1/metrics/prometheus
   traces:
     enabled: true
     # Langfuse configuration
     endpoint: "https://api.langfuse.com"
+  errors:
+    enabled: false
   logs:
     level: info
+
+workflowEvents:
+  backend: local
+  exchange: xagent.workflow
 
 # Volume mounts
 persistence:
