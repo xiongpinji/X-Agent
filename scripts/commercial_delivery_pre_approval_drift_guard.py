@@ -29,6 +29,9 @@ DEFAULT_OWNER_STAGE_EXECUTION_PLAN = REPORT_DIR / "commercial-delivery-owner-sta
 DEFAULT_OWNER_POST_APPROVAL_OPERATOR_CHECKLIST = (
     REPORT_DIR / "commercial-delivery-owner-post-approval-operator-checklist.json"
 )
+DEFAULT_OWNER_POST_STAGING_VERIFIER = REPORT_DIR / "commercial-delivery-owner-post-staging-verifier.json"
+DEFAULT_OWNER_POST_STAGE_COMMIT_GATE = REPORT_DIR / "commercial-delivery-owner-post-stage-commit-gate.json"
+DEFAULT_OWNER_COMMIT_PACKET = REPORT_DIR / "commercial-delivery-owner-commit-packet.json"
 DEFAULT_CLOSURE_SNAPSHOT = REPORT_DIR / "commercial-delivery-closure-snapshot.json"
 DEFAULT_TASK_BOARD = REPORT_DIR / "commercial-delivery-task-board.json"
 DEFAULT_OWNER_APPROVAL = REPORT_DIR / "commercial-delivery-owner-stage-approval.json"
@@ -228,6 +231,9 @@ def build_pre_approval_drift_guard(
     owner_stage_approval_gate_path: Path = DEFAULT_OWNER_STAGE_APPROVAL_GATE,
     owner_stage_execution_plan_path: Path = DEFAULT_OWNER_STAGE_EXECUTION_PLAN,
     owner_post_approval_operator_checklist_path: Path = DEFAULT_OWNER_POST_APPROVAL_OPERATOR_CHECKLIST,
+    owner_post_staging_verifier_path: Path = DEFAULT_OWNER_POST_STAGING_VERIFIER,
+    owner_post_stage_commit_gate_path: Path = DEFAULT_OWNER_POST_STAGE_COMMIT_GATE,
+    owner_commit_packet_path: Path = DEFAULT_OWNER_COMMIT_PACKET,
     closure_snapshot_path: Path = DEFAULT_CLOSURE_SNAPSHOT,
     task_board_path: Path = DEFAULT_TASK_BOARD,
     owner_approval_path: Path = DEFAULT_OWNER_APPROVAL,
@@ -240,13 +246,22 @@ def build_pre_approval_drift_guard(
         "owner_stage_approval_gate": owner_stage_approval_gate_path,
         "owner_stage_execution_plan": owner_stage_execution_plan_path,
         "owner_post_approval_operator_checklist": owner_post_approval_operator_checklist_path,
+        "owner_post_staging_verifier": owner_post_staging_verifier_path,
+        "owner_post_stage_commit_gate": owner_post_stage_commit_gate_path,
+        "owner_commit_packet": owner_commit_packet_path,
         "closure_snapshot": closure_snapshot_path,
         "task_board": task_board_path,
+    }
+    optional_report_names = {
+        "owner_post_approval_operator_checklist",
+        "owner_post_staging_verifier",
+        "owner_post_stage_commit_gate",
+        "owner_commit_packet",
     }
     reports: dict[str, dict[str, Any]] = {}
     errors: dict[str, str] = {}
     for name, path in report_paths.items():
-        if name == "owner_post_approval_operator_checklist":
+        if name in optional_report_names:
             payload, error = _read_optional_json(path)
         else:
             payload, error = _read_json(path)
@@ -260,6 +275,9 @@ def build_pre_approval_drift_guard(
     approval_gate = reports["owner_stage_approval_gate"]
     execution_plan = reports["owner_stage_execution_plan"]
     operator_checklist = reports["owner_post_approval_operator_checklist"]
+    post_staging_verifier = reports["owner_post_staging_verifier"]
+    post_stage_commit_gate = reports["owner_post_stage_commit_gate"]
+    owner_commit_packet = reports["owner_commit_packet"]
     closure = reports["closure_snapshot"]
     task_board = reports["task_board"]
     handoff_summary = _summary(handoff)
@@ -365,15 +383,118 @@ def build_pre_approval_drift_guard(
             or execution_approval_owner_stage_command_count == 0
         )
     )
+    request_stage_include_count = _int_or_none(_summary_value(request, "stage_include_count"))
+    request_owner_stage_command_count = _int_or_none(_summary_value(request, "owner_stage_command_count"))
+    request_stage_path_digest = _summary_value(request, "stage_path_digest")
+    request_stage_command_digest = _summary_value(request, "stage_command_digest")
+    request_expected_stage_path_set_digest = _summary_value(request, "expected_stage_path_set_digest")
+    current_approval_audit_stage_include_count = _int_or_none(payload_audit_summary.get("stage_include_count"))
+    current_approval_audit_owner_stage_command_count = _int_or_none(
+        payload_audit_summary.get("owner_stage_command_count")
+    )
+    current_approval_audit_approval_stage_include_count = _int_or_none(
+        payload_audit_summary.get("approval_stage_include_count")
+    )
+    current_approval_audit_approval_owner_stage_command_count = _int_or_none(
+        payload_audit_summary.get("approval_owner_stage_command_count")
+    )
+    approval_payload_ready = (
+        _status(payload_audit) == "owner_approval_payload_ready"
+        and payload_audit.get("approval_payload_present") is True
+        and payload_audit.get("approval_payload_valid") is True
+        and payload_audit.get("ready_for_approval_gate") is True
+    )
+    approval_payload_matches_request = (
+        request_stage_include_count is not None
+        and request_owner_stage_command_count is not None
+        and current_approval_audit_stage_include_count == request_stage_include_count
+        and current_approval_audit_owner_stage_command_count == request_owner_stage_command_count
+        and current_approval_audit_approval_stage_include_count == request_stage_include_count
+        and current_approval_audit_approval_owner_stage_command_count == request_owner_stage_command_count
+        and payload_audit_summary.get("approval_stage_path_digest") == request_stage_path_digest
+        and payload_audit_summary.get("approval_stage_command_digest") == request_stage_command_digest
+        and payload_audit_summary.get("approval_expected_stage_path_set_digest")
+        == request_expected_stage_path_set_digest
+    )
+    approval_gate_ready = (
+        _status(approval_gate) == "owner_stage_approval_ready"
+        and approval_gate.get("stage_allowed") is True
+    )
+    stage_execution_allowed_ready = (
+        _status(execution_plan) == "owner_stage_execution_ready"
+        and execution_plan.get("stage_allowed") is True
+    )
+    operator_checklist_ready = (
+        operator_checklist_present
+        and _status(operator_checklist) == "owner_post_approval_operator_checklist_ready"
+        and operator_checklist.get("operator_ready") is True
+        and operator_checklist.get("real_owner_approval_present") is True
+    )
+    post_stage_commit_chain_ready_without_handoff = (
+        owner_approval_present
+        and approval_payload_ready
+        and approval_payload_matches_request
+        and approval_gate_ready
+        and stage_execution_allowed_ready
+        and execution_stage_command_count == request_owner_stage_command_count
+        and request_owner_stage_command_count is not None
+        and request_owner_stage_command_count > 0
+        and operator_checklist_ready
+        and _status(post_staging_verifier) == "owner_post_staging_verification_ready"
+        and _status(post_stage_commit_gate) == "owner_post_stage_commit_gate_ready"
+        and _status(owner_commit_packet) == "owner_commit_packet_ready"
+        and _status(closure) in {"commercial_delivery_closure_blocked", "commercial_delivery_complete"}
+        and isinstance(closure.get("delivery_complete"), bool)
+        and closure.get("stage_ready") is True
+        and closure.get("approval_ready") is True
+        and closure.get("post_stage_ready") is True
+        and closure.get("commit_ready") is True
+    )
     handoff_failed_check_names = _failed_check_names(handoff)
     handoff_blocked_only_by_task_board_refresh = (
         _status(handoff) == "owner_approval_handoff_blocked"
         and handoff_summary.get("post_approval_noop_accounted_for") is True
         and handoff_failed_check_names == {"task_board_ready"}
     )
+    handoff_post_stage_lag_required_failures = {
+        "approval_payload_audit_pre_approval_blocked",
+        "real_owner_approval_not_written_by_handoff",
+        "stage_not_allowed_before_owner_approval",
+    }
+    handoff_post_stage_lag_allowed_failures = handoff_post_stage_lag_required_failures | {
+        "approval_brief_ready",
+        "approval_request_and_brief_digests_match_delivery_packet",
+        "current_counts_match",
+        "pre_approval_blockers_accounted_for",
+        "task_board_ready",
+    }
+    handoff_post_stage_commit_lag_accounted_for = (
+        post_stage_commit_chain_ready_without_handoff
+        and _status(handoff) == "owner_approval_handoff_blocked"
+        and handoff_post_stage_lag_required_failures.issubset(handoff_failed_check_names)
+        and handoff_failed_check_names.issubset(handoff_post_stage_lag_allowed_failures)
+    )
+    handoff_current_noop_historical_payload_delta_accounted_for = (
+        owner_approval_present
+        and _status(handoff) == "owner_approval_handoff_blocked"
+        and _status(payload_audit) == "owner_approval_payload_blocked"
+        and payload_audit.get("approval_payload_present") is True
+        and payload_audit.get("approval_payload_valid") is False
+        and payload_audit.get("ready_for_approval_gate") is False
+        and request_stage_include_count is not None
+        and current_approval_audit_stage_include_count == request_stage_include_count
+        and current_approval_audit_approval_stage_include_count == request_stage_include_count
+        and request_owner_stage_command_count == 0
+        and current_approval_audit_owner_stage_command_count == 0
+        and current_approval_audit_approval_owner_stage_command_count is not None
+        and current_approval_audit_approval_owner_stage_command_count > 0
+        and execution_post_commit_noop_accounted_for
+    )
     handoff_accounted_for = (
         _status(handoff) == "owner_approval_handoff_ready"
         or handoff_blocked_only_by_task_board_refresh
+        or handoff_post_stage_commit_lag_accounted_for
+        or handoff_current_noop_historical_payload_delta_accounted_for
     )
     post_approval_stage_execution_plan_ready = (
         _status(execution_plan) == "owner_stage_execution_ready"
@@ -447,6 +568,24 @@ def build_pre_approval_drift_guard(
         and operator_checklist.get("real_owner_approval_present") is True
         and closure_blocked_before_owner
     )
+    closure_current_noop_blocked = (
+        _status(closure) == "commercial_delivery_closure_blocked"
+        and closure.get("delivery_complete") is False
+        and closure.get("stage_ready") is True
+    )
+    post_approval_current_noop_historical_payload_delta_accounted_for = (
+        handoff_current_noop_historical_payload_delta_accounted_for
+        and _looks_like_sha256(approval_audit_approval_stage_path_digest)
+        and _looks_like_sha256(approval_audit_approval_stage_command_digest)
+        and _looks_like_sha256(approval_audit_approval_expected_stage_path_set_digest)
+        and approval_gate_blocked_before_owner
+        and execution_post_commit_noop_accounted_for
+        and closure_current_noop_blocked
+    )
+    post_approval_post_stage_commit_ready = (
+        post_stage_commit_chain_ready_without_handoff
+        and handoff_accounted_for
+    )
     post_approval_accounted_for = (
         owner_approval_present
         and handoff_accounted_for
@@ -474,10 +613,14 @@ def build_pre_approval_drift_guard(
         post_approval_accounted_for
         or post_approval_stage_execution_ready
         or post_approval_historical_payload_delta_accounted_for
+        or post_approval_current_noop_historical_payload_delta_accounted_for
+        or post_approval_post_stage_commit_ready
     )
     digest_stability_excluded_sources = (
         {"task_board"} if post_approval_or_stage_execution_accounted_for else set()
     )
+    if post_approval_current_noop_historical_payload_delta_accounted_for:
+        digest_stability_excluded_sources.update({"owner_approval_handoff", "closure_snapshot"})
     expected_stage_path_set_digest_excluded_sources = set(digest_stability_excluded_sources)
     if post_approval_stage_execution_ready:
         expected_stage_path_set_digest_excluded_sources.add("closure_snapshot")
@@ -492,6 +635,9 @@ def build_pre_approval_drift_guard(
                 "present": owner_approval_present,
                 "post_approval_historical_payload_delta_accounted_for": (
                     post_approval_historical_payload_delta_accounted_for
+                ),
+                "post_approval_current_noop_historical_payload_delta_accounted_for": (
+                    post_approval_current_noop_historical_payload_delta_accounted_for
                 ),
             },
             error="real owner approval payload exists before this guard expected it",
@@ -509,6 +655,10 @@ def build_pre_approval_drift_guard(
                 "status": _status(handoff),
                 "handoff_failed_check_names": sorted(handoff_failed_check_names),
                 "handoff_blocked_only_by_task_board_refresh": handoff_blocked_only_by_task_board_refresh,
+                "handoff_current_noop_historical_payload_delta_accounted_for": (
+                    handoff_current_noop_historical_payload_delta_accounted_for
+                ),
+                "handoff_post_stage_commit_lag_accounted_for": handoff_post_stage_commit_lag_accounted_for,
             },
             error="owner approval handoff is not ready",
         ),
@@ -568,6 +718,10 @@ def build_pre_approval_drift_guard(
                 "post_approval_historical_payload_delta_accounted_for": (
                     post_approval_historical_payload_delta_accounted_for
                 ),
+                "post_approval_current_noop_historical_payload_delta_accounted_for": (
+                    post_approval_current_noop_historical_payload_delta_accounted_for
+                ),
+                "post_approval_post_stage_commit_ready": post_approval_post_stage_commit_ready,
                 "approval_owner_stage_command_count": approval_audit_approval_owner_stage_command_count,
             },
             error="approval payload audit is not in the expected pre-owner blocked state",
@@ -596,6 +750,10 @@ def build_pre_approval_drift_guard(
                 "post_approval_historical_payload_delta_accounted_for": (
                     post_approval_historical_payload_delta_accounted_for
                 ),
+                "post_approval_current_noop_historical_payload_delta_accounted_for": (
+                    post_approval_current_noop_historical_payload_delta_accounted_for
+                ),
+                "post_approval_post_stage_commit_ready": post_approval_post_stage_commit_ready,
             },
             error="post-approval operator checklist is not in the expected waiting-for-owner state",
         ),
@@ -608,6 +766,7 @@ def build_pre_approval_drift_guard(
                 "stage_ready": closure.get("stage_ready"),
                 "approval_ready": closure.get("approval_ready"),
                 "post_approval_stage_execution_ready": post_approval_stage_execution_ready,
+                "post_approval_post_stage_commit_ready": post_approval_post_stage_commit_ready,
             },
             error="closure snapshot is not in the expected pre-owner blocked state",
         ),
@@ -659,6 +818,12 @@ def build_pre_approval_drift_guard(
         "post_approval_historical_payload_delta_accounted_for": (
             post_approval_historical_payload_delta_accounted_for
         ),
+        "post_approval_post_stage_commit_ready": post_approval_post_stage_commit_ready,
+        "post_stage_commit_chain_ready_without_handoff": post_stage_commit_chain_ready_without_handoff,
+        "handoff_post_stage_commit_lag_accounted_for": handoff_post_stage_commit_lag_accounted_for,
+        "owner_post_staging_verifier_status": _status(post_staging_verifier),
+        "owner_post_stage_commit_gate_status": _status(post_stage_commit_gate),
+        "owner_commit_packet_status": _status(owner_commit_packet),
         "approval_payload_audit_approval_stage_include_count": approval_audit_approval_stage_include_count,
         "approval_payload_audit_approval_owner_stage_command_count": (
             approval_audit_approval_owner_stage_command_count
@@ -667,6 +832,12 @@ def build_pre_approval_drift_guard(
         "approval_payload_audit_approval_stage_command_digest": approval_audit_approval_stage_command_digest,
         "approval_payload_audit_approval_expected_stage_path_set_digest": (
             approval_audit_approval_expected_stage_path_set_digest
+        ),
+        "handoff_current_noop_historical_payload_delta_accounted_for": (
+            handoff_current_noop_historical_payload_delta_accounted_for
+        ),
+        "post_approval_current_noop_historical_payload_delta_accounted_for": (
+            post_approval_current_noop_historical_payload_delta_accounted_for
         ),
     }
     return PreApprovalDriftGuard(

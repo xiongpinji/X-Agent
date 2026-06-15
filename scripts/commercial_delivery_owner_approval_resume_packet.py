@@ -368,6 +368,21 @@ def build_owner_approval_resume_packet(
         and stage_allowed
         and stage_execution_ready
     )
+    execution_noop_accounted_for = (
+        (
+            _status(execution_plan) == "owner_stage_execution_blocked"
+            and execution_plan.get("stage_allowed") is not True
+        )
+        or (
+            _status(execution_plan) == "owner_stage_execution_ready"
+            and execution_plan.get("stage_allowed") is not True
+            and (
+                execution_plan.get("post_commit_noop_accounted_for") is True
+                or _summary(execution_plan).get("post_commit_noop_accounted_for") is True
+            )
+            and execution_plan.get("stage_command_count") == 0
+        )
+    )
     post_commit_noop_resume_ready = (
         real_owner_approval_present
         and delivery_post_commit_noop_accounted_for
@@ -379,8 +394,7 @@ def build_owner_approval_resume_packet(
                 and payload_audit.get("ready_for_approval_gate") is False
                 and _status(approval_gate) == "owner_stage_approval_blocked"
                 and approval_gate.get("stage_allowed") is not True
-                and _status(execution_plan) == "owner_stage_execution_blocked"
-                and execution_plan.get("stage_allowed") is not True
+                and execution_noop_accounted_for
             )
             or (
                 approval_payload_ready
@@ -483,13 +497,21 @@ def build_owner_approval_resume_packet(
         and execution_plan.get("owner_gated") is True
     )
     full_codex_parity_claimed = _claims_parity(list(reports.values()))
+    current_noop_counts_accounted_for = (
+        post_commit_noop_resume_ready
+        and stage_counts.get("handoff_stage_include_count") == stage_counts.get("delivery_stage_include_count")
+        and stage_counts.get("delivery_owner_stage_command_count") == 0
+        and post_stage_stage_counts["execution_plan_stage_command_count"] == 0
+        and post_stage_stage_counts["planned_stage_commands_count"] == 0
+        and post_stage_stage_counts["post_staging_cached_path_count"] == 0
+    )
     stage_counts_consistent = _stage_counts_consistent(stage_counts) or (
         post_commit_noop_resume_ready
         and stage_counts.get("handoff_stage_include_count") == stage_counts.get("delivery_stage_include_count")
         and stage_counts.get("delivery_owner_stage_command_count") == 0
         and stage_counts.get("runbook_stage_command_count") == 0
         and stage_counts.get("execution_plan_stage_command_count") == 0
-    ) or (
+    ) or current_noop_counts_accounted_for or (
         post_stage_resume_evidence_ready
         and post_stage_stage_counts["delivery_stage_include_count"] is not None
         and post_stage_stage_counts["delivery_owner_stage_command_count"] is not None
@@ -540,21 +562,66 @@ def build_owner_approval_resume_packet(
             "owner_commit_packet",
         }
     }
-    stage_path_digest_consistent = _values_match_or_post_commit_noop(
+    current_noop_stage_path_digest_sources = {
+        key: value
+        for key, value in stage_path_digest_sources.items()
+        if key
+        in {
+            "owner_stage_approval_gate",
+            "owner_stage_execution_plan",
+            "owner_post_staging_verifier",
+            "owner_post_stage_commit_gate",
+            "owner_commit_packet",
+            "owner_delivery_packet",
+        }
+    }
+    current_noop_stage_command_digest_sources = {
+        key: value
+        for key, value in stage_command_digest_sources.items()
+        if key
+        in {
+            "owner_stage_approval_gate",
+            "owner_stage_execution_plan",
+            "owner_post_stage_commit_gate",
+            "owner_commit_packet",
+            "owner_delivery_packet",
+        }
+    }
+    current_noop_expected_stage_path_set_digest_sources = {
+        key: value
+        for key, value in expected_stage_path_set_digest_sources.items()
+        if key
+        in {
+            "owner_delivery_packet",
+            "owner_post_staging_verifier",
+            "owner_post_stage_commit_gate",
+            "owner_commit_packet",
+        }
+    }
+    current_noop_digest_accounted_for = post_commit_noop_resume_ready and all(
+        _nonempty_values_match(sources)
+        and next(iter({value for value in sources.values() if value}), None) == empty_digest
+        for sources in (
+            current_noop_stage_path_digest_sources,
+            current_noop_stage_command_digest_sources,
+            current_noop_expected_stage_path_set_digest_sources,
+        )
+    )
+    stage_path_digest_consistent = current_noop_digest_accounted_for or _values_match_or_post_commit_noop(
         stage_path_digest_sources,
         empty_digest,
     ) or (
         post_stage_resume_evidence_ready
         and _nonempty_values_match(post_stage_stage_path_digest_sources)
     )
-    stage_command_digest_consistent = _values_match_or_post_commit_noop(
+    stage_command_digest_consistent = current_noop_digest_accounted_for or _values_match_or_post_commit_noop(
         stage_command_digest_sources,
         empty_digest,
     ) or (
         post_stage_resume_evidence_ready
         and _nonempty_values_match(post_stage_stage_command_digest_sources)
     )
-    expected_stage_path_set_digest_consistent = _values_match_or_post_commit_noop(
+    expected_stage_path_set_digest_consistent = current_noop_digest_accounted_for or _values_match_or_post_commit_noop(
         expected_stage_path_set_digest_sources,
         empty_digest,
     ) or (
@@ -631,6 +698,7 @@ def build_owner_approval_resume_packet(
                 "stage_allowed": approval_gate.get("stage_allowed"),
                 "owner_stage_execution_plan_status": _status(execution_plan),
                 "execution_stage_allowed": execution_plan.get("stage_allowed"),
+                "execution_noop_accounted_for": execution_noop_accounted_for,
                 "post_commit_noop_resume_ready": post_commit_noop_resume_ready,
             },
             error="owner approval state is neither waiting for owner nor ready to resume",
@@ -642,6 +710,7 @@ def build_owner_approval_resume_packet(
                 "stage_counts": stage_counts,
                 "post_stage_stage_counts": post_stage_stage_counts,
                 "post_stage_resume_evidence_ready": post_stage_resume_evidence_ready,
+                "current_noop_counts_accounted_for": current_noop_counts_accounted_for,
             },
             error="stage include counts or owner stage command counts differ across resume inputs",
         ),
@@ -652,6 +721,7 @@ def build_owner_approval_resume_packet(
                 "stage_path_digest_sources": stage_path_digest_sources,
                 "post_stage_stage_path_digest_sources": post_stage_stage_path_digest_sources,
                 "post_stage_resume_evidence_ready": post_stage_resume_evidence_ready,
+                "current_noop_digest_accounted_for": current_noop_digest_accounted_for,
             },
             error="stage path digest is missing or inconsistent across resume inputs",
         ),
@@ -662,6 +732,7 @@ def build_owner_approval_resume_packet(
                 "stage_command_digest_sources": stage_command_digest_sources,
                 "post_stage_stage_command_digest_sources": post_stage_stage_command_digest_sources,
                 "post_stage_resume_evidence_ready": post_stage_resume_evidence_ready,
+                "current_noop_digest_accounted_for": current_noop_digest_accounted_for,
             },
             error="stage command digest is missing or inconsistent across resume inputs",
         ),
@@ -672,6 +743,7 @@ def build_owner_approval_resume_packet(
                 "expected_stage_path_set_digest_sources": expected_stage_path_set_digest_sources,
                 "post_stage_expected_stage_path_set_digest_sources": post_stage_expected_stage_path_set_digest_sources,
                 "post_stage_resume_evidence_ready": post_stage_resume_evidence_ready,
+                "current_noop_digest_accounted_for": current_noop_digest_accounted_for,
             },
             error="expected stage path set digest is missing or inconsistent across resume inputs",
         ),
@@ -881,6 +953,9 @@ def build_owner_approval_resume_packet(
             "owner_commit_packet_status": _status(commit_packet),
             "post_stage_resume_evidence_ready": post_stage_resume_evidence_ready,
             "post_commit_noop_resume_ready": post_commit_noop_resume_ready,
+            "execution_noop_accounted_for": execution_noop_accounted_for,
+            "current_noop_counts_accounted_for": current_noop_counts_accounted_for,
+            "current_noop_digest_accounted_for": current_noop_digest_accounted_for,
             "post_commit_noop_accounted_for": delivery_post_commit_noop_accounted_for,
             "task_board_post_commit_accounted_for": task_board_post_commit_accounted_for,
             "task_board_post_staging_accounted_for": task_board_post_staging_accounted_for,

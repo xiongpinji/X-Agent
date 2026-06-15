@@ -56,6 +56,9 @@ def _write_inputs(tmp_path: Path) -> dict[str, Path]:
         "owner_stage_approval_gate_path": tmp_path / "owner-stage-approval-gate.json",
         "owner_stage_execution_plan_path": tmp_path / "owner-stage-execution-plan.json",
         "owner_post_approval_operator_checklist_path": tmp_path / "owner-post-approval-operator-checklist.json",
+        "owner_post_staging_verifier_path": tmp_path / "owner-post-staging-verifier.json",
+        "owner_post_stage_commit_gate_path": tmp_path / "owner-post-stage-commit-gate.json",
+        "owner_commit_packet_path": tmp_path / "owner-commit-packet.json",
         "closure_snapshot_path": tmp_path / "closure-snapshot.json",
         "task_board_path": tmp_path / "task-board.json",
         "owner_approval_path": tmp_path / "owner-stage-approval.json",
@@ -528,6 +531,147 @@ def test_pre_approval_drift_guard_accounts_for_historical_owner_approval_payload
         check = next(check for check in guard.checks if check.name == check_name)
         assert check.status == "passed"
         assert check.details["excluded_sources"] == ["task_board"]
+
+
+def test_pre_approval_drift_guard_accounts_for_post_stage_commit_ready_with_stale_handoff(
+    tmp_path: Path,
+) -> None:
+    paths = _write_inputs(tmp_path)
+    paths["owner_approval_path"].write_text("{}", encoding="utf-8")
+    for key in (
+        "owner_stage_approval_request_path",
+        "owner_approval_handoff_path",
+        "closure_snapshot_path",
+    ):
+        payload = json.loads(paths[key].read_text(encoding="utf-8"))
+        payload["summary"].update(
+            {
+                "stage_include_count": 102,
+                "owner_stage_command_count": 5,
+            }
+        )
+        paths[key].write_text(json.dumps(payload), encoding="utf-8")
+    handoff = json.loads(paths["owner_approval_handoff_path"].read_text(encoding="utf-8"))
+    handoff["status"] = "owner_approval_handoff_blocked"
+    handoff["stage_allowed"] = True
+    handoff["delivery_complete"] = False
+    handoff["checks"] = [
+        {"name": name, "status": "failed", "details": {}, "error": "stale pre-owner handoff"}
+        for name in (
+            "approval_brief_ready",
+            "approval_payload_audit_pre_approval_blocked",
+            "approval_request_and_brief_digests_match_delivery_packet",
+            "current_counts_match",
+            "pre_approval_blockers_accounted_for",
+            "real_owner_approval_not_written_by_handoff",
+            "stage_not_allowed_before_owner_approval",
+            "task_board_ready",
+        )
+    ]
+    paths["owner_approval_handoff_path"].write_text(json.dumps(handoff), encoding="utf-8")
+    audit = json.loads(paths["owner_approval_payload_audit_path"].read_text(encoding="utf-8"))
+    audit.update(
+        {
+            "status": "owner_approval_payload_ready",
+            "approval_payload_present": True,
+            "approval_payload_valid": True,
+            "ready_for_approval_gate": True,
+            "summary": _stage_summary()
+            | {
+                "stage_include_count": 102,
+                "owner_stage_command_count": 5,
+                "approval_stage_include_count": 102,
+                "approval_owner_stage_command_count": 5,
+                "approval_stage_path_digest": STAGE_PATH_DIGEST,
+                "approval_stage_command_digest": STAGE_COMMAND_DIGEST,
+                "approval_expected_stage_path_set_digest": EXPECTED_STAGE_PATH_SET_DIGEST,
+            },
+        }
+    )
+    paths["owner_approval_payload_audit_path"].write_text(json.dumps(audit), encoding="utf-8")
+    gate = json.loads(paths["owner_stage_approval_gate_path"].read_text(encoding="utf-8"))
+    gate["status"] = "owner_stage_approval_ready"
+    gate["stage_allowed"] = True
+    paths["owner_stage_approval_gate_path"].write_text(json.dumps(gate), encoding="utf-8")
+    execution = json.loads(paths["owner_stage_execution_plan_path"].read_text(encoding="utf-8"))
+    execution["status"] = "owner_stage_execution_ready"
+    execution["stage_allowed"] = True
+    execution["stage_command_count"] = 5
+    execution["summary"]["stage_command_count"] = 5
+    paths["owner_stage_execution_plan_path"].write_text(json.dumps(execution), encoding="utf-8")
+    checklist = json.loads(paths["owner_post_approval_operator_checklist_path"].read_text(encoding="utf-8"))
+    checklist["status"] = "owner_post_approval_operator_checklist_ready"
+    checklist["waiting_for_owner"] = False
+    checklist["operator_ready"] = True
+    checklist["real_owner_approval_present"] = True
+    paths["owner_post_approval_operator_checklist_path"].write_text(json.dumps(checklist), encoding="utf-8")
+    _write_json(
+        paths["owner_post_staging_verifier_path"],
+        {"status": "owner_post_staging_verification_ready", "full_codex_parity_claimed": False},
+    )
+    _write_json(
+        paths["owner_post_stage_commit_gate_path"],
+        {"status": "owner_post_stage_commit_gate_ready", "full_codex_parity_claimed": False},
+    )
+    _write_json(
+        paths["owner_commit_packet_path"],
+        {"status": "owner_commit_packet_ready", "full_codex_parity_claimed": False},
+    )
+    closure = json.loads(paths["closure_snapshot_path"].read_text(encoding="utf-8"))
+    closure.update(
+        {
+            "status": "commercial_delivery_closure_blocked",
+            "delivery_complete": False,
+            "stage_ready": True,
+            "approval_ready": True,
+            "post_stage_ready": True,
+            "commit_ready": True,
+            "blockers": [],
+        }
+    )
+    paths["closure_snapshot_path"].write_text(json.dumps(closure), encoding="utf-8")
+    task_board = json.loads(paths["task_board_path"].read_text(encoding="utf-8"))
+    task_board["summary"].update(
+        {
+            "stage_path_digest": "stale-task-board-path-digest",
+            "stage_command_digest": "stale-task_example_token_redacted",
+            "expected_stage_path_set_digest": "stale-task_example_token_redacted",
+        }
+    )
+    paths["task_board_path"].write_text(json.dumps(task_board), encoding="utf-8")
+
+    guard = build_pre_approval_drift_guard(**paths)
+
+    assert guard.status == "pre_approval_drift_guard_ready"
+    assert guard.real_owner_approval_present is True
+    assert guard.summary["owner_approval_handoff_accounted_for"] is True
+    assert guard.summary["post_approval_post_stage_commit_ready"] is True
+    assert guard.summary["post_stage_commit_chain_ready_without_handoff"] is True
+    assert guard.summary["handoff_post_stage_commit_lag_accounted_for"] is True
+    assert guard.summary["owner_post_staging_verifier_status"] == "owner_post_staging_verification_ready"
+    assert guard.summary["owner_post_stage_commit_gate_status"] == "owner_post_stage_commit_gate_ready"
+    assert guard.summary["owner_commit_packet_status"] == "owner_commit_packet_ready"
+    handoff_check = next(check for check in guard.checks if check.name == "approval_handoff_ready")
+    assert handoff_check.status == "passed"
+    assert handoff_check.details["handoff_post_stage_commit_lag_accounted_for"] is True
+    for check_name in (
+        "stage_path_digest_stable",
+        "stage_command_digest_stable",
+        "expected_stage_path_set_digest_stable",
+    ):
+        check = next(check for check in guard.checks if check.name == check_name)
+        assert check.status == "passed"
+        assert check.details["excluded_sources"] == ["task_board"]
+
+    closure = json.loads(paths["closure_snapshot_path"].read_text(encoding="utf-8"))
+    closure["status"] = "commercial_delivery_complete"
+    closure["delivery_complete"] = True
+    paths["closure_snapshot_path"].write_text(json.dumps(closure), encoding="utf-8")
+
+    refreshed_guard = build_pre_approval_drift_guard(**paths)
+
+    assert refreshed_guard.status == "pre_approval_drift_guard_ready"
+    assert refreshed_guard.summary["post_approval_post_stage_commit_ready"] is True
 
 
 def test_pre_approval_drift_guard_blocks_on_stage_digest_drift(tmp_path: Path) -> None:

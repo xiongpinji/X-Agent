@@ -581,6 +581,60 @@ def test_owner_delivery_packet_accounts_for_post_commit_historical_approval_payl
     assert audit_check.details["approval_payload_audit_blocked_by_delivery_bootstrap"] is False
 
 
+def test_owner_delivery_packet_accounts_for_stale_owner_approval_larger_than_current_surface(
+    tmp_path: Path,
+) -> None:
+    paths = _write_reports(tmp_path)
+    stage_paths = ["backend/app/core/storage.py", "tests/test_storage.py"]
+    stage_commands = [
+        "git add -- 'backend/app/core/storage.py'",
+        "git add -- 'tests/test_storage.py'",
+    ]
+    stale_stage_paths = [f"stale-{index}.py" for index in range(6)]
+    stale_stage_commands = [f"git add -- 'stale-{index}.py'" for index in range(6)]
+    audit = json.loads(paths["owner_approval_payload_audit_path"].read_text(encoding="utf-8"))
+    audit.update(
+        {
+            "status": "owner_approval_payload_blocked",
+            "approval_payload_present": True,
+            "approval_payload_valid": False,
+            "ready_for_approval_gate": False,
+            "checks": [
+                {"name": "owner_delivery_packet_ready", "status": "failed"},
+                {"name": "owner_stage_approval_request_ready", "status": "failed"},
+                {"name": "approval_counts_match_request_and_delivery_packet", "status": "failed"},
+                {"name": "approval_digests_match_request_and_delivery_packet", "status": "failed"},
+            ],
+        }
+    )
+    audit["summary"].update(
+        {
+            "stage_include_count": 2,
+            "owner_stage_command_count": 2,
+            "approval_stage_include_count": 2,
+            "approval_owner_stage_command_count": 6,
+            "stage_path_digest": _digest_values(stage_paths),
+            "stage_command_digest": _digest_values(stage_commands),
+            "expected_stage_path_set_digest": _path_set_digest(stage_paths),
+            "approval_stage_path_digest": _digest_values(stale_stage_paths),
+            "approval_stage_command_digest": _digest_values(stale_stage_commands),
+            "approval_expected_stage_path_set_digest": _path_set_digest(stale_stage_paths),
+        }
+    )
+    paths["owner_approval_payload_audit_path"].write_text(json.dumps(audit), encoding="utf-8")
+
+    packet = build_owner_delivery_packet(**paths)
+
+    assert packet.status == "owner_delivery_packet_ready"
+    assert packet.stage_ready is True
+    assert packet.commit_ready is False
+    assert packet.summary["approval_payload_audit_has_stale_owner_approval_delta"] is True
+    assert packet.summary["approval_payload_audit_has_current_ready_historical_payload_delta"] is False
+    audit_check = next(check for check in packet.checks if check.name == "owner_approval_payload_audit_accounted_for")
+    assert audit_check.status == "passed"
+    assert audit_check.details["approval_payload_audit_has_stale_owner_approval_delta"] is True
+
+
 def test_owner_delivery_packet_blocks_post_commit_owner_gate_digest_drift(tmp_path: Path) -> None:
     paths = _write_reports(tmp_path, post_stage=True)
     approval_gate = json.loads(paths["owner_stage_approval_gate_path"].read_text(encoding="utf-8"))
@@ -869,6 +923,90 @@ def test_owner_delivery_packet_accepts_pre_approval_payload_audit_bootstrap(
     audit_check = next(check for check in packet.checks if check.name == "owner_approval_payload_audit_accounted_for")
     assert audit_check.status == "passed"
     assert audit_check.details["approval_payload_audit_blocked_by_delivery_bootstrap"] is True
+
+
+def test_owner_delivery_packet_accounts_for_stale_owner_approval_during_pre_approval_bootstrap(
+    tmp_path: Path,
+) -> None:
+    paths = _write_reports(tmp_path)
+    current_stage_paths = ["backend/app/core/storage.py", "tests/test_storage.py"]
+    current_stage_commands = [
+        "git add -- 'backend/app/core/storage.py'",
+        "git add -- 'tests/test_storage.py'",
+    ]
+    old_stage_paths = [
+        "backend/app/core/storage.py",
+        "tests/test_storage.py",
+        "scripts/old_owner_gate.py",
+    ]
+    old_stage_commands = [
+        "git add -- 'backend/app/core/storage.py'",
+        "git add -- 'tests/test_storage.py'",
+        "git add -- 'scripts/old_owner_gate.py'",
+    ]
+    approval_request = json.loads(paths["owner_stage_approval_request_path"].read_text(encoding="utf-8"))
+    approval_request["status"] = "owner_stage_approval_request_blocked"
+    approval_request["checks"] = [
+        {"name": "owner_delivery_packet_ready", "status": "failed"},
+        {"name": "owner_delivery_packet_requires_approval", "status": "failed"},
+    ]
+    approval_request["summary"].update(
+        {
+            "eligible_stage_count": 2,
+            "stage_path_digest": _digest_values(current_stage_paths),
+            "stage_command_digest": _digest_values(current_stage_commands),
+            "expected_stage_path_set_digest": _path_set_digest(current_stage_paths),
+        }
+    )
+    paths["owner_stage_approval_request_path"].write_text(json.dumps(approval_request), encoding="utf-8")
+    audit = json.loads(paths["owner_approval_payload_audit_path"].read_text(encoding="utf-8"))
+    audit.update(
+        {
+            "status": "owner_approval_payload_blocked",
+            "approval_payload_present": True,
+            "approval_payload_valid": False,
+            "ready_for_approval_gate": False,
+            "checks": [
+                {"name": "owner_delivery_packet_ready", "status": "failed"},
+                {"name": "owner_stage_approval_request_ready", "status": "failed"},
+                {"name": "approval_counts_match_request_and_delivery_packet", "status": "failed"},
+                {"name": "approval_digests_match_request_and_delivery_packet", "status": "failed"},
+            ],
+        }
+    )
+    audit["summary"].update(
+        {
+            "stage_include_count": 2,
+            "owner_stage_command_count": 2,
+            "approval_stage_include_count": 2,
+            "approval_owner_stage_command_count": 3,
+            "commit_command_preview": 'git commit -m "chore: prepare X-Agent commercial delivery package"',
+            "approval_commit_command_preview": 'git commit -m "chore: prepare X-Agent commercial delivery package"',
+            "stage_path_digest": _digest_values(current_stage_paths),
+            "stage_command_digest": _digest_values(current_stage_commands),
+            "expected_stage_path_set_digest": _path_set_digest(current_stage_paths),
+            "approval_stage_path_digest": _digest_values(old_stage_paths),
+            "approval_stage_command_digest": _digest_values(old_stage_commands),
+            "approval_expected_stage_path_set_digest": _path_set_digest(old_stage_paths),
+        }
+    )
+    paths["owner_approval_payload_audit_path"].write_text(json.dumps(audit), encoding="utf-8")
+    refresh = json.loads(paths["refresh_chain_path"].read_text(encoding="utf-8"))
+    refresh["status"] = "commercial_delivery_refresh_chain_receipt_blocked"
+    refresh["summary"]["failed_step_count"] = 1
+    refresh["steps"] = [
+        {"name": "owner_approval_payload_audit", "status": "failed"},
+    ]
+    paths["refresh_chain_path"].write_text(json.dumps(refresh), encoding="utf-8")
+
+    packet = build_owner_delivery_packet(**paths)
+
+    assert packet.status == "owner_delivery_packet_ready"
+    assert packet.stage_ready is True
+    assert packet.summary["pre_approval_bootstrap_accounted_for"] is True
+    audit_check = next(check for check in packet.checks if check.name == "owner_approval_payload_audit_accounted_for")
+    assert audit_check.status == "passed"
+    assert audit_check.details["approval_payload_audit_has_stale_owner_approval_delta"] is True
 
 
 def test_owner_delivery_packet_accepts_matched_payload_waiting_on_delivery_bootstrap(
