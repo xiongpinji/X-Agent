@@ -282,6 +282,56 @@ def _remote_pr_gate_status(payload: dict[str, Any] | None) -> str | None:
     return "not_met"
 
 
+def _claim_scan_gate(payload: dict[str, Any] | None) -> tuple[bool, dict[str, Any]]:
+    status = _status(payload)
+    violations = payload.get("violations") if isinstance(payload, dict) else None
+    violation_count = len(violations) if isinstance(violations, list) else None
+    ready_flag = payload.get("claim_safe_docs_ready") if isinstance(payload, dict) else None
+    ready = (
+        status in {"claim_safe_docs_ready", "passed"}
+        and ready_flag is not False
+        and violation_count in {None, 0}
+    )
+    return ready, {
+        "status": status,
+        "claim_safe_docs_ready": ready_flag,
+        "violation_count": violation_count,
+        "blocked_phrase_count": payload.get("blocked_phrase_count") if isinstance(payload, dict) else None,
+    }
+
+
+def _single_sha_index_gate(
+    payload: dict[str, Any] | None,
+    *,
+    current_head_sha: str | None,
+) -> tuple[bool, dict[str, Any]]:
+    status = _status(payload)
+    missing = payload.get("missing_or_mismatched") if isinstance(payload, dict) else None
+    missing_count = len(missing) if isinstance(missing, list) else None
+    selected_sha = payload.get("selected_sha") if isinstance(payload, dict) else None
+    index_head = payload.get("current_head_sha") if isinstance(payload, dict) else None
+    ready_flag = payload.get("single_sha_evidence_index_ready") if isinstance(payload, dict) else None
+    selected_sha_matches = not selected_sha or not current_head_sha or selected_sha == current_head_sha
+    index_head_matches = not index_head or not current_head_sha or index_head == current_head_sha
+    ready = (
+        status in {"single_sha_evidence_index_ready", "passed"}
+        and ready_flag is not False
+        and missing_count in {None, 0}
+        and selected_sha_matches
+        and index_head_matches
+    )
+    return ready, {
+        "status": status,
+        "single_sha_evidence_index_ready": ready_flag,
+        "selected_sha": selected_sha,
+        "current_head_sha": current_head_sha,
+        "index_current_head_sha": index_head,
+        "missing_or_mismatched": missing if isinstance(missing, list) else None,
+        "selected_sha_matches_current_head": selected_sha_matches,
+        "index_head_matches_current_head": index_head_matches,
+    }
+
+
 def _next_actions(missing_or_blocked: Sequence[str]) -> list[str]:
     if not missing_or_blocked:
         return [
@@ -330,6 +380,9 @@ def build_ga_final_gate_report(
     evidence_pairs = [_evidence_summary(spec) for spec in required_specs]
     required_evidence = [pair[0] for pair in evidence_pairs]
     required_payloads = [pair[1] for pair in evidence_pairs]
+    required_payload_by_name = {
+        spec.name: payload for spec, (_summary, payload) in zip(required_specs, evidence_pairs, strict=False)
+    }
 
     branch = branch or _git_value(["rev-parse", "--abbrev-ref", "HEAD"])
     current_head_sha = current_head_sha or _git_value(["rev-parse", "HEAD"])
@@ -343,6 +396,17 @@ def build_ga_final_gate_report(
     remote_head = _release_sha(remote_payload)
 
     missing_or_blocked = [evidence.name for evidence in required_evidence if not evidence.ready]
+    claim_scan_ready, claim_scan_details = _claim_scan_gate(required_payload_by_name.get("claim_safe_docs"))
+    single_sha_index_ready, single_sha_index_details = _single_sha_index_gate(
+        required_payload_by_name.get("single_sha_evidence_index"),
+        current_head_sha=current_head_sha,
+    )
+    for name, ready in (
+        ("claim_safe_docs", claim_scan_ready),
+        ("single_sha_evidence_index", single_sha_index_ready),
+    ):
+        if not ready and name not in missing_or_blocked:
+            missing_or_blocked.append(name)
     ready_evidence_shas = {
         evidence.name: evidence.release_sha for evidence in required_evidence if evidence.ready
     }
@@ -351,7 +415,7 @@ def build_ga_final_gate_report(
         for evidence in required_evidence
         if evidence.ready and evidence.release_sha
     )
-    all_required_ready = all(evidence.ready for evidence in required_evidence)
+    all_required_ready = all(evidence.ready for evidence in required_evidence) and claim_scan_ready and single_sha_index_ready
     current_head_remote_bound = bool(current_head_sha) and remote_branch_sha == current_head_sha
     stage4_current_bound = bool(current_head_sha) and stage4_head == current_head_sha
     remote_gate_current_bound = bool(current_head_sha) and remote_head == current_head_sha
@@ -393,6 +457,18 @@ def build_ga_final_gate_report(
             stage4_current_bound,
             {"current_head_sha": current_head_sha, "stage4_head": stage4_head},
             "Stage 4 package is not bound to current head.",
+        ),
+        _check(
+            "claim_safe_docs_gate_ready",
+            claim_scan_ready,
+            claim_scan_details,
+            "Claim-safe docs gate is missing, blocked, or has unallowlisted violations.",
+        ),
+        _check(
+            "single_sha_evidence_index_gate_ready",
+            single_sha_index_ready,
+            single_sha_index_details,
+            "Single-SHA evidence index is missing, blocked, mismatched, or incomplete.",
         ),
         _check(
             "all_required_ga_evidence_ready",

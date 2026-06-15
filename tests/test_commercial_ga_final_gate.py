@@ -135,6 +135,71 @@ def test_ga_final_gate_blocks_missing_required_evidence(tmp_path: Path) -> None:
     assert evidence_check.status == "failed"
 
 
+def test_ga_final_gate_blocks_claim_safe_docs_violations(tmp_path: Path) -> None:
+    _write_stage4_and_remote(tmp_path)
+    _write_all_ga_evidence(tmp_path)
+    _write_json(
+        tmp_path / "claims.json",
+        {
+            "status": "claim_safe_docs_blocked",
+            "current_head_sha": HEAD,
+            "claim_safe_docs_ready": False,
+            "violations": [{"file": "DEPLOYMENT.md", "line": 10, "phrase": "production-ready"}],
+            "blocked_phrase_count": 1,
+        },
+    )
+
+    report = build_ga_final_gate_report(
+        report_dir=tmp_path,
+        stage4_package_path=tmp_path / "stage4.json",
+        remote_pr_report_path=tmp_path / "remote.json",
+        required_specs=_specs(tmp_path),
+        branch="feat/commercial-delivery-v1",
+        current_head_sha=HEAD,
+        remote_branch_sha=HEAD,
+        git_status_lines=[],
+    )
+
+    assert report.status == "commercial_ga_blocked"
+    assert "claim_safe_docs" in report.missing_or_blocked_evidence
+    claim_check = next(check for check in report.checks if check.name == "claim_safe_docs_gate_ready")
+    assert claim_check.status == "failed"
+    assert claim_check.details["violation_count"] == 1
+
+
+def test_ga_final_gate_blocks_single_sha_index_blocked(tmp_path: Path) -> None:
+    _write_stage4_and_remote(tmp_path)
+    _write_all_ga_evidence(tmp_path)
+    _write_json(
+        tmp_path / "index.json",
+        {
+            "status": "single_sha_evidence_index_blocked",
+            "release_sha": HEAD,
+            "selected_sha": HEAD,
+            "current_head_sha": HEAD,
+            "single_sha_evidence_index_ready": False,
+            "missing_or_mismatched": ["real_staging_rehearsal"],
+        },
+    )
+
+    report = build_ga_final_gate_report(
+        report_dir=tmp_path,
+        stage4_package_path=tmp_path / "stage4.json",
+        remote_pr_report_path=tmp_path / "remote.json",
+        required_specs=_specs(tmp_path),
+        branch="feat/commercial-delivery-v1",
+        current_head_sha=HEAD,
+        remote_branch_sha=HEAD,
+        git_status_lines=[],
+    )
+
+    assert report.status == "commercial_ga_blocked"
+    assert "single_sha_evidence_index" in report.missing_or_blocked_evidence
+    index_check = next(check for check in report.checks if check.name == "single_sha_evidence_index_gate_ready")
+    assert index_check.status == "failed"
+    assert index_check.details["missing_or_mismatched"] == ["real_staging_rehearsal"]
+
+
 def test_ga_final_gate_blocks_ready_evidence_for_wrong_sha(tmp_path: Path) -> None:
     _write_stage4_and_remote(tmp_path)
     _write_all_ga_evidence(tmp_path, release_sha="62f567982fc33b6f8d72c4f3a8d8e192698d0c92")
