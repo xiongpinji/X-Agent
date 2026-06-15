@@ -5,7 +5,9 @@ import base64
 from pathlib import Path
 
 import scripts.rc_secrets_gate as gate
+from scripts.generate_secrets import generate_all_secrets
 from scripts.rc_secrets_gate import (
+    check_required_fields,
     check_artifact_secret_scan,
     check_prohibited_secret_artifacts,
     check_release_audit_secret_scan,
@@ -311,6 +313,23 @@ def test_secret_strength_rejects_weak_shapes() -> None:
 
     assert check.status == "failed"
     assert len(check.details["failures"]) == 7
+
+
+def test_default_generated_secrets_match_commercial_rc_contract() -> None:
+    generated = generate_all_secrets()
+
+    required = set(gate.REQUIRED_FIELDS)
+    assert set(generated) == required
+    assert check_required_fields(generated).status == "passed"
+    assert check_secret_strength(generated).status == "passed"
+
+
+def test_optional_generated_secrets_are_explicitly_opted_in() -> None:
+    generated = generate_all_secrets(include_optional=True)
+
+    assert gate.REQUIRED_FIELDS <= set(generated)
+    assert {"DB_PASSWORD", "REDIS_PASSWORD", "QDRANT_API_KEY"} <= set(generated)
+    assert check_secret_strength(generated).status == "passed"
 
 
 def test_uniqueness_rejects_duplicate_generated_values() -> None:

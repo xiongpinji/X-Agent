@@ -9,13 +9,13 @@ blank required keys are filled.
 from __future__ import annotations
 
 import argparse
+import base64
 import json
 import os
 import re
 import secrets
 import string
 import sys
-import uuid
 from pathlib import Path
 
 REQUIRED_SECRET_KEYS = (
@@ -68,8 +68,8 @@ def generate_jwt_secret(length: int = 32) -> str:
 
 
 def generate_encryption_key(length: int = 32) -> str:
-    """Generate an encryption key matching the installer contract."""
-    return _upper_digit_secret(length)
+    """Generate a base64-encoded encryption key."""
+    return base64.b64encode(secrets.token_bytes(length)).decode()
 
 
 def generate_hmac_secret(length: int = 32) -> str:
@@ -91,28 +91,37 @@ def generate_password(length: int = 32) -> str:
 
 
 def generate_api_key() -> str:
-    """Generate a bootstrap API key as a random UUID string."""
-    return str(uuid.uuid4())
+    """Generate a bootstrap API key with the commercial RC prefix."""
+    return f"xagent-{secrets.token_urlsafe(32)}"
 
 
-def generate_all_secrets() -> dict[str, str]:
+def generate_all_secrets(*, include_optional: bool = False) -> dict[str, str]:
     """Generate all installer-supported secrets.
+
+    Args:
+        include_optional: Include optional backing-service credentials.
 
     Returns:
         Dictionary keyed by unprefixed secret names.
     """
-    return {
-        "JWT_SECRET": generate_jwt_secret(),
+    generated = {
+        "JWT_SECRET": generate_jwt_secret(64),
         "ENCRYPTION_KEY": generate_encryption_key(),
         "AUDIT_HMAC_SECRET": generate_hmac_secret(),
         "BOOTSTRAP_API_KEY": generate_api_key(),
         "S3_ACCESS_KEY": generate_password(24),
         "S3_SECRET_KEY": generate_password(48),
         "NEO4J_PASSWORD": generate_password(32),
-        "DB_PASSWORD": generate_password(32),
-        "REDIS_PASSWORD": generate_password(32),
-        "QDRANT_API_KEY": generate_password(32),
     }
+    if include_optional:
+        generated.update(
+            {
+                "DB_PASSWORD": generate_password(32),
+                "REDIS_PASSWORD": generate_password(32),
+                "QDRANT_API_KEY": generate_password(32),
+            }
+        )
+    return generated
 
 
 def _env_key(name: str) -> str:
@@ -249,14 +258,19 @@ def _validate_generated_shapes(secrets_dict: dict[str, str]) -> None:
     audit = secrets_dict["AUDIT_HMAC_SECRET"]
     bootstrap = secrets_dict["BOOTSTRAP_API_KEY"]
 
-    upper_digit = re.compile(r"^[A-Z0-9]{32}$")
+    upper_digit = re.compile(r"^[A-Z0-9]{64,}$")
     if not upper_digit.match(jwt):
-        raise ValueError("JWT_SECRET must be 32 uppercase letters/digits")
-    if not upper_digit.match(encryption):
-        raise ValueError("ENCRYPTION_KEY must be 32 uppercase letters/digits")
+        raise ValueError("JWT_SECRET must be at least 64 uppercase letters/digits")
+    try:
+        encryption_bytes = base64.b64decode(encryption, validate=True)
+    except Exception as exc:
+        raise ValueError("ENCRYPTION_KEY must be base64 for exactly 32 bytes") from exc
+    if len(encryption_bytes) != 32:
+        raise ValueError("ENCRYPTION_KEY must be base64 for exactly 32 bytes")
     if not re.fullmatch(r"[0-9a-f]{64}", audit):
         raise ValueError("AUDIT_HMAC_SECRET must be 64 lowercase hex characters")
-    uuid.UUID(bootstrap)
+    if not bootstrap.startswith("xagent-") or len(bootstrap) < 48:
+        raise ValueError("BOOTSTRAP_API_KEY must use the xagent- prefix and be at least 48 characters")
 
 
 def main() -> None:
@@ -286,6 +300,11 @@ Examples:
         help="Only emit or merge JWT, encryption, audit HMAC, and bootstrap API key",
     )
     parser.add_argument(
+        "--include-optional",
+        action="store_true",
+        help="Also emit optional DB, Redis, and Qdrant credentials",
+    )
+    parser.add_argument(
         "--check",
         action="store_true",
         help="Validate generated secret shapes and exit",
@@ -293,7 +312,7 @@ Examples:
 
     args = parser.parse_args()
 
-    secrets_dict = generate_all_secrets()
+    secrets_dict = generate_all_secrets(include_optional=args.include_optional)
     if args.required_only:
         secrets_dict = {key: secrets_dict[key] for key in REQUIRED_SECRET_KEYS}
 
