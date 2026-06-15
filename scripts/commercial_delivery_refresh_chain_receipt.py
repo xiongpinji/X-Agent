@@ -2847,6 +2847,19 @@ def _is_complete_post_commit_closure_payload(report_payload: dict[str, Any]) -> 
     stage_path_digest = _read_summary_value(report_payload, "stage_path_digest")
     stage_command_digest = _read_summary_value(report_payload, "stage_command_digest")
     expected_stage_path_set_digest = _read_summary_value(report_payload, "expected_stage_path_set_digest")
+    command_counts_accounted_for = (
+        owner_stage_command_count > 0
+        and owner_stage_command_count <= stage_include_count
+        and owner_stage_execution_stage_command_count == owner_stage_command_count
+        and rollback_reset_command_count == owner_stage_command_count
+    )
+    noop_command_counts_accounted_for = (
+        owner_stage_command_count == 0
+        and owner_stage_execution_stage_command_count == 0
+        and rollback_reset_command_count == 0
+        and _read_summary_value(report_payload, "post_commit_noop_accounted_for") is True
+        and _read_summary_value(report_payload, "delivery_noop_stage_counts_accounted_for") is True
+    )
     return (
         _status(report_payload) == "commercial_delivery_complete"
         and report_payload.get("delivery_complete") is True
@@ -2879,10 +2892,7 @@ def _is_complete_post_commit_closure_payload(report_payload: dict[str, Any]) -> 
         and _read_summary_value(report_payload, "owner_post_approval_operator_checklist_waiting_for_owner") is False
         and _read_summary_value(report_payload, "owner_post_approval_operator_checklist_operator_ready") is True
         and stage_include_count > 0
-        and owner_stage_command_count > 0
-        and owner_stage_command_count <= stage_include_count
-        and owner_stage_execution_stage_command_count == owner_stage_command_count
-        and rollback_reset_command_count == owner_stage_command_count
+        and (command_counts_accounted_for or noop_command_counts_accounted_for)
         and isinstance(stage_path_digest, str)
         and len(stage_path_digest) == 64
         and isinstance(stage_command_digest, str)
@@ -2901,10 +2911,12 @@ def _is_complete_closure_superseded_post_commit_step(
     closure_payload: dict[str, Any],
 ) -> bool:
     expected_blocked_statuses = {
+        "owner_delivery_packet_before_owner_approval": "owner_delivery_packet_blocked",
         "owner_pre_stage_readiness_gate": "owner_pre_stage_readiness_blocked",
         "owner_staging_runbook": "owner_staging_runbook_blocked",
         "owner_stage_approval_request": "owner_stage_approval_request_blocked",
         "owner_stage_approval_brief": "owner_stage_approval_brief_blocked",
+        "owner_approval_payload_audit": "owner_approval_payload_blocked",
         "owner_approval_handoff": "owner_approval_handoff_blocked",
         "pre_approval_drift_guard": "pre_approval_drift_guard_blocked",
     }
@@ -2920,10 +2932,12 @@ def _is_complete_closure_superseded_post_commit_step(
 
 def _complete_closure_superseded_step_names() -> set[str]:
     return {
+        "owner_delivery_packet_before_owner_approval",
         "owner_pre_stage_readiness_gate",
         "owner_staging_runbook",
         "owner_stage_approval_request",
         "owner_stage_approval_brief",
+        "owner_approval_payload_audit",
         "owner_approval_handoff",
         "pre_approval_drift_guard",
     }

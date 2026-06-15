@@ -871,6 +871,69 @@ def test_owner_delivery_packet_accepts_pre_approval_payload_audit_bootstrap(
     assert audit_check.details["approval_payload_audit_blocked_by_delivery_bootstrap"] is True
 
 
+def test_owner_delivery_packet_accepts_matched_payload_waiting_on_delivery_bootstrap(
+    tmp_path: Path,
+) -> None:
+    paths = _write_reports(tmp_path)
+    task_board = json.loads(paths["task_board_path"].read_text(encoding="utf-8"))
+    task_board["status"] = "commercial_delivery_blocked"
+    task_board["summary"].update(
+        {
+            "owner_stage_command_count": 2,
+            "owner_staging_preflight_accounted_for": True,
+            "secondary_pending_blocks_owner_staging": False,
+        }
+    )
+    task_board["checks"] = [
+        {"name": "pre_approval_drift_guard_ready", "status": "failed"},
+    ]
+    paths["task_board_path"].write_text(json.dumps(task_board), encoding="utf-8")
+    approval_request = json.loads(paths["owner_stage_approval_request_path"].read_text(encoding="utf-8"))
+    approval_request["status"] = "owner_stage_approval_request_blocked"
+    approval_request["checks"] = [
+        {"name": "owner_delivery_packet_ready", "status": "failed"},
+        {"name": "owner_delivery_packet_requires_approval", "status": "failed"},
+    ]
+    approval_request["summary"].update(
+        {
+            "eligible_stage_count": 2,
+            "stage_path_digest": _digest_values(
+                ["backend/app/core/storage.py", "tests/test_storage.py"]
+            ),
+            "stage_command_digest": _digest_values(
+                [
+                    "git add -- 'backend/app/core/storage.py'",
+                    "git add -- 'tests/test_storage.py'",
+                ]
+            ),
+            "expected_stage_path_set_digest": _path_set_digest(
+                ["backend/app/core/storage.py", "tests/test_storage.py"]
+            ),
+        }
+    )
+    paths["owner_stage_approval_request_path"].write_text(
+        json.dumps(approval_request),
+        encoding="utf-8",
+    )
+    audit = json.loads(paths["owner_approval_payload_audit_path"].read_text(encoding="utf-8"))
+    audit["status"] = "owner_approval_payload_blocked"
+    audit["approval_payload_valid"] = True
+    audit["ready_for_approval_gate"] = False
+    audit["checks"] = [
+        {"name": "owner_delivery_packet_ready", "status": "failed"},
+        {"name": "approval_counts_match_request_and_delivery_packet", "status": "passed"},
+        {"name": "approval_digests_match_request_and_delivery_packet", "status": "passed"},
+    ]
+    paths["owner_approval_payload_audit_path"].write_text(json.dumps(audit), encoding="utf-8")
+
+    packet = build_owner_delivery_packet(**paths)
+
+    assert packet.status == "owner_delivery_packet_ready"
+    assert packet.stage_ready is True
+    audit_check = next(check for check in packet.checks if check.name == "owner_approval_payload_audit_accounted_for")
+    assert audit_check.status == "passed"
+
+
 def test_owner_delivery_packet_accepts_post_stage_commit_bootstrap(
     tmp_path: Path,
 ) -> None:

@@ -289,11 +289,29 @@ def build_owner_approval_resume_packet(
     task_summary = _summary(task_board)
     empty_digest = _digest_values([])
     delivery_post_commit_noop_accounted_for = delivery_summary.get("post_commit_noop_accounted_for") is True
+    commit_gate_noop_accounted_for = (
+        _status(commit_gate) == "owner_post_stage_commit_gate_blocked"
+        and _summary(commit_gate).get("post_commit_noop_accounted_for") is True
+    )
+    commit_packet_noop_accounted_for = (
+        _status(commit_packet) == "owner_commit_packet_blocked"
+        and _summary(commit_packet).get("post_commit_noop_accounted_for") is True
+    )
     task_board_post_commit_accounted_for = (
         delivery_post_commit_noop_accounted_for
         and _status(task_board) == "commercial_delivery_blocked"
-        and task_summary.get("owner_commit_packet_status") == "owner_commit_packet_ready"
-        and task_summary.get("owner_post_stage_commit_gate_status") == "owner_post_stage_commit_gate_ready"
+        and (
+            (
+                task_summary.get("owner_commit_packet_status") == "owner_commit_packet_ready"
+                and task_summary.get("owner_post_stage_commit_gate_status") == "owner_post_stage_commit_gate_ready"
+            )
+            or (
+                task_summary.get("owner_commit_packet_status") == "owner_commit_packet_blocked"
+                and task_summary.get("owner_post_stage_commit_gate_status") == "owner_post_stage_commit_gate_blocked"
+                and commit_gate_noop_accounted_for
+                and commit_packet_noop_accounted_for
+            )
+        )
     )
     task_board_failed_checks = _failed_report_check_names(task_board)
     task_board_post_staging_accounted_for = (

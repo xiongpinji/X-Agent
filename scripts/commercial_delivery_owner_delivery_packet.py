@@ -615,6 +615,20 @@ def build_owner_delivery_packet(
             or approval_payload_audit_has_historical_digest_delta
         )
     )
+    approval_payload_audit_matched_delivery_bootstrap = (
+        _status(approval_payload_audit) == "owner_approval_payload_blocked"
+        and approval_payload_audit.get("approval_payload_present") is True
+        and approval_payload_audit.get("ready_for_approval_gate") is False
+        and approval_payload_audit.get("mutation_performed") is not True
+        and approval_payload_audit.get("git_stage_performed") is not True
+        and approval_payload_audit.get("git_commit_performed") is not True
+        and approval_payload_audit.get("git_push_performed") is not True
+        and approval_payload_audit.get("network_mutation_performed") is not True
+        and approval_payload_audit.get("agent_execution_enabled") is not True
+        and approval_payload_audit.get("full_codex_parity_claimed") is not True
+        and approval_payload_audit_failed_checks == {"owner_delivery_packet_ready"}
+        and approval_payload_audit_has_matched_payload
+    )
     approval_payload_audit_blocked_by_post_stage_commit = (
         commit_ready
         and _status(approval_payload_audit) == "owner_approval_payload_blocked"
@@ -685,6 +699,7 @@ def build_owner_delivery_packet(
         or approval_payload_audit_post_commit_noop_accounted_for
         or approval_payload_audit_has_current_ready_historical_payload_delta
         or approval_payload_audit_has_delivery_bootstrap_historical_payload_delta
+        or approval_payload_audit_matched_delivery_bootstrap
     )
     approval_gate_summary = _summary(approval_gate)
     stage_execution_summary = _summary(stage_execution_plan)
@@ -817,13 +832,24 @@ def build_owner_delivery_packet(
     pre_approval_bootstrap_accounted_for = (
         refresh_receipt_ok
         and approval_request_blocked_by_delivery_bootstrap
-        and approval_payload_audit_blocked_by_delivery_bootstrap
+        and (
+            approval_payload_audit_blocked_by_delivery_bootstrap
+            or approval_payload_audit_matched_delivery_bootstrap
+        )
         and stage_approval_expected_blocked
         and stage_execution_expected_blocked
         and rollback_plan_ready
         and _status(manifest) == "original_kernel_delivery_manifest_ready"
         and _status(staging_packet) == "owner_staging_packet_ready"
-        and _status(task_board) == "commercial_delivery_ready_for_owner_staging_review"
+        and (
+            _status(task_board) == "commercial_delivery_ready_for_owner_staging_review"
+            or (
+                _status(task_board) == "commercial_delivery_blocked"
+                and task_summary.get("secondary_pending_blocks_owner_staging") is False
+                and task_summary.get("owner_staging_preflight_accounted_for") is True
+                and _int_or_none(task_summary.get("owner_stage_command_count")) == owner_stage_command_count
+            )
+        )
         and _status(control_modes_preservation) == "control_modes_preservation_ready"
     )
     stage_ready = strict_stage_ready or post_stage_chain_accounted_for or pre_approval_bootstrap_accounted_for
