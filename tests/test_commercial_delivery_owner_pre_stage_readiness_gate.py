@@ -575,6 +575,7 @@ def test_owner_pre_stage_readiness_gate_accepts_self_bootstrap_refresh_receipt(t
 def test_owner_pre_stage_readiness_gate_accepts_downstream_self_bootstrap_refresh_receipt(tmp_path: Path) -> None:
     paths = _write_reports(tmp_path)
     allowed_steps = [
+        "owner_decision_brief",
         "owner_staging_runbook",
         "owner_delivery_packet_before_owner_approval",
         "owner_delivery_packet",
@@ -598,6 +599,29 @@ def test_owner_pre_stage_readiness_gate_accepts_downstream_self_bootstrap_refres
         check = next(check for check in gate.checks if check.name == "refresh_chain_receipt_ready")
         assert check.status == "passed"
         assert check.details["failed_steps"] == [step_name]
+
+
+def test_owner_pre_stage_readiness_gate_accepts_multiple_self_bootstrap_refresh_steps(
+    tmp_path: Path,
+) -> None:
+    paths = _write_reports(tmp_path)
+    payload = json.loads(paths["refresh_receipt_path"].read_text(encoding="utf-8"))
+    failed_steps = [
+        "owner_decision_brief",
+        "owner_pre_stage_readiness_gate",
+        "owner_staging_runbook",
+    ]
+    payload["status"] = "commercial_delivery_refresh_chain_receipt_blocked"
+    payload["summary"]["failed_step_count"] = len(failed_steps)
+    payload["steps"] = [{"name": name, "status": "failed"} for name in failed_steps]
+    paths["refresh_receipt_path"].write_text(json.dumps(payload), encoding="utf-8")
+
+    gate = build_owner_pre_stage_readiness_gate(**paths)
+
+    assert gate.status == "owner_pre_stage_readiness_ready"
+    check = next(check for check in gate.checks if check.name == "refresh_chain_receipt_ready")
+    assert check.status == "passed"
+    assert check.details["failed_steps"] == failed_steps
 
 
 def test_owner_pre_stage_readiness_gate_blocks_nonempty_index(tmp_path: Path) -> None:

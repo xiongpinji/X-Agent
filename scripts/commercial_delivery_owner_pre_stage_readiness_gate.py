@@ -172,6 +172,7 @@ def _refresh_step_accounted_for(refresh_receipt: dict[str, Any], step_name: str)
 
 REFRESH_RECEIPT_SELF_BOOTSTRAP_STEPS = {
     "owner_pre_stage_readiness_gate",
+    "owner_decision_brief",
     "owner_staging_runbook",
     "owner_delivery_packet_before_owner_approval",
     "owner_delivery_packet",
@@ -191,11 +192,12 @@ def _refresh_receipt_ready_or_bootstrap(refresh_receipt: dict[str, Any]) -> bool
     ):
         return True
     failed_steps = _failed_step_names(refresh_receipt)
+    failed_step_count = int(refresh_summary.get("failed_step_count") or 0)
     return (
         _status(refresh_receipt) == "commercial_delivery_refresh_chain_receipt_blocked"
-        and int(refresh_summary.get("failed_step_count") or 0) == 1
-        and len(failed_steps) == 1
-        and failed_steps[0] in REFRESH_RECEIPT_SELF_BOOTSTRAP_STEPS
+        and failed_step_count > 0
+        and len(failed_steps) == failed_step_count
+        and set(failed_steps).issubset(REFRESH_RECEIPT_SELF_BOOTSTRAP_STEPS)
     )
 
 

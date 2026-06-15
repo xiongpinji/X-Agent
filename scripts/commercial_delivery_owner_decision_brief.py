@@ -232,10 +232,23 @@ def build_owner_decision_brief(
         owner_approval_resume_packet.get("real_owner_approval_present") is True
         or _status(owner_approval_resume_packet) == "owner_approval_resume_packet_waiting_for_owner"
     )
-    owner_boundary_ready_for_brief = owner_boundary_accounted_for or owner_boundary_post_staging_accounted_for
+    owner_boundary_noop_accounted_for = (
+        post_commit_noop_accounted_for
+        and _status(owner_approval_handoff) == "owner_approval_handoff_ready"
+        and _status(owner_approval_resume_packet)
+        in {"owner_approval_resume_packet_waiting_for_owner", "owner_approval_resume_packet_ready"}
+        and _status(operator_checklist)
+        in {"owner_post_approval_operator_checklist_waiting_for_owner", "owner_post_approval_operator_checklist_ready"}
+    )
+    owner_boundary_ready_for_brief = (
+        owner_boundary_accounted_for
+        or owner_boundary_post_staging_accounted_for
+        or owner_boundary_noop_accounted_for
+    )
     pre_stage_readiness_ready_for_brief = (
         _status(owner_pre_stage_readiness_gate) == "owner_pre_stage_readiness_ready"
         or post_staging_ready
+        or post_commit_noop_accounted_for
     )
     stage_commands_match_manifest = (
         stage_include_count == owner_stage_command_count
@@ -315,6 +328,7 @@ def build_owner_decision_brief(
                 "owner_pre_stage_readiness_gate_status": _status(owner_pre_stage_readiness_gate),
                 "post_staging_ready": post_staging_ready,
                 "owner_boundary_post_staging_accounted_for": owner_boundary_post_staging_accounted_for,
+                "owner_boundary_noop_accounted_for": owner_boundary_noop_accounted_for,
                 "owner_approval_resume_packet_status": _status(owner_approval_resume_packet),
                 "owner_approval_resume_packet_waiting_for_owner": owner_approval_resume_packet.get(
                     "waiting_for_owner"
@@ -414,6 +428,7 @@ def build_owner_decision_brief(
             "post_staging_ready": post_staging_ready,
             "post_commit_noop_accounted_for": post_commit_noop_accounted_for,
             "owner_boundary_post_staging_accounted_for": owner_boundary_post_staging_accounted_for,
+            "owner_boundary_noop_accounted_for": owner_boundary_noop_accounted_for,
             "stage_commands_subset_accounted_for": stage_commands_subset_accounted_for,
             "staging_review_eligible_count": staging_review_eligible_count,
             "secondary_pending_count": task_summary.get("secondary_pending_count"),
