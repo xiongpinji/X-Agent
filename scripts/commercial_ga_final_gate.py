@@ -147,6 +147,13 @@ def default_required_evidence(report_dir: Path = REPORT_DIR) -> list[RequiredEvi
             "claim_guardrail",
             "Full Codex parity is either proven by runtime/API/UI evidence or explicitly excluded.",
         ),
+        RequiredEvidenceSpec(
+            "artifacts_release",
+            report_dir / "stage5-artifacts-release-gate-20260615.json",
+            ("artifacts_release_ready", "passed"),
+            "ga_hard_blocker",
+            "Source bundle, image digests, SBOM, Helm package, checksums, and release receipt evidence.",
+        ),
     ]
 
 
