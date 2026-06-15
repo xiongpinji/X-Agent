@@ -1411,6 +1411,135 @@ def test_closure_snapshot_completes_post_commit_noop_with_zero_stage_commands(tm
     assert count_check.details["owner_stage_command_count"] == 0
 
 
+def test_closure_snapshot_accepts_current_noop_counts_when_delivery_summary_has_stale_counts(
+    tmp_path: Path,
+) -> None:
+    paths = _write_inputs(tmp_path, complete=True)
+    empty_digest = _digest_values([])
+    delivery_packet = json.loads(paths["owner_delivery_packet_path"].read_text(encoding="utf-8"))
+    delivery_packet["summary"].update(
+        {
+            "stage_include_count": 100,
+            "owner_stage_command_count": 0,
+            "owner_stage_execution_stage_command_count": 12,
+            "rollback_reset_command_count": 12,
+            "post_stage_chain_accounted_for": True,
+            "post_commit_owner_gate_accounted_for": True,
+            "post_commit_stage_approval_accounted_for": True,
+            "post_commit_stage_execution_accounted_for": True,
+            "post_commit_noop_accounted_for": True,
+            "stage_path_digest": empty_digest,
+            "stage_command_digest": empty_digest,
+            "expected_stage_path_set_digest": empty_digest,
+        }
+    )
+    paths["owner_delivery_packet_path"].write_text(json.dumps(delivery_packet), encoding="utf-8")
+    for key in ("owner_stage_approval_brief_path", "owner_stage_approval_gate_path"):
+        payload = json.loads(paths[key].read_text(encoding="utf-8"))
+        payload["status"] = (
+            "owner_stage_approval_brief_ready"
+            if key == "owner_stage_approval_brief_path"
+            else "owner_stage_approval_blocked"
+        )
+        payload["stage_allowed"] = False
+        payload["summary"].update(
+            {
+                "stage_path_digest": empty_digest,
+                "stage_command_digest": empty_digest,
+                "expected_stage_path_set_digest": empty_digest,
+            }
+        )
+        paths[key].write_text(json.dumps(payload), encoding="utf-8")
+    execution_plan = json.loads(paths["owner_stage_execution_plan_path"].read_text(encoding="utf-8"))
+    execution_plan.update(
+        {
+            "status": "owner_stage_execution_blocked",
+            "stage_allowed": False,
+            "stage_command_count": 0,
+            "stage_path_digest": empty_digest,
+            "stage_command_digest": empty_digest,
+        }
+    )
+    execution_plan["summary"].update(
+        {
+            "stage_path_digest": empty_digest,
+            "stage_command_digest": empty_digest,
+            "expected_stage_path_set_digest": empty_digest,
+        }
+    )
+    paths["owner_stage_execution_plan_path"].write_text(json.dumps(execution_plan), encoding="utf-8")
+    post_staging = json.loads(paths["owner_post_staging_verifier_path"].read_text(encoding="utf-8"))
+    post_staging.update(
+        {
+            "post_commit_noop_accounted_for": True,
+            "expected_stage_path_count": 0,
+            "cached_staged_path_count": 0,
+            "stage_path_digest": empty_digest,
+            "stage_command_digest": empty_digest,
+            "expected_stage_path_set_digest": empty_digest,
+            "cached_staged_path_set_digest": empty_digest,
+        }
+    )
+    post_staging["summary"].update(
+        {
+            "post_commit_noop_accounted_for": True,
+            "expected_stage_path_count": 0,
+            "cached_staged_path_count": 0,
+            "stage_path_digest": empty_digest,
+            "stage_command_digest": empty_digest,
+            "expected_stage_path_set_digest": empty_digest,
+            "cached_staged_path_set_digest": empty_digest,
+        }
+    )
+    paths["owner_post_staging_verifier_path"].write_text(json.dumps(post_staging), encoding="utf-8")
+    for key in ("owner_post_stage_commit_gate_path", "owner_commit_packet_path"):
+        payload = json.loads(paths[key].read_text(encoding="utf-8"))
+        payload.update(
+            {
+                "status": "owner_post_stage_commit_gate_ready"
+                if key == "owner_post_stage_commit_gate_path"
+                else "owner_commit_packet_ready",
+                "commit_allowed": True,
+                "post_commit_noop_accounted_for": True,
+                "stage_path_digest": empty_digest,
+                "stage_command_digest": empty_digest,
+                "expected_stage_path_set_digest": empty_digest,
+                "cached_staged_path_set_digest": empty_digest,
+            }
+        )
+        payload.setdefault("summary", {})
+        payload["summary"].update(
+            {
+                "post_commit_noop_accounted_for": True,
+                "stage_path_digest": empty_digest,
+                "stage_command_digest": empty_digest,
+                "expected_stage_path_set_digest": empty_digest,
+                "cached_staged_path_set_digest": empty_digest,
+            }
+        )
+        paths[key].write_text(json.dumps(payload), encoding="utf-8")
+    rollback = json.loads(paths["owner_staging_rollback_plan_path"].read_text(encoding="utf-8"))
+    rollback.update({"reset_command_count": 0, "rollback_available": False, "rollback_required": False})
+    rollback["summary"] = {"post_commit_noop_accounted_for": True, "stage_path_digest": empty_digest}
+    paths["owner_staging_rollback_plan_path"].write_text(json.dumps(rollback), encoding="utf-8")
+
+    snapshot = build_commercial_delivery_closure_snapshot(**paths)
+
+    assert snapshot.status == "commercial_delivery_complete"
+    assert snapshot.delivery_complete is True
+    assert snapshot.summary["current_post_commit_noop_counts_accounted_for"] is True
+    assert snapshot.summary["delivery_noop_stage_counts_accounted_for"] is True
+    assert snapshot.summary["commit_gate_noop_accounted_for"] is True
+    assert snapshot.summary["commit_packet_noop_accounted_for"] is True
+    count_check = next(check for check in snapshot.checks if check.name == "stage_counts_consistent")
+    assert count_check.status == "passed"
+    assert count_check.details["owner_stage_execution_stage_command_count"] == 12
+    assert count_check.details["rollback_reset_command_count"] == 12
+    assert count_check.details["execution_plan_stage_command_count"] == 0
+    assert count_check.details["rollback_plan_reset_command_count"] == 0
+    assert count_check.details["current_post_commit_noop_counts_accounted_for"] is True
+
+
 def test_closure_snapshot_completes_ready_resume_after_noop_commit_accounting(tmp_path: Path) -> None:
     paths = _write_inputs(tmp_path, complete=True)
     empty_digest = _digest_values([])

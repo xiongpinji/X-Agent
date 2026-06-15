@@ -672,17 +672,63 @@ def build_commercial_delivery_closure_snapshot(
         and _status(commit_packet) == "owner_commit_packet_ready"
         and commit_packet.get("commit_allowed") is True
     )
+    owner_stage_command_count = _int_or_none(delivery_summary.get("owner_stage_command_count"))
+    owner_stage_execution_stage_command_count = _int_or_none(
+        delivery_summary.get("owner_stage_execution_stage_command_count")
+    )
+    rollback_reset_command_count = _int_or_none(delivery_summary.get("rollback_reset_command_count"))
+    stage_include_count = _int_or_none(delivery_summary.get("stage_include_count"))
+    execution_plan_stage_command_count = _int_or_none(execution_plan.get("stage_command_count"))
+    rollback_plan_reset_command_count = _int_or_none(rollback_plan.get("reset_command_count"))
+    post_staging_expected_stage_path_count = _int_or_none(post_staging.get("expected_stage_path_count"))
+    post_staging_cached_staged_path_count = _int_or_none(post_staging.get("cached_staged_path_count"))
+    current_post_commit_noop_counts_accounted_for = (
+        delivery_post_commit_noop_accounted_for
+        and owner_stage_command_count == 0
+        and execution_plan_stage_command_count == 0
+        and rollback_plan_reset_command_count == 0
+        and post_staging_expected_stage_path_count == 0
+        and post_staging_cached_staged_path_count == 0
+        and _status(post_staging) == "owner_post_staging_verification_ready"
+        and _status(commit_gate) == "owner_post_stage_commit_gate_ready"
+        and _status(commit_packet) == "owner_commit_packet_ready"
+        and _digest_field(post_staging, "stage_path_digest") == empty_digest
+        and _digest_field(post_staging, "stage_command_digest") == empty_digest
+        and _digest_field(post_staging, "expected_stage_path_set_digest") == empty_digest
+        and _digest_field(post_staging, "cached_staged_path_set_digest") == empty_digest
+        and _digest_field(commit_gate, "stage_path_digest") == empty_digest
+        and _digest_field(commit_gate, "stage_command_digest") == empty_digest
+        and _digest_field(commit_gate, "expected_stage_path_set_digest") == empty_digest
+        and _digest_field(commit_gate, "cached_staged_path_set_digest") == empty_digest
+        and _digest_field(commit_packet, "stage_path_digest") == empty_digest
+        and _digest_field(commit_packet, "stage_command_digest") == empty_digest
+        and _digest_field(commit_packet, "expected_stage_path_set_digest") == empty_digest
+        and _digest_field(commit_packet, "cached_staged_path_set_digest") == empty_digest
+    )
     delivery_noop_stage_counts_accounted_for = (
         delivery_post_commit_noop_accounted_for
-        and _int_or_none(delivery_summary.get("owner_stage_command_count")) == 0
-        and _int_or_none(delivery_summary.get("owner_stage_execution_stage_command_count")) == 0
-        and _int_or_none(delivery_summary.get("rollback_reset_command_count")) == 0
-        and _int_or_none(delivery_summary.get("stage_include_count")) is not None
+        and stage_include_count is not None
+        and (
+            (
+                owner_stage_command_count == 0
+                and owner_stage_execution_stage_command_count == 0
+                and rollback_reset_command_count == 0
+            )
+            or current_post_commit_noop_counts_accounted_for
+        )
     )
     commit_gate_noop_accounted_for = (
         delivery_noop_stage_counts_accounted_for
-        and _status(commit_gate) == "owner_post_stage_commit_gate_blocked"
-        and commit_gate.get("commit_allowed") is not True
+        and (
+            (
+                _status(commit_gate) == "owner_post_stage_commit_gate_blocked"
+                and commit_gate.get("commit_allowed") is not True
+            )
+            or (
+                _status(commit_gate) == "owner_post_stage_commit_gate_ready"
+                and commit_gate.get("commit_allowed") is True
+            )
+        )
         and _summary_flag(commit_gate, "post_commit_noop_accounted_for")
         and _digest_field(commit_gate, "stage_path_digest") == empty_digest
         and _digest_field(commit_gate, "stage_command_digest") == empty_digest
@@ -691,8 +737,16 @@ def build_commercial_delivery_closure_snapshot(
     )
     commit_packet_noop_accounted_for = (
         delivery_noop_stage_counts_accounted_for
-        and _status(commit_packet) == "owner_commit_packet_blocked"
-        and commit_packet.get("commit_allowed") is not True
+        and (
+            (
+                _status(commit_packet) == "owner_commit_packet_blocked"
+                and commit_packet.get("commit_allowed") is not True
+            )
+            or (
+                _status(commit_packet) == "owner_commit_packet_ready"
+                and commit_packet.get("commit_allowed") is True
+            )
+        )
         and _summary_flag(commit_packet, "post_commit_noop_accounted_for")
         and _digest_field(commit_packet, "stage_path_digest") == empty_digest
         and _digest_field(commit_packet, "stage_command_digest") == empty_digest
@@ -1225,9 +1279,7 @@ def build_commercial_delivery_closure_snapshot(
             or (
                 delivery_post_commit_noop_accounted_for
                 and int(delivery_summary.get("stage_include_count") or 0) > 0
-                and int(delivery_summary.get("owner_stage_command_count", -1))
-                == int(delivery_summary.get("owner_stage_execution_stage_command_count", -2))
-                == int(delivery_summary.get("rollback_reset_command_count", -3))
+                and delivery_noop_stage_counts_accounted_for
             )
             or (
                 post_commit_refresh_accounted_for
@@ -1242,6 +1294,12 @@ def build_commercial_delivery_closure_snapshot(
                 "owner_stage_command_count": delivery_summary.get("owner_stage_command_count"),
                 "owner_stage_execution_stage_command_count": delivery_summary.get("owner_stage_execution_stage_command_count"),
                 "rollback_reset_command_count": delivery_summary.get("rollback_reset_command_count"),
+                "execution_plan_stage_command_count": execution_plan.get("stage_command_count"),
+                "rollback_plan_reset_command_count": rollback_plan.get("reset_command_count"),
+                "current_post_commit_noop_counts_accounted_for": (
+                    current_post_commit_noop_counts_accounted_for
+                ),
+                "delivery_noop_stage_counts_accounted_for": delivery_noop_stage_counts_accounted_for,
                 "current_post_stage_ready_for_digest": current_post_stage_ready_for_digest,
                 "post_commit_noop_accounted_for": delivery_post_commit_noop_accounted_for,
             },
@@ -1355,10 +1413,13 @@ def build_commercial_delivery_closure_snapshot(
             "commit_gate_noop_accounted_for": commit_gate_noop_accounted_for,
             "commit_packet_noop_accounted_for": commit_packet_noop_accounted_for,
             "delivery_noop_stage_counts_accounted_for": delivery_noop_stage_counts_accounted_for,
+            "current_post_commit_noop_counts_accounted_for": current_post_commit_noop_counts_accounted_for,
             "stage_include_count": delivery_summary.get("stage_include_count"),
             "owner_stage_command_count": delivery_summary.get("owner_stage_command_count"),
             "owner_stage_execution_stage_command_count": delivery_summary.get("owner_stage_execution_stage_command_count"),
             "rollback_reset_command_count": delivery_summary.get("rollback_reset_command_count"),
+            "execution_plan_stage_command_count": execution_plan.get("stage_command_count"),
+            "rollback_plan_reset_command_count": rollback_plan.get("reset_command_count"),
             "owner_approval_payload_audit_status": _status(approval_payload_audit),
             "owner_approval_payload_present": approval_payload_audit.get("approval_payload_present"),
             "owner_approval_payload_valid": approval_payload_audit.get("approval_payload_valid"),
