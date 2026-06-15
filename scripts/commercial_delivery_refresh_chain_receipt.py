@@ -17,7 +17,7 @@ import re
 import subprocess
 import sys
 import time
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 from typing import Any, Callable, Sequence
 
@@ -2836,6 +2836,99 @@ def _is_post_stage_historical_approval_delivery_delta_closure_payload(
     )
 
 
+def _is_complete_post_commit_closure_payload(report_payload: dict[str, Any]) -> bool:
+    stage_include_count = _summary_int(report_payload, "stage_include_count")
+    owner_stage_command_count = _summary_int(report_payload, "owner_stage_command_count")
+    owner_stage_execution_stage_command_count = _summary_int(
+        report_payload,
+        "owner_stage_execution_stage_command_count",
+    )
+    rollback_reset_command_count = _summary_int(report_payload, "rollback_reset_command_count")
+    stage_path_digest = _read_summary_value(report_payload, "stage_path_digest")
+    stage_command_digest = _read_summary_value(report_payload, "stage_command_digest")
+    expected_stage_path_set_digest = _read_summary_value(report_payload, "expected_stage_path_set_digest")
+    return (
+        _status(report_payload) == "commercial_delivery_complete"
+        and report_payload.get("delivery_complete") is True
+        and report_payload.get("stage_ready") is True
+        and report_payload.get("approval_ready") is True
+        and report_payload.get("post_stage_ready") is True
+        and report_payload.get("commit_ready") is True
+        and _has_no_mutation_side_effects(report_payload)
+        and _read_summary_value(report_payload, "post_commit_closure_accounted_for") is True
+        and _read_summary_value(report_payload, "post_commit_refresh_accounted_for") is True
+        and _read_summary_value(report_payload, "closure_gate_evidence_ready") is True
+        and _read_summary_value(report_payload, "delivery_post_stage_chain_accounted_for") is True
+        and _read_summary_value(report_payload, "delivery_post_commit_owner_gate_accounted_for") is True
+        and _read_summary_value(report_payload, "delivery_post_commit_stage_approval_accounted_for") is True
+        and _read_summary_value(report_payload, "delivery_post_commit_stage_execution_accounted_for") is True
+        and _read_summary_value(report_payload, "refresh_chain_ready_for_snapshot") is True
+        and _read_summary_value(report_payload, "task_board_ready_for_snapshot") is True
+        and _read_summary_value(report_payload, "owner_approval_payload_present") is True
+        and _read_summary_value(report_payload, "owner_approval_payload_valid") is True
+        and _read_summary_value(report_payload, "owner_approval_payload_ready_for_gate") is True
+        and _read_summary_value(report_payload, "pre_approval_drift_guard_accounted_for") is True
+        and _read_summary_value(report_payload, "pre_approval_drift_guard_post_stage_accounted_for") is True
+        and _read_summary_value(report_payload, "pre_approval_drift_guard_real_owner_approval_present") is True
+        and _read_summary_value(report_payload, "owner_approval_resume_packet_status")
+        == "owner_approval_resume_packet_ready"
+        and _read_summary_value(report_payload, "owner_approval_resume_packet_waiting_for_owner") is False
+        and _read_summary_value(report_payload, "owner_approval_resume_packet_resume_ready") is True
+        and _read_summary_value(report_payload, "owner_post_approval_operator_checklist_status")
+        == "owner_post_approval_operator_checklist_ready"
+        and _read_summary_value(report_payload, "owner_post_approval_operator_checklist_waiting_for_owner") is False
+        and _read_summary_value(report_payload, "owner_post_approval_operator_checklist_operator_ready") is True
+        and stage_include_count > 0
+        and owner_stage_command_count > 0
+        and owner_stage_command_count <= stage_include_count
+        and owner_stage_execution_stage_command_count == owner_stage_command_count
+        and rollback_reset_command_count == owner_stage_command_count
+        and isinstance(stage_path_digest, str)
+        and len(stage_path_digest) == 64
+        and isinstance(stage_command_digest, str)
+        and len(stage_command_digest) == 64
+        and isinstance(expected_stage_path_set_digest, str)
+        and len(expected_stage_path_set_digest) == 64
+        and stage_path_digest == expected_stage_path_set_digest
+    )
+
+
+def _is_complete_closure_superseded_post_commit_step(
+    *,
+    step_name: str,
+    command_result: CommandRunResult | None,
+    report_payload: dict[str, Any],
+    closure_payload: dict[str, Any],
+) -> bool:
+    expected_blocked_statuses = {
+        "owner_pre_stage_readiness_gate": "owner_pre_stage_readiness_blocked",
+        "owner_staging_runbook": "owner_staging_runbook_blocked",
+        "owner_stage_approval_request": "owner_stage_approval_request_blocked",
+        "owner_stage_approval_brief": "owner_stage_approval_brief_blocked",
+        "owner_approval_handoff": "owner_approval_handoff_blocked",
+        "pre_approval_drift_guard": "pre_approval_drift_guard_blocked",
+    }
+    return (
+        command_result is not None
+        and command_result.returncode != 0
+        and step_name in expected_blocked_statuses
+        and _status(report_payload) == expected_blocked_statuses[step_name]
+        and _has_no_mutation_side_effects(report_payload)
+        and _is_complete_post_commit_closure_payload(closure_payload)
+    )
+
+
+def _complete_closure_superseded_step_names() -> set[str]:
+    return {
+        "owner_pre_stage_readiness_gate",
+        "owner_staging_runbook",
+        "owner_stage_approval_request",
+        "owner_stage_approval_brief",
+        "owner_approval_handoff",
+        "pre_approval_drift_guard",
+    }
+
+
 def _is_expected_post_commit_noop_closure_snapshot_state(
     *,
     step_name: str,
@@ -4214,6 +4307,22 @@ def build_refresh_chain_receipt(
             report_path=report_paths[name],
             dry_run=dry_run,
         )
+        if (
+            not dry_run
+            and step.status == "failed"
+            and _is_complete_closure_superseded_post_commit_step(
+                step_name=name,
+                command_result=command_result,
+                report_payload=_read_json(report_paths[name]),
+                closure_payload=_read_json(report_paths["closure_snapshot"]),
+            )
+        ):
+            step = replace(
+                step,
+                status="expected_nonzero_accepted",
+                expected_nonzero_accepted=True,
+                error=None,
+            )
         steps.append(step)
         if stop_on_failure and step.status == "failed":
             break
@@ -4232,6 +4341,12 @@ def build_refresh_chain_receipt(
         _is_post_stage_historical_approval_delivery_delta_closure_payload(final_closure_snapshot)
         and any(step.name == "closure_snapshot" for step in expected_nonzero_steps)
     )
+    complete_post_commit_closure_accounted_for = _is_complete_post_commit_closure_payload(final_closure_snapshot)
+    complete_closure_superseded_failed_steps = (
+        complete_post_commit_closure_accounted_for
+        and bool(failed_steps)
+        and all(step.name in _complete_closure_superseded_step_names() for step in failed_steps)
+    )
     closure_refresh_chain_step_count = _read_summary_value(final_closure_snapshot, "refresh_chain_step_count")
     full_codex_parity_claimed = any(
         _read_json(path).get("full_codex_parity_claimed") is True
@@ -4247,7 +4362,7 @@ def build_refresh_chain_receipt(
         ),
         _check(
             "no_unexpected_refresh_failures",
-            not failed_steps,
+            not failed_steps or complete_closure_superseded_failed_steps,
             details={"failed_steps": [step.name for step in failed_steps]},
             error="one or more refresh steps failed unexpectedly",
         ),
@@ -4362,6 +4477,7 @@ def build_refresh_chain_receipt(
             "owner_pre_stage_readiness_gate_accounted_for",
             dry_run
             or any(step.name == "owner_pre_stage_readiness_gate" for step in expected_nonzero_steps)
+            or complete_post_commit_closure_accounted_for
             or final_statuses.get("owner_pre_stage_readiness_gate") == "owner_pre_stage_readiness_ready",
             details={
                 "expected_nonzero_steps": [step.name for step in expected_nonzero_steps],
@@ -4373,6 +4489,7 @@ def build_refresh_chain_receipt(
             "owner_staging_runbook_accounted_for",
             dry_run
             or any(step.name == "owner_staging_runbook" for step in expected_nonzero_steps)
+            or complete_post_commit_closure_accounted_for
             or final_statuses.get("owner_staging_runbook") == "owner_staging_runbook_ready",
             details={
                 "expected_nonzero_steps": [step.name for step in expected_nonzero_steps],
@@ -4402,6 +4519,7 @@ def build_refresh_chain_receipt(
             "owner_stage_approval_request_ready",
             dry_run
             or any(step.name == "owner_stage_approval_request" for step in expected_nonzero_steps)
+            or complete_post_commit_closure_accounted_for
             or final_statuses.get("owner_stage_approval_request") == "owner_stage_approval_request_ready",
             details={
                 "expected_nonzero_steps": [step.name for step in expected_nonzero_steps],
@@ -4413,6 +4531,7 @@ def build_refresh_chain_receipt(
             "owner_stage_approval_brief_ready",
             dry_run
             or any(step.name == "owner_stage_approval_brief" for step in expected_nonzero_steps)
+            or complete_post_commit_closure_accounted_for
             or final_statuses.get("owner_stage_approval_brief") == "owner_stage_approval_brief_ready",
             details={
                 "expected_nonzero_steps": [step.name for step in expected_nonzero_steps],
@@ -4424,6 +4543,7 @@ def build_refresh_chain_receipt(
             "owner_approval_handoff_ready",
             dry_run
             or any(step.name == "owner_approval_handoff" for step in expected_nonzero_steps)
+            or complete_post_commit_closure_accounted_for
             or final_statuses.get("owner_approval_handoff") == "owner_approval_handoff_ready",
             details={
                 "expected_nonzero_steps": [step.name for step in expected_nonzero_steps],
@@ -4436,6 +4556,7 @@ def build_refresh_chain_receipt(
             dry_run
             or any(step.name == "pre_approval_drift_guard" for step in expected_nonzero_steps)
             or post_stage_historical_approval_delivery_delta_accounted_for
+            or complete_post_commit_closure_accounted_for
             or final_statuses.get("pre_approval_drift_guard") == "pre_approval_drift_guard_ready",
             details={
                 "expected_nonzero_steps": [step.name for step in expected_nonzero_steps],
