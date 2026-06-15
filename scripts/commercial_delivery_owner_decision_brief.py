@@ -234,7 +234,13 @@ def build_owner_decision_brief(
     )
     owner_boundary_noop_accounted_for = (
         post_commit_noop_accounted_for
-        and _status(owner_approval_handoff) == "owner_approval_handoff_ready"
+        and (
+            _status(owner_approval_handoff) == "owner_approval_handoff_ready"
+            or (
+                _status(owner_approval_handoff) == "owner_approval_handoff_blocked"
+                and owner_approval_handoff.get("owner_action_required") is True
+            )
+        )
         and _status(owner_approval_resume_packet)
         in {"owner_approval_resume_packet_waiting_for_owner", "owner_approval_resume_packet_ready"}
         and _status(operator_checklist)

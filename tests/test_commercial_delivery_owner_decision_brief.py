@@ -430,6 +430,70 @@ def test_owner_decision_brief_accounts_for_direct_noop_when_pre_stage_gate_is_bo
     assert boundary_check.details["owner_boundary_noop_accounted_for"] is True
 
 
+def test_owner_decision_brief_accounts_for_post_commit_noop_after_owner_approval(
+    tmp_path: Path,
+) -> None:
+    paths = _write_reports(tmp_path)
+    manifest = json.loads(paths["manifest_path"].read_text(encoding="utf-8"))
+    manifest["stage_include_count"] = 100
+    paths["manifest_path"].write_text(json.dumps(manifest), encoding="utf-8")
+    staging_review = json.loads(paths["staging_review_path"].read_text(encoding="utf-8"))
+    staging_review["eligible_stage_count"] = 0
+    paths["staging_review_path"].write_text(json.dumps(staging_review), encoding="utf-8")
+    owner_packet = json.loads(paths["owner_packet_path"].read_text(encoding="utf-8"))
+    owner_packet["stage_commands"] = []
+    owner_packet["blocked_paths"] = []
+    owner_packet["summary"] = {"post_commit_noop_accounted_for": True}
+    paths["owner_packet_path"].write_text(json.dumps(owner_packet), encoding="utf-8")
+    command_audit = json.loads(paths["owner_command_audit_path"].read_text(encoding="utf-8"))
+    command_audit["command_count"] = 0
+    command_audit["expected_path_count"] = 0
+    command_audit["summary"] = {"post_commit_noop_accounted_for": True}
+    paths["owner_command_audit_path"].write_text(json.dumps(command_audit), encoding="utf-8")
+    pre_stage = json.loads(paths["owner_pre_stage_readiness_gate_path"].read_text(encoding="utf-8"))
+    pre_stage["summary"].update(
+        {
+            "post_commit_noop_accounted_for": False,
+            "post_commit_noop_stage_counts_agree": False,
+        }
+    )
+    paths["owner_pre_stage_readiness_gate_path"].write_text(json.dumps(pre_stage), encoding="utf-8")
+    post_staging = json.loads(paths["owner_post_staging_path"].read_text(encoding="utf-8"))
+    post_staging["status"] = "owner_post_staging_verification_ready"
+    post_staging["cached_staged_path_count"] = 0
+    post_staging["summary"] = {"post_commit_noop_accounted_for": True}
+    paths["owner_post_staging_path"].write_text(json.dumps(post_staging), encoding="utf-8")
+    handoff = json.loads(paths["owner_approval_handoff_path"].read_text(encoding="utf-8"))
+    handoff["status"] = "owner_approval_handoff_blocked"
+    handoff["owner_action_required"] = True
+    handoff["stage_allowed"] = False
+    handoff["summary"] = {
+        "owner_approval_payload_present": True,
+        "owner_approval_payload_valid": False,
+        "owner_stage_execution_plan_post_commit_noop_accounted_for": True,
+    }
+    paths["owner_approval_handoff_path"].write_text(json.dumps(handoff), encoding="utf-8")
+    resume = json.loads(paths["owner_approval_resume_packet_path"].read_text(encoding="utf-8"))
+    resume["status"] = "owner_approval_resume_packet_ready"
+    resume["waiting_for_owner"] = False
+    resume["resume_ready"] = True
+    paths["owner_approval_resume_packet_path"].write_text(json.dumps(resume), encoding="utf-8")
+    operator = json.loads(paths["owner_post_approval_operator_checklist_path"].read_text(encoding="utf-8"))
+    operator["status"] = "owner_post_approval_operator_checklist_ready"
+    operator["waiting_for_owner"] = False
+    operator["operator_ready"] = True
+    paths["owner_post_approval_operator_checklist_path"].write_text(json.dumps(operator), encoding="utf-8")
+
+    brief = build_owner_decision_brief(**paths)
+
+    assert brief.status == "ready_for_owner_staging_decision"
+    assert brief.summary["post_commit_noop_accounted_for"] is True
+    assert brief.summary["owner_boundary_noop_accounted_for"] is True
+    boundary_check = next(check for check in brief.checks if check.name == "owner_approval_boundary_accounted_for")
+    assert boundary_check.status == "passed"
+    assert boundary_check.details["owner_boundary_noop_accounted_for"] is True
+
+
 def test_owner_decision_brief_blocks_unknown_owner_boundary(tmp_path: Path) -> None:
     paths = _write_reports(tmp_path)
     packet = json.loads(paths["owner_approval_resume_packet_path"].read_text(encoding="utf-8"))
