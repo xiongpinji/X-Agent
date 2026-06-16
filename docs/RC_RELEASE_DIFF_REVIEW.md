@@ -124,7 +124,7 @@ git diff --check
 Observed local results:
 
 - RC release gate group: 449 passed after adding the delivery status gate.
-- Release audit: passed, 125 candidate files, no secret-like findings, no
+- Release audit: passed, 129 candidate files, no secret-like findings, no
   manifest unsafe paths, no excluded-area references, no local user/runtime
   path findings, and no file hygiene findings.
 - RC tag consistency gate: requires the selected non-destructive RC tag to
