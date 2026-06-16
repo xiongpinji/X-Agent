@@ -406,8 +406,13 @@ Runtime smoke evidence captured on 2026-06-06:
 - `scripts/rc_staging_plan.py` writes
   `.xagent_runtime/reports/rc-staging-plan.json` with exact `git add -- ...`
   commands split into safe chunks. It does not stage files. The latest dry-run
-  planned 129 files across 7 commands, and `git diff --cached --name-only`
+  planned 131 files across 7 commands, and `git diff --cached --name-only`
   remained empty.
+- `scripts/commercial_stage3_staging_external_evidence_intake.py` converts
+  owner/operator supplied external staging evidence references into the two
+  Stage 3 gate reports for observability and environment protection. It is
+  fail-closed, redacts raw evidence from generated reports, and does not deploy
+  or claim external staging proof by itself.
 
 ## RC-S1 Evidence Notes
 

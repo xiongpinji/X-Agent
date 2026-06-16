@@ -119,6 +119,7 @@ scripts/rc_tag_consistency_gate.py
 scripts/rc_delivery_status.py
 scripts/rc_install_release_gate.py
 scripts/original_kernel_delivery_manifest.py
+scripts/commercial_stage3_staging_external_evidence_intake.py
 scripts/rc_single_user_local_gate.py
 scripts/rc_supply_chain_gate.py
 scripts/rc_secrets_gate.py
@@ -153,6 +154,7 @@ tests/test_rc_tag_consistency_gate.py
 tests/test_rc_delivery_status.py
 tests/test_rc_install_release_gate.py
 tests/test_original_kernel_delivery_manifest.py
+tests/test_commercial_stage3_staging_external_evidence_intake.py
 tests/test_rc_single_user_local_gate.py
 tests/test_rc_supply_chain_gate.py
 tests/test_rc_secrets_gate.py

@@ -124,9 +124,11 @@ git diff --check
 Observed local results:
 
 - RC release gate group: 449 passed after adding the delivery status gate.
-- Release audit: passed, 129 candidate files, no secret-like findings, no
+- Release audit: passed, 131 candidate files, no secret-like findings, no
   manifest unsafe paths, no excluded-area references, no local user/runtime
   path findings, and no file hygiene findings.
+- Stage 3 external staging evidence intake is included as a fail-closed
+  reference validator; it does not claim or perform external staging deploy.
 - RC tag consistency gate: requires the selected non-destructive RC tag to
   resolve locally and remotely to the expected release commit.
 - RC delivery status: owner finalize pending until owner-controlled

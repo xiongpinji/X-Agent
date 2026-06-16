@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any
 
 from scripts.original_kernel_delivery_manifest import (
     DEFAULT_EVIDENCE_REPORTS,
@@ -423,6 +424,35 @@ def test_original_kernel_delivery_manifest_includes_owner_approval_payload_audit
     assert audit_paths.isdisjoint(excluded_paths)
 
 
+def test_original_kernel_delivery_manifest_includes_stage3_external_evidence_intake(tmp_path: Path) -> None:
+    reports_dir = tmp_path / ".xagent_runtime" / "reports"
+    _write_stage_files(tmp_path, DEFAULT_STAGE_FILES)
+    _write_evidence_reports(reports_dir)
+    intake_paths = {
+        "scripts/commercial_stage3_staging_external_evidence_intake.py",
+        "tests/test_commercial_stage3_staging_external_evidence_intake.py",
+    }
+
+    report = build_report(
+        workspace_root=tmp_path,
+        reports_dir=reports_dir,
+        git_status_lines=[f"?? {path}" for path in sorted(intake_paths)],
+    )
+
+    assert report["status"] == "original_kernel_delivery_manifest_ready"
+    assert intake_paths <= set(report["stage_include_paths"])
+
+    files = {item["path"]: item for item in report["files"]}
+    assert files["scripts/commercial_stage3_staging_external_evidence_intake.py"]["category"] == (
+        "commercial_delivery_gate_script"
+    )
+    assert files["tests/test_commercial_stage3_staging_external_evidence_intake.py"]["category"] == (
+        "commercial_delivery_gate_test"
+    )
+    excluded_paths = {item["path"] for item in report["excluded_dirty_paths"]}
+    assert intake_paths.isdisjoint(excluded_paths)
+
+
 def test_original_kernel_delivery_manifest_blocks_missing_required_file(tmp_path: Path) -> None:
     reports_dir = tmp_path / ".xagent_runtime" / "reports"
     _write_stage_files(tmp_path, DEFAULT_STAGE_FILES, omit={"backend/app/core/storage.py"})
@@ -444,7 +474,7 @@ def test_original_kernel_delivery_manifest_blocks_missing_required_file(tmp_path
 
 def test_original_kernel_delivery_manifest_blocks_forbidden_stage_path(tmp_path: Path) -> None:
     reports_dir = tmp_path / ".xagent_runtime" / "reports"
-    stage_files = tuple(DEFAULT_STAGE_FILES) + (FileSpec("frontend/src/App.tsx", "frontend"),)
+    stage_files = (*DEFAULT_STAGE_FILES, FileSpec("frontend/src/App.tsx", "frontend"))
     _write_stage_files(tmp_path, stage_files)
     _write_evidence_reports(reports_dir)
 

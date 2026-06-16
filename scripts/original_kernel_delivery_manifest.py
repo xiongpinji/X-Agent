@@ -14,17 +14,18 @@ import hashlib
 import json
 import subprocess
 import sys
+from collections.abc import Sequence
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from backend.app.core.storage import atomic_write_json
-from scripts.original_kernel_module_integration_summary import EXPECTED_REPORTS
+from backend.app.core.storage import atomic_write_json  # noqa: E402
+from scripts.original_kernel_module_integration_summary import EXPECTED_REPORTS  # noqa: E402
 
 REPORT_DIR = ROOT / ".xagent_runtime" / "reports"
 DEFAULT_OUTPUT = REPORT_DIR / "original-kernel-delivery-manifest.json"
@@ -130,6 +131,7 @@ SCRIPT_FILES: tuple[FileSpec, ...] = (
     FileSpec("scripts/commercial_delivery_owner_commit_packet.py", "commercial_delivery_gate_script"),
     FileSpec("scripts/commercial_delivery_owner_delivery_packet.py", "commercial_delivery_gate_script"),
     FileSpec("scripts/commercial_delivery_staging_review.py", "commercial_delivery_gate_script"),
+    FileSpec("scripts/commercial_stage3_staging_external_evidence_intake.py", "commercial_delivery_gate_script"),
     FileSpec("scripts/commercial_delivery_closure_snapshot.py", "commercial_delivery_gate_script"),
     FileSpec("scripts/commercial_delivery_refresh_chain_receipt.py", "commercial_delivery_gate_script"),
     FileSpec("scripts/commercial_delivery_task_board.py", "commercial_delivery_gate_script"),
@@ -184,6 +186,7 @@ TEST_FILES: tuple[FileSpec, ...] = (
     FileSpec("tests/test_commercial_delivery_owner_commit_packet.py", "commercial_delivery_gate_test"),
     FileSpec("tests/test_commercial_delivery_owner_delivery_packet.py", "commercial_delivery_gate_test"),
     FileSpec("tests/test_commercial_delivery_staging_review.py", "commercial_delivery_gate_test"),
+    FileSpec("tests/test_commercial_stage3_staging_external_evidence_intake.py", "commercial_delivery_gate_test"),
     FileSpec("tests/test_commercial_delivery_closure_snapshot.py", "commercial_delivery_gate_test"),
     FileSpec("tests/test_commercial_delivery_refresh_chain_receipt.py", "commercial_delivery_gate_test"),
     FileSpec("tests/test_commercial_delivery_task_board.py", "commercial_delivery_gate_test"),
@@ -196,14 +199,15 @@ DOC_FILES: tuple[FileSpec, ...] = (
 
 DEFAULT_STAGE_FILES: tuple[FileSpec, ...] = CORE_MODULE_FILES + SCRIPT_FILES + TEST_FILES + DOC_FILES
 
-DEFAULT_EVIDENCE_REPORTS: tuple[EvidenceSpec, ...] = tuple(
-    EvidenceSpec(
-        filename=spec.filename,
-        status=spec.ready_status,
-        evidence_type=spec.evidence_type,
-    )
-    for spec in EXPECTED_REPORTS
-) + (
+DEFAULT_EVIDENCE_REPORTS: tuple[EvidenceSpec, ...] = (
+    *(
+        EvidenceSpec(
+            filename=spec.filename,
+            status=spec.ready_status,
+            evidence_type=spec.evidence_type,
+        )
+        for spec in EXPECTED_REPORTS
+    ),
     EvidenceSpec(
         filename="original-kernel-module-integration-summary.json",
         status="original_kernel_module_integration_summary_ready",
