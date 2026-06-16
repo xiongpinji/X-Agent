@@ -21,7 +21,6 @@ def test_original_kernel_delivery_manifest_ready_with_excluded_dirty_paths(tmp_p
         "?? backend/app/core/storage.py",
         " M frontend/src/App.tsx",
         " M backend/app/api/workbench.py",
-        "?? backend/app/core/workflow_events.py",
         "?? backend/app/core/long_tasks_recovery_audit.py",
         "?? backend/app/core/skill_bundles.py",
         "?? backend/app/core/trace_analysis.py",
@@ -84,7 +83,6 @@ def test_original_kernel_delivery_manifest_ready_with_excluded_dirty_paths(tmp_p
         "?? backend/app/core/codex_permission_sandbox_readiness_packet.py",
         "?? backend/app/core/codex_memory_context_readiness_packet.py",
         "?? backend/app/core/codex_background_task_readiness_packet.py",
-        "?? tests/test_workflow_events.py",
         "?? tests/test_long_tasks_recovery_audit.py",
         "?? tests/test_skill_bundles.py",
         "?? tests/test_trace_analysis.py",
@@ -184,7 +182,6 @@ def test_original_kernel_delivery_manifest_ready_with_excluded_dirty_paths(tmp_p
     excluded = {item["path"]: item for item in report["excluded_dirty_paths"]}
     assert excluded["frontend/src/App.tsx"]["scope"] == "frontend"
     assert excluded["backend/app/api/workbench.py"]["scope"] == "api_router"
-    assert excluded["backend/app/core/workflow_events.py"]["scope"] == "secondary_integration_candidate"
     assert excluded["backend/app/core/long_tasks_recovery_audit.py"]["scope"] == "secondary_integration_candidate"
     assert excluded["backend/app/core/skill_bundles.py"]["scope"] == "secondary_integration_candidate"
     assert excluded["backend/app/core/trace_analysis.py"]["scope"] == "secondary_integration_candidate"
@@ -253,7 +250,6 @@ def test_original_kernel_delivery_manifest_ready_with_excluded_dirty_paths(tmp_p
     assert excluded["backend/app/core/codex_background_task_readiness_packet.py"]["scope"] == (
         "secondary_integration_candidate"
     )
-    assert excluded["tests/test_workflow_events.py"]["scope"] == "secondary_integration_candidate"
     assert excluded["tests/test_long_tasks_recovery_audit.py"]["scope"] == "secondary_integration_candidate"
     assert excluded["tests/test_skill_bundles.py"]["scope"] == "secondary_integration_candidate"
     assert excluded["tests/test_trace_analysis.py"]["scope"] == "secondary_integration_candidate"

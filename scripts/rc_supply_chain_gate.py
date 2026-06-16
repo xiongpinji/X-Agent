@@ -138,6 +138,7 @@ def check_python_manifest(root: Path = ROOT) -> SupplyChainCheck:
         "uvicorn",
         "redis",
         "celery",
+        "pika",
     ):
         if not any(str(item).lower().startswith(package) for item in dependencies):
             missing.append(f"missing runtime dependency {package}")
@@ -200,6 +201,7 @@ def check_python_lockfile(root: Path = ROOT, *, timeout_seconds: float = 120.0) 
         "httpx",
         "langfuse",
         "openai",
+        "pika",
         "playwright",
         "psycopg",
         "psycopg-binary",

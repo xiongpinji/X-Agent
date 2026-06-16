@@ -93,6 +93,7 @@ CORE_MODULE_FILES: tuple[FileSpec, ...] = (
     FileSpec("backend/app/core/long_tasks_helpers.py", "core_module"),
     FileSpec("backend/app/core/shell_job_runner.py", "core_module"),
     FileSpec("backend/app/core/pull_request_delivery.py", "core_module"),
+    FileSpec("backend/app/core/workflow_events.py", "core_module"),
 )
 
 SCRIPT_FILES: tuple[FileSpec, ...] = (
@@ -149,6 +150,7 @@ TEST_FILES: tuple[FileSpec, ...] = (
     FileSpec("tests/test_long_tasks_helpers.py", "test"),
     FileSpec("tests/test_shell_job_runner.py", "test"),
     FileSpec("tests/test_pull_request_delivery.py", "test"),
+    FileSpec("tests/test_workflow_events.py", "test"),
     FileSpec("tests/test_report_hygiene.py", "test"),
     FileSpec("tests/test_normalize_report_count_aliases.py", "test"),
     FileSpec("tests/test_run_pytest_evidence.py", "test"),
@@ -219,8 +221,6 @@ FORBIDDEN_STAGE_EXACT = {
     "backend/app/core/__init__.py",
 }
 SECONDARY_INTEGRATION_CANDIDATES = {
-    "backend/app/core/workflow_events.py",
-    "tests/test_workflow_events.py",
     "backend/app/core/long_tasks_recovery_audit.py",
     "tests/test_long_tasks_recovery_audit.py",
     "backend/app/core/skill_bundles.py",

@@ -77,6 +77,7 @@ backend/app/api/issue_to_pr.py
 backend/app/api/skill_curator.py
 backend/app/core/channels/gateway.py
 backend/app/core/channels/router.py
+backend/app/core/workflow_events.py
 backend/app/core/skill_curator/__init__.py
 backend/app/core/skill_curator/evidence.py
 backend/app/core/skill_curator/models.py
@@ -117,6 +118,7 @@ scripts/rc_owner_verified_finalize.py
 scripts/rc_tag_consistency_gate.py
 scripts/rc_delivery_status.py
 scripts/rc_install_release_gate.py
+scripts/original_kernel_delivery_manifest.py
 scripts/rc_single_user_local_gate.py
 scripts/rc_supply_chain_gate.py
 scripts/rc_secrets_gate.py
@@ -150,6 +152,7 @@ tests/test_rc_owner_verified_finalize.py
 tests/test_rc_tag_consistency_gate.py
 tests/test_rc_delivery_status.py
 tests/test_rc_install_release_gate.py
+tests/test_original_kernel_delivery_manifest.py
 tests/test_rc_single_user_local_gate.py
 tests/test_rc_supply_chain_gate.py
 tests/test_rc_secrets_gate.py
@@ -166,6 +169,7 @@ tests/test_skill_curator_models.py
 tests/test_skill_curator_scoring.py
 tests/test_telegram_channel_api.py
 tests/test_xagent_doctor.py
+tests/test_workflow_events.py
 ```
 
 ## Generated Evidence Not Intended For Git

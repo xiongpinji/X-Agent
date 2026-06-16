@@ -138,6 +138,8 @@ openai==1.100.0
     # via x-agent-core (pyproject.toml)
 packaging==24.0
     # via langfuse
+pika==1.3.2
+    # via x-agent-core (pyproject.toml)
 playwright==1.48.0
     # via x-agent-core (pyproject.toml)
 portalocker==2.10.1
