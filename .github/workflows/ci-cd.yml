@@ -260,6 +260,23 @@ jobs:
         run: |
           aws eks update-kubeconfig --name xagent-staging --region ${{ secrets.AWS_REGION }}
 
+      - name: Apply staging Kubernetes secret
+        run: |
+          kubectl create secret generic xagent-secrets \
+            --namespace staging \
+            --from-literal=database-url="${{ secrets.STAGING_DATABASE_URL }}" \
+            --from-literal=redis-url="${{ secrets.STAGING_REDIS_URL }}" \
+            --from-literal=api-key="${{ secrets.STAGING_API_KEY }}" \
+            --from-literal=jwt-secret="${{ secrets.STAGING_JWT_SECRET }}" \
+            --from-literal=encryption-key="${{ secrets.STAGING_ENCRYPTION_KEY }}" \
+            --from-literal=audit-hmac-secret="${{ secrets.STAGING_AUDIT_HMAC_SECRET }}" \
+            --from-literal=langfuse-public-key="${{ secrets.STAGING_LANGFUSE_PUBLIC_KEY }}" \
+            --from-literal=langfuse-secret-key="${{ secrets.STAGING_LANGFUSE_SECRET_KEY }}" \
+            --from-literal=sentry-dsn="${{ secrets.STAGING_SENTRY_DSN }}" \
+            --from-literal=workflow-event-rabbitmq-url="${{ secrets.STAGING_WORKFLOW_EVENT_RABBITMQ_URL }}" \
+            --dry-run=client \
+            -o yaml | kubectl apply -f -
+
       - name: Deploy with Helm
         run: |
           helm repo add xagent ${{ secrets.HELM_REPO_URL }}
@@ -269,16 +286,8 @@ jobs:
             --values deployment/helm/values-staging.yaml \
             --set image.tag=${{ needs.build.outputs.image-tag }} \
             --set secrets.enabled=true \
-            --set-string secrets.databaseUrl="${{ secrets.STAGING_DATABASE_URL }}" \
-            --set-string secrets.redisUrl="${{ secrets.STAGING_REDIS_URL }}" \
-            --set-string secrets.apiKey="${{ secrets.STAGING_API_KEY }}" \
-            --set-string secrets.jwtSecret="${{ secrets.STAGING_JWT_SECRET }}" \
-            --set-string secrets.encryptionKey="${{ secrets.STAGING_ENCRYPTION_KEY }}" \
-            --set-string secrets.auditHmacSecret="${{ secrets.STAGING_AUDIT_HMAC_SECRET }}" \
-            --set-string secrets.langfusePublicKey="${{ secrets.STAGING_LANGFUSE_PUBLIC_KEY }}" \
-            --set-string secrets.langfuseSecretKey="${{ secrets.STAGING_LANGFUSE_SECRET_KEY }}" \
-            --set-string secrets.sentryDsn="${{ secrets.STAGING_SENTRY_DSN }}" \
-            --set-string secrets.workflowEventRabbitmqUrl="${{ secrets.STAGING_WORKFLOW_EVENT_RABBITMQ_URL }}" \
+            --set secrets.create=false \
+            --set-string secrets.existingSecretName=xagent-secrets \
             --wait \
             --timeout 10m
 

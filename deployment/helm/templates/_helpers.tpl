@@ -58,3 +58,10 @@ Create the name of the service account to use
 {{- default "default" .Values.serviceAccount.name }}
 {{- end }}
 {{- end }}
+
+{{/*
+Secret name used by workload pods.
+*/}}
+{{- define "xagent.secretName" -}}
+{{- default (printf "%s-secrets" (include "xagent.fullname" .)) .Values.secrets.existingSecretName | trunc 63 | trimSuffix "-" }}
+{{- end }}

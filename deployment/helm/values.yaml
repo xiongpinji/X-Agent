@@ -143,9 +143,16 @@ configMap:
 # Secrets (create externally in production)
 secrets:
   enabled: false
+  create: true
+  existingSecretName: ""
+  databaseUrl: ""
+  redisUrl: ""
+  apiKey: ""
   jwtSecret: ""
   encryptionKey: ""
   auditHmacSecret: ""
+  langfusePublicKey: ""
+  langfuseSecretKey: ""
   sentryDsn: ""
   workflowEventRabbitmqUrl: ""
   # In production, use external secret management

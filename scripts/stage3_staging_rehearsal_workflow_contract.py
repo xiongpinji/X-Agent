@@ -116,10 +116,15 @@ REQUIRED_CONTAINS: tuple[Requirement, ...] = (
         description="Real deploy path is guarded and deploys only to staging.",
         tokens=(
             "steps.stage3-preflight.outputs.deploy_allowed == 'true'",
+            "Apply staging Kubernetes secret",
+            "kubectl create secret generic xagent-secrets",
+            "--dry-run=client",
             "aws eks update-kubeconfig --name xagent-staging",
             "helm upgrade --install xagent xagent/xagent",
             "--namespace staging",
             "deployment/helm/values-staging.yaml",
+            "--set secrets.create=false",
+            "--set-string secrets.existingSecretName=xagent-secrets",
             "kubectl rollout status deployment/xagent-api -n staging",
             "kubectl rollout status deployment/xagent-worker -n staging",
         ),
@@ -181,6 +186,56 @@ FORBIDDEN_CONTAINS: tuple[ForbiddenPattern, ...] = (
         id="no_broad_staging",
         description="Stage 3 workflow must not stage broad worktree contents.",
         token="git add .",
+    ),
+    ForbiddenPattern(
+        id="no_raw_database_url_helm_value",
+        description="Stage 3 workflow must not pass raw database URLs through Helm values.",
+        token="--set-string secrets.databaseUrl=",
+    ),
+    ForbiddenPattern(
+        id="no_raw_redis_url_helm_value",
+        description="Stage 3 workflow must not pass raw Redis URLs through Helm values.",
+        token="--set-string secrets.redisUrl=",
+    ),
+    ForbiddenPattern(
+        id="no_raw_api_key_helm_value",
+        description="Stage 3 workflow must not pass raw API keys through Helm values.",
+        token="--set-string secrets.apiKey=",
+    ),
+    ForbiddenPattern(
+        id="no_raw_jwt_secret_helm_value",
+        description="Stage 3 workflow must not pass raw JWT secrets through Helm values.",
+        token="--set-string secrets.jwtSecret=",
+    ),
+    ForbiddenPattern(
+        id="no_raw_encryption_key_helm_value",
+        description="Stage 3 workflow must not pass raw encryption keys through Helm values.",
+        token="--set-string secrets.encryptionKey=",
+    ),
+    ForbiddenPattern(
+        id="no_raw_audit_hmac_secret_helm_value",
+        description="Stage 3 workflow must not pass raw audit HMAC secrets through Helm values.",
+        token="--set-string secrets.auditHmacSecret=",
+    ),
+    ForbiddenPattern(
+        id="no_raw_langfuse_public_key_helm_value",
+        description="Stage 3 workflow must not pass raw Langfuse public keys through Helm values.",
+        token="--set-string secrets.langfusePublicKey=",
+    ),
+    ForbiddenPattern(
+        id="no_raw_langfuse_secret_key_helm_value",
+        description="Stage 3 workflow must not pass raw Langfuse secret keys through Helm values.",
+        token="--set-string secrets.langfuseSecretKey=",
+    ),
+    ForbiddenPattern(
+        id="no_raw_sentry_dsn_helm_value",
+        description="Stage 3 workflow must not pass raw Sentry DSNs through Helm values.",
+        token="--set-string secrets.sentryDsn=",
+    ),
+    ForbiddenPattern(
+        id="no_raw_workflow_event_rabbitmq_url_helm_value",
+        description="Stage 3 workflow must not pass raw RabbitMQ URLs through Helm values.",
+        token="--set-string secrets.workflowEventRabbitmqUrl=",
     ),
 )
 

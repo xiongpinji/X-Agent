@@ -15,7 +15,7 @@ This document outlines all required GitHub Secrets for the X-Agent CI/CD pipelin
 ### 3. Kubernetes & Helm Secrets
 - **HELM_REPO_URL**: URL to Helm repository
 
-The Helm chart consumes these values keys:
+The Helm chart still defines these values keys for local/dev chart-created secrets:
 
 - `secrets.databaseUrl`
 - `secrets.redisUrl`
@@ -28,7 +28,32 @@ The Helm chart consumes these values keys:
 - `secrets.sentryDsn`
 - `secrets.workflowEventRabbitmqUrl`
 
-The CI/CD workflows must pass those keys with `secrets.enabled=true`. Do not use the legacy Helm values keys `secrets.secretKey`, `secrets.dbPassword`, or `secrets.redisPassword`.
+Production-like CI/CD workflows must not pass raw secret values through Helm `--set-string secrets.*=...`, because those values can be retained in Helm release history. The workflows must create or update a Kubernetes Secret first and then deploy with:
+
+- `secrets.enabled=true`
+- `secrets.create=false`
+- `secrets.existingSecretName=xagent-secrets`
+
+The expected workflow pattern is:
+
+```bash
+kubectl create secret generic xagent-secrets \
+  --namespace staging \
+  --from-literal=database-url="$STAGING_DATABASE_URL" \
+  --from-literal=redis-url="$STAGING_REDIS_URL" \
+  --from-literal=api-key="$STAGING_API_KEY" \
+  --from-literal=jwt-secret="$STAGING_JWT_SECRET" \
+  --from-literal=encryption-key="$STAGING_ENCRYPTION_KEY" \
+  --from-literal=audit-hmac-secret="$STAGING_AUDIT_HMAC_SECRET" \
+  --from-literal=langfuse-public-key="$STAGING_LANGFUSE_PUBLIC_KEY" \
+  --from-literal=langfuse-secret-key="$STAGING_LANGFUSE_SECRET_KEY" \
+  --from-literal=sentry-dsn="$STAGING_SENTRY_DSN" \
+  --from-literal=workflow-event-rabbitmq-url="$STAGING_WORKFLOW_EVENT_RABBITMQ_URL" \
+  --dry-run=client \
+  -o yaml | kubectl apply -f -
+```
+
+Do not use the legacy Helm values keys `secrets.secretKey`, `secrets.dbPassword`, or `secrets.redisPassword`.
 
 Staging:
 

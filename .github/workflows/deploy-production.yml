@@ -146,6 +146,23 @@ jobs:
         run: |
           aws eks update-kubeconfig --name xagent-prod --region ${{ secrets.AWS_REGION }}
 
+      - name: Apply production Kubernetes secret
+        run: |
+          kubectl create secret generic xagent-secrets \
+            --namespace production \
+            --from-literal=database-url="${{ secrets.PROD_DATABASE_URL }}" \
+            --from-literal=redis-url="${{ secrets.PROD_REDIS_URL }}" \
+            --from-literal=api-key="${{ secrets.PROD_API_KEY }}" \
+            --from-literal=jwt-secret="${{ secrets.PROD_JWT_SECRET }}" \
+            --from-literal=encryption-key="${{ secrets.PROD_ENCRYPTION_KEY }}" \
+            --from-literal=audit-hmac-secret="${{ secrets.PROD_AUDIT_HMAC_SECRET }}" \
+            --from-literal=langfuse-public-key="${{ secrets.PROD_LANGFUSE_PUBLIC_KEY }}" \
+            --from-literal=langfuse-secret-key="${{ secrets.PROD_LANGFUSE_SECRET_KEY }}" \
+            --from-literal=sentry-dsn="${{ secrets.PROD_SENTRY_DSN }}" \
+            --from-literal=workflow-event-rabbitmq-url="${{ secrets.PROD_WORKFLOW_EVENT_RABBITMQ_URL }}" \
+            --dry-run=client \
+            -o yaml | kubectl apply -f -
+
       - name: Deploy with Helm
         run: |
           helm repo add xagent ${{ secrets.HELM_REPO_URL }}
@@ -155,16 +172,8 @@ jobs:
             --values deployment/helm/values-production.yaml \
             --set image.tag=${{ needs.build.outputs.image-tag }} \
             --set secrets.enabled=true \
-            --set-string secrets.databaseUrl="${{ secrets.PROD_DATABASE_URL }}" \
-            --set-string secrets.redisUrl="${{ secrets.PROD_REDIS_URL }}" \
-            --set-string secrets.apiKey="${{ secrets.PROD_API_KEY }}" \
-            --set-string secrets.jwtSecret="${{ secrets.PROD_JWT_SECRET }}" \
-            --set-string secrets.encryptionKey="${{ secrets.PROD_ENCRYPTION_KEY }}" \
-            --set-string secrets.auditHmacSecret="${{ secrets.PROD_AUDIT_HMAC_SECRET }}" \
-            --set-string secrets.langfusePublicKey="${{ secrets.PROD_LANGFUSE_PUBLIC_KEY }}" \
-            --set-string secrets.langfuseSecretKey="${{ secrets.PROD_LANGFUSE_SECRET_KEY }}" \
-            --set-string secrets.sentryDsn="${{ secrets.PROD_SENTRY_DSN }}" \
-            --set-string secrets.workflowEventRabbitmqUrl="${{ secrets.PROD_WORKFLOW_EVENT_RABBITMQ_URL }}" \
+            --set secrets.create=false \
+            --set-string secrets.existingSecretName=xagent-secrets \
             --wait \
             --timeout 10m
 

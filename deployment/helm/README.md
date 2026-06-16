@@ -26,18 +26,49 @@ Production-ready Helm chart for deploying X-Agent enterprise autonomous agent fr
 ### Development (Default)
 
 ```bash
+kubectl create namespace xagent-dev --dry-run=client -o yaml | kubectl apply -f -
+kubectl create secret generic xagent-secrets \
+  --namespace xagent-dev \
+  --from-literal=database-url="postgresql://user:pass@postgres:5432/xagent" \
+  --from-literal=redis-url="redis://redis:6379/0" \
+  --from-literal=api-key="dev-api-key-change-me" \
+  --from-literal=jwt-secret="dev-jwt-secret-change-me" \
+  --from-literal=encryption-key="dev-encryption-key-change-me" \
+  --from-literal=audit-hmac-secret="dev-audit-hmac-secret-change-me" \
+  --from-literal=langfuse-public-key="" \
+  --from-literal=langfuse-secret-key="" \
+  --from-literal=sentry-dsn="" \
+  --from-literal=workflow-event-rabbitmq-url="" \
+  --dry-run=client -o yaml | kubectl apply -f -
 helm install xagent ./deployment/helm \
-  --set-string secrets.databaseUrl="postgresql://user:pass@postgres:5432/xagent" \
-  --set-string secrets.apiKey="dev-api-key-change-me"
+  --namespace xagent-dev \
+  --set secrets.enabled=true \
+  --set secrets.create=false \
+  --set-string secrets.existingSecretName=xagent-secrets
 ```
 
 ### Staging
 
 ```bash
+kubectl create namespace xagent-staging --dry-run=client -o yaml | kubectl apply -f -
+kubectl create secret generic xagent-secrets \
+  --namespace xagent-staging \
+  --from-literal=database-url="$STAGING_DATABASE_URL" \
+  --from-literal=redis-url="$STAGING_REDIS_URL" \
+  --from-literal=api-key="$STAGING_API_KEY" \
+  --from-literal=jwt-secret="$STAGING_JWT_SECRET" \
+  --from-literal=encryption-key="$STAGING_ENCRYPTION_KEY" \
+  --from-literal=audit-hmac-secret="$STAGING_AUDIT_HMAC_SECRET" \
+  --from-literal=langfuse-public-key="$STAGING_LANGFUSE_PUBLIC_KEY" \
+  --from-literal=langfuse-secret-key="$STAGING_LANGFUSE_SECRET_KEY" \
+  --from-literal=sentry-dsn="$STAGING_SENTRY_DSN" \
+  --from-literal=workflow-event-rabbitmq-url="$STAGING_WORKFLOW_EVENT_RABBITMQ_URL" \
+  --dry-run=client -o yaml | kubectl apply -f -
 helm install xagent ./deployment/helm -f ./deployment/helm/values-staging.yaml \
-  --namespace xagent-staging --create-namespace \
-  --set-string secrets.databaseUrl="postgresql://user:pass@postgres-staging:5432/xagent" \
-  --set-string secrets.apiKey="staging-api-key"
+  --namespace xagent-staging \
+  --set secrets.enabled=true \
+  --set secrets.create=false \
+  --set-string secrets.existingSecretName=xagent-secrets
 ```
 
 When using `deployment/scripts/deploy.sh` for a staging route, keep the same
@@ -53,13 +84,26 @@ uses `deployment/helm/values-staging.yaml` for the staging values file.
 ### Production
 
 ```bash
+kubectl create namespace xagent-prod --dry-run=client -o yaml | kubectl apply -f -
+kubectl create secret generic xagent-secrets \
+  --namespace xagent-prod \
+  --from-literal=database-url="$PROD_DATABASE_URL" \
+  --from-literal=redis-url="$PROD_REDIS_URL" \
+  --from-literal=api-key="$PROD_API_KEY" \
+  --from-literal=jwt-secret="$PROD_JWT_SECRET" \
+  --from-literal=encryption-key="$PROD_ENCRYPTION_KEY" \
+  --from-literal=audit-hmac-secret="$PROD_AUDIT_HMAC_SECRET" \
+  --from-literal=langfuse-public-key="$PROD_LANGFUSE_PUBLIC_KEY" \
+  --from-literal=langfuse-secret-key="$PROD_LANGFUSE_SECRET_KEY" \
+  --from-literal=sentry-dsn="$PROD_SENTRY_DSN" \
+  --from-literal=workflow-event-rabbitmq-url="$PROD_WORKFLOW_EVENT_RABBITMQ_URL" \
+  --dry-run=client -o yaml | kubectl apply -f -
 helm install xagent ./deployment/helm -f ./deployment/helm/values-production.yaml \
-  --namespace xagent-prod --create-namespace \
+  --namespace xagent-prod \
   --set replicaCount=3 \
-  --set-string secrets.databaseUrl="postgresql://user:pass@postgres-prod:5432/xagent_prod" \
-  --set-string secrets.apiKey="<strong-production-key>" \
-  --set-string secrets.langfusePublicKey="<langfuse-key>" \
-  --set-string secrets.langfuseSecretKey="<langfuse-secret>"
+  --set secrets.enabled=true \
+  --set secrets.create=false \
+  --set-string secrets.existingSecretName=xagent-secrets
 ```
 
 ## Configuration
@@ -99,8 +143,10 @@ kubectl scale deployment xagent --replicas=5
 PostgreSQL connection via secrets:
 
 ```bash
-helm install xagent ./deployment/helm \
-  --set-string secrets.databaseUrl="postgresql://user:password@host:5432/dbname"
+kubectl create secret generic xagent-secrets \
+  --namespace xagent-dev \
+  --from-literal=database-url="postgresql://user:password@host:5432/dbname" \
+  --dry-run=client -o yaml | kubectl apply -f -
 ```
 
 ### Redis Cache
@@ -179,9 +225,11 @@ observability:
 Set Langfuse credentials:
 
 ```bash
-helm install xagent ./deployment/helm \
-  --set-string secrets.langfusePublicKey="pk-prod-xxx" \
-  --set-string secrets.langfuseSecretKey="sk-prod-xxx"
+kubectl create secret generic xagent-secrets \
+  --namespace xagent-prod \
+  --from-literal=langfuse-public-key="$PROD_LANGFUSE_PUBLIC_KEY" \
+  --from-literal=langfuse-secret-key="$PROD_LANGFUSE_SECRET_KEY" \
+  --dry-run=client -o yaml | kubectl apply -f -
 ```
 
 ## Deployment Examples
@@ -189,11 +237,25 @@ helm install xagent ./deployment/helm \
 ### Minimal Development Deployment
 
 ```bash
+kubectl create namespace xagent-dev --dry-run=client -o yaml | kubectl apply -f -
+kubectl create secret generic xagent-secrets \
+  --namespace xagent-dev \
+  --from-literal=database-url="postgresql://localhost:5432/xagent" \
+  --from-literal=redis-url="redis://localhost:6379/0" \
+  --from-literal=api-key="dev-key" \
+  --from-literal=jwt-secret="dev-jwt-secret-change-me" \
+  --from-literal=encryption-key="dev-encryption-key-change-me" \
+  --from-literal=audit-hmac-secret="dev-audit-hmac-secret-change-me" \
+  --from-literal=langfuse-public-key="" \
+  --from-literal=langfuse-secret-key="" \
+  --from-literal=sentry-dsn="" \
+  --from-literal=workflow-event-rabbitmq-url="" \
+  --dry-run=client -o yaml | kubectl apply -f -
 helm install xagent ./deployment/helm \
   --namespace xagent-dev \
-  --create-namespace \
-  --set-string secrets.databaseUrl="postgresql://localhost:5432/xagent" \
-  --set-string secrets.apiKey="dev-key"
+  --set secrets.enabled=true \
+  --set secrets.create=false \
+  --set-string secrets.existingSecretName=xagent-secrets
 ```
 
 ### High-Availability Production
@@ -201,7 +263,6 @@ helm install xagent ./deployment/helm \
 ```bash
 helm install xagent ./deployment/helm -f ./deployment/helm/values-production.yaml \
   --namespace xagent-prod \
-  --create-namespace \
   --set replicaCount=3 \
   --set ingress.enabled=true \
   --set ingress.hosts[0].host="api.x-agent.dev" \
@@ -209,8 +270,9 @@ helm install xagent ./deployment/helm -f ./deployment/helm/values-production.yam
   --set autoscaling.maxReplicas=10 \
   --set persistence.enabled=true \
   --set persistence.size="100Gi" \
-  --set-string secrets.databaseUrl="$DB_URL" \
-  --set-string secrets.apiKey="$API_KEY"
+  --set secrets.enabled=true \
+  --set secrets.create=false \
+  --set-string secrets.existingSecretName=xagent-secrets
 ```
 
 ## Upgrades

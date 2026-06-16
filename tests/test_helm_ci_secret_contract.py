@@ -5,6 +5,18 @@ from pathlib import Path
 
 
 WORKFLOWS = {
+    Path(".github/workflows/deploy.yml"): {
+        "secrets.databaseUrl": "STAGING_DATABASE_URL",
+        "secrets.redisUrl": "STAGING_REDIS_URL",
+        "secrets.apiKey": "STAGING_API_KEY",
+        "secrets.jwtSecret": "STAGING_JWT_SECRET",
+        "secrets.encryptionKey": "STAGING_ENCRYPTION_KEY",
+        "secrets.auditHmacSecret": "STAGING_AUDIT_HMAC_SECRET",
+        "secrets.langfusePublicKey": "STAGING_LANGFUSE_PUBLIC_KEY",
+        "secrets.langfuseSecretKey": "STAGING_LANGFUSE_SECRET_KEY",
+        "secrets.sentryDsn": "STAGING_SENTRY_DSN",
+        "secrets.workflowEventRabbitmqUrl": "STAGING_WORKFLOW_EVENT_RABBITMQ_URL",
+    },
     Path(".github/workflows/ci-cd.yml"): {
         "secrets.databaseUrl": "STAGING_DATABASE_URL",
         "secrets.redisUrl": "STAGING_REDIS_URL",
@@ -50,19 +62,68 @@ def _text(path: Path) -> str:
 
 
 def _helm_upgrade_blocks(text: str) -> list[str]:
-    return re.findall(r"helm upgrade --install xagent xagent/xagent \\\n(?:[^\n]*\n)+?            --timeout 10m", text)
+    return re.findall(r"helm upgrade --install xagent xagent/xagent \\\n(?:[^\n]*\n)+?\s+--timeout 10m", text)
 
 
 def test_deployment_workflows_helm_deploy_uses_chart_secret_keys() -> None:
     for workflow, expected_helm_keys in WORKFLOWS.items():
         blocks = _helm_upgrade_blocks(_text(workflow))
+        workflow_text = _text(workflow)
 
         assert blocks, f"{workflow} must keep an explicit Helm deploy block"
         for block in blocks:
             assert "--set secrets.enabled=true" in block
-            for helm_key, secret_name in expected_helm_keys.items():
-                assert f"--set-string {helm_key}=" in block
-                assert f"secrets.{secret_name}" in block
+            assert "--set secrets.create=false" in block
+            assert "--set-string secrets.existingSecretName=xagent-secrets" in block
+            for helm_key in expected_helm_keys:
+                assert f"--set-string {helm_key}=" not in block
+        for secret_name in expected_helm_keys.values():
+            assert f"secrets.{secret_name}" in workflow_text
+
+
+def test_deployment_workflows_create_kubernetes_secret_before_helm() -> None:
+    expected_key_names = (
+        "database-url",
+        "redis-url",
+        "api-key",
+        "jwt-secret",
+        "encryption-key",
+        "audit-hmac-secret",
+        "langfuse-public-key",
+        "langfuse-secret-key",
+        "sentry-dsn",
+        "workflow-event-rabbitmq-url",
+    )
+
+    for workflow, expected_helm_keys in WORKFLOWS.items():
+        text = _text(workflow)
+
+        assert "kubectl create secret generic xagent-secrets" in text
+        assert "--dry-run=client" in text
+        assert "-o yaml | kubectl apply -f -" in text
+        for key_name in expected_key_names:
+            assert f"--from-literal={key_name}=" in text
+        for secret_name in expected_helm_keys.values():
+            assert f"secrets.{secret_name}" in text
+
+
+def test_deployment_workflows_do_not_pass_raw_secrets_through_helm_values() -> None:
+    workflow_text = "\n".join(_text(path) for path in WORKFLOWS)
+
+    for expected_helm_keys in WORKFLOWS.values():
+        for helm_key in expected_helm_keys:
+            assert f"--set-string {helm_key}=" not in workflow_text
+    assert "--set-string secrets.existingSecretName=xagent-secrets" in workflow_text
+
+
+def test_helm_readme_does_not_recommend_raw_secret_helm_values() -> None:
+    readme = _text(HELM_README)
+
+    for expected_helm_keys in WORKFLOWS.values():
+        for helm_key in expected_helm_keys:
+            assert f"--set-string {helm_key}=" not in readme
+    assert "kubectl create secret generic xagent-secrets" in readme
+    assert "--set-string secrets.existingSecretName=xagent-secrets" in readme
 
 
 def test_deployment_workflows_reject_legacy_secret_values_keys() -> None:
@@ -78,12 +139,14 @@ def test_deployment_workflow_helm_keys_match_secret_template_consumers() -> None
 
     for helm_key in next(iter(WORKFLOWS.values())):
         assert f".Values.{helm_key}" in template
-        assert helm_key in workflow_text
+    assert "secrets.existingSecretName" in workflow_text
 
 
 def test_helm_secret_template_fails_closed_for_enabled_external_dependencies() -> None:
     template = _text(HELM_SECRET_TEMPLATE)
 
+    assert "{{- if .Values.secrets.create }}" in template
+    assert 'include "xagent.secretName"' in template
     for helm_key in next(iter(WORKFLOWS.values())):
         assert f'required "{helm_key} is required' in template
     assert "when observability.traces.enabled=true" in template
@@ -95,6 +158,7 @@ def test_helm_secret_template_fails_closed_for_enabled_external_dependencies() -
 def test_helm_runtime_observability_env_uses_xagent_prefixes() -> None:
     template = _text(HELM_DEPLOYMENT_TEMPLATE)
 
+    assert 'include "xagent.secretName"' in template
     assert "- name: XAGENT_LANGFUSE_PUBLIC_KEY" in template
     assert "- name: XAGENT_LANGFUSE_SECRET_KEY" in template
     assert "- name: XAGENT_LANGFUSE_HOST" in template
@@ -136,6 +200,9 @@ def test_github_secrets_doc_tracks_ci_helm_secret_contract() -> None:
     doc = _text(SECRETS_DOC)
 
     assert "secrets.enabled=true" in doc
+    assert "secrets.create=false" in doc
+    assert "secrets.existingSecretName" in doc
+    assert "kubectl create secret generic xagent-secrets" in doc
     for expected_helm_keys in WORKFLOWS.values():
         for helm_key, secret_name in expected_helm_keys.items():
             assert helm_key in doc

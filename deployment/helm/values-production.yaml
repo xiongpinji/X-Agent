@@ -139,6 +139,8 @@ networkPolicy:
 
 secrets:
   enabled: true
+  create: false
+  existingSecretName: xagent-secrets
   externalSecrets:
     enabled: true
     backend: vault

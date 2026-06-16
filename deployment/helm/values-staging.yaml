@@ -107,6 +107,11 @@ workflowEvents:
   backend: rabbitmq
   exchange: xagent.workflow
 
+secrets:
+  enabled: true
+  create: false
+  existingSecretName: xagent-secrets
+
 persistence:
   enabled: true
   size: 20Gi

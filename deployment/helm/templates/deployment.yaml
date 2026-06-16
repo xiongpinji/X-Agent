@@ -57,43 +57,43 @@ spec:
             - name: XAGENT_DATABASE_URL
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "xagent.fullname" . }}-secrets
+                  name: {{ include "xagent.secretName" . }}
                   key: database-url
             - name: XAGENT_REDIS_URL
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "xagent.fullname" . }}-secrets
+                  name: {{ include "xagent.secretName" . }}
                   key: redis-url
             - name: XAGENT_BOOTSTRAP_API_KEY
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "xagent.fullname" . }}-secrets
+                  name: {{ include "xagent.secretName" . }}
                   key: api-key
             - name: XAGENT_JWT_SECRET
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "xagent.fullname" . }}-secrets
+                  name: {{ include "xagent.secretName" . }}
                   key: jwt-secret
             - name: XAGENT_ENCRYPTION_KEY
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "xagent.fullname" . }}-secrets
+                  name: {{ include "xagent.secretName" . }}
                   key: encryption-key
             - name: XAGENT_AUDIT_HMAC_SECRET
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "xagent.fullname" . }}-secrets
+                  name: {{ include "xagent.secretName" . }}
                   key: audit-hmac-secret
             {{- if .Values.observability.traces.enabled }}
             - name: XAGENT_LANGFUSE_PUBLIC_KEY
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "xagent.fullname" . }}-secrets
+                  name: {{ include "xagent.secretName" . }}
                   key: langfuse-public-key
             - name: XAGENT_LANGFUSE_SECRET_KEY
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "xagent.fullname" . }}-secrets
+                  name: {{ include "xagent.secretName" . }}
                   key: langfuse-secret-key
             - name: XAGENT_LANGFUSE_HOST
               value: {{ .Values.observability.traces.endpoint | quote }}
@@ -102,7 +102,7 @@ spec:
             - name: XAGENT_SENTRY_DSN
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "xagent.fullname" . }}-secrets
+                  name: {{ include "xagent.secretName" . }}
                   key: sentry-dsn
             {{- end }}
             - name: XAGENT_WORKFLOW_EVENT_BROKER_BACKEND
@@ -113,7 +113,7 @@ spec:
             - name: XAGENT_WORKFLOW_EVENT_RABBITMQ_URL
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "xagent.fullname" . }}-secrets
+                  name: {{ include "xagent.secretName" . }}
                   key: workflow-event-rabbitmq-url
             {{- end }}
           volumeMounts:
