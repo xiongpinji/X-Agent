@@ -9,6 +9,7 @@ from backend.app.core.llm import LLMRouter
 from backend.app.core.memory import InMemoryMemorySystem
 from backend.app.core.policy import ToolPolicyEngine
 from backend.app.core.tools import build_default_tool_registry
+from backend.app.core.tracing import TraceStore
 from backend.app.core.workflows import (
     WorkflowCreateRequest,
     WorkflowEdge,
@@ -151,6 +152,20 @@ class _StubAgent:
         return _Response(self._summary, self._approval_pending)
 
 
+class _CapturingWorkflowEventPublisher:
+    def __init__(self, *, fail: bool = False) -> None:
+        self.fail = fail
+        self.events: list[dict[str, object]] = []
+
+    def publish(self, event_type: str, payload: dict[str, object]) -> None:
+        if self.fail:
+            raise RuntimeError("broker unavailable")
+        self.events.append({"event_type": event_type, "payload": payload})
+
+    def check_health(self) -> dict[str, object]:
+        return {"event_count": len(self.events)}
+
+
 def test_workflow_repository_persists_definitions_and_runs(tmp_path) -> None:
     repository = WorkflowRepository(
         definition_path=tmp_path / "workflows.json",
@@ -188,6 +203,75 @@ async def test_workflow_executor_runs_dag(tmp_path) -> None:
     assert len(run.node_results) == 3
     assert run.snapshot["workflow_id"] == workflow.id
     assert run.snapshot["node_result_count"] == 3
+
+
+async def test_workflow_executor_publishes_lifecycle_events(tmp_path) -> None:
+    repository = WorkflowRepository(
+        definition_path=tmp_path / "workflows.json",
+        run_path=tmp_path / "workflow_runs.jsonl",
+    )
+    workflow = repository.upsert_definition(_build_workflow_definition())
+    agent = AgentLoop(
+        llm_router=LLMRouter(),
+        memory=InMemoryMemorySystem(),
+        tools=build_default_tool_registry(ToolPolicyEngine()),
+    )
+    publisher = _CapturingWorkflowEventPublisher()
+    executor = WorkflowExecutor(
+        agent=agent,
+        repository=repository,
+        event_publisher=publisher,
+    )
+
+    run = await executor.execute(workflow.id, {"name": "X-Agent"}, tenant_id="tenant-a", user_id="user-a")
+
+    event_types = [str(event["event_type"]) for event in publisher.events]
+    assert run.status.value == "completed"
+    assert "workflow.started" in event_types
+    assert "workflow.node.started" in event_types
+    assert "workflow.node.completed" in event_types
+    assert "workflow.completed" in event_types
+    completed_payload = next(
+        event["payload"]
+        for event in publisher.events
+        if event["event_type"] == "workflow.completed"
+    )
+    assert completed_payload["workflow_id"] == workflow.id
+    assert completed_payload["run_id"] == run.run_id
+    assert completed_payload["tenant_id"] == "tenant-a"
+    assert completed_payload["user_id"] == "user-a"
+    assert completed_payload["trace_id"] == run.run_id
+
+
+async def test_workflow_executor_survives_event_publisher_failure(tmp_path) -> None:
+    repository = WorkflowRepository(
+        definition_path=tmp_path / "workflows.json",
+        run_path=tmp_path / "workflow_runs.jsonl",
+    )
+    workflow = repository.upsert_definition(_build_workflow_definition())
+    tracer = TraceStore()
+    agent = AgentLoop(
+        llm_router=LLMRouter(),
+        memory=InMemoryMemorySystem(),
+        tools=build_default_tool_registry(ToolPolicyEngine()),
+    )
+    executor = WorkflowExecutor(
+        agent=agent,
+        repository=repository,
+        tracer=tracer,
+        event_publisher=_CapturingWorkflowEventPublisher(fail=True),
+    )
+
+    run = await executor.execute(workflow.id, {"name": "X-Agent"})
+
+    trace_events = tracer.list_events(run.run_id)
+    assert run.status.value == "completed"
+    assert any(event.event == "workflow.completed" for event in trace_events)
+    assert any(
+        event.event == "workflow.event_publish_failed"
+        and event.data["failed_event"] == "workflow.completed"
+        for event in trace_events
+    )
 
 
 async def test_workflow_executor_records_timeout_and_retry_attempts(tmp_path) -> None:

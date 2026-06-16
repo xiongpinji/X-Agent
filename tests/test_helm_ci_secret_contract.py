@@ -81,6 +81,17 @@ def test_deployment_workflow_helm_keys_match_secret_template_consumers() -> None
         assert helm_key in workflow_text
 
 
+def test_helm_secret_template_fails_closed_for_enabled_external_dependencies() -> None:
+    template = _text(HELM_SECRET_TEMPLATE)
+
+    for helm_key in next(iter(WORKFLOWS.values())):
+        assert f'required "{helm_key} is required' in template
+    assert "when observability.traces.enabled=true" in template
+    assert "when observability.errors.enabled=true" in template
+    assert "when workflowEvents.backend=rabbitmq" in template
+    assert 'workflow-event-rabbitmq-url: {{ required "' in template
+
+
 def test_helm_runtime_observability_env_uses_xagent_prefixes() -> None:
     template = _text(HELM_DEPLOYMENT_TEMPLATE)
 
