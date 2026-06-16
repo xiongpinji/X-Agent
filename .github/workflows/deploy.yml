@@ -81,17 +81,39 @@ jobs:
       security-events: write
 
     steps:
+    - name: Resolve image reference
+      id: image-ref
+      shell: bash
+      run: |
+        first_tag="$(printf '%s\n' "${{ needs.build.outputs.image-tag }}" | head -n 1)"
+        if [ -z "$first_tag" ] || [ -z "${{ needs.build.outputs.image-digest }}" ]; then
+          echo "::error::Missing image tag or digest from build job."
+          exit 1
+        fi
+        echo "ref=${first_tag}@${{ needs.build.outputs.image-digest }}" >> "$GITHUB_OUTPUT"
+
     - name: Run Trivy vulnerability scanner
       uses: aquasecurity/trivy-action@master
       with:
-        image-ref: ${{ needs.build.outputs.image-tag }}
+        image-ref: ${{ steps.image-ref.outputs.ref }}
         format: 'sarif'
         output: 'trivy-results.sarif'
       continue-on-error: true
 
+    - name: Check Trivy SARIF output
+      id: trivy-sarif
+      shell: bash
+      run: |
+        if [ -s trivy-results.sarif ]; then
+          echo "present=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "::warning::Trivy SARIF output is missing; skipping SARIF upload."
+          echo "present=false" >> "$GITHUB_OUTPUT"
+        fi
+
     - name: Upload Trivy results to GitHub Security tab
       uses: github/codeql-action/upload-sarif@v3
-      if: always()
+      if: steps.trivy-sarif.outputs.present == 'true'
       with:
         sarif_file: 'trivy-results.sarif'
 
