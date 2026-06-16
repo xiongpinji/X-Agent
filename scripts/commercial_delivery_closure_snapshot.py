@@ -31,6 +31,7 @@ DEFAULT_OWNER_POST_STAGE_COMMIT_GATE = REPORT_DIR / "commercial-delivery-owner-p
 DEFAULT_OWNER_COMMIT_PACKET = REPORT_DIR / "commercial-delivery-owner-commit-packet.json"
 DEFAULT_REFRESH_CHAIN = REPORT_DIR / "commercial-delivery-refresh-chain-receipt.json"
 DEFAULT_TASK_BOARD = REPORT_DIR / "commercial-delivery-task-board.json"
+DEFAULT_OWNER_STAGING_PREFLIGHT = REPORT_DIR / "commercial-delivery-owner-staging-preflight.json"
 DEFAULT_PRE_APPROVAL_DRIFT_GUARD = REPORT_DIR / "commercial-delivery-pre-approval-drift-guard.json"
 DEFAULT_OWNER_APPROVAL_RESUME_PACKET = REPORT_DIR / "commercial-delivery-owner-approval-resume-packet.json"
 DEFAULT_OWNER_POST_APPROVAL_OPERATOR_CHECKLIST = (
@@ -517,6 +518,7 @@ def build_commercial_delivery_closure_snapshot(
     owner_commit_packet_path: Path = DEFAULT_OWNER_COMMIT_PACKET,
     refresh_chain_path: Path = DEFAULT_REFRESH_CHAIN,
     task_board_path: Path = DEFAULT_TASK_BOARD,
+    owner_staging_preflight_path: Path = DEFAULT_OWNER_STAGING_PREFLIGHT,
     pre_approval_drift_guard_path: Path = DEFAULT_PRE_APPROVAL_DRIFT_GUARD,
     owner_approval_resume_packet_path: Path = DEFAULT_OWNER_APPROVAL_RESUME_PACKET,
     owner_post_approval_operator_checklist_path: Path = DEFAULT_OWNER_POST_APPROVAL_OPERATOR_CHECKLIST,
@@ -534,6 +536,7 @@ def build_commercial_delivery_closure_snapshot(
         "owner_commit_packet": owner_commit_packet_path,
         "refresh_chain": refresh_chain_path,
         "task_board": task_board_path,
+        "owner_staging_preflight": owner_staging_preflight_path,
         "pre_approval_drift_guard": pre_approval_drift_guard_path,
     }
     reports: dict[str, dict[str, Any]] = {}
@@ -560,6 +563,7 @@ def build_commercial_delivery_closure_snapshot(
     commit_packet = reports["owner_commit_packet"]
     refresh_chain = reports["refresh_chain"]
     task_board = reports["task_board"]
+    owner_staging_preflight = reports["owner_staging_preflight"]
     pre_approval_drift_guard = reports["pre_approval_drift_guard"]
     delivery_summary = _summary(delivery_packet)
     approval_brief_summary = _summary(approval_brief)
@@ -841,6 +845,9 @@ def build_commercial_delivery_closure_snapshot(
         or task_board_post_commit_accounted_for
         or task_board_post_stage_accounted_for
     )
+    owner_staging_preflight_ready_for_snapshot = (
+        _status(owner_staging_preflight) == "owner_staging_preflight_ready"
+    )
     delivery_post_commit_owner_gate_accounted_for = delivery_summary.get("post_commit_owner_gate_accounted_for") is True
     delivery_post_commit_stage_approval_accounted_for = (
         delivery_summary.get("post_commit_stage_approval_accounted_for") is True
@@ -1061,6 +1068,7 @@ def build_commercial_delivery_closure_snapshot(
             rollback_ready,
             refresh_ready_for_snapshot,
             task_board_ready_for_snapshot,
+            owner_staging_preflight_ready_for_snapshot,
             pre_approval_drift_guard_accounted_for,
             owner_approval_resume_packet_accounted_for,
             owner_post_approval_operator_checklist_accounted_for,
@@ -1069,6 +1077,7 @@ def build_commercial_delivery_closure_snapshot(
     blockers = (
         _blocked("owner_stage_approval_gate_not_ready", approval_ready)
         + _blocked("owner_stage_execution_plan_not_ready", stage_execution_ready)
+        + _blocked("owner_staging_preflight_not_ready", owner_staging_preflight_ready_for_snapshot)
         + _blocked("post_staging_verifier_not_ready", post_stage_ready)
         + _blocked("owner_commit_packet_not_ready", commit_ready)
         + _blocked("cached_staged_path_set_digest_not_ready", cached_staged_path_set_digest_consistent)
@@ -1203,6 +1212,16 @@ def build_commercial_delivery_closure_snapshot(
                 "task_board_ready_for_snapshot": task_board_ready_for_snapshot,
             },
             error="commercial delivery task board is not ready",
+        ),
+        _check(
+            "owner_staging_preflight_ready",
+            owner_staging_preflight_ready_for_snapshot,
+            details={
+                "owner_staging_preflight_status": _status(owner_staging_preflight),
+                "cached_staged_path_count": owner_staging_preflight.get("cached_staged_path_count"),
+                "failed_checks": sorted(_failed_check_names(owner_staging_preflight)),
+            },
+            error="owner staging preflight is not ready",
         ),
         _check(
             "pre_approval_drift_guard_ready",
@@ -1482,6 +1501,12 @@ def build_commercial_delivery_closure_snapshot(
             "task_board_post_commit_accounted_for": task_board_post_commit_accounted_for,
             "task_board_post_stage_accounted_for": task_board_post_stage_accounted_for,
             "task_board_ready_for_snapshot": task_board_ready_for_snapshot,
+            "owner_staging_preflight_status": _status(owner_staging_preflight),
+            "owner_staging_preflight_ready_for_snapshot": owner_staging_preflight_ready_for_snapshot,
+            "owner_staging_preflight_cached_staged_path_count": owner_staging_preflight.get(
+                "cached_staged_path_count"
+            ),
+            "owner_staging_preflight_failed_checks": sorted(_failed_check_names(owner_staging_preflight)),
             "expected_nonzero_step_count": _summary(refresh_chain).get("expected_nonzero_step_count"),
             "expected_nonzero_steps": list(expected_nonzero_steps),
             "refresh_expected_nonzero_ready": refresh_expected_nonzero_ready,
@@ -1544,6 +1569,7 @@ def render_markdown_snapshot(snapshot: CommercialDeliveryClosureSnapshot) -> str
         f"- Cached staged path set digest: `{snapshot.summary.get('cached_staged_path_set_digest') or '<missing>'}`",
         f"- Owner action required: `{str(snapshot.summary.get('owner_action_required')).lower()}`",
         f"- Owner blocking reason count: `{snapshot.summary.get('owner_blocking_reason_count')}`",
+        f"- Owner staging preflight: `{snapshot.summary.get('owner_staging_preflight_status')}`",
         f"- Secondary handoff completed count: `{snapshot.summary.get('secondary_handoff_completed_count')}`",
         f"- Secondary latest completed candidate: `{snapshot.summary.get('secondary_handoff_latest_completed_candidate')}`",
         f"- Secondary next queue: `{', '.join(snapshot.summary.get('secondary_handoff_next_queue') or [])}`",
@@ -1602,6 +1628,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--owner-commit-packet", type=Path, default=DEFAULT_OWNER_COMMIT_PACKET)
     parser.add_argument("--refresh-chain", type=Path, default=DEFAULT_REFRESH_CHAIN)
     parser.add_argument("--task-board", type=Path, default=DEFAULT_TASK_BOARD)
+    parser.add_argument("--owner-staging-preflight", type=Path, default=DEFAULT_OWNER_STAGING_PREFLIGHT)
     parser.add_argument("--pre-approval-drift-guard", type=Path, default=DEFAULT_PRE_APPROVAL_DRIFT_GUARD)
     parser.add_argument("--owner-approval-resume-packet", type=Path, default=DEFAULT_OWNER_APPROVAL_RESUME_PACKET)
     parser.add_argument(
@@ -1629,6 +1656,7 @@ def main() -> int:
         owner_commit_packet_path=args.owner_commit_packet,
         refresh_chain_path=args.refresh_chain,
         task_board_path=args.task_board,
+        owner_staging_preflight_path=args.owner_staging_preflight,
         pre_approval_drift_guard_path=args.pre_approval_drift_guard,
         owner_approval_resume_packet_path=args.owner_approval_resume_packet,
         owner_post_approval_operator_checklist_path=args.owner_post_approval_operator_checklist,

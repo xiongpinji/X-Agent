@@ -48,6 +48,7 @@ def _write_inputs(tmp_path: Path, *, complete: bool = False) -> dict[str, Path]:
         "owner_commit_packet_path": tmp_path / "owner-commit-packet.json",
         "refresh_chain_path": tmp_path / "refresh-chain.json",
         "task_board_path": tmp_path / "task-board.json",
+        "owner_staging_preflight_path": tmp_path / "owner-staging-preflight.json",
         "pre_approval_drift_guard_path": tmp_path / "pre-approval-drift-guard.json",
         "owner_approval_resume_packet_path": tmp_path / "owner-approval-resume-packet.json",
         "owner_post_approval_operator_checklist_path": tmp_path / "owner-post-approval-operator-checklist.json",
@@ -213,6 +214,21 @@ def _write_inputs(tmp_path: Path, *, complete: bool = False) -> dict[str, Path]:
         },
     )
     _write_json(
+        paths["owner_staging_preflight_path"],
+        {
+            "status": "owner_staging_preflight_ready" if complete else "owner_staging_preflight_blocked",
+            "owner_gated": True,
+            "cached_staged_path_count": 0 if complete else 2,
+            "checks": [
+                {
+                    "name": "no_cached_staged_paths_before_owner_staging",
+                    "status": "passed" if complete else "failed",
+                }
+            ],
+            "full_codex_parity_claimed": False,
+        },
+    )
+    _write_json(
         paths["pre_approval_drift_guard_path"],
         {
             "status": "pre_approval_drift_guard_ready",
@@ -284,6 +300,8 @@ def test_closure_snapshot_blocks_before_owner_approval(tmp_path: Path) -> None:
     assert snapshot.summary["control_modes_surface_file_count"] == 12
     assert snapshot.summary["approval_brief_control_modes_preservation_status"] == "control_modes_preservation_ready"
     assert snapshot.summary["task_board_control_modes_preservation_status"] == "control_modes_preservation_ready"
+    assert snapshot.summary["owner_staging_preflight_status"] == "owner_staging_preflight_blocked"
+    assert snapshot.summary["owner_staging_preflight_ready_for_snapshot"] is False
     assert snapshot.summary["pre_approval_drift_guard_status"] == "pre_approval_drift_guard_ready"
     assert snapshot.summary["pre_approval_drift_guard_real_owner_approval_present"] is False
     assert snapshot.summary["pre_approval_drift_guard_stage_path_digest"] == _digest_values(_stage_paths())
@@ -321,6 +339,7 @@ def test_closure_snapshot_blocks_before_owner_approval(tmp_path: Path) -> None:
     assert snapshot.summary["owner_approval_payload_valid"] is False
     assert snapshot.summary["owner_approval_payload_ready_for_gate"] is False
     assert "owner_stage_approval_gate_not_ready" in snapshot.blockers
+    assert "owner_staging_preflight_not_ready" in snapshot.blockers
     assert "owner_commit_packet_not_ready" in snapshot.blockers
     assert "cached_staged_path_set_digest_not_ready" in snapshot.blockers
     assert next(check for check in snapshot.checks if check.name == "stage_ready").status == "passed"
@@ -341,6 +360,7 @@ def test_closure_snapshot_blocks_before_owner_approval(tmp_path: Path) -> None:
         ).status
         == "passed"
     )
+    assert next(check for check in snapshot.checks if check.name == "owner_staging_preflight_ready").status == "failed"
 
 
 def test_closure_snapshot_accepts_refresh_self_bootstrap_before_owner_approval(tmp_path: Path) -> None:
@@ -562,6 +582,30 @@ def test_closure_snapshot_complete_when_all_owner_gates_ready(tmp_path: Path) ->
         == "owner_post_approval_operator_checklist_ready"
     )
     assert snapshot.summary["owner_post_approval_operator_checklist_operator_ready"] is True
+
+
+def test_closure_snapshot_blocks_complete_owner_gates_when_owner_staging_preflight_is_blocked(
+    tmp_path: Path,
+) -> None:
+    paths = _write_inputs(tmp_path, complete=True)
+    preflight = json.loads(paths["owner_staging_preflight_path"].read_text(encoding="utf-8"))
+    preflight["status"] = "owner_staging_preflight_blocked"
+    preflight["cached_staged_path_count"] = 2
+    preflight["checks"] = [
+        {"name": "no_cached_staged_paths_before_owner_staging", "status": "failed"},
+    ]
+    paths["owner_staging_preflight_path"].write_text(json.dumps(preflight), encoding="utf-8")
+
+    snapshot = build_commercial_delivery_closure_snapshot(**paths)
+
+    assert snapshot.status == "commercial_delivery_closure_blocked"
+    assert snapshot.delivery_complete is False
+    assert snapshot.summary["owner_staging_preflight_status"] == "owner_staging_preflight_blocked"
+    assert snapshot.summary["owner_staging_preflight_ready_for_snapshot"] is False
+    assert "owner_staging_preflight_not_ready" in snapshot.blockers
+    preflight_check = next(check for check in snapshot.checks if check.name == "owner_staging_preflight_ready")
+    assert preflight_check.status == "failed"
+    assert preflight_check.details["owner_staging_preflight_status"] == "owner_staging_preflight_blocked"
 
 
 def test_closure_snapshot_completes_with_post_commit_accounted_blocked_owner_gates(tmp_path: Path) -> None:
