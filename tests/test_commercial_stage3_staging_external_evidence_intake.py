@@ -222,6 +222,53 @@ def test_environment_protection_blocks_on_image_digest_mismatch(tmp_path: Path) 
     assert digest_check.status == "failed"
 
 
+def test_template_or_advisory_input_cannot_be_accepted_as_real_external_evidence(tmp_path: Path) -> None:
+    input_path = tmp_path / "input.json"
+    payload = _input_payload()
+    payload["template_not_external_evidence"] = True
+    protection = payload["staging_environment_protection"]
+    assert isinstance(protection, dict)
+    deployed_image = protection["deployed_image"]
+    assert isinstance(deployed_image, dict)
+    deployed_image["not_external_deploy_proof"] = True
+    deployed_image["source"] = "advisory_build_and_scan_only"
+    _write_json(input_path, payload)
+
+    payloads, checks, input_error = build_external_evidence_payloads(
+        input_path=input_path,
+        current_head_sha=HEAD,
+        release_sha=HEAD,
+        expected_image_digest=DIGEST,
+    )
+    results = write_evidence_reports(
+        payloads,
+        observability_output=tmp_path / "obs.json",
+        protection_output=tmp_path / "protection.json",
+    )
+    report = build_intake_report(
+        input_path=input_path,
+        current_head_sha=HEAD,
+        release_sha=HEAD,
+        expected_image_digest=DIGEST,
+        write_results=results,
+        checks=checks,
+        input_error=input_error,
+    )
+
+    assert report.status == "stage3_staging_external_evidence_blocked"
+    assert report.real_external_evidence_collected is False
+    generated = json.loads((tmp_path / "protection.json").read_text(encoding="utf-8"))
+    assert generated["status"] == "staging_environment_protection_blocked"
+    assert generated["template_not_evidence"] is True
+    assert generated["not_external_deploy_proof"] is True
+    template_check = next(check for check in checks if check.name == "staging_environment_protection_not_template")
+    deploy_proof_check = next(
+        check for check in checks if check.name == "staging_environment_protection_deployed_image_is_external_proof"
+    )
+    assert template_check.status == "failed"
+    assert deploy_proof_check.status == "failed"
+
+
 def test_cli_writes_summary_and_blocked_reports_for_missing_input(tmp_path: Path) -> None:
     rc = main(
         [

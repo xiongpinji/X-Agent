@@ -267,22 +267,27 @@ def _build_evidence_payload(
     input_release_sha: str | None,
     input_error: str | None,
     expected_image_digest: str | None,
+    template_not_evidence: bool = False,
 ) -> tuple[dict[str, Any], list[IntakeCheck]]:
     missing = _missing_fields(section, required_fields)
     secret_violations = _secret_redaction_violations({name: section})
     release_bound = bool(release_sha and input_release_sha == release_sha)
     digest = _nested_value(section, "deployed_image.digest")
+    not_external_deploy_proof = _nested_value(section, "deployed_image.not_external_deploy_proof") is True
     digest_matches = (
         name != "staging_environment_protection"
         or not expected_image_digest
         or digest == expected_image_digest
     )
+    deployed_image_is_external_proof = name != "staging_environment_protection" or not not_external_deploy_proof
     ready = (
         input_error is None
         and not missing
         and not secret_violations
         and release_bound
         and digest_matches
+        and not template_not_evidence
+        and deployed_image_is_external_proof
     )
     checks = [
         _check(
@@ -298,6 +303,12 @@ def _build_evidence_payload(
             error="external staging evidence input is not bound to the selected release SHA",
         ),
         _check(
+            f"{name}_not_template",
+            not template_not_evidence,
+            details={"template_not_external_evidence": template_not_evidence},
+            error="input is explicitly marked as a template, not real external staging evidence",
+        ),
+        _check(
             f"{name}_required_fields_present",
             not missing,
             details={"missing_fields": missing},
@@ -311,13 +322,21 @@ def _build_evidence_payload(
         ),
     ]
     if name == "staging_environment_protection":
-        checks.append(
-            _check(
-                f"{name}_image_digest_matches_expected",
-                digest_matches,
-                details={"expected_image_digest": expected_image_digest, "input_digest_present": bool(digest)},
-                error="deployed image digest does not match the selected advisory image digest",
-            )
+        checks.extend(
+            [
+                _check(
+                    f"{name}_image_digest_matches_expected",
+                    digest_matches,
+                    details={"expected_image_digest": expected_image_digest, "input_digest_present": bool(digest)},
+                    error="deployed image digest does not match the selected advisory image digest",
+                ),
+                _check(
+                    f"{name}_deployed_image_is_external_proof",
+                    deployed_image_is_external_proof,
+                    details={"not_external_deploy_proof": not_external_deploy_proof},
+                    error="deployed image evidence is marked as advisory-only, not external deploy proof",
+                ),
+            ]
         )
 
     payload = {
@@ -331,7 +350,8 @@ def _build_evidence_payload(
         "external_evidence_input_path": _display_path(input_path),
         "external_evidence_input_embedded": False,
         "raw_secret_values_recorded": False,
-        "template_not_evidence": False,
+        "template_not_evidence": template_not_evidence,
+        "not_external_deploy_proof": not_external_deploy_proof,
         "mutation_performed": False,
         "deploy_performed_by_intake": False,
         "workflow_dispatch_performed": False,
@@ -363,6 +383,7 @@ def build_external_evidence_payloads(
     resolved_release_sha = release_sha if release_sha is not None else resolved_head
     input_payload, input_error = _read_json(input_path)
     input_release_sha = input_payload.get("release_sha") if isinstance(input_payload.get("release_sha"), str) else None
+    template_not_evidence = input_payload.get("template_not_external_evidence") is True
 
     observability_section = input_payload.get("staging_observability")
     if not isinstance(observability_section, Mapping):
@@ -381,6 +402,7 @@ def build_external_evidence_payloads(
         input_release_sha=input_release_sha,
         input_error=input_error,
         expected_image_digest=expected_image_digest,
+        template_not_evidence=template_not_evidence,
     )
     protection_payload, protection_checks = _build_evidence_payload(
         name="staging_environment_protection",
@@ -392,6 +414,7 @@ def build_external_evidence_payloads(
         input_release_sha=input_release_sha,
         input_error=input_error,
         expected_image_digest=expected_image_digest,
+        template_not_evidence=template_not_evidence,
     )
     return (
         {
