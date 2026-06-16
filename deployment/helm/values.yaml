@@ -1,187 +1,233 @@
-# Default values for xagent
-# This is a YAML-formatted file.
-# Declare variables to be passed into your templates.
+# X-Agent Helm Chart - Development/Default Values
+# For other environments, use values-staging.yaml or values-production.yaml
 
-# Global settings
 global:
-  environment: production
-  logLevel: INFO
-  debug: false
+  environment: development
 
-# Image configuration
+replicaCount: 1
+
 image:
-  repository: xagent
-  tag: latest
-  pullPolicy: Always
+  repository: x-agent/x-agent
+  pullPolicy: IfNotPresent
+  tag: "1.0.0"
 
-# API Server configuration
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "8000"
+  prometheus.io/path: "/api/v1/metrics/prometheus"
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+    add:
+      - NET_BIND_SERVICE
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8000
+  annotations: {}
+
 api:
-  enabled: true
-  replicas: 3
+  enabled: false
+  replicas: 1
   port: 8000
-  workers: 4
   resources:
-    requests:
-      memory: "512Mi"
-      cpu: "250m"
     limits:
-      memory: "1Gi"
-      cpu: "500m"
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
   autoscaling:
-    enabled: true
-    minReplicas: 3
-    maxReplicas: 10
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 5
     targetCPUUtilizationPercentage: 70
     targetMemoryUtilizationPercentage: 80
 
-# Celery Worker configuration
-worker:
-  enabled: true
-  replicas: 2
-  concurrency: 4
-  resources:
-    requests:
-      memory: "512Mi"
-      cpu: "250m"
-    limits:
-      memory: "1Gi"
-      cpu: "500m"
-  autoscaling:
-    enabled: true
-    minReplicas: 2
-    maxReplicas: 8
-    targetCPUUtilizationPercentage: 75
-    targetMemoryUtilizationPercentage: 80
-
-# Celery Beat configuration
-beat:
-  enabled: true
-  replicas: 1
-  resources:
-    requests:
-      memory: "256Mi"
-      cpu: "100m"
-    limits:
-      memory: "512Mi"
-      cpu: "200m"
-
-# PostgreSQL configuration
-postgres:
-  enabled: true
-  image: postgres:16-alpine
-  port: 5432
-  storage: 10Gi
-  resources:
-    requests:
-      memory: "256Mi"
-      cpu: "250m"
-    limits:
-      memory: "512Mi"
-      cpu: "500m"
-
-# Redis configuration
-redis:
-  enabled: true
-  image: redis:7-alpine
-  port: 6379
-  storage: 5Gi
-  resources:
-    requests:
-      memory: "128Mi"
-      cpu: "100m"
-    limits:
-      memory: "256Mi"
-      cpu: "200m"
-
-# Qdrant configuration
-qdrant:
-  enabled: true
-  image: qdrant/qdrant:latest
-  port: 6333
-  storage: 20Gi
-  resources:
-    requests:
-      memory: "512Mi"
-      cpu: "250m"
-    limits:
-      memory: "1Gi"
-      cpu: "500m"
-
-# Neo4j configuration
-neo4j:
-  enabled: true
-  image: neo4j:5-community
-  port: 7687
-  storage: 15Gi
-  resources:
-    requests:
-      memory: "1Gi"
-      cpu: "500m"
-    limits:
-      memory: "2Gi"
-      cpu: "1000m"
-
-# Ingress configuration
 ingress:
-  enabled: true
-  className: nginx
+  enabled: false
+  className: "nginx"
   annotations:
     cert-manager.io/cluster-issuer: "letsencrypt-prod"
-    nginx.ingress.kubernetes.io/rate-limit: "100"
   hosts:
-    - host: api.xagent.example.com
+    - host: x-agent.example.com
       paths:
         - path: /
           pathType: Prefix
   tls:
-    - secretName: xagent-tls
+    - secretName: x-agent-tls
       hosts:
-        - api.xagent.example.com
+        - x-agent.example.com
 
-# Service configuration
-service:
-  type: ClusterIP
-  port: 8000
+resources:
+  limits:
+    cpu: 1000m
+    memory: 1Gi
+  requests:
+    cpu: 250m
+    memory: 256Mi
 
-# Secrets (should be overridden in production)
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 3
+  targetCPUUtilizationPercentage: 80
+  targetMemoryUtilizationPercentage: 80
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
+# Health probe settings
+livenessProbe:
+  httpGet:
+    path: /health
+    port: 8000
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /health
+    port: 8000
+  initialDelaySeconds: 10
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 3
+
+# Environment configuration
+env:
+  LOG_LEVEL: info
+  DEBUG: "false"
+  ENVIRONMENT: development
+  XAGENT_MODE: standard
+  XAGENT_APP_MODE: development
+  XAGENT_DEPLOYMENT_ENVIRONMENT: development
+  XAGENT_REQUIRE_API_KEY: "false"
+
+# Configuration from ConfigMap
+configMap:
+  enabled: true
+  data:
+    mcp_servers: |
+      - name: github
+        command: python
+        args: ["-m", "mcp.server.github"]
+      - name: filesystem
+        command: python
+        args: ["-m", "mcp.server.filesystem"]
+
+# Secrets (create externally in production)
 secrets:
-  dbUser: xagent
-  dbPassword: change-me-in-production
-  redisPassword: change-me-in-production
-  qdrantApiKey: change-me-in-production
-  neo4jPassword: change-me-in-production
-  secretKey: change-me-in-production-use-strong-random-key
+  enabled: false
+  create: true
+  existingSecretName: ""
+  databaseUrl: ""
+  redisUrl: ""
+  apiKey: ""
+  jwtSecret: ""
+  encryptionKey: ""
+  auditHmacSecret: ""
+  langfusePublicKey: ""
+  langfuseSecretKey: ""
+  sentryDsn: ""
+  workflowEventRabbitmqUrl: ""
+  # In production, use external secret management
+  # externalSecrets:
+  #   enabled: true
+  #   backend: vault
+  #   vaultServer: https://vault.example.com
 
 # Database configuration
 database:
-  name: xagent_db
+  enabled: true
+  type: postgresql
+  host: postgres.default.svc.cluster.local
   port: 5432
+  name: xagent
+  poolSize: 10
+  maxOverflow: 20
+  # password and user should be set via secrets/environment
 
-# Redis configuration
+# Redis cache configuration
 redis:
+  enabled: true
+  host: redis.default.svc.cluster.local
   port: 6379
+  db: 0
+  password: null
 
-# Qdrant configuration
-qdrant:
-  port: 6333
-
-# Neo4j configuration
-neo4j:
-  user: neo4j
-  port: 7687
-
-# Monitoring
-monitoring:
+# Observability
+observability:
   enabled: true
-  prometheus:
+  metrics:
     enabled: true
-    port: 9090
-  grafana:
+    port: 8000
+    path: /api/v1/metrics/prometheus
+  traces:
     enabled: true
-    port: 3000
+    # Langfuse configuration
+    endpoint: "https://api.langfuse.com"
+  errors:
+    enabled: false
+  logs:
+    level: info
 
-# Backup configuration
-backup:
-  enabled: true
-  schedule: "0 2 * * *"  # Daily at 2 AM
-  retention: 30  # days
+workflowEvents:
+  backend: local
+  exchange: xagent.workflow
+
+# Volume mounts
+persistence:
+  enabled: false
+  storageClassName: "standard"
+  size: 10Gi
+  mountPath: /data
+
+# Pod Disruption Budget
+podDisruptionBudget:
+  enabled: false
+  minAvailable: 1
+
+# Network Policy
+networkPolicy:
+  enabled: false
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 8000
+
+# HorizontalPodAutoscaler
+hpa:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80

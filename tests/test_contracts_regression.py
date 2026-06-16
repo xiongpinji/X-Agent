@@ -33,6 +33,39 @@ def test_api_key_guard_allows_health_and_ready(monkeypatch) -> None:
     assert ready.status_code in {200, 503}
 
 
+def test_api_key_guard_allows_feishu_signed_webhook_without_api_key(monkeypatch) -> None:
+    from backend.app.core.feishu_bridge import FeishuBridge, FeishuSyncStore, feishu_bridge
+
+    monkeypatch.setattr("backend.app.main.settings.require_api_key", True)
+    feishu_bridge.store = FeishuSyncStore()
+    feishu_bridge.configure(
+        app_id="cli_a_test",
+        app_secret="app-secret",
+        encrypt_key="encrypt-key",
+    )
+    body = b'{"event_id":"api-key-feishu","header":{"event_type":"im.message.receive_v1"}}'
+    signature = FeishuBridge.calculate_lark_signature(
+        timestamp="1780890000",
+        nonce="pilot",
+        encrypt_key="encrypt-key",
+        body=body,
+    )
+
+    response = TestClient(app).post(
+        "/api/v1/integrations/feishu/events",
+        content=body,
+        headers={
+            "content-type": "application/json",
+            "X-Lark-Signature": signature,
+            "X-Lark-Request-Timestamp": "1780890000",
+            "X-Lark-Request-Nonce": "pilot",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["result"]["event_id"] == "api-key-feishu"
+
+
 def test_api_key_status_endpoint_reports_state(monkeypatch) -> None:
     client = TestClient(app, headers={"x-api-key": "bootstrap"})
     monkeypatch.setattr("backend.app.main.settings.require_api_key", False)

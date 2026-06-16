@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import AsyncGenerator
 
 import redis.asyncio as redis
@@ -19,6 +20,15 @@ from sqlalchemy.pool import NullPool
 logger = logging.getLogger(__name__)
 
 
+def normalize_async_database_url(database_url: str) -> str:
+    """Return an async SQLAlchemy URL for supported lite/local databases."""
+    if database_url.startswith("sqlite:///") and not database_url.startswith("sqlite+aiosqlite:///"):
+        return "sqlite+aiosqlite:///" + database_url.removeprefix("sqlite:///")
+    if database_url.startswith("sqlite://") and "+aiosqlite" not in database_url:
+        return database_url.replace("sqlite://", "sqlite+aiosqlite://", 1)
+    return database_url
+
+
 class DatabaseManager:
     """数据库连接管理器"""
 
@@ -31,7 +41,7 @@ class DatabaseManager:
         pool_recycle: int = 3600,
         echo: bool = False,
     ):
-        self.database_url = database_url
+        self.database_url = normalize_async_database_url(database_url)
         self.redis_url = redis_url
         self.pool_size = pool_size
         self.max_overflow = max_overflow
@@ -55,6 +65,7 @@ class DatabaseManager:
             is_sqlite = self.database_url.startswith("sqlite") or "sqlite" in self.database_url
             engine_kwargs: dict[str, object] = {"echo": self.echo}
             if is_sqlite:
+                self._ensure_sqlite_parent_dir()
                 engine_kwargs["poolclass"] = NullPool
                 # busy_timeout (via connect_args timeout): with NullPool each session
                 # opens its own file handle, so concurrent writers contend on SQLite's
@@ -98,6 +109,14 @@ class DatabaseManager:
         except Exception as e:
             logger.error(f"数据库初始化失败: {e}")
             raise
+
+    def _ensure_sqlite_parent_dir(self) -> None:
+        if not self.database_url.startswith("sqlite+aiosqlite:///"):
+            return
+        raw_path = self.database_url.removeprefix("sqlite+aiosqlite:///")
+        if raw_path in {":memory:", ""}:
+            return
+        Path(raw_path).expanduser().parent.mkdir(parents=True, exist_ok=True)
 
     async def close(self) -> None:
         """关闭数据库连接"""

@@ -20,6 +20,62 @@ class ApprovalStatus(StrEnum):
     APPROVED = "approved"
     REJECTED = "rejected"
     EXECUTED = "executed"
+    ABORTED = "aborted"
+
+
+class ApprovalSubjectType(StrEnum):
+    COMMAND = "command"
+    FILE_CHANGE = "file_change"
+    NETWORK_REQUEST = "network_request"
+    MCP_ELICITATION = "mcp_elicitation"
+    BROWSER_ACTION = "browser_action"
+    CHANNEL_SEND = "channel_send"
+    ISSUE_TO_PR_EXECUTE = "issue_to_pr_execute"
+    TOOL = "tool"
+    WORKFLOW = "workflow"
+
+
+class ApprovalDecisionType(StrEnum):
+    APPROVE_ONCE = "approve_once"
+    APPROVE_FOR_RUN = "approve_for_run"
+    APPROVE_FOR_SESSION = "approve_for_session"
+    DENY = "deny"
+    ABORT = "abort"
+
+
+APPROVAL_SUBJECT_ACTIONS: dict[ApprovalSubjectType, str] = {
+    ApprovalSubjectType.COMMAND: "command.execute",
+    ApprovalSubjectType.FILE_CHANGE: "file_change.apply",
+    ApprovalSubjectType.NETWORK_REQUEST: "network.request",
+    ApprovalSubjectType.MCP_ELICITATION: "mcp.elicitation.respond",
+    ApprovalSubjectType.BROWSER_ACTION: "browser.action.execute",
+    ApprovalSubjectType.CHANNEL_SEND: "channel.send",
+    ApprovalSubjectType.ISSUE_TO_PR_EXECUTE: "issue_to_pr.execute",
+    ApprovalSubjectType.TOOL: "tool.execute",
+    ApprovalSubjectType.WORKFLOW: "workflow.execute",
+}
+
+APPROVAL_SUBJECT_RESOURCE_TYPES: dict[ApprovalSubjectType, str] = {
+    ApprovalSubjectType.COMMAND: "command",
+    ApprovalSubjectType.FILE_CHANGE: "file_change",
+    ApprovalSubjectType.NETWORK_REQUEST: "network_request",
+    ApprovalSubjectType.MCP_ELICITATION: "mcp_elicitation",
+    ApprovalSubjectType.BROWSER_ACTION: "browser_action",
+    ApprovalSubjectType.CHANNEL_SEND: "channel_send",
+    ApprovalSubjectType.ISSUE_TO_PR_EXECUTE: "issue_to_pr_execute",
+    ApprovalSubjectType.TOOL: "tool",
+    ApprovalSubjectType.WORKFLOW: "workflow",
+}
+
+
+def infer_approval_subject_type(resource_type: str, action: str) -> ApprovalSubjectType:
+    """Infer the normalized approval subject from legacy resource/action fields."""
+    for subject_type, subject_action in APPROVAL_SUBJECT_ACTIONS.items():
+        if action == subject_action or resource_type == APPROVAL_SUBJECT_RESOURCE_TYPES[subject_type]:
+            return subject_type
+    if action.startswith("workflow."):
+        return ApprovalSubjectType.WORKFLOW
+    return ApprovalSubjectType.TOOL
 
 
 class ApprovalRequestRecord(BaseModel):
@@ -42,12 +98,39 @@ class ApprovalRequestRecord(BaseModel):
     executed_at: datetime | None = None
     execution_trace_id: str | None = None
     linked_policy_trace_id: str | None = None
+    subject_type: ApprovalSubjectType | None = None
+    decision_type: ApprovalDecisionType | None = None
+    decision_scope: str = "once"
+    expires_at: datetime | None = None
+    sandbox_profile: str = "locked"
+    owner_gate_required: bool = True
+    audit_required: bool = True
+    policy_snapshot: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+    def model_post_init(self, __context: Any) -> None:
+        if self.subject_type is None:
+            self.subject_type = infer_approval_subject_type(self.resource_type, self.action)
 
 
 class ApprovalDecisionRequest(BaseModel):
     decided_by: str = "anonymous"
     reason: str = ""
+    decision_type: ApprovalDecisionType = ApprovalDecisionType.APPROVE_ONCE
+
+
+class ApprovalSubjectRequest(BaseModel):
+    subject_type: ApprovalSubjectType
+    resource_id: str
+    risk_level: RiskLevel
+    reason: str
+    arguments_preview: dict[str, Any] = Field(default_factory=dict)
+    arguments: dict[str, Any] = Field(default_factory=dict)
+    action: str | None = None
+    sandbox_profile: str = "locked"
+    owner_gate_required: bool = True
+    audit_required: bool = True
+    policy_snapshot: dict[str, Any] = Field(default_factory=dict)
 
 
 class ApprovalStore:
@@ -77,6 +160,31 @@ class ApprovalStore:
             reason=reason,
             arguments_preview=arguments_preview,
             arguments=arguments,
+            subject_type=ApprovalSubjectType.TOOL,
+        )
+
+    def create_subject_approval(
+        self,
+        *,
+        context: RunContext,
+        subject: ApprovalSubjectRequest,
+    ) -> ApprovalRequestRecord:
+        resource_type = APPROVAL_SUBJECT_RESOURCE_TYPES[subject.subject_type]
+        action = subject.action or APPROVAL_SUBJECT_ACTIONS[subject.subject_type]
+        return self.create_approval(
+            context=context,
+            resource_type=resource_type,
+            resource_id=subject.resource_id,
+            action=action,
+            risk_level=subject.risk_level,
+            reason=subject.reason,
+            arguments_preview=subject.arguments_preview,
+            arguments=subject.arguments,
+            subject_type=subject.subject_type,
+            sandbox_profile=subject.sandbox_profile,
+            owner_gate_required=subject.owner_gate_required,
+            audit_required=subject.audit_required,
+            policy_snapshot=subject.policy_snapshot,
         )
 
     def create_approval(
@@ -90,7 +198,13 @@ class ApprovalStore:
         reason: str,
         arguments_preview: dict[str, Any] | None = None,
         arguments: dict[str, Any] | None = None,
+        subject_type: ApprovalSubjectType | None = None,
+        sandbox_profile: str = "locked",
+        owner_gate_required: bool = True,
+        audit_required: bool = True,
+        policy_snapshot: dict[str, Any] | None = None,
     ) -> ApprovalRequestRecord:
+        normalized_subject = subject_type or infer_approval_subject_type(resource_type, action)
         record = ApprovalRequestRecord(
             tenant_id=context.tenant_id,
             actor_id=context.user_id,
@@ -103,6 +217,11 @@ class ApprovalStore:
             arguments_preview=arguments_preview or {},
             arguments=arguments or {},
             linked_policy_trace_id=context.trace_id,
+            subject_type=normalized_subject,
+            sandbox_profile=sandbox_profile,
+            owner_gate_required=owner_gate_required,
+            audit_required=audit_required,
+            policy_snapshot=policy_snapshot or {},
         )
         with self._lock:
             self._records[record.id] = record
@@ -133,6 +252,12 @@ class ApprovalStore:
         approval_id: str,
         decision: ApprovalDecisionRequest,
     ) -> ApprovalRequestRecord | None:
+        if decision.decision_type not in {
+            ApprovalDecisionType.APPROVE_ONCE,
+            ApprovalDecisionType.APPROVE_FOR_RUN,
+            ApprovalDecisionType.APPROVE_FOR_SESSION,
+        }:
+            return None
         return self._decide(approval_id, ApprovalStatus.APPROVED, decision)
 
     def reject(
@@ -140,7 +265,16 @@ class ApprovalStore:
         approval_id: str,
         decision: ApprovalDecisionRequest,
     ) -> ApprovalRequestRecord | None:
+        decision = decision.model_copy(update={"decision_type": ApprovalDecisionType.DENY})
         return self._decide(approval_id, ApprovalStatus.REJECTED, decision)
+
+    def abort(
+        self,
+        approval_id: str,
+        decision: ApprovalDecisionRequest,
+    ) -> ApprovalRequestRecord | None:
+        decision = decision.model_copy(update={"decision_type": ApprovalDecisionType.ABORT})
+        return self._decide(approval_id, ApprovalStatus.ABORTED, decision)
 
     def mark_executed(
         self,
@@ -191,6 +325,8 @@ class ApprovalStore:
                     "decided_by": decision.decided_by,
                     "decided_at": datetime.now(UTC),
                     "decision_reason": decision.reason,
+                    "decision_type": decision.decision_type,
+                    "decision_scope": self._decision_scope(decision.decision_type),
                 }
             )
             self._records[approval_id] = updated
@@ -215,3 +351,15 @@ class ApprovalStore:
             json.dumps(payload, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
+
+    @staticmethod
+    def _decision_scope(decision_type: ApprovalDecisionType) -> str:
+        if decision_type == ApprovalDecisionType.APPROVE_FOR_RUN:
+            return "run"
+        if decision_type == ApprovalDecisionType.APPROVE_FOR_SESSION:
+            return "session"
+        if decision_type == ApprovalDecisionType.ABORT:
+            return "abort"
+        if decision_type == ApprovalDecisionType.DENY:
+            return "deny"
+        return "once"

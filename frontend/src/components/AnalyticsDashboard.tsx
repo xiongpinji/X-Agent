@@ -1,4 +1,4 @@
-"""Analytics dashboard frontend component."""
+/* Analytics dashboard frontend component. */
 
 import React, { useState, useEffect } from 'react';
 import {

@@ -1,0 +1,86 @@
+# Log Aggregation Stack: Loki + Promtail
+# Collects, indexes, and aggregates logs from X-Agent services
+#
+# Usage:
+#   docker compose -f deployment/loki/docker-compose.loki.yml up -d
+#
+# Components:
+#   - Loki (3100): Log aggregation engine with label-based indexing
+#   - Promtail (9080): Log collector shipped with X-Agent containers
+#   - Shared network: xagent-network (must be created externally)
+#
+# Data:
+#   - loki_data: Persisted logs and index (~/loki by default)
+#
+# Monitor:
+#   - Loki API: http://localhost:3100/loki/api/v1/labels
+#   - Promtail metrics: http://localhost:9080/metrics
+
+version: '3.9'
+
+services:
+  # Grafana Loki: Log aggregation engine
+  # - Single-node configuration (suitable for dev/staging)
+  # - For production, use distributed mode (3 read/write/backend nodes)
+  loki:
+    image: grafana/loki:2.9.0
+    container_name: xagent-loki
+    restart: unless-stopped
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./loki-config.yml:/etc/loki/local-config.yaml:ro
+      - loki_data:/loki
+    command: -config.file=/etc/loki/local-config.yaml
+    networks:
+      - xagent-network
+    environment:
+      - LOKI_CONFIG=/etc/loki/local-config.yaml
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3100/loki/api/v1/status/buildinfo"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    labels:
+      compose.service: "loki"
+      compose.version: "2.9.0"
+
+  # Grafana Promtail: Log collector and shipper
+  # - Ships logs from X-Agent containers to Loki
+  # - Automatically discovers containers by label: xagent=true
+  # - Also scrapes system logs from /var/log and Docker daemon logs
+  promtail:
+    image: grafana/promtail:2.9.0
+    container_name: xagent-promtail
+    restart: unless-stopped
+    ports:
+      - "9080:9080"
+    volumes:
+      - ./promtail-config.yml:/etc/promtail/config.yml:ro
+      - /var/log:/var/log:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: -config.file=/etc/promtail/config.yml
+    networks:
+      - xagent-network
+    environment:
+      - HOSTNAME=${HOSTNAME:-localhost}
+    depends_on:
+      loki:
+        condition: service_healthy
+    labels:
+      compose.service: "promtail"
+      compose.version: "2.9.0"
+
+volumes:
+  # Persists Loki's BoltDB index and chunks
+  # Production: Mount networked storage (NFS/EBS) for clustering
+  loki_data:
+    driver: local
+
+networks:
+  # External network shared with X-Agent backend/monitoring stack
+  # Create with: docker network create xagent-network
+  xagent-network:
+    external: true

@@ -1,0 +1,77 @@
+name: test_gen
+version: "1.0"
+description: Generate unit tests for a given code file
+author: x-agent
+
+triggers:
+  - command: gen-tests
+    event: push
+
+inputs:
+  - name: file_path
+    type: string
+    description: Path to the source file
+    required: true
+  - name: test_framework
+    type: string
+    description: Testing framework (pytest, unittest, jest, etc.)
+    default: pytest
+    required: false
+  - name: coverage_target
+    type: integer
+    description: Target code coverage percentage
+    default: 80
+    required: false
+  - name: include_edge_cases
+    type: boolean
+    description: Include edge case tests
+    default: true
+    required: false
+
+steps:
+  - id: read_source
+    tool: file_reader
+    args:
+      path: "{{inputs.file_path}}"
+    output_var: source_code
+
+  - id: analyze_structure
+    tool: code_analyzer
+    args:
+      content: "{{steps.read_source.output}}"
+      analysis_type: structure
+    output_var: code_structure
+
+  - id: generate_tests
+    tool: test_generator
+    args:
+      source_code: "{{steps.read_source.output}}"
+      structure: "{{steps.analyze_structure.output}}"
+      framework: "{{inputs.test_framework}}"
+      include_edge_cases: "{{inputs.include_edge_cases}}"
+      coverage_target: "{{inputs.coverage_target}}"
+    output_var: generated_tests
+
+  - id: estimate_coverage
+    tool: coverage_estimator
+    args:
+      tests: "{{steps.generate_tests.output}}"
+      source: "{{steps.read_source.output}}"
+    output_var: coverage_estimate
+
+  - id: format_tests
+    tool: code_formatter
+    args:
+      code: "{{steps.generate_tests.output}}"
+      language: python
+    output_var: formatted_tests
+
+outputs:
+  - name: test_file_content
+    value: "{{steps.format_tests.output}}"
+  - name: estimated_coverage
+    value: "{{steps.estimate_coverage.output.percentage}}"
+  - name: test_count
+    value: "{{steps.generate_tests.output.test_count}}"
+  - name: setup_instructions
+    value: "{{steps.generate_tests.output.setup}}"

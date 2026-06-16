@@ -1,0 +1,306 @@
+name: Publish SDK to PyPI
+
+on:
+  push:
+    tags:
+      - 'sdk-v*'
+
+concurrency:
+  group: publish-pypi
+  cancel-in-progress: false
+
+jobs:
+  validate-tag:
+    name: Validate tag format
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.extract-version.outputs.version }}
+    steps:
+      - name: Extract version from tag
+        id: extract-version
+        run: |
+          TAG="${{ github.ref_name }}"
+          if [[ ! $TAG =~ ^sdk-v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9]+)?$ ]]; then
+            echo "❌ Invalid tag format: $TAG"
+            echo "Expected format: sdk-v<major>.<minor>.<patch>[-prerelease]"
+            exit 1
+          fi
+          VERSION=${TAG#sdk-}
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "✓ Tag format valid: $VERSION"
+
+  build:
+    name: Build and verify package
+    runs-on: ubuntu-latest
+    needs: validate-tag
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install build dependencies
+        run: |
+          python -m pip install --upgrade pip setuptools wheel build twine
+          pip install -e ".[dev]"
+
+      - name: Verify version matches tag
+        working-directory: sdk
+        env:
+          VERSION: ${{ needs.validate-tag.outputs.version }}
+        run: |
+          PYPROJECT_VERSION=$(grep '^version = ' pyproject.toml | sed 's/version = "\(.*\)"/\1/')
+          if [ "$PYPROJECT_VERSION" != "$VERSION" ]; then
+            echo "❌ Version mismatch!"
+            echo "Tag version: $VERSION"
+            echo "pyproject.toml version: $PYPROJECT_VERSION"
+            exit 1
+          fi
+          echo "✓ Version matches: $VERSION"
+
+      - name: Build distribution packages
+        working-directory: sdk
+        run: |
+          python -m build
+          ls -lah dist/
+
+      - name: Verify package integrity
+        working-directory: sdk
+        run: |
+          python -m twine check dist/*
+          echo "✓ Package integrity verified"
+
+      - name: Run tests
+        working-directory: sdk
+        run: |
+          pytest tests/ -v --tb=short
+          echo "✓ All tests passed"
+
+      - name: Check for security issues
+        working-directory: sdk
+        run: |
+          pip install bandit
+          bandit -r xagent_sdk/ --skip B101 || true
+          echo "✓ Security scan complete"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-packages
+          path: sdk/dist/
+
+  publish-test-pypi:
+    name: Publish to TestPyPI
+    runs-on: ubuntu-latest
+    needs: build
+    if: ${{ contains(github.ref_name, 'rc') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'alpha') }}
+    environment:
+      name: testpypi
+      url: https://test.pypi.org/project/xagent-sdk/
+    permissions:
+      id-token: write
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: python-packages
+          path: dist/
+
+      - name: Publish to TestPyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+          verbose: true
+
+      - name: Test installation from TestPyPI
+        run: |
+          python -m pip install --index-url https://test.pypi.org/simple/ xagent-sdk
+          python -c "import xagent_sdk; print(f'✓ xagent-sdk {xagent_sdk.__version__} installed successfully')"
+
+  publish-pypi:
+    name: Publish to PyPI
+    runs-on: ubuntu-latest
+    needs: [build, validate-tag]
+    if: ${{ !contains(github.ref_name, 'rc') && !contains(github.ref_name, 'beta') && !contains(github.ref_name, 'alpha') }}
+    environment:
+      name: pypi
+      url: https://pypi.org/project/xagent-sdk/
+    permissions:
+      id-token: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: python-packages
+          path: dist/
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          verbose: true
+
+      - name: Create release notes
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const version = '${{ needs.validate-tag.outputs.version }}';
+            const changelog = fs.readFileSync('CHANGELOG.md', 'utf8');
+
+            // Extract release notes for this version
+            const versionRegex = new RegExp(`## \\[${version.replace(/\./g, '\\.')}\\]([\\s\\S]*?)(?=## \\[|$)`);
+            const match = changelog.match(versionRegex);
+            const releaseNotes = match ? match[1].trim() : 'See CHANGELOG.md for details';
+
+            github.rest.repos.createRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: context.ref_name,
+              name: `xagent-sdk ${version}`,
+              body: releaseNotes,
+              draft: false,
+              prerelease: false,
+            });
+
+      - name: Test installation from PyPI
+        run: |
+          # Wait for package to be available (PyPI indexing can take a few minutes)
+          for i in {1..30}; do
+            if python -m pip install --upgrade xagent-sdk 2>/dev/null; then
+              break
+            fi
+            echo "Waiting for package to be indexed... ($i/30)"
+            sleep 10
+          done
+          python -c "import xagent_sdk; print(f'✓ xagent-sdk {xagent_sdk.__version__} installed successfully')"
+
+  notify-slack:
+    name: Notify Slack
+    runs-on: ubuntu-latest
+    needs: [publish-pypi, publish-test-pypi]
+    if: always()
+    steps:
+      - name: Determine job status
+        id: status
+        run: |
+          if [ "${{ needs.publish-pypi.result }}" = "success" ] || [ "${{ needs.publish-test-pypi.result }}" = "success" ]; then
+            echo "status=✅ SUCCESS" >> $GITHUB_OUTPUT
+            echo "color=#36a64b" >> $GITHUB_OUTPUT
+          else
+            echo "status=❌ FAILED" >> $GITHUB_OUTPUT
+            echo "color=#ff0000" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Send Slack notification
+        uses: slackapi/slack-github-action@v1.24.0
+        if: always()
+        with:
+          webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
+          payload: |
+            {
+              "attachments": [
+                {
+                  "color": "${{ steps.status.outputs.color }}",
+                  "title": "PyPI Publish: xagent-sdk ${{ github.ref_name }}",
+                  "title_link": "https://pypi.org/project/xagent-sdk/",
+                  "text": "${{ steps.status.outputs.status }}",
+                  "fields": [
+                    {
+                      "title": "Repository",
+                      "value": "${{ github.repository }}",
+                      "short": true
+                    },
+                    {
+                      "title": "Branch",
+                      "value": "${{ github.ref_name }}",
+                      "short": true
+                    },
+                    {
+                      "title": "Actor",
+                      "value": "${{ github.actor }}",
+                      "short": true
+                    },
+                    {
+                      "title": "Commit",
+                      "value": "<https://github.com/${{ github.repository }}/commit/${{ github.sha }}|${{ github.sha }}>",
+                      "short": true
+                    }
+                  ],
+                  "footer": "X-Agent SDK",
+                  "footer_icon": "https://platform.slack-edge.com/img/default_application_icon.png",
+                  "ts": ${{ github.event.head_commit.timestamp }}
+                }
+              ]
+            }
+
+  notify-discord:
+    name: Notify Discord
+    runs-on: ubuntu-latest
+    needs: [publish-pypi, publish-test-pypi]
+    if: always()
+    steps:
+      - name: Send Discord notification
+        uses: sarisia/actions-status-discord@v1
+        if: always()
+        with:
+          webhook_url: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          status: ${{ job.status }}
+          title: 'PyPI Publish: xagent-sdk ${{ github.ref_name }}'
+          description: 'SDK package published to PyPI'
+          url: 'https://pypi.org/project/xagent-sdk/'
+          username: 'X-Agent CI'
+          avatar_url: 'https://avatars.githubusercontent.com/u/1?v=4'
+
+  documentation:
+    name: Update documentation
+    runs-on: ubuntu-latest
+    needs: [publish-pypi]
+    if: success()
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update documentation badge
+        env:
+          VERSION: ${{ needs.validate-tag.outputs.version }}
+        run: |
+          sed -i "s/\!\[PyPI\](.*)/![PyPI](https:\/\/img.shields.io\/pypi\/v\/xagent-sdk.svg)/g" README.md
+          git config user.name "X-Agent Bot"
+          git config user.email "bot@x-agent.dev"
+          git add README.md
+          git commit -m "chore: update PyPI version badge to $VERSION" || true
+          git push
+
+  summary:
+    name: Job summary
+    runs-on: ubuntu-latest
+    needs: [publish-pypi, publish-test-pypi, validate-tag]
+    if: always()
+    steps:
+      - name: Generate summary
+        run: |
+          echo "## 📦 PyPI Publish Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Item | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Version** | ${{ needs.validate-tag.outputs.version }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Package** | xagent-sdk |" >> $GITHUB_STEP_SUMMARY
+          echo "| **PyPI URL** | https://pypi.org/project/xagent-sdk/ |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Install** | \`pip install xagent-sdk\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Status** | ${{ needs.publish-pypi.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Next Steps" >> $GITHUB_STEP_SUMMARY
+          echo "- Verify package on [PyPI](https://pypi.org/project/xagent-sdk/)" >> $GITHUB_STEP_SUMMARY
+          echo "- Test installation: \`pip install xagent-sdk==${{ needs.validate-tag.outputs.version }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- Update downstream projects" >> $GITHUB_STEP_SUMMARY

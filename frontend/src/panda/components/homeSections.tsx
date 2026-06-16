@@ -1,0 +1,5 @@
+export { ModuleCardGrid, PromptActionRow, QuickActionGrid } from './homeActionSections'
+export { TaskComposer } from './homeTaskComposer'
+export type { TaskComposerProps } from './homeTaskComposer'
+export { RecentProjects } from './homeProjectSections'
+export { PlatformSnapshot } from './homeStatusSections'

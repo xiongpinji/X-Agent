@@ -31,7 +31,19 @@ Thumbs.db
 venv/
 .env
 *.env
+*.env.*
+.env.*
 !*.env.example
+!.env.example
+!*.env.*.example
+!**/.env.*.example
+!.env.*.example
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa
+id_ed25519
 .xagent_runtime/
 
 # Project specific
@@ -194,3 +206,6 @@ backend/PERFORMANCE_OPTIMIZATION_REPORT.py
 !.claude/skills/**
 
 data/api_keys.json
+
+# Codex recursive scaffold (orphaned, path too long to delete)
+backend/app/core/integration_review_manifest_adoption_tracker_notif*

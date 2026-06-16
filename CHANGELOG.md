@@ -2,6 +2,55 @@
 
 All notable changes to X-Agent are documented in this file.
 
+## [1.0.0] - 2026-06-13
+
+### Added
+
+- **One-click Installation Scripts** — bash script for Linux/macOS and PowerShell script for Windows with automatic dependency detection
+- **xagent-lite Mode** — lightweight deployment without Docker, PostgreSQL, or Redis (uses SQLite and in-memory cache)
+- **Lightweight Process Sandbox** — OS-level isolation for agent code execution (no Docker required)
+- **Web Search Tool** — DuckDuckGo and SerpAPI integrations for agent web queries
+- **Role-Based Access Control (RBAC)** — admin, developer, viewer permission model with fine-grained scope enforcement
+- **Declarative Skills Framework** — YAML-based extensible skill system with 3 built-in skills
+- **Distributed Rate Limiting** — Redis-backed rate limiting with token bucket algorithm
+- **xagent-sdk Python Client** — official Python SDK (`pip install xagent-sdk`)
+- **OAuth2/SSO Framework** — GitHub and Google OAuth2 support with PKCE flow
+- **Slack Channel Adapter** — bi-directional Slack integration with HMAC verification
+- **API Versioning Middleware** — version headers with deprecation warnings
+- **Alembic Database Migrations** — production-ready schema versioning
+- **GitHub Actions CI/CD** — build, test, lint, security scan, and Docker publish workflows
+- **Performance Benchmarks** — Locust load testing suite
+- **Chrome Extension (WebStore-ready)** — Manifest V3 extension
+- **Production Deployment Runbook** — AWS/GCP/Azure/DigitalOcean guides
+- **AlertManager + SLO/SLI** — Prometheus alerting with 99.9% availability SLO
+- **E2E Verification Script** — automated health checks
+
+### Changed
+
+- **README.md** — rewritten with professional structure and examples
+- **QUICKSTART.md** — dual-path guide for Docker and xagent-lite deployments
+- **docker-compose.yml** — `REQUIRE_API_KEY` defaults to `true`
+- **.env.example** — comprehensive 60+ variable documentation
+- **Skill System** — standardized YAML structure with validation
+- **Agent Logging** — structured JSON logs with trace IDs
+
+### Security
+
+- **Secret Generation** — automatic API key/JWT/HMAC generation on first install
+- **HMAC Audit Trail** — all admin actions verified with HMAC signatures
+- **Input Sanitization** — regex-based XSS/injection protection
+- **Authentication TTL** — session tokens expire after 24h
+
+### Fixed
+
+- **tools/ Directory Conflict** — renamed to avoid collision with tools.py
+- **Windows Compatibility** — resource module conditional import
+- **Rate Limiter Tests** — correct AsyncMock usage
+- **Agent Loop Deadlock** — session recovery non-reentrant lock issue
+- **Qdrant Client** — fixed premature real client creation
+
+---
+
 ## [Unreleased]
 
 ### Phase 5.5 - Cloud Sandbox Engine (2026-06-04)

@@ -14,9 +14,72 @@ This document outlines all required GitHub Secrets for the X-Agent CI/CD pipelin
 
 ### 3. Kubernetes & Helm Secrets
 - **HELM_REPO_URL**: URL to Helm repository
-- **STAGING_SECRET_KEY**: Secret key for staging environment
-- **STAGING_DB_PASSWORD**: Database password for staging
-- **STAGING_REDIS_PASSWORD**: Redis password for staging
+
+The Helm chart still defines these values keys for local/dev chart-created secrets:
+
+- `secrets.databaseUrl`
+- `secrets.redisUrl`
+- `secrets.apiKey`
+- `secrets.jwtSecret`
+- `secrets.encryptionKey`
+- `secrets.auditHmacSecret`
+- `secrets.langfusePublicKey`
+- `secrets.langfuseSecretKey`
+- `secrets.sentryDsn`
+- `secrets.workflowEventRabbitmqUrl`
+
+Production-like CI/CD workflows must not pass raw secret values through Helm `--set-string secrets.*=...`, because those values can be retained in Helm release history. The workflows must create or update a Kubernetes Secret first and then deploy with:
+
+- `secrets.enabled=true`
+- `secrets.create=false`
+- `secrets.existingSecretName=xagent-secrets`
+
+The expected workflow pattern is:
+
+```bash
+kubectl create secret generic xagent-secrets \
+  --namespace staging \
+  --from-literal=database-url="$STAGING_DATABASE_URL" \
+  --from-literal=redis-url="$STAGING_REDIS_URL" \
+  --from-literal=api-key="$STAGING_API_KEY" \
+  --from-literal=jwt-secret="$STAGING_JWT_SECRET" \
+  --from-literal=encryption-key="$STAGING_ENCRYPTION_KEY" \
+  --from-literal=audit-hmac-secret="$STAGING_AUDIT_HMAC_SECRET" \
+  --from-literal=langfuse-public-key="$STAGING_LANGFUSE_PUBLIC_KEY" \
+  --from-literal=langfuse-secret-key="$STAGING_LANGFUSE_SECRET_KEY" \
+  --from-literal=sentry-dsn="$STAGING_SENTRY_DSN" \
+  --from-literal=workflow-event-rabbitmq-url="$STAGING_WORKFLOW_EVENT_RABBITMQ_URL" \
+  --dry-run=client \
+  -o yaml | kubectl apply -f -
+```
+
+Do not use the legacy Helm values keys `secrets.secretKey`, `secrets.dbPassword`, or `secrets.redisPassword`.
+
+Staging:
+
+- **STAGING_DATABASE_URL**: Staging database connection URL
+- **STAGING_REDIS_URL**: Staging Redis connection URL
+- **STAGING_API_KEY**: Staging API key
+- **STAGING_JWT_SECRET**: Staging JWT signing secret
+- **STAGING_ENCRYPTION_KEY**: Staging encryption key
+- **STAGING_AUDIT_HMAC_SECRET**: Staging audit HMAC secret
+- **STAGING_LANGFUSE_PUBLIC_KEY**: Staging Langfuse public key
+- **STAGING_LANGFUSE_SECRET_KEY**: Staging Langfuse secret key
+- **STAGING_SENTRY_DSN**: Staging Sentry DSN
+- **STAGING_WORKFLOW_EVENT_RABBITMQ_URL**: Staging RabbitMQ URL for workflow event fan-out
+
+Production:
+
+- **PROD_DATABASE_URL**: Production database connection URL
+- **PROD_REDIS_URL**: Production Redis connection URL
+- **PROD_API_KEY**: Production API key
+- **PROD_JWT_SECRET**: Production JWT signing secret
+- **PROD_ENCRYPTION_KEY**: Production encryption key
+- **PROD_AUDIT_HMAC_SECRET**: Production audit HMAC secret
+- **PROD_LANGFUSE_PUBLIC_KEY**: Production Langfuse public key
+- **PROD_LANGFUSE_SECRET_KEY**: Production Langfuse secret key
+- **PROD_SENTRY_DSN**: Production Sentry DSN
+- **PROD_WORKFLOW_EVENT_RABBITMQ_URL**: Production RabbitMQ URL for workflow event fan-out
 
 ### 4. Notification Secrets
 - **SLACK_WEBHOOK**: Slack webhook URL for CI/CD notifications
@@ -54,14 +117,65 @@ Value: us-east-1  # or your preferred region
 Name: HELM_REPO_URL
 Value: https://your-helm-repo.example.com
 
-Name: STAGING_SECRET_KEY
-Value: <generate-a-secure-random-key>
+Name: STAGING_DATABASE_URL
+Value: <staging-database-url>
 
-Name: STAGING_DB_PASSWORD
-Value: <generate-a-secure-random-password>
+Name: STAGING_REDIS_URL
+Value: <staging-redis-url>
 
-Name: STAGING_REDIS_PASSWORD
-Value: <generate-a-secure-random-password>
+Name: STAGING_API_KEY
+Value: <staging-api-key>
+
+Name: STAGING_JWT_SECRET
+Value: <staging-jwt-secret>
+
+Name: STAGING_ENCRYPTION_KEY
+Value: <staging-encryption-key>
+
+Name: STAGING_AUDIT_HMAC_SECRET
+Value: <staging-audit-hmac-secret>
+
+Name: STAGING_LANGFUSE_PUBLIC_KEY
+Value: <staging-langfuse-public-key>
+
+Name: STAGING_LANGFUSE_SECRET_KEY
+Value: <staging-langfuse-secret-key>
+
+Name: STAGING_SENTRY_DSN
+Value: <staging-sentry-dsn>
+
+Name: STAGING_WORKFLOW_EVENT_RABBITMQ_URL
+Value: <staging-rabbitmq-url>
+
+Name: PROD_DATABASE_URL
+Value: <production-database-url>
+
+Name: PROD_REDIS_URL
+Value: <production-redis-url>
+
+Name: PROD_API_KEY
+Value: <production-api-key>
+
+Name: PROD_JWT_SECRET
+Value: <production-jwt-secret>
+
+Name: PROD_ENCRYPTION_KEY
+Value: <production-encryption-key>
+
+Name: PROD_AUDIT_HMAC_SECRET
+Value: <production-audit-hmac-secret>
+
+Name: PROD_LANGFUSE_PUBLIC_KEY
+Value: <production-langfuse-public-key>
+
+Name: PROD_LANGFUSE_SECRET_KEY
+Value: <production-langfuse-secret-key>
+
+Name: PROD_SENTRY_DSN
+Value: <production-sentry-dsn>
+
+Name: PROD_WORKFLOW_EVENT_RABBITMQ_URL
+Value: <production-rabbitmq-url>
 ```
 
 #### Notifications

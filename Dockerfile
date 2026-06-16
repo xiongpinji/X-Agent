@@ -11,9 +11,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements and project files
-COPY requirements-lock.txt .
+# Copy project metadata and source
 COPY pyproject.toml .
+COPY backend ./backend
+COPY cli ./cli
+COPY scripts ./scripts
+COPY templates ./templates
 
 # Create virtual environment
 RUN python -m venv /opt/venv
@@ -21,8 +24,7 @@ ENV PATH="/opt/venv/bin:$PATH"
 
 # Install Python dependencies
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
-    pip install --no-cache-dir -r requirements-lock.txt && \
-    pip install --no-cache-dir -e .
+    pip install --no-cache-dir ".[cli,prod]"
 
 # Stage 2: Runtime
 FROM python:3.11-slim
@@ -43,9 +45,10 @@ COPY --from=builder /opt/venv /opt/venv
 
 # Copy application code
 COPY backend ./backend
+COPY cli ./cli
 COPY scripts ./scripts
-COPY data ./data
 COPY templates ./templates
+RUN mkdir -p data
 
 # Set environment variables
 ENV PATH="/opt/venv/bin:$PATH" \

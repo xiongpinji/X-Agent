@@ -37,6 +37,22 @@ class ChannelMessage:
 
 
 @dataclass
+class ChannelDispatchResult:
+    """Stable receipt for channel webhook processing."""
+
+    channel: str
+    conversation_id: str
+    message_id: str
+    run_id: str
+    status: str
+    reply_sent: bool = False
+    reply_text: str = ""
+    sender_id: str = ""
+    dispatch: dict[str, Any] = field(default_factory=dict)
+    outbound: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
 class ChannelConfig:
     """Generic channel configuration. Adapters read what they need."""
 

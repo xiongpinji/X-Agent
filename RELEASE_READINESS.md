@@ -4,7 +4,11 @@ Last updated: 2026-06-05
 
 ## Current release-candidate status
 
-X-Agent is now in commercial-delivery convergence mode. The current `develop` branch includes the core enterprise agent framework, MCP integration, CLI, hooks, enhanced context management, Phase 5.5 cloud sandbox / Issue-to-PR infrastructure, Phase 5.6 channel adapters, and the DeepSeek real-LLM e2e fix.
+X-Agent is now in commercial-delivery convergence mode. The current
+`codex/codex-hermes-gap-closure` branch includes the core enterprise agent
+framework, MCP integration, CLI, hooks, enhanced context management, Phase 5.5
+cloud sandbox / Issue-to-PR infrastructure, Phase 5.6 channel adapters, and the
+DeepSeek real-LLM e2e fix.
 
 Latest confirmed commit at the start of this readiness pass:
 
@@ -12,7 +16,10 @@ Latest confirmed commit at the start of this readiness pass:
 c2b7dc9 fix: ensure agent replan applies code changes after read
 ```
 
-The project is suitable for internal pilot and PoC demonstration. It is not yet a final GA release until the production deployment checklist, security decisions, and full release-candidate baseline are completed.
+The project is suitable for internal pilot and PoC demonstration. It is not yet
+a final GA release until the production deployment checklist, security
+decisions, and full release-candidate baseline are completed. The active
+commercial RC gate is tracked in `docs/RC_COMMERCIAL_DEPLOYMENT_CHECKLIST.md`.
 
 ## Confirmed working capabilities
 
@@ -99,6 +106,12 @@ Playwright, real PostgreSQL/Qdrant, heavy ML, and performance/bcrypt tests remai
 
 ## Production deployment checklist
 
+Commercial RC convergence now uses the stricter gate in
+`docs/RC_COMMERCIAL_DEPLOYMENT_CHECKLIST.md`, with the exact source-control
+candidate list in `docs/RC_STAGING_MANIFEST.md`. The operational deployment
+handoff is `docs/COMMERCIAL_DEPLOYMENT_RUNBOOK.md`. The checklist below remains
+a production configuration quick reference.
+
 Before external commercial deployment, complete the following checklist:
 
 ```text
@@ -122,3 +135,5 @@ The following items should not be changed automatically without explicit owner a
 ## Recommended next milestone
 
 The next milestone is `v1.0.0-beta`: a deployable pilot release with documented setup, deterministic targeted verification, mock and DeepSeek modes, Docker Compose alignment, and an explicit known-limits section. GA should follow only after the full workstation/CI baseline and security decision list are closed.
+
+Post-RC commercial productization is tracked in `docs/superpowers/plans/2026-06-08-codex-aligned-commercial-delivery.md`. That plan keeps the current RC evidence frozen while adding Codex-aligned commercial-pilot workstreams for the X-Agent control plane, thread workbench, plugin/skill lifecycle, approval/sandbox governance, channel/browser entrypoints, and pilot packaging. It must not be used to claim full Codex parity until the plan's evidence gates pass.

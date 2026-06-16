@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import shlex
 import shutil
 import tempfile
 import uuid
@@ -82,6 +83,53 @@ def reset_docker_probe() -> None:
     """Reset the cached probe (test hook)."""
     global _DOCKER_AVAILABLE
     _DOCKER_AVAILABLE = None
+
+
+def _windows_bash() -> str | None:
+    """Prefer Git Bash over the WSL bash stub for subprocess fallback."""
+
+    candidates = [
+        Path(r"C:\Program Files\Git\bin\bash.exe"),
+        Path(r"C:\Program Files\Git\usr\bin\bash.exe"),
+        Path(r"C:\Program Files (x86)\Git\bin\bash.exe"),
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return str(candidate)
+    bash = shutil.which("bash")
+    if bash and "system32" not in bash.lower():
+        return bash
+    return None
+
+
+def _git_bash_path(value: str) -> str:
+    """Convert a Windows path to the POSIX form Git Bash expects."""
+
+    normalized = value.replace("\\", "/")
+    if len(normalized) >= 2 and normalized[1] == ":":
+        return f"/{normalized[0].lower()}{normalized[2:]}"
+    return normalized
+
+
+async def _kill_process_tree(proc: asyncio.subprocess.Process) -> None:
+    """Terminate a timed-out subprocess and its children when supported."""
+
+    import os
+
+    if os.name == "nt" and proc.pid:
+        killer = await asyncio.create_subprocess_exec(
+            "taskkill",
+            "/PID",
+            str(proc.pid),
+            "/T",
+            "/F",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        await killer.communicate()
+    else:
+        proc.kill()
+    await proc.wait()
 
 
 class DockerSandbox:
@@ -173,18 +221,36 @@ class DockerSandbox:
         unavailable. Network is left intact (we cannot easily block it without
         containers); callers needing strict isolation must run with Docker.
         """
-        proc = await asyncio.create_subprocess_shell(
-            command,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            cwd=str(self._workspace) if self._workspace else None,
-            env=self._build_env(),
-        )
+        import os
+
+        cwd = str(self._workspace) if self._workspace else None
+        env = self._build_env()
+        bash = _windows_bash() if os.name == "nt" else shutil.which("bash")
+        if os.name == "nt" and bash:
+            bash_command = command
+            if cwd:
+                bash_command = f"cd {shlex.quote(_git_bash_path(cwd))} && {command}"
+            proc = await asyncio.create_subprocess_exec(
+                bash,
+                "-lc",
+                bash_command,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                cwd=None,
+                env=env,
+            )
+        else:
+            proc = await asyncio.create_subprocess_shell(
+                command,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                cwd=cwd,
+                env=env,
+            )
         try:
             stdout_b, stderr_b = await asyncio.wait_for(proc.communicate(), timeout=timeout)
         except asyncio.TimeoutError:
-            proc.kill()
-            await proc.wait()
+            await _kill_process_tree(proc)
             raise
         return SandboxResult(
             success=proc.returncode == 0,

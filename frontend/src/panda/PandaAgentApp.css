@@ -1,0 +1,1209 @@
+.panda-agent-app {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 58% 12%, rgba(145, 28, 43, 0.24), transparent 30%),
+    radial-gradient(circle at 82% 72%, rgba(62, 82, 104, 0.18), transparent 28%),
+    #070a0d;
+  color: #f4f6f8;
+}
+
+.panda-agent-app button,
+.panda-agent-app input,
+.panda-agent-app textarea,
+.panda-agent-app select {
+  font: inherit;
+}
+
+.panda-agent-app :where(button, input, textarea, select, [tabindex]):focus-visible {
+  outline: 2px solid rgba(248, 113, 113, 0.95);
+  outline-offset: 3px;
+  box-shadow: 0 0 0 4px rgba(248, 113, 113, 0.16);
+}
+
+.panda-agent-app :where(button, input, textarea, select, [tabindex]):focus:not(:focus-visible) {
+  outline: none;
+}
+
+.panda-skip-link {
+  position: fixed;
+  left: 18px;
+  top: 14px;
+  z-index: 60;
+  border: 1px solid rgba(248, 113, 113, 0.7);
+  border-radius: 8px;
+  background: #111827;
+  color: #f8fafc;
+  opacity: 0;
+  padding: 9px 12px;
+  pointer-events: none;
+  transform: translateY(-12px);
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+
+.panda-skip-link:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.panda-shell {
+  display: grid;
+  grid-template-columns: 276px minmax(0, 1fr) 364px;
+  min-height: 100vh;
+}
+
+.panda-sidebar {
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+  background: linear-gradient(180deg, rgba(14, 17, 21, 0.94), rgba(7, 10, 13, 0.98));
+  padding: 16px 10px;
+}
+
+.panda-main-shell {
+  display: grid;
+  grid-template-rows: 68px minmax(0, 1fr);
+  min-width: 0;
+}
+
+.panda-mobile-status {
+  display: none;
+}
+
+.panda-topbar {
+  display: grid;
+  grid-template-columns: minmax(280px, 520px) minmax(180px, 1fr) max-content;
+  align-items: center;
+  gap: 18px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(8, 11, 15, 0.76);
+  padding: 12px 22px;
+  backdrop-filter: blur(18px);
+}
+
+.panda-content {
+  min-width: 0;
+  overflow: auto;
+  padding: 34px 34px 42px;
+}
+
+.panda-right-rail {
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
+  background: linear-gradient(180deg, rgba(13, 16, 20, 0.9), rgba(8, 11, 15, 0.96));
+  overflow-y: auto;
+  padding: 14px;
+}
+
+.panda-brand {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 8px 8px 24px;
+}
+
+.panda-brand-title {
+  color: #f8fafc;
+  font-size: 24px;
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.panda-brand-subtitle {
+  margin-top: 7px;
+  color: #9aa4b2;
+  font-size: 11px;
+  line-height: 1.35;
+  max-width: 154px;
+}
+
+.panda-logo {
+  height: 46px;
+  width: 46px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 14px 30px rgba(154, 31, 44, 0.32);
+  object-fit: cover;
+}
+
+.panda-nav {
+  display: grid;
+  gap: 6px;
+}
+
+.panda-nav-button {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: #aeb6c2;
+  padding: 11px 13px;
+  text-align: left;
+  transition: background 140ms ease, color 140ms ease, border-color 140ms ease;
+}
+
+.panda-nav-button:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: #f6f8fb;
+}
+
+.panda-nav-button.is-active {
+  border-color: rgba(255, 255, 255, 0.08);
+  background: linear-gradient(135deg, rgba(187, 43, 48, 0.94), rgba(112, 30, 38, 0.9));
+  color: white;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14), 0 12px 24px rgba(132, 26, 36, 0.24);
+}
+
+.panda-workspace-switcher {
+  margin-top: 30px;
+  min-height: 252px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.025);
+  padding: 12px;
+}
+
+.panda-search {
+  display: flex;
+  min-height: 38px;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.055);
+  color: #8e98a6;
+  padding: 0 12px;
+}
+
+.panda-search input {
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  background: transparent;
+  color: #f4f6f8;
+  outline: 0;
+}
+
+.panda-toolbar {
+  display: flex;
+  min-width: max-content;
+  align-items: center;
+  gap: 12px;
+}
+
+.panda-topbar-status {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.panda-icon-button,
+.panda-command-button {
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #f3f5f8;
+  padding: 0 12px;
+}
+
+.panda-icon-button {
+  width: 40px;
+  padding: 0;
+}
+
+.panda-user-chip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 170px;
+}
+
+.panda-avatar {
+  height: 36px;
+  width: 36px;
+  flex: 0 0 auto;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.9);
+  object-fit: cover;
+}
+
+.panda-card {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.03));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.panda-home-grid {
+  display: grid;
+  gap: 18px;
+}
+
+.panda-hero {
+  max-width: 960px;
+}
+
+.panda-composer {
+  margin-top: 18px;
+  max-width: 980px;
+  padding: 14px;
+}
+
+.panda-composer textarea {
+  min-height: 76px;
+  width: 100%;
+  resize: none;
+  border: 0;
+  background: transparent;
+  color: #f8fafc;
+  outline: 0;
+}
+
+.panda-composer-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.panda-pill-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+
+.panda-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 34px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.045);
+  color: #d9dee7;
+  padding: 0 12px;
+}
+
+.panda-send-button {
+  display: grid;
+  height: 40px;
+  width: 48px;
+  place-items: center;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #bb2932, #6f1d27);
+  color: white;
+}
+
+.panda-quick-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  max-width: 980px;
+}
+
+.panda-quick-card {
+  display: grid;
+  min-height: 132px;
+  align-content: space-between;
+  padding: 16px;
+  text-align: left;
+}
+
+.panda-data-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 18px;
+}
+
+.panda-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.panda-table th,
+.panda-table td {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.075);
+  padding: 12px 10px;
+  text-align: left;
+}
+
+.panda-table th {
+  color: #9aa4b2;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.panda-progress-track {
+  height: 4px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.panda-progress-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #ef4444, #22c55e);
+}
+
+.panda-thread-grid {
+  display: grid;
+  grid-template-columns: 300px minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+  min-width: 0;
+}
+
+.panda-thread-list {
+  display: grid;
+  gap: 10px;
+  max-height: 620px;
+  overflow: auto;
+}
+
+.panda-thread-item {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  padding: 12px;
+  text-align: left;
+}
+
+.panda-thread-item.is-active {
+  border-color: rgba(239, 68, 68, 0.52);
+  background: rgba(127, 29, 29, 0.22);
+}
+
+.panda-work-panel {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 620px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.panda-thread-execution-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 300px);
+  gap: 16px;
+  min-width: 0;
+  padding: 16px;
+}
+
+.panda-thread-side-actions {
+  min-width: 0;
+}
+
+.panda-thread-side-actions > * + * {
+  margin-top: 12px;
+}
+
+.panda-tab-row {
+  display: flex;
+  gap: 8px;
+  max-width: 100%;
+  overflow-x: auto;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 12px;
+}
+
+.panda-tab {
+  flex: 0 0 auto;
+  border-radius: 8px;
+  color: #aeb6c2;
+  padding: 8px 10px;
+}
+
+.panda-tab.is-active {
+  background: rgba(255, 255, 255, 0.09);
+  color: white;
+}
+
+.panda-terminal {
+  min-height: 240px;
+  max-width: 100%;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  border-radius: 8px;
+  background: #05070a;
+  color: #8ef6bd;
+  font-family: "Fira Code", "Courier New", monospace;
+  font-size: 12px;
+  line-height: 1.7;
+  padding: 14px;
+}
+
+.panda-module-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.panda-module-card {
+  min-height: 180px;
+  padding: 16px;
+}
+
+.panda-status-dot {
+  display: inline-block;
+  height: 8px;
+  width: 8px;
+  border-radius: 999px;
+  background: #22c55e;
+}
+
+.panda-status-dot.warn {
+  background: #f59e0b;
+}
+
+.panda-status-dot.danger {
+  background: #ef4444;
+}
+
+.panda-command-primary {
+  border-color: rgba(239, 68, 68, 0.38);
+  background: linear-gradient(135deg, rgba(190, 39, 47, 0.94), rgba(112, 30, 38, 0.9));
+}
+
+.panda-page-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.panda-page-heading h1 {
+  color: #f8fafc;
+  font-size: 28px;
+  font-weight: 750;
+  line-height: 1.15;
+}
+
+.panda-page-heading p {
+  margin-top: 8px;
+  max-width: 760px;
+  color: #9aa4b2;
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.panda-page-actions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.panda-contract-strip {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.8fr) minmax(210px, 1.3fr) minmax(170px, 1fr) minmax(220px, 1.4fr) minmax(96px, 0.7fr);
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.panda-contract-strip > div {
+  min-width: 0;
+  background: rgba(8, 10, 16, 0.72);
+  padding: 10px 12px;
+}
+
+.panda-contract-strip span {
+  display: block;
+  color: #747f90;
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.panda-contract-strip strong {
+  display: block;
+  overflow: hidden;
+  margin-top: 5px;
+  color: #dce3ec;
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.panda-contract-strip .panda-contract-fields {
+  white-space: normal;
+}
+
+.panda-contract-strip p {
+  grid-column: 1 / -1;
+  margin: 0;
+  background: rgba(120, 53, 15, 0.28);
+  padding: 9px 12px;
+  color: #fbbf24;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.panda-state-panel {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-height: 82px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  padding: 14px;
+}
+
+.panda-state-panel h3 {
+  color: #f8fafc;
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.panda-state-panel p {
+  margin-top: 6px;
+  color: #9aa4b2;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.panda-state-warning {
+  border-color: rgba(245, 158, 11, 0.28);
+  background: rgba(120, 53, 15, 0.16);
+}
+
+.panda-state-icon {
+  flex: 0 0 auto;
+  color: #fda4af;
+}
+
+.panda-state-warning .panda-state-icon {
+  color: #fbbf24;
+}
+
+.panda-state-icon.is-spinning {
+  animation: panda-spin 900ms linear infinite;
+}
+
+@keyframes panda-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.panda-workflow-canvas {
+  overflow: hidden;
+}
+
+.panda-canvas-toolbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 16px;
+}
+
+.panda-canvas-toolbar h2,
+.panda-org-core h2 {
+  color: #f8fafc;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.panda-canvas-toolbar p,
+.panda-org-core p {
+  margin-top: 6px;
+  color: #9aa4b2;
+  font-size: 13px;
+}
+
+.panda-risk-chip {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.055);
+  color: #d9dee7;
+  padding: 0 12px;
+  font-size: 13px;
+}
+
+.panda-canvas-stage {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  min-height: 430px;
+  overflow: hidden;
+  padding: 22px;
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    radial-gradient(circle at 50% 34%, rgba(190, 39, 47, 0.18), transparent 34%);
+  background-size: 34px 34px, 34px 34px, 100% 100%;
+}
+
+.panda-flow-node {
+  position: absolute;
+  width: clamp(176px, 14vw, 210px);
+  max-width: calc(100% - 32px);
+  transform: translate(-50%, -50%);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  background: rgba(9, 12, 16, 0.92);
+  box-shadow: 0 18px 36px rgba(0, 0, 0, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  padding: 13px;
+}
+
+.panda-list-grid,
+.panda-tools-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.panda-list-card,
+.panda-tool-card {
+  padding: 16px;
+}
+
+.panda-list-card h3,
+.panda-tool-card h3,
+.panda-audit-event h3 {
+  color: #f8fafc;
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.panda-list-card p,
+.panda-tool-card p,
+.panda-audit-event p {
+  margin-top: 8px;
+  color: #9aa4b2;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.panda-agent-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 18px;
+  align-items: start;
+  min-width: 0;
+}
+
+.panda-role-presets {
+  overflow: hidden;
+}
+
+.panda-role-presets-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 16px;
+}
+
+.panda-role-presets-heading h2,
+.panda-role-detail h3 {
+  color: #f8fafc;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.panda-role-presets-heading p,
+.panda-role-detail p {
+  margin-top: 6px;
+  color: #9aa4b2;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.panda-role-presets-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
+  align-items: stretch;
+  gap: 16px;
+  padding: 16px;
+}
+
+.panda-role-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(238px, 1fr));
+  align-content: start;
+  gap: 12px;
+}
+
+.panda-role-card {
+  display: grid;
+  grid-template-columns: 178px minmax(0, 1fr);
+  min-width: 0;
+  min-height: 216px;
+  align-items: center;
+  gap: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 8px;
+  background:
+    radial-gradient(circle at 22% 18%, rgba(248, 113, 113, 0.16), transparent 34%),
+    rgba(255, 255, 255, 0.04);
+  color: #dbe3ef;
+  padding: 14px;
+  text-align: left;
+}
+
+.panda-role-card.is-selected {
+  border-color: rgba(248, 113, 113, 0.62);
+  background: rgba(127, 29, 29, 0.24);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.panda-role-portrait {
+  position: relative;
+  display: grid;
+  height: 188px;
+  width: 178px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid rgba(248, 113, 113, 0.18);
+  border-radius: 8px;
+  background:
+    radial-gradient(circle at 50% 74%, rgba(248, 113, 113, 0.2), transparent 62%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(14, 18, 24, 0.7));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 18px 34px rgba(0, 0, 0, 0.24);
+  overflow: hidden;
+}
+
+.panda-role-portrait.is-large {
+  height: 340px;
+  width: 286px;
+}
+
+.panda-role-portrait img,
+.panda-role-portrait-image {
+  position: relative;
+  z-index: 1;
+  display: block;
+  height: 100%;
+  width: 100%;
+  object-fit: contain;
+  object-position: center bottom;
+  padding: 0;
+}
+
+.panda-role-card-copy {
+  min-width: 0;
+}
+
+.panda-role-card strong {
+  display: block;
+  overflow: hidden;
+  color: #f8fafc;
+  font-size: 14px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.panda-role-card span span {
+  display: block;
+  margin-top: 6px;
+  color: #9aa4b2;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.panda-role-detail {
+  min-width: 0;
+  align-self: stretch;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 8px;
+  background:
+    radial-gradient(circle at 18% 0%, rgba(239, 68, 68, 0.18), transparent 32%),
+    rgba(255, 255, 255, 0.035);
+  padding: 16px;
+}
+
+.panda-role-detail-title {
+  display: grid;
+  grid-template-columns: 1fr;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.panda-role-detail-block {
+  margin-top: 14px;
+}
+
+.panda-role-detail-block > span {
+  display: block;
+  margin-bottom: 8px;
+  color: #8e98a6;
+  font-size: 12px;
+}
+
+.panda-org-panel {
+  min-height: 320px;
+  padding: 20px;
+}
+
+.panda-org-core {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  border: 1px solid rgba(239, 68, 68, 0.24);
+  border-radius: 8px;
+  background: rgba(127, 29, 29, 0.16);
+  padding: 16px;
+}
+
+.panda-org-spokes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.panda-org-agent {
+  display: flex;
+  min-height: 58px;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  padding: 12px;
+  color: #d9dee7;
+  font-size: 13px;
+}
+
+.panda-mini-tag {
+  display: inline-flex;
+  min-height: 24px;
+  align-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.045);
+  color: #b8c4d4;
+  padding: 0 8px;
+  font-size: 11px;
+}
+
+.panda-audit-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 18px;
+}
+
+.panda-audit-event {
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.035);
+  padding: 14px;
+}
+
+.panda-tool-icon {
+  display: grid;
+  height: 38px;
+  width: 38px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 8px;
+  background: rgba(239, 68, 68, 0.14);
+  color: #fda4af;
+}
+
+.panda-tool-card span {
+  display: block;
+  color: #8e98a6;
+  font-size: 11px;
+}
+
+.panda-tool-card strong {
+  display: block;
+  margin-top: 6px;
+  color: #f8fafc;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.panda-split-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 18px;
+}
+
+.panda-management-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.035);
+  padding: 14px;
+}
+
+.panda-management-row h3 {
+  color: #f8fafc;
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.panda-management-row p {
+  margin-top: 8px;
+  color: #9aa4b2;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.panda-state-action {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(248, 113, 113, 0.28);
+  border-radius: 8px;
+  background: rgba(185, 28, 28, 0.16);
+  color: #fecdd3;
+  padding: 0 12px;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+@media (max-width: 1280px) {
+  .panda-shell {
+    grid-template-columns: 236px minmax(0, 1fr);
+  }
+
+  .panda-right-rail {
+    display: none;
+  }
+
+  .panda-quick-grid,
+  .panda-module-grid,
+  .panda-list-grid,
+  .panda-tools-grid,
+  .panda-role-card-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .panda-role-presets-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .panda-role-detail {
+    display: grid;
+    grid-template-columns: minmax(260px, 1fr) repeat(3, minmax(0, 1fr));
+    gap: 14px;
+  }
+
+  .panda-role-detail-block {
+    margin-top: 0;
+  }
+
+  .panda-contract-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 860px) {
+  .panda-shell,
+  .panda-thread-grid,
+  .panda-data-grid,
+  .panda-agent-grid,
+  .panda-audit-layout,
+  .panda-split-layout {
+    grid-template-columns: 1fr;
+    max-width: 100vw;
+  }
+
+  .panda-sidebar {
+    min-width: 0;
+    max-width: 100vw;
+    position: static;
+    border-right: 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 12px 10px;
+  }
+
+  .panda-brand {
+    padding-bottom: 12px;
+  }
+
+  .panda-nav {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+  }
+
+  .panda-nav-button {
+    flex: 0 0 auto;
+    width: auto;
+    min-height: 38px;
+    padding: 8px 12px;
+  }
+
+  .panda-workspace-switcher {
+    display: none;
+  }
+
+  .panda-topbar {
+    grid-template-columns: 1fr;
+    gap: 10px;
+    min-width: 0;
+    padding: 12px;
+  }
+
+  .panda-content {
+    min-width: 0;
+    max-width: 100vw;
+    padding: 20px 12px 28px;
+  }
+
+  .panda-quick-grid,
+  .panda-module-grid,
+  .panda-list-grid,
+  .panda-tools-grid,
+  .panda-role-card-grid,
+  .panda-org-spokes {
+    grid-template-columns: 1fr;
+  }
+
+  .panda-page-heading,
+  .panda-canvas-toolbar,
+  .panda-role-presets-heading {
+    flex-direction: column;
+  }
+
+  .panda-page-actions {
+    justify-content: flex-start;
+  }
+
+  .panda-contract-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .panda-canvas-stage {
+    min-height: 760px;
+    overflow: visible;
+  }
+
+  .panda-flow-node {
+    left: 50% !important;
+    width: min(280px, calc(100vw - 64px));
+  }
+
+  .panda-thread-execution-grid,
+  .panda-role-detail {
+    grid-template-columns: 1fr;
+  }
+
+  .panda-role-card {
+    grid-template-columns: 118px minmax(0, 1fr);
+  }
+
+  .panda-role-portrait {
+    height: 130px;
+    width: 118px;
+  }
+
+  .panda-composer-actions {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .panda-send-button {
+    width: 100%;
+  }
+
+  .panda-toolbar {
+    min-width: 0;
+    overflow-x: auto;
+    justify-content: space-between;
+  }
+
+  .panda-topbar-status {
+    display: none;
+  }
+
+  .panda-mobile-status {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(8, 11, 15, 0.7);
+    color: #9aa4b2;
+    padding: 0 12px 12px;
+    font-size: 12px;
+  }
+
+  .panda-mobile-status span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .panda-mobile-status span:first-child {
+    color: #f4f6f8;
+    font-weight: 650;
+  }
+
+  .panda-user-chip {
+    display: none;
+  }
+
+  .panda-search {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .panda-pill-row {
+    flex-wrap: nowrap;
+    max-width: 100%;
+    overflow-x: auto;
+    padding-bottom: 2px;
+  }
+
+  .panda-pill {
+    flex: 0 0 auto;
+  }
+
+  .panda-card {
+    min-width: 0;
+  }
+
+  .panda-table {
+    min-width: 640px;
+  }
+
+  .panda-data-grid .panda-card:first-child {
+    overflow-x: auto;
+  }
+
+  .panda-management-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

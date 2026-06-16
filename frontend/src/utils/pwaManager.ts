@@ -2,22 +2,11 @@
  * PWA Service Worker Registration and Management
  */
 
-interface ServiceWorkerRegistration {
-  unregister(): Promise<boolean>;
-  update(): Promise<void>;
-  active?: ServiceWorker;
-  waiting?: ServiceWorker;
-  installing?: ServiceWorker;
-}
-
-interface ServiceWorker extends EventTarget {
-  postMessage(message: any): void;
-}
-
 class PWAManager {
   private registration: ServiceWorkerRegistration | null = null;
   private updateCheckInterval: number | null = null;
   private listeners: Map<string, Set<Function>> = new Map();
+  private readonly firstRunEntrypoints = ['/', '/chat', '/api/v1/workbench'];
 
   constructor() {
     this.initializeListeners();
@@ -54,6 +43,7 @@ class PWAManager {
 
       // Check for updates periodically
       this.startUpdateCheck();
+      this.precacheFirstRunEntrypoints().catch(console.error);
 
       // Listen for controller change
       navigator.serviceWorker.addEventListener('controllerchange', () => {
@@ -150,6 +140,10 @@ class PWAManager {
         payload: { urls },
       });
     }
+  }
+
+  async precacheFirstRunEntrypoints(): Promise<void> {
+    await this.precacheUrls(this.firstRunEntrypoints);
   }
 
   /**

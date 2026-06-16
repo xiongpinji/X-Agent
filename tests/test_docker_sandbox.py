@@ -4,6 +4,7 @@ and that the container path is correctly gated behind the availability probe."""
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 
 import pytest
 
@@ -11,6 +12,8 @@ from backend.app.core.sandbox.docker_sandbox import (
     DockerSandbox,
     SandboxSpec,
     SandboxResult,
+    _git_bash_path,
+    _windows_bash,
     is_docker_available,
     reset_docker_probe,
 )
@@ -108,3 +111,38 @@ class TestDockerProbe:
         second = is_docker_available()
         assert first == second
         assert isinstance(first, bool)
+
+
+class TestWindowsBashSelection:
+    def test_converts_windows_path_to_git_bash_path(self):
+        assert _git_bash_path(r"D:\workspaces\x-agent") == "/d/workspaces/x-agent"
+
+    def test_prefers_git_bash_installation(self, monkeypatch):
+        expected = r"C:\Program Files\Git\bin\bash.exe"
+
+        def fake_exists(path: Path) -> bool:
+            return str(path) == expected
+
+        monkeypatch.setattr(Path, "exists", fake_exists)
+        monkeypatch.setattr("backend.app.core.sandbox.docker_sandbox.shutil.which", lambda _name: None)
+
+        assert _windows_bash() == expected
+
+    def test_ignores_system32_wsl_bash_relay(self, monkeypatch):
+        monkeypatch.setattr(Path, "exists", lambda _path: False)
+        monkeypatch.setattr(
+            "backend.app.core.sandbox.docker_sandbox.shutil.which",
+            lambda _name: r"C:\Windows\System32\bash.exe",
+        )
+
+        assert _windows_bash() is None
+
+    def test_accepts_non_system32_path_bash(self, monkeypatch):
+        expected = r"D:\tools\git\bin\bash.exe"
+        monkeypatch.setattr(Path, "exists", lambda _path: False)
+        monkeypatch.setattr(
+            "backend.app.core.sandbox.docker_sandbox.shutil.which",
+            lambda _name: expected,
+        )
+
+        assert _windows_bash() == expected

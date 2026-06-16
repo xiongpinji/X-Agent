@@ -12,6 +12,7 @@ from pathlib import Path
 import nest_asyncio
 from fastapi.testclient import TestClient
 
+from backend.app.core.security import anonymous_principal
 from backend.app.main import app
 
 nest_asyncio.apply()
@@ -25,6 +26,19 @@ def _bootstrap_client() -> TestClient:
 def _anon_client() -> TestClient:
     """Return an unauthenticated client."""
     return TestClient(app)
+
+
+def test_anonymous_principal_has_workbench_contract_fields() -> None:
+    principal = anonymous_principal()
+
+    assert principal.tenant_id == "default"
+    assert principal.user_id == "anonymous"
+    assert principal.agent_id == "default-agent"
+    assert principal.session_id
+    assert principal.trace_id
+    assert principal.created_at is not None
+    assert principal.authenticated is False
+    assert principal.scopes == []
 
 
 # =============================================================================
@@ -225,6 +239,17 @@ def test_register_rate_limit() -> None:
 # =============================================================================
 
 
+def _configure_feishu_for_signature_tests() -> None:
+    from backend.app.core.feishu_bridge import FeishuSyncStore, feishu_bridge
+
+    feishu_bridge.store = FeishuSyncStore()
+    feishu_bridge.configure(
+        app_id="cli_a_test",
+        app_secret="app-secret",
+        encrypt_key="encrypt-key",
+    )
+
+
 def test_feishu_event_requires_signature_headers() -> None:
     client = _anon_client()
     response = client.post("/api/v1/integrations/feishu/events", json={"test": 1})
@@ -233,6 +258,7 @@ def test_feishu_event_requires_signature_headers() -> None:
 
 
 def test_feishu_event_rejects_bad_signature() -> None:
+    _configure_feishu_for_signature_tests()
     client = _anon_client()
     response = client.post(
         "/api/v1/integrations/feishu/events",
@@ -245,6 +271,55 @@ def test_feishu_event_rejects_bad_signature() -> None:
     )
     assert response.status_code == 401
     assert "Invalid Feishu signature" in response.json()["message"]
+
+
+def test_feishu_event_accepts_official_lark_signature() -> None:
+    import json
+
+    from backend.app.core.feishu_bridge import FeishuBridge
+
+    _configure_feishu_for_signature_tests()
+    client = _anon_client()
+    body = json.dumps(
+        {
+            "event_id": "security-feishu-event",
+            "header": {"event_type": "im.message.receive_v1", "tenant_key": "tenant"},
+            "event": {
+                "sender": {"sender_id": {"open_id": "ou_test"}},
+                "message": {
+                    "message_id": "om_test",
+                    "chat_id": "oc_test",
+                    "content": json.dumps({"text": "hello"}),
+                },
+            },
+        },
+        separators=(",", ":"),
+    ).encode("utf-8")
+    timestamp = "1700000000"
+    nonce = "nonce"
+    signature = FeishuBridge.calculate_lark_signature(
+        timestamp=timestamp,
+        nonce=nonce,
+        encrypt_key="encrypt-key",
+        body=body,
+    )
+
+    response = client.post(
+        "/api/v1/integrations/feishu/events",
+        content=body,
+        headers={
+            "content-type": "application/json",
+            "X-Lark-Signature": signature,
+            "X-Lark-Request-Timestamp": timestamp,
+            "X-Lark-Request-Nonce": nonce,
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["ok"] is True
+    assert payload["result"]["accepted"] is True
+    assert payload["result"]["event_id"] == "security-feishu-event"
 
 
 # =============================================================================

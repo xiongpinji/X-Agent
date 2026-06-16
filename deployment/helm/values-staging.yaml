@@ -1,0 +1,124 @@
+# X-Agent Helm Chart - Staging Environment Values
+# Staging: 2 replicas, resource relaxation, staging domain, staging secrets
+
+global:
+  environment: staging
+
+replicaCount: 2
+
+image:
+  repository: x-agent/x-agent
+  pullPolicy: Always
+  tag: "1.0.0-staging"
+
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-staging"
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+  hosts:
+    - host: api-staging.x-agent.dev
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: x-agent-staging-tls
+      hosts:
+        - api-staging.x-agent.dev
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 200m
+    memory: 256Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 75
+  targetMemoryUtilizationPercentage: 80
+
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchExpressions:
+              - key: app
+                operator: In
+                values:
+                  - xagent
+          topologyKey: kubernetes.io/hostname
+
+env:
+  LOG_LEVEL: debug
+  DEBUG: "true"
+  ENVIRONMENT: staging
+  XAGENT_MODE: standard
+  XAGENT_APP_MODE: staging
+  XAGENT_DEPLOYMENT_ENVIRONMENT: staging
+  XAGENT_REQUIRE_API_KEY: "true"
+
+livenessProbe:
+  httpGet:
+    path: /health
+    port: 8000
+  initialDelaySeconds: 20
+  periodSeconds: 15
+  timeoutSeconds: 5
+  failureThreshold: 2
+
+readinessProbe:
+  httpGet:
+    path: /health
+    port: 8000
+  initialDelaySeconds: 5
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 2
+
+database:
+  host: postgres-staging.default.svc.cluster.local
+  poolSize: 15
+  maxOverflow: 30
+
+redis:
+  host: redis-staging.default.svc.cluster.local
+
+observability:
+  enabled: true
+  metrics:
+    enabled: true
+    path: /api/v1/metrics/prometheus
+  traces:
+    enabled: true
+    endpoint: "https://staging-api.langfuse.com"
+  errors:
+    enabled: true
+  logs:
+    level: debug
+
+workflowEvents:
+  backend: rabbitmq
+  exchange: xagent.workflow
+
+secrets:
+  enabled: true
+  create: false
+  existingSecretName: xagent-secrets
+
+persistence:
+  enabled: true
+  size: 20Gi
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+networkPolicy:
+  enabled: true

@@ -6,12 +6,14 @@ import hashlib
 import hmac
 import json
 import logging
+import os
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any, Literal
 from uuid import uuid4
 
 import httpx
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
 logger = logging.getLogger("xagent.feishu")
 
@@ -91,15 +93,39 @@ class FeishuBridge:
     def __init__(self) -> None:
         self.app_id: str | None = None
         self.app_secret: str | None = None
+        self.encrypt_key: str | None = None
         self.base_url = "https://open.feishu.cn"
         self._tenant_access_token: str | None = None
         self._tenant_token_expire_at: datetime | None = None
         self.store = FeishuSyncStore()
 
-    def configure(self, *, app_id: str, app_secret: str, base_url: str = "https://open.feishu.cn") -> None:
+    def configure(
+        self,
+        *,
+        app_id: str,
+        app_secret: str,
+        base_url: str = "https://open.feishu.cn",
+        encrypt_key: str | None = None,
+    ) -> None:
         self.app_id = app_id
         self.app_secret = app_secret
+        self.encrypt_key = encrypt_key
         self.base_url = base_url.rstrip("/")
+
+    def configure_from_env(self) -> bool:
+        app_id = os.getenv("XAGENT_FEISHU_APP_ID") or os.getenv("FEISHU_APP_ID")
+        app_secret = os.getenv("XAGENT_FEISHU_APP_SECRET") or os.getenv("FEISHU_APP_SECRET")
+        encrypt_key = os.getenv("XAGENT_FEISHU_ENCRYPT_KEY") or os.getenv("FEISHU_ENCRYPT_KEY")
+        base_url = os.getenv("XAGENT_FEISHU_BASE_URL") or os.getenv("FEISHU_BASE_URL") or self.base_url
+        if not (app_id and app_secret):
+            return False
+        self.configure(
+            app_id=app_id,
+            app_secret=app_secret,
+            base_url=base_url,
+            encrypt_key=encrypt_key,
+        )
+        return True
 
     async def get_tenant_access_token(self) -> str:
         if self._tenant_access_token and self._tenant_token_expire_at and datetime.now(UTC) < self._tenant_token_expire_at:
@@ -138,7 +164,25 @@ class FeishuBridge:
             response.raise_for_status()
             return response.json()
 
-    def verify_signature(self, *, timestamp: str, nonce: str, body: bytes, signature: str) -> bool:
+    @staticmethod
+    def calculate_lark_signature(*, timestamp: str, nonce: str, encrypt_key: str, body: bytes) -> str:
+        """Calculate Feishu/Lark event-callback signature for signed events."""
+
+        raw = f"{timestamp}{nonce}{encrypt_key}".encode("utf-8") + body
+        return hashlib.sha256(raw).hexdigest()
+
+    def _verify_lark_signature(self, *, timestamp: str, nonce: str, body: bytes, signature: str) -> bool:
+        if not self.encrypt_key:
+            return False
+        expected = self.calculate_lark_signature(
+            timestamp=timestamp,
+            nonce=nonce,
+            encrypt_key=self.encrypt_key,
+            body=body,
+        )
+        return hmac.compare_digest(expected, signature)
+
+    def _verify_legacy_signature(self, *, timestamp: str, nonce: str, body: bytes, signature: str) -> bool:
         if not self.app_secret:
             return False
         raw = f"{timestamp}\n{nonce}\n".encode("utf-8") + body
@@ -146,8 +190,52 @@ class FeishuBridge:
         expected = base64.b64encode(digest).decode("utf-8")
         return hmac.compare_digest(expected, signature)
 
+    def verify_signature(
+        self,
+        *,
+        timestamp: str,
+        nonce: str,
+        body: bytes,
+        signature: str,
+        mode: Literal["lark_sha256", "legacy_hmac_sha256"] | None = None,
+    ) -> bool:
+        if not (timestamp and nonce and signature):
+            return False
+        if mode == "lark_sha256":
+            return self._verify_lark_signature(timestamp=timestamp, nonce=nonce, body=body, signature=signature)
+        if mode == "legacy_hmac_sha256":
+            return self._verify_legacy_signature(timestamp=timestamp, nonce=nonce, body=body, signature=signature)
+        return self._verify_lark_signature(
+            timestamp=timestamp,
+            nonce=nonce,
+            body=body,
+            signature=signature,
+        ) or self._verify_legacy_signature(timestamp=timestamp, nonce=nonce, body=body, signature=signature)
+
+    def decrypt_callback_payload(self, encrypted: str) -> dict[str, Any]:
+        if not self.encrypt_key:
+            raise RuntimeError("Feishu event encrypt key is not configured")
+        key = hashlib.sha256(self.encrypt_key.encode("utf-8")).digest()
+        raw = base64.b64decode(encrypted)
+        if len(raw) < 32:
+            raise ValueError("Encrypted Feishu callback payload is too short")
+        iv = raw[:16]
+        ciphertext = raw[16:]
+        if len(ciphertext) % 16 != 0:
+            raise ValueError("Encrypted Feishu callback payload is not block aligned")
+        decryptor = Cipher(algorithms.AES(key), modes.CBC(iv)).decryptor()
+        padded = decryptor.update(ciphertext) + decryptor.finalize()
+        padding_size = padded[-1]
+        if padding_size < 1 or padding_size > 16:
+            raise ValueError("Invalid Feishu callback padding")
+        plaintext = padded[:-padding_size]
+        payload = json.loads(plaintext.decode("utf-8"))
+        if not isinstance(payload, dict):
+            raise ValueError("Decrypted Feishu callback payload must be an object")
+        return payload
+
     async def handle_event(self, payload: dict[str, Any]) -> dict[str, Any]:
-        event_id = payload.get("event_id") or payload.get("uuid") or str(uuid4())
+        event_id = payload.get("event_id") or payload.get("header", {}).get("event_id") or payload.get("uuid") or str(uuid4())
         if not await self.store.mark_event_seen(event_id):
             return {"accepted": False, "reason": "duplicate_event", "event_id": event_id}
         event_type = payload.get("header", {}).get("event_type") or payload.get("type") or "unknown"

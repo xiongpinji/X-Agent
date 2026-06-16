@@ -1,17 +1,23 @@
 apiVersion: v2
 name: xagent
-description: X-Agent Production Deployment Helm Chart
+description: X-Agent Enterprise Autonomous Agent Framework - Production-grade deployment chart
 type: application
 version: 1.0.0
-appVersion: "0.1.0"
+appVersion: "1.0.0"
+kubeVersion: ">=1.24.0"
 keywords:
-  - xagent
-  - ai
   - agent
-  - fastapi
-home: https://github.com/xagent/xagent
-sources:
-  - https://github.com/xagent/xagent
+  - autonomous
+  - framework
+  - ai
+  - mcp
+  - enterprise
 maintainers:
   - name: X-Agent Team
-    email: team@xagent.dev
+    email: team@x-agent.dev
+    url: https://x-agent.dev
+home: https://x-agent.dev
+sources:
+  - https://github.com/x-agent/x-agent
+icon: https://x-agent.dev/logo.png
+dependencies: []

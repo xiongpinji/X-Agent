@@ -340,14 +340,21 @@ def get_workflow_repository() -> WorkflowRepository:
 @lru_cache
 def get_workflow_executor() -> WorkflowExecutor:
     """Get the workflow executor instance (singleton)."""
+    from backend.app.core.workflow_events import build_workflow_event_publisher
     from backend.app.core.workflows import WorkflowExecutor
 
+    settings = get_settings()
     return WorkflowExecutor(
         agent=get_agent(),
         repository=get_workflow_repository(),
         tracer=get_trace_store(),
         approval_store=get_approval_store(),
         audit_store=get_audit_store(),
+        event_publisher=build_workflow_event_publisher(
+            workflow_event_broker_backend=settings.workflow_event_broker_backend,
+            workflow_event_rabbitmq_url=settings.workflow_event_rabbitmq_url or "",
+            workflow_event_exchange=settings.workflow_event_exchange,
+        ),
     )
 
 

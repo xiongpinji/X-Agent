@@ -8,43 +8,12 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
-import compression from 'vite-plugin-compression';
-import { visualizer } from 'rollup-plugin-visualizer';
 
 export default defineConfig({
   plugins: [
     react({
       // Enable Fast Refresh for faster HMR
       fastRefresh: true,
-      // Babel optimization
-      babel: {
-        plugins: [
-          ['@babel/plugin-proposal-decorators', { legacy: true }],
-        ],
-      },
-    }),
-    // Gzip compression for production
-    compression({
-      verbose: true,
-      disable: false,
-      threshold: 10240,
-      algorithm: 'gzip',
-      ext: '.gz',
-    }),
-    // Brotli compression for better compression ratio
-    compression({
-      verbose: true,
-      disable: false,
-      threshold: 10240,
-      algorithm: 'brotli',
-      ext: '.br',
-    }),
-    // Bundle analysis
-    visualizer({
-      open: false,
-      gzipSize: true,
-      brotliSize: true,
-      filename: 'dist/stats.html',
     }),
   ],
 
@@ -100,69 +69,27 @@ export default defineConfig({
       },
       mangle: true,
     },
-    // Aggressive code splitting strategy
-    rollupOptions: {
-      output: {
-        manualChunks: (id) => {
-          // Vendor chunks
-          if (id.includes('node_modules/react')) {
-            return 'vendor-react';
-          }
-          if (id.includes('node_modules/react-dom')) {
-            return 'vendor-react';
-          }
-          if (id.includes('node_modules/react-router-dom')) {
-            return 'vendor-react';
-          }
-          if (id.includes('node_modules/zustand') || id.includes('node_modules/@tanstack/react-query')) {
-            return 'vendor-state';
-          }
-          if (id.includes('node_modules/lucide-react') || id.includes('node_modules/recharts')) {
-            return 'vendor-ui';
-          }
-          if (id.includes('node_modules/axios') || id.includes('node_modules/date-fns')) {
-            return 'vendor-utils';
-          }
-          // Feature chunks
-          if (id.includes('src/console')) {
-            return 'console';
-          }
-          if (id.includes('src/pages')) {
-            return 'pages';
-          }
-          if (id.includes('src/components')) {
-            return 'components';
-          }
-        },
-        // Optimize chunk names
-        chunkFileNames: 'js/[name]-[hash].js',
-        entryFileNames: 'js/[name]-[hash].js',
-        assetFileNames: (assetInfo) => {
-          const info = assetInfo.name.split('.')
-          const ext = info[info.length - 1]
-          if (/png|jpe?g|gif|svg|webp/.test(ext)) {
-            return `images/[name]-[hash][extname]`
-          } else if (/woff|woff2|eot|ttf|otf/.test(ext)) {
-            return `fonts/[name]-[hash][extname]`
-          } else if (ext === 'css') {
-            return `css/[name]-[hash][extname]`
-          }
-          return `[name]-[hash][extname]`
-        },
-      },
-    },
     // Optimization settings
     cssCodeSplit: true,
     reportCompressedSize: true,
     chunkSizeWarningLimit: 400,
     rollupOptions: {
       output: {
-        // Limit chunk size to 100KB
-        manualChunks: {
-          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
-          'vendor-state': ['zustand', '@tanstack/react-query'],
-          'vendor-ui': ['lucide-react', 'recharts'],
-          'vendor-utils': ['axios', 'date-fns', 'clsx'],
+        chunkFileNames: 'js/[name]-[hash].js',
+        entryFileNames: 'js/[name]-[hash].js',
+        assetFileNames: (assetInfo) => {
+          const info = assetInfo.name?.split('.') ?? [];
+          const ext = info[info.length - 1] ?? '';
+          if (/png|jpe?g|gif|svg|webp/.test(ext)) {
+            return 'images/[name]-[hash][extname]';
+          }
+          if (/woff|woff2|eot|ttf|otf/.test(ext)) {
+            return 'fonts/[name]-[hash][extname]';
+          }
+          if (ext === 'css') {
+            return 'css/[name]-[hash][extname]';
+          }
+          return '[name]-[hash][extname]';
         },
       },
     },

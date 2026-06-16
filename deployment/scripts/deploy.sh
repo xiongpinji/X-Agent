@@ -11,7 +11,7 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 NAMESPACE=${NAMESPACE:-xagent}
 RELEASE_NAME=${RELEASE_NAME:-xagent}
 ENVIRONMENT=${ENVIRONMENT:-production}
-HELM_CHART_PATH="${SCRIPT_DIR}/helm"
+HELM_CHART_PATH="${HELM_CHART_PATH:-$PROJECT_ROOT/deployment/helm}"
 
 # Colors for output
 RED='\033[0;31m'
@@ -79,13 +79,21 @@ create_namespace() {
 deploy_helm() {
     log_info "Deploying with Helm..."
 
-    local values_file="${SCRIPT_DIR}/values-${ENVIRONMENT}.yaml"
+    if [ ! -f "$HELM_CHART_PATH/Chart.yaml" ]; then
+        log_error "Helm chart not found at: $HELM_CHART_PATH"
+        exit 1
+    fi
+
+    local values_file="${HELM_CHART_PATH}/values-${ENVIRONMENT}.yaml"
 
     if [ ! -f "$values_file" ]; then
         log_warn "Environment-specific values file not found: $values_file"
         log_info "Using default values.yaml"
-        values_file="${SCRIPT_DIR}/values.yaml"
+        values_file="${HELM_CHART_PATH}/values.yaml"
     fi
+
+    log_info "Helm chart: $HELM_CHART_PATH"
+    log_info "Helm values: $values_file"
 
     helm upgrade --install "$RELEASE_NAME" "$HELM_CHART_PATH" \
         --namespace "$NAMESPACE" \

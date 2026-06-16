@@ -66,6 +66,105 @@ export interface ChatMessage {
   metadata?: Record<string, any>
 }
 
+export interface ChatRunEvent {
+  type: string
+  status?: string
+  message: string
+  created_at?: string
+  metadata?: Record<string, any>
+}
+
+export interface ChatNextAction {
+  id: string
+  label: string
+  path?: string
+}
+
+export interface ChatRunResponse {
+  run_id: string
+  trace_id?: string
+  status: 'accepted' | 'running' | 'completed' | 'failed'
+  message: string
+  events: ChatRunEvent[]
+  approval_required: boolean
+  next_actions: ChatNextAction[]
+  agent_id: string
+  workflow_id?: string
+  resource_type: 'workflow_chat'
+}
+
+export interface WorkbenchBootstrap {
+  console: {
+    tenant_id: string
+    user_id: string
+    agent_id: string
+    session_id: string
+    created_at: string
+  }
+  entries: Array<{ id: string; label: string; path: string }>
+}
+
+export interface WorkbenchActivityItem {
+  id: string
+  title: string
+  subtitle: string
+  status: string
+  tone: 'success' | 'warning' | 'danger' | 'neutral'
+  time: string
+}
+
+export interface WorkbenchWorkflowRun {
+  id: string
+  name: string
+  state: string
+  progress: number
+  owner: string
+  tone: 'success' | 'warning' | 'danger' | 'neutral'
+}
+
+export interface WorkbenchHome {
+  brand: {
+    product_name: string
+    platform_name: string
+    subtitle: string
+  }
+  summary: string
+  metrics: {
+    active_agents: number
+    running_workflows: number
+    pending_approvals: number
+    api_calls: number
+    storage_used: string
+  }
+  agent_activity: WorkbenchActivityItem[]
+  workflow_runs: WorkbenchWorkflowRun[]
+  control_summary?: {
+    source?: string
+    status?: string
+    read_only?: boolean
+    execute_enabled?: boolean
+    count_scope?: string
+    limit?: number
+    plan_count?: number
+    goal_count?: number
+    status_counts?: Record<string, Record<string, number>>
+    latest_updated_at?: string | null
+    boundary?: string
+  }
+  runtime_capability_summary?: {
+    source?: string
+    source_status?: string
+    status?: string
+    read_only?: boolean
+    execute_enabled?: boolean
+    ok?: boolean
+    summary?: Record<string, number>
+    issue_codes?: string[]
+    next_actions?: string[]
+    boundary?: string
+  }
+}
+
 class ApiClient {
   private client: AxiosInstance
   private baseURL: string
@@ -98,13 +197,23 @@ class ApiClient {
     this.client.interceptors.response.use(
       (response) => response,
       (error: AxiosError) => {
-        if (error.response?.status === 401) {
+        if (error.response?.status === 401 && localStorage.getItem('auth_token')) {
           localStorage.removeItem('auth_token')
           window.location.href = '/login'
         }
         return Promise.reject(error)
       }
     )
+  }
+
+  async getWorkbenchBootstrap(): Promise<WorkbenchBootstrap> {
+    const response = await this.client.get<WorkbenchBootstrap>('/workbench')
+    return response.data
+  }
+
+  async getWorkbenchHome(): Promise<WorkbenchHome> {
+    const response = await this.client.get<WorkbenchHome>('/workbench/home')
+    return response.data
   }
 
   // Agents API
@@ -215,10 +324,10 @@ class ApiClient {
   }
 
   // Chat API
-  async sendMessage(message: string, agentId?: string): Promise<ChatMessage> {
-    const response = await this.client.post<ChatMessage>('/chat/send', {
-      content: message,
-      agentId,
+  async sendMessage(message: string, agentId?: string): Promise<ChatRunResponse> {
+    const response = await this.client.post<ChatRunResponse>('/workflows/create/chat', {
+      request: message,
+      agent_id: agentId,
     })
     return response.data
   }

@@ -1,0 +1,20 @@
+{
+  "name": "xagent-docs",
+  "version": "1.0.0",
+  "description": "X-Agent Enterprise Agent Framework Documentation",
+  "private": true,
+  "scripts": {
+    "dev": "vitepress dev",
+    "build": "vitepress build",
+    "preview": "vitepress preview",
+    "docs:deploy": "npm run build && echo 'Ready to deploy dist/ to hosting'",
+    "docs:local": "npm run dev -- --host 0.0.0.0"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "vitepress": "^1.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

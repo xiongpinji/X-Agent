@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import logging
+from typing import Any
+
 from backend.app.services.observability.event_exporter import observability_exporter
 from backend.app.settings import get_settings
 
@@ -11,6 +14,8 @@ except ImportError:  # pragma: no cover - optional runtime dependency
 
 class LangfuseClient:
     """Langfuse-backed observability facade with in-memory fallback."""
+
+    _logger = logging.getLogger("xagent.observability.langfuse")
 
     def __init__(
         self,
@@ -47,19 +52,50 @@ class LangfuseClient:
         """
         event = observability_exporter.export(event_type, **payload)
         if self._client is not None:
-            trace = self._client.trace(id=event.trace_id or payload.get("trace_id"))
-            trace.event(
-                name=event_type,
-                metadata={
-                    **event.payload,
-                    "tenant_id": event.tenant_id,
-                    "user_id": event.user_id,
-                    "run_id": event.run_id,
-                    "workflow_id": event.workflow_id,
-                    "agent_id": event.agent_id,
-                },
-            )
+            self._log_to_real_client(event_type, event, payload)
         return event
+
+    def _log_to_real_client(self, event_type: str, event: Any, payload: dict[str, Any]) -> None:
+        """Send an event to whichever Langfuse SDK surface is installed.
+
+        Observability must never break the agent execution path. Langfuse v2
+        exposed ``trace(...).event(...)`` while newer SDKs expose
+        ``create_event(...)``. Support both and degrade to the local exporter
+        if the configured client cannot accept the event.
+        """
+        metadata = {
+            **event.payload,
+            "tenant_id": event.tenant_id,
+            "user_id": event.user_id,
+            "run_id": event.run_id,
+            "workflow_id": event.workflow_id,
+            "agent_id": event.agent_id,
+        }
+        trace_id = event.trace_id or payload.get("trace_id")
+
+        try:
+            if hasattr(self._client, "trace"):
+                trace = self._client.trace(id=trace_id)
+                trace.event(name=event_type, metadata=metadata)
+                return
+
+            if hasattr(self._client, "create_event"):
+                trace_context = {"trace_id": trace_id} if trace_id else None
+                self._client.create_event(
+                    trace_context=trace_context,
+                    name=event_type,
+                    metadata=metadata,
+                )
+                return
+
+            self._logger.warning(
+                "Configured Langfuse client has no supported event API; using local exporter only."
+            )
+        except Exception as exc:  # pragma: no cover - depends on external SDK/network behavior
+            self._logger.warning(
+                "Langfuse event export failed; using local exporter only: %s",
+                exc,
+            )
 
     def events(self) -> list[Any]:
         """Get all logged events.

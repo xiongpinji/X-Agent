@@ -44,9 +44,9 @@ spec:
           name: http
         envFrom:
         - configMapRef:
-            name: xagent-config
+            name: {{ include "xagent.fullname" . }}-config
         - secretRef:
-            name: xagent-secrets
+            name: {{ include "xagent.secretName" . }}
         resources:
           {{- toYaml .Values.api.resources | nindent 10 }}
         livenessProbe:

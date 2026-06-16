@@ -41,7 +41,10 @@ class TelegramAdapter(ChannelAdapter):
 
     def verify_signature(self, body: bytes, headers: dict[str, str]) -> bool:
         expected = self.config.signing_secret
-        provided = headers.get("X-Telegram-Bot-Api-Secret-Token", "")
+        provided = headers.get("X-Telegram-Bot-Api-Secret-Token", "") or headers.get(
+            "x-telegram-bot-api-secret-token",
+            "",
+        )
         if not expected or not provided:
             return False
         return hmac.compare_digest(expected, provided)

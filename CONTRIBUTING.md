@@ -1,53 +1,359 @@
-# Contributing to X-Agent Core
+# Contributing to X-Agent
 
-Thank you for your interest in contributing to X-Agent Core! This document provides guidelines and instructions for contributing to the project.
+Thank you for your interest in contributing to X-Agent! This document provides guidelines for reporting issues, submitting pull requests, and contributing code.
 
 ## Table of Contents
 
 - [Code of Conduct](#code-of-conduct)
 - [Getting Started](#getting-started)
-- [Development Workflow](#development-workflow)
-- [Coding Standards](#coding-standards)
-- [Commit Guidelines](#commit-guidelines)
+- [Code Style & Standards](#code-style--standards)
+- [Testing Requirements](#testing-requirements)
+- [Commit Message Format](#commit-message-format)
 - [Pull Request Process](#pull-request-process)
-- [Testing](#testing)
-- [Reporting Issues](#reporting-issues)
-- [Contact](#contact)
+- [Issue Reporting](#issue-reporting)
+- [Security Vulnerabilities](#security-vulnerabilities)
+- [Development Workflow](#development-workflow)
+- [Release Process](#release-process)
 
 ## Code of Conduct
 
-We are committed to providing a welcoming and inclusive environment for all contributors. Please be respectful and constructive in all interactions.
+By participating in this project, you agree to:
+- Be respectful and inclusive of all contributors
+- Provide constructive feedback
+- Report harassment or inappropriate behavior to maintainers
 
 ## Getting Started
 
-### Prerequisites
+### Development Environment Setup
 
-- Python 3.11+
-- Git
-- PostgreSQL 14+
-- Docker and Docker Compose (recommended)
+```bash
+# Clone the repository
+git clone https://github.com/your-org/X-Agent.git
+cd X-Agent
 
-### Setting Up Development Environment
+# Create a Python virtual environment (Python 3.11+)
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
 
-1. **Fork and clone the repository**
+# Install development dependencies
+pip install -e ".[dev]"
+
+# Install pre-commit hooks
+pre-commit install
+
+# Run tests to verify setup
+pytest tests/ -v
+```
+
+### Project Structure
+
+```
+X-Agent/
+├── backend/                    # FastAPI application
+│   ├── app/
+│   │   ├── main.py            # Entry point
+│   │   ├── api/               # REST API endpoints
+│   │   ├── core/              # Core business logic
+│   │   ├── services/          # Service layer
+│   │   └── models/            # Data models
+│   └── tests/                 # Unit tests
+├── frontend/                  # Next.js web UI
+├── sdk/                       # Python client SDK
+├── tests/                     # Integration tests
+├── docs/                      # Documentation
+├── monitoring/                # Prometheus/Grafana configs
+├── extension/                 # Chrome extension
+└── CHANGELOG.md               # Release notes
+```
+
+## Code Style & Standards
+
+### Python
+
+```bash
+# Format code with Black
+black backend/ sdk/ tests/
+
+# Check linting with ruff
+ruff check backend/ sdk/ tests/ --fix
+
+# Type checking with mypy
+mypy backend/ sdk/
+
+# Security scanning with bandit
+bandit -r backend/ sdk/
+```
+
+**Style Requirements:**
+- Python 3.11+ syntax with full type annotations
+- Google-style docstrings for all public functions/classes
+- Line length: 100 characters (enforced by Black)
+- Async-first design for I/O operations
+
+### Example Code Style
+
+```python
+"""Module docstring explaining purpose."""
+
+from typing import Optional
+from dataclasses import dataclass
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class TaskRequest:
+    """Request model for task creation.
+    
+    Attributes:
+        name: Human-readable task name (required).
+        description: Task description (optional).
+        priority: Task priority (1-10, default 5).
+    """
+    name: str
+    description: Optional[str] = None
+    priority: int = 5
+
+
+async def process_task(task: TaskRequest) -> dict:
+    """Process a task asynchronously.
+    
+    Args:
+        task: The task request containing processing parameters.
+        
+    Returns:
+        Dictionary with task_id, status, and result fields.
+        
+    Raises:
+        ValueError: If task name is empty.
+    """
+    if not task.name:
+        raise ValueError("Task name cannot be empty")
+    
+    logger.info(f"Processing task: {task.name}")
+    return {"task_id": "task-123", "status": "success"}
+```
+
+## Testing Requirements
+
+### Test Coverage
+
+- **Minimum coverage:** 70% (enforced by CI/CD)
+- **Critical paths:** 90%+ (auth, security, database)
+- Tests should run in <5 minutes for pre-commit
+
+### Writing Tests
+
+```python
+"""tests/test_example.py"""
+
+import pytest
+from backend.app.core.example import process_task
+
+
+@pytest.mark.asyncio
+class TestProcessTask:
+    """Test suite for process_task function."""
+    
+    async def test_process_task_success(self):
+        """Test successful task processing."""
+        request = TaskRequest(name="test-task", priority=5)
+        result = await process_task(request)
+        
+        assert result["status"] == "success"
+        assert result["task_id"] is not None
+    
+    async def test_process_task_empty_name_raises(self):
+        """Test that empty task name raises ValueError."""
+        request = TaskRequest(name="", priority=5)
+        
+        with pytest.raises(ValueError, match="Task name cannot be empty"):
+            await process_task(request)
+```
+
+### Running Tests
+
+```bash
+# Run all tests
+pytest
+
+# Run specific file
+pytest tests/test_example.py
+
+# Run with coverage
+pytest --cov=backend --cov=sdk --cov-report=html
+
+# Run only fast tests
+pytest -m "not slow"
+```
+
+## Commit Message Format
+
+Follow Conventional Commits:
+
+```
+<type>(<scope>): <subject>
+<BLANK LINE>
+<body>
+<BLANK LINE>
+<footer>
+```
+
+### Types
+
+- `feat`: New feature
+- `fix`: Bug fix
+- `docs`: Documentation only
+- `test`: Adding/updating tests
+- `refactor`: Code refactoring
+- `perf`: Performance improvement
+- `security`: Security fix
+
+### Examples
+
+```
+feat(auth): add OAuth2 GitHub integration
+
+Implement GitHub OAuth2 support with PKCE flow.
+- Add GitHubOAuth2Provider class
+- Add /api/v1/auth/github/callback endpoint
+
+Closes #123
+```
+
+```
+fix(sandbox): prevent rate limit exhaustion
+
+Add semaphore to limit concurrent executions.
+
+Fixes #456
+```
+
+## Pull Request Process
+
+1. **Create feature branch** from `develop`:
    ```bash
-   git clone https://github.com/your-username/x-agent-core.git
-   cd x-agent-core
+   git checkout develop && git pull
+   git checkout -b feat/your-feature-name
    ```
 
-2. **Create a virtual environment**
+2. **Make changes** following code style and testing requirements
+
+3. **Run pre-commit checks:**
    ```bash
-   python -m venv venv
-   source venv/bin/activate  # Windows: venv\Scripts\activate
+   pre-commit run --all-files
+   pytest tests/
    ```
 
-3. **Install development dependencies**
-   ```bash
-   pip install -e ".[dev]"
-   ```
+4. **Push and open PR:**
+   - Title: Keep under 60 characters
+   - Description: Explain what and why
+   - Link issues: "Fixes #123"
 
-4. **Set up local services**
-   ```bash
+5. **PR Checklist:**
+   - [ ] Tests pass locally
+   - [ ] Coverage maintained (70%+)
+   - [ ] Code formatted
+   - [ ] Types checked
+   - [ ] Docstrings added
+   - [ ] CHANGELOG.md updated
+   - [ ] No security issues
+
+6. **Address review comments:**
+   - Push additional commits
+   - Re-request review when ready
+
+## Issue Reporting
+
+### Bug Reports
+
+Include:
+- **Title:** Clear bug description
+- **Steps to reproduce:** Numbered steps
+- **Expected behavior:** What should happen
+- **Actual behavior:** What actually happens
+- **Environment:** Python version, OS, deployment method
+- **Logs:** Full stack trace
+
+### Feature Requests
+
+Include:
+- **Problem statement:** What problem does this solve?
+- **Proposed solution:** How should it work?
+- **Alternatives considered:** Other approaches
+- **Use case:** Real-world example
+
+## Security Vulnerabilities
+
+Do NOT open a public issue for security vulnerabilities.
+
+Instead, email security@your-org.com with:
+- Description of the vulnerability
+- Steps to reproduce
+- Your name/affiliation (optional)
+
+We will:
+- Acknowledge within 48 hours
+- Provide status every 7 days
+- Release coordinated security patch
+- Credit you in advisory (if desired)
+
+## Development Workflow
+
+### Local Testing
+
+```bash
+# Start services
+docker-compose up -d
+
+# Run tests
+pytest tests/enterprise/
+
+# Check code quality
+pre-commit run --all-files
+```
+
+### Database Migrations
+
+```bash
+# Create migration
+alembic revision --autogenerate -m "Add field to table"
+
+# Apply locally
+alembic upgrade head
+
+# Rollback
+alembic downgrade -1
+```
+
+### Documentation
+
+- Add docstrings to all new public APIs
+- Update README.md for user-facing features
+- Document new environment variables in .env.example
+- Add migration guide for breaking changes
+
+## Release Process
+
+Releases are automated via GitHub Actions:
+
+```bash
+# Create tag (maintainers only)
+git tag -a v1.0.1 -m "Release v1.0.1"
+git push origin v1.0.1
+```
+
+## Additional Resources
+
+- [Architecture Overview](./docs/ARCHITECTURE.md)
+- [API Documentation](./docs/API_REFERENCE.md)
+- [Deployment Guide](./monitoring/RUNBOOK.md)
+- [Performance Benchmarks](./docs/BENCHMARKS.md)
+
+---
+
+**Thank you for contributing to X-Agent!**
    docker-compose up -d
    ```
 

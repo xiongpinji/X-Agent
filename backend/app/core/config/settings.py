@@ -151,7 +151,10 @@ class Settings(BaseConfig):
         default=None,
         description="Feishu app secret",
     )
-
+    feishu_encrypt_key: Optional[str] = Field(
+        default=None,
+        description="Feishu event callback encrypt key",
+    )
     # DingTalk Integration
     dingtalk_webhook_url: Optional[str] = Field(
         default=None,

@@ -9,6 +9,8 @@ Provides Typer-based command-line interface with support for:
 from __future__ import annotations
 
 import logging
+import os
+import shutil
 import sys
 from typing import Optional
 
@@ -137,7 +139,7 @@ def main(
 # ============================================================================
 # Mount command apps implemented in Wave 2.
 
-from cli.commands import agent_app, init_app, tools_app, workflow_app, hooks_app, approvals_app
+from cli.commands import agent_app, init_app, tools_app, workflow_app, hooks_app, approvals_app, control_app, github_app, gateway_app, sdk_app
 
 app.add_typer(agent_app, name="agent", help="Agent management commands")
 app.add_typer(tools_app, name="tools", help="Tool management commands")
@@ -145,11 +147,102 @@ app.add_typer(workflow_app, name="workflow", help="Workflow commands")
 app.add_typer(init_app, name="init", help="Initialize X-Agent configuration")
 app.add_typer(hooks_app, name="hooks", help="Hook management commands")
 app.add_typer(approvals_app, name="approvals", help="Approval request management commands")
+app.add_typer(control_app, name="control", help="Plan mode and loop-engineering goal commands")
+app.add_typer(github_app, name="github", help="GitHub automation commands")
+app.add_typer(gateway_app, name="gateway", help="Gateway and scheduler commands")
+app.add_typer(sdk_app, name="sdk", help="SDK and non-interactive control-plane commands")
 
 # ============================================================================
 # STANDALONE COMMANDS
 # ============================================================================
 # Health check and configuration display commands
+
+
+@app.command()
+def start(
+    mode: Optional[str] = typer.Option(
+        None,
+        "--mode",
+        help="Runtime mode: lite, standard, or production. Defaults to standard when Docker is available, otherwise lite.",
+    ),
+    host: str = typer.Option(
+        "127.0.0.1",
+        "--host",
+        help="Host for the embedded FastAPI server.",
+        envvar="XAGENT_HOST",
+    ),
+    port: int = typer.Option(
+        8000,
+        "--port",
+        help="Port for the embedded FastAPI server.",
+        envvar="XAGENT_PORT",
+    ),
+    reload: bool = typer.Option(
+        False,
+        "--reload",
+        help="Enable uvicorn reload for local development.",
+    ),
+) -> None:
+    """Start X-Agent API in the current Python environment."""
+    runtime_mode = _resolve_runtime_mode(mode)
+    _apply_runtime_mode_env(runtime_mode)
+
+    print_info(f"Starting X-Agent in {runtime_mode} mode on http://{host}:{port}")
+    try:
+        import uvicorn
+
+        uvicorn.run(
+            "backend.app.main:app",
+            host=host,
+            port=port,
+            reload=reload,
+        )
+    except Exception as e:
+        print_error(f"Failed to start X-Agent: {e}")
+        raise typer.Exit(code=1)
+
+
+def _resolve_runtime_mode(mode: str | None) -> str:
+    runtime_mode = (mode or "").strip().lower()
+    if not runtime_mode:
+        runtime_mode = "standard" if _docker_available() else "lite"
+    if runtime_mode not in {"lite", "standard", "production"}:
+        raise typer.BadParameter("mode must be one of: lite, standard, production")
+    return runtime_mode
+
+
+def _docker_available() -> bool:
+    if shutil.which("docker") is None:
+        return False
+    try:
+        import subprocess
+
+        result = subprocess.run(
+            ["docker", "version", "--format", "{{.Server.Version}}"],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=3,
+        )
+    except Exception:
+        return False
+    return result.returncode == 0
+
+
+def _apply_runtime_mode_env(mode: str) -> None:
+    os.environ["XAGENT_MODE"] = mode
+    if mode == "production":
+        os.environ.setdefault("XAGENT_APP_MODE", "production")
+        return
+    if mode == "lite":
+        os.environ.setdefault("XAGENT_APP_MODE", "development")
+        os.environ.setdefault("XAGENT_LLM_BACKEND", "mock")
+        os.environ.setdefault("XAGENT_MEMORY_BACKEND", "memory")
+        os.environ.setdefault("XAGENT_TRACE_BACKEND", "jsonl")
+        os.environ.setdefault("XAGENT_REQUIRE_API_KEY", "false")
+        os.environ.setdefault("XAGENT_DATABASE_URL", "sqlite+aiosqlite:///~/.xagent/data.db")
+        os.environ.setdefault("XAGENT_REDIS_URL", "")
+        os.environ.setdefault("XAGENT_QDRANT_URL", "")
 
 
 @app.command()

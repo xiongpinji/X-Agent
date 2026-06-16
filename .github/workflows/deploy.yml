@@ -7,10 +7,6 @@ on:
       - develop
     tags:
       - 'v*'
-  pull_request:
-    branches:
-      - main
-      - develop
   workflow_dispatch:
     inputs:
       environment:
@@ -21,10 +17,53 @@ on:
         options:
           - staging
           - production
+      release_sha:
+        description: 'Exact commit SHA to check out for Stage 3 staging rehearsal'
+        required: false
+        default: ''
+        type: string
+      image_ref:
+        description: 'Immutable image ref for Stage 3 staging rehearsal; defaults to this workflow build output'
+        required: false
+        default: ''
+        type: string
+      image_digest:
+        description: 'Expected image digest for Stage 3 staging rehearsal; defaults to this workflow build digest'
+        required: false
+        default: ''
+        type: string
+      staging_url:
+        description: 'External staging base URL used for smoke checks'
+        required: false
+        default: 'https://staging-api.example.com'
+        type: string
+      dry_run:
+        description: 'Run Stage 3 staging preflight only without deploying'
+        required: false
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+      confirm_deploy:
+        description: 'Use confirm-stage3-staging-deploy to permit a real staging rehearsal'
+        required: false
+        default: 'dry-run-only'
+        type: string
+      rollback_after_smoke:
+        description: 'Run rollback after staging smoke in a confirmed rehearsal'
+        required: false
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
 
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
+  EVIDENCE_DIR: .xagent_runtime/reports
+  REQUIRED_STAGE3_CONFIRMATION: confirm-stage3-staging-deploy
 
 jobs:
   build:
@@ -85,65 +124,360 @@ jobs:
       security-events: write
 
     steps:
+    - name: Resolve image reference
+      id: image-ref
+      shell: bash
+      run: |
+        first_tag="$(printf '%s\n' "${{ needs.build.outputs.image-tag }}" | head -n 1)"
+        if [ -z "$first_tag" ] || [ -z "${{ needs.build.outputs.image-digest }}" ]; then
+          echo "::error::Missing image tag or digest from build job."
+          exit 1
+        fi
+        echo "ref=${first_tag}@${{ needs.build.outputs.image-digest }}" >> "$GITHUB_OUTPUT"
+
     - name: Run Trivy vulnerability scanner
       uses: aquasecurity/trivy-action@master
       with:
-        image-ref: ${{ needs.build.outputs.image-tag }}
+        image-ref: ${{ steps.image-ref.outputs.ref }}
         format: 'sarif'
         output: 'trivy-results.sarif'
       continue-on-error: true
 
+    - name: Check Trivy SARIF output
+      id: trivy-sarif
+      shell: bash
+      run: |
+        if [ -s trivy-results.sarif ]; then
+          echo "present=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "::warning::Trivy SARIF output is missing; skipping SARIF upload."
+          echo "present=false" >> "$GITHUB_OUTPUT"
+        fi
+
     - name: Upload Trivy results to GitHub Security tab
-      uses: github/codeql-action/upload-sarif@v2
-      if: always()
+      uses: github/codeql-action/upload-sarif@v3
+      if: steps.trivy-sarif.outputs.present == 'true'
       with:
         sarif_file: 'trivy-results.sarif'
 
   deploy-staging:
+    name: Stage 3 staging rehearsal
     needs: [build, scan-image]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/develop' || github.event.inputs.environment == 'staging'
     environment:
       name: staging
-      url: https://staging.xagent.example.com
+      url: ${{ github.event.inputs.staging_url || 'https://staging-api.example.com' }}
+    permissions:
+      contents: read
 
     steps:
-    - uses: actions/checkout@v4
+    - name: Checkout selected release SHA
+      uses: actions/checkout@v4
+      with:
+        ref: ${{ github.event.inputs.release_sha || github.sha }}
+        fetch-depth: 0
 
-    - name: Configure AWS credentials
+    - name: Stage 3 staging preflight
+      id: stage3-preflight
+      shell: bash
+      env:
+        AWS_ACCESS_KEY_ID_VALUE: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY_VALUE: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        AWS_REGION_VALUE: ${{ secrets.AWS_REGION }}
+        HELM_REPO_URL_VALUE: ${{ secrets.HELM_REPO_URL }}
+        STAGING_DATABASE_URL_VALUE: ${{ secrets.STAGING_DATABASE_URL }}
+        STAGING_REDIS_URL_VALUE: ${{ secrets.STAGING_REDIS_URL }}
+        STAGING_API_KEY_VALUE: ${{ secrets.STAGING_API_KEY }}
+        STAGING_JWT_SECRET_VALUE: ${{ secrets.STAGING_JWT_SECRET }}
+        STAGING_ENCRYPTION_KEY_VALUE: ${{ secrets.STAGING_ENCRYPTION_KEY }}
+        STAGING_AUDIT_HMAC_SECRET_VALUE: ${{ secrets.STAGING_AUDIT_HMAC_SECRET }}
+        STAGING_LANGFUSE_PUBLIC_KEY_VALUE: ${{ secrets.STAGING_LANGFUSE_PUBLIC_KEY }}
+        STAGING_LANGFUSE_SECRET_KEY_VALUE: ${{ secrets.STAGING_LANGFUSE_SECRET_KEY }}
+        STAGING_SENTRY_DSN_VALUE: ${{ secrets.STAGING_SENTRY_DSN }}
+        STAGING_WORKFLOW_EVENT_RABBITMQ_URL_VALUE: ${{ secrets.STAGING_WORKFLOW_EVENT_RABBITMQ_URL }}
+      run: |
+        set -euo pipefail
+        mkdir -p "$EVIDENCE_DIR"
+
+        release_sha="${{ github.event.inputs.release_sha || github.sha }}"
+        checked_out_sha="$(git rev-parse HEAD)"
+        if [ "$checked_out_sha" != "$release_sha" ]; then
+          echo "::error::Checked out SHA does not match selected release SHA."
+          exit 1
+        fi
+
+        image_digest="${{ github.event.inputs.image_digest || needs.build.outputs.image-digest }}"
+        if ! [[ "$image_digest" =~ ^sha256:[a-f0-9]{64}$ ]]; then
+          echo "::error::image_digest must be a sha256 digest."
+          exit 1
+        fi
+
+        image_ref="${{ github.event.inputs.image_ref }}"
+        if [ -z "$image_ref" ]; then
+          first_tag="$(printf '%s\n' "${{ needs.build.outputs.image-tag }}" | head -n 1)"
+          image_ref="${first_tag}@${image_digest}"
+        fi
+        if [[ "$image_ref" != *"@$image_digest" ]]; then
+          echo "::error::image_ref must be immutable and include the expected digest."
+          exit 1
+        fi
+
+        staging_url="${{ github.event.inputs.staging_url || 'https://staging-api.example.com' }}"
+        if [[ "$staging_url" == *"xagent.example.com"* ]]; then
+          echo "::error::staging_url must not point at production."
+          exit 1
+        fi
+
+        dry_run="${{ github.event.inputs.dry_run || 'true' }}"
+        confirm_deploy="${{ github.event.inputs.confirm_deploy || 'dry-run-only' }}"
+        deploy_allowed=false
+        if [ "$dry_run" = "false" ] && [ "$confirm_deploy" = "$REQUIRED_STAGE3_CONFIRMATION" ]; then
+          deploy_allowed=true
+        fi
+        if [ "$dry_run" = "false" ] && [ "$deploy_allowed" != "true" ]; then
+          echo "::error::Real staging rehearsal requires confirm_deploy=$REQUIRED_STAGE3_CONFIRMATION."
+          exit 1
+        fi
+
+        missing=()
+        [ -n "$AWS_ACCESS_KEY_ID_VALUE" ] || missing+=("AWS_ACCESS_KEY_ID")
+        [ -n "$AWS_SECRET_ACCESS_KEY_VALUE" ] || missing+=("AWS_SECRET_ACCESS_KEY")
+        [ -n "$AWS_REGION_VALUE" ] || missing+=("AWS_REGION")
+        [ -n "$HELM_REPO_URL_VALUE" ] || missing+=("HELM_REPO_URL")
+        [ -n "$STAGING_DATABASE_URL_VALUE" ] || missing+=("STAGING_DATABASE_URL")
+        [ -n "$STAGING_REDIS_URL_VALUE" ] || missing+=("STAGING_REDIS_URL")
+        [ -n "$STAGING_API_KEY_VALUE" ] || missing+=("STAGING_API_KEY")
+        [ -n "$STAGING_JWT_SECRET_VALUE" ] || missing+=("STAGING_JWT_SECRET")
+        [ -n "$STAGING_ENCRYPTION_KEY_VALUE" ] || missing+=("STAGING_ENCRYPTION_KEY")
+        [ -n "$STAGING_AUDIT_HMAC_SECRET_VALUE" ] || missing+=("STAGING_AUDIT_HMAC_SECRET")
+        [ -n "$STAGING_LANGFUSE_PUBLIC_KEY_VALUE" ] || missing+=("STAGING_LANGFUSE_PUBLIC_KEY")
+        [ -n "$STAGING_LANGFUSE_SECRET_KEY_VALUE" ] || missing+=("STAGING_LANGFUSE_SECRET_KEY")
+        [ -n "$STAGING_SENTRY_DSN_VALUE" ] || missing+=("STAGING_SENTRY_DSN")
+        [ -n "$STAGING_WORKFLOW_EVENT_RABBITMQ_URL_VALUE" ] || missing+=("STAGING_WORKFLOW_EVENT_RABBITMQ_URL")
+
+        missing_csv="$(IFS=,; echo "${missing[*]}")"
+        image_without_digest="${image_ref%@*}"
+        image_repository="${image_without_digest%:*}"
+        image_tag="${image_without_digest##*:}@${image_digest}"
+
+        echo "deploy_allowed=$deploy_allowed" >> "$GITHUB_OUTPUT"
+        echo "missing_secret_names=$missing_csv" >> "$GITHUB_OUTPUT"
+        echo "release_sha=$release_sha" >> "$GITHUB_OUTPUT"
+        echo "image_ref=$image_ref" >> "$GITHUB_OUTPUT"
+        echo "image_digest=$image_digest" >> "$GITHUB_OUTPUT"
+        echo "image_repository=$image_repository" >> "$GITHUB_OUTPUT"
+        echo "image_tag=$image_tag" >> "$GITHUB_OUTPUT"
+        echo "staging_url=$staging_url" >> "$GITHUB_OUTPUT"
+        export MISSING_SECRET_NAMES="$missing_csv"
+        export STAGE3_RELEASE_SHA="$release_sha"
+        export STAGE3_IMAGE_REF="$image_ref"
+        export STAGE3_IMAGE_DIGEST="$image_digest"
+        export STAGE3_STAGING_URL="$staging_url"
+        export STAGE3_DRY_RUN="$dry_run"
+        export STAGE3_DEPLOY_ALLOWED="$deploy_allowed"
+
+        python - <<'PY'
+        import json
+        import os
+        from datetime import datetime, timezone
+        from pathlib import Path
+
+        evidence_dir = Path(os.environ["EVIDENCE_DIR"])
+        evidence_dir.mkdir(parents=True, exist_ok=True)
+        missing = [name for name in os.environ.get("MISSING_SECRET_NAMES", "").split(",") if name]
+        payload = {
+            "status": "stage3_staging_preflight_blocked" if missing else "stage3_staging_preflight_ready",
+            "generated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+            "release_sha": os.environ["STAGE3_RELEASE_SHA"],
+            "image_ref": os.environ["STAGE3_IMAGE_REF"],
+            "image_digest": os.environ["STAGE3_IMAGE_DIGEST"],
+            "staging_url": os.environ["STAGE3_STAGING_URL"],
+            "dry_run": os.environ["STAGE3_DRY_RUN"],
+            "deploy_allowed": os.environ["STAGE3_DEPLOY_ALLOWED"] == "true",
+            "missing_secret_names": missing,
+            "secret_values_recorded": False,
+            "production_side_effects": False,
+            "tag_or_release_side_effects": False,
+        }
+        (evidence_dir / "stage3-staging-rehearsal-preflight.json").write_text(
+            json.dumps(payload, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        PY
+
+    - name: Fail confirmed deploy when preflight secrets are missing
+      if: ${{ steps.stage3-preflight.outputs.deploy_allowed == 'true' && steps.stage3-preflight.outputs.missing_secret_names != '' }}
+      run: |
+        echo "::error::Confirmed staging rehearsal is blocked by missing secret names: ${{ steps.stage3-preflight.outputs.missing_secret_names }}"
+        exit 1
+
+    - name: Configure AWS credentials for staging
+      if: ${{ steps.stage3-preflight.outputs.deploy_allowed == 'true' }}
       uses: aws-actions/configure-aws-credentials@v4
       with:
-        role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME_STAGING }}
-        aws-region: us-east-1
-      continue-on-error: true
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ secrets.AWS_REGION }}
 
-    - name: Deploy to staging
+    - name: Update staging kubeconfig
+      if: ${{ steps.stage3-preflight.outputs.deploy_allowed == 'true' }}
+      run: aws eks update-kubeconfig --name xagent-staging --region "${{ secrets.AWS_REGION }}"
+
+    - name: Apply staging Kubernetes secret
+      id: stage3-secret
+      if: ${{ steps.stage3-preflight.outputs.deploy_allowed == 'true' }}
+      shell: bash
       run: |
-        echo "Deploying to staging environment..."
-        echo "Image: ${{ needs.build.outputs.image-tag }}"
-        # kubectl set image deployment/xagent-api xagent-api=${{ needs.build.outputs.image-tag }} -n staging
-        # kubectl rollout status deployment/xagent-api -n staging
+        kubectl create namespace staging --dry-run=client -o yaml | kubectl apply -f -
+        kubectl create secret generic xagent-secrets \
+          --namespace staging \
+          --from-literal=database-url="${{ secrets.STAGING_DATABASE_URL }}" \
+          --from-literal=redis-url="${{ secrets.STAGING_REDIS_URL }}" \
+          --from-literal=api-key="${{ secrets.STAGING_API_KEY }}" \
+          --from-literal=jwt-secret="${{ secrets.STAGING_JWT_SECRET }}" \
+          --from-literal=encryption-key="${{ secrets.STAGING_ENCRYPTION_KEY }}" \
+          --from-literal=audit-hmac-secret="${{ secrets.STAGING_AUDIT_HMAC_SECRET }}" \
+          --from-literal=langfuse-public-key="${{ secrets.STAGING_LANGFUSE_PUBLIC_KEY }}" \
+          --from-literal=langfuse-secret-key="${{ secrets.STAGING_LANGFUSE_SECRET_KEY }}" \
+          --from-literal=sentry-dsn="${{ secrets.STAGING_SENTRY_DSN }}" \
+          --from-literal=workflow-event-rabbitmq-url="${{ secrets.STAGING_WORKFLOW_EVENT_RABBITMQ_URL }}" \
+          --dry-run=client \
+          -o yaml | kubectl apply -f -
+
+    - name: Deploy selected image to staging
+      id: stage3-deploy
+      if: ${{ steps.stage3-preflight.outputs.deploy_allowed == 'true' }}
+      run: |
+        helm repo add xagent "${{ secrets.HELM_REPO_URL }}"
+        helm repo update
+        helm upgrade --install xagent xagent/xagent \
+          --namespace staging \
+          --create-namespace \
+          --values deployment/helm/values-staging.yaml \
+          --set-string image.repository="${{ steps.stage3-preflight.outputs.image_repository }}" \
+          --set-string image.tag="${{ steps.stage3-preflight.outputs.image_tag }}" \
+          --set secrets.enabled=true \
+          --set secrets.create=false \
+          --set-string secrets.existingSecretName=xagent-secrets \
+          --wait \
+          --timeout 10m
+
+    - name: Wait for staging rollout
+      id: stage3-rollout
+      if: ${{ steps.stage3-preflight.outputs.deploy_allowed == 'true' }}
+      run: |
+        kubectl rollout status deployment/xagent-api -n staging --timeout=5m
+        kubectl rollout status deployment/xagent-worker -n staging --timeout=5m
+
+    - name: Run staging health smoke
+      id: stage3-smoke
+      if: ${{ steps.stage3-preflight.outputs.deploy_allowed == 'true' }}
+      run: |
+        curl --fail --show-error --silent "${{ steps.stage3-preflight.outputs.staging_url }}/health"
+        curl --fail --show-error --silent "${{ steps.stage3-preflight.outputs.staging_url }}/ready"
+
+    - name: Write deploy smoke evidence
+      if: ${{ always() && steps.stage3-preflight.outputs.deploy_allowed == 'true' }}
+      shell: bash
       env:
-        DEPLOY_KEY: ${{ secrets.STAGING_DEPLOY_KEY }}
-
-    - name: Run smoke tests
+        STAGE3_SECRET_OUTCOME: ${{ steps.stage3-secret.outcome }}
+        STAGE3_DEPLOY_OUTCOME: ${{ steps.stage3-deploy.outcome }}
+        STAGE3_ROLLOUT_OUTCOME: ${{ steps.stage3-rollout.outcome }}
+        STAGE3_SMOKE_OUTCOME: ${{ steps.stage3-smoke.outcome }}
       run: |
-        echo "Running smoke tests..."
-        # curl -f https://staging.xagent.example.com/health || exit 1
-      continue-on-error: true
+        mkdir -p "$EVIDENCE_DIR"
+        export STAGE3_RELEASE_SHA="${{ steps.stage3-preflight.outputs.release_sha }}"
+        export STAGE3_IMAGE_REF="${{ steps.stage3-preflight.outputs.image_ref }}"
+        export STAGE3_IMAGE_DIGEST="${{ steps.stage3-preflight.outputs.image_digest }}"
+        export STAGE3_STAGING_URL="${{ steps.stage3-preflight.outputs.staging_url }}"
+        python - <<'PY'
+        import json
+        import os
+        from datetime import datetime, timezone
+        from pathlib import Path
 
-    - name: Notify deployment
+        outcomes = {
+            "secret": os.environ["STAGE3_SECRET_OUTCOME"],
+            "deploy": os.environ["STAGE3_DEPLOY_OUTCOME"],
+            "rollout": os.environ["STAGE3_ROLLOUT_OUTCOME"],
+            "smoke": os.environ["STAGE3_SMOKE_OUTCOME"],
+        }
+        completed = all(value == "success" for value in outcomes.values())
+        payload = {
+            "status": "stage3_staging_deploy_smoke_completed" if completed else "stage3_staging_deploy_smoke_failed",
+            "generated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+            "release_sha": os.environ["STAGE3_RELEASE_SHA"],
+            "image_ref": os.environ["STAGE3_IMAGE_REF"],
+            "image_digest": os.environ["STAGE3_IMAGE_DIGEST"],
+            "staging_url": os.environ["STAGE3_STAGING_URL"],
+            "step_outcomes": outcomes,
+            "production_side_effects": False,
+            "tag_or_release_side_effects": False,
+            "secret_values_recorded": False,
+        }
+        output = Path(os.environ["EVIDENCE_DIR"]) / "stage3-staging-rehearsal-deploy-smoke.json"
+        output.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+        PY
+
+    - name: Roll back staging deployments
+      id: stage3-rollback
+      if: ${{ always() && steps.stage3-preflight.outputs.deploy_allowed == 'true' && github.event.inputs.rollback_after_smoke == 'true' }}
+      run: |
+        kubectl rollout undo deployment/xagent-api -n staging
+        kubectl rollout undo deployment/xagent-worker -n staging
+        kubectl rollout status deployment/xagent-api -n staging --timeout=5m
+        kubectl rollout status deployment/xagent-worker -n staging --timeout=5m
+
+    - name: Run post-rollback health smoke
+      id: stage3-rollback-smoke
+      if: ${{ always() && steps.stage3-preflight.outputs.deploy_allowed == 'true' && github.event.inputs.rollback_after_smoke == 'true' }}
+      run: |
+        curl --fail --show-error --silent "${{ steps.stage3-preflight.outputs.staging_url }}/health"
+        curl --fail --show-error --silent "${{ steps.stage3-preflight.outputs.staging_url }}/ready"
+
+    - name: Write rollback evidence
+      if: ${{ always() && steps.stage3-preflight.outputs.deploy_allowed == 'true' && github.event.inputs.rollback_after_smoke == 'true' }}
+      shell: bash
+      env:
+        STAGE3_ROLLBACK_OUTCOME: ${{ steps.stage3-rollback.outcome }}
+        STAGE3_ROLLBACK_SMOKE_OUTCOME: ${{ steps.stage3-rollback-smoke.outcome }}
+      run: |
+        mkdir -p "$EVIDENCE_DIR"
+        export STAGE3_RELEASE_SHA="${{ steps.stage3-preflight.outputs.release_sha }}"
+        export STAGE3_STAGING_URL="${{ steps.stage3-preflight.outputs.staging_url }}"
+        python - <<'PY'
+        import json
+        import os
+        from datetime import datetime, timezone
+        from pathlib import Path
+
+        outcomes = {
+            "rollback": os.environ["STAGE3_ROLLBACK_OUTCOME"],
+            "rollback_smoke": os.environ["STAGE3_ROLLBACK_SMOKE_OUTCOME"],
+        }
+        completed = all(value == "success" for value in outcomes.values())
+        payload = {
+            "status": "stage3_staging_rollback_completed" if completed else "stage3_staging_rollback_failed",
+            "generated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+            "release_sha": os.environ["STAGE3_RELEASE_SHA"],
+            "staging_url": os.environ["STAGE3_STAGING_URL"],
+            "step_outcomes": outcomes,
+            "production_side_effects": False,
+            "tag_or_release_side_effects": False,
+            "secret_values_recorded": False,
+        }
+        output = Path(os.environ["EVIDENCE_DIR"]) / "stage3-staging-rehearsal-rollback.json"
+        output.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+        PY
+
+    - name: Upload Stage 3 staging rehearsal evidence
       if: always()
-      uses: actions/github-script@v7
+      uses: actions/upload-artifact@v4
       with:
-        script: |
-          github.rest.issues.createComment({
-            issue_number: context.issue.number,
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            body: '✅ Deployed to staging: ${{ needs.build.outputs.image-tag }}'
-          });
-      continue-on-error: true
+        name: stage3-staging-rehearsal-evidence
+        path: .xagent_runtime/reports/stage3-staging-rehearsal-*.json
+        if-no-files-found: warn
 
   deploy-production:
     needs: [build, scan-image]
@@ -193,8 +527,14 @@ jobs:
       uses: actions/github-script@v7
       with:
         script: |
-          github.rest.issues.createComment({
-            issue_number: context.issue.number,
+          const issueNumber = context.payload.pull_request?.number || context.payload.issue?.number;
+          if (!issueNumber) {
+            core.notice('No pull request or issue context; skipping production deployment comment.');
+            return;
+          }
+
+          await github.rest.issues.createComment({
+            issue_number: issueNumber,
             owner: context.repo.owner,
             repo: context.repo.repo,
             body: '🚀 Deployed to production: ${{ needs.build.outputs.image-tag }}'
@@ -228,8 +568,14 @@ jobs:
       uses: actions/github-script@v7
       with:
         script: |
-          github.rest.issues.createComment({
-            issue_number: context.issue.number,
+          const issueNumber = context.payload.pull_request?.number || context.payload.issue?.number;
+          if (!issueNumber) {
+            core.notice('No pull request or issue context; skipping rollback comment.');
+            return;
+          }
+
+          await github.rest.issues.createComment({
+            issue_number: issueNumber,
             owner: context.repo.owner,
             repo: context.repo.repo,
             body: '⚠️ Production deployment rolled back due to failure'

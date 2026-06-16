@@ -6,10 +6,7 @@ on:
       - main
       - develop
       - 'release/**'
-  pull_request:
-    branches:
-      - main
-      - develop
+  workflow_dispatch:
   schedule:
     - cron: '0 2 * * *'  # Daily security scan at 2 AM UTC
 
@@ -36,7 +33,7 @@ jobs:
           fetch-depth: 0
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: 'pip'
@@ -60,7 +57,7 @@ jobs:
 
       - name: Upload linting reports
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: linting-reports
           path: |
@@ -74,7 +71,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: 'pip'
@@ -100,7 +97,7 @@ jobs:
 
       - name: Upload security reports
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: security-reports
           path: |
@@ -144,7 +141,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: 'pip'
@@ -171,7 +168,7 @@ jobs:
 
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: test-results
           path: |
@@ -263,6 +260,23 @@ jobs:
         run: |
           aws eks update-kubeconfig --name xagent-staging --region ${{ secrets.AWS_REGION }}
 
+      - name: Apply staging Kubernetes secret
+        run: |
+          kubectl create secret generic xagent-secrets \
+            --namespace staging \
+            --from-literal=database-url="${{ secrets.STAGING_DATABASE_URL }}" \
+            --from-literal=redis-url="${{ secrets.STAGING_REDIS_URL }}" \
+            --from-literal=api-key="${{ secrets.STAGING_API_KEY }}" \
+            --from-literal=jwt-secret="${{ secrets.STAGING_JWT_SECRET }}" \
+            --from-literal=encryption-key="${{ secrets.STAGING_ENCRYPTION_KEY }}" \
+            --from-literal=audit-hmac-secret="${{ secrets.STAGING_AUDIT_HMAC_SECRET }}" \
+            --from-literal=langfuse-public-key="${{ secrets.STAGING_LANGFUSE_PUBLIC_KEY }}" \
+            --from-literal=langfuse-secret-key="${{ secrets.STAGING_LANGFUSE_SECRET_KEY }}" \
+            --from-literal=sentry-dsn="${{ secrets.STAGING_SENTRY_DSN }}" \
+            --from-literal=workflow-event-rabbitmq-url="${{ secrets.STAGING_WORKFLOW_EVENT_RABBITMQ_URL }}" \
+            --dry-run=client \
+            -o yaml | kubectl apply -f -
+
       - name: Deploy with Helm
         run: |
           helm repo add xagent ${{ secrets.HELM_REPO_URL }}
@@ -271,9 +285,9 @@ jobs:
             --namespace staging \
             --values deployment/helm/values-staging.yaml \
             --set image.tag=${{ needs.build.outputs.image-tag }} \
-            --set secrets.secretKey=${{ secrets.STAGING_SECRET_KEY }} \
-            --set secrets.dbPassword=${{ secrets.STAGING_DB_PASSWORD }} \
-            --set secrets.redisPassword=${{ secrets.STAGING_REDIS_PASSWORD }} \
+            --set secrets.enabled=true \
+            --set secrets.create=false \
+            --set-string secrets.existingSecretName=xagent-secrets \
             --wait \
             --timeout 10m
 

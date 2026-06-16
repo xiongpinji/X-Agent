@@ -12,6 +12,7 @@ from backend.app.core.approvals import ApprovalStore
 from backend.app.core.audit import AuditStore
 from backend.app.core.browser import BrowserAutomationStore, browser_automation_store
 from backend.app.core.contracts import ErrorCode
+from backend.app.core.control_modes import ControlModeStore
 from backend.app.core.orchestrator import Orchestrator
 from backend.app.core.embeddings import build_embedding_model
 from backend.app.core.llm import build_llm_router
@@ -31,6 +32,7 @@ from backend.app.core.security import (
 from backend.app.core.tools import ToolExecutionStore, build_default_tool_registry
 from backend.app.core.tracing import TraceStore, build_tracer
 from backend.app.core.tracing_postgres import PostgresTraceStore
+from backend.app.core.workflow_events import build_workflow_event_publisher
 from backend.app.core.workflows import (
     WorkflowExecutor,
     WorkflowRepository,
@@ -123,6 +125,12 @@ def get_trace_store() -> TraceStore | PostgresTraceStore:
 def get_run_store() -> RunStore:
     settings = get_settings()
     return RunStore(storage_path=settings.run_store_path)
+
+
+@lru_cache
+def get_control_mode_store() -> ControlModeStore:
+    settings = get_settings()
+    return ControlModeStore(storage_path=settings.control_mode_store_path)
 
 
 @lru_cache
@@ -279,12 +287,18 @@ def get_workflow_repository() -> WorkflowRepository:
 
 @lru_cache
 def get_workflow_executor() -> WorkflowExecutor:
+    settings = get_settings()
     return WorkflowExecutor(
         agent=get_agent(),
         repository=get_workflow_repository(),
         tracer=get_trace_store(),
         approval_store=get_approval_store(),
         audit_store=get_audit_store(),
+        event_publisher=build_workflow_event_publisher(
+            workflow_event_broker_backend=settings.workflow_event_broker_backend,
+            workflow_event_rabbitmq_url=settings.workflow_event_rabbitmq_url or "",
+            workflow_event_exchange=settings.workflow_event_exchange,
+        ),
     )
 
 

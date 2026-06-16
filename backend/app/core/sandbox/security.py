@@ -5,9 +5,12 @@ from __future__ import annotations
 import ast
 import logging
 import re
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from enum import Enum
-from typing import Optional, Set
+from typing import Any, Optional, Set
+
+from backend.app.core.approvals import ApprovalSubjectType
+from backend.app.core.contracts import RiskLevel as CoreRiskLevel
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +33,121 @@ class SecurityViolation:
     message: str
     line_number: Optional[int] = None
     suggestion: Optional[str] = None
+
+
+@dataclass(frozen=True)
+class EnterpriseSafetySubjectPolicy:
+    """Normalized sandbox/admin policy for a mutating execution subject."""
+
+    subject_type: ApprovalSubjectType
+    default_sandbox_profile: str
+    minimum_risk_level: CoreRiskLevel
+    owner_gate_required: bool
+    audit_required: bool
+    admin_policy_required: bool
+    allowed_decision_types: tuple[str, ...]
+    blocked_without_approval: bool
+
+    def to_dict(self) -> dict[str, Any]:
+        payload = asdict(self)
+        payload["subject_type"] = self.subject_type.value
+        payload["minimum_risk_level"] = self.minimum_risk_level.value
+        return payload
+
+
+APPROVAL_DECISION_TYPES = (
+    "approve_once",
+    "approve_for_run",
+    "approve_for_session",
+    "deny",
+    "abort",
+)
+
+ENTERPRISE_SAFETY_POLICIES: tuple[EnterpriseSafetySubjectPolicy, ...] = (
+    EnterpriseSafetySubjectPolicy(
+        subject_type=ApprovalSubjectType.COMMAND,
+        default_sandbox_profile="command_locked",
+        minimum_risk_level=CoreRiskLevel.HIGH,
+        owner_gate_required=True,
+        audit_required=True,
+        admin_policy_required=True,
+        allowed_decision_types=APPROVAL_DECISION_TYPES,
+        blocked_without_approval=True,
+    ),
+    EnterpriseSafetySubjectPolicy(
+        subject_type=ApprovalSubjectType.FILE_CHANGE,
+        default_sandbox_profile="filesystem_guarded",
+        minimum_risk_level=CoreRiskLevel.HIGH,
+        owner_gate_required=True,
+        audit_required=True,
+        admin_policy_required=True,
+        allowed_decision_types=APPROVAL_DECISION_TYPES,
+        blocked_without_approval=True,
+    ),
+    EnterpriseSafetySubjectPolicy(
+        subject_type=ApprovalSubjectType.NETWORK_REQUEST,
+        default_sandbox_profile="network_default_deny",
+        minimum_risk_level=CoreRiskLevel.HIGH,
+        owner_gate_required=True,
+        audit_required=True,
+        admin_policy_required=True,
+        allowed_decision_types=APPROVAL_DECISION_TYPES,
+        blocked_without_approval=True,
+    ),
+    EnterpriseSafetySubjectPolicy(
+        subject_type=ApprovalSubjectType.MCP_ELICITATION,
+        default_sandbox_profile="mcp_owner_gated",
+        minimum_risk_level=CoreRiskLevel.MEDIUM,
+        owner_gate_required=True,
+        audit_required=True,
+        admin_policy_required=True,
+        allowed_decision_types=APPROVAL_DECISION_TYPES,
+        blocked_without_approval=True,
+    ),
+    EnterpriseSafetySubjectPolicy(
+        subject_type=ApprovalSubjectType.BROWSER_ACTION,
+        default_sandbox_profile="browser_guarded",
+        minimum_risk_level=CoreRiskLevel.MEDIUM,
+        owner_gate_required=True,
+        audit_required=True,
+        admin_policy_required=True,
+        allowed_decision_types=APPROVAL_DECISION_TYPES,
+        blocked_without_approval=True,
+    ),
+    EnterpriseSafetySubjectPolicy(
+        subject_type=ApprovalSubjectType.CHANNEL_SEND,
+        default_sandbox_profile="channel_send_guarded",
+        minimum_risk_level=CoreRiskLevel.MEDIUM,
+        owner_gate_required=True,
+        audit_required=True,
+        admin_policy_required=True,
+        allowed_decision_types=APPROVAL_DECISION_TYPES,
+        blocked_without_approval=True,
+    ),
+    EnterpriseSafetySubjectPolicy(
+        subject_type=ApprovalSubjectType.ISSUE_TO_PR_EXECUTE,
+        default_sandbox_profile="github_mutation_guarded",
+        minimum_risk_level=CoreRiskLevel.HIGH,
+        owner_gate_required=True,
+        audit_required=True,
+        admin_policy_required=True,
+        allowed_decision_types=APPROVAL_DECISION_TYPES,
+        blocked_without_approval=True,
+    ),
+)
+
+
+def get_enterprise_safety_policy(
+    subject_type: ApprovalSubjectType,
+) -> EnterpriseSafetySubjectPolicy | None:
+    for policy in ENTERPRISE_SAFETY_POLICIES:
+        if policy.subject_type == subject_type:
+            return policy
+    return None
+
+
+def list_enterprise_safety_policies() -> list[EnterpriseSafetySubjectPolicy]:
+    return list(ENTERPRISE_SAFETY_POLICIES)
 
 
 class PythonSecurityValidator:

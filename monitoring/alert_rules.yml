@@ -1,381 +1,246 @@
+# Prometheus Alert Rules for X-Agent
+# Reload with: curl -X POST http://localhost:9090/-/reload
 groups:
-  - name: x-agent-alerts
+  - name: xagent_application
     interval: 30s
     rules:
-      # ============ API Performance Alerts ============
-      - alert: HighAPILatency
-        expr: xagent:api:latency:p95:5m > 1
-        for: 5m
-        labels:
-          severity: warning
-          component: api
-        annotations:
-          summary: "High API latency detected"
-          description: "API P95 latency is {{ $value | humanizeDuration }} (threshold: 1s)"
-          runbook_url: "https://wiki.example.com/runbooks/high-api-latency"
-
-      - alert: CriticalAPILatency
-        expr: xagent:api:latency:p99:5m > 5
+      # Application Availability
+      - alert: XAgentApplicationDown
+        expr: up{job="xagent-api"} == 0
         for: 2m
         labels:
           severity: critical
-          component: api
+          component: application
         annotations:
-          summary: "Critical API latency detected"
-          description: "API P99 latency is {{ $value | humanizeDuration }} (threshold: 5s)"
-          runbook_url: "https://wiki.example.com/runbooks/critical-api-latency"
+          summary: "X-Agent API is down"
+          description: "X-Agent API ({{ $labels.instance }}) has been down for more than 2 minutes"
 
-      # ============ Error Rate Alerts ============
       - alert: HighErrorRate
-        expr: xagent:api:error_rate:5m > 0.05
+        expr: rate(http_requests_total{status=~"5.."}[5m]) > 0.05
         for: 5m
         labels:
           severity: warning
-          component: api
+          component: application
         annotations:
           summary: "High error rate detected"
-          description: "Error rate is {{ $value | humanize }} errors/sec (threshold: 0.05)"
-          runbook_url: "https://wiki.example.com/runbooks/high-error-rate"
+          description: "Error rate is {{ $value | humanizePercentage }} over the last 5 minutes"
 
-      - alert: CriticalErrorRate
-        expr: xagent:api:error_rate:5m > 0.1
-        for: 2m
+      - alert: HighLatency
+        expr: histogram_quantile(0.99, rate(http_request_duration_seconds_bucket[5m])) > 1.0
+        for: 5m
+        labels:
+          severity: warning
+          component: performance
+        annotations:
+          summary: "High request latency detected"
+          description: "P99 latency is {{ $value }}s on {{ $labels.instance }}"
+
+      # Database Health
+      - alert: PostgreSQLDown
+        expr: up{job="postgres"} == 0
+        for: 1m
         labels:
           severity: critical
-          component: api
+          component: database
         annotations:
-          summary: "Critical error rate detected"
-          description: "Error rate is {{ $value | humanize }} errors/sec (threshold: 0.1)"
-          runbook_url: "https://wiki.example.com/runbooks/critical-error-rate"
+          summary: "PostgreSQL is down"
+          description: "PostgreSQL instance ({{ $labels.instance }}) is unreachable"
 
-      # ============ Agent Execution Alerts ============
-      - alert: HighAgentFailureRate
-        expr: xagent:agent:failure_rate:5m > 10
+      - alert: PostgreSQLConnectionHigh
+        expr: |
+          pg_stat_activity_count{datname="xagent"} > 80
+        for: 5m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "PostgreSQL connection pool near limit"
+          description: "Current connections: {{ $value }}/100 on {{ $labels.instance }}"
+
+      - alert: PostgreSQLSlowQueries
+        expr: rate(pg_slow_queries_total[5m]) > 1
+        for: 5m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "High rate of slow queries"
+          description: "Slow query rate: {{ $value }} per second"
+
+      # Cache/Redis Health
+      - alert: RedisDown
+        expr: up{job="redis"} == 0
+        for: 1m
+        labels:
+          severity: warning
+          component: cache
+        annotations:
+          summary: "Redis is down"
+          description: "Redis instance ({{ $labels.instance }}) is unreachable"
+
+      - alert: RedisMemoryHigh
+        expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.9
+        for: 5m
+        labels:
+          severity: warning
+          component: cache
+        annotations:
+          summary: "Redis memory usage is high"
+          description: "Redis memory usage: {{ $value | humanizePercentage }} on {{ $labels.instance }}"
+
+      # Qdrant Vector DB
+      - alert: QdrantDown
+        expr: up{job="qdrant"} == 0
+        for: 1m
+        labels:
+          severity: warning
+          component: vectordb
+        annotations:
+          summary: "Qdrant vector DB is down"
+          description: "Qdrant instance ({{ $labels.instance }}) is unreachable"
+
+      - alert: QdrantStorageHigh
+        expr: qdrant_storage_available_bytes / qdrant_storage_total_bytes < 0.1
+        for: 5m
+        labels:
+          severity: critical
+          component: vectordb
+        annotations:
+          summary: "Qdrant storage is running low"
+          description: "Available storage: {{ $value | humanizePercentage }} on {{ $labels.instance }}"
+
+      # Agent Execution
+      - alert: AgentFailureRateHigh
+        expr: |
+          rate(agent_execution_failures_total[5m]) /
+          (rate(agent_execution_total[5m]) + 0.001) > 0.1
         for: 5m
         labels:
           severity: warning
           component: agent
         annotations:
           summary: "High agent failure rate"
-          description: "Agent failure rate is {{ $value | humanize }}% (threshold: 10%)"
-          runbook_url: "https://wiki.example.com/runbooks/high-agent-failure"
+          description: "Agent failure rate: {{ $value | humanizePercentage }}"
 
-      - alert: CriticalAgentFailureRate
-        expr: xagent:agent:failure_rate:5m > 25
-        for: 2m
-        labels:
-          severity: critical
-          component: agent
-        annotations:
-          summary: "Critical agent failure rate"
-          description: "Agent failure rate is {{ $value | humanize }}% (threshold: 25%)"
-          runbook_url: "https://wiki.example.com/runbooks/critical-agent-failure"
-
-      - alert: AgentRunTimeout
-        expr: xagent:agent:duration:p95:5m > 300
+      - alert: AgentExecutionTimeout
+        expr: increase(agent_execution_timeouts_total[5m]) > 5
         for: 5m
         labels:
           severity: warning
           component: agent
         annotations:
-          summary: "Agent runs taking too long"
-          description: "Agent P95 duration is {{ $value | humanizeDuration }} (threshold: 5m)"
-          runbook_url: "https://wiki.example.com/runbooks/agent-timeout"
+          summary: "Multiple agent execution timeouts"
+          description: "{{ $value }} timeouts in the last 5 minutes"
 
-      # ============ Database Alerts ============
-      - alert: HighDatabaseLatency
-        expr: xagent:db:query_latency:p95:5m > 0.5
-        for: 5m
+      - alert: LLMConcurrencyHigh
+        expr: llm_concurrent_requests > 500
+        for: 3m
         labels:
           severity: warning
-          component: database
+          component: llm
         annotations:
-          summary: "High database query latency"
-          description: "Database P95 latency is {{ $value | humanizeDuration }} (threshold: 0.5s)"
-          runbook_url: "https://wiki.example.com/runbooks/high-db-latency"
+          summary: "LLM concurrent request count is high"
+          description: "Concurrent LLM requests: {{ $value }}"
 
-      - alert: CriticalDatabaseLatency
-        expr: xagent:db:query_latency:p95:5m > 2
-        for: 2m
-        labels:
-          severity: critical
-          component: database
-        annotations:
-          summary: "Critical database query latency"
-          description: "Database P95 latency is {{ $value | humanizeDuration }} (threshold: 2s)"
-          runbook_url: "https://wiki.example.com/runbooks/critical-db-latency"
-
-      - alert: DatabaseConnectionPoolExhausted
-        expr: xagent:db:connection_utilization:ratio > 0.9
-        for: 2m
-        labels:
-          severity: critical
-          component: database
-        annotations:
-          summary: "Database connection pool nearly exhausted"
-          description: "Connection pool usage is {{ $value | humanizePercentage }} (threshold: 90%)"
-          runbook_url: "https://wiki.example.com/runbooks/db-connection-pool"
-
-      - alert: DatabaseConnectionPoolFull
-        expr: xagent:db:connection_utilization:ratio >= 1.0
-        for: 1m
-        labels:
-          severity: critical
-          component: database
-        annotations:
-          summary: "Database connection pool exhausted"
-          description: "All connections are in use ({{ $value | humanizePercentage }})"
-          runbook_url: "https://wiki.example.com/runbooks/db-connection-full"
-
-      - alert: DatabaseDown
-        expr: up{job="postgres-exporter"} == 0
-        for: 1m
-        labels:
-          severity: critical
-          component: database
-        annotations:
-          summary: "Database is down"
-          description: "PostgreSQL database is not responding"
-          runbook_url: "https://wiki.example.com/runbooks/database-down"
-
-      # ============ Memory Alerts ============
-      - alert: HighMemoryUsage
-        expr: xagent:system:memory_usage_percent > 80
+      - alert: LLMRateLimitExceeded
+        expr: increase(llm_rate_limit_errors_total[5m]) > 10
         for: 5m
         labels:
-          severity: warning
-          component: system
-        annotations:
-          summary: "High memory usage"
-          description: "Memory usage is {{ $value | humanize }}% (threshold: 80%)"
-          runbook_url: "https://wiki.example.com/runbooks/high-memory"
-
-      - alert: CriticalMemoryUsage
-        expr: xagent:system:memory_usage_percent > 90
-        for: 2m
-        labels:
           severity: critical
-          component: system
+          component: llm
         annotations:
-          summary: "Critical memory usage"
-          description: "Memory usage is {{ $value | humanize }}% (threshold: 90%)"
-          runbook_url: "https://wiki.example.com/runbooks/critical-memory"
+          summary: "LLM rate limit exceeded"
+          description: "{{ $value }} rate limit errors in the last 5 minutes"
 
-      # ============ CPU Alerts ============
+      # System Resources
       - alert: HighCPUUsage
-        expr: xagent:system:cpu_usage_percent > 80
+        expr: rate(container_cpu_usage_seconds_total[5m]) > 0.8
         for: 5m
         labels:
           severity: warning
           component: system
         annotations:
-          summary: "High CPU usage"
-          description: "CPU usage is {{ $value | humanize }}% (threshold: 80%)"
-          runbook_url: "https://wiki.example.com/runbooks/high-cpu"
+          summary: "High CPU usage detected"
+          description: "CPU usage: {{ $value | humanizePercentage }}"
 
-      - alert: CriticalCPUUsage
-        expr: xagent:system:cpu_usage_percent > 95
-        for: 2m
+      - alert: HighMemoryUsage
+        expr: container_memory_usage_bytes / container_spec_memory_limit_bytes > 0.85
+        for: 5m
+        labels:
+          severity: warning
+          component: system
+        annotations:
+          summary: "High memory usage detected"
+          description: "Memory usage: {{ $value | humanizePercentage }}"
+
+      - alert: DiskSpaceLow
+        expr: (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes) < 0.1
+        for: 5m
         labels:
           severity: critical
           component: system
         annotations:
-          summary: "Critical CPU usage"
-          description: "CPU usage is {{ $value | humanize }}% (threshold: 95%)"
-          runbook_url: "https://wiki.example.com/runbooks/critical-cpu"
+          summary: "Low disk space"
+          description: "Available disk space: {{ $value | humanizePercentage }}"
 
-      # ============ Cache Alerts ============
-      - alert: LowCacheHitRate
-        expr: xagent:cache:hit_rate:5m < 50
+      # Workflow & Task Processing
+      - alert: WorkflowExecutionStuck
+        expr: |
+          increase(workflow_execution_duration_seconds_bucket{le="+Inf"}[15m]) == 0 and
+          workflow_execution_pending_count > 10
+        for: 10m
+        labels:
+          severity: critical
+          component: workflow
+        annotations:
+          summary: "Workflow execution appears stuck"
+          description: "{{ $value }} workflows pending with no recent completions"
+
+      - alert: TaskQueueBacklog
+        expr: task_queue_depth > 1000
         for: 10m
         labels:
           severity: warning
-          component: cache
+          component: taskqueue
         annotations:
-          summary: "Low cache hit rate"
-          description: "Cache hit rate is {{ $value | humanize }}% (threshold: 50%)"
-          runbook_url: "https://wiki.example.com/runbooks/low-cache-hit-rate"
+          summary: "Task queue has significant backlog"
+          description: "Current queue depth: {{ $value }}"
 
-      - alert: CriticalLowCacheHitRate
-        expr: xagent:cache:hit_rate:5m < 30
+  - name: xagent_infrastructure
+    interval: 60s
+    rules:
+      # Container Health
+      - alert: ContainerRestarting
+        expr: rate(container_last_seen{container_name=~"xagent.*"}[5m]) > 0
         for: 5m
         labels:
-          severity: critical
-          component: cache
+          severity: warning
+          component: infrastructure
         annotations:
-          summary: "Critical low cache hit rate"
-          description: "Cache hit rate is {{ $value | humanize }}% (threshold: 30%)"
-          runbook_url: "https://wiki.example.com/runbooks/critical-cache-hit-rate"
+          summary: "Container is restarting frequently"
+          description: "Container {{ $labels.container_name }} is restarting"
 
-      - alert: CacheDown
-        expr: up{job="redis-exporter"} == 0
+      # Prometheus Health
+      - alert: PrometheusScrapeFailing
+        expr: up{job="prometheus"} == 0
         for: 1m
         labels:
           severity: critical
-          component: cache
+          component: monitoring
         annotations:
-          summary: "Cache is down"
-          description: "Redis cache is not responding"
-          runbook_url: "https://wiki.example.com/runbooks/cache-down"
+          summary: "Prometheus scrape is failing"
+          description: "Prometheus target ({{ $labels.instance }}) is down"
 
-      # ============ Tool Execution Alerts ============
-      - alert: HighToolFailureRate
-        expr: xagent:tool:failure_rate:5m > 5
+      - alert: PrometheusStorageSpaceRunningOut
+        expr: |
+          predict_linear(
+            prometheus_tsdb_symbol_table_size_bytes[2h],
+            7200
+          ) > prometheus_tsdb_symbol_table_size_bytes * 1.5
         for: 5m
         labels:
           severity: warning
-          component: tools
+          component: monitoring
         annotations:
-          summary: "High tool execution failure rate"
-          description: "Tool failure rate is {{ $value | humanize }}% (threshold: 5%)"
-          runbook_url: "https://wiki.example.com/runbooks/high-tool-failure"
-
-      - alert: SlowToolExecution
-        expr: xagent:tool:duration:p95:5m > 30
-        for: 5m
-        labels:
-          severity: warning
-          component: tools
-        annotations:
-          summary: "Slow tool execution detected"
-          description: "Tool P95 execution time is {{ $value | humanizeDuration }} (threshold: 30s)"
-          runbook_url: "https://wiki.example.com/runbooks/slow-tool-execution"
-
-      # ============ Workflow Alerts ============
-      - alert: HighWorkflowFailureRate
-        expr: xagent:workflow:failure_rate:5m > 10
-        for: 5m
-        labels:
-          severity: warning
-          component: workflow
-        annotations:
-          summary: "High workflow failure rate"
-          description: "Workflow failure rate is {{ $value | humanize }}% (threshold: 10%)"
-          runbook_url: "https://wiki.example.com/runbooks/high-workflow-failure"
-
-      - alert: LongRunningWorkflow
-        expr: xagent:workflow:duration:p95:5m > 600
-        for: 5m
-        labels:
-          severity: warning
-          component: workflow
-        annotations:
-          summary: "Long-running workflow detected"
-          description: "Workflow P95 duration is {{ $value | humanizeDuration }} (threshold: 10m)"
-          runbook_url: "https://wiki.example.com/runbooks/long-workflow"
-
-      # ============ Service Availability Alerts ============
-      - alert: APIServiceDown
-        expr: up{job="x-agent-api"} == 0
-        for: 1m
-        labels:
-          severity: critical
-          component: api
-        annotations:
-          summary: "API service is down"
-          description: "X-Agent API is not responding"
-          runbook_url: "https://wiki.example.com/runbooks/api-down"
-
-      - alert: WorkerServiceDown
-        expr: up{job="x-agent-worker"} == 0
-        for: 1m
-        labels:
-          severity: critical
-          component: worker
-        annotations:
-          summary: "Worker service is down"
-          description: "X-Agent Worker is not responding"
-          runbook_url: "https://wiki.example.com/runbooks/worker-down"
-
-      - alert: VectorDatabaseDown
-        expr: up{job="qdrant"} == 0
-        for: 1m
-        labels:
-          severity: critical
-          component: vector-db
-        annotations:
-          summary: "Vector database is down"
-          description: "Qdrant vector database is not responding"
-          runbook_url: "https://wiki.example.com/runbooks/qdrant-down"
-
-      # ============ Request Volume Alerts ============
-      - alert: UnusuallyLowRequestVolume
-        expr: xagent:api:request_rate:5m < 1
-        for: 10m
-        labels:
-          severity: warning
-          component: api
-        annotations:
-          summary: "Unusually low request volume"
-          description: "Request rate is {{ $value | humanize }} req/sec (expected: >1)"
-          runbook_url: "https://wiki.example.com/runbooks/low-request-volume"
-
-      - alert: UnusuallyHighRequestVolume
-        expr: xagent:api:request_rate:5m > 1000
-        for: 5m
-        labels:
-          severity: warning
-          component: api
-        annotations:
-          summary: "Unusually high request volume"
-          description: "Request rate is {{ $value | humanize }} req/sec (threshold: 1000)"
-          runbook_url: "https://wiki.example.com/runbooks/high-request-volume"
-
-      # ============ Disk Space Alerts ============
-      - alert: HighDiskUsage
-        expr: (node_filesystem_avail_bytes{fstype!~"tmpfs|fuse.lxcfs|squashfs|vfat"} / node_filesystem_size_bytes) < 0.2
-        for: 5m
-        labels:
-          severity: warning
-          component: system
-        annotations:
-          summary: "High disk usage"
-          description: "Disk {{ $labels.device }} is {{ $value | humanizePercentage }} full (threshold: 80%)"
-          runbook_url: "https://wiki.example.com/runbooks/high-disk-usage"
-
-      - alert: CriticalDiskUsage
-        expr: (node_filesystem_avail_bytes{fstype!~"tmpfs|fuse.lxcfs|squashfs|vfat"} / node_filesystem_size_bytes) < 0.1
-        for: 2m
-        labels:
-          severity: critical
-          component: system
-        annotations:
-          summary: "Critical disk usage"
-          description: "Disk {{ $labels.device }} is {{ $value | humanizePercentage }} full (threshold: 90%)"
-          runbook_url: "https://wiki.example.com/runbooks/critical-disk-usage"
-
-      # ============ Component Health Alerts ============
-      - alert: ComponentUnhealthy
-        expr: xagent_health_check_status == 0
-        for: 2m
-        labels:
-          severity: critical
-          component: "{{ $labels.component }}"
-        annotations:
-          summary: "Component unhealthy"
-          description: "Component {{ $labels.component }} is unhealthy"
-          runbook_url: "https://wiki.example.com/runbooks/component-unhealthy"
-
-      # ============ Prometheus Alerts ============
-      - alert: PrometheusConfigReloadFailed
-        expr: increase(prometheus_config_last_reload_successful[15m]) == 0
-        for: 5m
-        labels:
-          severity: warning
-          component: prometheus
-        annotations:
-          summary: "Prometheus config reload failed"
-          description: "Prometheus configuration reload has failed"
-          runbook_url: "https://wiki.example.com/runbooks/prometheus-config-reload"
-
-      - alert: PrometheusRuleEvaluationFailures
-        expr: increase(prometheus_rule_evaluation_failures_total[15m]) > 0
-        for: 5m
-        labels:
-          severity: warning
-          component: prometheus
-        annotations:
-          summary: "Prometheus rule evaluation failures"
-          description: "Prometheus has {{ $value }} rule evaluation failures"
-          runbook_url: "https://wiki.example.com/runbooks/prometheus-rule-failures"
-
+          summary: "Prometheus storage space running out"
+          description: "Prometheus storage will run out of space in ~2 hours"

@@ -1,14 +1,15 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useAppStore } from '@/store/appStore'
-import { apiClient, ChatMessage } from '@/services/api'
-import { Send, Paperclip, Loader } from 'lucide-react'
+import { Agent, apiClient, ChatMessage, ChatRunResponse } from '@/services/api'
+import { Activity, AlertTriangle, CheckCircle2, Loader, Paperclip, Send } from 'lucide-react'
 import clsx from 'clsx'
 
 export const ChatPage: React.FC = () => {
   const { theme, messages, addMessage, isLoading, setLoading, setError } = useAppStore()
   const [input, setInput] = useState('')
-  const [agents, setAgents] = useState<any[]>([])
+  const [agents, setAgents] = useState<Agent[]>([])
   const [selectedAgent, setSelectedAgent] = useState<string>('')
+  const [lastRun, setLastRun] = useState<ChatRunResponse | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -25,14 +26,25 @@ export const ChatPage: React.FC = () => {
   }
 
   const loadAgents = async () => {
+    const fallbackAgent = (agentId: string = 'default-agent'): Agent => ({
+      id: agentId,
+      name: 'Default Agent',
+      status: 'active',
+      capabilities: ['workflow', 'tools', 'memory'],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    })
+
     try {
-      const data = await apiClient.listAgents()
-      setAgents(data)
-      if (data.length > 0) {
-        setSelectedAgent(data[0].id)
-      }
+      const bootstrap = await apiClient.getWorkbenchBootstrap()
+      const agent = fallbackAgent(bootstrap.console.agent_id)
+      setAgents([agent])
+      setSelectedAgent(agent.id)
     } catch (error) {
-      setError(error instanceof Error ? error.message : 'Failed to load agents')
+      const agent = fallbackAgent()
+      setAgents([agent])
+      setSelectedAgent(agent.id)
+      console.error('Failed to load workbench bootstrap:', error)
     }
   }
 
@@ -64,7 +76,20 @@ export const ChatPage: React.FC = () => {
 
       // Send to API
       const response = await apiClient.sendMessage(input, selectedAgent)
-      addMessage(response)
+      setLastRun(response)
+      addMessage({
+        id: response.run_id,
+        role: 'assistant',
+        content: response.message,
+        timestamp: new Date().toISOString(),
+        metadata: {
+          run_id: response.run_id,
+          status: response.status,
+          events: response.events,
+          approval_required: response.approval_required,
+          next_actions: response.next_actions,
+        },
+      })
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Failed to send message')
     } finally {
@@ -114,7 +139,60 @@ export const ChatPage: React.FC = () => {
             ))}
           </select>
         </div>
+
+        {lastRun && (
+          <div className={clsx(
+            'mt-4 flex flex-wrap items-center gap-2 text-xs',
+            theme === 'dark' ? 'text-slate-300' : 'text-slate-600'
+          )}>
+            <span className={clsx(
+              'inline-flex items-center gap-1 rounded-md border px-2 py-1',
+              theme === 'dark' ? 'border-slate-700 bg-slate-800' : 'border-slate-200 bg-white'
+            )}>
+              {lastRun.status === 'failed' ? <AlertTriangle size={14} /> : <CheckCircle2 size={14} />}
+              {lastRun.status}
+            </span>
+            <span className={clsx(
+              'inline-flex min-w-0 items-center gap-1 rounded-md border px-2 py-1',
+              theme === 'dark' ? 'border-slate-700 bg-slate-800' : 'border-slate-200 bg-white'
+            )}>
+              <Activity size={14} />
+              <span className="truncate">run {lastRun.run_id}</span>
+            </span>
+            {lastRun.approval_required && (
+              <span className="inline-flex items-center gap-1 rounded-md bg-amber-100 px-2 py-1 text-amber-700">
+                <AlertTriangle size={14} />
+                approval required
+              </span>
+            )}
+          </div>
+        )}
       </div>
+
+      {lastRun && (
+        <div className={clsx(
+          'border-b px-6 py-3',
+          theme === 'dark' ? 'border-slate-700 bg-slate-950' : 'border-slate-200 bg-white'
+        )}>
+          <div className={clsx(
+            'grid gap-2 text-xs md:grid-cols-2',
+            theme === 'dark' ? 'text-slate-300' : 'text-slate-600'
+          )}>
+            {lastRun.events.map((event, index) => (
+              <div
+                key={`${event.type}-${index}`}
+                className={clsx(
+                  'rounded-md border px-3 py-2',
+                  theme === 'dark' ? 'border-slate-700 bg-slate-900' : 'border-slate-200 bg-slate-50'
+                )}
+              >
+                <div className="font-medium">{event.type}</div>
+                <div className="mt-1">{event.message}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-6 space-y-4">

@@ -19,6 +19,7 @@ from backend.app.core.approvals import ApprovalStore
 from backend.app.core.contracts import RiskLevel, RunContext, TraceEvent, TaskFrame, PlanFrame, ExecutionFrame, RecoveryFrame
 from backend.app.core.audit import AuditStore
 from backend.app.core.tracing import TraceStore
+from backend.app.core.workflow_events import WorkflowEventPublisher
 from backend.app.services.observability.langfuse_client import langfuse_client
 
 if TYPE_CHECKING:
@@ -678,12 +679,14 @@ class WorkflowExecutor:
         tracer: TraceStore | None = None,
         approval_store: ApprovalStore | None = None,
         audit_store: AuditStore | None = None,
+        event_publisher: WorkflowEventPublisher | None = None,
     ) -> None:
         self.agent = agent
         self.repository = repository
         self.tracer = tracer
         self.approval_store = approval_store
         self.audit_store = audit_store
+        self.event_publisher = event_publisher
         self._paused: set[str] = set()
 
     async def execute(
@@ -1514,9 +1517,28 @@ class WorkflowExecutor:
         }
 
     def _record_event(self, context: RunContext, event: str, **data: Any) -> TraceEvent | None:
-        if self.tracer is None:
-            return None
-        return self.tracer.record(context, event, **data)
+        trace_event = self.tracer.record(context, event, **data) if self.tracer is not None else None
+        if self.event_publisher is not None:
+            payload = {
+                "trace_id": context.trace_id,
+                "request_id": context.request_id,
+                "agent_id": context.agent_id,
+                "tenant_id": context.tenant_id,
+                "user_id": context.user_id,
+                **data,
+            }
+            try:
+                self.event_publisher.publish(event, payload)
+            except Exception as exc:
+                logger.warning("workflow_event_publish_failed event=%s error=%s", event, exc)
+                if self.tracer is not None:
+                    self.tracer.record(
+                        context,
+                        "workflow.event_publish_failed",
+                        failed_event=event,
+                        error=str(exc),
+                    )
+        return trace_event
 
     def _record_audit(
         self,

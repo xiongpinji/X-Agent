@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import subprocess
 import sys
 from enum import Enum
 from pathlib import Path
@@ -243,145 +244,264 @@ def admin(
 
 
 # ============================================================================
-# Helper Functions
+# Database Commands
 # ============================================================================
 
-def _show_chat_help() -> None:
-    """Show chat help."""
-    help_text = """
-[bold cyan]Chat Commands:[/bold cyan]
-  help          - Show this help message
-  exit/quit     - Exit chat
-  clear         - Clear chat history
-  status        - Show agent status
-  tools         - List available tools
-  memory        - Show memory state
+@app.command()
+def db_migrate() -> None:
+    """Run database migrations to latest version.
+
+    This command runs pending Alembic migrations to bring the database
+    schema up to date with the latest application code.
+
+    Usage:
+        xagent db-migrate
     """
-    console.print(help_text)
+    try:
+        # Get project root
+        project_root = Path(__file__).parent.parent.parent
+
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            console=console,
+        ) as progress:
+            task_id = progress.add_task("Running database migrations...", total=None)
+
+            # Run alembic upgrade
+            result = subprocess.run(
+                ["alembic", "upgrade", "head"],
+                cwd=str(project_root),
+                capture_output=True,
+                text=True,
+                timeout=300,
+            )
+
+            progress.update(task_id, completed=True)
+
+        if result.returncode == 0:
+            console.print("[green]OK[/green] Database migrations completed successfully")
+            if result.stdout:
+                console.print("[dim]" + result.stdout + "[/dim]")
+        else:
+            console.print("[red]FAIL[/red] Migration failed")
+            console.print(f"[red]{result.stderr}[/red]")
+            sys.exit(1)
+
+    except FileNotFoundError:
+        console.print(
+            "[red]Error: alembic not found. Install it with:[/red]\n"
+            "  pip install alembic"
+        )
+        sys.exit(1)
+    except subprocess.TimeoutExpired:
+        console.print("[red]✗[/red] Migration timed out after 300 seconds")
+        sys.exit(1)
+    except Exception as e:
+        console.print(f"[red]✗[/red] Migration error: {e}")
+        sys.exit(1)
 
 
-def _list_tools(search: Optional[str] = None) -> None:
-    """List available tools."""
-    table = Table(title="Available Tools")
-    table.add_column("Name", style="cyan")
-    table.add_column("Category", style="magenta")
-    table.add_column("Status", style="green")
+@app.command()
+def db_status() -> None:
+    """Show current database migration status.
 
-    # Simulate tool list
-    tools_data = [
-        ("browser_automation", "Browser", "✓ Installed"),
-        ("code_execution", "Code", "✓ Installed"),
-        ("file_operations", "File", "✓ Installed"),
-        ("web_search", "Web", "✓ Installed"),
-        ("database_query", "Database", "○ Available"),
-        ("api_integration", "API", "○ Available"),
-    ]
+    Displays the current schema version and available migrations.
 
-    for name, category, status in tools_data:
-        if search is None or search.lower() in name.lower():
-            table.add_row(name, category, status)
+    Usage:
+        xagent db-status
+    """
+    try:
+        # Get project root
+        project_root = Path(__file__).parent.parent.parent
 
-    console.print(table)
+        # Run alembic current
+        result = subprocess.run(
+            ["alembic", "current"],
+            cwd=str(project_root),
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
 
+        if result.returncode == 0:
+            current = result.stdout.strip() if result.stdout.strip() else "No migrations applied"
+            console.print(
+                Panel(
+                    f"[cyan]Current Schema Version:[/cyan]\n{current}",
+                    title="Database Status",
+                    border_style="cyan",
+                )
+            )
 
-def _show_tool_info(tool_name: str) -> None:
-    """Show tool information."""
-    info = {
-        "name": tool_name,
-        "version": "1.0.0",
-        "category": "Utility",
-        "description": f"Tool: {tool_name}",
-        "status": "installed",
-    }
+            # Also show migration history
+            history_result = subprocess.run(
+                ["alembic", "history", "--indicate-current"],
+                cwd=str(project_root),
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
 
-    console.print(Panel(
-        json.dumps(info, indent=2),
-        title=f"Tool: {tool_name}",
-        border_style="cyan"
-    ))
+            if history_result.returncode == 0 and history_result.stdout.strip():
+                console.print("\n[cyan]Migration History:[/cyan]")
+                console.print(history_result.stdout)
+        else:
+            console.print("[red]✗[/red] Failed to get database status")
+            console.print(f"[red]{result.stderr}[/red]")
+            sys.exit(1)
 
-
-def _install_tool(tool_name: str) -> None:
-    """Install a tool."""
-    with Progress(
-        SpinnerColumn(),
-        TextColumn("[progress.description]{task.description}"),
-        console=console,
-    ) as progress:
-        task_id = progress.add_task(f"Installing {tool_name}...", total=None)
-        asyncio.sleep(1)
-        progress.update(task_id, completed=True)
-
-    console.print(f"[green]✓[/green] Tool installed: {tool_name}")
-
-
-def _uninstall_tool(tool_name: str) -> None:
-    """Uninstall a tool."""
-    console.print(f"[yellow]Uninstalling {tool_name}...[/yellow]")
-    console.print(f"[green]✓[/green] Tool uninstalled: {tool_name}")
-
-
-def _show_config() -> None:
-    """Show configuration."""
-    config_data = {
-        "api_host": "localhost",
-        "api_port": 8000,
-        "database_url": "postgresql://localhost/xagent",
-        "llm_backend": "openai",
-        "log_level": "INFO",
-    }
-
-    console.print(Panel(
-        json.dumps(config_data, indent=2),
-        title="X-Agent Configuration",
-        border_style="cyan"
-    ))
+    except FileNotFoundError:
+        console.print(
+            "[red]Error: alembic not found. Install it with:[/red]\n"
+            "  pip install alembic"
+        )
+        sys.exit(1)
+    except subprocess.TimeoutExpired:
+        console.print("[red]✗[/red] Status check timed out")
+        sys.exit(1)
+    except Exception as e:
+        console.print(f"[red]✗[/red] Error checking status: {e}")
+        sys.exit(1)
 
 
-def _get_config(key: str) -> None:
-    """Get configuration value."""
-    config_data = {
-        "api_host": "localhost",
-        "api_port": 8000,
-        "database_url": "postgresql://localhost/xagent",
-    }
 
-    value = config_data.get(key, "Not found")
-    console.print(f"[cyan]{key}[/cyan]: {value}")
+@app.command()
+def db_migrate() -> None:
+    """Run database migrations to latest version."""
+    try:
+        project_root = Path(__file__).parent.parent.parent
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            console=console,
+        ) as progress:
+            task_id = progress.add_task("Running database migrations...", total=None)
+            result = subprocess.run(
+                ["alembic", "upgrade", "head"],
+                cwd=str(project_root),
+                capture_output=True,
+                text=True,
+                timeout=300,
+            )
+            progress.update(task_id, completed=True)
+        if result.returncode == 0:
+            console.print("[green]OK[/green] Database migrations completed successfully")
+            if result.stdout:
+                console.print("[dim]" + result.stdout + "[/dim]")
+        else:
+            console.print("[red]FAIL[/red] Migration failed")
+            console.print(f"[red]{result.stderr}[/red]")
+            sys.exit(1)
+    except FileNotFoundError:
+        console.print(
+            "[red]Error: alembic not found. Install it with:[/red]\n"
+            "  pip install alembic"
+        )
+        sys.exit(1)
+    except subprocess.TimeoutExpired:
+        console.print("[red]FAIL[/red] Migration timed out after 300 seconds")
+        sys.exit(1)
+    except Exception as e:
+        console.print(f"[red]FAIL[/red] Migration error: {e}")
+        sys.exit(1)
 
 
-def _set_config(key: str, value: str) -> None:
-    """Set configuration value."""
-    console.print(f"[green]✓[/green] Configuration updated: {key} = {value}")
+@app.command()
+def db_status() -> None:
+    """Show current database migration status."""
+    try:
+        project_root = Path(__file__).parent.parent.parent
+        result = subprocess.run(
+            ["alembic", "current"],
+            cwd=str(project_root),
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if result.returncode == 0:
+            current = result.stdout.strip() if result.stdout.strip() else "No migrations applied"
+            console.print(
+                Panel(
+                    f"[cyan]Current Schema Version:[/cyan]\n{current}",
+                    title="Database Status",
+                    border_style="cyan",
+                )
+            )
+            history_result = subprocess.run(
+                ["alembic", "history", "--indicate-current"],
+                cwd=str(project_root),
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            if history_result.returncode == 0 and history_result.stdout.strip():
+                console.print("\n[cyan]Migration History:[/cyan]")
+                console.print(history_result.stdout)
+        else:
+            console.print("[red]FAIL[/red] Failed to get database status")
+            console.print(f"[red]{result.stderr}[/red]")
+            sys.exit(1)
+    except FileNotFoundError:
+        console.print(
+            "[red]Error: alembic not found. Install it with:[/red]\n"
+            "  pip install alembic"
+        )
+        sys.exit(1)
+    except subprocess.TimeoutExpired:
+        console.print("[red]FAIL[/red] Status check timed out")
+        sys.exit(1)
+    except Exception as e:
+        console.print(f"[red]FAIL[/red] Error checking status: {e}")
+        sys.exit(1)
 
 
-def _validate_config() -> None:
-    """Validate configuration."""
-    console.print("[green]✓[/green] Configuration is valid")
-
-
-def _admin_init() -> None:
-    """Initialize X-Agent."""
-    console.print("[yellow]Initializing X-Agent...[/yellow]")
-    console.print("[green]✓[/green] Initialization complete")
-
-
-def _admin_migrate() -> None:
-    """Run database migrations."""
-    console.print("[yellow]Running migrations...[/yellow]")
-    console.print("[green]✓[/green] Migrations complete")
-
-
-def _admin_backup() -> None:
-    """Backup system data."""
-    console.print("[yellow]Creating backup...[/yellow]")
-    console.print("[green]✓[/green] Backup created")
-
-
-def _admin_restore() -> None:
-    """Restore from backup."""
-    console.print("[yellow]Restoring from backup...[/yellow]")
-    console.print("[green]✓[/green] Restore complete")
+@app.command()
+def db_new_migration(
+    message: str = typer.Argument(..., help="Description of the migration"),
+    autogenerate: bool = typer.Option(False, "--autogenerate", help="Auto-generate from model changes"),
+) -> None:
+    """Create a new database migration."""
+    try:
+        project_root = Path(__file__).parent.parent.parent
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            console=console,
+        ) as progress:
+            task_id = progress.add_task(f"Creating migration: {message}...", total=None)
+            cmd = ["alembic", "revision"]
+            if autogenerate:
+                cmd.append("--autogenerate")
+            cmd.extend(["-m", message])
+            result = subprocess.run(
+                cmd,
+                cwd=str(project_root),
+                capture_output=True,
+                text=True,
+                timeout=60,
+            )
+            progress.update(task_id, completed=True)
+        if result.returncode == 0:
+            console.print("[green]OK[/green] Migration created successfully")
+            if result.stdout:
+                console.print("[dim]" + result.stdout + "[/dim]")
+        else:
+            console.print("[red]FAIL[/red] Failed to create migration")
+            console.print(f"[red]{result.stderr}[/red]")
+            sys.exit(1)
+    except FileNotFoundError:
+        console.print(
+            "[red]Error: alembic not found. Install it with:[/red]\n"
+            "  pip install alembic"
+        )
+        sys.exit(1)
+    except subprocess.TimeoutExpired:
+        console.print("[red]FAIL[/red] Migration creation timed out")
+        sys.exit(1)
+    except Exception as e:
+        console.print(f"[red]FAIL[/red] Error: {e}")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

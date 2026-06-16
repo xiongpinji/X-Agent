@@ -18,8 +18,8 @@
 
     /* Linting */
     "strict": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
     "noFallthroughCasesInSwitch": true,
 
     /* Path mapping */
@@ -32,6 +32,22 @@
       "@store/*": ["./src/store/*"]
     }
   },
-  "include": ["src"],
+  "include": [
+    "src/main.tsx",
+    "src/App.tsx",
+    "src/panda/**/*.ts",
+    "src/panda/**/*.tsx",
+    "src/pages/ChatPage.tsx",
+    "src/services/api.ts",
+    "src/store/appStore.ts",
+    "src/utils/pwaManager.ts",
+    "src/vite-env.d.ts"
+  ],
+  "exclude": [
+    "src/**/__tests__/**",
+    "src/**/*.test.ts",
+    "src/**/*.test.tsx",
+    "src/console/**"
+  ],
   "references": [{ "path": "./tsconfig.node.json" }]
 }

@@ -1,0 +1,151 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "xagent.fullname" . }}
+  labels:
+    {{- include "xagent.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "xagent.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "xagent.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "xagent.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ .Chart.Name }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+            {{- if .Values.observability.metrics.enabled }}
+            - name: metrics
+              containerPort: {{ .Values.observability.metrics.port | default 8000 }}
+              protocol: TCP
+            {{- end }}
+          livenessProbe:
+            {{- toYaml .Values.livenessProbe | nindent 12 }}
+          readinessProbe:
+            {{- toYaml .Values.readinessProbe | nindent 12 }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          env:
+            {{- range $key, $value := .Values.env }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+            - name: XAGENT_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "xagent.secretName" . }}
+                  key: database-url
+            - name: XAGENT_REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "xagent.secretName" . }}
+                  key: redis-url
+            - name: XAGENT_BOOTSTRAP_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "xagent.secretName" . }}
+                  key: api-key
+            - name: XAGENT_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "xagent.secretName" . }}
+                  key: jwt-secret
+            - name: XAGENT_ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "xagent.secretName" . }}
+                  key: encryption-key
+            - name: XAGENT_AUDIT_HMAC_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "xagent.secretName" . }}
+                  key: audit-hmac-secret
+            {{- if .Values.observability.traces.enabled }}
+            - name: XAGENT_LANGFUSE_PUBLIC_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "xagent.secretName" . }}
+                  key: langfuse-public-key
+            - name: XAGENT_LANGFUSE_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "xagent.secretName" . }}
+                  key: langfuse-secret-key
+            - name: XAGENT_LANGFUSE_HOST
+              value: {{ .Values.observability.traces.endpoint | quote }}
+            {{- end }}
+            {{- if .Values.observability.errors.enabled }}
+            - name: XAGENT_SENTRY_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "xagent.secretName" . }}
+                  key: sentry-dsn
+            {{- end }}
+            - name: XAGENT_WORKFLOW_EVENT_BROKER_BACKEND
+              value: {{ .Values.workflowEvents.backend | default "local" | quote }}
+            - name: XAGENT_WORKFLOW_EVENT_EXCHANGE
+              value: {{ .Values.workflowEvents.exchange | default "xagent.workflow" | quote }}
+            {{- if eq (.Values.workflowEvents.backend | default "local") "rabbitmq" }}
+            - name: XAGENT_WORKFLOW_EVENT_RABBITMQ_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "xagent.secretName" . }}
+                  key: workflow-event-rabbitmq-url
+            {{- end }}
+          volumeMounts:
+            - name: config
+              mountPath: /etc/xagent
+              readOnly: true
+            {{- if .Values.persistence.enabled }}
+            - name: data
+              mountPath: {{ .Values.persistence.mountPath }}
+            {{- end }}
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "xagent.fullname" . }}-config
+        - name: tmp
+          emptyDir: 
+        {{- if .Values.persistence.enabled }}
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ include "xagent.fullname" . }}-pvc
+        {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
