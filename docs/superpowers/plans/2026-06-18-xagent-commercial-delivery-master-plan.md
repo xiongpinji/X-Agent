@@ -41,10 +41,10 @@
 | P0-B4 | P0 | Browser DNS SSRF guard | VERIFIED | Codex | Browser navigation blocks literal local/private IPs and DNS names resolving to local/private addresses at API and service layers. | Deterministic guard set: `python -m pytest tests/test_url_safety.py tests/test_browser_service.py::test_browser_client_goto_blocks_private_ip_without_api_layer tests/test_browser_service.py::test_browser_session_close_prevents_further_actions tests/test_security.py::test_browser_goto_blocks_private_ip --no-cov -q` -> 25 passed. | 2026-06-18 | Full `tests/test_browser_service.py` still has a pre-existing real-browser fixture instability on `#name` at example.com; not counted as SSRF failure. |
 | P0-B5 | P0 | SSO/OIDC/WebAuthn fail-closed | VERIFIED | Codex | SAML rejects unsigned/forged responses, OIDC requires signature key and nonce validation, WebAuthn placeholders cannot return success. | `python -m pytest tests/test_saml_signature.py tests/enterprise/test_sso.py::TestWebAuthnProvider tests/test_sso_webauthn_fail_closed.py --no-cov -q` -> 25 passed. | 2026-06-18 | Later WebAuthn release requires standards-compliant attestation/assertion verification before enabling endpoints. |
 | P0-B6 | P0 | API key/user admin object boundaries | VERIFIED | Codex | `security:manage` is tenant-admin by default; only bootstrap/platform admin can list or mutate cross-tenant API keys/users. | `python -m pytest tests/test_admin_tenant_boundaries.py --no-cov -q` -> 9 passed; `python -m pytest tests/test_admin_tenant_boundaries.py tests/test_security_api_comprehensive.py tests/test_security_authz.py tests/test_api_endpoint_fixes.py --no-cov -q` -> 70 passed; wider P0-B regression set -> 150 passed, 1 skipped. | 2026-06-18 | Keep bootstrap-only platform admin semantics; continue backend security route/gate sweep. |
-| P0-C | P0 | CI/deployment trust chain | VERIFIED | Codex | Official commercial gate fails closed and hosted GitHub Actions pass for target SHA. | Local fail-closed CI/deployment/security gate contract verified in P0-C1; hosted Commercial RC Gate run `27712888135` passed for SHA `c99598749b45cffe9cce54d4a0f44172a741782d` on branch `codex/p0-c-ci-deployment-gates`. | 2026-06-18 | Continue to P0-D Stage3/production evidence and owner-final gate; do not treat CI pass alone as commercial release complete. |
+| P0-C | P0 | CI/deployment trust chain | VERIFIED | Codex | Official commercial gate fails closed and hosted GitHub Actions pass for target SHA. | Local fail-closed CI/deployment/security gate contract verified in P0-C1; latest hosted Commercial RC Gate run `27713214579` passed for SHA `dbd01763e88b2cfd9947b202f92e70473e667816` on branch `codex/p0-c-ci-deployment-gates`. | 2026-06-18 | Continue to P0-D Stage3/production evidence and owner-final gate; do not treat CI pass alone as commercial release complete. |
 | P0-C1 | P0 | Local CI/deployment/security gate contract | VERIFIED | Codex | Commercial RC workflow runs route auth audit, deployment hardening gate, and production hardening gate fail-closed; tests catch missing or fail-open gate commands. | `python -m pytest tests/test_rc_ci_contract.py tests/test_ci_workflow_hardening.py tests/test_stage3_staging_rehearsal_workflow_contract.py tests/test_deployment_hardening.py tests/test_production_hardening_gate.py tests/test_route_auth_audit.py --no-cov -q` -> 58 passed; `python scripts/rc_ci_contract.py` -> passed; `python scripts/route_auth_audit.py --json` -> `{"issues":[],"ok":true}`; `python scripts/security_deployment_gate.py` -> OK; `python scripts/production_hardening_gate.py` -> ready, 0 findings. | 2026-06-18 | Keep as hosted CI contract; next P0-C step is external Actions evidence. |
-| P0-C2 | P0 | Hosted Commercial RC Gate evidence | VERIFIED | Codex | GitHub Actions Commercial RC Gate passes on the RC repository branch containing the CI/deployment hardening commits. | [Commercial RC Gate run 27712888135](https://github.com/xiongpinji/Panda-Agent-RC/actions/runs/27712888135) -> success; head SHA `c99598749b45cffe9cce54d4a0f44172a741782d`; jobs `commercial-rc-linux` and `commercial-rc-windows-installer` both success. | 2026-06-18 | Use this as CI evidence for P0-D/owner gate; final release still requires Stage3 HTTPS/full-stack evidence and final gate. |
-| P0-D | P0 | Stage3/production evidence | BLOCKED | Codex + Owner | HTTPS/443, domain/TLS, full stack smoke, observability decision, owner intake, final gate pass. | `.xagent_runtime/reports/stage3-http-smoke-608e529-20260618.json` is temporary HTTP evidence only. | 2026-06-18 | Resume after CI/deploy and domain/TLS path are ready. |
+| P0-C2 | P0 | Hosted Commercial RC Gate evidence | VERIFIED | Codex | GitHub Actions Commercial RC Gate passes on the RC repository branch containing the CI/deployment hardening commits. | [Commercial RC Gate run 27713214579](https://github.com/xiongpinji/Panda-Agent-RC/actions/runs/27713214579) -> success; head SHA `dbd01763e88b2cfd9947b202f92e70473e667816`; jobs `commercial-rc-linux` and `commercial-rc-windows-installer` both success. | 2026-06-18 | Use this as CI evidence for P0-D/owner gate; final release still requires Stage3 HTTPS/full-stack evidence and final gate. |
+| P0-D | P0 | Stage3/production evidence | IN_PROGRESS | Codex + Owner | HTTPS/443, domain/TLS, full stack smoke, observability decision, owner intake, final gate pass. | Local RC final gate now passes `python scripts/rc_final_gate.py --require-ready-to-tag` -> `ready_for_rc_tag`; current Stage3 HTTP smoke still passes on `http://111.228.49.160:8899`, but HTTPS/443 probe fails TLS handshake and Stage3 external evidence intake remains blocked. | 2026-06-18 | Provision a real HTTPS/443 domain/TLS path or approved equivalent, then rerun Stage3/full-stack smoke and intake. |
 | P1-A | P1 | Dirty worktree classification | NOT_STARTED | Codex | 526 changed/untracked items classified without destructive cleanup. | `git status --porcelain=v1 -uall` count observed: 526. | 2026-06-18 | Classify after P0 blockers. |
 | P1-B | P1 | Release docs and customer handoff | NOT_STARTED | Codex | Release notes, runbook, quickstart, rollback and support boundaries match verified product. | Pending | 2026-06-18 | Update after final gate evidence. |
 | P2-A | P2 | Browser extension future hardening | DEFERRED | Future iteration | Extension is not shipped in first version; later release requires separate security work. | `extension/` excluded by scope decision. | 2026-06-18 | Keep out of release package/docs. |
@@ -55,8 +55,9 @@
 - Route audit previously reverified as `{"issues":[],"ok":true}`.
 - Deployment hardening gate previously reverified as passing.
 - Commercial RC workflow now has a local contract requiring route auth audit, deployment hardening, and production hardening gates to run fail-closed.
-- Hosted Commercial RC Gate evidence is now available for RC branch `codex/p0-c-ci-deployment-gates`: run `27712888135`, SHA `c99598749b45cffe9cce54d4a0f44172a741782d`, conclusion `success`.
-- Stage3 SHA `608e52924f965f7a3289c24349110089a81cc99d` has temporary HTTP health/ready smoke passing, but final GA still needs HTTPS/443 and full stack evidence.
+- Hosted Commercial RC Gate evidence is now available for RC branch `codex/p0-c-ci-deployment-gates`: latest verified run `27713214579`, SHA `dbd01763e88b2cfd9947b202f92e70473e667816`, conclusion `success`.
+- Stage3 SHA `608e52924f965f7a3289c24349110089a81cc99d` has temporary HTTP health/ready smoke passing on port `8899`, but final GA still needs HTTPS/443 and full stack evidence.
+- Local RC final gate is currently green for the refreshed evidence chain: `python scripts/rc_final_gate.py --require-ready-to-tag` -> `ready_for_rc_tag`. This does not substitute for the P0-D HTTPS/full-stack Stage3 evidence requirement.
 - Current workspace is dirty; do not reset, clean, or revert unrelated changes.
 
 ## Execution Log
@@ -193,10 +194,33 @@
   - `python -m pytest tests/test_issue_to_pr_pipeline.py tests/test_issue_to_pr_api.py tests/test_cli_github.py -o addopts= -o timeout=0 -o faulthandler_timeout=0 -p no:cov -q` -> 10 passed.
   - `python -m pytest tests/test_sessions_skills_issuepr_auth.py --no-cov -q` -> 17 passed.
   - Hosted [Commercial RC Gate run 27712888135](https://github.com/xiongpinji/Panda-Agent-RC/actions/runs/27712888135) -> success for SHA `c99598749b45cffe9cce54d4a0f44172a741782d`.
-  - Hosted job results: `commercial-rc-linux` success and `commercial-rc-windows-installer` success.
+  - Follow-up docs-only commit `dbd01763e88b2cfd9947b202f92e70473e667816` triggered hosted [Commercial RC Gate run 27713214579](https://github.com/xiongpinji/Panda-Agent-RC/actions/runs/27713214579) -> success.
+  - Latest hosted job results for run `27713214579`: `commercial-rc-linux` success and `commercial-rc-windows-installer` success.
 - Claim boundary:
   - P0-C CI/deployment trust chain is verified for the RC branch/SHA above.
   - This is not final commercial release approval. P0-D still needs Stage3/production evidence, HTTPS/443/domain/TLS/full-stack smoke evidence, and final owner gate/final gate handling.
+
+### 2026-06-18 P0-D Stage3 And Final Gate Stabilization
+
+- Rechecked live temporary Stage3 endpoint:
+  - `curl.exe -i --max-time 15 http://111.228.49.160:8899/health` -> 200 OK.
+  - `curl.exe -i --max-time 15 http://111.228.49.160:8899/ready` -> 200 OK with `status=ready`, `audit=ok`, `qdrant=ok`, `browser=ok`, and `observability=degraded`.
+  - `curl.exe -k -i --max-time 15 https://111.228.49.160/health` -> TLS handshake failure.
+- Re-ran Stage3 external evidence intake for hosted RC SHA `dbd01763e88b2cfd9947b202f92e70473e667816`:
+  - `python scripts/commercial_stage3_staging_external_evidence_intake.py --current-head-sha dbd01763e88b2cfd9947b202f92e70473e667816 --release-sha dbd01763e88b2cfd9947b202f92e70473e667816 --force` -> blocked for `staging_observability` and `staging_environment_protection`.
+- Stabilized the local final gate chain:
+  - Updated `docs/RC_RELEASE_DIFF_REVIEW.md` from the stale `131 candidate files` evidence line to `145 candidate files`.
+  - Refreshed Codex/Hermes gap evidence with `python scripts/codex_hermes_gap_matrix.py --write-report` -> passed for all 9 categories.
+  - Tightened `scripts/rc_evidence_pack.py` so public `xagent-...` artifact/path names are not treated as token leaks while `xagent_...` token-like values still fail the evidence secret scan.
+  - Added regression coverage in `tests/test_rc_evidence_pack.py`.
+- Verification completed:
+  - `python -m pytest tests/test_issue_to_pr_pipeline.py tests/test_issue_to_pr_api.py tests/test_cli_github.py -o addopts= -o timeout=0 -o faulthandler_timeout=0 -p no:cov -q` -> 10 passed.
+  - `python -m pytest tests/test_rc_evidence_pack.py --no-cov -q` -> 20 passed.
+  - `python -m py_compile scripts/rc_evidence_pack.py` -> passed.
+  - `python scripts/rc_evidence_pack.py; python scripts/rc_final_gate.py --allow-missing-evidence-pack; python scripts/rc_release_receipt.py; python scripts/rc_final_gate.py --allow-missing-evidence-pack; python scripts/rc_evidence_pack.py; python scripts/rc_final_gate.py; python scripts/rc_final_gate.py --require-ready-to-tag` -> final status `ready_for_rc_tag`.
+- Claim boundary:
+  - Local RC gate evidence is green again.
+  - Commercial delivery is still not complete because final P0-D requires real HTTPS/443/domain/TLS/full-stack Stage3 evidence and a decision on degraded observability.
 
 ## Update Rules
 

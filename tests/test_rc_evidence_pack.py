@@ -401,6 +401,42 @@ def test_evidence_pack_fails_on_secret_like_handoff_text(tmp_path: Path, monkeyp
     assert "secret-like" in str(check.error)
 
 
+def test_evidence_pack_allows_public_xagent_path_names(tmp_path: Path, monkeypatch) -> None:
+    paths = _write_pack_fixture(tmp_path, monkeypatch)
+    _write_json(
+        tmp_path / ".xagent_runtime" / "reports" / "codex-hermes-gap-closure.json",
+        {
+            "status": "passed",
+            "generated_at": "2026-06-05T10:00:00Z",
+            "status_short": [
+                "?? frontend/src/panda/assets/roles/xagent-reference-media-operator.png",
+                "?? docs/superpowers/plans/2026-06-14-xagent-remaining-parallel-delivery.md",
+            ],
+        },
+    )
+
+    report = build_evidence_pack(receipt_path=paths["receipt"])
+
+    assert report.status == "created"
+    check = next(item for item in report.checks if item.name == "evidence_secret_scan")
+    assert check.status == "passed"
+
+
+def test_evidence_pack_still_fails_on_xagent_token_value(tmp_path: Path, monkeypatch) -> None:
+    paths = _write_pack_fixture(tmp_path, monkeypatch)
+    _write_text(
+        tmp_path / ".xagent_runtime" / "reports" / "rc-owner-env-template.env",
+        'XAGENT_INTERNAL_TOKEN="xagent_' + ("a" * 32) + '"\n',
+    )
+
+    report = build_evidence_pack(receipt_path=paths["receipt"])
+
+    assert report.status == "failed"
+    check = next(item for item in report.checks if item.name == "evidence_secret_scan")
+    assert check.status == "failed"
+    assert "secret-like" in str(check.error)
+
+
 def test_evidence_pack_redacts_local_user_runtime_paths_before_privacy_scan(
     tmp_path: Path,
     monkeypatch,
