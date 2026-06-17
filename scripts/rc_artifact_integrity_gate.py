@@ -23,7 +23,7 @@ from scripts.rc_release_audit import (
     EXCLUDED_REFERENCE_SCAN_EXEMPT,
     SECRET_PATTERNS,
     TEXT_SUFFIXES,
-    _is_probable_placeholder,
+    _is_allowed_secret_match_sample,
     _redact,
     is_excluded,
 )
@@ -246,7 +246,7 @@ def check_zip_security_scan(path: Path | None) -> ArtifactIntegrityCheck:
                     for pattern in SECRET_PATTERNS:
                         for match in pattern.finditer(line):
                             sample = match.group(1) if match.groups() else match.group(0)
-                            if _is_probable_placeholder(sample):
+                            if _is_allowed_secret_match_sample(sample):
                                 continue
                             secret_findings.append(
                                 {

@@ -149,7 +149,7 @@ def test_artifact_integrity_gate_rejects_excluded_zip_entry(tmp_path: Path) -> N
 def test_artifact_integrity_gate_rejects_secret_like_zip_content(tmp_path: Path) -> None:
     artifact = tmp_path / "release" / "bundle.zip"
     artifact.parent.mkdir()
-    secret_sample = "xagent-" + "secretvalue12345678901234567890"
+    secret_sample = "xagent_" + "secretvalue12345678901234567890"
     data = f'XAGENT_BOOTSTRAP_API_KEY="{secret_sample}"\n'.encode("utf-8")
     (tmp_path / "config").mkdir()
     (tmp_path / "config" / "production.env").write_bytes(data)
@@ -171,6 +171,37 @@ def test_artifact_integrity_gate_rejects_secret_like_zip_content(tmp_path: Path)
     assert report.status == "failed"
     scan_check = next(check for check in report.checks if check.name == "zip_security_scan")
     assert scan_check.details["secret_findings"][0]["sample"].startswith("xage")
+
+
+def test_artifact_integrity_gate_allows_public_xagent_path_names(tmp_path: Path) -> None:
+    artifact = tmp_path / "release" / "bundle.zip"
+    artifact.parent.mkdir()
+    data = "\n".join(
+        [
+            '"?? frontend/src/panda/assets/roles/xagent-reference-media-operator.png"',
+            '"?? docs/superpowers/plans/2026-06-14-xagent-remaining-parallel-delivery.md"',
+        ]
+    ).encode("utf-8")
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests" / "test_public_paths.py").write_bytes(data)
+    with zipfile.ZipFile(artifact, "w") as archive:
+        archive.writestr("tests/test_public_paths.py", data)
+    report_path = _write_report(
+        tmp_path / "reports" / "rc-source-bundle.json",
+        {
+            "status": "created",
+            "dry_run": False,
+            "output_path": str(artifact),
+            "file_count": 1,
+            "files": [{"path": "tests/test_public_paths.py", "size_bytes": len(data), "sha256": _sha256(data)}],
+        },
+    )
+
+    report = run_artifact_integrity_gate(report_path, root=tmp_path)
+
+    assert report.status == "passed"
+    scan_check = next(check for check in report.checks if check.name == "zip_security_scan")
+    assert scan_check.details["secret_findings"] == []
 
 
 def test_artifact_integrity_gate_rejects_excluded_reference_zip_content(tmp_path: Path) -> None:
