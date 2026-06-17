@@ -12,6 +12,7 @@ data:
   JWT_EXPIRATION_HOURS: "24"
   # Database
   DB_NAME: "xagent_db"
+  DB_USER: "xagent"
   DB_PORT: "5432"
   # Redis
   REDIS_PORT: "6379"

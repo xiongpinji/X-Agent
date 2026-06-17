@@ -37,8 +37,9 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin
-      - GF_SECURITY_ADMIN_USER=admin
+      # SECURITY: admin password must be supplied via env; no weak default.
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:?Set GRAFANA_ADMIN_PASSWORD in .env}
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
       - GF_INSTALL_PLUGINS=grafana-piechart-panel
       - GF_USERS_ALLOW_SIGN_UP=false
       - GF_SERVER_ROOT_URL=http://localhost:3000
@@ -161,8 +162,9 @@ services:
       - "5601:5601"
     environment:
       - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
-      - ELASTICSEARCH_USERNAME=elastic
-      - ELASTICSEARCH_PASSWORD=changeme
+      - ELASTICSEARCH_USERNAME=${ELASTIC_USERNAME:-elastic}
+      # SECURITY: no weak default; supply via env when xpack security is on.
+      - ELASTICSEARCH_PASSWORD=${ELASTIC_PASSWORD:?Set ELASTIC_PASSWORD in .env}
       - TZ=UTC
     depends_on:
       elasticsearch:
@@ -209,7 +211,7 @@ services:
     ports:
       - "9187:9187"
     environment:
-      DATA_SOURCE_NAME: "postgresql://xagent:xagent@postgres:5432/xagent?sslmode=disable"
+      DATA_SOURCE_NAME: "postgresql://${DB_USER:-xagent}:${DB_PASSWORD:?Set DB_PASSWORD in .env}@postgres:5432/${DB_NAME:-xagent}?sslmode=disable"
       TZ: UTC
     depends_on:
       - postgres
@@ -219,7 +221,7 @@ services:
 
   # Redis Exporter - Redis metrics
   redis-exporter:
-    image: oliver006/redis_exporter:latest
+    image: oliver006/redis_exporter:v1.62.0
     container_name: x-agent-redis-exporter
     ports:
       - "9121:9121"
@@ -237,9 +239,9 @@ services:
     image: postgres:16-alpine
     container_name: x-agent-postgres
     environment:
-      POSTGRES_USER: xagent
-      POSTGRES_PASSWORD: xagent
-      POSTGRES_DB: xagent
+      POSTGRES_USER: ${DB_USER:-xagent}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
+      POSTGRES_DB: ${DB_NAME:-xagent}
       TZ: UTC
     ports:
       - "5432:5432"
@@ -249,7 +251,7 @@ services:
       - x-agent-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U xagent"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-xagent}"]
       interval: 10s
       timeout: 5s
       retries: 5

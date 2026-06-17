@@ -2,7 +2,7 @@ version: '3.9'
 
 services:
   nginx:
-    image: nginx:latest
+    image: nginx:1.27-alpine
     container_name: xagent-nginx
     ports:
       - "80:80"
@@ -32,7 +32,7 @@ services:
         max-file: "3"
 
   certbot:
-    image: certbot/certbot:latest
+    image: certbot/certbot:v2.11.0
     container_name: xagent-certbot
     volumes:
       - ./deployment/nginx/ssl:/etc/letsencrypt

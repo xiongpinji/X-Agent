@@ -12,6 +12,11 @@ NAMESPACE=${NAMESPACE:-xagent}
 RELEASE_NAME=${RELEASE_NAME:-xagent}
 ENVIRONMENT=${ENVIRONMENT:-production}
 HELM_CHART_PATH="${HELM_CHART_PATH:-$PROJECT_ROOT/deployment/helm}"
+# SECURITY: deploy an immutable, explicit image tag. Avoid mutable ":latest"
+# in production so rollouts and rollbacks are reproducible. Override with
+# IMAGE_TAG (e.g. a git SHA or release version).
+IMAGE_REPO=${IMAGE_REPO:-xagent}
+IMAGE_TAG=${IMAGE_TAG:-1.0.0}
 
 # Colors for output
 RED='\033[0;31m'
@@ -63,8 +68,8 @@ build_image() {
     fi
 
     cd "$PROJECT_ROOT"
-    docker build -t xagent:latest -f Dockerfile .
-    log_info "Docker image built successfully"
+    docker build -t "${IMAGE_REPO}:${IMAGE_TAG}" -f Dockerfile .
+    log_info "Docker image built successfully: ${IMAGE_REPO}:${IMAGE_TAG}"
 }
 
 # Create namespace
