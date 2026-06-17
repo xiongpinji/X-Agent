@@ -28,6 +28,32 @@ _tool_root_override: "_contextvars.ContextVar[str | None]" = _contextvars.Contex
     "xagent_tool_root_override", default=None
 )
 
+# search_text hardening constants (P2-02 fix). Keeping the tool from stalling
+# on .git pack files, log dumps, node_modules, or other large/binary content
+# that the agent would otherwise burn its iteration budget on.
+_SEARCH_TEXT_MAX_FILE_BYTES = 512 * 1024  # 512 KB per file
+_SEARCH_TEXT_MAX_FILES = 5000             # absolute cap on files inspected
+_SEARCH_TEXT_SKIP_DIRS = {
+    ".git", ".hg", ".svn",
+    "node_modules", "__pycache__",
+    ".venv", "venv", ".tox",
+    "dist", "build", "target",
+    ".next", ".nuxt", ".cache",
+    ".mypy_cache", ".pytest_cache", ".ruff_cache",
+    "htmlcov",
+}
+_SEARCH_TEXT_BINARY_SUFFIXES = {
+    ".pyc", ".pyo", ".so", ".dll", ".dylib", ".exe",
+    ".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".ico", ".svg",
+    ".mp3", ".mp4", ".avi", ".mov", ".wav", ".flac", ".ogg",
+    ".zip", ".tar", ".gz", ".bz2", ".xz", ".7z", ".rar",
+    ".pdf", ".docx", ".xlsx", ".pptx",
+    ".pack", ".idx",  # git pack files
+    ".db", ".sqlite", ".sqlite3",
+    ".whl", ".egg",
+    ".bin", ".dat",
+}
+
 
 def set_tool_root_override(root: str | None):
     """Set the active file-tool root (returns a token for reset)."""
@@ -1217,17 +1243,40 @@ async def apply_batch_patch(patches: list[dict[str, Any]], backup: bool = True) 
 
 
 async def search_text(root: str, query: str, pattern: str = "**/*", limit: int = 20) -> list[dict[str, str]]:
+    """Search for ``query`` (case-insensitive substring) under ``root``.
+
+    Hardened against pathological inputs (P2-02):
+    - Skips known-noise directories (.git, node_modules, __pycache__, .venv, dist, build)
+    - Skips files larger than ``_SEARCH_TEXT_MAX_FILE_BYTES`` (default 512 KB) — large
+      log/pack/binary files would otherwise stall ``read_text`` and exhaust the
+      60-second test timeout.
+    - Caps total files inspected at ``_SEARCH_TEXT_MAX_FILES`` (default 5000) so a
+      runaway glob cannot starve the agent loop.
+    - Skips files whose suffix is in ``_SEARCH_TEXT_BINARY_SUFFIXES`` (likely binary).
+    """
     base = _resolve_tool_root(root)
     if not base.exists():
         return []
     results: list[dict[str, str]] = []
     lowered = query.lower()
+    inspected = 0
     for path in sorted(base.glob(pattern)):
         if len(results) >= max(1, limit):
             break
+        if inspected >= _SEARCH_TEXT_MAX_FILES:
+            break
+        # Cheap rejects first to avoid expensive stat / read calls
+        parts_lower = {p.lower() for p in path.parts}
+        if parts_lower & _SEARCH_TEXT_SKIP_DIRS:
+            continue
+        if path.suffix.lower() in _SEARCH_TEXT_BINARY_SUFFIXES:
+            continue
         if not path.is_file():
             continue
+        inspected += 1
         try:
+            if path.stat().st_size > _SEARCH_TEXT_MAX_FILE_BYTES:
+                continue
             text = path.read_text(encoding="utf-8", errors="ignore")
         except Exception:
             continue
