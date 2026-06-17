@@ -8,14 +8,23 @@ Provides REST API for:
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Annotated, Any
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from backend.app.api.errors import api_error
 from backend.app.core.context import ContextManager, SessionMetadata, SessionStats
+from backend.app.core.contracts import ErrorCode
+from backend.app.core.security import Principal
+from backend.app.dependencies import enforce_scope, get_current_principal
 
 router = APIRouter(prefix="/api/sessions", tags=["sessions"])
+
+# Auth dependency (SECURITY P0-02): all session write endpoints require an
+# authenticated principal, and tenant_id is always taken from the principal
+# (never from the request body) to prevent cross-tenant access.
+PrincipalDependency = Annotated[Principal, Depends(get_current_principal)]
 
 # Global context manager instance (will be injected)
 _context_manager: ContextManager | None = None
@@ -32,6 +41,21 @@ def get_context_manager() -> ContextManager:
     if not _context_manager:
         raise HTTPException(status_code=500, detail="Context manager not initialized")
     return _context_manager
+
+
+def _ensure_session_tenant(principal: Principal, session_tenant_id: str | None) -> None:
+    """Validate tenant ownership of current/target session (SECURITY P0-02).
+
+    admin role may cross tenants; other roles require session tenant == principal tenant.
+    """
+    if principal.role == "admin":
+        return
+    if session_tenant_id and session_tenant_id != principal.tenant_id:
+        raise api_error(
+            403,
+            ErrorCode.AUTHORIZATION_FAILED,
+            "Cannot access session belonging to another tenant.",
+        )
 
 
 # Request/Response models
@@ -126,21 +150,31 @@ class ContextMetricsResponse(BaseModel):
 
 
 @router.post("/initialize", response_model=dict[str, Any])
-async def initialize_session(request: InitializeSessionRequest) -> dict[str, Any]:
+async def initialize_session(
+    request: InitializeSessionRequest,
+    principal: PrincipalDependency,
+) -> dict[str, Any]:
     """Initialize or restore a session.
+
+    SECURITY P0-02: tenant_id is taken from the authenticated principal,
+    ignoring any client-supplied tenant_id to prevent cross-tenant access.
 
     Args:
         request: Session initialization request
+        principal: Authenticated principal
 
     Returns:
         Session state information
     """
+    if not principal.authenticated:
+        raise api_error(401, ErrorCode.AUTHENTICATION_FAILED, "Authentication required.")
+    enforce_scope(principal, "session:write")
     try:
         context_manager = get_context_manager()
         session_state = await context_manager.initialize_session(
             session_id=request.session_id,
             agent_id=request.agent_id,
-            tenant_id=request.tenant_id,
+            tenant_id=principal.tenant_id,
             context_window=request.context_window,
         )
 
@@ -159,17 +193,30 @@ async def initialize_session(request: InitializeSessionRequest) -> dict[str, Any
 
 
 @router.post("/messages", response_model=MessageResponse)
-async def add_message(request: AddMessageRequest) -> MessageResponse:
+async def add_message(
+    request: AddMessageRequest,
+    principal: PrincipalDependency,
+) -> MessageResponse:
     """Add a message to the current session.
+
+    SECURITY P0-02: requires authentication; current session must belong to
+    the principal's tenant.
 
     Args:
         request: Message to add
+        principal: Authenticated principal
 
     Returns:
         Added message
     """
+    if not principal.authenticated:
+        raise api_error(401, ErrorCode.AUTHENTICATION_FAILED, "Authentication required.")
+    enforce_scope(principal, "session:write")
     try:
         context_manager = get_context_manager()
+        current = getattr(context_manager, "_current_session", None)
+        if current is not None:
+            _ensure_session_tenant(principal, getattr(current, "tenant_id", None))
         message = await context_manager.add_message(
             role=request.role,
             content=request.content,
@@ -222,14 +269,23 @@ async def get_context(
 
 
 @router.post("/compress", response_model=CompressionResultResponse | None)
-async def compress_context() -> CompressionResultResponse | None:
+async def compress_context(principal: PrincipalDependency) -> CompressionResultResponse | None:
     """Manually trigger context compression.
+
+    SECURITY P0-02: requires authentication; current session must belong to
+    the principal's tenant.
 
     Returns:
         Compression result if performed, None otherwise
     """
+    if not principal.authenticated:
+        raise api_error(401, ErrorCode.AUTHENTICATION_FAILED, "Authentication required.")
+    enforce_scope(principal, "session:write")
     try:
         context_manager = get_context_manager()
+        current = getattr(context_manager, "_current_session", None)
+        if current is not None:
+            _ensure_session_tenant(principal, getattr(current, "tenant_id", None))
         result = await context_manager.compress_if_needed()
 
         if result:
@@ -250,17 +306,30 @@ async def compress_context() -> CompressionResultResponse | None:
 
 
 @router.post("/{session_id}/save", response_model=dict[str, Any])
-async def save_session(session_id: str) -> dict[str, Any]:
+async def save_session(
+    session_id: str,
+    principal: PrincipalDependency,
+) -> dict[str, Any]:
     """Save a session.
+
+    SECURITY P0-02: requires authentication; current session must belong to
+    the principal's tenant.
 
     Args:
         session_id: Session ID to save
+        principal: Authenticated principal
 
     Returns:
         Save result
     """
+    if not principal.authenticated:
+        raise api_error(401, ErrorCode.AUTHENTICATION_FAILED, "Authentication required.")
+    enforce_scope(principal, "session:write")
     try:
         context_manager = get_context_manager()
+        current = getattr(context_manager, "_current_session", None)
+        if current is not None:
+            _ensure_session_tenant(principal, getattr(current, "tenant_id", None))
         success = await context_manager.save_session()
 
         return {
@@ -274,21 +343,35 @@ async def save_session(session_id: str) -> dict[str, Any]:
 
 
 @router.post("/{session_id}/restore", response_model=dict[str, Any])
-async def restore_session(session_id: str) -> dict[str, Any]:
+async def restore_session(
+    session_id: str,
+    principal: PrincipalDependency,
+) -> dict[str, Any]:
     """Restore a session.
+
+    SECURITY P0-02: requires authentication; target session tenant_id must
+    equal principal's tenant (admin may cross tenants) to prevent restoring
+    another tenant's session.
 
     Args:
         session_id: Session ID to restore
+        principal: Authenticated principal
 
     Returns:
         Restored session information
     """
+    if not principal.authenticated:
+        raise api_error(401, ErrorCode.AUTHENTICATION_FAILED, "Authentication required.")
+    enforce_scope(principal, "session:write")
     try:
         context_manager = get_context_manager()
         session_state = await context_manager.restore_session(session_id)
 
         if not session_state:
             raise HTTPException(status_code=404, detail=f"Session not found: {session_id}")
+
+        # Validate target session tenant ownership before activating it
+        _ensure_session_tenant(principal, getattr(session_state, "tenant_id", None))
 
         return {
             "session_id": session_state.session_id,
@@ -333,17 +416,34 @@ async def list_sessions(
 
 
 @router.delete("/{session_id}", response_model=dict[str, Any])
-async def delete_session(session_id: str) -> dict[str, Any]:
+async def delete_session(
+    session_id: str,
+    principal: PrincipalDependency,
+) -> dict[str, Any]:
     """Delete a session.
+
+    SECURITY P0-02: requires authentication; target session tenant_id must
+    equal principal's tenant (admin may cross tenants). Loads the session
+    snapshot to validate ownership before deleting.
 
     Args:
         session_id: Session ID to delete
+        principal: Authenticated principal
 
     Returns:
         Delete result
     """
+    if not principal.authenticated:
+        raise api_error(401, ErrorCode.AUTHENTICATION_FAILED, "Authentication required.")
+    enforce_scope(principal, "session:write")
     try:
         context_manager = get_context_manager()
+        # Load snapshot to validate tenant ownership before deleting
+        session_state = await context_manager.restore_session(session_id)
+        if session_state is None:
+            raise HTTPException(status_code=404, detail=f"Session not found: {session_id}")
+        _ensure_session_tenant(principal, getattr(session_state, "tenant_id", None))
+
         success = await context_manager.delete_session(session_id)
 
         if not success:

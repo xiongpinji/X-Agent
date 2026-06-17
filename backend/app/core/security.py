@@ -25,6 +25,9 @@ ROLE_SCOPES: dict[str, list[str]] = {
         "security:manage",
         "sandbox:run",
         "sandbox:read",
+        "chat:*",
+        "skill:*",
+        "session:*",
     ],
     "developer": [
         "agent:run",
@@ -36,6 +39,13 @@ ROLE_SCOPES: dict[str, list[str]] = {
         "workflow:run",
         "audit:read",
         "sandbox:run",
+        "chat:send",
+        "chat:read",
+        "skill:run",
+        "skill:read",
+        "skill:install",
+        "session:write",
+        "session:read",
     ],
     "user": [
         "agent:run",
@@ -44,8 +54,14 @@ ROLE_SCOPES: dict[str, list[str]] = {
         "memory:read",
         "memory:write",
         "workflow:run",
+        "chat:send",
+        "chat:read",
+        "skill:read",
+        "skill:run",
+        "session:write",
+        "session:read",
     ],
-    "viewer": ["memory:read", "audit:read"],
+    "viewer": ["memory:read", "audit:read", "chat:read", "skill:read", "session:read"],
     "anonymous": [],  # SECURITY: Anonymous users have NO permissions
 }
 

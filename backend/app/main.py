@@ -574,15 +574,27 @@ async def startup_event():
     """
     logger.info("Starting X-Agent application...")
 
-    # Security check: warn if production API auth is disabled
+    # Security check: production API auth must be enforced unless running as a
+    # local desktop (lite) deployment (SECURITY P0-06).
+    # 云端/API 部署若误配 require_api_key=false,整个 API 无认证保护——拒绝启动。
+    # 桌面 lite 单机模式可显式关闭(本机用户即操作者,无网络暴露面)。
     from backend.app.settings import get_settings as _get_settings
     _settings = _get_settings()
     if _settings.app_mode == "production" and not _settings.require_api_key:
-        logger.warning(
-            "SECURITY WARNING: XAGENT_REQUIRE_API_KEY=false in production mode. "
-            "Cloud and API deployments should set XAGENT_REQUIRE_API_KEY=true to prevent unauthenticated access. "
-            "Desktop-local deployments may leave this off intentionally."
-        )
+        if _settings.mode == "lite":
+            # 桌面本地部署:保留 WARNING,不阻断启动
+            logger.warning(
+                "XAGENT_REQUIRE_API_KEY=false in production desktop (lite) mode. "
+                "Acceptable for single-user local use; do NOT expose this to a network."
+            )
+        else:
+            # 云端/standard/production 部署:强制要求认证,拒绝启动
+            raise RuntimeError(
+                "XAGENT_REQUIRE_API_KEY=false is forbidden in production mode (mode="
+                + str(_settings.mode)
+                + "). Set XAGENT_REQUIRE_API_KEY=true, or use XAGENT_MODE=lite for "
+                "single-user desktop deployments. Ref: SECURITY_DECISIONS.md D-1"
+            )
 
     if _settings.feishu_app_id and _settings.feishu_app_secret:
         feishu_bridge.configure(
