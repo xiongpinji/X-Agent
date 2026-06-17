@@ -23,7 +23,14 @@ from uuid import uuid4
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field, EmailStr
 
-router = APIRouter(prefix="/api/v1/partners", tags=["partners"])
+from backend.app.api.rbac_enforcement import require_admin
+
+# SECURITY P1-03: partner management endpoints require admin role.
+router = APIRouter(
+    prefix="/api/v1/partners",
+    tags=["partners"],
+    dependencies=[Depends(require_admin)],
+)
 logger = logging.getLogger(__name__)
 
 # ============================================================================

@@ -114,8 +114,10 @@ class SAMLProvider:
             # Decode SAML response
             saml_response_xml = base64.b64decode(saml_response).decode("utf-8")
 
-            # Parse XML
-            root = ET.fromstring(saml_response_xml)
+            # Parse XML using defusedxml to prevent XXE attacks (SECURITY P1-04).
+            # The stdlib ET.fromstring is vulnerable to XML External Entity attacks.
+            from defusedxml import ElementTree as DefusedET
+            root = DefusedET.fromstring(saml_response_xml)
 
             # Extract assertion
             assertion = self._extract_assertion(root)
