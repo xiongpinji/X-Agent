@@ -9,7 +9,7 @@ from typing import Any, Iterable
 from fastapi import FastAPI
 from fastapi.routing import APIRoute
 
-from backend.app.dependencies import get_current_principal, get_refresh_principal
+from backend.app import dependencies
 
 
 AUTH_DEPENDENCY_NAMES = {
@@ -86,9 +86,17 @@ def _dependency_calls(route: APIRoute) -> set[Any]:
     return calls
 
 
+def _auth_dependency_objects() -> set[Any]:
+    calls = {dependencies.get_current_principal}
+    refresh_principal = getattr(dependencies, "get_refresh_principal", None)
+    if refresh_principal is not None:
+        calls.add(refresh_principal)
+    return calls
+
+
 def _has_auth_dependency(route: APIRoute) -> bool:
     calls = _dependency_calls(route)
-    if calls & {get_current_principal, get_refresh_principal}:
+    if calls & _auth_dependency_objects():
         return True
     return bool({_call_name(call) for call in calls} & AUTH_DEPENDENCY_NAMES)
 
