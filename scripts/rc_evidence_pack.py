@@ -19,7 +19,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Iterable
 
-from scripts.rc_release_audit import SECRET_PATTERNS, TEXT_SUFFIXES, _is_probable_placeholder, _redact
+from scripts.rc_release_audit import SECRET_PATTERNS, TEXT_SUFFIXES, _is_allowed_secret_match_sample, _redact
 from scripts.rc_source_bundle import ROOT
 
 REPORT_DIR = ROOT / ".xagent_runtime" / "reports"
@@ -86,8 +86,6 @@ ALLOWED_LOCAL_PATH_MARKERS = (
     "/tmp/pytest-of-",
     "/tmp/pytest-",
 )
-PUBLIC_XAGENT_NAME_RE = re.compile(r"(?i)^xagent-[a-z0-9][a-z0-9._-]*$")
-
 RECEIPT_VALIDATOR_REPORTS = {
     ".xagent_runtime/reports/rc-final-gate.json",
     ".xagent_runtime/reports/rc-refresh-release-chain.json",
@@ -268,7 +266,7 @@ def _scan_text_file(path: Path, archive_path: str) -> list[dict[str, Any]]:
         for pattern in SECRET_PATTERNS:
             for match in pattern.finditer(line):
                 sample = match.group(1) if match.groups() else match.group(0)
-                if _is_probable_placeholder(sample) or _is_public_xagent_name(sample):
+                if _is_allowed_secret_match_sample(sample):
                     continue
                 findings.append(
                     {
@@ -280,11 +278,6 @@ def _scan_text_file(path: Path, archive_path: str) -> list[dict[str, Any]]:
                 )
     return findings
 
-
-def _is_public_xagent_name(value: str) -> bool:
-    """Allow public repo artifact/path names without weakening token detection."""
-
-    return bool(PUBLIC_XAGENT_NAME_RE.fullmatch(value))
 
 
 def _security_scan(files: list[EvidencePackFile]) -> EvidencePackCheck:

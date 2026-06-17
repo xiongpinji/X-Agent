@@ -62,6 +62,7 @@ SECRET_PATTERNS = (
     re.compile(r"(?i)\b[A-Z0-9_]*(?:api[_-]?key|token|secret|password)\b\s*[:=]\s*['\"]?([A-Za-z0-9_./+=-]{24,})"),
     re.compile(r"\b(?:sk|ghp|github_pat|xagent)[_-][A-Za-z0-9_=-]{24,}\b"),
 )
+PUBLIC_XAGENT_NAME_RE = re.compile(r"(?i)^xagent-[a-z0-9][a-z0-9._-]*$")
 PLACEHOLDER_TOKENS = (
     "...",
     "<",
@@ -288,6 +289,14 @@ def _is_probable_placeholder(value: str) -> bool:
     lowered = value.lower()
     return any(token in lowered for token in PLACEHOLDER_TOKENS)
 
+def _is_public_xagent_name(value: str) -> bool:
+    """Allow public repo artifact/path names without weakening token detection."""
+
+    return bool(PUBLIC_XAGENT_NAME_RE.fullmatch(value))
+
+
+def _is_allowed_secret_match_sample(value: str) -> bool:
+    return _is_probable_placeholder(value) or _is_public_xagent_name(value)
 
 def _redact(value: str) -> str:
     if len(value) <= 12:
@@ -310,7 +319,7 @@ def scan_secret_findings(paths: Iterable[str], root: Path = ROOT) -> list[Secret
             for pattern in SECRET_PATTERNS:
                 for match in pattern.finditer(line):
                     sample = match.group(1) if match.groups() else match.group(0)
-                    if _is_probable_placeholder(sample):
+                    if _is_allowed_secret_match_sample(sample):
                         continue
                     key = (relative_path, line_number, sample)
                     if key in seen:

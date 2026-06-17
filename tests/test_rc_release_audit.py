@@ -312,6 +312,29 @@ def test_secret_scan_ignores_cli_flag_values(tmp_path: Path) -> None:
 
     assert scan_secret_findings(["candidate.py"], root=tmp_path) == []
 
+def test_secret_scan_allows_public_xagent_path_names(tmp_path: Path) -> None:
+    candidate = tmp_path / "candidate.json"
+    candidate.write_text(
+        "\n".join(
+            [
+                '"?? frontend/src/panda/assets/roles/xagent-reference-media-operator.png"',
+                '"?? docs/superpowers/plans/2026-06-14-xagent-remaining-parallel-delivery.md"',
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    assert scan_secret_findings(["candidate.json"], root=tmp_path) == []
+
+
+def test_secret_scan_still_flags_xagent_token_value(tmp_path: Path) -> None:
+    candidate = tmp_path / "candidate.env"
+    candidate.write_text('XAGENT_INTERNAL_TOKEN="xagent_' + ("a" * 32) + '"\n', encoding="utf-8")
+
+    findings = scan_secret_findings(["candidate.env"], root=tmp_path)
+
+    assert len(findings) == 1
+    assert findings[0].path == "candidate.env"
 
 def test_excluded_reference_scan_flags_creative_studio_leaks(tmp_path: Path) -> None:
     candidate = tmp_path / "main.py"
