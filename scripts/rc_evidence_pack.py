@@ -46,6 +46,10 @@ REQUIRED_REPORTS = (
     REPORT_DIR / "rc-owner-env-template.ps1",
     REPORT_DIR / "rc-owner-gate-checklist.json",
     REPORT_DIR / "rc-owner-gate-checklist.md",
+    REPORT_DIR / "stage3-owner-evidence-todo-20260618.json",
+    REPORT_DIR / "stage3-owner-evidence-todo-20260618.md",
+    REPORT_DIR / "stage3-owner-quickstart-20260618.json",
+    REPORT_DIR / "stage3-owner-quickstart-20260618.md",
     REPORT_DIR / "rc-source-bundle.json",
     REPORT_DIR / "rc-artifact-integrity-gate.json",
     REPORT_DIR / "rc-staging-plan.json",
@@ -277,7 +281,6 @@ def _scan_text_file(path: Path, archive_path: str) -> list[dict[str, Any]]:
                     }
                 )
     return findings
-
 
 
 def _security_scan(files: list[EvidencePackFile]) -> EvidencePackCheck:

@@ -183,7 +183,7 @@ class QueryCache(Cache[Any]):
     def make_key(query: str, params: dict[str, Any]) -> str:
         """Generate cache key from query and parameters."""
         key_str = f"{query}:{json.dumps(params, sort_keys=True)}"
-        return hashlib.md5(key_str.encode()).hexdigest()
+        return hashlib.md5(key_str.encode(), usedforsecurity=False).hexdigest()
 
 
 class LLMCallOptimizer:
@@ -259,7 +259,7 @@ class LLMCallOptimizer:
     def _make_cache_key(prompt: str, model: str, temperature: float) -> str:
         """Generate cache key for LLM call."""
         key_str = f"{prompt}:{model}:{temperature}"
-        return hashlib.md5(key_str.encode()).hexdigest()
+        return hashlib.md5(key_str.encode(), usedforsecurity=False).hexdigest()
 
 
 @dataclass
@@ -374,7 +374,7 @@ def cached(ttl: float = 300, strategy: CacheStrategy = CacheStrategy.LRU):
             key_parts = [func.__name__]
             key_parts.extend(str(arg) for arg in args)
             key_parts.extend(f"{k}={v}" for k, v in sorted(kwargs.items()))
-            cache_key = hashlib.md5(":".join(key_parts).encode()).hexdigest()
+            cache_key = hashlib.md5(":".join(key_parts).encode(), usedforsecurity=False).hexdigest()
 
             # Check cache
             cached_value = asyncio.run(cache.get(cache_key))
@@ -481,7 +481,7 @@ class ResponseCache:
 
     def _make_key(self, name: str, args: tuple, kwargs: dict) -> str:
         key_str = f"{name}:{args}:{json.dumps(kwargs, sort_keys=True)}"
-        return hashlib.md5(key_str.encode()).hexdigest()
+        return hashlib.md5(key_str.encode(), usedforsecurity=False).hexdigest()
 
     async def get(self, name: str, args: tuple, kwargs: dict) -> Optional[Any]:
         key = self._make_key(name, args, kwargs)

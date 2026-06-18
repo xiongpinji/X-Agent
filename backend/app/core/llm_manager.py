@@ -107,7 +107,7 @@ class LLMManager:
         use_cache = use_cache if use_cache is not None else self._enable_cache
         use_dedup = use_dedup if use_dedup is not None else self._enable_dedup
 
-        start_time = time.time()
+        start_time = time.perf_counter()
 
         # Count every request exactly once for dedup statistics. Deduplication
         # events (cache / in-flight) are recorded separately as a SUBSET of this
@@ -124,7 +124,7 @@ class LLMManager:
                 logger.info(f"Cache hit for model {model or 'default'}")
                 # A cache hit is still a completed call: record it so
                 # total_calls / cache_hits metrics count every request.
-                latency_ms = (time.time() - start_time) * 1000
+                latency_ms = (time.perf_counter() - start_time) * 1000
                 await self._record_metrics(
                     LLMCallMetrics(
                         model=cached_response.model,
@@ -157,7 +157,7 @@ class LLMManager:
                 )
                 if in_flight_response is not None:
                     logger.info("In-flight deduplication hit")
-                    latency_ms = (time.time() - start_time) * 1000
+                    latency_ms = (time.perf_counter() - start_time) * 1000
                     await self._record_metrics(
                         LLMCallMetrics(
                             model=in_flight_response.model,
@@ -191,7 +191,7 @@ class LLMManager:
                 await self._deduplicator.resolve_in_flight(signature, response)
 
             # Record metrics
-            latency_ms = (time.time() - start_time) * 1000
+            latency_ms = (time.perf_counter() - start_time) * 1000
             metrics = LLMCallMetrics(
                 model=response.model,
                 latency_ms=latency_ms,

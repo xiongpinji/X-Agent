@@ -6,6 +6,8 @@ from uuid import uuid4
 
 import asyncio
 
+from backend.app.core.url_safety import browser_navigation_url_error_reason
+
 try:
     from playwright.sync_api import Browser, BrowserContext, Page, sync_playwright
 except ImportError:  # pragma: no cover - optional runtime dependency
@@ -162,6 +164,9 @@ class PlaywrightBrowserClient:
 
     def goto(self, session_id: str, url: str) -> BrowserActionResult:
         session = self._require_session(session_id)
+        url_error = browser_navigation_url_error_reason(url)
+        if url_error is not None:
+            return session.record("goto", False, detail=f"URL is not allowed: {url_error}", attempted_url=url)
         if session.page is not None:
             session.page.goto(url, wait_until="domcontentloaded")
         return session.record("goto", True, url=url, navigation_kind="real" if session.page is not None else "fallback")

@@ -8,6 +8,7 @@ XAGENT_E2E=1. Real-LLM tests may require their own additional key/env gates.
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 import pytest
 
@@ -17,4 +18,12 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
         return
     skip_e2e = pytest.mark.skip(reason="e2e tests are opt-in: set XAGENT_E2E=1")
     for item in items:
-        item.add_marker(skip_e2e)
+        if _is_e2e_item(item):
+            item.add_marker(skip_e2e)
+
+
+def _is_e2e_item(item: pytest.Item) -> bool:
+    if item.get_closest_marker("e2e") is not None:
+        return True
+    path = Path(str(getattr(item, "path", getattr(item, "fspath", "")))).as_posix()
+    return "/tests/e2e/" in f"/{path}" or path.startswith("tests/e2e/")

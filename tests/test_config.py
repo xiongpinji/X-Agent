@@ -51,6 +51,12 @@ class TestDatabaseConfig:
         assert config.is_postgresql()
         assert not config.is_sqlite()
 
+    def test_asyncpg_postgresql_detection(self):
+        """Test PostgreSQL asyncpg URL detection."""
+        config = DatabaseConfig(database_url="postgresql+asyncpg://user:pass@localhost/db")
+        assert config.is_postgresql()
+        assert not config.is_sqlite()
+
     def test_invalid_database_url(self):
         """Test invalid database URL."""
         with pytest.raises(ValueError):

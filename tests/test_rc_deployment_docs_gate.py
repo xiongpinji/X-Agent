@@ -47,18 +47,39 @@ Required env:
 
 Commands:
 - python scripts/rc_final_gate.py --require-ready-to-tag
-- python scripts/rc_refresh_release_chain.py --provider ollama --ollama-model qwen2.5:1.5b --ollama-base-url http://localhost:11434
+- python scripts/rc_final_gate.py --require-ready-to-tag --require-stage3-rehearsal
+- --require-stage3-rehearsal
+- python scripts/rc_refresh_release_chain.py --provider deepseek --owner-verified --timeout 60
 - --owner-verified
 - python scripts/rc_evidence_pack.py
-- python scripts/rc_delivery_status.py
+- python scripts/rc_release_receipt.py
 - --allow-missing-evidence-pack
 - Final final gate remains strict
 - python scripts/rc_owner_gate_runner.py --gate all --dry-run --env-file .xagent_runtime/reports/rc-owner-env-template.env
 - python scripts/rc_owner_gate_runner.py --gate github_issue_to_pr_dry_run
-- python scripts/rc_external_smoke.py --check provider --provider ollama --require-configured
+- python scripts/rc_external_smoke.py --provider deepseek
+- --require-configured
 - --env-file .xagent_runtime/reports/rc-owner-env-template.env
 - --github-actions-preflight
 - python scripts/rc_owner_handoff_gate.py
+- python scripts/stage3_owner_domain_guide.py --domain "<REAL_DOMAIN>"
+- stage3-owner-domain-guide-20260618.json
+- stage3-owner-domain-guide-20260618.md
+- rc-external-smoke.json
+- use `--release-sha <40-character-sha>` only
+- python scripts/stage3_https_preflight.py --domain "<REAL_DOMAIN>"
+- --https-preflight-report .xagent_runtime\reports\stage3-https-preflight-20260618.json
+- prefill_refs.https_preflight_applied=true
+- stage3-https-preflight-20260618.json
+- stage3-https-preflight-20260618.md
+- python scripts/stage3_owner_evidence_todo.py
+- stage3-owner-evidence-todo-20260618.json
+- stage3-owner-evidence-todo-20260618.md
+- python scripts/stage3_owner_quickstart.py
+- stage3-owner-quickstart-20260618.json
+- stage3-owner-quickstart-20260618.md
+- temporary wildcard DNS such as `sslip.io`
+- owner-verified hosted GitHub Actions `head_sha`
 - docker compose --env-file .env.production
 - kubectl rollout status deployment/xagent-api
 
@@ -115,7 +136,7 @@ Boundary: full_parity_claimed=false.
 - RC refresh release chain
 - RC owner gate runner
 - RC owner handoff gate
-- RC delivery status
+- rc_delivery_status.py
 - --gate github_issue_to_pr_dry_run must not require XAGENT_GITHUB_TOKEN
 - read_probe.state=open
 - Deployment owner generates and stores final production secrets
@@ -320,10 +341,7 @@ def test_deployment_docs_gate_rejects_missing_runbook_token(tmp_path: Path) -> N
 def test_deployment_docs_gate_requires_strict_provider_handoff_command(tmp_path: Path) -> None:
     paths = _reports(tmp_path)
     paths["runbook"].write_text(
-        _runbook_text().replace(
-            "python scripts/rc_external_smoke.py --check provider --provider ollama --require-configured",
-            "python scripts/rc_external_smoke.py --check provider --provider ollama",
-        ),
+        _runbook_text().replace("--require-configured", "", 1),
         encoding="utf-8",
     )
 
@@ -346,6 +364,90 @@ def test_deployment_docs_gate_requires_owner_placeholder_reporting_tokens(tmp_pa
     assert report.status == "failed"
     check = next(item for item in report.checks if item.name == "runbook_document")
     assert "unresolved_env_names" in str(check.error)
+
+
+def test_deployment_docs_gate_requires_stage3_https_preflight_command(tmp_path: Path) -> None:
+    paths = _reports(tmp_path)
+    paths["runbook"].write_text(
+        _runbook_text().replace("python scripts/stage3_https_preflight.py", ""),
+        encoding="utf-8",
+    )
+
+    report = _gate(paths)
+
+    assert report.status == "failed"
+    check = next(item for item in report.checks if item.name == "runbook_document")
+    assert "stage3_https_preflight.py" in str(check.error)
+
+
+def test_deployment_docs_gate_requires_stage3_owner_domain_guide_command(tmp_path: Path) -> None:
+    paths = _reports(tmp_path)
+    paths["runbook"].write_text(
+        _runbook_text().replace("python scripts/stage3_owner_domain_guide.py", ""),
+        encoding="utf-8",
+    )
+
+    report = _gate(paths)
+
+    assert report.status == "failed"
+    check = next(item for item in report.checks if item.name == "runbook_document")
+    assert "stage3_owner_domain_guide.py" in str(check.error)
+
+
+def test_deployment_docs_gate_requires_stage3_preflight_owner_draft_prefill(tmp_path: Path) -> None:
+    paths = _reports(tmp_path)
+    paths["runbook"].write_text(
+        _runbook_text().replace("--https-preflight-report", ""),
+        encoding="utf-8",
+    )
+
+    report = _gate(paths)
+
+    assert report.status == "failed"
+    check = next(item for item in report.checks if item.name == "runbook_document")
+    assert "--https-preflight-report" in str(check.error)
+
+
+def test_deployment_docs_gate_requires_stage3_owner_evidence_todo_command(tmp_path: Path) -> None:
+    paths = _reports(tmp_path)
+    paths["runbook"].write_text(
+        _runbook_text().replace("python scripts/stage3_owner_evidence_todo.py", ""),
+        encoding="utf-8",
+    )
+
+    report = _gate(paths)
+
+    assert report.status == "failed"
+    check = next(item for item in report.checks if item.name == "runbook_document")
+    assert "stage3_owner_evidence_todo.py" in str(check.error)
+
+
+def test_deployment_docs_gate_requires_stage3_owner_quickstart_command(tmp_path: Path) -> None:
+    paths = _reports(tmp_path)
+    paths["runbook"].write_text(
+        _runbook_text().replace("python scripts/stage3_owner_quickstart.py", ""),
+        encoding="utf-8",
+    )
+
+    report = _gate(paths)
+
+    assert report.status == "failed"
+    check = next(item for item in report.checks if item.name == "runbook_document")
+    assert "stage3_owner_quickstart.py" in str(check.error)
+
+
+def test_deployment_docs_gate_requires_stage3_rehearsal_final_gate_command(tmp_path: Path) -> None:
+    paths = _reports(tmp_path)
+    paths["runbook"].write_text(
+        _runbook_text().replace("python scripts/rc_final_gate.py --require-ready-to-tag --require-stage3-rehearsal", ""),
+        encoding="utf-8",
+    )
+
+    report = _gate(paths)
+
+    assert report.status == "failed"
+    check = next(item for item in report.checks if item.name == "runbook_document")
+    assert "--require-stage3-rehearsal" in str(check.error)
 
 
 def test_deployment_docs_gate_requires_owner_gate_ids(tmp_path: Path) -> None:

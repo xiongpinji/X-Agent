@@ -1,4 +1,4 @@
-use serde_json::{json, Value};
+use serde_json::Value;
 use tauri::State;
 
 #[tauri::command]
@@ -8,10 +8,11 @@ pub async fn call_backend_api(
     body: Option<Value>,
     state: State<'_, std::sync::Arc<crate::state::AppState>>,
 ) -> Result<Value, String> {
-    let backend_url = format!(
-        "{}:{}{}",
-        state.config.backend_url, state.config.backend_port, path
-    );
+    let backend_url = crate::security::build_backend_url(
+        &state.config.backend_url,
+        state.config.backend_port,
+        &path,
+    )?;
 
     let client = reqwest::Client::new();
 
@@ -58,10 +59,11 @@ pub async fn call_backend_api(
 pub async fn get_backend_status(
     state: State<'_, std::sync::Arc<crate::state::AppState>>,
 ) -> Result<Value, String> {
-    let backend_url = format!(
-        "{}:{}/health",
-        state.config.backend_url, state.config.backend_port
-    );
+    let backend_url = crate::security::build_backend_url(
+        &state.config.backend_url,
+        state.config.backend_port,
+        "/health",
+    )?;
 
     let client = reqwest::Client::new();
     match client.get(&backend_url).send().await {

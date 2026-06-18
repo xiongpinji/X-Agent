@@ -26,6 +26,7 @@ class WebAuthnConfig:
     timeout: int = 60000  # 60 seconds
     attestation: str = "direct"  # direct, indirect, none
     user_verification: str = "preferred"  # required, preferred, discouraged
+    allow_unverified_attestation_for_tests: bool = False
 
 
 class WebAuthnCredential(BaseModel):
@@ -199,6 +200,10 @@ class WebAuthnProvider:
             logger.warning(f"Challenge is not for registration: {challenge_id}")
             return False
 
+        if not self.config.allow_unverified_attestation_for_tests:
+            logger.warning("WebAuthn registration rejected: attestation verification is not implemented")
+            return False
+
         # Store credential
         credential = WebAuthnCredential(
             credential_id=credential_id,
@@ -268,19 +273,8 @@ class WebAuthnProvider:
             logger.warning(f"Credential does not belong to user: {challenge_obj.user_id}")
             return False
 
-        # TODO: Verify signature using public key
-        # This requires cryptographic verification of the signature
-        # For now, we'll accept it as verified
-
-        # Update credential
-        credential.last_used_at = datetime.now(UTC)
-        credential.sign_count += 1
-
-        # Mark challenge as verified
-        challenge_obj.verified = True
-
-        logger.info(f"WebAuthn authentication verified: {credential_id} for user: {challenge_obj.user_id}")
-        return True
+        logger.warning("WebAuthn authentication rejected: assertion signature verification is not implemented")
+        return False
 
     def get_user_credentials(self, user_id: str) -> list[WebAuthnCredential]:
         """Get all credentials for user.

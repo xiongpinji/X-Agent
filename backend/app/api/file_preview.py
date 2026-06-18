@@ -16,6 +16,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
+from backend.app.core.path_security import enforce_path_boundary, get_workspace_roots
 from backend.app.core.security import Principal
 from backend.app.dependencies import enforce_scope, get_current_principal
 
@@ -23,6 +24,17 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/files", tags=["files"])
 PrincipalDependency = Annotated[Principal, Depends(get_current_principal)]
+
+
+def _resolve_within_workspace(raw_path: str) -> Path:
+    """Resolve ``raw_path`` and confirm it stays inside the workspace allowlist.
+
+    SECURITY: this is the single choke point that prevents file preview /
+    download / listing from reading arbitrary host files. It rejects
+    absolute-path escapes (``/etc/passwd``), ``..`` traversal, and symlink
+    escapes with HTTP 403 before any filesystem access occurs.
+    """
+    return enforce_path_boundary(raw_path, get_workspace_roots())
 
 
 class FileMetadata(BaseModel):
@@ -243,8 +255,8 @@ async def preview_file(
     """
     enforce_scope(principal, "agent:read")
 
-    # Security: prevent path traversal
-    file_path_obj = Path(file_path).resolve()
+    # Security: confine to workspace allowlist (blocks absolute/.. /symlink escapes)
+    file_path_obj = _resolve_within_workspace(file_path)
 
     if not file_path_obj.exists():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
@@ -312,7 +324,7 @@ async def get_file_metadata(
     """
     enforce_scope(principal, "agent:read")
 
-    file_path_obj = Path(file_path).resolve()
+    file_path_obj = _resolve_within_workspace(file_path)
 
     if not file_path_obj.exists():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
@@ -336,7 +348,7 @@ async def download_file(
     """
     enforce_scope(principal, "agent:read")
 
-    file_path_obj = Path(file_path).resolve()
+    file_path_obj = _resolve_within_workspace(file_path)
 
     if not file_path_obj.exists():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
@@ -371,7 +383,7 @@ async def list_directory(
     """
     enforce_scope(principal, "agent:read")
 
-    dir_path_obj = Path(dir_path).resolve()
+    dir_path_obj = _resolve_within_workspace(dir_path)
 
     if not dir_path_obj.exists():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Directory not found")
@@ -423,7 +435,7 @@ async def preview_code(
     """
     enforce_scope(principal, "agent:read")
 
-    file_path_obj = Path(file_path).resolve()
+    file_path_obj = _resolve_within_workspace(file_path)
 
     if not file_path_obj.exists():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")

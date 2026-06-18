@@ -3,9 +3,9 @@
     "beforeDevCommand": "npm run dev",
     "beforeBuildCommand": "npm run build",
     "devPath": "http://localhost:5173",
-    "frontendDist": "../frontend/dist"
+    "distDir": "../frontend/dist"
   },
-  "app": {
+  "tauri": {
     "windows": [
       {
         "title": "X-Agent",
@@ -22,30 +22,19 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self'; connect-src 'self' http://127.0.0.1:8000 http://localhost:8000; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
     },
-    "systemTray": {
-      "iconPath": "icons/icon.png",
-      "iconAsTemplate": true,
-      "menuOnLeftClick": false
-    }
-  },
-  "package": {
-    "productName": "X-Agent",
-    "version": "0.1.0"
-  },
-  "tauri": {
     "allowlist": {
       "all": false,
       "shell": {
         "all": false,
         "open": true,
-        "execute": true,
-        "sidecar": true,
-        "scope": ["*"]
+        "execute": false,
+        "sidecar": false,
+        "scope": []
       },
       "fs": {
-        "all": true,
+        "all": false,
         "readFile": true,
         "writeFile": true,
         "readDir": true,
@@ -54,63 +43,63 @@
         "removeFile": true,
         "renameFile": true,
         "exists": true,
-        "scope": ["$HOME/**", "$APPDATA/**"]
+        "scope": ["$APPDATA/com.xagent.desktop/**"]
       },
       "path": {
-        "all": true
+        "all": false
       },
       "window": {
-        "all": true,
-        "create": true,
-        "center": true,
-        "requestUserAttention": true,
-        "setResizable": true,
-        "setMaxPhysicalSize": true,
-        "setMinPhysicalSize": true,
-        "setTitle": true,
+        "all": false,
+        "create": false,
+        "center": false,
+        "requestUserAttention": false,
+        "setResizable": false,
+        "setMaxSize": false,
+        "setMinSize": false,
+        "setTitle": false,
         "maximize": true,
-        "unmaximize": true,
+        "unmaximize": false,
         "minimize": true,
-        "unminimize": true,
+        "unminimize": false,
         "show": true,
         "hide": true,
         "close": true,
-        "setDecorations": true,
-        "setAlwaysOnTop": true,
-        "setContentProtected": true,
+        "setDecorations": false,
+        "setAlwaysOnTop": false,
+        "setContentProtected": false,
         "setFocus": true,
-        "setSkipTaskbar": true,
-        "setCursorGrab": true,
-        "setCursorVisible": true,
-        "setCursorIcon": true,
-        "setCursorPosition": true,
-        "setIgnoreCursorEvents": true,
-        "startDragging": true,
-        "print": true
+        "setSkipTaskbar": false,
+        "setCursorGrab": false,
+        "setCursorVisible": false,
+        "setCursorIcon": false,
+        "setCursorPosition": false,
+        "setIgnoreCursorEvents": false,
+        "startDragging": false,
+        "print": false
       },
       "globalShortcut": {
         "all": true
       },
       "http": {
-        "all": true,
+        "all": false,
         "request": true,
-        "scope": ["http://**", "https://**"]
+        "scope": ["http://127.0.0.1:8000/**", "http://localhost:8000/**"]
       },
       "notification": {
-        "all": true
+        "all": false
       },
       "dialog": {
-        "all": true,
-        "open": true,
-        "save": true,
-        "message": true,
-        "ask": true,
-        "confirm": true
+        "all": false,
+        "open": false,
+        "save": false,
+        "message": false,
+        "ask": false,
+        "confirm": false
       },
       "clipboard": {
-        "all": true,
-        "readText": true,
-        "writeText": true
+        "all": false,
+        "readText": false,
+        "writeText": false
       }
     },
     "bundle": {
@@ -118,40 +107,33 @@
       "targets": ["msi", "nsis"],
       "identifier": "com.xagent.desktop",
       "icon": [
-        "icons/32x32.png",
-        "icons/128x128.png",
-        "icons/128x128@2x.png",
-        "icons/icon.icns",
         "icons/icon.ico"
       ],
       "windows": {
         "certificateThumbprint": null,
         "digestAlgorithm": "sha256",
-        "signingIdentity": null,
         "timestampUrl": ""
       },
       "macOS": {
         "frameworks": [],
         "minimumSystemVersion": "10.13",
-        "useBootstrapper": true,
-        "useScript": false,
-        "script": null,
         "entitlements": null,
         "signingIdentity": null,
-        "providerShortName": null,
-        "entitlementsLaunchAgent": null
+        "providerShortName": null
       },
-      "linux": {
-        "deb": {
-          "depends": []
-        },
-        "appimage": {
-          "bundleMediaFramework": true
-        },
-        "rpm": {
-          "epoch": 0
-        }
+      "deb": {
+        "depends": []
+      },
+      "appimage": {
+        "bundleMediaFramework": true
+      },
+      "rpm": {
+        "epoch": 0
       }
     }
+  },
+  "package": {
+    "productName": "X-Agent",
+    "version": "0.1.0"
   }
 }

@@ -6,7 +6,7 @@ Common questions about X-Agent Core.
 
 ### What is X-Agent Core?
 
-X-Agent Core is an open-source autonomous agent framework that enables developers to build intelligent, self-evolving systems. It combines LLM capabilities with enterprise-grade infrastructure for production-ready autonomous agents.
+X-Agent Core is an open-source autonomous agent framework that enables developers to build intelligent, self-evolving systems. It combines LLM capabilities with enterprise-grade infrastructure for controlled pilot autonomous-agent deployments.
 
 ### Who should use X-Agent Core?
 
@@ -18,7 +18,11 @@ X-Agent Core is designed for:
 
 ### Is X-Agent Core production-ready?
 
-Yes, X-Agent Core is designed for production use with:
+X-Agent Core is designed with production-oriented architecture, but the current
+commercial delivery boundary is owner-gated. This FAQ is not GA-ready,
+release-ready, commercial delivery-complete, or full Codex parity evidence.
+
+The implementation includes:
 - Comprehensive error handling
 - Multi-tenant support
 - Audit logging and compliance

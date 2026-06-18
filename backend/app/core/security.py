@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 
 ROLE_SCOPES: dict[str, list[str]] = {
     "admin": [
+        "auth:self",
         "agent:run",
         "agent:read",
         "tools:*",
@@ -30,6 +31,7 @@ ROLE_SCOPES: dict[str, list[str]] = {
         "session:*",
     ],
     "developer": [
+        "auth:self",
         "agent:run",
         "agent:read",
         "tools:read",
@@ -48,6 +50,7 @@ ROLE_SCOPES: dict[str, list[str]] = {
         "session:read",
     ],
     "user": [
+        "auth:self",
         "agent:run",
         "agent:read",
         "tools:read",
@@ -61,7 +64,7 @@ ROLE_SCOPES: dict[str, list[str]] = {
         "session:write",
         "session:read",
     ],
-    "viewer": ["memory:read", "audit:read", "chat:read", "skill:read", "session:read"],
+    "viewer": ["auth:self", "memory:read", "audit:read", "chat:read", "skill:read", "session:read"],
     "anonymous": [],  # SECURITY: Anonymous users have NO permissions
 }
 
@@ -79,6 +82,11 @@ class Principal(BaseModel):
     scopes: list[str] = Field(default_factory=list)
     api_key_id: str | None = None
     authenticated: bool = False
+
+
+def is_platform_admin(principal: Principal) -> bool:
+    """Return true only for the bootstrap/platform operator principal."""
+    return bool(principal.authenticated and principal.api_key_id == "bootstrap")
 
 
 class APIKeyRecord(BaseModel):

@@ -2,21 +2,40 @@
 
 Provides REST API for workspace creation, mounting directories,
 and managing file access.
+
+SECURITY: every endpoint requires an authenticated principal and an
+appropriate scope. File system state is isolated per principal (tenant +
+user) so that no two callers ever share the ``user_id="default"`` namespace.
+Mounting is restricted to the configured workspace roots, and deletion /
+unmounting verify that the calling principal owns the target resource.
 """
 
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Optional
+from typing import Annotated, Optional
 
-from fastapi import APIRouter, HTTPException, Depends, Query
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 
+from backend.app.api.errors import api_error
+from backend.app.core.contracts import ErrorCode
 from backend.app.core.filesystem_manager import create_file_system_manager, FileSystemManager
-from backend.app.settings import PROJECT_ROOT
+from backend.app.core.path_security import get_workspace_roots
+from backend.app.core.security import Principal
+from backend.app.dependencies import enforce_scope, get_current_principal
 
 
 router = APIRouter(prefix="/api/v1/workspace", tags=["workspace"])
+
+PrincipalDependency = Annotated[Principal, Depends(get_current_principal)]
+
+# Scopes used by this router. Reads require ``agent:read``; state-changing
+# operations require ``agent:run``. Both are granted to the user/developer/
+# admin roles but withheld from ``viewer``/``anonymous`` (see ROLE_SCOPES),
+# which is what produces 401 (unauthenticated) and 403 (authenticated but
+# under-privileged) responses.
+_SCOPE_READ = "agent:read"
+_SCOPE_WRITE = "agent:run"
 
 
 # Request/Response Models
@@ -76,38 +95,57 @@ class AuditLogEntry(BaseModel):
     reason: Optional[str] = None
 
 
-# Dependency to get file system manager
-def get_fs_manager(user_id: str = "default") -> FileSystemManager:
-    """Get file system manager for user.
+def _principal_namespace(principal: Principal) -> str:
+    """Build a filesystem-safe, per-principal isolation key.
 
-    Args:
-        user_id: User identifier
-
-    Returns:
-        FileSystemManager instance
+    SECURITY: combines tenant and user so two tenants with the same user_id
+    never collide, and so the legacy shared ``"default"`` namespace can never
+    be addressed. Any character outside ``[A-Za-z0-9._-]`` is replaced to keep
+    the value usable as a single path segment on every OS.
     """
-    workspace_base = PROJECT_ROOT / "workspaces"
-    return create_file_system_manager(workspace_base, user_id)
+    raw = f"{principal.tenant_id}__{principal.user_id}"
+    safe = "".join(ch if (ch.isalnum() or ch in "._-") else "_" for ch in raw)
+    # Guard against an empty or dot-only segment.
+    return safe or "unknown"
+
+
+def get_fs_manager(principal: PrincipalDependency) -> FileSystemManager:
+    """Build a per-principal FileSystemManager.
+
+    Authentication is enforced here (via the principal dependency); the
+    manager is namespaced by tenant+user so state is never shared across
+    principals. The mount manager is locked to the workspace allowlist so
+    mounting cannot escape to arbitrary host locations.
+    """
+    if not principal.authenticated:
+        raise api_error(
+            401,
+            ErrorCode.AUTHENTICATION_FAILED,
+            "Authentication required.",
+        )
+
+    # Single source of truth: the workspace base IS the (sole) allowlisted
+    # root, so per-user workspaces and the mount allowlist can never diverge.
+    workspace_roots = tuple(get_workspace_roots())
+    workspace_base = workspace_roots[0]
+    fs_manager = create_file_system_manager(workspace_base, _principal_namespace(principal))
+    # Restrict mounting to the configured workspace roots (goal 3).
+    fs_manager.mount_manager.allowed_roots = workspace_roots
+    return fs_manager
+
+
+FsManagerDependency = Annotated[FileSystemManager, Depends(get_fs_manager)]
 
 
 # Workspace Endpoints
 @router.post("/create", response_model=WorkspaceResponse)
 async def create_workspace(
     request: WorkspaceCreateRequest,
-    fs_manager: FileSystemManager = Depends(get_fs_manager),
+    principal: PrincipalDependency,
+    fs_manager: FsManagerDependency,
 ) -> WorkspaceResponse:
-    """Create a new workspace.
-
-    Args:
-        request: Workspace creation request
-        fs_manager: File system manager
-
-    Returns:
-        Created workspace information
-
-    Raises:
-        HTTPException: If creation fails
-    """
+    """Create a new workspace for the authenticated principal."""
+    enforce_scope(principal, _SCOPE_WRITE)
     try:
         from backend.app.core.workspace_manager import WorkspaceConfig
 
@@ -133,25 +171,19 @@ async def create_workspace(
             is_expired=ws.is_expired(),
         )
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to create workspace: {e}")
+        raise api_error(400, ErrorCode.VALIDATION_ERROR, str(e))
+    except Exception as e:  # noqa: BLE001
+        raise api_error(500, ErrorCode.VALIDATION_ERROR, f"Failed to create workspace: {e}")
 
 
 @router.get("/list", response_model=list[WorkspaceResponse])
 async def list_workspaces(
+    principal: PrincipalDependency,
+    fs_manager: FsManagerDependency,
     workspace_type: Optional[str] = Query(None, description="Filter by type"),
-    fs_manager: FileSystemManager = Depends(get_fs_manager),
 ) -> list[WorkspaceResponse]:
-    """List workspaces for user.
-
-    Args:
-        workspace_type: Optional filter by type
-        fs_manager: File system manager
-
-    Returns:
-        List of workspaces
-    """
+    """List workspaces owned by the authenticated principal."""
+    enforce_scope(principal, _SCOPE_READ)
     try:
         workspaces = fs_manager.workspace_manager.list_workspaces(
             fs_manager.user_id,
@@ -171,56 +203,63 @@ async def list_workspaces(
             )
             for ws in workspaces
         ]
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as e:  # noqa: BLE001
+        raise api_error(500, ErrorCode.VALIDATION_ERROR, str(e))
 
 
 @router.delete("/{workspace_id}")
 async def delete_workspace(
     workspace_id: str,
-    fs_manager: FileSystemManager = Depends(get_fs_manager),
+    principal: PrincipalDependency,
+    fs_manager: FsManagerDependency,
 ) -> dict:
-    """Delete a workspace.
+    """Delete a workspace, verifying the principal owns it.
 
-    Args:
-        workspace_id: Workspace identifier
-        fs_manager: File system manager
-
-    Returns:
-        Deletion result
-
-    Raises:
-        HTTPException: If deletion fails
+    SECURITY: ownership (tenant+user) is checked before deletion. A request
+    for a workspace owned by another principal returns 403, never deletes it.
     """
+    enforce_scope(principal, _SCOPE_WRITE)
     try:
-        deleted = fs_manager.workspace_manager.delete_workspace(workspace_id)
-        if not deleted:
-            raise HTTPException(status_code=404, detail="Workspace not found")
-        return {"success": True, "workspace_id": workspace_id}
+        result = fs_manager.workspace_manager.delete_workspace_for_user(
+            fs_manager.user_id,
+            workspace_id,
+        )
     except PermissionError as e:
-        raise HTTPException(status_code=403, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise api_error(403, ErrorCode.AUTHORIZATION_FAILED, str(e))
+    except Exception as e:  # noqa: BLE001
+        raise api_error(500, ErrorCode.VALIDATION_ERROR, str(e))
+
+    if result == "not_found":
+        raise api_error(404, ErrorCode.VALIDATION_ERROR, "Workspace not found")
+    if result == "forbidden":
+        raise api_error(
+            403,
+            ErrorCode.AUTHORIZATION_FAILED,
+            "You do not own this workspace.",
+        )
+    if result == "read_only":
+        raise api_error(
+            403,
+            ErrorCode.AUTHORIZATION_FAILED,
+            "Cannot delete a read-only workspace.",
+        )
+    return {"success": True, "workspace_id": workspace_id}
 
 
 # Mount Endpoints
 @router.post("/mount", response_model=MountResponse)
 async def mount_directory(
     request: MountDirectoryRequest,
-    fs_manager: FileSystemManager = Depends(get_fs_manager),
+    principal: PrincipalDependency,
+    fs_manager: FsManagerDependency,
 ) -> MountResponse:
     """Mount a directory.
 
-    Args:
-        request: Mount request
-        fs_manager: File system manager
-
-    Returns:
-        Mount information
-
-    Raises:
-        HTTPException: If mounting fails
+    SECURITY: only host paths inside the configured workspace roots may be
+    mounted (allowlist enforced by MountManager). Absolute-path, ``..`` and
+    symlink escapes are rejected with 403.
     """
+    enforce_scope(principal, _SCOPE_WRITE)
     try:
         mount = fs_manager.mount_manager.mount_directory(
             fs_manager.user_id,
@@ -237,51 +276,44 @@ async def mount_directory(
             created_at=mount.created_at.isoformat(),
         )
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise api_error(400, ErrorCode.VALIDATION_ERROR, str(e))
     except PermissionError as e:
-        raise HTTPException(status_code=403, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to mount directory: {e}")
+        raise api_error(403, ErrorCode.AUTHORIZATION_FAILED, str(e))
+    except Exception as e:  # noqa: BLE001
+        raise api_error(500, ErrorCode.VALIDATION_ERROR, f"Failed to mount directory: {e}")
 
 
 @router.delete("/mount/{mount_id}")
 async def unmount_directory(
     mount_id: str,
-    fs_manager: FileSystemManager = Depends(get_fs_manager),
+    principal: PrincipalDependency,
+    fs_manager: FsManagerDependency,
 ) -> dict:
-    """Unmount a directory.
-
-    Args:
-        mount_id: Mount identifier
-        fs_manager: File system manager
-
-    Returns:
-        Unmount result
-
-    Raises:
-        HTTPException: If unmounting fails
-    """
+    """Unmount a directory, verifying the principal owns the mount."""
+    enforce_scope(principal, _SCOPE_WRITE)
     try:
-        unmounted = fs_manager.mount_manager.unmount_directory(mount_id)
-        if not unmounted:
-            raise HTTPException(status_code=404, detail="Mount not found")
-        return {"success": True, "mount_id": mount_id}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        result = fs_manager.mount_manager.unmount_for_user(fs_manager.user_id, mount_id)
+    except Exception as e:  # noqa: BLE001
+        raise api_error(500, ErrorCode.VALIDATION_ERROR, str(e))
+
+    if result == "not_found":
+        raise api_error(404, ErrorCode.VALIDATION_ERROR, "Mount not found")
+    if result == "forbidden":
+        raise api_error(
+            403,
+            ErrorCode.AUTHORIZATION_FAILED,
+            "You do not own this mount.",
+        )
+    return {"success": True, "mount_id": mount_id}
 
 
 @router.get("/mounts", response_model=list[MountResponse])
 async def list_mounts(
-    fs_manager: FileSystemManager = Depends(get_fs_manager),
+    principal: PrincipalDependency,
+    fs_manager: FsManagerDependency,
 ) -> list[MountResponse]:
-    """List mounted directories.
-
-    Args:
-        fs_manager: File system manager
-
-    Returns:
-        List of mounts
-    """
+    """List directories mounted by the authenticated principal."""
+    enforce_scope(principal, _SCOPE_READ)
     try:
         mounts = fs_manager.mount_manager.list_mounts(fs_manager.user_id)
         return [
@@ -294,25 +326,19 @@ async def list_mounts(
             )
             for m in mounts
         ]
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as e:  # noqa: BLE001
+        raise api_error(500, ErrorCode.VALIDATION_ERROR, str(e))
 
 
 # Path Validation Endpoints
 @router.post("/validate-path", response_model=PathValidationResponse)
 async def validate_path(
     request: PathValidationRequest,
-    fs_manager: FileSystemManager = Depends(get_fs_manager),
+    principal: PrincipalDependency,
+    fs_manager: FsManagerDependency,
 ) -> PathValidationResponse:
-    """Validate path access.
-
-    Args:
-        request: Validation request
-        fs_manager: File system manager
-
-    Returns:
-        Validation result
-    """
+    """Validate path access for the authenticated principal."""
+    enforce_scope(principal, _SCOPE_READ)
     try:
         if request.operation == "read":
             allowed, reason = fs_manager.validate_read_access(request.path)
@@ -324,25 +350,21 @@ async def validate_path(
             raise ValueError(f"Unknown operation: {request.operation}")
 
         return PathValidationResponse(allowed=allowed, reason=reason)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except ValueError as e:
+        raise api_error(400, ErrorCode.VALIDATION_ERROR, str(e))
+    except Exception as e:  # noqa: BLE001
+        raise api_error(500, ErrorCode.VALIDATION_ERROR, str(e))
 
 
 # Audit Endpoints
 @router.get("/audit-logs", response_model=list[AuditLogEntry])
 async def get_audit_logs(
+    principal: PrincipalDependency,
+    fs_manager: FsManagerDependency,
     limit: int = Query(100, ge=1, le=1000),
-    fs_manager: FileSystemManager = Depends(get_fs_manager),
 ) -> list[AuditLogEntry]:
-    """Get audit logs.
-
-    Args:
-        limit: Maximum records to return
-        fs_manager: File system manager
-
-    Returns:
-        List of audit log entries
-    """
+    """Get the authenticated principal's file-operation audit logs."""
+    enforce_scope(principal, _SCOPE_READ)
     try:
         logs = fs_manager.get_audit_logs(limit)
         return [
@@ -355,23 +377,18 @@ async def get_audit_logs(
             )
             for log in logs
         ]
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as e:  # noqa: BLE001
+        raise api_error(500, ErrorCode.VALIDATION_ERROR, str(e))
 
 
 # Cleanup Endpoints
 @router.post("/cleanup-expired")
 async def cleanup_expired_workspaces(
-    fs_manager: FileSystemManager = Depends(get_fs_manager),
+    principal: PrincipalDependency,
+    fs_manager: FsManagerDependency,
 ) -> dict:
-    """Clean up expired temporary workspaces.
-
-    Args:
-        fs_manager: File system manager
-
-    Returns:
-        Cleanup result
-    """
+    """Clean up expired temporary workspaces for the authenticated principal."""
+    enforce_scope(principal, _SCOPE_WRITE)
     try:
         deleted = fs_manager.workspace_manager.cleanup_expired_workspaces()
         return {
@@ -379,5 +396,5 @@ async def cleanup_expired_workspaces(
             "deleted_count": len(deleted),
             "deleted_ids": deleted,
         }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as e:  # noqa: BLE001
+        raise api_error(500, ErrorCode.VALIDATION_ERROR, str(e))

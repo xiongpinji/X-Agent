@@ -36,7 +36,7 @@ def _make_search_cache_key(
         str(top_k),
     ]
     key_str = "|".join(key_parts)
-    return hashlib.md5(key_str.encode()).hexdigest()
+    return hashlib.md5(key_str.encode(), usedforsecurity=False).hexdigest()
 
 
 def _make_item_cache_key(memory_id: str) -> str:

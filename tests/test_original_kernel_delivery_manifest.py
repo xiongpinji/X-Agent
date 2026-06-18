@@ -429,6 +429,8 @@ def test_original_kernel_delivery_manifest_includes_stage3_external_evidence_int
     _write_stage_files(tmp_path, DEFAULT_STAGE_FILES)
     _write_evidence_reports(reports_dir)
     intake_paths = {
+        "scripts/owner_operator_commercial_delivery_intake.py",
+        "tests/test_owner_operator_commercial_delivery_intake.py",
         "scripts/commercial_stage3_staging_external_evidence_intake.py",
         "tests/test_commercial_stage3_staging_external_evidence_intake.py",
     }
@@ -443,6 +445,12 @@ def test_original_kernel_delivery_manifest_includes_stage3_external_evidence_int
     assert intake_paths <= set(report["stage_include_paths"])
 
     files = {item["path"]: item for item in report["files"]}
+    assert files["scripts/owner_operator_commercial_delivery_intake.py"]["category"] == (
+        "commercial_delivery_gate_script"
+    )
+    assert files["tests/test_owner_operator_commercial_delivery_intake.py"]["category"] == (
+        "commercial_delivery_gate_test"
+    )
     assert files["scripts/commercial_stage3_staging_external_evidence_intake.py"]["category"] == (
         "commercial_delivery_gate_script"
     )

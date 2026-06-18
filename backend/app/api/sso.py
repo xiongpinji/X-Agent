@@ -343,16 +343,10 @@ async def webauthn_register_start(
     if not principal.authenticated:
         raise api_error(401, ErrorCode.AUTHENTICATION_FAILED, "Authentication required.")
 
-    # TODO: Initialize WebAuthn provider
-    # webauthn_provider = WebAuthnProvider(config)
-    # challenge_options = webauthn_provider.create_registration_challenge(
-    #     principal.user_id,
-    #     request.username,
-    # )
-
-    return WebAuthnRegistrationStartResponse(
-        challenge_id="challenge_id",
-        options={},
+    raise api_error(
+        501,
+        ErrorCode.VALIDATION_ERROR,
+        "WebAuthn registration is disabled until standards-compliant attestation verification is configured.",
     )
 
 
@@ -382,15 +376,11 @@ async def webauthn_register_complete(
     if not principal.authenticated:
         raise api_error(401, ErrorCode.AUTHENTICATION_FAILED, "Authentication required.")
 
-    # TODO: Verify registration and store credential
-    # webauthn_provider.verify_registration(
-    #     request.challenge_id,
-    #     request.credential_id,
-    #     request.public_key,
-    #     request.device_name,
-    # )
-
-    return {"registered": True}
+    raise api_error(
+        501,
+        ErrorCode.VALIDATION_ERROR,
+        "WebAuthn registration is disabled until standards-compliant attestation verification is configured.",
+    )
 
 
 class WebAuthnAuthenticationStartResponse(BaseModel):
@@ -407,13 +397,10 @@ async def webauthn_authenticate_start() -> WebAuthnAuthenticationStartResponse:
     Returns:
         Authentication challenge
     """
-    # TODO: Initialize WebAuthn provider
-    # webauthn_provider = WebAuthnProvider(config)
-    # challenge_options = webauthn_provider.create_authentication_challenge(user_id)
-
-    return WebAuthnAuthenticationStartResponse(
-        challenge_id="challenge_id",
-        options={},
+    raise api_error(
+        501,
+        ErrorCode.VALIDATION_ERROR,
+        "WebAuthn authentication is disabled until standards-compliant assertion verification is configured.",
     )
 
 
@@ -438,18 +425,11 @@ async def webauthn_authenticate_complete(
     Returns:
         Authentication result
     """
-    # TODO: Verify authentication
-    # webauthn_provider.verify_authentication(
-    #     request.challenge_id,
-    #     request.credential_id,
-    #     request.signature,
-    #     request.client_data,
-    # )
-
-    return {
-        "authenticated": True,
-        "access_token": "token",
-    }
+    raise api_error(
+        501,
+        ErrorCode.VALIDATION_ERROR,
+        "WebAuthn authentication is disabled until standards-compliant assertion verification is configured.",
+    )
 
 
 # ============================================================================

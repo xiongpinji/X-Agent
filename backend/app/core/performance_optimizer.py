@@ -163,7 +163,7 @@ class LLMOptimizer:
 
         # Generate cache key
         content = json.dumps(request, sort_keys=True)
-        cache_key = f"llm:{hashlib.md5(content.encode()).hexdigest()}"
+        cache_key = f"llm:{hashlib.md5(content.encode(), usedforsecurity=False).hexdigest()}"
 
         # Check cache
         if cached := await self.cache.get(cache_key):

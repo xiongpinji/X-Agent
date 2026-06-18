@@ -133,7 +133,8 @@ class AuditLogSignatureTable(Base):
 class PostgresAuditStore:
     """PostgreSQL-based audit store with advanced querying."""
 
-    def __init__(self, database_url: str) -> None:
+    def __init__(self, database_url: str, hmac_secret: str | None = None) -> None:
+        self._hmac_secret = hmac_secret
         self._engine = create_engine(
             database_url,
             poolclass=NullPool,
@@ -514,18 +515,17 @@ class PostgresAuditStore:
         serialized = json.dumps(payload, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
         return sha256(serialized.encode("utf-8")).hexdigest()
 
-    @staticmethod
-    def _signature_record(record: AuditLogRecord) -> str | None:
+    def _signature_record(self, record: AuditLogRecord) -> str | None:
         """Generate signature for record."""
         from hashlib import sha256
         from hmac import new as hmac_new
 
-        # In production, use actual HMAC secret from config
-        hmac_secret = "default-secret"
+        if self._hmac_secret is None:
+            return None
 
         digest = record.hash or PostgresAuditStore._hash_record(record)
         return hmac_new(
-            hmac_secret.encode("utf-8"),
+            self._hmac_secret.encode("utf-8"),
             digest.encode("utf-8"),
             sha256,
         ).hexdigest()

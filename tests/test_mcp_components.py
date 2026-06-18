@@ -144,6 +144,43 @@ class TestFileOperationTool:
             assert logs[-1]["operation"] == "read"
             assert logs[-1]["success"] is True
 
+    @pytest.mark.asyncio
+    async def test_rejects_sibling_prefix_escape(self):
+        """Reject paths in sibling directories with a shared string prefix."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            parent = Path(tmpdir)
+            base = parent / "workspace"
+            sibling = parent / "workspace-evil"
+            base.mkdir()
+            sibling.mkdir()
+            (sibling / "secret.txt").write_text("hidden", encoding="utf-8")
+
+            tool = FileOperationTool(base_path=str(base))
+
+            with pytest.raises(ValueError):
+                await tool.read_file("../workspace-evil/secret.txt")
+
+    @pytest.mark.asyncio
+    async def test_rejects_symlink_escape(self):
+        """Reject symlinks that resolve outside the configured base directory."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            parent = Path(tmpdir)
+            base = parent / "workspace"
+            outside = parent / "outside"
+            base.mkdir()
+            outside.mkdir()
+            (outside / "secret.txt").write_text("hidden", encoding="utf-8")
+            link = base / "outside-link"
+            try:
+                link.symlink_to(outside, target_is_directory=True)
+            except OSError as exc:
+                pytest.skip(f"symlink creation unavailable on this platform: {exc}")
+
+            tool = FileOperationTool(base_path=str(base))
+
+            with pytest.raises(ValueError):
+                await tool.read_file("outside-link/secret.txt")
+
 
 class TestSearchOperationTool:
     """Test search operation tool."""

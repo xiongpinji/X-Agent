@@ -56,3 +56,30 @@ repos:
       - id: detect-secrets
         args: ['--baseline', '.secrets.baseline']
         exclude: package.lock.json
+
+  # Gitleaks — full-history-capable secret scanner (defense in depth alongside
+  # detect-secrets/detect-private-key). Catches API keys, tokens, and
+  # high-entropy strings that the baseline-driven scanner may miss.
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.18.4
+    hooks:
+      - id: gitleaks
+
+  # Deployment hardening gate — blocks commits that introduce weak default
+  # passwords, :latest images, production --reload, or publicly exposed
+  # databases into deployment manifests.
+  - repo: local
+    hooks:
+      - id: deployment-hardening-gate
+        name: deployment hardening gate
+        entry: python scripts/security_deployment_gate.py
+        language: system
+        pass_filenames: false
+        files: >-
+          (?x)(
+            ^docker-compose.*\.ya?ml$|
+            ^deployment/.*\.(ya?ml|sh|yaml)$|
+            ^monitoring/.*\.ya?ml$|
+            ^templates/.*\.ya?ml$|
+            ^\.env\.example$
+          )

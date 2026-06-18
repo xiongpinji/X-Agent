@@ -71,17 +71,55 @@ class MountPoint:
 class MountManager:
     """Manages mounted directories for flexible file access."""
 
-    def __init__(self, storage_path: Optional[Path] = None) -> None:
+    def __init__(
+        self,
+        storage_path: Optional[Path] = None,
+        allowed_roots: Optional[list[str | Path]] = None,
+    ) -> None:
         """Initialize mount manager.
 
         Args:
             storage_path: Path to persist mount metadata
+            allowed_roots: Optional allowlist of host directories that may be
+                mounted. When provided, ``mount_directory`` rejects any host
+                path that does not resolve within one of these roots
+                (defense against mounting arbitrary host locations such as
+                ``/etc`` or ``C:\\Windows``). When omitted (None), no root
+                restriction is applied — preserves backward compatibility for
+                existing callers/tests that construct a plain MountManager.
         """
         self.storage_path = Path(storage_path) if storage_path else None
         self._mounts: dict[str, MountPoint] = {}
         self._lock = RLock()
+        self.allowed_roots: Optional[tuple[Path, ...]] = None
+        if allowed_roots is not None:
+            resolved: list[Path] = []
+            for root in allowed_roots:
+                if root is None:
+                    continue
+                try:
+                    resolved.append(Path(root).expanduser().resolve())
+                except OSError:
+                    continue
+            self.allowed_roots = tuple(resolved)
         if self.storage_path:
             self._load_from_disk()
+
+    def _is_root_allowed(self, host_path_obj: Path) -> bool:
+        """Return True if ``host_path_obj`` is within the configured allowlist.
+
+        When no allowlist is configured (None), all roots are permitted.
+        An empty allowlist (``()``) denies everything (fail-closed).
+        """
+        if self.allowed_roots is None:
+            return True
+        for root in self.allowed_roots:
+            try:
+                host_path_obj.relative_to(root)
+                return True
+            except ValueError:
+                continue
+        return False
 
     def mount_directory(
         self,
@@ -105,6 +143,12 @@ class MountManager:
             ValueError: If path is invalid or already mounted
             PermissionError: If unable to access host path
         """
+        # SECURITY: resolve first (this follows symlinks), then require the
+        # resolved location to fall inside the allowlist. A symlink whose
+        # target escapes the allowed roots therefore resolves outside and is
+        # rejected below — no separate pre-resolution symlink walk is needed,
+        # and we avoid false positives on symlinked system ancestors
+        # (e.g. /tmp -> /private/tmp on macOS).
         host_path_obj = Path(host_path).resolve()
 
         # Validate host path exists and is accessible
@@ -113,6 +157,14 @@ class MountManager:
 
         if not host_path_obj.is_dir():
             raise ValueError(f"Host path is not a directory: {host_path}")
+
+        # SECURITY: only allow mounting within the configured allowlist of
+        # workspace roots. Prevents mounting arbitrary host locations and
+        # rejects symlink/.. escapes (the resolved path lands outside).
+        if not self._is_root_allowed(host_path_obj):
+            raise PermissionError(
+                f"Host path is outside the allowed mount roots: {host_path}"
+            )
 
         # Check if already mounted
         for mount in self._mounts.values():
@@ -168,6 +220,28 @@ class MountManager:
             self._persist()
 
         return True
+
+    def unmount_for_user(self, user_id: str, mount_id: str) -> str:
+        """Unmount a directory, enforcing that the caller owns the mount.
+
+        Args:
+            user_id: Identifier of the requesting user
+            mount_id: Mount identifier
+
+        Returns:
+            "ok" if unmounted, "not_found" if the mount does not exist,
+            "forbidden" if the mount belongs to another user.
+
+        SECURITY: callers must treat "forbidden" as HTTP 403 and "not_found"
+        as 404 — never reveal another tenant's mount existence beyond this.
+        """
+        mount = self._mounts.get(mount_id)
+        if mount is None:
+            return "not_found"
+        if mount.user_id != user_id:
+            return "forbidden"
+        self.unmount_directory(mount_id)
+        return "ok"
 
     def get_mount(self, mount_id: str) -> Optional[MountPoint]:
         """Get mount by ID.

@@ -246,7 +246,7 @@ class PluginMarketInitializer:
         """生成插件ID"""
         import hashlib
 
-        hash_obj = hashlib.md5(name.encode())
+        hash_obj = hashlib.md5(name.encode(), usedforsecurity=False)
         return hash_obj.hexdigest()[:12]
 
 

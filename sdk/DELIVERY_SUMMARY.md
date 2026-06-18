@@ -263,9 +263,9 @@ Every error type provides actionable context.
 
 ---
 
-## 📦 Ready for Distribution
+## 📦 Distribution Candidate
 
-The SDK is ready for:
+The SDK package is prepared as a distribution candidate for:
 1. **PyPI publication** (setup via pyproject.toml)
 2. **Private package index** (GitHub/GitLab packages)
 3. **Direct installation** (`pip install -e ./sdk`)
@@ -299,5 +299,4 @@ All files compile, imports resolve (with dependencies installed), and tests pass
 - **Great docs**: README + architecture guide + examples
 - **Production patterns**: Backoff, timeouts, cleanup, error recovery
 
-Ready to ship to PyPI or use in your X-Agent deployments.
-
+Prepared for PyPI or private deployment review after the current release boundary gates pass.

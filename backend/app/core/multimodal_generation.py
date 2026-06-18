@@ -403,7 +403,7 @@ class MultimodalGenerator:
         """生成缓存键"""
         import hashlib
         key_str = f"{request.generation_type}_{request.input_modality}_{request.output_modality}"
-        return hashlib.md5(key_str.encode()).hexdigest()
+        return hashlib.md5(key_str.encode(), usedforsecurity=False).hexdigest()
 
 
 class GenerationEvaluator:

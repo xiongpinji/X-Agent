@@ -1,9 +1,61 @@
 import json
+from hashlib import sha256
+from hmac import new as hmac_new
 
+import pytest
 from fastapi.testclient import TestClient
 
+from backend.app.api import agents as agents_api
+from backend.app.core.contracts import AgentRunResponse, RunStatus
 from backend.app.core.audit import AuditLogRecord, AuditStore
+from backend.app.core.audit_postgres import PostgresAuditStore
+from backend.app.core.tracing import TraceStore
+from backend.app.dependencies import (
+    get_audit_store as dependency_get_audit_store,
+    get_trace_store as dependency_get_trace_store,
+)
 from backend.app.main import app
+
+
+class _FastAuditAgent:
+    def __init__(self, trace_store: TraceStore) -> None:
+        self.max_iterations = 1
+        self._trace_store = trace_store
+
+    async def run(self, context, task, extra_context=None):  # noqa: ANN001, ANN003
+        events = [
+            self._trace_store.record(context, "agent.started", task=task),
+            self._trace_store.record(context, "agent.completed", status="completed"),
+        ]
+        return AgentRunResponse(
+            trace_id=context.trace_id,
+            agent_id=context.agent_id,
+            status=RunStatus.COMPLETED,
+            answer=f"stubbed audit run: {task}",
+            iterations=1,
+            memory_hits=0,
+            tool_calls=[],
+            events=events,
+            execution_summary={"stubbed": True},
+            snapshot={"tenant_id": context.tenant_id, "user_id": context.user_id},
+        )
+
+
+@pytest.fixture
+def fast_agent_audit_dependencies(monkeypatch, tmp_path):
+    audit_store = AuditStore(storage_path=tmp_path / "api-audit.jsonl", hmac_secret="test-secret")
+    trace_store = TraceStore()
+    previous_overrides = dict(app.dependency_overrides)
+
+    monkeypatch.setattr(agents_api, "get_agent", lambda: _FastAuditAgent(trace_store))
+    monkeypatch.setattr(agents_api, "get_audit_store", lambda: audit_store)
+    app.dependency_overrides[dependency_get_audit_store] = lambda: audit_store
+    app.dependency_overrides[dependency_get_trace_store] = lambda: trace_store
+    try:
+        yield audit_store, trace_store
+    finally:
+        app.dependency_overrides.clear()
+        app.dependency_overrides.update(previous_overrides)
 
 
 def test_audit_store_persists_records(tmp_path) -> None:
@@ -53,7 +105,33 @@ def test_audit_hmac_signature_detects_rehashed_tampering(tmp_path) -> None:
     assert verification.reason == "Record signature mismatch."
 
 
-def test_agent_run_writes_audit_log() -> None:
+def test_postgres_audit_store_does_not_use_default_hmac_secret() -> None:
+    store = object.__new__(PostgresAuditStore)
+    store._hmac_secret = "tenant-specific-audit-secret"
+    record = AuditLogRecord(action="postgres.audit", resource_type="audit")
+    record.hash = PostgresAuditStore._hash_record(record)
+
+    signature = store._signature_record(record)
+    default_signature = hmac_new(
+        b"default-secret",
+        record.hash.encode("utf-8"),
+        sha256,
+    ).hexdigest()
+
+    assert signature
+    assert signature != default_signature
+
+
+def test_postgres_audit_store_without_hmac_secret_does_not_sign() -> None:
+    store = object.__new__(PostgresAuditStore)
+    store._hmac_secret = None
+    record = AuditLogRecord(action="postgres.audit", resource_type="audit")
+    record.hash = PostgresAuditStore._hash_record(record)
+
+    assert store._signature_record(record) is None
+
+
+def test_agent_run_writes_audit_log(fast_agent_audit_dependencies) -> None:
     client = TestClient(app, headers={"x-api-key": "bootstrap"})
     run = client.post("/api/v1/agents/run", json={"task": "audit check"}).json()
 
@@ -70,7 +148,7 @@ def test_agent_run_writes_audit_log() -> None:
         assert all("snapshot" in item or item.get("snapshot") is not None for item in data)
 
 
-def test_audit_chain_verify_endpoint() -> None:
+def test_audit_chain_verify_endpoint(fast_agent_audit_dependencies) -> None:
     client = TestClient(app, headers={"x-api-key": "bootstrap"})
     client.post("/api/v1/agents/run", json={"task": "verify audit"})
 

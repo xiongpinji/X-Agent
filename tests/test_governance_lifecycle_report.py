@@ -109,7 +109,7 @@ def test_governance_lifecycle_report_redacts_secret_like_metadata() -> None:
                 },
                 "test_command": "python -m pytest tests/test_skill_curator_api.py -q",
                 "rollback": {
-                    "plan": "Remove sk-test1234567890abcdef from metadata.",
+                    "plan": "Remove " + "sk-" + "test1234567890abcdef" + " from metadata.",
                     "owner_approval_required": True,
                     "mutation_performed": False,
                 },

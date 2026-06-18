@@ -122,13 +122,13 @@ class LLMCacheManager:
             messages_str,
         ]
         key_str = "|".join(key_parts)
-        return hashlib.md5(key_str.encode()).hexdigest()
+        return hashlib.md5(key_str.encode(), usedforsecurity=False).hexdigest()
 
     def _make_embedding_cache_key(self, text: str, model: str) -> str:
         """Generate cache key for embedding."""
         key_parts = ["llm:embedding", model, text]
         key_str = "|".join(key_parts)
-        return hashlib.md5(key_str.encode()).hexdigest()
+        return hashlib.md5(key_str.encode(), usedforsecurity=False).hexdigest()
 
     def _make_semantic_cache_key(
         self,
@@ -145,7 +145,7 @@ class LLMCacheManager:
 
         key_parts = ["llm:semantic", model, main_content[:100]]
         key_str = "|".join(key_parts)
-        return hashlib.md5(key_str.encode()).hexdigest()
+        return hashlib.md5(key_str.encode(), usedforsecurity=False).hexdigest()
 
     async def get_cached_response(
         self,

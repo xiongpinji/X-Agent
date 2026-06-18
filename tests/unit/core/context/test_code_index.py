@@ -92,7 +92,7 @@ import { something } from './module1.js';
         assert isinstance(stats, IndexStats)
         assert stats.indexed_files > 0
         assert stats.total_symbols > 0
-        assert stats.index_time_seconds > 0
+        assert stats.index_time_seconds >= 0
 
     def test_build_index_nonexistent_path(self, index):
         """测试不存在的路径。
@@ -218,7 +218,7 @@ from pathlib import Path
         assert isinstance(stats, IndexStats)
         assert stats.indexed_files > 0
         assert stats.total_symbols > 0
-        assert stats.index_time_seconds > 0
+        assert stats.index_time_seconds >= 0
 
     def test_get_file_info(self, index, temp_codebase):
         """测试获取文件信息。

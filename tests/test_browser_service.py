@@ -29,3 +29,14 @@ def test_browser_session_close_prevents_further_actions() -> None:
 
     assert closed is True
     assert browser_client.get_session(session.session_id).active is False
+
+
+def test_browser_client_goto_blocks_private_ip_without_api_layer() -> None:
+    session = browser_client.create_session()
+
+    result = browser_client.goto(session.session_id, "http://127.0.0.1:8080/admin")
+
+    assert result.ok is False
+    assert "URL is not allowed" in result.detail
+    assert result.data["attempted_url"] == "http://127.0.0.1:8080/admin"
+    assert browser_client.get_session(session.session_id).current_url != "http://127.0.0.1:8080/admin"

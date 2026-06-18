@@ -2,13 +2,22 @@
 
 **Release Date**: 2026-06-14  
 **Branch**: `feat/commercial-delivery-v1`  
-**Status**: GA-Ready
+**Status**: Draft release notes; owner-gated delivery boundary
 
 ---
 
+> Boundary note (2026-06-14): These release notes describe a draft release
+> package and must not be used as current GA-ready, delivery-complete,
+> release-ready, or full Codex parity proof. The current closure snapshot is
+> `.xagent_runtime/reports/commercial-delivery-closure-snapshot.json` and is
+> owner-gated/blocked.
+
 ## Highlights
 
-X-Agent v1.0.0 is the first production-ready release of the Enterprise Autonomous Agent Framework. It delivers a complete, self-hosted alternative to cloud-only agent platforms — with multi-agent orchestration, enterprise security, and full observability built in.
+X-Agent v1.0.0 is a draft release package for the Enterprise Autonomous Agent
+Framework. It describes a self-hosted agent platform direction with
+multi-agent orchestration, enterprise security, and observability, subject to
+the current owner-gated delivery boundary.
 
 ### 30-Second Install
 ```bash
@@ -79,7 +88,13 @@ print(result.pr_url)
 - SLO/SLI Definitions
 - CHANGELOG + CONTRIBUTING + SECURITY
 - VitePress documentation site structure
-- Chrome Extension WebStore submission guide
+
+### Desktop Client
+- Tauri desktop client is in first-version delivery scope.
+- Desktop security hardening is tracked as a P0 gate and must remain tied to
+  the Tauri security pytest plus Rust `cargo check`/`cargo test` evidence.
+- System tray/icon wiring is deferred until real signed icon assets are
+  restored and reverified.
 
 ---
 
@@ -110,8 +125,11 @@ print(result.pr_url)
 
 ## Known Limitations
 
-- Chrome Extension requires manual WebStore submission
-- Desktop App (Tauri) requires local build (CI produces artifacts)
+- Browser extension is not included in the first-version commercial delivery
+  package, demo scope, or customer documentation commitment. It is deferred to
+  a later release and must pass a separate hardening gate before shipment.
+- Desktop App (Tauri) is in first-version scope, but release artifacts remain
+  tied to the current verified local/CI build evidence.
 - Full test suite needs Python 3.11+ (sandbox tests skip on Windows for Unix-specific commands)
 - Alembic migrations need `pip install alembic` (not in core requirements)
 
@@ -137,3 +155,4 @@ python scripts/e2e_verify.py
 - Multi-tenant billing integration (Stripe)
 - Kubernetes Operator for auto-scaling
 - Mobile SDK (React Native)
+- Browser extension hardening and packaging

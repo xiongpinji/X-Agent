@@ -136,7 +136,7 @@ class FeatureFlagManager:
 
         # Use consistent hashing for deterministic rollout
         hash_value = int(
-            hashlib.md5(identifier.encode()).hexdigest(),
+            hashlib.md5(identifier.encode(), usedforsecurity=False).hexdigest(),
             16,
         )
         return (hash_value % 100) < percentage

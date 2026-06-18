@@ -92,7 +92,7 @@ from backend.app.dependencies import (
     get_trace_store,
     get_workflow_repository,
 )
-from backend.app.core.security import Principal
+from backend.app.core.security import Principal, ROLE_SCOPES
 from backend.app.core.mcp.manager import (
     initialize_mcp_manager,
     shutdown_mcp_manager,
@@ -122,7 +122,7 @@ def require_api_key_header(request: Request) -> None:
         return
     if request.url.path in API_KEY_EXEMPT_PATHS:
         return
-    if request.headers.get("x-api-key"):
+    if _request_has_valid_api_key(request):
         return
     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing API key")
 
@@ -185,10 +185,26 @@ def _request_has_valid_api_key(request: Request) -> bool:
             app_settings.bootstrap_api_key,
             app_settings.bootstrap_api_key_sha256,
         ):
+            request.scope["principal"] = Principal(
+                tenant_id="default",
+                user_id="bootstrap-admin",
+                role="admin",
+                scopes=list(ROLE_SCOPES["admin"]),
+                api_key_id="bootstrap",
+                authenticated=True,
+            )
             return True
-        return get_api_key_store().authenticate(raw_key) is not None
+        principal = get_api_key_store().authenticate(raw_key)
+        if principal is None:
+            return False
+        request.scope["principal"] = principal
+        return True
     except Exception:  # noqa: BLE001 - never let CSRF exemption check crash the request
         return False
+
+
+def _api_key_failure_detail(request: Request) -> str:
+    return "Invalid API key" if request.headers.get("x-api-key") else "Missing API key"
 
 
 class CSRFProtectionMiddleware(BaseHTTPMiddleware):
@@ -394,8 +410,8 @@ async def request_logging_middleware(request: Request, call_next):
     request_id = request.headers.get("x-request-id") or str(uuid4())
     started = time.perf_counter()
     if settings.require_api_key and request.url.path not in API_KEY_EXEMPT_PATHS:
-        if not request.headers.get("x-api-key"):
-            response = JSONResponse({"detail": "Missing API key"}, status_code=401)
+        if not _request_has_valid_api_key(request):
+            response = JSONResponse({"detail": _api_key_failure_detail(request)}, status_code=401)
             response.headers["x-request-id"] = request_id
             return response
     response = await call_next(request)
@@ -431,9 +447,15 @@ async def tenant_isolation_middleware(request: Request, call_next):
         return await call_next(request)
 
     try:
-        # Try to get the principal from the request
-        # This is a best-effort check; the actual auth happens in route handlers
         principal = request.scope.get("principal")
+        if principal is None and (
+            request.headers.get("x-api-key")
+            or request.headers.get("authorization", "").lower().startswith("bearer ")
+        ):
+            try:
+                principal = get_current_principal(request)
+            except Exception:
+                principal = None
         if principal and principal.role != "admin":
             # Check for tenant_id in query parameters
             tenant_id_param = request.query_params.get("tenant_id")
@@ -528,7 +550,7 @@ app.include_router(migration_router)
 app.include_router(planning_router)
 app.include_router(workbench_router)
 app.include_router(messages_router)
-app.include_router(metrics_router)
+app.include_router(metrics_router, dependencies=[Depends(get_current_principal)])
 app.include_router(overview_router)
 app.include_router(execution_router)
 app.include_router(verification_router)

@@ -2,10 +2,36 @@
 
 > **本文件是 Codex(总调度 `019ecfe8`)与 ZCode(会话 `sess_c93e053f`)的共享协作黑板。**
 > 任何一方开始/完成任务前,必须先读本文件更新自己的状态,完成后回写进度。
-> 协作介质:① 文件系统(本文件 + `audit_reports/`);② **双向实时通道**(MCP 黑板 + `codex exec` 直连,见文末「🔗 双向通讯通道」)。
+> 协作介质:① 文件系统(本文件 + `audit_reports/`);② **双向通讯通道**(B 方案,已端到端验证,见文末「🔗 双向通讯通道」)。
 
 **最后更新**: 2026-06-17 (ZCode)
 **当前协作阶段**: 安全漏洞修复(基于 `audit_reports/COMPREHENSIVE_AUDIT_20260617.md`)
+
+---
+
+## 🚀 快速开始 —— 通讯通道速查(任何会话先读这段)
+
+> 本节是 ZCode/Codex 协作的"操作记忆"。详细协议见 `audit_reports/_comm/CHEATSHEET.md` 与 `PROTOCOL.md`。
+> **2026-06-17 已端到端验证**:Codex 完成 5/5 操作问答(see `messages` table id=`9c52d69f`)。
+
+**我是 ZCode,要派单给 Codex**:
+```bash
+python scripts/dispatch_to_codex.py --resume 019ecfe8-0db5-7b12-b1c0-e5acfc1985f3 --bypass-sandbox --timeout 600 "<指令>"
+```
+
+**我是 ZCode,要看 Codex 给我什么消息**:
+```bash
+python scripts/read_codex_messages.py            # 未读
+python scripts/read_codex_messages.py --watch 30 # 轮询
+```
+
+**我是 Codex,要给 ZCode 回报告**:
+```bash
+python scripts/send_to_zcode.py --subject "<主题>" --body "<正文>" [--task-id P0-02 --status done|failed|blocked]
+```
+
+**共享存储**:`audit_reports/_comm/blackboard.sqlite`(SQLite WAL,双进程读写)
+**完整速查**:`audit_reports/_comm/CHEATSHEET.md`
 
 ---
 
@@ -36,7 +62,7 @@
 | ID | 任务 | 文件 | 状态 | 验证标准 |
 |---|---|---|---|---|
 | P0-01 | enterprise.py 14 端点加授权 | `backend/app/api/enterprise.py` | 已修复待验证(Codex 019ecfe8) | 见 `audit_reports/FIX_TASKS.md#P0-01` |
-| P0-02 | sessions.py 6 端点强制 principal.tenant_id | `backend/app/api/sessions.py` | 进行中(Codex 019ecfe8) | 见 `audit_reports/FIX_TASKS.md#P0-02` |
+| P0-02 | sessions.py 6 端点强制 principal.tenant_id | `backend/app/api/sessions.py` | ✅ 已验证通过(ZCode) | **首次走完整 B 方案协作闭环 2026-06-17**:Codex 核验 `verify_fixes.py P0-02 → 4/0`、`pytest test_sessions_skills_issuepr_auth.py → 17 passed`;ZCode 独立复核 4/0;Codex 报告 msg id `df5fead6-be52-42ff-8057-d6b5152f48ed` |
 | P0-03 | skills_api.py 4 端点强制 principal | `backend/app/api/skills_api.py` | 待领取 | 见 `audit_reports/FIX_TASKS.md#P0-03` |
 | P0-04 | issue_to_pr.py execute 端点加授权 | `backend/app/api/issue_to_pr.py:49` | 待领取 | 见 `audit_reports/FIX_TASKS.md#P0-04` |
 | P0-05 | 核实 reset_password 令牌验证 | `backend/app/api/auth.py:431` | ✅ 已验证通过(ZCode) | **非漏洞**:reset_password 有完整双流程+token校验,见 `VERIFICATION_RESULTS.md` |
@@ -81,48 +107,65 @@
 | `audit_reports/VERIFICATION_RESULTS.md` | ZCode 验证结果(通过/失败+原因) | ZCode |
 | `audit_reports/_no_auth_routes.txt` | 118 个无授权路由原始清单 | ZCode |
 | `audit_reports/_auth_classification.txt` | REAL/STUB/UNKNOWN 分类 | ZCode |
-| `audit_reports/_comm/PROTOCOL.md` | 双向通讯协议规范(MCP+文件兜底) | ZCode |
-| `scripts/mcp_blackboard_server.py` | 共享 MCP 黑板 server(双向消息队列) | ZCode |
-| `scripts/dispatch_to_codex.py` | ZCode→Codex 同步直连封装(`codex exec`) | ZCode |
-| `audit_reports/_comm/blackboard.sqlite` | 消息队列持久化存储 | 双方读写 |
+| `audit_reports/_comm/PROTOCOL.md` | 双向通讯协议规范(B 方案,会话绑定) | ZCode |
+| `audit_reports/_comm/SESSION_BINDINGS.json` | ZCode/Codex 固定会话 ID 绑定配置 | ZCode |
+| `audit_reports/_comm/blackboard.sqlite` | 消息队列 + 任务板共享存储 | 双方读写 |
+| `scripts/dispatch_to_codex.py` | ZCode→Codex 同步直连(支持 --resume 复用固定会话) | ZCode |
+| `scripts/send_to_zcode.py` | Codex→ZCode 异步发消息 / 报告任务状态 | Codex |
+| `scripts/read_codex_messages.py` | ZCode 读 Codex 消息(支持 --watch 轮询) | ZCode |
+| `scripts/mcp_blackboard_server.py` | (备用)A 方案 MCP server,Codex 桌面版不加载 | ZCode |
 
 ---
 
-## 🔗 双向通讯通道(2026-06-17 建立)
+## 🔗 双向通讯通道(2026-06-17 建立,**B 方案,已端到端验证**)
 
-> 过去两个 agent 只能靠文件 + 人类信使异步沟通。现已建立**双向实时通道**,
+> 过去两个 agent 只能靠文件 + 人类信使异步沟通。现已建立**双向通道**,
 > 双方都能主动发消息、派任务、拿回执,不必等人类搬话。
+
+### 固定会话绑定
+
+| Agent | 会话 ID | 角色 |
+|---|---|---|
+| **ZCode** | `sess_c93e053f-cda9-475c-80aa-6a9d557e28b1` | 审计员/验证员 |
+| **Codex** | `019ecfe8-0db5-7b12-b1c0-e5acfc1985f3`(thread:主调度) | 修复执行方 |
+
+机器可读绑定:`audit_reports/_comm/SESSION_BINDINGS.json`
+
+### 为什么是 B 方案
+
+最初尝试 A 方案(共享 MCP 黑板 server 双向挂载),落地时发现 Codex 桌面版**不加载 `config.toml` 的 `[mcp_servers.*]`**,只从 plugin 加载。B 方案绕开 MCP 协议依赖,用 `codex exec resume` + 共享 SQLite,**已实测端到端跑通**(2 条消息双向往返)。
 
 ### 通道总览
 
-| 通道 | 方向 | 形态 | 何时用 |
-|---|---|---|---|
-| **MCP 黑板**(主) | 双向对称 | 共享 MCP server,双方各自挂载,读写同一 SQLite 队列 | 默认双向通讯。派单、回执、问询、状态同步 |
-| **`codex exec` 直连** | ZCode→Codex | ZCode 用 Bash 同步调起 Codex,即时拿回结果 | 需要Codex**立即执行并返回**时(如现场验证) |
-| **文件收件箱**(兜底) | 双向异步 | `audit_reports/_comm/inbox_{zcode,codex}/` | MCP server 未加载(会话未重启)时兜底,保证不丢消息 |
+| 方向 | 工具 | 形态 |
+|---|---|---|
+| **ZCode → Codex**(同步) | `scripts/dispatch_to_codex.py --resume <id> --bypass-sandbox` | 同步直连,在 Codex 固定会话上下文里执行,拿回最终回复 |
+| **Codex → ZCode**(异步) | Codex 跑 `scripts/send_to_zcode.py` 写共享 SQLite + 文件兜底 | ZCode 用 `read_codex_messages.py` 读取 |
+| **共享存储** | `audit_reports/_comm/blackboard.sqlite`(WAL,双进程读写) | messages 表 + tasks 表 |
+| **文件兜底** | `audit_reports/_comm/inbox_{zcode,codex}/` | SQLite 故障时不丢消息 |
 
-### MCP 黑板工具(双方均可调用)
-
-- `post_message(sender, recipient, subject, body)` —— 投递消息,recipient ∈ {zcode, codex, broadcast}
-- `read_inbox(agent, since_id?, limit?)` —— 读自己收件箱;不带 since_id 返回未读并标记已读
-- `create_task(task_id, created_by, summary, detail?)` —— 任务板上建任务
-- `claim_task(task_id, claimed_by)` —— 认领任务 → in_progress
-- `report_done(task_id, status, summary, by)` —— 报告 done/failed/blocked
-- `list_tasks(status?)` —— 列出任务板
-
-### ZCode 同步调用 Codex
+### 派单示例(ZCode 派给 Codex)
 
 ```bash
-# ZCode 在会话内用 Bash 执行:
-venv\Scripts\python.exe scripts\dispatch_to_codex.py --timeout 300 "请修复 P0-02, 规范见 audit_reports/FIX_TASKS.md#P0-02"
-# Codex 的最终回复会打印到 stdout, 同时落盘 audit_reports/_comm/_codex_last.txt
+python scripts/dispatch_to_codex.py \
+  --resume 019ecfe8-0db5-7b12-b1c0-e5acfc1985f3 \
+  --bypass-sandbox \
+  "请修复 P0-02, 规范见 audit_reports/FIX_TASKS.md#P0-02。完成后跑: python scripts/send_to_zcode.py --subject 'P0-02 done' --task-id P0-02 --status done --body '<改动摘要>'"
 ```
 
-### 生效条件 ⚠️
+### Codex 回执示例(Codex 在自己会话里跑)
 
-MCP 黑板 server 已挂载到 `.mcp.json`(ZCode)和 `.codex/config.toml`(Codex),
-但 **双方都需重启各自会话** 才能加载新 MCP server。重启前只能用 `codex exec` 直连 + 文件兜底。
+```bash
+python scripts/send_to_zcode.py --subject "P0-02 已修复" --task-id P0-02 --status done --body "改动见 sessions.py"
+```
+
+### ZCode 收消息
+
+```bash
+python scripts/read_codex_messages.py            # 未读
+python scripts/read_codex_messages.py --watch 30 # 轮询模式
+```
 
 ### 详细协议
 
-见 `audit_reports/_comm/PROTOCOL.md`(消息格式、调用约定、文件兜底确认机制)。
+见 `audit_reports/_comm/PROTOCOL.md`(完整通讯协议、SQLite 表结构、典型流程)。

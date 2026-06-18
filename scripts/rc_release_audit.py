@@ -4,9 +4,11 @@
 from __future__ import annotations
 
 import argparse
+import fnmatch
 import json
 import re
 import subprocess
+import sys
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -16,7 +18,18 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_MANIFEST = ROOT / "docs" / "RC_STAGING_MANIFEST.md"
 DEFAULT_OUTPUT = ROOT / ".xagent_runtime" / "reports" / "rc-release-audit.json"
 
-EXCLUDED_PREFIXES = (".agents/", ".codex/", ".xagent_runtime/", "backend/app/core/creative_studio/")
+EXCLUDED_PREFIXES = (
+    ".agents/",
+    ".codex/",
+    ".xagent_runtime/",
+    ".xagent/",
+    "backend/app/core/creative_studio/",
+)
+EXCLUDED_GLOBS = (
+    "data/*.db",
+    "test_baseline_*.txt",
+    "test_baseline_*.log",
+)
 EXCLUDED_EXACT = {
     "AGENTS.md",
     "COMPETITIVE_ANALYSIS_2026.md",
@@ -74,6 +87,12 @@ PLACEHOLDER_TOKENS = (
     "secure_key",
     "your",
 )
+
+
+def console_safe_text(value: str, encoding: str | None = None) -> str:
+    """Return text that can be written to the active console encoding."""
+    target_encoding = encoding or sys.stdout.encoding or "utf-8"
+    return value.encode(target_encoding, errors="backslashreplace").decode(target_encoding)
 
 
 @dataclass(frozen=True)
@@ -158,7 +177,12 @@ def _git_lines(*args: str) -> list[str]:
 
 
 def is_excluded(path: str) -> bool:
-    return path in EXCLUDED_EXACT or any(path.startswith(prefix) for prefix in EXCLUDED_PREFIXES)
+    normalized = path.replace("\\", "/")
+    return (
+        normalized in EXCLUDED_EXACT
+        or any(normalized.startswith(prefix) for prefix in EXCLUDED_PREFIXES)
+        or any(fnmatch.fnmatchcase(normalized, pattern) for pattern in EXCLUDED_GLOBS)
+    )
 
 
 def candidate_paths(manifest_text: str | None = None) -> tuple[list[str], list[str], bool]:
@@ -181,7 +205,8 @@ def repository_classification_paths() -> tuple[set[str], set[str]]:
 
 
 def missing_from_manifest(paths: Iterable[str], manifest_text: str) -> list[str]:
-    return [path for path in paths if path not in manifest_text]
+    manifest_paths = set(manifest_candidate_paths(manifest_text))
+    return [path for path in paths if path.replace("\\", "/") not in manifest_paths]
 
 
 def manifest_candidate_paths(manifest_text: str) -> list[str]:
@@ -289,6 +314,7 @@ def _is_probable_placeholder(value: str) -> bool:
     lowered = value.lower()
     return any(token in lowered for token in PLACEHOLDER_TOKENS)
 
+
 def _is_public_xagent_name(value: str) -> bool:
     """Allow public repo artifact/path names without weakening token detection."""
 
@@ -297,6 +323,7 @@ def _is_public_xagent_name(value: str) -> bool:
 
 def _is_allowed_secret_match_sample(value: str) -> bool:
     return _is_probable_placeholder(value) or _is_public_xagent_name(value)
+
 
 def _redact(value: str) -> str:
     if len(value) <= 12:
@@ -553,20 +580,20 @@ def main() -> int:
     if audit.secret_findings:
         print("Secret-like findings:")
         for finding in audit.secret_findings:
-            print(f"- {finding.path}:{finding.line} {finding.sample}")
+            print(f"- {finding.path}:{finding.line} {console_safe_text(finding.sample)}")
     if audit.excluded_reference_findings:
         print("Excluded-area references:")
         for finding in audit.excluded_reference_findings:
-            print(f"- {finding.path}:{finding.line} {finding.excluded_area}: {finding.sample}")
+            print(f"- {finding.path}:{finding.line} {finding.excluded_area}: {console_safe_text(finding.sample)}")
     if audit.local_path_findings:
         print("Local user/runtime path findings:")
         for finding in audit.local_path_findings:
-            print(f"- {finding.path}:{finding.line} {finding.pattern}: {finding.sample}")
+            print(f"- {finding.path}:{finding.line} {finding.pattern}: {console_safe_text(finding.sample)}")
     if audit.file_hygiene_findings:
         print("Candidate file hygiene findings:")
         for finding in audit.file_hygiene_findings:
             location = f"{finding.path}:{finding.line}" if finding.line else finding.path
-            print(f"- {location} {finding.kind}: {finding.sample}")
+            print(f"- {location} {finding.kind}: {console_safe_text(finding.sample)}")
     return 0 if audit.status == "passed" else 1
 
 

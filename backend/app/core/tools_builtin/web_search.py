@@ -47,7 +47,7 @@ class SearchCache:
         Returns:
             List of cached SearchResult objects or None if not found/expired.
         """
-        key = hashlib.md5(query.encode()).hexdigest()
+        key = hashlib.md5(query.encode(), usedforsecurity=False).hexdigest()
         if key in self._store:
             ts, results = self._store[key]
             if time.time() - ts < self.ttl_seconds:
@@ -62,7 +62,7 @@ class SearchCache:
             query: Search query string.
             results: List of SearchResult objects to cache.
         """
-        key = hashlib.md5(query.encode()).hexdigest()
+        key = hashlib.md5(query.encode(), usedforsecurity=False).hexdigest()
         self._store[key] = (time.time(), results)
 
 

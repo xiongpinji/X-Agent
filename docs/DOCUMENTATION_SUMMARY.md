@@ -2,7 +2,11 @@
 
 ## Project Overview
 
-X-Agent Core is a comprehensive autonomous agent framework with production-ready features. This documentation system provides complete guidance for users, developers, and operators.
+X-Agent Core is a comprehensive autonomous agent framework with production-oriented features. This documentation system provides guidance for users, developers, and operators.
+
+> Boundary note (2026-06-15): This documentation summary is historical
+> component documentation context. It is not current commercial
+> delivery-complete, release-ready, GA-ready, or full Codex parity evidence.
 
 ## Documentation Quality Assessment
 

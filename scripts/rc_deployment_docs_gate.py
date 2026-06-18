@@ -46,19 +46,40 @@ RUNBOOK_TOKENS = (
     "XAGENT_BOOTSTRAP_API_KEY",
     "prohibited_secret_artifacts",
     "python scripts/rc_final_gate.py --require-ready-to-tag",
-    "python scripts/rc_refresh_release_chain.py --provider ollama --ollama-model",
-    "--ollama-base-url",
+    "python scripts/rc_final_gate.py --require-ready-to-tag --require-stage3-rehearsal",
+    "--require-stage3-rehearsal",
+    "python scripts/rc_refresh_release_chain.py --provider deepseek --owner-verified --timeout 60",
     "--owner-verified",
     "python scripts/rc_evidence_pack.py",
-    "python scripts/rc_delivery_status.py",
+    "python scripts/rc_release_receipt.py",
     "--allow-missing-evidence-pack",
     "Final final gate remains strict",
     "python scripts/rc_owner_gate_runner.py --gate all --dry-run --env-file .xagent_runtime/reports/rc-owner-env-template.env",
-    "python scripts/rc_external_smoke.py --check provider --provider ollama --require-configured",
+    "python scripts/rc_external_smoke.py --provider deepseek",
+    "--require-configured",
     "feishu_webhook_contract",
     "--env-file .xagent_runtime/reports/rc-owner-env-template.env",
     "--github-actions-preflight",
     "python scripts/rc_owner_handoff_gate.py",
+    "python scripts/stage3_owner_domain_guide.py",
+    "stage3-owner-domain-guide-20260618.json",
+    "stage3-owner-domain-guide-20260618.md",
+    "rc-external-smoke.json",
+    "use `--release-sha <40-character-sha>` only",
+    "python scripts/stage3_https_preflight.py",
+    '--domain "<REAL_DOMAIN>"',
+    "--https-preflight-report",
+    "prefill_refs.https_preflight_applied=true",
+    "stage3-https-preflight-20260618.json",
+    "stage3-https-preflight-20260618.md",
+    "python scripts/stage3_owner_evidence_todo.py",
+    "stage3-owner-evidence-todo-20260618.json",
+    "stage3-owner-evidence-todo-20260618.md",
+    "python scripts/stage3_owner_quickstart.py",
+    "stage3-owner-quickstart-20260618.json",
+    "stage3-owner-quickstart-20260618.md",
+    "temporary wildcard DNS such as `sslip.io`",
+    "owner-verified hosted GitHub Actions `head_sha`",
     "docker compose --env-file .env.production",
     "kubectl rollout status deployment/xagent-api",
     "ROLLBACK_PROCEDURE.md",
@@ -104,7 +125,7 @@ CHECKLIST_TOKENS = (
     "RC refresh release chain",
     "RC owner gate runner",
     "RC owner handoff gate",
-    "RC delivery status",
+    "rc_delivery_status.py",
     "feishu_webhook_contract",
     "--gate github_issue_to_pr_dry_run",
     "must not require",
@@ -471,7 +492,12 @@ def _release_state_docs_check(
                 if status and status not in text and not owner_snapshot_docs[text_name]:
                     problems.append(f"{text_name} does not mention current final gate status {status}")
         for text_name, text in (("runbook", runbook), ("checklist", checklist), ("release_notes", notes)):
-            if "full_parity_claimed=false" not in text and "does not claim full" not in text:
+            normalized_text = text.lower()
+            if (
+                "full_parity_claimed=false" not in normalized_text
+                and "does not claim full" not in normalized_text
+                and "not a full codex/hermes parity claim" not in normalized_text
+            ):
                 problems.append(f"{text_name} does not preserve no-full-parity boundary")
     return DeploymentDocsCheck(
         name="release_state_docs",

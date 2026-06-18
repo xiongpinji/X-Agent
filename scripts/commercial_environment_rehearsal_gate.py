@@ -24,6 +24,43 @@ DEFAULT_STAGING_OUTPUT_JSON = REPORT_DIR / "stage3-staging-rehearsal-result-2026
 DEFAULT_STAGING_OUTPUT_MD = REPORT_DIR / "stage3-staging-rehearsal-result-20260615.md"
 DEFAULT_PRODUCTION_OUTPUT_JSON = REPORT_DIR / "stage5-production-rehearsal-result-20260615.json"
 DEFAULT_PRODUCTION_OUTPUT_MD = REPORT_DIR / "stage5-production-rehearsal-result-20260615.md"
+STAGING_INTAKE_EVIDENCE_NAMES = frozenset(
+    {
+        "staging_observability",
+        "staging_environment_protection",
+    }
+)
+STAGING_INTAKE_FALSE_FLAGS = (
+    "external_evidence_input_embedded",
+    "raw_secret_values_recorded",
+    "deploy_performed_by_intake",
+    "workflow_dispatch_performed",
+    "cluster_mutation_performed_by_intake",
+    "outbound_message_sent",
+)
+STAGING_EXTERNAL_ENVIRONMENT_EVIDENCE_NAMES = frozenset(
+    {
+        "staging_deploy_run",
+        "staging_smoke_tests",
+        "staging_rollback_rehearsal",
+    }
+)
+STAGING_EXTERNAL_ENVIRONMENT_FALSE_FLAGS = (
+    "template_not_evidence",
+    "raw_secret_values_recorded",
+    "workflow_dispatch_performed",
+    "outbound_message_sent",
+    "tag_performed",
+    "release_performed",
+)
+STAGING_LOCAL_EQUIVALENT_CLASSES = frozenset(
+    {
+        "local_staging_equivalent",
+        "controlled_pilot",
+        "controlled_pilot_only",
+        "template",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -45,6 +82,11 @@ class RehearsalEvidence:
     ready: bool
     reason: str
     error: str | None = None
+    real_external_evidence_collected: bool | None = None
+    external_evidence_metadata_required: bool = False
+    external_evidence_metadata_valid: bool = True
+    external_environment_metadata_required: bool = False
+    external_environment_metadata_valid: bool = True
 
 
 @dataclass(frozen=True)
@@ -244,9 +286,126 @@ def _bound_sha(sha_fields: dict[str, str]) -> str | None:
     return None
 
 
-def _evidence_item(spec: RehearsalEvidenceSpec, *, release_sha: str | None) -> RehearsalEvidence:
+def _intake_metadata_problems(payload: dict[str, Any]) -> list[str]:
+    problems: list[str] = []
+
+    if payload.get("real_external_evidence_collected") is not True:
+        problems.append("real_external_evidence_collected must be true")
+    if payload.get("template_not_evidence") is True:
+        problems.append("template_not_evidence must not be true")
+
+    input_path = payload.get("external_evidence_input_path")
+    if not isinstance(input_path, str) or not input_path.strip():
+        problems.append("external_evidence_input_path is missing")
+
+    for flag_name in STAGING_INTAKE_FALSE_FLAGS:
+        if payload.get(flag_name) is not False:
+            problems.append(f"{flag_name} must be false")
+
+    checks = payload.get("checks")
+    if not isinstance(checks, list) or not checks:
+        problems.append("intake checks are missing")
+    else:
+        failed_checks: list[str] = []
+        for index, check in enumerate(checks):
+            if not isinstance(check, dict):
+                failed_checks.append(f"check[{index}]")
+                continue
+            if check.get("status") != "passed":
+                name = check.get("name")
+                failed_checks.append(str(name) if isinstance(name, str) and name else f"check[{index}]")
+        if failed_checks:
+            problems.append(f"intake checks are not all passed: {', '.join(failed_checks)}")
+
+    return problems
+
+
+def _has_nonempty_reference(payload: dict[str, Any], *field_names: str) -> bool:
+    for field_name in field_names:
+        value = payload.get(field_name)
+        if isinstance(value, str) and value.strip():
+            return True
+        if isinstance(value, dict) and value:
+            return True
+        if isinstance(value, list) and value:
+            return True
+    return False
+
+
+def _claim_boundary_forbids_external_stage3(payload: dict[str, Any]) -> bool:
+    boundary = payload.get("claim_boundary")
+    if not isinstance(boundary, dict):
+        return False
+    forbidden = boundary.get("forbidden")
+    if not isinstance(forbidden, list):
+        return False
+    for item in forbidden:
+        if isinstance(item, str) and item.strip().lower() in {
+            "external staging proven",
+            "production ready",
+            "ga ready",
+            "customer delivery complete",
+        }:
+            return True
+    return False
+
+
+def _external_environment_metadata_problems(payload: dict[str, Any]) -> list[str]:
+    problems: list[str] = []
+
+    if payload.get("real_external_evidence_collected") is not True:
+        problems.append("real_external_evidence_collected must be true")
+
+    evidence_class = payload.get("evidence_class")
+    if isinstance(evidence_class, str) and evidence_class.strip().lower() in STAGING_LOCAL_EQUIVALENT_CLASSES:
+        problems.append(f"evidence_class {evidence_class} is not external Stage3 evidence")
+    if _claim_boundary_forbids_external_stage3(payload):
+        problems.append("claim_boundary forbids using this report as external Stage3 evidence")
+
+    if payload.get("environment") != "staging":
+        problems.append("environment must be staging")
+    if not _has_nonempty_reference(payload, "external_evidence_ref", "external_evidence_refs", "evidence_url", "evidence_urls", "run_url", "artifact_url"):
+        problems.append("external evidence reference is missing")
+
+    for flag_name in STAGING_EXTERNAL_ENVIRONMENT_FALSE_FLAGS:
+        if payload.get(flag_name) is True:
+            problems.append(f"{flag_name} must not be true")
+
+    if payload.get("workflow_dispatch_performed") is not False:
+        problems.append("workflow_dispatch_performed must be false")
+    if payload.get("outbound_message_sent") is not False:
+        problems.append("outbound_message_sent must be false")
+
+    checks = payload.get("checks")
+    if not isinstance(checks, list) or not checks:
+        problems.append("external environment checks are missing")
+    else:
+        failed_checks: list[str] = []
+        for index, check in enumerate(checks):
+            if not isinstance(check, dict):
+                failed_checks.append(f"check[{index}]")
+                continue
+            if check.get("status") != "passed":
+                name = check.get("name")
+                failed_checks.append(str(name) if isinstance(name, str) and name else f"check[{index}]")
+        if failed_checks:
+            problems.append(f"external environment checks are not all passed: {', '.join(failed_checks)}")
+
+    return problems
+
+
+def _evidence_item(
+    spec: RehearsalEvidenceSpec,
+    *,
+    release_sha: str | None,
+    require_external_environment_metadata: bool = False,
+) -> RehearsalEvidence:
     payload, read_error = _read_json(spec.path)
     status = _status(payload)
+    metadata_required = spec.name in STAGING_INTAKE_EVIDENCE_NAMES
+    environment_metadata_required = (
+        require_external_environment_metadata and spec.name in STAGING_EXTERNAL_ENVIRONMENT_EVIDENCE_NAMES
+    )
     if payload is None:
         return RehearsalEvidence(
             name=spec.name,
@@ -258,12 +417,21 @@ def _evidence_item(spec: RehearsalEvidenceSpec, *, release_sha: str | None) -> R
             ready=False,
             reason=spec.reason,
             error=read_error,
+            real_external_evidence_collected=None,
+            external_evidence_metadata_required=metadata_required,
+            external_evidence_metadata_valid=not metadata_required,
+            external_environment_metadata_required=environment_metadata_required,
+            external_environment_metadata_valid=not environment_metadata_required,
         )
 
     sha_fields = _collect_sha_fields(payload)
     bound_sha = _bound_sha(sha_fields)
     status_ready = status in spec.expected_statuses
     sha_matches_release = bool(release_sha and bound_sha == release_sha)
+    metadata_problems = _intake_metadata_problems(payload) if metadata_required else []
+    environment_metadata_problems = (
+        _external_environment_metadata_problems(payload) if environment_metadata_required else []
+    )
     problems: list[str] = []
     if read_error:
         problems.append(read_error)
@@ -275,6 +443,8 @@ def _evidence_item(spec: RehearsalEvidenceSpec, *, release_sha: str | None) -> R
         problems.append("evidence report contains multiple distinct SHA values")
     elif not sha_matches_release:
         problems.append("evidence SHA does not match release_sha")
+    problems.extend(metadata_problems)
+    problems.extend(environment_metadata_problems)
 
     return RehearsalEvidence(
         name=spec.name,
@@ -286,6 +456,15 @@ def _evidence_item(spec: RehearsalEvidenceSpec, *, release_sha: str | None) -> R
         ready=not problems,
         reason=spec.reason,
         error="; ".join(problems) if problems else None,
+        real_external_evidence_collected=(
+            payload.get("real_external_evidence_collected")
+            if isinstance(payload.get("real_external_evidence_collected"), bool)
+            else None
+        ),
+        external_evidence_metadata_required=metadata_required,
+        external_evidence_metadata_valid=not metadata_problems,
+        external_environment_metadata_required=environment_metadata_required,
+        external_environment_metadata_valid=not environment_metadata_problems,
     )
 
 
@@ -309,7 +488,15 @@ def build_environment_rehearsal_report(
     resolved_head = current_head_sha or resolve_current_head_sha()
     resolved_release_sha = release_sha or resolved_head
     evidence_specs = list(specs or default_evidence_specs(environment, report_dir))
-    evidence = [_evidence_item(spec, release_sha=resolved_release_sha) for spec in evidence_specs]
+    require_external_environment_metadata = environment == "staging" and specs is None
+    evidence = [
+        _evidence_item(
+            spec,
+            release_sha=resolved_release_sha,
+            require_external_environment_metadata=require_external_environment_metadata,
+        )
+        for spec in evidence_specs
+    ]
     missing_or_mismatched = [item.name for item in evidence if not item.ready]
     all_evidence_ready = not missing_or_mismatched
     release_sha_ready = resolved_release_sha is not None

@@ -163,6 +163,10 @@ def test_evidence_pack_creates_zip_with_manifest(tmp_path: Path, monkeypatch) ->
     assert any(item.archive_path.endswith("x-agent-commercial-rc-receipt.json") for item in report.files)
     assert any(item.archive_path.endswith("rc-refresh-release-chain.json") for item in report.files)
     assert any(item.archive_path.endswith("rc-owner-env-template.env") for item in report.files)
+    assert any(item.archive_path.endswith("stage3-owner-evidence-todo-20260618.json") for item in report.files)
+    assert any(item.archive_path.endswith("stage3-owner-evidence-todo-20260618.md") for item in report.files)
+    assert any(item.archive_path.endswith("stage3-owner-quickstart-20260618.json") for item in report.files)
+    assert any(item.archive_path.endswith("stage3-owner-quickstart-20260618.md") for item in report.files)
     assert any(check.name == "evidence_pack_freshness" and check.status == "passed" for check in report.checks)
     assert any(check.name == "evidence_secret_scan" and check.status == "passed" for check in report.checks)
     with zipfile.ZipFile(output) as archive:
@@ -171,6 +175,10 @@ def test_evidence_pack_creates_zip_with_manifest(tmp_path: Path, monkeypatch) ->
         receipt_text = archive.read(receipt_name).decode("utf-8")
     assert any(name.endswith("rc-owner-gate-checklist.md") for name in names)
     assert any(name.endswith("rc-refresh-release-chain.json") for name in names)
+    assert any(name.endswith("stage3-owner-evidence-todo-20260618.json") for name in names)
+    assert any(name.endswith("stage3-owner-evidence-todo-20260618.md") for name in names)
+    assert any(name.endswith("stage3-owner-quickstart-20260618.json") for name in names)
+    assert any(name.endswith("stage3-owner-quickstart-20260618.md") for name in names)
     assert any(name.endswith("x-agent-commercial-rc.zip") for name in names)
     assert "<redacted-local-path>" in receipt_text
     assert str(paths["source_zip"]) not in receipt_text
@@ -261,6 +269,30 @@ def test_evidence_pack_fails_when_required_handoff_file_missing(tmp_path: Path, 
     check = next(item for item in report.checks if item.name == "required_files")
     assert check.status == "failed"
     assert "rc-owner-env-template.env" in json.dumps(check.details)
+
+
+def test_evidence_pack_fails_when_stage3_owner_todo_report_missing(tmp_path: Path, monkeypatch) -> None:
+    paths = _write_pack_fixture(tmp_path, monkeypatch)
+    (tmp_path / ".xagent_runtime" / "reports" / "stage3-owner-evidence-todo-20260618.json").unlink()
+
+    report = build_evidence_pack(receipt_path=paths["receipt"])
+
+    assert report.status == "failed"
+    check = next(item for item in report.checks if item.name == "required_files")
+    assert check.status == "failed"
+    assert "stage3-owner-evidence-todo-20260618.json" in json.dumps(check.details)
+
+
+def test_evidence_pack_fails_when_stage3_owner_quickstart_report_missing(tmp_path: Path, monkeypatch) -> None:
+    paths = _write_pack_fixture(tmp_path, monkeypatch)
+    (tmp_path / ".xagent_runtime" / "reports" / "stage3-owner-quickstart-20260618.md").unlink()
+
+    report = build_evidence_pack(receipt_path=paths["receipt"])
+
+    assert report.status == "failed"
+    check = next(item for item in report.checks if item.name == "required_files")
+    assert check.status == "failed"
+    assert "stage3-owner-quickstart-20260618.md" in json.dumps(check.details)
 
 
 def test_evidence_pack_fails_when_owner_runner_env_file_evidence_missing(tmp_path: Path, monkeypatch) -> None:

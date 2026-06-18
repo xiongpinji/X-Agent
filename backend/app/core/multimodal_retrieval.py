@@ -393,7 +393,7 @@ class MultimodalRetriever:
         """生成缓存键"""
         import hashlib
         key_str = f"{query.query_type}_{query.modality}_{query.top_k}_{query.threshold}"
-        return hashlib.md5(key_str.encode()).hexdigest()
+        return hashlib.md5(key_str.encode(), usedforsecurity=False).hexdigest()
 
 
 class RetrievalEvaluator:

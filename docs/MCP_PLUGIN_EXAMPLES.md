@@ -101,7 +101,7 @@ result = await plugin.create_pull_request(
 
 ```json
 {
-  "github_token": "ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+  "github_token": "gh_example_token_redacted",
   "timeout": 30
 }
 ```

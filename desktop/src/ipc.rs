@@ -1,16 +1,18 @@
-use serde_json::json;
-use tauri::AppHandle;
+use futures::StreamExt;
+use tauri::{AppHandle, Manager};
 
 pub async fn connect_to_backend(app_handle: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
     let config = app_handle.state::<std::sync::Arc<crate::state::AppState>>();
-    let backend_url = format!(
-        "{}:{}",
-        config.config.backend_url, config.config.backend_port
-    );
+    let backend_url = crate::security::build_backend_url(
+        &config.config.backend_url,
+        config.config.backend_port,
+        "/health",
+    )
+    .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidInput, e))?;
 
     // Try to connect to backend
     let client = reqwest::Client::new();
-    match client.get(&format!("{}/health", backend_url)).send().await {
+    match client.get(&backend_url).send().await {
         Ok(response) if response.status().is_success() => {
             config.set_backend_connected(true).await;
             log::info!("Connected to backend at {}", backend_url);
@@ -31,12 +33,12 @@ pub async fn call_backend(
     body: Option<serde_json::Value>,
 ) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
     let config = app_handle.state::<std::sync::Arc<crate::state::AppState>>();
-    let backend_url = format!(
-        "{}:{}",
-        config.config.backend_url, config.config.backend_port
-    );
-
-    let url = format!("{}{}", backend_url, path);
+    let url = crate::security::build_backend_url(
+        &config.config.backend_url,
+        config.config.backend_port,
+        path,
+    )
+    .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidInput, e))?;
     let client = reqwest::Client::new();
 
     let response = match method {
@@ -72,12 +74,12 @@ pub async fn stream_backend(
     body: serde_json::Value,
 ) -> Result<impl futures::Stream<Item = Result<String, Box<dyn std::error::Error>>>, Box<dyn std::error::Error>> {
     let config = app_handle.state::<std::sync::Arc<crate::state::AppState>>();
-    let backend_url = format!(
-        "{}:{}",
-        config.config.backend_url, config.config.backend_port
-    );
-
-    let url = format!("{}{}", backend_url, path);
+    let url = crate::security::build_backend_url(
+        &config.config.backend_url,
+        config.config.backend_port,
+        path,
+    )
+    .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidInput, e))?;
     let client = reqwest::Client::new();
 
     let response = client.post(&url).json(&body).send().await?;

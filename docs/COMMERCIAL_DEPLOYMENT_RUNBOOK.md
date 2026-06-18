@@ -1,42 +1,49 @@
 # X-Agent Commercial RC Deployment Runbook
 
-Last updated: 2026-06-08
+Last updated: 2026-06-18
 
-This runbook is the deployment handoff for the current
-`codex/codex-hermes-gap-closure` release-candidate branch. It turns the broader
-deployment docs into a commercial RC procedure with explicit verification gates.
+> Current status note (2026-06-18): this runbook is for the first-version
+> commercial RC path, not GA. The current delivery ledger is
+> `docs/superpowers/plans/2026-06-18-xagent-commercial-delivery-master-plan.md`.
+> Desktop/Tauri is first-version scope. Browser extension work is deferred and
+> must not be shipped, demoed, or documented as part of the first-version
+> customer delivery. Do not paste secret values into this file; use secret
+> manager references or CI/environment variable names.
+
+This runbook is the deployment handoff for the current commercial RC evidence
+chain. It turns the broader deployment docs into a commercial RC procedure with
+explicit verification gates.
 
 It is not a GA claim and it is not a full Codex/Hermes parity claim. It is a
 commercial pilot/RC deployment path that must still be validated with the
-customer's real provider tokens, channel credentials, and infrastructure.
+customer's real provider configuration, channel credentials, and infrastructure.
 Current commercial RC readiness is machine-report driven, not inferred from any
-historical tag-ready snapshot. For the active non-destructive RC candidate, read
-`.xagent_runtime/reports/rc-delivery-status.json` and rerun the commands in the
-pre-deploy gate below for the selected commit, hosted Actions run, and RC tag.
-At the time of this update, the selected candidate is
-`x-agent-commercial-rc-20260608-5` at
-`5877b0b273a8d4abd1fad1ce501d673c6cd06f32`; current HEAD, remote branch,
-hosted CI, and tag consistency pass. Current local final gate status is
-`ready_with_owner_gates`, and commercial handoff remains
-`owner_finalize_pending` until the owner reruns the Feishu, GitHub issue-to-PR,
-provider, and hosted Actions gates for that exact SHA. Older owner-verified
-snapshots or earlier pushed tags are historical evidence only and must not be
-treated as current commercial handoff proof. This runbook does not claim full
-Codex/Hermes parity.
-When the owner-verified finalization command passes for the same selected commit, hosted Actions run, and RC tag, the final gate reports `ready_for_rc_tag`; rerun `rc_delivery_status.py` immediately after that proof so the handoff report records `commercial_rc_ready` before any tag or deployment claim.
-Current local provider smoke is verified with Ollama at
-`http://127.0.0.1:11435`, model `qwen2.5:1.5b`, after copying the required
-model blobs to the ASCII-only model directory `D:\ollama-models`. The direct
-proof command returned the required sentinel:
-`ollama run qwen2.5:1.5b "Reply with exactly: xagent-rc-ok"`.
-The previous `http://localhost:11434` Ollama instance still reproduces an HTTP
-500 model-load failure because its model blob path is passed to the loader with
-mojibake from the non-ASCII `D:\AI模型库` directory. For Windows local-provider
-release smoke, use an ASCII-only `OLLAMA_MODELS` path, prove `ollama run
-<model>` works, and pass the same `--ollama-base-url` and `--ollama-model` to
-the refresh chain.
-Feishu, GitHub issue-to-PR, and hosted GitHub Actions are owner-controlled
-gates and must remain verified for the exact commit SHA used for RC tagging.
+historical tag-ready snapshot. For the active RC candidate, read the master plan,
+`.xagent_runtime/reports/rc-delivery-status.json`, and the latest RC gate
+reports before making any tag or deployment claim.
+
+Current local owner gates are verified with DeepSeek, Feishu webhook contract
+checks, GitHub issue-to-PR dry-run/execute preflight, and hosted GitHub Actions
+run evidence for RC branch `codex/p0-c-ci-deployment-gates`, hosted Commercial
+RC Gate run `27717463270`, SHA
+`dca6a063e9c21ee5e420d3346c28735b17a92fdf`.
+`python scripts/rc_final_gate.py --require-ready-to-tag` is the current
+machine gate for the owner-verified evidence chain; read the live status from
+`.xagent_runtime/reports/rc-final-gate.json`.
+During evidence refresh, expected interim machine states include `failed` and
+`ready_with_receipt_refresh_required`; only the live JSON report controls the
+current decision.
+
+This does not close final Stage3/production evidence. P0-D2 remains open until
+an owner-controlled real domain points to `111.228.49.160`, HTTPS/443 serves
+`/health` and `/ready` with trusted TLS, and the Stage3 external evidence intake
+records release-bound observability and environment-protection references.
+Temporary HTTP on `http://111.228.49.160:8899` is useful smoke evidence only;
+the `sslip.io` host path is not acceptable commercial evidence on this server.
+
+Older Ollama/local-provider snapshots, earlier pushed tags, and historical
+owner-verified reports are historical evidence only. Do not treat them as
+current commercial handoff proof.
 
 ## 1. Release Scope
 
@@ -137,11 +144,14 @@ Run these from the repository root before packaging or tagging:
 python scripts/codex_hermes_gap_matrix.py --write-report
 python scripts/xagent_doctor.py --json
 python scripts/rc_runtime_smoke.py
-python scripts/rc_owner_verified_finalize.py --provider ollama --ollama-model qwen2.5:1.5b --ollama-base-url http://127.0.0.1:11435 --github-actions-run-url <hosted-commercial-rc-run-url> --github-actions-head-sha <expected-release-commit-sha> --expected-commit-sha <expected-release-commit-sha>
-python scripts/rc_tag_consistency_gate.py --expected-commit-sha <expected-release-commit-sha> --tag-name <selected-rc-tag> --require-match
-python scripts/rc_delivery_status.py --expected-commit-sha <expected-release-commit-sha> --tag-name <selected-rc-tag> --github-actions-run-url <hosted-commercial-rc-run-url> --github-actions-head-sha <expected-release-commit-sha> --fetch-github
+python scripts/rc_external_smoke.py --provider deepseek --check provider --check feishu_webhook_contract --check github_issue_to_pr_dry_run --check github_issue_to_pr_execute_preflight --check hosted_github_actions_run --require-configured --github-execute-preflight --github-actions-preflight --timeout 40
+python scripts/rc_refresh_release_chain.py --provider deepseek --owner-verified --timeout 60
+python scripts/rc_final_gate.py --require-ready-to-tag
+python scripts/rc_release_receipt.py
+python scripts/rc_evidence_pack.py
+python scripts/rc_final_gate.py --require-ready-to-tag
+python scripts/rc_final_gate.py --require-ready-to-tag --require-stage3-rehearsal
 git rev-parse HEAD
-git rev-parse <selected-rc-tag>
 ```
 
 Provider smoke is a sentinel check, not just a connectivity check: the selected
@@ -153,28 +163,16 @@ refresh entrypoint. It runs the dependent RC reports sequentially so downstream
 gates never read a half-written JSON report from an upstream gate. Keep the
 individual `rc_*` scripts available for focused debugging, but do not parallelize
 the release refresh chain.
-`scripts/rc_owner_verified_finalize.py` is the owner-facing finalization
-entrypoint. It wraps the owner-verified refresh chain, summarizes
-`rc_final_gate.py` tag-readiness state, writes
-`.xagent_runtime/reports/rc-owner-verified-finalize.json`, and intentionally
-does not create git tags or store secret values.
-It binds `XAGENT_COMMERCIAL_RC_GITHUB_ACTIONS_HEAD_SHA` to the expected release
-commit SHA, defaulting to `git rev-parse HEAD`; use `--expected-commit-sha`
-only when finalizing a specific checked commit. The hosted Actions run SHA, the
-local release commit, and the RC tag target must all match before handoff.
-For Ollama/local release evidence, pass the exact `--ollama-model` and
-`--ollama-base-url` used for provider smoke so refreshed reports do not
-implicitly fall back to the default model.
 For the final tag-ready refresh, also pass `--owner-verified`; that mode reruns
 the owner-controlled external smoke checks with `--require-configured`,
 `--github-execute-preflight`, and `--github-actions-preflight` so existing
 Feishu, GitHub issue-to-PR, and hosted Actions evidence is not overwritten by a
 non-owner local smoke snapshot.
-`scripts/rc_delivery_status.py` is the read-only handoff summary. It combines
-current HEAD, remote branch, hosted CI metadata, owner finalization evidence,
-and RC tag consistency into `.xagent_runtime/reports/rc-delivery-status.json`.
-Treat `owner_finalize_pending` as a hard stop for commercial handoff until the
-owner-controlled Feishu/GitHub evidence passes for the exact release commit.
+The hosted Actions run SHA, local release commit, and evidence reports must all
+refer to the same selected release commit before handoff. Historical
+`rc_owner_verified_finalize.py`, `rc_delivery_status.py`, and tag-consistency
+reports can be used for focused debugging, but the current first-RC handoff must
+be based on the owner-verified refresh chain above.
 
 The refresh chain uses `--allow-missing-evidence-pack` only for bootstrap
 `rc_final_gate.py` passes that run before the first evidence pack exists. Final final gate remains strict:
@@ -184,6 +182,17 @@ The final gate also treats `rc-refresh-release-chain.json` as a local gate and
 as an evidence-pack freshness input. If the refresh-chain report is regenerated
 after the evidence pack, rerun `rc_release_receipt.py`, `rc_evidence_pack.py`,
 and `rc_final_gate.py --require-ready-to-tag` before handoff.
+For commercial handoff after Stage3 evidence is filled, run
+`python scripts/rc_final_gate.py --require-ready-to-tag --require-stage3-rehearsal`.
+That stricter mode requires
+`.xagent_runtime/reports/stage3-staging-rehearsal-result-20260615.json` to
+report `staging_rehearsal_ready`, `rehearsal_ready=true`, `environment=staging`,
+a release SHA, no `missing_or_mismatched` evidence, no gate side effects, and
+passed rehearsal checks. The rehearsal `release_sha` must match the
+owner-verified hosted GitHub Actions `head_sha`, so an older ready rehearsal
+cannot be reused for a different RC candidate. The ordinary
+`--require-ready-to-tag` command is still useful for owner-gate debugging, but
+it is not the final P0-D2 commercial gate.
 Final-gate fixed-point reports are validators only: they must not relax
 receipt, refresh-chain, owner-gate, secrets, artifact, or source-bundle
 freshness requirements.
@@ -203,8 +212,10 @@ any staging, commit, tag, or deployment.
 Focused debugging entrypoints remain:
 
 ```bash
-python scripts/rc_refresh_release_chain.py --provider ollama --ollama-model qwen2.5:1.5b --ollama-base-url http://127.0.0.1:11435 --owner-verified
+python scripts/rc_external_smoke.py --provider deepseek --check provider --check feishu_webhook_contract --check github_issue_to_pr_dry_run --check github_issue_to_pr_execute_preflight --check hosted_github_actions_run --require-configured --github-execute-preflight --github-actions-preflight --timeout 40
+python scripts/rc_refresh_release_chain.py --provider deepseek --owner-verified --timeout 60
 python scripts/rc_final_gate.py --require-ready-to-tag
+python scripts/rc_final_gate.py --require-ready-to-tag --require-stage3-rehearsal
 python scripts/rc_owner_gate_runner.py --gate all --dry-run --env-file .xagent_runtime/reports/rc-owner-env-template.env
 python scripts/rc_owner_handoff_gate.py
 python scripts/rc_evidence_pack.py
@@ -298,6 +309,120 @@ python scripts/rc_external_smoke.py --require-configured --github-execute-prefli
 For customer-facing web access, place TLS termination and authentication-aware
 routing in front of the API/frontend host. Do not expose PostgreSQL, Redis,
 Qdrant, or Neo4j directly to the public internet.
+
+### 4.1 Stage3 HTTPS Evidence Checklist
+
+P0-D2 cannot be closed from the temporary HTTP smoke endpoint. Use this
+redaction-safe checklist after a real owner-controlled domain exists. Do not
+paste secret values into any command output or evidence file.
+
+What the owner must decide:
+
+- The real domain name, for example `xagent.example.com`, with a DNS A record
+  pointing to `111.228.49.160`.
+- Whether first-RC observability uses real broker, trace, error, metrics, and
+  alert refs, or an explicit owner-approved first-RC observability exception
+  ref.
+- The approval ref and UTC approval timestamp for the exact release SHA.
+
+What Codex/operator tooling can fill after the domain exists:
+
+- `https://<domain>/health` and `https://<domain>/ready` probe refs.
+- Nginx site path, `nginx -t`, reload output, and certificate refs.
+- Running Stage3 image ref/digest and secret variable-name refs.
+- The regenerated Stage3 intake report and final validation command output.
+
+Generate the no-secret owner/operator domain guide before editing DNS or the
+server. This guide writes the exact DNS, Nginx, Certbot, preflight, owner-draft,
+and strict final-gate command sequence without executing any of it:
+
+```powershell
+python scripts/stage3_owner_domain_guide.py `
+  --domain "<REAL_DOMAIN>"
+```
+
+The guide writes `.xagent_runtime/reports/stage3-owner-domain-guide-20260618.json`
+and `.xagent_runtime/reports/stage3-owner-domain-guide-20260618.md`. If the
+domain is a bare IP, localhost, a single-label host, or temporary wildcard DNS
+such as `sslip.io`, the guide is intentionally blocked and will not print
+server commands. When `--release-sha` is omitted, the guide reads the verified
+hosted GitHub Actions `head_sha` from `.xagent_runtime/reports/rc-external-smoke.json`;
+use `--release-sha <40-character-sha>` only when intentionally preparing a
+different owner-verified RC commit.
+
+Run the read-only HTTPS preflight after DNS and TLS are configured:
+
+```powershell
+python scripts/stage3_https_preflight.py `
+  --domain "<REAL_DOMAIN>"
+```
+
+The preflight writes
+`.xagent_runtime/reports/stage3-https-preflight-20260618.json` and
+`.xagent_runtime/reports/stage3-https-preflight-20260618.md`. When the JSON
+report is `stage3_https_preflight_ready`, pass it into the owner draft helper
+with `--https-preflight-report` so the HTTPS endpoint, DNS, TLS, `/health`, and
+`/ready` refs are prefilled. Do not paste secret-bearing logs.
+
+Required evidence fields are listed in the generated owner draft:
+
+```powershell
+python scripts/commercial_stage3_staging_external_evidence_intake.py `
+  --write-owner-draft `
+  --current-head-sha dca6a063e9c21ee5e420d3346c28735b17a92fdf `
+  --release-sha dca6a063e9c21ee5e420d3346c28735b17a92fdf `
+  --domain "<REAL_DOMAIN>" `
+  --https-preflight-report .xagent_runtime\reports\stage3-https-preflight-20260618.json `
+  --owner xiongpinji `
+  --force
+```
+
+The generated Markdown checklist is
+`.xagent_runtime/reports/stage3-staging-external-evidence-owner-draft-20260616.md`.
+Immediately convert the draft into a no-secret owner todo list:
+
+```powershell
+python scripts/stage3_owner_evidence_todo.py
+```
+
+This writes `.xagent_runtime/reports/stage3-owner-evidence-todo-20260618.json`
+and `.xagent_runtime/reports/stage3-owner-evidence-todo-20260618.md`. Use the
+Markdown todo file as the beginner-facing fill list; it does not mutate the
+draft, deploy, dispatch workflows, or record raw secret values.
+
+For a shorter owner/operator checklist, generate the six-step quickstart:
+
+```powershell
+python scripts/stage3_owner_quickstart.py
+```
+
+This writes `.xagent_runtime/reports/stage3-owner-quickstart-20260618.json`
+and `.xagent_runtime/reports/stage3-owner-quickstart-20260618.md`. It is a
+summary only; it does not replace the full todo report and cannot be used as
+Stage3 evidence by itself.
+
+The JSON draft remains blocked while `template_not_external_evidence=true`,
+even when `prefill_refs.https_preflight_applied=true`; change it to `false`
+only after every placeholder has been replaced with a real reference. Keep
+`secret_binding.redaction_confirmed=false` until the file has been reviewed and
+contains only variable names or secret-manager refs, never secret values. Keep
+`deployed_image.not_external_deploy_proof=true` until the image ref/digest comes
+from the running Stage3 environment.
+
+After the draft is filled with real references:
+
+```powershell
+python scripts/commercial_stage3_staging_external_evidence_intake.py `
+  --input-json .xagent_runtime\reports\stage3-staging-external-evidence-owner-draft-20260616.json `
+  --current-head-sha dca6a063e9c21ee5e420d3346c28735b17a92fdf `
+  --release-sha dca6a063e9c21ee5e420d3346c28735b17a92fdf `
+  --force
+```
+
+The command must report `stage3_staging_external_evidence_ready` before P0-D2
+can move forward. HTTP URLs, bare IP addresses, localhost, non-443 HTTPS ports,
+URL credentials, and temporary wildcard DNS such as `sslip.io`, `nip.io`, or
+`xip.io` are intentionally rejected by the intake.
 
 ## 5. Kubernetes Or Helm Deployment
 
@@ -447,17 +572,19 @@ Before enabling an integration for a customer:
   `head_sha_verified=true` before the gate can be treated as verified.
 - `refresh_release_chain_owner_verified`: after provider, Feishu, GitHub
   issue-to-PR, and hosted Actions evidence all pass for the current commit,
-  rerun `python scripts/rc_refresh_release_chain.py --provider ollama
-  --ollama-model qwen2.5:1.5b --ollama-base-url http://127.0.0.1:11435
-  --owner-verified`. This final refresh preserves owner-controlled external
-  evidence and prevents a later mock or skipped local smoke snapshot from being
-  packaged as tag-ready evidence.
+  rerun `python scripts/rc_refresh_release_chain.py --provider deepseek
+  --owner-verified --timeout 60`. This final refresh preserves
+  owner-controlled external evidence and prevents a later mock, local Ollama, or
+  skipped smoke snapshot from being packaged as tag-ready evidence.
 - Skill Curator: keep custom draft roots disabled in production/API-key mode.
 
 ## 9. Residual RC Risks
 
 Keep these items visible in the release report:
 
+- P0-D2 remains open until a real owner-controlled domain points to
+  `111.228.49.160`, trusted HTTPS/443 serves `/health` and `/ready`, and
+  release-bound observability and environment-protection evidence is recorded.
 - GitHub Actions commercial RC workflow has run successfully in GitHub for this
   RC evidence snapshot. The hosted Commercial RC Gate workflow run is recorded
   in `XAGENT_COMMERCIAL_RC_GITHUB_ACTIONS_RUN_URL`, and the exact hosted run

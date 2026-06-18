@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-import ipaddress
 import re
 from typing import Annotated
-from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
@@ -12,6 +10,7 @@ from backend.app.api.errors import api_error
 from backend.app.api.recovery_helpers import build_recovery_context, build_recovery_payload
 from backend.app.core.contracts import ErrorCode
 from backend.app.core.security import Principal
+from backend.app.core.url_safety import is_browser_navigation_url_allowed
 from backend.app.dependencies import enforce_scope, get_current_principal
 from backend.app.services.browser.automation import browser_automation
 
@@ -20,25 +19,8 @@ PrincipalDependency = Annotated[Principal, Depends(get_current_principal)]
 
 
 def _is_url_allowed(url: str) -> bool:
-    """Block SSRF vectors: private IPs, localhost, file protocol, metadata endpoints."""
-    try:
-        parsed = urlparse(url)
-    except Exception:
-        return False
-    if parsed.scheme not in {"http", "https"}:
-        return False
-    hostname = parsed.hostname or ""
-    if hostname.lower() in {"localhost", "127.0.0.1", "::1", "0.0.0.0"}:
-        return False
-    if re.match(r"^169\.254\.", hostname):
-        return False
-    try:
-        addr = ipaddress.ip_address(hostname)
-        if addr.is_private or addr.is_loopback or addr.is_reserved or addr.is_multicast:
-            return False
-    except ValueError:
-        pass
-    return True
+    """Block browser SSRF vectors, including DNS names resolving to local networks."""
+    return is_browser_navigation_url_allowed(url)
 
 
 def _sanitize_screenshot_path(path: str) -> str:
