@@ -76,13 +76,14 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import type { RunSummary } from '../types'
 
-const runs = ref([])
+const runs = ref<RunSummary[]>([])
 const filterStatus = ref('')
 const currentPage = ref(1)
 const pageSize = ref(10)
 const detailsVisible = ref(false)
-const selectedRun = ref(null)
+const selectedRun = ref<RunSummary | null>(null)
 
 const total = computed(() => runs.value.length)
 
@@ -145,12 +146,12 @@ const getStatusType = (status: string) => {
   }
 }
 
-const viewDetails = (run: any) => {
+const viewDetails = (run: RunSummary) => {
   selectedRun.value = run
   detailsVisible.value = true
 }
 
-const deleteRun = async (run: any) => {
+const deleteRun = async (run: RunSummary) => {
   try {
     await ElMessageBox.confirm('确定删除该运行记录吗?', '警告', {
       confirmButtonText: '确定',

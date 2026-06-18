@@ -60,6 +60,8 @@ Observed status:
 - RC final gate: current local owner-gate chain is evaluated by
   `python scripts/rc_final_gate.py --require-ready-to-tag`; read the live
   status from `.xagent_runtime/reports/rc-final-gate.json`.
+  The current final gate status is `ready_with_owner_gates`; RC tagging still
+  requires the owner-controlled gates named in the live report.
   During evidence refresh, expected interim machine states include `failed` and
   `ready_with_receipt_refresh_required`; only the live JSON report controls the
   current decision.

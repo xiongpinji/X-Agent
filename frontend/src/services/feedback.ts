@@ -1,4 +1,5 @@
 import axios, { AxiosInstance } from 'axios'
+import { AUTH_TOKEN_STORAGE_KEY, getAuthHeaders, getStoredAuthToken } from './authHeaders'
 
 export interface Feedback {
   id: string
@@ -73,9 +74,9 @@ class FeedbackService {
   private setupInterceptors() {
     this.client.interceptors.request.use(
       (config) => {
-        const token = localStorage.getItem('auth_token')
-        if (token) {
-          config.headers.Authorization = `Bearer ${token}`
+        const authHeaders = getAuthHeaders()
+        if (authHeaders.Authorization) {
+          config.headers.Authorization = authHeaders.Authorization
         }
         return config
       },
@@ -85,8 +86,8 @@ class FeedbackService {
     this.client.interceptors.response.use(
       (response) => response,
       (error) => {
-        if (error.response?.status === 401) {
-          localStorage.removeItem('auth_token')
+        if (error.response?.status === 401 && getStoredAuthToken()) {
+          localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY)
           window.location.href = '/login'
         }
         return Promise.reject(error)

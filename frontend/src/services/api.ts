@@ -1,4 +1,5 @@
 import axios, { AxiosInstance, AxiosError } from 'axios'
+import { AUTH_TOKEN_STORAGE_KEY, getAuthHeaders, getStoredAuthToken } from './authHeaders'
 
 export interface ApiResponse<T = any> {
   data: T
@@ -185,9 +186,9 @@ class ApiClient {
   private setupInterceptors() {
     this.client.interceptors.request.use(
       (config) => {
-        const token = localStorage.getItem('auth_token')
-        if (token) {
-          config.headers.Authorization = `Bearer ${token}`
+        const authHeaders = getAuthHeaders()
+        if (authHeaders.Authorization) {
+          config.headers.Authorization = authHeaders.Authorization
         }
         return config
       },
@@ -197,8 +198,8 @@ class ApiClient {
     this.client.interceptors.response.use(
       (response) => response,
       (error: AxiosError) => {
-        if (error.response?.status === 401 && localStorage.getItem('auth_token')) {
-          localStorage.removeItem('auth_token')
+        if (error.response?.status === 401 && getStoredAuthToken()) {
+          localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY)
           window.location.href = '/login'
         }
         return Promise.reject(error)

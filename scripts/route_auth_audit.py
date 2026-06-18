@@ -12,17 +12,19 @@ from fastapi.routing import APIRoute
 from backend.app import dependencies
 
 
-AUTH_DEPENDENCY_NAMES = {
-    "get_current_principal",
-    "get_refresh_principal",
-    "get_chat_principal",
-    "get_panda_workbench_principal",
-    "get_skill_curator_principal",
-    "get_workbench_principal",
+AUTH_DEPENDENCY_REFS = {
+    "backend.app.dependencies.get_current_principal",
+    "backend.app.dependencies.get_refresh_principal",
+    "backend.app.api.messages.get_messages_stream_principal",
+    "backend.app.api.skill_curator.get_skill_curator_principal",
+    "backend.app.api.streaming.get_stream_principal",
+    "backend.app.api.workbench.get_workbench_principal",
+    "backend.app.api.workbench_resources_bff.get_panda_workbench_principal",
+    "backend.app.api.workflows.get_chat_principal",
 }
 
-SIGNATURE_DEPENDENCY_NAMES = {
-    "get_channel_router",
+SIGNATURE_DEPENDENCY_REFS = {
+    "backend.app.api.channels.get_channel_router",
 }
 
 PUBLIC_ROUTES = {
@@ -76,6 +78,12 @@ def _call_name(call: Any) -> str:
     return getattr(call, "__name__", f"{type(call).__module__}.{type(call).__qualname__}")
 
 
+def _call_ref(call: Any) -> str:
+    module = getattr(call, "__module__", type(call).__module__)
+    qualname = getattr(call, "__qualname__", getattr(call, "__name__", type(call).__qualname__))
+    return f"{module}.{qualname}"
+
+
 def _dependency_calls(route: APIRoute) -> set[Any]:
     calls: set[Any] = set()
     stack = list(route.dependant.dependencies)
@@ -98,12 +106,12 @@ def _has_auth_dependency(route: APIRoute) -> bool:
     calls = _dependency_calls(route)
     if calls & _auth_dependency_objects():
         return True
-    return bool({_call_name(call) for call in calls} & AUTH_DEPENDENCY_NAMES)
+    return bool({_call_ref(call) for call in calls} & AUTH_DEPENDENCY_REFS)
 
 
 def _has_signature_strategy(route: APIRoute) -> bool:
     calls = _dependency_calls(route)
-    return bool({_call_name(call) for call in calls} & SIGNATURE_DEPENDENCY_NAMES)
+    return bool({_call_ref(call) for call in calls} & SIGNATURE_DEPENDENCY_REFS)
 
 
 def _endpoint_ref(route: APIRoute) -> str:

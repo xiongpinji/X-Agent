@@ -54,8 +54,12 @@ def _read_stream_history(client, params: dict) -> str:
     makes the server return the connect notice + replayed history then end, giving a
     finite body. Returns the SSE text for assertions.
     """
-    request_params = {**params, "replay_only": "true"}
-    response = client.get("/api/v1/messages/stream", params=request_params)
+    token_response = client.post("/api/v1/messages/stream/token", params=params)
+    assert token_response.status_code == 200
+
+    stream_url = token_response.json()["stream_url"]
+    separator = "&" if "?" in stream_url else "?"
+    response = TestClient(app).get(f"{stream_url}{separator}replay_only=true")
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/event-stream")
     return response.text
@@ -117,6 +121,47 @@ def test_messages_stream_replays_history_and_sets_sse_ids() -> None:
     finally:
         _clear_principal_override()
         _clear_event_bus()
+
+
+def test_messages_stream_token_rejects_cross_tenant_or_user_filters() -> None:
+    client = TestClient(app, headers={"x-api-key": "bootstrap"})
+    _set_principal_override()
+
+    try:
+        tenant_response = client.post(
+            "/api/v1/messages/stream/token",
+            params={"tenant_id": "tenant-2", "agent_id": "agent-1", "user_id": "user-1"},
+        )
+        user_response = client.post(
+            "/api/v1/messages/stream/token",
+            params={"tenant_id": "tenant-1", "agent_id": "agent-1", "user_id": "user-2"},
+        )
+
+        assert tenant_response.status_code == 403
+        assert user_response.status_code == 403
+    finally:
+        _clear_principal_override()
+
+
+def test_messages_stream_rejects_cross_tenant_filters_without_signed_token() -> None:
+    client = TestClient(app, headers={"x-api-key": "bootstrap"})
+    _set_principal_override()
+
+    try:
+        response = client.get(
+            "/api/v1/messages/stream",
+            params={
+                "tenant_id": "tenant-2",
+                "agent_id": "agent-1",
+                "user_id": "user-1",
+                "trace_id": "trace-1",
+                "replay_only": "true",
+            },
+        )
+
+        assert response.status_code == 403
+    finally:
+        _clear_principal_override()
 
 
 def test_messages_stream_honors_domain_filters() -> None:

@@ -1,4 +1,5 @@
 import React from "react";
+import { getAuthHeaders } from "../../../services/authHeaders";
 
 export type ToolsDetailPageProps = {
   toolId?: string;
@@ -41,7 +42,7 @@ export function ToolsDetailPage(props: ToolsDetailPageProps) {
     let cancelled = false;
     const load = async () => {
       try {
-        const response = await fetch(`/api/v1/tools-control/detail/${encodeURIComponent(toolId)}`, { method: "GET", headers: { "Content-Type": "application/json" } });
+        const response = await fetch(`/api/v1/tools-control/detail/${encodeURIComponent(toolId)}`, { method: "GET", headers: { "Content-Type": "application/json", ...getAuthHeaders() } });
         if (!response.ok) return;
         const payload = (await response.json()) as ToolsDetailApiResponse;
         if (!cancelled) setApiData(payload);

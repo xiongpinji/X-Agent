@@ -124,6 +124,61 @@ def test_ci_contract_requires_route_auth_audit_gate(tmp_path: Path) -> None:
     assert any(finding.id == "release_gate_commands" for finding in report.findings)
 
 
+def test_ci_contract_requires_frontend_api_contract_gate(tmp_path: Path) -> None:
+    workflow = _copy_workflow(tmp_path)
+    workflow.write_text(
+        workflow.read_text(encoding="utf-8").replace(
+            "python scripts/frontend_api_contract_audit.py --json > .xagent_runtime/reports/frontend-api-contract-audit.json",
+            "",
+        ),
+        encoding="utf-8",
+    )
+
+    report = run_contract(workflow)
+
+    assert report.status == "failed"
+    assert any(finding.id == "release_gate_commands" for finding in report.findings)
+
+
+def test_ci_contract_requires_frontend_auth_client_contract_test(tmp_path: Path) -> None:
+    workflow = _copy_workflow(tmp_path)
+    workflow.write_text(
+        workflow.read_text(encoding="utf-8").replace("tests/test_frontend_auth_client_contract.py", ""),
+        encoding="utf-8",
+    )
+
+    report = run_contract(workflow)
+
+    assert report.status == "failed"
+    assert any(finding.id == "targeted_rc_pytest_group" for finding in report.findings)
+
+
+def test_ci_contract_requires_desktop_first_version_smoke_test(tmp_path: Path) -> None:
+    workflow = _copy_workflow(tmp_path)
+    workflow.write_text(
+        workflow.read_text(encoding="utf-8").replace("tests/test_desktop_first_version_smoke.py", ""),
+        encoding="utf-8",
+    )
+
+    report = run_contract(workflow)
+
+    assert report.status == "failed"
+    assert any(finding.id == "targeted_rc_pytest_group" for finding in report.findings)
+
+
+def test_ci_contract_requires_desktop_first_version_smoke_command(tmp_path: Path) -> None:
+    workflow = _copy_workflow(tmp_path)
+    workflow.write_text(
+        workflow.read_text(encoding="utf-8").replace("python scripts/desktop_first_version_smoke.py --json", ""),
+        encoding="utf-8",
+    )
+
+    report = run_contract(workflow)
+
+    assert report.status == "failed"
+    assert any(finding.id == "release_gate_commands" for finding in report.findings)
+
+
 def test_ci_contract_requires_deployment_hardening_gate(tmp_path: Path) -> None:
     workflow = _copy_workflow(tmp_path)
     workflow.write_text(
@@ -162,6 +217,23 @@ def test_ci_contract_rejects_fail_open_security_gates(tmp_path: Path) -> None:
 
     assert report.status == "failed"
     assert any(finding.id == "no_security_deployment_gate_fail_open" for finding in report.findings)
+
+
+def test_ci_contract_rejects_fail_open_frontend_api_contract_gate(tmp_path: Path) -> None:
+    workflow = _copy_workflow(tmp_path)
+    text = workflow.read_text(encoding="utf-8")
+    workflow.write_text(
+        text.replace(
+            "python scripts/frontend_api_contract_audit.py --json > .xagent_runtime/reports/frontend-api-contract-audit.json",
+            "python scripts/frontend_api_contract_audit.py --json || true",
+        ),
+        encoding="utf-8",
+    )
+
+    report = run_contract(workflow)
+
+    assert report.status == "failed"
+    assert any(finding.id == "no_frontend_api_contract_audit_fail_open" for finding in report.findings)
 
 
 def test_ci_contract_rejects_allow_blocked_production_gate(tmp_path: Path) -> None:

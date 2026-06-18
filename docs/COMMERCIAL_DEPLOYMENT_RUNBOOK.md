@@ -30,6 +30,8 @@ RC Gate run `27717463270`, SHA
 `python scripts/rc_final_gate.py --require-ready-to-tag` is the current
 machine gate for the owner-verified evidence chain; read the live status from
 `.xagent_runtime/reports/rc-final-gate.json`.
+The current final gate status is `ready_with_owner_gates`, so RC tagging still
+requires the owner-controlled gates named in the live report.
 During evidence refresh, expected interim machine states include `failed` and
 `ready_with_receipt_refresh_required`; only the live JSON report controls the
 current decision.

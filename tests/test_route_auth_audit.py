@@ -41,3 +41,19 @@ def test_audit_allows_mounted_route_with_principal_dependency() -> None:
         return {"authenticated": principal.authenticated}
 
     assert audit_routes(test_app, public_routes=set(), signature_routes=set()) == []
+
+
+def test_audit_rejects_same_named_auth_dependency_from_wrong_module() -> None:
+    test_app = FastAPI()
+
+    def get_messages_stream_principal() -> object:
+        return object()
+
+    @test_app.get("/api/v1/private")
+    async def private_route(principal=Depends(get_messages_stream_principal)) -> dict[str, bool]:
+        return {"authenticated": bool(principal)}
+
+    issues = audit_routes(test_app, public_routes=set(), signature_routes=set())
+
+    assert len(issues) == 1
+    assert issues[0].path == "/api/v1/private"

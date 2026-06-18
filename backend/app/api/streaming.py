@@ -17,14 +17,20 @@ import json
 import logging
 from datetime import datetime
 from typing import Annotated, Any, AsyncGenerator
+from urllib.parse import quote
 from uuid import uuid4
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
 
 from backend.app.core.agent import AgentLoop
 from backend.app.core.contracts import RunContext, ErrorCode
 from backend.app.core.security import Principal
+from backend.app.core.stream_tokens import (
+    STREAM_TOKEN_TTL_SECONDS,
+    create_stream_token as create_signed_stream_token,
+    principal_from_stream_token,
+)
 from backend.app.dependencies import enforce_scope, get_agent, get_current_principal, get_run_store, get_trace_store
 
 logger = logging.getLogger(__name__)
@@ -131,6 +137,12 @@ class HeartbeatEvent(BaseModel):
     timestamp: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
     run_id: str
     sequence: int = 0
+
+
+class StreamTokenResponse(BaseModel):
+    """Short-lived signed URL for EventSource clients."""
+    stream_url: str
+    token_expires_in: int = STREAM_TOKEN_TTL_SECONDS
 
 
 class LogEvent(BaseModel):
@@ -280,6 +292,28 @@ def _context_from_principal(principal: Principal) -> RunContext:
     )
 
 
+def get_stream_principal(request: Request, run_id: str, token: str | None = Query(default=None)) -> Principal:
+    principal = principal_from_stream_token(run_id, token)
+    if principal is not None:
+        request.scope["principal"] = principal
+        return principal
+    return get_current_principal(request)
+
+
+@router.get("/stream/health")
+async def stream_health() -> dict[str, Any]:
+    """
+    Get health status of the streaming service.
+
+    Returns:
+        Health status
+    """
+    return {
+        "status": "healthy",
+        "store_stats": event_store.get_stats(),
+    }
+
+
 async def _stream_events(
     run_id: str,
     queue: asyncio.Queue,
@@ -327,8 +361,9 @@ async def _stream_events(
 @router.get("/stream/{run_id}")
 async def subscribe_to_stream(
     run_id: str,
-    principal: PrincipalDependency,
+    principal: Annotated[Principal, Depends(get_stream_principal)],
     since_sequence: int = Query(default=0, ge=0, description="Get events since this sequence number"),
+    replay_only: bool = Query(default=False, description="Return buffered events and close; intended for tests/snapshots."),
 ) -> Any:
     """
     Subscribe to real-time streaming events for an agent run.
@@ -366,6 +401,9 @@ async def subscribe_to_stream(
                 yield f"event: {event.event_type}\n"
                 yield f"data: {event_json}\n\n"
 
+            if replay_only:
+                return
+
             # Stream new events
             async for chunk in _stream_events(run_id, queue):
                 yield chunk
@@ -382,6 +420,20 @@ async def subscribe_to_stream(
             "X-Accel-Buffering": "no",
             "Connection": "keep-alive",
         }
+    )
+
+
+@router.post("/stream/{run_id}/token", response_model=StreamTokenResponse)
+async def create_stream_token(
+    run_id: str,
+    principal: PrincipalDependency,
+) -> StreamTokenResponse:
+    """Create a short-lived signed stream URL for browser EventSource clients."""
+    enforce_scope(principal, "agent:read")
+    token = create_signed_stream_token(stream_id=run_id, principal=principal, scopes=["agent:read"])
+    return StreamTokenResponse(
+        stream_url=f"/api/v1/agent/stream/{quote(run_id, safe='')}?token={token}",
+        token_expires_in=STREAM_TOKEN_TTL_SECONDS,
     )
 
 
@@ -673,19 +725,5 @@ async def get_stream_stats(
         "total_events": len(events),
         "active_connections": connections,
         "event_counts": event_counts,
-        "store_stats": event_store.get_stats(),
-    }
-
-
-@router.get("/stream/health")
-async def stream_health() -> dict[str, Any]:
-    """
-    Get health status of the streaming service.
-
-    Returns:
-        Health status
-    """
-    return {
-        "status": "healthy",
         "store_stats": event_store.get_stats(),
     }

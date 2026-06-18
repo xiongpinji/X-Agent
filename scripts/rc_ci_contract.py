@@ -104,6 +104,7 @@ REQUIRED_CONTAINS: tuple[Requirement, ...] = (
             "scripts/route_auth_audit.py",
             "scripts/security_deployment_gate.py",
             "scripts/production_hardening_gate.py",
+            "scripts/desktop_first_version_smoke.py",
             "scripts/rc_runtime_smoke.py",
             "scripts/rc_external_smoke.py",
             "scripts/rc_release_audit.py",
@@ -128,6 +129,7 @@ REQUIRED_CONTAINS: tuple[Requirement, ...] = (
             "scripts/rc_release_receipt.py",
             "scripts/rc_source_bundle.py",
             "scripts/rc_staging_plan.py",
+            "scripts/frontend_api_contract_audit.py",
         ),
     ),
     Requirement(
@@ -135,6 +137,11 @@ REQUIRED_CONTAINS: tuple[Requirement, ...] = (
         description="Targeted RC pytest group includes all local release-gate tests.",
         tokens=(
             "tests/test_route_auth_audit.py",
+            "tests/test_frontend_api_contract_audit.py",
+            "tests/test_frontend_auth_client_contract.py",
+            "tests/test_rc_first_version_scope.py",
+            "tests/test_desktop_tauri_security.py",
+            "tests/test_desktop_first_version_smoke.py",
             "tests/test_deployment_hardening.py",
             "tests/test_production_hardening_gate.py",
             "tests/test_rc_runtime_smoke.py",
@@ -169,6 +176,7 @@ REQUIRED_CONTAINS: tuple[Requirement, ...] = (
         description="Workflow runs every commercial RC local gate command.",
         tokens=(
             "python scripts/route_auth_audit.py --json",
+            "python scripts/frontend_api_contract_audit.py --json",
             "python scripts/security_deployment_gate.py",
             "python scripts/production_hardening_gate.py",
             "python scripts/rc_refresh_release_chain.py --provider mock",
@@ -178,6 +186,7 @@ REQUIRED_CONTAINS: tuple[Requirement, ...] = (
             "python scripts/rc_delivery_status.py",
             "--tag-name x-agent-commercial-rc-20260608-ci-snapshot",
             "python scripts/rc_runtime_smoke.py",
+            "python scripts/desktop_first_version_smoke.py --json",
             "python scripts/rc_ci_contract.py",
         ),
     ),
@@ -206,6 +215,8 @@ REQUIRED_CONTAINS: tuple[Requirement, ...] = (
         tokens=(
             ".xagent_runtime/reports/codex-hermes-gap-closure.json",
             ".xagent_runtime/reports/route-auth-audit.json",
+            ".xagent_runtime/reports/frontend-api-contract-audit.json",
+            ".xagent_runtime/reports/desktop-first-version-smoke.json",
             ".xagent_runtime/reports/production-hardening-gate.json",
             ".xagent_runtime/reports/rc-external-smoke.json",
             ".xagent_runtime/reports/rc-ci-contract.json",
@@ -267,6 +278,11 @@ FORBIDDEN_CONTAINS: tuple[ForbiddenPattern, ...] = (
         id="no_security_deployment_gate_fail_open",
         description="Deployment security gate must not be allowed to fail open in commercial RC CI.",
         token="python scripts/security_deployment_gate.py || true",
+    ),
+    ForbiddenPattern(
+        id="no_frontend_api_contract_audit_fail_open",
+        description="Frontend API contract audit must not be allowed to fail open in commercial RC CI.",
+        token="python scripts/frontend_api_contract_audit.py --json || true",
     ),
     ForbiddenPattern(
         id="no_production_hardening_gate_allow_blocked",

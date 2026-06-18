@@ -5,6 +5,8 @@
  * Handles authentication, error handling, and request/response serialization.
  */
 
+import { getAuthHeaders } from './authHeaders';
+
 export interface AgentRun {
   run_id: string;
   task: string;
@@ -123,7 +125,7 @@ export class APIClient {
   ): Promise<T> {
     const url = `${this.baseURL}${path}`;
     const timeout = options?.timeout || this.timeout;
-    const headers = { ...this.headers, ...options?.headers };
+    const headers = { ...this.headers, ...getAuthHeaders(), ...options?.headers };
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeout);
@@ -237,7 +239,9 @@ export class APIClient {
 
   async downloadFile(filePath: string): Promise<Blob> {
     const url = `${this.baseURL}/files/download/${encodeURIComponent(filePath)}`;
-    const response = await fetch(url);
+    const response = await fetch(url, {
+      headers: getAuthHeaders(),
+    });
     if (!response.ok) {
       throw new Error(`Failed to download file: ${response.statusText}`);
     }

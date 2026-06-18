@@ -6,6 +6,7 @@
  */
 
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
+import { createAgentStreamUrl } from '../../services/streamUrls';
 
 // ============================================================================
 // Types
@@ -75,8 +76,8 @@ export const RealtimeTaskList: React.FC<RealtimeTaskListProps> = ({
   }, []);
 
   useEffect(() => {
-    const url = `/api/v1/streaming/stream/${encodeURIComponent(runId)}`;
-    const eventSource = new EventSource(url);
+    let eventSource: EventSource | null = null;
+    let cancelled = false;
 
     const handleMessage = (rawEvent: Event) => {
       try {
@@ -88,21 +89,29 @@ export const RealtimeTaskList: React.FC<RealtimeTaskListProps> = ({
       }
     };
 
-    eventSource.addEventListener('task_status', handleMessage);
-    eventSource.addEventListener('message', handleMessage);
+    void createAgentStreamUrl(runId).then((url) => {
+      if (cancelled) return;
+      eventSource = new EventSource(url);
+      eventSource.addEventListener('task_status', handleMessage);
+      eventSource.addEventListener('message', handleMessage);
 
-    eventSource.onerror = () => {
+      eventSource.onerror = () => {
+        setIsConnected(false);
+        setError('Connection lost');
+        eventSource?.close();
+      };
+
+      eventSourceRef.current = eventSource;
+      setIsConnected(true);
+      setError(null);
+    }).catch((error) => {
       setIsConnected(false);
-      setError('Connection lost');
-      eventSource.close();
-    };
-
-    eventSourceRef.current = eventSource;
-    setIsConnected(true);
-    setError(null);
+      setError(error instanceof Error ? error.message : 'Connection lost');
+    });
 
     return () => {
-      eventSource.close();
+      cancelled = true;
+      eventSource?.close();
     };
   }, [runId, handleTaskUpdate]);
 
@@ -232,8 +241,8 @@ export const RealtimeProgressBar: React.FC<RealtimeProgressBarProps> = ({
   const eventSourceRef = useRef<EventSource | null>(null);
 
   useEffect(() => {
-    const url = `/api/v1/streaming/stream/${encodeURIComponent(runId)}`;
-    const eventSource = new EventSource(url);
+    let eventSource: EventSource | null = null;
+    let cancelled = false;
 
     const handleMessage = (rawEvent: Event) => {
       try {
@@ -254,19 +263,26 @@ export const RealtimeProgressBar: React.FC<RealtimeProgressBarProps> = ({
       }
     };
 
-    eventSource.addEventListener('progress', handleMessage);
-    eventSource.addEventListener('message', handleMessage);
+    void createAgentStreamUrl(runId).then((url) => {
+      if (cancelled) return;
+      eventSource = new EventSource(url);
+      eventSource.addEventListener('progress', handleMessage);
+      eventSource.addEventListener('message', handleMessage);
 
-    eventSource.onerror = () => {
+      eventSource.onerror = () => {
+        setIsConnected(false);
+        eventSource?.close();
+      };
+
+      eventSourceRef.current = eventSource;
+      setIsConnected(true);
+    }).catch(() => {
       setIsConnected(false);
-      eventSource.close();
-    };
-
-    eventSourceRef.current = eventSource;
-    setIsConnected(true);
+    });
 
     return () => {
-      eventSource.close();
+      cancelled = true;
+      eventSource?.close();
     };
   }, [runId]);
 
@@ -389,8 +405,8 @@ export const RealtimeLogStream: React.FC<RealtimeLogStreamProps> = ({
   }, [logs, scrollToBottom]);
 
   useEffect(() => {
-    const url = `/api/v1/streaming/stream/${encodeURIComponent(runId)}`;
-    const eventSource = new EventSource(url);
+    let eventSource: EventSource | null = null;
+    let cancelled = false;
 
     const handleMessage = (rawEvent: Event) => {
       try {
@@ -408,20 +424,27 @@ export const RealtimeLogStream: React.FC<RealtimeLogStreamProps> = ({
       }
     };
 
-    eventSource.addEventListener('log', handleMessage);
-    eventSource.addEventListener('error', handleMessage);
-    eventSource.addEventListener('message', handleMessage);
+    void createAgentStreamUrl(runId).then((url) => {
+      if (cancelled) return;
+      eventSource = new EventSource(url);
+      eventSource.addEventListener('log', handleMessage);
+      eventSource.addEventListener('error', handleMessage);
+      eventSource.addEventListener('message', handleMessage);
 
-    eventSource.onerror = () => {
+      eventSource.onerror = () => {
+        setIsConnected(false);
+        eventSource?.close();
+      };
+
+      eventSourceRef.current = eventSource;
+      setIsConnected(true);
+    }).catch(() => {
       setIsConnected(false);
-      eventSource.close();
-    };
-
-    eventSourceRef.current = eventSource;
-    setIsConnected(true);
+    });
 
     return () => {
-      eventSource.close();
+      cancelled = true;
+      eventSource?.close();
     };
   }, [runId, maxLogs]);
 

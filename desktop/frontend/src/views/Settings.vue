@@ -18,11 +18,11 @@
 
       <el-col :xs="24" :md="18">
         <el-card>
-          <!-- 基本设置 -->
+          <template #header>
+            <div class="card-header">{{ activeTabTitle }}</div>
+          </template>
+
           <template v-if="activeTab === 'basic'">
-            <template #header>
-              <div class="card-header">基本设置</div>
-            </template>
             <el-form :model="settings" label-width="120px">
               <el-form-item label="后端地址">
                 <el-input v-model="settings.backend_url" placeholder="http://localhost" />
@@ -49,11 +49,7 @@
             </el-form>
           </template>
 
-          <!-- 高级设置 -->
-          <template v-if="activeTab === 'advanced'">
-            <template #header>
-              <div class="card-header">高级设置</div>
-            </template>
+          <template v-else-if="activeTab === 'advanced'">
             <el-form :model="settings" label-width="120px">
               <el-form-item label="日志级别">
                 <el-select v-model="settings.log_level">
@@ -75,11 +71,7 @@
             </el-form>
           </template>
 
-          <!-- 关于 -->
-          <template v-if="activeTab === 'about'">
-            <template #header>
-              <div class="card-header">关于</div>
-            </template>
+          <template v-else>
             <el-descriptions :column="1" border>
               <el-descriptions-item label="应用名称">X-Agent Desktop</el-descriptions-item>
               <el-descriptions-item label="版本">0.1.0</el-descriptions-item>
@@ -101,12 +93,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { invoke } from '@tauri-apps/api/tauri'
 import { ElMessage } from 'element-plus'
+import type { DesktopSettings } from '../types'
 
 const activeTab = ref('basic')
-const settings = ref({
+const settings = ref<DesktopSettings>({
   backend_url: 'http://localhost',
   backend_port: 8000,
   language: 'zh-CN',
@@ -122,13 +115,17 @@ const menuItems = [
   { key: 'about', label: '关于', icon: 'el-icon-info' }
 ]
 
+const activeTabTitle = computed(() => {
+  return menuItems.find(item => item.key === activeTab.value)?.label ?? '设置'
+})
+
 onMounted(async () => {
   await loadSettings()
 })
 
 const loadSettings = async () => {
   try {
-    const result = await invoke('get_settings')
+    const result = await invoke<DesktopSettings>('get_settings')
     settings.value = result
   } catch (e) {
     ElMessage.error('加载设置失败')

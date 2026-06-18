@@ -15,6 +15,7 @@ from backend.app.main import app
 from backend.app.api.streaming import (
     event_store,
     StreamEventStore,
+    STREAM_TOKEN_TTL_SECONDS,
     MessageEvent,
     ToolCallEvent,
     ToolResultEvent,
@@ -289,6 +290,48 @@ class TestStreamingEndpoints:
         data = response.json()
         assert data["status"] == "healthy"
         assert "store_stats" in data
+
+    def test_create_stream_token_returns_signed_stream_url(self, client, reset_event_store):
+        """Test creating a short-lived EventSource stream URL."""
+        run_id = "test-run-1"
+        response = client.post(f"/api/v1/agent/stream/{run_id}/token")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["token_expires_in"] == STREAM_TOKEN_TTL_SECONDS
+        assert data["stream_url"].startswith(f"/api/v1/agent/stream/{run_id}?token=")
+        assert "Bearer" not in data["stream_url"]
+
+    def test_create_stream_token_encodes_reserved_run_id_characters(self, client, reset_event_store):
+        """Test signed stream URLs keep reserved run_id characters out of the query."""
+        run_id = "run with?reserved&chars"
+        response = client.post("/api/v1/agent/stream/run%20with%3Freserved%26chars/token")
+
+        assert response.status_code == 200
+        stream_url = response.json()["stream_url"]
+        assert stream_url.startswith("/api/v1/agent/stream/run%20with%3Freserved%26chars?token=")
+        assert run_id not in stream_url
+        assert stream_url.count("?token=") == 1
+
+    def test_subscribe_to_stream_accepts_signed_stream_token(self, client, reset_event_store):
+        """Test EventSource clients can authenticate with short-lived stream token."""
+        run_id = "test-run-1"
+        token_response = client.post(f"/api/v1/agent/stream/{run_id}/token")
+        assert token_response.status_code == 200
+
+        event_store.add_event(run_id, MessageEvent(run_id=run_id, content="ready"))
+        stream_url = token_response.json()["stream_url"]
+        response = TestClient(app).get(f"{stream_url}&since_sequence=0&replay_only=true")
+
+        assert response.status_code == 200
+        assert response.headers["content-type"].startswith("text/event-stream")
+        assert "ready" in response.text
+
+    def test_subscribe_to_stream_rejects_bad_signed_stream_token(self, reset_event_store):
+        """Test invalid stream tokens cannot authenticate EventSource subscriptions."""
+        response = TestClient(app).get("/api/v1/agent/stream/test-run-1?token=bad")
+
+        assert response.status_code == 401
 
 
 class TestEventTypes:

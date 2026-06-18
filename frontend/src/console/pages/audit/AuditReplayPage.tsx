@@ -48,7 +48,7 @@ type AuditAlert = {
   level: "low" | "medium" | "high";
   description: string;
   actionLabel: string;
-  actionKey: "execution" | "tools" | "memory" | "organization" | "marketplace";
+  actionKey: "execution" | "tools" | "memory" | "organization";
 };
 
 export function AuditReplayPage(props: AuditReplayPageProps) {
@@ -61,7 +61,6 @@ export function AuditReplayPage(props: AuditReplayPageProps) {
     { title: "工具调用波动", source: "tools", level: "low", description: "近期工具调用量变化明显。", actionLabel: "前往工具中心", actionKey: "tools" },
     { title: "记忆写入审查", source: "memory", level: "low", description: "部分记忆条目需要复核。", actionLabel: "前往记忆中心", actionKey: "memory" },
     { title: "组织权限变更", source: "organization", level: "medium", description: "有待审核的权限调整。", actionLabel: "前往组织权限中心", actionKey: "organization" },
-    { title: "能力市场发布", source: "marketplace", level: "low", description: "能力条目发布与安装同步。", actionLabel: "前往能力市场", actionKey: "marketplace" },
   ];
 
   return (
@@ -257,7 +256,7 @@ function RecoveryPanel({ memory }: { memory: MemorySnapshot }) {
 }
 
 function RelatedSystemsPanel() {
-  const systems = ["运行控制", "工具中心", "记忆中心", "组织权限中心", "能力市场", "全局导航"];
+  const systems = ["运行控制", "工具中心", "记忆中心", "组织权限中心", "全局导航"];
   return (
     <section>
       <h3 className="font-semibold">关联系统</h3>
