@@ -4,7 +4,7 @@
 > 任何一方开始/完成任务前,必须先读本文件更新自己的状态,完成后回写进度。
 > 协作介质:① 文件系统(本文件 + `audit_reports/`);② **双向通讯通道**(B 方案,已端到端验证,见文末「🔗 双向通讯通道」)。
 
-**最后更新**: 2026-06-17 (ZCode)
+**最后更新**: 2026-06-21 (Codex)
 **当前协作阶段**: 安全漏洞修复(基于 `audit_reports/COMPREHENSIVE_AUDIT_20260617.md`)
 
 ---
@@ -61,18 +61,18 @@ python scripts/send_to_zcode.py --subject "<主题>" --body "<正文>" [--task-i
 
 | ID | 任务 | 文件 | 状态 | 验证标准 |
 |---|---|---|---|---|
-| P0-01 | enterprise.py 14 端点加授权 | `backend/app/api/enterprise.py` | 已修复待验证(Codex 019ecfe8) | 见 `audit_reports/FIX_TASKS.md#P0-01` |
+| P0-01 | enterprise.py 14 端点加授权 | `backend/app/api/enterprise.py` | 已修复待验证(Codex 019ecfe8) | `verify_fixes.py P0-01 → 5/0`; `pytest test_enterprise_api_auth.py → 4 passed` |
 | P0-02 | sessions.py 6 端点强制 principal.tenant_id | `backend/app/api/sessions.py` | ✅ 已验证通过(ZCode) | **首次走完整 B 方案协作闭环 2026-06-17**:Codex 核验 `verify_fixes.py P0-02 → 4/0`、`pytest test_sessions_skills_issuepr_auth.py → 17 passed`;ZCode 独立复核 4/0;Codex 报告 msg id `df5fead6-be52-42ff-8057-d6b5152f48ed` |
-| P0-03 | skills_api.py 4 端点强制 principal | `backend/app/api/skills_api.py` | 待领取 | 见 `audit_reports/FIX_TASKS.md#P0-03` |
-| P0-04 | issue_to_pr.py execute 端点加授权 | `backend/app/api/issue_to_pr.py:49` | 待领取 | 见 `audit_reports/FIX_TASKS.md#P0-04` |
+| P0-03 | skills_api.py 4 端点强制 principal | `backend/app/api/skills_api.py` | 已修复待验证(Codex 019ecfe8) | `verify_fixes.py P0-03 → 4/0`; `pytest test_sessions_skills_issuepr_auth.py → 17 passed` |
+| P0-04 | issue_to_pr.py execute 端点加授权 | `backend/app/api/issue_to_pr.py:49` | 已修复待验证(Codex 019ecfe8) | `verify_fixes.py P0-04 → 2/0`; `pytest test_sessions_skills_issuepr_auth.py → 17 passed` |
 | P0-05 | 核实 reset_password 令牌验证 | `backend/app/api/auth.py:431` | ✅ 已验证通过(ZCode) | **非漏洞**:reset_password 有完整双流程+token校验,见 `VERIFICATION_RESULTS.md` |
-| P0-06 | main.py:580 WARNING 改 raise | `backend/app/main.py:580` | 待领取 | 见 `audit_reports/FIX_TASKS.md#P0-06` |
+| P0-06 | main.py:580 WARNING 改 raise | `backend/app/main.py:580` | 已修复待验证(Codex 019ecfe8) | `verify_fixes.py P0-06 → 1/0`; `pytest test_security_fixes.py → 39 passed` |
 
 ### P1 — 一周内
 
 | ID | 任务 | 文件 | 状态 |
 |---|---|---|---|
-| P1-01 | 撤销 4 个被跟踪的 .env 文件 | `.env.{development,production,test,performance}` | 待领取 |
+| P1-01 | 撤销被跟踪的 .env 文件 | `.env.{development,production,test,performance}`、`frontend/.env.production` | 已修复待验证(Codex 019ecfe8) |
 | P1-02 | 加 pre-commit gitleaks 钩子 | `.pre-commit-config.yaml` | 待领取 |
 | P1-03 | 审计 35 个 UNKNOWN 未授权路由 | `enterprise_audit/migration/sso/i18n/...` | 待领取 |
 | P1-04 | saml_sso.py 用 defusedxml + 真签名验证 | `backend/app/core/saml_sso.py` | 待领取 |
