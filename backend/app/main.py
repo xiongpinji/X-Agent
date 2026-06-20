@@ -35,6 +35,7 @@ from backend.app.api.auth import router as auth_router
 from backend.app.api.feishu import router as feishu_router
 from backend.app.api.integrations import router as integrations_router
 from backend.app.api.issue_to_pr import router as issue_to_pr_router
+from backend.app.api.llm_governance import router as llm_governance_router
 from backend.app.api.memory import router as memory_router
 from backend.app.api.messages import router as messages_router
 from backend.app.api.org import router as org_router
@@ -543,6 +544,7 @@ app.include_router(dispatch_router)
 app.include_router(feishu_router)
 app.include_router(integrations_router)
 app.include_router(issue_to_pr_router)
+app.include_router(llm_governance_router)
 app.include_router(memory_router)
 app.include_router(org_router)
 app.include_router(evolution_router)

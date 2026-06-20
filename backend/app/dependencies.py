@@ -15,6 +15,7 @@ from backend.app.core.contracts import ErrorCode
 from backend.app.core.control_modes import ControlModeStore
 from backend.app.core.orchestrator import Orchestrator
 from backend.app.core.embeddings import build_embedding_model
+from backend.app.core.llm.cost_optimizer import CostTracker
 from backend.app.core.llm import build_llm_router
 from backend.app.core.memory import MemorySystem
 from backend.app.core.memory_postgres import PostgresMemorySystem
@@ -147,6 +148,11 @@ def get_desktop_store() -> DesktopAutomationStore:
 def get_tool_execution_store() -> ToolExecutionStore:
     settings = get_settings()
     return ToolExecutionStore(storage_path=settings.tool_execution_store_path)
+
+
+@lru_cache
+def get_llm_cost_tracker() -> CostTracker:
+    return CostTracker()
 
 
 @lru_cache
