@@ -12,10 +12,13 @@ TTS     — edge-tts (免费, 无 API Key, 中文晓晓/云扬等)
 from __future__ import annotations
 
 import asyncio
+import inspect
 import logging
+import os
 import shutil
 import subprocess
 from pathlib import Path
+from typing import Any, Callable
 
 from backend.app.core.creative_studio.media import (
     MediaKind,
@@ -25,6 +28,35 @@ from backend.app.core.creative_studio.media import (
 )
 
 logger = logging.getLogger(__name__)
+
+PostJson = Callable[[str, dict[str, Any], dict[str, str], float], Any]
+
+
+def external_video_api_status() -> dict[str, Any]:
+    """Return redacted external video provider configuration status."""
+    api_url = os.getenv("XAGENT_CREATIVE_VIDEO_API_URL", "")
+    api_key = os.getenv("XAGENT_CREATIVE_VIDEO_API_KEY", "")
+    provider = os.getenv("XAGENT_CREATIVE_VIDEO_PROVIDER", ExternalVideoAPIAdapter.name)
+    model = os.getenv("XAGENT_CREATIVE_VIDEO_MODEL", "")
+    configured = bool(api_url and api_key)
+    return {
+        "provider": provider,
+        "model": model,
+        "configured": configured,
+        "api_url_configured": bool(api_url),
+        "api_key_configured": bool(api_key),
+        "api_key_fingerprint": _fingerprint_secret(api_key),
+        "requires_human_review": True,
+        "provider_api_call_attempted": False,
+    }
+
+
+def _fingerprint_secret(value: str) -> str:
+    if not value:
+        return ""
+    import hashlib
+
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()[:12]
 
 
 # ──────────────────────────────────────────
@@ -126,6 +158,139 @@ class GPTImage2Adapter(MediaProvider):
         except Exception as exc:
             logger.warning("gpt-image-2 failed: %s", exc)
             return MediaResult(success=False, kind=MediaKind.IMAGE, error=str(exc), provider=self.name)
+
+
+# ──────────────────────────────────────────
+# 视频 adapter: external HTTP JSON API
+# 不绑定具体本地模型/ComfyUI。由环境变量配置外部模型 API。
+# ──────────────────────────────────────────
+class ExternalVideoAPIAdapter(MediaProvider):
+    """外部视频模型 API：HTTP JSON 适配器，调用前必须已人工审核。"""
+
+    name = "external-video-api"
+    kind = MediaKind.VIDEO
+    requires_network = True
+
+    def __init__(
+        self,
+        api_url: str | None = None,
+        api_key: str | None = None,
+        provider: str | None = None,
+        model: str | None = None,
+        timeout_seconds: float = 60.0,
+        post_json: PostJson | None = None,
+    ) -> None:
+        self.api_url = api_url if api_url is not None else os.getenv("XAGENT_CREATIVE_VIDEO_API_URL", "")
+        self.api_key = api_key if api_key is not None else os.getenv("XAGENT_CREATIVE_VIDEO_API_KEY", "")
+        self.provider = provider if provider is not None else os.getenv("XAGENT_CREATIVE_VIDEO_PROVIDER", self.name)
+        self.model = model if model is not None else os.getenv("XAGENT_CREATIVE_VIDEO_MODEL", "")
+        self.timeout_seconds = timeout_seconds
+        self._post_json = post_json
+
+    async def available(self) -> bool:
+        return True
+
+    async def generate(self, request: MediaRequest) -> MediaResult:
+        import time
+
+        if not request.params.get("human_review_approved", False):
+            return MediaResult(
+                success=False,
+                kind=MediaKind.VIDEO,
+                provider=self.provider,
+                error="human_review_required_before_video_provider_call",
+                metadata={"provider_api_call_attempted": False},
+            )
+        if not self.api_url or not self.api_key:
+            return MediaResult(
+                success=False,
+                kind=MediaKind.VIDEO,
+                provider=self.provider,
+                error="external_video_api_not_configured",
+                metadata={"provider_api_call_attempted": False},
+            )
+
+        t0 = time.perf_counter()
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "prompt": request.prompt,
+            "model": request.params.get("model") or self.model,
+            "duration_seconds": request.params.get("duration_seconds"),
+            "aspect_ratio": request.params.get("aspect_ratio", "9:16"),
+            "provider": self.provider,
+            "metadata": request.params.get("metadata", {}),
+        }
+        try:
+            data = await self._post(payload, headers)
+            output_url = _first_present(
+                data,
+                ("video_url", "output_url", "url", "download_url", "output"),
+            )
+            job_id = _first_present(data, ("job_id", "id", "request_id"))
+            response_keys = sorted(str(key) for key in data.keys())
+            if not output_url and not job_id:
+                return MediaResult(
+                    success=False,
+                    kind=MediaKind.VIDEO,
+                    provider=self.provider,
+                    error="external_video_api_missing_output_reference",
+                    latency_ms=(time.perf_counter() - t0) * 1000,
+                    metadata={
+                        "provider_api_call_attempted": True,
+                        "response_keys": response_keys,
+                    },
+                )
+            return MediaResult(
+                success=True,
+                kind=MediaKind.VIDEO,
+                output_path=str(output_url or request.output_path or ""),
+                provider=self.provider,
+                latency_ms=(time.perf_counter() - t0) * 1000,
+                metadata={
+                    "provider_api_call_attempted": True,
+                    "job_id": job_id,
+                    "response_keys": response_keys,
+                },
+            )
+        except Exception as exc:
+            logger.warning("external video api failed: %s", type(exc).__name__)
+            return MediaResult(
+                success=False,
+                kind=MediaKind.VIDEO,
+                provider=self.provider,
+                error="external_video_api_request_failed",
+                latency_ms=(time.perf_counter() - t0) * 1000,
+                metadata={"provider_api_call_attempted": True},
+            )
+
+    async def _post(self, payload: dict[str, Any], headers: dict[str, str]) -> dict[str, Any]:
+        if self._post_json is not None:
+            value = self._post_json(self.api_url, payload, headers, self.timeout_seconds)
+            if inspect.isawaitable(value):
+                value = await value
+            return dict(value or {})
+
+        def _request() -> dict[str, Any]:
+            import json
+            import urllib.request
+
+            body = json.dumps(payload).encode("utf-8")
+            req = urllib.request.Request(self.api_url, data=body, headers=headers, method="POST")
+            with urllib.request.urlopen(req, timeout=self.timeout_seconds) as resp:
+                return json.loads(resp.read().decode("utf-8"))
+
+        return await asyncio.to_thread(_request)
+
+
+def _first_present(data: dict[str, Any], keys: tuple[str, ...]) -> Any:
+    for key in keys:
+        value = data.get(key)
+        if value:
+            return value
+    return None
 
 
 # ──────────────────────────────────────────
