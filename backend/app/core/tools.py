@@ -417,6 +417,28 @@ class ToolRegistry:
             self._record_execution(context, record)
             return record
 
+        scope_error = self._required_scope_error(context, tool)
+        if scope_error:
+            denied = ToolPolicyVerdict(
+                allowed=False,
+                requires_approval=False,
+                sandbox_profile="none",
+                reason=scope_error,
+            )
+            record = ToolCallRecord(
+                tool_name=name,
+                success=False,
+                error=scope_error,
+                policy=denied,
+                risk_level=tool.risk_level,
+                latency_ms=self._elapsed_ms(started),
+                arguments_preview=arguments_preview,
+                trace_id=context.trace_id,
+                request_id=context.request_id,
+            )
+            self._record_execution(context, record)
+            return record
+
         validation_error = self._validate_arguments(arguments, tool.parameters_schema)
         if validation_error:
             record = ToolCallRecord(
@@ -904,6 +926,15 @@ class ToolRegistry:
             )
             self._record_execution(context, record)
             return record
+
+    @staticmethod
+    def _required_scope_error(context: RunContext, tool: ToolDefinition) -> str | None:
+        required_scope = (tool.required_scope or "").strip()
+        if not required_scope or required_scope.startswith("tool:"):
+            return None
+        if required_scope in context.permission_scope or "tools:*" in context.permission_scope:
+            return None
+        return f"Missing permission scope {required_scope}."
 
     @staticmethod
     def _elapsed_ms(started: float) -> float:
