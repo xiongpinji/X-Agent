@@ -42,7 +42,7 @@ git diff --check
 Latest local results:
 
 - `python -m py_compile ...`: passed.
-- `tests/test_llm_governance_api.py tests/test_llm_governance_api_gate.py tests/test_llm_router.py tests/test_llm_providers.py tests/test_route_auth_audit.py`: 48 passed.
+- `tests/test_llm_governance_api.py tests/test_llm_governance_api_gate.py tests/test_llm_router.py tests/test_llm_providers.py tests/test_route_auth_audit.py`: 50 passed.
 - `scripts/llm_governance_api_gate.py`: passed and wrote `.xagent_runtime/reports/llm-governance-api-gate.json`, including `auto_completion_rejected_until_costed` and `deepseek_base_url_must_be_official_external_https`.
 - `git diff --check`: passed.
 
