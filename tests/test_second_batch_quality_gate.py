@@ -41,6 +41,7 @@ def test_second_batch_quality_gate_report_json_contract(tmp_path) -> None:
     assert any(item["evidence_type"] == "browser_workspace_verification_gate" for item in payload["capability_reports"])
     assert any(item["evidence_type"] == "provider_health_failover_gate" for item in payload["capability_reports"])
     assert any(item["evidence_type"] == "provider_preflight_api_gate" for item in payload["capability_reports"])
+    assert any(item["evidence_type"] == "second_batch_capability_manifest_gate" for item in payload["capability_reports"])
     assert any(
         item["evidence_type"] == "creative_studio_external_video_api_only_gate"
         for item in payload["capability_reports"]

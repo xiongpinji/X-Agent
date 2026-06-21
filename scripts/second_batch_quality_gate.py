@@ -106,6 +106,7 @@ def build_second_batch_quality_gate_report(root: Path = ROOT) -> QualityGateRepo
         root / ".xagent_runtime/reports/browser-workspace-verification-gate.json",
         root / ".xagent_runtime/reports/provider-health-failover-gate.json",
         root / ".xagent_runtime/reports/provider-preflight-api-gate.json",
+        root / ".xagent_runtime/reports/second-batch-capability-manifest-gate.json",
     ]
     loaded: list[tuple[Path, dict[str, Any]]] = []
     missing: list[str] = []
@@ -183,6 +184,7 @@ def build_second_batch_quality_gate_report(root: Path = ROOT) -> QualityGateRepo
                 "browser_workspace_verification_gate",
                 "provider_health_failover_gate",
                 "provider_preflight_api_gate",
+                "second_batch_capability_manifest_gate",
             }.issubset(evidence_types),
             details={"evidence_types": sorted(str(item) for item in evidence_types)},
             error="second-batch audit pack does not cover the required capability surfaces",
@@ -213,6 +215,7 @@ def build_second_batch_quality_gate_report(root: Path = ROOT) -> QualityGateRepo
             "python scripts/browser_workspace_verification_gate.py",
             "python scripts/provider_health_failover_gate.py",
             "python scripts/provider_preflight_api_gate.py",
+            "python scripts/second_batch_capability_manifest_gate.py",
             "python scripts/second_batch_quality_gate.py",
             *sorted(set(all_next_commands)),
         ],
