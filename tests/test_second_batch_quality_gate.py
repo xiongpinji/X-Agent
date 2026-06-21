@@ -34,6 +34,9 @@ def test_second_batch_quality_gate_report_json_contract(tmp_path) -> None:
     assert len(payload["capability_reports"]) >= 2
     assert any(item["evidence_type"] == "llm_governance_api_gate" for item in payload["capability_reports"])
     assert any(item["evidence_type"] == "rag_governance_api_gate" for item in payload["capability_reports"])
+    assert any(item["evidence_type"] == "agent_dispatch_contract_gate" for item in payload["capability_reports"])
+    assert any(item["evidence_type"] == "browser_workspace_verification_gate" for item in payload["capability_reports"])
+    assert any(item["evidence_type"] == "provider_health_failover_gate" for item in payload["capability_reports"])
     assert any(
         item["evidence_type"] == "creative_studio_external_video_api_only_gate"
         for item in payload["capability_reports"]

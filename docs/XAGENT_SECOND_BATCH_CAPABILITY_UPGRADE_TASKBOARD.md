@@ -11,9 +11,9 @@ Second-batch upgrades target API-first capability expansion for users with unkno
 | B2-P0-01 | External LLM API governance route | Merged and locally verified | Mounted `/api/v1/llm` route with external API-only provider list, completion budget guard, explicit `auto` completion rejection, official external HTTPS base URL enforcement for DeepSeek, in-process cost tracker, audit records, stats endpoint, and dry-run gate report | `python -m pytest tests/test_llm_governance_api.py tests/test_llm_governance_api_gate.py tests/test_llm_router.py tests/test_llm_providers.py tests/test_route_auth_audit.py -q --no-cov`; `python scripts/llm_governance_api_gate.py`; `git diff --check` |
 | B2-P0-02 | Unified quality gate and audit pack | Implemented and locally verified | Standard report schema aggregator for second-batch capability slices: pass status, dry-run flag, mutation flags, release-claim boundary, check counts, failed checks, and replay commands | `python -m pytest tests/test_second_batch_quality_gate.py -q --no-cov`; `python scripts/second_batch_quality_gate.py`; `git diff --check` |
 | B2-P0-03 | API-only RAG and knowledge retrieval | Implemented and locally verified | Mounted `/api/v1/rag` read/query governance route with API-only provider list, local retrieval provider rejection, tenant-scoped mock retrieval, budget guard, audit records, and dry-run gate report | `python -m pytest tests/test_rag_governance_api.py tests/test_rag_governance_api_gate.py -q --no-cov`; `python scripts/rag_governance_api_gate.py`; `python scripts/second_batch_quality_gate.py`; `git diff --check` |
-| B2-P1-01 | Multi-agent workflow dispatcher hardening | Planned | Explicit handoff contracts, timeout/cost controls, retry policy, and fan-in validation | Add workflow contract tests and trace/audit assertions |
-| B2-P1-02 | Browser/workspace verification harness | Planned | Replayable scripts and report artifacts for UI/API workflows; AI-assisted exploration cannot be final proof | Add Playwright/API smoke gate with stored evidence |
-| B2-P1-03 | Provider health and failover evidence | Planned | Provider readiness matrix with redacted config status and no secret exposure | Add provider status tests and redaction checks |
+| B2-P1-01 | Multi-agent workflow dispatcher hardening | Implemented and locally verified | Explicit handoff contracts with timeout/cost controls, bounded retry policy, required handoff artifacts, fan-in, trace, and audit requirements | `python -m pytest tests/test_agent_dispatch_contract_gate.py -q --no-cov`; `python scripts/agent_dispatch_contract_gate.py`; `python scripts/second_batch_quality_gate.py`; `git diff --check` |
+| B2-P1-02 | Browser/workspace verification harness | Implemented and locally verified | Replayable local verification steps and report artifacts for UI/API workflows; AI-assisted exploration is not accepted as final proof | `python -m pytest tests/test_browser_workspace_verification_gate.py -q --no-cov`; `python scripts/browser_workspace_verification_gate.py`; `python scripts/second_batch_quality_gate.py`; `git diff --check` |
+| B2-P1-03 | Provider health and failover evidence | Implemented and locally verified | Provider readiness matrix with API-only/local=false provider entries, redacted credential status, mock fallback, DeepSeek official-host guard, and declared failover paths | `python -m pytest tests/test_provider_health_failover_gate.py -q --no-cov`; `python scripts/provider_health_failover_gate.py`; `python scripts/second_batch_quality_gate.py`; `git diff --check` |
 
 ## B2-P0-01 Acceptance
 
@@ -99,6 +99,82 @@ Latest local results:
 - `python -m py_compile ...`: passed.
 - `tests/test_rag_governance_api.py tests/test_rag_governance_api_gate.py`: 8 passed.
 - `scripts/rag_governance_api_gate.py`: passed and wrote `.xagent_runtime/reports/rag-governance-api-gate.json`.
+
+## B2-P1-01 Acceptance
+
+The dispatcher hardening slice is considered merge-ready when all are true:
+
+- A default second-batch dispatch contract validates successfully.
+- Every handoff has explicit objective, input refs, output artifact requirements, timeout, cost budget, and retry cap.
+- Parallel dispatch requires fan-in validation.
+- Trace and audit requirements are explicit.
+- The local gate does not spawn agents or perform network work.
+
+## B2-P1-01 Current Verification
+
+```text
+python -m py_compile backend\app\core\agent_dispatch_contracts.py scripts\agent_dispatch_contract_gate.py tests\test_agent_dispatch_contract_gate.py
+python -m pytest tests/test_agent_dispatch_contract_gate.py -q --no-cov
+python scripts\agent_dispatch_contract_gate.py
+python scripts\second_batch_quality_gate.py
+git diff --check
+```
+
+Latest local results:
+
+- `tests/test_agent_dispatch_contract_gate.py`: 2 passed.
+- `scripts/agent_dispatch_contract_gate.py`: passed and wrote `.xagent_runtime/reports/agent-dispatch-contract-gate.json`.
+
+## B2-P1-02 Acceptance
+
+The browser/workspace verification harness is considered merge-ready when all are true:
+
+- It defines replayable local commands and evidence paths.
+- It disallows network mutation in every step.
+- It does not treat AI exploration as final proof.
+- Evidence paths are local and can be attached to later browser/UI runs.
+- The local gate does not launch browsers or mutate the workspace.
+
+## B2-P1-02 Current Verification
+
+```text
+python -m py_compile scripts\browser_workspace_verification_gate.py tests\test_browser_workspace_verification_gate.py
+python -m pytest tests/test_browser_workspace_verification_gate.py -q --no-cov
+python scripts\browser_workspace_verification_gate.py
+python scripts\second_batch_quality_gate.py
+git diff --check
+```
+
+Latest local results:
+
+- `tests/test_browser_workspace_verification_gate.py`: 2 passed.
+- `scripts/browser_workspace_verification_gate.py`: passed and wrote `.xagent_runtime/reports/browser-workspace-verification-gate.json`.
+
+## B2-P1-03 Acceptance
+
+The provider health/failover evidence slice is considered merge-ready when all are true:
+
+- Provider matrix entries are API-only and `local=false`.
+- Credential status is redacted and never includes raw secret values.
+- Mock fallback is always available for local verification.
+- DeepSeek declares the official-host-only guard.
+- Failover order is present for each provider entry.
+- The local gate does not call external providers.
+
+## B2-P1-03 Current Verification
+
+```text
+python -m py_compile scripts\provider_health_failover_gate.py tests\test_provider_health_failover_gate.py
+python -m pytest tests/test_provider_health_failover_gate.py -q --no-cov
+python scripts\provider_health_failover_gate.py
+python scripts\second_batch_quality_gate.py
+git diff --check
+```
+
+Latest local results:
+
+- `tests/test_provider_health_failover_gate.py`: 2 passed.
+- `scripts/provider_health_failover_gate.py`: passed and wrote `.xagent_runtime/reports/provider-health-failover-gate.json`.
 
 ## Known Limits
 
