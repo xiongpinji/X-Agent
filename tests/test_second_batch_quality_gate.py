@@ -33,6 +33,7 @@ def test_second_batch_quality_gate_report_json_contract(tmp_path) -> None:
     assert payload["network_mutation_performed"] is False
     assert len(payload["capability_reports"]) >= 2
     assert any(item["evidence_type"] == "llm_governance_api_gate" for item in payload["capability_reports"])
+    assert any(item["evidence_type"] == "rag_governance_api_gate" for item in payload["capability_reports"])
     assert any(
         item["evidence_type"] == "creative_studio_external_video_api_only_gate"
         for item in payload["capability_reports"]

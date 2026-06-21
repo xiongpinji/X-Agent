@@ -85,6 +85,7 @@ def build_second_batch_quality_gate_report(root: Path = ROOT) -> QualityGateRepo
     report_paths = [
         root / ".xagent_runtime/reports/creative-studio-external-video-gate.json",
         root / ".xagent_runtime/reports/llm-governance-api-gate.json",
+        root / ".xagent_runtime/reports/rag-governance-api-gate.json",
     ]
     loaded: list[tuple[Path, dict[str, Any]]] = []
     missing: list[str] = []
@@ -148,6 +149,7 @@ def build_second_batch_quality_gate_report(root: Path = ROOT) -> QualityGateRepo
             {
                 "creative_studio_external_video_api_only_gate",
                 "llm_governance_api_gate",
+                "rag_governance_api_gate",
             }.issubset(evidence_types),
             details={"evidence_types": sorted(str(item) for item in evidence_types)},
             error="second-batch audit pack does not cover the required capability surfaces",

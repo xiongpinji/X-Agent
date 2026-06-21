@@ -39,6 +39,7 @@ from backend.app.api.llm_governance import router as llm_governance_router
 from backend.app.api.memory import router as memory_router
 from backend.app.api.messages import router as messages_router
 from backend.app.api.org import router as org_router
+from backend.app.api.rag_governance import router as rag_governance_router
 from backend.app.api.evolution import router as evolution_router
 from backend.app.api.migration import router as migration_router
 from backend.app.api.workbench import router as workbench_router
@@ -547,6 +548,7 @@ app.include_router(issue_to_pr_router)
 app.include_router(llm_governance_router)
 app.include_router(memory_router)
 app.include_router(org_router)
+app.include_router(rag_governance_router)
 app.include_router(evolution_router)
 app.include_router(migration_router)
 app.include_router(planning_router)
