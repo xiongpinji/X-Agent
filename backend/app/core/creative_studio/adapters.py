@@ -26,10 +26,12 @@ from backend.app.core.creative_studio.media import (
     MediaRequest,
     MediaResult,
 )
+from backend.app.core.url_safety import external_https_url_error_reason
 
 logger = logging.getLogger(__name__)
 
 PostJson = Callable[[str, dict[str, Any], dict[str, str], float], Any]
+LOCAL_VIDEO_PROVIDER_NAMES = {"comfyui", "local", "localhost", "ollama"}
 
 
 def external_video_api_status() -> dict[str, Any]:
@@ -38,13 +40,17 @@ def external_video_api_status() -> dict[str, Any]:
     api_key = os.getenv("XAGENT_CREATIVE_VIDEO_API_KEY", "")
     provider = os.getenv("XAGENT_CREATIVE_VIDEO_PROVIDER", ExternalVideoAPIAdapter.name)
     model = os.getenv("XAGENT_CREATIVE_VIDEO_MODEL", "")
-    configured = bool(api_url and api_key)
+    safety_error = external_video_api_error_reason(api_url=api_url, provider=provider)
+    configured = bool(api_url and api_key and safety_error is None)
     return {
         "provider": provider,
         "model": model,
         "configured": configured,
         "api_url_configured": bool(api_url),
         "api_key_configured": bool(api_key),
+        "api_url_external_https": bool(api_url and safety_error is None),
+        "local_provider_blocked": safety_error == "provider must not be local",
+        "configuration_error": safety_error or "",
         "api_key_fingerprint": _fingerprint_secret(api_key),
         "requires_human_review": True,
         "provider_api_call_attempted": False,
@@ -57,6 +63,12 @@ def _fingerprint_secret(value: str) -> str:
     import hashlib
 
     return hashlib.sha256(value.encode("utf-8")).hexdigest()[:12]
+
+
+def external_video_api_error_reason(*, api_url: str, provider: str) -> str | None:
+    if provider.strip().lower() in LOCAL_VIDEO_PROVIDER_NAMES:
+        return "provider must not be local"
+    return external_https_url_error_reason(api_url)
 
 
 # ──────────────────────────────────────────
@@ -208,6 +220,15 @@ class ExternalVideoAPIAdapter(MediaProvider):
                 provider=self.provider,
                 error="external_video_api_not_configured",
                 metadata={"provider_api_call_attempted": False},
+            )
+        safety_error = external_video_api_error_reason(api_url=self.api_url, provider=self.provider)
+        if safety_error is not None:
+            return MediaResult(
+                success=False,
+                kind=MediaKind.VIDEO,
+                provider=self.provider,
+                error="external_video_api_url_rejected",
+                metadata={"provider_api_call_attempted": False, "reason": safety_error},
             )
 
         t0 = time.perf_counter()

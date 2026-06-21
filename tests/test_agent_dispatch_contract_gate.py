@@ -26,5 +26,6 @@ def test_agent_dispatch_contract_gate_json_contract(tmp_path) -> None:
     assert payload["status"] == "passed"
     assert payload["evidence_type"] == "agent_dispatch_contract_gate"
     assert payload["dry_run"] is True
+    assert payload["git_sha"]
     assert payload["network_mutation_performed"] is False
     assert any(check["name"] == "fan_in_trace_and_audit_required" for check in payload["checks"])

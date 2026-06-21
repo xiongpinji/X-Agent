@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import subprocess
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -19,6 +20,7 @@ SENSITIVE_ENV_KEYS = {
     "XAGENT_OPENAI_API_KEY",
     "XAGENT_DEEPSEEK_API_KEY",
     "XAGENT_TAVILY_API_KEY",
+    "XAGENT_CREATIVE_VIDEO_API_KEY",
 }
 
 
@@ -39,6 +41,7 @@ class GateReport:
     mutation_performed: bool
     network_mutation_performed: bool
     full_release_claimed: bool
+    git_sha: str
     provider_matrix: list[dict[str, Any]]
     checks: list[GateCheck]
     known_limits: list[str]
@@ -52,6 +55,18 @@ class GateReport:
 
 def _utc_now() -> str:
     return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def _current_git_sha(root: Path = ROOT) -> str:
+    try:
+        return subprocess.check_output(
+            ["git", "rev-parse", "HEAD"],
+            cwd=root,
+            text=True,
+            stderr=subprocess.DEVNULL,
+        ).strip()
+    except Exception:
+        return "unknown"
 
 
 def _check(name: str, ok: bool, *, details: dict[str, Any] | None = None, error: str) -> GateCheck:
@@ -90,6 +105,16 @@ def _provider_matrix() -> list[dict[str, Any]]:
             "api_only": True,
             "local": False,
             "failover_order": ["mock"],
+            "secret_value": "<redacted>",
+        },
+        {
+            "capability": "creative-video",
+            "provider": os.environ.get("XAGENT_CREATIVE_VIDEO_PROVIDER", "external-video-api"),
+            "configured": _configured("XAGENT_CREATIVE_VIDEO_API_KEY") and _configured("XAGENT_CREATIVE_VIDEO_API_URL"),
+            "api_only": True,
+            "local": False,
+            "external_https_required": True,
+            "failover_order": ["dry-run"],
             "secret_value": "<redacted>",
         },
         {
@@ -134,6 +159,11 @@ def build_provider_health_failover_gate_report() -> GateReport:
             any(item["provider"] == "deepseek" and item.get("official_host_only") is True for item in matrix),
             error="deepseek provider does not declare official-host-only guard",
         ),
+        _check(
+            "creative_video_provider_is_covered",
+            any(item["capability"] == "creative-video" and item.get("external_https_required") is True for item in matrix),
+            error="provider matrix does not cover the creative video external provider",
+        ),
     ]
     failed = [check for check in checks if check.status == "failed"]
     return GateReport(
@@ -144,6 +174,7 @@ def build_provider_health_failover_gate_report() -> GateReport:
         mutation_performed=False,
         network_mutation_performed=False,
         full_release_claimed=False,
+        git_sha=_current_git_sha(),
         provider_matrix=matrix,
         checks=checks,
         known_limits=[

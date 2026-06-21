@@ -7,6 +7,7 @@ import argparse
 import asyncio
 import json
 import os
+import subprocess
 import sys
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
@@ -50,6 +51,7 @@ class GateReport:
     mutation_performed: bool
     network_mutation_performed: bool
     full_release_claimed: bool
+    git_sha: str
     checks: list[GateCheck]
     known_limits: list[str]
     next_commands: list[str]
@@ -62,6 +64,18 @@ class GateReport:
 
 def _utc_now() -> str:
     return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def _current_git_sha(root: Path = ROOT) -> str:
+    try:
+        return subprocess.check_output(
+            ["git", "rev-parse", "HEAD"],
+            cwd=root,
+            text=True,
+            stderr=subprocess.DEVNULL,
+        ).strip()
+    except Exception:
+        return "unknown"
 
 
 def _principal(scopes: list[str] | None = None) -> Principal:
@@ -81,6 +95,9 @@ def _check(name: str, ok: bool, *, details: dict[str, Any] | None = None, error:
 
 
 async def build_llm_governance_gate_report(root: Path = ROOT) -> GateReport:
+    old_mock_enabled = os.environ.get("XAGENT_ENABLE_API_MOCK_PROVIDER")
+    os.environ["XAGENT_ENABLE_API_MOCK_PROVIDER"] = "true"
+    get_settings.cache_clear()
     api_source = (root / "backend/app/api/llm_governance.py").read_text(encoding="utf-8")
     main_source = (root / "backend/app/main.py").read_text(encoding="utf-8")
     dependencies_source = (root / "backend/app/dependencies.py").read_text(encoding="utf-8")
@@ -195,6 +212,17 @@ async def build_llm_governance_gate_report(root: Path = ROOT) -> GateReport:
             error="provider surface exposes local model providers or misses external provider contract",
         ),
         _check(
+            "mock_provider_is_verification_only",
+            any(
+                item["provider"] == "mock"
+                and item.get("verification_only") is True
+                and item.get("configured") is True
+                for item in providers["providers"]
+            )
+            and "Mock LLM provider is reserved for deterministic verification" in api_source,
+            error="mock provider can be mistaken for a default production provider",
+        ),
+        _check(
             "completion_requires_agent_run",
             'enforce_scope(principal, "agent:run")' in api_source,
             error="/complete does not enforce agent:run",
@@ -264,7 +292,7 @@ async def build_llm_governance_gate_report(root: Path = ROOT) -> GateReport:
     ]
 
     failed = [check for check in checks if check.status == "failed"]
-    return GateReport(
+    report = GateReport(
         status="passed" if not failed else "failed",
         generated_at=_utc_now(),
         evidence_type="llm_governance_api_gate",
@@ -272,10 +300,11 @@ async def build_llm_governance_gate_report(root: Path = ROOT) -> GateReport:
         mutation_performed=False,
         network_mutation_performed=False,
         full_release_claimed=False,
+        git_sha=_current_git_sha(root),
         checks=checks,
         known_limits=[
             "Cost tracking is process-local in this slice and is not billing truth.",
-            "This gate uses the mock provider and does not perform real OpenAI or DeepSeek calls.",
+            "This gate explicitly enables the verification-only mock provider and does not perform real OpenAI or DeepSeek calls.",
             "Fine-grained llm:* scopes are deferred; this slice reuses agent:run and audit:read.",
         ],
         next_commands=[
@@ -284,6 +313,12 @@ async def build_llm_governance_gate_report(root: Path = ROOT) -> GateReport:
             "git diff --check",
         ],
     )
+    if old_mock_enabled is None:
+        os.environ.pop("XAGENT_ENABLE_API_MOCK_PROVIDER", None)
+    else:
+        os.environ["XAGENT_ENABLE_API_MOCK_PROVIDER"] = old_mock_enabled
+    get_settings.cache_clear()
+    return report
 
 
 def write_report(report: GateReport, output_path: Path = DEFAULT_OUTPUT) -> None:

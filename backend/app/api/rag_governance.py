@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import asyncio
+import json
 from typing import Annotated, Literal
+from urllib import request as urllib_request
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
@@ -9,7 +12,9 @@ from backend.app.api.errors import XAgentAPIError, api_error
 from backend.app.core.audit import AuditStore
 from backend.app.core.contracts import ErrorCode
 from backend.app.core.security import Principal
+from backend.app.core.url_safety import external_https_url_error_reason
 from backend.app.dependencies import enforce_scope, get_audit_store, get_current_principal
+from backend.app.settings import get_settings
 
 router = APIRouter(prefix="/api/v1/rag", tags=["rag-governance"])
 
@@ -18,6 +23,8 @@ AuditStoreDependency = Annotated[AuditStore, Depends(get_audit_store)]
 
 SUPPORTED_PROVIDERS = {"openai-search", "tavily", "mock"}
 LOCAL_PROVIDER_NAMES = {"local", "qdrant", "chroma", "pgvector", "ollama", "comfyui", "localhost"}
+OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses"
+TAVILY_SEARCH_URL = "https://api.tavily.com/search"
 MOCK_DOCUMENTS = [
     {
         "document_id": "tenant-1-policy",
@@ -106,6 +113,17 @@ def _budget_guard(request: RAGQueryRequest, *, provider: str, estimated_cost_usd
         )
 
 
+def _provider_configured(provider: str) -> bool:
+    settings = get_settings()
+    if provider == "mock":
+        return True
+    if provider == "openai-search":
+        return bool(settings.openai_api_key)
+    if provider == "tavily":
+        return bool(settings.tavily_api_key)
+    return False
+
+
 def _record_audit(
     audit_store: AuditStore,
     principal: Principal,
@@ -162,14 +180,148 @@ def _mock_retrieve(request: RAGQueryRequest, principal: Principal) -> list[RAGDo
     return results[: min(request.top_k, request.max_results)]
 
 
+async def _external_retrieve(provider: str, request: RAGQueryRequest, principal: Principal) -> list[RAGDocument]:
+    tenant_scope = request.tenant_scope or principal.tenant_id
+    if tenant_scope != principal.tenant_id:
+        raise api_error(
+            403,
+            ErrorCode.AUTHORIZATION_FAILED,
+            "RAG tenant scope does not match the authenticated tenant.",
+            details={"tenant_scope": tenant_scope},
+        )
+    if provider == "tavily":
+        return await _tavily_retrieve(request, principal)
+    if provider == "openai-search":
+        return await _openai_search_retrieve(request, principal)
+    raise api_error(
+        400,
+        ErrorCode.VALIDATION_ERROR,
+        "Unsupported RAG provider.",
+        details={"provider": provider, "supported_providers": sorted(SUPPORTED_PROVIDERS)},
+    )
+
+
+async def _tavily_retrieve(request: RAGQueryRequest, principal: Principal) -> list[RAGDocument]:
+    settings = get_settings()
+    payload = {
+        "query": request.query,
+        "search_depth": "basic",
+        "include_answer": False,
+        "include_raw_content": False,
+        "max_results": min(request.top_k, request.max_results),
+    }
+    data = await _post_external_json(
+        TAVILY_SEARCH_URL,
+        payload,
+        {
+            "Authorization": f"Bearer {settings.tavily_api_key}",
+            "Content-Type": "application/json",
+        },
+    )
+    results = data.get("results") if isinstance(data, dict) else []
+    documents: list[RAGDocument] = []
+    for index, item in enumerate(results if isinstance(results, list) else []):
+        if not isinstance(item, dict):
+            continue
+        title = str(item.get("title") or item.get("url") or f"Tavily result {index + 1}")
+        source_url = str(item.get("url") or "")
+        snippet = str(item.get("content") or item.get("snippet") or "")
+        score = float(item.get("score") or max(0.0, 0.9 - index * 0.05))
+        if not source_url:
+            continue
+        documents.append(
+            RAGDocument(
+                document_id=f"tavily-{index + 1}",
+                title=title,
+                snippet=snippet[:1000],
+                source_url=source_url,
+                score=score,
+                tenant_id=principal.tenant_id,
+            )
+        )
+    return documents[: min(request.top_k, request.max_results)]
+
+
+async def _openai_search_retrieve(request: RAGQueryRequest, principal: Principal) -> list[RAGDocument]:
+    settings = get_settings()
+    payload = {
+        "model": settings.openai_model,
+        "input": request.query,
+        "tools": [{"type": "web_search"}],
+    }
+    data = await _post_external_json(
+        OPENAI_RESPONSES_URL,
+        payload,
+        {
+            "Authorization": f"Bearer {settings.openai_api_key}",
+            "Content-Type": "application/json",
+        },
+    )
+    text = str(data.get("output_text") or _extract_openai_output_text(data) or "")
+    return [
+        RAGDocument(
+            document_id=str(data.get("id") or "openai-search-result"),
+            title="OpenAI web search context",
+            snippet=text[:1000],
+            source_url="https://api.openai.com/v1/responses",
+            score=0.75,
+            tenant_id=principal.tenant_id,
+        )
+    ] if text else []
+
+
+def _extract_openai_output_text(data: dict[str, object]) -> str:
+    output = data.get("output")
+    parts: list[str] = []
+    for item in output if isinstance(output, list) else []:
+        if not isinstance(item, dict):
+            continue
+        content = item.get("content")
+        for content_item in content if isinstance(content, list) else []:
+            if isinstance(content_item, dict) and isinstance(content_item.get("text"), str):
+                parts.append(content_item["text"])
+    return "\n".join(parts)
+
+
+async def _post_external_json(url: str, payload: dict[str, object], headers: dict[str, str]) -> dict[str, object]:
+    error = external_https_url_error_reason(url)
+    if error is not None:
+        raise api_error(
+            400,
+            ErrorCode.VALIDATION_ERROR,
+            "External RAG provider URL must be an external HTTPS endpoint.",
+            details={"reason": error},
+        )
+
+    def _request() -> dict[str, object]:
+        body = json.dumps(payload).encode("utf-8")
+        req = urllib_request.Request(url, data=body, headers=headers, method="POST")
+        with urllib_request.urlopen(req, timeout=30.0) as response:
+            return dict(json.loads(response.read().decode("utf-8")) or {})
+
+    return await asyncio.to_thread(_request)
+
+
 @router.get("/providers")
 async def list_rag_providers(principal: PrincipalDependency) -> dict[str, object]:
     enforce_scope(principal, "memory:read")
     return {
         "providers": [
-            {"provider": "openai-search", "api_only": True, "local": False, "configured": False},
-            {"provider": "tavily", "api_only": True, "local": False, "configured": False},
-            {"provider": "mock", "api_only": True, "local": False, "configured": True},
+            {
+                "provider": "openai-search",
+                "api_only": True,
+                "local": False,
+                "configured": _provider_configured("openai-search"),
+                "endpoint": "https://api.openai.com/v1/responses",
+            },
+            {
+                "provider": "tavily",
+                "api_only": True,
+                "local": False,
+                "configured": _provider_configured("tavily"),
+                "endpoint": "https://api.tavily.com/search",
+            },
+            {"provider": "mock", "api_only": True, "local": False, "configured": True, "verification_only": True},
         ],
         "local_providers_blocked": sorted(LOCAL_PROVIDER_NAMES),
         "default_provider": "mock",
@@ -209,7 +361,7 @@ async def query_rag(
         )
         raise
 
-    if provider != "mock":
+    if not _provider_configured(provider):
         _record_audit(
             audit_store,
             principal,
@@ -225,7 +377,7 @@ async def query_rag(
         )
 
     try:
-        results = _mock_retrieve(request, principal)
+        results = _mock_retrieve(request, principal) if provider == "mock" else await _external_retrieve(provider, request, principal)
     except XAgentAPIError:
         _record_audit(
             audit_store,
@@ -235,6 +387,20 @@ async def query_rag(
             error_code="tenant_scope_rejected",
         )
         raise
+    except Exception:
+        _record_audit(
+            audit_store,
+            principal,
+            provider=provider,
+            outcome="failure",
+            error_code="provider_request_failed",
+        )
+        raise api_error(
+            502,
+            ErrorCode.INTERNAL_ERROR,
+            "RAG provider request failed.",
+            details={"provider": provider},
+        )
     _record_audit(
         audit_store,
         principal,

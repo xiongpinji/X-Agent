@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import subprocess
 import sys
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
@@ -33,6 +34,7 @@ class QualityGateReport:
     mutation_performed: bool
     network_mutation_performed: bool
     full_release_claimed: bool
+    git_sha: str
     capability_reports: list[dict[str, Any]]
     checks: list[QualityGateCheck]
     known_limits: list[str]
@@ -46,6 +48,18 @@ class QualityGateReport:
 
 def _utc_now() -> str:
     return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def _current_git_sha(root: Path = ROOT) -> str:
+    try:
+        return subprocess.check_output(
+            ["git", "rev-parse", "HEAD"],
+            cwd=root,
+            text=True,
+            stderr=subprocess.DEVNULL,
+        ).strip()
+    except Exception:
+        return "unknown"
 
 
 def _check(name: str, ok: bool, *, details: dict[str, Any] | None = None, error: str) -> QualityGateCheck:
@@ -71,6 +85,7 @@ def _report_summary(path: Path, payload: dict[str, Any]) -> dict[str, Any]:
         "mutation_performed": payload.get("mutation_performed"),
         "network_mutation_performed": payload.get("network_mutation_performed"),
         "full_release_claimed": payload.get("full_release_claimed"),
+        "git_sha": payload.get("git_sha"),
         "check_count": len(checks),
         "failed_checks": [
             item.get("name")
@@ -82,6 +97,7 @@ def _report_summary(path: Path, payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def build_second_batch_quality_gate_report(root: Path = ROOT) -> QualityGateReport:
+    current_git_sha = _current_git_sha(root)
     report_paths = [
         root / ".xagent_runtime/reports/creative-studio-external-video-gate.json",
         root / ".xagent_runtime/reports/llm-governance-api-gate.json",
@@ -148,6 +164,15 @@ def build_second_batch_quality_gate_report(root: Path = ROOT) -> QualityGateRepo
             error="one or more reports are missing replay commands",
         ),
         _check(
+            "capability_reports_match_current_git_sha",
+            bool(loaded) and all(summary["git_sha"] == current_git_sha for summary in summaries),
+            details={
+                "current_git_sha": current_git_sha,
+                "report_shas": {summary["path"]: summary["git_sha"] for summary in summaries},
+            },
+            error="one or more reports were generated from a different git revision",
+        ),
+        _check(
             "required_capability_surfaces_covered",
             {
                 "creative_studio_external_video_api_only_gate",
@@ -170,6 +195,7 @@ def build_second_batch_quality_gate_report(root: Path = ROOT) -> QualityGateRepo
         mutation_performed=False,
         network_mutation_performed=False,
         full_release_claimed=False,
+        git_sha=current_git_sha,
         capability_reports=summaries,
         checks=checks,
         known_limits=[

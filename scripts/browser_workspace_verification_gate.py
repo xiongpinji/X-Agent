@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import subprocess
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -41,6 +42,7 @@ class GateReport:
     mutation_performed: bool
     network_mutation_performed: bool
     full_release_claimed: bool
+    git_sha: str
     replay_steps: list[dict[str, Any]]
     checks: list[GateCheck]
     known_limits: list[str]
@@ -54,6 +56,18 @@ class GateReport:
 
 def _utc_now() -> str:
     return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def _current_git_sha(root: Path = ROOT) -> str:
+    try:
+        return subprocess.check_output(
+            ["git", "rev-parse", "HEAD"],
+            cwd=root,
+            text=True,
+            stderr=subprocess.DEVNULL,
+        ).strip()
+    except Exception:
+        return "unknown"
 
 
 def _check(name: str, ok: bool, *, details: dict[str, Any] | None = None, error: str) -> GateCheck:
@@ -70,12 +84,12 @@ def _default_steps() -> list[VerificationStep]:
         VerificationStep(
             step_id="frontend_contracts",
             command="cd frontend && npm run verify:creative-studio:contracts && npm run type-check",
-            evidence_path="frontend/dist",
+            evidence_path=".xagent_runtime/reports/second-batch-quality-gate.json",
         ),
         VerificationStep(
-            step_id="optional_browser_smoke",
-            command="cd frontend && npm run build",
-            evidence_path="frontend/dist/index.html",
+            step_id="desktop_frontend_typecheck",
+            command="cd desktop/frontend && npm run type-check",
+            evidence_path="desktop/frontend/tsconfig.json",
             requires_browser=False,
         ),
     ]
@@ -121,11 +135,13 @@ def build_browser_workspace_verification_gate_report() -> GateReport:
         mutation_performed=False,
         network_mutation_performed=False,
         full_release_claimed=False,
+        git_sha=_current_git_sha(),
         replay_steps=step_payload,
         checks=checks,
         known_limits=[
             "This harness defines replayable local verification steps; it does not launch a browser by itself.",
             "Visual/browser execution should attach screenshots or traces in a later run when a UI server is active.",
+            "Build commands that write dist artifacts are intentionally outside this dry-run no-mutation report.",
         ],
         next_commands=[
             "python scripts/browser_workspace_verification_gate.py",

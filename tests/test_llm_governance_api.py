@@ -65,6 +65,38 @@ def test_llm_providers_reports_api_only_external_surface(monkeypatch) -> None:
     assert "ollama" in data["local_providers_blocked"]
     assert all(provider["api_only"] for provider in data["providers"])
     assert all(provider["local"] is False for provider in data["providers"])
+    mock_provider = next(provider for provider in data["providers"] if provider["provider"] == "mock")
+    assert mock_provider["verification_only"] is True
+    assert mock_provider["configured"] is False
+
+
+def test_llm_complete_rejects_mock_provider_unless_explicitly_enabled(monkeypatch) -> None:
+    monkeypatch.setenv("XAGENT_LLM_BACKEND", "mock")
+    monkeypatch.delenv("XAGENT_ENABLE_API_MOCK_PROVIDER", raising=False)
+    get_settings.cache_clear()
+    tracker = CostTracker()
+    audit = AuditStore()
+    client = TestClient(_app(_principal(), cost_tracker=tracker, audit_store=audit))
+
+    try:
+        response = client.post(
+            "/api/v1/llm/complete",
+            json={
+                "provider": "mock",
+                "messages": [{"role": "user", "content": "Summarize API routing"}],
+            },
+        )
+    finally:
+        get_settings.cache_clear()
+
+    assert response.status_code == 400
+    assert "deterministic verification" in response.text
+    assert len(tracker.records) == 1
+    assert tracker.records[0].provider == "mock"
+    assert tracker.records[0].success is False
+    records = audit.list(limit=10, action="llm.completion", resource_type="llm_provider")
+    assert len(records) == 1
+    assert records[0].details["error_code"] == "provider_rejected"
 
 
 def test_llm_complete_rejects_local_provider(monkeypatch) -> None:
@@ -181,18 +213,23 @@ def test_llm_complete_rejects_deepseek_non_official_base_url(monkeypatch) -> Non
 
 def test_llm_complete_blocks_estimated_token_budget(monkeypatch) -> None:
     monkeypatch.setenv("XAGENT_LLM_BACKEND", "mock")
+    monkeypatch.setenv("XAGENT_ENABLE_API_MOCK_PROVIDER", "true")
+    get_settings.cache_clear()
     tracker = CostTracker()
     audit = AuditStore()
     client = TestClient(_app(_principal(), cost_tracker=tracker, audit_store=audit))
 
-    response = client.post(
-        "/api/v1/llm/complete",
-        json={
-            "provider": "mock",
-            "messages": [{"role": "user", "content": "x" * 200}],
-            "max_input_tokens": 2,
-        },
-    )
+    try:
+        response = client.post(
+            "/api/v1/llm/complete",
+            json={
+                "provider": "mock",
+                "messages": [{"role": "user", "content": "x" * 200}],
+                "max_input_tokens": 2,
+            },
+        )
+    finally:
+        get_settings.cache_clear()
 
     assert response.status_code == 429
     assert "token budget" in response.text
@@ -205,18 +242,23 @@ def test_llm_complete_blocks_estimated_token_budget(monkeypatch) -> None:
 
 def test_llm_complete_records_cost_and_audit_for_mock(monkeypatch) -> None:
     monkeypatch.setenv("XAGENT_LLM_BACKEND", "mock")
+    monkeypatch.setenv("XAGENT_ENABLE_API_MOCK_PROVIDER", "true")
+    get_settings.cache_clear()
     tracker = CostTracker()
     audit = AuditStore()
     client = TestClient(_app(_principal(), cost_tracker=tracker, audit_store=audit))
 
-    response = client.post(
-        "/api/v1/llm/complete",
-        json={
-            "provider": "mock",
-            "messages": [{"role": "user", "content": "Summarize API routing"}],
-            "task_type": "analysis",
-        },
-    )
+    try:
+        response = client.post(
+            "/api/v1/llm/complete",
+            json={
+                "provider": "mock",
+                "messages": [{"role": "user", "content": "Summarize API routing"}],
+                "task_type": "analysis",
+            },
+        )
+    finally:
+        get_settings.cache_clear()
 
     assert response.status_code == 200
     data = response.json()

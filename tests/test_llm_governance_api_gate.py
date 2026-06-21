@@ -38,6 +38,7 @@ async def test_llm_governance_gate_report_json_contract(tmp_path, monkeypatch):
     payload = json.loads(output.read_text(encoding="utf-8"))
     assert payload["status"] == "passed"
     assert payload["evidence_type"] == "llm_governance_api_gate"
+    assert payload["git_sha"]
     assert payload["dry_run"] is True
     assert payload["network_mutation_performed"] is False
     assert any(check["name"] == "auto_completion_rejected_until_costed" for check in payload["checks"])

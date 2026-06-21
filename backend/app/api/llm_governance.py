@@ -95,6 +95,13 @@ def _completion_provider(provider: str | None) -> str:
             "Auto provider routing is not enabled for governed completion requests.",
             details={"provider": value, "supported_providers": sorted(COMPLETION_PROVIDERS)},
         )
+    if value == "mock" and not _mock_provider_enabled():
+        raise api_error(
+            400,
+            ErrorCode.VALIDATION_ERROR,
+            "Mock LLM provider is reserved for deterministic verification and is disabled by default.",
+            details={"provider": value, "enable_with": "XAGENT_ENABLE_API_MOCK_PROVIDER=true"},
+        )
     return value
 
 
@@ -106,21 +113,31 @@ def _fallback_order_for(provider: str) -> str:
             for item in settings.llm_fallback_order.split(",")
             if item.strip()
         ]
-        external_only = [item for item in configured if item in SUPPORTED_PROVIDERS and item not in LOCAL_PROVIDER_NAMES]
-        return ",".join(external_only or ["openai", "deepseek", "mock"])
+        external_only = [
+            item
+            for item in configured
+            if item in {"openai", "deepseek"} and item not in LOCAL_PROVIDER_NAMES
+        ]
+        if _mock_provider_enabled() and "mock" in configured:
+            external_only.append("mock")
+        return ",".join(external_only or ["openai", "deepseek"])
     return provider
+
+
+def _mock_provider_enabled() -> bool:
+    return bool(get_settings().enable_api_mock_provider)
 
 
 def _provider_configured(provider: str) -> bool:
     settings = get_settings()
     if provider == "mock":
-        return True
+        return _mock_provider_enabled()
     if provider == "openai":
         return bool(settings.openai_api_key)
     if provider == "deepseek":
         return bool(settings.deepseek_api_key)
     if provider == "auto":
-        return bool(settings.openai_api_key or settings.deepseek_api_key or "mock" in _fallback_order_for("auto").split(","))
+        return bool(settings.openai_api_key or settings.deepseek_api_key)
     return False
 
 
@@ -151,9 +168,9 @@ def _provider_model(provider: str) -> str:
     return "mock"
 
 
-def _deepseek_base_url(provider: str) -> str:
+def _deepseek_base_url(provider: str) -> str | None:
     if provider != "deepseek":
-        return DEFAULT_DEEPSEEK_BASE_URL
+        return None
     settings = get_settings()
     base_url = settings.deepseek_base_url or DEFAULT_DEEPSEEK_BASE_URL
     error = external_https_url_error_reason(base_url)
@@ -296,9 +313,11 @@ async def list_llm_providers(principal: PrincipalDependency) -> dict[str, object
             {
                 "provider": "mock",
                 "model": "mock",
-                "configured": True,
+                "configured": _mock_provider_enabled(),
                 "api_only": True,
                 "local": False,
+                "verification_only": True,
+                "enabled_by": "XAGENT_ENABLE_API_MOCK_PROVIDER",
             },
         ],
         "local_providers_blocked": sorted(LOCAL_PROVIDER_NAMES),
@@ -433,7 +452,7 @@ async def complete(
         openai_model=settings.openai_model,
         deepseek_api_key=settings.deepseek_api_key,
         deepseek_model=settings.deepseek_model,
-        deepseek_base_url=deepseek_base_url,
+        deepseek_base_url=deepseek_base_url or DEFAULT_DEEPSEEK_BASE_URL,
     )
     messages = [item.model_dump() for item in request.messages]
     start = time.perf_counter()

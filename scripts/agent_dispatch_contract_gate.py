@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import subprocess
 import sys
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
@@ -37,6 +38,7 @@ class GateReport:
     mutation_performed: bool
     network_mutation_performed: bool
     full_release_claimed: bool
+    git_sha: str
     contract_summary: dict[str, Any]
     checks: list[GateCheck]
     known_limits: list[str]
@@ -50,6 +52,18 @@ class GateReport:
 
 def _utc_now() -> str:
     return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def _current_git_sha(root: Path = ROOT) -> str:
+    try:
+        return subprocess.check_output(
+            ["git", "rev-parse", "HEAD"],
+            cwd=root,
+            text=True,
+            stderr=subprocess.DEVNULL,
+        ).strip()
+    except Exception:
+        return "unknown"
 
 
 def _check(name: str, ok: bool, *, details: dict[str, Any] | None = None, error: str) -> GateCheck:
@@ -105,6 +119,7 @@ def build_agent_dispatch_contract_gate_report() -> GateReport:
         mutation_performed=False,
         network_mutation_performed=False,
         full_release_claimed=False,
+        git_sha=_current_git_sha(),
         contract_summary={
             "workflow_id": contract.workflow_id,
             "pattern": contract.pattern,

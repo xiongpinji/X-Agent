@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import subprocess
 import sys
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
@@ -46,6 +47,7 @@ class GateReport:
     mutation_performed: bool
     network_mutation_performed: bool
     full_release_claimed: bool
+    git_sha: str
     checks: list[GateCheck]
     known_limits: list[str]
     next_commands: list[str]
@@ -58,6 +60,18 @@ class GateReport:
 
 def _utc_now() -> str:
     return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def _current_git_sha(root: Path = ROOT) -> str:
+    try:
+        return subprocess.check_output(
+            ["git", "rev-parse", "HEAD"],
+            cwd=root,
+            text=True,
+            stderr=subprocess.DEVNULL,
+        ).strip()
+    except Exception:
+        return "unknown"
 
 
 def _principal(scopes: list[str] | None = None, *, tenant_id: str = "tenant-1") -> Principal:
@@ -188,6 +202,7 @@ async def build_rag_governance_gate_report(root: Path = ROOT) -> GateReport:
         mutation_performed=False,
         network_mutation_performed=False,
         full_release_claimed=False,
+        git_sha=_current_git_sha(root),
         checks=checks,
         known_limits=[
             "This gate uses the mock retrieval provider and does not perform external search calls.",

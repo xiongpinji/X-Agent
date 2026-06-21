@@ -19,6 +19,7 @@ def test_second_batch_quality_gate_passes_with_existing_reports() -> None:
     assert checks["capability_reports_passed"].status == "passed"
     assert checks["capability_reports_do_not_mutate"].status == "passed"
     assert checks["required_capability_surfaces_covered"].status == "passed"
+    assert checks["capability_reports_match_current_git_sha"].status == "passed"
 
 
 def test_second_batch_quality_gate_report_json_contract(tmp_path) -> None:
@@ -30,8 +31,10 @@ def test_second_batch_quality_gate_report_json_contract(tmp_path) -> None:
     assert payload["status"] == "passed"
     assert payload["evidence_type"] == "second_batch_quality_gate"
     assert payload["dry_run"] is True
+    assert payload["git_sha"]
     assert payload["network_mutation_performed"] is False
     assert len(payload["capability_reports"]) >= 2
+    assert all(item["git_sha"] == payload["git_sha"] for item in payload["capability_reports"])
     assert any(item["evidence_type"] == "llm_governance_api_gate" for item in payload["capability_reports"])
     assert any(item["evidence_type"] == "rag_governance_api_gate" for item in payload["capability_reports"])
     assert any(item["evidence_type"] == "agent_dispatch_contract_gate" for item in payload["capability_reports"])

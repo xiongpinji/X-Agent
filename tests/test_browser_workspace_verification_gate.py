@@ -25,6 +25,7 @@ def test_browser_workspace_verification_gate_json_contract(tmp_path) -> None:
     payload = json.loads(output.read_text(encoding="utf-8"))
     assert payload["status"] == "passed"
     assert payload["evidence_type"] == "browser_workspace_verification_gate"
+    assert payload["git_sha"]
     assert payload["replay_steps"]
     assert all(step["network_mutation_allowed"] is False for step in payload["replay_steps"])
-
+    assert all("npm run build" not in step["command"] for step in payload["replay_steps"])

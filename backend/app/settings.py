@@ -27,11 +27,13 @@ class Settings(BaseSettings):
 
     llm_backend: str = "mock"
     llm_fallback_order: str = ""
+    enable_api_mock_provider: bool = False
     openai_api_key: str | None = None
     openai_model: str = "gpt-4o-mini"
     deepseek_api_key: str | None = None
     deepseek_model: str = "deepseek-chat"
     deepseek_base_url: str | None = None
+    tavily_api_key: str | None = None
 
     memory_backend: str = "memory"
     database_url: str = "sqlite:///./data/xagent.db"

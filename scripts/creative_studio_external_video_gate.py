@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import subprocess
 import sys
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
@@ -16,6 +17,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from backend.app.core.creative_studio.adapters import external_video_api_status
+from backend.app.core.creative_studio.adapters import external_video_api_error_reason
 from backend.app.core.creative_studio.storyboard import Storyboard, Shot
 from backend.app.core.creative_studio.workflow import run_external_video_workflow
 
@@ -40,6 +42,7 @@ class CreativeVideoGateReport:
     mutation_performed: bool
     network_mutation_performed: bool
     full_release_claimed: bool
+    git_sha: str
     provider_status: dict[str, Any]
     checks: list[CreativeVideoGateCheck]
     known_limits: list[str]
@@ -53,6 +56,18 @@ class CreativeVideoGateReport:
 
 def _utc_now() -> str:
     return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def _current_git_sha(root: Path = ROOT) -> str:
+    try:
+        return subprocess.check_output(
+            ["git", "rev-parse", "HEAD"],
+            cwd=root,
+            text=True,
+            stderr=subprocess.DEVNULL,
+        ).strip()
+    except Exception:
+        return "unknown"
 
 
 def _read(path: Path) -> str:
@@ -111,6 +126,11 @@ async def build_creative_video_gate_report(root: Path = ROOT) -> CreativeVideoGa
     frontend_client_source = _read(root / "frontend/src/panda/api/creativeStudioClient.ts")
     provider_status = external_video_api_status()
     workflow_cap = await _workflow_execution_cap_check()
+    rejected_video_urls = [
+        external_video_api_error_reason(api_url="http://localhost:8188/prompt", provider="external-video-api"),
+        external_video_api_error_reason(api_url="https://127.0.0.1/prompt", provider="external-video-api"),
+        external_video_api_error_reason(api_url="https://api.example/video", provider="comfyui"),
+    ]
 
     checks = [
         _check(
@@ -124,6 +144,14 @@ async def build_creative_video_gate_report(root: Path = ROOT) -> CreativeVideoGa
             provider_status.get("provider_api_call_attempted") is False,
             details={"provider_api_call_attempted": provider_status.get("provider_api_call_attempted")},
             error="provider status attempted an external provider call",
+        ),
+        _check(
+            "provider_url_must_be_external_https",
+            "external_video_api_error_reason" in adapters_source
+            and "external_https_url_error_reason" in adapters_source
+            and all(rejected_video_urls),
+            details={"rejected_reasons": rejected_video_urls},
+            error="external video provider can be configured with local, non-HTTPS, or ComfyUI endpoints",
         ),
         _check(
             "human_review_required_by_api_contract",
@@ -232,12 +260,14 @@ async def build_creative_video_gate_report(root: Path = ROOT) -> CreativeVideoGa
         mutation_performed=False,
         network_mutation_performed=False,
         full_release_claimed=False,
+        git_sha=_current_git_sha(root),
         provider_status=provider_status,
         checks=checks,
         known_limits=[
             "Creative Studio remains excluded from the commercial RC default surface unless the owner explicitly approves promotion.",
             "This gate does not call any external video provider and does not validate real provider credentials.",
             "This gate validates a local opt-in workflow boundary; it does not promote Creative Studio into the global workflow router.",
+            "Provider URLs must be external HTTPS endpoints; local ComfyUI-style endpoints are rejected before provider calls.",
         ],
         next_commands=[
             "python scripts/creative_studio_external_video_gate.py",

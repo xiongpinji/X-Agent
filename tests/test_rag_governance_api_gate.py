@@ -31,6 +31,7 @@ async def test_rag_governance_gate_report_json_contract(tmp_path) -> None:
     payload = json.loads(output.read_text(encoding="utf-8"))
     assert payload["status"] == "passed"
     assert payload["evidence_type"] == "rag_governance_api_gate"
+    assert payload["git_sha"]
     assert payload["dry_run"] is True
     assert payload["network_mutation_performed"] is False
     assert any(check["name"] == "tenant_scope_is_enforced" for check in payload["checks"])

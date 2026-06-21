@@ -25,6 +25,7 @@ async def test_creative_video_gate_passes_without_external_call(monkeypatch):
     assert report.full_release_claimed is False
     assert report.provider_status["provider_api_call_attempted"] is False
     assert checks["provider_status_redacted"].status == "passed"
+    assert checks["provider_url_must_be_external_https"].status == "passed"
     assert checks["adapter_blocks_without_human_review"].status == "passed"
     assert checks["video_workflow_endpoint_is_local_opt_in"].status == "passed"
     assert checks["workflow_defaults_to_dry_run"].status == "passed"
@@ -37,7 +38,7 @@ async def test_creative_video_gate_passes_without_external_call(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_creative_video_gate_report_json_contract(tmp_path, monkeypatch):
-    monkeypatch.setenv("XAGENT_CREATIVE_VIDEO_API_URL", "https://video.example/generate")
+    monkeypatch.setenv("XAGENT_CREATIVE_VIDEO_API_URL", "https://api.runwayml.com/v1/video")
     monkeypatch.setenv("XAGENT_CREATIVE_VIDEO_API_KEY", "secret-video-key")
 
     output = tmp_path / "creative-video-gate.json"
@@ -47,9 +48,25 @@ async def test_creative_video_gate_report_json_contract(tmp_path, monkeypatch):
     payload = json.loads(output.read_text(encoding="utf-8"))
     assert payload["status"] == "passed"
     assert payload["evidence_type"] == "creative_studio_external_video_api_only_gate"
+    assert payload["git_sha"]
     assert payload["provider_status"]["configured"] is True
+    assert payload["provider_status"]["api_url_external_https"] is True
     assert payload["provider_status"]["api_key_fingerprint"]
     assert "secret-video-key" not in json.dumps(payload)
-    assert "https://video.example/generate" not in json.dumps(payload)
+    assert "https://api.runwayml.com/v1/video" not in json.dumps(payload)
     assert any(check["name"] == "frontend_contract_requires_review" for check in payload["checks"])
     assert any(check["name"] == "frontend_contract_exposes_video_workflow" for check in payload["checks"])
+
+
+@pytest.mark.asyncio
+async def test_creative_video_gate_rejects_local_video_provider_config(monkeypatch):
+    monkeypatch.setenv("XAGENT_CREATIVE_VIDEO_API_URL", "http://localhost:8188/prompt")
+    monkeypatch.setenv("XAGENT_CREATIVE_VIDEO_API_KEY", "secret-video-key")
+    monkeypatch.setenv("XAGENT_CREATIVE_VIDEO_PROVIDER", "comfyui")
+
+    report = await build_creative_video_gate_report()
+
+    assert report.status == "passed"
+    assert report.provider_status["configured"] is False
+    assert report.provider_status["local_provider_blocked"] is True
+    assert report.provider_status["provider_api_call_attempted"] is False
