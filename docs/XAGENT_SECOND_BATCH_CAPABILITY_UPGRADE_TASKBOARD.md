@@ -13,7 +13,7 @@ Second-batch upgrades target API-first capability expansion for users with unkno
 | B2-P0-03 | API-only RAG and knowledge retrieval | Implemented and locally verified | Mounted `/api/v1/rag` read/query governance route with API-only provider list, local retrieval provider rejection, protocol-search boundary with optional provider adapters, tenant-scoped mock retrieval, budget guard, audit records, and dry-run gate report | `python -m pytest tests/test_rag_governance_api.py tests/test_rag_governance_api_gate.py -q --no-cov`; `python scripts/rag_governance_api_gate.py`; `python scripts/second_batch_quality_gate.py`; `git diff --check` |
 | B2-P1-01 | Multi-agent workflow dispatcher hardening | Implemented and locally verified | Explicit handoff contracts with timeout/cost controls, bounded retry policy, required handoff artifacts, fan-in, trace, and audit requirements | `python -m pytest tests/test_agent_dispatch_contract_gate.py -q --no-cov`; `python scripts/agent_dispatch_contract_gate.py`; `python scripts/second_batch_quality_gate.py`; `git diff --check` |
 | B2-P1-02 | Browser/workspace verification harness | Implemented and locally verified | Replayable local verification steps and report artifacts for UI/API workflows; AI-assisted exploration is not accepted as final proof | `python -m pytest tests/test_browser_workspace_verification_gate.py -q --no-cov`; `python scripts/browser_workspace_verification_gate.py`; `python scripts/second_batch_quality_gate.py`; `git diff --check` |
-| B2-P1-03 | Provider health and failover evidence | Implemented and locally verified | Provider readiness matrix with API-only/local=false provider entries, redacted credential status, protocol LLM/search seams, mock/dry-run fallback, DeepSeek official-host guard, Creative Video protocol external HTTPS guard, and declared failover paths | `python -m pytest tests/test_provider_health_failover_gate.py -q --no-cov`; `python scripts/provider_health_failover_gate.py`; `python scripts/second_batch_quality_gate.py`; `git diff --check` |
+| B2-P1-03 | Provider health, failover, and runtime preflight | Implemented and locally verified | Provider readiness matrix plus `/api/v1/providers/preflight` runtime API with `audit:read`, API-only/local=false entries, redacted credential status, protocol LLM/search seams, mock/dry-run fallback, DeepSeek official-host guard, Creative Video protocol external HTTPS guard, and declared failover paths | `python -m pytest tests/test_provider_health_failover_gate.py tests/test_provider_preflight_api.py tests/test_provider_preflight_api_gate.py -q --no-cov`; `python scripts/provider_health_failover_gate.py`; `python scripts/provider_preflight_api_gate.py`; `python scripts/second_batch_quality_gate.py`; `git diff --check` |
 
 ## B2-P0-01 Acceptance
 
@@ -154,7 +154,7 @@ Latest local results:
 
 ## B2-P1-03 Acceptance
 
-The provider health/failover evidence slice is considered merge-ready when all are true:
+The provider health/failover/preflight slice is considered merge-ready when all are true:
 
 - Provider matrix entries are API-only and `local=false`.
 - Credential status is redacted and never includes raw secret values.
@@ -162,22 +162,26 @@ The provider health/failover evidence slice is considered merge-ready when all a
 - DeepSeek declares the official-host-only guard.
 - Creative Video provider declares the protocol external-HTTPS-only guard and does not preselect image/video models.
 - Failover order is present for each provider entry.
+- `/api/v1/providers/preflight` is mounted, requires `audit:read`, and imports runtime preflight logic from `backend.app.core`, not `scripts.*`.
+- Runtime preflight reports `dry_run=true`, `network_mutation_performed=false`, and per-provider `network_call_attempted=false`.
 - The local gate does not call external providers.
 
 ## B2-P1-03 Current Verification
 
 ```text
-python -m py_compile scripts\provider_health_failover_gate.py tests\test_provider_health_failover_gate.py
-python -m pytest tests/test_provider_health_failover_gate.py -q --no-cov
+python -m py_compile scripts\provider_health_failover_gate.py scripts\provider_preflight_api_gate.py tests\test_provider_health_failover_gate.py tests\test_provider_preflight_api.py tests\test_provider_preflight_api_gate.py
+python -m pytest tests/test_provider_health_failover_gate.py tests/test_provider_preflight_api.py tests/test_provider_preflight_api_gate.py -q --no-cov
 python scripts\provider_health_failover_gate.py
+python scripts\provider_preflight_api_gate.py
 python scripts\second_batch_quality_gate.py
 git diff --check
 ```
 
 Latest local results:
 
-- `tests/test_provider_health_failover_gate.py`: 2 passed.
+- `tests/test_provider_health_failover_gate.py tests/test_provider_preflight_api.py tests/test_provider_preflight_api_gate.py`: passed.
 - `scripts/provider_health_failover_gate.py`: passed and wrote `.xagent_runtime/reports/provider-health-failover-gate.json`.
+- `scripts/provider_preflight_api_gate.py`: passed and wrote `.xagent_runtime/reports/provider-preflight-api-gate.json`.
 
 ## Known Limits
 
