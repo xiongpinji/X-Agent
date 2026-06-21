@@ -65,6 +65,29 @@ def test_provider_preflight_returns_redacted_dry_run_status(monkeypatch) -> None
     assert all(item["network_call_attempted"] is False for item in payload["providers"])
 
 
+def test_provider_preflight_rejects_blocked_protocol_and_local_video_config(monkeypatch) -> None:
+    monkeypatch.setenv("XAGENT_PROTOCOL_LLM_API_KEY", "secret-protocol-llm-key")
+    monkeypatch.setenv("XAGENT_PROTOCOL_LLM_BASE_URL", "https://api.openai.com/v1")
+    monkeypatch.setenv("XAGENT_DEEPSEEK_API_KEY", "secret-deepseek-key")
+    monkeypatch.setenv("XAGENT_DEEPSEEK_BASE_URL", "https://openrouter.ai/api/v1")
+    monkeypatch.setenv("XAGENT_PROTOCOL_SEARCH_API_KEY", "secret-protocol-search-key")
+    monkeypatch.setenv("XAGENT_PROTOCOL_SEARCH_BASE_URL", "https://api.tavily.com/search")
+    monkeypatch.setenv("XAGENT_CREATIVE_VIDEO_API_KEY", "secret-video-key")
+    monkeypatch.setenv("XAGENT_CREATIVE_VIDEO_API_URL", "https://video-gateway.example/v1/generate")
+    monkeypatch.setenv("XAGENT_CREATIVE_VIDEO_PROVIDER", "comfyui")
+    client = TestClient(_app(_principal()))
+
+    response = client.get("/api/v1/providers/preflight")
+
+    assert response.status_code == 200
+    providers = {item["provider"]: item for item in response.json()["providers"]}
+    assert providers["protocol-llm"]["status"] == "rejected_config"
+    assert providers["deepseek"]["status"] == "rejected_config"
+    assert providers["protocol-search"]["status"] == "rejected_config"
+    assert providers["comfyui"]["status"] == "rejected_config"
+    assert providers["comfyui"]["configuration_error"] == "provider must not be local"
+
+
 def test_main_app_mounts_provider_preflight_route() -> None:
     routes = {
         getattr(route, "path", "")
