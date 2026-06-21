@@ -23,8 +23,11 @@ from backend.app.api.collaboration import router as collaboration_router
 from backend.app.api.commercial_pilot import router as commercial_pilot_router
 from backend.app.api.control_modes import router as control_modes_router
 from backend.app.api.control_plane import router as control_plane_router
+from backend.app.api.creative_studio import router as creative_studio_router
 from backend.app.api.desktop import router as desktop_router
 from backend.app.api.dispatch import router as dispatch_router
+from backend.app.api.enterprise import router as enterprise_router
+from backend.app.api.enterprise_sso import router as enterprise_sso_router
 from backend.app.api.errors import (
     XAgentAPIError,
     pydantic_validation_error_handler,
@@ -33,6 +36,10 @@ from backend.app.api.errors import (
 )
 from backend.app.api.auth import router as auth_router
 from backend.app.api.feishu import router as feishu_router
+from backend.app.api.files_v2 import router as files_v2_router
+from backend.app.api.forum import router as forum_router
+from backend.app.api.forum_search import router as forum_search_router
+from backend.app.api.frontend_commercial_contract import router as frontend_commercial_contract_router
 from backend.app.api.integrations import router as integrations_router
 from backend.app.api.issue_to_pr import router as issue_to_pr_router
 from backend.app.api.llm_governance import router as llm_governance_router
@@ -80,6 +87,7 @@ from backend.app.api.feedback import router as feedback_router
 from backend.app.api.sync import router as sync_router
 from backend.app.api.sandbox_tasks import router as sandbox_tasks_router
 from backend.app.api.sandbox_tasks import start_sandbox_worker, stop_sandbox_worker
+from backend.app.api.sso import router as sso_router
 from backend.app.services.browser.automation import browser_automation
 from backend.app.services.browser.playwright_client import browser_client
 from backend.app.services.memory.indexer import memory_indexer
@@ -95,6 +103,7 @@ from backend.app.dependencies import (
     get_run_store,
     get_trace_store,
     get_workflow_repository,
+    require_authenticated_principal,
 )
 from backend.app.core.security import Principal, ROLE_SCOPES
 from backend.app.core.mcp.manager import (
@@ -533,6 +542,7 @@ async def security_headers_middleware(request: Request, call_next):
 
 
 app.include_router(auth_router)
+app.include_router(frontend_commercial_contract_router)
 app.include_router(agents_router)
 app.include_router(approvals_router)
 app.include_router(audit_router)
@@ -542,9 +552,15 @@ app.include_router(collaboration_router)
 app.include_router(commercial_pilot_router)
 app.include_router(control_modes_router)
 app.include_router(control_plane_router)
+app.include_router(creative_studio_router, dependencies=[Depends(require_authenticated_principal)])
 app.include_router(desktop_router)
 app.include_router(dispatch_router)
+app.include_router(enterprise_router)
+app.include_router(enterprise_sso_router, dependencies=[Depends(require_authenticated_principal)])
 app.include_router(feishu_router)
+app.include_router(files_v2_router, dependencies=[Depends(require_authenticated_principal)])
+app.include_router(forum_router, dependencies=[Depends(require_authenticated_principal)])
+app.include_router(forum_search_router, dependencies=[Depends(require_authenticated_principal)])
 app.include_router(integrations_router)
 app.include_router(issue_to_pr_router)
 app.include_router(llm_governance_router)
@@ -591,6 +607,7 @@ app.include_router(memory_enhanced_router)
 app.include_router(feedback_router)
 app.include_router(sync_router)
 app.include_router(sandbox_tasks_router)
+app.include_router(sso_router, dependencies=[Depends(require_authenticated_principal)])
 app.add_exception_handler(XAgentAPIError, xagent_api_error_handler)
 app.add_exception_handler(RequestValidationError, validation_error_handler)
 app.add_exception_handler(PydanticValidationError, pydantic_validation_error_handler)
@@ -729,6 +746,11 @@ async def root() -> FileResponse:
     startup = frontend_dir / "startup.html"
     if startup.exists():
         return FileResponse(startup)
+    return FileResponse(frontend_dir / "index.html")
+
+
+@app.get("/login")
+async def login_page() -> FileResponse:
     return FileResponse(frontend_dir / "index.html")
 
 

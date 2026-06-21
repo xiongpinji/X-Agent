@@ -3,8 +3,9 @@ from functools import lru_cache
 from hashlib import sha256
 from secrets import compare_digest
 from secrets import token_urlsafe
+from typing import Annotated
 
-from fastapi import Request
+from fastapi import Depends, Request
 
 from backend.app.api.errors import api_error
 from backend.app.core.agent import AgentLoop
@@ -311,6 +312,19 @@ def enforce_scope(principal: Principal, scope: str) -> None:
             ErrorCode.AUTHORIZATION_FAILED,
             f"Missing required scope: {scope}",
         )
+
+
+def require_authenticated_principal(
+    principal: Annotated[Principal, Depends(get_current_principal)],
+) -> Principal:
+    """Require a real API key or bearer-token principal, even in dev mode."""
+    if not principal.authenticated:
+        raise api_error(
+            401,
+            ErrorCode.AUTHENTICATION_FAILED,
+            "Authentication required.",
+        )
+    return principal
 
 
 @lru_cache

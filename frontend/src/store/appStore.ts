@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { Agent, Task, Memory, Tool, ChatMessage } from '@/services/api'
+import { clearStoredAuthSession, getStoredAuthToken } from '@/services/authHeaders'
 
 export interface AppState {
   // User state
@@ -67,9 +68,12 @@ export const useAppStore = create<AppState>()(
     (set) => ({
       // User state
       user: null,
-      isAuthenticated: false,
+      isAuthenticated: !!getStoredAuthToken(),
       setUser: (user) => set({ user, isAuthenticated: !!user }),
-      logout: () => set({ user: null, isAuthenticated: false }),
+      logout: () => {
+        clearStoredAuthSession()
+        set({ user: null, isAuthenticated: false })
+      },
 
       // UI state
       theme: 'light',

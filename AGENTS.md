@@ -9,6 +9,14 @@
 
 ---
 
+## 🧭 Codex 当前执行记录
+
+| 时间 | Agent | 任务 | 状态 | 证据 |
+|---|---|---|---|---|
+| 2026-06-21 | Codex | F-001 后端商业 router 安全挂载与路径兼容；F-004 前端登录鉴权闭环 | 已完成本地修复与验证 | `pytest test_frontend_commercial_contract_routes.py test_sessions_skills_issuepr_auth.py → 19 passed`; `09_frontend_contract.py → FE 商业路径 200 + /login 200`; `npm run build → passed`; 浏览器验证匿名跳 `/login`、登录后回 `/` |
+
+---
+
 ## 🚀 快速开始 —— 通讯通道速查(任何会话先读这段)
 
 > 本节是 ZCode/Codex 协作的"操作记忆"。详细协议见 `audit_reports/_comm/CHEATSHEET.md` 与 `PROTOCOL.md`。

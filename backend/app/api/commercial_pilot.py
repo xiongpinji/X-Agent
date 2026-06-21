@@ -6,14 +6,18 @@ import hashlib
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
+
+from backend.app.core.security import Principal
+from backend.app.dependencies import enforce_scope, get_current_principal
 
 ROOT = Path(__file__).resolve().parents[3]
 REPORT_DIR = ROOT / ".xagent_runtime" / "reports"
 
 router = APIRouter(prefix="/api/v1/commercial-pilot/feishu", tags=["commercial-pilot"])
+PrincipalDependency = Annotated[Principal, Depends(get_current_principal)]
 
 
 @dataclass(frozen=True)
@@ -336,14 +340,16 @@ def build_feishu_pilot_status(report_dir: Path | None = None) -> dict[str, Any]:
 
 
 @router.get("/status")
-async def get_feishu_pilot_status() -> dict[str, Any]:
+async def get_feishu_pilot_status(principal: PrincipalDependency) -> dict[str, Any]:
     """Return the stable read-only Feishu Pilot V1 operations status."""
+    enforce_scope(principal, "audit:read")
     return build_feishu_pilot_status()
 
 
 @router.get("/reports")
-async def list_feishu_pilot_reports() -> dict[str, Any]:
+async def list_feishu_pilot_reports(principal: PrincipalDependency) -> dict[str, Any]:
     """List Feishu Pilot V1 evidence reports with digest metadata."""
+    enforce_scope(principal, "audit:read")
     status = build_feishu_pilot_status()
     return {
         "status": status["status"],
@@ -354,8 +360,9 @@ async def list_feishu_pilot_reports() -> dict[str, Any]:
 
 
 @router.get("/reports/{report_name}")
-async def get_feishu_pilot_report(report_name: str) -> dict[str, Any]:
+async def get_feishu_pilot_report(report_name: str, principal: PrincipalDependency) -> dict[str, Any]:
     """Return a single Feishu Pilot V1 evidence report with digest metadata."""
+    enforce_scope(principal, "audit:read")
     spec = next((candidate for candidate in REPORT_SPECS if candidate.name == report_name), None)
     if spec is None:
         raise HTTPException(status_code=404, detail="commercial pilot report is not registered")

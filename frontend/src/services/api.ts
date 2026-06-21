@@ -1,5 +1,5 @@
 import axios, { AxiosInstance, AxiosError } from 'axios'
-import { AUTH_TOKEN_STORAGE_KEY, getAuthHeaders, getStoredAuthToken } from './authHeaders'
+import { clearStoredAuthSession, getAuthHeaders, redirectToLogin } from './authHeaders'
 
 export interface ApiResponse<T = any> {
   data: T
@@ -198,9 +198,9 @@ class ApiClient {
     this.client.interceptors.response.use(
       (response) => response,
       (error: AxiosError) => {
-        if (error.response?.status === 401 && getStoredAuthToken()) {
-          localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY)
-          window.location.href = '/login'
+        if (error.response?.status === 401) {
+          clearStoredAuthSession()
+          redirectToLogin()
         }
         return Promise.reject(error)
       }

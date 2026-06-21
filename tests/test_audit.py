@@ -9,9 +9,11 @@ from backend.app.api import agents as agents_api
 from backend.app.core.contracts import AgentRunResponse, RunStatus
 from backend.app.core.audit import AuditLogRecord, AuditStore
 from backend.app.core.audit_postgres import PostgresAuditStore
+from backend.app.core.security import Principal, ROLE_SCOPES
 from backend.app.core.tracing import TraceStore
 from backend.app.dependencies import (
     get_audit_store as dependency_get_audit_store,
+    get_current_principal as dependency_get_current_principal,
     get_trace_store as dependency_get_trace_store,
 )
 from backend.app.main import app
@@ -146,6 +148,82 @@ def test_agent_run_writes_audit_log(fast_agent_audit_dependencies) -> None:
     # depending on the agent loop implementation; verify the endpoint shape.
     if data:
         assert all("snapshot" in item or item.get("snapshot") is not None for item in data)
+
+
+def test_audit_logs_default_to_caller_tenant(tmp_path) -> None:
+    audit_store = AuditStore(storage_path=tmp_path / "tenant-audit.jsonl", hmac_secret="test-secret")
+    audit_store.record(
+        action="agent.run",
+        resource_type="agent",
+        actor_id="user-a",
+        tenant_id="tenant_a",
+        outcome="completed",
+    )
+    audit_store.record(
+        action="agent.run",
+        resource_type="agent",
+        actor_id="user-b",
+        tenant_id="tenant_b",
+        outcome="completed",
+    )
+    previous_overrides = dict(app.dependency_overrides)
+    app.dependency_overrides[dependency_get_audit_store] = lambda: audit_store
+    app.dependency_overrides[dependency_get_current_principal] = lambda: Principal(
+        tenant_id="tenant_b",
+        user_id="dev-b",
+        role="developer",
+        scopes=list(ROLE_SCOPES["developer"]),
+        authenticated=True,
+    )
+    try:
+        client = TestClient(app)
+        response = client.get("/api/v1/audit-logs")
+    finally:
+        app.dependency_overrides.clear()
+        app.dependency_overrides.update(previous_overrides)
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data
+    assert {item["tenant_id"] for item in data} == {"tenant_b"}
+
+
+def test_audit_export_defaults_to_caller_tenant(tmp_path) -> None:
+    audit_store = AuditStore(storage_path=tmp_path / "tenant-audit-export.jsonl", hmac_secret="test-secret")
+    audit_store.record(
+        action="agent.run",
+        resource_type="agent",
+        actor_id="user-a",
+        tenant_id="tenant_a",
+        outcome="completed",
+    )
+    audit_store.record(
+        action="agent.run",
+        resource_type="agent",
+        actor_id="user-b",
+        tenant_id="tenant_b",
+        outcome="completed",
+    )
+    previous_overrides = dict(app.dependency_overrides)
+    app.dependency_overrides[dependency_get_audit_store] = lambda: audit_store
+    app.dependency_overrides[dependency_get_current_principal] = lambda: Principal(
+        tenant_id="tenant_b",
+        user_id="dev-b",
+        role="developer",
+        scopes=list(ROLE_SCOPES["developer"]),
+        authenticated=True,
+    )
+    try:
+        client = TestClient(app)
+        response = client.get("/api/v1/audit-logs/export/json")
+    finally:
+        app.dependency_overrides.clear()
+        app.dependency_overrides.update(previous_overrides)
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data
+    assert {item["tenant_id"] for item in data} == {"tenant_b"}
 
 
 def test_audit_chain_verify_endpoint(fast_agent_audit_dependencies) -> None:

@@ -24,6 +24,128 @@
   outline: none;
 }
 
+.panda-auth-loading {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  background: #070a0d;
+  color: #dce3ec;
+}
+
+.panda-login-page {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  background:
+    radial-gradient(circle at 28% 18%, rgba(190, 39, 47, 0.26), transparent 30%),
+    radial-gradient(circle at 76% 76%, rgba(48, 89, 92, 0.2), transparent 32%),
+    #070a0d;
+  color: #f4f6f8;
+  padding: 24px;
+}
+
+.panda-login-panel {
+  width: min(420px, 100%);
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 8px;
+  background: rgba(11, 15, 20, 0.92);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.34), inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  padding: 24px;
+}
+
+.panda-login-brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 24px;
+}
+
+.panda-login-mark {
+  display: grid;
+  height: 46px;
+  width: 46px;
+  place-items: center;
+  border: 1px solid rgba(248, 113, 113, 0.36);
+  border-radius: 8px;
+  background: linear-gradient(135deg, rgba(190, 39, 47, 0.94), rgba(112, 30, 38, 0.92));
+  color: white;
+  font-weight: 800;
+}
+
+.panda-login-brand h1 {
+  color: #f8fafc;
+  font-size: 24px;
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+.panda-login-brand p {
+  margin-top: 5px;
+  color: #9aa4b2;
+  font-size: 13px;
+}
+
+.panda-login-form {
+  display: grid;
+  gap: 15px;
+}
+
+.panda-login-form label {
+  display: grid;
+  gap: 7px;
+  color: #cbd5e1;
+  font-size: 13px;
+}
+
+.panda-login-input {
+  display: flex;
+  min-height: 42px;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.055);
+  color: #9aa4b2;
+  padding: 0 12px;
+}
+
+.panda-login-input input {
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  background: transparent;
+  color: #f8fafc;
+  outline: 0;
+}
+
+.panda-login-error {
+  margin: 0;
+  border: 1px solid rgba(248, 113, 113, 0.24);
+  border-radius: 8px;
+  background: rgba(127, 29, 29, 0.22);
+  color: #fecdd3;
+  padding: 10px 12px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.panda-login-submit {
+  display: inline-flex;
+  min-height: 42px;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #bb2932, #6f1d27);
+  color: white;
+  font-weight: 700;
+}
+
+.panda-login-submit:disabled {
+  cursor: wait;
+  opacity: 0.68;
+}
+
 .panda-skip-link {
   position: fixed;
   left: 18px;
