@@ -12,6 +12,9 @@ from backend.app.core.audit import AuditStore
 from backend.app.core.contracts import ErrorCode
 from backend.app.core.llm import LLMBackendError, LLMResponse, build_llm_router
 from backend.app.core.llm.cost_optimizer import CostTracker, TokenEstimator
+from backend.app.core.provider_governance_policy import DEEPSEEK_BASE_URL_HOSTS
+from backend.app.core.provider_governance_policy import DEFAULT_DEEPSEEK_BASE_URL
+from backend.app.core.provider_governance_policy import PROTOCOL_LLM_DENIED_HOSTS
 from backend.app.core.security import Principal
 from backend.app.core.url_safety import external_https_url_error_reason
 from backend.app.dependencies import (
@@ -31,9 +34,6 @@ AuditStoreDependency = Annotated[AuditStore, Depends(get_audit_store)]
 SUPPORTED_PROVIDERS = {"protocol-llm", "deepseek", "mock", "auto"}
 COMPLETION_PROVIDERS = {"protocol-llm", "deepseek", "mock"}
 LOCAL_PROVIDER_NAMES = {"ollama", "local", "localhost", "comfyui"}
-PROTOCOL_LLM_DENIED_HOSTS = {"api.openai.com"}
-DEFAULT_DEEPSEEK_BASE_URL = "https://api.deepseek.com/v1"
-DEEPSEEK_BASE_URL_HOSTS = {"api.deepseek.com"}
 
 
 class LLMMessage(BaseModel):

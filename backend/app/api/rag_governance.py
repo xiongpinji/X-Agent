@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 from backend.app.api.errors import XAgentAPIError, api_error
 from backend.app.core.audit import AuditStore
 from backend.app.core.contracts import ErrorCode
+from backend.app.core.provider_governance_policy import PROTOCOL_SEARCH_DENIED_HOSTS
 from backend.app.core.security import Principal
 from backend.app.core.url_safety import external_https_url_error_reason
 from backend.app.dependencies import enforce_scope, get_audit_store, get_current_principal
@@ -24,7 +25,6 @@ AuditStoreDependency = Annotated[AuditStore, Depends(get_audit_store)]
 
 SUPPORTED_PROVIDERS = {"protocol-search", "mock"}
 LOCAL_PROVIDER_NAMES = {"local", "qdrant", "chroma", "pgvector", "ollama", "comfyui", "localhost"}
-PROTOCOL_SEARCH_DENIED_HOSTS = {"api.openai.com", "api.tavily.com"}
 PROVIDER_URL_VALIDATION_MESSAGES = {
     "External RAG provider URL must be an external HTTPS endpoint.",
     "Protocol search base URL must be an external HTTPS endpoint.",

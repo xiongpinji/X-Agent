@@ -46,6 +46,7 @@ from backend.app.api.workbench import router as workbench_router
 from backend.app.api.metrics import router as metrics_router
 from backend.app.api.overview import router as overview_router
 from backend.app.api.planning import router as planning_router
+from backend.app.api.provider_preflight import router as provider_preflight_router
 from backend.app.api.execution import router as execution_router
 from backend.app.api.verification import router as verification_router
 from backend.app.api.replay import router as replay_router
@@ -552,6 +553,7 @@ app.include_router(rag_governance_router)
 app.include_router(evolution_router)
 app.include_router(migration_router)
 app.include_router(planning_router)
+app.include_router(provider_preflight_router)
 app.include_router(workbench_router)
 app.include_router(messages_router)
 app.include_router(metrics_router, dependencies=[Depends(get_current_principal)])
