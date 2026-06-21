@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+import pytest
 
 from backend.app.api.errors import XAgentAPIError, xagent_api_error_handler
 from backend.app.api.llm_governance import router
@@ -67,6 +68,7 @@ def test_llm_providers_reports_api_only_external_surface(monkeypatch) -> None:
     assert all(provider["local"] is False for provider in data["providers"])
     protocol_provider = next(provider for provider in data["providers"] if provider["provider"] == "protocol-llm")
     assert protocol_provider["external_https_required"] is True
+    assert protocol_provider["official_hosts_blocked"] == ["api.openai.com"]
     mock_provider = next(provider for provider in data["providers"] if provider["provider"] == "mock")
     assert mock_provider["verification_only"] is True
     assert mock_provider["configured"] is False
@@ -236,6 +238,38 @@ def test_llm_complete_rejects_protocol_llm_local_base_url(monkeypatch) -> None:
     assert response.status_code == 400
     assert "external HTTPS endpoint" in response.text
     assert "localhost:11434" not in response.text
+    assert len(tracker.records) == 1
+    assert tracker.records[0].provider == "protocol-llm"
+    assert tracker.records[0].success is False
+    records = audit.list(limit=10, action="llm.completion", resource_type="llm_provider")
+    assert len(records) == 1
+    assert records[0].details["error_code"] == "provider_base_url_rejected"
+
+
+@pytest.mark.parametrize("base_url", ["https://api.openai.com/v1", "https://api.openai.com./v1"])
+def test_llm_complete_rejects_protocol_llm_official_openai_base_url(monkeypatch, base_url: str) -> None:
+    monkeypatch.setenv("XAGENT_LLM_BACKEND", "mock")
+    monkeypatch.setenv("XAGENT_PROTOCOL_LLM_API_KEY", "test-key")
+    monkeypatch.setenv("XAGENT_PROTOCOL_LLM_BASE_URL", base_url)
+    get_settings.cache_clear()
+    tracker = CostTracker()
+    audit = AuditStore()
+    client = TestClient(_app(_principal(), cost_tracker=tracker, audit_store=audit))
+
+    try:
+        response = client.post(
+            "/api/v1/llm/complete",
+            json={
+                "provider": "protocol-llm",
+                "messages": [{"role": "user", "content": "hello"}],
+            },
+        )
+    finally:
+        get_settings.cache_clear()
+
+    assert response.status_code == 400
+    assert "official OpenAI API host" in response.text
+    assert base_url not in response.text
     assert len(tracker.records) == 1
     assert tracker.records[0].provider == "protocol-llm"
     assert tracker.records[0].success is False

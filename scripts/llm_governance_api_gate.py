@@ -17,6 +17,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
+from backend.app.api import llm_governance
 from backend.app.api.errors import XAgentAPIError
 from backend.app.api.llm_governance import (
     LLMCompletionRequest,
@@ -98,6 +99,17 @@ async def build_llm_governance_gate_report(root: Path = ROOT) -> GateReport:
     old_mock_enabled = os.environ.get("XAGENT_ENABLE_API_MOCK_PROVIDER")
     os.environ["XAGENT_ENABLE_API_MOCK_PROVIDER"] = "true"
     get_settings.cache_clear()
+    try:
+        return await _build_llm_governance_gate_report(root)
+    finally:
+        if old_mock_enabled is None:
+            os.environ.pop("XAGENT_ENABLE_API_MOCK_PROVIDER", None)
+        else:
+            os.environ["XAGENT_ENABLE_API_MOCK_PROVIDER"] = old_mock_enabled
+        get_settings.cache_clear()
+
+
+async def _build_llm_governance_gate_report(root: Path = ROOT) -> GateReport:
     api_source = (root / "backend/app/api/llm_governance.py").read_text(encoding="utf-8")
     main_source = (root / "backend/app/main.py").read_text(encoding="utf-8")
     dependencies_source = (root / "backend/app/dependencies.py").read_text(encoding="utf-8")
@@ -178,6 +190,46 @@ async def build_llm_governance_gate_report(root: Path = ROOT) -> GateReport:
             os.environ.pop("XAGENT_DEEPSEEK_BASE_URL", None)
         else:
             os.environ["XAGENT_DEEPSEEK_BASE_URL"] = old_base_url
+        get_settings.cache_clear()
+
+    protocol_official_base_url_rejected = False
+    protocol_official_network_guard_triggered = False
+    old_protocol_api_key = os.environ.get("XAGENT_PROTOCOL_LLM_API_KEY")
+    old_protocol_base_url = os.environ.get("XAGENT_PROTOCOL_LLM_BASE_URL")
+    old_build_llm_router = llm_governance.build_llm_router
+
+    def fail_build_llm_router(*args: Any, **kwargs: Any) -> Any:
+        raise AssertionError("official protocol LLM host should be rejected before provider routing")
+
+    os.environ["XAGENT_PROTOCOL_LLM_API_KEY"] = "gate-key"
+    os.environ["XAGENT_PROTOCOL_LLM_BASE_URL"] = "https://api.openai.com./v1"
+    llm_governance.build_llm_router = fail_build_llm_router
+    get_settings.cache_clear()
+    try:
+        try:
+            await complete(
+                LLMCompletionRequest(
+                    provider="protocol-llm",
+                    messages=[{"role": "user", "content": "hello"}],
+                ),
+                _principal(),
+                tracker,
+                audit,
+            )
+        except XAgentAPIError as exc:
+            protocol_official_base_url_rejected = exc.status_code == 400
+        except AssertionError:
+            protocol_official_network_guard_triggered = True
+    finally:
+        llm_governance.build_llm_router = old_build_llm_router
+        if old_protocol_api_key is None:
+            os.environ.pop("XAGENT_PROTOCOL_LLM_API_KEY", None)
+        else:
+            os.environ["XAGENT_PROTOCOL_LLM_API_KEY"] = old_protocol_api_key
+        if old_protocol_base_url is None:
+            os.environ.pop("XAGENT_PROTOCOL_LLM_BASE_URL", None)
+        else:
+            os.environ["XAGENT_PROTOCOL_LLM_BASE_URL"] = old_protocol_base_url
         get_settings.cache_clear()
 
     success_response = await complete(
@@ -266,6 +318,13 @@ async def build_llm_governance_gate_report(root: Path = ROOT) -> GateReport:
             error="deepseek provider can be routed to a local, non-HTTPS, or non-official base URL",
         ),
         _check(
+            "protocol_llm_rejects_official_openai_host",
+            protocol_official_base_url_rejected
+            and not protocol_official_network_guard_triggered
+            and any(record.success is False and record.provider == "protocol-llm" for record in tracker.records),
+            error="protocol-llm can still be routed directly to the official OpenAI API host",
+        ),
+        _check(
             "mock_completion_records_success",
             success_response.provider == "mock"
             and success_response.governance["budget_checked"] is True
@@ -274,7 +333,7 @@ async def build_llm_governance_gate_report(root: Path = ROOT) -> GateReport:
         ),
         _check(
             "audit_records_policy_and_success",
-            audit.count() == 5
+            audit.count() == 6
             and {record.details.get("error_code") for record in audit.list(limit=10)} >= {
                 "provider_rejected",
                 "budget_guard_rejected",
@@ -318,11 +377,6 @@ async def build_llm_governance_gate_report(root: Path = ROOT) -> GateReport:
             "git diff --check",
         ],
     )
-    if old_mock_enabled is None:
-        os.environ.pop("XAGENT_ENABLE_API_MOCK_PROVIDER", None)
-    else:
-        os.environ["XAGENT_ENABLE_API_MOCK_PROVIDER"] = old_mock_enabled
-    get_settings.cache_clear()
     return report
 
 

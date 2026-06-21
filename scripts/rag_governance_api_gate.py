@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import os
 import subprocess
 import sys
 from dataclasses import asdict, dataclass, field
@@ -17,6 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from backend.app.api.errors import XAgentAPIError
+from backend.app.api import rag_governance
 from backend.app.api.rag_governance import (
     LOCAL_PROVIDER_NAMES,
     RAGQueryRequest,
@@ -25,6 +27,7 @@ from backend.app.api.rag_governance import (
 )
 from backend.app.core.audit import AuditStore
 from backend.app.core.security import Principal, ROLE_SCOPES
+from backend.app.settings import get_settings
 
 REPORT_DIR = ROOT / ".xagent_runtime" / "reports"
 DEFAULT_OUTPUT = REPORT_DIR / "rag-governance-api-gate.json"
@@ -133,6 +136,43 @@ async def build_rag_governance_gate_report(root: Path = ROOT) -> GateReport:
     except XAgentAPIError as exc:
         tenant_rejected = exc.status_code == 403
 
+    official_host_rejected = False
+    old_protocol_api_key = os.environ.get("XAGENT_PROTOCOL_SEARCH_API_KEY")
+    old_protocol_base_url = os.environ.get("XAGENT_PROTOCOL_SEARCH_BASE_URL")
+    old_post_external_json = rag_governance._post_external_json
+
+    async def fail_post_external_json(
+        url: str,
+        payload: dict[str, object],
+        headers: dict[str, str],
+    ) -> dict[str, object]:
+        raise AssertionError("official protocol search host should be rejected before network calls")
+
+    os.environ["XAGENT_PROTOCOL_SEARCH_API_KEY"] = "gate-key"
+    os.environ["XAGENT_PROTOCOL_SEARCH_BASE_URL"] = "https://api.tavily.com./search"
+    rag_governance._post_external_json = fail_post_external_json
+    get_settings.cache_clear()
+    try:
+        try:
+            await query_rag(
+                RAGQueryRequest(provider="protocol-search", query="governance", top_k=1, max_results=1),
+                _principal(),
+                audit,
+            )
+        except XAgentAPIError as exc:
+            official_host_rejected = exc.status_code == 400
+    finally:
+        rag_governance._post_external_json = old_post_external_json
+        if old_protocol_api_key is None:
+            os.environ.pop("XAGENT_PROTOCOL_SEARCH_API_KEY", None)
+        else:
+            os.environ["XAGENT_PROTOCOL_SEARCH_API_KEY"] = old_protocol_api_key
+        if old_protocol_base_url is None:
+            os.environ.pop("XAGENT_PROTOCOL_SEARCH_BASE_URL", None)
+        else:
+            os.environ["XAGENT_PROTOCOL_SEARCH_BASE_URL"] = old_protocol_base_url
+        get_settings.cache_clear()
+
     success_response = await query_rag(
         RAGQueryRequest(provider="mock", query="api governance", top_k=3, max_results=5),
         _principal(tenant_id="tenant-1"),
@@ -178,6 +218,12 @@ async def build_rag_governance_gate_report(root: Path = ROOT) -> GateReport:
             error="RAG query can cross tenant scope or is not audited",
         ),
         _check(
+            "protocol_search_rejects_official_hosts_before_network",
+            official_host_rejected
+            and any(record.details.get("error_code") == "provider_base_url_rejected" for record in audit.list(limit=20)),
+            error="protocol-search can still be routed directly to official OpenAI or Tavily API hosts",
+        ),
+        _check(
             "mock_results_are_tenant_scoped",
             success_response.provider == "mock"
             and success_response.governance["tenant_scoped"] is True
@@ -187,8 +233,14 @@ async def build_rag_governance_gate_report(root: Path = ROOT) -> GateReport:
         ),
         _check(
             "audit_records_policy_and_success",
-            audit.count() == 4
-            and audit_error_codes >= {"provider_rejected", "budget_guard_rejected", "tenant_scope_rejected", None},
+            audit.count() == 5
+            and audit_error_codes >= {
+                "provider_rejected",
+                "budget_guard_rejected",
+                "tenant_scope_rejected",
+                "provider_base_url_rejected",
+                None,
+            },
             details={"audit_count": audit.count()},
             error="audit store does not contain expected RAG governance records",
         ),

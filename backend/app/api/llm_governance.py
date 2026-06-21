@@ -31,6 +31,7 @@ AuditStoreDependency = Annotated[AuditStore, Depends(get_audit_store)]
 SUPPORTED_PROVIDERS = {"protocol-llm", "deepseek", "mock", "auto"}
 COMPLETION_PROVIDERS = {"protocol-llm", "deepseek", "mock"}
 LOCAL_PROVIDER_NAMES = {"ollama", "local", "localhost", "comfyui"}
+PROTOCOL_LLM_DENIED_HOSTS = {"api.openai.com"}
 DEFAULT_DEEPSEEK_BASE_URL = "https://api.deepseek.com/v1"
 DEEPSEEK_BASE_URL_HOSTS = {"api.deepseek.com"}
 
@@ -184,6 +185,14 @@ def _protocol_llm_base_url(provider: str) -> str | None:
             "Protocol LLM base URL must be an external HTTPS endpoint.",
             details={"provider": "protocol-llm", "reason": error},
         )
+    host = (urlparse(base_url).hostname or "").rstrip(".").lower()
+    if host in PROTOCOL_LLM_DENIED_HOSTS:
+        raise api_error(
+            400,
+            ErrorCode.VALIDATION_ERROR,
+            "Protocol LLM base URL must use a protocol-compatible gateway, not the official OpenAI API host.",
+            details={"provider": "protocol-llm", "denied_hosts": sorted(PROTOCOL_LLM_DENIED_HOSTS)},
+        )
     return base_url
 
 
@@ -200,7 +209,7 @@ def _deepseek_base_url(provider: str) -> str | None:
             "DeepSeek base URL must be an external HTTPS endpoint.",
             details={"provider": "deepseek", "reason": error},
         )
-    host = (urlparse(base_url).hostname or "").lower()
+    host = (urlparse(base_url).hostname or "").rstrip(".").lower()
     if host not in DEEPSEEK_BASE_URL_HOSTS:
         raise api_error(
             400,
@@ -322,6 +331,7 @@ async def list_llm_providers(principal: PrincipalDependency) -> dict[str, object
                 "api_only": True,
                 "local": False,
                 "external_https_required": True,
+                "official_hosts_blocked": sorted(PROTOCOL_LLM_DENIED_HOSTS),
             },
             {
                 "provider": "deepseek",

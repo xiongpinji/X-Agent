@@ -4,6 +4,7 @@ import asyncio
 import json
 from typing import Annotated, Literal
 from urllib import request as urllib_request
+from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
@@ -23,6 +24,12 @@ AuditStoreDependency = Annotated[AuditStore, Depends(get_audit_store)]
 
 SUPPORTED_PROVIDERS = {"protocol-search", "mock"}
 LOCAL_PROVIDER_NAMES = {"local", "qdrant", "chroma", "pgvector", "ollama", "comfyui", "localhost"}
+PROTOCOL_SEARCH_DENIED_HOSTS = {"api.openai.com", "api.tavily.com"}
+PROVIDER_URL_VALIDATION_MESSAGES = {
+    "External RAG provider URL must be an external HTTPS endpoint.",
+    "Protocol search base URL must be an external HTTPS endpoint.",
+    "Protocol search base URL must use a protocol-compatible gateway, not official OpenAI or Tavily API hosts.",
+}
 MOCK_DOCUMENTS = [
     {
         "document_id": "tenant-1-policy",
@@ -119,6 +126,30 @@ def _provider_configured(provider: str) -> bool:
     return False
 
 
+def _protocol_search_base_url() -> str | None:
+    settings = get_settings()
+    url = settings.protocol_search_base_url
+    if not url:
+        return None
+    error = external_https_url_error_reason(url)
+    if error is not None:
+        raise api_error(
+            400,
+            ErrorCode.VALIDATION_ERROR,
+            "Protocol search base URL must be an external HTTPS endpoint.",
+            details={"provider": "protocol-search", "reason": error},
+        )
+    host = (urlparse(url).hostname or "").rstrip(".").lower()
+    if host in PROTOCOL_SEARCH_DENIED_HOSTS:
+        raise api_error(
+            400,
+            ErrorCode.VALIDATION_ERROR,
+            "Protocol search base URL must use a protocol-compatible gateway, not official OpenAI or Tavily API hosts.",
+            details={"provider": "protocol-search", "denied_hosts": sorted(PROTOCOL_SEARCH_DENIED_HOSTS)},
+        )
+    return url
+
+
 def _record_audit(
     audit_store: AuditStore,
     principal: Principal,
@@ -196,7 +227,7 @@ async def _external_retrieve(provider: str, request: RAGQueryRequest, principal:
 
 async def _protocol_search_retrieve(request: RAGQueryRequest, principal: Principal) -> list[RAGDocument]:
     settings = get_settings()
-    url = settings.protocol_search_base_url
+    url = _protocol_search_base_url()
     if not url:
         return []
     payload = {
@@ -269,6 +300,7 @@ async def list_rag_providers(principal: PrincipalDependency) -> dict[str, object
                 "configured": _provider_configured("protocol-search"),
                 "endpoint": get_settings().protocol_search_base_url,
                 "external_https_required": True,
+                "official_hosts_blocked": sorted(PROTOCOL_SEARCH_DENIED_HOSTS),
             },
             {"provider": "mock", "api_only": True, "local": False, "configured": True, "verification_only": True},
         ],
@@ -327,13 +359,18 @@ async def query_rag(
 
     try:
         results = _mock_retrieve(request, principal) if provider == "mock" else await _external_retrieve(provider, request, principal)
-    except XAgentAPIError:
+    except XAgentAPIError as exc:
+        error_code = "tenant_scope_rejected"
+        if exc.code == ErrorCode.VALIDATION_ERROR and exc.message in PROVIDER_URL_VALIDATION_MESSAGES:
+            error_code = "provider_base_url_rejected"
+        elif exc.code == ErrorCode.VALIDATION_ERROR:
+            error_code = "provider_request_rejected"
         _record_audit(
             audit_store,
             principal,
             provider=provider,
             outcome="failure",
-            error_code="tenant_scope_rejected",
+            error_code=error_code,
         )
         raise
     except Exception:

@@ -59,6 +59,7 @@ def test_rag_providers_report_api_only_surface() -> None:
     protocol_provider = next(item for item in data["providers"] if item["provider"] == "protocol-search")
     assert protocol_provider["endpoint"] is None
     assert protocol_provider["external_https_required"] is True
+    assert protocol_provider["official_hosts_blocked"] == ["api.openai.com", "api.tavily.com"]
 
 
 def test_rag_query_rejects_local_provider_and_records_audit() -> None:
@@ -124,10 +125,53 @@ def test_rag_query_reports_unconfigured_external_provider() -> None:
     assert records[0].details["error_code"] == "provider_not_configured"
 
 
+@pytest.mark.parametrize(
+    "base_url",
+    [
+        "https://api.tavily.com/search",
+        "https://api.tavily.com./search",
+        "https://api.openai.com/v1/responses",
+        "https://api.openai.com./v1/responses",
+    ],
+)
+def test_rag_query_rejects_official_provider_hosts_before_network(monkeypatch, base_url: str) -> None:
+    monkeypatch.setenv("XAGENT_PROTOCOL_SEARCH_API_KEY", "test-key")
+    monkeypatch.setenv("XAGENT_PROTOCOL_SEARCH_BASE_URL", base_url)
+    get_settings.cache_clear()
+    audit = AuditStore()
+    client = TestClient(_app(_principal(), audit_store=audit))
+
+    async def fail_post(url: str, payload: dict[str, object], headers: dict[str, str]) -> dict[str, object]:
+        raise AssertionError("official provider URL rejection must happen before network calls")
+
+    monkeypatch.setattr(rag_governance, "_post_external_json", fail_post)
+
+    try:
+        response = client.post(
+            "/api/v1/rag/query",
+            json={
+                "provider": "protocol-search",
+                "query": "governance",
+                "top_k": 1,
+                "max_results": 1,
+            },
+        )
+    finally:
+        get_settings.cache_clear()
+
+    assert response.status_code == 400
+    assert "official OpenAI or Tavily API hosts" in response.text
+    assert base_url not in response.text
+    records = audit.list(limit=10, action="rag.query", resource_type="rag_provider")
+    assert len(records) == 1
+    assert records[0].resource_id == "protocol-search"
+    assert records[0].details["error_code"] == "provider_base_url_rejected"
+
+
 @pytest.mark.asyncio
 async def test_protocol_search_retrieval_adapter_maps_external_results(monkeypatch) -> None:
     monkeypatch.setenv("XAGENT_PROTOCOL_SEARCH_API_KEY", "test-key")
-    monkeypatch.setenv("XAGENT_PROTOCOL_SEARCH_BASE_URL", "https://search.gateway.example/v1/query")
+    monkeypatch.setenv("XAGENT_PROTOCOL_SEARCH_BASE_URL", "https://search-gateway.x-agent.dev/v1/query")
     monkeypatch.setenv("XAGENT_PROTOCOL_SEARCH_MODEL", "search-model")
     get_settings.cache_clear()
     posted: dict[str, object] = {}
@@ -158,7 +202,7 @@ async def test_protocol_search_retrieval_adapter_maps_external_results(monkeypat
     finally:
         get_settings.cache_clear()
 
-    assert posted["url"] == "https://search.gateway.example/v1/query"
+    assert posted["url"] == "https://search-gateway.x-agent.dev/v1/query"
     assert posted["authorization"] == "Bearer test-key"
     assert posted["payload"]["model"] == "search-model"
     assert results[0].source_url == "https://docs.example/governance"
