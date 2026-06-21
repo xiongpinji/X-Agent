@@ -482,6 +482,8 @@ def build_llm_router(
     deepseek_api_key: str | None,
     deepseek_model: str,
     deepseek_base_url: str,
+    openai_base_url: str | None = None,
+    openai_backend_name: str = "openai",
 ) -> LLMRouter:
     """Build provider router from settings.
 
@@ -496,7 +498,7 @@ def build_llm_router(
     backends: list[BaseLLMBackend] = []
     for name in requested:
         if name == "openai" and openai_api_key:
-            backends.append(OpenAIBackend(openai_api_key, openai_model, name="openai"))
+            backends.append(OpenAIBackend(openai_api_key, openai_model, base_url=openai_base_url, name=openai_backend_name))
         elif name == "deepseek" and deepseek_api_key:
             backends.append(
                 OpenAIBackend(
@@ -512,7 +514,4 @@ def build_llm_router(
     if not backends:
         backends.append(MockLLMBackend())
     return LLMRouter(backends=backends)
-
-
-
 

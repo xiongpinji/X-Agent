@@ -17,9 +17,9 @@ REPORT_DIR = ROOT / ".xagent_runtime" / "reports"
 DEFAULT_OUTPUT = REPORT_DIR / "provider-health-failover-gate.json"
 
 SENSITIVE_ENV_KEYS = {
-    "XAGENT_OPENAI_API_KEY",
+    "XAGENT_PROTOCOL_LLM_API_KEY",
     "XAGENT_DEEPSEEK_API_KEY",
-    "XAGENT_TAVILY_API_KEY",
+    "XAGENT_PROTOCOL_SEARCH_API_KEY",
     "XAGENT_CREATIVE_VIDEO_API_KEY",
 }
 
@@ -81,10 +81,11 @@ def _provider_matrix() -> list[dict[str, Any]]:
     return [
         {
             "capability": "llm",
-            "provider": "openai",
-            "configured": _configured("XAGENT_OPENAI_API_KEY"),
+            "provider": "protocol-llm",
+            "configured": _configured("XAGENT_PROTOCOL_LLM_API_KEY") and _configured("XAGENT_PROTOCOL_LLM_BASE_URL"),
             "api_only": True,
             "local": False,
+            "external_https_required": True,
             "failover_order": ["deepseek", "mock"],
             "secret_value": "<redacted>",
         },
@@ -100,10 +101,11 @@ def _provider_matrix() -> list[dict[str, Any]]:
         },
         {
             "capability": "rag",
-            "provider": "tavily",
-            "configured": _configured("XAGENT_TAVILY_API_KEY"),
+            "provider": "protocol-search",
+            "configured": _configured("XAGENT_PROTOCOL_SEARCH_API_KEY") and _configured("XAGENT_PROTOCOL_SEARCH_BASE_URL"),
             "api_only": True,
             "local": False,
+            "external_https_required": True,
             "failover_order": ["mock"],
             "secret_value": "<redacted>",
         },

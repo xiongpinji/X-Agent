@@ -51,13 +51,14 @@ def test_rag_providers_report_api_only_surface() -> None:
 
     assert response.status_code == 200
     data = response.json()
-    assert {item["provider"] for item in data["providers"]} == {"openai-search", "tavily", "mock"}
+    assert {item["provider"] for item in data["providers"]} == {"protocol-search", "mock"}
     assert all(item["api_only"] for item in data["providers"])
     assert all(item["local"] is False for item in data["providers"])
     assert "qdrant" in data["local_providers_blocked"]
     assert next(item for item in data["providers"] if item["provider"] == "mock")["verification_only"] is True
-    assert next(item for item in data["providers"] if item["provider"] == "openai-search")["endpoint"].startswith("https://api.openai.com/")
-    assert next(item for item in data["providers"] if item["provider"] == "tavily")["endpoint"] == "https://api.tavily.com/search"
+    protocol_provider = next(item for item in data["providers"] if item["provider"] == "protocol-search")
+    assert protocol_provider["endpoint"] is None
+    assert protocol_provider["external_https_required"] is True
 
 
 def test_rag_query_rejects_local_provider_and_records_audit() -> None:
@@ -84,7 +85,7 @@ def test_rag_query_blocks_estimated_budget_before_provider_use() -> None:
     response = client.post(
         "/api/v1/rag/query",
         json={
-            "provider": "tavily",
+            "provider": "protocol-search",
             "query": "governance",
             "top_k": 10,
             "max_results": 20,
@@ -96,7 +97,7 @@ def test_rag_query_blocks_estimated_budget_before_provider_use() -> None:
     assert "cost budget" in response.text
     records = audit.list(limit=10, action="rag.query", resource_type="rag_provider")
     assert len(records) == 1
-    assert records[0].resource_id == "tavily"
+    assert records[0].resource_id == "protocol-search"
     assert records[0].details["error_code"] == "budget_guard_rejected"
 
 
@@ -107,7 +108,7 @@ def test_rag_query_reports_unconfigured_external_provider() -> None:
     response = client.post(
         "/api/v1/rag/query",
         json={
-            "provider": "tavily",
+            "provider": "protocol-search",
             "query": "governance",
             "top_k": 1,
             "max_results": 1,
@@ -119,13 +120,15 @@ def test_rag_query_reports_unconfigured_external_provider() -> None:
     assert "not configured" in response.text
     records = audit.list(limit=10, action="rag.query", resource_type="rag_provider")
     assert len(records) == 1
-    assert records[0].resource_id == "tavily"
+    assert records[0].resource_id == "protocol-search"
     assert records[0].details["error_code"] == "provider_not_configured"
 
 
 @pytest.mark.asyncio
-async def test_tavily_retrieval_adapter_maps_external_results(monkeypatch) -> None:
-    monkeypatch.setenv("XAGENT_TAVILY_API_KEY", "test-key")
+async def test_protocol_search_retrieval_adapter_maps_external_results(monkeypatch) -> None:
+    monkeypatch.setenv("XAGENT_PROTOCOL_SEARCH_API_KEY", "test-key")
+    monkeypatch.setenv("XAGENT_PROTOCOL_SEARCH_BASE_URL", "https://search.gateway.example/v1/query")
+    monkeypatch.setenv("XAGENT_PROTOCOL_SEARCH_MODEL", "search-model")
     get_settings.cache_clear()
     posted: dict[str, object] = {}
 
@@ -148,15 +151,16 @@ async def test_tavily_retrieval_adapter_maps_external_results(monkeypatch) -> No
 
     try:
         results = await rag_governance._external_retrieve(
-            "tavily",
-            RAGQueryRequest(provider="tavily", query="governance", top_k=1, max_results=1),
+            "protocol-search",
+            RAGQueryRequest(provider="protocol-search", query="governance", top_k=1, max_results=1),
             _principal(),
         )
     finally:
         get_settings.cache_clear()
 
-    assert posted["url"] == "https://api.tavily.com/search"
+    assert posted["url"] == "https://search.gateway.example/v1/query"
     assert posted["authorization"] == "Bearer test-key"
+    assert posted["payload"]["model"] == "search-model"
     assert results[0].source_url == "https://docs.example/governance"
     assert results[0].tenant_id == "tenant-1"
 

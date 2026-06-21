@@ -205,7 +205,7 @@ async def build_llm_governance_gate_report(root: Path = ROOT) -> GateReport:
         ),
         _check(
             "provider_surface_is_api_only",
-            provider_names == {"openai", "deepseek", "mock"}
+            provider_names == {"protocol-llm", "deepseek", "mock"}
             and not (provider_names & LOCAL_PROVIDER_NAMES)
             and providers.get("local_providers_blocked"),
             details={"providers": sorted(provider_names), "blocked": providers.get("local_providers_blocked")},
@@ -221,6 +221,11 @@ async def build_llm_governance_gate_report(root: Path = ROOT) -> GateReport:
             )
             and "Mock LLM provider is reserved for deterministic verification" in api_source,
             error="mock provider can be mistaken for a default production provider",
+        ),
+        _check(
+            "official_openai_is_not_governance_provider",
+            '"provider": "openai"' not in api_source and '"protocol-llm"' in api_source,
+            error="LLM governance route still exposes the official OpenAI provider name",
         ),
         _check(
             "completion_requires_agent_run",
@@ -304,7 +309,7 @@ async def build_llm_governance_gate_report(root: Path = ROOT) -> GateReport:
         checks=checks,
         known_limits=[
             "Cost tracking is process-local in this slice and is not billing truth.",
-            "This gate explicitly enables the verification-only mock provider and does not perform real OpenAI or DeepSeek calls.",
+            "This gate explicitly enables the verification-only mock provider and does not perform real protocol LLM or DeepSeek calls.",
             "Fine-grained llm:* scopes are deferred; this slice reuses agent:run and audit:read.",
         ],
         next_commands=[

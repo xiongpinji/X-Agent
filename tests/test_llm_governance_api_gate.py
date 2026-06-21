@@ -10,7 +10,8 @@ from scripts.llm_governance_api_gate import build_llm_governance_gate_report, wr
 @pytest.mark.asyncio
 async def test_llm_governance_gate_passes_without_external_call(monkeypatch):
     monkeypatch.setenv("XAGENT_LLM_BACKEND", "mock")
-    monkeypatch.delenv("XAGENT_OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("XAGENT_PROTOCOL_LLM_API_KEY", raising=False)
+    monkeypatch.delenv("XAGENT_PROTOCOL_LLM_BASE_URL", raising=False)
     monkeypatch.delenv("XAGENT_DEEPSEEK_API_KEY", raising=False)
 
     report = await build_llm_governance_gate_report()

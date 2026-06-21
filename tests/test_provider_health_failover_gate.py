@@ -6,8 +6,11 @@ from scripts.provider_health_failover_gate import build_provider_health_failover
 
 
 def test_provider_health_failover_gate_redacts_secrets(monkeypatch) -> None:
-    monkeypatch.setenv("XAGENT_OPENAI_API_KEY", "secret-openai-key")
+    monkeypatch.setenv("XAGENT_PROTOCOL_LLM_API_KEY", "secret-protocol-llm-key")
+    monkeypatch.setenv("XAGENT_PROTOCOL_LLM_BASE_URL", "https://llm.gateway.example/v1")
     monkeypatch.setenv("XAGENT_DEEPSEEK_API_KEY", "secret-deepseek-key")
+    monkeypatch.setenv("XAGENT_PROTOCOL_SEARCH_API_KEY", "secret-protocol-search-key")
+    monkeypatch.setenv("XAGENT_PROTOCOL_SEARCH_BASE_URL", "https://search.gateway.example/v1/query")
     monkeypatch.setenv("XAGENT_CREATIVE_VIDEO_API_KEY", "secret-video-key")
     monkeypatch.setenv("XAGENT_CREATIVE_VIDEO_API_URL", "https://api.xagent-protocol.invalid/v1/video/generate")
 
@@ -16,7 +19,8 @@ def test_provider_health_failover_gate_redacts_secrets(monkeypatch) -> None:
     checks = {check.name: check for check in report.checks}
 
     assert report.status == "passed"
-    assert "secret-openai-key" not in payload
+    assert "secret-protocol-llm-key" not in payload
+    assert "secret-protocol-search-key" not in payload
     assert "secret-deepseek-key" not in payload
     assert "secret-video-key" not in payload
     assert checks["provider_matrix_is_api_only"].status == "passed"
@@ -37,4 +41,6 @@ def test_provider_health_failover_gate_json_contract(tmp_path) -> None:
     assert payload["git_sha"]
     assert payload["network_mutation_performed"] is False
     assert any(item["provider"] == "mock" and item["configured"] is True for item in payload["provider_matrix"])
+    assert any(item["provider"] == "protocol-llm" for item in payload["provider_matrix"])
+    assert any(item["provider"] == "protocol-search" for item in payload["provider_matrix"])
     assert any(item["capability"] == "creative-video" for item in payload["provider_matrix"])

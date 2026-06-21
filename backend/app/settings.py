@@ -30,10 +30,16 @@ class Settings(BaseSettings):
     enable_api_mock_provider: bool = False
     openai_api_key: str | None = None
     openai_model: str = "gpt-4o-mini"
+    protocol_llm_api_key: str | None = None
+    protocol_llm_base_url: str | None = None
+    protocol_llm_model: str = "protocol-llm"
     deepseek_api_key: str | None = None
     deepseek_model: str = "deepseek-chat"
     deepseek_base_url: str | None = None
     tavily_api_key: str | None = None
+    protocol_search_api_key: str | None = None
+    protocol_search_base_url: str | None = None
+    protocol_search_model: str = "protocol-search"
 
     memory_backend: str = "memory"
     database_url: str = "sqlite:///./data/xagent.db"

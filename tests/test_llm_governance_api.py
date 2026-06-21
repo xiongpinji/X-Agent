@@ -61,10 +61,12 @@ def test_llm_providers_reports_api_only_external_surface(monkeypatch) -> None:
 
     assert response.status_code == 200
     data = response.json()
-    assert data["default_provider"] in {"openai", "deepseek", "mock", "auto"}
+    assert data["default_provider"] in {"protocol-llm", "deepseek", "mock", "auto"}
     assert "ollama" in data["local_providers_blocked"]
     assert all(provider["api_only"] for provider in data["providers"])
     assert all(provider["local"] is False for provider in data["providers"])
+    protocol_provider = next(provider for provider in data["providers"] if provider["provider"] == "protocol-llm")
+    assert protocol_provider["external_https_required"] is True
     mock_provider = next(provider for provider in data["providers"] if provider["provider"] == "mock")
     assert mock_provider["verification_only"] is True
     assert mock_provider["configured"] is False
@@ -205,6 +207,37 @@ def test_llm_complete_rejects_deepseek_non_official_base_url(monkeypatch) -> Non
     assert "openrouter.ai" not in response.text
     assert len(tracker.records) == 1
     assert tracker.records[0].provider == "deepseek"
+    assert tracker.records[0].success is False
+    records = audit.list(limit=10, action="llm.completion", resource_type="llm_provider")
+    assert len(records) == 1
+    assert records[0].details["error_code"] == "provider_base_url_rejected"
+
+
+def test_llm_complete_rejects_protocol_llm_local_base_url(monkeypatch) -> None:
+    monkeypatch.setenv("XAGENT_LLM_BACKEND", "mock")
+    monkeypatch.setenv("XAGENT_PROTOCOL_LLM_API_KEY", "test-key")
+    monkeypatch.setenv("XAGENT_PROTOCOL_LLM_BASE_URL", "http://localhost:11434/v1")
+    get_settings.cache_clear()
+    tracker = CostTracker()
+    audit = AuditStore()
+    client = TestClient(_app(_principal(), cost_tracker=tracker, audit_store=audit))
+
+    try:
+        response = client.post(
+            "/api/v1/llm/complete",
+            json={
+                "provider": "protocol-llm",
+                "messages": [{"role": "user", "content": "hello"}],
+            },
+        )
+    finally:
+        get_settings.cache_clear()
+
+    assert response.status_code == 400
+    assert "external HTTPS endpoint" in response.text
+    assert "localhost:11434" not in response.text
+    assert len(tracker.records) == 1
+    assert tracker.records[0].provider == "protocol-llm"
     assert tracker.records[0].success is False
     records = audit.list(limit=10, action="llm.completion", resource_type="llm_provider")
     assert len(records) == 1

@@ -111,7 +111,7 @@ async def build_rag_governance_gate_report(root: Path = ROOT) -> GateReport:
     try:
         await query_rag(
             RAGQueryRequest(
-                provider="tavily",
+                provider="protocol-search",
                 query="governance",
                 top_k=10,
                 max_results=20,
@@ -148,7 +148,7 @@ async def build_rag_governance_gate_report(root: Path = ROOT) -> GateReport:
         ),
         _check(
             "provider_surface_is_api_only",
-            provider_names == {"openai-search", "tavily", "mock"}
+            provider_names == {"protocol-search", "mock"}
             and not (provider_names & LOCAL_PROVIDER_NAMES)
             and providers.get("local_providers_blocked"),
             details={"providers": sorted(provider_names), "blocked": providers.get("local_providers_blocked")},
@@ -207,7 +207,7 @@ async def build_rag_governance_gate_report(root: Path = ROOT) -> GateReport:
         known_limits=[
             "This gate uses the mock retrieval provider and does not perform external search calls.",
             "This slice exposes read/query governance only; ingestion and indexing are deferred.",
-            "Provider credentials and live retrieval staging require owner approval.",
+            "Protocol search gateway credentials, base URL, and live retrieval staging require owner approval.",
         ],
         next_commands=[
             "python scripts/rag_governance_api_gate.py",

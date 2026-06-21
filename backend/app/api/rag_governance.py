@@ -21,10 +21,8 @@ router = APIRouter(prefix="/api/v1/rag", tags=["rag-governance"])
 PrincipalDependency = Annotated[Principal, Depends(get_current_principal)]
 AuditStoreDependency = Annotated[AuditStore, Depends(get_audit_store)]
 
-SUPPORTED_PROVIDERS = {"openai-search", "tavily", "mock"}
+SUPPORTED_PROVIDERS = {"protocol-search", "mock"}
 LOCAL_PROVIDER_NAMES = {"local", "qdrant", "chroma", "pgvector", "ollama", "comfyui", "localhost"}
-OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses"
-TAVILY_SEARCH_URL = "https://api.tavily.com/search"
 MOCK_DOCUMENTS = [
     {
         "document_id": "tenant-1-policy",
@@ -92,8 +90,7 @@ def _estimate_cost(provider: str, *, top_k: int, max_results: int) -> float:
     if provider == "mock":
         return 0.0
     rates = {
-        "openai-search": 0.002,
-        "tavily": 0.001,
+        "protocol-search": 0.001,
     }
     return rates.get(provider, 0.0) * max(top_k, max_results)
 
@@ -117,10 +114,8 @@ def _provider_configured(provider: str) -> bool:
     settings = get_settings()
     if provider == "mock":
         return True
-    if provider == "openai-search":
-        return bool(settings.openai_api_key)
-    if provider == "tavily":
-        return bool(settings.tavily_api_key)
+    if provider == "protocol-search":
+        return bool(settings.protocol_search_api_key and settings.protocol_search_base_url)
     return False
 
 
@@ -189,10 +184,8 @@ async def _external_retrieve(provider: str, request: RAGQueryRequest, principal:
             "RAG tenant scope does not match the authenticated tenant.",
             details={"tenant_scope": tenant_scope},
         )
-    if provider == "tavily":
-        return await _tavily_retrieve(request, principal)
-    if provider == "openai-search":
-        return await _openai_search_retrieve(request, principal)
+    if provider == "protocol-search":
+        return await _protocol_search_retrieve(request, principal)
     raise api_error(
         400,
         ErrorCode.VALIDATION_ERROR,
@@ -201,37 +194,40 @@ async def _external_retrieve(provider: str, request: RAGQueryRequest, principal:
     )
 
 
-async def _tavily_retrieve(request: RAGQueryRequest, principal: Principal) -> list[RAGDocument]:
+async def _protocol_search_retrieve(request: RAGQueryRequest, principal: Principal) -> list[RAGDocument]:
     settings = get_settings()
+    url = settings.protocol_search_base_url
+    if not url:
+        return []
     payload = {
         "query": request.query,
-        "search_depth": "basic",
-        "include_answer": False,
-        "include_raw_content": False,
+        "mode": request.mode,
+        "model": settings.protocol_search_model,
+        "top_k": request.top_k,
         "max_results": min(request.top_k, request.max_results),
     }
     data = await _post_external_json(
-        TAVILY_SEARCH_URL,
+        url,
         payload,
         {
-            "Authorization": f"Bearer {settings.tavily_api_key}",
+            "Authorization": f"Bearer {settings.protocol_search_api_key}",
             "Content-Type": "application/json",
         },
     )
-    results = data.get("results") if isinstance(data, dict) else []
+    results = data.get("results") or data.get("documents") if isinstance(data, dict) else []
     documents: list[RAGDocument] = []
     for index, item in enumerate(results if isinstance(results, list) else []):
         if not isinstance(item, dict):
             continue
-        title = str(item.get("title") or item.get("url") or f"Tavily result {index + 1}")
-        source_url = str(item.get("url") or "")
-        snippet = str(item.get("content") or item.get("snippet") or "")
+        title = str(item.get("title") or item.get("url") or item.get("source_url") or f"Protocol search result {index + 1}")
+        source_url = str(item.get("source_url") or item.get("url") or "")
+        snippet = str(item.get("snippet") or item.get("content") or item.get("text") or "")
         score = float(item.get("score") or max(0.0, 0.9 - index * 0.05))
         if not source_url:
             continue
         documents.append(
             RAGDocument(
-                document_id=f"tavily-{index + 1}",
+                document_id=str(item.get("document_id") or item.get("id") or f"protocol-search-{index + 1}"),
                 title=title,
                 snippet=snippet[:1000],
                 source_url=source_url,
@@ -240,47 +236,6 @@ async def _tavily_retrieve(request: RAGQueryRequest, principal: Principal) -> li
             )
         )
     return documents[: min(request.top_k, request.max_results)]
-
-
-async def _openai_search_retrieve(request: RAGQueryRequest, principal: Principal) -> list[RAGDocument]:
-    settings = get_settings()
-    payload = {
-        "model": settings.openai_model,
-        "input": request.query,
-        "tools": [{"type": "web_search"}],
-    }
-    data = await _post_external_json(
-        OPENAI_RESPONSES_URL,
-        payload,
-        {
-            "Authorization": f"Bearer {settings.openai_api_key}",
-            "Content-Type": "application/json",
-        },
-    )
-    text = str(data.get("output_text") or _extract_openai_output_text(data) or "")
-    return [
-        RAGDocument(
-            document_id=str(data.get("id") or "openai-search-result"),
-            title="OpenAI web search context",
-            snippet=text[:1000],
-            source_url="https://api.openai.com/v1/responses",
-            score=0.75,
-            tenant_id=principal.tenant_id,
-        )
-    ] if text else []
-
-
-def _extract_openai_output_text(data: dict[str, object]) -> str:
-    output = data.get("output")
-    parts: list[str] = []
-    for item in output if isinstance(output, list) else []:
-        if not isinstance(item, dict):
-            continue
-        content = item.get("content")
-        for content_item in content if isinstance(content, list) else []:
-            if isinstance(content_item, dict) and isinstance(content_item.get("text"), str):
-                parts.append(content_item["text"])
-    return "\n".join(parts)
 
 
 async def _post_external_json(url: str, payload: dict[str, object], headers: dict[str, str]) -> dict[str, object]:
@@ -308,18 +263,12 @@ async def list_rag_providers(principal: PrincipalDependency) -> dict[str, object
     return {
         "providers": [
             {
-                "provider": "openai-search",
+                "provider": "protocol-search",
                 "api_only": True,
                 "local": False,
-                "configured": _provider_configured("openai-search"),
-                "endpoint": "https://api.openai.com/v1/responses",
-            },
-            {
-                "provider": "tavily",
-                "api_only": True,
-                "local": False,
-                "configured": _provider_configured("tavily"),
-                "endpoint": "https://api.tavily.com/search",
+                "configured": _provider_configured("protocol-search"),
+                "endpoint": get_settings().protocol_search_base_url,
+                "external_https_required": True,
             },
             {"provider": "mock", "api_only": True, "local": False, "configured": True, "verification_only": True},
         ],

@@ -28,8 +28,8 @@ PrincipalDependency = Annotated[Principal, Depends(get_current_principal)]
 CostTrackerDependency = Annotated[CostTracker, Depends(get_llm_cost_tracker)]
 AuditStoreDependency = Annotated[AuditStore, Depends(get_audit_store)]
 
-SUPPORTED_PROVIDERS = {"openai", "deepseek", "mock", "auto"}
-COMPLETION_PROVIDERS = {"openai", "deepseek", "mock"}
+SUPPORTED_PROVIDERS = {"protocol-llm", "deepseek", "mock", "auto"}
+COMPLETION_PROVIDERS = {"protocol-llm", "deepseek", "mock"}
 LOCAL_PROVIDER_NAMES = {"ollama", "local", "localhost", "comfyui"}
 DEFAULT_DEEPSEEK_BASE_URL = "https://api.deepseek.com/v1"
 DEEPSEEK_BASE_URL_HOSTS = {"api.deepseek.com"}
@@ -116,11 +116,11 @@ def _fallback_order_for(provider: str) -> str:
         external_only = [
             item
             for item in configured
-            if item in {"openai", "deepseek"} and item not in LOCAL_PROVIDER_NAMES
+            if item in {"protocol-llm", "deepseek"} and item not in LOCAL_PROVIDER_NAMES
         ]
         if _mock_provider_enabled() and "mock" in configured:
             external_only.append("mock")
-        return ",".join(external_only or ["openai", "deepseek"])
+        return ",".join(external_only or ["protocol-llm", "deepseek"])
     return provider
 
 
@@ -132,12 +132,15 @@ def _provider_configured(provider: str) -> bool:
     settings = get_settings()
     if provider == "mock":
         return _mock_provider_enabled()
-    if provider == "openai":
-        return bool(settings.openai_api_key)
+    if provider == "protocol-llm":
+        return bool(settings.protocol_llm_api_key and settings.protocol_llm_base_url)
     if provider == "deepseek":
         return bool(settings.deepseek_api_key)
     if provider == "auto":
-        return bool(settings.openai_api_key or settings.deepseek_api_key)
+        return bool(
+            (settings.protocol_llm_api_key and settings.protocol_llm_base_url)
+            or settings.deepseek_api_key
+        )
     return False
 
 
@@ -152,7 +155,7 @@ def _estimate_cost(provider: str, model: str, input_tokens: int, output_tokens: 
         return 0.0
     # Conservative per-1K estimates; final accounting uses provider-reported response.cost.
     pricing = {
-        "openai": {"prompt": 0.005, "completion": 0.015},
+        "protocol-llm": {"prompt": 0.005, "completion": 0.015},
         "deepseek": {"prompt": 0.00027, "completion": 0.00110},
     }
     rates = pricing.get(provider, {"prompt": 0.0, "completion": 0.0})
@@ -163,9 +166,25 @@ def _provider_model(provider: str) -> str:
     settings = get_settings()
     if provider == "deepseek":
         return settings.deepseek_model
-    if provider == "openai":
-        return settings.openai_model
+    if provider == "protocol-llm":
+        return settings.protocol_llm_model
     return "mock"
+
+
+def _protocol_llm_base_url(provider: str) -> str | None:
+    if provider != "protocol-llm":
+        return None
+    settings = get_settings()
+    base_url = settings.protocol_llm_base_url
+    error = external_https_url_error_reason(base_url)
+    if error is not None:
+        raise api_error(
+            400,
+            ErrorCode.VALIDATION_ERROR,
+            "Protocol LLM base URL must be an external HTTPS endpoint.",
+            details={"provider": "protocol-llm", "reason": error},
+        )
+    return base_url
 
 
 def _deepseek_base_url(provider: str) -> str | None:
@@ -297,11 +316,12 @@ async def list_llm_providers(principal: PrincipalDependency) -> dict[str, object
     return {
         "providers": [
             {
-                "provider": "openai",
-                "model": settings.openai_model,
-                "configured": bool(settings.openai_api_key),
+                "provider": "protocol-llm",
+                "model": settings.protocol_llm_model,
+                "configured": bool(settings.protocol_llm_api_key and settings.protocol_llm_base_url),
                 "api_only": True,
                 "local": False,
+                "external_https_required": True,
             },
             {
                 "provider": "deepseek",
@@ -422,6 +442,7 @@ async def complete(
 
     settings = get_settings()
     try:
+        protocol_llm_base_url = _protocol_llm_base_url("protocol-llm") if provider in {"protocol-llm", "auto"} else None
         deepseek_base_url = _deepseek_base_url(provider)
     except XAgentAPIError:
         _record_cost(
@@ -446,13 +467,15 @@ async def complete(
         )
         raise
     llm_router = build_llm_router(
-        llm_backend=provider,
-        fallback_order=_fallback_order_for(provider),
-        openai_api_key=settings.openai_api_key,
-        openai_model=settings.openai_model,
+        llm_backend="openai" if provider == "protocol-llm" else provider,
+        fallback_order=_fallback_order_for(provider).replace("protocol-llm", "openai"),
+        openai_api_key=settings.protocol_llm_api_key,
+        openai_model=settings.protocol_llm_model,
         deepseek_api_key=settings.deepseek_api_key,
         deepseek_model=settings.deepseek_model,
         deepseek_base_url=deepseek_base_url or DEFAULT_DEEPSEEK_BASE_URL,
+        openai_base_url=protocol_llm_base_url,
+        openai_backend_name="protocol-llm",
     )
     messages = [item.model_dump() for item in request.messages]
     start = time.perf_counter()
