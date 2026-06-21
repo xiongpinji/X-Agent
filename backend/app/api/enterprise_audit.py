@@ -7,7 +7,7 @@ import logging
 from datetime import datetime
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel
 
 from backend.app.api.rbac_enforcement import require_admin
@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(
     prefix="/api/v1/enterprise/audit",
     tags=["enterprise-audit"],
-    dependencies=[Depends(require_admin)],
+    dependencies=[require_admin],
 )
 
 # 初始化管理器

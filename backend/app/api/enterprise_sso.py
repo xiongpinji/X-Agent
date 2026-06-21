@@ -6,7 +6,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
 
 from backend.app.api.rbac_enforcement import require_admin
@@ -20,14 +20,9 @@ from backend.app.core.enterprise_sso import (
 
 logger = logging.getLogger(__name__)
 
-# SECURITY P1-03: enterprise SSO config endpoints require admin role.
-# Note: initiate_saml_auth/initiate_oauth_auth/sso_logout are SSO login entry
-# points; if they need to be public, exclude them per-route later. For now,
-# require_admin closes the unauthenticated gap.
 router = APIRouter(
     prefix="/api/v1/enterprise/sso",
     tags=["enterprise-sso"],
-    dependencies=[Depends(require_admin)],
 )
 
 # 初始化管理器
@@ -65,7 +60,9 @@ class OAuthAuthResponse(BaseModel):
     authorization_url: str
 
 
-@router.post("/saml/config", response_model=dict[str, Any])
+# SECURITY P1-03: SSO configuration and logout require admin role; SSO login
+# initiation routes remain public identity-provider entry points.
+@router.post("/saml/config", response_model=dict[str, Any], dependencies=[require_admin])
 async def configure_saml(request: SAMLConfigRequest) -> dict[str, Any]:
     """配置SAML 2.0"""
     try:
@@ -87,10 +84,7 @@ async def configure_saml(request: SAMLConfigRequest) -> dict[str, Any]:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-# SSO login entry points must be PUBLIC (unauthenticated users initiate SSO
-# here). dependencies=[] overrides the router-level require_admin so login is
-# not blocked. (SECURITY P1-03 refinement)
-@router.post("/saml/auth", response_model=SAMLAuthResponse, dependencies=[])
+@router.post("/saml/auth", response_model=SAMLAuthResponse)
 async def initiate_saml_auth() -> SAMLAuthResponse:
     """启动SAML认证"""
     try:
@@ -113,7 +107,7 @@ async def initiate_saml_auth() -> SAMLAuthResponse:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.post("/oauth/config", response_model=dict[str, Any])
+@router.post("/oauth/config", response_model=dict[str, Any], dependencies=[require_admin])
 async def configure_oauth(request: OAuthConfigRequest) -> dict[str, Any]:
     """配置OAuth 2.0/OIDC"""
     try:
@@ -137,8 +131,7 @@ async def configure_oauth(request: OAuthConfigRequest) -> dict[str, Any]:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-# SSO login entry point — must be PUBLIC (see /saml/auth note above).
-@router.post("/oauth/auth", response_model=OAuthAuthResponse, dependencies=[])
+@router.post("/oauth/auth", response_model=OAuthAuthResponse)
 async def initiate_oauth_auth() -> OAuthAuthResponse:
     """启动OAuth认证"""
     try:
@@ -163,7 +156,7 @@ async def initiate_oauth_auth() -> OAuthAuthResponse:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.post("/logout", response_model=dict[str, Any])
+@router.post("/logout", response_model=dict[str, Any], dependencies=[require_admin])
 async def sso_logout(session_id: str) -> dict[str, Any]:
     """SSO登出"""
     try:

@@ -9,6 +9,7 @@ from typing import Any, Iterable
 from fastapi import FastAPI
 from fastapi.routing import APIRoute
 
+from backend.app.api.rbac_enforcement import PermissionDependency
 from backend.app import dependencies
 
 
@@ -32,6 +33,8 @@ PUBLIC_ROUTES = {
     ("POST", "/api/v1/auth/login"),
     ("POST", "/api/v1/auth/login/oauth"),
     ("POST", "/api/v1/auth/reset-password"),
+    ("POST", "/api/v1/enterprise/sso/saml/auth"),
+    ("POST", "/api/v1/enterprise/sso/oauth/auth"),
     ("GET", "/api/v1/commercial-pilot/feishu/status"),
     ("GET", "/api/v1/commercial-pilot/feishu/reports"),
     ("GET", "/api/v1/commercial-pilot/feishu/reports/{report_name}"),
@@ -40,6 +43,12 @@ PUBLIC_ROUTES = {
     ("GET", "/api/v1/health/ready"),
     ("GET", "/api/v1/health/detailed"),
     ("GET", "/api/v1/agent/stream/health"),
+    ("GET", "/api/i18n/supported-languages"),
+    ("GET", "/api/i18n/supported-regions"),
+    ("GET", "/api/i18n/locale"),
+    ("GET", "/api/i18n/translations/{language}"),
+    ("GET", "/api/i18n/translation"),
+    ("GET", "/api/i18n/localization-config/{region}"),
     ("GET", "/api-key/status"),
     ("GET", "/ready"),
     ("GET", "/health"),
@@ -114,6 +123,15 @@ def _has_signature_strategy(route: APIRoute) -> bool:
     return bool({_call_ref(call) for call in calls} & SIGNATURE_DEPENDENCY_REFS)
 
 
+def _has_restrictive_permission_dependency(route: APIRoute) -> bool:
+    calls = _dependency_calls(route)
+    return any(
+        isinstance(call, PermissionDependency)
+        and call.permission not in {"agent:read", "task:read", "tool:read", "workflow:read", "memory:read", "skill:read", "sandbox:read", "chat:read"}
+        for call in calls
+    )
+
+
 def _endpoint_ref(route: APIRoute) -> str:
     endpoint = route.endpoint
     return f"{getattr(endpoint, '__module__', '<unknown>')}.{getattr(endpoint, '__qualname__', _call_name(endpoint))}"
@@ -140,7 +158,7 @@ def audit_routes(
                 continue
             if not route.path.startswith("/api/"):
                 continue
-            if not _has_auth_dependency(route):
+            if not _has_auth_dependency(route) and not _has_restrictive_permission_dependency(route):
                 issues.append(
                     RouteAuditIssue(
                         method=method,

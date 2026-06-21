@@ -20,7 +20,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any, Optional
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field, EmailStr
 
 from backend.app.api.rbac_enforcement import require_admin
@@ -29,7 +29,7 @@ from backend.app.api.rbac_enforcement import require_admin
 router = APIRouter(
     prefix="/api/v1/partners",
     tags=["partners"],
-    dependencies=[Depends(require_admin)],
+    dependencies=[require_admin],
 )
 logger = logging.getLogger(__name__)
 

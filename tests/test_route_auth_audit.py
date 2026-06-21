@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from fastapi import Depends, FastAPI
 
+from backend.app.api.rbac_enforcement import require_admin
 from backend.app.dependencies import get_current_principal
 from backend.app.main import app
 from scripts.route_auth_audit import audit_routes, issues_to_dicts, load_app
@@ -39,6 +40,16 @@ def test_audit_allows_mounted_route_with_principal_dependency() -> None:
     @test_app.get("/api/v1/private")
     async def private_route(principal=Depends(get_current_principal)) -> dict[str, bool]:
         return {"authenticated": principal.authenticated}
+
+    assert audit_routes(test_app, public_routes=set(), signature_routes=set()) == []
+
+
+def test_audit_allows_mounted_route_with_restrictive_rbac_dependency() -> None:
+    test_app = FastAPI()
+
+    @test_app.post("/api/v1/admin-only", dependencies=[require_admin])
+    async def private_route() -> dict[str, bool]:
+        return {"ok": True}
 
     assert audit_routes(test_app, public_routes=set(), signature_routes=set()) == []
 

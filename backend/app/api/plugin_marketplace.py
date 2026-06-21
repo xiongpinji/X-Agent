@@ -15,7 +15,7 @@ import logging
 from datetime import UTC, datetime
 from typing import Annotated, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from backend.app.api.rbac_enforcement import require_admin
@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(
     prefix="/api/v1/plugins",
     tags=["plugins"],
-    dependencies=[Depends(require_admin)],
+    dependencies=[require_admin],
 )
 
 

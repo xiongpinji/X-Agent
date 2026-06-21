@@ -74,7 +74,7 @@ python scripts/send_to_zcode.py --subject "<主题>" --body "<正文>" [--task-i
 |---|---|---|---|
 | P1-01 | 撤销被跟踪的 .env 文件 | `.env.{development,production,test,performance}`、`frontend/.env.production` | 已修复待验证(Codex 019ecfe8) |
 | P1-02 | 加 pre-commit gitleaks 钩子 | `.pre-commit-config.yaml` | 已修复待验证(Codex 019ecfe8)；`pytest test_pre_commit_security_hooks.py → 1 passed`；`pre-commit run gitleaks --all-files` 因首次下载 Go 环境 SSL EOF 未完成 |
-| P1-03 | 审计 35 个 UNKNOWN 未授权路由 | `enterprise_audit/migration/sso/i18n/...` | 待领取 |
+| P1-03 | 审计 35 个 UNKNOWN 未授权路由 | `enterprise_audit/migration/sso/i18n/...` | 已修复待验证(Codex 019ecfe8)；`pytest test_p1_03_unknown_route_auth.py test_route_auth_audit.py test_rbac_enforcement.py → 37 passed`；`route_auth_audit.py → passed` |
 | P1-04 | saml_sso.py 用 defusedxml + 真签名验证 | `backend/app/core/saml_sso.py` | 待领取 |
 | P1-05 | 4 个无 timeout 的 HTTP 请求加 timeout | `plugin_crawler.py` 等 | 待领取 |
 
