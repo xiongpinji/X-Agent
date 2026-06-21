@@ -45,6 +45,9 @@ from backend.app.core.creative_studio.media import (
 from backend.app.core.creative_studio.adapters import PlaceholderImageAdapter
 from backend.app.core.creative_studio.adapters import ExternalVideoAPIAdapter
 
+VIDEO_PROTOCOL_URL = "https://api.xagent-protocol.invalid/v1/video/generate"
+"""Static external-HTTPS protocol URL used only with injected post_json fakes."""
+
 
 # ───── storyboard schema ─────
 
@@ -251,7 +254,7 @@ async def test_external_video_adapter_blocks_without_human_review():
         return {"video_url": "https://cdn.example/video.mp4"}
 
     adp = ExternalVideoAPIAdapter(
-        api_url="https://api.runwayml.com/v1/video",
+        api_url=VIDEO_PROTOCOL_URL,
         api_key="test-key",
         post_json=post_json,
     )
@@ -272,9 +275,9 @@ async def test_external_video_adapter_posts_approved_request():
         return {"video_url": "https://cdn.example/video.mp4", "job_id": "job-1"}
 
     adp = ExternalVideoAPIAdapter(
-        api_url="https://api.runwayml.com/v1/video",
+        api_url=VIDEO_PROTOCOL_URL,
         api_key="test-key",
-        provider="seedance",
+        provider="protocol-video",
         model="video-model",
         timeout_seconds=12,
         post_json=post_json,
@@ -290,11 +293,11 @@ async def test_external_video_adapter_posts_approved_request():
 
     assert result.success
     assert result.output_path == "https://cdn.example/video.mp4"
-    assert result.provider == "seedance"
+    assert result.provider == "protocol-video"
     assert result.metadata["provider_api_call_attempted"] is True
     assert result.metadata["job_id"] == "job-1"
     url, payload, headers, timeout = calls[0]
-    assert url == "https://api.runwayml.com/v1/video"
+    assert url == VIDEO_PROTOCOL_URL
     assert payload["prompt"] == "slow push in"
     assert payload["model"] == "video-model"
     assert "output_path" not in payload
@@ -308,7 +311,7 @@ async def test_external_video_adapter_rejects_missing_output_reference():
         return {"status": "ok"}
 
     adp = ExternalVideoAPIAdapter(
-        api_url="https://api.runwayml.com/v1/video",
+        api_url=VIDEO_PROTOCOL_URL,
         api_key="test-key",
         post_json=post_json,
     )
@@ -445,27 +448,27 @@ def test_external_video_api_status_reports_redacted_missing_config(monkeypatch):
 def test_external_video_api_status_redacts_configured_secret(monkeypatch):
     from backend.app.core.creative_studio.adapters import external_video_api_status
 
-    monkeypatch.setenv("XAGENT_CREATIVE_VIDEO_API_URL", "https://api.runwayml.com/v1/video")
+    monkeypatch.setenv("XAGENT_CREATIVE_VIDEO_API_URL", VIDEO_PROTOCOL_URL)
     monkeypatch.setenv("XAGENT_CREATIVE_VIDEO_API_KEY", "secret-video-key")
-    monkeypatch.setenv("XAGENT_CREATIVE_VIDEO_PROVIDER", "seedance")
+    monkeypatch.setenv("XAGENT_CREATIVE_VIDEO_PROVIDER", "protocol-video")
     monkeypatch.setenv("XAGENT_CREATIVE_VIDEO_MODEL", "video-model")
 
     status = external_video_api_status()
 
-    assert status["provider"] == "seedance"
+    assert status["provider"] == "protocol-video"
     assert status["model"] == "video-model"
     assert status["configured"] is True
     assert status["api_url_configured"] is True
     assert status["api_key_configured"] is True
     assert status["api_key_fingerprint"]
     assert "secret-video-key" not in json.dumps(status)
-    assert "https://api.runwayml.com/v1/video" not in json.dumps(status)
+    assert VIDEO_PROTOCOL_URL not in json.dumps(status)
 
 
 def test_creative_studio_video_provider_status_endpoint(monkeypatch):
-    monkeypatch.setenv("XAGENT_CREATIVE_VIDEO_API_URL", "https://api.runwayml.com/v1/video")
+    monkeypatch.setenv("XAGENT_CREATIVE_VIDEO_API_URL", VIDEO_PROTOCOL_URL)
     monkeypatch.setenv("XAGENT_CREATIVE_VIDEO_API_KEY", "secret-video-key")
-    monkeypatch.setenv("XAGENT_CREATIVE_VIDEO_PROVIDER", "seedance")
+    monkeypatch.setenv("XAGENT_CREATIVE_VIDEO_PROVIDER", "protocol-video")
     monkeypatch.setenv("XAGENT_CREATIVE_VIDEO_MODEL", "video-model")
 
     app = FastAPI()
@@ -480,11 +483,11 @@ def test_creative_studio_video_provider_status_endpoint(monkeypatch):
     assert response.status_code == 200
     data = response.json()
     assert data["configured"] is True
-    assert data["provider"] == "seedance"
+    assert data["provider"] == "protocol-video"
     assert data["model"] == "video-model"
     assert data["endpoints"]["shot_video"] == "/api/v1/creative-studio/shot-video"
     assert "secret-video-key" not in response.text
-    assert "https://api.runwayml.com/v1/video" not in response.text
+    assert VIDEO_PROTOCOL_URL not in response.text
 
 
 def test_external_video_workflow_plan_requires_review():
@@ -587,7 +590,7 @@ async def test_external_video_workflow_executes_after_review():
         return {
             "success": True,
             "output_path": "https://cdn.example/S01.mp4",
-            "provider": "seedance",
+            "provider": "protocol-video",
             "error": None,
             "metadata": {"provider_api_call_attempted": True, "job_id": "job-S01"},
         }
@@ -621,7 +624,7 @@ async def test_external_video_workflow_execution_caps_max_shots():
         return {
             "success": True,
             "output_path": "https://cdn.example/shot.mp4",
-            "provider": "seedance",
+            "provider": "protocol-video",
             "error": None,
             "metadata": {"provider_api_call_attempted": True},
         }
@@ -773,10 +776,10 @@ async def test_creative_video_tool_allows_workflow_control_scope():
 @pytest.mark.asyncio
 async def test_external_video_adapter_logs_sanitized_provider_exception(caplog):
     async def post_json(url, payload, headers, timeout):
-        raise RuntimeError("boom https://api.runwayml.com/v1/video Bearer secret-video-key")
+        raise RuntimeError(f"boom {VIDEO_PROTOCOL_URL} Bearer secret-video-key")
 
     adp = ExternalVideoAPIAdapter(
-        api_url="https://api.runwayml.com/v1/video",
+        api_url=VIDEO_PROTOCOL_URL,
         api_key="secret-video-key",
         post_json=post_json,
     )
@@ -792,7 +795,7 @@ async def test_external_video_adapter_logs_sanitized_provider_exception(caplog):
 
     assert not result.success
     assert result.error == "external_video_api_request_failed"
-    assert "https://api.runwayml.com/v1/video" not in caplog.text
+    assert VIDEO_PROTOCOL_URL not in caplog.text
     assert "secret-video-key" not in caplog.text
 
 

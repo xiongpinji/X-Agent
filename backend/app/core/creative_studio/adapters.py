@@ -4,7 +4,7 @@
 工作流只依赖 media.py 里的抽象，切换供应商不改流水线。
 
 TTS     — edge-tts (免费, 无 API Key, 中文晓晓/云扬等)
-图片    — gpt-image-2 via openai SDK (需 OPENAI_API_KEY)
+图片    — 外部生图模型适配点按实际供应商另行匹配
 图片保底— 纯色占位图 (无需任何依赖，永远可用)
 合成    — ffmpeg subprocess (需系统安装 ffmpeg)
 """
@@ -173,11 +173,11 @@ class GPTImage2Adapter(MediaProvider):
 
 
 # ──────────────────────────────────────────
-# 视频 adapter: external HTTP JSON API
-# 不绑定具体本地模型/ComfyUI。由环境变量配置外部模型 API。
+# 视频 adapter: protocol HTTP JSON API
+# 不绑定具体供应商、本地模型或 ComfyUI。实际使用时再匹配生图/视频模型。
 # ──────────────────────────────────────────
 class ExternalVideoAPIAdapter(MediaProvider):
-    """外部视频模型 API：HTTP JSON 适配器，调用前必须已人工审核。"""
+    """外部视频协议 API：HTTP JSON 适配器，调用前必须已人工审核。"""
 
     name = "external-video-api"
     kind = MediaKind.VIDEO

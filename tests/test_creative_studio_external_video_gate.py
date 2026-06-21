@@ -9,6 +9,8 @@ from scripts.creative_studio_external_video_gate import (
     write_report,
 )
 
+VIDEO_PROTOCOL_URL = "https://api.xagent-protocol.invalid/v1/video/generate"
+
 
 @pytest.mark.asyncio
 async def test_creative_video_gate_passes_without_external_call(monkeypatch):
@@ -38,7 +40,7 @@ async def test_creative_video_gate_passes_without_external_call(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_creative_video_gate_report_json_contract(tmp_path, monkeypatch):
-    monkeypatch.setenv("XAGENT_CREATIVE_VIDEO_API_URL", "https://api.runwayml.com/v1/video")
+    monkeypatch.setenv("XAGENT_CREATIVE_VIDEO_API_URL", VIDEO_PROTOCOL_URL)
     monkeypatch.setenv("XAGENT_CREATIVE_VIDEO_API_KEY", "secret-video-key")
 
     output = tmp_path / "creative-video-gate.json"
@@ -53,7 +55,7 @@ async def test_creative_video_gate_report_json_contract(tmp_path, monkeypatch):
     assert payload["provider_status"]["api_url_external_https"] is True
     assert payload["provider_status"]["api_key_fingerprint"]
     assert "secret-video-key" not in json.dumps(payload)
-    assert "https://api.runwayml.com/v1/video" not in json.dumps(payload)
+    assert VIDEO_PROTOCOL_URL not in json.dumps(payload)
     assert any(check["name"] == "frontend_contract_requires_review" for check in payload["checks"])
     assert any(check["name"] == "frontend_contract_exposes_video_workflow" for check in payload["checks"])
 

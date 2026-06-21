@@ -96,7 +96,7 @@ async def _workflow_execution_cap_check() -> dict[str, Any]:
         return {
             "success": True,
             "output_path": "https://cdn.example/shot.mp4",
-            "provider": "seedance",
+            "provider": "protocol-video",
             "error": None,
             "metadata": {"provider_api_call_attempted": True},
         }

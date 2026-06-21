@@ -9,7 +9,7 @@ def test_provider_health_failover_gate_redacts_secrets(monkeypatch) -> None:
     monkeypatch.setenv("XAGENT_OPENAI_API_KEY", "secret-openai-key")
     monkeypatch.setenv("XAGENT_DEEPSEEK_API_KEY", "secret-deepseek-key")
     monkeypatch.setenv("XAGENT_CREATIVE_VIDEO_API_KEY", "secret-video-key")
-    monkeypatch.setenv("XAGENT_CREATIVE_VIDEO_API_URL", "https://video.example/generate")
+    monkeypatch.setenv("XAGENT_CREATIVE_VIDEO_API_URL", "https://api.xagent-protocol.invalid/v1/video/generate")
 
     report = build_provider_health_failover_gate_report()
     payload = json.dumps(report.to_dict(), ensure_ascii=False)

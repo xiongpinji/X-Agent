@@ -2,7 +2,9 @@
 
 ## Scope
 
-This slice gives X-Agent a Creative Studio video-generation boundary that can call external model APIs without requiring local ComfyUI, local video models, or user GPU capacity.
+This slice gives X-Agent a Creative Studio video-generation boundary that can call an external protocol API without requiring local ComfyUI, local video models, or user GPU capacity.
+
+It intentionally does not choose the final image-generation model or video-generation model. Those providers are matched later when the owner decides which paid API, internal gateway, or partner model endpoint to use.
 
 The implementation is intentionally opt-in:
 
@@ -14,16 +16,31 @@ The implementation is intentionally opt-in:
 
 ## Provider Configuration
 
-Set these environment variables only in the runtime that owns the external provider call:
+Set these environment variables only in the runtime that owns the external protocol call:
 
 ```text
-XAGENT_CREATIVE_VIDEO_API_URL=https://provider.example/video/generate
+XAGENT_CREATIVE_VIDEO_API_URL=https://api.your-video-gateway.invalid/v1/video/generate
 XAGENT_CREATIVE_VIDEO_API_KEY=...
-XAGENT_CREATIVE_VIDEO_PROVIDER=external-provider-name
-XAGENT_CREATIVE_VIDEO_MODEL=provider-model-name
+XAGENT_CREATIVE_VIDEO_PROVIDER=protocol-video
+XAGENT_CREATIVE_VIDEO_MODEL=matched-later
 ```
 
-Status responses expose only redacted configuration state. Raw API URL and raw API key are not returned.
+Status responses expose only redacted configuration state. Raw API URL and raw API key are not returned. The URL must be an external HTTPS endpoint; localhost, private-network endpoints, and ComfyUI-style local providers are rejected before any provider call.
+
+The current protocol payload is intentionally small and provider-neutral:
+
+```json
+{
+  "prompt": "<compiled shot video prompt>",
+  "model": "<configured model or request override>",
+  "duration_seconds": 4,
+  "aspect_ratio": "9:16",
+  "provider": "protocol-video",
+  "metadata": {}
+}
+```
+
+Accepted response references are also provider-neutral: `video_url`, `output_url`, `url`, `download_url`, `output`, or an async job reference such as `job_id`, `id`, or `request_id`.
 
 ## Local Endpoints
 
@@ -35,9 +52,9 @@ POST /api/v1/creative-studio/shot-video
 POST /api/v1/creative-studio/video-workflow
 ```
 
-`/video-provider-status` reports whether provider config exists and whether human review is required.
+`/video-provider-status` reports whether protocol config exists and whether human review is required.
 
-`/shot-video` runs a single external video request only after human review approval. Without approval it fails closed with `provider_api_call_attempted=false`.
+`/shot-video` runs a single external protocol video request only after human review approval. Without approval it fails closed with `provider_api_call_attempted=false`.
 
 `/video-workflow` accepts a storyboard JSON payload and returns a deterministic plan by default. It only executes shot video calls when both `execute=true` and `human_review_approved=true`.
 
@@ -103,4 +120,4 @@ npm run verify:panda:contracts
 
 ## Release Boundary
 
-This is a feature-slice delivery, not a commercial RC promotion. Promotion still requires owner approval to mount the router, expose UI entry points, choose provider credentials, define cost limits, and run a real provider staging test.
+This is a feature-slice delivery, not a commercial RC promotion. Promotion still requires owner approval to mount the router, expose UI entry points, choose image/video provider credentials, define cost limits, map the provider-specific request/response fields, and run a real provider staging test.
