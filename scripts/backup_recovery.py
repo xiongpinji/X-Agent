@@ -17,6 +17,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+HTTP_TIMEOUT_SECONDS = 30
+
 
 class BackupManager:
     """Manages backups for all X-Agent data stores."""
@@ -78,7 +80,7 @@ class BackupManager:
             import requests
 
             # Create snapshot
-            response = requests.post(f"{qdrant_url}/snapshots")
+            response = requests.post(f"{qdrant_url}/snapshots", timeout=HTTP_TIMEOUT_SECONDS)
             if response.status_code != 200:
                 raise Exception(f"Failed to create snapshot: {response.text}")
 
@@ -86,7 +88,10 @@ class BackupManager:
             logger.info(f"Snapshot created: {snapshot_name}")
 
             # Download snapshot
-            response = requests.get(f"{qdrant_url}/snapshots/{snapshot_name}")
+            response = requests.get(
+                f"{qdrant_url}/snapshots/{snapshot_name}",
+                timeout=HTTP_TIMEOUT_SECONDS,
+            )
             if response.status_code != 200:
                 raise Exception(f"Failed to download snapshot: {response.text}")
 
@@ -326,7 +331,11 @@ class RecoveryManager:
 
             with open(backup_file, 'rb') as f:
                 files = {'snapshot': f}
-                response = requests.post(f"{qdrant_url}/snapshots/recover", files=files)
+                response = requests.post(
+                    f"{qdrant_url}/snapshots/recover",
+                    files=files,
+                    timeout=HTTP_TIMEOUT_SECONDS,
+                )
 
             if response.status_code == 200:
                 logger.info("Qdrant restore completed successfully")

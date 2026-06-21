@@ -270,8 +270,7 @@ class SAMLProvider:
             logger.warning("SAML assertion expired")
             return False
 
-        # TODO: Verify signature using IdP certificate
-        # This requires XML signature verification
+        # XMLDSig is verified before assertion extraction in verify_response().
 
         return True
 
