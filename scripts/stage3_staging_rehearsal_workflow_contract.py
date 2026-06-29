@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -276,10 +277,10 @@ def _stage3_workflow_text(text: str) -> str:
     start = text.find(marker)
     if start == -1:
         return ""
-    next_job = text.find("\n  deploy-production:", start + len(marker))
-    if next_job == -1:
+    next_job = re.search(r"\n  [A-Za-z0-9_-]+:", text[start + len(marker) :])
+    if next_job is None:
         return text[start:]
-    return text[start:next_job]
+    return text[start : start + len(marker) + next_job.start()]
 
 
 def run_contract(workflow_path: Path = DEFAULT_WORKFLOW) -> WorkflowContractReport:
