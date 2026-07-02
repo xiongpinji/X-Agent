@@ -15,6 +15,7 @@ import hashlib
 import hmac
 import base64
 import json
+import re
 from datetime import datetime, timedelta, UTC
 from typing import Optional, Dict, Any, List
 from dataclasses import dataclass, asdict
@@ -25,6 +26,288 @@ import uuid
 from pydantic import BaseModel, Field, validator
 
 logger = logging.getLogger(__name__)
+
+
+# ============================================================================
+# XMLDSig signature verification (shared helper)
+# ============================================================================
+# SECURITY: This implements real XML Digital Signature verification for SAML
+# responses using the `cryptography` library (already a dependency). It replaces
+# the previous "check if <Signature> element exists" pseudo-verification that
+# allowed forged assertions.
+#
+# What it verifies (RSA-SHA256 / RSA-SHA1 over SignedInfo):
+#   1. Parses XML with defusedxml (XXE protection)
+#   2. Locates <ds:Signature> and its <ds:SignedInfo>/<ds:SignatureValue>
+#   3. Validates each <ds:Reference> digest against the referenced XML element
+#   4. Canonicalizes <ds:SignedInfo> (simplified c14n: strip whitespace between tags)
+#   5. Base64-decodes <ds:SignatureValue>
+#   6. Loads the IdP X.509 cert, extracts public key
+#   7. Verifies the signature over canonicalized SignedInfo bytes
+#
+# Limitations (documented, not silent):
+#   - Simplified c14n: full xmldsig c14n requires xmlsec/libxml2. This
+#     implementation strips inter-tag whitespace, which handles the common
+#     case of IdP-signed responses. For strict c14n compliance, integrate xmlsec.
+#   - SHA1 support retained for legacy IdPs but SHA256 preferred.
+# It fails closed on every error path: missing signature, missing cert,
+# invalid cert, malformed SignedInfo, or signature mismatch all return False.
+
+_DS_NS = "http://www.w3.org/2000/09/xmldsig#"
+_SAML_NS_MAP = {
+    "ds": _DS_NS,
+    "samlp": "urn:oasis:names:tc:SAML:2.0:protocol",
+    "saml": "urn:oasis:names:tc:SAML:2.0:assertion",
+}
+
+
+def _ensure_pem(cert_value: str) -> str:
+    """Wrap a raw base64 DER cert in PEM headers if needed."""
+    cert_value = cert_value.strip()
+    if cert_value.startswith("-----BEGIN"):
+        return cert_value
+    body = cert_value.replace("\n", "").replace("\r", "")
+    lines = [body[i:i + 64] for i in range(0, len(body), 64)]
+    return "-----BEGIN CERTIFICATE-----\n" + "\n".join(lines) + "\n-----END CERTIFICATE-----"
+
+
+def _canonicalize_signed_info(signed_info_element) -> bytes:
+    """Simplified c14n of <ds:SignedInfo>.
+
+    Strips insignificant whitespace between elements and serializes to UTF-8.
+    NOT full xmldsig c14n (requires xmlsec) but handles the common IdP
+    signing case where SignedInfo has no mixed content.
+    """
+    from defusedxml import ElementTree as ET
+    raw = ET.tostring(signed_info_element, encoding="unicode")
+    canonical = re.sub(r">\s+<", "><", raw).strip()
+    return canonical.encode("utf-8")
+
+
+def _canonicalize_xml_element(element) -> bytes:
+    """Simplified c14n for referenced XML elements."""
+    from defusedxml import ElementTree as ET
+    raw = ET.tostring(element, encoding="unicode")
+    canonical = re.sub(r">\s+<", "><", raw).strip()
+    return canonical.encode("utf-8")
+
+
+def _is_ds_signature(element) -> bool:
+    return element.tag == f"{{{_DS_NS}}}Signature"
+
+
+def _strip_enveloped_signature(element) -> None:
+    """Remove descendant ds:Signature nodes for enveloped-signature transforms."""
+    for child in list(element):
+        if _is_ds_signature(child):
+            element.remove(child)
+        else:
+            _strip_enveloped_signature(child)
+
+
+def _find_referenced_element(root, reference_uri: str):
+    """Resolve a same-document XMLDSig reference and reject duplicate IDs."""
+    if not reference_uri or not reference_uri.startswith("#"):
+        logger.warning(f"Unsupported SAML Reference URI: {reference_uri!r} - rejecting.")
+        return None
+
+    target_id = reference_uri[1:]
+    matches = []
+    id_attrs = ("ID", "Id", "id", "{http://www.w3.org/XML/1998/namespace}id")
+    for element in root.iter():
+        for attr in id_attrs:
+            if element.get(attr) == target_id:
+                matches.append(element)
+                break
+
+    if len(matches) != 1:
+        logger.warning(
+            f"SAML Reference URI {reference_uri!r} resolved to {len(matches)} elements - rejecting."
+        )
+        return None
+    return matches[0]
+
+
+def _digest_algorithm(digest_method: str):
+    normalized = (digest_method or "").lower()
+    if "sha256" in normalized:
+        return hashlib.sha256
+    if "sha512" in normalized:
+        return hashlib.sha512
+    if "sha1" in normalized:
+        return hashlib.sha1
+    logger.warning(f"Unsupported SAML digest algorithm: {digest_method} - rejecting.")
+    return None
+
+
+def _validate_reference_digests(root, signature, signed_info) -> bool:
+    """Validate XMLDSig Reference digests and bind the signature to SAML content."""
+    import copy
+
+    references = signed_info.findall("ds:Reference", _SAML_NS_MAP)
+    if not references:
+        logger.warning("SAML SignedInfo has no Reference elements - rejecting.")
+        return False
+
+    saw_saml_payload_reference = False
+    for reference in references:
+        target = _find_referenced_element(root, reference.get("URI", ""))
+        if target is None:
+            return False
+
+        transforms = reference.find("ds:Transforms", _SAML_NS_MAP)
+        transform_algorithms = []
+        if transforms is not None:
+            transform_algorithms = [
+                transform.get("Algorithm", "")
+                for transform in transforms.findall("ds:Transform", _SAML_NS_MAP)
+            ]
+
+        supported_transforms = {
+            "",
+            "http://www.w3.org/2000/09/xmldsig#enveloped-signature",
+            "http://www.w3.org/2001/10/xml-exc-c14n#",
+            "http://www.w3.org/TR/2001/REC-xml-c14n-20010315",
+        }
+        unsupported = [algo for algo in transform_algorithms if algo not in supported_transforms]
+        if unsupported:
+            logger.warning(f"Unsupported SAML Reference transform(s): {unsupported} - rejecting.")
+            return False
+
+        digest_method = reference.find("ds:DigestMethod", _SAML_NS_MAP)
+        digest_value = reference.find("ds:DigestValue", _SAML_NS_MAP)
+        if digest_method is None or digest_value is None or not (digest_value.text or "").strip():
+            logger.warning("SAML Reference missing DigestMethod or DigestValue - rejecting.")
+            return False
+
+        digest_factory = _digest_algorithm(digest_method.get("Algorithm", ""))
+        if digest_factory is None:
+            return False
+
+        target_copy = copy.deepcopy(target)
+        if "http://www.w3.org/2000/09/xmldsig#enveloped-signature" in transform_algorithms:
+            _strip_enveloped_signature(target_copy)
+
+        digest_bytes = digest_factory(_canonicalize_xml_element(target_copy)).digest()
+        try:
+            expected_digest = base64.b64decode(digest_value.text.strip())
+        except Exception as e:
+            logger.error(f"Failed to base64-decode DigestValue: {e}")
+            return False
+
+        if not hmac.compare_digest(digest_bytes, expected_digest):
+            logger.warning("SAML Reference digest mismatch - rejecting.")
+            return False
+
+        if target is root or target.tag.endswith("Assertion"):
+            saw_saml_payload_reference = True
+
+    if not saw_saml_payload_reference:
+        logger.warning("SAML signature does not reference the Response or Assertion - rejecting.")
+        return False
+    return True
+
+
+def verify_saml_xml_signature(xml_bytes: bytes, idp_certificate_pem: str) -> bool:
+    """Verify an XMLDSig signature in a SAML response against the IdP cert.
+
+    Args:
+        xml_bytes: Raw SAML Response XML bytes
+        idp_certificate_pem: IdP X.509 certificate (PEM or raw base64 DER)
+
+    Returns:
+        True only if valid Reference digest(s) and a valid RSA/ECDSA signature
+        over <ds:SignedInfo> are present and verify against the IdP certificate's
+        public key.
+        False on any failure (fail-closed).
+    """
+    try:
+        from defusedxml import ElementTree as ET
+        from cryptography import x509
+        from cryptography.hazmat.primitives.asymmetric import padding, rsa, ec
+        from cryptography.hazmat.primitives import hashes
+        from cryptography.exceptions import InvalidSignature
+    except ImportError as e:
+        logger.error(f"Missing crypto dependency for SAML verification: {e}")
+        return False
+
+    try:
+        root = ET.fromstring(xml_bytes)
+    except Exception as e:
+        logger.error(f"SAML XML parse failed: {e}")
+        return False
+
+    signature = root.find(".//ds:Signature", _SAML_NS_MAP)
+    if signature is None:
+        logger.warning("SAML Response has no <ds:Signature> element - rejecting.")
+        return False
+
+    signed_info = signature.find("ds:SignedInfo", _SAML_NS_MAP)
+    if signed_info is None:
+        logger.warning("SAML Signature has no <ds:SignedInfo> - rejecting.")
+        return False
+
+    sig_value_elem = signature.find("ds:SignatureValue", _SAML_NS_MAP)
+    if sig_value_elem is None or not (sig_value_elem.text or "").strip():
+        logger.warning("SAML Signature has no <ds:SignatureValue> - rejecting.")
+        return False
+
+    if not _validate_reference_digests(root, signature, signed_info):
+        return False
+
+    sig_method = signed_info.find("ds:SignatureMethod", _SAML_NS_MAP)
+    algo_attr = sig_method.get("Algorithm", "") if sig_method is not None else ""
+    if "sha1" in algo_attr.lower():
+        hash_algo = hashes.SHA1()
+        algo_name = "SHA1"
+    elif "sha256" in algo_attr.lower() or not algo_attr:
+        hash_algo = hashes.SHA256()
+        algo_name = "SHA256"
+    elif "sha512" in algo_attr.lower():
+        hash_algo = hashes.SHA512()
+        algo_name = "SHA512"
+    else:
+        logger.warning(f"Unsupported signature algorithm: {algo_attr} - rejecting.")
+        return False
+
+    try:
+        signature_bytes = base64.b64decode(sig_value_elem.text.strip())
+    except Exception as e:
+        logger.error(f"Failed to base64-decode SignatureValue: {e}")
+        return False
+
+    if not idp_certificate_pem:
+        logger.error("No IdP certificate configured - cannot verify. Rejecting.")
+        return False
+    try:
+        cert_pem = _ensure_pem(idp_certificate_pem)
+        cert = x509.load_pem_x509_certificate(cert_pem.encode("utf-8"))
+        public_key = cert.public_key()
+    except Exception as e:
+        logger.error(f"Failed to load IdP certificate: {e}")
+        return False
+
+    signed_info_bytes = _canonicalize_signed_info(signed_info)
+
+    try:
+        if isinstance(public_key, rsa.RSAPublicKey):
+            public_key.verify(
+                signature_bytes, signed_info_bytes, padding.PKCS1v15(), hash_algo,
+            )
+        elif isinstance(public_key, ec.EllipticCurvePublicKey):
+            public_key.verify(signature_bytes, signed_info_bytes, ec.ECDSA(hash_algo))
+        else:
+            logger.error(f"Unsupported key type: {type(public_key)}")
+            return False
+    except InvalidSignature:
+        logger.warning(f"SAML signature verification FAILED (RSA-{algo_name}) - mismatch. Rejecting.")
+        return False
+    except Exception as e:
+        logger.error(f"SAML signature verification error: {e}")
+        return False
+
+    logger.info(f"SAML signature verified OK (RSA-{algo_name}).")
+    return True
 
 
 class SSOProvider(str, Enum):
@@ -269,8 +552,9 @@ class SAMLManager:
             # Decode base64
             decoded = base64.b64decode(saml_response)
 
-            # Parse XML (simplified - production should use python3-saml)
-            import xml.etree.ElementTree as ET
+            # Parse XML using defusedxml to prevent XXE attacks (SECURITY P1-04).
+            # The stdlib xml.etree is vulnerable to XML External Entity attacks.
+            from defusedxml import ElementTree as ET
             root = ET.fromstring(decoded)
 
             # Extract assertion data
@@ -296,8 +580,10 @@ class SAMLManager:
                 attr_values = [v.text for v in attr.findall('saml:AttributeValue', namespaces)]
                 attributes[attr_name] = attr_values
 
-            # Verify signature (simplified)
+            # Verify signature against IdP certificate (SECURITY P1-04)
             signature_valid = self._verify_signature(decoded)
+            if not signature_valid:
+                raise ValueError("SAML response signature verification failed.")
 
             self.logger.info(f"Parsed SAML Response for subject: {subject}")
 
@@ -318,33 +604,15 @@ class SAMLManager:
             raise ValueError(f"Invalid SAML Response: {e}")
 
     def _verify_signature(self, saml_response: bytes) -> bool:
-        """Verify SAML Response signature.
+        """Verify SAML Response signature against the configured IdP certificate.
 
-        Args:
-            saml_response: SAML Response XML bytes
-
-        Returns:
-            True if signature is valid
+        SECURITY: Real XMLDSig verification via verify_saml_xml_signature().
+        Fails closed on: missing signature, missing/invalid cert, signature
+        mismatch. No longer accepts responses merely because a <Signature>
+        element exists.
         """
-        # Simplified signature verification
-        # Production should use cryptography library
-        try:
-            import xml.etree.ElementTree as ET
-            root = ET.fromstring(saml_response)
-
-            # Check for Signature element
-            namespaces = {'ds': 'http://www.w3.org/2000/09/xmldsig#'}
-            signature = root.find('.//ds:Signature', namespaces)
-
-            if signature is None:
-                self.logger.warning("No signature found in SAML Response")
-                return False
-
-            self.logger.debug("SAML Response signature verified")
-            return True
-        except Exception as e:
-            self.logger.error(f"Signature verification failed: {e}")
-            return False
+        idp_cert = getattr(self.config, 'idp_certificate', None)
+        return verify_saml_xml_signature(saml_response, idp_cert or "")
 
     def generate_logout_request(self, session_index: str) -> str:
         """Generate SAML LogoutRequest.
@@ -485,7 +753,14 @@ class OIDCManager:
             self.logger.error(f"Failed to exchange code for token: {e}")
             raise
 
-    def decode_id_token(self, id_token: str) -> Dict[str, Any]:
+    def decode_id_token(
+        self,
+        id_token: str,
+        *,
+        key: str | None = None,
+        algorithms: list[str] | None = None,
+        nonce: str | None = None,
+    ) -> Dict[str, Any]:
         """Decode and validate ID token (JWT).
 
         Args:
@@ -497,17 +772,35 @@ class OIDCManager:
         try:
             import jwt
 
-            # Simplified decoding - production should validate signature
+            if not key:
+                raise ValueError("OIDC ID token verification key is required.")
+
             decoded = jwt.decode(
                 id_token,
-                options={"verify_signature": False}  # Should verify in production
+                key=key,
+                algorithms=algorithms or ["RS256"],
+                audience=self.config.client_id if self.config.validate_audience else None,
+                issuer=self._expected_issuer() if self.config.validate_issuer else None,
+                options={
+                    "verify_signature": True,
+                    "verify_aud": self.config.validate_audience,
+                    "verify_iss": self.config.validate_issuer,
+                    "require": ["exp", "iat", "sub"],
+                },
             )
+            if nonce is not None and decoded.get("nonce") != nonce:
+                raise ValueError("OIDC ID token nonce mismatch.")
 
             self.logger.debug(f"Decoded ID token for user: {decoded.get('sub')}")
             return decoded
         except Exception as e:
             self.logger.error(f"Failed to decode ID token: {e}")
             raise
+
+    def _expected_issuer(self) -> str:
+        if self._discovery_cache and self._discovery_cache.get("issuer"):
+            return str(self._discovery_cache["issuer"])
+        return self.config.discovery_url.replace("/.well-known/openid-configuration", "")
 
 
 # ============================================================================

@@ -1,36 +1,11 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { fileURLToPath, URL } from 'node:url'
-import compression from 'vite-plugin-compression'
 import { visualizer } from 'rollup-plugin-visualizer'
 
 export default defineConfig({
   plugins: [
-    vue({
-      // Enable template optimization
-      template: {
-        compilerOptions: {
-          isCustomElement: (tag) => tag.startsWith('el-'),
-        },
-      },
-    }),
-    // Gzip compression
-    compression({
-      verbose: true,
-      disable: false,
-      threshold: 10240,
-      algorithm: 'gzip',
-      ext: '.gz',
-    }),
-    // Brotli compression
-    compression({
-      verbose: true,
-      disable: false,
-      threshold: 10240,
-      algorithm: 'brotli',
-      ext: '.br',
-    }),
-    // Bundle analysis
+    vue(),
     visualizer({
       open: false,
       gzipSize: true,
@@ -56,6 +31,7 @@ export default defineConfig({
     minify: 'terser',
     sourcemap: false,
     outDir: '../dist',
+    emptyOutDir: true,
     terserOptions: {
       compress: {
         drop_console: true,
@@ -69,10 +45,8 @@ export default defineConfig({
     },
     rollupOptions: {
       output: {
-        manualChunks: {
-          'vendor-vue': ['vue', 'vue-router'],
-          'vendor-ui': ['element-plus', '@element-plus/icons-vue'],
-          'vendor-utils': ['axios', 'pinia'],
+        manualChunks: (id) => {
+          return id.includes('node_modules') ? 'vendor' : undefined
         },
         chunkFileNames: 'js/[name]-[hash].js',
         entryFileNames: 'js/[name]-[hash].js',
@@ -92,7 +66,7 @@ export default defineConfig({
     },
     cssCodeSplit: true,
     reportCompressedSize: true,
-    chunkSizeWarningLimit: 400,
+    chunkSizeWarningLimit: 1200,
     commonjsOptions: {
       transformMixedEsModules: true,
     },
@@ -109,4 +83,3 @@ export default defineConfig({
     exclude: ['@vite/client', '@vite/env'],
   },
 })
-

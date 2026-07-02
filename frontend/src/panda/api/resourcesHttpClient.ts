@@ -1,5 +1,6 @@
 import type { ApiPandaResourceSnapshot } from './adapters'
 import type { PandaResourcesHttpClient } from './resourcesApiLoader'
+import { getAuthHeaders, getStoredAuthToken } from '../../services/authHeaders'
 
 export const PANDA_RESOURCES_BFF_ENDPOINT = '/api/v1/workbench/resources'
 
@@ -15,7 +16,7 @@ export function resolvePandaResourcesEndpoint(endpoint?: string): string {
 
 export function createPandaResourcesFetchClient({
   endpoint,
-  getToken = () => localStorage.getItem('auth_token'),
+  getToken = getStoredAuthToken,
 }: PandaResourcesFetchClientOptions = {}): PandaResourcesHttpClient {
   const resolvedEndpoint = resolvePandaResourcesEndpoint(endpoint)
 
@@ -24,10 +25,7 @@ export function createPandaResourcesFetchClient({
       const headers: HeadersInit = {
         Accept: 'application/json',
       }
-      const token = getToken()
-      if (token) {
-        headers.Authorization = `Bearer ${token}`
-      }
+      Object.assign(headers, getAuthHeaders(getToken))
 
       const response = await fetch(resolvedEndpoint, { headers })
       if (!response.ok) {

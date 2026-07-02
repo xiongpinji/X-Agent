@@ -53,8 +53,9 @@
 import { ref, onMounted } from 'vue'
 import { invoke } from '@tauri-apps/api/tauri'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import type { AgentStatus } from '../types'
 
-const agents = ref([])
+const agents = ref<AgentStatus[]>([])
 
 onMounted(async () => {
   await loadAgents()
@@ -62,7 +63,7 @@ onMounted(async () => {
 
 const loadAgents = async () => {
   try {
-    const result = await invoke('list_agents')
+    const result = await invoke<AgentStatus[]>('list_agents')
     agents.value = result
   } catch (e) {
     ElMessage.error('加载Agent列表失败')
@@ -103,8 +104,8 @@ const deleteAgent = async (agentId: string) => {
       cancelButtonText: '取消',
       type: 'warning'
     })
+    agents.value = agents.value.filter(agent => agent.id !== agentId)
     ElMessage.success('Agent已删除')
-    await loadAgents()
   } catch (e) {
     console.error(e)
   }

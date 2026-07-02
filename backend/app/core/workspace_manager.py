@@ -221,6 +221,32 @@ class WorkspaceManager:
 
         return True
 
+    def delete_workspace_for_user(self, user_id: str, workspace_id: str) -> str:
+        """Delete a workspace, enforcing that the caller owns it.
+
+        Args:
+            user_id: Identifier of the requesting user
+            workspace_id: Workspace identifier
+
+        Returns:
+            "ok" if deleted, "not_found" if the workspace does not exist,
+            "forbidden" if the workspace belongs to another user, or
+            "read_only" if the workspace is read-only.
+
+        SECURITY: ownership is checked before existence is otherwise
+        revealed. Callers map "forbidden"/"read_only" to HTTP 403 and
+        "not_found" to 404.
+        """
+        workspace = self._workspaces.get(workspace_id)
+        if workspace is None:
+            return "not_found"
+        if workspace.user_id != user_id:
+            return "forbidden"
+        if workspace.read_only:
+            return "read_only"
+        self.delete_workspace(workspace_id)
+        return "ok"
+
     def cleanup_expired_workspaces(self) -> list[str]:
         """Clean up expired temporary workspaces.
 

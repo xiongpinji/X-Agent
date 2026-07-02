@@ -7,6 +7,9 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 import backend.app.api.commercial_pilot as commercial_pilot
+from backend.app.api.errors import XAgentAPIError, xagent_api_error_handler
+from backend.app.core.security import Principal, ROLE_SCOPES
+from backend.app.dependencies import get_current_principal
 
 
 PILOT_SHA = "765d44b69da061caba6585a4cee0105bbf3310a7"
@@ -109,6 +112,22 @@ def _write_all_reports(report_dir: Path) -> None:
 def _client(report_dir: Path, monkeypatch) -> TestClient:  # noqa: ANN001
     monkeypatch.setattr(commercial_pilot, "REPORT_DIR", report_dir)
     app = FastAPI()
+    app.add_exception_handler(XAgentAPIError, xagent_api_error_handler)
+    app.include_router(commercial_pilot.router)
+    return TestClient(app)
+
+
+def _authed_client(report_dir: Path, monkeypatch) -> TestClient:  # noqa: ANN001
+    monkeypatch.setattr(commercial_pilot, "REPORT_DIR", report_dir)
+    app = FastAPI()
+    app.add_exception_handler(XAgentAPIError, xagent_api_error_handler)
+    app.dependency_overrides[get_current_principal] = lambda: Principal(
+        tenant_id="tenant_a",
+        user_id="pilot-reader",
+        role="developer",
+        scopes=list(ROLE_SCOPES["developer"]),
+        authenticated=True,
+    )
     app.include_router(commercial_pilot.router)
     return TestClient(app)
 
@@ -116,7 +135,7 @@ def _client(report_dir: Path, monkeypatch) -> TestClient:  # noqa: ANN001
 def test_feishu_pilot_status_ready_from_runtime_reports(tmp_path: Path, monkeypatch) -> None:  # noqa: ANN001
     _write_all_reports(tmp_path)
 
-    response = _client(tmp_path, monkeypatch).get("/api/v1/commercial-pilot/feishu/status")
+    response = _authed_client(tmp_path, monkeypatch).get("/api/v1/commercial-pilot/feishu/status")
 
     assert response.status_code == 200
     payload = response.json()
@@ -134,7 +153,7 @@ def test_feishu_pilot_status_ready_from_runtime_reports(tmp_path: Path, monkeypa
 def test_feishu_pilot_reports_list_includes_digests(tmp_path: Path, monkeypatch) -> None:  # noqa: ANN001
     _write_all_reports(tmp_path)
 
-    response = _client(tmp_path, monkeypatch).get("/api/v1/commercial-pilot/feishu/reports")
+    response = _authed_client(tmp_path, monkeypatch).get("/api/v1/commercial-pilot/feishu/reports")
 
     assert response.status_code == 200
     payload = response.json()
@@ -147,7 +166,7 @@ def test_feishu_pilot_reports_list_includes_digests(tmp_path: Path, monkeypatch)
 def test_feishu_pilot_single_report_returns_payload(tmp_path: Path, monkeypatch) -> None:  # noqa: ANN001
     _write_all_reports(tmp_path)
 
-    response = _client(tmp_path, monkeypatch).get("/api/v1/commercial-pilot/feishu/reports/acceptance_gate")
+    response = _authed_client(tmp_path, monkeypatch).get("/api/v1/commercial-pilot/feishu/reports/acceptance_gate")
 
     assert response.status_code == 200
     payload = response.json()
@@ -160,7 +179,7 @@ def test_feishu_pilot_status_action_required_when_handoff_index_missing(tmp_path
     _write_all_reports(tmp_path)
     (tmp_path / "commercial-pilot-handoff-index.json").unlink()
 
-    response = _client(tmp_path, monkeypatch).get("/api/v1/commercial-pilot/feishu/status")
+    response = _authed_client(tmp_path, monkeypatch).get("/api/v1/commercial-pilot/feishu/status")
 
     assert response.status_code == 200
     payload = response.json()
@@ -176,7 +195,7 @@ def test_feishu_pilot_status_blocks_full_codex_parity_claim(tmp_path: Path, monk
         _runtime_payload("delivery_receipt_ready", evidence_type="commercial_pilot_delivery_receipt", parity=True),
     )
 
-    response = _client(tmp_path, monkeypatch).get("/api/v1/commercial-pilot/feishu/status")
+    response = _authed_client(tmp_path, monkeypatch).get("/api/v1/commercial-pilot/feishu/status")
 
     assert response.status_code == 200
     payload = response.json()
@@ -189,6 +208,22 @@ def test_feishu_pilot_status_blocks_full_codex_parity_claim(tmp_path: Path, monk
 def test_feishu_pilot_unknown_report_returns_404(tmp_path: Path, monkeypatch) -> None:  # noqa: ANN001
     _write_all_reports(tmp_path)
 
-    response = _client(tmp_path, monkeypatch).get("/api/v1/commercial-pilot/feishu/reports/unknown")
+    response = _authed_client(tmp_path, monkeypatch).get("/api/v1/commercial-pilot/feishu/reports/unknown")
 
     assert response.status_code == 404
+
+
+def test_feishu_pilot_status_rejects_anonymous_request(tmp_path: Path, monkeypatch) -> None:  # noqa: ANN001
+    _write_all_reports(tmp_path)
+
+    response = _client(tmp_path, monkeypatch).get("/api/v1/commercial-pilot/feishu/status")
+
+    assert response.status_code in {401, 403}
+
+
+def test_feishu_pilot_reports_reject_anonymous_request(tmp_path: Path, monkeypatch) -> None:  # noqa: ANN001
+    _write_all_reports(tmp_path)
+
+    response = _client(tmp_path, monkeypatch).get("/api/v1/commercial-pilot/feishu/reports")
+
+    assert response.status_code in {401, 403}

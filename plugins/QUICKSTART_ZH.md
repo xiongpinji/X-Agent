@@ -81,7 +81,7 @@ xagent plugin list
 
 ```bash
 xagent plugin config github-mcp \
-  --github-token "ghp_xxxxxxxxxxxxxxxxxxxx" \
+  --github-token "gh_example_token_redacted" \
   --timeout 30
 ```
 
@@ -89,7 +89,7 @@ xagent plugin config github-mcp \
 
 ```json
 {
-  "github_token": "ghp_xxxxxxxxxxxxxxxxxxxx",
+  "github_token": "gh_example_token_redacted",
   "timeout": 30
 }
 ```

@@ -147,12 +147,10 @@ jobs:
         run: pip install bandit pip-audit
 
       - name: Run Bandit legacy core audit
-        continue-on-error: true
         run: |
           bandit -r backend/app/core/ -ll --skip B101
 
       - name: Run Python lockfile dependency audit
-        continue-on-error: true
         run: pip-audit -r requirements-lock.txt --strict
 
   docker:

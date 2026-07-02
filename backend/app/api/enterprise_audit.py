@@ -10,6 +10,7 @@ from typing import Any, Optional
 from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel
 
+from backend.app.api.rbac_enforcement import require_admin
 from backend.app.core.enterprise_audit import (
     AuditAnalyzer,
     AuditEventType,
@@ -22,7 +23,12 @@ from backend.app.core.enterprise_audit import (
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/v1/enterprise/audit", tags=["enterprise-audit"])
+# SECURITY P1-03: enterprise audit endpoints require admin role.
+router = APIRouter(
+    prefix="/api/v1/enterprise/audit",
+    tags=["enterprise-audit"],
+    dependencies=[require_admin],
+)
 
 # 初始化管理器
 audit_log_store = AuditLogStore()

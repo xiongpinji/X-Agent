@@ -6,6 +6,7 @@
  */
 
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { createAgentStreamUrl } from '../services/streamUrls';
 
 export interface StreamEvent {
   event_type: string;
@@ -142,58 +143,64 @@ export const useStreamingEvents = (
 
   const connectToStream = useCallback(() => {
     try {
-      const url = `/api/v1/agent/stream/${runId}?since_sequence=${lastSequenceRef.current}`;
-      const eventSource = new EventSource(url);
+      void createAgentStreamUrl(runId, lastSequenceRef.current).then((url) => {
+        const eventSource = new EventSource(url);
 
-      // Generic event handler
-      const handleMessage = (rawEvent: Event) => {
-        try {
-          const messageEvent = rawEvent as MessageEvent;
-          const data = JSON.parse(messageEvent.data) as StreamEvent;
-          handleEvent(data);
-        } catch (e) {
-          console.error('Failed to parse event:', e);
-        }
-      };
+        // Generic event handler
+        const handleMessage = (rawEvent: Event) => {
+          try {
+            const messageEvent = rawEvent as MessageEvent;
+            const data = JSON.parse(messageEvent.data) as StreamEvent;
+            handleEvent(data);
+          } catch (e) {
+            console.error('Failed to parse event:', e);
+          }
+        };
 
-      // Listen to all event types
-      eventSource.addEventListener('message', handleMessage);
-      eventSource.addEventListener('tool_call', handleMessage);
-      eventSource.addEventListener('tool_result', handleMessage);
-      eventSource.addEventListener('progress', handleMessage);
-      eventSource.addEventListener('error', handleMessage);
-      eventSource.addEventListener('completion', handleMessage);
-      eventSource.addEventListener('heartbeat', handleMessage);
-      eventSource.addEventListener('log', handleMessage);
-      eventSource.addEventListener('metric', handleMessage);
-      eventSource.addEventListener('task_status', handleMessage);
+        // Listen to all event types
+        eventSource.addEventListener('message', handleMessage);
+        eventSource.addEventListener('tool_call', handleMessage);
+        eventSource.addEventListener('tool_result', handleMessage);
+        eventSource.addEventListener('progress', handleMessage);
+        eventSource.addEventListener('error', handleMessage);
+        eventSource.addEventListener('completion', handleMessage);
+        eventSource.addEventListener('heartbeat', handleMessage);
+        eventSource.addEventListener('log', handleMessage);
+        eventSource.addEventListener('metric', handleMessage);
+        eventSource.addEventListener('task_status', handleMessage);
 
-      eventSource.onerror = () => {
-        console.error('EventSource error');
+        eventSource.onerror = () => {
+          console.error('EventSource error');
+          setIsConnected(false);
+          setError('Connection lost');
+          eventSource.close();
+
+          // Attempt reconnection
+          if (reconnectCount < reconnectAttempts) {
+            const delay = reconnectDelay * Math.pow(2, reconnectCount);
+            reconnectTimerRef.current = setTimeout(() => {
+              console.log(`Reconnecting... (attempt ${reconnectCount + 1}/${reconnectAttempts})`);
+              setReconnectCount((prev) => prev + 1);
+              connectToStream();
+            }, delay);
+          } else {
+            setError('Failed to reconnect after multiple attempts');
+          }
+        };
+
+        eventSourceRef.current = eventSource;
+        setIsConnected(true);
+        setError(null);
+        setReconnectCount(0);
+        resetHeartbeatTimer();
+
+        console.log(`Connected to stream for run ${runId}`);
+      }).catch((e) => {
+        const errorMsg = e instanceof Error ? e.message : String(e);
+        setError(`Failed to connect: ${errorMsg}`);
         setIsConnected(false);
-        setError('Connection lost');
-        eventSource.close();
-
-        // Attempt reconnection
-        if (reconnectCount < reconnectAttempts) {
-          const delay = reconnectDelay * Math.pow(2, reconnectCount);
-          reconnectTimerRef.current = setTimeout(() => {
-            console.log(`Reconnecting... (attempt ${reconnectCount + 1}/${reconnectAttempts})`);
-            setReconnectCount((prev) => prev + 1);
-            connectToStream();
-          }, delay);
-        } else {
-          setError('Failed to reconnect after multiple attempts');
-        }
-      };
-
-      eventSourceRef.current = eventSource;
-      setIsConnected(true);
-      setError(null);
-      setReconnectCount(0);
-      resetHeartbeatTimer();
-
-      console.log(`Connected to stream for run ${runId}`);
+        if (onError) onError(new Error(errorMsg));
+      });
     } catch (e) {
       const errorMsg = e instanceof Error ? e.message : String(e);
       setError(`Failed to connect: ${errorMsg}`);

@@ -1,0 +1,209 @@
+{
+  "owner_gate_refs": {
+    "feishu_webhook_contract": {
+      "app_id_variable_name": "",
+      "app_secret_variable_name": "",
+      "encrypt_key_variable_name": "",
+      "status": "",
+      "verification_ref": ""
+    },
+    "github_issue_to_pr_dry_run": {
+      "disposable_issue_ref": "",
+      "dry_run_ref": "",
+      "no_execute_mutation_status": "",
+      "repository_ref": ""
+    },
+    "github_issue_to_pr_execute_preflight": {
+      "disposable_issue_ref": "",
+      "github_token_variable_name": "",
+      "issue_probe_ref": "",
+      "no_mutation_status": "",
+      "repo_permission_probe_ref": ""
+    },
+    "hosted_github_actions_commercial_rc": {
+      "artifact_digest_ref": "",
+      "evidence_artifact_ref": "",
+      "head_sha": "adbce7a93854870ef665fe03c39051491a90b9d6",
+      "linux_job_status": "",
+      "run_ref": "",
+      "windows_installer_job_status": ""
+    },
+    "owner_approval": {
+      "approval_ref": "",
+      "approval_timestamp": "",
+      "approved_scope": "SHA + environment + release boundary",
+      "approver_identity_ref": "",
+      "target_sha": "adbce7a93854870ef665fe03c39051491a90b9d6"
+    },
+    "provider": {
+      "credential_variable_name": "",
+      "model_ref": "",
+      "provider_backend": "",
+      "provider_smoke_ref": "",
+      "status": ""
+    },
+    "refresh_release_chain_owner_verified": {
+      "owner_verified_ref": "",
+      "status": "",
+      "timestamp": ""
+    }
+  },
+  "panda_frontend_decisions": {
+    "accessibility_security_refs": {
+      "disposition": "",
+      "owner_ref": "",
+      "refs": [],
+      "tag_impact": ""
+    },
+    "asset_manifest_refs": {
+      "disposition": "",
+      "owner_ref": "",
+      "refs": [],
+      "tag_impact": ""
+    },
+    "auth_tenant_refs": {
+      "disposition": "",
+      "owner_ref": "",
+      "refs": [],
+      "tag_impact": ""
+    },
+    "bff_contract_refs": {
+      "disposition": "",
+      "owner_ref": "",
+      "refs": [],
+      "tag_impact": ""
+    },
+    "canonical_role_png_set": {
+      "disposition": "",
+      "owner_ref": "",
+      "paths": [],
+      "tag_impact": ""
+    },
+    "frontend_browser_claim_boundary": {
+      "disposition": "",
+      "owner_ref": "",
+      "permitted_wording": "",
+      "tag_impact": ""
+    },
+    "modified_role_pngs": {
+      "disposition": "",
+      "owner_ref": "",
+      "paths_or_pattern": "",
+      "tag_impact": ""
+    },
+    "panda_qa_smoke_script": {
+      "disposition": "",
+      "owner_ref": "",
+      "path": "frontend/scripts/panda-qa-smoke.mjs",
+      "tag_impact": ""
+    },
+    "release_manifest_refs": {
+      "disposition": "",
+      "owner_ref": "",
+      "refs": [],
+      "tag_impact": ""
+    },
+    "release_notes_wording": {
+      "disposition": "",
+      "owner_ref": "",
+      "tag_impact": "",
+      "wording": ""
+    },
+    "screenshot_review_refs": {
+      "disposition": "",
+      "owner_ref": "",
+      "refs": [],
+      "tag_impact": ""
+    },
+    "smoke_artifact_treatment": {
+      "artifact_refs": [],
+      "disposition": "",
+      "owner_ref": "",
+      "tag_impact": ""
+    },
+    "untracked_xagent_reference_pngs": {
+      "disposition": "",
+      "owner_ref": "",
+      "paths_or_pattern": "frontend/src/panda/assets/roles/xagent-reference-*.png",
+      "tag_impact": ""
+    }
+  },
+  "stage3_production_refs": {
+    "deployed_image": {
+      "digest": "",
+      "image_ref": "",
+      "provenance_ref": "",
+      "rollout_ref": "",
+      "workload_imageid_ref": ""
+    },
+    "dns_tls_lb_ingress": {
+      "dns_record_ref": "",
+      "environment_name": "",
+      "hostname": "",
+      "ingress_ref": "",
+      "load_balancer_ref": "",
+      "tls_certificate_ref": ""
+    },
+    "external_endpoint": {
+      "health_url": "",
+      "public_https_endpoint": "",
+      "ready_url": "",
+      "smoke_run_ref": "",
+      "smoke_status": "",
+      "timestamp": ""
+    },
+    "external_secret_eso": {
+      "cluster_secret_store_name": "",
+      "cluster_secret_store_ready_ref": "",
+      "eso_ready_ref": "",
+      "expected_key_names": [],
+      "external_secret_object_refs": [],
+      "target_secret_object_names": [],
+      "workload_secretkeyref_refs": []
+    },
+    "observability": {
+      "alert_ref": "",
+      "langfuse_trace_ref": "",
+      "log_search_ref": "",
+      "metrics_ref": "",
+      "rabbitmq_health_ref": "",
+      "sentry_event_ref": ""
+    },
+    "owner_approval": {
+      "approval_ref": "",
+      "approval_timestamp": "",
+      "approver_identity_ref": "",
+      "environment_name": "",
+      "release_sha": "adbce7a93854870ef665fe03c39051491a90b9d6"
+    },
+    "production_readiness_acceptance": {
+      "acceptance_ref": "",
+      "acceptance_timestamp": "",
+      "accepted_sha_environment_boundary": ""
+    },
+    "rollback": {
+      "completed_at": "",
+      "post_rollback_digest": "",
+      "post_rollback_health_ref": "",
+      "pre_rollback_digest": "",
+      "rollback_run_ref": "",
+      "rollback_target_ref": "",
+      "started_at": ""
+    },
+    "runtime_bindings": {
+      "db_binding_ref": "",
+      "langfuse_binding_ref": "",
+      "neo4j_binding_ref": "",
+      "qdrant_binding_ref": "",
+      "rabbitmq_binding_ref": "",
+      "redis_binding_ref": "",
+      "sentry_event_ref": ""
+    },
+    "stage3_run_artifacts": {
+      "stage3_artifact_digest_ref": "",
+      "stage3_artifact_ref": "",
+      "stage3_run_ref": ""
+    }
+  },
+  "target_sha": "adbce7a93854870ef665fe03c39051491a90b9d6"
+}

@@ -222,7 +222,7 @@ async def initialize_billing_on_startup(app) -> None:
         await initialize_billing_system(
             stripe_api_key="sk_test_123",  # 从环境变量读取
             alipay_app_id="2021000000000000",
-            alipay_private_key="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----",
+            alipay_private_key="-----BEGIN REDACTED EXAMPLE KEY-----\n...\n-----END PRIVATE KEY-----",
             alipay_public_key="-----BEGIN PUBLIC KEY-----\n...\n-----END PUBLIC KEY-----",
             wechat_mch_id="1234567890",
             wechat_api_key="your_api_key",

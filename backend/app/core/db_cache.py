@@ -25,7 +25,7 @@ def _make_query_cache_key(query_type: str, *args: Any, **kwargs: Any) -> str:
     key_parts.extend(str(arg) for arg in args)
     key_parts.extend(f"{k}={v}" for k, v in sorted(kwargs.items()))
     key_str = "|".join(key_parts)
-    return hashlib.md5(key_str.encode()).hexdigest()
+    return hashlib.md5(key_str.encode(), usedforsecurity=False).hexdigest()
 
 
 async def get_cached_query(query_type: str, *args: Any, **kwargs: Any) -> Any | None:

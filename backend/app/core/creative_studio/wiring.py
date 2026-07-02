@@ -3,7 +3,7 @@
 在模块级注册表 media_registry 中注册默认适配器（优先 gpt-image-2，保底
 PlaceholderImage；TTS 用 edge-tts；合成用 ffmpeg）。
 
-同时导出 register_creative_tools 供 build_default_tool_registry 调用。
+同时导出 register_creative_tools 供显式 opt-in 工具注册；默认商业工具面不自动挂入。
 """
 
 from __future__ import annotations
@@ -16,6 +16,7 @@ from typing import Any
 
 from backend.app.core.creative_studio.adapters import (
     EdgeTTSAdapter,
+    ExternalVideoAPIAdapter,
     FFmpegAdapter,
     GPTImage2Adapter,
     PlaceholderImageAdapter,
@@ -29,24 +30,29 @@ logger = logging.getLogger(__name__)
 
 def _setup_media_registry() -> None:
     """注册默认媒体适配器（幂等，可重复调用）。"""
-    if media_registry.list_for(MediaKind.IMAGE):
-        return  # 已注册过
-
     # 图片：gpt-image-2 优先，PlaceholderImage 保底（永远可用）
-    openai_key = os.getenv("OPENAI_API_KEY", "") or os.getenv("XAGENT_OPENAI_API_KEY", "")
-    if openai_key:
-        media_registry.register(GPTImage2Adapter(api_key=openai_key))
-    media_registry.register(PlaceholderImageAdapter())  # 永远保底
+    if not media_registry.list_for(MediaKind.IMAGE):
+        openai_key = os.getenv("OPENAI_API_KEY", "") or os.getenv("XAGENT_OPENAI_API_KEY", "")
+        if openai_key:
+            media_registry.register(GPTImage2Adapter(api_key=openai_key))
+        media_registry.register(PlaceholderImageAdapter())  # 永远保底
 
     # TTS：edge-tts（无需 API Key）
-    media_registry.register(EdgeTTSAdapter())
+    if not media_registry.list_for(MediaKind.TTS):
+        media_registry.register(EdgeTTSAdapter())
 
     # 合成：ffmpeg（需系统安装）
-    media_registry.register(FFmpegAdapter())
+    if not media_registry.list_for(MediaKind.RENDER):
+        media_registry.register(FFmpegAdapter())
+
+    # 视频：外部模型 API，仅在配置齐全且调用已人工审核后才会出站。
+    if not media_registry.list_for(MediaKind.VIDEO):
+        media_registry.register(ExternalVideoAPIAdapter())
 
     logger.info(
-        "creative_studio: media registry ready (image=%d tts=%d render=%d)",
+        "creative_studio: media registry ready (image=%d video=%d tts=%d render=%d)",
         len(media_registry.list_for(MediaKind.IMAGE)),
+        len(media_registry.list_for(MediaKind.VIDEO)),
         len(media_registry.list_for(MediaKind.TTS)),
         len(media_registry.list_for(MediaKind.RENDER)),
     )
@@ -114,6 +120,43 @@ async def generate_shot_image(
     )
     return {"success": result.success, "output_path": result.output_path,
             "provider": result.provider, "error": result.error}
+
+
+async def generate_shot_video(
+    video_prompt: str,
+    output_path: str = "",
+    duration_seconds: int = 5,
+    aspect_ratio: str = "9:16",
+    human_review_approved: bool = False,
+) -> dict[str, Any]:
+    """为单个镜头调用外部视频模型 API；未人工审核时不会出站调用。"""
+    if not human_review_approved:
+        return {
+            "success": False,
+            "output_path": "",
+            "provider": "external-video-api",
+            "error": "human_review_required_before_video_provider_call",
+            "metadata": {"provider_api_call_attempted": False},
+        }
+    result = await media_registry.generate(
+        MediaRequest(
+            kind=MediaKind.VIDEO,
+            prompt=video_prompt,
+            output_path=output_path,
+            params={
+                "duration_seconds": duration_seconds,
+                "aspect_ratio": aspect_ratio,
+                "human_review_approved": human_review_approved,
+            },
+        )
+    )
+    return {
+        "success": result.success,
+        "output_path": result.output_path,
+        "provider": result.provider,
+        "error": result.error,
+        "metadata": result.metadata,
+    }
 
 
 async def synthesize_voiceover(
@@ -193,7 +236,7 @@ def _storyboard_summary(sb: Storyboard) -> dict[str, Any]:
 
 
 def register_creative_tools(registry) -> None:
-    """注册 Creative Studio 工具到 ToolRegistry。按此调用加入 build_default_tool_registry。"""
+    """注册 Creative Studio 工具到 ToolRegistry。调用方需显式 opt-in。"""
     from backend.app.core.contracts import RiskLevel
 
     registry.register(
@@ -228,6 +271,24 @@ def register_creative_tools(registry) -> None:
         },
     )
     registry.register(
+        "generate_shot_video",
+        "为故事板单个镜头调用外部视频模型 API 生成视频；必须先完成真人审核。",
+        generate_shot_video,
+        risk_level=RiskLevel.HIGH,
+        required_scope="workflow:control",
+        parameters_schema={
+            "type": "object",
+            "properties": {
+                "video_prompt": {"type": "string", "description": "Prompt Compiler 输出的视频提示词"},
+                "output_path": {"type": "string", "description": "输出文件路径或远端交付目标"},
+                "duration_seconds": {"type": "integer", "description": "镜头时长（秒），默认 5"},
+                "aspect_ratio": {"type": "string", "description": "画幅比例，默认 9:16"},
+                "human_review_approved": {"type": "boolean", "description": "是否已完成真人审核"},
+            },
+            "required": ["video_prompt", "human_review_approved"],
+        },
+    )
+    registry.register(
         "synthesize_voiceover",
         "用 edge-tts 把台词合成配音文件，无 API Key（Microsoft Edge TTS）。",
         synthesize_voiceover,
@@ -256,4 +317,4 @@ def register_creative_tools(registry) -> None:
             "required": ["storyboard_json"],
         },
     )
-    logger.info("creative_studio: 4 tools registered (storyboard/image/tts/compose)")
+    logger.info("creative_studio: 5 tools registered (storyboard/image/video/tts/compose)")

@@ -10,7 +10,9 @@ BACKUP_DIR="${BACKUP_DIR:-/backups/xagent}"
 DOCKER_COMPOSE_FILE="${DOCKER_COMPOSE_FILE:-docker-compose.yml}"
 RETENTION_DAYS="${RETENTION_DAYS:-30}"
 POSTGRES_USER="${POSTGRES_USER:-xagent}"
-POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-xagent}"
+# SECURITY: never bake a default DB password. Require it from the environment
+# (matches POSTGRES_PASSWORD used by the compose stack); fail fast if unset.
+POSTGRES_PASSWORD="${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in the environment}"
 POSTGRES_DB="${POSTGRES_DB:-xagent}"
 LOG_FILE="/var/log/xagent/backup.log"
 BACKUP_TIMESTAMP=$(date +'%Y%m%d_%H%M%S')

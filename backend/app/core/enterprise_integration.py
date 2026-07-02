@@ -10,6 +10,10 @@ from typing import Any, Optional
 
 from pydantic import BaseModel
 
+# SECURITY (P1-05): All outbound HTTP calls to SSO/OAuth providers must have an
+# explicit timeout to prevent hanging on unresponsive providers (DoS vector).
+_HTTP_TIMEOUT_SECONDS = 30
+
 
 # ============================================================================
 # IMPLEMENTATION GUIDE
@@ -274,7 +278,7 @@ class SSO_OktaIntegration:
             "redirect_uri": redirect_uri,
         }
 
-        response = requests.post(token_url, data=data)
+        response = requests.post(token_url, data=data, timeout=_HTTP_TIMEOUT_SECONDS)
         return response.json()
 
     def get_user_info(self, access_token: str) -> dict[str, Any]:
@@ -284,7 +288,7 @@ class SSO_OktaIntegration:
         userinfo_url = f"{self.domain}/oauth2/{self.authorization_server}/v1/userinfo"
         headers = {"Authorization": f"Bearer {access_token}"}
 
-        response = requests.get(userinfo_url, headers=headers)
+        response = requests.get(userinfo_url, headers=headers, timeout=_HTTP_TIMEOUT_SECONDS)
         return response.json()
 
 
@@ -322,7 +326,7 @@ class SSO_AzureADIntegration:
             "scope": "openid profile email",
         }
 
-        response = requests.post(token_url, data=data)
+        response = requests.post(token_url, data=data, timeout=_HTTP_TIMEOUT_SECONDS)
         return response.json()
 
     def get_user_info(self, access_token: str) -> dict[str, Any]:
@@ -332,7 +336,7 @@ class SSO_AzureADIntegration:
         userinfo_url = "https://graph.microsoft.com/v1.0/me"
         headers = {"Authorization": f"Bearer {access_token}"}
 
-        response = requests.get(userinfo_url, headers=headers)
+        response = requests.get(userinfo_url, headers=headers, timeout=_HTTP_TIMEOUT_SECONDS)
         return response.json()
 
 

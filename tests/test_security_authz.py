@@ -27,6 +27,7 @@ class TestRBACPolicy:
         assert policy.has_scope(principal, "workflow:create")
         assert policy.has_scope(principal, "security:manage")
         assert policy.has_scope(principal, "tools:*")
+        assert policy.has_scope(principal, "auth:self")
 
     def test_developer_has_limited_scopes(self, policy):
         """Test that developer role has limited scopes."""
@@ -62,6 +63,7 @@ class TestRBACPolicy:
         )
         assert policy.has_scope(principal, "memory:read")
         assert policy.has_scope(principal, "audit:read")
+        assert policy.has_scope(principal, "auth:self")
         assert not policy.has_scope(principal, "agent:run")
         assert not policy.has_scope(principal, "memory:write")
 

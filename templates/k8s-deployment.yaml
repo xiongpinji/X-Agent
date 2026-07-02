@@ -64,7 +64,7 @@ spec:
     spec:
       containers:
       - name: backend
-        image: xagent/backend:latest
+        image: xagent/backend:1.0.0
         ports:
         - containerPort: 8000
           protocol: TCP
@@ -202,7 +202,7 @@ spec:
     spec:
       containers:
       - name: worker
-        image: xagent/backend:latest
+        image: xagent/backend:1.0.0
         command: ["celery", "-A", "backend.app.celery_app", "worker", "--loglevel=info", "--concurrency=4"]
         resources:
           requests: {cpu: "250m", memory: "256Mi"}

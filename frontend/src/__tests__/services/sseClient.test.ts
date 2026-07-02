@@ -35,6 +35,17 @@ describe('SSEClient', () => {
     expect(mockEventSource.addEventListener).toHaveBeenCalled();
   });
 
+  test('should not place bearer token in EventSource URL', () => {
+    localStorage.setItem('auth_token', 'secret-token');
+    const onMessage = jest.fn();
+    client.connect('test-run-id', onMessage);
+
+    expect(global.EventSource).toHaveBeenCalledWith(
+      '/api/v1/agent/stream/test-run-id'
+    );
+    expect(client.getAuthMode()).toBe('cookie-or-signed-url');
+  });
+
   test('should handle incoming messages', () => {
     const onMessage = jest.fn();
     client.connect('test-run-id', onMessage);

@@ -20,9 +20,12 @@ impl AppConfig {
 
         if config_path.exists() {
             let content = std::fs::read_to_string(&config_path)?;
-            Ok(serde_json::from_str(&content)?)
+            let config: Self = serde_json::from_str(&content)?;
+            config.validate()?;
+            Ok(config)
         } else {
             let config = Self::default();
+            config.validate()?;
             config.save()?;
             Ok(config)
         }
@@ -52,6 +55,12 @@ impl AppConfig {
         } else {
             Self::config_dir().join(&self.data_dir)
         }
+    }
+
+    pub fn validate(&self) -> Result<(), Box<dyn std::error::Error>> {
+        crate::security::validate_backend_origin(&self.backend_url, self.backend_port)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidInput, e))?;
+        Ok(())
     }
 }
 

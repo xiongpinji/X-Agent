@@ -7,12 +7,10 @@ mod db;
 mod ipc;
 mod security;
 mod state;
-mod tray;
 mod utils;
 
 use tauri::{
-    generate_handler, App, AppHandle, GlobalShortcutManager, Manager, SystemTray,
-    SystemTrayEvent,
+    generate_handler, App, AppHandle, GlobalShortcutManager, Manager,
 };
 use std::sync::Arc;
 
@@ -29,12 +27,10 @@ fn main() {
     let app_state = Arc::new(AppState::new(db, app_config));
 
     tauri::Builder::default()
-        .setup(|app| {
+        .setup(move |app| {
             setup_app(app, app_state.clone())?;
             Ok(())
         })
-        .system_tray(SystemTray::new().with_menu(tray::build_menu()))
-        .on_system_tray_event(|app, event| tray::handle_tray_event(app, event))
         .invoke_handler(generate_handler![
             commands::file::read_file,
             commands::file::write_file,
@@ -71,12 +67,14 @@ fn setup_app(app: &mut App, state: Arc<AppState>) -> Result<(), Box<dyn std::err
     // Setup global shortcuts
     setup_global_shortcuts(&app_handle)?;
 
-    // Initialize database
-    state.db.init().expect("Failed to initialize database");
-
     // Start backend connection
     let app_handle_clone = app_handle.clone();
+    let state_clone = state.clone();
     tauri::async_runtime::spawn(async move {
+        if let Err(e) = state_clone.db.init().await {
+            log::error!("Failed to initialize database: {}", e);
+        }
+
         if let Err(e) = ipc::connect_to_backend(&app_handle_clone).await {
             log::error!("Failed to connect to backend: {}", e);
         }

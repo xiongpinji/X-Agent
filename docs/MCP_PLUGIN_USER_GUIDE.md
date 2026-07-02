@@ -156,7 +156,7 @@ X-Agent会自动调用GitHub插件，显示你的仓库列表。
 #### GitHub插件配置
 
 ```
-GitHub Token: ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxx
+GitHub Token: gh_example_token_redacted
 超时时间: 30秒
 ```
 

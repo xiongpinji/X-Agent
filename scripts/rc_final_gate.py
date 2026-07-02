@@ -37,6 +37,8 @@ DEFAULT_INPUTS = {
     "owner_gate_runner": REPORT_DIR / "rc-owner-gate-runner.json",
     "owner_env_template": REPORT_DIR / "rc-owner-env-template.json",
     "owner_gate_checklist": REPORT_DIR / "rc-owner-gate-checklist.json",
+    "stage3_owner_evidence_todo": REPORT_DIR / "stage3-owner-evidence-todo-20260618.json",
+    "stage3_owner_quickstart": REPORT_DIR / "stage3-owner-quickstart-20260618.json",
     "owner_handoff_gate": REPORT_DIR / "rc-owner-handoff-gate.json",
     "install_release_gate": REPORT_DIR / "rc-install-release-gate.json",
     "single_user_local_gate": REPORT_DIR / "rc-single-user-local-gate.json",
@@ -47,6 +49,7 @@ DEFAULT_INPUTS = {
     "release_receipt": ROOT / ".xagent_runtime" / "release" / "x-agent-commercial-rc-receipt.json",
     "evidence_pack": REPORT_DIR / "rc-evidence-pack.json",
     "staging_plan": REPORT_DIR / "rc-staging-plan.json",
+    "staging_rehearsal": REPORT_DIR / "stage3-staging-rehearsal-result-20260615.json",
 }
 
 REQUIRED_SECRETS_CHECKS = {
@@ -187,6 +190,8 @@ EVIDENCE_PACK_FRESHNESS_INPUTS = {
     "owner_handoff_gate": "owner_handoff_gate",
     "owner_env_template": "owner_env_template",
     "owner_gate_checklist": "owner_gate_checklist",
+    "stage3_owner_evidence_todo": "stage3_owner_evidence_todo",
+    "stage3_owner_quickstart": "stage3_owner_quickstart",
     "install_release_gate": "install_release_gate",
     "supply_chain_gate": "supply_chain_gate",
     "secrets_gate": "secrets_gate",
@@ -1806,7 +1811,109 @@ def _refresh_release_chain_owner_gate(refresh_payload: dict[str, Any] | None) ->
     ]
 
 
-def run_final_gate(inputs: dict[str, Path] | None = None, *, allow_missing_evidence_pack: bool = False) -> FinalGateReport:
+def _release_sha_from_external_smoke(payload: dict[str, Any] | None) -> str | None:
+    if not payload:
+        return None
+    checks = payload.get("checks")
+    if not isinstance(checks, list):
+        return None
+    for check in checks:
+        if not isinstance(check, dict) or check.get("name") != "hosted_github_actions_run":
+            continue
+        details = check.get("details")
+        if not isinstance(details, dict):
+            return None
+        expected = details.get("expected_head_sha")
+        actual = details.get("head_sha")
+        if isinstance(expected, str) and expected and isinstance(actual, str) and actual and expected == actual:
+            return expected
+        if isinstance(actual, str) and actual and details.get("head_sha_verified") is True:
+            return actual
+        return None
+    return None
+
+
+def _stage3_rehearsal_gate(path: Path, *, expected_release_sha: str | None) -> GateInput:
+    payload, error = _read_json(path)
+    status = _status(payload, "status")
+    details: dict[str, Any] = {
+        "environment": payload.get("environment") if payload else None,
+        "rehearsal_ready": payload.get("rehearsal_ready") if payload else None,
+        "current_head_sha": payload.get("current_head_sha") if payload else None,
+        "release_sha": payload.get("release_sha") if payload else None,
+        "expected_release_sha": expected_release_sha,
+        "missing_or_mismatched": payload.get("missing_or_mismatched", []) if payload else [],
+        "next_actions": payload.get("next_actions", []) if payload else [],
+    }
+    problems: list[str] = []
+    if error:
+        problems.append(error)
+    if payload is not None:
+        generated_at = payload.get("generated_at")
+        report_time = _parse_report_time(generated_at)
+        if report_time is not None and _is_future_report_time(report_time):
+            problems.append("staging_rehearsal generated_at is in the future")
+        if status != "staging_rehearsal_ready":
+            problems.append(f"expected staging_rehearsal_ready, got {status}")
+        if payload.get("environment") != "staging":
+            problems.append("staging_rehearsal environment must be staging")
+        if payload.get("rehearsal_ready") is not True:
+            problems.append("staging_rehearsal rehearsal_ready must be true")
+        release_sha = payload.get("release_sha")
+        current_head_sha = payload.get("current_head_sha")
+        if release_sha in (None, ""):
+            problems.append("staging_rehearsal release_sha is missing")
+        if expected_release_sha in (None, ""):
+            problems.append("expected release SHA is missing from owner-verified external smoke evidence")
+        elif release_sha != expected_release_sha:
+            problems.append("staging_rehearsal release_sha does not match owner-verified release SHA")
+        if current_head_sha not in (None, "", release_sha):
+            problems.append("staging_rehearsal current_head_sha does not match release_sha")
+        if payload.get("missing_or_mismatched"):
+            problems.append("staging_rehearsal missing_or_mismatched is not empty")
+        side_effect_fields = [
+            "mutation_performed",
+            "outbound_message_sent",
+            "deploy_tag_release_performed",
+            "workflow_dispatch_performed",
+            "cluster_mutation_performed_by_gate",
+        ]
+        side_effects = [field for field in side_effect_fields if payload.get(field) is True]
+        if side_effects:
+            problems.append(f"staging_rehearsal side effects present: {', '.join(side_effects)}")
+        checks_by_name = _check_map(payload)
+        required_checks = {
+            "required_environment_evidence_ready",
+            "release_sha_resolved",
+            "gate_has_no_environment_side_effects",
+        }
+        missing_checks = sorted(required_checks.difference(checks_by_name))
+        if missing_checks:
+            problems.append(f"missing required staging_rehearsal checks: {', '.join(missing_checks)}")
+        failed_checks = sorted(
+            name
+            for name, check in checks_by_name.items()
+            if name in required_checks and check.get("status") != "passed"
+        )
+        if failed_checks:
+            problems.append(f"required staging_rehearsal checks failed: {', '.join(failed_checks)}")
+
+    return GateInput(
+        name="staging_rehearsal",
+        path=str(path),
+        status=status,
+        ok=not problems,
+        details=details,
+        error="; ".join(problems) if problems else None,
+    )
+
+
+def run_final_gate(
+    inputs: dict[str, Path] | None = None,
+    *,
+    allow_missing_evidence_pack: bool = False,
+    require_stage3_rehearsal: bool = False,
+) -> FinalGateReport:
     paths = inputs or DEFAULT_INPUTS
     local_gates = [
         _gate_from_report("gap_matrix", paths["gap_matrix"], {"passed"}, status_keys=("summary", "overall_status")),
@@ -1867,6 +1974,13 @@ def run_final_gate(inputs: dict[str, Path] | None = None, *, allow_missing_evide
         _cross_report_consistency_gate(paths),
     ]
     external_payload, _ = _read_json(paths["external_smoke"])
+    if require_stage3_rehearsal:
+        local_gates.append(
+            _stage3_rehearsal_gate(
+                paths.get("staging_rehearsal", DEFAULT_INPUTS["staging_rehearsal"]),
+                expected_release_sha=_release_sha_from_external_smoke(external_payload),
+            )
+        )
     owner_plan_payload, _ = _read_json(paths["owner_gate_plan"])
     refresh_payload, _ = _read_json(paths["refresh_release_chain"])
     owner_gates = _merge_owner_gates(
@@ -1940,6 +2054,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--owner-gate-runner", type=Path, default=DEFAULT_INPUTS["owner_gate_runner"])
     parser.add_argument("--owner-env-template", type=Path, default=DEFAULT_INPUTS["owner_env_template"])
     parser.add_argument("--owner-gate-checklist", type=Path, default=DEFAULT_INPUTS["owner_gate_checklist"])
+    parser.add_argument(
+        "--stage3-owner-evidence-todo",
+        type=Path,
+        default=DEFAULT_INPUTS["stage3_owner_evidence_todo"],
+    )
+    parser.add_argument(
+        "--stage3-owner-quickstart",
+        type=Path,
+        default=DEFAULT_INPUTS["stage3_owner_quickstart"],
+    )
     parser.add_argument("--owner-handoff-gate", type=Path, default=DEFAULT_INPUTS["owner_handoff_gate"])
     parser.add_argument("--install-release-gate", type=Path, default=DEFAULT_INPUTS["install_release_gate"])
     parser.add_argument("--single-user-local-gate", type=Path, default=DEFAULT_INPUTS["single_user_local_gate"])
@@ -1950,6 +2074,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--release-receipt", type=Path, default=DEFAULT_INPUTS["release_receipt"])
     parser.add_argument("--evidence-pack", type=Path, default=DEFAULT_INPUTS["evidence_pack"])
     parser.add_argument("--staging-plan", type=Path, default=DEFAULT_INPUTS["staging_plan"])
+    parser.add_argument("--staging-rehearsal", type=Path, default=DEFAULT_INPUTS["staging_rehearsal"])
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument(
         "--allow-missing-evidence-pack",
@@ -1957,6 +2082,11 @@ def parse_args() -> argparse.Namespace:
         help="allow the first bootstrap final gate before rc_evidence_pack.py has produced its report",
     )
     parser.add_argument("--require-ready-to-tag", action="store_true", help="fail when owner gates remain")
+    parser.add_argument(
+        "--require-stage3-rehearsal",
+        action="store_true",
+        help="fail unless the Stage3 staging rehearsal report is ready for the selected release",
+    )
     return parser.parse_args()
 
 
@@ -1976,6 +2106,8 @@ def main() -> int:
             "owner_gate_runner": args.owner_gate_runner,
             "owner_env_template": args.owner_env_template,
             "owner_gate_checklist": args.owner_gate_checklist,
+            "stage3_owner_evidence_todo": args.stage3_owner_evidence_todo,
+            "stage3_owner_quickstart": args.stage3_owner_quickstart,
             "owner_handoff_gate": args.owner_handoff_gate,
             "install_release_gate": args.install_release_gate,
             "single_user_local_gate": args.single_user_local_gate,
@@ -1986,8 +2118,10 @@ def main() -> int:
             "release_receipt": args.release_receipt,
             "evidence_pack": args.evidence_pack,
             "staging_plan": args.staging_plan,
+            "staging_rehearsal": args.staging_rehearsal,
         },
         allow_missing_evidence_pack=args.allow_missing_evidence_pack,
+        require_stage3_rehearsal=args.require_stage3_rehearsal,
     )
     write_report(report, args.output)
     print(f"RC final gate status: {report.status}")

@@ -9,6 +9,7 @@ from typing import Any, Optional
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
 
+from backend.app.api.rbac_enforcement import require_admin
 from backend.app.core.enterprise_sso import (
     OAuthConfig,
     OAuthProcessor,
@@ -19,7 +20,10 @@ from backend.app.core.enterprise_sso import (
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/v1/enterprise/sso", tags=["enterprise-sso"])
+router = APIRouter(
+    prefix="/api/v1/enterprise/sso",
+    tags=["enterprise-sso"],
+)
 
 # 初始化管理器
 sso_session_manager = SSOSessionManager()
@@ -56,7 +60,9 @@ class OAuthAuthResponse(BaseModel):
     authorization_url: str
 
 
-@router.post("/saml/config", response_model=dict[str, Any])
+# SECURITY P1-03: SSO configuration and logout require admin role; SSO login
+# initiation routes remain public identity-provider entry points.
+@router.post("/saml/config", response_model=dict[str, Any], dependencies=[require_admin])
 async def configure_saml(request: SAMLConfigRequest) -> dict[str, Any]:
     """配置SAML 2.0"""
     try:
@@ -101,7 +107,7 @@ async def initiate_saml_auth() -> SAMLAuthResponse:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.post("/oauth/config", response_model=dict[str, Any])
+@router.post("/oauth/config", response_model=dict[str, Any], dependencies=[require_admin])
 async def configure_oauth(request: OAuthConfigRequest) -> dict[str, Any]:
     """配置OAuth 2.0/OIDC"""
     try:
@@ -150,7 +156,7 @@ async def initiate_oauth_auth() -> OAuthAuthResponse:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.post("/logout", response_model=dict[str, Any])
+@router.post("/logout", response_model=dict[str, Any], dependencies=[require_admin])
 async def sso_logout(session_id: str) -> dict[str, Any]:
     """SSO登出"""
     try:

@@ -120,10 +120,17 @@ class DatabaseConfig(BaseConfig):
         """Validate database URL format."""
         if not v:
             raise ValueError("database_url cannot be empty")
-        if not any(v.startswith(prefix) for prefix in ["sqlite://", "postgresql://", "mysql://", "mongodb://"]):
+        valid_prefixes = [
+            "sqlite://",
+            "postgresql://",
+            "postgresql+asyncpg://",
+            "mysql://",
+            "mongodb://",
+        ]
+        if not any(v.startswith(prefix) for prefix in valid_prefixes):
             raise ValueError(
                 "database_url must start with a valid scheme: "
-                "sqlite://, postgresql://, mysql://, or mongodb://"
+                "sqlite://, postgresql://, postgresql+asyncpg://, mysql://, or mongodb://"
             )
         return v
 
@@ -143,7 +150,7 @@ class DatabaseConfig(BaseConfig):
 
     def is_postgresql(self) -> bool:
         """Check if using PostgreSQL backend."""
-        return self.database_url.startswith("postgresql://")
+        return self.database_url.startswith(("postgresql://", "postgresql+asyncpg://"))
 
     def is_mysql(self) -> bool:
         """Check if using MySQL backend."""

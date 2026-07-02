@@ -6,7 +6,7 @@ from fastapi.responses import StreamingResponse
 from backend.app.api.linked_summary import LinkedSummaryEnvelope, build_linked_summary
 from backend.app.api.pagination import PaginationParams, apply_pagination
 from backend.app.core.audit import AuditChainVerification, AuditLogRecord, AuditStore
-from backend.app.core.security import Principal
+from backend.app.core.security import Principal, is_platform_admin
 from backend.app.dependencies import enforce_scope, get_audit_store, get_current_principal
 
 router = APIRouter(prefix="/api/v1/audit-logs", tags=["audit"])
@@ -51,10 +51,11 @@ async def list_audit_logs(
         Paginated audit logs
     """
     enforce_scope(principal, "audit:read")
+    effective_tenant_id = tenant_id if is_platform_admin(principal) else principal.tenant_id
     records = audit_store.list(
         limit=10000,
         offset=0,
-        tenant_id=tenant_id,
+        tenant_id=effective_tenant_id,
         actor_id=actor_id,
         action=action,
         resource_type=resource_type,
@@ -93,7 +94,7 @@ async def audit_summary(
     principal: PrincipalDependency,
 ) -> dict[str, object]:
     enforce_scope(principal, "audit:read")
-    items = audit_store.list(limit=1000)
+    items = audit_store.list(limit=1000, tenant_id=None if is_platform_admin(principal) else principal.tenant_id)
     by_action: dict[str, int] = {}
     by_resource_type: dict[str, int] = {}
     by_outcome: dict[str, int] = {}
@@ -135,8 +136,9 @@ async def export_audit_logs_csv(
         CSV file as streaming response
     """
     enforce_scope(principal, "audit:read")
+    effective_tenant_id = tenant_id if is_platform_admin(principal) else principal.tenant_id
     csv_content = audit_store.export_csv(
-        tenant_id=tenant_id,
+        tenant_id=effective_tenant_id,
         actor_id=actor_id,
         action=action,
         resource_type=resource_type,
@@ -175,8 +177,9 @@ async def export_audit_logs_json(
         JSON formatted audit logs
     """
     enforce_scope(principal, "audit:read")
+    effective_tenant_id = tenant_id if is_platform_admin(principal) else principal.tenant_id
     records = audit_store.export_json(
-        tenant_id=tenant_id,
+        tenant_id=effective_tenant_id,
         actor_id=actor_id,
         action=action,
         resource_type=resource_type,

@@ -27,6 +27,8 @@
     "verify:panda:dry-run": "node scripts/verify-panda-resource-dry-run.mjs",
     "verify:panda:dry-run:json": "node scripts/verify-panda-resource-dry-run.mjs --json",
     "verify:panda": "node scripts/verify-panda-workbench.mjs",
+    "verify:creative-studio:contracts": "node scripts/verify-creative-studio-api-contracts.mjs",
+    "verify:creative-studio:contracts:json": "node scripts/verify-creative-studio-api-contracts.mjs --json",
     "format": "prettier --write \"src/**/*.{ts,tsx,json,css}\""
   },
   "dependencies": {

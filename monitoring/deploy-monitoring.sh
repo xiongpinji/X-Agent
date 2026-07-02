@@ -155,7 +155,8 @@ JAEGER_SAMPLER_PARAM=1
 ELASTICSEARCH_HOST=elasticsearch
 ELASTICSEARCH_PORT=9200
 ELASTICSEARCH_USER=elastic
-ELASTICSEARCH_PASSWORD=changeme
+# SECURITY: set a strong password before enabling xpack security (leave blank otherwise).
+ELASTICSEARCH_PASSWORD=
 
 # Logstash Configuration
 LOGSTASH_JAVA_OPTS=-Xmx256m -Xms256m
@@ -169,7 +170,8 @@ SLACK_WEBHOOK_URL=https://hooks.slack.com/services/YOUR/WEBHOOK/URL
 PAGERDUTY_SERVICE_KEY=your-service-key
 
 # Grafana Configuration
-GF_SECURITY_ADMIN_PASSWORD=admin
+# SECURITY: set a strong admin password before first start (must not be empty in prod).
+GF_SECURITY_ADMIN_PASSWORD=
 GF_SECURITY_ADMIN_USER=admin
 GF_INSTALL_PLUGINS=grafana-piechart-panel
 GF_USERS_ALLOW_SIGN_UP=false
@@ -182,14 +184,16 @@ PROMETHEUS_EVALUATION_INTERVAL=15s
 
 # Database Configuration
 POSTGRES_USER=xagent
-POSTGRES_PASSWORD=xagent
+# SECURITY: set a strong database password before deploying (must not be empty in prod).
+POSTGRES_PASSWORD=
 POSTGRES_DB=xagent
 
 # Redis Configuration
 REDIS_PASSWORD=
 
 # Qdrant Configuration
-QDRANT_API_KEY=qdrant_key
+# SECURITY: set a strong Qdrant API key before deploying.
+QDRANT_API_KEY=
 EOF
         print_success "Created .env file"
         print_warning "Please review and update .env file with your settings"
@@ -304,7 +308,7 @@ print_access_info() {
     echo "Access the monitoring interfaces:"
     echo ""
     echo -e "${GREEN}Prometheus${NC}:      http://localhost:9090"
-    echo -e "${GREEN}Grafana${NC}:         http://localhost:3000 (admin/admin)"
+    echo -e "${GREEN}Grafana${NC}:         http://localhost:3000 (user: admin, password: see GF_SECURITY_ADMIN_PASSWORD in .env)"
     echo -e "${GREEN}Kibana${NC}:          http://localhost:5601"
     echo -e "${GREEN}Jaeger${NC}:          http://localhost:16686"
     echo -e "${GREEN}AlertManager${NC}:    http://localhost:9093"

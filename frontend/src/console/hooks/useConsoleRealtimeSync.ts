@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { getAuthHeaders } from "../../services/authHeaders";
+import { createMessagesStreamUrl } from "../../services/streamUrls";
 import { validateConsoleBootstrapResponse, warnConsoleBootstrapIssues } from "../state/consoleValidation";
 
 export type RealtimeSyncStatus = "idle" | "bootstrapping" | "sse" | "polling" | "error";
@@ -166,7 +168,7 @@ export function useConsoleRealtimeSync(
 
   const refreshMessagesOnly = useCallback(async () => {
     try {
-      const response = await fetch(bootstrapUrl, { method: "GET", headers: { "Content-Type": "application/json" } });
+      const response = await fetch(bootstrapUrl, { method: "GET", headers: { "Content-Type": "application/json", ...getAuthHeaders() } });
       if (!response.ok) return;
 
       const data = (await response.json()) as ConsoleBootstrapResponse;
@@ -210,50 +212,56 @@ export function useConsoleRealtimeSync(
       clearReconnectTimer();
       eventSourceRef.current?.close();
 
-      const eventSource = new EventSource(getStreamUrl().toString());
-      eventSourceRef.current = eventSource;
+      void createMessagesStreamUrl(getStreamUrl()).then((streamUrl) => {
+        const eventSource = new EventSource(streamUrl);
+        eventSourceRef.current = eventSource;
 
-      const handleSsePayload = (rawEvent: MessageEvent<string>) => {
-        if (!aliveRef.current) return;
-        try {
-          const payload = JSON.parse(rawEvent.data) as UnifiedMessageEvent;
-          const eventId = getSseEventId(rawEvent);
-          if (eventId) lastEventIdRef.current = eventId;
-          if (payload.event_id) lastEventIdRef.current = payload.event_id;
-          handleRealtimeEvent(payload);
-          setLastSyncedAt(new Date().toISOString());
-          setSyncError(null);
-        } catch (error) {
-          console.warn("Invalid SSE payload", error);
-        }
-      };
-
-      eventSource.onopen = () => {
-        if (!aliveRef.current) return;
-        reconnectAttemptRef.current = 0;
-        reconnectDelayRef.current = 1000;
-        setSyncStatus("sse");
-        setSyncError(null);
-        stopPolling();
-      };
-
-      eventSource.addEventListener("system.notification", handleSsePayload as EventListener);
-      eventSource.onmessage = handleSsePayload;
-
-      eventSource.onerror = () => {
-        if (!aliveRef.current) return;
-        eventSource.close();
-        eventSourceRef.current = null;
-        reconnectAttemptRef.current += 1;
-        setSyncStatus("polling");
-        startPolling();
-        clearReconnectTimer();
-        reconnectTimerRef.current = setTimeout(() => {
+        const handleSsePayload = (rawEvent: MessageEvent<string>) => {
           if (!aliveRef.current) return;
-          reconnectDelayRef.current = Math.min(reconnectDelayRef.current * 2, 30000);
-          connectSSE();
-        }, reconnectDelayRef.current);
-      };
+          try {
+            const payload = JSON.parse(rawEvent.data) as UnifiedMessageEvent;
+            const eventId = getSseEventId(rawEvent);
+            if (eventId) lastEventIdRef.current = eventId;
+            if (payload.event_id) lastEventIdRef.current = payload.event_id;
+            handleRealtimeEvent(payload);
+            setLastSyncedAt(new Date().toISOString());
+            setSyncError(null);
+          } catch (error) {
+            console.warn("Invalid SSE payload", error);
+          }
+        };
+
+        eventSource.onopen = () => {
+          if (!aliveRef.current) return;
+          reconnectAttemptRef.current = 0;
+          reconnectDelayRef.current = 1000;
+          setSyncStatus("sse");
+          setSyncError(null);
+          stopPolling();
+        };
+
+        eventSource.addEventListener("system.notification", handleSsePayload as EventListener);
+        eventSource.onmessage = handleSsePayload;
+
+        eventSource.onerror = () => {
+          if (!aliveRef.current) return;
+          eventSource.close();
+          eventSourceRef.current = null;
+          reconnectAttemptRef.current += 1;
+          setSyncStatus("polling");
+          startPolling();
+          clearReconnectTimer();
+          reconnectTimerRef.current = setTimeout(() => {
+            if (!aliveRef.current) return;
+            reconnectDelayRef.current = Math.min(reconnectDelayRef.current * 2, 30000);
+            connectSSE();
+          }, reconnectDelayRef.current);
+        };
+      }).catch((error) => {
+        setSyncStatus("polling");
+        setSyncError(error instanceof Error ? error.message : "Failed to start SSE");
+        startPolling();
+      });
     } catch (error) {
       setSyncStatus("polling");
       setSyncError(error instanceof Error ? error.message : "Failed to start SSE");
@@ -267,7 +275,7 @@ export function useConsoleRealtimeSync(
     setSyncError(null);
 
     try {
-      const response = await fetch(bootstrapUrl, { method: "GET", headers: { "Content-Type": "application/json" } });
+      const response = await fetch(bootstrapUrl, { method: "GET", headers: { "Content-Type": "application/json", ...getAuthHeaders() } });
       if (!response.ok) throw new Error(`Bootstrap failed: ${response.status}`);
 
       const data = (await response.json()) as ConsoleBootstrapResponse;

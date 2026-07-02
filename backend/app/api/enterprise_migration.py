@@ -9,6 +9,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
 
+from backend.app.api.rbac_enforcement import require_admin
 from backend.app.core.enterprise_migration import (
     ConfigurationTransformer,
     DataExporter,
@@ -22,7 +23,12 @@ from backend.app.core.enterprise_migration import (
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/v1/enterprise/migration", tags=["enterprise-migration"])
+# SECURITY P1-03: enterprise migration endpoints require admin role.
+router = APIRouter(
+    prefix="/api/v1/enterprise/migration",
+    tags=["enterprise-migration"],
+    dependencies=[require_admin],
+)
 
 # 初始化管理器
 openclaw_migrator = OpenClawMigrator()

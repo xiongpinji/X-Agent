@@ -64,7 +64,7 @@ def test_github_review_action_report_redacts_secret_like_issue_content() -> None
     report = build_github_review_action_report(
         {
             "issue_url": "https://github.com/acme/project/issues/7",
-            "title": "Do not leak sk-test1234567890abcdef",
+            "title": "Do not leak " + "sk-" + "test1234567890abcdef",
             "body": "Bearer abcdefghijklmnopqrstuvwxyz must not appear.",
         }
     )

@@ -289,7 +289,7 @@ def cache_key(*args: Any, **kwargs: Any) -> str:
     key_parts = [str(arg) for arg in args]
     key_parts.extend(f"{k}={v}" for k, v in sorted(kwargs.items()))
     key_str = "|".join(key_parts)
-    return hashlib.md5(key_str.encode()).hexdigest()
+    return hashlib.md5(key_str.encode(), usedforsecurity=False).hexdigest()
 
 
 def cached(ttl_seconds: int | None = None, key_prefix: str | None = None):

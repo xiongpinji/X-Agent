@@ -22,6 +22,8 @@ from uuid import uuid4
 
 from pydantic import BaseModel, Field
 
+from backend.app.core.saml_sso import verify_saml_xml_signature
+
 logger = logging.getLogger(__name__)
 
 
@@ -315,12 +317,24 @@ class SAMLProcessor:
         return match.group(1) if match else ""
 
     def _verify_saml_response(self, saml_response_xml: str) -> None:
-        """验证SAML响应签名和条件"""
-        # 简化实现：在生产环境中应使用python3-saml库
-        if self.config.want_response_signed:
-            if "Signature" not in saml_response_xml:
-                raise ValueError("SAML response must be signed")
-        logger.debug("SAML response verification passed")
+        """验证SAML响应签名(真实XMLDSig验证,fail-closed)。
+
+        SECURITY: 不再只检查 "Signature" 字符串是否存在。调用共享的
+        verify_saml_xml_signature() 做真实 RSA-SHA256 验证。
+        缺证书、无签名、签名错误都 raise ValueError(fail-closed)。
+        """
+        idp_cert = getattr(self.config, "idp_certificate", None)
+        if not idp_cert:
+            raise ValueError(
+                "SAML IdP certificate not configured - cannot verify response signature. "
+                "Configure SAMLConfig.idp_certificate."
+            )
+        if not verify_saml_xml_signature(saml_response_xml.encode("utf-8"), idp_cert):
+            raise ValueError(
+                "SAML response signature verification failed "
+                "(missing/invalid signature or certificate mismatch)."
+            )
+        logger.debug("SAML response signature verified OK.")
 
     def _extract_assertion(self, saml_response_xml: str) -> SAMLAssertion:
         """从SAML响应中提取断言"""

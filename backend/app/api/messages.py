@@ -6,11 +6,18 @@ from datetime import UTC, datetime
 from typing import Annotated
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
+from backend.app.api.errors import api_error
+from backend.app.core.contracts import ErrorCode
 from backend.app.core.security import Principal
+from backend.app.core.stream_tokens import (
+    STREAM_TOKEN_TTL_SECONDS,
+    create_stream_token,
+    principal_from_stream_token,
+)
 from backend.app.dependencies import enforce_scope, get_current_principal
 
 router = APIRouter(prefix="/api/v1/messages", tags=["messages"])
@@ -74,6 +81,11 @@ class UnifiedMessageEvent(BaseModel):
     user_id: str | None = None
     channel_type: str = "system"
     payload: dict[str, object] = Field(default_factory=dict)
+
+
+class MessageStreamTokenResponse(BaseModel):
+    stream_url: str
+    token_expires_in: int = STREAM_TOKEN_TTL_SECONDS
 
 
 class _MessageEventBus:
@@ -306,9 +318,162 @@ def _serialize_sse(event: UnifiedMessageEvent, event_name: str | None = None) ->
     return "\n".join(lines) + "\n\n"
 
 
+def _messages_stream_id(
+    *,
+    tenant_id: str | None = None,
+    org_id: str | None = None,
+    room_id: str | None = None,
+    conversation_id: str | None = None,
+    agent_id: str | None = None,
+    user_id: str | None = None,
+    channel_type: str | None = None,
+    trace_id: str | None = None,
+) -> str:
+    return build_channel_key(
+        tenant_id=tenant_id,
+        org_id=org_id,
+        room_id=room_id,
+        conversation_id=conversation_id,
+        agent_id=agent_id,
+        user_id=user_id,
+        channel_type=channel_type,
+        trace_id=trace_id,
+    )
+
+
+def _principal_value(principal: Principal, field: str) -> str | None:
+    value = getattr(principal, field, None)
+    if value is None:
+        return None
+    text = str(value)
+    return text if text else None
+
+
+def _require_self_stream_filter(
+    principal: Principal,
+    *,
+    tenant_id: str | None = None,
+    agent_id: str | None = None,
+    user_id: str | None = None,
+    trace_id: str | None = None,
+) -> None:
+    protected_filters = {
+        "tenant_id": tenant_id,
+        "agent_id": agent_id,
+        "user_id": user_id,
+        "trace_id": trace_id,
+    }
+    for field, requested in protected_filters.items():
+        if requested is None:
+            continue
+        current = _principal_value(principal, field)
+        if current is not None and requested != current:
+            raise api_error(
+                403,
+                ErrorCode.AUTHORIZATION_FAILED,
+                f"Message stream {field} must match the authenticated principal.",
+            )
+
+
+def get_messages_stream_principal(
+    request: Request,
+    token: str | None = Query(default=None),
+    tenant_id: str | None = Query(default=None),
+    org_id: str | None = Query(default=None),
+    room_id: str | None = Query(default=None),
+    conversation_id: str | None = Query(default=None),
+    agent_id: str | None = Query(default=None),
+    user_id: str | None = Query(default=None),
+    channel_type: str | None = Query(default=None),
+    trace_id: str | None = Query(default=None),
+) -> Principal:
+    stream_id = _messages_stream_id(
+        tenant_id=tenant_id,
+        org_id=org_id,
+        room_id=room_id,
+        conversation_id=conversation_id,
+        agent_id=agent_id,
+        user_id=user_id,
+        channel_type=channel_type,
+        trace_id=trace_id,
+    )
+    principal = principal_from_stream_token(stream_id, token)
+    if principal is not None:
+        request.scope["principal"] = principal
+        return principal
+    principal = get_current_principal(request)
+    _require_self_stream_filter(
+        principal,
+        tenant_id=tenant_id,
+        agent_id=agent_id,
+        user_id=user_id,
+        trace_id=trace_id,
+    )
+    return principal
+
+
+@router.post("/stream/token", response_model=MessageStreamTokenResponse)
+async def create_message_stream_token(
+    principal: PrincipalDependency,
+    tenant_id: str | None = Query(default=None),
+    org_id: str | None = Query(default=None),
+    room_id: str | None = Query(default=None),
+    conversation_id: str | None = Query(default=None),
+    agent_id: str | None = Query(default=None),
+    user_id: str | None = Query(default=None),
+    channel_type: str | None = Query(default=None),
+    trace_id: str | None = Query(default=None),
+    include_system: bool = Query(default=True),
+    include_audit: bool = Query(default=True),
+    include_workflow: bool = Query(default=True),
+    last_event_id: str | None = Query(default=None),
+) -> MessageStreamTokenResponse:
+    enforce_scope(principal, "agent:run")
+    _require_self_stream_filter(
+        principal,
+        tenant_id=tenant_id,
+        agent_id=agent_id,
+        user_id=user_id,
+        trace_id=trace_id,
+    )
+    stream_id = _messages_stream_id(
+        tenant_id=tenant_id or principal.tenant_id,
+        org_id=org_id,
+        room_id=room_id,
+        conversation_id=conversation_id,
+        agent_id=agent_id or principal.agent_id,
+        user_id=user_id or principal.user_id,
+        channel_type=channel_type,
+        trace_id=trace_id or principal.trace_id,
+    )
+    token = create_stream_token(stream_id=stream_id, principal=principal, scopes=["agent:run"])
+    params = {
+        "tenant_id": tenant_id or principal.tenant_id,
+        "org_id": org_id,
+        "room_id": room_id,
+        "conversation_id": conversation_id,
+        "agent_id": agent_id or principal.agent_id,
+        "user_id": user_id or principal.user_id,
+        "channel_type": channel_type,
+        "trace_id": trace_id or principal.trace_id,
+        "include_system": str(include_system).lower(),
+        "include_audit": str(include_audit).lower(),
+        "include_workflow": str(include_workflow).lower(),
+        "last_event_id": last_event_id,
+        "token": token,
+    }
+    from urllib.parse import urlencode
+
+    query = urlencode({key: value for key, value in params.items() if value is not None})
+    return MessageStreamTokenResponse(
+        stream_url=f"/api/v1/messages/stream?{query}",
+        token_expires_in=STREAM_TOKEN_TTL_SECONDS,
+    )
+
+
 @router.get("/stream")
 async def stream_messages(
-    principal: PrincipalDependency,
+    principal: Annotated[Principal, Depends(get_messages_stream_principal)],
     tenant_id: str | None = Query(default=None),
     org_id: str | None = Query(default=None),
     room_id: str | None = Query(default=None),

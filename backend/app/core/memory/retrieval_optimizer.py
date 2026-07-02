@@ -438,12 +438,12 @@ class RetrieverOptimizer:
             嵌入向量
         """
         if dim is None:
-            hash_val = hashlib.md5(query.encode()).digest()
+            hash_val = hashlib.md5(query.encode(), usedforsecurity=False).digest()
             embedding = np.frombuffer(hash_val, dtype=np.float32).copy()
         else:
             # 用查询哈希做确定性随机种子,生成目标维度向量
             seed = int.from_bytes(
-                hashlib.md5(query.encode()).digest()[:8], "little", signed=False
+                hashlib.md5(query.encode(), usedforsecurity=False).digest()[:8], "little", signed=False
             )
             rng = np.random.default_rng(seed)
             embedding = rng.standard_normal(int(dim)).astype(np.float32)
@@ -455,7 +455,7 @@ class RetrieverOptimizer:
 
     def _compute_cache_key(self, query: str) -> str:
         """计算缓存键。"""
-        return hashlib.md5(query.encode()).hexdigest()
+        return hashlib.md5(query.encode(), usedforsecurity=False).hexdigest()
 
     def _add_to_cache(
         self,

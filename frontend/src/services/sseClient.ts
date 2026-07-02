@@ -5,6 +5,8 @@
  * of agent execution events with automatic reconnection and error handling.
  */
 
+import { createAgentStreamUrl } from './streamUrls';
+
 export interface StreamEvent {
   event_type: string;
   timestamp: string;
@@ -74,6 +76,13 @@ export interface SSEClientConfig {
   heartbeatTimeoutMs?: number;
 }
 
+export type SSEAuthMode = 'cookie-or-signed-url';
+
+export interface StreamTokenResponse {
+  stream_url: string;
+  token_expires_in: number;
+}
+
 export class SSEClient {
   private eventSource: EventSource | null = null;
   private reconnectAttempts = 0;
@@ -81,6 +90,7 @@ export class SSEClient {
   private reconnectDelayMs: number;
   private maxReconnectDelayMs: number;
   private heartbeatTimeoutMs: number;
+  private authMode: SSEAuthMode = 'cookie-or-signed-url';
   private heartbeatTimer: NodeJS.Timeout | null = null;
   private isManuallyClosed = false;
 
@@ -89,6 +99,10 @@ export class SSEClient {
     this.reconnectDelayMs = config.reconnectDelayMs ?? 1000;
     this.maxReconnectDelayMs = config.maxReconnectDelayMs ?? 30000;
     this.heartbeatTimeoutMs = config.heartbeatTimeoutMs ?? 60000;
+  }
+
+  getAuthMode(): SSEAuthMode {
+    return this.authMode;
   }
 
   connect(
@@ -103,8 +117,23 @@ export class SSEClient {
 
     this.isManuallyClosed = false;
 
+    void this.openSignedConnection(runId, onMessage, onError, onComplete);
+  }
+
+  private async requestStreamUrl(runId: string): Promise<string> {
+    return createAgentStreamUrl(runId);
+  }
+
+  private async openSignedConnection(
+    runId: string,
+    onMessage: (event: AnyStreamEvent) => void,
+    onError?: (error: Error) => void,
+    onComplete?: () => void
+  ): Promise<void> {
     try {
-      const url = `/api/v1/agent/stream/${encodeURIComponent(runId)}`;
+      const url = await this.requestStreamUrl(runId);
+      if (this.isManuallyClosed) return;
+
       this.eventSource = new EventSource(url);
 
       // Generic message handler

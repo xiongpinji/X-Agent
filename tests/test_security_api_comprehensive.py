@@ -57,6 +57,7 @@ def _make_record(**overrides) -> APIKeyRecord:
         "name": "test-key",
         "key_prefix": "xag_test",
         "key_hash": "hash-placeholder",
+        "tenant_id": "tenant1",
     }
     data.update(overrides)
     return APIKeyRecord(**data)
@@ -157,12 +158,14 @@ class TestDeleteAPIKeyEndpoint:
     """Test DELETE /api/v1/security/api-keys/{key_id} endpoint."""
 
     def test_delete_api_key_success(self, client, mock_api_key_store):
+        mock_api_key_store.list.return_value = [_make_record(id="key1", name="test-key")]
         mock_api_key_store.revoke.return_value = _make_record(id="key1", name="test-key")
         response = client.delete("/api/v1/security/api-keys/key1")
         assert response.status_code == 200
         assert response.json()["deleted"] is True
 
     def test_delete_api_key_not_found(self, client, mock_api_key_store):
+        mock_api_key_store.list.return_value = []
         mock_api_key_store.revoke.return_value = None
         response = client.delete("/api/v1/security/api-keys/nonexistent")
         assert response.status_code == 404
@@ -177,12 +180,14 @@ class TestRevokeAPIKeyEndpoint:
     """Test POST /api/v1/security/api-keys/{key_id}/revoke endpoint."""
 
     def test_revoke_api_key_success(self, client, mock_api_key_store):
+        mock_api_key_store.list.return_value = [_make_record(id="key1", name="test-key")]
         mock_api_key_store.revoke.return_value = _make_record(id="key1", name="test-key")
         response = client.post("/api/v1/security/api-keys/key1/revoke")
         assert response.status_code == 200
         assert response.json()["id"] == "key1"
 
     def test_revoke_api_key_not_found(self, client, mock_api_key_store):
+        mock_api_key_store.list.return_value = []
         mock_api_key_store.revoke.return_value = None
         response = client.post("/api/v1/security/api-keys/nonexistent/revoke")
         assert response.status_code == 404

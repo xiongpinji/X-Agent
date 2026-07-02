@@ -23,8 +23,11 @@ from backend.app.api.collaboration import router as collaboration_router
 from backend.app.api.commercial_pilot import router as commercial_pilot_router
 from backend.app.api.control_modes import router as control_modes_router
 from backend.app.api.control_plane import router as control_plane_router
+from backend.app.api.creative_studio import router as creative_studio_router
 from backend.app.api.desktop import router as desktop_router
 from backend.app.api.dispatch import router as dispatch_router
+from backend.app.api.enterprise import router as enterprise_router
+from backend.app.api.enterprise_sso import router as enterprise_sso_router
 from backend.app.api.errors import (
     XAgentAPIError,
     pydantic_validation_error_handler,
@@ -33,17 +36,25 @@ from backend.app.api.errors import (
 )
 from backend.app.api.auth import router as auth_router
 from backend.app.api.feishu import router as feishu_router
+from backend.app.api.files_v2 import router as files_v2_router
+from backend.app.api.forum import router as forum_router
+from backend.app.api.forum_search import router as forum_search_router
+from backend.app.api.frontend_commercial_contract import router as frontend_commercial_contract_router
 from backend.app.api.integrations import router as integrations_router
 from backend.app.api.issue_to_pr import router as issue_to_pr_router
+from backend.app.api.llm_governance import router as llm_governance_router
 from backend.app.api.memory import router as memory_router
 from backend.app.api.messages import router as messages_router
 from backend.app.api.org import router as org_router
+from backend.app.api.rag_governance import router as rag_governance_router
+from backend.app.api.capabilities import router as capabilities_router
 from backend.app.api.evolution import router as evolution_router
 from backend.app.api.migration import router as migration_router
 from backend.app.api.workbench import router as workbench_router
 from backend.app.api.metrics import router as metrics_router
 from backend.app.api.overview import router as overview_router
 from backend.app.api.planning import router as planning_router
+from backend.app.api.provider_preflight import router as provider_preflight_router
 from backend.app.api.execution import router as execution_router
 from backend.app.api.verification import router as verification_router
 from backend.app.api.replay import router as replay_router
@@ -76,6 +87,7 @@ from backend.app.api.feedback import router as feedback_router
 from backend.app.api.sync import router as sync_router
 from backend.app.api.sandbox_tasks import router as sandbox_tasks_router
 from backend.app.api.sandbox_tasks import start_sandbox_worker, stop_sandbox_worker
+from backend.app.api.sso import router as sso_router
 from backend.app.services.browser.automation import browser_automation
 from backend.app.services.browser.playwright_client import browser_client
 from backend.app.services.memory.indexer import memory_indexer
@@ -91,8 +103,9 @@ from backend.app.dependencies import (
     get_run_store,
     get_trace_store,
     get_workflow_repository,
+    require_authenticated_principal,
 )
-from backend.app.core.security import Principal
+from backend.app.core.security import Principal, ROLE_SCOPES
 from backend.app.core.mcp.manager import (
     initialize_mcp_manager,
     shutdown_mcp_manager,
@@ -122,7 +135,7 @@ def require_api_key_header(request: Request) -> None:
         return
     if request.url.path in API_KEY_EXEMPT_PATHS:
         return
-    if request.headers.get("x-api-key"):
+    if _request_has_valid_api_key(request):
         return
     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing API key")
 
@@ -185,10 +198,26 @@ def _request_has_valid_api_key(request: Request) -> bool:
             app_settings.bootstrap_api_key,
             app_settings.bootstrap_api_key_sha256,
         ):
+            request.scope["principal"] = Principal(
+                tenant_id="default",
+                user_id="bootstrap-admin",
+                role="admin",
+                scopes=list(ROLE_SCOPES["admin"]),
+                api_key_id="bootstrap",
+                authenticated=True,
+            )
             return True
-        return get_api_key_store().authenticate(raw_key) is not None
+        principal = get_api_key_store().authenticate(raw_key)
+        if principal is None:
+            return False
+        request.scope["principal"] = principal
+        return True
     except Exception:  # noqa: BLE001 - never let CSRF exemption check crash the request
         return False
+
+
+def _api_key_failure_detail(request: Request) -> str:
+    return "Invalid API key" if request.headers.get("x-api-key") else "Missing API key"
 
 
 class CSRFProtectionMiddleware(BaseHTTPMiddleware):
@@ -394,8 +423,8 @@ async def request_logging_middleware(request: Request, call_next):
     request_id = request.headers.get("x-request-id") or str(uuid4())
     started = time.perf_counter()
     if settings.require_api_key and request.url.path not in API_KEY_EXEMPT_PATHS:
-        if not request.headers.get("x-api-key"):
-            response = JSONResponse({"detail": "Missing API key"}, status_code=401)
+        if not _request_has_valid_api_key(request):
+            response = JSONResponse({"detail": _api_key_failure_detail(request)}, status_code=401)
             response.headers["x-request-id"] = request_id
             return response
     response = await call_next(request)
@@ -431,9 +460,15 @@ async def tenant_isolation_middleware(request: Request, call_next):
         return await call_next(request)
 
     try:
-        # Try to get the principal from the request
-        # This is a best-effort check; the actual auth happens in route handlers
         principal = request.scope.get("principal")
+        if principal is None and (
+            request.headers.get("x-api-key")
+            or request.headers.get("authorization", "").lower().startswith("bearer ")
+        ):
+            try:
+                principal = get_current_principal(request)
+            except Exception:
+                principal = None
         if principal and principal.role != "admin":
             # Check for tenant_id in query parameters
             tenant_id_param = request.query_params.get("tenant_id")
@@ -507,6 +542,7 @@ async def security_headers_middleware(request: Request, call_next):
 
 
 app.include_router(auth_router)
+app.include_router(frontend_commercial_contract_router)
 app.include_router(agents_router)
 app.include_router(approvals_router)
 app.include_router(audit_router)
@@ -516,19 +552,29 @@ app.include_router(collaboration_router)
 app.include_router(commercial_pilot_router)
 app.include_router(control_modes_router)
 app.include_router(control_plane_router)
+app.include_router(creative_studio_router, dependencies=[Depends(require_authenticated_principal)])
 app.include_router(desktop_router)
 app.include_router(dispatch_router)
+app.include_router(enterprise_router)
+app.include_router(enterprise_sso_router, dependencies=[Depends(require_authenticated_principal)])
 app.include_router(feishu_router)
+app.include_router(files_v2_router, dependencies=[Depends(require_authenticated_principal)])
+app.include_router(forum_router, dependencies=[Depends(require_authenticated_principal)])
+app.include_router(forum_search_router, dependencies=[Depends(require_authenticated_principal)])
 app.include_router(integrations_router)
 app.include_router(issue_to_pr_router)
+app.include_router(llm_governance_router)
 app.include_router(memory_router)
 app.include_router(org_router)
+app.include_router(rag_governance_router)
 app.include_router(evolution_router)
 app.include_router(migration_router)
 app.include_router(planning_router)
+app.include_router(capabilities_router)
+app.include_router(provider_preflight_router)
 app.include_router(workbench_router)
 app.include_router(messages_router)
-app.include_router(metrics_router)
+app.include_router(metrics_router, dependencies=[Depends(get_current_principal)])
 app.include_router(overview_router)
 app.include_router(execution_router)
 app.include_router(verification_router)
@@ -561,6 +607,7 @@ app.include_router(memory_enhanced_router)
 app.include_router(feedback_router)
 app.include_router(sync_router)
 app.include_router(sandbox_tasks_router)
+app.include_router(sso_router, dependencies=[Depends(require_authenticated_principal)])
 app.add_exception_handler(XAgentAPIError, xagent_api_error_handler)
 app.add_exception_handler(RequestValidationError, validation_error_handler)
 app.add_exception_handler(PydanticValidationError, pydantic_validation_error_handler)
@@ -574,15 +621,27 @@ async def startup_event():
     """
     logger.info("Starting X-Agent application...")
 
-    # Security check: warn if production API auth is disabled
+    # Security check: production API auth must be enforced unless running as a
+    # local desktop (lite) deployment (SECURITY P0-06).
+    # 云端/API 部署若误配 require_api_key=false,整个 API 无认证保护——拒绝启动。
+    # 桌面 lite 单机模式可显式关闭(本机用户即操作者,无网络暴露面)。
     from backend.app.settings import get_settings as _get_settings
     _settings = _get_settings()
     if _settings.app_mode == "production" and not _settings.require_api_key:
-        logger.warning(
-            "SECURITY WARNING: XAGENT_REQUIRE_API_KEY=false in production mode. "
-            "Cloud and API deployments should set XAGENT_REQUIRE_API_KEY=true to prevent unauthenticated access. "
-            "Desktop-local deployments may leave this off intentionally."
-        )
+        if _settings.mode == "lite":
+            # 桌面本地部署:保留 WARNING,不阻断启动
+            logger.warning(
+                "XAGENT_REQUIRE_API_KEY=false in production desktop (lite) mode. "
+                "Acceptable for single-user local use; do NOT expose this to a network."
+            )
+        else:
+            # 云端/standard/production 部署:强制要求认证,拒绝启动
+            raise RuntimeError(
+                "XAGENT_REQUIRE_API_KEY=false is forbidden in production mode (mode="
+                + str(_settings.mode)
+                + "). Set XAGENT_REQUIRE_API_KEY=true, or use XAGENT_MODE=lite for "
+                "single-user desktop deployments. Ref: SECURITY_DECISIONS.md D-1"
+            )
 
     if _settings.feishu_app_id and _settings.feishu_app_secret:
         feishu_bridge.configure(
@@ -687,6 +746,11 @@ async def root() -> FileResponse:
     startup = frontend_dir / "startup.html"
     if startup.exists():
         return FileResponse(startup)
+    return FileResponse(frontend_dir / "index.html")
+
+
+@app.get("/login")
+async def login_page() -> FileResponse:
     return FileResponse(frontend_dir / "index.html")
 
 

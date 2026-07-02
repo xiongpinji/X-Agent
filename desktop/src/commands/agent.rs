@@ -24,10 +24,11 @@ pub async fn start_agent(
 ) -> Result<AgentStatus, String> {
     state.set_agent_running(true).await;
 
-    let backend_url = format!(
-        "{}:{}/api/agents/{}/start",
-        state.config.backend_url, state.config.backend_port, agent_id
-    );
+    let backend_url = crate::security::build_backend_url(
+        &state.config.backend_url,
+        state.config.backend_port,
+        &format!("/api/agents/{}/start", agent_id),
+    )?;
 
     let client = reqwest::Client::new();
     let response = client
@@ -48,10 +49,11 @@ pub async fn stop_agent(
     agent_id: String,
     state: State<'_, std::sync::Arc<crate::state::AppState>>,
 ) -> Result<AgentStatus, String> {
-    let backend_url = format!(
-        "{}:{}/api/agents/{}/stop",
-        state.config.backend_url, state.config.backend_port, agent_id
-    );
+    let backend_url = crate::security::build_backend_url(
+        &state.config.backend_url,
+        state.config.backend_port,
+        &format!("/api/agents/{}/stop", agent_id),
+    )?;
 
     let client = reqwest::Client::new();
     let response = client
@@ -73,10 +75,11 @@ pub async fn get_agent_status(
     agent_id: String,
     state: State<'_, std::sync::Arc<crate::state::AppState>>,
 ) -> Result<AgentStatus, String> {
-    let backend_url = format!(
-        "{}:{}/api/agents/{}",
-        state.config.backend_url, state.config.backend_port, agent_id
-    );
+    let backend_url = crate::security::build_backend_url(
+        &state.config.backend_url,
+        state.config.backend_port,
+        &format!("/api/agents/{}", agent_id),
+    )?;
 
     let client = reqwest::Client::new();
     let response = client
@@ -96,10 +99,11 @@ pub async fn get_agent_status(
 pub async fn list_agents(
     state: State<'_, std::sync::Arc<crate::state::AppState>>,
 ) -> Result<Vec<AgentStatus>, String> {
-    let backend_url = format!(
-        "{}:{}/api/agents",
-        state.config.backend_url, state.config.backend_port
-    );
+    let backend_url = crate::security::build_backend_url(
+        &state.config.backend_url,
+        state.config.backend_port,
+        "/api/agents",
+    )?;
 
     let client = reqwest::Client::new();
     let response = client

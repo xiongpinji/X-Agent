@@ -36,8 +36,8 @@ spec:
               topologyKey: kubernetes.io/hostname
       containers:
       - name: xagent-api
-        image: xagent:latest
-        imagePullPolicy: Always
+        image: xagent:1.0.0
+        imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 8000
           name: http
@@ -47,6 +47,12 @@ spec:
             configMapKeyRef:
               name: xagent-config
               key: ENVIRONMENT
+        - name: XAGENT_APP_MODE
+          value: "production"
+        - name: XAGENT_MODE
+          value: "production"
+        - name: XAGENT_REQUIRE_API_KEY
+          value: "true"
         - name: LOG_LEVEL
           valueFrom:
             configMapKeyRef:
@@ -69,6 +75,8 @@ spec:
               key: SECRET_KEY
         - name: DATABASE_URL
           value: "postgresql://$(DB_USER):$(DB_PASSWORD)@postgres:5432/$(DB_NAME)"
+        - name: XAGENT_DATABASE_URL
+          value: "postgresql://$(DB_USER):$(DB_PASSWORD)@postgres:5432/$(DB_NAME)"
         - name: DB_USER
           valueFrom:
             configMapKeyRef:
@@ -86,6 +94,8 @@ spec:
               key: DB_NAME
         - name: REDIS_URL
           value: "redis://:$(REDIS_PASSWORD)@redis:6379/0"
+        - name: XAGENT_REDIS_URL
+          value: "redis://:$(REDIS_PASSWORD)@redis:6379/0"
         - name: REDIS_PASSWORD
           valueFrom:
             secretKeyRef:
@@ -93,7 +103,14 @@ spec:
               key: REDIS_PASSWORD
         - name: QDRANT_URL
           value: "http://qdrant:6333"
+        - name: XAGENT_QDRANT_URL
+          value: "http://qdrant:6333"
         - name: QDRANT_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: xagent-secrets
+              key: QDRANT_API_KEY
+        - name: XAGENT_QDRANT_API_KEY
           valueFrom:
             secretKeyRef:
               name: xagent-secrets

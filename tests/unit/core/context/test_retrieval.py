@@ -178,7 +178,7 @@ class TestContextRetriever:
         for i in range(len(results) - 1):
             assert results[i].relevance_score >= results[i + 1].relevance_score
 
-    def test_retrieve_hybrid_with_time_window(self, retriever):
+    def test_retrieve_hybrid_with_time_window(self, retriever, sample_messages):
         """测试混合检索的时间窗口。
 
         验证时间窗口参数能够正确过滤消息。
@@ -193,8 +193,8 @@ class TestContextRetriever:
         assert isinstance(results, list)
 
         # 验证所有结果都在时间窗口内
-        now = datetime.now(timezone.utc)
-        time_start = now - timedelta(hours=1)
+        latest_message_time = max(message.timestamp for message in sample_messages)
+        time_start = latest_message_time - timedelta(hours=1)
         for item in results:
             assert item.timestamp >= time_start
 

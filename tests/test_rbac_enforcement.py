@@ -87,6 +87,33 @@ class TestPermissionDependency:
         await dep(request)
 
     @pytest.mark.asyncio
+    async def test_permission_dependency_reads_principal_from_request_scope(self) -> None:
+        """Test the real auth dependency path that stores principal in request.scope."""
+        dep = PermissionDependency("agent:run")
+        request = MagicMock()
+        request.state = MagicMock(spec=[])
+        request.scope = {"principal": MagicMock(role="developer")}
+        request.url.path = "/agent/run"
+
+        await dep(request)
+
+    @pytest.mark.asyncio
+    async def test_permission_dependency_prefers_state_principal_over_scope(self) -> None:
+        """Lock legacy state-principal precedence when both locations are set."""
+        from fastapi import HTTPException
+
+        dep = PermissionDependency("admin:*")
+        request = MagicMock()
+        request.state.principal = MagicMock(role="viewer")
+        request.scope = {"principal": MagicMock(role="admin")}
+        request.url.path = "/admin"
+
+        with pytest.raises(HTTPException) as exc_info:
+            await dep(request)
+
+        assert exc_info.value.status_code == 403
+
+    @pytest.mark.asyncio
     async def test_permission_dependency_no_principal_defaults_viewer(self) -> None:
         """Test that missing principal defaults to viewer role.
 

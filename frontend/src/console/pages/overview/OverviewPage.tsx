@@ -32,7 +32,6 @@ export function OverviewPage(props: OverviewPageProps) {
     { label: "工具中心", action: "open_tools", page: "tools_overview" },
     { label: "记忆中心", action: "open_memory", page: "memory_overview" },
     { label: "组织权限中心", action: "open_org", page: "org_overview" },
-    { label: "能力市场", action: "open_market", page: "market_overview" },
     { label: "全局导航", action: "open_search", page: "search_overview" },
     { label: "统一审计", action: "open_audit", page: "audit" },
   ];
@@ -45,7 +44,6 @@ export function OverviewPage(props: OverviewPageProps) {
   const favoriteEntries = [
     { label: "运行控制", action: "open_execution", hint: "执行总览与恢复", page: "execution_overview" },
     { label: "工具中心", action: "open_tools", hint: "能力与插件管理", page: "tools_overview" },
-    { label: "能力市场", action: "open_market", hint: "发现与启用能力", page: "market_overview" },
     { label: "统一审计", action: "open_audit", hint: "风险与回放", page: "audit" },
   ];
 
@@ -65,7 +63,6 @@ export function OverviewPage(props: OverviewPageProps) {
             <button className="rounded-lg bg-white/10 px-3 py-2 text-sm hover:bg-white/20" onClick={() => props.onOpenAction?.("open_tools")}>工具中心</button>
             <button className="rounded-lg bg-white/10 px-3 py-2 text-sm hover:bg-white/20" onClick={() => props.onOpenAction?.("open_memory")}>记忆中心</button>
             <button className="rounded-lg bg-white/10 px-3 py-2 text-sm hover:bg-white/20" onClick={() => props.onOpenAction?.("open_org")}>组织权限</button>
-            <button className="rounded-lg bg-white/10 px-3 py-2 text-sm hover:bg-white/20" onClick={() => props.onOpenAction?.("open_market")}>能力市场</button>
           </div>
         </div>
       </section>
@@ -284,7 +281,6 @@ function RiskAlertsCard({ onOpenAudit }: { onOpenAudit?: () => void }) {
     { label: "执行异常", detail: "存在待恢复执行项", action: "open_audit" },
     { label: "工具波动", detail: "工具调用有变化", action: "open_tools" },
     { label: "权限调整", detail: "有待审核权限变更", action: "open_org" },
-    { label: "能力发布", detail: "市场条目待确认", action: "open_market" },
   ];
 
   return (

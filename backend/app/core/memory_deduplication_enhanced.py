@@ -547,7 +547,7 @@ class MemoryDeduplicatorEnhanced:
 
         for word in words:
             # 用确定性哈希(非内置 hash,保证跨进程/跨运行可复现)
-            idx = int(hashlib.md5(word.encode("utf-8")).hexdigest(), 16) % 100
+            idx = int(hashlib.md5(word.encode("utf-8"), usedforsecurity=False).hexdigest(), 16) % 100
             embedding[idx] += 1.0
 
         # 归一化为词频比例

@@ -4,6 +4,7 @@ from pathlib import Path
 
 from scripts.rc_release_audit import (
     candidate_paths,
+    console_safe_text,
     is_excluded,
     is_safe_manifest_path,
     manifest_candidate_sections,
@@ -28,18 +29,57 @@ def _windows_user_path(*parts: str) -> str:
 def test_excluded_paths_cover_local_agent_and_analysis_artifacts() -> None:
     assert is_excluded(".agents/skills/example/SKILL.md")
     assert is_excluded(".codex/config.toml")
+    assert is_excluded(".xagent/DISPATCH.md")
+    assert is_excluded(".xagent/tasks/worker.json")
+    assert is_excluded(".xagent_runtime/reports/rc-release-audit.json")
+    assert is_excluded("data/xagent.db")
+    assert is_excluded("data/session-cache.db")
+    assert is_excluded("test_baseline_20260613_180323.txt")
+    assert is_excluded("test_baseline_local.log")
     assert is_excluded("backend/app/core/creative_studio/storyboard.py")
     assert is_excluded("backend/app/api/creative_studio.py")
     assert is_excluded("tests/test_creative_studio.py")
     assert is_excluded("AGENTS.md")
     assert is_excluded("COMPETITIVE_ANALYSIS_2026.md")
+    assert not is_excluded("data/schema.sql")
+    assert not is_excluded("docs/.xagent/notes.md")
     assert not is_excluded("scripts/rc_runtime_smoke.py")
 
 
 def test_missing_from_manifest_reports_candidate_omissions() -> None:
-    manifest = "scripts/rc_runtime_smoke.py\n"
+    manifest = """
+## Tracked Modified Candidate Files
+
+```text
+scripts/rc_runtime_smoke.py
+```
+
+## New Candidate Files
+
+```text
+```
+"""
 
     assert missing_from_manifest(["scripts/rc_runtime_smoke.py", "tests/new_test.py"], manifest) == ["tests/new_test.py"]
+
+
+def test_missing_from_manifest_requires_exact_candidate_path_match() -> None:
+    manifest = """
+## Tracked Modified Candidate Files
+
+```text
+```
+
+## New Candidate Files
+
+```text
+tests/test_rc_release_audit.py.bak
+```
+"""
+
+    assert missing_from_manifest(["tests/test_rc_release_audit.py"], manifest) == [
+        "tests/test_rc_release_audit.py"
+    ]
 
 
 def test_manifest_candidate_paths_extracts_only_staging_candidate_blocks() -> None:
@@ -313,6 +353,31 @@ def test_secret_scan_ignores_cli_flag_values(tmp_path: Path) -> None:
     assert scan_secret_findings(["candidate.py"], root=tmp_path) == []
 
 
+def test_secret_scan_allows_public_xagent_path_names(tmp_path: Path) -> None:
+    candidate = tmp_path / "candidate.json"
+    candidate.write_text(
+        "\n".join(
+            [
+                '"?? frontend/src/panda/assets/roles/xagent-reference-media-operator.png"',
+                '"?? docs/superpowers/plans/2026-06-14-xagent-remaining-parallel-delivery.md"',
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    assert scan_secret_findings(["candidate.json"], root=tmp_path) == []
+
+
+def test_secret_scan_still_flags_xagent_token_value(tmp_path: Path) -> None:
+    candidate = tmp_path / "candidate.env"
+    candidate.write_text('XAGENT_INTERNAL_TOKEN="xagent_' + ("a" * 32) + '"\n', encoding="utf-8")
+
+    findings = scan_secret_findings(["candidate.env"], root=tmp_path)
+
+    assert len(findings) == 1
+    assert findings[0].path == "candidate.env"
+
+
 def test_excluded_reference_scan_flags_creative_studio_leaks(tmp_path: Path) -> None:
     candidate = tmp_path / "main.py"
     candidate.write_text(
@@ -390,3 +455,13 @@ def test_file_hygiene_scan_flags_utf8_decode_errors(tmp_path: Path) -> None:
     assert len(findings) == 1
     assert findings[0].kind == "utf8_decode_error"
     assert findings[0].line == 0
+
+
+def test_console_safe_text_backslash_escapes_gbk_unsafe_samples() -> None:
+    sample = "status ✅"
+
+    safe_sample = console_safe_text(sample, encoding="gbk")
+
+    safe_sample.encode("gbk")
+    assert safe_sample == "status \\u2705"
+    assert sample == "status ✅"

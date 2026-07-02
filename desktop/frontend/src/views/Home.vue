@@ -121,6 +121,7 @@
 import { ref, onMounted } from 'vue'
 import { invoke } from '@tauri-apps/api/tauri'
 import { ElMessage } from 'element-plus'
+import type { BackendHealth, DesktopSettings, RunSummary } from '../types'
 
 const runningAgents = ref(0)
 const totalRuns = ref(0)
@@ -129,7 +130,7 @@ const backendStatus = ref(false)
 const backendUrl = ref('http://localhost:8000')
 const dataDir = ref('~/.xagent/data')
 const offlineMode = ref(false)
-const recentRuns = ref([])
+const recentRuns = ref<RunSummary[]>([])
 
 onMounted(async () => {
   await loadDashboardData()
@@ -138,7 +139,7 @@ onMounted(async () => {
 const loadDashboardData = async () => {
   try {
     // Get backend status
-    const status = await invoke('get_backend_status')
+    await invoke<BackendHealth>('get_backend_status')
     backendStatus.value = true
   } catch (e) {
     backendStatus.value = false
@@ -146,7 +147,7 @@ const loadDashboardData = async () => {
 
   // Get settings
   try {
-    const settings = await invoke('get_settings')
+    const settings = await invoke<DesktopSettings>('get_settings')
     backendUrl.value = `${settings.backend_url}:${settings.backend_port}`
     offlineMode.value = settings.offline_mode
   } catch (e) {

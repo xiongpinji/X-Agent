@@ -193,7 +193,7 @@ class QueryOptimizer:
         for log_entry in query_log:
             query = log_entry.get("query", "")
             # Normalize query by removing parameters
-            normalized = hashlib.md5(query.encode()).hexdigest()
+            normalized = hashlib.md5(query.encode(), usedforsecurity=False).hexdigest()
 
             if normalized not in query_patterns:
                 query_patterns[normalized] = {
@@ -243,7 +243,7 @@ class QueryCache(Generic[T]):
             Cache key
         """
         key_data = f"{query}:{json.dumps(params or [])}"
-        return hashlib.md5(key_data.encode()).hexdigest()
+        return hashlib.md5(key_data.encode(), usedforsecurity=False).hexdigest()
 
     def get(self, query: str, params: list[Any] | None = None) -> T | None:
         """Get cached result if available and not expired.

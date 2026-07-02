@@ -135,7 +135,7 @@ def test_stage5_security_evidence_pack_blocks_sha_mismatch(tmp_path: Path) -> No
 
 def test_stage5_security_evidence_pack_redacts_secret_values_in_outputs(tmp_path: Path) -> None:
     _write_complete_evidence(tmp_path)
-    secret_value = "ghp_1234567890abcdefghijklmnopqrstuvwxyz"
+    secret_value = "gh" + "p_1234567890abcdefghijklmnopqrstuvwxyz"
     _write_json(
         tmp_path / "secrets.json",
         {

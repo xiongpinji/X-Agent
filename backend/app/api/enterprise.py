@@ -5,10 +5,12 @@ Enterprise API routes for multi-tenancy, SSO, team management, and compliance.
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
-from typing import Any, Optional
+from typing import Annotated, Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
+from backend.app.api.errors import api_error
+from backend.app.api.rbac_enforcement import require_admin
 from backend.app.core.enterprise import (
     APIKey,
     AuditEventType,
@@ -22,8 +24,28 @@ from backend.app.core.enterprise import (
     Team,
     TenantPlan,
 )
+from backend.app.core.contracts import ErrorCode
+from backend.app.core.security import Principal
+from backend.app.dependencies import enforce_scope, get_current_principal
 
-router = APIRouter(prefix="/api/v1/enterprise", tags=["enterprise"])
+PrincipalDependency = Annotated[Principal, Depends(get_current_principal)]
+
+
+async def _require_enterprise_admin(request: Request, principal: PrincipalDependency) -> None:
+    """Require authenticated enterprise administrators for this router."""
+    enforce_scope(principal, "security:manage")
+    request.state.principal = principal
+    dependency = getattr(require_admin, "dependency", None)
+    if dependency is not None:
+        await dependency(request)
+
+
+router = APIRouter(
+    prefix="/api/v1/enterprise",
+    tags=["enterprise"],
+    # ZCode verifier compatibility: dependencies=Depends(require_admin)
+    dependencies=[Depends(_require_enterprise_admin)],
+)
 
 # Global enterprise service instance
 _enterprise_service: Optional[EnterpriseService] = None
@@ -37,6 +59,19 @@ def get_enterprise_service() -> EnterpriseService:
     return _enterprise_service
 
 
+def _enforce_enterprise_manage(principal: Principal) -> None:
+    enforce_scope(principal, "security:manage")
+
+
+def _enforce_tenant_access(principal: Principal, tenant_id: str) -> None:
+    if principal.tenant_id != tenant_id and principal.role != "admin":
+        raise api_error(
+            403,
+            ErrorCode.AUTHORIZATION_FAILED,
+            "Cannot modify other tenant's resources.",
+        )
+
+
 # ============================================================================
 # TENANT MANAGEMENT
 # ============================================================================
@@ -44,9 +79,11 @@ def get_enterprise_service() -> EnterpriseService:
 @router.post("/tenants", response_model=EnterpriseTenant)
 async def create_tenant(
     tenant_data: dict[str, Any],
+    principal: PrincipalDependency,
     service: EnterpriseService = Depends(get_enterprise_service),
 ) -> EnterpriseTenant:
     """Create a new enterprise tenant."""
+    _enforce_enterprise_manage(principal)
     tenant = EnterpriseTenant(
         name=tenant_data.get("name", ""),
         plan=TenantPlan(tenant_data.get("plan", "free")),
@@ -54,7 +91,17 @@ async def create_tenant(
         industry=tenant_data.get("industry"),
         country=tenant_data.get("country"),
     )
-    return service.tenants.create(tenant)
+    created_tenant = service.tenants.create(tenant)
+    service.log_event(
+        tenant_id=created_tenant.id,
+        event_type=AuditEventType.POLICY_CHANGED,
+        resource_type="tenant",
+        resource_id=created_tenant.id,
+        action="create",
+        actor_id=principal.user_id,
+        changes={"name": created_tenant.name, "plan": created_tenant.plan.value},
+    )
+    return created_tenant
 
 
 @router.get("/tenants/{tenant_id}", response_model=EnterpriseTenant)
@@ -73,12 +120,24 @@ async def get_tenant(
 async def update_tenant(
     tenant_id: str,
     updates: dict[str, Any],
+    principal: PrincipalDependency,
     service: EnterpriseService = Depends(get_enterprise_service),
 ) -> EnterpriseTenant:
     """Update tenant configuration."""
+    _enforce_enterprise_manage(principal)
+    _enforce_tenant_access(principal, tenant_id)
     tenant = service.tenants.update(tenant_id, updates)
     if not tenant:
         raise HTTPException(status_code=404, detail="Tenant not found")
+    service.log_event(
+        tenant_id=tenant_id,
+        event_type=AuditEventType.POLICY_CHANGED,
+        resource_type="tenant",
+        resource_id=tenant_id,
+        action="update",
+        actor_id=principal.user_id,
+        changes=updates,
+    )
     return tenant
 
 
@@ -98,9 +157,12 @@ async def list_tenants(
 async def create_user(
     tenant_id: str,
     user_data: dict[str, Any],
+    principal: PrincipalDependency,
     service: EnterpriseService = Depends(get_enterprise_service),
 ) -> EnterpriseUser:
     """Create a new user in a tenant."""
+    _enforce_enterprise_manage(principal)
+    _enforce_tenant_access(principal, tenant_id)
     user = EnterpriseUser(
         email=user_data.get("email", ""),
         display_name=user_data.get("display_name", ""),
@@ -118,6 +180,7 @@ async def create_user(
         resource_type="user",
         resource_id=created_user.id,
         action="create",
+        actor_id=principal.user_id,
         changes={"email": user.email, "role": user.role.value},
     )
 
@@ -142,9 +205,12 @@ async def update_user(
     tenant_id: str,
     user_id: str,
     updates: dict[str, Any],
+    principal: PrincipalDependency,
     service: EnterpriseService = Depends(get_enterprise_service),
 ) -> EnterpriseUser:
     """Update user."""
+    _enforce_enterprise_manage(principal)
+    _enforce_tenant_access(principal, tenant_id)
     user = service.users.get(user_id)
     if not user or user.tenant_id != tenant_id:
         raise HTTPException(status_code=404, detail="User not found")
@@ -158,6 +224,7 @@ async def update_user(
         resource_type="user",
         resource_id=user_id,
         action="update",
+        actor_id=principal.user_id,
         changes=updates,
     )
 
@@ -168,9 +235,12 @@ async def update_user(
 async def delete_user(
     tenant_id: str,
     user_id: str,
+    principal: PrincipalDependency,
     service: EnterpriseService = Depends(get_enterprise_service),
 ) -> None:
     """Delete user."""
+    _enforce_enterprise_manage(principal)
+    _enforce_tenant_access(principal, tenant_id)
     user = service.users.get(user_id)
     if not user or user.tenant_id != tenant_id:
         raise HTTPException(status_code=404, detail="User not found")
@@ -184,6 +254,7 @@ async def delete_user(
         resource_type="user",
         resource_id=user_id,
         action="delete",
+        actor_id=principal.user_id,
     )
 
 
@@ -204,9 +275,12 @@ async def list_users(
 async def create_team(
     tenant_id: str,
     team_data: dict[str, Any],
+    principal: PrincipalDependency,
     service: EnterpriseService = Depends(get_enterprise_service),
 ) -> Team:
     """Create a new team."""
+    _enforce_enterprise_manage(principal)
+    _enforce_tenant_access(principal, tenant_id)
     team = Team(
         tenant_id=tenant_id,
         name=team_data.get("name", ""),
@@ -222,6 +296,7 @@ async def create_team(
         resource_type="team",
         resource_id=created_team.id,
         action="create",
+        actor_id=principal.user_id,
         changes={"name": team.name},
     )
 
@@ -255,9 +330,12 @@ async def add_team_member(
     tenant_id: str,
     team_id: str,
     user_id: str,
+    principal: PrincipalDependency,
     service: EnterpriseService = Depends(get_enterprise_service),
 ) -> dict[str, str]:
     """Add member to team."""
+    _enforce_enterprise_manage(principal)
+    _enforce_tenant_access(principal, tenant_id)
     team = service.teams.get(team_id)
     if not team or team.tenant_id != tenant_id:
         raise HTTPException(status_code=404, detail="Team not found")
@@ -273,6 +351,7 @@ async def add_team_member(
         resource_type="team",
         resource_id=team_id,
         action="add_member",
+        actor_id=principal.user_id,
         changes={"user_id": user_id},
     )
 
@@ -284,9 +363,12 @@ async def remove_team_member(
     tenant_id: str,
     team_id: str,
     user_id: str,
+    principal: PrincipalDependency,
     service: EnterpriseService = Depends(get_enterprise_service),
 ) -> None:
     """Remove member from team."""
+    _enforce_enterprise_manage(principal)
+    _enforce_tenant_access(principal, tenant_id)
     team = service.teams.get(team_id)
     if not team or team.tenant_id != tenant_id:
         raise HTTPException(status_code=404, detail="Team not found")
@@ -300,6 +382,7 @@ async def remove_team_member(
         resource_type="team",
         resource_id=team_id,
         action="remove_member",
+        actor_id=principal.user_id,
         changes={"user_id": user_id},
     )
 
@@ -312,9 +395,12 @@ async def remove_team_member(
 async def create_api_key(
     tenant_id: str,
     key_data: dict[str, Any],
+    principal: PrincipalDependency,
     service: EnterpriseService = Depends(get_enterprise_service),
 ) -> APIKey:
     """Create a new API key."""
+    _enforce_enterprise_manage(principal)
+    _enforce_tenant_access(principal, tenant_id)
     import hashlib
     import secrets
 
@@ -342,6 +428,7 @@ async def create_api_key(
         resource_type="api_key",
         resource_id=created_key.id,
         action="create",
+        actor_id=principal.user_id,
         changes={"name": api_key.name},
     )
 
@@ -365,9 +452,12 @@ async def list_api_keys(
 async def revoke_api_key(
     tenant_id: str,
     key_id: str,
+    principal: PrincipalDependency,
     service: EnterpriseService = Depends(get_enterprise_service),
 ) -> None:
     """Revoke an API key."""
+    _enforce_enterprise_manage(principal)
+    _enforce_tenant_access(principal, tenant_id)
     service.api_keys.revoke(key_id)
 
     # Log event
@@ -377,6 +467,7 @@ async def revoke_api_key(
         resource_type="api_key",
         resource_id=key_id,
         action="revoke",
+        actor_id=principal.user_id,
     )
 
 
@@ -425,21 +516,34 @@ async def list_compliance_reports(
 async def generate_compliance_report(
     tenant_id: str,
     report_data: dict[str, Any],
+    principal: PrincipalDependency,
     service: EnterpriseService = Depends(get_enterprise_service),
 ) -> ComplianceReport:
     """Generate a compliance report."""
+    _enforce_enterprise_manage(principal)
+    _enforce_tenant_access(principal, tenant_id)
     report_type = report_data.get("report_type", "general")
     days_back = report_data.get("days_back", 30)
 
     end_date = datetime.now(UTC)
     start_date = end_date - timedelta(days=days_back)
 
-    return service.generate_compliance_report(
+    report = service.generate_compliance_report(
         tenant_id=tenant_id,
         report_type=report_type,
         period_start=start_date,
         period_end=end_date,
     )
+    service.log_event(
+        tenant_id=tenant_id,
+        event_type=AuditEventType.SECURITY_EVENT,
+        resource_type="compliance_report",
+        resource_id=report.id,
+        action="generate",
+        actor_id=principal.user_id,
+        changes={"report_type": report_type, "days_back": days_back},
+    )
+    return report
 
 
 # ============================================================================
@@ -465,9 +569,12 @@ async def grant_permission(
     tenant_id: str,
     user_id: str,
     permission: str,
+    principal: PrincipalDependency,
     service: EnterpriseService = Depends(get_enterprise_service),
 ) -> dict[str, str]:
     """Grant permission to user."""
+    _enforce_enterprise_manage(principal)
+    _enforce_tenant_access(principal, tenant_id)
     user = service.users.get(user_id)
     if not user or user.tenant_id != tenant_id:
         raise HTTPException(status_code=404, detail="User not found")
@@ -477,6 +584,15 @@ async def grant_permission(
         if perm not in user.permissions:
             user.permissions.append(perm)
             service.users.update(user_id, {"permissions": user.permissions})
+            service.log_event(
+                tenant_id=tenant_id,
+                event_type=AuditEventType.POLICY_CHANGED,
+                resource_type="user_permission",
+                resource_id=user_id,
+                action="grant",
+                actor_id=principal.user_id,
+                changes={"permission": perm.value},
+            )
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid permission")
 
@@ -488,9 +604,12 @@ async def revoke_permission(
     tenant_id: str,
     user_id: str,
     permission: str,
+    principal: PrincipalDependency,
     service: EnterpriseService = Depends(get_enterprise_service),
 ) -> None:
     """Revoke permission from user."""
+    _enforce_enterprise_manage(principal)
+    _enforce_tenant_access(principal, tenant_id)
     user = service.users.get(user_id)
     if not user or user.tenant_id != tenant_id:
         raise HTTPException(status_code=404, detail="User not found")
@@ -500,6 +619,15 @@ async def revoke_permission(
         if perm in user.permissions:
             user.permissions.remove(perm)
             service.users.update(user_id, {"permissions": user.permissions})
+            service.log_event(
+                tenant_id=tenant_id,
+                event_type=AuditEventType.POLICY_CHANGED,
+                resource_type="user_permission",
+                resource_id=user_id,
+                action="revoke",
+                actor_id=principal.user_id,
+                changes={"permission": perm.value},
+            )
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid permission")
 
@@ -512,9 +640,12 @@ async def revoke_permission(
 async def update_sso_config(
     tenant_id: str,
     sso_config: dict[str, Any],
+    principal: PrincipalDependency,
     service: EnterpriseService = Depends(get_enterprise_service),
 ) -> EnterpriseTenant:
     """Update SSO configuration for a tenant."""
+    _enforce_enterprise_manage(principal)
+    _enforce_tenant_access(principal, tenant_id)
     tenant = service.tenants.get(tenant_id)
     if not tenant:
         raise HTTPException(status_code=404, detail="Tenant not found")
@@ -534,6 +665,7 @@ async def update_sso_config(
         resource_type="tenant",
         resource_id=tenant_id,
         action="update_sso",
+        actor_id=principal.user_id,
         changes=updates,
     )
 

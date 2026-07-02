@@ -310,9 +310,12 @@ class FileOperationTool:
         Raises:
             ValueError: If path is outside base path
         """
-        resolved = (self.base_path / path).resolve()
-        if not str(resolved).startswith(str(self.base_path.resolve())):
-            raise ValueError(f"Path outside base directory: {path}")
+        base_path = self.base_path.resolve()
+        resolved = (base_path / path).resolve()
+        try:
+            resolved.relative_to(base_path)
+        except ValueError as exc:
+            raise ValueError(f"Path outside base directory: {path}") from exc
         return resolved
 
     def get_audit_logs(self, limit: int = 100) -> list[Dict[str, Any]]:

@@ -1,4 +1,5 @@
 import React from "react";
+import { getAuthHeaders } from "../services/authHeaders";
 import { ConsoleLayout } from "./components/layout/ConsoleLayout";
 import { ConsoleSyncStatusBadge } from "./components/layout/ConsoleSyncStatusBadge";
 import { useConsoleDispatch, useConsoleState } from "./state/consoleContext";
@@ -24,7 +25,6 @@ import {
 import { selectToolsCenterOverviewData } from "./state/toolsCenterSelectors";
 import { selectMemoryCenterOverviewData } from "./state/memoryCenterSelectors";
 import { selectOrganizationCenterOverviewData } from "./state/organizationCenterSelectors";
-import { selectMarketplaceCenterOverviewData } from "./state/marketplaceCenterSelectors";
 import { selectNavigationCenterOverviewData } from "./state/navigationCenterSelectors";
 import { validateConsoleBootstrapResponse, validateConsoleSelectors, warnConsoleBootstrapIssues } from "./state/consoleValidation";
 import { useConsoleRealtimeSync } from "./hooks/useConsoleRealtimeSync";
@@ -38,7 +38,6 @@ import { WorkflowPage } from "./pages/workflow/WorkflowPage";
 import { AuditReplayPage } from "./pages/audit/AuditReplayPage";
 import { ExecutionOverviewPage } from "./pages/execution/ExecutionOverviewPage";
 import { OrganizationCenterOverviewPage } from "./pages/organization/OrganizationCenterOverviewPage";
-import { MarketplaceOverviewPage } from "./pages/marketplace/MarketplaceOverviewPage";
 import { NavigationOverviewPage } from "./pages/navigation/NavigationOverviewPage";
 import { OrganizationStructurePage } from "./pages/organization/OrganizationStructurePage";
 import { OrganizationRolesPage } from "./pages/organization/OrganizationRolesPage";
@@ -85,7 +84,6 @@ export function ConsoleShell() {
   const toolsCenterData = selectToolsCenterOverviewData(state);
   const memoryCenterData = selectMemoryCenterOverviewData(state);
   const organizationCenterData = selectOrganizationCenterOverviewData(state);
-  const marketplaceCenterData = selectMarketplaceCenterOverviewData(state);
   const navigationCenterData = selectNavigationCenterOverviewData(state);
   const identityData = selectIdentityData(state);
   const meetingRoomData = selectMeetingRoomData(state);
@@ -122,13 +120,13 @@ export function ConsoleShell() {
 
     const load = async () => {
       try {
-        const [executionRes, toolsRes, memoryRes, orgRes, marketRes, navRes] = await Promise.all([
-          fetch("/api/v1/execution-control/overview", { method: "GET", headers: { "Content-Type": "application/json" } }),
-          fetch("/api/v1/tools-control/overview", { method: "GET", headers: { "Content-Type": "application/json" } }),
-          fetch("/api/v1/memory-control/overview", { method: "GET", headers: { "Content-Type": "application/json" } }),
-          fetch("/api/v1/organization-control/overview", { method: "GET", headers: { "Content-Type": "application/json" } }),
-          fetch("/api/v1/marketplace-control/overview", { method: "GET", headers: { "Content-Type": "application/json" } }),
-          fetch("/api/v1/navigation-control/overview", { method: "GET", headers: { "Content-Type": "application/json" } }),
+        const headers = { "Content-Type": "application/json", ...getAuthHeaders() };
+        const [executionRes, toolsRes, memoryRes, orgRes, navRes] = await Promise.all([
+          fetch("/api/v1/execution-control/overview", { method: "GET", headers }),
+          fetch("/api/v1/tools-control/overview", { method: "GET", headers }),
+          fetch("/api/v1/memory-control/overview", { method: "GET", headers }),
+          fetch("/api/v1/organization-control/overview", { method: "GET", headers }),
+          fetch("/api/v1/navigation-control/overview", { method: "GET", headers }),
         ]);
 
         if (cancelled) return;
@@ -148,10 +146,6 @@ export function ConsoleShell() {
         if (orgRes.ok) {
           const payload = (await orgRes.json()) as OverviewResponse<OrganizationCenterOverview["primary"], OrganizationCenterOverview["linked_summaries"]>;
           dispatch({ type: "organizationCenter/overviewUpdate", payload: payload as unknown as OrganizationCenterOverview });
-        }
-        if (marketRes.ok) {
-          const payload = (await marketRes.json()) as OverviewResponse<MarketplaceCenterOverview["primary"], MarketplaceCenterOverview["linked_summaries"]>;
-          dispatch({ type: "marketplaceCenter/overviewUpdate", payload: payload as unknown as MarketplaceCenterOverview });
         }
         if (navRes.ok) {
           const payload = (await navRes.json()) as OverviewResponse<NavigationCenterOverview["primary"], NavigationCenterOverview["linked_summaries"]>;
@@ -231,7 +225,6 @@ export function ConsoleShell() {
               if (actionKey === "open_tools") dispatch({ type: "page/set", payload: "tools_overview" });
               if (actionKey === "open_memory") dispatch({ type: "page/set", payload: "memory_overview" });
               if (actionKey === "open_org") dispatch({ type: "page/set", payload: "org_overview" });
-              if (actionKey === "open_market") dispatch({ type: "page/set", payload: "market_overview" });
               if (actionKey === "open_search") dispatch({ type: "page/set", payload: "search_overview" });
               if (actionKey === "open_execution") dispatch({ type: "page/set", payload: "execution_overview" });
               if (actionKey === "open_agents") dispatch({ type: "page/set", payload: "organization_graph" });
@@ -404,14 +397,10 @@ export function ConsoleShell() {
       case "tools_history":
         return <ToolsHistoryPage totalEvents={42} successEvents={35} failedEvents={7} lastEventStatus="success" riskLevel="low" />;
       case "market_overview":
-        return (
-          <MarketplaceOverviewPage
-            {...marketplaceCenterData}
-            onOpenDetail={() => dispatch({ type: "page/set", payload: "market_detail" })}
-            onOpenManagement={() => dispatch({ type: "page/set", payload: "market_management" })}
-            onOpenHistory={() => dispatch({ type: "page/set", payload: "market_history" })}
-          />
-        );
+      case "market_detail":
+      case "market_management":
+      case "market_history":
+        return <DeferredFirstVersionPage title="能力市场" description="插件市场、技能市场和模板市场不纳入 RC 首版交付范围。" />;
       case "search_overview":
         return (
           <NavigationOverviewPage
@@ -422,7 +411,6 @@ export function ConsoleShell() {
               if (pageKey === "tools_overview") dispatch({ type: "page/set", payload: "tools_overview" });
               if (pageKey === "memory_overview") dispatch({ type: "page/set", payload: "memory_overview" });
               if (pageKey === "org_overview") dispatch({ type: "page/set", payload: "org_overview" });
-              if (pageKey === "market_overview") dispatch({ type: "page/set", payload: "market_overview" });
               if (pageKey === "audit") dispatch({ type: "page/set", payload: "audit" });
             }}
             onOpenSearch={() => dispatch({ type: "page/set", payload: "search_results" })}
@@ -478,7 +466,6 @@ export function ConsoleShell() {
               if (actionKey === "tools") dispatch({ type: "page/set", payload: "tools_overview" });
               if (actionKey === "memory") dispatch({ type: "page/set", payload: "memory_overview" });
               if (actionKey === "organization") dispatch({ type: "page/set", payload: "org_overview" });
-              if (actionKey === "marketplace") dispatch({ type: "page/set", payload: "market_overview" });
             }}
           />
         );
@@ -511,7 +498,6 @@ export function ConsoleShell() {
             <button className="rounded-lg border px-2 py-1 hover:bg-gray-50" onClick={() => dispatch({ type: "page/set", payload: "tools_detail" })}>工具详情</button>
             <button className="rounded-lg border px-2 py-1 hover:bg-gray-50" onClick={() => dispatch({ type: "page/set", payload: "tools_management" })}>工具管理</button>
             <button className="rounded-lg border px-2 py-1 hover:bg-gray-50" onClick={() => dispatch({ type: "page/set", payload: "tools_history" })}>调用历史</button>
-            <button className="rounded-lg border px-2 py-1 hover:bg-gray-50" onClick={() => dispatch({ type: "page/set", payload: "market_overview" })}>能力市场</button>
             <button className="rounded-lg border px-2 py-1 hover:bg-gray-50" onClick={() => dispatch({ type: "page/set", payload: "search_overview" })}>全局导航</button>
             <button className="rounded-lg border px-2 py-1 hover:bg-gray-50" onClick={() => dispatch({ type: "page/set", payload: "memory_overview" })}>记忆中心</button>
             <button className="rounded-lg border px-2 py-1 hover:bg-gray-50" onClick={() => dispatch({ type: "page/set", payload: "memory_detail" })}>记忆详情</button>
@@ -567,4 +553,14 @@ export function ConsoleShell() {
 
 function emptyGraph(): OrganizationGraphView {
   return { organization: null, departments: [], role_templates: [], agent_instances: [], meeting_rooms: [], nodes: [], edges: [] };
+}
+
+function DeferredFirstVersionPage({ title, description }: { title: string; description: string }) {
+  return (
+    <section className="rounded-2xl border bg-white p-6 shadow-sm">
+      <h2 className="text-lg font-semibold">{title}</h2>
+      <p className="mt-2 text-sm text-gray-600">{description}</p>
+      <p className="mt-3 text-sm text-gray-500">该入口已从首版导航隐藏，后续版本会在后端路由、权限和前端合约测试齐备后再开放。</p>
+    </section>
+  );
 }

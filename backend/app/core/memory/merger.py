@@ -307,7 +307,7 @@ class MemoryMerger:
             else:
                 # 使用内容哈希作为简单嵌入
                 content = mem.get("content", "")
-                hash_val = hashlib.md5(content.encode()).digest()
+                hash_val = hashlib.md5(content.encode(), usedforsecurity=False).digest()
                 embedding = np.frombuffer(hash_val, dtype=np.float32)
                 embeddings.append(embedding)
 

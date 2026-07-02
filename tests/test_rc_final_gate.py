@@ -2,9 +2,22 @@ from __future__ import annotations
 
 import hashlib
 import json
+import sys
 from pathlib import Path
 
-from scripts.rc_final_gate import run_final_gate
+from scripts.rc_final_gate import DEFAULT_INPUTS, EVIDENCE_PACK_FRESHNESS_INPUTS, parse_args, run_final_gate
+
+VERIFIED_RELEASE_SHA = "a" * 40
+
+
+def test_final_gate_freshness_inputs_are_available_to_defaults_and_cli(monkeypatch) -> None:
+    monkeypatch.setattr(sys, "argv", ["rc_final_gate.py"])
+
+    args = parse_args()
+
+    assert set(EVIDENCE_PACK_FRESHNESS_INPUTS.values()).issubset(DEFAULT_INPUTS)
+    assert args.stage3_owner_evidence_todo == DEFAULT_INPUTS["stage3_owner_evidence_todo"]
+    assert args.stage3_owner_quickstart == DEFAULT_INPUTS["stage3_owner_quickstart"]
 
 
 def _write_json(path: Path, payload: dict[str, object]) -> Path:
@@ -82,6 +95,9 @@ def _verified_external_checks() -> list[dict[str, object]]:
                 "run_status": "completed",
                 "conclusion": "success",
                 "mutation_performed": False,
+                "expected_head_sha": VERIFIED_RELEASE_SHA,
+                "head_sha": VERIFIED_RELEASE_SHA,
+                "head_sha_verified": True,
             },
         },
     ]
@@ -125,6 +141,31 @@ def _staging_plan_payload(paths: list[str], *, errors: list[str] | None = None) 
         "missing_files": [],
         "excluded_files": [],
         "errors": errors or [],
+    }
+
+
+def _staging_rehearsal_payload(*, ready: bool = True, release_sha: str = VERIFIED_RELEASE_SHA) -> dict[str, object]:
+    status = "staging_rehearsal_ready" if ready else "staging_rehearsal_blocked"
+    check_status = "passed" if ready else "failed"
+    return {
+        "status": status,
+        "environment": "staging",
+        "generated_at": "2026-06-05T10:01:00Z",
+        "current_head_sha": release_sha,
+        "release_sha": release_sha,
+        "rehearsal_ready": ready,
+        "mutation_performed": False,
+        "outbound_message_sent": False,
+        "deploy_tag_release_performed": False,
+        "workflow_dispatch_performed": False,
+        "cluster_mutation_performed_by_gate": False,
+        "missing_or_mismatched": [] if ready else ["external_endpoint"],
+        "next_actions": [] if ready else ["Produce staging evidence for external_endpoint."],
+        "checks": [
+            {"name": "required_environment_evidence_ready", "status": check_status},
+            {"name": "release_sha_resolved", "status": "passed"},
+            {"name": "gate_has_no_environment_side_effects", "status": "passed"},
+        ],
     }
 
 
@@ -517,6 +558,30 @@ def _inputs(tmp_path: Path, *, external_checks: list[dict[str, object]] | None =
                 "errors": [],
             },
         ),
+        "stage3_owner_evidence_todo": _write_json(
+            tmp_path / "reports" / "stage3-owner-evidence-todo-20260618.json",
+            {
+                "status": "stage3_owner_evidence_todo_ready",
+                "generated_at": "2026-06-05T10:01:00Z",
+                "todo_count": 32,
+                "mutation_performed": False,
+                "deploy_performed": False,
+                "workflow_dispatch_performed": False,
+                "raw_secret_values_recorded": False,
+            },
+        ),
+        "stage3_owner_quickstart": _write_json(
+            tmp_path / "reports" / "stage3-owner-quickstart-20260618.json",
+            {
+                "status": "stage3_owner_quickstart_ready",
+                "generated_at": "2026-06-05T10:01:00Z",
+                "todo_count": 32,
+                "mutation_performed": False,
+                "deploy_performed": False,
+                "workflow_dispatch_performed": False,
+                "raw_secret_values_recorded": False,
+            },
+        ),
         "owner_handoff_gate": _write_json(
             tmp_path / "reports" / "rc-owner-handoff-gate.json",
             _owner_handoff_report(),
@@ -671,6 +736,10 @@ def _inputs(tmp_path: Path, *, external_checks: list[dict[str, object]] | None =
             tmp_path / "reports" / "rc-staging-plan.json",
             _staging_plan_payload(candidate_files),
         ),
+        "staging_rehearsal": _write_json(
+            tmp_path / "reports" / "stage3-staging-rehearsal-result-20260615.json",
+            _staging_rehearsal_payload(),
+        ),
     }
 
 
@@ -763,6 +832,134 @@ def test_final_gate_ready_to_tag_when_external_and_owner_plan_gates_are_verified
     assert report.status == "ready_for_rc_tag"
     assert report.release_decision["can_tag_rc_now"] is True
     assert report.owner_gates == []
+
+
+def test_final_gate_does_not_require_stage3_rehearsal_by_default(tmp_path: Path) -> None:
+    inputs = _inputs(
+        tmp_path,
+        external_checks=_verified_external_checks(),
+    )
+    _write_json(
+        inputs["owner_gate_plan"],
+        {
+            "status": "verified",
+            "generated_at": "2026-06-05T10:01:00Z",
+            "gates": [
+                {"name": "provider", "status": "verified", "missing": []},
+                {"name": "feishu_webhook_contract", "status": "verified", "missing": []},
+                {"name": "github_issue_to_pr_dry_run", "status": "verified", "missing": []},
+                {"name": "github_issue_to_pr_execute_preflight", "status": "verified", "missing": []},
+                {"name": "hosted_github_actions_commercial_rc", "status": "verified", "missing": []},
+            ],
+            "evidence_freshness": {"required": True, "fresh": True},
+            "next_commands": [],
+        },
+    )
+    receipt = json.loads(inputs["release_receipt"].read_text(encoding="utf-8"))
+    receipt["final_gate"] = {"status": "ready_for_rc_tag"}
+    receipt["approval_request"]["final_gate_status"] = "ready_for_rc_tag"
+    receipt["approval_request"]["can_tag_rc_now"] = True
+    receipt["approval_request"]["remaining_risks"] = []
+    _write_json(inputs["release_receipt"], receipt)
+    inputs["staging_rehearsal"].unlink()
+
+    report = run_final_gate(inputs)
+
+    assert report.status == "ready_for_rc_tag"
+    assert all(gate.name != "staging_rehearsal" for gate in report.local_gates)
+
+
+def test_final_gate_requires_stage3_rehearsal_when_explicitly_enabled(tmp_path: Path) -> None:
+    inputs = _inputs(tmp_path, external_checks=_verified_external_checks())
+    inputs["staging_rehearsal"].unlink()
+
+    report = run_final_gate(inputs, require_stage3_rehearsal=True)
+
+    assert report.status == "failed"
+    gate = next(item for item in report.local_gates if item.name == "staging_rehearsal")
+    assert gate.ok is False
+    assert "report missing" in str(gate.error)
+
+
+def test_final_gate_rejects_blocked_stage3_rehearsal_when_required(tmp_path: Path) -> None:
+    inputs = _inputs(tmp_path, external_checks=_verified_external_checks())
+    _write_json(inputs["staging_rehearsal"], _staging_rehearsal_payload(ready=False))
+
+    report = run_final_gate(inputs, require_stage3_rehearsal=True)
+
+    assert report.status == "failed"
+    gate = next(item for item in report.local_gates if item.name == "staging_rehearsal")
+    assert gate.ok is False
+    assert "expected staging_rehearsal_ready" in str(gate.error)
+    assert "rehearsal_ready must be true" in str(gate.error)
+
+
+def test_final_gate_rejects_stage3_rehearsal_for_different_release_sha(tmp_path: Path) -> None:
+    inputs = _inputs(tmp_path, external_checks=_verified_external_checks())
+    _write_json(inputs["staging_rehearsal"], _staging_rehearsal_payload(release_sha="b" * 40))
+
+    report = run_final_gate(inputs, require_stage3_rehearsal=True)
+
+    assert report.status == "failed"
+    gate = next(item for item in report.local_gates if item.name == "staging_rehearsal")
+    assert gate.ok is False
+    assert gate.details["expected_release_sha"] == VERIFIED_RELEASE_SHA
+    assert "release_sha does not match owner-verified release SHA" in str(gate.error)
+
+
+def test_final_gate_accepts_ready_stage3_rehearsal_when_required(tmp_path: Path) -> None:
+    inputs = _inputs(
+        tmp_path,
+        external_checks=_verified_external_checks(),
+    )
+    _write_json(
+        inputs["owner_gate_plan"],
+        {
+            "status": "verified",
+            "generated_at": "2026-06-05T10:01:00Z",
+            "gates": [
+                {"name": "provider", "status": "verified", "missing": []},
+                {"name": "feishu_webhook_contract", "status": "verified", "missing": []},
+                {"name": "github_issue_to_pr_dry_run", "status": "verified", "missing": []},
+                {"name": "github_issue_to_pr_execute_preflight", "status": "verified", "missing": []},
+                {"name": "hosted_github_actions_commercial_rc", "status": "verified", "missing": []},
+            ],
+            "evidence_freshness": {"required": True, "fresh": True},
+            "next_commands": [],
+        },
+    )
+    receipt = json.loads(inputs["release_receipt"].read_text(encoding="utf-8"))
+    receipt["final_gate"] = {"status": "ready_for_rc_tag"}
+    receipt["approval_request"]["final_gate_status"] = "ready_for_rc_tag"
+    receipt["approval_request"]["can_tag_rc_now"] = True
+    receipt["approval_request"]["remaining_risks"] = []
+    _write_json(inputs["release_receipt"], receipt)
+
+    report = run_final_gate(inputs, require_stage3_rehearsal=True)
+
+    assert report.status == "ready_for_rc_tag"
+    gate = next(item for item in report.local_gates if item.name == "staging_rehearsal")
+    assert gate.ok is True
+    assert gate.details["rehearsal_ready"] is True
+
+
+def test_final_gate_cli_parses_stage3_rehearsal_requirement(monkeypatch, tmp_path: Path) -> None:
+    rehearsal_path = tmp_path / "stage3.json"
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "rc_final_gate.py",
+            "--require-stage3-rehearsal",
+            "--staging-rehearsal",
+            str(rehearsal_path),
+        ],
+    )
+
+    args = parse_args()
+
+    assert args.require_stage3_rehearsal is True
+    assert args.staging_rehearsal == rehearsal_path
 
 
 def test_final_gate_rejects_future_dated_external_smoke_even_when_owner_gates_verified(tmp_path: Path) -> None:
@@ -2027,6 +2224,36 @@ def test_final_gate_requires_evidence_pack_refresh_after_refresh_chain_changes(t
     gate = next(item for item in report.local_gates if item.name == "evidence_pack")
     assert gate.status == "failed"
     assert any(item["name"] == "refresh_release_chain" for item in gate.details["stale_reports"])
+
+
+def test_final_gate_requires_evidence_pack_refresh_after_stage3_owner_todo_changes(tmp_path: Path) -> None:
+    inputs = _inputs(tmp_path)
+    payload = json.loads(inputs["stage3_owner_evidence_todo"].read_text(encoding="utf-8"))
+    payload["generated_at"] = "2026-06-05T10:04:00Z"
+    payload["todo_count"] = 31
+    _write_json(inputs["stage3_owner_evidence_todo"], payload)
+
+    report = run_final_gate(inputs)
+
+    assert report.status == "failed"
+    gate = next(item for item in report.local_gates if item.name == "evidence_pack")
+    assert gate.status == "failed"
+    assert any(item["name"] == "stage3_owner_evidence_todo" for item in gate.details["stale_reports"])
+
+
+def test_final_gate_requires_evidence_pack_refresh_after_stage3_owner_quickstart_changes(tmp_path: Path) -> None:
+    inputs = _inputs(tmp_path)
+    payload = json.loads(inputs["stage3_owner_quickstart"].read_text(encoding="utf-8"))
+    payload["generated_at"] = "2026-06-05T10:04:00Z"
+    payload["todo_count"] = 31
+    _write_json(inputs["stage3_owner_quickstart"], payload)
+
+    report = run_final_gate(inputs)
+
+    assert report.status == "failed"
+    gate = next(item for item in report.local_gates if item.name == "evidence_pack")
+    assert gate.status == "failed"
+    assert any(item["name"] == "stage3_owner_quickstart" for item in gate.details["stale_reports"])
 
 
 def test_final_gate_allows_refresh_chain_fixed_point_after_evidence_pack(tmp_path: Path) -> None:

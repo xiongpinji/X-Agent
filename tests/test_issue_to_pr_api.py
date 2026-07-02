@@ -17,7 +17,7 @@ def _csrf_headers(client: TestClient) -> dict[str, str]:
 
 
 def test_issue_to_pr_dry_run_from_url_returns_plan() -> None:
-    client = TestClient(app)
+    client = TestClient(app, headers={"x-api-key": "bootstrap"})
 
     response = client.post(
         "/api/v1/issue-to-pr/dry-run",
@@ -38,7 +38,7 @@ def test_issue_to_pr_dry_run_from_url_returns_plan() -> None:
 def test_issue_to_pr_execute_requires_explicit_token(monkeypatch) -> None:
     monkeypatch.delenv("GITHUB_TOKEN", raising=False)
     monkeypatch.delenv("XAGENT_GITHUB_TOKEN", raising=False)
-    client = TestClient(app)
+    client = TestClient(app, headers={"x-api-key": "bootstrap"})
 
     response = client.post(
         "/api/v1/issue-to-pr/execute",
@@ -73,7 +73,7 @@ def test_issue_to_pr_execute_uses_fake_executor(monkeypatch) -> None:
         }
 
     app.dependency_overrides[get_issue_to_pr_executor] = lambda: fake_executor
-    client = TestClient(app)
+    client = TestClient(app, headers={"x-api-key": "bootstrap"})
 
     response = client.post(
         "/api/v1/issue-to-pr/execute",

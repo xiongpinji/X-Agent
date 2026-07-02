@@ -550,8 +550,10 @@ class MemorySystem:
                 imported_memories += 1
         return {"memories": imported_memories, "sessions": imported_sessions}
 
-    def session_count(self) -> int:
-        return len(self._sessions)
+    def session_count(self, tenant_id: str | None = None) -> int:
+        if tenant_id is None:
+            return len(self._sessions)
+        return len([session for session in self._sessions.values() if session.tenant_id == tenant_id])
 
     @staticmethod
     def _normalize_layer(layer: int) -> int:
@@ -621,16 +623,18 @@ class MemorySystem:
     def layer_profile(self, layer: int) -> dict[str, str]:
         return dict(self._LAYER_PROFILES[self._normalize_layer(layer)])
 
-    def layer_counts(self) -> dict[int, int]:
+    def layer_counts(self, tenant_id: str | None = None) -> dict[int, int]:
         counts: dict[int, int] = {layer: 0 for layer in range(1, 11)}
         with self._lock:
             items_snapshot = list(self._items)
         for item in items_snapshot:
+            if tenant_id is not None and item.tenant_id != tenant_id:
+                continue
             counts[item.layer] = counts.get(item.layer, 0) + 1
         return counts
 
-    def layer_summary(self) -> list[dict[str, object]]:
-        counts = self.layer_counts()
+    def layer_summary(self, tenant_id: str | None = None) -> list[dict[str, object]]:
+        counts = self.layer_counts(tenant_id=tenant_id)
         return [
             {"layer": layer, **self.layer_profile(layer), "count": counts.get(layer, 0)}
             for layer in range(1, 11)
@@ -720,11 +724,11 @@ class MemorySystem:
             for layer, layer_items in sorted(grouped.items())
         ]
 
-    def snapshot(self) -> dict[str, object]:
+    def snapshot(self, tenant_id: str | None = None) -> dict[str, object]:
         return {
-            "count": self.count(),
-            "session_count": self.session_count(),
-            "layers": self.layer_summary(),
+            "count": self.count() if tenant_id is None else sum(self.layer_counts(tenant_id=tenant_id).values()),
+            "session_count": self.session_count(tenant_id=tenant_id),
+            "layers": self.layer_summary(tenant_id=tenant_id),
         }
 
     async def consolidate(

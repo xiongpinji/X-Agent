@@ -228,7 +228,7 @@ class LLMRouterOptimized:
 
     def _get_cache_key(self, strategy: str) -> str:
         """生成缓存键"""
-        return hashlib.md5(f"{strategy}".encode()).hexdigest()
+        return hashlib.md5(f"{strategy}".encode(), usedforsecurity=False).hexdigest()
 
     def _is_cache_valid(self, decision: RoutingDecision) -> bool:
         """检查缓存是否有效"""

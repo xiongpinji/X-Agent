@@ -6,12 +6,21 @@ from fastapi import APIRouter, HTTPException, Query
 from typing import Dict, Any, List
 from pydantic import BaseModel
 
+from backend.app.api.rbac_enforcement import require_developer
 from backend.app.core.i18n import (
     Language, Region, Locale, LocalizationConfig,
-    TranslationManager, I18nManager, i18n
+    TranslationManager, I18nManager
 )
 
-router = APIRouter(prefix="/api/i18n", tags=["i18n"])
+# SECURITY P1-03: i18n GET endpoints (language/region lists, translations) are
+# public so frontends can render localization anonymously. Write endpoints
+# (set-locale, format-*) require developer role via per-route Depends.
+router = APIRouter(
+    prefix="/api/i18n",
+    tags=["i18n"],
+)
+
+i18n = I18nManager()
 
 
 class LocaleRequest(BaseModel):
@@ -70,7 +79,7 @@ async def get_supported_regions():
     ]
 
 
-@router.post("/set-locale")
+@router.post("/set-locale", dependencies=[require_developer])
 async def set_locale(request: LocaleRequest):
     """设置用户地区"""
     try:
@@ -147,7 +156,7 @@ async def get_localization_config(region: str):
         raise HTTPException(status_code=400, detail=f"Unsupported region: {region}")
 
 
-@router.post("/format-date")
+@router.post("/format-date", dependencies=[require_developer])
 async def format_date(
     language: str = Query(...),
     region: str = Query(...),
@@ -175,7 +184,7 @@ async def format_date(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.post("/format-currency")
+@router.post("/format-currency", dependencies=[require_developer])
 async def format_currency(
     language: str = Query(...),
     region: str = Query(...),
@@ -199,7 +208,7 @@ async def format_currency(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.post("/format-number")
+@router.post("/format-number", dependencies=[require_developer])
 async def format_number(
     region: str = Query(...),
     number: float = Query(...),

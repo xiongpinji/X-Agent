@@ -12,6 +12,7 @@ from backend.app.api.auth import (
     _login_failures,
     _revoked_tokens,
     _token_expiry,
+    _token_types,
     _token_users,
 )
 from backend.app.core.admin import UserCreateRequest, user_store
@@ -40,12 +41,14 @@ def cleanup():
     _login_failures.clear()
     _revoked_tokens.clear()
     _token_expiry.clear()
+    _token_types.clear()
     _token_users.clear()
     yield
     user_store._records.clear()
     _login_failures.clear()
     _revoked_tokens.clear()
     _token_expiry.clear()
+    _token_types.clear()
     _token_users.clear()
 
 
@@ -238,6 +241,55 @@ class TestAuthenticationSecurity:
         # rejection satisfies the "refresh requires authentication" intent.
         assert response.status_code in (401, 403)
 
+    def test_refresh_rejects_access_token_and_accepts_refresh_token(self, client):
+        """Refresh flow must not treat an access token as a refresh token."""
+        client.post(
+            "/api/v1/auth/register",
+            json={"email": "test@example.com", "password": "ValidPass123"},
+        )
+        login_response = client.post(
+            "/api/v1/auth/login",
+            json={"email": "test@example.com", "password": "ValidPass123"},
+        )
+        assert login_response.status_code == 200
+        tokens = login_response.json()
+
+        access_refresh = client.post(
+            "/api/v1/auth/refresh",
+            headers={"Authorization": f"Bearer {tokens['access_token']}"},
+        )
+        assert access_refresh.status_code == 401
+
+        refresh_response = client.post(
+            "/api/v1/auth/refresh",
+            headers={"Authorization": f"Bearer {tokens['refresh_token']}"},
+        )
+        assert refresh_response.status_code == 200
+        new_access_token = refresh_response.json()["access_token"]
+        assert _token_types[new_access_token] == "access"
+
+        me_response = client.get(
+            "/api/v1/auth/me",
+            headers={"Authorization": f"Bearer {new_access_token}"},
+        )
+        assert me_response.status_code == 200
+
+    def test_refresh_token_cannot_authenticate_regular_self_service_routes(self, client):
+        """Refresh tokens are only accepted by the refresh dependency."""
+        register_response = client.post(
+            "/api/v1/auth/register",
+            json={"email": "test@example.com", "password": "ValidPass123"},
+        )
+        assert register_response.status_code == 200
+        refresh_token = register_response.json()["refresh_token"]
+
+        response = client.get(
+            "/api/v1/auth/me",
+            headers={"Authorization": f"Bearer {refresh_token}"},
+        )
+
+        assert response.status_code == 401
+
     def test_missing_email_or_password(self, client):
         """Test that email and password are required."""
         # Missing password — required field, pydantic rejects with 422
@@ -247,4 +299,4 @@ class TestAuthenticationSecurity:
         )
         assert response.status_code in [400, 422]
 
-        # Missing email — required 
+        # Missing email — required

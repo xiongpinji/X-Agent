@@ -35,7 +35,7 @@ class SearchCache:
 
     def _make_key(self, query: str, provider: str) -> str:
         """Generate cache key from query and provider."""
-        query_hash = hashlib.md5(query.lower().encode()).hexdigest()
+        query_hash = hashlib.md5(query.lower().encode(), usedforsecurity=False).hexdigest()
         return f"{self.prefix}{provider}:{query_hash}"
 
     async def get(self, query: str, provider: str) -> Optional[SearchResponse]:
@@ -99,7 +99,7 @@ class SearchCache:
             return await self.redis.delete(key)
         else:
             # Invalidate all providers for this query
-            query_hash = hashlib.md5(query.lower().encode()).hexdigest()
+            query_hash = hashlib.md5(query.lower().encode(), usedforsecurity=False).hexdigest()
             pattern = f"{self.prefix}*:{query_hash}"
             keys = await self.redis.keys(pattern)
             if keys:

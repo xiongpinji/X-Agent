@@ -103,6 +103,8 @@ async def search_memory(request: MemorySearchRequest, memory: MemoryDependency, 
         direct_items: list[MemoryItem] = []
         for layer in request.layers:
             for item in memory.layer_items(layer):
+                if item.tenant_id != principal.tenant_id:
+                    continue
                 content_terms = set(item.content.lower().split())
                 if not query_terms or query_terms & content_terms:
                     direct_items.append(item)
@@ -129,7 +131,7 @@ async def consolidate_memory(request: MemoryConsolidateRequest, memory: MemoryDe
 @router.get("/layers")
 async def memory_layers(memory: MemoryDependency, principal: PrincipalDependency) -> dict[str, object]:
     enforce_scope(principal, "memory:read")
-    layer_summary = memory.layer_summary() if hasattr(memory, "layer_summary") else []
+    layer_summary = _layer_summary_for_tenant(memory, principal.tenant_id)
     layer_roles = memory.layer_roles() if hasattr(memory, "layer_roles") else {}
     return {"layers": layer_summary, "layer_roles": layer_roles}
 
@@ -140,7 +142,7 @@ async def memory_layer_detail(layer: int, memory: MemoryDependency, principal: P
     if not hasattr(memory, "layer_profile") or not hasattr(memory, "layer_items"):
         return {"layer": layer, "items": [], "count": 0}
     profile = memory.layer_profile(layer)
-    items = memory.layer_items(layer)
+    items = _tenant_items(memory.layer_items(layer), principal.tenant_id)
     return {"layer": layer, "profile": profile, "count": len(items), "items": [item.model_dump(mode="json") if hasattr(item, "model_dump") else item for item in items]}
 
 
@@ -152,20 +154,22 @@ async def memory_session_detail(session_id: str, memory: MemoryDependency, princ
     summary = memory.session_summary(session_id)
     if summary is None:
         raise api_error(404, ErrorCode.RUN_NOT_FOUND, "Session not found.", trace_id=session_id)
-    items = memory.session_items(session_id) if hasattr(memory, "session_items") else []
-    layers = memory.session_memory_layers(session_id) if hasattr(memory, "session_memory_layers") else []
+    session_tenant_id = summary.get("session", {}).get("tenant_id") if isinstance(summary.get("session"), dict) else None
+    if session_tenant_id != principal.tenant_id:
+        raise api_error(404, ErrorCode.RUN_NOT_FOUND, "Session not found.", trace_id=session_id)
+    items = _tenant_items(memory.session_items(session_id), principal.tenant_id) if hasattr(memory, "session_items") else []
+    summary = _session_summary_for_items(summary, items)
+    layers = _session_layers_for_items(memory, items) if hasattr(memory, "layer_profile") else []
     return {"session_id": session_id, "summary": summary, "items": [item.model_dump(mode="json") if hasattr(item, "model_dump") else item for item in items], "layers": layers}
 
 
 @router.get("/count")
 async def memory_count(memory: MemoryDependency, principal: PrincipalDependency) -> dict[str, object]:
     enforce_scope(principal, "memory:read")
-    snapshot = memory.snapshot() if hasattr(memory, "snapshot") else {}
-    count = snapshot.get("count", memory.count())
-    layers = snapshot.get("layers", memory.layer_summary() if hasattr(memory, "layer_summary") else [])
-    session_count = snapshot.get("session_count", memory.session_count() if hasattr(memory, "session_count") else 0)
-    if hasattr(count, "__await__"):
-        count = await count
+    snapshot = _snapshot_for_tenant(memory, principal.tenant_id)
+    count = snapshot.get("count", 0)
+    layers = snapshot.get("layers", [])
+    session_count = snapshot.get("session_count", 0)
     return {"count": int(count), "session_count": int(session_count), "layers": layers}
 
 
@@ -220,3 +224,75 @@ async def get_memory_correlation(memory_id: str, memory: MemoryDependency, princ
 
 def _context_from_principal(principal: Principal) -> RunContext:
     return RunContext(tenant_id=principal.tenant_id, user_id=principal.user_id, agent_id=principal.agent_id, request_id=principal.request_id, trace_id=principal.trace_id, permission_scope=principal.permission_scope)
+
+
+def _tenant_items(items: list[MemoryItem], tenant_id: str) -> list[MemoryItem]:
+    return [item for item in items if item.tenant_id == tenant_id]
+
+
+def _layer_summary_for_tenant(memory: object, tenant_id: str) -> list[dict[str, object]]:
+    if not hasattr(memory, "layer_summary"):
+        return []
+    try:
+        return memory.layer_summary(tenant_id=tenant_id)
+    except TypeError:
+        if not hasattr(memory, "layer_items") or not hasattr(memory, "layer_profile"):
+            return memory.layer_summary()
+        layers = []
+        for item in memory.layer_summary():
+            layer = int(item.get("layer", 0))
+            tenant_count = len(_tenant_items(memory.layer_items(layer), tenant_id))
+            layers.append({**item, "count": tenant_count})
+        return layers
+
+
+def _snapshot_for_tenant(memory: object, tenant_id: str) -> dict[str, object]:
+    if hasattr(memory, "snapshot"):
+        try:
+            return memory.snapshot(tenant_id=tenant_id)
+        except TypeError:
+            pass
+    layers = _layer_summary_for_tenant(memory, tenant_id)
+    return {
+        "count": sum(int(layer.get("count", 0)) for layer in layers),
+        "session_count": _session_count_for_tenant(memory, tenant_id),
+        "layers": layers,
+    }
+
+
+def _session_count_for_tenant(memory: object, tenant_id: str) -> int:
+    if not hasattr(memory, "session_count"):
+        return 0
+    try:
+        return int(memory.session_count(tenant_id=tenant_id))
+    except TypeError:
+        if hasattr(memory, "list_sessions"):
+            return len(memory.list_sessions(tenant_id=tenant_id))
+        return int(memory.session_count())
+
+
+def _session_summary_for_items(summary: dict[str, object], items: list[MemoryItem]) -> dict[str, object]:
+    layer_breakdown: dict[int, int] = {}
+    for item in items:
+        layer_breakdown[item.layer] = layer_breakdown.get(item.layer, 0) + 1
+    filtered = dict(summary)
+    filtered["count"] = len(items)
+    filtered["layer_breakdown"] = layer_breakdown
+    filtered["layers"] = sorted(layer_breakdown)
+    filtered["latest_memory_id"] = items[-1].id if items else None
+    return filtered
+
+
+def _session_layers_for_items(memory: object, items: list[MemoryItem]) -> list[dict[str, object]]:
+    grouped: dict[int, list[MemoryItem]] = {}
+    for item in items:
+        grouped.setdefault(item.layer, []).append(item)
+    return [
+        {
+            "layer": layer,
+            "profile": memory.layer_profile(layer),
+            "count": len(layer_items),
+            "items": [item.model_dump(mode="json") for item in layer_items],
+        }
+        for layer, layer_items in sorted(grouped.items())
+    ]

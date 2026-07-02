@@ -282,7 +282,7 @@ class MultiLayerCache:
         for k, v in sorted(kwargs.items()):
             key_parts.append(f"{k}={v}")
         key_str = ":".join(key_parts)
-        return hashlib.md5(key_str.encode()).hexdigest()
+        return hashlib.md5(key_str.encode(), usedforsecurity=False).hexdigest()
 
     def get_stats(self) -> dict[str, CacheStats]:
         """Get cache statistics."""

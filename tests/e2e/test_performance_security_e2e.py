@@ -195,6 +195,19 @@ class EncryptionTester:
     """加密测试工具"""
 
     @staticmethod
+    def _json_safe_payload(value: Any) -> Any:
+        """Convert JWT payload values to deterministic JSON-safe values."""
+        if isinstance(value, datetime):
+            return value.isoformat()
+        if isinstance(value, dict):
+            return {key: EncryptionTester._json_safe_payload(item) for key, item in value.items()}
+        if isinstance(value, list):
+            return [EncryptionTester._json_safe_payload(item) for item in value]
+        if isinstance(value, tuple):
+            return [EncryptionTester._json_safe_payload(item) for item in value]
+        return value
+
+    @staticmethod
     def encrypt_aes256(data: str, key: str) -> str:
         """AES-256 加密"""
         from cryptography.fernet import Fernet
@@ -234,7 +247,7 @@ class EncryptionTester:
         import base64
 
         header = base64.urlsafe_b64encode(json.dumps({"alg": algorithm, "typ": "JWT"}).encode()).decode().rstrip("=")
-        payload_encoded = base64.urlsafe_b64encode(json.dumps(payload).encode()).decode().rstrip("=")
+        payload_encoded = base64.urlsafe_b64encode(json.dumps(EncryptionTester._json_safe_payload(payload)).encode()).decode().rstrip("=")
 
         message = f"{header}.{payload_encoded}"
         signature = base64.urlsafe_b64encode(
@@ -604,4 +617,3 @@ class TestAuditLogging:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "--tb=short"])
-

@@ -3,21 +3,32 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Annotated, Any
 
-from fastapi import APIRouter, HTTPException, Query, Body
+from fastapi import APIRouter, Depends, HTTPException, Query, Body
 from pydantic import BaseModel, Field
 
+from backend.app.api.errors import api_error
+from backend.app.core.contracts import ErrorCode
+from backend.app.core.security import Principal
 from backend.app.core.skills_manager import get_skill_system_manager
 from backend.app.core.skills_core import SkillCapability
+from backend.app.dependencies import enforce_scope, get_current_principal
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/skills", tags=["skills"])
 
+# 认证授权依赖(SECURITY P0-03):写操作端点必须校验已认证主体与权限。
+PrincipalDependency = Annotated[Principal, Depends(get_current_principal)]
+
 
 class SkillExecuteRequest(BaseModel):
-    """Request to execute a skill"""
+    """Request to execute a skill.
+
+    Note: user_id/tenant_id 字段保留以向后兼容旧客户端,但服务端始终以
+    认证主体(principal)的值为准,忽略客户端传入值,防止越权(SECURITY P0-03)。
+    """
     skill_name: str
     input_data: dict[str, Any] = Field(default_factory=dict)
     user_id: str = ""
@@ -26,7 +37,10 @@ class SkillExecuteRequest(BaseModel):
 
 
 class SkillInstallRequest(BaseModel):
-    """Request to install a skill"""
+    """Request to install a skill.
+
+    user_id 字段保留向后兼容,服务端以 principal.user_id 为准(SECURITY P0-03)。
+    """
     skill_id: str
     user_id: str = ""
 
@@ -127,15 +141,23 @@ async def list_skills(
 
 
 @router.post("/execute")
-async def execute_skill(request: SkillExecuteRequest) -> dict[str, Any]:
-    """Execute a skill"""
+async def execute_skill(
+    request: SkillExecuteRequest,
+    principal: PrincipalDependency,
+) -> dict[str, Any]:
+    """Execute a skill.
+
+    SECURITY P0-03: user_id/tenant_id 一律取自认证主体,忽略请求体传入值,
+    防止跨用户/跨租户越权执行技能。
+    """
+    enforce_scope(principal, "skill:run")
     try:
         manager = get_skill_system_manager()
         result = await manager.execute_skill(
             skill_name=request.skill_name,
             input_data=request.input_data,
-            user_id=request.user_id,
-            tenant_id=request.tenant_id,
+            user_id=principal.user_id,
+            tenant_id=principal.tenant_id,
             sandbox_id=request.sandbox_id,
         )
         return {
@@ -152,12 +174,17 @@ async def execute_skill(request: SkillExecuteRequest) -> dict[str, Any]:
 @router.post("/{skill_id}/install")
 async def install_skill(
     skill_id: str,
+    principal: PrincipalDependency,
     request: SkillInstallRequest = Body(...),
 ) -> dict[str, Any]:
-    """Install a skill"""
+    """Install a skill.
+
+    SECURITY P0-03: 以 principal.user_id 为准,忽略请求体 user_id。
+    """
+    enforce_scope(principal, "skill:install")
     try:
         manager = get_skill_system_manager()
-        success, error = await manager.install_skill(skill_id=skill_id, user_id=request.user_id)
+        success, error = await manager.install_skill(skill_id=skill_id, user_id=principal.user_id)
         if not success:
             raise HTTPException(status_code=400, detail=error)
         return {"success": True, "message": f"Skill installed: {skill_id}"}
@@ -169,8 +196,15 @@ async def install_skill(
 
 
 @router.post("/{skill_id}/uninstall")
-async def uninstall_skill(skill_id: str) -> dict[str, Any]:
-    """Uninstall a skill"""
+async def uninstall_skill(
+    skill_id: str,
+    principal: PrincipalDependency,
+) -> dict[str, Any]:
+    """Uninstall a skill.
+
+    SECURITY P0-03: 需要已认证主体与 skill:install 权限(卸载与安装同等敏感)。
+    """
+    enforce_scope(principal, "skill:install")
     try:
         manager = get_skill_system_manager()
         success, error = await manager.uninstall_skill(skill_id)
@@ -187,9 +221,16 @@ async def uninstall_skill(skill_id: str) -> dict[str, Any]:
 @router.post("/{skill_id}/rate")
 async def rate_skill(
     skill_id: str,
+    principal: PrincipalDependency,
     rating: float = Query(..., ge=1.0, le=5.0),
 ) -> dict[str, Any]:
-    """Rate a skill"""
+    """Rate a skill.
+
+    SECURITY P0-03: 需要已认证主体与 skill:run 权限,防止匿名/低权刷分。
+    """
+    if not principal.authenticated:
+        raise api_error(401, ErrorCode.AUTHENTICATION_FAILED, "Authentication required to rate skills.")
+    enforce_scope(principal, "skill:run")
     try:
         manager = get_skill_system_manager()
         success, error = await manager.rate_skill(skill_id, rating)

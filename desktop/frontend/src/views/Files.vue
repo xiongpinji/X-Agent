@@ -60,9 +60,10 @@
 import { ref, onMounted, computed } from 'vue'
 import { invoke } from '@tauri-apps/api/tauri'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import type { DirectoryEntry } from '../types'
 
 const currentPath = ref('/')
-const files = ref([])
+const files = ref<DirectoryEntry[]>([])
 
 const breadcrumbs = computed(() => {
   const parts = currentPath.value.split('/').filter(p => p)
@@ -79,7 +80,7 @@ onMounted(async () => {
 
 const loadFiles = async () => {
   try {
-    const result = await invoke('list_directory', { path: currentPath.value })
+    const result = await invoke<DirectoryEntry[]>('list_directory', { path: currentPath.value })
     files.value = result
   } catch (e) {
     ElMessage.error('加载文件列表失败')
@@ -102,7 +103,7 @@ const createFolder = async () => {
   ElMessage.info('创建文件夹功能开发中...')
 }
 
-const openFile = async (file: any) => {
+const openFile = async (file: DirectoryEntry) => {
   if (file.is_dir) {
     currentPath.value = file.path
     await loadFiles()
@@ -111,7 +112,7 @@ const openFile = async (file: any) => {
   }
 }
 
-const deleteFile = async (file: any) => {
+const deleteFile = async (file: DirectoryEntry) => {
   try {
     await ElMessageBox.confirm('确定删除该文件吗?', '警告', {
       confirmButtonText: '确定',

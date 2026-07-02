@@ -338,7 +338,7 @@ def cached(ttl: int = 3600):
         async def wrapper(*args, **kwargs) -> Any:
             # 生成缓存键
             key_parts = [func.__name__] + [str(arg) for arg in args]
-            key = hashlib.md5("|".join(key_parts).encode()).hexdigest()
+            key = hashlib.md5("|".join(key_parts).encode(), usedforsecurity=False).hexdigest()
 
             cache = get_cache_manager()
             cached_value = await cache.get(key)

@@ -3,8 +3,9 @@ from functools import lru_cache
 from hashlib import sha256
 from secrets import compare_digest
 from secrets import token_urlsafe
+from typing import Annotated
 
-from fastapi import Request
+from fastapi import Depends, Request
 
 from backend.app.api.errors import api_error
 from backend.app.core.agent import AgentLoop
@@ -15,6 +16,7 @@ from backend.app.core.contracts import ErrorCode
 from backend.app.core.control_modes import ControlModeStore
 from backend.app.core.orchestrator import Orchestrator
 from backend.app.core.embeddings import build_embedding_model
+from backend.app.core.llm.cost_optimizer import CostTracker
 from backend.app.core.llm import build_llm_router
 from backend.app.core.memory import MemorySystem
 from backend.app.core.memory_postgres import PostgresMemorySystem
@@ -150,6 +152,11 @@ def get_tool_execution_store() -> ToolExecutionStore:
 
 
 @lru_cache
+def get_llm_cost_tracker() -> CostTracker:
+    return CostTracker()
+
+
+@lru_cache
 def get_audit_store() -> AuditStore:
     settings = get_settings()
     hmac_secret = settings.audit_hmac_secret
@@ -203,7 +210,7 @@ def get_current_principal(request: Request) -> Principal:
             settings.bootstrap_api_key,
             settings.bootstrap_api_key_sha256,
         ):
-            return Principal(
+            principal = Principal(
                 tenant_id="default",
                 user_id="bootstrap-admin",
                 role="admin",
@@ -211,9 +218,12 @@ def get_current_principal(request: Request) -> Principal:
                 api_key_id="bootstrap",
                 authenticated=True,
             )
+            request.scope["principal"] = principal
+            return principal
         principal = get_api_key_store().authenticate(raw_key)
         if principal is None:
             raise api_error(401, ErrorCode.AUTHENTICATION_FAILED, "Invalid API key.")
+        request.scope["principal"] = principal
         return principal
 
     # Fallback to Bearer token (auth session)
@@ -221,27 +231,55 @@ def get_current_principal(request: Request) -> Principal:
     if auth_header.lower().startswith("bearer "):
         token = auth_header[7:].strip()
         if token:
-            from backend.app.api.auth import _is_token_valid, _token_users
-            if _is_token_valid(token):
-                user_id = _token_users.get(token)
-                if user_id:
-                    from backend.app.core.admin import user_store
-                    user = user_store.get(user_id)
-                    if user:
-                        return Principal(
-                            tenant_id=user.tenant_id,
-                            user_id=user.id,
-                            role=user.role,
-                            scopes=list(ROLE_SCOPES.get(user.role, [])),
-                            authenticated=True,
-                        )
+            principal = _principal_from_bearer_token(token, token_type="access")
+            if principal is not None:
+                request.scope["principal"] = principal
+                return principal
         raise api_error(401, ErrorCode.AUTHENTICATION_FAILED, "Invalid or expired token.")
 
     # 生产环境绝不回落匿名主体（S5）：即便 require_api_key 默认 False，
     # 生产模式也必须要求显式凭证，避免漏配 enforce_scope 的路由被未鉴权访问。
     if settings.require_api_key or getattr(settings, "app_mode", "development") == "production":
         raise api_error(401, ErrorCode.AUTHENTICATION_FAILED, "API key required.")
-    return anonymous_principal()
+    principal = anonymous_principal()
+    request.scope["principal"] = principal
+    return principal
+
+
+def get_refresh_principal(request: Request) -> Principal:
+    """Resolve a principal from a refresh bearer token only."""
+    auth_header = request.headers.get("authorization", "")
+    if auth_header.lower().startswith("bearer "):
+        token = auth_header[7:].strip()
+        if token:
+            principal = _principal_from_bearer_token(token, token_type="refresh")
+            if principal is not None:
+                request.scope["principal"] = principal
+                return principal
+    raise api_error(401, ErrorCode.AUTHENTICATION_FAILED, "Invalid or expired refresh token.")
+
+
+def _principal_from_bearer_token(token: str, *, token_type: str) -> Principal | None:
+    from backend.app.api.auth import _get_token_user, _is_token_valid
+
+    if not _is_token_valid(token, token_type=token_type):
+        return None
+    user_id = _get_token_user(token)
+    if not user_id:
+        return None
+
+    from backend.app.core.admin import user_store
+
+    user = user_store.get(user_id)
+    if not user:
+        return None
+    return Principal(
+        tenant_id=user.tenant_id,
+        user_id=user.id,
+        role=user.role,
+        scopes=list(ROLE_SCOPES.get(user.role, [])),
+        authenticated=True,
+    )
 
 
 def _matches_bootstrap_key(
@@ -274,6 +312,19 @@ def enforce_scope(principal: Principal, scope: str) -> None:
             ErrorCode.AUTHORIZATION_FAILED,
             f"Missing required scope: {scope}",
         )
+
+
+def require_authenticated_principal(
+    principal: Annotated[Principal, Depends(get_current_principal)],
+) -> Principal:
+    """Require a real API key or bearer-token principal, even in dev mode."""
+    if not principal.authenticated:
+        raise api_error(
+            401,
+            ErrorCode.AUTHENTICATION_FAILED,
+            "Authentication required.",
+        )
+    return principal
 
 
 @lru_cache

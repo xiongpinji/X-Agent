@@ -34,7 +34,7 @@ class CacheKeyBuilder:
     @staticmethod
     def _hash_query(query: str, length: int = 8) -> str:
         """Generate hash of query string."""
-        return hashlib.md5(query.encode()).hexdigest()[:length]
+        return hashlib.md5(query.encode(), usedforsecurity=False).hexdigest()[:length]
 
     @staticmethod
     def memory_search(

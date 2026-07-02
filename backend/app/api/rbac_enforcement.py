@@ -77,7 +77,7 @@ class PermissionDependency:
     async def __call__(self, request: Request) -> None:
         """Check permission and raise HTTPException if denied.
 
-        Extracts the principal from request state (set by auth middleware).
+        Extracts the principal from request state or scope (set by auth middleware).
         If no principal exists, defaults to "viewer" role. Checks if the
         principal's role has the required permission using the RBAC module's
         has_permission function.
@@ -91,8 +91,12 @@ class PermissionDependency:
         Returns:
             None (void dependency for route enforcement).
         """
-        # Get principal from request state (set by auth middleware)
+        # State is used by legacy middleware; scope is used by get_current_principal.
         principal = getattr(request.state, "principal", None)
+        if principal is None:
+            scope = getattr(request, "scope", {})
+            if isinstance(scope, dict):
+                principal = scope.get("principal")
         if principal is None:
             # If no auth middleware ran, default to viewer (read-only)
             role = "viewer"

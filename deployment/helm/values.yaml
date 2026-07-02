@@ -126,7 +126,7 @@ env:
   XAGENT_MODE: standard
   XAGENT_APP_MODE: development
   XAGENT_DEPLOYMENT_ENVIRONMENT: development
-  XAGENT_REQUIRE_API_KEY: "false"
+  XAGENT_REQUIRE_API_KEY: "true"
 
 # Configuration from ConfigMap
 configMap:

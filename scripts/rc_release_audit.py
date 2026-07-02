@@ -4,9 +4,11 @@
 from __future__ import annotations
 
 import argparse
+import fnmatch
 import json
 import re
 import subprocess
+import sys
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -16,7 +18,18 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_MANIFEST = ROOT / "docs" / "RC_STAGING_MANIFEST.md"
 DEFAULT_OUTPUT = ROOT / ".xagent_runtime" / "reports" / "rc-release-audit.json"
 
-EXCLUDED_PREFIXES = (".agents/", ".codex/", ".xagent_runtime/", "backend/app/core/creative_studio/")
+EXCLUDED_PREFIXES = (
+    ".agents/",
+    ".codex/",
+    ".xagent_runtime/",
+    ".xagent/",
+    "backend/app/core/creative_studio/",
+)
+EXCLUDED_GLOBS = (
+    "data/*.db",
+    "test_baseline_*.txt",
+    "test_baseline_*.log",
+)
 EXCLUDED_EXACT = {
     "AGENTS.md",
     "COMPETITIVE_ANALYSIS_2026.md",
@@ -62,6 +75,7 @@ SECRET_PATTERNS = (
     re.compile(r"(?i)\b[A-Z0-9_]*(?:api[_-]?key|token|secret|password)\b\s*[:=]\s*['\"]?([A-Za-z0-9_./+=-]{24,})"),
     re.compile(r"\b(?:sk|ghp|github_pat|xagent)[_-][A-Za-z0-9_=-]{24,}\b"),
 )
+PUBLIC_XAGENT_NAME_RE = re.compile(r"(?i)^xagent-[a-z0-9][a-z0-9._-]*$")
 PLACEHOLDER_TOKENS = (
     "...",
     "<",
@@ -73,6 +87,12 @@ PLACEHOLDER_TOKENS = (
     "secure_key",
     "your",
 )
+
+
+def console_safe_text(value: str, encoding: str | None = None) -> str:
+    """Return text that can be written to the active console encoding."""
+    target_encoding = encoding or sys.stdout.encoding or "utf-8"
+    return value.encode(target_encoding, errors="backslashreplace").decode(target_encoding)
 
 
 @dataclass(frozen=True)
@@ -157,7 +177,12 @@ def _git_lines(*args: str) -> list[str]:
 
 
 def is_excluded(path: str) -> bool:
-    return path in EXCLUDED_EXACT or any(path.startswith(prefix) for prefix in EXCLUDED_PREFIXES)
+    normalized = path.replace("\\", "/")
+    return (
+        normalized in EXCLUDED_EXACT
+        or any(normalized.startswith(prefix) for prefix in EXCLUDED_PREFIXES)
+        or any(fnmatch.fnmatchcase(normalized, pattern) for pattern in EXCLUDED_GLOBS)
+    )
 
 
 def candidate_paths(manifest_text: str | None = None) -> tuple[list[str], list[str], bool]:
@@ -180,7 +205,8 @@ def repository_classification_paths() -> tuple[set[str], set[str]]:
 
 
 def missing_from_manifest(paths: Iterable[str], manifest_text: str) -> list[str]:
-    return [path for path in paths if path not in manifest_text]
+    manifest_paths = set(manifest_candidate_paths(manifest_text))
+    return [path for path in paths if path.replace("\\", "/") not in manifest_paths]
 
 
 def manifest_candidate_paths(manifest_text: str) -> list[str]:
@@ -289,6 +315,16 @@ def _is_probable_placeholder(value: str) -> bool:
     return any(token in lowered for token in PLACEHOLDER_TOKENS)
 
 
+def _is_public_xagent_name(value: str) -> bool:
+    """Allow public repo artifact/path names without weakening token detection."""
+
+    return bool(PUBLIC_XAGENT_NAME_RE.fullmatch(value))
+
+
+def _is_allowed_secret_match_sample(value: str) -> bool:
+    return _is_probable_placeholder(value) or _is_public_xagent_name(value)
+
+
 def _redact(value: str) -> str:
     if len(value) <= 12:
         return "***"
@@ -310,7 +346,7 @@ def scan_secret_findings(paths: Iterable[str], root: Path = ROOT) -> list[Secret
             for pattern in SECRET_PATTERNS:
                 for match in pattern.finditer(line):
                     sample = match.group(1) if match.groups() else match.group(0)
-                    if _is_probable_placeholder(sample):
+                    if _is_allowed_secret_match_sample(sample):
                         continue
                     key = (relative_path, line_number, sample)
                     if key in seen:
@@ -544,20 +580,20 @@ def main() -> int:
     if audit.secret_findings:
         print("Secret-like findings:")
         for finding in audit.secret_findings:
-            print(f"- {finding.path}:{finding.line} {finding.sample}")
+            print(f"- {finding.path}:{finding.line} {console_safe_text(finding.sample)}")
     if audit.excluded_reference_findings:
         print("Excluded-area references:")
         for finding in audit.excluded_reference_findings:
-            print(f"- {finding.path}:{finding.line} {finding.excluded_area}: {finding.sample}")
+            print(f"- {finding.path}:{finding.line} {finding.excluded_area}: {console_safe_text(finding.sample)}")
     if audit.local_path_findings:
         print("Local user/runtime path findings:")
         for finding in audit.local_path_findings:
-            print(f"- {finding.path}:{finding.line} {finding.pattern}: {finding.sample}")
+            print(f"- {finding.path}:{finding.line} {finding.pattern}: {console_safe_text(finding.sample)}")
     if audit.file_hygiene_findings:
         print("Candidate file hygiene findings:")
         for finding in audit.file_hygiene_findings:
             location = f"{finding.path}:{finding.line}" if finding.line else finding.path
-            print(f"- {location} {finding.kind}: {finding.sample}")
+            print(f"- {location} {finding.kind}: {console_safe_text(finding.sample)}")
     return 0 if audit.status == "passed" else 1
 
 

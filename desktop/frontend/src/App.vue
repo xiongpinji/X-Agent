@@ -84,7 +84,6 @@
 import { ref, onMounted, Suspense } from 'vue'
 import { useRouter } from 'vue-router'
 import { invoke } from '@tauri-apps/api/tauri'
-import { appWindow } from '@tauri-apps/api/window'
 import { Loading } from '@element-plus/icons-vue'
 
 const router = useRouter()
@@ -111,7 +110,7 @@ onMounted(async () => {
 
   // Load theme preference
   try {
-    const theme = await invoke('get_theme')
+    const theme = await invoke<string>('get_theme')
     isDark.value = theme === 'dark'
   } catch (e) {
     console.error('Failed to load theme:', e)

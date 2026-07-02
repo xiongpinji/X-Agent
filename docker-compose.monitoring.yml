@@ -37,7 +37,8 @@ services:
     ports:
       - "3001:3000"
     environment:
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      # SECURITY: admin password must be supplied via env; no weak fallback.
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:?Set GRAFANA_PASSWORD in .env}
       GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/xagent.json
       GF_INSTALL_PLUGINS: grafana-piechart-panel
       GF_SMTP_ENABLED: ${GRAFANA_SMTP_ENABLED:-false}

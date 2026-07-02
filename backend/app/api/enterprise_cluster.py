@@ -9,6 +9,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
 
+from backend.app.api.rbac_enforcement import require_admin
 from backend.app.core.enterprise_cluster import (
     ClusterConfig,
     ClusterManager,
@@ -17,7 +18,12 @@ from backend.app.core.enterprise_cluster import (
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/v1/enterprise/cluster", tags=["enterprise-cluster"])
+# SECURITY P1-03: enterprise cluster endpoints require admin role.
+router = APIRouter(
+    prefix="/api/v1/enterprise/cluster",
+    tags=["enterprise-cluster"],
+    dependencies=[require_admin],
+)
 
 # 初始化管理器
 cluster_manager = ClusterManager()

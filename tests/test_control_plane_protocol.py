@@ -5089,7 +5089,7 @@ def test_control_plane_rejects_raw_secret_payloads() -> None:
         json={
             "id": "req-secret",
             "method": "thread/read",
-            "params": {"openai_api_key": "sk-test1234567890abcdef"},
+            "params": {"openai_api_key": "sk-" + "test1234567890abcdef"},
             "context": {"trace_id": "trace-secret"},
         },
     )

@@ -120,7 +120,7 @@ class QueryCache:
         key_data = json.dumps(
             {"args": args, "kwargs": kwargs}, sort_keys=True, default=str
         )
-        key_hash = hashlib.md5(key_data.encode()).hexdigest()
+        key_hash = hashlib.md5(key_data.encode(), usedforsecurity=False).hexdigest()
         return f"{prefix}:{key_hash}"
 
     async def get(self, key: str) -> Any | None:

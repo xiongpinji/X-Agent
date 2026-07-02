@@ -19,7 +19,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Iterable
 
-from scripts.rc_release_audit import SECRET_PATTERNS, TEXT_SUFFIXES, _is_probable_placeholder, _redact
+from scripts.rc_release_audit import SECRET_PATTERNS, TEXT_SUFFIXES, _is_allowed_secret_match_sample, _redact
 from scripts.rc_source_bundle import ROOT
 
 REPORT_DIR = ROOT / ".xagent_runtime" / "reports"
@@ -46,6 +46,10 @@ REQUIRED_REPORTS = (
     REPORT_DIR / "rc-owner-env-template.ps1",
     REPORT_DIR / "rc-owner-gate-checklist.json",
     REPORT_DIR / "rc-owner-gate-checklist.md",
+    REPORT_DIR / "stage3-owner-evidence-todo-20260618.json",
+    REPORT_DIR / "stage3-owner-evidence-todo-20260618.md",
+    REPORT_DIR / "stage3-owner-quickstart-20260618.json",
+    REPORT_DIR / "stage3-owner-quickstart-20260618.md",
     REPORT_DIR / "rc-source-bundle.json",
     REPORT_DIR / "rc-artifact-integrity-gate.json",
     REPORT_DIR / "rc-staging-plan.json",
@@ -86,7 +90,6 @@ ALLOWED_LOCAL_PATH_MARKERS = (
     "/tmp/pytest-of-",
     "/tmp/pytest-",
 )
-
 RECEIPT_VALIDATOR_REPORTS = {
     ".xagent_runtime/reports/rc-final-gate.json",
     ".xagent_runtime/reports/rc-refresh-release-chain.json",
@@ -267,7 +270,7 @@ def _scan_text_file(path: Path, archive_path: str) -> list[dict[str, Any]]:
         for pattern in SECRET_PATTERNS:
             for match in pattern.finditer(line):
                 sample = match.group(1) if match.groups() else match.group(0)
-                if _is_probable_placeholder(sample):
+                if _is_allowed_secret_match_sample(sample):
                     continue
                 findings.append(
                     {

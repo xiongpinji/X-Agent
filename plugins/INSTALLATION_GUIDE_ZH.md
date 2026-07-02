@@ -151,7 +151,7 @@ xagent plugin list
 
 ```bash
 xagent plugin config github-mcp \
-  --github-token "ghp_xxxxxxxxxxxxxxxxxxxx" \
+  --github-token "gh_example_token_redacted" \
   --timeout 30
 ```
 
@@ -164,7 +164,7 @@ nano ~/.xagent/plugins/github-mcp.json
 
 ```json
 {
-  "github_token": "ghp_xxxxxxxxxxxxxxxxxxxx",
+  "github_token": "gh_example_token_redacted",
   "timeout": 30
 }
 ```
@@ -172,7 +172,7 @@ nano ~/.xagent/plugins/github-mcp.json
 **方法 3：使用环境变量**
 
 ```bash
-export XAGENT_GITHUB_TOKEN="ghp_xxxxxxxxxxxxxxxxxxxx"
+export XAGENT_GITHUB_TOKEN="gh_example_token_redacted"
 export XAGENT_GITHUB_TIMEOUT=30
 ```
 

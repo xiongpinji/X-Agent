@@ -10,6 +10,7 @@ describe('APIClient', () => {
   beforeEach(() => {
     client = new APIClient({ baseURL: '/api/v1' });
     global.fetch = jest.fn();
+    localStorage.clear();
   });
 
   afterEach(() => {
@@ -168,6 +169,44 @@ describe('APIClient', () => {
     client.setHeaders({ Authorization: 'Bearer token' });
     // Headers should be set for subsequent requests
     expect(client).toBeDefined();
+  });
+
+  test('should attach bearer token from local storage', async () => {
+    localStorage.setItem('auth_token', 'test-token');
+    (global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ items: [], total: 0 }),
+    });
+
+    await client.listAgentRuns();
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      '/api/v1/agent/runs?',
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: 'Bearer test-token',
+        }),
+      })
+    );
+  });
+
+  test('should attach bearer token when downloading files', async () => {
+    localStorage.setItem('auth_token', 'download-token');
+    (global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      blob: async () => new Blob(['ok']),
+    });
+
+    await client.downloadFile('/tmp/report.txt');
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      '/api/v1/files/download/%2Ftmp%2Freport.txt',
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: 'Bearer download-token',
+        }),
+      })
+    );
   });
 
   test('should set custom base URL', () => {

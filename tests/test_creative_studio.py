@@ -5,8 +5,14 @@ from __future__ import annotations
 import asyncio
 import json
 
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 import pytest
 
+from backend.app.api.errors import XAgentAPIError, xagent_api_error_handler
+from backend.app.api.creative_studio import router as creative_studio_router
+from backend.app.core.security import Principal, ROLE_SCOPES
+from backend.app.dependencies import get_current_principal
 from backend.app.core.creative_studio.storyboard import (
     AspectRatio,
     Storyboard,
@@ -37,6 +43,10 @@ from backend.app.core.creative_studio.media import (
     MediaProviderRegistry,
 )
 from backend.app.core.creative_studio.adapters import PlaceholderImageAdapter
+from backend.app.core.creative_studio.adapters import ExternalVideoAPIAdapter
+
+VIDEO_PROTOCOL_URL = "https://api.xagent-protocol.invalid/v1/video/generate"
+"""Static external-HTTPS protocol URL used only with injected post_json fakes."""
 
 
 # ───── storyboard schema ─────
@@ -217,12 +227,12 @@ async def test_placeholder_image_generates_png(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_registry_falls_back_to_placeholder():
+async def test_registry_falls_back_to_placeholder(tmp_path):
     """gpt-image-2 requires key; placeholder is always last in chain → must succeed."""
     from backend.app.core.creative_studio.media import MediaProviderRegistry
     reg = MediaProviderRegistry()
     reg.register(PlaceholderImageAdapter())
-    result = await reg.generate(MediaRequest(kind=MediaKind.IMAGE, prompt="test", output_path="/tmp/reg_test.png"))
+    result = await reg.generate(MediaRequest(kind=MediaKind.IMAGE, prompt="test", output_path=str(tmp_path / "reg_test.png")))
     assert result.success
     assert result.provider == "placeholder-image"
 
@@ -235,15 +245,567 @@ async def test_registry_no_provider_returns_failure():
     assert result.error
 
 
+@pytest.mark.asyncio
+async def test_external_video_adapter_blocks_without_human_review():
+    calls = []
+
+    async def post_json(url, payload, headers, timeout):
+        calls.append(payload)
+        return {"video_url": "https://cdn.example/video.mp4"}
+
+    adp = ExternalVideoAPIAdapter(
+        api_url=VIDEO_PROTOCOL_URL,
+        api_key="test-key",
+        post_json=post_json,
+    )
+    result = await adp.generate(MediaRequest(kind=MediaKind.VIDEO, prompt="slow push in"))
+
+    assert not result.success
+    assert result.error == "human_review_required_before_video_provider_call"
+    assert result.metadata["provider_api_call_attempted"] is False
+    assert calls == []
+
+
+@pytest.mark.asyncio
+async def test_external_video_adapter_posts_approved_request():
+    calls = []
+
+    async def post_json(url, payload, headers, timeout):
+        calls.append((url, payload, headers, timeout))
+        return {"video_url": "https://cdn.example/video.mp4", "job_id": "job-1"}
+
+    adp = ExternalVideoAPIAdapter(
+        api_url=VIDEO_PROTOCOL_URL,
+        api_key="test-key",
+        provider="protocol-video",
+        model="video-model",
+        timeout_seconds=12,
+        post_json=post_json,
+    )
+    result = await adp.generate(
+        MediaRequest(
+            kind=MediaKind.VIDEO,
+            prompt="slow push in",
+            output_path="shot.mp4",
+            params={"human_review_approved": True, "duration_seconds": 5, "aspect_ratio": "9:16"},
+        )
+    )
+
+    assert result.success
+    assert result.output_path == "https://cdn.example/video.mp4"
+    assert result.provider == "protocol-video"
+    assert result.metadata["provider_api_call_attempted"] is True
+    assert result.metadata["job_id"] == "job-1"
+    url, payload, headers, timeout = calls[0]
+    assert url == VIDEO_PROTOCOL_URL
+    assert payload["prompt"] == "slow push in"
+    assert payload["model"] == "video-model"
+    assert "output_path" not in payload
+    assert headers["Authorization"] == "Bearer test-key"
+    assert timeout == 12
+
+
+@pytest.mark.asyncio
+async def test_external_video_adapter_rejects_missing_output_reference():
+    async def post_json(url, payload, headers, timeout):
+        return {"status": "ok"}
+
+    adp = ExternalVideoAPIAdapter(
+        api_url=VIDEO_PROTOCOL_URL,
+        api_key="test-key",
+        post_json=post_json,
+    )
+    result = await adp.generate(
+        MediaRequest(
+            kind=MediaKind.VIDEO,
+            prompt="slow push in",
+            params={"human_review_approved": True},
+        )
+    )
+
+    assert not result.success
+    assert result.error == "external_video_api_missing_output_reference"
+    assert result.metadata["provider_api_call_attempted"] is True
+    assert result.metadata["response_keys"] == ["status"]
+
+
+@pytest.mark.asyncio
+async def test_external_video_adapter_reports_missing_config_without_call():
+    calls = []
+
+    async def post_json(url, payload, headers, timeout):
+        calls.append(payload)
+        return {"video_url": "https://cdn.example/video.mp4"}
+
+    adp = ExternalVideoAPIAdapter(api_url="", api_key="", post_json=post_json)
+    result = await adp.generate(
+        MediaRequest(
+            kind=MediaKind.VIDEO,
+            prompt="slow push in",
+            params={"human_review_approved": True},
+        )
+    )
+
+    assert not result.success
+    assert result.error == "external_video_api_not_configured"
+    assert result.metadata["provider_api_call_attempted"] is False
+    assert calls == []
+
+
+@pytest.mark.asyncio
+async def test_generate_shot_video_requires_review_before_external_call():
+    from backend.app.core.creative_studio.wiring import generate_shot_video
+
+    result = await generate_shot_video(video_prompt="camera move", human_review_approved=False)
+
+    assert not result["success"]
+    assert result["error"] == "human_review_required_before_video_provider_call"
+    assert result["metadata"]["provider_api_call_attempted"] is False
+
+
+def _principal(role: str = "admin") -> Principal:
+    return Principal(
+        tenant_id="tenant-1",
+        user_id="user-1",
+        role=role,
+        authenticated=True,
+        api_key_id="test-key",
+        permission_scope=list(ROLE_SCOPES[role]),
+        scopes=list(ROLE_SCOPES[role]),
+    )
+
+
+def _principal_with_scopes(scopes: list[str], role: str = "user") -> Principal:
+    return Principal(
+        tenant_id="tenant-1",
+        user_id="user-1",
+        role=role,
+        authenticated=True,
+        api_key_id="test-key",
+        permission_scope=scopes,
+        scopes=scopes,
+    )
+
+
+def test_creative_studio_shot_video_endpoint_blocks_without_review():
+    app = FastAPI()
+    app.include_router(creative_studio_router)
+    app.dependency_overrides[get_current_principal] = lambda: _principal()
+    try:
+        client = TestClient(app)
+        response = client.post(
+            "/api/v1/creative-studio/shot-video",
+            json={"video_prompt": "slow push in", "human_review_approved": False},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    data = response.json()
+    assert not data["success"]
+    assert data["error"] == "human_review_required_before_video_provider_call"
+    assert data["metadata"]["provider_api_call_attempted"] is False
+
+
+def test_creative_studio_shot_video_endpoint_requires_control_scope_for_reviewed_execution():
+    app = FastAPI()
+    app.include_router(creative_studio_router)
+    app.add_exception_handler(XAgentAPIError, xagent_api_error_handler)
+    app.dependency_overrides[get_current_principal] = lambda: _principal_with_scopes(["workflow:run"])
+    try:
+        client = TestClient(app)
+        response = client.post(
+            "/api/v1/creative-studio/shot-video",
+            json={"video_prompt": "slow push in", "human_review_approved": True},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 403
+    assert "workflow:control" in response.text
+
+
+def test_external_video_api_status_reports_redacted_missing_config(monkeypatch):
+    from backend.app.core.creative_studio.adapters import external_video_api_status
+
+    monkeypatch.delenv("XAGENT_CREATIVE_VIDEO_API_URL", raising=False)
+    monkeypatch.delenv("XAGENT_CREATIVE_VIDEO_API_KEY", raising=False)
+    monkeypatch.delenv("XAGENT_CREATIVE_VIDEO_PROVIDER", raising=False)
+    monkeypatch.delenv("XAGENT_CREATIVE_VIDEO_MODEL", raising=False)
+
+    status = external_video_api_status()
+
+    assert status["provider"] == "external-video-api"
+    assert status["model"] == ""
+    assert status["configured"] is False
+    assert status["api_url_configured"] is False
+    assert status["api_key_configured"] is False
+    assert status["api_key_fingerprint"] == ""
+    assert status["requires_human_review"] is True
+    assert status["provider_api_call_attempted"] is False
+
+
+def test_external_video_api_status_redacts_configured_secret(monkeypatch):
+    from backend.app.core.creative_studio.adapters import external_video_api_status
+
+    monkeypatch.setenv("XAGENT_CREATIVE_VIDEO_API_URL", VIDEO_PROTOCOL_URL)
+    monkeypatch.setenv("XAGENT_CREATIVE_VIDEO_API_KEY", "secret-video-key")
+    monkeypatch.setenv("XAGENT_CREATIVE_VIDEO_PROVIDER", "protocol-video")
+    monkeypatch.setenv("XAGENT_CREATIVE_VIDEO_MODEL", "video-model")
+
+    status = external_video_api_status()
+
+    assert status["provider"] == "protocol-video"
+    assert status["model"] == "video-model"
+    assert status["configured"] is True
+    assert status["api_url_configured"] is True
+    assert status["api_key_configured"] is True
+    assert status["api_key_fingerprint"]
+    assert "secret-video-key" not in json.dumps(status)
+    assert VIDEO_PROTOCOL_URL not in json.dumps(status)
+
+
+def test_creative_studio_video_provider_status_endpoint(monkeypatch):
+    monkeypatch.setenv("XAGENT_CREATIVE_VIDEO_API_URL", VIDEO_PROTOCOL_URL)
+    monkeypatch.setenv("XAGENT_CREATIVE_VIDEO_API_KEY", "secret-video-key")
+    monkeypatch.setenv("XAGENT_CREATIVE_VIDEO_PROVIDER", "protocol-video")
+    monkeypatch.setenv("XAGENT_CREATIVE_VIDEO_MODEL", "video-model")
+
+    app = FastAPI()
+    app.include_router(creative_studio_router)
+    app.dependency_overrides[get_current_principal] = lambda: _principal()
+    try:
+        client = TestClient(app)
+        response = client.get("/api/v1/creative-studio/video-provider-status")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["configured"] is True
+    assert data["provider"] == "protocol-video"
+    assert data["model"] == "video-model"
+    assert data["endpoints"]["shot_video"] == "/api/v1/creative-studio/shot-video"
+    assert "secret-video-key" not in response.text
+    assert VIDEO_PROTOCOL_URL not in response.text
+
+
+def test_external_video_workflow_plan_requires_review():
+    from backend.app.core.creative_studio.workflow import build_external_video_workflow_plan
+
+    sb = Storyboard(brief="外部视频工作流", genre="都市")
+    sb.shots = [
+        Shot(shot_id="S01", duration_seconds=4, video_prompt="slow push"),
+        Shot(shot_id="S02", duration_seconds=5, video_prompt="pan right"),
+    ]
+
+    plan = build_external_video_workflow_plan(sb, human_review_approved=False)
+
+    assert plan["workflow_status"] == "needs_approval"
+    assert plan["dry_run"] is True
+    assert plan["approval_required"] is True
+    assert plan["risk_level"] == "high"
+    assert plan["provider_status"]["provider_api_call_attempted"] is False
+    by_id = {node["id"]: node for node in plan["nodes"]}
+    assert by_id["human_review"]["status"] == "needs_approval"
+    assert by_id["shot_video:S01"]["status"] == "blocked"
+    assert all(node["provider_api_call_attempted"] is False for node in plan["nodes"])
+
+
+def test_external_video_workflow_plan_clamps_max_shots():
+    from backend.app.core.creative_studio.workflow import build_external_video_workflow_plan
+
+    sb = Storyboard(brief="外部视频工作流", genre="都市")
+    sb.shots = [Shot(shot_id=f"S{i:02d}", duration_seconds=4, video_prompt="slow push") for i in range(12)]
+
+    plan = build_external_video_workflow_plan(sb, human_review_approved=True, max_shots=99)
+
+    assert plan["selected_shot_count"] == 8
+    shot_nodes = [node for node in plan["nodes"] if node["type"] == "shot_video"]
+    assert len(shot_nodes) == 8
+
+
+@pytest.mark.asyncio
+async def test_external_video_workflow_dry_run_does_not_call_runner():
+    from backend.app.core.creative_studio.workflow import run_external_video_workflow
+
+    calls = []
+    sb = Storyboard(brief="外部视频工作流", genre="都市")
+    sb.shots = [Shot(shot_id="S01", duration_seconds=4, video_prompt="slow push")]
+
+    async def runner(**kwargs):
+        calls.append(kwargs)
+        return {"success": True, "metadata": {"provider_api_call_attempted": True}}
+
+    result = await run_external_video_workflow(
+        sb,
+        execute=False,
+        human_review_approved=True,
+        shot_video_runner=runner,
+    )
+
+    assert result["success"] is True
+    assert result["workflow_status"] == "dry_run"
+    assert result["provider_api_call_attempted"] is False
+    assert result["results"] == []
+    assert calls == []
+
+
+@pytest.mark.asyncio
+async def test_external_video_workflow_blocks_execution_without_review():
+    from backend.app.core.creative_studio.workflow import run_external_video_workflow
+
+    calls = []
+    sb = Storyboard(brief="外部视频工作流", genre="都市")
+    sb.shots = [Shot(shot_id="S01", duration_seconds=4, video_prompt="slow push")]
+
+    async def runner(**kwargs):
+        calls.append(kwargs)
+        return {"success": True, "metadata": {"provider_api_call_attempted": True}}
+
+    result = await run_external_video_workflow(
+        sb,
+        execute=True,
+        human_review_approved=False,
+        shot_video_runner=runner,
+    )
+
+    assert result["success"] is False
+    assert result["workflow_status"] == "needs_approval"
+    assert result["error"] == "human_review_required_before_video_provider_call"
+    assert result["provider_api_call_attempted"] is False
+    assert calls == []
+
+
+@pytest.mark.asyncio
+async def test_external_video_workflow_executes_after_review():
+    from backend.app.core.creative_studio.workflow import run_external_video_workflow
+
+    calls = []
+    sb = Storyboard(brief="外部视频工作流", genre="都市")
+    sb.shots = [Shot(shot_id="S01", duration_seconds=4, video_prompt="slow push")]
+
+    async def runner(**kwargs):
+        calls.append(kwargs)
+        return {
+            "success": True,
+            "output_path": "https://cdn.example/S01.mp4",
+            "provider": "protocol-video",
+            "error": None,
+            "metadata": {"provider_api_call_attempted": True, "job_id": "job-S01"},
+        }
+
+    result = await run_external_video_workflow(
+        sb,
+        execute=True,
+        human_review_approved=True,
+        shot_video_runner=runner,
+    )
+
+    assert result["success"] is True
+    assert result["workflow_status"] == "completed"
+    assert result["dry_run"] is False
+    assert result["provider_api_call_attempted"] is True
+    assert result["results"][0]["shot_id"] == "S01"
+    assert calls[0]["human_review_approved"] is True
+    assert calls[0]["video_prompt"] == "slow push"
+
+
+@pytest.mark.asyncio
+async def test_external_video_workflow_execution_caps_max_shots():
+    from backend.app.core.creative_studio.workflow import run_external_video_workflow
+
+    calls = []
+    sb = Storyboard(brief="外部视频工作流", genre="都市")
+    sb.shots = [Shot(shot_id=f"S{i:02d}", duration_seconds=4, video_prompt="slow push") for i in range(12)]
+
+    async def runner(**kwargs):
+        calls.append(kwargs)
+        return {
+            "success": True,
+            "output_path": "https://cdn.example/shot.mp4",
+            "provider": "protocol-video",
+            "error": None,
+            "metadata": {"provider_api_call_attempted": True},
+        }
+
+    result = await run_external_video_workflow(
+        sb,
+        execute=True,
+        human_review_approved=True,
+        max_shots=99,
+        shot_video_runner=runner,
+    )
+
+    assert result["selected_shot_count"] == 8
+    assert len(result["results"]) == 8
+    assert len(calls) == 8
+
+
+def test_creative_studio_video_workflow_endpoint_dry_run():
+    sb = Storyboard(brief="外部视频工作流", genre="都市")
+    sb.shots = [Shot(shot_id="S01", duration_seconds=4, video_prompt="slow push")]
+
+    app = FastAPI()
+    app.include_router(creative_studio_router)
+    app.dependency_overrides[get_current_principal] = lambda: _principal()
+    try:
+        client = TestClient(app)
+        response = client.post(
+            "/api/v1/creative-studio/video-workflow",
+            json={"storyboard_json": sb.model_dump(mode="json"), "execute": False},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["success"] is True
+    assert data["workflow_status"] == "dry_run"
+    assert data["provider_api_call_attempted"] is False
+    assert data["nodes"][0]["id"] == "provider_status"
+
+
+def test_creative_studio_video_workflow_endpoint_invalid_contract_shape():
+    app = FastAPI()
+    app.include_router(creative_studio_router)
+    app.dependency_overrides[get_current_principal] = lambda: _principal()
+    try:
+        client = TestClient(app)
+        response = client.post(
+            "/api/v1/creative-studio/video-workflow",
+            json={"storyboard_json": {"shots": "not-a-list"}, "execute": False},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["success"] is False
+    assert data["workflow_status"] == "invalid"
+    assert data["dry_run"] is True
+    assert data["provider_api_call_attempted"] is False
+    assert data["nodes"] == []
+    assert data["results"] == []
+
+
+def test_creative_studio_video_workflow_requires_control_scope_for_execution():
+    sb = Storyboard(brief="外部视频工作流", genre="都市")
+    sb.shots = [Shot(shot_id="S01", duration_seconds=4, video_prompt="slow push")]
+
+    app = FastAPI()
+    app.include_router(creative_studio_router)
+    app.add_exception_handler(XAgentAPIError, xagent_api_error_handler)
+    app.dependency_overrides[get_current_principal] = lambda: _principal_with_scopes(["workflow:run"])
+    try:
+        client = TestClient(app)
+        response = client.post(
+            "/api/v1/creative-studio/video-workflow",
+            json={
+                "storyboard_json": sb.model_dump(mode="json"),
+                "execute": True,
+                "human_review_approved": True,
+            },
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 403
+    assert "workflow:control" in response.text
+
+
 # ───── tool integration ─────
 
-def test_creative_tools_registered_in_default_registry():
-    from backend.app.core.tools import build_default_tool_registry
+def test_creative_tools_register_into_explicit_registry():
     from backend.app.core.policy import ToolPolicyEngine
-    reg = build_default_tool_registry(ToolPolicyEngine(enable_high_risk_tools=True))
+    from backend.app.core.tools import ToolRegistry
+    from backend.app.core.creative_studio.wiring import register_creative_tools
+
+    reg = ToolRegistry(ToolPolicyEngine(enable_high_risk_tools=True))
+    register_creative_tools(reg)
     names = {t["name"] for t in reg.manifest()}
     assert "create_short_drama_storyboard" in names
     assert "generate_shot_image" in names
-
+    assert "generate_shot_video" in names
     assert "synthesize_voiceover" in names
     assert "compose_short_drama" in names
+    by_name = {t["name"]: t for t in reg.manifest()}
+    assert by_name["generate_shot_video"]["risk_level"] == "high"
+    assert by_name["generate_shot_video"]["required_scope"] == "workflow:control"
+
+
+@pytest.mark.asyncio
+async def test_creative_video_tool_requires_workflow_control_scope():
+    from backend.app.core.contracts import RunContext
+    from backend.app.core.policy import ToolPolicyEngine
+    from backend.app.core.tools import ToolRegistry
+    from backend.app.core.creative_studio.wiring import register_creative_tools
+
+    reg = ToolRegistry(ToolPolicyEngine(enable_high_risk_tools=True))
+    register_creative_tools(reg)
+    result = await reg.execute(
+        RunContext(permission_scope=["tools:read"]),
+        "generate_shot_video",
+        {"video_prompt": "slow push", "human_review_approved": True},
+    )
+
+    assert result.success is False
+    assert "workflow:control" in result.error
+
+
+@pytest.mark.asyncio
+async def test_creative_video_tool_allows_workflow_control_scope():
+    from backend.app.core.contracts import RunContext
+    from backend.app.core.policy import ToolPolicyEngine
+    from backend.app.core.tools import ToolRegistry
+    from backend.app.core.creative_studio.wiring import register_creative_tools
+
+    reg = ToolRegistry(ToolPolicyEngine(enable_high_risk_tools=True))
+    register_creative_tools(reg)
+    result = await reg.execute(
+        RunContext(permission_scope=["tools:read", "workflow:control"]),
+        "generate_shot_video",
+        {"video_prompt": "slow push", "human_review_approved": False},
+    )
+
+    assert result.success is True
+    assert result.output["success"] is False
+    assert result.output["error"] == "human_review_required_before_video_provider_call"
+
+
+@pytest.mark.asyncio
+async def test_external_video_adapter_logs_sanitized_provider_exception(caplog):
+    async def post_json(url, payload, headers, timeout):
+        raise RuntimeError(f"boom {VIDEO_PROTOCOL_URL} Bearer secret-video-key")
+
+    adp = ExternalVideoAPIAdapter(
+        api_url=VIDEO_PROTOCOL_URL,
+        api_key="secret-video-key",
+        post_json=post_json,
+    )
+
+    with caplog.at_level("WARNING"):
+        result = await adp.generate(
+            MediaRequest(
+                kind=MediaKind.VIDEO,
+                prompt="slow push in",
+                params={"human_review_approved": True},
+            )
+        )
+
+    assert not result.success
+    assert result.error == "external_video_api_request_failed"
+    assert VIDEO_PROTOCOL_URL not in caplog.text
+    assert "secret-video-key" not in caplog.text
+
+
+def test_creative_tools_not_in_default_registry():
+    from backend.app.core.policy import ToolPolicyEngine
+    from backend.app.core.tools import build_default_tool_registry
+
+    reg = build_default_tool_registry(ToolPolicyEngine(enable_high_risk_tools=True))
+    names = {t["name"] for t in reg.manifest()}
+
+    assert "create_short_drama_storyboard" not in names
+    assert "generate_shot_image" not in names
+    assert "generate_shot_video" not in names

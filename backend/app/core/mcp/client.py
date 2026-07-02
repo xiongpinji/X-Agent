@@ -65,7 +65,7 @@ class MCPResultCache:
         """Generate cache key from tool name and arguments."""
         args_str = json.dumps(args, sort_keys=True, default=str)
         key_str = f"{tool_name}:{args_str}"
-        return hashlib.md5(key_str.encode()).hexdigest()
+        return hashlib.md5(key_str.encode(), usedforsecurity=False).hexdigest()
 
     def get(self, tool_name: str, args: Dict[str, Any]) -> Optional[Any]:
         """Get cached result if available and not expired.

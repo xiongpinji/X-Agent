@@ -14,6 +14,14 @@ router = APIRouter(prefix="/api/v1/browser/advanced", tags=["browser-advanced"])
 PrincipalDependency = Annotated[Principal, Depends(get_current_principal)]
 
 
+def _require_browser_read(principal: Principal) -> None:
+    enforce_scope(principal, "tools:read")
+
+
+def _require_browser_operation(principal: Principal) -> None:
+    enforce_scope(principal, "agent:run")
+
+
 # Request/Response models
 class NetworkRequestsRequest(BaseModel):
     session_id: str
@@ -155,6 +163,7 @@ async def get_network_requests(
     principal: PrincipalDependency,
 ) -> NetworkRequestsResponse:
     """Get captured network requests."""
+    _require_browser_read(principal)
     try:
         requests = await advanced_browser_monitoring.get_network_requests(
             request.session_id,
@@ -173,6 +182,7 @@ async def get_network_responses(
     principal: PrincipalDependency,
 ) -> NetworkRequestsResponse:
     """Get captured network responses."""
+    _require_browser_read(principal)
     try:
         responses = await advanced_browser_monitoring.get_network_responses(
             request.session_id,
@@ -191,6 +201,7 @@ async def get_network_summary(
     principal: PrincipalDependency,
 ) -> NetworkSummaryResponse:
     """Get network activity summary."""
+    _require_browser_read(principal)
     try:
         summary = await advanced_browser_monitoring.get_network_summary(request.session_id)
         return NetworkSummaryResponse(**summary)
@@ -206,6 +217,7 @@ async def clear_network_history(
     principal: PrincipalDependency,
 ) -> dict:
     """Clear network history."""
+    _require_browser_operation(principal)
     try:
         await advanced_browser_monitoring.clear_network_history(request.session_id)
         return {"success": True}
@@ -222,6 +234,7 @@ async def build_element_tree(
     principal: PrincipalDependency,
 ) -> ElementTreeResponse:
     """Build element reference tree."""
+    _require_browser_read(principal)
     try:
         tree = await advanced_browser_monitoring.build_element_tree(request.session_id)
         return ElementTreeResponse(**tree)
@@ -238,6 +251,7 @@ async def get_element_by_ref(
     principal: PrincipalDependency,
 ) -> ElementRefResponse:
     """Get element by reference."""
+    _require_browser_read(principal)
     try:
         elem = await advanced_browser_monitoring.get_element_by_ref(session_id, ref)
         if not elem:
@@ -256,6 +270,7 @@ async def click_element_by_ref(
     principal: PrincipalDependency,
 ) -> ElementActionResponse:
     """Click element by reference."""
+    _require_browser_operation(principal)
     try:
         success = await advanced_browser_monitoring.click_by_ref(session_id, ref)
         return ElementActionResponse(
@@ -276,6 +291,7 @@ async def fill_element_by_ref(
     principal: PrincipalDependency,
 ) -> ElementActionResponse:
     """Fill element by reference."""
+    _require_browser_operation(principal)
     try:
         if not request.value:
             raise HTTPException(status_code=400, detail="Value is required")
@@ -297,6 +313,7 @@ async def get_console_messages(
     principal: PrincipalDependency,
 ) -> ConsoleMessagesResponse:
     """Get console messages."""
+    _require_browser_read(principal)
     try:
         messages = await advanced_browser_monitoring.get_console_messages(
             request.session_id,
@@ -319,6 +336,7 @@ async def get_console_errors(
     principal: PrincipalDependency,
 ) -> ConsoleMessagesResponse:
     """Get console errors."""
+    _require_browser_read(principal)
     try:
         errors = await advanced_browser_monitoring.get_console_errors(request.session_id)
         return ConsoleMessagesResponse(
@@ -337,6 +355,7 @@ async def get_console_summary(
     principal: PrincipalDependency,
 ) -> ConsoleSummaryResponse:
     """Get console summary."""
+    _require_browser_read(principal)
     try:
         summary = await advanced_browser_monitoring.get_console_summary(request.session_id)
         return ConsoleSummaryResponse(**summary)
@@ -352,6 +371,7 @@ async def clear_console_messages(
     principal: PrincipalDependency,
 ) -> dict:
     """Clear console messages."""
+    _require_browser_operation(principal)
     try:
         await advanced_browser_monitoring.clear_console_messages(request.session_id)
         return {"success": True}
@@ -368,6 +388,7 @@ async def find_elements_by_description(
     principal: PrincipalDependency,
 ) -> FindElementResponse:
     """Find elements by natural language description."""
+    _require_browser_read(principal)
     try:
         elements = await advanced_browser_monitoring.find_elements_by_description(
             request.session_id,
@@ -391,6 +412,7 @@ async def capture_snapshot(
     principal: PrincipalDependency,
 ) -> SnapshotResponse:
     """Capture page snapshot."""
+    _require_browser_read(principal)
     try:
         snapshot = await advanced_browser_monitoring.capture_snapshot(
             request.session_id,
@@ -412,6 +434,7 @@ async def compare_snapshots(
     principal: PrincipalDependency,
 ) -> SnapshotDiffResponse:
     """Compare two snapshots."""
+    _require_browser_read(principal)
     try:
         diff = await advanced_browser_monitoring.compare_snapshots(
             request.session_id,
@@ -433,6 +456,7 @@ async def get_dom_diff(
     principal: PrincipalDependency,
 ) -> dict:
     """Get DOM diff between snapshots."""
+    _require_browser_read(principal)
     try:
         diff = await advanced_browser_monitoring.get_dom_diff(
             request.session_id,

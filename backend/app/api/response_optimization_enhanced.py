@@ -99,7 +99,7 @@ class HTTPCacheManager:
 
     async def generate_etag(self, data: bytes) -> str:
         """生成ETag"""
-        return hashlib.md5(data).hexdigest()
+        return hashlib.md5(data, usedforsecurity=False).hexdigest()
 
     async def get_cache_headers(
         self,

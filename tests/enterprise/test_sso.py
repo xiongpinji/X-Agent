@@ -321,13 +321,13 @@ class TestWebAuthnProvider:
         assert "rpId" in options
         assert options["rpId"] == "example.com"
 
-    def test_verify_registration(self):
-        """Test verifying WebAuthn registration."""
+    def test_verify_registration_fails_closed_without_real_attestation(self):
+        """WebAuthn registration must fail closed until real attestation verification is wired."""
         config = WebAuthnConfig(rp_id="example.com", origin="https://example.com")
         provider = WebAuthnProvider(config)
 
         # Create challenge
-        challenge_options = provider.create_registration_challenge("user123", "user@example.com")
+        provider.create_registration_challenge("user123", "user@example.com")
         challenge_id = list(provider._challenges.keys())[0]
 
         # Verify registration
@@ -337,15 +337,19 @@ class TestWebAuthnProvider:
             "public_key_data",
             "My Device",
         )
-        assert result is True
+        assert result is False
 
-    def test_get_user_credentials(self):
-        """Test getting user credentials."""
-        config = WebAuthnConfig(rp_id="example.com", origin="https://example.com")
+    def test_get_user_credentials_for_test_mode_registered_credential(self):
+        """Test getting user credentials when explicitly using non-production test mode."""
+        config = WebAuthnConfig(
+            rp_id="example.com",
+            origin="https://example.com",
+            allow_unverified_attestation_for_tests=True,
+        )
         provider = WebAuthnProvider(config)
 
         # Register credential
-        challenge_options = provider.create_registration_challenge("user123", "user@example.com")
+        provider.create_registration_challenge("user123", "user@example.com")
         challenge_id = list(provider._challenges.keys())[0]
         provider.verify_registration(challenge_id, "credential123", "public_key_data")
 
@@ -356,11 +360,15 @@ class TestWebAuthnProvider:
 
     def test_remove_credential(self):
         """Test removing credential."""
-        config = WebAuthnConfig(rp_id="example.com", origin="https://example.com")
+        config = WebAuthnConfig(
+            rp_id="example.com",
+            origin="https://example.com",
+            allow_unverified_attestation_for_tests=True,
+        )
         provider = WebAuthnProvider(config)
 
         # Register credential
-        challenge_options = provider.create_registration_challenge("user123", "user@example.com")
+        provider.create_registration_challenge("user123", "user@example.com")
         challenge_id = list(provider._challenges.keys())[0]
         provider.verify_registration(challenge_id, "credential123", "public_key_data")
 
@@ -370,6 +378,37 @@ class TestWebAuthnProvider:
 
         credentials = provider.get_user_credentials("user123")
         assert len(credentials) == 0
+
+    def test_verify_authentication_fails_closed_without_real_signature_verification(self):
+        """WebAuthn authentication must not accept placeholder signatures."""
+        config = WebAuthnConfig(
+            rp_id="example.com",
+            origin="https://example.com",
+            allow_unverified_attestation_for_tests=True,
+        )
+        provider = WebAuthnProvider(config)
+        provider.create_registration_challenge("user123", "user@example.com")
+        registration_challenge_id = list(provider._challenges.keys())[0]
+        assert provider.verify_registration(
+            registration_challenge_id,
+            "credential123",
+            "public_key_data",
+        )
+        provider.create_authentication_challenge("user123")
+        auth_challenge_id = [
+            challenge_id
+            for challenge_id, challenge in provider._challenges.items()
+            if challenge.operation == "authenticate"
+        ][0]
+
+        result = provider.verify_authentication(
+            auth_challenge_id,
+            "credential123",
+            "placeholder-signature",
+            "placeholder-client-data",
+        )
+
+        assert result is False
 
     def test_cleanup_expired_challenges(self):
         """Test cleaning up expired WebAuthn challenges."""

@@ -31,7 +31,7 @@ class SearchCache:
             Cache key
         """
         key_str = f"{search_type}:{query}"
-        return hashlib.md5(key_str.encode()).hexdigest()
+        return hashlib.md5(key_str.encode(), usedforsecurity=False).hexdigest()
 
     async def get(self, query: str, search_type: str = "web") -> Optional[List[Dict[str, Any]]]:
         """Get cached search results.
@@ -135,7 +135,7 @@ class RedisSearchCache:
             Cache key
         """
         key_str = f"search:{search_type}:{query}"
-        return hashlib.md5(key_str.encode()).hexdigest()
+        return hashlib.md5(key_str.encode(), usedforsecurity=False).hexdigest()
 
     async def get(self, query: str, search_type: str = "web") -> Optional[List[Dict[str, Any]]]:
         """Get cached search results.

@@ -67,6 +67,241 @@ class MetricType(str, Enum):
     ERROR_RATE = "error_rate"     # 0-1 rate
 
 
+class ExperimentStatus(str, Enum):
+    """Lifecycle states for the synchronous A/B testing compatibility API."""
+
+    DRAFT = "draft"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    PAUSED = "paused"
+    CANCELLED = "cancelled"
+
+
+class TrafficAllocationStrategy(str, Enum):
+    """Traffic allocation strategies for prompt/model experiment variants."""
+
+    EQUAL = "equal"
+    WEIGHTED = "weighted"
+
+
+class VariantType(str, Enum):
+    """Variant role in an experiment."""
+
+    CONTROL = "control"
+    TREATMENT = "treatment"
+
+
+@dataclass
+class ABVariant:
+    """Variant record used by the legacy synchronous ABTestingSystem API."""
+
+    name: str
+    variant_type: VariantType
+    config: dict[str, Any] = field(default_factory=dict)
+    traffic_weight: float = 0.5
+    description: str = ""
+    variant_id: str = field(default_factory=lambda: str(uuid.uuid4()))
+
+    def model_dump(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
+class ABVariantMetrics:
+    """Aggregated variant metrics for the legacy synchronous API."""
+
+    variant_id: str
+    total_requests: int = 0
+    successes: int = 0
+    metric_values: dict[str, list[float]] = field(default_factory=dict)
+
+    @property
+    def success_rate(self) -> float:
+        if self.total_requests == 0:
+            return 0.0
+        return self.successes / self.total_requests
+
+    def model_dump(self) -> dict[str, Any]:
+        payload = asdict(self)
+        payload["success_rate"] = self.success_rate
+        return payload
+
+
+@dataclass
+class ABExperiment:
+    """Experiment record used by the legacy synchronous ABTestingSystem API."""
+
+    name: str
+    objective: str
+    description: str = ""
+    duration_days: int = 7
+    traffic_strategy: TrafficAllocationStrategy = TrafficAllocationStrategy.EQUAL
+    experiment_id: str = field(default_factory=lambda: str(uuid.uuid4()))
+    status: ExperimentStatus = ExperimentStatus.DRAFT
+    variants: list[ABVariant] = field(default_factory=list)
+    created_at: datetime = field(default_factory=datetime.utcnow)
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+
+    def add_variant(
+        self,
+        name: str,
+        variant_type: VariantType,
+        config: dict[str, Any] | None = None,
+        traffic_weight: float = 0.5,
+        description: str = "",
+    ) -> ABVariant:
+        variant = ABVariant(
+            name=name,
+            variant_type=variant_type,
+            config=config or {},
+            traffic_weight=traffic_weight,
+            description=description,
+        )
+        self.variants.append(variant)
+        return variant
+
+    def start(self) -> None:
+        self.status = ExperimentStatus.RUNNING
+        self.started_at = datetime.utcnow()
+
+    def complete(self) -> None:
+        self.status = ExperimentStatus.COMPLETED
+        self.completed_at = datetime.utcnow()
+
+    def is_running(self) -> bool:
+        return self.status == ExperimentStatus.RUNNING
+
+    def model_dump(self) -> dict[str, Any]:
+        payload = asdict(self)
+        payload["variants"] = [variant.model_dump() for variant in self.variants]
+        return payload
+
+
+class ABTestingSystem:
+    """Backward-compatible synchronous A/B testing facade.
+
+    Older LLM management code imports ABTestingSystem directly for in-memory
+    prompt/model experiments, while the newer ABTestRunner below handles async
+    provider-side experiment execution. Keep this facade small and local so the
+    public import contract remains stable without changing the runner API.
+    """
+
+    def __init__(self, storage_path: str | Path | None = None) -> None:
+        self.storage_path = Path(storage_path) if storage_path else None
+        self._experiments: dict[str, ABExperiment] = {}
+        self._metrics: dict[str, dict[str, ABVariantMetrics]] = {}
+
+    def create_experiment(
+        self,
+        name: str,
+        objective: str,
+        description: str = "",
+        duration_days: int = 7,
+        traffic_strategy: TrafficAllocationStrategy = TrafficAllocationStrategy.EQUAL,
+    ) -> ABExperiment:
+        experiment = ABExperiment(
+            name=name,
+            objective=objective,
+            description=description,
+            duration_days=duration_days,
+            traffic_strategy=traffic_strategy,
+        )
+        self._experiments[experiment.experiment_id] = experiment
+        self._metrics[experiment.experiment_id] = {}
+        return experiment
+
+    def get_experiment(self, experiment_id: str) -> ABExperiment | None:
+        return self._experiments.get(experiment_id)
+
+    def list_experiments(self, status: ExperimentStatus | None = None) -> list[ABExperiment]:
+        experiments = list(self._experiments.values())
+        if status is not None:
+            experiments = [experiment for experiment in experiments if experiment.status == status]
+        return experiments
+
+    def add_variant(
+        self,
+        experiment_id: str,
+        name: str,
+        variant_type: VariantType,
+        config: dict[str, Any] | None = None,
+        traffic_weight: float = 0.5,
+        description: str = "",
+    ) -> ABVariant:
+        experiment = self._require_experiment(experiment_id)
+        return experiment.add_variant(
+            name=name,
+            variant_type=variant_type,
+            config=config,
+            traffic_weight=traffic_weight,
+            description=description,
+        )
+
+    def assign_variant(self, experiment_id: str, user_id: str) -> ABVariant | None:
+        experiment = self.get_experiment(experiment_id)
+        if experiment is None or not experiment.variants:
+            return None
+
+        if experiment.traffic_strategy == TrafficAllocationStrategy.WEIGHTED:
+            bucket = (hash(user_id) % 10_000) / 10_000
+            cumulative = 0.0
+            for variant in experiment.variants:
+                cumulative += max(variant.traffic_weight, 0.0)
+                if bucket <= cumulative:
+                    return variant
+
+        return experiment.variants[hash(user_id) % len(experiment.variants)]
+
+    def record_metric(
+        self,
+        experiment_id: str,
+        variant_id: str,
+        metric_name: str,
+        value: float,
+    ) -> ABVariantMetrics:
+        metrics = self._variant_metrics(experiment_id, variant_id)
+        metrics.total_requests += 1
+        metrics.metric_values.setdefault(metric_name, []).append(value)
+        return metrics
+
+    def record_success(self, experiment_id: str, variant_id: str) -> ABVariantMetrics:
+        metrics = self._variant_metrics(experiment_id, variant_id)
+        metrics.successes += 1
+        return metrics
+
+    def get_metrics(self, experiment_id: str) -> dict[str, ABVariantMetrics]:
+        self._require_experiment(experiment_id)
+        return self._metrics.setdefault(experiment_id, {})
+
+    def determine_winner(self, experiment_id: str) -> ABVariant | None:
+        experiment = self.get_experiment(experiment_id)
+        if experiment is None or not experiment.variants:
+            return None
+
+        metrics = self.get_metrics(experiment_id)
+        return max(
+            experiment.variants,
+            key=lambda variant: metrics.get(
+                variant.variant_id,
+                ABVariantMetrics(variant_id=variant.variant_id),
+            ).success_rate,
+        )
+
+    def _require_experiment(self, experiment_id: str) -> ABExperiment:
+        experiment = self.get_experiment(experiment_id)
+        if experiment is None:
+            raise KeyError(f"Experiment not found: {experiment_id}")
+        return experiment
+
+    def _variant_metrics(self, experiment_id: str, variant_id: str) -> ABVariantMetrics:
+        self._require_experiment(experiment_id)
+        return self._metrics.setdefault(experiment_id, {}).setdefault(
+            variant_id,
+            ABVariantMetrics(variant_id=variant_id),
+        )
+
+
 @dataclass
 class Variant:
     """A/B test variant (model + configuration)."""

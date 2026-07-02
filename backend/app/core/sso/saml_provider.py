@@ -12,6 +12,8 @@ from uuid import uuid4
 
 from pydantic import BaseModel, Field
 
+from backend.app.core.saml_sso import verify_saml_xml_signature
+
 logger = logging.getLogger(__name__)
 
 
@@ -114,8 +116,19 @@ class SAMLProvider:
             # Decode SAML response
             saml_response_xml = base64.b64decode(saml_response).decode("utf-8")
 
-            # Parse XML
-            root = ET.fromstring(saml_response_xml)
+            # Parse XML using defusedxml to prevent XXE attacks (SECURITY P1-04).
+            # The stdlib ET.fromstring is vulnerable to XML External Entity attacks.
+            from defusedxml import ElementTree as DefusedET
+            root = DefusedET.fromstring(saml_response_xml)
+
+            # SECURITY: verify XMLDSig signature against IdP certificate before
+            # trusting any assertion content. Fail-closed: no cert / no signature
+            # / bad signature all reject.
+            if not verify_saml_xml_signature(
+                saml_response_xml.encode("utf-8"), self.config.idp_certificate
+            ):
+                logger.warning("SAML response signature verification failed - rejecting.")
+                return None
 
             # Extract assertion
             assertion = self._extract_assertion(root)
@@ -257,8 +270,7 @@ class SAMLProvider:
             logger.warning("SAML assertion expired")
             return False
 
-        # TODO: Verify signature using IdP certificate
-        # This requires XML signature verification
+        # XMLDSig is verified before assertion extraction in verify_response().
 
         return True
 

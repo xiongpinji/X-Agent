@@ -33,7 +33,7 @@ neo4j:
   user: ${NEO4J_USER:neo4j}
   password: ${NEO4J_PASSWORD}
   encrypted: true
-  trust: TRUST_ALL_CERTIFICATES
+  trust: TRUST_SYSTEM_CA_SIGNED_CERTIFICATES
 
 security:
   secret_key: ${SECRET_KEY}

@@ -20,8 +20,10 @@ from pydantic import BaseModel, Field
 from backend.app.core.contracts import RunContext
 from backend.app.core.hybrid_memory_system import HybridMemorySystem, Memory, MemoryTierStats
 from backend.app.core.security import Principal
+from backend.app.dependencies import enforce_scope, get_current_principal
 
 router = APIRouter(prefix="/api/v1/memory", tags=["memory"])
+PrincipalDependency = Annotated[Principal, Depends(get_current_principal)]
 
 
 class StoreMemoryRequest(BaseModel):
@@ -148,17 +150,26 @@ def _context_from_principal(principal: Principal) -> RunContext:
     )
 
 
+def _require_memory_read(principal: Principal) -> None:
+    enforce_scope(principal, "memory:read")
+
+
+def _require_memory_write(principal: Principal) -> None:
+    enforce_scope(principal, "memory:write")
+
+
 @router.post("/store", response_model=StoreMemoryResponse)
 async def store_memory(
     request: StoreMemoryRequest,
     hybrid_memory: HybridMemoryDependency,
-    principal: Principal,
+    principal: PrincipalDependency,
 ) -> StoreMemoryResponse:
     """Store memory with automatic tier selection.
 
     The system automatically selects the appropriate tier (hot/cold/graph)
     based on memory characteristics like age, importance, and relationships.
     """
+    _require_memory_write(principal)
     try:
         from uuid import uuid4
 
@@ -189,13 +200,14 @@ async def store_memory(
 async def recall_memory(
     request: RecallMemoryRequest,
     hybrid_memory: HybridMemoryDependency,
-    principal: Principal,
+    principal: PrincipalDependency,
 ) -> RecallMemoryResponse:
     """Recall memories using hybrid search.
 
     Searches across all tiers (hot, cold, graph) and combines results
     ranked by relevance.
     """
+    _require_memory_read(principal)
     try:
         context = _context_from_principal(principal)
         memories = await hybrid_memory.recall(
@@ -217,7 +229,7 @@ async def recall_memory(
 async def search_memory(
     request: SearchMemoryRequest,
     hybrid_memory: HybridMemoryDependency,
-    principal: Principal,
+    principal: PrincipalDependency,
 ) -> SearchMemoryResponse:
     """Search memories with specified strategy.
 
@@ -227,6 +239,7 @@ async def search_memory(
     - semantic: Vector similarity search in cold tier
     - graph: Relationship-based search in graph tier
     """
+    _require_memory_read(principal)
     try:
         context = _context_from_principal(principal)
         memories = await hybrid_memory.search(
@@ -250,13 +263,14 @@ async def search_memory(
 async def relate_memories(
     request: RelateMemoriesRequest,
     hybrid_memory: HybridMemoryDependency,
-    principal: Principal,
+    principal: PrincipalDependency,
 ) -> RelateMemoriesResponse:
     """Create relationship between two memories.
 
     Relationships are stored in the graph tier and enable
     relationship-based queries and knowledge graph traversal.
     """
+    _require_memory_write(principal)
     try:
         success = await hybrid_memory.relate(
             request.memory_id1,
@@ -279,12 +293,13 @@ async def get_related_memories(
     limit: int = Query(default=5, ge=1, le=50),
     *,
     hybrid_memory: HybridMemoryDependency,
-    principal: Principal = Depends(),
+    principal: PrincipalDependency,
 ) -> RecallMemoryResponse:
     """Get memories related to a specific memory.
 
     Uses graph traversal to find related memories up to depth 2.
     """
+    _require_memory_read(principal)
     try:
         # For now, use recall with memory ID as query
         context = _context_from_principal(principal)
@@ -307,7 +322,7 @@ async def get_related_memories(
 async def merge_memories(
     request: MergeMemoriesRequest,
     hybrid_memory: HybridMemoryDependency,
-    principal: Principal,
+    principal: PrincipalDependency,
 ) -> MergeMemoriesResponse:
     """Merge multiple memories into one.
 
@@ -317,6 +332,7 @@ async def merge_memories(
     - keep_oldest: Keep oldest memory
     - keep_most_important: Keep most important memory
     """
+    _require_memory_write(principal)
     try:
         if len(request.memory_ids) < 2:
             raise ValueError("At least 2 memories required for merging")
@@ -348,12 +364,13 @@ async def merge_memories(
 @router.get("/stats", response_model=MemoryStatsResponse)
 async def get_memory_stats(
     hybrid_memory: HybridMemoryDependency,
-    principal: Principal,
+    principal: PrincipalDependency,
 ) -> MemoryStatsResponse:
     """Get memory system statistics.
 
     Returns counts and statistics for each tier.
     """
+    _require_memory_read(principal)
     try:
         stats = await hybrid_memory.get_stats()
 
@@ -373,7 +390,7 @@ async def get_memory_stats(
 @router.post("/sync")
 async def sync_tiers(
     hybrid_memory: HybridMemoryDependency,
-    principal: Principal,
+    principal: PrincipalDependency,
 ) -> dict[str, Any]:
     """Synchronize memories across tiers.
 
@@ -383,6 +400,7 @@ async def sync_tiers(
     - Graph relationship updates
     - Deduplication across tiers
     """
+    _require_memory_write(principal)
     try:
         sync_stats = await hybrid_memory.sync_tiers()
         return sync_stats

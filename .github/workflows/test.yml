@@ -44,7 +44,7 @@ jobs:
           - 6379:6379
 
       qdrant:
-        image: qdrant/qdrant:latest
+        image: qdrant/qdrant:v1.7.0
         ports:
           - 6333:6333
 
@@ -128,7 +128,7 @@ jobs:
           - 6379:6379
 
       qdrant:
-        image: qdrant/qdrant:latest
+        image: qdrant/qdrant:v1.7.0
         ports:
           - 6333:6333
 
@@ -153,7 +153,6 @@ jobs:
         QDRANT_URL: http://localhost:6333
       run: |
         pytest tests/test_workbench_bff.py -q -o addopts=--no-cov --tb=short
-      continue-on-error: ${{ github.event_name == 'pull_request' }}
 
   contract-tests:
     runs-on: ubuntu-latest
@@ -184,7 +183,7 @@ jobs:
           - 6379:6379
 
       qdrant:
-        image: qdrant/qdrant:latest
+        image: qdrant/qdrant:v1.7.0
         ports:
           - 6333:6333
 
@@ -241,7 +240,7 @@ jobs:
           - 6379:6379
 
       qdrant:
-        image: qdrant/qdrant:latest
+        image: qdrant/qdrant:v1.7.0
         ports:
           - 6333:6333
 
@@ -289,9 +288,9 @@ jobs:
         echo "## Test Summary" > test-summary.md
         echo "" >> test-summary.md
         echo "### Test Results" >> test-summary.md
-        echo "- Unit Tests: $([ -d test-results-py3.11 ] && echo '✓' || echo '✗')" >> test-summary.md
-        echo "- Integration Tests: ✓" >> test-summary.md
-        echo "- Contract Tests: ✓" >> test-summary.md
+        echo "- Unit Tests: ${{ needs.unit-tests.result }}" >> test-summary.md
+        echo "- Integration Tests: ${{ needs.integration-tests.result }}" >> test-summary.md
+        echo "- Contract Tests: ${{ needs.contract-tests.result }}" >> test-summary.md
         cat test-summary.md
 
     - name: Upload test summary

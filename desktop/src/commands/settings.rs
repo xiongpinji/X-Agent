@@ -19,7 +19,7 @@ pub async fn get_settings(
 #[tauri::command]
 pub async fn update_settings(
     settings: Value,
-    state: State<'_, std::sync::Arc<crate::state::AppState>>,
+    _state: State<'_, std::sync::Arc<crate::state::AppState>>,
 ) -> Result<(), String> {
     // This would need to be implemented with mutable state
     // For now, just log the update
@@ -37,7 +37,7 @@ pub async fn get_theme(
 #[tauri::command]
 pub async fn set_theme(
     theme: String,
-    state: State<'_, std::sync::Arc<crate::state::AppState>>,
+    _state: State<'_, std::sync::Arc<crate::state::AppState>>,
 ) -> Result<(), String> {
     if !["light", "dark", "auto"].contains(&theme.as_str()) {
         return Err("Invalid theme".to_string());

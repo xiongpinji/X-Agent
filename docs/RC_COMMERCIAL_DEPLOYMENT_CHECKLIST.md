@@ -1,12 +1,14 @@
 # X-Agent Commercial RC Deployment Checklist
 
-Last updated: 2026-06-08
+Last updated: 2026-06-18
 
-This checklist is the release gate for turning the current
-`codex/codex-hermes-gap-closure` branch into a commercial deployment release
-candidate. It is intentionally stricter than the Codex/Hermes gap-closure
+This checklist is the release gate for the current first-version commercial RC
+evidence chain. It is intentionally stricter than the Codex/Hermes gap-closure
 matrix: repository evidence can show P0 closure, but commercial deployment also
-needs security, runtime, CI, documentation, and rollback proof.
+needs security, runtime, CI, documentation, rollback proof, and Stage3 evidence.
+Use the master ledger
+`docs/superpowers/plans/2026-06-18-xagent-commercial-delivery-master-plan.md`
+for current status.
 
 ## Release Target
 
@@ -16,52 +18,25 @@ needs security, runtime, CI, documentation, and rollback proof.
   Curator MVP, Gateway dry-run mode, installer, doctor, and IDE roadmap.
 - Non-claim: do not claim full Codex or Hermes parity without broader external
   product, production, IDE, ecosystem, and real-provider evidence.
-- Machine boundary: do not treat the current checkout as fully commercial-RC
-  ready until the owner-verified finalization command passes for the current
-  HEAD, the hosted Actions head SHA matches that HEAD, and the selected RC tag
-  passes `scripts\rc_tag_consistency_gate.py --require-match`.
+- Machine boundary: local owner gates and `rc_final_gate.py
+  --require-ready-to-tag` can be green while P0-D2 remains open. Do not claim
+  commercial delivery complete until real HTTPS/443 domain/TLS, Stage3
+  observability, and environment-protection evidence are recorded.
 
 ## Current Evidence Snapshot
 
-These checks were last verified locally on 2026-06-08:
+Current owner-gate and release-packaging checks were refreshed on 2026-06-18:
 
 ```powershell
-python scripts\codex_hermes_gap_matrix.py --write-report
-npm audit --audit-level=moderate
-npm run type-check
-npm run build
-powershell -ExecutionPolicy Bypass -File scripts\install-xagent.ps1 -DryRun
-& 'C:\Program Files\Git\bin\bash.exe' scripts/install-xagent.sh --dry-run
-python scripts\rc_runtime_smoke.py
-python scripts\rc_external_smoke.py
-python scripts\rc_release_audit.py
-python scripts\rc_owner_verified_finalize.py --provider ollama --ollama-model qwen2.5:1.5b --ollama-base-url http://127.0.0.1:11435 --github-actions-run-url <hosted-commercial-rc-run-url> --github-actions-head-sha <expected-release-commit-sha> --expected-commit-sha <expected-release-commit-sha>
-python scripts\rc_tag_consistency_gate.py --expected-commit-sha <expected-release-commit-sha> --tag-name <selected-rc-tag> --require-match
-python scripts\rc_delivery_status.py --expected-commit-sha <expected-release-commit-sha> --tag-name <selected-rc-tag> --github-actions-run-url <hosted-commercial-rc-run-url> --github-actions-head-sha <expected-release-commit-sha> --fetch-github
-python scripts\rc_owner_gate_runner.py --gate all --dry-run --env-file .xagent_runtime\reports\rc-owner-env-template.env
-python scripts\xagent_doctor.py --json
-git diff --check
-python -m pytest tests/test_rc_runtime_smoke.py -o addopts="" -p no:cov -p no:cacheprovider -q
-python -m pytest tests/test_rc_external_smoke.py -o addopts="" -p no:cov -p no:cacheprovider -q
-python -m pytest tests/test_rc_release_audit.py -o addopts="" -p no:cov -p no:cacheprovider -q
-python -m pytest tests/test_rc_ci_contract.py -o addopts="" -p no:cov -p no:cacheprovider -q
-python -m pytest tests/test_rc_evidence_pack.py -o addopts="" -p no:cov -p no:cacheprovider -q
-python -m pytest tests/test_rc_owner_gate_plan.py -o addopts="" -p no:cov -p no:cacheprovider -q
-python -m pytest tests/test_rc_owner_gate_runner.py -o addopts="" -p no:cov -p no:cacheprovider -q
-python -m pytest tests/test_rc_owner_handoff_gate.py -o addopts="" -p no:cov -p no:cacheprovider -q
-python -m pytest tests/test_rc_owner_env_template.py -o addopts="" -p no:cov -p no:cacheprovider -q
-python -m pytest tests/test_rc_owner_gate_checklist.py -o addopts="" -p no:cov -p no:cacheprovider -q
-python -m pytest tests/test_rc_delivery_status.py -o addopts="" -p no:cov -p no:cacheprovider -q
-python -m pytest tests/test_rc_install_release_gate.py -o addopts="" -p no:cov -p no:cacheprovider -q
-python -m pytest tests/test_rc_supply_chain_gate.py -o addopts="" -p no:cov -p no:cacheprovider -q
-python -m pytest tests/test_rc_secrets_gate.py -o addopts="" -p no:cov -p no:cacheprovider -q
-python -m pytest tests/test_rc_artifact_integrity_gate.py -o addopts="" -p no:cov -p no:cacheprovider -q
-python -m pytest tests/test_rc_final_gate.py -o addopts="" -p no:cov -p no:cacheprovider -q
-python -m pytest tests/test_rc_release_receipt.py -o addopts="" -p no:cov -p no:cacheprovider -q
-python -m pytest tests/test_rc_source_bundle.py -o addopts="" -p no:cov -p no:cacheprovider -q
-python -m pytest tests/test_rc_staging_plan.py -o addopts="" -p no:cov -p no:cacheprovider -q
-python -m pytest tests/test_docker_compose_env_contract.py -o addopts="" -p no:cov -p no:cacheprovider -q
-python -m pytest tests/test_issue_to_pr_pipeline.py tests/test_issue_to_pr_api.py tests/test_cli_github.py -o addopts="" -p no:cov -p no:cacheprovider -q
+python scripts\rc_external_smoke.py --provider deepseek --check provider --check feishu_webhook_contract --check github_issue_to_pr_dry_run --check github_issue_to_pr_execute_preflight --check hosted_github_actions_run --require-configured --github-execute-preflight --github-actions-preflight --timeout 40
+python scripts\rc_refresh_release_chain.py --provider deepseek --owner-verified --timeout 60
+python scripts\rc_release_receipt.py
+python scripts\rc_evidence_pack.py
+python scripts\rc_final_gate.py --require-ready-to-tag
+python scripts\route_auth_audit.py --json
+python scripts\security_deployment_gate.py
+python scripts\production_hardening_gate.py
+python -m pytest tests/test_rc_deployment_docs_gate.py tests/test_rc_release_audit.py --no-cov -q
 ```
 
 Observed status:
@@ -78,17 +53,21 @@ Observed status:
 - RC runtime smoke script: passed; it started backend and Vite frontend,
   validated `/health`, `/ready`, `/chat`, workflow-chat, and the workbench API
   through the frontend proxy.
-- RC external smoke script: report generation passed and the provider check is
-  verified with Ollama `qwen2.5:1.5b` at `http://127.0.0.1:11435` using the
-  ASCII-only model directory `D:\ollama-models`; the sentinel response
-  `xagent-rc-ok` was recorded. Feishu, GitHub issue-to-PR, and hosted Actions
-  are verified in the owner-controlled RC evidence snapshot.
-- RC final gate: the selected release commit, hosted Commercial RC run, and
-  non-destructive RC tag must be read from
-  `.xagent_runtime\reports\rc-delivery-status.json` and verified with
-  `scripts\rc_tag_consistency_gate.py --require-match`. Before owner
-  finalization, current local final gate status remains `ready_with_owner_gates`
-  and delivery status is `owner_finalize_pending`. After owner-controlled Feishu, GitHub issue-to-PR, provider, and hosted Actions evidence passes for the exact selected commit, the final gate reports `ready_for_rc_tag`; rerun `scripts\rc_delivery_status.py` before making any commercial handoff claim.
+- RC external smoke script: provider, Feishu webhook contract, GitHub
+  issue-to-PR dry-run/execute preflight, and hosted Actions run verification
+  pass in the owner-controlled RC evidence snapshot for DeepSeek and hosted run
+  `27717463270`.
+- RC final gate: current local owner-gate chain is evaluated by
+  `python scripts/rc_final_gate.py --require-ready-to-tag`; read the live
+  status from `.xagent_runtime/reports/rc-final-gate.json`.
+  The current final gate status is `ready_with_owner_gates`; RC tagging still
+  requires the owner-controlled gates named in the live report.
+  During evidence refresh, expected interim machine states include `failed` and
+  `ready_with_receipt_refresh_required`; only the live JSON report controls the
+  current decision.
+  This does not close P0-D2; real HTTPS/443 domain/TLS, observability, and
+  environment-protection evidence must still be collected before any full
+  commercial delivery claim.
 - RC final gate also enforces release receipt freshness: the receipt
   `generated_at` must not be older than the source bundle, artifact integrity,
   owner gate plan, owner handoff gate, `owner_env_template`,
@@ -106,21 +85,14 @@ Observed status:
   the generated env-file label and variable names only, keeping the owner gate
   path reproducible without storing secret values.
 - RC refresh release chain: runs the dependent RC evidence refresh scripts in
-  order with
-  `python scripts\rc_refresh_release_chain.py --provider ollama --ollama-model qwen2.5:1.5b --ollama-base-url http://127.0.0.1:11435 --owner-verified`,
-  so downstream reports do not read half-written or stale upstream JSON and
-  owner-controlled Feishu, GitHub, and hosted Actions evidence is refreshed in
-  strict `--require-configured` mode before tagging.
-- RC owner-verified finalization: wraps the owner-verified refresh chain,
-  writes `.xagent_runtime\reports\rc-owner-verified-finalize.json`, records
-  only owner env variable names, and reports whether the fixed-point final gate
-  is tag-ready without creating a git tag or storing secret values.
-- RC delivery status: `scripts\rc_delivery_status.py` reads current HEAD,
-  remote branch, hosted CI metadata, owner finalize evidence, and the selected
-  RC tag consistency report, then writes
-  `.xagent_runtime\reports\rc-delivery-status.json`. It returns
-  `owner_finalize_pending` until owner-controlled Feishu/GitHub evidence passes
-  for the same commit.
+  order with `python scripts\rc_refresh_release_chain.py --provider deepseek
+  --owner-verified --timeout 60`, so downstream reports do not read
+  half-written or stale upstream JSON and owner-controlled Feishu, GitHub, and
+  hosted Actions evidence is refreshed in strict `--require-configured` mode
+  before packaging.
+- Historical `rc_owner_verified_finalize.py`, `rc_delivery_status.py`, and
+  tag-consistency reports are focused debugging aids. They do not replace the
+  current owner-verified refresh chain or P0-D2 Stage3 evidence.
 - RC refresh release chain bootstrap uses `--allow-missing-evidence-pack` only
   before the first evidence pack exists. Final final gate remains strict:
   `python scripts\rc_final_gate.py --require-ready-to-tag` must consume a
@@ -185,7 +157,8 @@ Observed status:
 
 ## RC-S0 Source Control Gate
 
-- [x] Current branch identified: `codex/codex-hermes-gap-closure`.
+- [x] Current RC evidence branch identified:
+  `codex/p0-c-ci-deployment-gates`.
 - [x] Dirty worktree inspected before release planning.
 - [x] Explicit staging manifest created: `docs/RC_STAGING_MANIFEST.md`.
 - [x] Pre-existing dirty files reviewed before staging.
@@ -243,43 +216,19 @@ Observed status:
 - [x] Add a release-owner checklist renderer for owner gates that records only
   env variable names, commands, evidence paths, and missing actions.
 - [x] Run one configured real provider smoke for the intended deployment
-  backend: OpenAI, Anthropic, DeepSeek, or local model. The provider response
-  must contain the `xagent-rc-ok` sentinel recorded by `rc_external_smoke.py`.
-  Current local RC evidence uses Ollama at `http://127.0.0.1:11435` with
-  `qwen2.5:1.5b` after copying the selected model to the ASCII-only
-  `D:\ollama-models` directory. The direct proof command
-  `ollama run qwen2.5:1.5b "Reply with exactly: xagent-rc-ok"` returned
-  `xagent-rc-ok`, and `rc_external_smoke.py --provider ollama` recorded the
-  provider check as passed. Customer deployment may replace this with a stable
-  customer provider and rerun the same gate.
-  The previous local `http://localhost:11434` Ollama instance still reproduces
-  an HTTP 500 model-load failure because its model blob path reaches the loader
-  with mojibake from the non-ASCII `D:\AI模型库` directory.
-  For local/Ollama smoke, record `XAGENT_OLLAMA_BASE_URL` and
-  `XAGENT_OLLAMA_MODEL` in the owner env template so the same model can be
-  rerun before tagging. If Ollama returns HTTP 404, verify the base URL is the
-  Ollama root endpoint and pull or select an installed model. If it returns
-  HTTP 500, inspect Ollama logs and prove `ollama run <model>` works locally.
-  When the response mentions `failed to load model` or `llama_model_loader`,
-  verify `OLLAMA_MODELS`/model storage points to readable, intact model blobs
-  and reinstall or move the selected model before rerunning. On Windows, avoid
-  non-ASCII `OLLAMA_MODELS` paths for release smoke providers; use an ASCII
-  model directory such as `%USERPROFILE%\.ollama\models` or `D:\ollama-models`,
-  restart the Ollama service, and prove `ollama run <model>` works from that
-  directory before rerunning the provider gate. If the connection fails, start
-  Ollama and confirm `<base-url>/api/generate` is reachable before rerunning
-  the provider gate.
-- [ ] Verify `feishu_webhook_contract` with Feishu app ID, app secret, and event encrypt key; the smoke must accept valid X-Lark signed callbacks, reject invalid/missing signatures, and perform no outbound Feishu mutation.
-- [ ] Verify `github_issue_to_pr_dry_run` with a test issue URL. The scoped
+  backend: DeepSeek. The provider response must contain the `xagent-rc-ok`
+  sentinel recorded by `rc_external_smoke.py`.
+- [x] Verify `feishu_webhook_contract` with Feishu app ID, app secret, and event encrypt key; the smoke must accept valid X-Lark signed callbacks, reject invalid/missing signatures, and perform no outbound Feishu mutation.
+- [x] Verify `github_issue_to_pr_dry_run` with a test issue URL. The scoped
   command `python scripts\rc_owner_gate_runner.py --gate github_issue_to_pr_dry_run`
   must require only `XAGENT_GITHUB_TEST_ISSUE_URL` and must not require
   `XAGENT_GITHUB_TOKEN`. When using the generated env template, add
   `--env-file .xagent_runtime\reports\rc-owner-env-template.env`.
-- [ ] Verify `github_issue_to_pr_execute_preflight` with a token-authenticated
+- [x] Verify `github_issue_to_pr_execute_preflight` with a token-authenticated
   read-only probe against a disposable test issue and repository permission
   probe confirming `read_probe.state=open` and `permissions.push=true` before
   any real customer repository use.
-- [ ] Run `hosted_github_actions_commercial_rc` by executing the hosted GitHub
+- [x] Run `hosted_github_actions_commercial_rc` by executing the hosted GitHub
   Actions Commercial RC Gate. Trigger the hosted Commercial RC Gate workflow
   first, then record the successful
   run URL in `XAGENT_COMMERCIAL_RC_GITHUB_ACTIONS_RUN_URL` and the exact hosted
@@ -288,13 +237,15 @@ Observed status:
   and the SHA value must be a 40-character hex git commit SHA. Then run
   `--github-actions-preflight` so the read-only Actions run API confirms
   `status=completed`, `conclusion=success`, and `head_sha_verified=true`.
-- [ ] Run `refresh_release_chain_owner_verified` after all owner external gates
+- [x] Run `refresh_release_chain_owner_verified` after all owner external gates
   pass for the current commit: `python scripts\rc_refresh_release_chain.py
-  --provider ollama --ollama-model qwen2.5:1.5b --ollama-base-url
-  http://127.0.0.1:11435 --owner-verified`. This is the only refresh chain
+  --provider deepseek --owner-verified --timeout 60`. This is the only refresh chain
   mode that can produce tag-ready evidence because it reruns required provider,
   Feishu, GitHub issue-to-PR, and hosted Actions checks without falling back to
   mock or skipped smoke evidence.
+- [ ] Close P0-D2 Stage3 evidence: real domain to `111.228.49.160`, trusted
+  HTTPS/443 `/health` and `/ready`, and release-bound observability and
+  environment-protection evidence.
 - [x] Record external-service limitations and missing tokens in the final report.
 - [x] Aggregate local and owner-controlled gates into a final machine-readable
   RC decision report.
@@ -319,14 +270,15 @@ Runtime smoke evidence captured on 2026-06-06:
 - Smoke reports are runtime artifacts under `.xagent_runtime/smoke/` and are
   not intended for source-control staging.
 - `python scripts\rc_external_smoke.py` wrote
-  `.xagent_runtime/reports/rc-external-smoke.json`. Provider is verified:
-  the current local Ollama attempt uses `qwen2.5:1.5b` at
-  `http://127.0.0.1:11435` with `D:\ollama-models` and records
-  `sentinel_matched=true`. The owner-verified RC evidence snapshot also records
-  Feishu webhook contract, GitHub dry-run, GitHub execute-preflight, and hosted
-  Actions as verified. If this command is rerun in a workstation without the
-  owner-controlled credentials/test resources, those non-provider checks will
-  correctly fall back to skipped/action-required. Execute preflight now requires
+  `.xagent_runtime/reports/rc-external-smoke.json`. The current
+  owner-verified RC evidence chain uses DeepSeek and records
+  `sentinel_matched=true` for provider smoke. It also records Feishu webhook
+  contract, GitHub dry-run, GitHub execute-preflight, and hosted Actions as
+  verified. Older Ollama/local-provider attempts are retained only as
+  troubleshooting history and are not current commercial handoff proof. If this
+  command is rerun in a workstation without the owner-controlled
+  credentials/test resources, those non-provider checks will correctly fall
+  back to skipped/action-required. Execute preflight now requires
   token-authenticated read-only GitHub issue API and repository permission
   probes against the disposable test repository; the repo probe must confirm
   `permissions.push=true`, and the smoke still performs no repository

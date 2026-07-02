@@ -299,7 +299,7 @@ class PluginCrawler:
     @staticmethod
     def _generate_plugin_id(repo_url: str) -> str:
         """生成插件ID"""
-        hash_obj = hashlib.md5(repo_url.encode())
+        hash_obj = hashlib.md5(repo_url.encode(), usedforsecurity=False)
         return hash_obj.hexdigest()[:12]
 
     async def crawl_all_plugins(self) -> list[PluginMetadata]:

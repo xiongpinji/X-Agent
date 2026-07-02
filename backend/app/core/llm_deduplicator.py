@@ -132,7 +132,7 @@ class LLMDeduplicator:
         embedding_func: Optional[Callable[[str], Any]] = None,
     ) -> list[float]:
         """Get embedding for text, using cache if available."""
-        text_hash = hashlib.md5(text.encode()).hexdigest()
+        text_hash = hashlib.md5(text.encode(), usedforsecurity=False).hexdigest()
 
         if text_hash in self._embedding_cache:
             return self._embedding_cache[text_hash]

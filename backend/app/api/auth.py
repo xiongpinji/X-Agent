@@ -13,10 +13,11 @@ from backend.app.api.errors import api_error
 from backend.app.core.admin import AuthLoginRequest, AuthTokenResponse, UserCreateRequest, user_store
 from backend.app.core.contracts import ErrorCode
 from backend.app.core.security import Principal
-from backend.app.dependencies import get_current_principal
+from backend.app.dependencies import enforce_scope, get_current_principal, get_refresh_principal
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 PrincipalDependency = Annotated[Principal, Depends(get_current_principal)]
+RefreshPrincipalDependency = Annotated[Principal, Depends(get_refresh_principal)]
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +25,7 @@ logger = logging.getLogger(__name__)
 _revoked_tokens: set[str] = set()
 _token_expiry: dict[str, float] = {}
 _token_users: dict[str, str] = {}
+_token_types: dict[str, str] = {}
 _token_lock = threading.Lock()
 _DEFAULT_TOKEN_TTL_SECONDS = 900  # 15 minutes
 _last_purge_ts: float = 0.0
@@ -46,6 +48,7 @@ def _purge_expired_tokens(force: bool = False) -> None:
         for tok in expired:
             _token_expiry.pop(tok, None)
             _token_users.pop(tok, None)
+            _token_types.pop(tok, None)
             _revoked_tokens.discard(tok)
 
 # Login failure tracking for account lockout
@@ -78,7 +81,7 @@ def _init_redis() -> None:
         _use_redis = False
 
 
-def _issue_token(ttl_seconds: int = _DEFAULT_TOKEN_TTL_SECONDS) -> str:
+def _issue_token(ttl_seconds: int = _DEFAULT_TOKEN_TTL_SECONDS, *, token_type: str = "access") -> str:
     """Issue a new session token with expiration."""
     token = f"xag_{uuid4().hex}"
     expiry_time = time.time() + ttl_seconds
@@ -86,19 +89,22 @@ def _issue_token(ttl_seconds: int = _DEFAULT_TOKEN_TTL_SECONDS) -> str:
     if _use_redis and _redis_client:
         try:
             _redis_client.setex(f"token:{token}:expiry", ttl_seconds, str(expiry_time))
+            _redis_client.setex(f"token:{token}:type", ttl_seconds, token_type)
             logger.debug(f"Token stored in Redis: {token}")
         except Exception as e:
             logger.warning(f"Failed to store token in Redis: {e}. Using in-memory fallback.")
             with _token_lock:
                 _token_expiry[token] = expiry_time
+                _token_types[token] = token_type
     else:
         with _token_lock:
             _token_expiry[token] = expiry_time
+            _token_types[token] = token_type
 
     return token
 
 
-def _is_token_valid(token: str) -> bool:
+def _is_token_valid(token: str, *, token_type: str | None = None) -> bool:
     """Check if token is valid and not expired or revoked."""
     if _use_redis and _redis_client:
         try:
@@ -107,6 +113,9 @@ def _is_token_valid(token: str) -> bool:
                 return False
             expiry = float(expiry_str)
             is_revoked = _redis_client.exists(f"token:{token}:revoked")
+            stored_type = _redis_client.get(f"token:{token}:type")
+            if token_type is not None and stored_type != token_type:
+                return False
             return time.time() <= expiry and not is_revoked
         except Exception as e:
             logger.warning(f"Redis token validation failed: {e}. Using in-memory fallback.")
@@ -117,7 +126,10 @@ def _is_token_valid(token: str) -> bool:
         if token in _revoked_tokens:
             return False
         expiry = _token_expiry.get(token)
+        stored_type = _token_types.get(token)
 
+    if token_type is not None and stored_type != token_type:
+        return False
     if expiry is None or time.time() > expiry:
         return False
     return True
@@ -128,16 +140,21 @@ def _revoke_token(token: str) -> None:
     if _use_redis and _redis_client:
         try:
             _redis_client.setex(f"token:{token}:revoked", 86400, "1")  # 24 hour TTL
+            _redis_client.delete(f"token:{token}:expiry", f"token:{token}:type", f"token:{token}:user")
             logger.debug(f"Token revoked in Redis: {token}")
         except Exception as e:
             logger.warning(f"Failed to revoke token in Redis: {e}. Using in-memory fallback.")
             with _token_lock:
                 _revoked_tokens.add(token)
                 _token_expiry.pop(token, None)
+                _token_users.pop(token, None)
+                _token_types.pop(token, None)
     else:
         with _token_lock:
             _revoked_tokens.add(token)
             _token_expiry.pop(token, None)
+            _token_users.pop(token, None)
+            _token_types.pop(token, None)
 
 
 def _store_token_user(token: str, user_id: str) -> None:
@@ -252,9 +269,13 @@ async def register(request: AuthLoginRequest) -> AuthTokenResponse:
         UserCreateRequest(email=request.email, display_name=request.email.split("@")[0]),
         password=request.password,
     )
+    access_token = _issue_token(token_type="access")
+    refresh_token = _issue_token(ttl_seconds=86400, token_type="refresh")
+    _store_token_user(access_token, user.id)
+    _store_token_user(refresh_token, user.id)
     return AuthTokenResponse(
-        access_token=_issue_token(),
-        refresh_token=_issue_token(),
+        access_token=access_token,
+        refresh_token=refresh_token,
         user=user.model_dump(mode="json"),
     )
 
@@ -291,8 +312,8 @@ async def login(request: AuthLoginRequest) -> AuthTokenResponse:
     # Clear login failures on successful authentication
     _clear_login_failures(request.email)
 
-    access_token = _issue_token()
-    refresh_token = _issue_token(ttl_seconds=86400)  # 24 hours
+    access_token = _issue_token(token_type="access")
+    refresh_token = _issue_token(ttl_seconds=86400, token_type="refresh")  # 24 hours
     _store_token_user(access_token, user.id)
     _store_token_user(refresh_token, user.id)
 
@@ -365,11 +386,12 @@ async def login_oauth(
 
 
 @router.post("/refresh")
-async def refresh(principal: PrincipalDependency) -> dict[str, object]:
+async def refresh(principal: RefreshPrincipalDependency) -> dict[str, object]:
     """Refresh access token using refresh token."""
-    if not principal.authenticated:
-        raise api_error(401, ErrorCode.AUTHENTICATION_FAILED, "Authentication required.")
-    return {"access_token": _issue_token(), "token_type": "Bearer", "expires_in": 900}
+    enforce_scope(principal, "auth:self")
+    access_token = _issue_token(token_type="access")
+    _store_token_user(access_token, principal.user_id)
+    return {"access_token": access_token, "token_type": "Bearer", "expires_in": 900}
 
 
 @router.post("/logout")
@@ -378,6 +400,7 @@ async def logout(
     authorization: str | None = Header(default=None, alias="Authorization"),
 ) -> dict[str, bool]:
     """Logout and revoke current token."""
+    enforce_scope(principal, "auth:self")
     if authorization and authorization.lower().startswith("bearer "):
         token = authorization[7:].strip()
         if token:
@@ -396,18 +419,19 @@ async def logout(
 
 @router.post("/verify-email")
 async def verify_email(
+    principal: PrincipalDependency,
     token: str | None = None,
-    principal: PrincipalDependency | None = None,
 ) -> dict[str, bool]:
     """Verify user email address using verification token.
 
     Args:
         token: Email verification token sent to user's email
-        principal: Optional current principal for authenticated verification
+        principal: Current authenticated principal for self-service verification
 
     Returns:
         Success status
     """
+    enforce_scope(principal, "auth:self")
     # token 声明为可选：缺失时由 handler 返回 400 VALIDATION_ERROR(业务校验)，
     # 而非 FastAPI 必填参数缺失的 422 —— 与 reset_password / login_oauth 范式一致。
     if not token:
@@ -561,10 +585,12 @@ async def reset_password(
 @router.get("/me", response_model=dict[str, object])
 async def me(principal: PrincipalDependency) -> dict[str, object]:
     """Get current user information."""
+    enforce_scope(principal, "auth:self")
     return principal.model_dump(mode="json")
 
 
 @router.put("/me")
 async def update_me(principal: PrincipalDependency) -> dict[str, object]:
     """Update current user information."""
+    enforce_scope(principal, "auth:self")
     return principal.model_dump(mode="json")

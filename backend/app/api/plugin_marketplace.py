@@ -15,12 +15,21 @@ import logging
 from datetime import UTC, datetime
 from typing import Annotated, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
+
+from backend.app.api.rbac_enforcement import require_admin
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/v1/plugins", tags=["plugins"])
+# SECURITY P1-03: plugin marketplace management endpoints require admin role.
+# install/uninstall/rate may later be relaxed to developer, but admin default
+# closes the unauthenticated gap.
+router = APIRouter(
+    prefix="/api/v1/plugins",
+    tags=["plugins"],
+    dependencies=[require_admin],
+)
 
 
 # ==================== Request/Response Models ====================

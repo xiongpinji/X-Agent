@@ -1,9 +1,59 @@
+import pytest
 from fastapi.testclient import TestClient
 
+from backend.app.api import agents as agents_api
+from backend.app.core.audit import AuditStore
+from backend.app.core.contracts import AgentRunResponse, RunStatus
+from backend.app.core.tracing import TraceStore
+from backend.app.dependencies import (
+    get_audit_store as dependency_get_audit_store,
+    get_trace_store as dependency_get_trace_store,
+)
 from backend.app.main import app
 
 
-def test_trace_and_audit_cross_reference_for_agent_run() -> None:
+class _FastTraceAuditAgent:
+    def __init__(self, trace_store: TraceStore) -> None:
+        self.max_iterations = 1
+        self._trace_store = trace_store
+
+    async def run(self, context, task, extra_context=None):  # noqa: ANN001, ANN003
+        events = [
+            self._trace_store.record(context, "agent.started", task=task),
+            self._trace_store.record(context, "agent.completed", status="completed"),
+        ]
+        return AgentRunResponse(
+            trace_id=context.trace_id,
+            agent_id=context.agent_id,
+            status=RunStatus.COMPLETED,
+            answer=f"stubbed trace audit run: {task}",
+            iterations=1,
+            memory_hits=0,
+            tool_calls=[],
+            events=events,
+            execution_summary={"stubbed": True},
+            snapshot={"tenant_id": context.tenant_id, "user_id": context.user_id},
+        )
+
+
+@pytest.fixture
+def fast_trace_audit_dependencies(monkeypatch, tmp_path):
+    audit_store = AuditStore(storage_path=tmp_path / "trace-audit.jsonl", hmac_secret="test-secret")
+    trace_store = TraceStore()
+    previous_overrides = dict(app.dependency_overrides)
+
+    monkeypatch.setattr(agents_api, "get_agent", lambda: _FastTraceAuditAgent(trace_store))
+    monkeypatch.setattr(agents_api, "get_audit_store", lambda: audit_store)
+    app.dependency_overrides[dependency_get_audit_store] = lambda: audit_store
+    app.dependency_overrides[dependency_get_trace_store] = lambda: trace_store
+    try:
+        yield audit_store, trace_store
+    finally:
+        app.dependency_overrides.clear()
+        app.dependency_overrides.update(previous_overrides)
+
+
+def test_trace_and_audit_cross_reference_for_agent_run(fast_trace_audit_dependencies) -> None:
     client = TestClient(app, headers={"x-api-key": "bootstrap"})
     run_response = client.post("/api/v1/agents/run", json={"task": "cross reference"})
     assert run_response.status_code == 200, f"Agent run failed: {run_response.text}"

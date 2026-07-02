@@ -1,8 +1,16 @@
 # X-Agent Commercial RC Diff Review
 
-Last updated: 2026-06-08
+Last updated: 2026-06-18
 
-Branch: `codex/codex-hermes-gap-closure`
+Branch: `codex/p0-c-ci-deployment-gates`
+
+Current status note: this review is a local RC diff and packaging review, not a
+commercial-delivery-complete claim. The owner-gate chain is currently verified
+for DeepSeek, Feishu, GitHub issue-to-PR preflight, and hosted Commercial RC
+Gate run `27717463270` at SHA
+`dca6a063e9c21ee5e420d3346c28735b17a92fdf`. P0-D2 remains open until real
+HTTPS/443 domain/TLS, observability, and environment-protection evidence is
+recorded.
 
 This review covers the current commercial RC candidate file set listed in
 `docs/RC_STAGING_MANIFEST.md`. No files have been staged as part of this review.
@@ -18,11 +26,10 @@ Important correction made during review:
   beyond the existing authorization model, so it was reverted. The first-run
   workbench/chat contract still works through route-local non-production
   principals and does not require broad user audit/sandbox permissions.
-- Provider owner gate evidence was corrected from a broad "ready to run" state
-  to `action_required` when the latest external smoke contains skipped/failed
-  provider diagnostics.
-- Owner env templates now prefill only non-secret local/Ollama reproduction
-  fields from provider smoke details; secret-bearing fields remain placeholders.
+- Provider owner gate evidence now uses DeepSeek for the current RC evidence
+  chain; older Ollama/local-provider evidence is historical only.
+- Owner env templates prefill only non-secret reproduction fields; secret-bearing
+  fields remain placeholders.
 
 ## Reviewed Areas
 
@@ -108,10 +115,12 @@ Latest local review evidence:
 ```powershell
 python -m pytest tests/test_rc_runtime_smoke.py tests/test_rc_external_smoke.py tests/test_docker_compose_env_contract.py tests/test_rc_release_audit.py tests/test_rc_release_diff_review_gate.py tests/test_rc_deployment_docs_gate.py tests/test_rc_ci_contract.py tests/test_rc_evidence_pack.py tests/test_rc_refresh_release_chain.py tests/test_rc_owner_gate_plan.py tests/test_rc_owner_env_template.py tests/test_rc_owner_gate_checklist.py tests/test_rc_owner_verified_finalize.py tests/test_rc_tag_consistency_gate.py tests/test_rc_delivery_status.py tests/test_rc_install_release_gate.py tests/test_rc_single_user_local_gate.py tests/test_rc_supply_chain_gate.py tests/test_rc_secrets_gate.py tests/test_rc_artifact_integrity_gate.py tests/test_rc_final_gate.py tests/test_rc_release_receipt.py tests/test_rc_source_bundle.py tests/test_rc_staging_plan.py tests/test_codex_hermes_gap_matrix.py -o addopts="" -p no:cov -p no:cacheprovider -q
 python scripts\rc_release_audit.py
-python scripts\rc_tag_consistency_gate.py --expected-commit-sha <expected-release-commit-sha> --tag-name <selected-rc-tag> --require-match
-python scripts\rc_delivery_status.py --expected-commit-sha <expected-release-commit-sha> --tag-name <selected-rc-tag> --github-actions-run-url <hosted-commercial-rc-run-url> --github-actions-head-sha <expected-release-commit-sha> --fetch-github
 python scripts\rc_single_user_local_gate.py --require-rc2-handoff
-python scripts\rc_refresh_release_chain.py --provider ollama --ollama-model qwen2.5:1.5b --ollama-base-url http://localhost:11434
+python scripts\rc_external_smoke.py --provider deepseek --check provider --check feishu_webhook_contract --check github_issue_to_pr_dry_run --check github_issue_to_pr_execute_preflight --check hosted_github_actions_run --require-configured --github-execute-preflight --github-actions-preflight --timeout 40
+python scripts\rc_refresh_release_chain.py --provider deepseek --owner-verified --timeout 60
+python scripts\rc_release_receipt.py
+python scripts\rc_evidence_pack.py
+python scripts\rc_final_gate.py --require-ready-to-tag
 python scripts\rc_release_diff_review_gate.py
 python scripts\codex_hermes_gap_matrix.py --write-report
 python scripts\rc_runtime_smoke.py
@@ -129,20 +138,18 @@ Observed local results:
   path findings, and no file hygiene findings.
 - Stage 3 external staging evidence intake is included as a fail-closed
   reference validator; it does not claim or perform external staging deploy.
-- RC tag consistency gate: requires the selected non-destructive RC tag to
-  resolve locally and remotely to the expected release commit.
-- RC delivery status: owner finalize pending until owner-controlled
-  Feishu/GitHub environment variables are provided and
-  `scripts\rc_owner_verified_finalize.py` passes for the same expected release
-  commit recorded in `.xagent_runtime/reports/rc-delivery-status.json`.
+- RC final gate: current owner-gate chain is evaluated by
+  `python scripts/rc_final_gate.py --require-ready-to-tag`; read the live
+  status from `.xagent_runtime/reports/rc-final-gate.json`. This does not close
+  P0-D2 Stage3/production evidence.
 - Release diff review gate: passed.
 - Gap matrix: passed, 9/9 categories, `full_parity_claimed=false`.
 - Runtime smoke: passed.
 - Frontend audit/type-check/build: passed.
 - Diff whitespace check: clean.
-- Provider owner gate: not verified in the current local evidence. The latest
-  explicit Ollama attempt uses `qwen2.5:1.5b` at `http://localhost:11434` and is
-  skipped with an HTTP 500 model-load failure.
+- Provider owner gate: verified with DeepSeek in the current owner-controlled
+  evidence chain. Older Ollama/local-provider attempts are historical debugging
+  evidence only.
 
 ## Explicit Non-Staged / Excluded Files
 
