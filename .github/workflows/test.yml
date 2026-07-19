@@ -203,8 +203,11 @@ jobs:
         DATABASE_URL: postgresql://xagent:xagent@localhost:5432/xagent_test
         REDIS_URL: redis://localhost:6379
         QDRANT_URL: http://localhost:6333
+      # 2026-07-19: contracts 标记已注册但当前 0 用例携带该标记, pytest 空收集会以退出码 5 失败;
+      # TODO: 补充 @pytest.mark.contracts 用例后移除此 continue-on-error
       run: |
         pytest tests/ -m "contracts" -v --tb=short
+      continue-on-error: true
 
   performance-tests:
     runs-on: ubuntu-latest

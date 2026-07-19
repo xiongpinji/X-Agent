@@ -1,0 +1,20 @@
+backend/app/api/streaming_enhanced.py:212:24: F821 Undefined name `deque`
+backend/app/api/workflow_view_helpers.py:44:71: F821 Undefined name `Any`
+backend/app/api/workflow_view_helpers.py:44:86: F821 Undefined name `Any`
+backend/app/core/agent/loop.py:298:17: F821 Undefined name `HookEvent`
+backend/app/core/audit_enhanced.py:354:29: F821 Undefined name `r`
+backend/app/core/audit_enhanced.py:354:50: F821 Undefined name `r`
+backend/app/core/enterprise_integration.py:418:24: F821 Undefined name `requests`
+backend/app/core/i18n.py:516:31: F821 Undefined name `datetime`
+backend/app/core/i18n.py:524:31: F821 Undefined name `datetime`
+backend/app/core/i18n.py:580:31: F821 Undefined name `datetime`
+backend/app/core/i18n.py:583:31: F821 Undefined name `datetime`
+backend/app/core/tool_documentation.py:66:24: F821 Undefined name `self`
+backend/app/core/tool_documentation.py:69:24: F821 Undefined name `self`
+backend/app/core/workflows.py:1639:9: F821 Undefined name `evolution_store`
+backend/app/core/workflows.py:1640:13: F821 Undefined name `LearningRecord`
+backend/app/core/workflows.py:1651:22: F821 Undefined name `open_source_discovery_store`
+backend/app/db/query_optimizer.py:126:48: F821 Undefined name `e`
+backend/app/services/observability/langfuse_client.py:38:50: F821 Undefined name `Any`
+backend/app/services/observability/langfuse_client.py:64:30: F821 Undefined name `Any`
+backend/app/skills/examples/example_skills.py:672:5: F822 Undefined name `CodeReviewAssistant` in `__all__`

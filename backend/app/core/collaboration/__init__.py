@@ -1,15 +1,12 @@
-"""Multi-Agent Collaboration System for X-Agent.
+"""Multi-Agent Collaboration (chat-room store) for X-Agent.
 
-This package provides a comprehensive framework for coordinating multiple agents
-to work together on complex tasks. It includes:
+Only the in-memory chat-room CollaborationStore remains in this package;
+it is used by api/collaboration.py, api/org.py and core/dispatch.py.
 
-- Communication protocols for inter-agent messaging
-- Agent registry for discovery and capability management
-- Task dispatcher for distributing work across agents
-- State synchronization for distributed state management
-- Result aggregation for combining partial results
-- Collaboration patterns (Pipeline, MapReduce, Master-Worker, P2P)
-- Monitoring and performance tracking
+The task-collaboration framework (protocol / registry / dispatcher /
+state_sync / aggregator / patterns / monitor / benchmarks / examples)
+had zero production callers and was archived on 2026-07-19 to
+archive/dead_code_2026-07-19/backend/app/core/collaboration/.
 """
 
 from backend.app.core.collaboration.store import (
@@ -18,68 +15,10 @@ from backend.app.core.collaboration.store import (
     CollaborationStore,
     collaboration_store,
 )
-from backend.app.core.collaboration.protocol import (
-    Message,
-    MessageType,
-    Request,
-    Response,
-    Event,
-    MessageRouter,
-)
-from backend.app.core.collaboration.registry import (
-    AgentCapability,
-    AgentInfo,
-    AgentRegistry,
-)
-from backend.app.core.collaboration.dispatcher import (
-    Task,
-    TaskDispatcher,
-    DispatchStrategy,
-)
-from backend.app.core.collaboration.state_sync import (
-    StateSnapshot,
-    StateManager,
-)
-from backend.app.core.collaboration.aggregator import (
-    ResultAggregator,
-    AggregationStrategy,
-)
-from backend.app.core.collaboration.patterns import (
-    CollaborationPattern,
-    PipelinePattern,
-    MapReducePattern,
-    MasterWorkerPattern,
-)
-from backend.app.core.collaboration.monitor import (
-    CollaborationMonitor,
-    TaskMetrics,
-)
 
 __all__ = [
     "CollaborationMessage",
     "CollaborationRoom",
     "CollaborationStore",
     "collaboration_store",
-    "Message",
-    "MessageType",
-    "Request",
-    "Response",
-    "Event",
-    "MessageRouter",
-    "AgentCapability",
-    "AgentInfo",
-    "AgentRegistry",
-    "Task",
-    "TaskDispatcher",
-    "DispatchStrategy",
-    "StateSnapshot",
-    "StateManager",
-    "ResultAggregator",
-    "AggregationStrategy",
-    "CollaborationPattern",
-    "PipelinePattern",
-    "MapReducePattern",
-    "MasterWorkerPattern",
-    "CollaborationMonitor",
-    "TaskMetrics",
 ]

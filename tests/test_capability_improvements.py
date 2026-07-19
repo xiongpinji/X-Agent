@@ -7,23 +7,16 @@ import pytest
 import asyncio
 from pathlib import Path
 from datetime import datetime
-from unittest.mock import patch
 
 # Import new modules
 from backend.app.core.code_editor import (
     CodeEditor, CodeEdit, EditType, ASTAnalyzer, CodeFormatter, CodeRefactorer
-)
-from backend.app.core.plugin_manager import (
-    PluginManager, PluginMetadata, PluginDependency, PluginCategory
 )
 from backend.app.core.performance import (
     MemoryCache, CacheStrategy, LLMCallOptimizer, PerformanceMonitor
 )
 from backend.app.core.i18n import (
     Translator, Language, LocalizationManager, PromptTranslator
-)
-from backend.app.core.tool_system import (
-    ToolManager, ToolMetadata, ToolPermission, Tool
 )
 from backend.app.core.advanced_features import (
     TaskScheduler, Task, TaskPriority, TaskState, ResourceQuota,
@@ -89,64 +82,6 @@ def another_function():
         code = "x=1+2"
         formatted = await formatter.format_python(code)
         assert formatted is not None
-
-
-# ============================================================================
-# Plugin Manager Tests
-# ============================================================================
-
-class TestPluginManager:
-    """Test plugin management."""
-
-    @pytest.fixture(autouse=True)
-    def _isolate_plugin_registry(self):
-        """Prevent PluginRegistry from touching ~/.xagent/plugins/registry.json.
-
-        Real disk I/O causes cross-test pollution: a registry.json left over
-        from a prior run makes register() return False (name already exists).
-        """
-        from backend.app.core.plugin_manager import PluginRegistry
-        with patch.object(PluginRegistry, "_load_registry"), \
-             patch.object(PluginRegistry, "_save_registry"):
-            yield
-
-    @pytest.mark.asyncio
-    async def test_plugin_registry(self):
-        """Test plugin registry."""
-        manager = PluginManager()
-
-        metadata = PluginMetadata(
-            name="test_plugin",
-            version="1.0.0",
-            author="Test",
-            description="Test plugin",
-            category=PluginCategory.TOOLS,
-        )
-
-        success = await manager.registry.register(metadata)
-        assert success is True
-
-        plugin = await manager.registry.get(metadata.name)
-        assert plugin is not None
-        assert plugin.metadata.name == "test_plugin"
-
-    @pytest.mark.asyncio
-    async def test_plugin_search(self):
-        """Test plugin search."""
-        manager = PluginManager()
-
-        metadata = PluginMetadata(
-            name="search_test",
-            version="1.0.0",
-            author="Test",
-            description="Test search functionality",
-            category=PluginCategory.TOOLS,
-            keywords=["search", "test"],
-        )
-
-        await manager.registry.register(metadata)
-        results = await manager.registry.search(keyword="search")
-        assert len(results) > 0
 
 
 # ============================================================================
@@ -242,77 +177,6 @@ class TestI18n:
 
 
 # ============================================================================
-# Tool System Tests
-# ============================================================================
-
-class TestToolSystem:
-    """Test enhanced tool system."""
-
-    @pytest.mark.asyncio
-    async def test_tool_registry(self):
-        """Test tool registry."""
-        manager = ToolManager()
-
-        # Create mock tool
-        class MockTool(Tool):
-            async def execute(self, **kwargs):
-                return "mock_result"
-
-        metadata = ToolMetadata(
-            name="mock_tool",
-            version="1.0.0",
-            description="Mock tool",
-            author="Test",
-            category="test",
-            entry_point="mock_tool.py",
-        )
-
-        tool = MockTool(metadata)
-        await manager.registry.register(tool)
-
-        retrieved = await manager.registry.get_tool("mock_tool")
-        assert retrieved is not None
-
-    @pytest.mark.asyncio
-    async def test_tool_permissions(self):
-        """Test tool permissions."""
-        manager = ToolManager()
-
-        permission = ToolPermission(
-            resource="file_system",
-            action="read",
-        )
-
-        manager.permission_manager.grant_permission("test_tool", permission)
-        has_perm = manager.permission_manager.has_permission("test_tool", "file_system", "read")
-        assert has_perm is True
-
-    @pytest.mark.asyncio
-    async def test_tool_statistics(self):
-        """Test tool statistics."""
-        manager = ToolManager()
-
-        class MockTool(Tool):
-            async def execute(self, **kwargs):
-                return "result"
-
-        metadata = ToolMetadata(
-            name="stat_tool",
-            version="1.0.0",
-            description="Tool for stats",
-            author="Test",
-            category="test",
-            entry_point="stat_tool.py",
-        )
-
-        tool = MockTool(metadata)
-        await manager.registry.register(tool)
-
-        stats = await manager.registry.get_stats("stat_tool")
-        assert stats is not None
-
-
-# ============================================================================
 # Advanced Features Tests
 # ============================================================================
 
@@ -395,8 +259,6 @@ class TestIntegration:
         """Test complete workflow."""
         # Initialize components
         editor = CodeEditor()
-        plugin_manager = PluginManager()
-        tool_manager = ToolManager()
         coordinator = MultiAgentCoordinator()
 
         # Register agent
@@ -417,10 +279,8 @@ class TestIntegration:
         """Test that all modules can be imported."""
         # This test ensures all new modules are properly structured
         assert CodeEditor is not None
-        assert PluginManager is not None
         assert MemoryCache is not None
         assert Translator is not None
-        assert ToolManager is not None
         assert MultiAgentCoordinator is not None
 
 

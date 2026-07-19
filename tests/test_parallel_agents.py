@@ -37,10 +37,32 @@ from backend.app.core.result_aggregator import (
 
 # Test Fixtures
 
+class _MockAgent:
+    """满足 P0 后 agent_factory 契约的 mock agent。
+
+    spawn_agents 已移除内置模拟执行(旧假成功契约), 调用方必须显式注入
+    agent_factory(agent_id, isolation) -> 带 async execute(task) 的 agent。
+    """
+
+    def __init__(self, agent_id: str, isolation: IsolationMode) -> None:
+        self.agent_id = agent_id
+        self.isolation = isolation
+
+    async def execute(self, task: AgentTask) -> dict[str, Any]:
+        await asyncio.sleep(0)  # 让出事件循环, 保持并行调度语义
+        return {"goal": task.goal, "agent_id": self.agent_id}
+
+
 @pytest.fixture
 def executor():
     """Create a parallel agent executor."""
     return ParallelAgentExecutor(max_workers=3)
+
+
+@pytest.fixture
+def mock_agent_factory():
+    """spawn_agents 新契约必需的 mock agent_factory。"""
+    return lambda agent_id, isolation: _MockAgent(agent_id, isolation)
 
 
 @pytest.fixture
@@ -83,12 +105,13 @@ class TestParallelAgentExecutor:
     """Tests for ParallelAgentExecutor."""
 
     @pytest.mark.asyncio
-    async def test_spawn_agents_basic(self, executor, sample_tasks):
+    async def test_spawn_agents_basic(self, executor, sample_tasks, mock_agent_factory):
         """Test basic agent spawning."""
         result = await executor.spawn_agents(
             tasks=sample_tasks,
             isolation=IsolationMode.THREAD,
             max_parallel=2,
+            agent_factory=mock_agent_factory,
         )
 
         assert result.batch_id is not None
@@ -97,7 +120,7 @@ class TestParallelAgentExecutor:
         assert result.total_duration_seconds > 0
 
     @pytest.mark.asyncio
-    async def test_spawn_agents_with_timeout(self, executor):
+    async def test_spawn_agents_with_timeout(self, executor, mock_agent_factory):
         """Test agent spawning with timeout."""
         tasks = [
             AgentTask(
@@ -109,41 +132,45 @@ class TestParallelAgentExecutor:
         result = await executor.spawn_agents(
             tasks=tasks,
             isolation=IsolationMode.THREAD,
+            agent_factory=mock_agent_factory,
         )
 
         assert result.total_tasks == 1
         assert len(result.results) == 1
 
     @pytest.mark.asyncio
-    async def test_spawn_agents_thread_isolation(self, executor, sample_tasks):
+    async def test_spawn_agents_thread_isolation(self, executor, sample_tasks, mock_agent_factory):
         """Test thread isolation mode."""
         result = await executor.spawn_agents(
             tasks=sample_tasks,
             isolation=IsolationMode.THREAD,
             max_parallel=3,
+            agent_factory=mock_agent_factory,
         )
 
         assert result.total_tasks == 3
         assert result.metadata["isolation_mode"] == "thread"
 
     @pytest.mark.asyncio
-    async def test_spawn_agents_process_isolation(self, executor, sample_tasks):
+    async def test_spawn_agents_process_isolation(self, executor, sample_tasks, mock_agent_factory):
         """Test process isolation mode."""
         result = await executor.spawn_agents(
             tasks=sample_tasks,
             isolation=IsolationMode.PROCESS,
             max_parallel=2,
+            agent_factory=mock_agent_factory,
         )
 
         assert result.total_tasks == 3
         assert result.metadata["isolation_mode"] == "process"
 
     @pytest.mark.asyncio
-    async def test_get_batch_status(self, executor, sample_tasks):
+    async def test_get_batch_status(self, executor, sample_tasks, mock_agent_factory):
         """Test getting batch status."""
         result = await executor.spawn_agents(
             tasks=sample_tasks,
             isolation=IsolationMode.THREAD,
+            agent_factory=mock_agent_factory,
         )
 
         status = await executor.get_batch_status(result.batch_id)
@@ -152,11 +179,12 @@ class TestParallelAgentExecutor:
         assert status["is_active"] is False
 
     @pytest.mark.asyncio
-    async def test_get_batch_results(self, executor, sample_tasks):
+    async def test_get_batch_results(self, executor, sample_tasks, mock_agent_factory):
         """Test getting batch results."""
         result = await executor.spawn_agents(
             tasks=sample_tasks,
             isolation=IsolationMode.THREAD,
+            agent_factory=mock_agent_factory,
         )
 
         results = await executor.get_batch_results(result.batch_id)
@@ -164,11 +192,12 @@ class TestParallelAgentExecutor:
         assert all(r.task_id for r in results)
 
     @pytest.mark.asyncio
-    async def test_cancel_batch(self, executor, sample_tasks):
+    async def test_cancel_batch(self, executor, sample_tasks, mock_agent_factory):
         """Test batch cancellation."""
         result = await executor.spawn_agents(
             tasks=sample_tasks,
             isolation=IsolationMode.THREAD,
+            agent_factory=mock_agent_factory,
         )
 
         cancelled = await executor.cancel_batch(result.batch_id)
@@ -190,7 +219,7 @@ class TestParallelAgentExecutor:
             )
 
     @pytest.mark.asyncio
-    async def test_parallel_execution_speedup(self, executor):
+    async def test_parallel_execution_speedup(self, executor, mock_agent_factory):
         """Test that parallel execution is faster than sequential."""
         # Create tasks that take time
         tasks = [
@@ -203,6 +232,7 @@ class TestParallelAgentExecutor:
             tasks=tasks,
             isolation=IsolationMode.THREAD,
             max_parallel=3,
+            agent_factory=mock_agent_factory,
         )
         parallel_time = time.time() - start
 
@@ -501,7 +531,7 @@ class TestParallelAgentIntegration:
     """Integration tests for parallel agent execution."""
 
     @pytest.mark.asyncio
-    async def test_end_to_end_execution(self, executor, aggregator):
+    async def test_end_to_end_execution(self, executor, aggregator, mock_agent_factory):
         """Test end-to-end parallel execution with aggregation."""
         tasks = [
             AgentTask(goal=f"Task {i}", timeout_seconds=5)
@@ -512,6 +542,7 @@ class TestParallelAgentIntegration:
             tasks=tasks,
             isolation=IsolationMode.THREAD,
             max_parallel=3,
+            agent_factory=mock_agent_factory,
         )
 
         assert result.total_tasks == 3
@@ -552,7 +583,7 @@ class TestPerformance:
     """Performance benchmarks."""
 
     @pytest.mark.asyncio
-    async def test_parallel_vs_sequential_performance(self, executor):
+    async def test_parallel_vs_sequential_performance(self, executor, mock_agent_factory):
         """Benchmark parallel vs sequential execution."""
         tasks = [
             AgentTask(goal=f"Task {i}", timeout_seconds=5)
@@ -564,6 +595,7 @@ class TestPerformance:
             tasks=tasks,
             isolation=IsolationMode.THREAD,
             max_parallel=3,
+            agent_factory=mock_agent_factory,
         )
         parallel_time = time.time() - start
 

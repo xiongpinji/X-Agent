@@ -1,6 +1,6 @@
 {
   "name": "x-agent-chrome-extension",
-  "version": "1.0.0",
+  "version": "0.2.0-alpha",
   "description": "X-Agent Browser Extension - Intelligent web automation powered by AI",
   "author": "X-Agent Team",
   "license": "MIT",

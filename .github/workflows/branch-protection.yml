@@ -28,6 +28,8 @@ jobs:
               required_status_checks: {
                 strict: true,
                 contexts: [
+                  // ci.yml 为 Phase 1 收敛后的唯一权威 CI(P0-09), 其 check 名 'ci' 必须纳入必需检查
+                  'ci',
                   'unit-tests (3.11)',
                   'unit-tests (3.12)',
                   'integration-tests',
@@ -70,6 +72,8 @@ jobs:
               required_status_checks: {
                 strict: true,
                 contexts: [
+                  // ci.yml 为 Phase 1 收敛后的唯一权威 CI(P0-09), 其 check 名 'ci' 必须纳入必需检查
+                  'ci',
                   'unit-tests (3.11)',
                   'unit-tests (3.12)',
                   'integration-tests',

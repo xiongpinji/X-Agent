@@ -15,9 +15,12 @@
 #         runs/traces/trace_events/memories/workflows/workflow_runs/
 #         workflow_schedules/audit_logs/api_keys/active_api_keys/approvals/
 #         pending_approvals）
-#   - /metrics 端点当前【不存在】；recording_rules.yml 引用的
-#     xagent_api_requests_total 等富指标由 backend 侧 P0-04 接线
-#     （PrometheusMiddleware + /metrics）后才会真实产生。
+#   - /metrics 端点已挂载（main.py 经 prometheus_client make_asgi_app），
+#     输出 core/metrics 的 xagent_http_* 系列（由 MetricsMiddleware 记录）；
+#     本配置未抓取该端点。recording_rules.yml 引用的
+#     xagent_api_requests_total 等系列定义于 services/observability/
+#     prometheus_metrics.py，但其接线入口（monitoring_setup /
+#     PrometheusMiddleware）当前未被 main.py 调用，不产生数据。
 #
 # 注意：生产模式（app_mode=production）下 require_api_key 强制为 true，
 #       抓取 /api/v1/metrics/prometheus 需携带 x-api-key 头，否则 401。
@@ -59,9 +62,9 @@ alerting:
 rule_files:
   - 'alert_rules.yml'
   - 'recording_rules.yml'
-  # 注意：monitoring/docker-compose.monitoring.yml 当前仅挂载 alert_rules.yml，
-  # 尚未挂载 recording_rules.yml（compose 不在本次修复范围，已记录待办）。
-  # 在补齐挂载前直接以该 compose 启动 Prometheus 会因规则文件缺失而失败。
+  # 挂载状态（2026-07-19 第二波）：monitoring/docker-compose.monitoring.yml
+  # 与 monitoring/docker-compose.yml 均已补挂 recording_rules.yml，
+  # 与上述 rule_files 引用一致，可正常启动。
 
 scrape_configs:
   # X-Agent API Server（唯一真实指标来源）

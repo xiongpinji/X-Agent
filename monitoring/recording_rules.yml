@@ -8,8 +8,8 @@
 #   backend/app/monitoring_integration.py），但需 backend 侧 P0-04 接线
 #   （PrometheusMiddleware + /metrics 端点）后才会真实产出。
 #   接线完成前，本文件所有录制规则产出为空集，属预期行为。
-# 注意：monitoring/docker-compose.monitoring.yml 尚未挂载本文件（compose
-#   不在本次修复范围，已记录待办），compose 启动前需补齐挂载。
+# 挂载状态（2026-07-19 第二波）：monitoring/docker-compose.monitoring.yml
+#   与 monitoring/docker-compose.yml 均已补挂本文件，可正常启动。
 # =============================================================================
 groups:
   - name: x-agent-recording-rules

@@ -56,11 +56,30 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e ".[dev,cli]"
 
-      - name: Static checks
+      # ruff 双层门禁(2026-07-19, Phase 1 第三波):
+      # - 阻断层: E9/F63/F7/F82(语法错误/未定义名等真实错误)零容忍, 仅拦截新增;
+      #   存量 20 个 F821/F822 列入豁免基线 .github/ruff-blocking-baseline.txt。
+      #   TODO: 基线清零后移除 diff 豁免, 改为直接 ruff check --select E9,F63,F7,F82 backend tests
+      - name: Static checks (blocking)
         run: |
           git diff --check
-          ruff check backend tests
+          ruff check --select E9,F63,F7,F82 backend tests --output-format=concise | grep -vE '^Found [0-9]+ errors?' > ruff-blocking.txt || true
+          new_errors=$(grep -vxFf .github/ruff-blocking-baseline.txt ruff-blocking.txt || true)
+          if [ -n "$new_errors" ]; then
+            echo "::error::新增阻断级 lint 错误(不在豁免基线 .github/ruff-blocking-baseline.txt 内):"
+            echo "$new_errors"
+            exit 1
+          fi
+          echo "blocking layer OK: 无新增 E9/F63/F7/F82 错误(存量 20 个见豁免基线)"
 
+      # 信息层: 全量 ruff 统计仅作观测, 存量 1 万+ lint 待分期清零, 见 commercial_audit
+      - name: Static checks (informational)
+        continue-on-error: true
+        run: |
+          ruff check backend tests --statistics || true
+
+      # 覆盖率门禁(--cov-fail-under=70)暂不加入本步骤: 当前真实覆盖率仅约 19%, 硬门禁必失败;
+      # 覆盖率门禁待 Phase 2 覆盖率提升后按 pytest_comprehensive.ini 收紧。
       - name: Run test suite with coverage
         run: |
           python -m pytest tests/ -q --cov=backend --cov-report=xml --cov-report=html --cov-report=term-missing

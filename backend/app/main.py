@@ -335,9 +335,21 @@ logger = logging.getLogger("xagent.http")
 tool_registry = ToolCatalog()
 
 frontend_dir = settings.static_dir
+# React 构建产物目录(frontend/dist)。存在时优先伺服构建产物,不存在时回退源码目录。
+frontend_dist_dir = frontend_dir / "dist"
 app = FastAPI(title=settings.app_name, version="0.1.0")
 if frontend_dir.exists():
     app.mount("/assets", StaticFiles(directory=frontend_dir, html=False), name="assets")
+if frontend_dist_dir.is_dir():
+    # dist/index.html 以根绝对路径引用 /js/...、/css/... 构建产物
+    for _dist_subdir in ("js", "css"):
+        _dist_subdir_path = frontend_dist_dir / _dist_subdir
+        if _dist_subdir_path.is_dir():
+            app.mount(
+                f"/{_dist_subdir}",
+                StaticFiles(directory=_dist_subdir_path, html=False),
+                name=f"dist-{_dist_subdir}",
+            )
 
 # Parse CORS origins from settings - CRITICAL: Never use wildcard in production
 allow_origins = [origin.strip() for origin in settings.cors_origins.split(",") if origin.strip()]
@@ -680,8 +692,21 @@ async def chat_page() -> FileResponse:
     return FileResponse(frontend_dir / "chat.html")
 
 
+@app.get("/console")
+async def console_page() -> FileResponse:
+    """伺服 console 页: 优先 dist 构建产物, 回退源码目录。"""
+    dist_console = frontend_dist_dir / "console.html"
+    if dist_console.exists():
+        return FileResponse(dist_console)
+    return FileResponse(frontend_dir / "console.html")
+
+
 @app.get("/")
 async def root() -> FileResponse:
+    dist_index = frontend_dist_dir / "index.html"
+    if dist_index.exists():
+        # React 构建产物存在时, / 直接返回 React 入口
+        return FileResponse(dist_index)
     startup = frontend_dir / "startup.html"
     if startup.exists():
         return FileResponse(startup)
@@ -812,3 +837,17 @@ async def get_csrf_token(request: Request) -> JSONResponse:
         secure=(settings.app_mode == "production"),
     )
     return response
+
+
+# SPA 前端路由 fallback。仅在 dist 构建产物存在时, 将 React Router 已知前缀
+# (frontend/src/App.tsx: /memory、/tasks、/tools 及其子路径) 回退到 dist/index.html;
+# 其余未知路径(含 /api/...)仍返回标准 404。必须注册在所有路由之后。
+_SPA_ROUTE_PREFIXES = frozenset({"memory", "tasks", "tools"})
+
+
+@app.get("/{spa_path:path}", include_in_schema=False)
+async def spa_fallback(spa_path: str) -> FileResponse:
+    dist_index = frontend_dist_dir / "index.html"
+    if dist_index.exists() and spa_path.split("/", 1)[0] in _SPA_ROUTE_PREFIXES:
+        return FileResponse(dist_index)
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not Found")

@@ -90,7 +90,7 @@
       "pluginVersion": "8.0.0",
       "targets": [
         {
-          "expr": "rate(xagent_http_requests_total[5m])",
+          "expr": "rate(xagent_api_requests_total[5m])",
           "refId": "A"
         }
       ],
@@ -148,7 +148,7 @@
       "pluginVersion": "8.0.0",
       "targets": [
         {
-          "expr": "histogram_quantile(0.95, rate(xagent_http_request_duration_seconds_bucket[5m]))",
+          "expr": "histogram_quantile(0.95, rate(xagent_api_request_duration_seconds_bucket[5m]))",
           "refId": "A"
         }
       ],
@@ -223,7 +223,7 @@
       "pluginVersion": "8.0.0",
       "targets": [
         {
-          "expr": "rate(xagent_agent_executions_total[5m])",
+          "expr": "rate(xagent_agent_runs_total[5m])",
           "refId": "A"
         }
       ],
@@ -298,7 +298,7 @@
       "pluginVersion": "8.0.0",
       "targets": [
         {
-          "expr": "xagent_cpu_usage_percent",
+          "expr": "xagent_system_cpu_usage_percent",
           "refId": "A"
         }
       ],

@@ -1,3 +1,16 @@
+# =============================================================================
+# X-Agent deployment 侧 Prometheus 配置（非权威）
+#
+# 权威配置在 monitoring/prometheus.yml, 本文件保留供 deployment 引用
+# （由 deployment/docker-compose.monitoring.yml 挂载）。
+#
+# 2026-07-19 第二波修复：xagent-health 任务原抓取 /health（健康检查 JSON，
+# 非指标端点，Prometheus 无法解析），已改为真实指标路径
+# /api/v1/metrics/prometheus（backend/app/api/metrics.py 实际挂载）。
+# xagent-api 任务抓取 /metrics（backend/app/main.py 实际挂载，输出
+# core/metrics 的 xagent_http_* 系列），路径正确，保持不变。
+# =============================================================================
+
 global:
   scrape_interval: 15s
   evaluation_interval: 15s
@@ -28,11 +41,11 @@ scrape_configs:
     scrape_interval: 10s
     scrape_timeout: 5s
 
-  # X-Agent Health
+  # X-Agent Health（2026-07-19：/health 非指标端点，改抓真实指标路径）
   - job_name: 'xagent-health'
     static_configs:
       - targets: ['xagent-api:8000']
-    metrics_path: '/health'
+    metrics_path: '/api/v1/metrics/prometheus'
     scrape_interval: 30s
     scrape_timeout: 10s
 

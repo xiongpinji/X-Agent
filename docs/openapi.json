@@ -3,7 +3,7 @@
   "info": {
     "title": "X-Agent API",
     "description": "Complete REST API for X-Agent Core - An autonomous agent framework with workflow orchestration, memory management, and tool integration",
-    "version": "1.0.0",
+    "version": "0.2.0-alpha",
     "contact": {
       "name": "X-Agent Team",
       "url": "https://github.com/x-agent"

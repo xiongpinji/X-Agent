@@ -815,13 +815,23 @@ def test_workflow_api_resume_approved_run() -> None:
     blocked = client.post(f"/api/v1/workflows/{workflow['id']}/run", json={"inputs": {}}).json()
     approval_id = blocked["pending_approval_id"]
 
-    approved = client.post(
+    # P0-07 职责分离（SoD）: 审批请求的 actor（本测试为 bootstrap-admin）不得自审自批。
+    # 换用第二个已认证身份（独立 API key，user_id 不同于发起人）完成审批；
+    # decided_by 由服务端强制绑定为审批人 principal，请求体传入值一律忽略。
+    approver_key = client.post(
+        "/api/v1/security/api-keys",
+        json={"name": "workflow-approver", "role": "admin", "user_id": "workflow-approver"},
+    ).json()["key"]
+    approver = TestClient(app, headers={"x-api-key": approver_key})
+
+    approved = approver.post(
         f"/api/v1/approvals/{approval_id}/approve",
-        json={"decided_by": "admin", "reason": "ok"},
+        json={"reason": "ok"},
     )
     resumed = client.post(f"/api/v1/workflows/runs/{blocked['run_id']}/resume-approved", json={"approval_id": approval_id})
 
     assert approved.status_code == 200
+    assert approved.json()["decided_by"] == "workflow-approver"
     assert resumed.status_code == 200
     assert resumed.json()["status"] == "completed"
     assert resumed.json()["outputs"]["output_1"] == "resumed"

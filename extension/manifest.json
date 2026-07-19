@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "X-Agent Browser Extension",
-  "version": "1.0.0",
+  "version": "0.2.0",
   "description": "Browser automation and intelligent web interaction powered by X-Agent",
   "permissions": [
     "activeTab",
@@ -30,16 +30,24 @@
   },
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
-      "js": ["content.js"],
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "content.js"
+      ],
       "run_at": "document_start",
       "all_frames": true
     }
   ],
   "web_accessible_resources": [
     {
-      "resources": ["injected.js"],
-      "matches": ["<all_urls>"]
+      "resources": [
+        "injected.js"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
     }
   ],
   "icons": {
@@ -62,5 +70,6 @@
       },
       "description": "Highlight interactive elements"
     }
-  }
+  },
+  "version_name": "0.2.0-alpha"
 }

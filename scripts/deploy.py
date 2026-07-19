@@ -100,10 +100,7 @@ class DeploymentManager:
         self.log("=" * 60)
 
         optimization_files = [
-            "backend/app/core/llm_router_optimized.py",
-            "backend/app/core/cache_multilayer_optimized.py",
             "backend/app/core/multimodal_processor_optimized.py",
-            "backend/app/core/plugin_system_optimized.py",
             "backend/app/core/optimized_stores.py",
         ]
 

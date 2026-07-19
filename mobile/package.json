@@ -1,9 +1,6 @@
-// mobile/package.json
-// React Native项目配置
-
 {
   "name": "x-agent-mobile",
-  "version": "1.0.0",
+  "version": "0.2.0-alpha",
   "description": "X-Agent Mobile Application",
   "main": "index.js",
   "scripts": {
