@@ -1,0 +1,14 @@
+tests/test_context_management.py
+tests/test_context_management_system.py
+tests/test_contracts_regression.py
+tests/test_core_contracts_comprehensive.py
+tests/test_core_modules_comprehensive.py
+tests/test_core_modules_extended.py
+tests/test_coverage_boundary_conditions.py
+tests/test_coverage_branch_coverage.py
+tests/test_coverage_error_handling.py
+tests/test_coverage_exception_cases.py
+tests/test_creative_studio.py
+tests/test_desktop_macros.py
+tests/test_distributed_integration.py
+tests/test_distributed_performance.py

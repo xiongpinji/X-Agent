@@ -1,0 +1,5 @@
+tests/performance/test_benchmarks.py
+tests/performance/test_bottleneck_analysis.py
+tests/performance/test_load.py
+tests/performance/test_stability.py
+tests/performance/test_stress.py

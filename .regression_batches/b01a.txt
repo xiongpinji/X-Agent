@@ -1,0 +1,6 @@
+tests/enterprise/test_memory_deduplication.py
+tests/enterprise/test_memory_v2_performance.py
+tests/enterprise/test_personalization.py
+tests/enterprise/test_sso.py
+tests/enterprise/test_subscription_management.py
+tests/enterprise/test_tools.py

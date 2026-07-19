@@ -1,0 +1,15 @@
+tests/test_cli_client.py
+tests/test_cli_commands.py
+tests/test_cli_config.py
+tests/test_cli_github.py
+tests/test_cli_repl.py
+tests/test_code_capabilities.py
+tests/test_code_execution.py
+tests/test_code_executor.py
+tests/test_code_generation_quality.py
+tests/test_code_quality_improvements.py
+tests/test_codex_hermes_gap_matrix.py
+tests/test_collaboration_api.py
+tests/test_collaboration_comprehensive.py
+tests/test_config.py
+tests/test_container.py

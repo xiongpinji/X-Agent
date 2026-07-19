@@ -1,0 +1,4 @@
+tests/integration/test_agent_v2_integration.py
+tests/integration/test_mcp_e2e.py
+tests/runtime/test_desktop_runtime_complex.py
+tests/runtime/test_open_source_package_only.py

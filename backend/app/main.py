@@ -388,6 +388,18 @@ try:
     from prometheus_client import make_asgi_app
 
     app.mount("/metrics", make_asgi_app())
+
+    @app.get("/metrics", include_in_schema=False)
+    async def _metrics_exact_path():
+        # Starlette Mount only matches "/metrics/..." — serve the exact path
+        # Prometheus operators expect without a redirect (some scrapers do not
+        # follow redirects with auth headers intact).
+        from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
+
+        from starlette.responses import Response
+
+        return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
+
     logger.info("Prometheus metrics endpoint mounted at /metrics")
 except ImportError:
     logger.warning("prometheus_client not installed; /metrics endpoint not available")

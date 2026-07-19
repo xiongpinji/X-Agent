@@ -137,10 +137,13 @@ class TestMemoryEndpoints:
     def test_list_memories_unauthorized(self, client: TestClient) -> None:
         """Test listing memories without authentication."""
         response = client.get("/api/v1/memory")
-        # The memory router exposes no GET-collection route (only POST ""), so an
-        # unauthenticated GET resolves to 405 Method Not Allowed before any auth
-        # check. 401/403 remain valid if a collection GET is added later.
-        assert response.status_code in (401, 403, 405)
+        # The memory router exposes no GET-collection route (only POST "").
+        # Contract after Phase 1 (commit 78cf5b4): the SPA fallback catch-all
+        # (``GET /{spa_path:path}``, registered after all routers) fully matches
+        # method-mismatched API paths and raises 404 for the ``api`` prefix by
+        # design, so such GETs resolve to 404 instead of the former 405.
+        # 401/403 remain valid if a collection GET is added later.
+        assert response.status_code in (401, 403, 404)
 
     def test_create_memory_unauthorized(self, client: TestClient) -> None:
         """Test creating memory without authentication."""
@@ -255,9 +258,12 @@ class TestCollaborationEndpoints:
     def test_list_messages_unauthorized(self, client: TestClient) -> None:
         """Test listing messages without authentication."""
         response = client.get("/api/v1/collaboration/rooms/room-123/messages")
-        # No GET route exists for messages (POST-only); unauthenticated safe
-        # request is rejected before/at routing.
-        assert response.status_code in (401, 403, 405)
+        # No GET route exists for messages (POST-only). Contract after Phase 1
+        # (commit 78cf5b4): the SPA fallback catch-all fully matches
+        # method-mismatched API paths and raises 404 for the ``api`` prefix by
+        # design, so this safe unauthenticated request resolves to 404 instead
+        # of the former 405. 401/403 remain valid if a GET route is added later.
+        assert response.status_code in (401, 403, 404)
 
     def test_add_member_unauthorized(self, client: TestClient) -> None:
         """Test adding member without authentication."""

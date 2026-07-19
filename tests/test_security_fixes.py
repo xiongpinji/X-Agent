@@ -149,7 +149,9 @@ class TestRedisSessionStorage:
         """Verify Redis is in project dependencies."""
         pyproject_path = Path("pyproject.toml")
         if pyproject_path.exists():
-            with open(pyproject_path) as f:
+            # 显式 UTF-8：Windows 中文 locale 默认 GBK 会在读取含非 GBK
+            # 字节的 pyproject.toml 时抛 UnicodeDecodeError。
+            with open(pyproject_path, encoding="utf-8") as f:
                 content = f.read()
             assert "redis" in content.lower()
 
