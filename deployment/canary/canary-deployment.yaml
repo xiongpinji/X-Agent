@@ -1,16 +1,22 @@
+# P1-15: 已收敛对齐到 deployment/k8s/ 权威清单约定:
+#   - namespace: xagent (原 production, 与已归档的 deployment/kubernetes/ 配套, 该套已归档)
+#   - 标签 app: xagent-api + version: canary, 使 xagent-api Service 按副本比例分流 stable/canary
+#   - env 改用真实存在的 xagent-config ConfigMap 与 xagent-secrets Secret
+#     (原引用的 database-url/redis-url/qdrant-url/secret-key 等 secret key 不存在, Pod 必失败)
+# P1-16: 优雅停机 terminationGracePeriodSeconds=90 + preStop sleep 10
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: xagent-canary
-  namespace: production
+  namespace: xagent
   labels:
-    app: xagent
+    app: xagent-api
     version: canary
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: xagent
+      app: xagent-api
       version: canary
   strategy:
     type: RollingUpdate
@@ -20,22 +26,33 @@ spec:
   template:
     metadata:
       labels:
-        app: xagent
+        app: xagent-api
         version: canary
       annotations:
         prometheus.io/scrape: "true"
         prometheus.io/port: "8000"
-        prometheus.io/path: "/metrics"
+        prometheus.io/path: "/api/v1/metrics/prometheus"
     spec:
       serviceAccountName: xagent
+      # P1-16: 优雅停机 —— 宽限期 90s, preStop sleep 10s 等待 Endpoints 摘除传播
+      terminationGracePeriodSeconds: 90
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
         fsGroup: 1000
       containers:
-      - name: xagent
+      # P1-15: 容器名与稳定版一致(xagent-api), deploy-canary.sh/rollback.sh 按此名 set image
+      - name: xagent-api
         image: xagent:canary
         imagePullPolicy: Always
+        lifecycle:
+          # P1-16: 镜像为 python:3.11-slim, 内置 /bin/sh 与 sleep
+          preStop:
+            exec:
+              command:
+              - /bin/sh
+              - -c
+              - sleep 10
         ports:
         - name: http
           containerPort: 8000
@@ -43,49 +60,58 @@ spec:
         env:
         # P0-03: 应用配置统一 XAGENT_ 前缀(对照 backend/app/settings.py, env_prefix="XAGENT_")
         - name: XAGENT_APP_MODE
-          value: "production"
+          valueFrom:
+            configMapKeyRef:
+              name: xagent-config
+              key: XAGENT_APP_MODE
         # LOG_LEVEL 由 backend/app/monitoring 与 core/config.py LogSettings(LOG_ 前缀)直接读取, 保持原名
         - name: LOG_LEVEL
-          value: "INFO"
+          valueFrom:
+            configMapKeyRef:
+              name: xagent-config
+              key: LOG_LEVEL
+        # 以下为组合 URL 用的辅助变量; 必须先于 $(VAR) 引用定义(K8s 按顺序展开)
+        - name: DB_USER
+          valueFrom:
+            configMapKeyRef:
+              name: xagent-config
+              key: DB_USER
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: xagent-secrets
+              key: DB_PASSWORD
+        - name: DB_NAME
+          valueFrom:
+            configMapKeyRef:
+              name: xagent-config
+              key: DB_NAME
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: xagent-secrets
+              key: REDIS_PASSWORD
         - name: XAGENT_DATABASE_URL
-          valueFrom:
-            secretKeyRef:
-              name: xagent-secrets
-              key: database-url
+          value: "postgresql+asyncpg://$(DB_USER):$(DB_PASSWORD)@postgres:5432/$(DB_NAME)"
         - name: XAGENT_REDIS_URL
-          valueFrom:
-            secretKeyRef:
-              name: xagent-secrets
-              key: redis-url
+          value: "redis://:$(REDIS_PASSWORD)@redis:6379/0"
         - name: XAGENT_QDRANT_URL
+          value: "http://qdrant:6333"
+        - name: XAGENT_QDRANT_API_KEY
           valueFrom:
             secretKeyRef:
               name: xagent-secrets
-              key: qdrant-url
-        # 预留: 后端当前未消费 NEO4J 配置
-        - name: XAGENT_NEO4J_URI
-          valueFrom:
-            secretKeyRef:
-              name: xagent-secrets
-              key: neo4j-uri
+              key: QDRANT_API_KEY
         - name: XAGENT_JWT_SECRET
           valueFrom:
             secretKeyRef:
               name: xagent-secrets
-              key: secret-key
-        # 生产模式必需(Settings 校验); secret 需补充 encryption-key, 未提供时 Pod 将因校验失败而无法启动
+              key: XAGENT_JWT_SECRET
         - name: XAGENT_ENCRYPTION_KEY
           valueFrom:
             secretKeyRef:
               name: xagent-secrets
-              key: encryption-key
-              optional: true
-        - name: XAGENT_SENTRY_DSN
-          valueFrom:
-            secretKeyRef:
-              name: xagent-secrets
-              key: sentry-dsn
-              optional: true
+              key: XAGENT_ENCRYPTION_KEY
         resources:
           requests:
             memory: "512Mi"
@@ -113,8 +139,18 @@ spec:
         volumeMounts:
         - name: logs
           mountPath: /var/log/xagent
+        - name: tmp
+          mountPath: /tmp
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
       volumes:
       - name: logs
+        emptyDir: {}
+      - name: tmp
         emptyDir: {}
       affinity:
         podAntiAffinity:
@@ -126,5 +162,9 @@ spec:
                 - key: app
                   operator: In
                   values:
-                  - xagent
+                  - xagent-api
+                - key: version
+                  operator: In
+                  values:
+                  - canary
               topologyKey: kubernetes.io/hostname

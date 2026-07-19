@@ -20,6 +20,9 @@ spec:
       labels:
         app: xagent-worker
     spec:
+      serviceAccountName: xagent
+      # P1-16: 优雅停机 —— worker 执行长任务, 宽限期 120s; preStop sleep 等待 Endpoints 摘除
+      terminationGracePeriodSeconds: 120
       affinity:
         podAntiAffinity:
           preferredDuringSchedulingIgnoredDuringExecution:
@@ -42,6 +45,15 @@ spec:
         - python
         - -m
         - backend.app.workflow_worker
+        lifecycle:
+          # P1-16: 先 sleep 10s 再 SIGTERM, 给在途任务留出停止窗口;
+          # 镜像为 python:3.11-slim, 内置 /bin/sh 与 sleep
+          preStop:
+            exec:
+              command:
+              - /bin/sh
+              - -c
+              - sleep 10
         env:
         # P0-03: 应用配置统一 XAGENT_ 前缀(对照 backend/app/settings.py, env_prefix="XAGENT_")
         - name: XAGENT_APP_MODE

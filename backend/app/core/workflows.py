@@ -108,6 +108,11 @@ class WorkflowRunRecord(BaseModel):
     pending_approval_id: str | None = None
     pending_node_id: str | None = None
     resume_cursor: int = 0
+    # Crash-recovery metadata: which worker owns the run and when it last
+    # persisted progress. A RUNNING run whose worker is gone is resumable
+    # from `resume_cursor` (topological index of the next node to execute).
+    worker_id: str | None = None
+    heartbeat_at: datetime | None = None
     snapshot: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -119,6 +124,10 @@ class WorkflowScheduleRecord(BaseModel):
     user_id: str = "anonymous"
     permission_scope: list[str] = Field(default_factory=list)
     run_at: datetime
+    # 5-field cron expression for recurring schedules. When set, `run_at` is
+    # the NEXT fire time and triggering re-arms the schedule instead of
+    # moving it to a terminal state.
+    cron: str | None = None
     status: WorkflowScheduleStatus = WorkflowScheduleStatus.PENDING
     run_id: str | None = None
     locked_by: str | None = None
@@ -169,6 +178,9 @@ class WorkflowScheduleRequest(BaseModel):
     user_id: str = "anonymous"
     run_at: datetime | None = None
     delay_seconds: int = Field(default=0, ge=0)
+    # Recurring schedule: standard 5-field cron expression (minute hour dom month dow).
+    # Mutually exclusive with run_at/delay_seconds semantics — cron wins when set.
+    cron: str | None = None
 
 
 class WorkflowChatCreateRequest(BaseModel):
@@ -225,6 +237,145 @@ class WorkflowApprovalRequired(WorkflowExecutionError):
     def __init__(self, approval_id: str) -> None:
         super().__init__(f"Workflow approval required: {approval_id}")
         self.approval_id = approval_id
+
+
+# ---------------------------------------------------------------------------
+# Cron scheduling support (P1-07)
+# ---------------------------------------------------------------------------
+try:  # pragma: no cover - import guard
+    from croniter import croniter as _croniter
+except ImportError:  # optional dependency degraded explicitly
+    _croniter = None
+    logger.warning(
+        "croniter is not installed; falling back to the built-in minimal cron "
+        "parser (_MinimalCron). Install croniter for full cron semantics."
+    )
+
+
+class _MinimalCron:
+    """Built-in fallback parser for standard 5-field cron expressions.
+
+    Only used when ``croniter`` is unavailable. Supported syntax per field:
+    ``*``, ``*/n``, ``a``, ``a-b``, ``a-b/n`` and comma lists of those.
+    Field order: minute (0-59), hour (0-23), day-of-month (1-31),
+    month (1-12), day-of-week (0-7, both 0 and 7 mean Sunday).
+    When both day-of-month and day-of-week are restricted, standard cron
+    OR-semantics apply (either match fires).
+    """
+
+    _BOUNDS = ((0, 59), (0, 23), (1, 31), (1, 12), (0, 7))
+
+    def __init__(self, expression: str) -> None:
+        fields = expression.split()
+        if len(fields) != 5:
+            raise WorkflowExecutionError(
+                f"Invalid cron expression {expression!r}: expected 5 fields "
+                "(minute hour day-of-month month day-of-week)."
+            )
+        self._allowed: list[set[int]] = []
+        self._restricted: list[bool] = []
+        for field, (low, high) in zip(fields, self._BOUNDS, strict=True):
+            allowed = self._parse_field(field, low, high)
+            self._allowed.append(allowed)
+            self._restricted.append(field.strip() != "*")
+
+    @classmethod
+    def _parse_field(cls, field: str, low: int, high: int) -> set[int]:
+        values: set[int] = set()
+        for part in field.split(","):
+            part = part.strip()
+            if not part:
+                raise WorkflowExecutionError(f"Invalid cron field {field!r}: empty item.")
+            step = 1
+            has_step = "/" in part
+            if has_step:
+                part, step_text = part.split("/", 1)
+                try:
+                    step = int(step_text)
+                except ValueError as exc:
+                    raise WorkflowExecutionError(
+                        f"Invalid cron step {step_text!r} in field {field!r}."
+                    ) from exc
+                if step <= 0:
+                    raise WorkflowExecutionError(f"Cron step must be positive in field {field!r}.")
+            if part in ("*", ""):
+                start, end = low, high
+            elif "-" in part:
+                start_text, end_text = part.split("-", 1)
+                try:
+                    start, end = int(start_text), int(end_text)
+                except ValueError as exc:
+                    raise WorkflowExecutionError(f"Invalid cron range {part!r}.") from exc
+            else:
+                try:
+                    start = int(part)
+                except ValueError as exc:
+                    raise WorkflowExecutionError(f"Invalid cron value {part!r}.") from exc
+                # Vixie-cron shorthand: "a/n" means "a-high/n".
+                end = high if has_step else start
+            if start < low or end > high or start > end:
+                raise WorkflowExecutionError(
+                    f"Cron value out of range [{low}, {high}] in field {field!r}."
+                )
+            values.update(range(start, end + 1, step))
+        # Normalize Sunday: both 0 and 7 are Sunday in day-of-week.
+        if low == 0 and high == 7 and 7 in values:
+            values.discard(7)
+            values.add(0)
+        return values
+
+    def matches(self, moment: datetime) -> bool:
+        minute, hour, dom, month, dow = self._allowed
+        cron_dow = (moment.weekday() + 1) % 7  # python Mon=0..Sun=6 -> cron Sun=0
+        if moment.minute not in minute or moment.hour not in hour or moment.month not in month:
+            return False
+        dom_restricted, dow_restricted = self._restricted[2], self._restricted[4]
+        dom_hit = moment.day in dom
+        dow_hit = cron_dow in dow
+        if dom_restricted and dow_restricted:
+            return dom_hit or dow_hit
+        return dom_hit and dow_hit
+
+    def next_after(self, moment: datetime) -> datetime:
+        candidate = (moment + timedelta(minutes=1)).replace(second=0, microsecond=0)
+        # Bound the scan to a little over one year so pathological expressions
+        # (e.g. Feb 30) fail explicitly instead of looping forever.
+        for _ in range(370 * 24 * 60):
+            if self.matches(candidate):
+                return candidate
+            candidate += timedelta(minutes=1)
+        raise WorkflowExecutionError(
+            "Cron expression has no fire time within one year; check the day-of-month/month fields."
+        )
+
+
+def next_cron_run(expression: str, *, now: datetime | None = None) -> datetime:
+    """Return the next fire time (UTC-aware) for a cron expression.
+
+    Uses ``croniter`` when installed; otherwise the built-in ``_MinimalCron``
+    fallback. Invalid expressions raise ``WorkflowExecutionError`` — callers
+    must surface this as a client error rather than scheduling silently.
+    """
+    if not expression or not expression.strip():
+        raise WorkflowExecutionError("Cron expression must not be empty.")
+    moment = now or datetime.now(UTC)
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=UTC)
+    if _croniter is not None:
+        try:
+            fire_at = _croniter(expression, moment).get_next(datetime)
+        except (ValueError, KeyError) as exc:
+            raise WorkflowExecutionError(f"Invalid cron expression: {expression!r}") from exc
+        if fire_at.tzinfo is None:
+            fire_at = fire_at.replace(tzinfo=UTC)
+        return fire_at
+    return _MinimalCron(expression).next_after(moment)
+
+
+def validate_cron_expression(expression: str) -> str:
+    """Validate a cron expression, returning it unchanged. Raises on invalid."""
+    next_cron_run(expression)
+    return expression
 
 
 class WorkflowRepository:
@@ -359,6 +510,38 @@ class WorkflowRepository:
 
     def get_run(self, run_id: str) -> WorkflowRunRecord | None:
         return self._runs.get(run_id)
+
+    def update_run_progress(
+        self,
+        run_id: str,
+        *,
+        node_results: list[WorkflowNodeResult],
+        resume_cursor: int,
+        worker_id: str | None = None,
+        heartbeat_at: datetime | None = None,
+    ) -> WorkflowRunRecord | None:
+        """Persist intermediate node progress for crash recovery.
+
+        Called by the executor after every node settles. ``resume_cursor``
+        uses TOPOLOGICAL indexing: it is the position of the NEXT node to
+        execute, so a restarted worker can skip exactly the settled prefix.
+        The heartbeat marks the run as owned by a live worker.
+        """
+        with self._lock:
+            run = self._runs.get(run_id)
+            if run is None:
+                return None
+            update_payload: dict[str, Any] = {
+                "node_results": list(node_results),
+                "resume_cursor": resume_cursor,
+                "heartbeat_at": heartbeat_at or datetime.now(UTC),
+            }
+            if worker_id is not None:
+                update_payload["worker_id"] = worker_id
+            updated = run.model_copy(update=update_payload)
+            self._runs[run_id] = updated
+            self._append_run(updated)
+            return updated
 
     def definition_count(self) -> int:
         return len(self._definitions)
@@ -531,6 +714,7 @@ class WorkflowScheduleStore:
         user_id: str,
         permission_scope: list[str],
         run_at: datetime,
+        cron: str | None = None,
     ) -> WorkflowScheduleRecord:
         if run_at.tzinfo is None:
             run_at = run_at.replace(tzinfo=UTC)
@@ -541,10 +725,12 @@ class WorkflowScheduleStore:
             user_id=user_id,
             permission_scope=permission_scope,
             run_at=run_at,
+            cron=cron,
             snapshot={
                 "workflow_id": workflow_id,
                 "input_keys": sorted(inputs.keys()),
                 "run_at": run_at.isoformat(),
+                "cron": cron,
             },
         )
         with self._lock:
@@ -649,6 +835,48 @@ class WorkflowScheduleStore:
             return len(self._records)
         return sum(1 for record in self._records.values() if record.status == status)
 
+    def reschedule(
+        self,
+        schedule_id: str,
+        *,
+        run_at: datetime,
+        run_id: str | None = None,
+        error: str | None = None,
+    ) -> WorkflowScheduleRecord | None:
+        """Re-arm a recurring (cron) schedule for its next fire time.
+
+        Unlike ``mark``, this keeps the schedule PENDING so the scheduler
+        picks it up again; the last triggered run and error are recorded
+        explicitly on the record for observability.
+        """
+        if run_at.tzinfo is None:
+            run_at = run_at.replace(tzinfo=UTC)
+        with self._lock:
+            record = self._records.get(schedule_id)
+            if record is None:
+                return None
+            snapshot = dict(record.snapshot)
+            snapshot["last_run_at"] = record.run_at.isoformat()
+            if error:
+                snapshot["last_error"] = error
+            else:
+                snapshot.pop("last_error", None)
+            updated = record.model_copy(
+                update={
+                    "status": WorkflowScheduleStatus.PENDING,
+                    "run_at": run_at,
+                    "run_id": run_id if run_id is not None else record.run_id,
+                    "locked_by": None,
+                    "locked_until": None,
+                    "error": error,
+                    "updated_at": datetime.now(UTC),
+                    "snapshot": snapshot,
+                }
+            )
+            self._records[schedule_id] = updated
+            self._persist()
+            return updated
+
     def _load_from_disk(self) -> None:
         if self._storage_path is None or not self._storage_path.exists():
             return
@@ -697,6 +925,8 @@ class WorkflowExecutor:
         run_id: str | None = None,
         pause_checkpoint: Callable[[str], Awaitable[None]] | None = None,
         approved_approvals: dict[str, str] | None = None,
+        worker_id: str | None = None,
+        resume_record: WorkflowRunRecord | None = None,
     ) -> WorkflowRunRecord:
         definition = self.repository.get_definition(workflow_id)
         if definition is None:
@@ -710,31 +940,67 @@ class WorkflowExecutor:
             permission_scope=permission_scope or RunContext().permission_scope,
         )
         inputs = inputs or {}
-        self.repository.record_run(
-            WorkflowRunRecord(
-                run_id=run_id,
-                workflow_id=definition.id,
-                workflow_name=definition.name,
-                status=WorkflowRunStatus.RUNNING,
-                tenant_id=tenant_id,
-                user_id=user_id,
-                inputs=inputs,
-                started_at=run_context.created_at,
-                completed_at=run_context.created_at,
-                resume_cursor=0,
-                snapshot=self._build_snapshot(definition, inputs, state={"inputs": inputs}, status=WorkflowRunStatus.RUNNING, resume_cursor=0),
+        if resume_record is None:
+            self.repository.record_run(
+                WorkflowRunRecord(
+                    run_id=run_id,
+                    workflow_id=definition.id,
+                    workflow_name=definition.name,
+                    status=WorkflowRunStatus.RUNNING,
+                    tenant_id=tenant_id,
+                    user_id=user_id,
+                    inputs=inputs,
+                    started_at=run_context.created_at,
+                    completed_at=run_context.created_at,
+                    resume_cursor=0,
+                    worker_id=worker_id,
+                    heartbeat_at=datetime.now(UTC),
+                    snapshot=self._build_snapshot(definition, inputs, state={"inputs": inputs}, status=WorkflowRunStatus.RUNNING, resume_cursor=0),
+                )
             )
-        )
         self._record_event(run_context, "workflow.started", workflow_id=workflow_id)
 
-        state: dict[str, Any] = {"inputs": inputs, "node_results": []}
         ordered_nodes = self.repository._topological_order(definition)
         node_map = {node.id: node for node in definition.nodes}
         outgoing_edges: dict[str, list[WorkflowEdge]] = {node.id: [] for node in definition.nodes}
         for edge in definition.edges:
             outgoing_edges.setdefault(edge.source, []).append(edge)
-        node_results: list[WorkflowNodeResult] = []
-        outputs: dict[str, Any] = {}
+        if resume_record is None:
+            node_results: list[WorkflowNodeResult] = []
+            outputs: dict[str, Any] = {}
+            state: dict[str, Any] = {"inputs": inputs, "node_results": node_results}
+        else:
+            # Crash recovery: rebuild in-memory state from the persisted
+            # progress of the interrupted run. Only COMPLETED node outputs are
+            # restored into state (condition-skipped nodes produce no result
+            # and are re-evaluated idempotently). The stored record's
+            # topological resume_cursor drives the skip logic below.
+            cursor = resume_record.resume_cursor
+            position = {node_id: idx for idx, node_id in enumerate(ordered_nodes)}
+            # Drop stale results at/after the cursor (e.g. a NEEDS_APPROVAL or
+            # FAILED entry for the node the cursor will re-execute) so the
+            # resumed run does not accumulate duplicate node entries.
+            node_results = [
+                result
+                for result in resume_record.node_results
+                if position.get(result.node_id, len(ordered_nodes)) < cursor
+            ]
+            outputs = {
+                result.node_id: result.output
+                for result in node_results
+                if result.node_type == WorkflowNodeType.OUTPUT
+                and result.status == WorkflowRunStatus.COMPLETED
+            }
+            state = {"inputs": inputs, "node_results": node_results}
+            for result in node_results:
+                if result.status == WorkflowRunStatus.COMPLETED:
+                    state[result.node_id] = result.output
+            self.repository.update_run_progress(
+                run_id,
+                node_results=node_results,
+                resume_cursor=cursor,
+                worker_id=worker_id,
+            )
 
         try:
             for index, node_id in enumerate(ordered_nodes):
@@ -801,6 +1067,7 @@ class WorkflowExecutor:
                         node_id=node.id,
                         node_type=node.type.value,
                     )
+                    self._persist_progress(run_id, node_results, index + 1, worker_id)
                 except WorkflowApprovalRequired as exc:
                     node_result = WorkflowNodeResult(
                         node_id=node.id,
@@ -821,6 +1088,9 @@ class WorkflowExecutor:
                         node_type=node.type.value,
                         approval_id=exc.approval_id,
                     )
+                    # The approval node itself is NOT settled: keep the cursor
+                    # on it so a crash-resume re-enters the approval branch.
+                    self._persist_progress(run_id, node_results, index, worker_id)
                     raise
                 except Exception as exc:  # noqa: BLE001 - surfaced as workflow failure
                     if isinstance(exc, WorkflowNodeExecutionError):
@@ -1007,6 +1277,76 @@ class WorkflowExecutor:
                 details={"status": record.status.value, "error": str(exc)},
             )
             return record
+
+    def _persist_progress(
+        self,
+        run_id: str,
+        node_results: list[WorkflowNodeResult],
+        resume_cursor: int,
+        worker_id: str | None,
+    ) -> None:
+        """Best-effort progress checkpoint for crash recovery.
+
+        A checkpoint write failure must not fail the running workflow, so it
+        degrades explicitly: a WARNING is logged and execution continues with
+        reduced recoverability (the run resumes from an older cursor).
+        """
+        try:
+            self.repository.update_run_progress(
+                run_id,
+                node_results=node_results,
+                resume_cursor=resume_cursor,
+                worker_id=worker_id,
+            )
+        except Exception:  # noqa: BLE001 - checkpoint degradation is logged, not silent
+            logger.warning(
+                "Failed to persist workflow run progress (run_id=%s, cursor=%s); "
+                "crash recovery will resume from the last persisted checkpoint.",
+                run_id,
+                resume_cursor,
+                exc_info=True,
+            )
+
+    async def resume(
+        self,
+        run_id: str,
+        *,
+        pause_checkpoint: Callable[[str], Awaitable[None]] | None = None,
+        approved_approvals: dict[str, str] | None = None,
+        worker_id: str | None = None,
+    ) -> WorkflowRunRecord:
+        """Resume an interrupted run from its persisted progress cursor.
+
+        Resumable statuses: RUNNING/PAUSED (crashed or paused mid-flight) and
+        FAILED (retry from the last checkpoint). Terminal COMPLETED/CANCELED
+        and NEEDS_APPROVAL runs are rejected explicitly — the approval flow
+        has its own dedicated resume path.
+        """
+        record = self.repository.get_run(run_id)
+        if record is None:
+            raise WorkflowExecutionError(f"Workflow run not found: {run_id}")
+        if record.status not in (
+            WorkflowRunStatus.RUNNING,
+            WorkflowRunStatus.PAUSED,
+            WorkflowRunStatus.FAILED,
+        ):
+            raise WorkflowExecutionError(
+                f"Workflow run {run_id} is not resumable (status={record.status.value})."
+            )
+        if self.repository.get_definition(record.workflow_id) is None:
+            raise WorkflowExecutionError(f"Workflow not found: {record.workflow_id}")
+        return await self.execute(
+            record.workflow_id,
+            record.inputs,
+            tenant_id=record.tenant_id,
+            user_id=record.user_id,
+            permission_scope=record.snapshot.get("permission_scope") or None,
+            run_id=run_id,
+            pause_checkpoint=pause_checkpoint,
+            approved_approvals=approved_approvals,
+            worker_id=worker_id,
+            resume_record=record,
+        )
 
     async def _execute_node_with_policy(
         self,
@@ -1762,6 +2102,7 @@ class WorkflowRuntimeManager:
         self._tasks: dict[str, asyncio.Task] = {}
         self._paused: set[str] = set()
         self._approved: dict[str, dict[str, str]] = {}
+        self.worker_id = f"workflow-runtime-{uuid4()}"
 
     async def start(
         self,
@@ -1814,11 +2155,75 @@ class WorkflowRuntimeManager:
                 run_id=run_id,
                 pause_checkpoint=self.pause_checkpoint,
                 approved_approvals=self._approved.get(run_id, {}),
+                worker_id=self.worker_id,
             )
         )
         self._tasks[run_id] = task
         task.add_done_callback(lambda _: self._cleanup_run(run_id))
         return record
+
+    def list_interrupted_runs(self, *, limit: int = 10_000) -> list[WorkflowRunRecord]:
+        """Runs still marked RUNNING that this process does not own.
+
+        After a worker crash/restart the run rows survive in the repository
+        but no live task exists here; those runs are resumable from their
+        persisted ``resume_cursor`` checkpoints.
+        """
+        interrupted: list[WorkflowRunRecord] = []
+        for run in self.repository.list_runs(limit=limit):
+            if run.status == WorkflowRunStatus.RUNNING and run.run_id not in self._tasks:
+                interrupted.append(run)
+        return interrupted
+
+    async def recover_interrupted_runs(
+        self,
+        *,
+        resume: bool = True,
+        limit: int = 10_000,
+    ) -> list[WorkflowRunRecord]:
+        """Recover runs orphaned by a crashed worker.
+
+        Default strategy: resume each interrupted run from its persisted
+        checkpoint in a fresh background task owned by THIS runtime. When the
+        workflow definition is gone (or ``resume=False``), the run is marked
+        FAILED with an explicit "interrupted" error — never silently dropped.
+        """
+        recovered: list[WorkflowRunRecord] = []
+        for run in self.list_interrupted_runs(limit=limit):
+            if resume and self.repository.get_definition(run.workflow_id) is not None:
+                task = asyncio.create_task(
+                    self.executor.resume(run.run_id, worker_id=self.worker_id)
+                )
+                self._tasks[run.run_id] = task
+                task.add_done_callback(lambda _: self._cleanup_run(run.run_id))
+                record = self.repository.get_run(run.run_id) or run
+                langfuse_client.log(
+                    "workflow.run.recovered",
+                    trace_id=run.workflow_id,
+                    run_id=run.run_id,
+                    workflow_id=run.workflow_id,
+                    strategy="resume",
+                )
+            else:
+                record = self.repository.update_run_status(
+                    run.run_id,
+                    WorkflowRunStatus.FAILED,
+                    error=(
+                        "interrupted: worker restarted before the run completed; "
+                        "resume was not possible (workflow definition missing or disabled)."
+                    ),
+                    resume_cursor=run.resume_cursor,
+                )
+                langfuse_client.log(
+                    "workflow.run.recovered",
+                    trace_id=run.workflow_id,
+                    run_id=run.run_id,
+                    workflow_id=run.workflow_id,
+                    strategy="mark_failed",
+                )
+            if record is not None:
+                recovered.append(record)
+        return recovered
 
     async def pause_latest(self, workflow_id: str) -> WorkflowControlResponse:
         run = self._latest_active_run(workflow_id)
@@ -1964,7 +2369,13 @@ class WorkflowScheduler:
     ) -> WorkflowScheduleRecord:
         if self.repository.get_definition(workflow_id) is None:
             raise WorkflowExecutionError(f"Workflow not found: {workflow_id}")
-        run_at = request.run_at or datetime.now(UTC) + timedelta(seconds=request.delay_seconds)
+        cron_expr = request.cron.strip() if request.cron else None
+        if cron_expr:
+            # Validates the expression (raises WorkflowExecutionError when
+            # invalid) and computes the first fire time.
+            run_at = next_cron_run(cron_expr)
+        else:
+            run_at = request.run_at or datetime.now(UTC) + timedelta(seconds=request.delay_seconds)
         record = self.schedule_store.create(
             workflow_id=workflow_id,
             inputs=request.inputs,
@@ -1972,11 +2383,13 @@ class WorkflowScheduler:
             user_id=user_id,
             permission_scope=permission_scope,
             run_at=run_at,
+            cron=cron_expr,
         )
         record.snapshot = {
             "workflow_id": workflow_id,
             "scheduled_for": run_at.isoformat(),
             "input_keys": sorted(request.inputs.keys()),
+            "cron": cron_expr,
         }
         return record
 
@@ -2001,17 +2414,44 @@ class WorkflowScheduler:
                     user_id=record.user_id,
                     permission_scope=record.permission_scope,
                 )
-                updated = self.schedule_store.mark(
-                    record.schedule_id,
-                    WorkflowScheduleStatus.TRIGGERED,
-                    run_id=run.run_id,
-                )
+                if record.cron:
+                    # Recurring schedule: re-arm for the next fire time
+                    # instead of moving to a terminal TRIGGERED state.
+                    updated = self.schedule_store.reschedule(
+                        record.schedule_id,
+                        run_at=next_cron_run(record.cron),
+                        run_id=run.run_id,
+                    )
+                else:
+                    updated = self.schedule_store.mark(
+                        record.schedule_id,
+                        WorkflowScheduleStatus.TRIGGERED,
+                        run_id=run.run_id,
+                    )
             except Exception as exc:  # noqa: BLE001 - schedule failures are persisted
-                updated = self.schedule_store.mark(
-                    record.schedule_id,
-                    WorkflowScheduleStatus.FAILED,
-                    error=str(exc),
-                )
+                if record.cron:
+                    # A failed occurrence must not kill the recurring series:
+                    # re-arm for the next fire time with the error recorded
+                    # explicitly on the record.
+                    try:
+                        next_at = next_cron_run(record.cron)
+                        updated = self.schedule_store.reschedule(
+                            record.schedule_id,
+                            run_at=next_at,
+                            error=str(exc),
+                        )
+                    except WorkflowExecutionError:
+                        updated = self.schedule_store.mark(
+                            record.schedule_id,
+                            WorkflowScheduleStatus.FAILED,
+                            error=str(exc),
+                        )
+                else:
+                    updated = self.schedule_store.mark(
+                        record.schedule_id,
+                        WorkflowScheduleStatus.FAILED,
+                        error=str(exc),
+                    )
             if updated is not None:
                 triggered.append(updated)
         return triggered

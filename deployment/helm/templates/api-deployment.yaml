@@ -23,6 +23,9 @@ spec:
         app: xagent-api
         version: v1
     spec:
+      serviceAccountName: xagent
+      # P1-16: 优雅停机 —— 宽限期默认 90s; preStop sleep 等待 Endpoints 摘除传播
+      terminationGracePeriodSeconds: {{ .Values.api.terminationGracePeriodSeconds | default 90 }}
       affinity:
         podAntiAffinity:
           preferredDuringSchedulingIgnoredDuringExecution:
@@ -42,6 +45,14 @@ spec:
         ports:
         - containerPort: {{ .Values.api.port }}
           name: http
+        lifecycle:
+          # P1-16: 镜像为 python:3.11-slim, 内置 /bin/sh 与 sleep
+          preStop:
+            exec:
+              command:
+              - /bin/sh
+              - -c
+              - sleep {{ .Values.api.preStopSleepSeconds | default 10 }}
         envFrom:
         - configMapRef:
             name: xagent-config
@@ -51,11 +62,13 @@ spec:
         # (envFrom 变量先于 env 处理, 可被 $(VAR) 引用)
         env:
         - name: XAGENT_DATABASE_URL
-          value: "postgresql+asyncpg://$(DB_USER):$(DB_PASSWORD)@postgres:{{ .Values.database.port }}/$(DB_NAME)"
+          value: "postgresql+asyncpg://$(DB_USER):$(DB_PASSWORD)@{{ include "xagent.postgresHost" . }}:{{ .Values.database.port }}/$(DB_NAME)"
         - name: XAGENT_REDIS_URL
-          value: "redis://:$(REDIS_PASSWORD)@redis:{{ .Values.redis.port }}/0"
+          value: "redis://:$(REDIS_PASSWORD)@{{ include "xagent.redisHost" . }}:{{ .Values.redis.port }}/0"
         - name: XAGENT_QDRANT_URL
-          value: "http://qdrant:{{ .Values.qdrant.port }}"
+          value: "http://{{ include "xagent.qdrantHost" . }}:{{ .Values.qdrant.port }}"
+        - name: XAGENT_NEO4J_URI
+          value: "bolt://{{ include "xagent.neo4jHost" . }}:{{ .Values.neo4j.port }}"
         resources:
           {{- toYaml .Values.api.resources | nindent 10 }}
         livenessProbe:

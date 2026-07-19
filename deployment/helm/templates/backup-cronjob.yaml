@@ -1,0 +1,113 @@
+{{- if .Values.backup.enabled }}
+# P1-17: K8s 定时备份 CronJob —— 执行 deployment/backup/backup.sh
+# (PG pg_dump / Redis RDB / Qdrant 官方快照 API POST /collections/{name}/snapshots)
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: xagent-backup
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: xagent-backup
+spec:
+  schedule: {{ .Values.backup.schedule | quote }}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      activeDeadlineSeconds: {{ .Values.backup.activeDeadlineSeconds | default 3600 }}
+      backoffLimit: 1
+      template:
+        metadata:
+          labels:
+            app: xagent-backup
+        spec:
+          restartPolicy: OnFailure
+          # P1-16: 优雅停机(批任务正常结束时 preStop 不触发, 节点驱逐时生效)
+          terminationGracePeriodSeconds: {{ .Values.backup.terminationGracePeriodSeconds | default 60 }}
+          containers:
+          - name: backup
+            # 备份镜像由 deployment/backup/Dockerfile 构建, 含 pg_dump/redis-cli/curl/jq
+            image: "{{ .Values.backup.image.repository }}:{{ .Values.backup.image.tag }}"
+            imagePullPolicy: {{ .Values.backup.image.pullPolicy | default "IfNotPresent" }}
+            command:
+            - /bin/bash
+            - /usr/local/bin/backup.sh
+            lifecycle:
+              # P1-16: 备份镜像基于 debian slim, 含 /bin/sh 与 sleep
+              preStop:
+                exec:
+                  command:
+                  - /bin/sh
+                  - -c
+                  - sleep {{ .Values.backup.preStopSleepSeconds | default 5 }}
+            env:
+            - name: BACKUP_DIR
+              value: /backups
+            - name: RETENTION_DAYS
+              value: {{ .Values.backup.retention | quote }}
+            - name: DB_HOST
+              value: {{ include "xagent.postgresHost" . | quote }}
+            - name: DB_PORT
+              value: {{ .Values.database.port | quote }}
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: xagent-secrets
+                  key: DB_USER
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: xagent-secrets
+                  key: DB_PASSWORD
+            - name: DB_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: xagent-config
+                  key: DB_NAME
+            - name: REDIS_HOST
+              value: {{ include "xagent.redisHost" . | quote }}
+            - name: REDIS_PORT
+              value: {{ .Values.redis.port | quote }}
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: xagent-secrets
+                  key: REDIS_PASSWORD
+            - name: QDRANT_HOST
+              value: {{ include "xagent.qdrantHost" . | quote }}
+            - name: QDRANT_PORT
+              value: {{ .Values.qdrant.port | quote }}
+            - name: QDRANT_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: xagent-secrets
+                  key: QDRANT_API_KEY
+            - name: S3_ENABLED
+              value: {{ .Values.backup.s3.enabled | quote }}
+            - name: S3_BUCKET
+              value: {{ .Values.backup.s3.bucket | quote }}
+            - name: S3_REGION
+              value: {{ .Values.backup.s3.region | quote }}
+            volumeMounts:
+            - name: backup-storage
+              mountPath: /backups
+          volumes:
+          - name: backup-storage
+            persistentVolumeClaim:
+              claimName: xagent-backup-pvc
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: xagent-backup-pvc
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: xagent-backup
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.backup.storage }}
+{{- end }}

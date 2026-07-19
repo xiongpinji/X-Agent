@@ -50,13 +50,40 @@ await context_manager.save_session()
 
 ## 2. 集成到Agent执行循环
 
-### 2.1 在agent.py中集成
+> **现状（P1-14 已完成）**：core/context 已实际接入生产主循环
+> `backend/app/core/agent/loop.py` 的 `AgentLoop`，通过桥接层
+> `backend/app/core/context/agent_integration.py` 的 `AgentLoopContextBridge`：
+>
+> - **Token 级压缩**：`_plan()` 发给 LLM 的消息列表超阈值（默认预算 24 000
+>   tokens × 0.85）自动摘要/裁剪，保护 system 与最新消息；压缩事件记录到
+>   `execution_summary["context_management"]["llm_compression_events"]` 并发出
+>   `agent.context.compressed` trace。
+> - **会话恢复**：`RunContext.session_id` 存在时自动从 `data/sessions/` 恢复快照，
+>   最近历史以有界 recap 注入规划提示词；运行结束自动保存快照。
+> - **主循环上下文压缩**：`_compress_context()` 已从"白名单字段裁剪"替换为
+>   token 预算感知裁剪（操作性键原样保留，其余按预算截断/丢弃并记录）。
+>
+> 接线方式（三选一，均已在 AgentLoop 构造函数实现）：
+> ```python
+> AgentLoop(
+>     ...,
+>     context_bridge=bridge,            # 方式1：注入共享桥接器（单会话语义）
+>     context_bridge_factory=factory,   # 方式2：按运行创建（并发推荐）
+>     context_token_budget=24_000,      # LLM 消息 token 预算
+> )
+> # 方式3（默认）：都不传时，带 session_id 的运行自动创建临时桥接器
+> # （存储于 <项目根>/data/sessions）；无 session_id 不做持久化。
+> ```
+>
+> 以下为在**自定义**循环中使用 ContextManager 的参考示例（生产主循环无需手写）：
+
+### 2.1 在自定义 agent 循环中集成
 
 ```python
 from backend.app.core.context import ContextManager, SessionRecovery
 from backend.app.core.context_compactor import ContextCompactor
 
-class AgentLoop:
+class CustomAgentLoop:
     def __init__(self, ...):
         # ... 其他初始化 ...
         
@@ -163,10 +190,16 @@ Content-Type: application/json
 {
   "session_id": "my-session",
   "agent_id": "agent-1",
-  "tenant_id": "tenant-1",
   "context_window": 128000
 }
 ```
+
+> **安全说明（P1-14 起）**：请求体不再接受 `tenant_id` —— 租户强制收敛到认证主体
+> （`principal.tenant_id`，经 API Key / Bearer Token 解析）。所有端点都要求认证；
+> 会话级操作（restore/delete/stats/save/读上下文/写消息）做租户归属校验，
+> 不匹配一律返回 404（不泄露会话存在性）。
+> **挂载状态**：sessions 路由当前未在 main.py 注册，由集成波统一挂载；
+> 挂载时需调用 `backend.app.api.sessions.set_context_manager(...)` 注入共享实例。
 
 #### 添加消息
 ```
@@ -234,6 +267,16 @@ context_manager = ContextManager(
     auto_compress_enabled=True,
 )
 ```
+
+> **压缩语义（P1-14 修正后）**：自动压缩只在 token 用量超过
+> `ContextCompactor.compression_threshold × token_limit` 时触发；
+> 压缩始终保留最近 `min_messages_to_keep` 条消息原文，只摘要/裁剪更早历史，
+> 并返回统一的 `CompactionResult`（挂载智能压缩器 `context_compressor` 时同样
+> 受阈值门槛约束，不再出现"每条消息都全量压缩"的行为）。
+>
+> **租户防线（P1-14 新增）**：`initialize_session()` 恢复已存在会话时，
+> 若存储的 tenant_id 与请求的 tenant_id 不一致（两边均非空），显式抛出
+> `ValueError`，防止跨租户会话被静默接管。
 
 ### 4.2 SessionRecovery配置
 

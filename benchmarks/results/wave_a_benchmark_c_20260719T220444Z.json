@@ -1,0 +1,53 @@
+{
+  "benchmark": "wave_a_load",
+  "environment": {
+    "os": "Windows 11 (10.0.26200)",
+    "machine": "AMD64",
+    "python_version": "3.13.13",
+    "cpu_count_logical": 32,
+    "llm_mode": "mock (settings.llm_backend 默认值 'mock', 未配置真实 LLM API key)",
+    "app_mode": "development (XAGENT_APP_MODE)",
+    "date_utc": "2026-07-19T22:03:42.043193+00:00",
+    "cpu_model": "AMD64 Family 26 Model 112 Stepping 0, AuthenticAMD",
+    "memory_total_gb": 123.65
+  },
+  "base_url": "http://127.0.0.1:8127",
+  "phases_executed": [
+    "c"
+  ],
+  "rate_limits_in_code": {
+    "source": "backend/app/main.py rate_limit_middleware",
+    "login": "10 req/min/IP",
+    "register": "5 req/min/IP",
+    "api_other": "100 req/min/IP (合计)",
+    "health": "不限流"
+  },
+  "phase_c_rate_limit_verification": {
+    "scenario": "rate_limit_verify",
+    "method": "GET",
+    "path": "/api/v1/agents",
+    "auth": true,
+    "num_requests": 150,
+    "concurrency": 10,
+    "accepted_requests": 100,
+    "rejected_429": 50,
+    "errors_5xx_or_network": 0,
+    "error_rate": 0.0,
+    "rejection_rate_429": 0.3333333333333333,
+    "status_codes": {
+      "200": 100,
+      "429": 50
+    },
+    "wall_time_s": 1.163,
+    "throughput_rps": 128.98,
+    "latency_ms": {
+      "min": 11.74,
+      "max": 754.16,
+      "mean": 103.81,
+      "p50": 30.75,
+      "p95": 752.89,
+      "p99": 754.12,
+      "sample_count": 100
+    }
+  }
+}

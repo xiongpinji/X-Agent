@@ -5,9 +5,14 @@ Complete list of all created files and their purposes
 
 # File Manifest and Delivery Checklist
 
+> **P1-08 订正（2026-07-20）**：本清单宣称的 `router.py`（"Enhanced Router"）
+> 从未存在于代码库中；生产路由外壳是 `backends.py` 的 `LLMRouter` +
+> `build_llm_router`。清单中"状态/覆盖率/性能"等数字为历史宣传口径，未经
+> 验证，请勿引用。P1-08 新增文件见文末「P1-08 增补清单」。
+
 ## Project: X-Agent Enhanced LLM Routing System
 ## Completion Date: 2026-05-27
-## Status: 100% Complete - Production Ready
+## Status: 100% Complete - Production Ready（历史口径，见上方订正）
 
 ---
 
@@ -543,3 +548,24 @@ The X-Agent Enhanced LLM Routing System is a complete, production-ready solution
 **Test Coverage:** 85%+
 **Documentation:** 2,300+ lines
 **Status:** ✅ 100% Complete - Production Ready
+
+---
+
+## P1-08 增补清单（2026-07-20，已验证）
+
+| 文件 | 用途 |
+|---|---|
+| `config/model_profiles.yaml` | 模型档案单一事实来源（定价/延迟/质量/任务/速率 + 配额覆盖表） |
+| `backend/app/core/llm/profiles.py` | 档案加载/校验/定价表派生（~180 行） |
+| `backend/app/core/llm/llm_settings.py` | XAGENT_* 环境子配置（pydantic-settings 子模型） |
+| `backend/app/core/llm/anthropic_backend.py` | Anthropic Messages API 后端（SDK 可选导入） |
+| `backend/app/core/llm/ollama_backend.py` | Ollama /api/chat 后端（httpx 直连） |
+| `backend/app/core/llm/quota.py` | 租户/用户 token 配额（CacheManager 存储） |
+| `backend/app/core/llm/smart_router.py` | SmartLLMRouter（rank_candidates 全量排序映射活后端） |
+| `tests/test_llm_routing_convergence.py` | 32 例离线单测（MockTransport） |
+| `scripts/verify_p1_08.py` | 19 项功能级实测脚本（不依赖 backend.app.main） |
+
+修改：`backends.py`（定价外置、LLMRouter 配额/排序钩子、build_llm_router 扩展）、
+`selector.py`（外部档案注入 + rank_candidates）、`__init__.py`（导出）、
+`llm_manager.py`（删除 get_llm_manager 内 return 之后 ~310 行不可达死代码）、
+`requirements.txt`（anthropic 钉版放宽为 >=0.28.0，venv 实测 0.117.0）。

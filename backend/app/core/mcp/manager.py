@@ -23,19 +23,23 @@ class MCPManager:
         self,
         tool_registry: ToolCatalog,
         config_path: Optional[str] = None,
+        runtime_registry: Optional[Any] = None,
     ):
         """初始化MCP管理器
 
         Args:
-            tool_registry: 工具注册表实例
+            tool_registry: 工具 schema 目录（ToolCatalog）
             config_path: 配置文件路径
+            runtime_registry: 唯一的运行时 ToolRegistry（core/tools.py）。
+                传入后发现的 MCP 工具会桥接进 Agent 主循环执行表；
+                缺省时回退 tool_registry.runtime_registry（显式组合绑定）。
         """
         self.tool_registry = tool_registry
         self.config_path = Path(config_path) if config_path else None
         self.config: Dict[str, Any] = {}
 
         # 初始化组件
-        self.discovery = MCPToolDiscovery(tool_registry)
+        self.discovery = MCPToolDiscovery(tool_registry, runtime_registry=runtime_registry)
 
         # 状态
         self.initialized = False
@@ -65,12 +69,22 @@ class MCPManager:
             for server_config in servers:
                 config = MCPServerConfig(
                     name=server_config["name"],
-                    url=server_config["url"],
+                    url=server_config.get("url", ""),
+                    transport=server_config.get(
+                        "transport",
+                        "http" if server_config.get("url") else "stdio",
+                    ),
+                    command=server_config.get("command"),
+                    args=server_config.get("args") or [],
+                    env=server_config.get("env"),
+                    cwd=server_config.get("cwd"),
+                    headers=server_config.get("headers"),
                     enabled=server_config.get("enabled", True),
                     auto_register=server_config.get("auto_register", True),
                     timeout=server_config.get("timeout", 30.0),
                     max_retries=server_config.get("max_retries", 3),
                     tags=server_config.get("tags", []),
+                    risk_level=server_config.get("risk_level"),
                 )
 
                 if await self.discovery.add_server(config):
@@ -173,16 +187,21 @@ class MCPManager:
         if not tool_schema:
             raise ValueError(f"Tool {tool_name} not found")
 
-        # 按工具的 mcp_server 元数据路由到对应的 MCP 客户端。
-        # discovery 在注册时把来源 server 与原始工具名写入 metadata
-        # （见 discovery._convert_to_tool_schema），这里据此定位 client。
-        metadata = getattr(tool_schema, "metadata", None) or {}
-        server_name = metadata.get("mcp_server")
-        mcp_tool_name = metadata.get("mcp_tool_name", tool_name)
+        # 执行路由：首选 discovery 的路由表（注册时写入，唯一事实来源）；
+        # 回退到工具 schema 的 metadata（旧调用方/测试使用的契约）。
+        server_name: Optional[str] = None
+        mcp_tool_name: str = tool_name
+        route = self.discovery.resolve_route(tool_name)
+        if route is not None:
+            server_name, mcp_tool_name = route
+        else:
+            metadata = getattr(tool_schema, "metadata", None) or {}
+            server_name = metadata.get("mcp_server")
+            mcp_tool_name = metadata.get("mcp_tool_name", tool_name)
         if not server_name:
             raise ValueError(
                 f"Tool {tool_name} is not an MCP-discovered tool "
-                f"(missing 'mcp_server' metadata)"
+                f"(no discovery route; missing 'mcp_server' metadata)"
             )
 
         client = self.discovery.servers.get(server_name)
@@ -352,12 +371,15 @@ def get_mcp_manager() -> Optional[MCPManager]:
 async def initialize_mcp_manager(
     tool_registry: ToolCatalog,
     config_path: Optional[str] = None,
+    runtime_registry: Optional[Any] = None,
 ) -> Optional[MCPManager]:
     """初始化全局MCP管理器
 
     Args:
-        tool_registry: 工具注册表实例
+        tool_registry: 工具 schema 目录（ToolCatalog）
         config_path: 配置文件路径
+        runtime_registry: 唯一的运行时 ToolRegistry（core/tools.py）。
+            传入后 MCP 发现的工具会桥接进 Agent 主循环执行表（P1-01）。
 
     Returns:
         MCP管理器实例，初始化失败返回None
@@ -368,7 +390,7 @@ async def initialize_mcp_manager(
         logger.warning("MCP manager already initialized")
         return _mcp_manager
 
-    manager = MCPManager(tool_registry, config_path)
+    manager = MCPManager(tool_registry, config_path, runtime_registry=runtime_registry)
 
     if await manager.initialize():
         _mcp_manager = manager

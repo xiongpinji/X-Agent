@@ -279,6 +279,44 @@ class MemoryDeduplicatorEnhanced:
 
         return results
 
+    def check_new_against_existing(
+        self,
+        new: Memory,
+        existing: list[Memory],
+    ) -> Optional[Memory]:
+        """Single-write duplicate check used by the store write path.
+
+        Returns the EXISTING memory that ``new`` duplicates (the one to keep),
+        or None when ``new`` is unique. Cheapest check first:
+        exact content-hash match, then vector similarity >= threshold.
+        """
+        if not existing:
+            return None
+        if not new.content_hash:
+            new.content_hash = new._calculate_hash()
+        for candidate in existing:
+            if candidate.id == new.id:
+                continue
+            candidate_hash = candidate.content_hash or candidate._calculate_hash()
+            if candidate_hash == new.content_hash:
+                return candidate
+        if new.embedding is None:
+            return None
+        best: Optional[Memory] = None
+        best_similarity = self.vector_similarity_threshold
+        for candidate in existing:
+            if candidate.id == new.id or candidate.embedding is None:
+                continue
+            if len(candidate.embedding) != len(new.embedding):
+                continue
+            similarity = float(
+                cosine_similarity([new.embedding], [candidate.embedding])[0][0]
+            )
+            if similarity >= best_similarity:
+                best = candidate
+                best_similarity = similarity
+        return best
+
     def _prepare_memories(self, memories: list[Memory]) -> None:
         """Ensure all memories have embeddings and hashes."""
         for memory in memories:

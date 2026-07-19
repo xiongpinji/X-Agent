@@ -16,6 +16,7 @@ from backend.app.core.memory import MemorySystem
 from backend.app.core.security import Principal
 from backend.app.core.workflows import (
     WorkflowDefinition,
+    WorkflowExecutionError,
     WorkflowRunRecord,
     WorkflowRunRequest,
     WorkflowRunStatus,
@@ -409,8 +410,11 @@ async def schedule_workflow(workflow_id: str, payload: dict[str, object], reposi
     workflow = repository.get_definition(workflow_id)
     if workflow is None:
         raise api_error(404, ErrorCode.WORKFLOW_NOT_FOUND, "Workflow not found.")
-    request = WorkflowScheduleRequest.model_validate({"inputs": payload.get("inputs", {}), "tenant_id": principal.tenant_id, "user_id": principal.user_id, "delay_seconds": payload.get("delay_seconds", 0), "run_at": payload.get("run_at")})
-    schedule = scheduler.schedule(workflow.id, request, tenant_id=request.tenant_id, user_id=request.user_id, permission_scope=principal.permission_scope)
+    request = WorkflowScheduleRequest.model_validate({"inputs": payload.get("inputs", {}), "tenant_id": principal.tenant_id, "user_id": principal.user_id, "delay_seconds": payload.get("delay_seconds", 0), "run_at": payload.get("run_at"), "cron": payload.get("cron")})
+    try:
+        schedule = scheduler.schedule(workflow.id, request, tenant_id=request.tenant_id, user_id=request.user_id, permission_scope=principal.permission_scope)
+    except WorkflowExecutionError as exc:
+        raise api_error(400, ErrorCode.VALIDATION_ERROR, str(exc)) from exc
     _audit_store().record(action="workflow.schedule", resource_type="workflow", resource_id=workflow.id, tenant_id=request.tenant_id, actor_id=request.user_id, workflow_id=workflow.id, details={"schedule_id": schedule.schedule_id})
     return {**schedule.model_dump(mode="json"), "id": schedule.schedule_id, "schedule_id": schedule.schedule_id, "workflow_id": workflow.id, "resource_type": "workflow_schedule", "snapshot": {**schedule.snapshot, "workflow_id": workflow.id, "schedule_id": schedule.schedule_id}}
 

@@ -1,0 +1,101 @@
+{
+  "timestamp": "2026-07-20T05:58:21.951322",
+  "database": "sqlite:benchmarks/results/perf_test_sqlite.db",
+  "total_operations_tested": 6,
+  "operations": [
+    {
+      "operation": "INSERT",
+      "num_operations": 5000,
+      "min_time": 0.08869171142578125,
+      "max_time": 391.9517993927002,
+      "mean_time": 0.8065572261810302,
+      "median_time": 0.3604888916015625,
+      "p95_time": 0.6263256072998047,
+      "p99_time": 1.2373924255371094,
+      "throughput_ops": 1238.9859649665923,
+      "error_count": 0,
+      "error_rate": 0.0,
+      "timestamp": "2026-07-20T05:58:16.605053"
+    },
+    {
+      "operation": "SELECT",
+      "num_operations": 5000,
+      "min_time": 0.080108642578125,
+      "max_time": 6.301164627075195,
+      "mean_time": 0.39047894477844236,
+      "median_time": 0.3782510757446289,
+      "p95_time": 0.6098747253417969,
+      "p99_time": 0.9119510650634766,
+      "throughput_ops": 2557.295048633251,
+      "error_count": 0,
+      "error_rate": 0.0,
+      "timestamp": "2026-07-20T05:58:18.563096"
+    },
+    {
+      "operation": "UPDATE",
+      "num_operations": 2000,
+      "min_time": 0.08630752563476562,
+      "max_time": 11.570453643798828,
+      "mean_time": 0.3687713146209717,
+      "median_time": 0.3337860107421875,
+      "p95_time": 0.5097389221191406,
+      "p99_time": 0.8788108825683594,
+      "throughput_ops": 2707.845662692994,
+      "error_count": 0,
+      "error_rate": 0.0,
+      "timestamp": "2026-07-20T05:58:19.302979"
+    },
+    {
+      "operation": "COMPLEX_QUERY",
+      "num_operations": 500,
+      "min_time": 2.500295639038086,
+      "max_time": 10.05864143371582,
+      "mean_time": 4.270356178283691,
+      "median_time": 4.158496856689453,
+      "p95_time": 5.743741989135742,
+      "p99_time": 6.94584846496582,
+      "throughput_ops": 234.13216444688916,
+      "error_count": 0,
+      "error_rate": 0.0,
+      "timestamp": "2026-07-20T05:58:21.439154"
+    },
+    {
+      "operation": "TRANSACTION",
+      "num_operations": 500,
+      "min_time": 0.171661376953125,
+      "max_time": 13.538599014282227,
+      "mean_time": 0.6909584999084473,
+      "median_time": 0.6209611892700195,
+      "p95_time": 1.0039806365966797,
+      "p99_time": 2.637624740600586,
+      "throughput_ops": 1446.0105550430187,
+      "error_count": 0,
+      "error_rate": 0.0,
+      "timestamp": "2026-07-20T05:58:21.785497"
+    },
+    {
+      "operation": "DELETE",
+      "num_operations": 500,
+      "min_time": 0.08368492126464844,
+      "max_time": 9.868383407592773,
+      "mean_time": 0.32947397232055664,
+      "median_time": 0.274658203125,
+      "p95_time": 0.6115436553955078,
+      "p99_time": 1.3327598571777344,
+      "throughput_ops": 3031.2804894794585,
+      "error_count": 0,
+      "error_rate": 0.0,
+      "timestamp": "2026-07-20T05:58:21.950922"
+    }
+  ],
+  "summary": {
+    "average_operation_time_ms": 1.1427660226821899,
+    "median_operation_time_ms": 0.5407187223434449,
+    "max_operation_time_ms": 4.270356178283691,
+    "average_throughput_ops": 1869.2583142103674,
+    "total_error_rate": 0.0,
+    "slowest_operation": "COMPLEX_QUERY",
+    "fastest_operation": "DELETE",
+    "highest_throughput_operation": "DELETE"
+  }
+}

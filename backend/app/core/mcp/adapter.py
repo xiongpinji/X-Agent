@@ -1,22 +1,68 @@
-"""MCP adapter for integrating MCP tools with X-Agent system."""
+"""MCP adapter for integrating MCP tools with X-Agent system.
+
+P1-10：本适配器**不再持有裸 dict 工具表**（原 ``self.tool_registry:
+Dict[str, Callable]`` 是系统里第四套平行注册表，造成权限/审计双轨）。
+现改为显式组合唯一的运行时 ``ToolRegistry``（``core/tools.py``）：
+
+* 工具以 ``ToolDefinition`` 注册进运行时注册表（风险等级取统一风险模型）；
+* 执行一律经 ``ToolRegistry.execute`` 咽喉点 —— 策略、hooks、执行审计
+  （``ToolExecutionStore``）与 Agent 主循环同轨；
+* 各 legacy 工具（file/search/browser）自带的 ``PermissionChecker`` 作为
+  操作级二次防线保留：默认策略引擎 ``enable_high_risk_tools=True``（本适配器
+  是运维/管理 API 执行面，操作级放行/拒绝由工具的 PermissionChecker 裁决，
+  其拒绝映射为 ``PERMISSION_DENIED``）；注入 ``approval_store`` /
+  ``execution_store`` / ``hook_manager`` 后，审批与执行审计立即并入单轨。
+"""
 
 from __future__ import annotations
 
+import contextvars
 import logging
-from typing import Any, Dict, Optional, List, Callable
+from typing import Any, Dict, Optional, List, Callable, Tuple
 from datetime import datetime
+from uuid import uuid4
 
+from backend.app.core.contracts import RiskLevel, RunContext
 from backend.app.core.mcp.client import MCPClient
 from backend.app.core.mcp.tools.file_tool import FileOperationTool, PermissionChecker as FilePermissionChecker
 from backend.app.core.mcp.tools.search_tool import SearchOperationTool, SearchPermissionChecker
 from backend.app.core.mcp.tools.browser_tool import BrowserTool, BrowserPermissionChecker
-from backend.app.core.tool_schema import ToolCallInput, ToolCallOutput, ToolSchema, ToolRiskLevel
+from backend.app.core.tool_schema import ToolCallInput, ToolCallOutput
+from backend.app.core.tools import ToolRegistry
 
 logger = logging.getLogger(__name__)
 
+# 工具内部 PermissionError → ToolCallOutput.error_code 的传递通道
+# （registry.execute 会把异常收敛为 record.error 字符串，错误码经此
+# contextvar 跨调用边界带回；协程安全，并发执行互不漏串）。
+_adapter_error_code: "contextvars.ContextVar[Optional[str]]" = contextvars.ContextVar(
+    "xagent_mcp_adapter_error_code", default=None
+)
+
 
 class MCPToolAdapter:
-    """Adapter for integrating MCP tools with X-Agent tool system."""
+    """Adapter for integrating MCP tools with X-Agent tool system.
+
+    持有唯一的运行时 ``ToolRegistry``（显式组合），legacy 工具注册其中。
+    """
+
+    # name -> (description, category, risk_level)
+    _LEGACY_TOOL_META: Dict[str, Tuple[str, str, RiskLevel]] = {
+        "file_read": ("Read file content", "file", RiskLevel.LOW),
+        "file_write": ("Write content to file", "file", RiskLevel.HIGH),
+        "file_list": ("List files in directory", "file", RiskLevel.LOW),
+        "file_delete": ("Delete file", "file", RiskLevel.CRITICAL),
+        "file_exists": ("Check if file exists", "file", RiskLevel.LOW),
+        "search_web": ("Search the web", "search", RiskLevel.LOW),
+        "search_news": ("Search news", "search", RiskLevel.LOW),
+        "browser_navigate": ("Navigate to URL", "browser", RiskLevel.MEDIUM),
+        "browser_click": ("Click element", "browser", RiskLevel.MEDIUM),
+        "browser_type": ("Type text", "browser", RiskLevel.MEDIUM),
+        "browser_screenshot": ("Take screenshot", "browser", RiskLevel.LOW),
+        "browser_scroll": ("Scroll page", "browser", RiskLevel.LOW),
+        "browser_wait": ("Wait for duration", "browser", RiskLevel.LOW),
+        "browser_get_content": ("Get page content", "browser", RiskLevel.LOW),
+    }
 
     def __init__(
         self,
@@ -24,6 +70,11 @@ class MCPToolAdapter:
         file_tool: Optional[FileOperationTool] = None,
         search_tool: Optional[SearchOperationTool] = None,
         browser_tool: Optional[BrowserTool] = None,
+        *,
+        runtime_registry: Optional[ToolRegistry] = None,
+        approval_store: Any = None,
+        execution_store: Any = None,
+        hook_manager: Any = None,
     ):
         """Initialize MCP tool adapter.
 
@@ -32,38 +83,117 @@ class MCPToolAdapter:
             file_tool: File operation tool instance
             search_tool: Search operation tool instance
             browser_tool: Browser control tool instance
+            runtime_registry: 复用外部运行时 ToolRegistry（缺省时自建）
+            approval_store: 审批存储（注入后高/危风险执行产生审批记录）
+            execution_store: 执行审计存储（注入后每次执行写入审计单轨）
+            hook_manager: 钩子管理器（注入后 pre/post_tool_use 钩子生效）
         """
         self.mcp_client = mcp_client
         self.file_tool = file_tool
         self.search_tool = search_tool
         self.browser_tool = browser_tool
-        self.tool_registry: Dict[str, Callable] = {}
+        self._runtime_registry = runtime_registry or self._build_registry(
+            approval_store=approval_store,
+            execution_store=execution_store,
+            hook_manager=hook_manager,
+        )
         self._register_tools()
 
+    @staticmethod
+    def _build_registry(
+        approval_store: Any = None,
+        execution_store: Any = None,
+        hook_manager: Any = None,
+    ) -> ToolRegistry:
+        """构建适配器自用的运行时注册表。
+
+        策略引擎 ``enable_high_risk_tools=True``：本适配器是运维/管理 API
+        执行面，操作级权限由各工具的 PermissionChecker 裁决（拒绝时抛
+        PermissionError → PERMISSION_DENIED）；审批/审计/钩子在注入相应
+        组件后于同一咽喉点生效。
+        """
+        from backend.app.core.policy import ToolPolicyEngine
+
+        policy = ToolPolicyEngine(enable_high_risk_tools=True)
+        return ToolRegistry(
+            policy,
+            approval_store=approval_store,
+            execution_store=execution_store,
+            hook_manager=hook_manager,
+        )
+
+    @property
+    def runtime_registry(self) -> ToolRegistry:
+        """适配器持有的唯一运行时注册表（显式组合关系）。"""
+        return self._runtime_registry
+
     def _register_tools(self) -> None:
-        """Register all available MCP tools."""
+        """把所有可用 legacy 工具注册进运行时注册表（替代原裸 dict）。"""
+        handlers: Dict[str, Callable] = {}
         if self.file_tool:
-            self.tool_registry["file_read"] = self.file_tool.read_file
-            self.tool_registry["file_write"] = self.file_tool.write_file
-            self.tool_registry["file_list"] = self.file_tool.list_files
-            self.tool_registry["file_delete"] = self.file_tool.delete_file
-            self.tool_registry["file_exists"] = self.file_tool.file_exists
-
+            handlers.update(
+                {
+                    "file_read": self.file_tool.read_file,
+                    "file_write": self.file_tool.write_file,
+                    "file_list": self.file_tool.list_files,
+                    "file_delete": self.file_tool.delete_file,
+                    "file_exists": self.file_tool.file_exists,
+                }
+            )
         if self.search_tool:
-            self.tool_registry["search_web"] = self.search_tool.search_web
-            self.tool_registry["search_news"] = self.search_tool.search_news
-
+            handlers.update(
+                {
+                    "search_web": self.search_tool.search_web,
+                    "search_news": self.search_tool.search_news,
+                }
+            )
         if self.browser_tool:
-            self.tool_registry["browser_navigate"] = self.browser_tool.navigate
-            self.tool_registry["browser_click"] = self.browser_tool.click
-            self.tool_registry["browser_type"] = self.browser_tool.type_text
-            self.tool_registry["browser_screenshot"] = self.browser_tool.screenshot
-            self.tool_registry["browser_scroll"] = self.browser_tool.scroll
-            self.tool_registry["browser_wait"] = self.browser_tool.wait
-            self.tool_registry["browser_get_content"] = self.browser_tool.get_page_content
+            handlers.update(
+                {
+                    "browser_navigate": self.browser_tool.navigate,
+                    "browser_click": self.browser_tool.click,
+                    "browser_type": self.browser_tool.type_text,
+                    "browser_screenshot": self.browser_tool.screenshot,
+                    "browser_scroll": self.browser_tool.scroll,
+                    "browser_wait": self.browser_tool.wait,
+                    "browser_get_content": self.browser_tool.get_page_content,
+                }
+            )
+
+        for name, func in handlers.items():
+            description, _category, risk_level = self._LEGACY_TOOL_META[name]
+            self._runtime_registry.register(
+                name,
+                description,
+                self._wrap_legacy_handler(func),
+                risk_level=risk_level,
+                required_scope=f"tool:{name}",
+                # **kwargs 签名无法推导参数 schema；显式放行任意对象参数，
+                # 参数级校验由工具自身完成。
+                parameters_schema={"type": "object"},
+            )
+
+    @staticmethod
+    def _wrap_legacy_handler(func: Callable) -> Callable:
+        """把 legacy 工具函数包装为注册表 handler。
+
+        PermissionError（工具自身 PermissionChecker 拒绝）经 contextvar
+        带出 PERMISSION_DENIED 错误码后原样上抛，由 registry 收敛为
+        失败记录。
+        """
+
+        async def _shim(**kwargs: Any) -> Any:
+            try:
+                return await func(**kwargs)
+            except PermissionError:
+                _adapter_error_code.set("PERMISSION_DENIED")
+                raise
+
+        _shim.__name__ = getattr(func, "__name__", "legacy_tool")
+        return _shim
 
     async def execute_tool(self, tool_input: ToolCallInput) -> ToolCallOutput:
-        """Execute a tool call.
+        """Execute a tool call（经运行时注册表咽喉点）.
 
         Args:
             tool_input: Tool call input
@@ -74,43 +204,55 @@ class MCPToolAdapter:
         tool_name = tool_input.tool_name
         arguments = tool_input.arguments or {}
 
+        if self._runtime_registry.get(tool_name) is None:
+            return ToolCallOutput(
+                tool_id="",
+                tool_name=tool_name,
+                success=False,
+                error=f"Tool {tool_name} not found in MCP adapter",
+                error_code="TOOL_NOT_FOUND",
+            )
+
+        context = RunContext(
+            trace_id=tool_input.trace_id or str(uuid4()),
+            tenant_id=tool_input.tenant_id,
+            user_id=tool_input.user_id,
+        )
+
+        token = _adapter_error_code.set(None)
         try:
-            if tool_name not in self.tool_registry:
-                return ToolCallOutput(
-                    tool_id="",
-                    tool_name=tool_name,
-                    success=False,
-                    error=f"Tool {tool_name} not found in MCP adapter",
-                    error_code="TOOL_NOT_FOUND",
-                )
+            record = await self._runtime_registry.execute(
+                context, tool_name, arguments
+            )
+            handler_error_code = _adapter_error_code.get()
+        finally:
+            _adapter_error_code.reset(token)
 
-            tool_func = self.tool_registry[tool_name]
-            result = await tool_func(**arguments)
-
+        if record.success:
             return ToolCallOutput(
                 tool_id=tool_name,
                 tool_name=tool_name,
                 success=True,
-                result=result,
+                result=record.output,
+                latency_ms=int(record.latency_ms),
             )
-        except PermissionError as e:
-            logger.warning(f"Permission denied for tool {tool_name}: {e}")
-            return ToolCallOutput(
-                tool_id=tool_name,
-                tool_name=tool_name,
-                success=False,
-                error=str(e),
-                error_code="PERMISSION_DENIED",
-            )
-        except Exception as e:
-            logger.error(f"Error executing tool {tool_name}: {e}")
-            return ToolCallOutput(
-                tool_id=tool_name,
-                tool_name=tool_name,
-                success=False,
-                error=str(e),
-                error_code="EXECUTION_ERROR",
-            )
+
+        if handler_error_code:
+            error_code = handler_error_code
+        elif not record.policy.allowed:
+            # 策略/审批拒绝统一映射为 PERMISSION_DENIED
+            error_code = "PERMISSION_DENIED"
+        else:
+            error_code = "EXECUTION_ERROR"
+
+        return ToolCallOutput(
+            tool_id=tool_name,
+            tool_name=tool_name,
+            success=False,
+            error=record.error,
+            error_code=error_code,
+            latency_ms=int(record.latency_ms),
+        )
 
     async def execute_tools_batch(
         self, tool_inputs: List[ToolCallInput]
@@ -129,109 +271,24 @@ class MCPToolAdapter:
         return await asyncio.gather(*tasks)
 
     def get_available_tools(self) -> List[Dict[str, Any]]:
-        """Get list of available tools.
+        """Get list of available tools（以运行时注册表为唯一事实来源）.
 
         Returns:
             List of tool definitions
         """
         tools = []
-
-        if self.file_tool:
-            tools.extend([
+        for definition in self._runtime_registry.manifest():
+            _description, category, _risk = self._LEGACY_TOOL_META.get(
+                definition["name"], ("", "utility", RiskLevel.LOW)
+            )
+            tools.append(
                 {
-                    "name": "file_read",
-                    "description": "Read file content",
-                    "category": "file",
-                    "risk_level": "low",
-                },
-                {
-                    "name": "file_write",
-                    "description": "Write content to file",
-                    "category": "file",
-                    "risk_level": "high",
-                },
-                {
-                    "name": "file_list",
-                    "description": "List files in directory",
-                    "category": "file",
-                    "risk_level": "low",
-                },
-                {
-                    "name": "file_delete",
-                    "description": "Delete file",
-                    "category": "file",
-                    "risk_level": "critical",
-                },
-                {
-                    "name": "file_exists",
-                    "description": "Check if file exists",
-                    "category": "file",
-                    "risk_level": "low",
-                },
-            ])
-
-        if self.search_tool:
-            tools.extend([
-                {
-                    "name": "search_web",
-                    "description": "Search the web",
-                    "category": "search",
-                    "risk_level": "low",
-                },
-                {
-                    "name": "search_news",
-                    "description": "Search news",
-                    "category": "search",
-                    "risk_level": "low",
-                },
-            ])
-
-        if self.browser_tool:
-            tools.extend([
-                {
-                    "name": "browser_navigate",
-                    "description": "Navigate to URL",
-                    "category": "browser",
-                    "risk_level": "medium",
-                },
-                {
-                    "name": "browser_click",
-                    "description": "Click element",
-                    "category": "browser",
-                    "risk_level": "medium",
-                },
-                {
-                    "name": "browser_type",
-                    "description": "Type text",
-                    "category": "browser",
-                    "risk_level": "medium",
-                },
-                {
-                    "name": "browser_screenshot",
-                    "description": "Take screenshot",
-                    "category": "browser",
-                    "risk_level": "low",
-                },
-                {
-                    "name": "browser_scroll",
-                    "description": "Scroll page",
-                    "category": "browser",
-                    "risk_level": "low",
-                },
-                {
-                    "name": "browser_wait",
-                    "description": "Wait for duration",
-                    "category": "browser",
-                    "risk_level": "low",
-                },
-                {
-                    "name": "browser_get_content",
-                    "description": "Get page content",
-                    "category": "browser",
-                    "risk_level": "low",
-                },
-            ])
-
+                    "name": definition["name"],
+                    "description": definition["description"],
+                    "category": category,
+                    "risk_level": definition["risk_level"],
+                }
+            )
         return tools
 
     def get_audit_logs(self, tool_category: Optional[str] = None) -> Dict[str, Any]:

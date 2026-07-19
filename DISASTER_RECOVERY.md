@@ -4,7 +4,14 @@
 
 This document outlines the disaster recovery procedures for X-Agent production environment. It covers prevention, detection, and recovery strategies for various failure scenarios.
 
+> 2026-07-20 (P1-15/P1-17) 更新:
+> - 权威 K8s 清单为 `deployment/k8s/`(namespace: **xagent**); 旧 `deployment/kubernetes/`(namespace production)已归档至 `archive/legacy_kubernetes_manifests_2026-07-20/`。本文所有 `kubectl` 命令已对齐到 `xagent` 命名空间。
+> - Qdrant 备份/恢复改用官方快照 API(创建 `POST /collections/{name}/snapshots`; 下载 `GET /collections/{name}/snapshots/{file}`; 恢复 `POST /collections/{name}/snapshots/upload` 或 `PUT /collections/{name}/snapshots/recover`)。旧的 `/collections/backup`、`/collections/restore` 端点不存在, 已废弃。
+> - 定时备份由 K8s CronJob 执行: `deployment/k8s/backup-cronjob.yaml`(或 Helm `backup.enabled`, 二选一, 勿重复部署), 脚本 `deployment/backup/backup.sh`。
+
 ## Recovery Time Objectives (RTO) and Recovery Point Objectives (RPO)
+
+> 注: 以下 RTO/RPO 为**目标值**, 尚未经过真实演练验证(首次演练后回填实测值)。
 
 | Component | RTO | RPO |
 |-----------|-----|-----|
@@ -22,20 +29,20 @@ This document outlines the disaster recovery procedures for X-Agent production e
 **Detection:**
 ```bash
 # Pod is not running
-kubectl get pods -n production | grep xagent-api
+kubectl get pods -n xagent | grep xagent-api
 
 # Pod is in CrashLoopBackOff
-kubectl describe pod <pod-name> -n production
+kubectl describe pod <pod-name> -n xagent
 ```
 
 **Recovery:**
 ```bash
 # Kubernetes automatically restarts the pod
 # Monitor recovery
-kubectl get pods -n production -w
+kubectl get pods -n xagent -w
 
 # If pod doesn't recover, check logs
-kubectl logs <pod-name> -n production --previous
+kubectl logs <pod-name> -n xagent --previous
 ```
 
 **RTO:** 2-5 minutes
@@ -48,13 +55,13 @@ kubectl logs <pod-name> -n production --previous
 kubectl get nodes
 
 # Pods are pending
-kubectl get pods -n production | grep Pending
+kubectl get pods -n xagent | grep Pending
 ```
 
 **Recovery:**
 ```bash
 # Kubernetes automatically reschedules pods to healthy nodes
-kubectl get pods -n production -o wide
+kubectl get pods -n xagent -o wide
 
 # If node doesn't recover, drain and remove it
 kubectl drain <node-name> --ignore-daemonsets --delete-emptydir-data
@@ -71,7 +78,7 @@ kubectl delete node <node-name>
 **Detection:**
 ```bash
 # Database connection errors in logs
-kubectl logs -n production -l app=xagent-api | grep "database"
+kubectl logs -n xagent -l app=xagent-api | grep "database"
 
 # Health check fails
 curl https://api.example.com/health
@@ -87,7 +94,7 @@ curl https://api.example.com/health
 # Monitor failover progress in AWS console
 
 # Verify connection
-kubectl exec -it <pod-name> -n production -- \
+kubectl exec -it <pod-name> -n xagent -- \
   psql -h $DB_HOST -U $DB_USER -d xagent_prod -c "SELECT 1"
 ```
 
@@ -111,7 +118,7 @@ python deployment/migrations/migrate.py verify
 **Detection:**
 ```bash
 # Redis connection errors
-kubectl logs -n production -l app=xagent-api | grep "redis"
+kubectl logs -n xagent -l app=xagent-api | grep "redis"
 
 # Cache misses increasing
 # (monitor in Prometheus)
@@ -126,7 +133,7 @@ kubectl logs -n production -l app=xagent-api | grep "redis"
 # AWS automatically fails over to replica
 
 # Verify connection
-kubectl exec -it <pod-name> -n production -- \
+kubectl exec -it <pod-name> -n xagent -- \
   redis-cli -h $REDIS_HOST ping
 ```
 
@@ -150,7 +157,7 @@ redis-cli -h $REDIS_HOST FLUSHALL
 **Detection:**
 ```bash
 # Vector search errors
-kubectl logs -n production -l app=xagent-api | grep "qdrant"
+kubectl logs -n xagent -l app=xagent-api | grep "qdrant"
 
 # Memory retrieval failures
 # (monitor in application logs)
@@ -168,16 +175,25 @@ kubectl logs -n production -l app=xagent-api | grep "qdrant"
 curl http://prod-qdrant.example.com:6333/health
 ```
 
-#### Option B: Restore from Backup
+#### Option B: Restore from Snapshot
 
 ```bash
-# List available backups
+# List available backups (每个集合一个快照文件, 由 deployment/backup/backup.sh 生成)
 ls -lh /backups/
 
-# Restore Qdrant backup
-curl -X POST "http://prod-qdrant.example.com:6333/collections/restore" \
+# 方式 1: 上传快照文件恢复 (官方 API: POST /collections/{name}/snapshots/upload)
+# priority=snapshot 表示以快照数据为准
+curl -X POST "http://prod-qdrant.example.com:6333/collections/<collection>/snapshots/upload?priority=snapshot" \
+  -H "api-key: $QDRANT_API_KEY" \
+  -H "Content-Type: multipart/form-data" \
+  -F "snapshot=@/backups/backup_20240527_020000/qdrant_<collection>.snapshot"
+
+# 方式 2: 若快照文件已在 Qdrant 节点本地或可下载 URL, 用 recover 端点
+# (官方 API: PUT /collections/{name}/snapshots/recover)
+curl -X PUT "http://prod-qdrant.example.com:6333/collections/<collection>/snapshots/recover" \
+  -H "api-key: $QDRANT_API_KEY" \
   -H "Content-Type: application/json" \
-  -d @/backups/backup_20240527_020000/qdrant.backup
+  -d '{"location": "file:///qdrant/snapshots/qdrant_<collection>.snapshot", "priority": "snapshot"}'
 ```
 
 **RTO:** 30-120 minutes
@@ -219,17 +235,20 @@ curl -X POST "http://prod-qdrant.example.com:6333/collections/restore" \
 # 1. Restore database from backup
 python deployment/migrations/migrate.py restore /backups/latest/database.dump
 
-# 2. Restore Redis from backup
-redis-cli --rdb /backups/latest/redis.rdb
+# 2. Restore Redis from backup (RDB 文件放回数据目录后重启; --rdb 是备份命令)
+kubectl cp /backups/latest/redis.rdb <redis-pod>:/data/dump.rdb -n xagent
+kubectl delete pod <redis-pod> -n xagent
 
-# 3. Restore Qdrant from backup
-curl -X POST "http://new-qdrant:6333/collections/restore" \
-  -H "Content-Type: application/json" \
-  -d @/backups/latest/qdrant.backup
+# 3. Restore Qdrant from snapshot (官方快照上传 API, 每个集合执行一次)
+curl -X POST "http://new-qdrant:6333/collections/<collection>/snapshots/upload?priority=snapshot" \
+  -H "api-key: $QDRANT_API_KEY" \
+  -H "Content-Type: multipart/form-data" \
+  -F "snapshot=@/backups/latest/qdrant_<collection>.snapshot"
 
 # 4. Deploy application
-helm install xagent xagent/xagent \
-  --namespace production \
+helm upgrade --install xagent deployment/helm \
+  --namespace xagent \
+  --create-namespace \
   --values deployment/helm/values-production.yaml
 ```
 
@@ -237,7 +256,7 @@ helm install xagent xagent/xagent \
 
 ```bash
 # Run comprehensive health checks
-bash deployment/health-check.sh
+bash disaster-recovery/scripts/health-check.sh
 
 # Notify stakeholders
 # - Incident started
@@ -253,13 +272,15 @@ bash deployment/health-check.sh
 ### Backup Strategy
 
 ```bash
-# Automated daily backups
-# - Database: 2 AM UTC
-# - Redis: 2:15 AM UTC
-# - Qdrant: 2:30 AM UTC
+# Automated daily backups (K8s CronJob: deployment/k8s/backup-cronjob.yaml,
+# 或 Helm backup.enabled=true, 二选一勿重复; 脚本: deployment/backup/backup.sh)
+# - Database: 2 AM UTC (pg_dump custom 格式)
+# - Redis: 同一任务内顺序执行 (RDB)
+# - Qdrant: 同一任务内顺序执行 (官方快照 API, 每个集合一个 .snapshot 文件)
 
-# Backup retention: 30 days
-# Backup location: S3 (cross-region)
+# Backup retention: 30 days (RETENTION_DAYS)
+# Backup location: 本地 PVC (xagent-backup-pvc); 可选 S3 (跨区, S3_ENABLED=true,
+# S3 上传需 aws cli, 请扩展 deployment/backup/Dockerfile 安装后启用)
 
 # Backup verification: Daily
 # - Restore test weekly
@@ -269,10 +290,10 @@ bash deployment/health-check.sh
 ### Backup Verification
 
 ```bash
-# List backups
-aws s3 ls s3://xagent-backups/
+# List backups (本地 PVC; 若启用了可选 S3 上传, 用 aws s3 ls s3://$S3_BUCKET/)
+ls -lhd /backups/*/
 
-# Verify backup integrity
+# Verify backup integrity (读取 XAGENT_DATABASE_URL, 兼容 DATABASE_URL)
 python deployment/migrations/migrate.py verify
 
 # Test restore (in staging)
@@ -285,12 +306,18 @@ python deployment/migrations/migrate.py restore /backups/latest/database.dump
 # Database restore
 python deployment/migrations/migrate.py restore <backup-file>
 
-# Redis restore
-redis-cli --rdb <backup-file>
+# Redis restore: RDB 文件放回数据目录后重启 (redis-cli --rdb 是备份命令, 不能用于恢复)
+docker cp /backups/latest/redis.rdb <redis-container>:/data/dump.rdb
+docker restart <redis-container>
+# K8s: kubectl cp /backups/latest/redis.rdb <redis-pod>:/data/dump.rdb -n xagent && \
+#      kubectl delete pod <redis-pod> -n xagent
 
-# Qdrant restore
-curl -X POST "http://qdrant:6333/collections/restore" \
-  -d @<backup-file>
+# Qdrant restore (官方快照上传 API; <collection> 为集合名, 与备份文件名对应:
+# qdrant_<collection>.snapshot)
+curl -X POST "http://qdrant:6333/collections/<collection>/snapshots/upload?priority=snapshot" \
+  -H "api-key: $QDRANT_API_KEY" \
+  -H "Content-Type: multipart/form-data" \
+  -F "snapshot=@/backups/latest/qdrant_<collection>.snapshot"
 ```
 
 ## Monitoring and Alerting
@@ -396,14 +423,21 @@ Post-Incident:
 
 ### Runbook Locations
 
+> P1-17 修正: 原引用的 `/deployment/runbooks/` 目录不存在, 已替换为仓库中真实存在的文档与脚本。
+
 ```
-/deployment/runbooks/
-├── pod-failure.md
-├── node-failure.md
-├── database-failure.md
-├── redis-failure.md
-├── qdrant-failure.md
-└── complete-failure.md
+disaster-recovery/                     # 灾难恢复文档体系
+├── DISASTER_RECOVERY_MANUAL.md        # 操作手册(故障诊断/转移/恢复/回切)
+├── DISASTER_RECOVERY_PLAN.md          # DR 计划(RTO/RPO/场景/演练计划)
+├── DRILL_REPORT_TEMPLATE.md           # 演练报告模板
+├── RCA_TEMPLATE.md                    # 根因分析模板
+└── scripts/
+    ├── health-check.sh                # 健康检查(应用/PG/Redis/Qdrant/Neo4j/资源)
+    ├── failover.sh                    # 故障转移(自动/手动, 含 dry-run)
+    └── verify-recovery.sh             # 恢复验证
+monitoring/RUNBOOK.md                  # 监控告警处置 runbook
+deployment/backup/backup.sh            # 全量备份脚本(PG/Redis/Qdrant 快照)
+deployment/k8s/backup-cronjob.yaml     # 定时备份 CronJob
 ```
 
 ### Runbook Updates
@@ -417,7 +451,10 @@ Post-Incident:
 
 ## Related Documentation
 
-- [Production Deployment Guide](PRODUCTION_DEPLOYMENT_GUIDE.md)
+> P1-17 修正: 原引用的 PRODUCTION_DEPLOYMENT_GUIDE.md / PRODUCTION_CHECKLIST.md /
+> deployment/security/security-hardening.md 在仓库中不存在, 已替换为真实路径或移除。
+
+- [Deployment Guide](docs/DEPLOYMENT_GUIDE.md)
 - [Rollback Procedure](ROLLBACK_PROCEDURE.md)
-- [Production Checklist](PRODUCTION_CHECKLIST.md)
-- [Security Hardening](deployment/security/security-hardening.md)
+- [Deployment Checklist](monitoring/DEPLOYMENT_CHECKLIST.md)
+- [Monitoring Runbook](monitoring/RUNBOOK.md)

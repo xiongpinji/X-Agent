@@ -320,7 +320,13 @@ class MCPPluginAdapter:
             return False
 
     def call_tool(self, plugin: MCPPlugin, tool_name: str, args: dict[str, Any]) -> Any:
-        """Call a tool provided by the plugin"""
+        """Call a tool provided by the plugin.
+
+        ⚠️ 未实现：插件进程的 MCP 协议握手（initialize/tools-call）尚未接线，
+        ``start_server`` 仅拉起进程。本方法**显式报错**而不是返回伪造的成功
+        结果（P1-01 反"假成功"裁决）。真实 MCP server 请使用
+        ``backend.app.core.mcp.client.MCPClient``（stdio / Streamable HTTP）。
+        """
         if plugin.status != MCPPluginStatus.RUNNING:
             raise RuntimeError(f"Plugin {plugin.manifest.name} is not running")
 
@@ -337,10 +343,13 @@ class MCPPluginAdapter:
         # Validate input schema
         self._validate_tool_input(tool_def, args)
 
-        # Call tool (implementation depends on plugin type)
-        logger.info(f"Calling tool {tool_name} on plugin {plugin.manifest.name}")
-        # TODO: Implement actual tool invocation via MCP protocol
-        return {"status": "success", "data": {}}
+        raise NotImplementedError(
+            f"Plugin tool invocation over MCP protocol is not implemented "
+            f"(plugin={plugin.manifest.name}, tool={tool_name}). "
+            f"Use backend.app.core.mcp.client.MCPClient for real MCP servers "
+            f"(stdio / Streamable HTTP); plugin-process MCP handshake is a "
+            f"tracked TODO owned by the plugin runtime (P1-12)."
+        )
 
     def get_resources(self, plugin: MCPPlugin) -> list[dict[str, Any]]:
         """Get resources provided by plugin"""

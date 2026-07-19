@@ -4,7 +4,7 @@ import os
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -31,6 +31,9 @@ class Settings(BaseSettings):
 
     memory_backend: str = "memory"
     database_url: str = "sqlite:///./data/xagent.db"
+    # 用户/租户管理存储后端 (P1-03): memory=进程内存(仅 dev); postgres=SQL 后端,
+    # 使用 database_url 指向的数据库(生产须为 Postgres), 支持多实例共享
+    admin_store_backend: str = "memory"
     memory_store_path: Path = PROJECT_ROOT / "data" / "memory.jsonl"
     embedding_backend: str = "local"
     openai_embedding_model: str = "text-embedding-3-small"
@@ -135,6 +138,65 @@ class Settings(BaseSettings):
                 "XAGENT_GITHUB_WEBHOOK_SECRET is not set — GitHub webhooks will be unauthenticated"
             )
         return value
+
+    @field_validator("admin_store_backend")
+    @classmethod
+    def _validate_admin_store_backend(cls, value: str) -> str:
+        """用户/租户存储后端取值校验 (P1-03)。"""
+        normalized = value.strip().lower()
+        valid_backends = {"memory", "postgres"}
+        if normalized not in valid_backends:
+            raise ValueError(
+                f"Invalid admin_store_backend: {value!r}. Must be one of: {sorted(valid_backends)}"
+            )
+        return normalized
+
+    @model_validator(mode="after")
+    def _production_storage_fail_fast(self) -> "Settings":
+        """P1-19: 生产模式存储 fail-fast 守卫。
+
+        app_mode=production 时, 以下任一情况直接拒绝启动(一次性列出全部违规项):
+        - database_url 指向 sqlite(单文件库, 多实例/多副本部署数据分裂);
+        - memory_backend 为 memory/jsonl(进程内存或本地文件, 重启即丢且不可共享);
+        - trace_backend 为 memory(进程内存);
+        - admin_store_backend 为 memory(用户/租户库在进程内存, 重启即丢)。
+
+        修复方向: 统一设置 XAGENT_DATABASE_URL 为 Postgres DSN, 并将
+        XAGENT_MEMORY_BACKEND / XAGENT_TRACE_BACKEND / XAGENT_ADMIN_STORE_BACKEND
+        设置为外部化后端(postgres 等)。
+        """
+        if self.app_mode != "production":
+            return self
+
+        violations: list[str] = []
+        if self.database_url.strip().lower().startswith("sqlite"):
+            violations.append(
+                "- database_url 指向 sqlite(单文件嵌入式库, 多实例部署会数据分裂): "
+                "设置 XAGENT_DATABASE_URL=postgresql+asyncpg://<user>:<pass>@<host>:5432/<db>"
+            )
+        if self.memory_backend.strip().lower() in {"memory", "jsonl"}:
+            violations.append(
+                f"- memory_backend={self.memory_backend!r} 为进程内存/本地文件后端: "
+                "设置 XAGENT_MEMORY_BACKEND=postgres (或 qdrant)"
+            )
+        if self.trace_backend.strip().lower() == "memory":
+            violations.append(
+                "- trace_backend='memory' 为进程内存后端: "
+                "设置 XAGENT_TRACE_BACKEND=postgres (或 langfuse)"
+            )
+        if self.admin_store_backend.strip().lower() == "memory":
+            violations.append(
+                "- admin_store_backend='memory' 使用户/租户库驻留进程内存(重启即丢, 不可多实例共享): "
+                "设置 XAGENT_ADMIN_STORE_BACKEND=postgres"
+            )
+
+        if violations:
+            raise ValueError(
+                "生产模式 (app_mode=production) 检测到进程内存/文件/sqlite 存储, "
+                "多实例部署将导致数据分裂或丢失, 拒绝启动 (P1-19 fail-fast):\n"
+                + "\n".join(violations)
+            )
+        return self
 
     @field_validator("cors_origins")
     @classmethod

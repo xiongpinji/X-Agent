@@ -1,0 +1,329 @@
+{
+  "benchmark": "wave_a_load",
+  "environment": {
+    "os": "Windows 11 (10.0.26200)",
+    "machine": "AMD64",
+    "python_version": "3.13.13",
+    "cpu_count_logical": 32,
+    "llm_mode": "mock (settings.llm_backend 默认值 'mock', 未配置真实 LLM API key)",
+    "app_mode": "development (XAGENT_APP_MODE)",
+    "date_utc": "2026-07-19T21:59:13.643885+00:00",
+    "cpu_model": "AMD64 Family 26 Model 112 Stepping 0, AuthenticAMD",
+    "memory_total_gb": 123.65
+  },
+  "base_url": "http://127.0.0.1:8126",
+  "phases_executed": [
+    "a",
+    "b",
+    "c"
+  ],
+  "rate_limits_in_code": {
+    "source": "backend/app/main.py rate_limit_middleware",
+    "login": "10 req/min/IP",
+    "register": "5 req/min/IP",
+    "api_other": "100 req/min/IP (合计)",
+    "health": "不限流"
+  },
+  "phase_a_within_quota_latency": [
+    {
+      "scenario": "auth_login",
+      "method": "POST",
+      "path": "/api/v1/auth/login",
+      "auth": false,
+      "num_requests": 8,
+      "concurrency": 2,
+      "accepted_requests": 8,
+      "rejected_429": 0,
+      "errors_5xx_or_network": 0,
+      "error_rate": 0.0,
+      "rejection_rate_429": 0.0,
+      "status_codes": {
+        "200": 8
+      },
+      "wall_time_s": 1.896,
+      "throughput_rps": 4.22,
+      "latency_ms": {
+        "min": 459.63,
+        "max": 477.61,
+        "mean": 469.12,
+        "p50": 469.54,
+        "p95": 477.47,
+        "p99": 477.58,
+        "sample_count": 8
+      }
+    },
+    {
+      "scenario": "agents_list",
+      "method": "GET",
+      "path": "/api/v1/agents",
+      "auth": true,
+      "num_requests": 15,
+      "concurrency": 5,
+      "accepted_requests": 15,
+      "rejected_429": 0,
+      "errors_5xx_or_network": 0,
+      "error_rate": 0.0,
+      "rejection_rate_429": 0.0,
+      "status_codes": {
+        "200": 15
+      },
+      "wall_time_s": 0.523,
+      "throughput_rps": 28.7,
+      "latency_ms": {
+        "min": 14.21,
+        "max": 450.24,
+        "mean": 167.1,
+        "p50": 36.35,
+        "p95": 450.04,
+        "p99": 450.2,
+        "sample_count": 15
+      }
+    },
+    {
+      "scenario": "agent_run_mock",
+      "method": "POST",
+      "path": "/api/v1/agents/run",
+      "auth": true,
+      "num_requests": 3,
+      "concurrency": 2,
+      "accepted_requests": 3,
+      "rejected_429": 0,
+      "errors_5xx_or_network": 0,
+      "error_rate": 0.0,
+      "rejection_rate_429": 0.0,
+      "status_codes": {
+        "200": 3
+      },
+      "wall_time_s": 216.17,
+      "throughput_rps": 0.01,
+      "latency_ms": {
+        "min": 68694.28,
+        "max": 147454.89,
+        "mean": 121201.22,
+        "p50": 147454.49,
+        "p95": 147454.85,
+        "p99": 147454.88,
+        "sample_count": 3
+      }
+    },
+    {
+      "scenario": "memory_store",
+      "method": "POST",
+      "path": "/api/v1/memory",
+      "auth": true,
+      "num_requests": 20,
+      "concurrency": 5,
+      "accepted_requests": 20,
+      "rejected_429": 0,
+      "errors_5xx_or_network": 0,
+      "error_rate": 0.0,
+      "rejection_rate_429": 0.0,
+      "status_codes": {
+        "200": 20
+      },
+      "wall_time_s": 0.157,
+      "throughput_rps": 127.47,
+      "latency_ms": {
+        "min": 20.68,
+        "max": 46.38,
+        "mean": 33.28,
+        "p50": 34.06,
+        "p95": 41.98,
+        "p99": 45.5,
+        "sample_count": 20
+      }
+    },
+    {
+      "scenario": "memory_search",
+      "method": "POST",
+      "path": "/api/v1/memory/search",
+      "auth": true,
+      "num_requests": 20,
+      "concurrency": 5,
+      "accepted_requests": 20,
+      "rejected_429": 0,
+      "errors_5xx_or_network": 0,
+      "error_rate": 0.0,
+      "rejection_rate_429": 0.0,
+      "status_codes": {
+        "200": 20
+      },
+      "wall_time_s": 0.114,
+      "throughput_rps": 175.07,
+      "latency_ms": {
+        "min": 19.8,
+        "max": 27.65,
+        "mean": 23.26,
+        "p50": 23.05,
+        "p95": 26.51,
+        "p99": 27.42,
+        "sample_count": 20
+      }
+    },
+    {
+      "scenario": "memory_count",
+      "method": "GET",
+      "path": "/api/v1/memory/count",
+      "auth": true,
+      "num_requests": 10,
+      "concurrency": 5,
+      "accepted_requests": 10,
+      "rejected_429": 0,
+      "errors_5xx_or_network": 0,
+      "error_rate": 0.0,
+      "rejection_rate_429": 0.0,
+      "status_codes": {
+        "200": 10
+      },
+      "wall_time_s": 0.05,
+      "throughput_rps": 199.02,
+      "latency_ms": {
+        "min": 14.73,
+        "max": 16.22,
+        "mean": 15.47,
+        "p50": 15.47,
+        "p95": 15.97,
+        "p99": 16.17,
+        "sample_count": 10
+      }
+    }
+  ],
+  "phase_b_health_flood": [
+    {
+      "scenario": "health_flood",
+      "method": "GET",
+      "path": "/health",
+      "auth": false,
+      "num_requests": 2000,
+      "concurrency": 50,
+      "accepted_requests": 2000,
+      "rejected_429": 0,
+      "errors_5xx_or_network": 0,
+      "error_rate": 0.0,
+      "rejection_rate_429": 0.0,
+      "status_codes": {
+        "200": 2000
+      },
+      "wall_time_s": 9.125,
+      "throughput_rps": 219.19,
+      "latency_ms": {
+        "min": 18.9,
+        "max": 2530.45,
+        "mean": 223.16,
+        "p50": 143.94,
+        "p95": 667.76,
+        "p99": 1238.62,
+        "sample_count": 2000
+      }
+    },
+    {
+      "scenario": "health_c10",
+      "method": "GET",
+      "path": "/health",
+      "auth": false,
+      "num_requests": 1000,
+      "concurrency": 10,
+      "accepted_requests": 1000,
+      "rejected_429": 0,
+      "errors_5xx_or_network": 0,
+      "error_rate": 0.0,
+      "rejection_rate_429": 0.0,
+      "status_codes": {
+        "200": 1000
+      },
+      "wall_time_s": 2.827,
+      "throughput_rps": 353.7,
+      "latency_ms": {
+        "min": 7.85,
+        "max": 444.11,
+        "mean": 27.81,
+        "p50": 23.72,
+        "p95": 33.43,
+        "p99": 50.17,
+        "sample_count": 1000
+      }
+    },
+    {
+      "scenario": "health_c50",
+      "method": "GET",
+      "path": "/health",
+      "auth": false,
+      "num_requests": 1000,
+      "concurrency": 50,
+      "accepted_requests": 1000,
+      "rejected_429": 0,
+      "errors_5xx_or_network": 0,
+      "error_rate": 0.0,
+      "rejection_rate_429": 0.0,
+      "status_codes": {
+        "200": 1000
+      },
+      "wall_time_s": 5.935,
+      "throughput_rps": 168.49,
+      "latency_ms": {
+        "min": 20.71,
+        "max": 1826.06,
+        "mean": 287.82,
+        "p50": 169.79,
+        "p95": 931.2,
+        "p99": 1428.22,
+        "sample_count": 1000
+      }
+    },
+    {
+      "scenario": "health_c100",
+      "method": "GET",
+      "path": "/health",
+      "auth": false,
+      "num_requests": 1000,
+      "concurrency": 100,
+      "accepted_requests": 1000,
+      "rejected_429": 0,
+      "errors_5xx_or_network": 0,
+      "error_rate": 0.0,
+      "rejection_rate_429": 0.0,
+      "status_codes": {
+        "200": 1000
+      },
+      "wall_time_s": 9.916,
+      "throughput_rps": 100.85,
+      "latency_ms": {
+        "min": 22.02,
+        "max": 6555.5,
+        "mean": 941.73,
+        "p50": 690.47,
+        "p95": 3002.58,
+        "p99": 4851.46,
+        "sample_count": 1000
+      }
+    }
+  ],
+  "phase_c_rate_limit_verification": {
+    "scenario": "rate_limit_verify",
+    "method": "GET",
+    "path": "/api/v1/agents",
+    "auth": true,
+    "num_requests": 150,
+    "concurrency": 10,
+    "accepted_requests": 100,
+    "rejected_429": 50,
+    "errors_5xx_or_network": 0,
+    "error_rate": 0.0,
+    "rejection_rate_429": 0.3333333333333333,
+    "status_codes": {
+      "200": 100,
+      "429": 50
+    },
+    "wall_time_s": 1.163,
+    "throughput_rps": 128.98,
+    "latency_ms": {
+      "min": 11.74,
+      "max": 754.16,
+      "mean": 103.81,
+      "p50": 30.75,
+      "p95": 752.89,
+      "p99": 754.12,
+      "sample_count": 100
+    }
+  }
+}

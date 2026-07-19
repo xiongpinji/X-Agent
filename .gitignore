@@ -90,7 +90,7 @@ data/*.jsonl
 # === A·½°¸Ê×´ÎÈë¿â:¹¤¾ß²úÎï/ÁÙÊ±ÎÄ¼ş(¾ø²»Èë¿â)===
 .codegraph/
 audit_reports/
-backup/
+/backup/  # P1-17 ä¿®æ­£: åŸ backup/ è§„åˆ™ä¼šæ„å¤–è¦†ç›– deployment/backup/(å¤‡ä»½è„šæœ¬ä¸ Dockerfile éœ€å…¥åº“); ä»…å¿½ç•¥æ ¹ç›®å½•å¤‡ä»½è¾“å‡º
 ~$*.docx
 ~$*.xlsx
 *.tmp

@@ -1,3 +1,19 @@
+"""Collaboration chat-room API.
+
+Tenant convergence (P1-09): non-admin principals are pinned to their own
+``principal.tenant_id`` — a mismatched explicit ``tenant_id`` is rejected with
+403, and cross-tenant room access answers 404 (no existence leak). Admins may
+address any tenant explicitly.
+
+Persistence: rooms live in the in-memory CollaborationStore by default
+(**dev-only: lost on restart**). Set ``XAGENT_COLLABORATION_STORE_PATH`` to a
+JSON file path to enable durable snapshot persistence.
+
+Runtime delegation: ``POST /delegate`` runs a real sub-AgentLoop via the
+collaboration delegator (capability match + round-robin load balancing,
+core.dispatch ranking when org hints are present).
+"""
+
 from __future__ import annotations
 
 from typing import Annotated
@@ -8,6 +24,13 @@ from pydantic import BaseModel, Field
 from backend.app.api.errors import api_error
 from backend.app.api.messages import UnifiedMessageEvent, build_channel_key, message_event_bus
 from backend.app.core.collaboration import collaboration_store
+from backend.app.core.collaboration.delegation import (
+    CandidateSpec,
+    DelegationRequest,
+    NoCapableAgentError,
+    get_delegator,
+)
+from backend.app.core.collaboration.store import CollaborationRoom
 from backend.app.core.contracts import ErrorCode
 from backend.app.core.memory import MemoryScope, MemorySystem
 from backend.app.core.security import Principal
@@ -19,9 +42,41 @@ PrincipalDependency = Annotated[Principal, Depends(get_current_principal)]
 MemoryDependency = Annotated[object, Depends(get_memory)]
 
 
+def _resolve_tenant(principal: Principal, requested: str | None) -> str:
+    """Converge the effective tenant onto the principal.
+
+    Non-admins may omit ``requested`` (defaults to their own tenant) or repeat
+    their own tenant; anything else is a 403 tenant-isolation violation — the
+    same contract as the browser session API. Admins may address any tenant.
+    """
+    if requested is None or requested == "":
+        return principal.tenant_id
+    if principal.role != "admin" and requested != principal.tenant_id:
+        raise api_error(
+            403,
+            ErrorCode.AUTHORIZATION_FAILED,
+            f"Cannot act on tenant '{requested}'. You can only act on your own tenant '{principal.tenant_id}'.",
+        )
+    return requested
+
+
+def _get_room_for_principal(room_id: str, principal: Principal) -> CollaborationRoom:
+    """Fetch a room enforcing tenant convergence.
+
+    Cross-tenant access by non-admins answers 404 (identical to a missing
+    room) so room existence does not leak across tenants.
+    """
+    room = collaboration_store.get_room(room_id)
+    if room is None:
+        raise api_error(404, ErrorCode.RESOURCE_NOT_FOUND, "Collaboration room not found.", details={"resource_type": "collaboration_room", "resource_id": room_id})
+    if principal.role != "admin" and room.tenant_id != principal.tenant_id:
+        raise api_error(404, ErrorCode.RESOURCE_NOT_FOUND, "Collaboration room not found.", details={"resource_type": "collaboration_room", "resource_id": room_id})
+    return room
+
+
 class CollaborationRoomCreateRequest(BaseModel):
     topic: str = Field(..., min_length=1, max_length=200)
-    tenant_id: str = "default"
+    tenant_id: str | None = None
     members: list[str] = Field(default_factory=list)
     invited_role_template_ids: list[str] = Field(default_factory=list)
     department_id: str | None = None
@@ -40,9 +95,10 @@ class CollaborationMessageCreateRequest(BaseModel):
 @router.post("/rooms")
 async def create_room(request: CollaborationRoomCreateRequest, principal: PrincipalDependency) -> dict[str, object]:
     enforce_scope(principal, "agent:run")
+    tenant_id = _resolve_tenant(principal, request.tenant_id)
     room = collaboration_store.create_room(
         topic=request.topic,
-        tenant_id=request.tenant_id,
+        tenant_id=tenant_id,
         created_by=principal.user_id,
         members=request.members,
         memory_scope={
@@ -70,24 +126,26 @@ async def create_room(request: CollaborationRoomCreateRequest, principal: Princi
 @router.get("/rooms")
 async def list_rooms(principal: PrincipalDependency, tenant_id: str | None = None) -> list[dict[str, object]]:
     enforce_scope(principal, "agent:run")
-    return [room.model_dump(mode="json") for room in collaboration_store.list_rooms(tenant_id=tenant_id)]
+    # Tenant convergence: non-admins are always pinned to their own tenant;
+    # passing a different tenant_id is a 403 violation instead of a silent
+    # cross-tenant listing (the old direct pass-through behavior).
+    effective_tenant = _resolve_tenant(principal, tenant_id) if tenant_id else principal.tenant_id
+    if principal.role == "admin":
+        effective_tenant = tenant_id  # admins may list any tenant, or all when omitted
+    return [room.model_dump(mode="json") for room in collaboration_store.list_rooms(tenant_id=effective_tenant)]
 
 
 @router.get("/rooms/{room_id}")
 async def get_room(room_id: str, principal: PrincipalDependency) -> dict[str, object]:
     enforce_scope(principal, "agent:run")
-    room = collaboration_store.get_room(room_id)
-    if room is None:
-        raise api_error(404, ErrorCode.RESOURCE_NOT_FOUND, "Collaboration room not found.", details={"resource_type": "collaboration_room", "resource_id": room_id})
+    room = _get_room_for_principal(room_id, principal)
     return room.model_dump(mode="json")
 
 
 @router.get("/rooms/{room_id}/correlation")
 async def get_room_correlation(room_id: str, principal: PrincipalDependency) -> dict[str, object]:
     enforce_scope(principal, "agent:run")
-    room = collaboration_store.get_room(room_id)
-    if room is None:
-        raise api_error(404, ErrorCode.RESOURCE_NOT_FOUND, "Collaboration room not found.", details={"resource_type": "collaboration_room", "resource_id": room_id})
+    room = _get_room_for_principal(room_id, principal)
     trace_id = room.room_id
     return {
         "room_id": room.room_id,
@@ -123,9 +181,7 @@ async def get_room_correlation(room_id: str, principal: PrincipalDependency) -> 
 @router.post("/rooms/{room_id}/memory-sync")
 async def sync_room_memory(room_id: str, principal: PrincipalDependency, memory: MemoryDependency) -> dict[str, object]:
     enforce_scope(principal, "memory:write")
-    room = collaboration_store.get_room(room_id)
-    if room is None:
-        raise api_error(404, ErrorCode.RESOURCE_NOT_FOUND, "Collaboration room not found.", details={"resource_type": "collaboration_room", "resource_id": room_id})
+    room = _get_room_for_principal(room_id, principal)
     if not hasattr(memory, "store"):
         raise api_error(400, ErrorCode.VALIDATION_ERROR, "Current memory backend does not support syncing.")
     context = _memory_context_from_principal(principal)
@@ -157,13 +213,15 @@ async def sync_room_memory(room_id: str, principal: PrincipalDependency, memory:
             scope=shared_scope,
         )
         synced_ids.append(memory_id)
-        room.memory_refs.append(memory_id)
+        # Route ref bookkeeping through the store so optional persistence
+        # captures it (direct room mutation would bypass snapshot writes).
+        collaboration_store.add_memory_ref(room.room_id, memory_id)
         agent_key = str(metadata.get("agent_id") or message.sender_id)
         if agent_key:
-            room.agent_memory_refs.setdefault(agent_key, []).append(memory_id)
+            collaboration_store.add_agent_memory_ref(room.room_id, agent_key, memory_id)
         department_key = str(metadata.get("department_id") or "")
         if department_key:
-            room.department_memory_refs.setdefault(department_key, []).append(memory_id)
+            collaboration_store.add_department_memory_ref(room.room_id, department_key, memory_id)
         if hasattr(memory, "route_shared_memory"):
             memory.route_shared_memory(memory_id)
     return {
@@ -180,9 +238,7 @@ async def sync_room_memory(room_id: str, principal: PrincipalDependency, memory:
 @router.get("/rooms/{room_id}/workflow-suggestion")
 async def get_room_workflow_suggestion(room_id: str, principal: PrincipalDependency) -> dict[str, object]:
     enforce_scope(principal, "workflow:create")
-    room = collaboration_store.get_room(room_id)
-    if room is None:
-        raise api_error(404, ErrorCode.RESOURCE_NOT_FOUND, "Collaboration room not found.", details={"resource_type": "collaboration_room", "resource_id": room_id})
+    room = _get_room_for_principal(room_id, principal)
     topic = room.topic.strip() or "协作任务"
     lower = f"{topic} {' '.join(message.content for message in room.messages[-5:])}".lower()
     nodes = [
@@ -232,6 +288,7 @@ async def add_member(room_id: str, request: dict[str, str], principal: Principal
     member_id = request.get("member_id")
     if not member_id:
         raise api_error(400, ErrorCode.VALIDATION_ERROR, "member_id is required.")
+    _get_room_for_principal(room_id, principal)
     try:
         room = collaboration_store.add_member(room_id, member_id)
     except (KeyError, ValueError):
@@ -256,6 +313,7 @@ async def add_member(room_id: str, request: dict[str, str], principal: Principal
 @router.post("/rooms/{room_id}/messages")
 async def post_message(room_id: str, request: CollaborationMessageCreateRequest, principal: PrincipalDependency) -> dict[str, object]:
     enforce_scope(principal, "agent:run")
+    _get_room_for_principal(room_id, principal)
     try:
         message = collaboration_store.post_message(
             room_id,
@@ -296,9 +354,7 @@ async def post_message(room_id: str, request: CollaborationMessageCreateRequest,
 @router.post("/rooms/{room_id}/workflow-suggestion")
 async def suggest_workflow_from_room(room_id: str, principal: PrincipalDependency) -> dict[str, object]:
     enforce_scope(principal, "agent:run")
-    room = collaboration_store.get_room(room_id)
-    if room is None:
-        raise api_error(404, ErrorCode.RESOURCE_NOT_FOUND, "Collaboration room not found.", details={"resource_type": "collaboration_room", "resource_id": room_id})
+    room = _get_room_for_principal(room_id, principal)
     transcript = "\n".join(message.content for message in room.messages[-8:])
     topic = room.topic
     prompt = f"{topic}\n{transcript}".strip()
@@ -336,6 +392,7 @@ async def suggest_workflow_from_room(room_id: str, principal: PrincipalDependenc
 @router.post("/rooms/{room_id}/close")
 async def close_room(room_id: str, principal: PrincipalDependency) -> dict[str, bool]:
     enforce_scope(principal, "agent:run")
+    _get_room_for_principal(room_id, principal)
     try:
         room = collaboration_store.close_room(room_id)
     except (KeyError, ValueError):
@@ -355,6 +412,105 @@ async def close_room(room_id: str, principal: PrincipalDependency) -> dict[str, 
         ),
     )
     return {"closed": True}
+
+
+# ---------------------------------------------------------------------------
+# Runtime delegation (P1-09)
+# ---------------------------------------------------------------------------
+
+
+class DelegationCandidateModel(BaseModel):
+    agent_id: str = Field(..., min_length=1)
+    agent_type: str = "subagent"
+    capabilities: list[str] = Field(default_factory=list)
+
+
+class DelegationRequestModel(BaseModel):
+    task: str = Field(..., min_length=1)
+    required_capabilities: list[str] = Field(default_factory=list)
+    candidates: list[DelegationCandidateModel] = Field(default_factory=list)
+    org_id: str | None = None
+    department_id: str | None = None
+    room_id: str | None = None
+    tenant_id: str | None = None
+    isolation: str | None = None
+    wait: bool = True
+    timeout_seconds: int = Field(default=600, ge=1, le=86400)
+    max_iterations: int = Field(default=10, ge=1, le=100)
+    metadata: dict[str, object] = Field(default_factory=dict)
+
+
+@router.post("/delegate")
+async def delegate_task(request: DelegationRequestModel, principal: PrincipalDependency) -> dict[str, object]:
+    """Delegate a task to a capability-matched sub-agent running a real AgentLoop.
+
+    Load balancing is round-robin over the capability-matched pool; org hints
+    additionally rank candidates via core.dispatch. Failures are explicit:
+    422 when no candidate is capable, 400 for invalid input (e.g. unsupported
+    isolation), 429 when the spawner's concurrency cap is reached.
+    """
+    enforce_scope(principal, "agent:run")
+    tenant_id = _resolve_tenant(principal, request.tenant_id)
+    if request.room_id:
+        _get_room_for_principal(request.room_id, principal)
+    try:
+        result = await get_delegator().delegate(
+            DelegationRequest(
+                task=request.task,
+                required_capabilities=request.required_capabilities,
+                candidates=[
+                    CandidateSpec(
+                        agent_id=candidate.agent_id,
+                        agent_type=candidate.agent_type,
+                        capabilities=candidate.capabilities,
+                    )
+                    for candidate in request.candidates
+                ],
+                org_id=request.org_id,
+                department_id=request.department_id,
+                room_id=request.room_id,
+                tenant_id=tenant_id,
+                user_id=principal.user_id,
+                isolation=request.isolation,
+                wait=request.wait,
+                timeout_seconds=request.timeout_seconds,
+                max_iterations=request.max_iterations,
+                metadata={
+                    **request.metadata,
+                    "agent_id": principal.agent_id,
+                    "trace_id": principal.trace_id,
+                    "request_id": principal.request_id,
+                    "delegator": principal.user_id,
+                },
+            )
+        )
+    except NoCapableAgentError as exc:
+        raise api_error(422, ErrorCode.VALIDATION_ERROR, str(exc)) from exc
+    except (NotImplementedError, ValueError) as exc:
+        raise api_error(400, ErrorCode.VALIDATION_ERROR, str(exc)) from exc
+    except RuntimeError as exc:
+        # Spawner concurrency cap (and other runtime delegation failures).
+        raise api_error(429, ErrorCode.RATE_LIMIT_EXCEEDED, str(exc)) from exc
+    return result.model_dump(mode="json")
+
+
+@router.get("/delegations")
+async def list_delegations(principal: PrincipalDependency, tenant_id: str | None = None, limit: int = 50) -> list[dict[str, object]]:
+    enforce_scope(principal, "agent:run")
+    if principal.role == "admin":
+        effective_tenant = tenant_id  # admins: any tenant, or all when omitted
+    else:
+        effective_tenant = _resolve_tenant(principal, tenant_id) if tenant_id else principal.tenant_id
+    return [item.model_dump(mode="json") for item in get_delegator().list_delegations(tenant_id=effective_tenant, limit=limit)]
+
+
+@router.get("/delegations/{delegation_id}")
+async def get_delegation(delegation_id: str, principal: PrincipalDependency) -> dict[str, object]:
+    enforce_scope(principal, "agent:run")
+    result = get_delegator().get_delegation(delegation_id)
+    if result is None or (principal.role != "admin" and result.tenant_id != principal.tenant_id):
+        raise api_error(404, ErrorCode.RESOURCE_NOT_FOUND, "Delegation not found.", details={"resource_type": "delegation", "resource_id": delegation_id})
+    return result.model_dump(mode="json")
 
 
 def _memory_context_from_principal(principal: Principal):

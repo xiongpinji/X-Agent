@@ -20,6 +20,9 @@ api:
   replicas: 3
   port: 8000
   workers: 4
+  # P1-16: 优雅停机 —— 宽限期(>=60) + preStop sleep 秒数
+  terminationGracePeriodSeconds: 90
+  preStopSleepSeconds: 10
   resources:
     requests:
       memory: "512Mi"
@@ -40,6 +43,8 @@ worker:
   enabled: true
   replicas: 2
   concurrency: 4
+  terminationGracePeriodSeconds: 120
+  preStopSleepSeconds: 10
   resources:
     requests:
       memory: "512Mi"
@@ -58,6 +63,8 @@ worker:
 beat:
   enabled: true
   replicas: 1
+  terminationGracePeriodSeconds: 60
+  preStopSleepSeconds: 5
   resources:
     requests:
       memory: "256Mi"
@@ -67,11 +74,14 @@ beat:
       cpu: "200m"
 
 # PostgreSQL configuration
+# enabled=false 时依赖外部数据库, 必须设置 external.postgresHost (见 templates/_helpers.tpl)
 postgres:
   enabled: true
   image: postgres:16-alpine
   port: 5432
   storage: 10Gi
+  terminationGracePeriodSeconds: 60
+  preStopSleepSeconds: 5
   resources:
     requests:
       memory: "256Mi"
@@ -81,11 +91,14 @@ postgres:
       cpu: "500m"
 
 # Redis configuration
+# enabled=false 时依赖外部 Redis, 必须设置 external.redisHost
 redis:
   enabled: true
   image: redis:7-alpine
   port: 6379
   storage: 5Gi
+  terminationGracePeriodSeconds: 60
+  preStopSleepSeconds: 5
   resources:
     requests:
       memory: "128Mi"
@@ -95,11 +108,15 @@ redis:
       cpu: "200m"
 
 # Qdrant configuration
+# enabled=false 时依赖外部 Qdrant, 必须设置 external.qdrantHost
 qdrant:
   enabled: true
   image: qdrant/qdrant:latest
   port: 6333
+  grpcPort: 6334
   storage: 20Gi
+  terminationGracePeriodSeconds: 60
+  preStopSleepSeconds: 5
   resources:
     requests:
       memory: "512Mi"
@@ -109,11 +126,16 @@ qdrant:
       cpu: "500m"
 
 # Neo4j configuration
+# enabled=false 时依赖外部 Neo4j, 必须设置 external.neo4jHost
 neo4j:
   enabled: true
   image: neo4j:5-community
   port: 7687
+  httpPort: 7474
+  user: neo4j
   storage: 15Gi
+  terminationGracePeriodSeconds: 60
+  preStopSleepSeconds: 5
   resources:
     requests:
       memory: "1Gi"
@@ -121,6 +143,15 @@ neo4j:
     limits:
       memory: "2Gi"
       cpu: "1000m"
+
+# 外部依赖端点(仅当对应组件 enabled=false 时使用; 组件启用时忽略)
+# 商用生产建议: 数据库类组件使用云厂商托管实例, 将 postgres/redis/qdrant/neo4j 的
+# enabled 设为 false 并在此填写外部端点, 见 deployment/helm/README.md
+external:
+  postgresHost: ""
+  redisHost: ""
+  qdrantHost: ""
+  neo4jHost: ""
 
 # Ingress configuration
 ingress:
@@ -161,19 +192,6 @@ database:
   name: xagent_db
   port: 5432
 
-# Redis configuration
-redis:
-  port: 6379
-
-# Qdrant configuration
-qdrant:
-  port: 6333
-
-# Neo4j configuration
-neo4j:
-  user: neo4j
-  port: 7687
-
 # Monitoring
 monitoring:
   enabled: true
@@ -184,8 +202,25 @@ monitoring:
     enabled: true
     port: 3000
 
-# Backup configuration
+# Backup configuration (P1-17: 渲染为 K8s CronJob, 脚本见 deployment/backup/backup.sh)
 backup:
   enabled: true
   schedule: "0 2 * * *"  # Daily at 2 AM
-  retention: 30  # days
+  retention: 30  # days (脚本内 RETENTION_DAYS)
+  # 备份镜像由 deployment/backup/Dockerfile 构建, 含 pg_dump/redis-cli/curl/jq
+  image:
+    repository: xagent-backup
+    tag: latest
+    pullPolicy: IfNotPresent
+  # 备份落盘的 PVC 大小
+  storage: 20Gi
+  # 可选: 上传到 S3
+  s3:
+    enabled: false
+    bucket: ""
+    region: us-east-1
+  # 优雅停机(CronJob Pod; 批任务正常结束时 preStop 不触发)
+  terminationGracePeriodSeconds: 60
+  preStopSleepSeconds: 5
+  # 超时兜底, 防止备份卡死占用锁
+  activeDeadlineSeconds: 3600

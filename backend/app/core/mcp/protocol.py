@@ -1,4 +1,19 @@
-"""MCP Protocol implementation."""
+"""MCP Protocol implementation.
+
+.. deprecated:: P1-01
+   本模块中的 ``MCPRequest`` / ``MCPResponse`` / ``MCPMessage`` / ``MCPServer``
+   是 X-Agent 早期自造的私有 JSON 协议（HTTP POST ``/mcp/request``），**不是**
+   官方 Model Context Protocol。它们仅为 ``backend/app/api/mcp.py`` 的旧端点
+   与既有测试保留。
+
+   真实的 MCP 协议（JSON-RPC 2.0，``initialize`` / ``tools/list`` /
+   ``tools/call``，stdio 与 Streamable HTTP 传输）由
+   ``backend.app.core.mcp.client.MCPClient`` 基于官方 ``mcp`` Python SDK 实现。
+   新代码请使用 ``MCPClient``，不要再使用本模块的服务端/消息类型。
+
+``MCPTool`` 仍作为发现层的工具描述数据类沿用（与官方 ``mcp.types.Tool``
+字段对齐：``input_schema`` ↔ ``inputSchema``、``annotations`` ↔ ``annotations``）。
+"""
 
 from __future__ import annotations
 
@@ -39,13 +54,19 @@ class MCPMessage(BaseModel):
 
 
 class MCPTool(BaseModel):
-    """MCP tool definition."""
+    """MCP tool definition.
+
+    ``annotations`` 对应官方 MCP ``ToolAnnotations``（readOnlyHint /
+    destructiveHint / idempotentHint / openWorldHint 等），发现层据此做
+    风险等级推断。
+    """
 
     name: str
     description: str
     input_schema: Dict[str, Any]
     output_schema: Optional[Dict[str, Any]] = None
     tags: list[str] = Field(default_factory=list)
+    annotations: Dict[str, Any] = Field(default_factory=dict)
 
 
 class MCPServer:

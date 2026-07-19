@@ -8,9 +8,10 @@ services:
     ports:
       - "9090:9090"
     volumes:
-      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - ./monitoring/alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
-      - ./monitoring/recording_rules.yml:/etc/prometheus/recording_rules.yml:ro
+      # P1-15 修正: compose 相对路径以本文件所在目录(monitoring/)为基准解析
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
+      - ./recording_rules.yml:/etc/prometheus/recording_rules.yml:ro
       - prometheus_data:/prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
@@ -46,8 +47,12 @@ services:
       - TZ=UTC
     volumes:
       - grafana_data:/var/lib/grafana
-      - ./monitoring/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
-      - ./monitoring/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      # P1-15 修正: 原挂载的 ./monitoring/grafana/provisioning/dashboards 与
+      # .../datasources 目录不存在(实际为 .yml 文件); provisioning/dashboards 需要
+      # provider 配置, 复用 deployment/grafana 的(options.path=/var/lib/grafana/dashboards)
+      - ../deployment/grafana/provisioning/dashboards.yml:/etc/grafana/provisioning/dashboards/main.yml:ro
+      - ./grafana/provisioning/datasources.yml:/etc/grafana/provisioning/datasources/main.yml:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
     depends_on:
       prometheus:
         condition: service_healthy
@@ -68,7 +73,7 @@ services:
     ports:
       - "9093:9093"
     volumes:
-      - ./monitoring/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - ./alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
       - alertmanager_data:/alertmanager
     command:
       - '--config.file=/etc/alertmanager/alertmanager.yml'
@@ -136,7 +141,7 @@ services:
     image: docker.elastic.co/logstash/logstash:8.11.0
     container_name: x-agent-logstash
     volumes:
-      - ./monitoring/elk/logstash.conf:/usr/share/logstash/pipeline/logstash.conf:ro
+      - ./elk/logstash.conf:/usr/share/logstash/pipeline/logstash.conf:ro
       - /var/log/xagent:/var/log/xagent:ro
     ports:
       - "5000:5000/udp"

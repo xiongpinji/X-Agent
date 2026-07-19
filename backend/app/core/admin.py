@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from pathlib import Path
 from threading import RLock
+from typing import TYPE_CHECKING
 from uuid import uuid4
 
 import bcrypt
@@ -235,5 +236,94 @@ def _hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt(rounds=12)).decode("utf-8")
 
 
-user_store = UserStore()
-tenant_store = TenantStore()
+# ---------------------------------------------------------------------------
+# P1-03: 存储后端装配(内存 dev 降级 / Postgres 生产)
+# ---------------------------------------------------------------------------
+
+_SQL_BACKEND_ALIASES = {"postgres", "postgresql", "sql", "database", "db"}
+
+
+def _resolve_admin_store_config(
+    backend: str | None,
+    database_url: str | None,
+) -> tuple[str, str | None]:
+    """解析用户/租户存储后端配置。
+
+    解析顺序: 显式参数 > settings(XAGENT_ADMIN_STORE_BACKEND / XAGENT_DATABASE_URL)
+    > 安全默认(memory)。settings 模块不可导入(极端早期导入)时回退 memory;
+    但 settings 校验失败(如生产模式 fail-fast 守卫)必须向上抛出——
+    绝不静默降级回内存后端(否则会架空 P1-19 的拒绝启动语义)。
+    """
+    if backend is None or (backend in _SQL_BACKEND_ALIASES and database_url is None):
+        try:
+            from backend.app.settings import get_settings
+        except ImportError:  # settings 模块本身不可导入的极端场景: dev 回退内存
+            return (backend or "memory").strip().lower(), database_url
+
+        settings = get_settings()  # ValidationError(含 P1-19 fail-fast)直接上抛
+        if backend is None:
+            backend = getattr(settings, "admin_store_backend", "memory")
+        if database_url is None:
+            database_url = settings.database_url
+    backend = (backend or "memory").strip().lower()
+    return backend, database_url
+
+
+def create_user_store(
+    backend: str | None = None,
+    database_url: str | None = None,
+) -> "UserStore | SqlUserStoreProtocol":
+    """按配置创建用户存储。
+
+    - ``memory``: 进程内存后端(默认, 仅 dev/测试; 重启即丢, 不可多实例共享)
+    - ``postgres``(别名 postgresql/sql/database/db): SQL 后端, 状态外置,
+      支持多实例共享(P1-03)。需要 ``database_url``(生产为 Postgres DSN)。
+    """
+    resolved_backend, resolved_url = _resolve_admin_store_config(backend, database_url)
+    if resolved_backend == "memory":
+        return UserStore()
+    if resolved_backend in _SQL_BACKEND_ALIASES:
+        if not resolved_url:
+            raise ValueError(
+                "admin_store_backend=postgres 需要 database_url "
+                "(设置 XAGENT_DATABASE_URL 或显式传参)"
+            )
+        from backend.app.core.admin_store import SqlUserStore
+
+        return SqlUserStore(resolved_url)
+    raise ValueError(
+        f"未知用户存储后端: {resolved_backend!r}; 合法值: memory, postgres"
+    )
+
+
+def create_tenant_store(
+    backend: str | None = None,
+    database_url: str | None = None,
+) -> "TenantStore | SqlTenantStoreProtocol":
+    """按配置创建租户存储(后端取值与 create_user_store 相同)。"""
+    resolved_backend, resolved_url = _resolve_admin_store_config(backend, database_url)
+    if resolved_backend == "memory":
+        return TenantStore()
+    if resolved_backend in _SQL_BACKEND_ALIASES:
+        if not resolved_url:
+            raise ValueError(
+                "admin_store_backend=postgres 需要 database_url "
+                "(设置 XAGENT_DATABASE_URL 或显式传参)"
+            )
+        from backend.app.core.admin_store import SqlTenantStore
+
+        return SqlTenantStore(resolved_url)
+    raise ValueError(
+        f"未知租户存储后端: {resolved_backend!r}; 合法值: memory, postgres"
+    )
+
+
+if TYPE_CHECKING:
+    from backend.app.core.admin_store import SqlTenantStore as SqlTenantStoreProtocol
+    from backend.app.core.admin_store import SqlUserStore as SqlUserStoreProtocol
+
+
+# 全局存储单例: 按 settings 装配(默认 memory; XAGENT_ADMIN_STORE_BACKEND=postgres
+# 时切换为 SQL 后端)。生产模式下 settings 守卫(P1-19)会拒绝 memory 后端。
+user_store = create_user_store()
+tenant_store = create_tenant_store()

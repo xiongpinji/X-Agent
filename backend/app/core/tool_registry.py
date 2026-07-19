@@ -5,6 +5,21 @@
 负责运行时执行（policy/approval/hooks/execute）的 ``ToolRegistry`` 同名，长期
 造成混淆。现规范名为 ``ToolCatalog``（工具 schema 目录/生命周期），并保留
 ``ToolRegistry`` 作为向后兼容别名，避免破坏既有 import。
+
+P1-10 架构裁决（单一事实来源）：
+
+* **运行时执行注册表唯一**：``backend.app.core.tools.ToolRegistry`` 是 Agent
+  主循环唯一的工具执行表（policy/approval/hooks/execute 咽喉点）。
+* **Schema 目录唯一**：本模块的 ``ToolCatalog`` 是唯一的工具元数据目录
+  （版本/状态/生命周期），通过 :meth:`ToolCatalog.bind_runtime_registry`
+  与运行时注册表形成显式组合关系，而非平行第三套注册表。
+* **风险模型统一**：目录侧 ``ToolRiskLevel`` 与运行时侧
+  ``contracts.RiskLevel`` 的换算只允许经
+  :func:`catalog_risk_to_runtime` / :func:`runtime_risk_to_catalog`，
+  禁止各调用方自行实现第二份映射。
+* **审计单轨**：工具*执行*审计的唯一轨道是运行时注册表写入的
+  ``ToolExecutionStore``；``ToolCatalog.record_call`` 仅供
+  ``core/tool_executor.py`` 的旧管理面调用，不再承接 MCP/主循环执行审计。
 """
 from __future__ import annotations
 
@@ -14,6 +29,7 @@ from pathlib import Path
 from threading import RLock
 from typing import Any, Callable
 
+from backend.app.core.contracts import RiskLevel
 from backend.app.core.tool_schema import (
     ToolSchema,
     ToolCategory,
@@ -22,6 +38,35 @@ from backend.app.core.tool_schema import (
     ToolAuditEntry,
     ToolLifecycleEvent,
 )
+
+# 风险等级严重度顺序（单一事实来源，供映射与"取较高者"比较使用）。
+_RISK_SEVERITY: tuple[str, ...] = ("low", "medium", "high", "critical")
+
+
+def catalog_risk_to_runtime(risk: ToolRiskLevel | str) -> RiskLevel:
+    """目录侧 ToolRiskLevel → 运行时 contracts.RiskLevel（唯一换算入口）。"""
+    value = risk.value if isinstance(risk, ToolRiskLevel) else str(risk)
+    try:
+        return RiskLevel(value)
+    except ValueError:
+        # 未知等级一律按 HIGH 处理（保守，不允许静默降级为低风险）。
+        return RiskLevel.HIGH
+
+
+def runtime_risk_to_catalog(risk: RiskLevel | str) -> ToolRiskLevel:
+    """运行时 contracts.RiskLevel → 目录侧 ToolRiskLevel（唯一换算入口）。"""
+    value = risk.value if isinstance(risk, RiskLevel) else str(risk)
+    try:
+        return ToolRiskLevel(value)
+    except ValueError:
+        return ToolRiskLevel.HIGH
+
+
+def max_catalog_risk(*risks: ToolRiskLevel) -> ToolRiskLevel:
+    """返回若干目录风险等级中最高者（用于多来源风险信号取保守值）。"""
+    if not risks:
+        return ToolRiskLevel.LOW
+    return max(risks, key=lambda r: _RISK_SEVERITY.index(r.value))
 
 
 class ToolCatalog:
@@ -34,8 +79,24 @@ class ToolCatalog:
         self._lifecycle_events: list[ToolLifecycleEvent] = []
         self._lock = RLock()
         self._storage_path = Path(storage_path) if storage_path else None
+        # 显式组合关系：目录可选地绑定唯一的运行时执行注册表
+        # （core.tools.ToolRegistry），供 MCP 发现等写入方把工具桥接进主循环。
+        self._runtime_registry: Any | None = None
         if self._storage_path:
             self._load_from_disk()
+
+    def bind_runtime_registry(self, runtime_registry: Any) -> None:
+        """绑定唯一的运行时执行注册表（显式组合，而非平行注册表）。
+
+        绑定后，MCP 发现等写入方在注册目录条目的同时，会把可执行 handler
+        桥接进该运行时注册表，使 Agent 主循环可以真正调用到这些工具。
+        """
+        self._runtime_registry = runtime_registry
+
+    @property
+    def runtime_registry(self) -> Any | None:
+        """已绑定的运行时执行注册表（未绑定返回 None）。"""
+        return self._runtime_registry
 
     def register(self, schema: ToolSchema) -> ToolSchema:
         """注册新工具或更新现有工具"""
@@ -227,7 +288,12 @@ class ToolCatalog:
         actor_id: str = "system",
         tenant_id: str = "default",
     ) -> ToolAuditEntry:
-        """记录工具调用"""
+        """记录工具调用（旧管理面审计入口）。
+
+        注意（P1-10 审计单轨裁决）：Agent 主循环与 MCP 桥接工具的*执行*审计
+        统一由运行时 ``ToolRegistry.execute`` 写入 ``ToolExecutionStore``，
+        不经本方法。本方法仅供 ``core/tool_executor.py`` 的旧管理面使用。
+        """
         tool = self._tools.get(tool_name)
         if not tool:
             raise ValueError(f"Tool {tool_name} not found")

@@ -1,6 +1,17 @@
 # X-Agent Performance Benchmark Report
 
-**Generated:** 2026-05-26
+> **⚠️ 作废声明 (2026-07-20, P1-18 性能基准工程师)**
+>
+> 本文件主体中的性能数字 (如 "Average Execution Time: 0.35s"、"Peak Memory Usage: 120 MB"、
+> 各场景耗时对比表) 来自 `benchmarks/report_generator.py` 旧的硬编码样例数据生成路径
+> ("Generate sample reports"), **不是真实测量结果, 不可复现, 一律作废, 不得引用**。
+> 该硬编码路径已删除, 报告生成器现在只接受真实测量 JSON 输入。
+>
+> 当前有效的真实基准报告见根目录 `PERFORMANCE_BENCHMARK_REPORT.md` (Wave A, 2026-07-20),
+> 机器可读原始数据见 `benchmarks/results/*.json`。
+> v1/v2 架构对比基准本次未重测 (见根报告 §8 "未覆盖"), 重测前本文其余内容仅作结构参考。
+
+**Generated:** 2026-05-26 (样例数据, 已作废 — 见上方声明)
 
 ## Executive Summary
 

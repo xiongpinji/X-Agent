@@ -5,6 +5,13 @@ Complete LLM routing, optimization, and monitoring solution
 
 # X-Agent Enhanced LLM Routing System
 
+> **P1-08 订正（2026-07-20）**：本文档早前版本引用的 `router.py` / `EnhancedLLMRouter`
+> 在代码库中并不存在（假成功文档），下文 “File Structure / Quick Start / API
+> Reference” 中与之相关的内容以本次订正为准。生产环境唯一入口是
+> `backend.app.core.llm.build_llm_router`（`backends.py`），返回顺序 fallback 的
+> `LLMRouter`。P1-08 在此外壳上收敛了智能路由、Anthropic/Ollama 提供商与
+> 租户/用户级 token 配额，详见文末「P1-08 路由收敛」章节。
+
 ## Overview
 
 The Enhanced LLM Routing System is a production-ready solution for intelligent LLM model selection, cost optimization, performance monitoring, and fallback strategies. It enables X-Agent to efficiently manage multiple LLM providers while optimizing for cost, performance, and reliability.
@@ -97,13 +104,19 @@ The Enhanced LLM Routing System is a production-ready solution for intelligent L
 ```
 backend/app/core/llm/
 ├── __init__.py                 # Module exports
-├── selector.py                 # Model selection logic
+├── backends.py                 # 生产外壳: BaseLLMBackend/LLMRouter/build_llm_router + OpenAI/Mock 后端
+├── profiles.py                 # P1-08: config/model_profiles.yaml 加载与校验
+├── llm_settings.py             # P1-08: XAGENT_* 环境子配置（settings.py 冻结期间的扩展点）
+├── anthropic_backend.py        # P1-08: Anthropic Messages API 后端（anthropic SDK，可选导入）
+├── ollama_backend.py           # P1-08: Ollama /api/chat 后端（httpx 直连 localhost:11434）
+├── quota.py                    # P1-08: 租户/用户级 token 配额（复用 cache 抽象）
+├── smart_router.py             # P1-08: SmartLLMRouter（按任务/成本/延迟重排 fallback 顺序）
+├── selector.py                 # Model selection logic（支持外部档案注入 + rank_candidates）
 ├── cost_optimizer.py           # Cost tracking and optimization
 ├── fallback.py                 # Fallback strategies
 ├── streaming.py                # Streaming response management
 ├── prompt_optimizer.py         # Prompt optimization
 ├── monitor.py                  # Performance monitoring
-├── router.py                   # Main router orchestration
 ├── adapters/
 │   ├── __init__.py
 │   ├── base.py                 # Base adapter interface
@@ -115,8 +128,12 @@ backend/app/core/llm/
 ├── INTEGRATION_GUIDE.md        # Integration instructions
 └── README.md                   # This file
 
+config/
+└── model_profiles.yaml         # P1-08: 模型档案（定价/延迟/质量/任务支持）单一事实来源
+
 tests/
-└── test_llm_enhanced.py        # Comprehensive test suite
+├── test_llm_enhanced.py        # Comprehensive test suite
+└── test_llm_routing_convergence.py  # P1-08: 离线单测（MockTransport 覆盖 Anthropic/Ollama、配额、智能排序）
 ```
 
 ## Quick Start
@@ -416,3 +433,69 @@ For issues, questions, or suggestions:
 ## Acknowledgments
 
 Built as part of X-Agent Phase 2 optimization initiative.
+
+---
+
+## P1-08 路由收敛（2026-07-20，以代码实际为准）
+
+### 唯一入口与外壳
+
+```python
+from backend.app.core.llm import build_llm_router
+
+router = build_llm_router(
+    llm_backend=settings.llm_backend,          # 或 "auto"
+    fallback_order=settings.llm_fallback_order, # 如 "openai,anthropic,ollama,mock"
+    openai_api_key=settings.openai_api_key,
+    openai_model=settings.openai_model,
+    deepseek_api_key=settings.deepseek_api_key,
+    deepseek_model=settings.deepseek_model,
+    deepseek_base_url=settings.deepseek_base_url,
+    # 以下为 P1-08 新增可选参数，缺省读取 XAGENT_* 环境变量
+    # anthropic_api_key=..., routing_mode="smart", quota_enabled=True, ...
+)
+```
+
+- 默认 `sequential` 模式行为与历史完全一致（顺序 fallback，测试不劣化）。
+- `routing_mode="smart"`（或 `XAGENT_LLM_ROUTING_MODE=smart`）返回 `SmartLLMRouter`：
+  每次请求由 `ModelSelector.rank_candidates` 按任务类型/成本/延迟/质量对模型档案
+  全量排序，把“有活后端”的最佳候选排到最前，其余后端保持原顺序兜底；
+  选择失败或无匹配后端时显式降级为配置顺序（warning 日志，非静默）。
+- 未知模式/策略/task_type 显式抛 `ValueError`（不静默）。
+
+### 模型档案外置
+
+- 单一事实来源：`config/model_profiles.yaml`（定价、延迟、质量分、任务支持、速率）。
+- `TokenUsage.calculate_cost` 与各后端成本计量均从该文件派生；
+  文件缺失 → warning + 内建默认档案（显式降级）；YAML 非法 → `ModelProfileLoadError`。
+- 覆盖路径：`XAGENT_LLM_MODEL_PROFILES_PATH`。
+
+### 新提供商
+
+- `anthropic`：`AnthropicBackend`（官方 SDK，`requirements.txt` 已声明 `anthropic>=0.28.0`；
+  未安装时调用显式抛 `LLMBackendError`）。env：`XAGENT_ANTHROPIC_API_KEY`、
+  `XAGENT_ANTHROPIC_MODEL`、`XAGENT_ANTHROPIC_BASE_URL`。fallback_order 中含
+  `anthropic` 且有 key 才接入。
+- `ollama`：`OllamaBackend`（httpx 直连 `/api/chat`，无需 key）。env：
+  `XAGENT_OLLAMA_BASE_URL`（默认 `http://localhost:11434`）、`XAGENT_OLLAMA_MODEL`。
+  本地模型成本按 0 计。
+- 两个后端均接受 `http_client` 注入，离线测试用 `httpx.MockTransport` 全覆盖。
+
+### 租户/用户级 token 配额
+
+- `TokenQuotaManager`（`llm/quota.py`）：按 token 计量累计，存储复用现有
+  `CacheManager`（L1 内存 / L2 Redis），不新建存储系统；读写经 asyncio 锁串行化。
+- 开关与默认值：`XAGENT_LLM_QUOTA_ENABLED`、`XAGENT_LLM_QUOTA_PERIOD`
+  （day/month/total）、`XAGENT_LLM_QUOTA_DEFAULT_TENANT_TOKENS`、
+  `XAGENT_LLM_QUOTA_DEFAULT_USER_TOKENS`；按租户/用户的覆盖表在
+  `config/model_profiles.yaml` 的 `quota:` 节。
+- 语义：post-metered。桶已用尽（used >= limit）时，下一次请求在到达任何提供商
+  之前抛 `QuotaExceededError`（含作用域/已用/上限/周期）；它是 `RuntimeError`
+  而非 `LLMBackendError`，不会被 fallback 循环吞掉（不会用下一个后端绕过配额）。
+- 调用侧透传：`router.chat(messages, tools, tenant_id=..., user_id=...,
+  task_type=..., strategy=...)`，均为可选关键字参数，存量两参调用不受影响。
+
+### 验证
+
+- 新增 `tests/test_llm_routing_convergence.py`（32 例，全离线）。
+- `tests/test_llm*` 全量：174 passed / 8 skipped（基线 142 + 8，无劣化）。

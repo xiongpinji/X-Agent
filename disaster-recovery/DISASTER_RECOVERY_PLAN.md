@@ -5,6 +5,14 @@
 **优先级**: P2 - 高  
 **状态**: 生产就绪
 
+> **勘误 (2026-07-20, P1-17)**: 本文中 `./scripts/dr/*` 路径下的多数脚本
+> (restore-qdrant.sh、inject-failure.sh、monitor-recovery.sh 等)在仓库中**尚未实现**,
+> 属于目标流程设计, 执行前需先落地。当前真实可用的脚本仅有
+> `./scripts/health-check.sh`、`./scripts/failover.sh`、`./scripts/verify-recovery.sh`
+> (位于 `disaster-recovery/scripts/`); 引用这三者的路径已修正。
+> Qdrant 恢复请以官方快照 API 为准(见根目录 `DISASTER_RECOVERY.md` 与
+> `deployment/backup/backup.sh`)。
+
 ---
 
 ## 目录
@@ -260,7 +268,7 @@ Neo4j:
 ./scripts/dr/assess-failure.sh
 
 # 2. 执行手动转移
-./scripts/dr/manual-failover.sh --region us-west --force
+./scripts/failover.sh --manual --region us-west --force
 
 # 3. 验证转移
 ./scripts/dr/verify-failover.sh
@@ -430,7 +438,7 @@ T+1800秒: 故障根因分析开始
 **响应步骤**：
 ```bash
 1. 确认主区域完全不可用
-2. 执行跨区域转移: ./scripts/dr/failover-to-dr.sh
+2. 执行跨区域转移: ./scripts/failover.sh --auto
 3. 验证备用区域服务正常
 4. 更新DNS指向备用区域
 5. 通知所有利益相关者
@@ -558,7 +566,7 @@ T+60分钟: 根因分析
 ./scripts/dr/monitor-recovery.sh
 
 # 4. 验证恢复
-./scripts/dr/verify-recovery.sh
+./scripts/verify-recovery.sh
 
 # 5. 收集指标
 ./scripts/dr/collect-metrics.sh

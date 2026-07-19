@@ -1,24 +1,38 @@
 from __future__ import annotations
 
+import logging
 import math
+import os
 import re
 from collections import Counter
 from collections.abc import Awaitable
 from hashlib import sha256
 from typing import Any, Protocol
 
+logger = logging.getLogger(__name__)
+
+# 默认本地句向量模型: 多语言(含中文)MiniLM, 384 维, ~470MB, CPU 可跑。
+# 实测(2026-07-20): 中文改写对 cos=0.71 vs 无关对 0.16; 英文改写对 0.77。
+# 纯英文场景可换更快的 all-MiniLM-L6-v2 (~90MB, 但不支持中文语义)。
+DEFAULT_SENTENCE_TRANSFORMER_MODEL = "paraphrase-multilingual-MiniLM-L12-v2"
+
 
 class EmbeddingModel(Protocol):
     def embed(self, text: str) -> list[float] | Awaitable[list[float]]:
-        """Return a deterministic vector for local retrieval."""
+        """Return a vector for retrieval."""
 
 
 class DeterministicEmbeddingModel:
-    """Dependency-free embedding model for local tests and offline development.
+    """Dependency-free **offline fallback** embedding (feature-hashing over tokens).
 
-    It is not a replacement for production embeddings, but it gives the memory layer
-    a stable vector contract that can later be backed by OpenAI, pgvector, or another
-    provider without changing callers.
+    WARNING: this is a hash-based pseudo-embedding. It is NOT semantic and must
+    only be used as an explicit offline/degraded fallback for local tests and
+    offline development. Production semantic retrieval should use
+    ``SentenceTransformerEmbeddingModel`` (local) or ``OpenAIEmbeddingModel``
+    (OpenAI-compatible API) via ``build_embedding_model``.
+
+    It gives the memory layer a stable vector contract that can be backed by a
+    real provider without changing callers.
     """
 
     def __init__(self, dimensions: int = 128) -> None:
@@ -54,18 +68,99 @@ class DeterministicEmbeddingModel:
         return words + bigrams
 
 
+class SentenceTransformerEmbeddingModel:
+    """Real local embeddings via the optional ``sentence-transformers`` package.
+
+    Install with ``pip install -r requirements-embeddings.txt`` (pulls torch).
+
+    Explicit degradation semantics (no silent fake-success):
+    - Package not installed -> ``RuntimeError`` at construction with install hint.
+    - Model weights unavailable (e.g. offline, HuggingFace unreachable):
+      * ``strict=True``  -> ``RuntimeError``.
+      * ``strict=False`` -> fall back to ``fallback`` model (default:
+        :class:`DeterministicEmbeddingModel`), set ``degraded=True`` /
+        ``degraded_reason`` and log a warning. Callers can inspect the flags.
+    """
+
+    def __init__(
+        self,
+        model_name: str | None = None,
+        *,
+        device: str | None = None,
+        fallback: EmbeddingModel | None = None,
+        strict: bool = False,
+    ) -> None:
+        self.model_name = model_name or os.getenv(
+            "XAGENT_ST_MODEL", DEFAULT_SENTENCE_TRANSFORMER_MODEL
+        )
+        self.device = device or os.getenv("XAGENT_ST_DEVICE") or None
+        self.degraded = False
+        self.degraded_reason: str | None = None
+        self._fallback = fallback if fallback is not None else DeterministicEmbeddingModel()
+        try:
+            from sentence_transformers import SentenceTransformer
+        except ImportError as exc:
+            raise RuntimeError(
+                "sentence-transformers is not installed; install real local "
+                "embeddings via `pip install -r requirements-embeddings.txt`, "
+                "or use embedding_backend='local' (hash fallback) / 'openai'."
+            ) from exc
+        try:
+            self._model = SentenceTransformer(self.model_name, device=self.device)
+        except Exception as exc:  # offline / weights missing / OOM ...
+            if strict:
+                raise RuntimeError(
+                    f"Failed to load sentence-transformers model {self.model_name!r}: {exc}"
+                ) from exc
+            self._model = None
+            self.degraded = True
+            self.degraded_reason = f"model load failed: {exc}"
+            logger.warning(
+                "SentenceTransformerEmbeddingModel degraded: cannot load %r (%s); "
+                "falling back to %s (hash-based, non-semantic).",
+                self.model_name,
+                exc,
+                type(self._fallback).__name__,
+            )
+
+    @property
+    def dimensions(self) -> int:
+        if self._model is not None:
+            dim = self._model.get_sentence_embedding_dimension()
+            if dim:
+                return int(dim)
+        return getattr(self._fallback, "dimensions", 0) or 0
+
+    def embed(self, text: str) -> list[float]:
+        if self._model is None:
+            result = self._fallback.embed(text)
+            if hasattr(result, "__await__"):
+                raise RuntimeError("async fallback models are not supported here")
+            return list(result)  # type: ignore[arg-type]
+        vector = self._model.encode(text, normalize_embeddings=True)
+        return [float(value) for value in vector]
+
+
 class OpenAIEmbeddingModel:
+    """Embeddings via any OpenAI-compatible embeddings API.
+
+    ``base_url`` makes it config-driven for compatible providers (vLLM, Ollama,
+    SiliconFlow, Azure proxies, ...). Defaults to the official OpenAI endpoint.
+    """
+
     def __init__(
         self,
         *,
         api_key: str,
         model: str = "text-embedding-3-small",
         dimensions: int | None = None,
+        base_url: str | None = None,
         client: Any | None = None,
     ) -> None:
         self.api_key = api_key
         self.model = model
         self.dimensions = dimensions
+        self.base_url = base_url or os.getenv("XAGENT_OPENAI_BASE_URL") or None
         self._client = client
 
     async def embed(self, text: str) -> list[float]:
@@ -75,7 +170,10 @@ class OpenAIEmbeddingModel:
                 from openai import AsyncOpenAI
             except ImportError as exc:  # pragma: no cover - dependency exists in project deps
                 raise RuntimeError("openai package is not installed") from exc
-            client = AsyncOpenAI(api_key=self.api_key)
+            kwargs: dict[str, Any] = {"api_key": self.api_key}
+            if self.base_url:
+                kwargs["base_url"] = self.base_url
+            client = AsyncOpenAI(**kwargs)
 
         request: dict[str, Any] = {"model": self.model, "input": text}
         if self.dimensions is not None:
@@ -90,13 +188,49 @@ def build_embedding_model(
     openai_api_key: str | None = None,
     openai_embedding_model: str = "text-embedding-3-small",
     openai_embedding_dimensions: int | None = None,
+    openai_base_url: str | None = None,
+    st_model: str | None = None,
+    st_device: str | None = None,
+    strict: bool = False,
 ) -> EmbeddingModel:
-    if embedding_backend == "openai":
+    """Build an embedding model for the given backend.
+
+    Backends:
+    - ``"local"`` / ``"hash"``: deterministic hash pseudo-embedding (OFFLINE
+      FALLBACK, non-semantic). Kept for tests and offline development.
+    - ``"sentence-transformers"`` (aliases ``"sentence_transformers"``,
+      ``"st"``, ``"local-st"``): real local embeddings; needs the optional
+      ``sentence-transformers`` package. When weights cannot be loaded it
+      degrades explicitly (see :class:`SentenceTransformerEmbeddingModel`).
+    - ``"openai"``: OpenAI-compatible embeddings API; requires an API key and
+      honors ``openai_base_url`` / ``XAGENT_OPENAI_BASE_URL``.
+
+    Unknown backends raise ``ValueError`` (never silently fall through).
+    """
+    backend = (embedding_backend or "local").strip().lower()
+    if backend in {"local", "hash", "deterministic"}:
+        if backend == "local":
+            logger.info(
+                "embedding_backend='local' -> DeterministicEmbeddingModel "
+                "(hash-based OFFLINE fallback, non-semantic)."
+            )
+        return DeterministicEmbeddingModel()
+    if backend in {"sentence-transformers", "sentence_transformers", "st", "local-st"}:
+        return SentenceTransformerEmbeddingModel(
+            model_name=st_model,
+            device=st_device,
+            strict=strict,
+        )
+    if backend == "openai":
         if not openai_api_key:
             raise ValueError("XAGENT_OPENAI_API_KEY or OPENAI_API_KEY is required for embeddings.")
         return OpenAIEmbeddingModel(
             api_key=openai_api_key,
             model=openai_embedding_model,
             dimensions=openai_embedding_dimensions,
+            base_url=openai_base_url,
         )
-    return DeterministicEmbeddingModel()
+    raise ValueError(
+        f"Unknown embedding_backend: {embedding_backend!r}. "
+        "Valid backends: 'local' (hash fallback), 'sentence-transformers', 'openai'."
+    )

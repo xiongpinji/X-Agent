@@ -15,9 +15,19 @@ spec:
       labels:
         app: neo4j
     spec:
+      # P1-16: 优雅停机 —— 宽限期 60s, 留给事务关闭与存储 flush; preStop sleep 5s
+      terminationGracePeriodSeconds: 60
       containers:
       - name: neo4j
         image: neo4j:5-community
+        lifecycle:
+          # P1-16: neo4j:5-community 基于 debian, 含 /bin/sh 与 sleep
+          preStop:
+            exec:
+              command:
+              - /bin/sh
+              - -c
+              - sleep 5
         ports:
         - containerPort: 7687
           name: bolt

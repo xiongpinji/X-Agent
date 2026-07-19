@@ -9,4 +9,6 @@ providers:
     updateIntervalSeconds: 10
     allowUiUpdates: true
     options:
-      path: /etc/grafana/provisioning/dashboards
+      # P1-15: 与 compose 挂载约定一致 —— provider 配置在 provisioning/,
+      # 仪表盘 JSON 统一放 /var/lib/grafana/dashboards(避免 provider 扫描自身配置目录)
+      path: /var/lib/grafana/dashboards

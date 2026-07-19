@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
@@ -10,6 +11,11 @@ from backend.app.core.contracts import AgentRunResponse, AgentPlanStepRecord, Ex
 if TYPE_CHECKING:
     from backend.app.core.hooks import HookManager
     from backend.app.core.approvals import ApprovalStore
+from backend.app.core.context.agent_integration import (
+    AgentLoopContextBridge,
+    fit_messages_to_token_budget,
+)
+from backend.app.core.context_compactor import ContextCompactor
 from backend.app.core.evolution import CapabilityVersion, LearningRecord, ReflectionRecord, evolution_store
 from backend.app.core.llm import LLMRouter
 from backend.app.core.memory import MemorySystem
@@ -39,6 +45,8 @@ from backend.app.core.agent_phases import (
 )
 from backend.app.core.enums import StepKind, RecoveryBranch
 from backend.app.services.observability.langfuse_client import langfuse_client
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -82,6 +90,9 @@ class AgentLoop:
         repair_loop: RepairLoop | None = None,
         hook_manager: "HookManager | None" = None,
         approval_store: "ApprovalStore | None" = None,
+        context_bridge: AgentLoopContextBridge | None = None,
+        context_bridge_factory: Callable[[], AgentLoopContextBridge] | None = None,
+        context_token_budget: int = 24_000,
     ) -> None:
         self.llm = llm_router
         self.memory = memory
@@ -98,6 +109,24 @@ class AgentLoop:
         self.state_manager = AgentStateManager()
         self.runtime_adapter = AgentRuntimeAdapter(self.state_manager)
         self.approval_store = approval_store
+        # 上下文管理（P1-14）：
+        # - context_bridge：显式注入的桥接器（调用方持有，单会话语义，便于测试/集成波接线）。
+        # - context_bridge_factory：按运行创建桥接器的工厂（并发生产接线推荐）。
+        # - 两者都缺省时，带 session_id 的运行会按需创建临时桥接器（存储于 data/sessions）。
+        # - context_token_budget：发给 LLM 的消息列表 token 预算，超阈值自动压缩。
+        self.context_bridge = context_bridge
+        self.context_bridge_factory = context_bridge_factory
+        self.context_token_budget = context_token_budget
+        self._llm_message_compactor = ContextCompactor(
+            token_limit=context_token_budget,
+            compression_threshold=0.85,
+            min_messages_to_keep=3,
+        )
+        # 每次运行的上下文管理状态（run() 开始时重置，结束时归档到 execution_summary）
+        self._active_bridge: AgentLoopContextBridge | None = None
+        self._bridge_ephemeral: bool = False
+        self._compression_events: list[dict[str, object]] = []
+        self._run_context_mgmt: dict[str, object] = {}
         # 控制平面 Hooks：默认挂载进程级全局 HookManager（惰性导入避免循环依赖）。
         # 空 HookManager 即为无操作，完全向后兼容。
         if hook_manager is None:
@@ -105,6 +134,109 @@ class AgentLoop:
 
             hook_manager = get_hook_manager()
         self.hook_manager = hook_manager
+
+    def _acquire_context_bridge(self, session_id: str | None) -> AgentLoopContextBridge | None:
+        """按优先级获取本次运行的上下文桥接器。
+
+        优先级：显式注入的 context_bridge > context_bridge_factory > 临时默认桥接器。
+        无 session_id 时返回 None（不做会话持久化，但 LLM 消息压缩仍生效）。
+
+        Args:
+            session_id: 本次运行的会话 ID
+
+        Returns:
+            AgentLoopContextBridge 或 None
+        """
+        if session_id is None:
+            return None
+        if self.context_bridge is not None:
+            self._bridge_ephemeral = False
+            return self.context_bridge
+        if self.context_bridge_factory is not None:
+            self._bridge_ephemeral = True
+            return self.context_bridge_factory()
+        # 默认：临时桥接器（每次运行独立 ContextManager，避免并发运行串会话）
+        self._bridge_ephemeral = True
+        return AgentLoopContextBridge.create_default(token_budget=self.context_token_budget)
+
+    def _fit_llm_messages(
+        self,
+        messages: list[dict[str, str]],
+    ) -> tuple[list[dict[str, str]], dict[str, object] | None]:
+        """把发给 LLM 的消息列表压缩到 token 预算内（token 级压缩）。
+
+        优先使用活跃桥接器的 compactor（事件会并入桥接统计）；
+        否则使用主循环本地的 ContextCompactor。未超阈值时原样返回。
+        """
+        if self._active_bridge is not None:
+            return self._active_bridge.fit_messages(messages)
+        return fit_messages_to_token_budget(self._llm_message_compactor, messages)
+
+    async def _open_context_session(
+        self,
+        context: RunContext,
+        task: str,
+        session_id: str,
+    ) -> str:
+        """打开/恢复会话并记录用户任务，返回注入规划提示词的会话 recap。
+
+        失败时显式降级：记录错误到 _run_context_mgmt 并返回空 recap，
+        主循环继续运行（不静默假成功，也不阻断任务）。
+        """
+        bridge = self._active_bridge
+        if bridge is None:
+            return ""
+        try:
+            await bridge.open_session(
+                session_id=session_id,
+                agent_id=context.agent_id,
+                tenant_id=context.tenant_id,
+            )
+            recap = ""
+            if bridge.restored_message_count:
+                recap = bridge.build_session_recap()
+                self._run_context_mgmt["session_restored"] = True
+            else:
+                self._run_context_mgmt["session_restored"] = False
+            await bridge.record(
+                "user",
+                task,
+                metadata={"trace_id": context.trace_id, "event": "task"},
+                importance=0.8,
+            )
+            self._run_context_mgmt["enabled"] = True
+            return recap
+        except Exception as exc:  # 显式降级：上下文管理失败不阻断主循环
+            logger.warning("Context session open failed for %s: %s", session_id, exc)
+            self._run_context_mgmt["enabled"] = False
+            self._run_context_mgmt["error"] = f"session_open_failed: {exc}"
+            return ""
+
+    async def _close_context_session(self, answer: str, context: RunContext) -> None:
+        """运行结束：记录最终答案并保存会话快照。"""
+        bridge = self._active_bridge
+        if bridge is None:
+            return
+        try:
+            await bridge.record(
+                "assistant",
+                (answer or "(empty answer)")[:4_000],
+                metadata={"trace_id": context.trace_id, "event": "final_answer"},
+                importance=0.9,
+            )
+            saved = await bridge.close(save=True)
+            self._run_context_mgmt["session_saved"] = saved
+            if not saved:
+                self._run_context_mgmt.setdefault("error", "session_save_returned_false")
+        except Exception as exc:  # 显式降级：保存失败记录错误，不影响已产出的答案
+            logger.warning("Context session close failed: %s", exc)
+            self._run_context_mgmt["session_saved"] = False
+            self._run_context_mgmt["error"] = f"session_close_failed: {exc}"
+        finally:
+            self._run_context_mgmt.update(bridge.metrics_snapshot())
+            if self._bridge_ephemeral:
+                self._active_bridge = None
+                self._bridge_ephemeral = False
 
     def _build_initial_recovery_frame(self, tool_name: str | None = None) -> RecoveryFrame:
         return RecoveryFrame(
@@ -180,6 +312,9 @@ class AgentLoop:
         compact_context = self._compress_context(extra_context or {})
         if context.session_id:
             compact_context.setdefault("session_id", context.session_id)
+        # 会话恢复 recap（P1-14）：作为规划提示词输入透传，不参与 token 预算裁剪
+        if isinstance(extra_context, dict) and extra_context.get("_session_recap"):
+            compact_context["_session_recap"] = str(extra_context["_session_recap"])
 
         indexed_repo = code_index.index(compact_context.get("root", "."), limit=int(compact_context.get("index_limit", 2000)))
         compact_context["code_index"] = {
@@ -348,6 +483,10 @@ class AgentLoop:
     ) -> AgentRunResponse:
         started = self.tracer.record(context, "agent.started", task=task, extra_context=extra_context or {})
 
+        # 上下文管理（P1-14）：重置每次运行的压缩/会话状态
+        self._compression_events = []
+        self._run_context_mgmt = {"enabled": False}
+
         # 控制平面 Hooks：AGENT_START 与 USER_PROMPT_SUBMIT 在执行开始前触发。
         # 任一被拒绝（DENY）则提前返回 FAILED，不进入主循环。
         from backend.app.core.hooks import HookEvent
@@ -376,9 +515,28 @@ class AgentLoop:
                 error=denial,
             )
 
+        # 会话恢复（P1-14）：session_id 存在时打开/恢复会话，
+        # 恢复的历史以 recap 形式注入规划提示词；失败显式降级（继续运行并记录错误）。
+        run_extra = dict(extra_context) if isinstance(extra_context, dict) else (extra_context or {})
+        session_id = context.session_id or (
+            str(run_extra.get("session_id")) if isinstance(run_extra, dict) and run_extra.get("session_id") else None
+        )
+        if session_id:
+            self._active_bridge = self._acquire_context_bridge(session_id)
+            session_recap = await self._open_context_session(context, task, session_id)
+            if session_recap and isinstance(run_extra, dict):
+                run_extra["_session_recap"] = session_recap
+            if self._active_bridge is not None and self._active_bridge.session_active:
+                self._emit_trace(
+                    context,
+                    "agent.context.session_opened",
+                    session_id=session_id,
+                    restored_messages=self._active_bridge.restored_message_count,
+                )
+
         # 第一阶段：初始化执行上下文
         compact_context, execution_frame, capability_decision, recovery_hint, tool_decision = await self._initialize_execution_context(
-            context, task, extra_context
+            context, task, run_extra
         )
 
         # 第二阶段：准备执行计划
@@ -388,21 +546,29 @@ class AgentLoop:
 
         # 第三阶段：设置轨迹和计划
         trajectory, plan, resume_payload = await self._setup_trajectory_and_plan(
-            context, task, extra_context or {}, execution_frame, compact_context,
+            context, task, run_extra, execution_frame, compact_context,
             compact_context.get("draft_plan"), tool_decision, recovery_hint
         )
 
         # 第四阶段：执行主循环
-        resume_trace_id = str((extra_context or {}).get("resume_trace_id") or "")
+        resume_trace_id = str(run_extra.get("resume_trace_id") or "") if isinstance(run_extra, dict) else ""
         answer, memory_hits, tool_calls, observations, plan_records, events = await self._execute_main_loop(
-            context, task, trajectory, plan, execution_frame, extra_context or {}, started, tool_decision, resume_trace_id
+            context, task, trajectory, plan, execution_frame, run_extra, started, tool_decision, resume_trace_id
         )
 
         # 第五阶段：完成执行并返回结果
         result = await self._finalize_execution(
             context, task, trajectory, answer, memory_hits, tool_calls, observations, plan_records, events,
-            execution_frame, compact_context, extra_context or {}, resume_trace_id
+            execution_frame, compact_context, run_extra, resume_trace_id
         )
+
+        # 会话持久化（P1-14）：记录最终答案并保存快照；失败显式记录 error。
+        had_bridge = self._active_bridge is not None
+        if had_bridge:
+            await self._close_context_session(result.answer or answer, context)
+        self._run_context_mgmt.setdefault("enabled", had_bridge)
+        self._run_context_mgmt["llm_compression_events"] = list(self._compression_events)
+        result.execution_summary["context_management"] = dict(self._run_context_mgmt)
 
         return result
 
@@ -642,6 +808,7 @@ class AgentLoop:
             trajectory.stage = f"step_{iteration}_{step.kind}"
 
             # 执行不同类型的步骤
+            observations_before = len(observations)
             if step.kind == "observe":
                 answer, memory_hits, last_tool_result, observations, plan_records = await self._execute_observe_step(
                     context, task, trajectory, step, observations, plan_records, memory_hits, last_tool_result, execution_frame, iteration
@@ -702,6 +869,20 @@ class AgentLoop:
                 answer, plan_records = self._execute_final_step(
                     context, task, trajectory, step, last_tool_result, extra_context, plan_records, execution_frame, iteration
                 )
+
+            # 会话记录（P1-14）：把本步新增的观察写入活跃会话（失败静默降级——
+            # 记录性写入不影响主循环；打开/关闭会话的失败已在别处显式上报）
+            if self._active_bridge is not None and self._active_bridge.session_active:
+                for new_observation in observations[observations_before:]:
+                    try:
+                        await self._active_bridge.record(
+                            "assistant",
+                            f"[step {iteration} {step.kind}] {new_observation}"[:2_000],
+                            metadata={"trace_id": context.trace_id, "iteration": iteration, "step_kind": step.kind},
+                            importance=0.6,
+                        )
+                    except Exception as record_exc:
+                        logger.debug("Session observation record failed: %s", record_exc)
 
         if not answer:
             answer = self._finalize_answer(task, trajectory, last_tool_result, extra_context)
@@ -1156,6 +1337,14 @@ class AgentLoop:
         execution_summary["subtask_status"] = trajectory.subtask_status
         execution_summary["current_subtask_index"] = trajectory.current_subtask_index
 
+        # 上下文管理（P1-14）：快照此时已知的压缩/会话状态；
+        # run() 在会话关闭后会用最终状态覆写 result.execution_summary["context_management"]
+        execution_summary["context_management"] = {
+            "enabled": self._active_bridge is not None,
+            "llm_compression_events": list(self._compression_events),
+            **self._run_context_mgmt,
+        }
+
         # 构建运行视图
         run_view = self.runtime_adapter.build_run_view(state, status=RunStatus.COMPLETED.value, answer=answer)
         execution_summary["run_view"] = run_view.model_dump()
@@ -1361,8 +1550,42 @@ class AgentLoop:
             subtasks = ["understand request", "complete task", "verify output"]
         return list(dict.fromkeys(subtasks[:5]))
 
+    #: 操作性键：下游功能代码（工具参数/恢复/审批/重规划）直接消费，必须原样保留，
+    #: 绝不参与 token 预算裁剪。是旧白名单的超集（补齐 needle/tree_limit 等旧白名单
+    #: 漏掉但 _enrich_patch_plan 实际会读取的键）。
+    _OPERATIONAL_CONTEXT_KEYS = frozenset({
+        # 文件/补丁操作（工具参数直接消费）
+        "root", "path", "target_path", "file", "pattern", "limit", "read_limit",
+        "replace_all", "old_text", "new_text", "replacement", "content", "patches",
+        "needle", "tree_limit", "entrypoint_limit", "dependency_limit", "impact_limit",
+        "coord_limit", "index_limit", "backup",
+        # 任务语义
+        "goal", "objective", "task_focus", "task_profile", "requires_approval",
+        # 运行控制 / 恢复
+        "session_id", "resume_trace_id", "resume_policy", "skip_observe_on_resume",
+        "retry_budget",
+        # 运行状态（供 _build_execution_summary / _should_defer_step 恢复分支判定）
+        "workflow_state", "approval_state", "browser_state", "desktop_state",
+        # 会话恢复 recap（规划提示词输入）
+        "_session_recap",
+    })
+
+    #: 非操作性键的默认总 token 预算（超出后按体积从大到小显式丢弃并记录）
+    _EXTRA_CONTEXT_TOKEN_BUDGET = 2_000
+    #: 非操作性字符串值的单值字符上限（超出显式截断并带标记）
+    _EXTRA_VALUE_CHAR_CAP = 1_000
+
     def _compress_context(self, extra_context: dict[str, object]) -> dict[str, object]:
-        """压缩上下文以减少令牌使用。
+        """Token 预算感知的上下文压缩（替代旧白名单字段裁剪）。
+
+        旧实现只保留白名单键、静默丢弃其余字段。新实现：
+        1. 操作性键（_OPERATIONAL_CONTEXT_KEYS）原样保留 —— 它们是工具参数与
+           恢复控制的功能性契约，裁剪会破坏执行正确性。
+        2. 非操作性键在 token 预算内尽量保留：字符串值超过单值上限显式截断
+           （带标记）；总量超预算时按体积从大到小显式丢弃。
+        3. 所有截断/丢弃记录到 compact["_context_compaction"]，绝不静默。
+        4. 保留旧有的派生字段（target_path / task_focus / patch_preview / patch_count）。
+        5. 非 dict 输入显式降级为 {}（与旧行为一致）；不可序列化值用安全 repr。
 
         Args:
             extra_context: 额外上下文字典
@@ -1370,16 +1593,58 @@ class AgentLoop:
         Returns:
             压缩后的上下文字典
         """
-        keys = ["root", "path", "target_path", "file", "pattern", "limit", "read_limit", "replace_all", "old_text", "new_text", "replacement", "content", "goal", "objective", "patches", "resume_trace_id", "skip_observe_on_resume"]
+        if not isinstance(extra_context, dict):
+            return {}
+
+        compaction_meta: dict[str, object] = {
+            "budget_tokens": self._EXTRA_CONTEXT_TOKEN_BUDGET,
+            "truncated_keys": [],
+            "dropped_keys": [],
+        }
         compact: dict[str, object] = {}
-        for key in keys:
+
+        # 1. 操作性键原样保留
+        for key in self._OPERATIONAL_CONTEXT_KEYS:
             if key in extra_context:
                 compact[key] = extra_context[key]
-        if "context" in extra_context and isinstance(extra_context["context"], dict):
-            nested = extra_context["context"]
-            for key in keys:
+
+        # 2. 非操作性键：token 预算内保留，超单值上限截断，超总预算丢弃
+        extra_keys = [k for k in extra_context if k not in compact and not k.startswith("_context_")]
+        # 体积从大到小排序：大字段优先接受截断，装不下时优先丢弃大字段
+        def _size_of(key: str) -> int:
+            return len(self._safe_context_repr(extra_context[key]))
+
+        extra_keys.sort(key=_size_of, reverse=True)
+        extra_token_budget = self._EXTRA_CONTEXT_TOKEN_BUDGET
+        for key in extra_keys:
+            value = extra_context[key]
+            if isinstance(value, str) and len(value) > self._EXTRA_VALUE_CHAR_CAP:
+                omitted = len(value) - self._EXTRA_VALUE_CHAR_CAP
+                value = value[: self._EXTRA_VALUE_CHAR_CAP] + f"…[truncated {omitted} chars]"
+                compaction_meta["truncated_keys"].append(key)
+            safe_repr = self._safe_context_repr(value)
+            try:
+                json.dumps(value)
+            except (TypeError, ValueError, RecursionError):
+                # 循环引用/不可序列化对象：替换为安全 repr 字符串，
+                # 避免下游 json.dumps(extra_context) 整树崩溃
+                value = safe_repr
+                compaction_meta["truncated_keys"].append(f"{key}(repr)")
+            value_tokens = self._llm_message_compactor.count_tokens(safe_repr)
+            if value_tokens > extra_token_budget:
+                compaction_meta["dropped_keys"].append(key)
+                continue
+            extra_token_budget -= value_tokens
+            compact[key] = value
+
+        # 嵌套 "context" 字典中的操作性键补齐（旧行为保留）
+        nested = extra_context.get("context")
+        if isinstance(nested, dict):
+            for key in self._OPERATIONAL_CONTEXT_KEYS:
                 if key in nested and key not in compact:
                     compact[key] = nested[key]
+
+        # 3. 派生字段（旧行为保留）
         if compact.get("path") and not compact.get("target_path"):
             compact["target_path"] = compact["path"]
         if compact.get("goal") or compact.get("objective"):
@@ -1396,7 +1661,22 @@ class AgentLoop:
                     })
             compact["patch_preview"] = patch_preview
             compact["patch_count"] = len(compact["patches"])
+
+        # 4. 有实际裁剪动作时才记录元数据，避免污染常规小上下文
+        if compaction_meta["truncated_keys"] or compaction_meta["dropped_keys"]:
+            compact["_context_compaction"] = compaction_meta
         return compact
+
+    @staticmethod
+    def _safe_context_repr(value: object) -> str:
+        """安全序列化上下文值用于 token 估算（容忍循环引用/不可序列化对象）。"""
+        try:
+            return json.dumps(value, ensure_ascii=False, default=str)
+        except (TypeError, ValueError, RecursionError):
+            try:
+                return repr(value)
+            except Exception:
+                return f"<unserializable {type(value).__name__}>"
 
     def _record_audit(self, action: str, context: RunContext, trajectory: AgentTrajectory, **details: object) -> None:
         """记录审计日志。
@@ -1633,6 +1913,29 @@ class AgentLoop:
             messages.append({"role": "user", "content": self._build_run_prompt(run_context)})
         if trajectory.stage.startswith("resuming"):
             messages.append({"role": "user", "content": self._build_resume_prompt(trajectory, extra_context)})
+        # 会话恢复 recap（P1-14）：从存储重建的历史上下文注入规划提示词
+        session_recap = str(extra_context.get("_session_recap") or "")
+        if session_recap:
+            messages.append({
+                "role": "user",
+                "content": (
+                    "Recovered session context from previous conversation "
+                    "(use as background, most recent last):\n" + session_recap
+                ),
+            })
+        # Token 级上下文压缩（P1-14）：超阈值自动摘要/裁剪发给 LLM 的消息
+        messages, compression_meta = self._fit_llm_messages(messages)
+        if compression_meta:
+            self._compression_events.append(compression_meta)
+            self._emit_trace(
+                context,
+                "agent.context.compressed",
+                original_tokens=compression_meta.get("original_tokens"),
+                compressed_tokens=compression_meta.get("compressed_tokens"),
+                messages_before=compression_meta.get("messages_before"),
+                messages_after=compression_meta.get("messages_after"),
+                strategy=compression_meta.get("strategy"),
+            )
         response = await self.llm.chat(messages, self.tools.definitions_for_llm())
         plan_text = response.content or ""
         if response.tool_calls:

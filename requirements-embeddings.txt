@@ -1,0 +1,11 @@
+# X-Agent Real Local Embeddings Optional Dependencies (P1-13)
+# sentence-transformers 本地真实嵌入, 供 embedding_backend='sentence-transformers' 使用。
+# 这些是大型 ML 包(torch 为 GB 级), 核心服务不安装也能运行:
+#   - 未安装时 build_embedding_model 会显式报错并提示本文件;
+#   - 模型权重加载失败(离线等)时按 strict 标志显式降级到哈希嵌入或抛错。
+# 安装:  pip install -r requirements-embeddings.txt
+# Python >= 3.11
+
+sentence-transformers>=3.0.0   # 本地句向量(默认 paraphrase-multilingual-MiniLM-L12-v2 多语言含中文, ~470MB); 拉取 torch/transformers
+# torch 由 sentence-transformers 传递安装; CPU 环境如需官方 CPU 轮子:
+#   pip install torch --index-url https://download.pytorch.org/whl/cpu

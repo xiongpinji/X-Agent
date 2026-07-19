@@ -521,47 +521,60 @@ class PerformanceBenchmarkReportGenerator:
         return output_path
 
 
-def main():
-    """Generate sample reports."""
-    # Sample v2 results
-    v2_results = {
-        'timestamp': datetime.now().isoformat(),
-        'results': [
-            {
-                'scenario_name': 'Simple Task',
-                'task_complexity': 'simple',
-                'tool_calls_count': 1,
-                'timing': {
-                    'initialization_time': 0.05,
-                    'planning_time': 0.02,
-                    'execution_time': 0.01,
-                    'recovery_time': 0.0,
-                    'completion_time': 0.02,
-                    'total_time': 0.10,
-                },
-                'memory': {
-                    'initial_memory_mb': 50.0,
-                    'peak_memory_mb': 65.0,
-                    'final_memory_mb': 55.0,
-                    'memory_delta_mb': 15.0,
-                },
-                'cpu': {
-                    'avg_cpu_percent': 25.5,
-                    'max_cpu_percent': 45.0,
-                    'cpu_samples': 100,
-                },
-                'success': True,
-            },
-        ],
-    }
+def main() -> int:
+    """从真实测量结果 JSON 生成报告.
+
+    本入口不再内置任何样例/硬编码数据: 报告只能由真实基准运行产物生成。
+    用法:
+        python -m benchmarks.report_generator <results.json> [--v1 v1_results.json]
+    其中 <results.json> 必须是 benchmarks/run_benchmarks.py 或
+    benchmarks/wave_a_load_benchmark.py 等真实测量脚本写出的结果文件。
+    """
+    import argparse
+    import sys
+
+    parser = argparse.ArgumentParser(
+        description="Generate performance report from REAL benchmark results only.")
+    parser.add_argument("v2_results", help="真实 v2 基准结果 JSON 路径")
+    parser.add_argument("--v1", default=None, help="可选: 真实 v1 基准结果 JSON 路径")
+    parser.add_argument("--output", default="PERFORMANCE_BENCHMARK_REPORT.md",
+                        help="输出文件名 (写入 benchmarks/results/ 下)")
+    args = parser.parse_args()
+
+    v2_path = Path(args.v2_results)
+    if not v2_path.is_file():
+        print(f"ERROR: 结果文件不存在: {v2_path}", file=sys.stderr)
+        return 2
+
+    with open(v2_path, encoding="utf-8") as f:
+        v2_results = json.load(f)
+
+    v1_results = None
+    if args.v1:
+        v1_path = Path(args.v1)
+        if not v1_path.is_file():
+            print(f"ERROR: 结果文件不存在: {v1_path}", file=sys.stderr)
+            return 2
+        with open(v1_path, encoding="utf-8") as f:
+            v1_results = json.load(f)
+
+    if not isinstance(v2_results, dict) or "results" not in v2_results:
+        print(
+            "ERROR: 输入 JSON 不含 'results' 键, 不是可识别的真实测量结果; "
+            "拒绝生成报告 (禁止用样例数据冒充真实测量)。",
+            file=sys.stderr,
+        )
+        return 2
 
     generator = PerformanceBenchmarkReportGenerator()
-    report_path = generator.generate_markdown_report(v2_results)
-    comparison_path = generator.generate_comparison_table(v2_results)
+    report_path = generator.generate_markdown_report(
+        v2_results, v1_results, output_filename=args.output)
+    comparison_path = generator.generate_comparison_table(v2_results, v1_results)
 
     print(f"Report generated: {report_path}")
     print(f"Comparison table generated: {comparison_path}")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

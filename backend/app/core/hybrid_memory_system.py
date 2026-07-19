@@ -1,11 +1,20 @@
 """Hybrid memory system combining hot (filesystem), cold (vector), and graph storage.
 
-Architecture:
+Architecture (as actually implemented):
 - Hot tier: Fast filesystem-based Markdown storage for recent/important memories
-- Cold tier: Vector database (Qdrant) for semantic search and long-term storage
-- Graph tier: Neo4j for relationship management and knowledge graphs
+- Cold tier: Vector database (Qdrant) for semantic search and long-term storage.
+  Requires an injected ``qdrant_client``; without one ``ColdMemoryStore`` is a
+  no-op degraded tier (see api/memory_enhanced.py ``degraded_tiers`` surfacing).
+- Graph tier: Neo4j for relationship management. Requires an injected driver
+  (or ``GraphMemoryStore.create_driver``); without one it is an explicit no-op
+  degraded tier (``GraphMemoryStore.available == False``).
 - Classifier: Automatic categorization and importance scoring
 - Merger: Deduplication and conflict resolution
+
+Model unification (P1-13): the tier-local ``Memory`` model is one of three
+legacy memory representations; use ``Memory.to_canonical()`` /
+``Memory.from_canonical()`` to interoperate with the canonical model in
+``backend.app.core.memory_dedup_adapter``.
 """
 
 from __future__ import annotations
@@ -19,6 +28,11 @@ from pydantic import BaseModel, Field
 from backend.app.core.contracts import RunContext
 from backend.app.core.embeddings import EmbeddingModel
 from backend.app.core.memory import MemoryItem, MemoryScope
+from backend.app.core.memory_dedup_adapter import (
+    CanonicalMemory,
+    canonical_from_hybrid_memory,
+    hybrid_memory_from_canonical,
+)
 
 
 class Memory(BaseModel):
@@ -37,6 +51,15 @@ class Memory(BaseModel):
     accessed_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     access_count: int = 0
     related_ids: list[str] = Field(default_factory=list)
+
+    def to_canonical(self) -> CanonicalMemory:
+        """Convert to the canonical cross-subsystem memory model."""
+        return canonical_from_hybrid_memory(self)
+
+    @classmethod
+    def from_canonical(cls, canonical: CanonicalMemory) -> "Memory":
+        """Build a tier Memory from the canonical model."""
+        return hybrid_memory_from_canonical(canonical)
 
 
 class MemoryTierStats(BaseModel):

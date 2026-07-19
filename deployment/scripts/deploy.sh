@@ -11,7 +11,9 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 NAMESPACE=${NAMESPACE:-xagent}
 RELEASE_NAME=${RELEASE_NAME:-xagent}
 ENVIRONMENT=${ENVIRONMENT:-production}
-HELM_CHART_PATH="${SCRIPT_DIR}/helm"
+# P1-15 修正: SCRIPT_DIR 为 deployment/scripts, Chart 在 deployment/helm;
+# 原值 "${SCRIPT_DIR}/helm" 指向不存在的 deployment/scripts/helm
+HELM_CHART_PATH="${PROJECT_ROOT}/deployment/helm"
 
 # Colors for output
 RED='\033[0;31m'
@@ -79,7 +81,7 @@ create_namespace() {
 deploy_helm() {
     log_info "Deploying with Helm..."
 
-    local values_file="${SCRIPT_DIR}/values-${ENVIRONMENT}.yaml"
+    local values_file="${PROJECT_ROOT}/deployment/helm/values-${ENVIRONMENT}.yaml"
 
     if [ ! -f "$values_file" ]; then
         log_warn "Environment-specific values file not found: $values_file"
@@ -129,6 +131,16 @@ verify_deployment() {
 # Run database migrations
 run_migrations() {
     log_info "Running database migrations..."
+
+    # 仓库当前没有 alembic.ini(backend/migrations/ 为纯 SQL, 全新部署由
+    # postgres 容器的 initdb 挂载 backend/migrations/init_schema.sql 完成初始化)。
+    # 显式降级: 无 alembic.ini 时跳过并告警, 不假装迁移成功。
+    if [ ! -f "${PROJECT_ROOT}/alembic.ini" ]; then
+        log_warn "alembic.ini 不存在, 跳过 alembic 迁移"
+        log_warn "全新部署的 schema 由 postgres initdb (backend/migrations/init_schema.sql) 初始化;"
+        log_warn "增量迁移请使用 deployment/migrations/migrate.py (需先落地 alembic 工程)"
+        return 0
+    fi
 
     local api_pod=$(kubectl get pods -n "$NAMESPACE" -l app=xagent-api -o jsonpath='{.items[0].metadata.name}')
 

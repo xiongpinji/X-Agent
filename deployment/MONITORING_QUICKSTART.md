@@ -15,8 +15,8 @@
 ### 1. 启动监控栈
 
 ```bash
-cd deployment
-docker-compose -f docker-compose.monitoring.yml up -d
+# 在项目根目录执行(compose 内挂载路径以 deployment/ 目录为基准, -f 调用时自动正确解析)
+docker-compose -f deployment/docker-compose.monitoring.yml up -d
 ```
 
 ### 2. 验证服务

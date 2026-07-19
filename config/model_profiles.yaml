@@ -1,0 +1,168 @@
+# X-Agent LLM 模型档案（P1-08 路由收敛）
+#
+# 单一事实来源：智能路由（selector）、成本计量（TokenUsage 定价）均从本文件加载。
+# - backend/app/core/llm/profiles.py 负责解析与校验；文件缺失时显式降级为
+#   selector 内建默认档案并记录 warning（不会静默）；YAML 结构非法时抛出
+#   ModelProfileLoadError（显式报错）。
+# - 环境变量 XAGENT_LLM_MODEL_PROFILES_PATH 可指向其他档案文件。
+#
+# 字段说明：
+#   name/provider        模型名与提供商（openai/deepseek/anthropic/ollama/mock）
+#   cost_per_1k_*        USD / 1K tokens（本地模型为 0）
+#   latency_ms           经验平均延迟，供 latency 策略排序
+#   quality_score        0-100 主观质量分，供 performance 策略排序
+#   max_tokens           上下文窗口
+#   supported_tasks      见 selector.TaskType；空列表表示不限制
+#   availability         可用率 0-1
+#   rate_limit_rpm/tpm   速率限制（后端自检用）
+version: 1
+
+models:
+  - name: gpt-4o
+    provider: openai
+    cost_per_1k_input: 0.005
+    cost_per_1k_output: 0.015
+    latency_ms: 800
+    quality_score: 95
+    max_tokens: 128000
+    supported_tasks: [complex_reasoning, code_generation, analysis, creative]
+    availability: 0.999
+    rate_limit_rpm: 3500
+    rate_limit_tpm: 90000
+
+  - name: gpt-4o-mini
+    provider: openai
+    cost_per_1k_input: 0.00015
+    cost_per_1k_output: 0.0006
+    latency_ms: 400
+    quality_score: 85
+    max_tokens: 128000
+    supported_tasks: [simple_qa, summarization, translation]
+    availability: 0.999
+    rate_limit_rpm: 3500
+    rate_limit_tpm: 90000
+
+  # 以下为历史计费档案（TokenUsage 成本计算沿用），保留以兼容存量调用。
+  - name: gpt-4
+    provider: openai
+    cost_per_1k_input: 0.03
+    cost_per_1k_output: 0.06
+    latency_ms: 1500
+    quality_score: 92
+    max_tokens: 8192
+    supported_tasks: [complex_reasoning, analysis]
+    availability: 0.99
+    rate_limit_rpm: 3500
+    rate_limit_tpm: 90000
+
+  - name: gpt-4-turbo
+    provider: openai
+    cost_per_1k_input: 0.01
+    cost_per_1k_output: 0.03
+    latency_ms: 1000
+    quality_score: 93
+    max_tokens: 128000
+    supported_tasks: [complex_reasoning, analysis, code_generation]
+    availability: 0.99
+    rate_limit_rpm: 3500
+    rate_limit_tpm: 90000
+
+  - name: gpt-3.5-turbo
+    provider: openai
+    cost_per_1k_input: 0.0005
+    cost_per_1k_output: 0.0015
+    latency_ms: 350
+    quality_score: 78
+    max_tokens: 16385
+    supported_tasks: [simple_qa, summarization, translation]
+    availability: 0.99
+    rate_limit_rpm: 3500
+    rate_limit_tpm: 90000
+
+  - name: deepseek-chat
+    provider: deepseek
+    cost_per_1k_input: 0.0014
+    cost_per_1k_output: 0.0042
+    latency_ms: 600
+    quality_score: 88
+    max_tokens: 64000
+    supported_tasks: [complex_reasoning, code_generation, analysis]
+    availability: 0.98
+    rate_limit_rpm: 3500
+    rate_limit_tpm: 90000
+
+  - name: deepseek-coder
+    provider: deepseek
+    cost_per_1k_input: 0.0014
+    cost_per_1k_output: 0.0042
+    latency_ms: 700
+    quality_score: 92
+    max_tokens: 64000
+    supported_tasks: [code_generation]
+    availability: 0.98
+    rate_limit_rpm: 3500
+    rate_limit_tpm: 90000
+
+  - name: claude-3-5-haiku-20241022
+    provider: anthropic
+    cost_per_1k_input: 0.0008
+    cost_per_1k_output: 0.004
+    latency_ms: 500
+    quality_score: 86
+    max_tokens: 200000
+    supported_tasks: [simple_qa, summarization, translation, analysis]
+    availability: 0.999
+    rate_limit_rpm: 4000
+    rate_limit_tpm: 200000
+
+  - name: claude-sonnet-4-20250514
+    provider: anthropic
+    cost_per_1k_input: 0.003
+    cost_per_1k_output: 0.015
+    latency_ms: 900
+    quality_score: 95
+    max_tokens: 200000
+    supported_tasks: [complex_reasoning, code_generation, analysis, creative]
+    availability: 0.999
+    rate_limit_rpm: 4000
+    rate_limit_tpm: 200000
+
+  # 本地 Ollama 模型：无 API 成本，延迟为经验值，按实际部署修改。
+  - name: llama3.1
+    provider: ollama
+    cost_per_1k_input: 0.0
+    cost_per_1k_output: 0.0
+    latency_ms: 1200
+    quality_score: 80
+    max_tokens: 128000
+    supported_tasks: [simple_qa, summarization, translation, code_generation]
+    availability: 0.95
+    rate_limit_rpm: 600
+    rate_limit_tpm: 1000000
+
+  - name: mock
+    provider: mock
+    cost_per_1k_input: 0.0
+    cost_per_1k_output: 0.0
+    latency_ms: 1
+    quality_score: 10
+    max_tokens: 100000
+    supported_tasks: []
+    availability: 1.0
+    rate_limit_rpm: 100000
+    rate_limit_tpm: 100000000
+
+# 租户/用户级 token 配额（P1-08）。
+# 开关与默认上限由环境变量控制：XAGENT_LLM_QUOTA_ENABLED /
+# XAGENT_LLM_QUOTA_PERIOD / XAGENT_LLM_QUOTA_DEFAULT_TENANT_TOKENS /
+# XAGENT_LLM_QUOTA_DEFAULT_USER_TOKENS；本节仅承载“按租户/用户”的覆盖表，
+# 属于配置文件职责。token 计量累计存储在现有 cache 抽象（CacheManager）中，
+# 不新建存储系统。
+quota:
+  # tenant_id -> 周期内 token 上限覆盖
+  tenant_overrides: {}
+  #   example-tenant: 5000000
+  # user_id -> 周期内 token 上限覆盖（跨租户唯一时使用；同租户内更精确请用
+  # TokenQuotaManager.set_user_quota(tenant, user, tokens)）
+  user_overrides: {}
+  #   user-42: 250000

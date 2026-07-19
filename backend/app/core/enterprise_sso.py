@@ -97,25 +97,30 @@ class OAuthConfig(BaseModel):
     jwks_uri: Optional[str] = None
     issuer: str
     scopes: list[str] = Field(default_factory=lambda: ["openid", "profile", "email"])
-    redirect_uri: str
+    # P1-02: 放宽为可选 — api/enterprise_sso.py 的配置端点不传该字段;
+    # 但 exchange_code_for_token 时若仍缺失会显式报错 (fail-closed)
+    redirect_uri: Optional[str] = None
     response_type: str = "code"
     grant_type: str = "authorization_code"
     token_endpoint_auth_method: str = "client_secret_basic"
     id_token_signed_alg: str = "RS256"
     userinfo_signed_response_alg: Optional[str] = None
     metadata_url: Optional[str] = None
+    http_timeout_seconds: float = 10.0
 
 
 class OAuthAuthorizationRequest(BaseModel):
     """OAuth授权请求"""
     request_id: str
     client_id: str
-    redirect_uri: str
+    redirect_uri: Optional[str] = None
     scope: str
     state: str
     nonce: Optional[str] = None
     code_challenge: Optional[str] = None
     code_challenge_method: str = "S256"
+    # P1-02: 保存 PKCE verifier 供 token 交换时使用 (此前丢失导致 PKCE 流程无法闭环)
+    code_verifier: Optional[str] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
@@ -329,7 +334,8 @@ class SAMLProcessor:
         raise ValueError(
             "SAML response signature verification is not implemented; "
             "refusing to process SAML response (fail-closed, P0-05). "
-            "真 SSO 实现见 P1-02（需接入 python3-saml/signxml 做真实 XML 签名验证）。"
+            "SAML 当前为 Beta 状态 (P1-02): 需接入 python3-saml/signxml 做真实 "
+            "XML 签名验证后方可启用; OIDC 已 GA, 请优先使用 OIDC。"
         )
 
     def _extract_assertion(self, saml_response_xml: str) -> SAMLAssertion:
@@ -391,12 +397,33 @@ class SAMLProcessor:
 # ============================================================================
 
 class OAuthProcessor:
-    """OAuth 2.0 / OIDC处理器"""
+    """OAuth 2.0 / OIDC处理器 (P1-02: 真实 HTTP 实现, 无任何伪造数据)"""
 
-    def __init__(self, config: OAuthConfig):
+    def __init__(self, config: OAuthConfig, *, http_client: Any = None):
         self.config = config
         self._auth_requests: dict[str, OAuthAuthorizationRequest] = {}
+        self._state_index: dict[str, str] = {}  # state -> request_id
         self._tokens: dict[str, OAuthToken] = {}
+        # 可注入 httpx.Client (同步); None 时按需创建
+        self._http_client = http_client
+
+    def _post(self, url: str, **kwargs: Any) -> "httpx.Response":  # noqa: F821
+        import httpx
+
+        timeout = kwargs.pop("timeout", self.config.http_timeout_seconds)
+        if self._http_client is not None:
+            return self._http_client.post(url, timeout=timeout, **kwargs)
+        with httpx.Client() as client:
+            return client.post(url, timeout=timeout, **kwargs)
+
+    def _get(self, url: str, **kwargs: Any) -> "httpx.Response":  # noqa: F821
+        import httpx
+
+        timeout = kwargs.pop("timeout", self.config.http_timeout_seconds)
+        if self._http_client is not None:
+            return self._http_client.get(url, timeout=timeout, **kwargs)
+        with httpx.Client() as client:
+            return client.get(url, timeout=timeout, **kwargs)
 
     def generate_authorization_url(self) -> tuple[str, str]:
         """生成授权URL
@@ -422,13 +449,15 @@ class OAuthProcessor:
             state=state,
             nonce=nonce,
             code_challenge=code_challenge,
+            code_verifier=code_verifier,
         )
         self._auth_requests[request_id] = auth_request
+        self._state_index[state] = request_id
 
         # 构建授权URL
         params = {
             "client_id": self.config.client_id,
-            "redirect_uri": self.config.redirect_uri,
+            "redirect_uri": self.config.redirect_uri or "",
             "response_type": self.config.response_type,
             "scope": auth_request.scope,
             "state": state,
@@ -444,50 +473,183 @@ class OAuthProcessor:
         return request_id, authorization_url
 
     def exchange_code_for_token(self, code: str, state: str) -> OAuthToken:
-        """使用授权码交换令牌
+        """使用授权码交换令牌 (P1-02: 真实 token 端点调用 + state 校验)
 
         Args:
             code: 授权码
-            state: 状态参数
+            state: 状态参数 (必须与 generate_authorization_url 签发的匹配, 一次性)
 
         Returns:
             OAuthToken对象
+
+        Raises:
+            ValueError: state 未知/已使用、token 端点报错、或 id_token 验签失败
         """
-        # 在生产环境中应验证state并调用token_endpoint
-        # 这里是简化实现
+        # 1) state 一次性校验 (防 CSRF)
+        request_id = self._state_index.pop(state, None)
+        auth_request = self._auth_requests.pop(request_id, None) if request_id else None
+        if auth_request is None:
+            logger.warning("OAuth token exchange rejected: unknown or reused state")
+            raise ValueError("Invalid or expired OAuth state (possible CSRF). Authentication rejected.")
+
+        # 2) 真实调用 token 端点
+        if not self.config.redirect_uri:
+            raise ValueError(
+                "OAuthConfig.redirect_uri 未配置, 无法完成授权码交换 (fail-closed)。"
+            )
+
+        data: dict[str, str] = {
+            "grant_type": "authorization_code",
+            "code": code,
+            "redirect_uri": self.config.redirect_uri,
+        }
+        if auth_request.code_verifier:
+            data["code_verifier"] = auth_request.code_verifier
+
+        kwargs: dict[str, Any] = {}
+        if self.config.token_endpoint_auth_method == "client_secret_post":
+            data["client_id"] = self.config.client_id
+            data["client_secret"] = self.config.client_secret
+        else:  # client_secret_basic (默认)
+            kwargs["auth"] = (self.config.client_id, self.config.client_secret)
+
+        try:
+            resp = self._post(self.config.token_endpoint, data=data, **kwargs)
+        except Exception as e:
+            logger.error(f"Token endpoint request failed: {e}")
+            raise ValueError(f"Token exchange request failed: {e}") from e
+
+        if resp.status_code != 200:
+            logger.error(f"Token exchange failed: HTTP {resp.status_code}")
+            raise ValueError(f"Token exchange failed: HTTP {resp.status_code}")
+
+        token_data = resp.json()
+        if "access_token" not in token_data:
+            raise ValueError("Token endpoint response missing access_token")
+
+        # 3) 若返回 id_token 则必须验签 (fail-closed)
+        id_token = token_data.get("id_token")
+        if id_token:
+            self._verify_id_token(id_token, expected_nonce=auth_request.nonce)
+
         token = OAuthToken(
-            access_token=f"access_{uuid4().hex}",
-            token_type="Bearer",
-            expires_in=3600,
-            refresh_token=f"refresh_{uuid4().hex}",
-            id_token=f"id_{uuid4().hex}",
-            scope=" ".join(self.config.scopes),
+            access_token=token_data["access_token"],
+            token_type=token_data.get("token_type", "Bearer"),
+            expires_in=int(token_data.get("expires_in", 3600)),
+            refresh_token=token_data.get("refresh_token"),
+            id_token=id_token,
+            scope=token_data.get("scope", " ".join(self.config.scopes)),
         )
         self._tokens[token.access_token] = token
 
-        logger.info(f"Exchanged authorization code for token")
+        logger.info("Exchanged authorization code for token (state validated)")
         return token
 
+    def _verify_id_token(self, id_token: str, *, expected_nonce: Optional[str] = None) -> dict[str, Any]:
+        """验证 id_token 签名与 claims (复用 saml_sso 的验签器, fail-closed)。"""
+        from backend.app.core.saml_sso import (
+            SSOAuthenticationError,
+            verify_jwt_signature,
+            validate_claims,
+        )
+
+        jwks: Optional[dict[str, Any]] = None
+        secret: Optional[str] = None
+
+        import json as _json
+        import base64 as _b64
+
+        try:
+            header = _json.loads(_b64.urlsafe_b64decode(id_token.split(".")[0] + "=="))
+        except Exception as e:
+            raise ValueError(f"Malformed id_token header: {e}") from e
+
+        alg = str(header.get("alg") or "")
+        if alg.startswith("HS"):
+            secret = self.config.client_secret
+        else:
+            jwks_uri = self.config.jwks_uri
+            if not jwks_uri:
+                # 尝试 OIDC discovery
+                discovery_base = (self.config.metadata_url or "").strip()
+                if not discovery_base and self.config.issuer:
+                    discovery_base = self.config.issuer.rstrip("/") + "/.well-known/openid-configuration"
+                if discovery_base:
+                    try:
+                        doc = self._get(discovery_base).json()
+                        jwks_uri = doc.get("jwks_uri")
+                    except Exception as e:
+                        raise ValueError(f"OIDC discovery failed, cannot verify id_token: {e}") from e
+            if not jwks_uri:
+                raise ValueError(
+                    "无法确定 JWKS 端点 (jwks_uri/metadata_url/issuer 均未配置), "
+                    "id_token 无法验签, 拒绝认证 (fail-closed)。"
+                )
+            try:
+                jwks = self._get(jwks_uri).json()
+            except Exception as e:
+                raise ValueError(f"JWKS fetch failed, cannot verify id_token: {e}") from e
+
+        try:
+            claims = verify_jwt_signature(id_token, jwks=jwks, client_secret=secret)
+            validate_claims(
+                claims,
+                issuer=self.config.issuer or None,
+                audience=self.config.client_id,
+                expected_nonce=expected_nonce,
+                validate_issuer=bool(self.config.issuer),
+                validate_audience=True,
+            )
+        except SSOAuthenticationError as e:
+            raise ValueError(f"id_token validation failed: {e}") from e
+        return claims
+
     def get_userinfo(self, access_token: str) -> OAuthUserInfo:
-        """获取用户信息
+        """获取用户信息 (P1-02: 真实 userinfo 端点调用)
 
         Args:
             access_token: 访问令牌
 
         Returns:
             OAuthUserInfo对象
+
+        Raises:
+            ValueError: 令牌无效或端点报错
         """
-        # 在生产环境中应调用userinfo_endpoint
-        # 这里是简化实现
+        try:
+            resp = self._get(
+                self.config.userinfo_endpoint,
+                headers={"Authorization": f"Bearer {access_token}"},
+            )
+        except Exception as e:
+            logger.error(f"Userinfo request failed: {e}")
+            raise ValueError(f"Userinfo request failed: {e}") from e
+
+        if resp.status_code == 401:
+            raise ValueError("Userinfo rejected the access token (401)")
+        if resp.status_code != 200:
+            raise ValueError(f"Userinfo request failed: HTTP {resp.status_code}")
+
+        data = resp.json()
+        known = {
+            "sub", "email", "email_verified", "name", "given_name",
+            "family_name", "picture", "locale", "updated_at",
+        }
         return OAuthUserInfo(
-            sub=uuid4().hex,
-            email="user@example.com",
-            email_verified=True,
-            name="Example User",
+            sub=str(data.get("sub", "")),
+            email=str(data.get("email", "")),
+            email_verified=bool(data.get("email_verified", False)),
+            name=data.get("name"),
+            given_name=data.get("given_name"),
+            family_name=data.get("family_name"),
+            picture=data.get("picture"),
+            locale=data.get("locale"),
+            updated_at=data.get("updated_at"),
+            custom_claims={k: v for k, v in data.items() if k not in known},
         )
 
     def refresh_token(self, refresh_token: str) -> OAuthToken:
-        """刷新令牌
+        """刷新令牌 (P1-02: 真实 token 端点调用)
 
         Args:
             refresh_token: 刷新令牌
@@ -495,16 +657,38 @@ class OAuthProcessor:
         Returns:
             新的OAuthToken对象
         """
+        data: dict[str, str] = {
+            "grant_type": "refresh_token",
+            "refresh_token": refresh_token,
+        }
+        kwargs: dict[str, Any] = {}
+        if self.config.token_endpoint_auth_method == "client_secret_post":
+            data["client_id"] = self.config.client_id
+            data["client_secret"] = self.config.client_secret
+        else:
+            kwargs["auth"] = (self.config.client_id, self.config.client_secret)
+
+        try:
+            resp = self._post(self.config.token_endpoint, data=data, **kwargs)
+        except Exception as e:
+            logger.error(f"Token refresh request failed: {e}")
+            raise ValueError(f"Token refresh request failed: {e}") from e
+
+        if resp.status_code != 200:
+            raise ValueError(f"Token refresh failed: HTTP {resp.status_code}")
+
+        token_data = resp.json()
         token = OAuthToken(
-            access_token=f"access_{uuid4().hex}",
-            token_type="Bearer",
-            expires_in=3600,
-            refresh_token=refresh_token,
-            scope=" ".join(self.config.scopes),
+            access_token=token_data["access_token"],
+            token_type=token_data.get("token_type", "Bearer"),
+            expires_in=int(token_data.get("expires_in", 3600)),
+            refresh_token=token_data.get("refresh_token", refresh_token),
+            id_token=token_data.get("id_token"),
+            scope=token_data.get("scope", " ".join(self.config.scopes)),
         )
         self._tokens[token.access_token] = token
 
-        logger.info(f"Refreshed OAuth token")
+        logger.info("Refreshed OAuth token via token endpoint")
         return token
 
 

@@ -6,14 +6,33 @@ Features:
 - Graph traversal and path finding
 - Related memory expansion
 - Knowledge graph queries
+
+Dependency note (P1-13): the ``neo4j`` driver package is an OPTIONAL
+dependency, now declared in requirements.txt. Without a driver the store runs
+in an explicit no-op degraded mode: reads return empty results and
+``add_node`` returns the memory id WITHOUT persisting anything. This mode is
+only acceptable for dev/test; it is inspectable via ``GraphMemoryStore.available``
+and logged once per instance — it must not be mistaken for a working graph
+tier in production (use ``create_driver`` or inject a driver).
 """
 
 from __future__ import annotations
 
+import logging
 import re
 from typing import Any
 
 from backend.app.core.hybrid_memory_system import Memory
+
+logger = logging.getLogger(__name__)
+
+try:
+    from neo4j import GraphDatabase as _Neo4jGraphDatabase
+
+    NEO4J_AVAILABLE = True
+except ImportError:  # pragma: no cover - optional runtime dependency
+    _Neo4jGraphDatabase = None  # type: ignore[assignment]
+    NEO4J_AVAILABLE = False
 
 # Whitelist of relationship types allowed in Cypher MERGE clauses.
 # Relationship types cannot be parameterized in Cypher, so only these
@@ -53,6 +72,45 @@ class GraphMemoryStore:
         self.neo4j_driver = neo4j_driver
         self.database = database
         self._node_count = 0
+        self._noop_warned = False
+        if neo4j_driver is None:
+            logger.info(
+                "GraphMemoryStore: no Neo4j driver configured — running in explicit "
+                "no-op degraded mode (nothing is persisted; reads return empty). "
+                "Use GraphMemoryStore.create_driver(...) for a real graph tier."
+            )
+
+    @property
+    def available(self) -> bool:
+        """True when a real Neo4j driver backs this store."""
+        return self.neo4j_driver is not None
+
+    @classmethod
+    def create_driver(
+        cls,
+        uri: str,
+        auth: tuple[str, str] | None = None,
+        database: str = "neo4j",
+        **driver_kwargs: Any,
+    ) -> "GraphMemoryStore":
+        """Build a store with a real Neo4j driver; fails explicitly if unavailable."""
+        if not NEO4J_AVAILABLE:
+            raise RuntimeError(
+                "neo4j package is not installed; the graph memory tier requires "
+                "`pip install neo4j` (declared in requirements.txt)."
+            )
+        driver = _Neo4jGraphDatabase.driver(uri, auth=auth, **driver_kwargs)
+        return cls(neo4j_driver=driver, database=database)
+
+    def _warn_noop_once(self, operation: str) -> None:
+        if self._noop_warned:
+            return
+        self._noop_warned = True
+        logger.warning(
+            "GraphMemoryStore.%s called without a Neo4j driver: result is a no-op "
+            "(nothing persisted / empty reads). This is only acceptable in dev/test.",
+            operation,
+        )
 
     async def add_node(self, memory: Memory) -> str:
         """Add memory as node in graph.
@@ -64,6 +122,9 @@ class GraphMemoryStore:
             Memory ID
         """
         if not self.neo4j_driver:
+            # Explicit degraded no-op: returns the id WITHOUT persisting.
+            # Callers must check `.available` before treating this as stored.
+            self._warn_noop_once("add_node")
             return memory.id
 
         try:

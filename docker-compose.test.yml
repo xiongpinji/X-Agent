@@ -331,8 +331,12 @@ services:
       - TZ=UTC
     volumes:
       - grafana_test_data:/var/lib/grafana
-      - ./deployment/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
-      - ./deployment/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      # P1-15 修正: 原挂载的 ./deployment/grafana/provisioning/dashboards 与
+      # .../datasources 目录不存在(实际为 .yml 文件); 按 Grafana provisioning
+      # 规范挂载 provider 配置, 仪表盘 JSON 单独挂载
+      - ./deployment/grafana/provisioning/dashboards.yml:/etc/grafana/provisioning/dashboards/main.yml:ro
+      - ./deployment/grafana/provisioning/datasources.yml:/etc/grafana/provisioning/datasources/main.yml:ro
+      - ./deployment/grafana/dashboards:/var/lib/grafana/dashboards:ro
     depends_on:
       prometheus:
         condition: service_healthy
@@ -468,7 +472,8 @@ services:
     image: docker.elastic.co/logstash/logstash:8.11.0
     container_name: xagent-test-logstash
     volumes:
-      - ./deployment/elk/logstash.conf:/usr/share/logstash/pipeline/logstash.conf:ro
+      # P1-15 修正: deployment/elk/ 不存在; 真实文件在 monitoring/elk/
+      - ./monitoring/elk/logstash.conf:/usr/share/logstash/pipeline/logstash.conf:ro
       - ./logs:/var/log/xagent:ro
     ports:
       - "5000:5000/udp"

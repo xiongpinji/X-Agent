@@ -1,5 +1,11 @@
 # MCP服务器配置示例
 # 将此文件复制为 config/mcp_servers.yaml 并根据需要修改
+#
+# P1-01 起支持两种官方 MCP 传输：
+#   transport: "http"  — Streamable HTTP（需 url 指向 MCP 端点，如 http://host:8000/mcp）
+#   transport: "stdio" — 子进程 stdio（需 command，可配 args/env/cwd）
+# 发现的工具会同时注册进工具目录（ToolCatalog）与运行时 ToolRegistry
+# （Agent 主循环执行表），风险等级/审批策略由运行时策略引擎统一裁决。
 
 # MCP服务器列表
 mcp_servers:
@@ -14,6 +20,19 @@ mcp_servers:
       - "filesystem"
       - "local"
     description: "本地文件系统操作工具"
+
+  # stdio 传输示例：以子进程拉起官方 filesystem MCP server（npx）
+  # - name: "filesystem-stdio"
+  #   transport: "stdio"
+  #   command: "npx"
+  #   args: ["-y", "@modelcontextprotocol/server-filesystem", "/allowed/path"]
+  #   # env: {"FOO": "bar"}     # 可选：子进程环境变量
+  #   # cwd: "/workdir"         # 可选：子进程工作目录
+  #   enabled: false
+  #   auto_register: true
+  #   timeout: 30.0
+  #   max_retries: 1
+  #   # risk_level: "medium"    # 可选：整站风险等级下限（与按工具推断值取较高者）
 
   # 数据库服务器
   - name: "database"

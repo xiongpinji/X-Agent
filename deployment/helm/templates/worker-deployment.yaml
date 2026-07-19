@@ -1,0 +1,120 @@
+{{- if .Values.worker.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: xagent-worker
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: xagent-worker
+spec:
+  replicas: {{ .Values.worker.replicas }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: xagent-worker
+  template:
+    metadata:
+      labels:
+        app: xagent-worker
+    spec:
+      serviceAccountName: xagent
+      # P1-16: 优雅停机 —— worker 执行长任务, 宽限期默认 120s; preStop sleep 等待摘除传播
+      terminationGracePeriodSeconds: {{ .Values.worker.terminationGracePeriodSeconds | default 120 }}
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - xagent-worker
+              topologyKey: kubernetes.io/hostname
+      containers:
+      - name: xagent-worker
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        # P0-02: 后端无 Celery 应用, workflow_worker 是 asyncio 轮询 worker,
+        # 直接以 python -m 启动; celery 依赖保留但未使用, 待真 Celery 返工
+        command:
+        - python
+        - -m
+        - backend.app.workflow_worker
+        lifecycle:
+          # P1-16: 镜像为 python:3.11-slim, 内置 /bin/sh 与 sleep
+          preStop:
+            exec:
+              command:
+              - /bin/sh
+              - -c
+              - sleep {{ .Values.worker.preStopSleepSeconds | default 10 }}
+        envFrom:
+        - configMapRef:
+            name: xagent-config
+        - secretRef:
+            name: xagent-secrets
+        # P0-03: envFrom 仅注入零散 key, 应用实际读取的连接串在此由辅助变量组合
+        env:
+        - name: XAGENT_DATABASE_URL
+          value: "postgresql+asyncpg://$(DB_USER):$(DB_PASSWORD)@{{ include "xagent.postgresHost" . }}:{{ .Values.database.port }}/$(DB_NAME)"
+        - name: XAGENT_REDIS_URL
+          value: "redis://:$(REDIS_PASSWORD)@{{ include "xagent.redisHost" . }}:{{ .Values.redis.port }}/0"
+        - name: XAGENT_QDRANT_URL
+          value: "http://{{ include "xagent.qdrantHost" . }}:{{ .Values.qdrant.port }}"
+        - name: XAGENT_NEO4J_URI
+          value: "bolt://{{ include "xagent.neo4jHost" . }}:{{ .Values.neo4j.port }}"
+        resources:
+          {{- toYaml .Values.worker.resources | nindent 10 }}
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+        - name: logs
+          mountPath: /app/logs
+      volumes:
+      - name: tmp
+        emptyDir: {}
+      - name: logs
+        emptyDir: {}
+{{- if .Values.worker.autoscaling.enabled }}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: xagent-worker-hpa
+  namespace: {{ .Release.Namespace }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: xagent-worker
+  minReplicas: {{ .Values.worker.autoscaling.minReplicas }}
+  maxReplicas: {{ .Values.worker.autoscaling.maxReplicas }}
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: {{ .Values.worker.autoscaling.targetCPUUtilizationPercentage }}
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: {{ .Values.worker.autoscaling.targetMemoryUtilizationPercentage }}
+{{- end }}
+{{- end }}

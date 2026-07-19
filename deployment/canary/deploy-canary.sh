@@ -6,12 +6,18 @@
 set -euo pipefail
 
 # Configuration
-NAMESPACE=${NAMESPACE:-production}
+# P1-15: 命名空间与容器名对齐权威清单 deployment/k8s/ 与 deployment/canary/
+NAMESPACE=${NAMESPACE:-xagent}
 NEW_VERSION=${1:-}
 CANARY_REPLICAS_STAGES=(1 2 3 5 10)
 MONITORING_INTERVAL=${MONITORING_INTERVAL:-300}
 ERROR_RATE_THRESHOLD=${ERROR_RATE_THRESHOLD:-0.01}
 PROMETHEUS_URL=${PROMETHEUS_URL:-http://prometheus:9090}
+# 容器名 == 各 Deployment 名(deployment/k8s/*.yaml 与 canary-deployment.yaml 的约定)
+CONTAINER_API=xagent-api
+CONTAINER_WORKER=xagent-worker
+CONTAINER_BEAT=xagent-beat
+CONTAINER_CANARY=xagent-api
 
 # Colors
 RED='\033[0;31m'
@@ -59,7 +65,7 @@ log_info "Namespace: $NAMESPACE"
 # Step 1: Deploy canary version
 log_step "Deploying canary version..."
 kubectl set image deployment/xagent-canary \
-    xagent="xagent:$NEW_VERSION" \
+    "$CONTAINER_CANARY=xagent:$NEW_VERSION" \
     -n "$NAMESPACE" || {
     log_error "Failed to set canary image"
     exit 1
@@ -75,6 +81,9 @@ log_step "Monitoring canary deployment..."
 sleep "$MONITORING_INTERVAL"
 
 # Check error rate
+# 注意: 判据依赖 http_requests_total{version=...} 指标; 该指标由后端 Prometheus 中间件产生,
+# 其接线属于监控子系统范围(P0-04)。若指标缺失, Prometheus 返回空结果, 错误率按 0 处理 —
+# 即金丝雀门控会"降级为仅按时间推进", 不会误报失败, 也不会拦截真实故障。接入指标前请知悉该限制。
 check_error_rate() {
     local version=$1
     local query="rate(http_requests_total{version='$version',status=~'5..'}[5m])"
@@ -141,15 +150,15 @@ log_info "Current stable replicas: $STABLE_REPLICAS"
 
 # Update stable deployment
 kubectl set image deployment/xagent-api \
-    xagent="xagent:$NEW_VERSION" \
+    "$CONTAINER_API=xagent:$NEW_VERSION" \
     -n "$NAMESPACE"
 
 kubectl set image deployment/xagent-worker \
-    xagent="xagent:$NEW_VERSION" \
+    "$CONTAINER_WORKER=xagent:$NEW_VERSION" \
     -n "$NAMESPACE"
 
 kubectl set image deployment/xagent-beat \
-    xagent="xagent:$NEW_VERSION" \
+    "$CONTAINER_BEAT=xagent:$NEW_VERSION" \
     -n "$NAMESPACE"
 
 # Wait for rollout

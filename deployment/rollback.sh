@@ -6,10 +6,16 @@
 set -euo pipefail
 
 # Configuration
-NAMESPACE=${NAMESPACE:-production}
+# P1-15: 默认命名空间对齐权威清单 deployment/k8s/ (namespace: xagent);
+# 容器名与 deployment/k8s/*.yaml 一致(每个 Deployment 的容器名 == Deployment 名)
+NAMESPACE=${NAMESPACE:-xagent}
 DEPLOYMENT_API=${DEPLOYMENT_API:-xagent-api}
 DEPLOYMENT_WORKER=${DEPLOYMENT_WORKER:-xagent-worker}
 DEPLOYMENT_BEAT=${DEPLOYMENT_BEAT:-xagent-beat}
+CONTAINER_API=${CONTAINER_API:-xagent-api}
+CONTAINER_WORKER=${CONTAINER_WORKER:-xagent-worker}
+CONTAINER_BEAT=${CONTAINER_BEAT:-xagent-beat}
+SERVICE_NAME=${SERVICE_NAME:-xagent-api}
 ROLLBACK_TIMEOUT=${ROLLBACK_TIMEOUT:-5m}
 HEALTH_CHECK_RETRIES=${HEALTH_CHECK_RETRIES:-30}
 HEALTH_CHECK_INTERVAL=${HEALTH_CHECK_INTERVAL:-10}
@@ -41,7 +47,7 @@ Usage: $0 [OPTIONS]
 Options:
     -v, --version VERSION       Rollback to specific version (default: previous)
     -d, --database              Also rollback database schema
-    -n, --namespace NAMESPACE   Kubernetes namespace (default: production)
+    -n, --namespace NAMESPACE   Kubernetes namespace (default: xagent)
     -h, --help                  Show this help message
 
 Examples:
@@ -117,15 +123,15 @@ else
     log_info "Rolling back to version: $ROLLBACK_VERSION"
 
     kubectl set image deployment/"$DEPLOYMENT_API" \
-        xagent="$ROLLBACK_VERSION" \
+        "$CONTAINER_API=$ROLLBACK_VERSION" \
         -n "$NAMESPACE"
 
     kubectl set image deployment/"$DEPLOYMENT_WORKER" \
-        xagent="$ROLLBACK_VERSION" \
+        "$CONTAINER_WORKER=$ROLLBACK_VERSION" \
         -n "$NAMESPACE"
 
     kubectl set image deployment/"$DEPLOYMENT_BEAT" \
-        xagent="$ROLLBACK_VERSION" \
+        "$CONTAINER_BEAT=$ROLLBACK_VERSION" \
         -n "$NAMESPACE"
 fi
 
@@ -196,7 +202,7 @@ fi
 
 # Verify service is responding
 log_info "Verifying service endpoints..."
-SERVICE_IP=$(kubectl get service xagent-service -n "$NAMESPACE" -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "")
+SERVICE_IP=$(kubectl get service "$SERVICE_NAME" -n "$NAMESPACE" -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "")
 
 if [ -n "$SERVICE_IP" ]; then
     log_info "Service IP: $SERVICE_IP"

@@ -141,6 +141,7 @@ class SessionMetadata:
     message_count: int = 0
     token_count: int = 0
     last_snapshot: Optional[datetime] = None
+    tenant_id: str = ""
 
 
 @dataclass
@@ -249,6 +250,7 @@ class SessionRecovery:
                     message_count=len(session_state.messages),
                     token_count=session_state.total_tokens,
                     last_snapshot=datetime.now(UTC),
+                    tenant_id=session_state.tenant_id,
                 )
                 metadata_file.write_text(json.dumps(asdict(metadata), indent=2, default=str))
 
@@ -307,12 +309,15 @@ class SessionRecovery:
         self,
         agent_id: str | None = None,
         limit: int = 100,
+        tenant_id: str | None = None,
     ) -> list[SessionMetadata]:
         """List all sessions.
 
         Args:
             agent_id: Filter by agent ID (optional)
             limit: Maximum number of sessions to return
+            tenant_id: Filter by tenant ID (optional); 传入时只返回该租户的会话，
+                无 tenant_id 的旧元数据视为不属于任何指定租户。
 
         Returns:
             List of session metadata
@@ -344,10 +349,14 @@ class SessionRecovery:
                                 if metadata_data.get("last_snapshot")
                                 else None
                             ),
+                            tenant_id=metadata_data.get("tenant_id", ""),
                         )
 
-                        if agent_id is None or metadata.agent_id == agent_id:
-                            sessions.append(metadata)
+                        if agent_id is not None and metadata.agent_id != agent_id:
+                            continue
+                        if tenant_id is not None and metadata.tenant_id != tenant_id:
+                            continue
+                        sessions.append(metadata)
 
                     except Exception as e:
                         logger.warning(f"Failed to load metadata for {session_dir}: {e}")

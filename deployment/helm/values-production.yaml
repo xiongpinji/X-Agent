@@ -14,6 +14,8 @@ api:
   replicas: 5
   port: 8000
   workers: 4
+  terminationGracePeriodSeconds: 90
+  preStopSleepSeconds: 10
   resources:
     requests:
       memory: "512Mi"
@@ -32,6 +34,8 @@ worker:
   enabled: true
   replicas: 4
   concurrency: 4
+  terminationGracePeriodSeconds: 120
+  preStopSleepSeconds: 10
   resources:
     requests:
       memory: "512Mi"
@@ -49,6 +53,8 @@ worker:
 beat:
   enabled: true
   replicas: 1
+  terminationGracePeriodSeconds: 60
+  preStopSleepSeconds: 5
   resources:
     requests:
       memory: "256Mi"
@@ -57,11 +63,15 @@ beat:
       memory: "512Mi"
       cpu: "200m"
 
+# 生产建议: 数据库类组件改用云厂商托管实例 —— 将对应 enabled 设为 false,
+# 并在 external.* 填写外部端点。默认仍启用集群内单副本(适合演示/中小规模)。
 postgres:
   enabled: true
   image: postgres:16-alpine
   port: 5432
   storage: 50Gi
+  terminationGracePeriodSeconds: 60
+  preStopSleepSeconds: 5
   resources:
     requests:
       memory: "512Mi"
@@ -75,6 +85,8 @@ redis:
   image: redis:7-alpine
   port: 6379
   storage: 10Gi
+  terminationGracePeriodSeconds: 60
+  preStopSleepSeconds: 5
   resources:
     requests:
       memory: "256Mi"
@@ -87,7 +99,10 @@ qdrant:
   enabled: true
   image: qdrant/qdrant:latest
   port: 6333
+  grpcPort: 6334
   storage: 50Gi
+  terminationGracePeriodSeconds: 60
+  preStopSleepSeconds: 5
   resources:
     requests:
       memory: "1Gi"
@@ -100,7 +115,11 @@ neo4j:
   enabled: true
   image: neo4j:5-community
   port: 7687
+  httpPort: 7474
+  user: neo4j
   storage: 50Gi
+  terminationGracePeriodSeconds: 60
+  preStopSleepSeconds: 5
   resources:
     requests:
       memory: "2Gi"
@@ -108,6 +127,13 @@ neo4j:
     limits:
       memory: "4Gi"
       cpu: "2000m"
+
+# 外部依赖端点(仅当对应组件 enabled=false 时必填)
+external:
+  postgresHost: ""
+  redisHost: ""
+  qdrantHost: ""
+  neo4jHost: ""
 
 ingress:
   enabled: true
@@ -144,16 +170,6 @@ database:
   name: xagent_db
   port: 5432
 
-redis:
-  port: 6379
-
-qdrant:
-  port: 6333
-
-neo4j:
-  user: neo4j
-  port: 7687
-
 monitoring:
   enabled: true
   prometheus:
@@ -167,3 +183,15 @@ backup:
   enabled: true
   schedule: "0 2 * * *"
   retention: 30
+  image:
+    repository: your-registry/xagent-backup
+    tag: latest
+    pullPolicy: IfNotPresent
+  storage: 100Gi
+  s3:
+    enabled: false
+    bucket: ""
+    region: us-east-1
+  terminationGracePeriodSeconds: 60
+  preStopSleepSeconds: 5
+  activeDeadlineSeconds: 7200

@@ -53,6 +53,15 @@ backup_database() {
 run_migrations() {
     log_info "Running database migrations..."
 
+    # 仓库当前没有 alembic.ini(backend/migrations/ 为纯 SQL, 全新部署由
+    # postgres 容器 initdb 挂载 backend/migrations/init_schema.sql 初始化)。
+    # 显式降级: 无 alembic.ini 时跳过并告警, 不假装迁移成功。
+    if [ ! -f "${PROJECT_ROOT}/alembic.ini" ]; then
+        log_warn "alembic.ini 不存在, 跳过 alembic 迁移"
+        log_warn "全新部署的 schema 由 postgres initdb (backend/migrations/init_schema.sql) 初始化"
+        return 0
+    fi
+
     if command -v docker-compose &> /dev/null; then
         docker-compose exec xagent-api alembic upgrade head
     else
@@ -65,6 +74,11 @@ run_migrations() {
 
 # Verify migrations
 verify_migrations() {
+    if [ ! -f "${PROJECT_ROOT}/alembic.ini" ]; then
+        log_warn "alembic.ini 不存在, 跳过迁移验证"
+        return 0
+    fi
+
     log_info "Verifying migrations..."
 
     if command -v docker-compose &> /dev/null; then

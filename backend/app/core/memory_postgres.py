@@ -31,10 +31,18 @@ CREATE INDEX IF NOT EXISTS idx_memories_content_trgm
 
 
 class PostgresMemorySystem:
-    """PostgreSQL-backed L1-L4 memory store.
+    """PostgreSQL-backed memory store.
 
-    Search is intentionally keyword-based for Phase 0. pgvector/hybrid retrieval can
-    be added behind the same methods once embedding generation exists.
+    Reality notes (aligned with the code, P1-13):
+    - The schema CHECK constrains ``layer`` to 1-4, although the canonical
+      ``MemoryItem`` model allows 1-10; writes with layer>4 are rejected by
+      Postgres until the schema is migrated.
+    - Search is keyword-based unless ``enable_vector_search=True`` (pgvector).
+    - Write-path dedup is available but OPT-IN here (``enable_dedup=True``):
+      exact normalized-content match per tenant, plus vector near-duplicate
+      detection when vector search is enabled. It is off by default to keep
+      the established SQL call contract; the JSONL ``MemorySystem`` dedups by
+      default.
     """
 
     def __init__(
@@ -45,6 +53,8 @@ class PostgresMemorySystem:
         embedding_model: EmbeddingModel | None = None,
         enable_vector_search: bool = False,
         vector_dimensions: int = 1536,
+        enable_dedup: bool = False,
+        dedup_vector_threshold: float = 0.95,
     ) -> None:
         self.database_url = database_url
         self._pool = pool
@@ -53,6 +63,8 @@ class PostgresMemorySystem:
         self._embedding_model = embedding_model
         self._enable_vector_search = enable_vector_search
         self._vector_dimensions = vector_dimensions
+        self._enable_dedup = enable_dedup
+        self._dedup_vector_threshold = dedup_vector_threshold
 
     async def store(
         self,
@@ -64,6 +76,17 @@ class PostgresMemorySystem:
         metadata: dict | None = None,
     ) -> str:
         pool = await self._get_pool()
+        if self._enable_dedup:
+            duplicate_id = await self._find_duplicate(pool, context, content)
+            if duplicate_id is not None:
+                await self._merge_into_existing(
+                    pool,
+                    duplicate_id,
+                    incoming_tags=tags or [],
+                    incoming_importance=importance,
+                    incoming_content=content,
+                )
+                return duplicate_id
         item = MemoryItem(
             tenant_id=context.tenant_id,
             agent_id=context.agent_id,
@@ -213,6 +236,88 @@ class PostgresMemorySystem:
             target_memory_id=target_memory_id,
             summary=summary,
             tags=tags,
+        )
+
+    async def _find_duplicate(self, pool: Any, context: RunContext, content: str) -> str | None:
+        """Tenant-scoped duplicate check for the write path (opt-in).
+
+        Exact normalized-content match first; when vector search is enabled,
+        also flag near-duplicates within (1 - threshold) cosine distance.
+        """
+        normalized = " ".join(content.split()).casefold()
+        row = await pool.fetchrow(
+            """
+            SELECT id::text AS id
+            FROM memories
+            WHERE tenant_id = $1
+              AND lower(regexp_replace(btrim(content), '\\s+', ' ', 'g')) = $2
+            LIMIT 1
+            """,
+            context.tenant_id,
+            normalized,
+        )
+        if row:
+            return row["id"]
+        if self._enable_vector_search and self._embedding_model is not None:
+            embedding = await self._embed(content)
+            if embedding:
+                row = await pool.fetchrow(
+                    """
+                    SELECT id::text AS id
+                    FROM memories
+                    WHERE tenant_id = $1
+                      AND embedding <=> $2::vector <= $3
+                    ORDER BY embedding <=> $2::vector
+                    LIMIT 1
+                    """,
+                    context.tenant_id,
+                    self._vector_literal(embedding),
+                    1.0 - self._dedup_vector_threshold,
+                )
+                if row:
+                    return row["id"]
+        return None
+
+    async def _merge_into_existing(
+        self,
+        pool: Any,
+        memory_id: str,
+        *,
+        incoming_tags: list[str],
+        incoming_importance: float,
+        incoming_content: str,
+    ) -> None:
+        """Merge a duplicate write into the kept row (tags union, max importance)."""
+        row = await pool.fetchrow(
+            "SELECT tags, importance, metadata FROM memories WHERE id = $1::uuid",
+            memory_id,
+        )
+        existing_tags = list(row["tags"]) if row else []
+        merged_tags = list(dict.fromkeys([*existing_tags, *incoming_tags]))
+        merged_importance = max(float(row["importance"]) if row else 0.0, incoming_importance)
+        metadata = row["metadata"] if row else {}
+        if isinstance(metadata, str):
+            metadata = json.loads(metadata)
+        metadata = dict(metadata or {})
+        merges = metadata.setdefault("merged_writes", [])
+        merges.append(
+            {
+                "content": incoming_content[:500],
+                "merged_at": datetime.now(UTC).isoformat(),
+            }
+        )
+        del merges[:-20]
+        metadata["merge_count"] = len(merges)
+        await pool.execute(
+            """
+            UPDATE memories
+            SET tags = $2::text[], importance = $3, metadata = $4::jsonb
+            WHERE id = $1::uuid
+            """,
+            memory_id,
+            merged_tags,
+            merged_importance,
+            json.dumps(metadata),
         )
 
     async def _get_pool(self) -> Any:

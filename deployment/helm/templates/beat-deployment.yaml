@@ -1,0 +1,70 @@
+{{- if .Values.beat.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: xagent-beat
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: xagent-beat
+spec:
+  replicas: {{ .Values.beat.replicas }}
+  selector:
+    matchLabels:
+      app: xagent-beat
+  template:
+    metadata:
+      labels:
+        app: xagent-beat
+    spec:
+      serviceAccountName: xagent
+      # P1-16: 优雅停机 —— 宽限期默认 60s; preStop sleep 后再 SIGTERM
+      terminationGracePeriodSeconds: {{ .Values.beat.terminationGracePeriodSeconds | default 60 }}
+      containers:
+      - name: xagent-beat
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        # P0-02: 后端无 Celery 应用; beat 角色当前与 worker 同为 asyncio 轮询进程,
+        # 直接以 python -m 启动, 待真 Celery 返工后再拆分调度器
+        command:
+        - python
+        - -m
+        - backend.app.workflow_worker
+        lifecycle:
+          # P1-16: 镜像为 python:3.11-slim, 内置 /bin/sh 与 sleep
+          preStop:
+            exec:
+              command:
+              - /bin/sh
+              - -c
+              - sleep {{ .Values.beat.preStopSleepSeconds | default 5 }}
+        envFrom:
+        - configMapRef:
+            name: xagent-config
+        - secretRef:
+            name: xagent-secrets
+        env:
+        - name: XAGENT_DATABASE_URL
+          value: "postgresql+asyncpg://$(DB_USER):$(DB_PASSWORD)@{{ include "xagent.postgresHost" . }}:{{ .Values.database.port }}/$(DB_NAME)"
+        - name: XAGENT_REDIS_URL
+          value: "redis://:$(REDIS_PASSWORD)@{{ include "xagent.redisHost" . }}:{{ .Values.redis.port }}/0"
+        resources:
+          {{- toYaml .Values.beat.resources | nindent 10 }}
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+        - name: logs
+          mountPath: /app/logs
+      volumes:
+      - name: tmp
+        emptyDir: {}
+      - name: logs
+        emptyDir: {}
+{{- end }}

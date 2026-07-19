@@ -15,9 +15,20 @@ spec:
       labels:
         app: qdrant
     spec:
+      # P1-16: 优雅停机 —— 宽限期 60s, 留给存储 flush; preStop sleep 5s
+      terminationGracePeriodSeconds: 60
       containers:
       - name: qdrant
         image: qdrant/qdrant:latest
+        lifecycle:
+          # P1-16: qdrant/qdrant 官方镜像基于 debian slim, 含 /bin/sh 与 coreutils sleep;
+          # 若未来切换到无 shell 的精简镜像, 删除本 preStop 并依赖 terminationGracePeriodSeconds
+          preStop:
+            exec:
+              command:
+              - /bin/sh
+              - -c
+              - sleep 5
         ports:
         - containerPort: 6333
           name: http

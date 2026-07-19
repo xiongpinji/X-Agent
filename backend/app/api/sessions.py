@@ -4,18 +4,32 @@ Provides REST API for:
 - Session management (list, create, restore, delete)
 - Context compression control
 - Session statistics and metrics
+
+SECURITY (P1-14): tenant_id 一律强制收敛到认证主体（Principal），
+绝不直信客户端请求体/查询参数中的 tenant_id。所有会话级操作
+（恢复/删除/统计/保存/读上下文/写消息）都做租户归属校验：
+不匹配一律返回 404（不泄露会话存在性）。
+
+集成波接线说明：本路由当前未在 main.py 注册。挂载时需：
+1. ``app.include_router(router)``（本模块 router）
+2. 启动时调用 ``set_context_manager(context_manager)`` 注入共享 ContextManager
+   （见 backend/app/core/context/INTEGRATION_GUIDE.md 第 2.2 节）。
 """
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Annotated, Any
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from backend.app.core.context import ContextManager, SessionMetadata, SessionStats
+from backend.app.core.security import Principal
+from backend.app.dependencies import enforce_scope, get_current_principal
 
 router = APIRouter(prefix="/api/sessions", tags=["sessions"])
+
+PrincipalDependency = Annotated[Principal, Depends(get_current_principal)]
 
 # Global context manager instance (will be injected)
 _context_manager: ContextManager | None = None
@@ -34,15 +48,46 @@ def get_context_manager() -> ContextManager:
     return _context_manager
 
 
+def _require_current_session(context_manager: ContextManager, principal: Principal):
+    """获取当前活跃会话并校验租户归属。
+
+    Raises:
+        HTTPException 409: 无活跃会话
+        HTTPException 404: 会话不属于当前租户（不泄露存在性）
+    """
+    session = context_manager.current_session
+    if session is None:
+        raise HTTPException(status_code=409, detail="No active session. Initialize one first.")
+    if session.tenant_id and session.tenant_id != principal.tenant_id:
+        raise HTTPException(status_code=404, detail=f"Session not found: {session.session_id}")
+    return session
+
+
+async def _load_session_for_tenant(context_manager: ContextManager, session_id: str, principal: Principal):
+    """从存储加载会话并校验租户归属（restore/delete/stats 前置校验）。
+
+    Raises:
+        HTTPException 404: 会话不存在或不属于当前租户
+    """
+    session_state = await context_manager.session_recovery.load_snapshot(session_id)
+    if session_state is None:
+        raise HTTPException(status_code=404, detail=f"Session not found: {session_id}")
+    if session_state.tenant_id and session_state.tenant_id != principal.tenant_id:
+        raise HTTPException(status_code=404, detail=f"Session not found: {session_id}")
+    return session_state
+
+
 # Request/Response models
 
 
 class InitializeSessionRequest(BaseModel):
-    """Request to initialize a session."""
+    """Request to initialize a session.
+
+    注意：不包含 tenant_id —— 租户强制收敛到认证主体（principal.tenant_id）。
+    """
 
     session_id: str
     agent_id: str = ""
-    tenant_id: str = ""
     context_window: int = 128_000
 
 
@@ -126,21 +171,22 @@ class ContextMetricsResponse(BaseModel):
 
 
 @router.post("/initialize", response_model=dict[str, Any])
-async def initialize_session(request: InitializeSessionRequest) -> dict[str, Any]:
+async def initialize_session(
+    request: InitializeSessionRequest,
+    principal: PrincipalDependency,
+) -> dict[str, Any]:
     """Initialize or restore a session.
 
-    Args:
-        request: Session initialization request
-
-    Returns:
-        Session state information
+    tenant_id 强制取 principal.tenant_id（忽略客户端任何租户声称）。
+    恢复的会话租户与主体不匹配时返回 404。
     """
+    enforce_scope(principal, "agent:run")
     try:
         context_manager = get_context_manager()
         session_state = await context_manager.initialize_session(
             session_id=request.session_id,
             agent_id=request.agent_id,
-            tenant_id=request.tenant_id,
+            tenant_id=principal.tenant_id,
             context_window=request.context_window,
         )
 
@@ -154,22 +200,25 @@ async def initialize_session(request: InitializeSessionRequest) -> dict[str, Any
             "updated_at": session_state.updated_at.isoformat(),
         }
 
+    except ValueError as e:
+        # ContextManager 的租户防线：显式报错统一映射为 404（不泄露存在性）
+        raise HTTPException(status_code=404, detail=str(e))
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/messages", response_model=MessageResponse)
-async def add_message(request: AddMessageRequest) -> MessageResponse:
-    """Add a message to the current session.
-
-    Args:
-        request: Message to add
-
-    Returns:
-        Added message
-    """
+async def add_message(
+    request: AddMessageRequest,
+    principal: PrincipalDependency,
+) -> MessageResponse:
+    """Add a message to the current session（需当前会话归属当前租户）。"""
+    enforce_scope(principal, "agent:run")
     try:
         context_manager = get_context_manager()
+        _require_current_session(context_manager, principal)
         message = await context_manager.add_message(
             role=request.role,
             content=request.content,
@@ -187,26 +236,23 @@ async def add_message(request: AddMessageRequest) -> MessageResponse:
             token_count=message.token_count,
         )
 
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/context", response_model=ContextResponse)
 async def get_context(
+    principal: PrincipalDependency,
     limit: int = Query(None, description="Maximum number of messages"),
     include_metadata: bool = Query(False, description="Include message metadata"),
 ) -> ContextResponse:
-    """Get current context.
-
-    Args:
-        limit: Maximum number of messages to return
-        include_metadata: Include message metadata
-
-    Returns:
-        Current context
-    """
+    """Get current context（需当前会话归属当前租户）。"""
+    enforce_scope(principal, "agent:read")
     try:
         context_manager = get_context_manager()
+        _require_current_session(context_manager, principal)
         messages = await context_manager.get_context(limit=limit, include_metadata=include_metadata)
 
         total_tokens = sum(msg.get("token_count", 0) for msg in messages)
@@ -217,19 +263,23 @@ async def get_context(
             total_tokens=total_tokens,
         )
 
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/compress", response_model=CompressionResultResponse | None)
-async def compress_context() -> CompressionResultResponse | None:
-    """Manually trigger context compression.
+async def compress_context(principal: PrincipalDependency) -> CompressionResultResponse | None:
+    """Manually trigger context compression（需当前会话归属当前租户）。
 
     Returns:
         Compression result if performed, None otherwise
     """
+    enforce_scope(principal, "agent:run")
     try:
         context_manager = get_context_manager()
+        _require_current_session(context_manager, principal)
         result = await context_manager.compress_if_needed()
 
         if result:
@@ -245,22 +295,27 @@ async def compress_context() -> CompressionResultResponse | None:
 
         return None
 
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/{session_id}/save", response_model=dict[str, Any])
-async def save_session(session_id: str) -> dict[str, Any]:
-    """Save a session.
-
-    Args:
-        session_id: Session ID to save
-
-    Returns:
-        Save result
-    """
+async def save_session(
+    session_id: str,
+    principal: PrincipalDependency,
+) -> dict[str, Any]:
+    """Save a session（仅当其为当前活跃会话且归属当前租户）。"""
+    enforce_scope(principal, "agent:run")
     try:
         context_manager = get_context_manager()
+        session = _require_current_session(context_manager, principal)
+        if session.session_id != session_id:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Session not found or not active: {session_id}",
+            )
         success = await context_manager.save_session()
 
         return {
@@ -269,22 +324,23 @@ async def save_session(session_id: str) -> dict[str, Any]:
             "message": "Session saved successfully" if success else "Failed to save session",
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/{session_id}/restore", response_model=dict[str, Any])
-async def restore_session(session_id: str) -> dict[str, Any]:
-    """Restore a session.
-
-    Args:
-        session_id: Session ID to restore
-
-    Returns:
-        Restored session information
-    """
+async def restore_session(
+    session_id: str,
+    principal: PrincipalDependency,
+) -> dict[str, Any]:
+    """Restore a session（仅当会话归属当前租户）。"""
+    enforce_scope(principal, "agent:run")
     try:
         context_manager = get_context_manager()
+        # 先校验存在性与租户归属，再恢复（避免污染当前会话）
+        await _load_session_for_tenant(context_manager, session_id, principal)
         session_state = await context_manager.restore_session(session_id)
 
         if not session_state:
@@ -293,6 +349,7 @@ async def restore_session(session_id: str) -> dict[str, Any]:
         return {
             "session_id": session_state.session_id,
             "agent_id": session_state.agent_id,
+            "tenant_id": session_state.tenant_id,
             "message_count": len(session_state.messages),
             "total_tokens": session_state.total_tokens,
             "created_at": session_state.created_at.isoformat(),
@@ -307,43 +364,41 @@ async def restore_session(session_id: str) -> dict[str, Any]:
 
 @router.get("", response_model=SessionListResponse)
 async def list_sessions(
+    principal: PrincipalDependency,
     agent_id: str = Query(None, description="Filter by agent ID"),
     limit: int = Query(100, ge=1, le=1000, description="Maximum number of sessions"),
 ) -> SessionListResponse:
-    """List all sessions.
-
-    Args:
-        agent_id: Filter by agent ID
-        limit: Maximum number of sessions
-
-    Returns:
-        List of sessions
-    """
+    """List sessions（强制只列当前租户的会话）。"""
+    enforce_scope(principal, "agent:read")
     try:
         context_manager = get_context_manager()
-        sessions = await context_manager.list_sessions(agent_id=agent_id, limit=limit)
+        sessions = await context_manager.list_sessions(
+            agent_id=agent_id,
+            limit=limit,
+            tenant_id=principal.tenant_id,
+        )
 
         return SessionListResponse(
             sessions=sessions,
             total_count=len(sessions),
         )
 
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.delete("/{session_id}", response_model=dict[str, Any])
-async def delete_session(session_id: str) -> dict[str, Any]:
-    """Delete a session.
-
-    Args:
-        session_id: Session ID to delete
-
-    Returns:
-        Delete result
-    """
+async def delete_session(
+    session_id: str,
+    principal: PrincipalDependency,
+) -> dict[str, Any]:
+    """Delete a session（仅当会话归属当前租户）。"""
+    enforce_scope(principal, "agent:run")
     try:
         context_manager = get_context_manager()
+        await _load_session_for_tenant(context_manager, session_id, principal)
         success = await context_manager.delete_session(session_id)
 
         if not success:
@@ -362,17 +417,15 @@ async def delete_session(session_id: str) -> dict[str, Any]:
 
 
 @router.get("/{session_id}/stats", response_model=SessionStatsResponse)
-async def get_session_stats(session_id: str) -> SessionStatsResponse:
-    """Get statistics for a session.
-
-    Args:
-        session_id: Session ID
-
-    Returns:
-        Session statistics
-    """
+async def get_session_stats(
+    session_id: str,
+    principal: PrincipalDependency,
+) -> SessionStatsResponse:
+    """Get statistics for a session（仅当会话归属当前租户）。"""
+    enforce_scope(principal, "agent:read")
     try:
         context_manager = get_context_manager()
+        await _load_session_for_tenant(context_manager, session_id, principal)
         stats = await context_manager.get_session_stats(session_id)
 
         if not stats:
@@ -398,12 +451,9 @@ async def get_session_stats(session_id: str) -> SessionStatsResponse:
 
 
 @router.get("/metrics", response_model=ContextMetricsResponse)
-async def get_metrics() -> ContextMetricsResponse:
-    """Get current context metrics.
-
-    Returns:
-        Context metrics
-    """
+async def get_metrics(principal: PrincipalDependency) -> ContextMetricsResponse:
+    """Get current context metrics（管理器级计数器，需认证）。"""
+    enforce_scope(principal, "agent:read")
     try:
         context_manager = get_context_manager()
         metrics = await context_manager.get_metrics()
@@ -421,5 +471,7 @@ async def get_metrics() -> ContextMetricsResponse:
             memory_usage_mb=metrics.memory_usage_mb,
         )
 
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

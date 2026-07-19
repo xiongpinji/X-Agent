@@ -121,6 +121,92 @@ Start with `uvicorn backend.app.main:app --reload`.
 
 ---
 
+## TLS termination (production required)
+
+In production (`XAGENT_APP_MODE=production`) the API MUST be reachable only
+over HTTPS. Uvicorn MUST NOT be exposed directly to the network; terminate
+TLS at a reverse proxy in front of it and keep uvicorn bound to localhost.
+
+**Full-chain TLS requirements:**
+
+1. **Client → proxy:** HTTPS only. Redirect port 80 to 443, enable HSTS
+   (the backend already emits `Strict-Transport-Security` via
+   `SecurityHeadersMiddleware`).
+2. **Proxy → uvicorn:** same-host loopback (`http://127.0.0.1:8000`) is
+   acceptable; if the proxy and the API run on different hosts or containers
+   crossing a network boundary, this hop MUST also be TLS (or an equivalent
+   private-network encrypted tunnel such as WireGuard/mTLS).
+3. **API → databases (PostgreSQL/Redis/Qdrant):** enable TLS or keep them on
+   the same private network with no public exposure. Never expose database
+   ports on `0.0.0.0` in production.
+4. Interactive docs (`/docs`, `/redoc`, `/openapi.json`) are disabled in
+   production (see `ProductionDocsGuardMiddleware`); do not re-enable them
+   through the proxy.
+
+### nginx reference configuration
+
+```nginx
+server {
+    listen 80;
+    server_name your-app.example.com;
+    # ACME http-01 challenge (if using certbot)
+    location /.well-known/acme-challenge/ { root /var/www/certbot; }
+    location / { return 301 https://$host$request_uri; }
+}
+
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name your-app.example.com;
+
+    ssl_certificate     /etc/letsencrypt/live/your-app.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/your-app.example.com/privkey.pem;
+    ssl_protocols       TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers off;
+
+    # HSTS is also emitted by the backend middleware; keeping it here too is fine.
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+
+    client_max_body_size 20m;
+
+    location / {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        # CRITICAL: lets the app know the original scheme was HTTPS.
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 300s;
+    }
+}
+```
+
+Run uvicorn bound to loopback only:
+
+```bash
+uvicorn backend.app.main:app --host 127.0.0.1 --port 8000
+```
+
+### Caddy reference configuration
+
+Caddy obtains and renews certificates automatically:
+
+```caddyfile
+your-app.example.com {
+    reverse_proxy 127.0.0.1:8000
+    # X-Forwarded-Proto is set automatically by Caddy's reverse_proxy.
+}
+```
+
+### Docker Compose note
+
+The development `docker-compose.yml` exposes port 8000 for local use. For a
+production compose deployment, do NOT publish `8000:8000` on `0.0.0.0`;
+either bind it to `127.0.0.1:8000:8000` or place an nginx/Caddy container in
+front and keep the API port internal to the compose network.
+
+---
+
 ## Release-candidate validation
 
 See `RELEASE_READINESS.md` for the current targeted baseline commands, known limits, and production checklist.

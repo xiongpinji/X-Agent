@@ -96,6 +96,55 @@ class LLMResponse:
     latency_ms: float = 0.0
 
 
+# Historical built-in pricing, used only when config/model_profiles.yaml is
+# absent (explicit degrade, logged once by the profiles loader).
+_BUILTIN_PRICING: dict[str, dict[str, float]] = {
+    "gpt-4": {"prompt": 0.03, "completion": 0.06},
+    "gpt-4-turbo": {"prompt": 0.01, "completion": 0.03},
+    "gpt-3.5-turbo": {"prompt": 0.0005, "completion": 0.0015},
+    "gpt-4o": {"prompt": 0.005, "completion": 0.015},
+}
+
+_PRICING_TABLE_CACHE: dict[str, dict[str, float]] | None = None
+
+
+def get_pricing_table() -> dict[str, dict[str, float]]:
+    """Return the model pricing table (USD per 1K tokens).
+
+    Source of truth is ``config/model_profiles.yaml`` (P1-08 externalization).
+    If the file is missing or malformed, the historical built-in table is used
+    — a missing file logs a warning via the profiles loader; a malformed file
+    would raise ModelProfileLoadError at load time, so here we explicitly
+    degrade to the built-in table and log the reason.
+    """
+    global _PRICING_TABLE_CACHE
+    if _PRICING_TABLE_CACHE is not None:
+        return _PRICING_TABLE_CACHE
+    try:
+        from backend.app.core.llm.profiles import (
+            load_model_profiles,
+            pricing_table_from_profiles,
+        )
+
+        config = load_model_profiles()
+        table = pricing_table_from_profiles(config)
+        if table:
+            _PRICING_TABLE_CACHE = table
+            return _PRICING_TABLE_CACHE
+    except Exception as exc:  # noqa: BLE001 - explicit degrade with logging
+        logger.warning(
+            "Falling back to built-in LLM pricing table: %s", exc
+        )
+    _PRICING_TABLE_CACHE = dict(_BUILTIN_PRICING)
+    return _PRICING_TABLE_CACHE
+
+
+def reset_pricing_table_cache() -> None:
+    """Clear the cached pricing table (tests / profile hot-reload)."""
+    global _PRICING_TABLE_CACHE
+    _PRICING_TABLE_CACHE = None
+
+
 @dataclass
 class TokenUsage:
     """Token usage tracking for cost calculation."""
@@ -104,13 +153,8 @@ class TokenUsage:
     total_tokens: int = 0
 
     def calculate_cost(self, model: str) -> float:
-        """Calculate cost based on model pricing."""
-        pricing = {
-            "gpt-4": {"prompt": 0.03, "completion": 0.06},
-            "gpt-4-turbo": {"prompt": 0.01, "completion": 0.03},
-            "gpt-3.5-turbo": {"prompt": 0.0005, "completion": 0.0015},
-            "gpt-4o": {"prompt": 0.005, "completion": 0.015},
-        }
+        """Calculate cost based on model pricing (config/model_profiles.yaml)."""
+        pricing = get_pricing_table()
         rates = pricing.get(model, {"prompt": 0.0, "completion": 0.0})
         return (self.prompt_tokens * rates["prompt"] +
                 self.completion_tokens * rates["completion"]) / 1000
@@ -449,27 +493,76 @@ class OpenAIResponsesBackend(BaseLLMBackend):
 
 
 class LLMRouter:
+    """Sequential-fallback router — the production shell for all LLM calls.
+
+    Optional quota enforcement: when a ``quota_manager`` (see llm/quota.py) is
+    attached, every chat checks tenant/user token quotas BEFORE any provider
+    call (raising ``QuotaExceededError``) and accumulates actual usage after a
+    successful call. QuotaExceededError is a RuntimeError, not an
+    LLMBackendError, so it is never swallowed by the provider fallback loop.
+    """
+
     def __init__(
         self,
         backend: BaseLLMBackend | None = None,
         backends: list[BaseLLMBackend] | None = None,
+        *,
+        quota_manager: Any | None = None,
     ) -> None:
         if backend and backends:
             raise ValueError("Pass either backend or backends, not both.")
         self._backends = backends or [backend or MockLLMBackend()]
+        self._quota_manager = quota_manager
+
+    @property
+    def quota_manager(self) -> Any | None:
+        return self._quota_manager
+
+    def _order_backends(
+        self,
+        messages: list[dict[str, str]],
+        tools: list[dict[str, Any]],
+        *,
+        task_type: Any = None,
+        strategy: Any = None,
+    ) -> list[BaseLLMBackend]:
+        """Return the backend try-order for this request (sequential default).
+
+        SmartLLMRouter overrides this hook to reorder by task/cost/latency.
+        """
+        return list(self._backends)
+
+    def _on_backend_success(self, backend: BaseLLMBackend, response: LLMResponse) -> None:
+        """Hook invoked after a backend completes successfully (observability)."""
 
     async def chat(
         self,
         messages: list[dict[str, str]],
         tools: list[dict[str, Any]],
+        *,
+        tenant_id: str | None = None,
+        user_id: str | None = None,
+        task_type: Any = None,
+        strategy: Any = None,
     ) -> LLMResponse:
+        if self._quota_manager is not None:
+            await self._quota_manager.check_quota(tenant_id, user_id)
+
         last_error: Exception | None = None
-        for backend in self._backends:
+        for backend in self._order_backends(
+            messages, tools, task_type=task_type, strategy=strategy
+        ):
             try:
-                return await backend.chat(messages, tools)
+                response = await backend.chat(messages, tools)
             except LLMBackendError as exc:
                 last_error = exc
                 continue
+            if self._quota_manager is not None:
+                await self._quota_manager.record_usage(
+                    tenant_id, user_id, response.tokens_used, response.cost
+                )
+            self._on_backend_success(backend, response)
+            return response
         raise LLMBackendError(f"No LLM backend completed successfully: {last_error}")
 
 
@@ -482,12 +575,43 @@ def build_llm_router(
     deepseek_api_key: str | None,
     deepseek_model: str,
     deepseek_base_url: str,
+    anthropic_api_key: str | None = None,
+    anthropic_model: str | None = None,
+    anthropic_base_url: str | None = None,
+    ollama_base_url: str | None = None,
+    ollama_model: str | None = None,
+    routing_mode: str | None = None,
+    smart_strategy: str | None = None,
+    model_profiles_path: str | None = None,
+    quota_manager: Any | None = None,
+    quota_enabled: bool | None = None,
+    selector: Any | None = None,
 ) -> LLMRouter:
-    """Build provider router from settings.
+    """Build provider router from settings — the single construction entry point.
 
-    The explicit `llm_backend` selects a single backend unless it is `auto`. `auto`
-    follows `fallback_order` and skips providers without credentials.
+    The explicit `llm_backend` selects a single backend unless it is `auto`.
+    `auto` follows `fallback_order` and skips providers without credentials.
+
+    P1-08 convergence:
+    - provider names now also include ``anthropic`` (needs an API key) and
+      ``ollama`` (local server, no key required);
+    - ``routing_mode="smart"`` wraps the same sequential shell in a
+      SmartLLMRouter that reorders backends per request via ModelSelector,
+      with model profiles loaded from config/model_profiles.yaml;
+    - when quotas are enabled (``quota_enabled`` or XAGENT_LLM_QUOTA_ENABLED),
+      a TokenQuotaManager backed by the existing cache abstraction is
+      attached. Any parameter left as None falls back to the XAGENT_*
+      environment sub-settings in llm/llm_settings.py.
     """
+    from backend.app.core.llm.llm_settings import get_llm_feature_settings
+
+    features = get_llm_feature_settings()
+
+    anthropic_api_key = anthropic_api_key if anthropic_api_key is not None else features.anthropic_api_key
+    anthropic_model = anthropic_model or features.anthropic_model
+    anthropic_base_url = anthropic_base_url if anthropic_base_url is not None else features.anthropic_base_url
+    ollama_base_url = ollama_base_url or features.ollama_base_url
+    ollama_model = ollama_model or features.ollama_model
 
     requested = [llm_backend] if llm_backend != "auto" else [
         item.strip() for item in fallback_order.split(",") if item.strip()
@@ -506,12 +630,72 @@ def build_llm_router(
                     name="deepseek",
                 )
             )
+        elif name == "anthropic" and anthropic_api_key:
+            from backend.app.core.llm.anthropic_backend import AnthropicBackend
+
+            backends.append(
+                AnthropicBackend(
+                    anthropic_api_key,
+                    anthropic_model,
+                    base_url=anthropic_base_url,
+                    name="anthropic",
+                )
+            )
+        elif name == "ollama":
+            from backend.app.core.llm.ollama_backend import OllamaBackend
+
+            backends.append(
+                OllamaBackend(ollama_model, base_url=ollama_base_url, name="ollama")
+            )
         elif name == "mock":
             backends.append(MockLLMBackend())
 
     if not backends:
         backends.append(MockLLMBackend())
-    return LLMRouter(backends=backends)
+
+    # --- Quota wiring (token-metered, stored in the existing cache layer) ---
+    if quota_manager is None:
+        effective_quota_enabled = (
+            quota_enabled if quota_enabled is not None else features.llm_quota_enabled
+        )
+        if effective_quota_enabled:
+            from backend.app.core.llm.profiles import load_model_profiles
+            from backend.app.core.llm.quota import build_quota_manager_from_config
+
+            profile_config = load_model_profiles(
+                model_profiles_path or features.llm_model_profiles_path
+            )
+            quota_manager = build_quota_manager_from_config(
+                enabled=True,
+                period=features.llm_quota_period,
+                default_tenant_tokens=features.llm_quota_default_tenant_tokens,
+                default_user_tokens=features.llm_quota_default_user_tokens,
+                tenant_overrides=profile_config.quota.tenant_overrides,
+                user_overrides=profile_config.quota.user_overrides,
+            )
+
+    # --- Routing mode ---
+    mode = (routing_mode or features.llm_routing_mode or "sequential").strip().lower()
+    if mode == "sequential":
+        return LLMRouter(backends=backends, quota_manager=quota_manager)
+    if mode == "smart":
+        from backend.app.core.llm.profiles import build_selector, load_model_profiles
+        from backend.app.core.llm.smart_router import SmartLLMRouter
+
+        if selector is None:
+            profile_config = load_model_profiles(
+                model_profiles_path or features.llm_model_profiles_path
+            )
+            selector = build_selector(profile_config)
+        return SmartLLMRouter(
+            backends=backends,
+            selector=selector,
+            strategy=smart_strategy or features.llm_smart_strategy,
+            quota_manager=quota_manager,
+        )
+    raise ValueError(
+        f"unknown llm routing mode '{mode}'; valid: 'sequential', 'smart'"
+    )
 
 
 

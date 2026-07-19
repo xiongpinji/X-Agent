@@ -12,7 +12,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
-from backend.app.core.context_compactor import ContextCompactor, CompactionResult
+from backend.app.core.context_compactor import (
+    CompactionMetrics,
+    CompactionResult,
+    ContextCompactor,
+)
 from backend.app.core.context.session_recovery import (
     Message,
     SessionRecovery,
@@ -110,6 +114,16 @@ class ContextManager:
 
         logger.info("ContextManager initialized")
 
+    @property
+    def current_session(self) -> Optional[SessionState]:
+        """当前活跃会话（只读视图；无活跃会话时为 None）。"""
+        return self._current_session
+
+    @property
+    def current_session_id(self) -> Optional[str]:
+        """当前活跃会话 ID（无活跃会话时为 None）。"""
+        return self._session_id
+
     async def initialize_session(
         self,
         session_id: str,
@@ -127,6 +141,10 @@ class ContextManager:
 
         Returns:
             SessionState
+
+        Raises:
+            ValueError: 恢复的会话 tenant_id 与请求 tenant_id 不一致时显式报错，
+                防止跨租户会话被静默接管（两边均非空时才强制校验）。
         """
         async with self._lock:
             try:
@@ -134,6 +152,13 @@ class ContextManager:
                 existing_session = await self.session_recovery.load_snapshot(session_id)
 
                 if existing_session:
+                    existing_tenant = (existing_session.tenant_id or "").strip()
+                    requested_tenant = (tenant_id or "").strip()
+                    if existing_tenant and requested_tenant and existing_tenant != requested_tenant:
+                        raise ValueError(
+                            f"Tenant mismatch for session {session_id}: "
+                            f"stored tenant '{existing_tenant}' != requested tenant '{requested_tenant}'"
+                        )
                     self._current_session = existing_session
                     self._session_id = session_id
                     logger.info(f"Restored session: {session_id}")
@@ -215,7 +240,7 @@ class ContextManager:
                             metadata={
                                 "session_id": self._session_id,
                                 "role": role,
-                                **metadata,
+                                **(metadata or {}),
                             },
                         )
                     except Exception as e:
@@ -297,29 +322,65 @@ class ContextManager:
             return await self._check_and_compress()
 
     async def _check_and_compress(self) -> CompactionResult | None:
-        """Internal method to check and compress context."""
+        """Check token usage and compress context when over threshold.
+
+        统一行为（两条压缩路径共用）：
+        1. 先用 ContextCompactor.should_compress 做阈值门槛 —— 未超阈值绝不压缩
+           （修复旧实现中挂载智能压缩器后每次 add_message 都全量压缩的问题）。
+        2. 压缩时始终保留最近 min_messages_to_keep 条消息原文，只压缩更早的历史，
+           避免整段会话被压成单个 blob 后丢失近期上下文。
+        3. 优先使用智能压缩器（ContextCompressor）对旧历史生成摘要；
+           失败或不可用时回退到 legacy ContextCompactor 的重要性评分压缩。
+        4. 压缩后重算 total_tokens，并返回统一的 CompactionResult。
+
+        Returns:
+            CompactionResult if compression was performed, None otherwise
+        """
         if not self._current_session or not self.auto_compress_enabled:
             return None
 
         try:
-            # If new compressor is available, use it preferentially
+            messages = [
+                {
+                    "role": msg.role,
+                    "content": msg.content,
+                }
+                for msg in self._current_session.messages
+            ]
+
+            # 统一阈值门槛：两条路径都只在超阈值时触发
+            if not self.context_compactor.should_compress(messages):
+                return None
+
+            min_keep = max(1, int(getattr(self.context_compactor, "min_messages_to_keep", 3)))
+            all_messages = self._current_session.messages
+            if len(all_messages) <= min_keep:
+                # 全是受保护的近期消息，无法在不丢近期上下文的前提下压缩
+                return None
+
+            recent_messages = all_messages[-min_keep:]
+            older_messages = all_messages[:-min_keep]
+            original_tokens = sum(msg.token_count for msg in all_messages)
+            messages_before = len(all_messages)
+            started_at = datetime.now(timezone.utc)
+
+            summary_message: Message | None = None
+            kept_older: list[Message] = []
+            strategy_used = "legacy"
+
+            # 优先：智能压缩器把旧历史压成一条摘要
             if self._context_compressor:
                 try:
-                    # Combine all messages into single content
                     combined_content = "\n".join(
                         f"[{msg.role}]: {msg.content}"
-                        for msg in self._current_session.messages
+                        for msg in older_messages
                     )
-
-                    # Use new compressor
                     compressed = await self._context_compressor.compress_async(
                         content=combined_content,
                         strategy="hybrid",
                         target_ratio=0.5,
                     )
-
-                    if compressed:
-                        # Create summary message
+                    if compressed and compressed.content.strip():
                         summary_message = Message(
                             role="system",
                             content=compressed.content,
@@ -329,100 +390,97 @@ class ContextManager:
                                 "strategy": compressed.strategy,
                                 "original_tokens": compressed.original_tokens,
                                 "compressed_tokens": compressed.compressed_tokens,
+                                "summarized_messages": len(older_messages),
                             },
                         )
-
-                        # Replace messages with compressed version
-                        self._current_session.messages = [summary_message]
-                        self._current_session.compressed_tokens = compressed.compressed_tokens
-                        self._current_session.compression_history.append(
-                            {
-                                "timestamp": datetime.now(timezone.utc).isoformat(),
-                                "original_tokens": compressed.original_tokens,
-                                "compressed_tokens": compressed.compressed_tokens,
-                                "ratio": compressed.compression_ratio,
-                                "strategy": compressed.strategy,
-                            }
-                        )
-
-                        # Update metrics
-                        self._metrics.compression_count += 1
-                        self._metrics.compressed_tokens = compressed.compressed_tokens
-                        self._metrics.compression_ratio = compressed.compression_ratio
-                        self._metrics.last_compression_time = datetime.now(timezone.utc)
-
-                        logger.info(
-                            f"Compression successful (new compressor): "
-                            f"{compressed.original_tokens} → {compressed.compressed_tokens} tokens, "
-                            f"ratio: {compressed.compression_ratio:.2%}"
-                        )
-
-                        return None  # Return None as we're using new compressor
-
+                        strategy_used = f"intelligent:{compressed.strategy}"
+                    else:
+                        logger.warning("Intelligent compressor returned empty content, falling back to legacy")
                 except Exception as e:
-                    logger.warning(f"New compressor failed, falling back to legacy: {e}")
+                    logger.warning(f"Intelligent compressor failed, falling back to legacy: {e}")
 
-            # Fall back to legacy compactor
-            messages = [
-                {
-                    "role": msg.role,
-                    "content": msg.content,
-                }
-                for msg in self._current_session.messages
-            ]
-
-            # Check if compression is needed
-            if not self.context_compactor.should_compress(messages):
-                return None
-
-            logger.info("Triggering context compression (legacy)")
-
-            # Perform compression
-            result = self.context_compactor.compress(messages)
-
-            if result.success:
-                # Update session with compressed messages
-                compressed_messages = []
-                for msg_dict in result.messages:
-                    # Find original message or create new one
+            # 回退：legacy 重要性评分压缩旧历史
+            if summary_message is None:
+                legacy_result = self.context_compactor.compress(
+                    [{"role": msg.role, "content": msg.content} for msg in older_messages]
+                )
+                if not legacy_result.success:
+                    logger.warning(f"Compression failed: {legacy_result.error}")
+                    return None
+                for msg_dict in legacy_result.messages:
                     original = next(
-                        (m for m in self._current_session.messages if m.content == msg_dict.get("content")),
+                        (m for m in older_messages if m.content == msg_dict.get("content")),
                         None,
                     )
-
-                    if original:
-                        compressed_messages.append(original)
+                    if original is not None:
+                        kept_older.append(original)
                     else:
-                        # Summary message
-                        compressed_messages.append(
+                        kept_older.append(
                             Message(
                                 role=msg_dict.get("role", "system"),
                                 content=msg_dict.get("content", ""),
                                 compressed=True,
                             )
                         )
+                strategy_used = "legacy"
 
-                self._current_session.messages = compressed_messages
-                self._current_session.compressed_tokens = result.metrics.compressed_tokens
-                self._current_session.compression_history.append(result.metrics.__dict__)
+            new_messages = ([summary_message] if summary_message is not None else []) + kept_older + recent_messages
 
-                # Update metrics
-                self._metrics.compression_count += 1
-                self._metrics.compressed_tokens = result.metrics.compressed_tokens
-                self._metrics.compression_ratio = result.metrics.compression_ratio
-                self._metrics.last_compression_time = datetime.now(timezone.utc)
+            # 重算 token 计数（摘要消息需要计数）
+            for msg in new_messages:
+                if msg is summary_message or msg.token_count <= 0:
+                    msg.token_count = self.context_compactor.count_tokens(msg.content)
 
-                logger.info(
-                    f"Compression successful (legacy): {result.metrics.messages_before} → "
-                    f"{result.metrics.messages_after} messages, "
-                    f"ratio: {result.metrics.compression_ratio:.2%}"
-                )
+            self._current_session.messages = new_messages
+            self._current_session.total_tokens = sum(msg.token_count for msg in new_messages)
+            self._current_session.compressed_tokens = self._current_session.total_tokens
+            compressed_tokens = self._current_session.total_tokens
+            compression_ratio = compressed_tokens / original_tokens if original_tokens > 0 else 1.0
 
-                return result
+            finished_at = datetime.now(timezone.utc)
+            duration_ms = (finished_at - started_at).total_seconds() * 1000
 
-            else:
-                logger.warning(f"Compression failed: {result.error}")
-                return None
+            self._current_session.compression_history.append(
+                {
+                    "timestamp": finished_at.isoformat(),
+                    "original_tokens": original_tokens,
+                    "compressed_tokens": compressed_tokens,
+                    "ratio": compression_ratio,
+                    "strategy": strategy_used,
+                    "messages_before": messages_before,
+                    "messages_after": len(new_messages),
+                    "kept_recent": min_keep,
+                }
+            )
+
+            # Update metrics
+            self._metrics.compression_count += 1
+            self._metrics.compressed_tokens = compressed_tokens
+            self._metrics.compression_ratio = compression_ratio
+            self._metrics.last_compression_time = finished_at
+            count = self._metrics.compression_count
+            self._metrics.average_compression_duration_ms = (
+                self._metrics.average_compression_duration_ms * (count - 1) + duration_ms
+            ) / count
+
+            logger.info(
+                f"Compression successful ({strategy_used}): {messages_before} → "
+                f"{len(new_messages)} messages, {original_tokens} → {compressed_tokens} tokens, "
+                f"ratio: {compression_ratio:.2%}"
+            )
+
+            return CompactionResult(
+                success=True,
+                messages=[{"role": msg.role, "content": msg.content} for msg in new_messages],
+                metrics=CompactionMetrics(
+                    original_tokens=original_tokens,
+                    compressed_tokens=compressed_tokens,
+                    compression_ratio=compression_ratio,
+                    messages_before=messages_before,
+                    messages_after=len(new_messages),
+                ),
+                summary=f"Compressed {messages_before - min_keep} older messages ({strategy_used}), kept {min_keep} recent",
+            )
 
         except Exception as e:
             logger.error(f"Error during compression check: {e}")
@@ -485,23 +543,26 @@ class ContextManager:
         self,
         agent_id: str | None = None,
         limit: int = 100,
+        tenant_id: str | None = None,
     ) -> list[dict[str, Any]]:
         """List all sessions.
 
         Args:
             agent_id: Filter by agent ID
             limit: Maximum number of sessions
+            tenant_id: Filter by tenant ID（多租户隔离用）
 
         Returns:
             List of session metadata
         """
         try:
-            sessions = await self.session_recovery.list_sessions(agent_id, limit)
+            sessions = await self.session_recovery.list_sessions(agent_id, limit, tenant_id=tenant_id)
 
             return [
                 {
                     "session_id": s.session_id,
                     "agent_id": s.agent_id,
+                    "tenant_id": s.tenant_id,
                     "title": s.title,
                     "created_at": s.created_at.isoformat(),
                     "updated_at": s.updated_at.isoformat(),

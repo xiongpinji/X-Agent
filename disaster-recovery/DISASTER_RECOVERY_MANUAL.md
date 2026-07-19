@@ -4,6 +4,14 @@
 **最后更新**: 2026-05-28  
 **用途**: 运维团队在灾难发生时的操作指南
 
+> **勘误 (2026-07-20, P1-17)**: 本手册原引用的 `./scripts/dr/*` 路径多数不存在。
+> 当前真实可用的脚本仅有 `./scripts/health-check.sh`、`./scripts/failover.sh`、
+> `./scripts/verify-recovery.sh`(即 `disaster-recovery/scripts/` 下的三个文件),
+> 相关引用已修正; 其余 `./scripts/dr/*.sh`(restore-qdrant.sh、verify-failover.sh、
+> inject-failure.sh 等)为**规划中的目标脚本, 尚未实现**, 执行前需先落地,
+> 不可用其替代手工步骤。Qdrant 恢复请以官方快照 API 为准
+> (见根目录 `DISASTER_RECOVERY.md` 与 `deployment/backup/backup.sh`)。
+
 ---
 
 ## 目录
@@ -32,16 +40,16 @@ DRP负责人: 13800138001
 
 ```bash
 # 检查系统状态
-./scripts/dr/health-check.sh
+./scripts/health-check.sh
 
 # 执行自动故障转移
-./scripts/dr/failover.sh --auto
+./scripts/failover.sh --auto
 
 # 执行手动故障转移
-./scripts/dr/failover.sh --manual --region us-west
+./scripts/failover.sh --manual --region us-west
 
 # 验证恢复
-./scripts/dr/verify-recovery.sh
+./scripts/verify-recovery.sh
 
 # 查看恢复日志
 tail -f /var/log/xagent/disaster-recovery.log
@@ -194,7 +202,7 @@ aws ec2 describe-vpn-connections --vpn-connection-ids vpn-xxxxx
 
 ```bash
 # 执行自动故障转移
-./scripts/dr/failover.sh --auto
+./scripts/failover.sh --auto
 
 # 监控转移进度
 ./scripts/dr/monitor-failover.sh
@@ -322,7 +330,7 @@ docker-compose -f docker-compose.dr.yml up -d
 ./scripts/dr/wait-for-services.sh --region us-west
 
 # 步骤3：验证服务健康
-./scripts/dr/health-check.sh --region us-west
+./scripts/health-check.sh --region us-west
 
 # 步骤4：执行功能测试
 ./scripts/dr/functional-test.sh --region us-west
@@ -378,7 +386,7 @@ docker stop xagent-api
 docker start xagent-api
 
 # 步骤9：验证恢复
-./scripts/dr/verify-recovery.sh
+./scripts/verify-recovery.sh
 ```
 
 #### 增量恢复
@@ -394,7 +402,7 @@ docker start xagent-api
 ./scripts/dr/apply-differential-backup.sh --backup-id backup-2026-05-28-15-00-00
 
 # 步骤4：验证恢复
-./scripts/dr/verify-recovery.sh
+./scripts/verify-recovery.sh
 ```
 
 ### 2. 数据一致性修复
@@ -583,7 +591,7 @@ docker-compose -f docker-compose.dr.yml down
 
 **A**: 使用手动转移命令：
 ```bash
-./scripts/dr/failover.sh --manual --region us-west --force
+./scripts/failover.sh --manual --region us-west --force
 ```
 
 ### Q5: 故障转移失败怎么办？
@@ -614,7 +622,7 @@ docker-compose -f docker-compose.dr.yml down
 ./scripts/dr/prepare-drill.sh --quarter Q1
 ./scripts/dr/inject-failure.sh --type app-crash
 ./scripts/dr/monitor-recovery.sh
-./scripts/dr/verify-recovery.sh
+./scripts/verify-recovery.sh
 ./scripts/dr/generate-report.sh
 ```
 

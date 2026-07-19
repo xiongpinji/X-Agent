@@ -19,10 +19,11 @@ from .backends import (
     OpenAIResponsesBackend,
     TokenUsage,
     build_llm_router,
+    get_pricing_table,
 )
 
 # Enhanced routing / optimization components.
-from .selector import ModelSelector, SelectionStrategy, TaskType
+from .selector import ModelSelector, ModelProfile, SelectionStrategy, TaskType
 from .cost_optimizer import CostOptimizer, CostTracker, TokenEstimator
 from .fallback import FallbackStrategy, FallbackManager
 from .streaming import StreamingResponse, StreamManager
@@ -32,6 +33,22 @@ from .adapters.base import LLMAdapter
 from .adapters.openai_adapter import OpenAIAdapter
 from .adapters.deepseek_adapter import DeepSeekAdapter
 from .adapters.local_adapter import LocalAdapter
+
+# P1-08 routing convergence: external profiles, new providers, smart routing,
+# tenant/user token quotas.
+from .profiles import (
+    ModelProfileConfig,
+    ModelProfileLoadError,
+    QuotaFileConfig,
+    build_selector,
+    load_model_profiles,
+    pricing_table_from_profiles,
+)
+from .llm_settings import LLMFeatureSettings, get_llm_feature_settings
+from .anthropic_backend import AnthropicBackend
+from .ollama_backend import OllamaBackend
+from .quota import QuotaExceededError, TokenQuotaManager
+from .smart_router import SmartLLMRouter, classify_task
 
 __all__ = [
     # Legacy backends + core router
@@ -44,8 +61,10 @@ __all__ = [
     "OpenAIResponsesBackend",
     "TokenUsage",
     "build_llm_router",
+    "get_pricing_table",
     # Enhanced routing / optimization
     "ModelSelector",
+    "ModelProfile",
     "SelectionStrategy",
     "TaskType",
     "CostOptimizer",
@@ -63,4 +82,19 @@ __all__ = [
     "OpenAIAdapter",
     "DeepSeekAdapter",
     "LocalAdapter",
+    # P1-08 routing convergence
+    "ModelProfileConfig",
+    "ModelProfileLoadError",
+    "QuotaFileConfig",
+    "build_selector",
+    "load_model_profiles",
+    "pricing_table_from_profiles",
+    "LLMFeatureSettings",
+    "get_llm_feature_settings",
+    "AnthropicBackend",
+    "OllamaBackend",
+    "QuotaExceededError",
+    "TokenQuotaManager",
+    "SmartLLMRouter",
+    "classify_task",
 ]

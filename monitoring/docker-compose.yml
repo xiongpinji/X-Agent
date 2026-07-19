@@ -7,9 +7,10 @@ services:
     ports:
       - "9090:9090"
     volumes:
-      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
-      - ./monitoring/alert_rules.yml:/etc/prometheus/alert_rules.yml
-      - ./monitoring/recording_rules.yml:/etc/prometheus/recording_rules.yml
+      # P1-15 修正: compose 相对路径以本文件所在目录(monitoring/)为基准解析
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./alert_rules.yml:/etc/prometheus/alert_rules.yml
+      - ./recording_rules.yml:/etc/prometheus/recording_rules.yml
       - prometheus_data:/prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
@@ -31,8 +32,11 @@ services:
       - GF_INSTALL_PLUGINS=grafana-piechart-panel
     volumes:
       - grafana_data:/var/lib/grafana
-      - ./monitoring/grafana-dashboard.json:/etc/grafana/provisioning/dashboards/x-agent.json
-      - ./monitoring/grafana-datasource.yml:/etc/grafana/provisioning/datasources/prometheus.yml
+      # P1-15 修正: provisioning/dashboards 需要 provider 配置(yml), 裸 JSON 不会被加载;
+      # 复用 deployment/grafana 的 provider 配置(其 options.path=/var/lib/grafana/dashboards)
+      - ../deployment/grafana/provisioning/dashboards.yml:/etc/grafana/provisioning/dashboards/main.yml:ro
+      - ./grafana-dashboard.json:/var/lib/grafana/dashboards/x-agent.json:ro
+      - ./grafana-datasource.yml:/etc/grafana/provisioning/datasources/prometheus.yml:ro
     depends_on:
       - prometheus
     networks:
@@ -45,7 +49,7 @@ services:
     ports:
       - "9093:9093"
     volumes:
-      - ./monitoring/alertmanager.yml:/etc/alertmanager/alertmanager.yml
+      - ./alertmanager.yml:/etc/alertmanager/alertmanager.yml
       - alertmanager_data:/alertmanager
     command:
       - '--config.file=/etc/alertmanager/alertmanager.yml'
@@ -155,7 +159,7 @@ services:
     image: docker.elastic.co/logstash/logstash:8.11.0
     container_name: x-agent-logstash
     volumes:
-      - ./monitoring/elk/logstash.conf:/usr/share/logstash/pipeline/logstash.conf
+      - ./elk/logstash.conf:/usr/share/logstash/pipeline/logstash.conf
       - /var/log/xagent:/var/log/xagent:ro
     ports:
       - "5000:5000"

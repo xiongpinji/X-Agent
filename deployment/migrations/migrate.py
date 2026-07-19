@@ -12,8 +12,18 @@ from pathlib import Path
 from typing import Optional
 
 import asyncpg
-from alembic import command
-from alembic.config import Config
+
+# alembic 为可选依赖: 仅 migrate/rollback 子命令需要。
+# backup/restore/verify 子命令只依赖 asyncpg + pg_dump/pg_restore 客户端,
+# 未安装 alembic 时这些命令必须可用(显式报错而非 ImportError 全灭)。
+try:
+    from alembic import command as alembic_command
+    from alembic.config import Config as AlembicConfig
+    ALEMBIC_AVAILABLE = True
+except ImportError:  # pragma: no cover - 取决于部署环境
+    alembic_command = None
+    AlembicConfig = None
+    ALEMBIC_AVAILABLE = False
 
 # Configure logging
 logging.basicConfig(
@@ -27,10 +37,30 @@ class DatabaseMigrator:
     """Manages database migrations and backups."""
 
     def __init__(self, db_url: str, backup_dir: str = "/backups"):
-        self.db_url = db_url
+        # asyncpg/pg_dump 只认 postgresql:// 原生 scheme;
+        # 应用配置里的 postgresql+asyncpg:// 需要归一化
+        self.db_url = db_url.replace("postgresql+asyncpg://", "postgresql://", 1)
         self.backup_dir = Path(backup_dir)
         self.backup_dir.mkdir(parents=True, exist_ok=True)
-        self.alembic_cfg = Config("alembic.ini")
+        # alembic 配置延迟到真正使用时构造(需要 alembic 包 + alembic.ini)
+        self._alembic_cfg = None
+
+    @property
+    def alembic_cfg(self):
+        """懒加载 alembic 配置; 缺依赖/缺 alembic.ini 时显式报错。"""
+        if not ALEMBIC_AVAILABLE:
+            raise RuntimeError(
+                "alembic 未安装, migrate/rollback 子命令不可用; "
+                "backup/restore/verify 子命令不受影响"
+            )
+        if not Path("alembic.ini").exists():
+            raise RuntimeError(
+                "alembic.ini 不存在: 仓库当前以 backend/migrations/*.sql 管理 schema, "
+                "alembic 工程尚未落地, migrate/rollback 子命令不可用"
+            )
+        if self._alembic_cfg is None:
+            self._alembic_cfg = AlembicConfig("alembic.ini")
+        return self._alembic_cfg
 
     async def backup_database(self) -> str:
         """
@@ -125,7 +155,7 @@ class DatabaseMigrator:
             # Run migrations
             target = target_revision or "head"
             logger.info(f"Running migrations to {target}")
-            command.upgrade(self.alembic_cfg, target)
+            alembic_command.upgrade(self.alembic_cfg, target)
             logger.info("Migrations completed successfully")
 
         except Exception as e:
@@ -150,12 +180,12 @@ class DatabaseMigrator:
             logger.info(f"Rolling back {steps} migration(s)")
 
             # Get current revision
-            current = command.current(self.alembic_cfg)
+            current = alembic_command.current(self.alembic_cfg)
             logger.info(f"Current revision: {current}")
 
             # Rollback
             for _ in range(steps):
-                command.downgrade(self.alembic_cfg, "-1")
+                alembic_command.downgrade(self.alembic_cfg, "-1")
 
             logger.info("Rollback completed")
 
@@ -220,9 +250,11 @@ async def main():
     """Main entry point."""
     import os
 
-    db_url = os.getenv('DATABASE_URL')
+    # 优先读取应用配置前缀 XAGENT_DATABASE_URL (backend/app/settings.py),
+    # 兼容旧的 DATABASE_URL
+    db_url = os.getenv('XAGENT_DATABASE_URL') or os.getenv('DATABASE_URL')
     if not db_url:
-        logger.error("DATABASE_URL environment variable not set")
+        logger.error("XAGENT_DATABASE_URL (or DATABASE_URL) environment variable not set")
         sys.exit(1)
 
     migrator = DatabaseMigrator(db_url)

@@ -1,4 +1,12 @@
-"""Skill System Manager - Unified interface for all skill operations"""
+"""Skill System Manager - Unified interface for all skill operations
+
+.. deprecated:: P1-11（2026-07-20）
+   LEGACY 管理平面。X-Agent 唯一技能运行时为 ``backend.app.core.skills``
+   （目录扫描加载 skills/ 与 custom-skills/，经 ``skill_agent_adapter`` 注入 AgentLoop）。
+   本扁平栈（skills_core/loader/registry/executor/sandbox/marketplace）仅保留
+   以兼容既有测试与 skills_api.py，不再作为技能运行时入口，待后续版本移除或重定向。
+   详见 SKILLS_SYSTEM_README.md。
+"""
 
 from __future__ import annotations
 

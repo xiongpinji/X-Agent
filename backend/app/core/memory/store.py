@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import logging
+import os
 from datetime import UTC, datetime
 from inspect import isawaitable
 from pathlib import Path
@@ -11,7 +13,14 @@ from pydantic import BaseModel, Field
 
 from backend.app.core.contracts import RunContext
 from backend.app.core.embeddings import DeterministicEmbeddingModel, EmbeddingModel
+from backend.app.core.memory_dedup_adapter import (
+    WritePathDeduper,
+    canonical_from_store_item,
+    dedup_memory_from_canonical,
+)
 from backend.app.core.memory_graph import MemoryGraph
+
+logger = logging.getLogger(__name__)
 
 
 class MemoryScope(BaseModel):
@@ -112,6 +121,13 @@ class MemorySystem:
     Memory is isolated by default per tenant, agent, and session. Sharing must be explicit
     through scopes such as room or project. Higher layers capture durable memory and
     identity-level synthesis.
+
+    Write-path deduplication: ``store()``/``store_layer()`` merge duplicate writes
+    (exact normalized-content hash, then vector similarity >= threshold via the
+    repo's ``MemoryDeduplicatorEnhanced`` engine) into the kept item instead of
+    appending. Enabled by default; disable via ``enable_dedup=False`` or
+    ``XAGENT_MEMORY_DEDUP=off``. The synchronous ``add()`` is a raw append
+    primitive and intentionally does not dedup.
     """
 
     _LAYER_PROFILES: dict[int, dict[str, str]] = {
@@ -128,6 +144,10 @@ class MemorySystem:
     }
 
     def add(self, content: str, summary: str | None = None, *, tenant_id: str | None = None) -> str:
+        """Raw synchronous append primitive (NOT deduplicated by design).
+
+        Use the async store()/store_layer() path for deduplicated writes.
+        """
         if tenant_id is None:
             raise ValueError("tenant_id is required for memory isolation.")
         with self._lock:
@@ -150,6 +170,9 @@ class MemorySystem:
         self,
         storage_path: str | Path | None = None,
         embedding_model: EmbeddingModel | None = None,
+        enable_dedup: bool | None = None,
+        dedup_vector_threshold: float | None = None,
+        dedup_candidate_limit: int = 2000,
     ) -> None:
         self._items: list[MemoryItem] = []
         self._sessions: dict[str, SessionRecord] = {}
@@ -157,6 +180,26 @@ class MemorySystem:
         self._storage_path = Path(storage_path) if storage_path else None
         self._embedding_model = embedding_model or DeterministicEmbeddingModel()
         self._graph = MemoryGraph()
+        # Write-path deduplication (P1-13): ON by default, env-overridable via
+        # XAGENT_MEMORY_DEDUP=off and XAGENT_MEMORY_DEDUP_THRESHOLD=0.95.
+        # Only the async store()/store_layer() path dedups; the synchronous
+        # add() helper intentionally does NOT (kept as a raw append primitive).
+        if enable_dedup is None:
+            enable_dedup = os.getenv("XAGENT_MEMORY_DEDUP", "on").strip().lower() not in {
+                "off",
+                "0",
+                "false",
+                "no",
+            }
+        if dedup_vector_threshold is None:
+            try:
+                dedup_vector_threshold = float(os.getenv("XAGENT_MEMORY_DEDUP_THRESHOLD", "0.95"))
+            except ValueError:
+                dedup_vector_threshold = 0.95
+        self._dedup = (
+            WritePathDeduper(vector_threshold=dedup_vector_threshold) if enable_dedup else None
+        )
+        self._dedup_candidate_limit = max(int(dedup_candidate_limit), 1)
         if self._storage_path:
             self._load_from_disk()
 
@@ -228,7 +271,16 @@ class MemorySystem:
             metadata=metadata,
             embedding=await self._embed(content),
         )
+        duplicate_id = await self._find_write_duplicate(item)
         with self._lock:
+            if duplicate_id is not None:
+                existing = self.get_item(duplicate_id)
+                if existing is not None:
+                    self._merge_duplicate(existing, item)
+                    if session_id:
+                        self._attach_to_session(context, session_id, existing)
+                    self._append_to_disk(existing)
+                    return existing.id
             self._items.append(item)
             self._graph.add_text(item.content)
             if session_id:
@@ -844,6 +896,10 @@ class MemorySystem:
     def _load_from_disk(self) -> None:
         if self._storage_path is None or not self._storage_path.exists():
             return
+        # Upsert-by-id: mutation paths (_append_to_disk on revision/share/merge)
+        # re-append the full record, so the latest line for an id wins instead
+        # of duplicating the item on every reload.
+        index_by_id: dict[str, int] = {}
         with self._storage_path.open("r", encoding="utf-8") as handle:
             for line in handle:
                 line = line.strip()
@@ -855,7 +911,11 @@ class MemorySystem:
                     self._sessions[session.session_id] = session
                     continue
                 item = MemoryItem.model_validate(payload)
-                self._items.append(item)
+                if item.id in index_by_id:
+                    self._items[index_by_id[item.id]] = item
+                else:
+                    index_by_id[item.id] = len(self._items)
+                    self._items.append(item)
                 self._graph.add_text(item.content)
 
     def _append_to_disk(self, record: MemoryItem | SessionRecord) -> None:
@@ -870,6 +930,159 @@ class MemorySystem:
             return item.embedding
         item.embedding = await self._embed(item.content)
         return item.embedding
+
+    # ------------------------------------------------------------------
+    # Write-path deduplication (P1-13)
+    # ------------------------------------------------------------------
+
+    async def _find_write_duplicate(self, item: MemoryItem) -> str | None:
+        """Return the id of an existing tenant-scoped duplicate, or None."""
+        if self._dedup is None:
+            return None
+        with self._lock:
+            candidates = [c for c in self._items if c.tenant_id == item.tenant_id]
+        if not candidates:
+            return None
+        if len(candidates) > self._dedup_candidate_limit:
+            candidates = candidates[-self._dedup_candidate_limit :]
+        # Fast path: exact normalized-content hash (no embedding work needed).
+        new_hash = self._dedup.content_hash(item.content)
+        for candidate in candidates:
+            if self._dedup.content_hash(candidate.content) == new_hash:
+                return candidate.id
+        if not item.embedding:
+            return None
+        # Vector path via the repo's dedup engine (MemoryDeduplicatorEnhanced).
+        canonical_candidates = []
+        for candidate in candidates:
+            if not candidate.embedding:
+                candidate.embedding = await self._embed(candidate.content)
+            canonical_candidates.append(canonical_from_store_item(candidate))
+        duplicate = self._dedup.find_duplicate(
+            canonical_from_store_item(item),
+            canonical_candidates,
+        )
+        return duplicate.id if duplicate is not None else None
+
+    def _merge_duplicate(self, existing: MemoryItem, incoming: MemoryItem) -> None:
+        """Merge a duplicate write into the kept item (kept content wins)."""
+        existing.tags = self._merge_tags(existing.tags, incoming.tags)
+        existing.importance = max(existing.importance, incoming.importance)
+        merges = existing.metadata.setdefault("merged_writes", [])
+        merges.append(
+            {
+                "content": incoming.content[:500],
+                "content_hash": (
+                    self._dedup.content_hash(incoming.content) if self._dedup else ""
+                ),
+                "layer": incoming.layer,
+                "merged_at": datetime.now(UTC).isoformat(),
+            }
+        )
+        if len(merges) > 20:
+            del merges[:-20]
+        existing.metadata["merge_count"] = len(merges)
+        if self._dedup is not None:
+            self._dedup.note_merge()
+        logger.info(
+            "memory write deduplicated: merged into %s (tenant=%s)",
+            existing.id,
+            existing.tenant_id,
+        )
+
+    def dedup_stats(self) -> dict[str, object]:
+        """Expose write-path dedup status (explicit, inspectable)."""
+        return {
+            "enabled": self._dedup is not None,
+            "vector_threshold": self._dedup.vector_threshold if self._dedup else None,
+            "merged_writes": self._dedup.merged_writes if self._dedup else 0,
+            "candidate_limit": self._dedup_candidate_limit,
+        }
+
+    async def deduplicate(self, context: RunContext, strategy: str = "combined") -> dict[str, object]:
+        """Batch maintenance dedup over this tenant's memories.
+
+        Runs the existing ``MemoryDeduplicationService`` engine over converted
+        canonical memories, removes losers from the store, annotates kept items
+        and rewrites the JSONL backing file so removals actually persist.
+        """
+        if self._dedup is None:
+            return {"enabled": False, "removed": 0, "original_count": 0, "deduplicated_count": 0}
+        with self._lock:
+            items = [c for c in self._items if c.tenant_id == context.tenant_id]
+        if len(items) < 2:
+            return {
+                "enabled": True,
+                "removed": 0,
+                "original_count": len(items),
+                "deduplicated_count": len(items),
+            }
+        from backend.app.core.memory_deduplication_service import MemoryDeduplicationService
+
+        service = MemoryDeduplicationService(
+            vector_similarity_threshold=self._dedup.vector_threshold
+        )
+        for item in items:
+            if not item.embedding:
+                item.embedding = await self._embed(item.content)
+        # Partition by embedding length: items embedded by different models
+        # historically cannot be compared in one similarity matrix.
+        partitions: dict[int, list[MemoryItem]] = {}
+        for item in items:
+            partitions.setdefault(len(item.embedding), []).append(item)
+
+        removed_ids: set[str] = set()
+        merge_summary: dict[str, dict] = {}
+        total_groups = 0
+        for partition in partitions.values():
+            if len(partition) < 2:
+                continue
+            result = await service.deduplicate_memories(
+                [
+                    dedup_memory_from_canonical(canonical_from_store_item(item))
+                    for item in partition
+                ],
+                strategy=strategy,
+            )
+            removed_ids.update(result.removed_ids)
+            merge_summary.update(result.merge_summary)
+            total_groups += len(result.merged_groups)
+
+        if removed_ids:
+            with self._lock:
+                self._items = [c for c in self._items if c.id not in removed_ids]
+                for kept_id, info in merge_summary.items():
+                    kept = self.get_item(kept_id)
+                    if kept is not None:
+                        kept.metadata["dedup_merged_ids"] = list(info.get("merged_ids", []))
+                self._rewrite_disk()
+        logger.info(
+            "batch dedup tenant=%s: %d -> %d (removed %d, groups %d)",
+            context.tenant_id,
+            len(items),
+            len(items) - len(removed_ids),
+            len(removed_ids),
+            total_groups,
+        )
+        return {
+            "enabled": True,
+            "original_count": len(items),
+            "deduplicated_count": len(items) - len(removed_ids),
+            "removed": len(removed_ids),
+            "removed_ids": sorted(removed_ids),
+            "merged_groups": total_groups,
+        }
+
+    def _rewrite_disk(self) -> None:
+        """Rewrite the whole JSONL backing file (used after batch removals)."""
+        if self._storage_path is None:
+            return
+        self._storage_path.parent.mkdir(parents=True, exist_ok=True)
+        with self._storage_path.open("w", encoding="utf-8") as handle:
+            for session in self._sessions.values():
+                handle.write(json.dumps(session.model_dump(mode="json"), ensure_ascii=False) + "\n")
+            for item in self._items:
+                handle.write(json.dumps(item.model_dump(mode="json"), ensure_ascii=False) + "\n")
 
     async def _embed(self, text: str) -> list[float]:
         result = self._embedding_model.embed(text)

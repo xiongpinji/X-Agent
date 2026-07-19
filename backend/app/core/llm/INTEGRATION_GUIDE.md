@@ -5,6 +5,10 @@ X-Agent LLM Module Integration
 
 # Integration Guide
 
+> **P1-08 订正（2026-07-20）**：本文涉及的 `router.py` / `EnhancedLLMRouter`
+> 在代码库中不存在。生产唯一入口为 `backend.app.core.llm.build_llm_router`
+> （见 README.md 文末「P1-08 路由收敛」章节，以代码实际为准）。
+
 ## Quick Start
 
 ### 1. Installation

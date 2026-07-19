@@ -11,6 +11,7 @@ from uuid import uuid4
 
 from pydantic import BaseModel, Field
 
+from backend.app.core.audit_rotation import AuditLogRotator, AuditRotationConfig
 from backend.app.core.config import get_settings
 
 
@@ -47,11 +48,18 @@ class AuditStore:
         self,
         storage_path: str | Path | None = None,
         hmac_secret: str | None = None,
+        rotation: AuditRotationConfig | AuditLogRotator | None = None,
     ) -> None:
         self._records: list[AuditLogRecord] = []
         self._lock = RLock()
         self._storage_path = Path(storage_path) if storage_path else None
         self._hmac_secret = hmac_secret
+        if isinstance(rotation, AuditLogRotator):
+            self._rotator: AuditLogRotator | None = rotation
+        elif rotation is not None:
+            self._rotator = AuditLogRotator(rotation)
+        else:
+            self._rotator = None
 
         # Production fail-fast: HMAC secret is required in production
         settings = get_settings()
@@ -149,10 +157,51 @@ class AuditStore:
         return len(self._records)
 
     def verify_chain(self) -> AuditChainVerification:
+        return self._verify_records(self._records)
+
+    def verify_chain_across_files(self) -> AuditChainVerification:
+        """跨轮转段验证审计链(含全部历史段与当前活动文件)。
+
+        未配置轮转时退化为当前活动文件验证。首条记录作为链锚点:
+        留存清理删除最旧段后, 剩余链首条的 prev_hash 指向已删除段,
+        不视为链断裂(与进程内 verify_chain 的锚点语义一致)。
+        """
+        if self._storage_path is None:
+            return self.verify_chain()
+        if self._rotator is not None:
+            files = self._rotator.chain_files(self._storage_path)
+        else:
+            files = [self._storage_path]
+
+        records: list[AuditLogRecord] = []
+        for path in files:
+            if not path.exists():
+                continue
+            with path.open("r", encoding="utf-8") as handle:
+                for line in handle:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        records.append(AuditLogRecord.model_validate(json.loads(line)))
+                    except (json.JSONDecodeError, ValueError) as exc:
+                        import logging
+                        logging.getLogger(__name__).warning(
+                            "Skipping corrupt audit line in %s during chain verification: %s",
+                            path, exc,
+                        )
+        return self._verify_records(records)
+
+    def _verify_records(self, records: list[AuditLogRecord]) -> AuditChainVerification:
         previous_hash: str | None = None
         signed = 0
-        for index, record in enumerate(self._records):
-            if record.prev_hash != previous_hash:
+        for index, record in enumerate(records):
+            # 首条记录作为链锚点, 不校验 prev_hash:
+            # - 进程内完整链的首条 prev_hash 恒为 None, 语义不变;
+            # - 轮转/留存清理后, 文件内首条的 prev_hash 指向已归档/已删除段,
+            #   不构成链断裂。篡改检测由后续记录的 prev_hash 连续性
+            #   与每条记录的 hash/HMAC 签名保证。
+            if index > 0 and record.prev_hash != previous_hash:
                 return AuditChainVerification(
                     valid=False,
                     checked=index,
@@ -194,7 +243,19 @@ class AuditStore:
                         reason="Record signature mismatch.",
                     )
             previous_hash = record.hash
-        return AuditChainVerification(valid=True, checked=len(self._records), signed=signed)
+        return AuditChainVerification(valid=True, checked=len(records), signed=signed)
+
+    def rotated_segments(self) -> list[Path]:
+        """列出当前活动文件的全部轮转段(升序); 未配置轮转返回空列表。"""
+        if self._storage_path is None or self._rotator is None:
+            return []
+        return self._rotator.list_segments(self._storage_path)
+
+    def cleanup_expired_segments(self) -> list[Path]:
+        """按轮转配置留存期清理过期段, 返回被删除的路径列表。"""
+        if self._storage_path is None or self._rotator is None:
+            return []
+        return self._rotator.cleanup_expired(self._storage_path)
 
     def _load_from_disk(self) -> None:
         if self._storage_path is None or not self._storage_path.exists():
@@ -226,6 +287,8 @@ class AuditStore:
         if self._storage_path is None:
             return
         self._storage_path.parent.mkdir(parents=True, exist_ok=True)
+        if self._rotator is not None:
+            self._rotator.maybe_rotate(self._storage_path)
         with self._storage_path.open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(record.model_dump(mode="json"), ensure_ascii=False) + "\n")
 

@@ -89,12 +89,23 @@ class SelectionResult:
 class ModelSelector:
     """Intelligent model selector based on task characteristics and constraints."""
 
-    def __init__(self):
-        """Initialize model selector with default model profiles."""
+    def __init__(self, profiles: Optional[list[ModelProfile]] = None):
+        """Initialize model selector.
+
+        Args:
+            profiles: Externalized model catalog (e.g. loaded from
+                config/model_profiles.yaml via llm/profiles.py). When None,
+                the built-in default catalog is used, preserving the
+                historical behavior.
+        """
         self.models: dict[str, ModelProfile] = {}
         self._performance_history: dict[str, list[dict[str, Any]]] = {}
         self._ab_test_assignments: dict[str, str] = {}
-        self._initialize_default_models()
+        if profiles is None:
+            self._initialize_default_models()
+        else:
+            for profile in profiles:
+                self.register_model(profile)
 
     def _initialize_default_models(self) -> None:
         """Initialize default model profiles."""
@@ -188,6 +199,44 @@ class ModelSelector:
             return self._select_availability(candidates, context)
         else:  # BALANCED
             return self._select_balanced(candidates, context)
+
+    def rank_candidates(self, context: SelectionContext) -> list[ModelProfile]:
+        """Return filtered candidates fully ranked by the context strategy.
+
+        Uses the same filters and scoring formulas as :meth:`select`, but
+        returns the complete ranked list instead of a winner plus top-3
+        alternatives. ``SmartLLMRouter`` uses this to map the best candidate
+        that has a live backend to the front of the try-order without being
+        constrained by the alternatives truncation. A_B_TEST ranks like
+        BALANCED here (its sticky single-assignment semantics live in
+        :meth:`select`)."""
+        candidates = self._filter_candidates(context)
+        if not candidates:
+            candidates = list(self.models.values())
+
+        def estimated_cost(m: ModelProfile) -> float:
+            return m.estimate_cost(
+                context.input_tokens, context.expected_output_tokens
+            )
+
+        def balanced_score(m: ModelProfile) -> float:
+            cost = estimated_cost(m)
+            cost_score = 1.0 / (1.0 + cost)
+            quality_score = m.quality_score / 100.0
+            latency_score = 1.0 / (1.0 + m.latency_ms / 1000.0)
+            return cost_score * 0.3 + quality_score * 0.5 + latency_score * 0.2
+
+        strategy = context.strategy
+        if strategy == SelectionStrategy.COST_OPTIMIZED:
+            return sorted(candidates, key=estimated_cost)
+        if strategy == SelectionStrategy.PERFORMANCE_OPTIMIZED:
+            return sorted(candidates, key=lambda m: m.quality_score, reverse=True)
+        if strategy == SelectionStrategy.LATENCY_OPTIMIZED:
+            return sorted(candidates, key=lambda m: m.latency_ms)
+        if strategy == SelectionStrategy.AVAILABILITY:
+            return sorted(candidates, key=lambda m: m.availability, reverse=True)
+        # BALANCED / A_B_TEST share the composite ranking
+        return sorted(candidates, key=balanced_score, reverse=True)
 
     def _filter_candidates(self, context: SelectionContext) -> list[ModelProfile]:
         """Filter models based on constraints."""

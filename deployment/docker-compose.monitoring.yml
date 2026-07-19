@@ -7,8 +7,9 @@ services:
     ports:
       - "9090:9090"
     volumes:
-      - ./deployment/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
-      - ./deployment/prometheus/alerts.yml:/etc/prometheus/alerts.yml
+      # P1-15 修正: compose 相对路径以本文件所在目录(deployment/)为基准解析
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./prometheus/alerts.yml:/etc/prometheus/alerts.yml
       - prometheus_data:/prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
@@ -26,7 +27,7 @@ services:
     ports:
       - "9093:9093"
     volumes:
-      - ./deployment/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml
+      - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml
       - alertmanager_data:/alertmanager
     command:
       - '--config.file=/etc/alertmanager/alertmanager.yml'
@@ -46,8 +47,12 @@ services:
       - GF_INSTALL_PLUGINS=grafana-piechart-panel
       - GF_PATHS_PROVISIONING=/etc/grafana/provisioning
     volumes:
-      - ./deployment/grafana/provisioning:/etc/grafana/provisioning
-      - ./deployment/grafana/dashboards:/etc/grafana/provisioning/dashboards
+      # P1-15 修正: Grafana provisioning 要求 provider 配置在
+      # provisioning/{dashboards,datasources}/*.yml 子路径; 原整目录挂载会把
+      # yml 落到 provisioning 根(被忽略), 且 dashboards 目录挂载会遮蔽 provider 配置
+      - ./grafana/provisioning/dashboards.yml:/etc/grafana/provisioning/dashboards/main.yml:ro
+      - ./grafana/provisioning/datasources.yml:/etc/grafana/provisioning/datasources/main.yml:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
       - grafana_data:/var/lib/grafana
     depends_on:
       - prometheus

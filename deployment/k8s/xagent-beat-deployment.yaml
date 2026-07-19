@@ -15,6 +15,9 @@ spec:
       labels:
         app: xagent-beat
     spec:
+      serviceAccountName: xagent
+      # P1-16: 优雅停机 —— 宽限期 60s, preStop sleep 5s 后再 SIGTERM
+      terminationGracePeriodSeconds: 60
       containers:
       - name: xagent-beat
         image: xagent:latest
@@ -25,6 +28,14 @@ spec:
         - python
         - -m
         - backend.app.workflow_worker
+        lifecycle:
+          # P1-16: 镜像为 python:3.11-slim, 内置 /bin/sh 与 sleep
+          preStop:
+            exec:
+              command:
+              - /bin/sh
+              - -c
+              - sleep 5
         env:
         # P0-03: 应用配置统一 XAGENT_ 前缀(对照 backend/app/settings.py, env_prefix="XAGENT_")
         - name: XAGENT_APP_MODE

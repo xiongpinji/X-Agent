@@ -303,6 +303,19 @@ class ToolRegistry:
     def get(self, name: str) -> ToolDefinition | None:
         return self._tools.get(name)
 
+    def unregister(self, name: str) -> bool:
+        """Remove a tool from the runtime registry.
+
+        Returns True when the tool existed and was removed. Used by the MCP
+        discovery layer to detach bridged tools when an MCP server goes away,
+        so the agent main loop never calls into a disconnected server.
+        """
+        return self._tools.pop(name, None) is not None
+
+    def tool_names(self) -> list[str]:
+        """Return the names of all registered tools (sorted)."""
+        return sorted(self._tools)
+
     def related_tools(self, query: str) -> list[dict[str, Any]]:
         query_lower = query.lower()
         scored: list[tuple[int, ToolDefinition]] = []

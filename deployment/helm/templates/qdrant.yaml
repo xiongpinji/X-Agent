@@ -1,0 +1,94 @@
+{{- if .Values.qdrant.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: qdrant
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: qdrant
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: qdrant
+  template:
+    metadata:
+      labels:
+        app: qdrant
+    spec:
+      # P1-16: 优雅停机 —— 宽限期默认 60s, 留给存储 flush
+      terminationGracePeriodSeconds: {{ .Values.qdrant.terminationGracePeriodSeconds | default 60 }}
+      containers:
+      - name: qdrant
+        image: {{ .Values.qdrant.image }}
+        lifecycle:
+          # P1-16: qdrant/qdrant 官方镜像基于 debian slim, 含 /bin/sh 与 sleep;
+          # 若切换到无 shell 的精简镜像, 删除本 preStop 并依赖 terminationGracePeriodSeconds
+          preStop:
+            exec:
+              command:
+              - /bin/sh
+              - -c
+              - sleep {{ .Values.qdrant.preStopSleepSeconds | default 5 }}
+        ports:
+        - containerPort: {{ .Values.qdrant.port }}
+          name: http
+        - containerPort: {{ .Values.qdrant.grpcPort | default 6334 }}
+          name: grpc
+        env:
+        - name: QDRANT_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: xagent-secrets
+              key: QDRANT_API_KEY
+        resources:
+          {{- toYaml .Values.qdrant.resources | nindent 10 }}
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: {{ .Values.qdrant.port }}
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: {{ .Values.qdrant.port }}
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        volumeMounts:
+        - name: qdrant-storage
+          mountPath: /qdrant/storage
+      volumes:
+      - name: qdrant-storage
+        persistentVolumeClaim:
+          claimName: qdrant-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: qdrant
+  namespace: {{ .Release.Namespace }}
+spec:
+  selector:
+    app: qdrant
+  ports:
+  - port: {{ .Values.qdrant.port }}
+    targetPort: {{ .Values.qdrant.port }}
+    name: http
+  - port: {{ .Values.qdrant.grpcPort | default 6334 }}
+    targetPort: {{ .Values.qdrant.grpcPort | default 6334 }}
+    name: grpc
+  type: ClusterIP
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: qdrant-pvc
+  namespace: {{ .Release.Namespace }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.qdrant.storage }}
+{{- end }}

@@ -22,6 +22,9 @@ spec:
         app: xagent-api
         version: v1
     spec:
+      serviceAccountName: xagent
+      # P1-16: 优雅停机 —— 宽限期 >=60s, 配合 preStop sleep 等待 Endpoints/负载均衡摘除
+      terminationGracePeriodSeconds: 90
       affinity:
         podAntiAffinity:
           preferredDuringSchedulingIgnoredDuringExecution:
@@ -41,6 +44,15 @@ spec:
         ports:
         - containerPort: 8000
           name: http
+        lifecycle:
+          # P1-16: 先 sleep 10s 让 Service Endpoints 摘除传播, 再由 SIGTERM 触发应用优雅停机;
+          # 镜像为 python:3.11-slim, 内置 /bin/sh 与 sleep (见根目录 Dockerfile)
+          preStop:
+            exec:
+              command:
+              - /bin/sh
+              - -c
+              - sleep 10
         env:
         # P0-03: 应用配置统一 XAGENT_ 前缀(对照 backend/app/settings.py, env_prefix="XAGENT_")
         - name: XAGENT_APP_MODE

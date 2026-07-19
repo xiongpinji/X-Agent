@@ -1,5 +1,11 @@
 """
 X-Agent 技能系统 v2 - 完善的技能定义、注册、执行和管理
+
+.. deprecated:: P1-11（2026-07-20）
+   LEGACY。X-Agent 唯一技能运行时为 ``backend.app.core.skills``
+   （目录扫描加载 skills/ 与 custom-skills/，经 ``skill_agent_adapter`` 注入 AgentLoop）。
+   本模块仅保留供 skill_chain 使用，不再作为技能运行时入口。
+   详见 SKILLS_SYSTEM_README.md。
 """
 
 from __future__ import annotations

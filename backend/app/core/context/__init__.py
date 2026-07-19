@@ -27,6 +27,10 @@ from backend.app.core.context.session_recovery import (
     SessionState,
     SessionStats,
 )
+from backend.app.core.context.agent_integration import (
+    AgentLoopContextBridge,
+    fit_messages_to_token_budget,
+)
 
 # Conditional imports for optional modules
 try:
@@ -49,6 +53,8 @@ except ImportError:
     pass
 
 __all__ = [
+    "AgentLoopContextBridge",
+    "fit_messages_to_token_budget",
     "CodebaseIndex",
     "CodeMatch",
     "DependencyEdge",
