@@ -1,0 +1,387 @@
+{
+  "version": "8.11.0",
+  "objects": [
+    {
+      "type": "dashboard",
+      "id": "xagent-logs-overview",
+      "attributes": {
+        "title": "X-Agent Logs Overview",
+        "description": "Overview of X-Agent application logs",
+        "panels": [
+          {
+            "version": "8.11.0",
+            "gridData": {
+              "x": 0,
+              "y": 0,
+              "w": 24,
+              "h": 15
+            },
+            "type": "visualization",
+            "embeddableConfig": {},
+            "panelIndex": "1",
+            "embeddableConfig": {
+              "vis": {
+                "colors": {
+                  "ERROR": "#F2495C",
+                  "WARN": "#FF9830",
+                  "INFO": "#73BF69",
+                  "DEBUG": "#5794F2"
+                }
+              }
+            },
+            "visualization": {
+              "title": "Log Level Distribution",
+              "type": "pie",
+              "params": {
+                "addTooltip": true,
+                "addLegend": true,
+                "legendPosition": "right",
+                "isDonut": false
+              },
+              "aggs": [
+                {
+                  "id": "1",
+                  "enabled": true,
+                  "type": "count",
+                  "schema": "metric",
+                  "params": {}
+                },
+                {
+                  "id": "2",
+                  "enabled": true,
+                  "type": "terms",
+                  "schema": "segment",
+                  "params": {
+                    "field": "log_level",
+                    "size": 10,
+                    "order": "desc",
+                    "orderBy": "1"
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "timeRestore": true,
+        "timeFrom": "now-24h",
+        "timeTo": "now",
+        "refreshInterval": {
+          "pause": false,
+          "value": 10000
+        }
+      }
+    },
+    {
+      "type": "dashboard",
+      "id": "xagent-errors-analysis",
+      "attributes": {
+        "title": "X-Agent Error Analysis",
+        "description": "Detailed analysis of X-Agent errors",
+        "panels": [
+          {
+            "version": "8.11.0",
+            "gridData": {
+              "x": 0,
+              "y": 0,
+              "w": 12,
+              "h": 15
+            },
+            "type": "visualization",
+            "visualization": {
+              "title": "Error Types",
+              "type": "table",
+              "params": {
+                "perPage": 10,
+                "showPartialRows": false,
+                "showMeticsAtAllLevels": false,
+                "showTotal": false,
+                "totalFunc": "sum",
+                "percentageCol": ""
+              },
+              "aggs": [
+                {
+                  "id": "1",
+                  "enabled": true,
+                  "type": "count",
+                  "schema": "metric",
+                  "params": {}
+                },
+                {
+                  "id": "2",
+                  "enabled": true,
+                  "type": "terms",
+                  "schema": "bucket",
+                  "params": {
+                    "field": "error_type",
+                    "size": 20,
+                    "order": "desc",
+                    "orderBy": "1"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "version": "8.11.0",
+            "gridData": {
+              "x": 12,
+              "y": 0,
+              "w": 12,
+              "h": 15
+            },
+            "type": "visualization",
+            "visualization": {
+              "title": "Error Rate Over Time",
+              "type": "line",
+              "params": {
+                "grid": {
+                  "categoryLines": false,
+                  "valueAxis": "ValueAxis-1"
+                },
+                "categoryAxes": [
+                  {
+                    "id": "CategoryAxis-1",
+                    "type": "category",
+                    "position": "bottom",
+                    "show": true,
+                    "style": {},
+                    "scale": {
+                      "type": "linear"
+                    },
+                    "labels": {
+                      "show": true,
+                      "truncate": 100
+                    },
+                    "title": {}
+                  }
+                ],
+                "valueAxes": [
+                  {
+                    "id": "ValueAxis-1",
+                    "name": "LeftAxis-1",
+                    "type": "value",
+                    "position": "left",
+                    "show": true,
+                    "style": {},
+                    "scale": {
+                      "type": "linear",
+                      "mode": "normal"
+                    },
+                    "labels": {
+                      "show": true,
+                      "truncate": 100
+                    },
+                    "title": {
+                      "text": "Error Count"
+                    }
+                  }
+                ],
+                "seriesParams": [
+                  {
+                    "show": true,
+                    "type": "line",
+                    "interpolate": "linear",
+                    "valueAxis": "ValueAxis-1"
+                  }
+                ],
+                "addTooltip": true,
+                "addLegend": true,
+                "legendPosition": "bottom",
+                "isDonut": false
+              },
+              "aggs": [
+                {
+                  "id": "1",
+                  "enabled": true,
+                  "type": "count",
+                  "schema": "metric",
+                  "params": {}
+                },
+                {
+                  "id": "2",
+                  "enabled": true,
+                  "type": "date_histogram",
+                  "schema": "segment",
+                  "params": {
+                    "field": "@timestamp",
+                    "interval": "auto",
+                    "customInterval": "2h",
+                    "min_doc_count": 1,
+                    "extended_bounds": {}
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "timeRestore": true,
+        "timeFrom": "now-7d",
+        "timeTo": "now",
+        "refreshInterval": {
+          "pause": false,
+          "value": 30000
+        }
+      }
+    },
+    {
+      "type": "dashboard",
+      "id": "xagent-audit-logs",
+      "attributes": {
+        "title": "X-Agent Audit Logs",
+        "description": "Audit trail of X-Agent operations",
+        "panels": [
+          {
+            "version": "8.11.0",
+            "gridData": {
+              "x": 0,
+              "y": 0,
+              "w": 24,
+              "h": 20
+            },
+            "type": "visualization",
+            "visualization": {
+              "title": "Audit Events",
+              "type": "table",
+              "params": {
+                "perPage": 50,
+                "showPartialRows": false,
+                "showMeticsAtAllLevels": false,
+                "showTotal": false,
+                "totalFunc": "sum",
+                "percentageCol": ""
+              },
+              "aggs": [
+                {
+                  "id": "1",
+                  "enabled": true,
+                  "type": "count",
+                  "schema": "metric",
+                  "params": {}
+                },
+                {
+                  "id": "2",
+                  "enabled": true,
+                  "type": "terms",
+                  "schema": "bucket",
+                  "params": {
+                    "field": "event_type",
+                    "size": 100,
+                    "order": "desc",
+                    "orderBy": "1"
+                  }
+                },
+                {
+                  "id": "3",
+                  "enabled": true,
+                  "type": "terms",
+                  "schema": "bucket",
+                  "params": {
+                    "field": "actor",
+                    "size": 100,
+                    "order": "desc",
+                    "orderBy": "1"
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "timeRestore": true,
+        "timeFrom": "now-30d",
+        "timeTo": "now",
+        "refreshInterval": {
+          "pause": false,
+          "value": 60000
+        }
+      }
+    },
+    {
+      "type": "search",
+      "id": "xagent-all-logs",
+      "attributes": {
+        "title": "X-Agent All Logs",
+        "description": "Search all X-Agent logs",
+        "hits": 0,
+        "columns": [
+          "@timestamp",
+          "log_level",
+          "service",
+          "component",
+          "message"
+        ],
+        "sort": [
+          [
+            "@timestamp",
+            "desc"
+          ]
+        ],
+        "version": 1,
+        "kibanaSavedObjectMeta": {
+          "searchSourceJSON": {
+            "index": "xagent-logs-*",
+            "query": {
+              "match_all": {}
+            },
+            "highlight": {
+              "pre_tags": [
+                "@kibana-highlighted-field@"
+              ],
+              "post_tags": [
+                "@/kibana-highlighted-field@"
+              ],
+              "fields": {
+                "*": {}
+              },
+              "fragment_size": 150
+            },
+            "version": true
+          }
+        }
+      }
+    },
+    {
+      "type": "search",
+      "id": "xagent-errors-only",
+      "attributes": {
+        "title": "X-Agent Errors Only",
+        "description": "Search X-Agent error logs",
+        "hits": 0,
+        "columns": [
+          "@timestamp",
+          "error_type",
+          "error_message",
+          "stack_trace",
+          "request_id"
+        ],
+        "sort": [
+          [
+            "@timestamp",
+            "desc"
+          ]
+        ],
+        "version": 1,
+        "kibanaSavedObjectMeta": {
+          "searchSourceJSON": {
+            "index": "xagent-critical-*",
+            "query": {
+              "match_all": {}
+            },
+            "highlight": {
+              "pre_tags": [
+                "@kibana-highlighted-field@"
+              ],
+              "post_tags": [
+                "@/kibana-highlighted-field@"
+              ],
+              "fields": {
+                "*": {}
+              },
+              "fragment_size": 150
+            },
+            "version": true
+          }
+        }
+      }
+    }
+  ]
+}

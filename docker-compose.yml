@@ -1,0 +1,281 @@
+version: '3.9'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: xagent-postgres
+    environment:
+      POSTGRES_USER: ${DB_USER:-xagent}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-xagent_secure_password}
+      POSTGRES_DB: ${DB_NAME:-xagent_db}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=en_US.UTF-8"
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./deployment/migrations/init.sql:/docker-entrypoint-initdb.d/01-init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-xagent}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - xagent-network
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: xagent-redis
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-redis_secure_password}
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - xagent-network
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Qdrant Vector Database
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: xagent-qdrant
+    environment:
+      QDRANT_API_KEY: ${QDRANT_API_KEY:-qdrant_secure_key}
+    ports:
+      - "${QDRANT_PORT:-6333}:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6333/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - xagent-network
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Neo4j Graph Database
+  neo4j:
+    image: neo4j:5-community
+    container_name: xagent-neo4j
+    environment:
+      NEO4J_AUTH: ${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD:-neo4j_secure_password}
+      NEO4J_server_memory_heap_initial__size: 512m
+      NEO4J_server_memory_heap_max__size: 1g
+    ports:
+      - "${NEO4J_PORT:-7687}:7687"
+      - "7474:7474"
+    volumes:
+      - neo4j_data:/var/lib/neo4j/data
+      - neo4j_logs:/var/lib/neo4j/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7474"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - xagent-network
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # X-Agent API Server
+  xagent-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: xagent-api
+    environment:
+      # Core settings read by backend.app.settings.Settings (env_prefix = XAGENT_)
+      XAGENT_APP_MODE: ${XAGENT_APP_MODE:-development}
+      XAGENT_DATABASE_URL: postgresql+asyncpg://${DB_USER:-xagent}:${DB_PASSWORD:-xagent_secure_password}@postgres:5432/${DB_NAME:-xagent_db}
+      XAGENT_REDIS_URL: redis://:${REDIS_PASSWORD:-redis_secure_password}@redis:6379/0
+      XAGENT_QDRANT_URL: http://qdrant:6333
+      XAGENT_QDRANT_API_KEY: ${QDRANT_API_KEY:-qdrant_secure_key}
+      XAGENT_MEMORY_BACKEND: ${XAGENT_MEMORY_BACKEND:-postgres}
+      XAGENT_TRACE_BACKEND: ${XAGENT_TRACE_BACKEND:-jsonl}
+      XAGENT_LLM_BACKEND: ${XAGENT_LLM_BACKEND:-mock}
+      XAGENT_LLM_FALLBACK_ORDER: ${XAGENT_LLM_FALLBACK_ORDER:-}
+      XAGENT_OPENAI_API_KEY: ${XAGENT_OPENAI_API_KEY:-}
+      XAGENT_OPENAI_MODEL: ${XAGENT_OPENAI_MODEL:-gpt-4o-mini}
+      XAGENT_DEEPSEEK_API_KEY: ${XAGENT_DEEPSEEK_API_KEY:-}
+      XAGENT_DEEPSEEK_MODEL: ${XAGENT_DEEPSEEK_MODEL:-deepseek-chat}
+      XAGENT_DEEPSEEK_BASE_URL: ${XAGENT_DEEPSEEK_BASE_URL:-https://api.deepseek.com/v1}
+      XAGENT_LANGFUSE_PUBLIC_KEY: ${XAGENT_LANGFUSE_PUBLIC_KEY:-}
+      XAGENT_LANGFUSE_SECRET_KEY: ${XAGENT_LANGFUSE_SECRET_KEY:-}
+      XAGENT_LANGFUSE_HOST: ${XAGENT_LANGFUSE_HOST:-}
+      XAGENT_AUDIT_HMAC_SECRET: ${XAGENT_AUDIT_HMAC_SECRET:-}
+      XAGENT_JWT_SECRET: ${XAGENT_JWT_SECRET:-}
+      XAGENT_ENCRYPTION_KEY: ${XAGENT_ENCRYPTION_KEY:-}
+      XAGENT_REQUIRE_API_KEY: ${XAGENT_REQUIRE_API_KEY:-false}
+      XAGENT_BOOTSTRAP_API_KEY: ${XAGENT_BOOTSTRAP_API_KEY:-}
+      XAGENT_CORS_ORIGINS: ${XAGENT_CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
+      XAGENT_ENABLE_HIGH_RISK_TOOLS: ${XAGENT_ENABLE_HIGH_RISK_TOOLS:-false}
+      XAGENT_PLAYWRIGHT_HEADLESS: ${XAGENT_PLAYWRIGHT_HEADLESS:-true}
+      XAGENT_GITHUB_TOKEN: ${XAGENT_GITHUB_TOKEN:-}
+      XAGENT_GITHUB_WEBHOOK_SECRET: ${XAGENT_GITHUB_WEBHOOK_SECRET:-}
+      XAGENT_FEISHU_APP_ID: ${XAGENT_FEISHU_APP_ID:-}
+      XAGENT_FEISHU_APP_SECRET: ${XAGENT_FEISHU_APP_SECRET:-}
+      XAGENT_FEISHU_ENCRYPT_KEY: ${XAGENT_FEISHU_ENCRYPT_KEY:-}
+      XAGENT_TELEGRAM_BOT_TOKEN: ${XAGENT_TELEGRAM_BOT_TOKEN:-}
+      XAGENT_TELEGRAM_WEBHOOK_SECRET: ${XAGENT_TELEGRAM_WEBHOOK_SECRET:-}
+      XAGENT_TELEGRAM_BASE_URL: ${XAGENT_TELEGRAM_BASE_URL:-}
+      # Celery still reads its conventional variables directly.
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:-redis_secure_password}@redis:6379/1
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:-redis_secure_password}@redis:6379/2
+      API_HOST: 0.0.0.0
+      API_PORT: 8000
+      API_WORKERS: ${API_WORKERS:-4}
+    ports:
+      - "${API_PORT:-8000}:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+      neo4j:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app/backend
+      - ./logs:/app/logs
+    networks:
+      - xagent-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Celery Worker
+  xagent-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: xagent-worker
+    command: celery -A backend.app.workflow_worker worker --loglevel=info --concurrency=4
+    environment:
+      XAGENT_APP_MODE: ${XAGENT_APP_MODE:-development}
+      XAGENT_DATABASE_URL: postgresql+asyncpg://${DB_USER:-xagent}:${DB_PASSWORD:-xagent_secure_password}@postgres:5432/${DB_NAME:-xagent_db}
+      XAGENT_REDIS_URL: redis://:${REDIS_PASSWORD:-redis_secure_password}@redis:6379/0
+      XAGENT_QDRANT_URL: http://qdrant:6333
+      XAGENT_QDRANT_API_KEY: ${QDRANT_API_KEY:-qdrant_secure_key}
+      XAGENT_MEMORY_BACKEND: ${XAGENT_MEMORY_BACKEND:-postgres}
+      XAGENT_TRACE_BACKEND: ${XAGENT_TRACE_BACKEND:-jsonl}
+      XAGENT_LLM_BACKEND: ${XAGENT_LLM_BACKEND:-mock}
+      XAGENT_LLM_FALLBACK_ORDER: ${XAGENT_LLM_FALLBACK_ORDER:-}
+      XAGENT_OPENAI_API_KEY: ${XAGENT_OPENAI_API_KEY:-}
+      XAGENT_OPENAI_MODEL: ${XAGENT_OPENAI_MODEL:-gpt-4o-mini}
+      XAGENT_DEEPSEEK_API_KEY: ${XAGENT_DEEPSEEK_API_KEY:-}
+      XAGENT_DEEPSEEK_MODEL: ${XAGENT_DEEPSEEK_MODEL:-deepseek-chat}
+      XAGENT_DEEPSEEK_BASE_URL: ${XAGENT_DEEPSEEK_BASE_URL:-https://api.deepseek.com/v1}
+      XAGENT_LANGFUSE_PUBLIC_KEY: ${XAGENT_LANGFUSE_PUBLIC_KEY:-}
+      XAGENT_LANGFUSE_SECRET_KEY: ${XAGENT_LANGFUSE_SECRET_KEY:-}
+      XAGENT_LANGFUSE_HOST: ${XAGENT_LANGFUSE_HOST:-}
+      XAGENT_AUDIT_HMAC_SECRET: ${XAGENT_AUDIT_HMAC_SECRET:-}
+      XAGENT_JWT_SECRET: ${XAGENT_JWT_SECRET:-}
+      XAGENT_ENCRYPTION_KEY: ${XAGENT_ENCRYPTION_KEY:-}
+      XAGENT_REQUIRE_API_KEY: ${XAGENT_REQUIRE_API_KEY:-false}
+      XAGENT_ENABLE_HIGH_RISK_TOOLS: ${XAGENT_ENABLE_HIGH_RISK_TOOLS:-false}
+      XAGENT_PLAYWRIGHT_HEADLESS: ${XAGENT_PLAYWRIGHT_HEADLESS:-true}
+      XAGENT_GITHUB_TOKEN: ${XAGENT_GITHUB_TOKEN:-}
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:-redis_secure_password}@redis:6379/1
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:-redis_secure_password}@redis:6379/2
+    depends_on:
+      - postgres
+      - redis
+      - qdrant
+      - neo4j
+    volumes:
+      - ./backend:/app/backend
+      - ./logs:/app/logs
+    networks:
+      - xagent-network
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Celery Beat (Scheduler)
+  xagent-beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: xagent-beat
+    command: celery -A backend.app.workflow_worker beat --loglevel=info
+    environment:
+      XAGENT_APP_MODE: ${XAGENT_APP_MODE:-development}
+      XAGENT_DATABASE_URL: postgresql+asyncpg://${DB_USER:-xagent}:${DB_PASSWORD:-xagent_secure_password}@postgres:5432/${DB_NAME:-xagent_db}
+      XAGENT_REDIS_URL: redis://:${REDIS_PASSWORD:-redis_secure_password}@redis:6379/0
+      XAGENT_MEMORY_BACKEND: ${XAGENT_MEMORY_BACKEND:-postgres}
+      XAGENT_TRACE_BACKEND: ${XAGENT_TRACE_BACKEND:-jsonl}
+      XAGENT_AUDIT_HMAC_SECRET: ${XAGENT_AUDIT_HMAC_SECRET:-}
+      XAGENT_JWT_SECRET: ${XAGENT_JWT_SECRET:-}
+      XAGENT_ENCRYPTION_KEY: ${XAGENT_ENCRYPTION_KEY:-}
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:-redis_secure_password}@redis:6379/1
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:-redis_secure_password}@redis:6379/2
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - ./backend:/app/backend
+      - ./logs:/app/logs
+    networks:
+      - xagent-network
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  qdrant_data:
+    driver: local
+  neo4j_data:
+    driver: local
+  neo4j_logs:
+    driver: local
+
+networks:
+  xagent-network:
+    driver: bridge

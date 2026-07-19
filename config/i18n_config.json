@@ -1,0 +1,262 @@
+{
+  "translationManagement": {
+    "enabled": true,
+    "localesDir": "locales",
+    "fallbackLanguage": "en",
+    "supportedLanguages": [
+      {
+        "code": "en",
+        "name": "English",
+        "nativeName": "English",
+        "direction": "ltr"
+      },
+      {
+        "code": "zh",
+        "name": "Chinese",
+        "nativeName": "中文",
+        "direction": "ltr"
+      },
+      {
+        "code": "ja",
+        "name": "Japanese",
+        "nativeName": "日本語",
+        "direction": "ltr"
+      },
+      {
+        "code": "ko",
+        "name": "Korean",
+        "nativeName": "한국어",
+        "direction": "ltr"
+      },
+      {
+        "code": "es",
+        "name": "Spanish",
+        "nativeName": "Español",
+        "direction": "ltr"
+      }
+    ],
+    "supportedRegions": [
+      {
+        "code": "US",
+        "name": "United States",
+        "timezone": "America/New_York",
+        "currency": "USD",
+        "dateFormat": "MM/DD/YYYY",
+        "timeFormat": "hh:mm:ss A",
+        "numberFormat": {
+          "decimal": ".",
+          "thousands": ","
+        }
+      },
+      {
+        "code": "CN",
+        "name": "China",
+        "timezone": "Asia/Shanghai",
+        "currency": "CNY",
+        "dateFormat": "YYYY-MM-DD",
+        "timeFormat": "HH:mm:ss",
+        "numberFormat": {
+          "decimal": ".",
+          "thousands": ","
+        }
+      },
+      {
+        "code": "JP",
+        "name": "Japan",
+        "timezone": "Asia/Tokyo",
+        "currency": "JPY",
+        "dateFormat": "YYYY年MM月DD日",
+        "timeFormat": "HH:mm:ss",
+        "numberFormat": {
+          "decimal": ".",
+          "thousands": ","
+        }
+      },
+      {
+        "code": "KR",
+        "name": "Korea",
+        "timezone": "Asia/Seoul",
+        "currency": "KRW",
+        "dateFormat": "YYYY.MM.DD",
+        "timeFormat": "HH:mm:ss",
+        "numberFormat": {
+          "decimal": ".",
+          "thousands": ","
+        }
+      },
+      {
+        "code": "ES",
+        "name": "Spain",
+        "timezone": "Europe/Madrid",
+        "currency": "EUR",
+        "dateFormat": "DD/MM/YYYY",
+        "timeFormat": "HH:mm:ss",
+        "numberFormat": {
+          "decimal": ",",
+          "thousands": "."
+        }
+      },
+      {
+        "code": "GB",
+        "name": "United Kingdom",
+        "timezone": "Europe/London",
+        "currency": "GBP",
+        "dateFormat": "DD/MM/YYYY",
+        "timeFormat": "HH:mm:ss",
+        "numberFormat": {
+          "decimal": ".",
+          "thousands": ","
+        }
+      },
+      {
+        "code": "DE",
+        "name": "Germany",
+        "timezone": "Europe/Berlin",
+        "currency": "EUR",
+        "dateFormat": "DD.MM.YYYY",
+        "timeFormat": "HH:mm:ss",
+        "numberFormat": {
+          "decimal": ",",
+          "thousands": "."
+        }
+      },
+      {
+        "code": "FR",
+        "name": "France",
+        "timezone": "Europe/Paris",
+        "currency": "EUR",
+        "dateFormat": "DD/MM/YYYY",
+        "timeFormat": "HH:mm:ss",
+        "numberFormat": {
+          "decimal": ",",
+          "thousands": " "
+        }
+      }
+    ],
+    "currencyFormats": {
+      "US": {
+        "symbol": "$",
+        "position": "prefix",
+        "space": false
+      },
+      "CN": {
+        "symbol": "¥",
+        "position": "prefix",
+        "space": false
+      },
+      "JP": {
+        "symbol": "¥",
+        "position": "prefix",
+        "space": false
+      },
+      "KR": {
+        "symbol": "₩",
+        "position": "suffix",
+        "space": true
+      },
+      "ES": {
+        "symbol": "€",
+        "position": "suffix",
+        "space": true
+      },
+      "GB": {
+        "symbol": "£",
+        "position": "prefix",
+        "space": false
+      },
+      "DE": {
+        "symbol": "€",
+        "position": "suffix",
+        "space": true
+      },
+      "FR": {
+        "symbol": "€",
+        "position": "suffix",
+        "space": true
+      }
+    },
+    "translationKeys": {
+      "common": [
+        "loading",
+        "error",
+        "success",
+        "warning",
+        "info",
+        "confirm",
+        "cancel",
+        "save",
+        "delete",
+        "edit",
+        "close",
+        "back",
+        "next",
+        "previous",
+        "search",
+        "filter",
+        "sort",
+        "export",
+        "import",
+        "download",
+        "upload",
+        "settings",
+        "help",
+        "about",
+        "logout",
+        "login",
+        "register",
+        "profile",
+        "language",
+        "theme",
+        "dark",
+        "light",
+        "auto"
+      ],
+      "navigation": [
+        "dashboard",
+        "chat",
+        "tasks",
+        "tools",
+        "memory",
+        "agents",
+        "marketplace",
+        "console"
+      ],
+      "errors": [
+        "notFound",
+        "unauthorized",
+        "forbidden",
+        "serverError",
+        "networkError",
+        "validationError",
+        "tryAgain"
+      ],
+      "validation": [
+        "required",
+        "email",
+        "minLength",
+        "maxLength",
+        "pattern"
+      ],
+      "i18n": [
+        "selectLanguage",
+        "selectRegion",
+        "timezone",
+        "currency",
+        "dateFormat",
+        "timeFormat",
+        "numberFormat"
+      ]
+    },
+    "translationProgress": {
+      "en": 100,
+      "zh": 100,
+      "ja": 100,
+      "ko": 100,
+      "es": 100
+    },
+    "autoDetectLanguage": true,
+    "autoDetectRegion": true,
+    "persistUserPreferences": true,
+    "preferencesStorageKey": "xagent_i18n_preferences"
+  }
+}

@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>X-Agent 控制台</title>
+    <meta name="theme-color" content="#050814" />
+    <link rel="stylesheet" href="/app-shell.css" />
+    <style>
+      body { margin:0; background:#050814; color:var(--text); font-family:system-ui, sans-serif; }
+      .wrap { max-width:1600px; margin:0 auto; padding:20px; }
+      .app-shell { display:grid; grid-template-columns:280px minmax(0,1fr); gap:16px; }
+      .sidebar,.topbar,.panel { background:linear-gradient(180deg, rgba(17,24,38,.88), rgba(8,12,21,.88)); border:1px solid var(--line); border-radius:18px; box-shadow:var(--shadow); }
+      .sidebar { padding:16px; position:sticky; top:20px; height:fit-content; }
+      .topbar { padding:18px 20px; display:flex; justify-content:space-between; margin-bottom:16px; align-items:center; }
+      .nav { display:grid; gap:10px; margin-bottom:16px; }
+      button,input,textarea,select { border-radius:12px; border:1px solid var(--line); background:rgba(7,12,20,.82); color:var(--text); padding:10px 12px; }
+      button { cursor:pointer; background:linear-gradient(180deg, rgba(113,167,255,.26), rgba(33,75,143,.92)); }
+      button.secondary { background:rgba(12,18,28,.9); }
+      .page { display:none; }
+      .page.active { display:block; }
+      .grid { display:grid; grid-template-columns:280px minmax(0,1fr); gap:16px; }
+      .panel h2 { margin:0; padding:14px 16px; font-size:13px; letter-spacing:.12em; text-transform:uppercase; border-bottom:1px solid var(--line); }
+      .panel .body { padding:14px; }
+      .row,.row-inline,.actions,.overview,.chips { display:flex; gap:8px; flex-wrap:wrap; }
+      .row,.row-inline { margin-bottom:12px; }
+      .row-inline > div { flex:1; }
+      .metric-card,.history-item { border:1px solid var(--line); border-radius:14px; padding:12px; background:#0c121a; }
+      .metric-value { display:block; font-size:18px; font-weight:700; }
+      .metric-label,.hint { color:var(--muted); font-size:12px; white-space:pre-wrap; }
+      .tag { display:inline-flex; align-items:center; gap:6px; padding:4px 8px; border-radius:999px; font-size:11px; border:1px solid var(--line); background:rgba(255,255,255,0.03); color:var(--muted); }
+      .tag.good { color:var(--good); border-color:rgba(61,242,160,.25); }
+      .tag.bad { color:var(--bad); border-color:rgba(255,107,143,.25); }
+      .tag.warn { color:#ffd36a; border-color:rgba(255,211,106,.25); }
+      .page-memory,.page-org,.page-evolution,.page-agent { min-height:400px; }
+      .split { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+      .timeline { display:grid; gap:10px; }
+      .codebox { white-space:pre-wrap; background:#0a1020; border:1px solid var(--line); border-radius:14px; padding:14px; font-family:ui-monospace, SFMono-Regular, Consolas, monospace; font-size:12px; }
+      .tag { display:inline-flex; align-items:center; gap:6px; padding:4px 8px; border-radius:999px; background:rgba(255,255,255,.06); border:1px solid var(--line); font-size:11px; color:var(--muted); }
+      .tag.good { color:var(--good); border-color:rgba(61,242,160,.25); }
+      .tag.bad { color:var(--bad); border-color:rgba(255,107,143,.25); }
+      .tag.warn { color:#ffd36b; border-color:rgba(255,211,107,.25); }
+      .simple-panel { display:grid; gap:10px; }
+      .simple-panel .metric-card { padding:14px; }
+      .simple-panel .metric-value { font-size:16px; }
+      .advanced { display:none; }
+      .advanced.show { display:block; }
+      .advanced-level { display:none; margin-top:10px; }
+      .advanced-level.show { display:block; }
+      .muted-button { background:rgba(255,255,255,.04); color:var(--muted); }
+      .split > .panel { min-height:0; }
+      .page-agent .grid { grid-template-columns:360px minmax(0,1fr); }
+      .details { display:none; }
+      .details.show { display:block; }
+      .mini { font-size:12px; color:var(--muted); }
+      .accordion { display:grid; gap:8px; }
+      .accordion-item { border:1px solid var(--line); border-radius:14px; background:#0c121a; overflow:hidden; }
+      .accordion-header { width:100%; text-align:left; background:transparent; border:none; padding:12px 14px; color:var(--text); }
+      .accordion-body { display:none; padding:0 14px 14px; }
+      .accordion-item.show .accordion-body { display:block; }
+      .accordion { display:grid; gap:10px; }
+      .accordion-item { border:1px solid var(--line); border-radius:14px; background:#0c121a; overflow:hidden; }
+      .accordion-header { width:100%; text-align:left; background:transparent; border:0; padding:12px 14px; color:var(--text); }
+      .accordion-body { display:none; padding:0 14px 14px 14px; }
+      .accordion-item.show .accordion-body { display:block; }
+      @media (max-width: 980px){ .grid,.split { grid-template-columns:1fr; } .topbar{flex-direction:column; gap:8px;} }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="topbar"><h1>X-Agent 控制台</h1><div class="hint">简单、直接、先做对事</div></div>
+      <div class="app-shell">
+        <aside class="sidebar">
+          <div class="hint" style="margin-bottom:10px;">工作区</div>
+          <div class="nav">
+            <button class="secondary active" data-page="memory">记忆</button>
+            <button class="secondary" data-page="org">组织架构</button>
+            <button class="secondary" data-page="evolution">自我进化</button>
+            <button class="secondary" data-page="agent">Agent 工作台</button>
+          </div>
+          <div class="panel" style="margin-top:14px;"><h2>快捷说明</h2><div class="body">
+            <div class="hint">左边切模块，右边看内容。</div>
+            <div class="hint" style="margin-top:8px;">Agent 工作台默认最简单。</div>
+          </div></div>
+          <div class="panel" style="margin-top:14px;"><h2>最近 Agent</h2><div class="body"><div id="sidebarAgentRuns" class="timeline"></div></div></div>
+        </aside>
+        <main>
+
+      <div class="page active page-memory" id="page-memory">
+        <div class="grid">
+          <section class="panel"><h2>记忆总览</h2><div class="body">
+            <div class="actions" style="margin-bottom:12px;"><button id="refreshMemory" class="secondary">刷新记忆</button></div>
+            <div id="pageMemorySummary" class="overview"></div>
+            <div id="pageMemoryList" class="overview" style="margin-top:12px;"></div>
+          </div></section>
+          <section class="panel"><h2>记忆详情</h2><div class="body">
+            <div class="hint" id="pageMemoryHint">点击记忆查看 revisions / pollution / rollback。</div>
+            <div id="pageMemoryDetail" class="overview" style="margin-top:12px;"></div>
+            <div class="actions" style="margin-top:12px;"><button id="pageMemoryReloadDetail" class="secondary">刷新详情</button></div>
+          </div></section>
+        </div>
+      </div>
+
+      <div class="page page-org" id="page-org">
+        <div class="grid">
+          <section class="panel"><h2>组织概览</h2><div class="body">
+            <div class="actions" style="margin-bottom:12px;"><button id="refreshOrg" class="secondary">刷新组织</button></div>
+            <div id="pageOrgSummary" class="overview"></div>
+            <div id="pageOrgList" class="overview" style="margin-top:12px;"></div>
+          </div></section>
+          <section class="panel"><h2>创建组织 / 部门 / 智能体</h2><div class="body">
+            <div class="row"><input id="orgName" placeholder="组织名称" /></div>
+            <div class="row"><textarea id="orgDesc" placeholder="组织描述"></textarea></div>
+            <div class="actions" style="margin-bottom:12px;"><button id="createOrg" class="secondary">创建组织</button></div>
+            <div class="row-inline"><div><input id="departmentOrgId" placeholder="组织 ID" /></div><div><input id="departmentName" placeholder="部门名称" /></div></div>
+            <div class="row"><textarea id="departmentMission" placeholder="部门使命"></textarea></div>
+            <div class="actions" style="margin-bottom:12px;"><button id="createDepartment" class="secondary">创建部门</button></div>
+            <div class="row-inline"><div><input id="agentOrgId" placeholder="组织 ID" /></div><div><input id="agentDepartmentId" placeholder="部门 ID" /></div></div>
+            <div class="row-inline"><div><input id="agentName" placeholder="智能体名称" /></div><div><select id="agentRole"><option value="assistant">assistant</option><option value="specialist">specialist</option><option value="lead">lead</option><option value="manager">manager</option><option value="director">director</option></select></div></div>
+            <div class="row"><input id="agentTitle" placeholder="职位" /></div>
+            <div class="row-inline"><div><input id="agentManagerId" placeholder="上级 Agent ID" /></div><div><input id="agentTeamLimit" type="number" min="0" max="100" value="5" /></div></div>
+            <div class="row"><input id="agentCapabilities" placeholder="能力标签，如 planning, coding, review" /></div>
+            <div class="row-inline"><div><input id="feishuUserId" placeholder="飞书 User ID" /></div><div><input id="feishuOpenId" placeholder="飞书 Open ID" /></div></div>
+            <div class="row-inline"><div><input id="feishuUnionId" placeholder="飞书 Union ID" /></div><div><input id="feishuEmail" placeholder="飞书邮箱" /></div></div>
+            <div class="row"><label><input id="feishuEnabled" type="checkbox" /> 启用飞书绑定</label></div>
+            <div class="actions"><button id="createAgentFromOrg" class="secondary">创建智能体</button></div>
+            <div id="pageOrgActionResult" class="overview" style="margin-top:12px;"></div>
+          </div></section>
+        </div>
+      </div>
+
+      <div class="page page-evolution" id="page-evolution">
+        <div class="grid">
+          <section class="panel"><h2>自我进化总览</h2><div class="body">
+            <div class="actions" style="margin-bottom:12px;"><button id="refreshEvolution" class="secondary">刷新进化</button></div>
+            <div id="pageEvolutionSummary" class="overview"></div>
+            <div class="split" style="margin-top:12px;">
+              <div>
+                <h3 style="margin:0 0 8px;">最近反思</h3>
+                <div id="pageEvolutionReflections" class="overview"></div>
+              </div>
+              <div>
+                <h3 style="margin:0 0 8px;">最近学习</h3>
+                <div id="pageEvolutionLearnings" class="overview"></div>
+              </div>
+            </div>
+          </div></section>
+          <section class="panel"><h2>能力版本</h2><div class="body">
+            <div id="pageEvolutionCapabilities" class="overview"></div>
+          </div></section>
+        </div>
+      </div>
+
+      <div class="page page-agent" id="page-agent">
+        <div class="grid">
+          <section class="panel"><h2>一步跑 Agent</h2><div class="body simple-panel">
+            <div class="hint">输入一句任务，点运行即可。</div>
+            <div><input id="agentBaseUrl" placeholder="API Base URL" value="http://127.0.0.1:8003" /></div>
+            <div><input id="agentTask" placeholder="例如：帮我整理这个项目的回放摘要" /></div>
+            <div class="actions"><button id="fillAgentExample" class="muted-button">填一个示例</button><button id="toggleAdvanced" class="muted-button">更多设置</button></div>
+            <div id="agentAdvanced" class="advanced">
+              <div class="actions"><button id="toggleAdvancedLevel" class="muted-button">高级设置</button></div>
+              <div id="agentAdvancedLevel" class="advanced-level">
+                <div class="row"><textarea id="agentExtraContext" placeholder='可选：{"path":"backend/app/core/agent.py"}'></textarea></div>
+              </div>
+            </div>
+            <div class="actions"><button id="runAgent" class="secondary">运行</button><button id="refreshAgentRuns" class="secondary">刷新历史</button></div>
+            <div id="agentRunResult" class="overview"></div>
+          </div></section>
+          <section class="panel"><h2>最近运行</h2><div class="body">
+            <div class="hint">点一下就能看详情、计划、工具和回放。</div>
+            <div id="agentRunList" class="timeline"></div>
+          </div></section>
+        </div>
+        <div class="panel" style="margin-top:16px;"><h2>运行详情</h2><div class="body">
+          <div class="actions"><button id="toggleReplayDetails" class="muted-button">显示详情</button></div>
+          <div id="agentReplaySummary" class="overview"></div>
+          <div id="agentReplayDetails" class="details" style="margin-top:12px;"></div>
+        </div></div>
+      </div>
+    </div>
+
+    <script>
+      const $ = (id) => document.getElementById(id);
+      const api = () => ($("api")?.value || "http://127.0.0.1:8000").replace(/\/$/, "");
+      const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
+      const setPage = (page) => { document.querySelectorAll(".page").forEach((n) => n.classList.remove("active")); document.querySelectorAll("[data-page]").forEach((b) => b.classList.toggle("active", b.dataset.page === page)); $(`page-${page}`).classList.add("active"); };
+      document.querySelectorAll("[data-page]").forEach((b) => b.addEventListener("click", () => setPage(b.dataset.page)));
+      const card = (title, label) => `<div class="metric-card"><span class="metric-value">${esc(title)}</span><span class="metric-label">${esc(label)}</span></div>`;
+
+      async function refreshMemory(){
+        const summary = await fetch(`${api()}/api/v1/memory/count`).then(r=>r.json());
+        $("pageMemorySummary").innerHTML = `<div class="chips"><span class="metric-card"><span class="metric-value">${summary.count ?? 0}</span><span class="metric-label">memories</span></span><span class="metric-card"><span class="metric-value">${summary.session_count ?? 0}</span><span class="metric-label">sessions</span></span></div><div class="overview">${(summary.layers||[]).map(l=>card(`L${esc(l.layer)}`, `${esc(l.role)} · ${esc(l.count ?? 0)}`)).join("")}</div>`;
+        const res = await fetch(`${api()}/api/v1/memory/search`, {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({query:"", top_k:12, include_scores:true})});
+        const data = await res.json();
+        $("pageMemoryList").innerHTML = (data.items||[]).map(item=>`<div class="history-item"><div><strong>${esc(item.content || "")}</strong></div><div class="hint">${esc(item.id || "")} · L${esc(item.layer || "")}</div><div class="actions" style="margin-top:8px;"><button class="secondary" data-memory-action="open" data-memory-id="${esc(item.id||"")}">打开</button><button class="secondary" data-memory-action="pollution" data-memory-id="${esc(item.id||"")}">污染</button><button class="secondary" data-memory-action="revisions" data-memory-id="${esc(item.id||"")}">修订</button><button class="secondary" data-memory-action="rollback" data-memory-id="${esc(item.id||"")}">回滚</button></div></div>`).join("") || '<div class="hint">当前没有记忆。</div>';
+      }
+
+      async function refreshOrg(){
+        const [orgs, deps, agents] = await Promise.all([
+          fetch(`${api()}/api/v1/org/organizations`).then(r=>r.json()),
+          fetch(`${api()}/api/v1/org/departments`).then(r=>r.json()),
+          fetch(`${api()}/api/v1/org/agents`).then(r=>r.json()),
+        ]);
+        $("pageOrgSummary").innerHTML = `<div class="chips">${card(orgs.length, "organizations")}${card(deps.length, "departments")}${card(agents.length, "agents")}</div>`;
+        $("pageOrgList").innerHTML = [...orgs.map(o=>`<div class="history-item"><strong>${esc(o.name)}</strong><div class="hint">org_id: ${esc(o.org_id)}</div></div>`), ...deps.map(d=>`<div class="history-item"><strong>${esc(d.name)}</strong><div class="hint">department_id: ${esc(d.department_id)} · org_id: ${esc(d.org_id)}</div></div>`), ...agents.map(a=>`<div class="history-item"><strong>${esc(a.name)}</strong><div class="hint">agent_id: ${esc(a.agent_id)} · role: ${esc(a.role)} · feishu: ${esc(a.memory_scope?.feishu_enabled || a.memory_scope?.feishu_user_id || "")}</div></div>`)].join("") || '<div class="hint">当前没有组织数据。</div>';
+      }
+
+      async function refreshEvolution(){
+        const [summary, reflections, learnings, capabilities] = await Promise.all([
+          fetch(`${api()}/api/v1/evolution/summary`).then(r=>r.json()),
+          fetch(`${api()}/api/v1/evolution/reflections`).then(r=>r.json()),
+          fetch(`${api()}/api/v1/evolution/learnings`).then(r=>r.json()),
+          fetch(`${api()}/api/v1/evolution/capabilities`).then(r=>r.json()),
+        ]);
+        $("pageEvolutionSummary").innerHTML = `<div class="chips">${card(summary.reflections ?? 0, "reflections")}${card(summary.learnings ?? 0, "learnings")}${card(summary.capabilities ?? 0, "capabilities")}</div>`;
+        $("pageEvolutionReflections").innerHTML = (reflections.slice(0,5)||[]).map(item=>`<div class="history-item"><strong>${esc(item.task_summary || item.task_id || item.trace_id || "reflection")}</strong><div class="hint">strengths: ${esc((item.strengths||[]).join("; "))}\nweaknesses: ${esc((item.weaknesses||[]).join("; "))}</div></div>`).join("") || '<div class="hint">暂无反思记录。</div>';
+        $("pageEvolutionLearnings").innerHTML = (learnings.slice(0,5)||[]).map(item=>`<div class="history-item"><strong>${esc(item.domain || "general")}</strong><div class="hint">pattern: ${esc(item.pattern || "")}\noutcome: ${esc(item.outcome || "")} · confidence: ${esc(item.confidence ?? 0)}</div></div>`).join("") || '<div class="hint">暂无学习记录。</div>';
+        $("pageEvolutionCapabilities").innerHTML = (capabilities.slice(0,8)||[]).map(item=>`<div class="history-item"><strong>${esc(item.name || "capability")}</strong><div class="hint">version: ${esc(item.version || "v1")}\ndesc: ${esc(item.description || "")}</div></div>`).join("") || '<div class="hint">暂无能力版本。</div>';
+      }
+
+      function refreshMemoryDetail(id){ return fetch(`${api()}/api/v1/memory/${encodeURIComponent(id)}`).then(r=>r.json()).then(data=>{ $("pageMemoryHint").textContent = `已加载 ${id}`; $("pageMemoryDetail").innerHTML = `<div class="metric-card"><span class="metric-value">${esc(data.id)}</span><span class="metric-label">${esc(data.content)}</span></div>`; }); }
+
+      async function loadAgentRuns(){
+        const res = await fetch(`${api()}/api/v1/agent/runs?limit=6`);
+        const data = await res.json();
+        const items = (data.items || []).map(item => {
+          const subtasks = item.snapshot?.execution_summary?.subtasks || item.execution_summary?.subtasks || [];
+          const currentIndex = item.snapshot?.current_subtask_index ?? item.execution_summary?.current_subtask_index ?? 0;
+          const currentSubtask = subtasks[currentIndex] || subtasks[0] || '—';
+          const workflow = item.snapshot?.execution_summary?.workflow || item.execution_summary?.workflow || {};
+          const approval = item.snapshot?.execution_summary?.approval || item.execution_summary?.approval || {};
+          const browser = item.snapshot?.execution_summary?.browser || item.execution_summary?.browser || {};
+          const desktop = item.snapshot?.execution_summary?.desktop || item.execution_summary?.desktop || {};
+          const workflowLabel = workflow.workflow_name || workflow.workflow_id || workflow.workflow_status || '—';
+          const approvalLabel = approval.approval_status || (approval.pending_count ? 'pending' : '—');
+          const browserLabel = browser.session_count != null ? `${browser.active_count || 0}/${browser.session_count}` : '—';
+          const desktopLabel = desktop.session_count != null ? `${desktop.active_count || 0}/${desktop.session_count}` : '—';
+          return `
+          <div class="history-item">
+            <strong>${esc(item.task || item.id || item.trace_id)}</strong>
+            <div class="hint">${esc(item.status || "")}</div>
+            <div class="mini">当前子任务: ${esc(currentSubtask)}</div>
+            <div class="mini">Workflow: ${esc(workflowLabel)} · Approval: ${esc(approvalLabel)} · Browser: ${esc(browserLabel)} · Desktop: ${esc(desktopLabel)}</div>
+            <div class="actions" style="margin-top:8px;">
+              <button class="secondary" data-agent-run-action="replay" data-trace-id="${esc(item.trace_id)}">看结果</button>
+              <button class="secondary" data-agent-run-action="detail" data-trace-id="${esc(item.trace_id)}">详情</button>
+            </div>
+          </div>
+        `;}).join('') || '<div class="hint">暂无 agent 运行记录。</div>';
+        $("agentRunList").innerHTML = items;
+        $("sidebarAgentRuns").innerHTML = items.slice(0, 3) || '<div class="hint">暂无最近运行。</div>';
+      }
+
+      function renderReplayPanel(data){
+        const summary = data.execution_summary || {};
+        const affectedCount = (data.affected_files || []).length;
+        const fileResultCount = (data.file_results || []).length;
+        const subtasks = data.subtasks || [];
+        const subtaskStatus = summary.subtask_status || data.run?.execution_summary?.subtask_status || data.run?.snapshot?.execution_summary?.subtask_status || {};
+        const currentIndex = summary.current_subtask_index ?? data.run?.execution_summary?.current_subtask_index ?? 0;
+        const statusLabel = (s) => s === 'done' ? '已完成' : s === 'blocked' ? '阻塞' : s === 'observed' ? '已观察' : s === 'in_progress' ? '进行中' : '待开始';
+        const currentSubtask = subtasks[currentIndex] || subtasks[0] || '—';
+        const workflow = data.run?.workflow || summary.workflow || data.snapshot?.workflow || {};
+        const approval = data.run?.approval || summary.approval || data.snapshot?.approval || {};
+        const browser = data.run?.browser || summary.browser || data.snapshot?.browser || {};
+        const desktop = data.run?.desktop || summary.desktop || data.snapshot?.desktop || {};
+        const workflowLabel = workflow.workflow_name || workflow.workflow_id || workflow.workflow_status || '—';
+        const approvalLabel = approval.approval_status || (approval.pending_count ? 'pending' : '—');
+        const browserLabel = browser.session_count != null ? `${browser.active_count || 0}/${browser.session_count}` : '—';
+        const desktopLabel = desktop.session_count != null ? `${desktop.active_count || 0}/${desktop.session_count}` : '—';
+        return {
+          summary: `
+            <div class="metric-card"><span class="metric-value">${esc(summary.final_answer || '任务已完成')}</span><span class="metric-label">${esc(data.trace_id)}</span></div>
+            <div class="simple-panel" style="margin-top:10px;">${card(summary.goal || '—', '目标')}${card((summary.tool_calls ?? 0), '工具')}${card((summary.plan_steps ?? 0), '步骤')}${card(affectedCount, '文件')}</div>
+            <div class="simple-panel" style="margin-top:10px;">${card(currentSubtask, '当前子任务')}${card(Object.entries(subtaskStatus).filter(([,v])=>v==='done').length, '已完成')}${card(Object.entries(subtaskStatus).filter(([,v])=>v==='blocked').length, '阻塞')}${card(subtasks.length, '总子任务')}</div>
+            <div class="simple-panel" style="margin-top:10px;">${card(workflowLabel, 'Workflow')}${card(approvalLabel, 'Approval')}${card(browserLabel, 'Browser')}${card(desktopLabel, 'Desktop')}</div>
+            <div class="actions" style="margin-top:10px;"><button class="secondary" id="copyReplaySummary">复制摘要</button><button class="secondary" id="toggleReplayDetails">显示详情</button></div>
+          `,
+          details: `
+            <div class="accordion">
+              <div class="accordion-item"><button class="accordion-header">子任务</button><div class="accordion-body">${subtasks.map((s, i) => `<div class="history-item"><strong>${esc(i + 1)}. ${esc(s)}</strong><div class="mini">状态: ${esc(statusLabel(subtaskStatus[s] || 'pending'))}</div></div>`).join('') || '<div class="hint">暂无子任务。</div>'}</div></div>
+              <div class="accordion-item"><button class="accordion-header">平台状态</button><div class="accordion-body"><div class="history-item"><strong>Workflow</strong><div class="mini">${esc(JSON.stringify(workflow, null, 2))}</div></div><div class="history-item"><strong>Approval</strong><div class="mini">${esc(JSON.stringify(approval, null, 2))}</div></div><div class="history-item"><strong>Browser</strong><div class="mini">${esc(JSON.stringify(browser, null, 2))}</div></div><div class="history-item"><strong>Desktop</strong><div class="mini">${esc(JSON.stringify(desktop, null, 2))}</div></div></div></div>
+              <div class="accordion-item"><button class="accordion-header">计划</button><div class="accordion-body">${(data.plan || []).map((step, i) => `<div class="history-item"><strong>${esc(i + 1)}. ${esc(step.instruction || '')}</strong><div class="mini">${esc(step.tool_name || step.kind || '')} · ${esc(step.error || step.summary || '')}</div></div>`).join('') || '<div class="hint">暂无计划。</div>'}</div></div>
+              <div class="accordion-item"><button class="accordion-header">受影响文件</button><div class="accordion-body">${(data.affected_files || []).map(f => `<div class="history-item"><strong>${esc(f)}</strong></div>`).join('') || '<div class="hint">暂无受影响文件。</div>'}</div></div>
+              <div class="accordion-item"><button class="accordion-header">文件级结果 <span class="mini">${esc(fileResultCount)} 条</span></button><div class="accordion-body">${(data.file_results || []).map((item) => `<div class="history-item"><strong>${esc(item.path || '')}</strong><div class="mini">${esc(item.tool || '')} · ${esc(item.success ? '成功' : '失败')} · 已验证=${esc(item.verified)}</div></div>`).join('') || '<div class="hint">暂无文件结果。</div>'}</div></div>
+            </div>
+            <div class="details" style="margin-top:10px;"><div class="codebox">${esc(JSON.stringify(data, null, 2))}</div></div>
+          `
+        };
+      }
+      async function loadAgentReplay(traceId){
+        const res = await fetch(`${api()}/api/v1/agent/${encodeURIComponent($('agentBaseUrl').dataset.agentId || 'default-agent')}/runs/${encodeURIComponent(traceId)}/replay`);
+        const data = await res.json();
+        const rendered = renderReplayPanel(data);
+        $('agentReplaySummary').innerHTML = rendered.summary;
+        $('agentReplayDetails').innerHTML = rendered.details;
+      }
+      document.addEventListener("click", async (e)=>{ const t=e.target; if(!(t instanceof HTMLElement)) return; const act=t.dataset.memoryAction; const id=t.dataset.memoryId; if(!act||!id) return; if(act==='open') await refreshMemoryDetail(id); if(act==='pollution') fetch(`${api()}/api/v1/memory/${encodeURIComponent(id)}/pollution`).then(r=>r.json()).then(j=>{$("pageMemoryDetail").innerHTML=`<div class="metric-card"><span class="metric-value">${esc(j.report.risk_level)}</span><span class="metric-label">${esc(JSON.stringify(j.report.reasons))}</span></div>`}); if(act==='revisions') fetch(`${api()}/api/v1/memory/${encodeURIComponent(id)}/revisions`).then(r=>r.json()).then(j=>{$("pageMemoryDetail").innerHTML=`<div class="metric-card"><span class="metric-value">修订历史</span><span class="metric-label">${esc(JSON.stringify(j.revisions, null, 2))}</span></div>`}); if(act==='rollback') { const rev=prompt('revision_id（留空=最新）','')||''; fetch(`${api()}/api/v1/memory/${encodeURIComponent(id)}/rollback`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(rev?{revision_id:rev}:{})}).then(r=>r.json()).then(j=>{$("pageMemoryDetail").innerHTML=`<div class="metric-card"><span class="metric-value">已回滚</span><span class="metric-label">${esc(JSON.stringify(j, null, 2))}</span></div>`}); } const agentAct=t.dataset.agentRunAction; const traceId=t.dataset.traceId; if(agentAct==='detail'){ const r=await fetch(`${api()}/api/v1/agent/runs/${encodeURIComponent(traceId)}`); $('agentReplaySummary').innerHTML=`<div class="codebox">${esc(JSON.stringify(await r.json(), null, 2))}</div>`; } if(agentAct==='replay'){ await loadAgentReplay(traceId); } });
+      $("refreshMemory").addEventListener("click", ()=>refreshMemory().catch(console.error));
+      $("pageMemoryReloadDetail").addEventListener("click", ()=>refreshMemory().catch(console.error));
+      $("refreshOrg").addEventListener("click", ()=>refreshOrg().catch(console.error));
+      $("refreshEvolution").addEventListener("click", ()=>refreshEvolution().catch(console.error));
+      $("createOrg").addEventListener("click", async ()=>{ const r=await fetch(`${api()}/api/v1/org/organizations`, {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({name:$("orgName").value, description:$("orgDesc").value})}); $("pageOrgActionResult").innerHTML = `<div class="metric-card"><span class="metric-value">组织已创建</span><span class="metric-label">${esc(JSON.stringify(await r.json(), null, 2))}</span></div>`; await refreshOrg(); });
+      $("createDepartment").addEventListener("click", async ()=>{ const r=await fetch(`${api()}/api/v1/org/departments`, {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({org_id:$("departmentOrgId").value, name:$("departmentName").value, mission:$("departmentMission").value})}); $("pageOrgActionResult").innerHTML = `<div class="metric-card"><span class="metric-value">部门已创建</span><span class="metric-label">${esc(JSON.stringify(await r.json(), null, 2))}</span></div>`; await refreshOrg(); });
+      $("createAgentFromOrg").addEventListener("click", async ()=>{ const cap = $("agentCapabilities").value.split(",").map(s=>s.trim()).filter(Boolean); const r=await fetch(`${api()}/api/v1/org/agents`, {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({org_id:$("agentOrgId").value, department_id:$("agentDepartmentId").value, name:$("agentName").value, role:$("agentRole").value, title:$("agentTitle").value, manager_agent_id:$("agentManagerId").value||null, capabilities:cap, team_size_limit:Number($("agentTeamLimit").value||5), feishu_user_id:$("feishuUserId").value||null, feishu_open_id:$("feishuOpenId").value||null, feishu_union_id:$("feishuUnionId").value||null, feishu_email:$("feishuEmail").value||null, feishu_enabled:$("feishuEnabled").checked})}); $("pageOrgActionResult").innerHTML = `<div class="metric-card"><span class="metric-value">智能体已创建</span><span class="metric-label">${esc(JSON.stringify(await r.json(), null, 2))}</span></div>`; await refreshOrg(); });
+      $('runAgent').addEventListener('click', async ()=>{ try { const task = $('agentTask').value.trim(); const extra = $('agentExtraContext').value.trim() ? JSON.parse($('agentExtraContext').value) : {}; const r = await fetch(`${api()}/api/v1/agent/run`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({task, extra_context:extra})}); $('agentRunResult').innerHTML = `<div class="codebox">${esc(JSON.stringify(await r.json(), null, 2))}</div>`; await loadAgentRuns(); } catch (err) { $('agentRunResult').innerHTML = `<div class="metric-card"><span class="metric-value">错误</span><span class="metric-label">${esc(String(err))}</span></div>`; } });
+      $('refreshAgentRuns').addEventListener('click', ()=>loadAgentRuns().catch(console.error));
+      $('toggleAdvanced').addEventListener('click', ()=>$('agentAdvanced').classList.toggle('show'));
+      $('toggleAdvancedLevel').addEventListener('click', ()=>$('agentAdvancedLevel').classList.toggle('show'));
+      $('fillAgentExample').addEventListener('click', ()=>{ $('agentTask').value='帮我把这个项目的 Agent 回放页面做得更简单易懂，并保留计划、工具和结果'; $('agentExtraContext').value='{"path":"frontend/index.html"}'; $('agentAdvanced').classList.add('show'); });
+      document.addEventListener('click', (e)=>{ const t=e.target; if(!(t instanceof HTMLElement)) return; if(t.id==='copyReplaySummary'){ const text=($('agentReplaySummary')?.innerText || '').trim(); navigator.clipboard?.writeText(text).catch(()=>{}); t.textContent='已复制'; setTimeout(()=>t.textContent='复制摘要',1200); } if(t.id==='toggleReplayDetails'){ $('agentReplayDetails').classList.toggle('show'); t.textContent = $('agentReplayDetails').classList.contains('show') ? '隐藏详情' : '显示详情'; } const header=t.closest?.('.accordion-header'); if(header){ const item=header.parentElement; item?.classList.toggle('show'); } });
+      refreshMemory().catch(()=>{}); refreshOrg().catch(()=>{}); refreshEvolution().catch(()=>{}); loadAgentRuns().catch(()=>{});
+    </script>
+  </body>
+</html>

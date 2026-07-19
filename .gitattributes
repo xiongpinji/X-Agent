@@ -1,0 +1,55 @@
+# Normalize line endings across platforms.
+# Without this, CRLF<->LF flips produce hundreds of phantom "modified" files.
+# Default: let Git decide text vs binary, and store text with LF in the repo.
+* text=auto eol=lf
+
+# --- Source code: always LF in repo and on checkout ---
+*.py    text eol=lf
+*.pyi   text eol=lf
+*.ts    text eol=lf
+*.tsx   text eol=lf
+*.js    text eol=lf
+*.jsx   text eol=lf
+*.json  text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+*.toml  text eol=lf
+*.ini   text eol=lf
+*.cfg   text eol=lf
+*.md    text eol=lf
+*.txt   text eol=lf
+*.html  text eol=lf
+*.css   text eol=lf
+*.sql   text eol=lf
+*.sh    text eol=lf
+*.conf  text eol=lf
+Dockerfile     text eol=lf
+.gitignore     text eol=lf
+.gitattributes text eol=lf
+
+# --- Windows-only scripts: keep CRLF so they run natively ---
+*.bat   text eol=crlf
+*.cmd   text eol=crlf
+*.ps1   text eol=crlf
+
+# --- Binary assets: never normalize, never diff ---
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.ico   binary
+*.svg   binary
+*.pdf   binary
+*.woff  binary
+*.woff2 binary
+*.ttf   binary
+*.eot   binary
+*.zip   binary
+*.gz    binary
+*.tar   binary
+*.whl   binary
+*.so    binary
+*.pyd   binary
+*.db    binary
+*.sqlite binary
+*.sqlite3 binary

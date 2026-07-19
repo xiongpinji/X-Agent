@@ -1,0 +1,82 @@
+graph TB
+    subgraph "触发方式"
+        SCHEDULE[定时任务<br/>APScheduler]
+        EVENT[事件触发<br/>Webhook]
+        MANUAL[手动触发<br/>CLI/API]
+        WORKFLOW[工作流节点<br/>RPA Node]
+    end
+
+    subgraph "任务编排器"
+        ORCH[任务编排引擎]
+        QUEUE[任务队列<br/>Redis Queue]
+        PRIORITY[优先级管理<br/>P0-P3]
+        RATE_LIMIT[速率限制<br/>Token Bucket]
+    end
+
+    subgraph "计算机操控"
+        MOUSE[鼠标控制<br/>PyAutoGUI<br/>点击/拖拽/滚轮]
+        KEYBOARD[键盘输入<br/>文本/快捷键<br/>中文输入法]
+        WINDOW[窗口管理<br/>查找/激活/关闭<br/>多显示器]
+        SCREENSHOT[屏幕截图<br/>全屏/区域<br/>OCR预处理]
+    end
+
+    subgraph "浏览器自动化"
+        BROWSER[Playwright引擎]
+        NAV[页面导航<br/>前进/后退/刷新]
+        FORM[表单填充<br/>自动填写/提交]
+        EXTRACT[数据抓取<br/>CSS/XPath选择器]
+        COOKIE[Cookie管理<br/>登录态保持]
+        PROXY[代理支持<br/>IP轮换]
+    end
+
+    subgraph "多模态识别"
+        OCR[OCR识别<br/>PaddleOCR/Tesseract<br/>中英文/数字/表格]
+        IMG[图像识别<br/>模板匹配<br/>SIFT特征点<br/>YOLO目标检测]
+        VOICE[语音识别<br/>Whisper STT<br/>说话人识别]
+    end
+
+    subgraph "安全沙箱"
+        SANDBOX[执行沙箱]
+        PERM[权限控制<br/>应用白名单]
+        AUDIT[操作审计<br/>全量录屏]
+        ENCRYPT[凭证加密<br/>Vault管理]
+    end
+
+    SCHEDULE --> ORCH
+    EVENT --> ORCH
+    MANUAL --> ORCH
+    WORKFLOW --> ORCH
+
+    ORCH --> QUEUE
+    QUEUE --> PRIORITY
+    PRIORITY --> RATE_LIMIT
+
+    RATE_LIMIT --> MOUSE
+    RATE_LIMIT --> KEYBOARD
+    RATE_LIMIT --> WINDOW
+    RATE_LIMIT --> SCREENSHOT
+    RATE_LIMIT --> BROWSER
+
+    BROWSER --> NAV
+    BROWSER --> FORM
+    BROWSER --> EXTRACT
+    BROWSER --> COOKIE
+    BROWSER --> PROXY
+
+    SCREENSHOT --> OCR
+    SCREENSHOT --> IMG
+    OCR --> MOUSE
+    IMG --> MOUSE
+
+    MOUSE --> SANDBOX
+    KEYBOARD --> SANDBOX
+    BROWSER --> SANDBOX
+
+    SANDBOX --> PERM
+    SANDBOX --> AUDIT
+    SANDBOX --> ENCRYPT
+
+    style ORCH fill:#4A90D9,color:#fff
+    style SANDBOX fill:#E74C3C,color:#fff
+    style BROWSER fill:#27AE60,color:#fff
+    style OCR fill:#E67E22,color:#fff

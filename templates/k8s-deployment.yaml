@@ -1,0 +1,215 @@
+# X-Agent Kubernetes Deployment (Production)
+# Usage: helm install xagent ./helm/xagent -n production
+
+# === Namespace ===
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: xagent-production
+
+---
+# === Secrets ===
+apiVersion: v1
+kind: Secret
+metadata:
+  name: xagent-secrets
+  namespace: xagent-production
+type: Opaque
+stringData:
+  database-url: "postgresql+asyncpg://xagent:CHANGE_ME@postgres:5432/xagent"
+  redis-url: "redis://redis:6379/0"
+  jwt-secret: "CHANGE_ME_64_CHAR_MIN"
+  openai-api-key: "sk-CHANGE_ME"
+  anthropic-api-key: "sk-ant-CHANGE_ME"
+  deepseek-api-key: "sk-CHANGE_ME"
+
+---
+# === ConfigMap ===
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: xagent-config
+  namespace: xagent-production
+data:
+  log-level: "INFO"
+  milvus-host: "milvus:19530"
+  neo4j-uri: "bolt://neo4j:7687"
+
+---
+# === Backend Deployment ===
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: xagent-backend
+  namespace: xagent-production
+  labels:
+    app: xagent
+    component: backend
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: xagent
+      component: backend
+  template:
+    metadata:
+      labels:
+        app: xagent
+        component: backend
+    spec:
+      containers:
+      - name: backend
+        image: xagent/backend:latest
+        ports:
+        - containerPort: 8000
+          protocol: TCP
+        resources:
+          requests:
+            cpu: "500m"
+            memory: "512Mi"
+          limits:
+            cpu: "2"
+            memory: "2Gi"
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: xagent-secrets
+              key: database-url
+        - name: REDIS_URL
+          valueFrom:
+            secretKeyRef:
+              name: xagent-secrets
+              key: redis-url
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: xagent-secrets
+              key: openai-api-key
+        - name: LOG_LEVEL
+          valueFrom:
+            configMapKeyRef:
+              name: xagent-config
+              key: log-level
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8000
+          initialDelaySeconds: 10
+          periodSeconds: 5
+
+---
+# === Backend Service ===
+apiVersion: v1
+kind: Service
+metadata:
+  name: xagent-backend
+  namespace: xagent-production
+spec:
+  selector:
+    app: xagent
+    component: backend
+  ports:
+  - port: 8000
+    targetPort: 8000
+  type: ClusterIP
+
+---
+# === Horizontal Pod Autoscaler ===
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: xagent-backend-hpa
+  namespace: xagent-production
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: xagent-backend
+  minReplicas: 3
+  maxReplicas: 20
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+
+---
+# === Ingress ===
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: xagent-ingress
+  namespace: xagent-production
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts:
+    - api.x-agent.ai
+    secretName: xagent-tls
+  rules:
+  - host: api.x-agent.ai
+    http:
+      paths:
+      - path: /api
+        pathType: Prefix
+        backend:
+          service:
+            name: xagent-backend
+            port:
+              number: 8000
+
+---
+# === Celery Worker Deployment ===
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: xagent-celery-worker
+  namespace: xagent-production
+spec:
+  replicas: 5
+  selector:
+    matchLabels:
+      app: xagent
+      component: celery-worker
+  template:
+    metadata:
+      labels:
+        app: xagent
+        component: celery-worker
+    spec:
+      containers:
+      - name: worker
+        image: xagent/backend:latest
+        command: ["celery", "-A", "backend.app.celery_app", "worker", "--loglevel=info", "--concurrency=4"]
+        resources:
+          requests: {cpu: "250m", memory: "256Mi"}
+          limits: {cpu: "1", memory: "1Gi"}
+        env:
+        - name: REDIS_URL
+          valueFrom:
+            secretKeyRef:
+              name: xagent-secrets
+              key: redis-url

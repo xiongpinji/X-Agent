@@ -1,0 +1,604 @@
+{
+  "info": {
+    "name": "X-Agent API",
+    "description": "Complete REST API collection for X-Agent Core",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "version": "1.0.0"
+  },
+  "item": [
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"user@example.com\",\n  \"password\": \"secure_password\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/login",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "auth", "login"]
+            }
+          }
+        },
+        {
+          "name": "Register",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"newuser@example.com\",\n  \"password\": \"secure_password\",\n  \"email\": \"newuser@example.com\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/register",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "auth", "register"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Agents",
+      "item": [
+        {
+          "name": "Create Agent",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api_key}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Data Analyzer\",\n  \"status\": \"active\",\n  \"capabilities\": [\"run\", \"trace\", \"memory\", \"tools\"]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/agents",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "agents"]
+            }
+          }
+        },
+        {
+          "name": "List Agents",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api_key}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/agents",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "agents"]
+            }
+          }
+        },
+        {
+          "name": "Get Agent",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api_key}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/agents/{{agent_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "agents", "{{agent_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Update Agent",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api_key}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Updated Agent Name\",\n  \"status\": \"active\",\n  \"capabilities\": [\"run\", \"memory\"]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/agents/{{agent_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "agents", "{{agent_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Delete Agent",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api_key}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/agents/{{agent_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "agents", "{{agent_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Pause Agent",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api_key}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/agents/{{agent_id}}/pause",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "agents", "{{agent_id}}", "pause"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Workflows",
+      "item": [
+        {
+          "name": "Create Workflow",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api_key}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Data Processing Pipeline\",\n  \"description\": \"ETL workflow for data processing\",\n  \"nodes\": [\n    {\n      \"id\": \"node1\",\n      \"type\": \"start\",\n      \"label\": \"Start\"\n    },\n    {\n      \"id\": \"node2\",\n      \"type\": \"task\",\n      \"label\": \"Extract Data\",\n      \"config\": {\n        \"source\": \"database\",\n        \"query\": \"SELECT * FROM sales\"\n      }\n    },\n    {\n      \"id\": \"node3\",\n      \"type\": \"task\",\n      \"label\": \"Transform Data\"\n    },\n    {\n      \"id\": \"node4\",\n      \"type\": \"end\",\n      \"label\": \"End\"\n    }\n  ],\n  \"edges\": [\n    {\"source\": \"node1\", \"target\": \"node2\"},\n    {\"source\": \"node2\", \"target\": \"node3\"},\n    {\"source\": \"node3\", \"target\": \"node4\"}\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/workflows",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "workflows"]
+            }
+          }
+        },
+        {
+          "name": "List Workflows",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api_key}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/workflows",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "workflows"]
+            }
+          }
+        },
+        {
+          "name": "Get Workflow Status",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api_key}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/workflows/status",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "workflows", "status"]
+            }
+          }
+        },
+        {
+          "name": "Get Workflow Templates",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api_key}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/workflows/templates",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "workflows", "templates"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Runs",
+      "item": [
+        {
+          "name": "Start Run",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api_key}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "req_{{$timestamp}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"task\": \"Analyze the sales data for Q1 2025\",\n  \"extra_context\": {\n    \"data_source\": \"sales_db\",\n    \"format\": \"json\",\n    \"filters\": {\n      \"region\": \"North America\"\n    }\n  },\n  \"async_run\": false\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/runs/start",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "runs", "start"]
+            }
+          }
+        },
+        {
+          "name": "List Runs",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api_key}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/runs?limit=20&status=completed",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "runs"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "status",
+                  "value": "completed"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Memory",
+      "item": [
+        {
+          "name": "Store Memory",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api_key}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"content\": \"User prefers JSON format for data exports\",\n  \"layer\": 2,\n  \"importance\": 0.8,\n  \"tags\": [\"user_preference\", \"data_format\"],\n  \"metadata\": {\n    \"user_id\": \"user123\",\n    \"context\": \"data_export\",\n    \"source\": \"user_feedback\"\n  },\n  \"session_id\": \"session_abc123\",\n  \"scope\": \"user\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/memory",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "memory"]
+            }
+          }
+        },
+        {
+          "name": "Search Memory",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api_key}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"user preferences for data export\",\n  \"layers\": [1, 2, 3],\n  \"top_k\": 5,\n  \"include_scores\": true,\n  \"scope\": \"user\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/memory/search",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "memory", "search"]
+            }
+          }
+        },
+        {
+          "name": "Export Memory",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api_key}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/memory/export",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "memory", "export"]
+            }
+          }
+        },
+        {
+          "name": "Import Memory",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api_key}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"version\": \"1.0\",\n  \"memories\": [\n    {\n      \"content\": \"Imported memory\",\n      \"layer\": 2,\n      \"importance\": 0.7,\n      \"tags\": [\"imported\"]\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/memory/import",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "memory", "import"]
+            }
+          }
+        },
+        {
+          "name": "Consolidate Memory",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api_key}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"source_layers\": [1, 2],\n  \"target_layer\": 4,\n  \"max_items\": 20,\n  \"min_importance\": 0.5\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/memory/consolidate",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "memory", "consolidate"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Tools",
+      "item": [
+        {
+          "name": "List Tools",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api_key}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/tools",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "tools"]
+            }
+          }
+        },
+        {
+          "name": "Get Tool Execution",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api_key}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/tools/executions/{{execution_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "tools", "executions", "{{execution_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Get Tool Execution Correlation",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api_key}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/tools/executions/{{execution_id}}/correlation",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "tools", "executions", "{{execution_id}}", "correlation"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Traces",
+      "item": [
+        {
+          "name": "List Traces",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api_key}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/traces?limit=20",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "traces"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Trace",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api_key}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/traces/{{trace_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "traces", "{{trace_id}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Audit",
+      "item": [
+        {
+          "name": "List Audit Logs",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api_key}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/audit?limit=20&action=workflow.create",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "audit"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "action",
+                  "value": "workflow.create"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8000",
+      "type": "string"
+    },
+    {
+      "key": "api_key",
+      "value": "your-api-key-here",
+      "type": "string"
+    },
+    {
+      "key": "agent_id",
+      "value": "default-agent",
+      "type": "string"
+    },
+    {
+      "key": "execution_id",
+      "value": "exec_abc123",
+      "type": "string"
+    },
+    {
+      "key": "trace_id",
+      "value": "trace_xyz789",
+      "type": "string"
+    }
+  ]
+}

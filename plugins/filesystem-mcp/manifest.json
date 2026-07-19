@@ -1,0 +1,237 @@
+{
+  "schema_version": "1.0",
+  "name": "filesystem-mcp",
+  "version": "1.0.0",
+  "type": "mcp-plugin",
+  "xagent_compatibility": {
+    "min_version": "0.1.0",
+    "max_version": "1.0.0"
+  },
+  "metadata": {
+    "display_name": "文件系统助手",
+    "description": "File system integration for X-Agent. Read, write, search, and manage files directly from X-Agent.",
+    "description_zh": "文件系统集成插件。直接在X-Agent中读写、搜索和管理文件。",
+    "author": "X-Agent Team",
+    "author_email": "team@x-agent.com",
+    "license": "MIT",
+    "homepage": "https://github.com/x-agent/filesystem-mcp",
+    "repository": "https://github.com/x-agent/filesystem-mcp",
+    "icon_url": "https://example.com/filesystem-icon.png",
+    "category": "system"
+  },
+  "chinese": {
+    "name": "文件系统助手",
+    "description": "这个插件让你可以在X-Agent中直接读写和管理文件，支持文件搜索、内容分析等功能。",
+    "usage": "1. 安装插件\n2. 配置允许访问的目录\n3. 在对话中使用文件命令\n4. 查看文件内容或操作结果",
+    "适合谁用": ["开发者", "数据分析师", "系统管理员"],
+    "常见问题": [
+      {
+        "question": "支持哪些文件操作？",
+        "answer": "支持读取、写入、删除、搜索、列表等基本文件操作。"
+      },
+      {
+        "question": "如何限制访问范围？",
+        "answer": "在插件配置中指定允许访问的目录路径。"
+      },
+      {
+        "question": "支持哪些文件类型？",
+        "answer": "支持所有文件类型，包括文本、二进制、图片等。"
+      }
+    ],
+    "tutorial": "https://example.com/filesystem-plugin-tutorial"
+  },
+  "capabilities": {
+    "tools": true,
+    "resources": true,
+    "prompts": false
+  },
+  "permissions": {
+    "network": {
+      "required": false
+    },
+    "filesystem": {
+      "required": true,
+      "paths": ["/home", "/tmp", "/var/data"]
+    },
+    "environment": {
+      "required": false,
+      "variables": []
+    }
+  },
+  "entry_point": {
+    "type": "python",
+    "module": "main",
+    "class": "FileSystemPlugin"
+  },
+  "dependencies": {
+    "python": ">=3.11",
+    "packages": {
+      "pathlib": ">=1.0.0",
+      "pydantic": ">=2.0.0"
+    }
+  },
+  "configuration": {
+    "allowed_paths": {
+      "type": "array",
+      "required": true,
+      "description": "List of allowed directory paths",
+      "description_zh": "允许访问的目录路径列表"
+    },
+    "max_file_size_mb": {
+      "type": "integer",
+      "required": false,
+      "default": 100,
+      "description": "Maximum file size in MB",
+      "description_zh": "最大文件大小（MB）"
+    },
+    "enable_write": {
+      "type": "boolean",
+      "required": false,
+      "default": true,
+      "description": "Enable write operations",
+      "description_zh": "启用写入操作"
+    }
+  },
+  "tools": [
+    {
+      "name": "read_file",
+      "description": "Read file content",
+      "description_zh": "读取文件内容",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "File path"
+          },
+          "encoding": {
+            "type": "string",
+            "default": "utf-8",
+            "description": "File encoding"
+          }
+        },
+        "required": ["path"]
+      }
+    },
+    {
+      "name": "write_file",
+      "description": "Write content to file",
+      "description_zh": "写入内容到文件",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "File path"
+          },
+          "content": {
+            "type": "string",
+            "description": "File content"
+          },
+          "append": {
+            "type": "boolean",
+            "default": false,
+            "description": "Append to file"
+          }
+        },
+        "required": ["path", "content"]
+      }
+    },
+    {
+      "name": "list_files",
+      "description": "List files in directory",
+      "description_zh": "列出目录中的文件",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Directory path"
+          },
+          "recursive": {
+            "type": "boolean",
+            "default": false,
+            "description": "List recursively"
+          }
+        },
+        "required": ["path"]
+      }
+    },
+    {
+      "name": "search_files",
+      "description": "Search files by pattern",
+      "description_zh": "按模式搜索文件",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Search directory"
+          },
+          "pattern": {
+            "type": "string",
+            "description": "File name pattern (glob)"
+          },
+          "recursive": {
+            "type": "boolean",
+            "default": true,
+            "description": "Search recursively"
+          }
+        },
+        "required": ["path", "pattern"]
+      }
+    },
+    {
+      "name": "delete_file",
+      "description": "Delete a file",
+      "description_zh": "删除文件",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "File path"
+          }
+        },
+        "required": ["path"]
+      }
+    },
+    {
+      "name": "get_file_info",
+      "description": "Get file information",
+      "description_zh": "获取文件信息",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "File path"
+          }
+        },
+        "required": ["path"]
+      }
+    }
+  ],
+  "resources": [
+    {
+      "uri": "filesystem://files",
+      "name": "Files",
+      "description": "File system resources",
+      "description_zh": "文件系统资源",
+      "mime_type": "application/json"
+    }
+  ],
+  "security": {
+    "sandbox": true,
+    "max_memory_mb": 512,
+    "max_cpu_percent": 50,
+    "timeout_seconds": 300,
+    "allowed_protocols": [],
+    "blocked_paths": ["/etc", "/root", "/sys", "/proc"]
+  },
+  "quality_metrics": {
+    "code_quality_score": 8.5,
+    "test_coverage": 85,
+    "documentation_completeness": 90
+  }
+}

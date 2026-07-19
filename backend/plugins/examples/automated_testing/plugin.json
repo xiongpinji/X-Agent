@@ -1,0 +1,27 @@
+{
+  "name": "Automated Testing",
+  "version": "1.0.0",
+  "author": "X-Agent Team",
+  "description": "Run and manage automated tests with coverage reporting and performance analysis",
+  "license": "MIT",
+  "keywords": ["testing", "automation", "coverage", "performance", "ci-cd"],
+  "categories": ["development"],
+  "capabilities": [
+    "run_tests",
+    "run_unit_tests",
+    "run_integration_tests",
+    "generate_coverage_report",
+    "run_performance_tests",
+    "schedule_tests"
+  ],
+  "permissions": [
+    "test:read",
+    "test:execute"
+  ],
+  "dependencies": {},
+  "entry_point": "main.py",
+  "icon_url": "https://cdn-icons-png.flaticon.com/512/3143/3143615.png",
+  "screenshots": [],
+  "documentation_url": "https://docs.pytest.org/",
+  "support_url": "https://stackoverflow.com/questions/tagged/pytest"
+}

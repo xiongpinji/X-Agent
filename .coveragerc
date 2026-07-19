@@ -1,0 +1,32 @@
+[run]
+branch = True
+source = backend/app
+omit =
+    */tests/*
+    */test_*.py
+    */__pycache__/*
+    */site-packages/*
+
+[report]
+precision = 2
+show_missing = True
+skip_covered = False
+exclude_lines =
+    pragma: no cover
+    def __repr__
+    raise AssertionError
+    raise NotImplementedError
+    if __name__ == .__main__.:
+    if TYPE_CHECKING:
+    @abstractmethod
+    @abc.abstractmethod
+    class .*\(Protocol\):
+    if sys.version_info
+
+[html]
+directory = htmlcov
+
+[paths]
+source =
+    backend/app
+    */backend/app

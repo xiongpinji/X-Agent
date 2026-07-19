@@ -1,0 +1,72 @@
+{
+  "common": {
+    "loading": "Cargando...",
+    "error": "Error",
+    "success": "Éxito",
+    "warning": "Advertencia",
+    "info": "Información",
+    "confirm": "Confirmar",
+    "cancel": "Cancelar",
+    "save": "Guardar",
+    "delete": "Eliminar",
+    "edit": "Editar",
+    "close": "Cerrar",
+    "back": "Atrás",
+    "next": "Siguiente",
+    "previous": "Anterior",
+    "search": "Buscar",
+    "filter": "Filtrar",
+    "sort": "Ordenar",
+    "export": "Exportar",
+    "import": "Importar",
+    "download": "Descargar",
+    "upload": "Cargar",
+    "settings": "Configuración",
+    "help": "Ayuda",
+    "about": "Acerca de",
+    "logout": "Cerrar sesión",
+    "login": "Iniciar sesión",
+    "register": "Registrarse",
+    "profile": "Perfil",
+    "language": "Idioma",
+    "theme": "Tema",
+    "dark": "Oscuro",
+    "light": "Claro",
+    "auto": "Automático"
+  },
+  "navigation": {
+    "dashboard": "Panel de control",
+    "chat": "Chat",
+    "tasks": "Tareas",
+    "tools": "Herramientas",
+    "memory": "Memoria",
+    "agents": "Agentes",
+    "marketplace": "Mercado",
+    "console": "Consola"
+  },
+  "errors": {
+    "notFound": "No encontrado",
+    "unauthorized": "No autorizado",
+    "forbidden": "Prohibido",
+    "serverError": "Error del servidor",
+    "networkError": "Error de red",
+    "validationError": "Error de validación",
+    "tryAgain": "Intentar de nuevo"
+  },
+  "validation": {
+    "required": "Este campo es obligatorio",
+    "email": "Por favor ingrese un correo electrónico válido",
+    "minLength": "La longitud mínima es {min}",
+    "maxLength": "La longitud máxima es {max}",
+    "pattern": "Formato inválido"
+  },
+  "i18n": {
+    "selectLanguage": "Seleccionar idioma",
+    "selectRegion": "Seleccionar región",
+    "timezone": "Zona horaria",
+    "currency": "Moneda",
+    "dateFormat": "Formato de fecha",
+    "timeFormat": "Formato de hora",
+    "numberFormat": "Formato de número"
+  }
+}

@@ -1,0 +1,604 @@
+version: '3.9'
+
+# X-Agent Complete Test Environment
+# Includes: Backend, Frontend, Chrome Extension, Monitoring, Logging, CI/CD
+
+services:
+  # ============================================================================
+  # CORE INFRASTRUCTURE
+  # ============================================================================
+
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: xagent-test-postgres
+    environment:
+      POSTGRES_USER: ${DB_USER:-xagent_test}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-test_password_123}
+      POSTGRES_DB: ${DB_NAME:-xagent_test_db}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=en_US.UTF-8"
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - postgres_test_data:/var/lib/postgresql/data
+      - ./deployment/migrations/init.sql:/docker-entrypoint-initdb.d/01-init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-xagent_test}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - xagent-test-network
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: xagent-test-redis
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-test_redis_123}
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_test_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - xagent-test-network
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Qdrant Vector Database
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: xagent-test-qdrant
+    environment:
+      QDRANT_API_KEY: ${QDRANT_API_KEY:-test_qdrant_key}
+    ports:
+      - "${QDRANT_PORT:-6333}:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_test_data:/qdrant/storage
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6333/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - xagent-test-network
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Neo4j Graph Database
+  neo4j:
+    image: neo4j:5-community
+    container_name: xagent-test-neo4j
+    environment:
+      NEO4J_AUTH: ${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD:-test_neo4j_123}
+      NEO4J_server_memory_heap_initial__size: 512m
+      NEO4J_server_memory_heap_max__size: 1g
+    ports:
+      - "${NEO4J_PORT:-7687}:7687"
+      - "7474:7474"
+    volumes:
+      - neo4j_test_data:/var/lib/neo4j/data
+      - neo4j_test_logs:/var/lib/neo4j/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7474"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - xagent-test-network
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ============================================================================
+  # BACKEND SERVICES
+  # ============================================================================
+
+  # X-Agent API Server
+  xagent-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: xagent-test-api
+    environment:
+      # Database
+      DATABASE_URL: postgresql://${DB_USER:-xagent_test}:${DB_PASSWORD:-test_password_123}@postgres:5432/${DB_NAME:-xagent_test_db}
+      # Redis
+      REDIS_URL: redis://:${REDIS_PASSWORD:-test_redis_123}@redis:6379/0
+      # Qdrant
+      QDRANT_URL: http://qdrant:6333
+      QDRANT_API_KEY: ${QDRANT_API_KEY:-test_qdrant_key}
+      # Neo4j
+      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_USER: ${NEO4J_USER:-neo4j}
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD:-test_neo4j_123}
+      # Application
+      ENVIRONMENT: test
+      LOG_LEVEL: DEBUG
+      DEBUG: "true"
+      # Security
+      SECRET_KEY: ${SECRET_KEY:-test-secret-key-change-in-production}
+      JWT_ALGORITHM: HS256
+      JWT_EXPIRATION_HOURS: 24
+      # API
+      API_HOST: 0.0.0.0
+      API_PORT: 8000
+      API_WORKERS: 4
+      # Celery
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:-test_redis_123}@redis:6379/1
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:-test_redis_123}@redis:6379/2
+      # Monitoring
+      PROMETHEUS_ENABLED: "true"
+      JAEGER_ENABLED: "true"
+      JAEGER_AGENT_HOST: jaeger
+      JAEGER_AGENT_PORT: 6831
+    ports:
+      - "${API_PORT:-8000}:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+      neo4j:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app/backend
+      - ./logs:/app/logs
+    networks:
+      - xagent-test-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Celery Worker
+  xagent-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: xagent-test-worker
+    command: celery -A backend.app.workflow_worker worker --loglevel=debug --concurrency=4
+    environment:
+      DATABASE_URL: postgresql://${DB_USER:-xagent_test}:${DB_PASSWORD:-test_password_123}@postgres:5432/${DB_NAME:-xagent_test_db}
+      REDIS_URL: redis://:${REDIS_PASSWORD:-test_redis_123}@redis:6379/0
+      QDRANT_URL: http://qdrant:6333
+      QDRANT_API_KEY: ${QDRANT_API_KEY:-test_qdrant_key}
+      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_USER: ${NEO4J_USER:-neo4j}
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD:-test_neo4j_123}
+      ENVIRONMENT: test
+      LOG_LEVEL: DEBUG
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:-test_redis_123}@redis:6379/1
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:-test_redis_123}@redis:6379/2
+    depends_on:
+      - postgres
+      - redis
+      - qdrant
+      - neo4j
+    volumes:
+      - ./backend:/app/backend
+      - ./logs:/app/logs
+    networks:
+      - xagent-test-network
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Celery Beat (Scheduler)
+  xagent-beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: xagent-test-beat
+    command: celery -A backend.app.workflow_worker beat --loglevel=debug
+    environment:
+      DATABASE_URL: postgresql://${DB_USER:-xagent_test}:${DB_PASSWORD:-test_password_123}@postgres:5432/${DB_NAME:-xagent_test_db}
+      REDIS_URL: redis://:${REDIS_PASSWORD:-test_redis_123}@redis:6379/0
+      ENVIRONMENT: test
+      LOG_LEVEL: DEBUG
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:-test_redis_123}@redis:6379/1
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:-test_redis_123}@redis:6379/2
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - ./backend:/app/backend
+      - ./logs:/app/logs
+    networks:
+      - xagent-test-network
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ============================================================================
+  # FRONTEND SERVICES
+  # ============================================================================
+
+  # React Web Frontend
+  xagent-web:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: xagent-test-web
+    ports:
+      - "3000:3000"
+    environment:
+      REACT_APP_API_URL: http://localhost:8000/api/v1
+      REACT_APP_ENV: test
+      REACT_APP_DEBUG: "true"
+    depends_on:
+      - xagent-api
+    volumes:
+      - ./frontend:/app
+    networks:
+      - xagent-test-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ============================================================================
+  # MONITORING & OBSERVABILITY
+  # ============================================================================
+
+  # Prometheus - Metrics Collection
+  prometheus:
+    image: prom/prometheus:v2.48.0
+    container_name: xagent-test-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./deployment/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./deployment/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus_test_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=7d'
+      - '--web.enable-lifecycle'
+    environment:
+      - TZ=UTC
+    networks:
+      - xagent-test-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Grafana - Metrics Visualization
+  grafana:
+    image: grafana/grafana:10.2.0
+    container_name: xagent-test-grafana
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SERVER_ROOT_URL=http://localhost:3001
+      - TZ=UTC
+    volumes:
+      - grafana_test_data:/var/lib/grafana
+      - ./deployment/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./deployment/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    networks:
+      - xagent-test-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # AlertManager - Alert Management
+  alertmanager:
+    image: prom/alertmanager:v0.26.0
+    container_name: xagent-test-alertmanager
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./deployment/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager_test_data:/alertmanager
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+    environment:
+      - TZ=UTC
+    networks:
+      - xagent-test-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9093/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Node Exporter - System Metrics
+  node-exporter:
+    image: prom/node-exporter:v1.7.0
+    container_name: xagent-test-node-exporter
+    ports:
+      - "9100:9100"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    environment:
+      - TZ=UTC
+    networks:
+      - xagent-test-network
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Jaeger - Distributed Tracing
+  jaeger:
+    image: jaegertracing/all-in-one:1.50
+    container_name: xagent-test-jaeger
+    ports:
+      - "16686:16686"
+      - "6831:6831/udp"
+      - "6832:6832/udp"
+      - "5778:5778"
+      - "14268:14268"
+      - "14250:14250"
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+      - TZ=UTC
+    networks:
+      - xagent-test-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:16686/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ============================================================================
+  # LOGGING & LOG AGGREGATION
+  # ============================================================================
+
+  # Elasticsearch - Log Storage
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+    container_name: xagent-test-elasticsearch
+    environment:
+      - discovery.type=single-node
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - xpack.security.enabled=false
+      - xpack.watcher.enabled=false
+      - TZ=UTC
+    ports:
+      - "9200:9200"
+    volumes:
+      - elasticsearch_test_data:/usr/share/elasticsearch/data
+    networks:
+      - xagent-test-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://localhost:9200/_cluster/health | grep -q '\"status\":\"green\"'"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Logstash - Log Processing
+  logstash:
+    image: docker.elastic.co/logstash/logstash:8.11.0
+    container_name: xagent-test-logstash
+    volumes:
+      - ./deployment/elk/logstash.conf:/usr/share/logstash/pipeline/logstash.conf:ro
+      - ./logs:/var/log/xagent:ro
+    ports:
+      - "5000:5000/udp"
+      - "5001:5001"
+    environment:
+      - "LS_JAVA_OPTS=-Xmx256m -Xms256m"
+      - ELASTICSEARCH_HOST=elasticsearch
+      - ELASTICSEARCH_PORT=9200
+      - TZ=UTC
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    networks:
+      - xagent-test-network
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Kibana - Log Visualization
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.11.0
+    container_name: xagent-test-kibana
+    ports:
+      - "5601:5601"
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+      - ELASTICSEARCH_USERNAME=elastic
+      - ELASTICSEARCH_PASSWORD=changeme
+      - TZ=UTC
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    networks:
+      - xagent-test-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://localhost:5601/api/status | grep -q 'state.*green'"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ============================================================================
+  # TESTING & CI/CD SUPPORT
+  # ============================================================================
+
+  # Test Runner Container
+  test-runner:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: xagent-test-runner
+    command: pytest backend/tests -v --cov=backend --cov-report=html --cov-report=term
+    environment:
+      DATABASE_URL: postgresql://${DB_USER:-xagent_test}:${DB_PASSWORD:-test_password_123}@postgres:5432/${DB_NAME:-xagent_test_db}
+      REDIS_URL: redis://:${REDIS_PASSWORD:-test_redis_123}@redis:6379/0
+      QDRANT_URL: http://qdrant:6333
+      QDRANT_API_KEY: ${QDRANT_API_KEY:-test_qdrant_key}
+      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_USER: ${NEO4J_USER:-neo4j}
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD:-test_neo4j_123}
+      ENVIRONMENT: test
+      LOG_LEVEL: DEBUG
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+      neo4j:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app/backend
+      - ./test-results:/app/test-results
+      - ./coverage:/app/coverage
+    networks:
+      - xagent-test-network
+    profiles:
+      - test
+
+  # Performance Test Container
+  performance-test:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: xagent-test-performance
+    command: locust -f backend/tests/performance/locustfile.py --host=http://xagent-api:8000 -u 100 -r 10 --run-time 5m
+    environment:
+      DATABASE_URL: postgresql://${DB_USER:-xagent_test}:${DB_PASSWORD:-test_password_123}@postgres:5432/${DB_NAME:-xagent_test_db}
+      REDIS_URL: redis://:${REDIS_PASSWORD:-test_redis_123}@redis:6379/0
+    depends_on:
+      - xagent-api
+    volumes:
+      - ./backend:/app/backend
+      - ./performance-results:/app/performance-results
+    networks:
+      - xagent-test-network
+    profiles:
+      - performance
+
+volumes:
+  postgres_test_data:
+    driver: local
+  redis_test_data:
+    driver: local
+  qdrant_test_data:
+    driver: local
+  neo4j_test_data:
+    driver: local
+  neo4j_test_logs:
+    driver: local
+  prometheus_test_data:
+    driver: local
+  grafana_test_data:
+    driver: local
+  alertmanager_test_data:
+    driver: local
+  elasticsearch_test_data:
+    driver: local
+
+networks:
+  xagent-test-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.21.0.0/16

@@ -1,0 +1,348 @@
+/**
+ * RTL (Right-to-Left) Styles for Arabic and Hebrew
+ *
+ * This file contains CSS utilities and overrides for RTL languages
+ * Automatically applied when document direction is set to 'rtl'
+ */
+
+/* RTL Global Styles */
+[dir="rtl"] {
+  direction: rtl;
+  text-align: right;
+}
+
+[dir="rtl"] * {
+  direction: rtl;
+}
+
+/* Text Alignment */
+[dir="rtl"] .text-left {
+  text-align: right;
+}
+
+[dir="rtl"] .text-right {
+  text-align: left;
+}
+
+/* Margin and Padding Utilities */
+[dir="rtl"] .ml-auto {
+  margin-left: auto;
+  margin-right: 0;
+}
+
+[dir="rtl"] .mr-auto {
+  margin-right: auto;
+  margin-left: 0;
+}
+
+[dir="rtl"] .pl-4 {
+  padding-left: 0;
+  padding-right: 1rem;
+}
+
+[dir="rtl"] .pr-4 {
+  padding-right: 0;
+  padding-left: 1rem;
+}
+
+[dir="rtl"] .ml-2 {
+  margin-left: 0;
+  margin-right: 0.5rem;
+}
+
+[dir="rtl"] .mr-2 {
+  margin-right: 0;
+  margin-left: 0.5rem;
+}
+
+/* Flexbox Direction */
+[dir="rtl"] .flex-row {
+  flex-direction: row-reverse;
+}
+
+/* Border Radius */
+[dir="rtl"] .rounded-l {
+  border-radius: 0 0.375rem 0.375rem 0;
+}
+
+[dir="rtl"] .rounded-r {
+  border-radius: 0.375rem 0 0 0.375rem;
+}
+
+/* Transform */
+[dir="rtl"] .scale-x-minus-1 {
+  transform: scaleX(-1);
+}
+
+/* Navigation */
+[dir="rtl"] nav {
+  direction: rtl;
+}
+
+[dir="rtl"] nav ul {
+  flex-direction: row-reverse;
+}
+
+[dir="rtl"] nav li {
+  text-align: right;
+}
+
+/* Sidebar */
+[dir="rtl"] .sidebar {
+  left: auto;
+  right: 0;
+  border-left: none;
+  border-right: 1px solid #e5e7eb;
+}
+
+[dir="rtl"] .sidebar-content {
+  padding-left: 0;
+  padding-right: 1rem;
+}
+
+/* Input Fields */
+[dir="rtl"] input,
+[dir="rtl"] textarea,
+[dir="rtl"] select {
+  direction: rtl;
+  text-align: right;
+}
+
+[dir="rtl"] input::placeholder,
+[dir="rtl"] textarea::placeholder {
+  text-align: right;
+}
+
+/* Icons */
+[dir="rtl"] .icon-left {
+  margin-left: 0;
+  margin-right: 0.5rem;
+}
+
+[dir="rtl"] .icon-right {
+  margin-right: 0;
+  margin-left: 0.5rem;
+}
+
+/* Buttons */
+[dir="rtl"] button {
+  direction: rtl;
+}
+
+[dir="rtl"] .btn-icon-left {
+  flex-direction: row-reverse;
+}
+
+[dir="rtl"] .btn-icon-right {
+  flex-direction: row;
+}
+
+/* Lists */
+[dir="rtl"] ul,
+[dir="rtl"] ol {
+  padding-left: 0;
+  padding-right: 1.5rem;
+}
+
+[dir="rtl"] li {
+  text-align: right;
+}
+
+/* Tables */
+[dir="rtl"] table {
+  direction: rtl;
+}
+
+[dir="rtl"] th,
+[dir="rtl"] td {
+  text-align: right;
+}
+
+/* Modals and Dialogs */
+[dir="rtl"] .modal-content {
+  direction: rtl;
+}
+
+[dir="rtl"] .modal-header {
+  text-align: right;
+}
+
+/* Dropdowns */
+[dir="rtl"] .dropdown-menu {
+  left: auto;
+  right: 0;
+  text-align: right;
+}
+
+/* Tooltips */
+[dir="rtl"] .tooltip-left {
+  left: auto;
+  right: 100%;
+}
+
+[dir="rtl"] .tooltip-right {
+  right: auto;
+  left: 100%;
+}
+
+/* Progress Bars */
+[dir="rtl"] .progress-bar {
+  direction: ltr;
+}
+
+/* Badges */
+[dir="rtl"] .badge {
+  direction: rtl;
+}
+
+/* Cards */
+[dir="rtl"] .card {
+  direction: rtl;
+}
+
+[dir="rtl"] .card-header {
+  text-align: right;
+}
+
+[dir="rtl"] .card-body {
+  text-align: right;
+}
+
+/* Forms */
+[dir="rtl"] .form-group {
+  text-align: right;
+}
+
+[dir="rtl"] .form-label {
+  text-align: right;
+  margin-left: 0;
+  margin-right: 0.5rem;
+}
+
+[dir="rtl"] .form-control {
+  text-align: right;
+}
+
+/* Alerts */
+[dir="rtl"] .alert {
+  direction: rtl;
+  text-align: right;
+}
+
+[dir="rtl"] .alert-icon {
+  margin-left: 0;
+  margin-right: 0.75rem;
+}
+
+/* Breadcrumbs */
+[dir="rtl"] .breadcrumb {
+  flex-direction: row-reverse;
+}
+
+[dir="rtl"] .breadcrumb-separator {
+  transform: scaleX(-1);
+}
+
+/* Pagination */
+[dir="rtl"] .pagination {
+  flex-direction: row-reverse;
+}
+
+/* Tabs */
+[dir="rtl"] .tabs {
+  direction: rtl;
+}
+
+[dir="rtl"] .tab-list {
+  flex-direction: row-reverse;
+}
+
+/* Accordion */
+[dir="rtl"] .accordion-item {
+  text-align: right;
+}
+
+[dir="rtl"] .accordion-button {
+  text-align: right;
+}
+
+[dir="rtl"] .accordion-button::after {
+  margin-left: 0;
+  margin-right: auto;
+  transform: rotate(180deg);
+}
+
+/* Spinners */
+[dir="rtl"] .spinner {
+  direction: ltr;
+}
+
+/* Animations - preserve LTR for animations */
+[dir="rtl"] @keyframes slideInLeft {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+[dir="rtl"] @keyframes slideInRight {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+/* Utility Classes for RTL */
+.rtl-text-right {
+  [dir="rtl"] & {
+    text-align: left;
+  }
+}
+
+.rtl-text-left {
+  [dir="rtl"] & {
+    text-align: right;
+  }
+}
+
+.rtl-ml-auto {
+  [dir="rtl"] & {
+    margin-left: 0;
+    margin-right: auto;
+  }
+}
+
+.rtl-mr-auto {
+  [dir="rtl"] & {
+    margin-right: 0;
+    margin-left: auto;
+  }
+}
+
+/* Responsive RTL */
+@media (max-width: 768px) {
+  [dir="rtl"] .sidebar {
+    left: auto;
+    right: -100%;
+    transition: right 0.3s ease;
+  }
+
+  [dir="rtl"] .sidebar.open {
+    right: 0;
+  }
+
+  [dir="rtl"] .mobile-menu {
+    flex-direction: row-reverse;
+  }
+}
+
+/* Print Styles */
+@media print {
+  [dir="rtl"] {
+    direction: rtl;
+  }
+}

@@ -1,0 +1,115 @@
+groups:
+  - name: x-agent-recording-rules
+    interval: 30s
+    rules:
+      # API Performance Recording Rules
+      - record: xagent:api:request_rate:5m
+        expr: rate(xagent_api_requests_total[5m])
+
+      - record: xagent:api:error_rate:5m
+        expr: rate(xagent_errors_total[5m])
+
+      - record: xagent:api:latency:p50:5m
+        expr: histogram_quantile(0.50, rate(xagent_api_request_duration_seconds_bucket[5m]))
+
+      - record: xagent:api:latency:p95:5m
+        expr: histogram_quantile(0.95, rate(xagent_api_request_duration_seconds_bucket[5m]))
+
+      - record: xagent:api:latency:p99:5m
+        expr: histogram_quantile(0.99, rate(xagent_api_request_duration_seconds_bucket[5m]))
+
+      # Agent Execution Recording Rules
+      - record: xagent:agent:success_rate:5m
+        expr: |
+          (rate(xagent_agent_runs_total{status="success"}[5m]) /
+           rate(xagent_agent_runs_total[5m])) * 100
+
+      - record: xagent:agent:failure_rate:5m
+        expr: |
+          (rate(xagent_agent_runs_total{status="failed"}[5m]) /
+           rate(xagent_agent_runs_total[5m])) * 100
+
+      - record: xagent:agent:duration:p95:5m
+        expr: histogram_quantile(0.95, rate(xagent_agent_run_duration_seconds_bucket[5m]))
+
+      # Database Performance Recording Rules
+      - record: xagent:db:query_rate:5m
+        expr: rate(xagent_db_query_duration_seconds_count[5m])
+
+      - record: xagent:db:query_latency:p95:5m
+        expr: histogram_quantile(0.95, rate(xagent_db_query_duration_seconds_bucket[5m]))
+
+      - record: xagent:db:connection_utilization:ratio
+        expr: xagent_db_connections_active / xagent_db_connection_pool_size
+
+      # Cache Performance Recording Rules
+      - record: xagent:cache:hit_rate:5m
+        expr: |
+          (rate(xagent_cache_hits_total[5m]) /
+           (rate(xagent_cache_hits_total[5m]) + rate(xagent_cache_misses_total[5m]))) * 100
+
+      - record: xagent:cache:miss_rate:5m
+        expr: |
+          (rate(xagent_cache_misses_total[5m]) /
+           (rate(xagent_cache_hits_total[5m]) + rate(xagent_cache_misses_total[5m]))) * 100
+
+      # Tool Execution Recording Rules
+      - record: xagent:tool:success_rate:5m
+        expr: |
+          (rate(xagent_tool_executions_total{status="success"}[5m]) /
+           rate(xagent_tool_executions_total[5m])) * 100
+
+      - record: xagent:tool:failure_rate:5m
+        expr: |
+          (rate(xagent_tool_executions_total{status="failed"}[5m]) /
+           rate(xagent_tool_executions_total[5m])) * 100
+
+      - record: xagent:tool:duration:p95:5m
+        expr: histogram_quantile(0.95, rate(xagent_tool_execution_duration_seconds_bucket[5m]))
+
+      # Workflow Recording Rules
+      - record: xagent:workflow:success_rate:5m
+        expr: |
+          (rate(xagent_workflow_runs_total{status="success"}[5m]) /
+           rate(xagent_workflow_runs_total[5m])) * 100
+
+      - record: xagent:workflow:failure_rate:5m
+        expr: |
+          (rate(xagent_workflow_runs_total{status="failed"}[5m]) /
+           rate(xagent_workflow_runs_total[5m])) * 100
+
+      - record: xagent:workflow:duration:p95:5m
+        expr: histogram_quantile(0.95, rate(xagent_workflow_run_duration_seconds_bucket[5m]))
+
+      # System Resource Recording Rules
+      - record: xagent:system:memory_usage_percent
+        expr: (xagent_system_memory_usage_bytes / 1024 / 1024 / 1024) * 100
+
+      - record: xagent:system:cpu_usage_percent
+        expr: xagent_system_cpu_usage_percent
+
+      # Business Metrics Recording Rules
+      - record: xagent:business:total_runs:1h
+        expr: increase(xagent_agent_runs_total[1h])
+
+      - record: xagent:business:total_tasks:1h
+        expr: increase(xagent_agent_tasks_completed[1h])
+
+      - record: xagent:business:total_errors:1h
+        expr: increase(xagent_errors_total[1h])
+
+      # Availability Recording Rules
+      - record: xagent:availability:api:5m
+        expr: |
+          (count(up{job="x-agent-api"} == 1) /
+           count(up{job="x-agent-api"})) * 100
+
+      - record: xagent:availability:database:5m
+        expr: |
+          (count(up{job="postgres-exporter"} == 1) /
+           count(up{job="postgres-exporter"})) * 100
+
+      - record: xagent:availability:cache:5m
+        expr: |
+          (count(up{job="redis-exporter"} == 1) /
+           count(up{job="redis-exporter"})) * 100

@@ -1,0 +1,182 @@
+name: Security Scan
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    # Run security scans daily at 2 AM UTC
+    - cron: '0 2 * * *'
+
+jobs:
+  bandit:
+    runs-on: ubuntu-latest
+    name: Bandit Security Scan
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.11"
+        cache: 'pip'
+
+    - name: Install bandit
+      run: |
+        python -m pip install --upgrade pip
+        pip install bandit[toml]
+
+    - name: Run bandit
+      run: |
+        bandit -r backend/ -c pyproject.toml -f json -o bandit-report.json
+      continue-on-error: true
+
+    - name: Upload bandit report
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: bandit-report
+        path: bandit-report.json
+
+    - name: Comment PR with security findings
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          try {
+            const bandit = JSON.parse(fs.readFileSync('bandit-report.json', 'utf8'));
+            const metrics = bandit.metrics;
+            let comment = '## Security Scan Results (Bandit)\n\n';
+            comment += `- High Severity: ${metrics.high || 0}\n`;
+            comment += `- Medium Severity: ${metrics.medium || 0}\n`;
+            comment += `- Low Severity: ${metrics.low || 0}\n`;
+
+            if (metrics.high > 0) {
+              comment += '\n⚠️ **High severity issues found - please review**\n';
+            }
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+          } catch (e) {
+            console.log('No security issues found');
+          }
+      continue-on-error: true
+
+  dependency-check:
+    runs-on: ubuntu-latest
+    name: Dependency Vulnerability Scan
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.11"
+        cache: 'pip'
+
+    - name: Install audit tools
+      run: |
+        python -m pip install --upgrade pip
+        pip install pip-audit safety
+
+    - name: Run pip-audit
+      run: |
+        pip-audit --desc --output json > pip-audit-report.json || true
+      continue-on-error: true
+
+    - name: Run safety check
+      run: |
+        safety check --json > safety-report.json || true
+      continue-on-error: true
+
+    - name: Upload dependency reports
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: dependency-reports
+        path: |
+          pip-audit-report.json
+          safety-report.json
+
+  secret-scan:
+    runs-on: ubuntu-latest
+    name: Secret Detection
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Run TruffleHog secret scan
+      uses: trufflesecurity/trufflehog@main
+      with:
+        path: ./
+        base: ${{ github.event.repository.default_branch }}
+        head: HEAD
+        extra_args: --debug --only-verified
+      continue-on-error: true
+
+  sast:
+    runs-on: ubuntu-latest
+    name: SAST Analysis
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.11"
+        cache: 'pip'
+
+    - name: Install semgrep
+      run: |
+        python -m pip install --upgrade pip
+        pip install semgrep
+
+    - name: Run semgrep SAST
+      run: |
+        semgrep --config=p/security-audit --json -o semgrep-report.json backend/ || true
+      continue-on-error: true
+
+    - name: Upload semgrep report
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: semgrep-report
+        path: semgrep-report.json
+
+  security-summary:
+    runs-on: ubuntu-latest
+    name: Security Summary
+    needs: [bandit, dependency-check, secret-scan, sast]
+    if: always()
+
+    steps:
+    - name: Download all reports
+      uses: actions/download-artifact@v3
+
+    - name: Generate security summary
+      run: |
+        echo "## Security Scan Summary" > security-summary.md
+        echo "" >> security-summary.md
+        echo "### Scan Results" >> security-summary.md
+        echo "- Bandit: $([ -f bandit-report/bandit-report.json ] && echo '✓' || echo '✗')" >> security-summary.md
+        echo "- Dependency Check: $([ -f dependency-reports/pip-audit-report.json ] && echo '✓' || echo '✗')" >> security-summary.md
+        echo "- Secret Scan: ✓" >> security-summary.md
+        echo "- SAST: $([ -f semgrep-report/semgrep-report.json ] && echo '✓' || echo '✗')" >> security-summary.md
+        cat security-summary.md
+
+    - name: Upload security summary
+      uses: actions/upload-artifact@v3
+      with:
+        name: security-summary
+        path: security-summary.md

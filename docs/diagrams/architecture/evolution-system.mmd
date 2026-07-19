@@ -1,0 +1,106 @@
+graph TB
+    subgraph "触发源"
+        TASK[任务失败/低分]
+        FEEDBACK[用户反馈]
+        SCHEDULE[定时自检]
+    end
+
+    subgraph "评估引擎"
+        EVAL[多维评估器]
+        ACC[准确率评估<br/>任务成功率]
+        SPEED[速度评估<br/>响应延迟]
+        COMPLEX[复杂度评估<br/>推理步数]
+        NOVEL[创新度评估<br/>方案新颖性]
+    end
+
+    subgraph "学习规划器"
+        PLANNER[学习路径规划]
+        GAP[能力缺口分析]
+        STRATEGY[策略选择<br/>RL/PPO]
+        RESOURCE[资源分配<br/>GPU/内存/时间]
+    end
+
+    subgraph "知识获取器"
+        ACQ[知识获取引擎]
+        OBSERVE[观察学习<br/>从交互学习]
+        CRAWL[主动搜索<br/>文档/API/论文]
+        DISTILL[知识蒸馏<br/>大模型→小模型]
+    end
+
+    subgraph "能力进化器"
+        EVOLVE[能力进化执行]
+        FINE_TUNE[微调/适配]
+        SKILL_NEW[新技能创建]
+        OPTIMIZE[性能优化]
+        TEST[能力验证]
+    end
+
+    subgraph "安全边界"
+        SANDBOX[沙箱验证]
+        HUMAN[人工审核]
+        ROLLBACK[自动回滚]
+        AUDIT[审计日志]
+    end
+
+    subgraph "记忆同步"
+        META_MEM[更新元记忆<br/>L7]
+        PROC_MEM[更新程序记忆<br/>L6]
+        SEM_MEM[更新语义记忆<br/>L5]
+    end
+
+    TASK --> EVAL
+    FEEDBACK --> EVAL
+    SCHEDULE --> EVAL
+
+    EVAL --> ACC
+    EVAL --> SPEED
+    EVAL --> COMPLEX
+    EVAL --> NOVEL
+
+    ACC --> PLANNER
+    SPEED --> PLANNER
+    COMPLEX --> PLANNER
+    NOVEL --> PLANNER
+
+    PLANNER --> GAP
+    GAP --> STRATEGY
+    STRATEGY --> RESOURCE
+
+    STRATEGY --> ACQ
+    ACQ --> OBSERVE
+    ACQ --> CRAWL
+    ACQ --> DISTILL
+
+    OBSERVE --> EVOLVE
+    CRAWL --> EVOLVE
+    DISTILL --> EVOLVE
+
+    EVOLVE --> FINE_TUNE
+    EVOLVE --> SKILL_NEW
+    EVOLVE --> OPTIMIZE
+
+    FINE_TUNE --> SANDBOX
+    SKILL_NEW --> SANDBOX
+    OPTIMIZE --> SANDBOX
+
+    SANDBOX -->|"通过"| TEST
+    SANDBOX -->|"需审核"| HUMAN
+    SANDBOX -->|"失败"| ROLLBACK
+
+    HUMAN -->|"批准"| TEST
+    HUMAN -->|"拒绝"| ROLLBACK
+
+    TEST -->|"验证通过"| META_MEM
+    TEST -->|"验证通过"| PROC_MEM
+    TEST -->|"验证通过"| SEM_MEM
+    TEST -->|"验证失败"| ROLLBACK
+
+    ROLLBACK --> AUDIT
+
+    style EVAL fill:#3498DB,color:#fff
+    style PLANNER fill:#E67E22,color:#fff
+    style ACQ fill:#27AE60,color:#fff
+    style EVOLVE fill:#9B59B6,color:#fff
+    style SANDBOX fill:#E74C3C,color:#fff
+    style TEST fill:#1ABC9C,color:#fff
+    style ROLLBACK fill:#C0392B,color:#fff

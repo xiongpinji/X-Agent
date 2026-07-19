@@ -1,0 +1,103 @@
+name: Build & Quality Assurance
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    name: Build & Quality Checks
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.11"
+        cache: 'pip'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e ".[dev,test]"
+
+    - name: Run code formatting check
+      run: |
+        ruff format --check backend/ tests/
+        isort --check-only backend/ tests/
+
+    - name: Run linting
+      run: |
+        ruff check backend/ tests/ --output-format=github
+        pylint backend/ --exit-zero || true
+
+    - name: Run type checking
+      run: |
+        mypy backend/ --ignore-missing-imports --no-strict-optional
+
+    - name: Run unit tests
+      run: |
+        pytest tests/ -m "not e2e and not integration and not contracts" \
+          --cov=backend \
+          --cov-report=xml \
+          --cov-report=html \
+          -v --tb=short
+
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage.xml
+        flags: build-py311
+        name: codecov-build
+        fail_ci_if_error: false
+
+    - name: Archive coverage reports
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: coverage-report
+        path: htmlcov/
+
+    - name: Comment PR with build status
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: '✅ Build & Quality Checks Passed'
+          });
+      continue-on-error: true
+
+  docker-build:
+    runs-on: ubuntu-latest
+    name: Docker Build
+    needs: build
+    if: github.event_name == 'push'
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v2
+
+    - name: Build Docker image
+      uses: docker/build-push-action@v4
+      with:
+        context: .
+        push: false
+        tags: x-agent-core:${{ github.sha }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max

@@ -1,0 +1,201 @@
+groups:
+  - name: xagent_alerts
+    interval: 30s
+    rules:
+      # High Error Rate Alert
+      - alert: HighErrorRate
+        expr: |
+          (
+            increase(xagent_errors_total[5m]) /
+            (increase(xagent_http_requests_total[5m]) + 1)
+          ) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          component: api
+        annotations:
+          summary: "High error rate detected"
+          description: "Error rate is {{ $value | humanizePercentage }} over the last 5 minutes"
+
+      # Slow Response Time Alert
+      - alert: SlowResponseTime
+        expr: |
+          histogram_quantile(0.95, rate(xagent_http_request_duration_seconds_bucket[5m])) > 2
+        for: 5m
+        labels:
+          severity: warning
+          component: api
+        annotations:
+          summary: "Slow API response times detected"
+          description: "95th percentile response time is {{ $value }}s"
+
+      # High CPU Usage Alert
+      - alert: HighCPUUsage
+        expr: xagent_cpu_usage_percent > 80
+        for: 5m
+        labels:
+          severity: warning
+          component: system
+        annotations:
+          summary: "High CPU usage detected"
+          description: "CPU usage is {{ $value }}%"
+
+      # High Memory Usage Alert
+      - alert: HighMemoryUsage
+        expr: |
+          (xagent_memory_usage_bytes / (1024 * 1024 * 1024)) > 4
+        for: 5m
+        labels:
+          severity: warning
+          component: system
+        annotations:
+          summary: "High memory usage detected"
+          description: "Memory usage is {{ $value }}GB"
+
+      # Database Connection Pool Exhaustion Alert
+      - alert: DatabaseConnectionPoolExhaustion
+        expr: |
+          (xagent_db_active_connections / xagent_db_connection_pool_size) > 0.8
+        for: 5m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "Database connection pool near exhaustion"
+          description: "{{ $value | humanizePercentage }} of connections in use"
+
+      # Slow Database Queries Alert
+      - alert: SlowDatabaseQueries
+        expr: |
+          histogram_quantile(0.95, rate(xagent_db_query_duration_seconds_bucket[5m])) > 1
+        for: 5m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "Slow database queries detected"
+          description: "95th percentile query time is {{ $value }}s"
+
+      # High Pending Approvals Alert
+      - alert: HighPendingApprovals
+        expr: xagent_approvals_pending > 100
+        for: 10m
+        labels:
+          severity: warning
+          component: business
+        annotations:
+          summary: "High number of pending approvals"
+          description: "{{ $value }} approvals pending"
+
+      # Agent Execution Failure Alert
+      - alert: AgentExecutionFailure
+        expr: |
+          (
+            increase(xagent_agent_executions_total{status="failed"}[5m]) /
+            (increase(xagent_agent_executions_total[5m]) + 1)
+          ) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          component: agent
+        annotations:
+          summary: "High agent execution failure rate"
+          description: "Failure rate is {{ $value | humanizePercentage }}"
+
+      # Tool Call Failure Alert
+      - alert: ToolCallFailure
+        expr: |
+          (
+            increase(xagent_tool_calls_total{status="failed"}[5m]) /
+            (increase(xagent_tool_calls_total[5m]) + 1)
+          ) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          component: tools
+        annotations:
+          summary: "High tool call failure rate"
+          description: "Failure rate is {{ $value | humanizePercentage }}"
+
+      # LLM API Failure Alert
+      - alert: LLMAPIFailure
+        expr: |
+          (
+            increase(xagent_llm_calls_total{status="failed"}[5m]) /
+            (increase(xagent_llm_calls_total[5m]) + 1)
+          ) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          component: llm
+        annotations:
+          summary: "High LLM API failure rate"
+          description: "Failure rate is {{ $value | humanizePercentage }}"
+
+      # Cache Hit Rate Too Low Alert
+      - alert: LowCacheHitRate
+        expr: |
+          (
+            increase(xagent_cache_hits_total[5m]) /
+            (increase(xagent_cache_hits_total[5m]) + increase(xagent_cache_misses_total[5m]) + 1)
+          ) < 0.5
+        for: 10m
+        labels:
+          severity: info
+          component: cache
+        annotations:
+          summary: "Low cache hit rate"
+          description: "Cache hit rate is {{ $value | humanizePercentage }}"
+
+      # Service Unavailable Alert
+      - alert: ServiceUnavailable
+        expr: up{job="xagent-api"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: api
+        annotations:
+          summary: "X-Agent API service is unavailable"
+          description: "X-Agent API has been down for more than 1 minute"
+
+      # High Workflow Execution Time Alert
+      - alert: HighWorkflowExecutionTime
+        expr: |
+          histogram_quantile(0.95, rate(xagent_workflow_execution_duration_seconds_bucket[5m])) > 300
+        for: 5m
+        labels:
+          severity: warning
+          component: workflow
+        annotations:
+          summary: "Workflow execution times are high"
+          description: "95th percentile execution time is {{ $value }}s"
+
+      # Memory Operation Failure Alert
+      - alert: MemoryOperationFailure
+        expr: |
+          (
+            increase(xagent_memory_operations_total{status="failed"}[5m]) /
+            (increase(xagent_memory_operations_total[5m]) + 1)
+          ) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          component: memory
+        annotations:
+          summary: "High memory operation failure rate"
+          description: "Failure rate is {{ $value | humanizePercentage }}"
+
+      # Langfuse API Failure Alert
+      - alert: LangfuseAPIFailure
+        expr: |
+          (
+            increase(xagent_langfuse_api_calls_total{status="failed"}[5m]) /
+            (increase(xagent_langfuse_api_calls_total[5m]) + 1)
+          ) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          component: observability
+        annotations:
+          summary: "High Langfuse API failure rate"
+          description: "Failure rate is {{ $value | humanizePercentage }}"

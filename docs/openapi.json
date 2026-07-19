@@ -1,0 +1,845 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "X-Agent API",
+    "description": "Complete REST API for X-Agent Core - An autonomous agent framework with workflow orchestration, memory management, and tool integration",
+    "version": "1.0.0",
+    "contact": {
+      "name": "X-Agent Team",
+      "url": "https://github.com/x-agent"
+    },
+    "license": {
+      "name": "MIT"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8000",
+      "description": "Local development server"
+    },
+    {
+      "url": "https://api.x-agent.io",
+      "description": "Production server"
+    }
+  ],
+  "paths": {
+    "/api/v1/agents": {
+      "post": {
+        "tags": ["Agents"],
+        "summary": "Create a new Agent",
+        "operationId": "createAgent",
+        "security": [
+          {"ApiKeyAuth": []},
+          {"BearerAuth": []}
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {"type": "string", "example": "Data Analyzer"},
+                  "status": {"type": "string", "enum": ["active", "inactive"], "example": "active"},
+                  "capabilities": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "example": ["run", "trace", "memory", "tools"]
+                  }
+                },
+                "required": ["name"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Agent created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Agent"
+                }
+              }
+            }
+          },
+          "400": {"$ref": "#/components/responses/BadRequest"},
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"}
+        }
+      },
+      "get": {
+        "tags": ["Agents"],
+        "summary": "List all Agents",
+        "operationId": "listAgents",
+        "security": [
+          {"ApiKeyAuth": []},
+          {"BearerAuth": []}
+        ],
+        "responses": {
+          "200": {
+            "description": "List of agents",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {"$ref": "#/components/schemas/Agent"}
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {"$ref": "#/components/responses/Unauthorized"}
+        }
+      }
+    },
+    "/api/v1/agents/{agent_id}": {
+      "get": {
+        "tags": ["Agents"],
+        "summary": "Get Agent details",
+        "operationId": "getAgent",
+        "security": [
+          {"ApiKeyAuth": []},
+          {"BearerAuth": []}
+        ],
+        "parameters": [
+          {
+            "name": "agent_id",
+            "in": "path",
+            "required": true,
+            "schema": {"type": "string"}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Agent details",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/Agent"}
+              }
+            }
+          },
+          "404": {"$ref": "#/components/responses/NotFound"}
+        }
+      },
+      "put": {
+        "tags": ["Agents"],
+        "summary": "Update Agent",
+        "operationId": "updateAgent",
+        "security": [
+          {"ApiKeyAuth": []},
+          {"BearerAuth": []}
+        ],
+        "parameters": [
+          {
+            "name": "agent_id",
+            "in": "path",
+            "required": true,
+            "schema": {"type": "string"}
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {"type": "string"},
+                  "status": {"type": "string", "enum": ["active", "inactive"]},
+                  "capabilities": {"type": "array", "items": {"type": "string"}}
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Agent updated",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/Agent"}
+              }
+            }
+          },
+          "404": {"$ref": "#/components/responses/NotFound"}
+        }
+      },
+      "delete": {
+        "tags": ["Agents"],
+        "summary": "Delete Agent",
+        "operationId": "deleteAgent",
+        "security": [
+          {"ApiKeyAuth": []},
+          {"BearerAuth": []}
+        ],
+        "parameters": [
+          {
+            "name": "agent_id",
+            "in": "path",
+            "required": true,
+            "schema": {"type": "string"}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Agent deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "deleted": {"type": "boolean"}
+                  }
+                }
+              }
+            }
+          },
+          "404": {"$ref": "#/components/responses/NotFound"}
+        }
+      }
+    },
+    "/api/v1/agents/{agent_id}/pause": {
+      "post": {
+        "tags": ["Agents"],
+        "summary": "Pause Agent execution",
+        "operationId": "pauseAgent",
+        "security": [
+          {"ApiKeyAuth": []},
+          {"BearerAuth": []}
+        ],
+        "parameters": [
+          {
+            "name": "agent_id",
+            "in": "path",
+            "required": true,
+            "schema": {"type": "string"}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Agent paused",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/Agent"}
+              }
+            }
+          },
+          "404": {"$ref": "#/components/responses/NotFound"}
+        }
+      }
+    },
+    "/api/v1/workflows": {
+      "post": {
+        "tags": ["Workflows"],
+        "summary": "Create a new Workflow",
+        "operationId": "createWorkflow",
+        "security": [
+          {"ApiKeyAuth": []},
+          {"BearerAuth": []}
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {"$ref": "#/components/schemas/WorkflowDefinition"}
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Workflow created",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/Workflow"}
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": ["Workflows"],
+        "summary": "List all Workflows",
+        "operationId": "listWorkflows",
+        "security": [
+          {"ApiKeyAuth": []},
+          {"BearerAuth": []}
+        ],
+        "responses": {
+          "200": {
+            "description": "List of workflows",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {"$ref": "#/components/schemas/Workflow"}
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/workflows/status": {
+      "get": {
+        "tags": ["Workflows"],
+        "summary": "Get Workflow status",
+        "operationId": "getWorkflowStatus",
+        "security": [
+          {"ApiKeyAuth": []},
+          {"BearerAuth": []}
+        ],
+        "responses": {
+          "200": {
+            "description": "Workflow status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {"$ref": "#/components/schemas/WorkflowStatus"}
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/runs/start": {
+      "post": {
+        "tags": ["Runs"],
+        "summary": "Start a new Agent run",
+        "operationId": "startRun",
+        "security": [
+          {"ApiKeyAuth": []},
+          {"BearerAuth": []}
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {"$ref": "#/components/schemas/AgentRunStartRequest"}
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Run started",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/AgentRunResponse"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/runs": {
+      "get": {
+        "tags": ["Runs"],
+        "summary": "List all runs",
+        "operationId": "listRuns",
+        "security": [
+          {"ApiKeyAuth": []},
+          {"BearerAuth": []}
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {"type": "integer", "default": 20, "minimum": 1, "maximum": 100}
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {"type": "string", "enum": ["pending", "running", "completed", "failed"]}
+          },
+          {
+            "name": "user_id",
+            "in": "query",
+            "schema": {"type": "string"}
+          },
+          {
+            "name": "trace_id",
+            "in": "query",
+            "schema": {"type": "string"}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of runs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {"$ref": "#/components/schemas/AgentRunRecord"}
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/memory": {
+      "post": {
+        "tags": ["Memory"],
+        "summary": "Store memory",
+        "operationId": "storeMemory",
+        "security": [
+          {"ApiKeyAuth": []},
+          {"BearerAuth": []}
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {"$ref": "#/components/schemas/MemoryStoreRequest"}
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Memory stored",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/MemoryStoreResponse"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/memory/search": {
+      "post": {
+        "tags": ["Memory"],
+        "summary": "Search memory",
+        "operationId": "searchMemory",
+        "security": [
+          {"ApiKeyAuth": []},
+          {"BearerAuth": []}
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {"$ref": "#/components/schemas/MemorySearchRequest"}
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Search results",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/MemorySearchResponse"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/memory/export": {
+      "get": {
+        "tags": ["Memory"],
+        "summary": "Export memory",
+        "operationId": "exportMemory",
+        "security": [
+          {"ApiKeyAuth": []},
+          {"BearerAuth": []}
+        ],
+        "responses": {
+          "200": {
+            "description": "Memory export",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/MemoryExportResponse"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tools": {
+      "get": {
+        "tags": ["Tools"],
+        "summary": "List available tools",
+        "operationId": "listTools",
+        "security": [
+          {"ApiKeyAuth": []},
+          {"BearerAuth": []}
+        ],
+        "responses": {
+          "200": {
+            "description": "List of tools",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {"$ref": "#/components/schemas/Tool"}
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tools/executions/{execution_id}": {
+      "get": {
+        "tags": ["Tools"],
+        "summary": "Get tool execution",
+        "operationId": "getToolExecution",
+        "security": [
+          {"ApiKeyAuth": []},
+          {"BearerAuth": []}
+        ],
+        "parameters": [
+          {
+            "name": "execution_id",
+            "in": "path",
+            "required": true,
+            "schema": {"type": "string"}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Tool execution details",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/ToolExecution"}
+              }
+            }
+          },
+          "404": {"$ref": "#/components/responses/NotFound"}
+        }
+      }
+    },
+    "/api/v1/auth/login": {
+      "post": {
+        "tags": ["Authentication"],
+        "summary": "Login user",
+        "operationId": "login",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "username": {"type": "string"},
+                  "password": {"type": "string"}
+                },
+                "required": ["username", "password"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Login successful",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/LoginResponse"}
+              }
+            }
+          },
+          "401": {"$ref": "#/components/responses/Unauthorized"}
+        }
+      }
+    },
+    "/api/v1/traces": {
+      "get": {
+        "tags": ["Traces"],
+        "summary": "List traces",
+        "operationId": "listTraces",
+        "security": [
+          {"ApiKeyAuth": []},
+          {"BearerAuth": []}
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {"type": "integer", "default": 20}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of traces",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {"$ref": "#/components/schemas/Trace"}
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/audit": {
+      "get": {
+        "tags": ["Audit"],
+        "summary": "List audit logs",
+        "operationId": "listAuditLogs",
+        "security": [
+          {"ApiKeyAuth": []},
+          {"BearerAuth": []}
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {"type": "integer", "default": 20}
+          },
+          {
+            "name": "action",
+            "in": "query",
+            "schema": {"type": "string"}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of audit logs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {"$ref": "#/components/schemas/AuditLog"}
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Agent": {
+        "type": "object",
+        "properties": {
+          "id": {"type": "string"},
+          "name": {"type": "string"},
+          "status": {"type": "string", "enum": ["active", "inactive", "paused"]},
+          "capabilities": {"type": "array", "items": {"type": "string"}},
+          "max_iterations": {"type": "integer"},
+          "created_at": {"type": "string", "format": "date-time"},
+          "updated_at": {"type": "string", "format": "date-time"}
+        }
+      },
+      "Workflow": {
+        "type": "object",
+        "properties": {
+          "id": {"type": "string"},
+          "workflow_id": {"type": "string"},
+          "name": {"type": "string"},
+          "description": {"type": "string"},
+          "nodes": {"type": "array"},
+          "edges": {"type": "array"},
+          "resource_type": {"type": "string"},
+          "snapshot": {"type": "object"}
+        }
+      },
+      "WorkflowDefinition": {
+        "type": "object",
+        "properties": {
+          "name": {"type": "string"},
+          "description": {"type": "string"},
+          "nodes": {"type": "array"},
+          "edges": {"type": "array"}
+        },
+        "required": ["name", "nodes", "edges"]
+      },
+      "WorkflowStatus": {
+        "type": "object",
+        "properties": {
+          "workflow_id": {"type": "string"},
+          "workflow_name": {"type": "string"},
+          "status": {"type": "string"},
+          "latest_run_id": {"type": "string"},
+          "run_count": {"type": "integer"}
+        }
+      },
+      "AgentRunStartRequest": {
+        "type": "object",
+        "properties": {
+          "task": {"type": "string", "minLength": 1, "maxLength": 20000},
+          "extra_context": {"type": "object"},
+          "async_run": {"type": "boolean", "default": false}
+        },
+        "required": ["task"]
+      },
+      "AgentRunResponse": {
+        "type": "object",
+        "properties": {
+          "run_id": {"type": "string"},
+          "trace_id": {"type": "string"},
+          "status": {"type": "string"},
+          "task": {"type": "string"},
+          "result": {"type": "object"},
+          "started_at": {"type": "string", "format": "date-time"},
+          "completed_at": {"type": "string", "format": "date-time"}
+        }
+      },
+      "AgentRunRecord": {
+        "type": "object",
+        "properties": {
+          "run_id": {"type": "string"},
+          "trace_id": {"type": "string"},
+          "status": {"type": "string"},
+          "task": {"type": "string"},
+          "user_id": {"type": "string"},
+          "tenant_id": {"type": "string"},
+          "started_at": {"type": "string", "format": "date-time"},
+          "completed_at": {"type": "string", "format": "date-time"}
+        }
+      },
+      "MemoryStoreRequest": {
+        "type": "object",
+        "properties": {
+          "content": {"type": "string", "minLength": 1, "maxLength": 20000},
+          "layer": {"type": "integer", "minimum": 1, "maximum": 10, "default": 3},
+          "importance": {"type": "number", "minimum": 0, "maximum": 1, "default": 0.5},
+          "tags": {"type": "array", "items": {"type": "string"}},
+          "metadata": {"type": "object"},
+          "session_id": {"type": "string"},
+          "scope": {"type": "string", "enum": ["user", "session", "global"]}
+        },
+        "required": ["content"]
+      },
+      "MemoryStoreResponse": {
+        "type": "object",
+        "properties": {
+          "id": {"type": "string"}
+        }
+      },
+      "MemorySearchRequest": {
+        "type": "object",
+        "properties": {
+          "query": {"type": "string"},
+          "layers": {"type": "array", "items": {"type": "integer"}},
+          "top_k": {"type": "integer", "minimum": 1, "maximum": 50, "default": 5},
+          "include_scores": {"type": "boolean", "default": false},
+          "scope": {"type": "string"}
+        }
+      },
+      "MemorySearchResponse": {
+        "type": "object",
+        "properties": {
+          "items": {"type": "array"},
+          "hits": {"type": "array"}
+        }
+      },
+      "MemoryExportResponse": {
+        "type": "object",
+        "properties": {
+          "bundle": {"type": "object"}
+        }
+      },
+      "Tool": {
+        "type": "object",
+        "properties": {
+          "name": {"type": "string"},
+          "description": {"type": "string"},
+          "parameters": {"type": "object"},
+          "returns": {"type": "object"}
+        }
+      },
+      "ToolExecution": {
+        "type": "object",
+        "properties": {
+          "execution_id": {"type": "string"},
+          "tool_name": {"type": "string"},
+          "status": {"type": "string"},
+          "input": {"type": "object"},
+          "output": {"type": "object"},
+          "created_at": {"type": "string", "format": "date-time"},
+          "updated_at": {"type": "string", "format": "date-time"}
+        }
+      },
+      "LoginResponse": {
+        "type": "object",
+        "properties": {
+          "access_token": {"type": "string"},
+          "token_type": {"type": "string"},
+          "expires_in": {"type": "integer"},
+          "user": {"type": "object"}
+        }
+      },
+      "Trace": {
+        "type": "object",
+        "properties": {
+          "trace_id": {"type": "string"},
+          "run_id": {"type": "string"},
+          "status": {"type": "string"},
+          "event_count": {"type": "integer"},
+          "started_at": {"type": "string", "format": "date-time"},
+          "ended_at": {"type": "string", "format": "date-time"}
+        }
+      },
+      "AuditLog": {
+        "type": "object",
+        "properties": {
+          "id": {"type": "string"},
+          "action": {"type": "string"},
+          "resource_type": {"type": "string"},
+          "resource_id": {"type": "string"},
+          "actor_id": {"type": "string"},
+          "tenant_id": {"type": "string"},
+          "details": {"type": "object"},
+          "timestamp": {"type": "string", "format": "date-time"}
+        }
+      }
+    },
+    "securitySchemes": {
+      "ApiKeyAuth": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-API-Key"
+      },
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    },
+    "responses": {
+      "BadRequest": {
+        "description": "Bad request",
+        "content": {
+          "application/json": {
+            "schema": {"$ref": "#/components/schemas/Error"}
+          }
+        }
+      },
+      "Unauthorized": {
+        "description": "Unauthorized",
+        "content": {
+          "application/json": {
+            "schema": {"$ref": "#/components/schemas/Error"}
+          }
+        }
+      },
+      "Forbidden": {
+        "description": "Forbidden",
+        "content": {
+          "application/json": {
+            "schema": {"$ref": "#/components/schemas/Error"}
+          }
+        }
+      },
+      "NotFound": {
+        "description": "Not found",
+        "content": {
+          "application/json": {
+            "schema": {"$ref": "#/components/schemas/Error"}
+          }
+        }
+      }
+    }
+  }
+}

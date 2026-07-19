@@ -1,0 +1,474 @@
+# X-Agent 企业版配置指南
+
+## 配置文件结构
+
+```yaml
+# enterprise-config.yaml
+
+# ============================================================================
+# 企业功能总体配置
+# ============================================================================
+enterprise:
+  enabled: true
+  version: "1.0"
+
+  # 多租户配置
+  multi_tenancy:
+    enabled: true
+    isolation_level: "row"  # row, schema, database
+    default_plan: "free"
+
+  # SSO 配置
+  sso:
+    enabled: true
+    providers:
+      - okta
+      - azure_ad
+      - google_workspace
+      - saml2
+
+    # Okta 配置
+    okta:
+      enabled: false
+      domain: "${OKTA_DOMAIN}"
+      client_id: "${OKTA_CLIENT_ID}"
+      client_secret: "${OKTA_CLIENT_SECRET}"
+      authorization_server: "default"
+      scopes:
+        - openid
+        - profile
+        - email
+
+    # Azure AD 配置
+    azure_ad:
+      enabled: false
+      tenant_id: "${AZURE_TENANT_ID}"
+      client_id: "${AZURE_CLIENT_ID}"
+      client_secret: "${AZURE_CLIENT_SECRET}"
+      authority: "https://login.microsoftonline.com/${AZURE_TENANT_ID}"
+
+    # Google Workspace 配置
+    google_workspace:
+      enabled: false
+      client_id: "${GOOGLE_CLIENT_ID}"
+      client_secret: "${GOOGLE_CLIENT_SECRET}"
+      scopes:
+        - openid
+        - profile
+        - email
+
+  # 权限管理
+  rbac:
+    enabled: true
+    default_role: "developer"
+
+    # 角色定义
+    roles:
+      super_admin:
+        description: "平台超级管理员"
+        permissions: "*"  # 所有权限
+
+      tenant_admin:
+        description: "租户管理员"
+        permissions:
+          - "tenant:*"
+          - "team:*"
+          - "user:*"
+          - "audit:read"
+
+      team_lead:
+        description: "团队负责人"
+        permissions:
+          - "team:read"
+          - "team:write"
+          - "user:read"
+          - "agent:*"
+          - "workflow:*"
+
+      developer:
+        description: "开发者"
+        permissions:
+          - "agent:read"
+          - "agent:write"
+          - "agent:execute"
+          - "workflow:read"
+          - "workflow:write"
+          - "workflow:execute"
+
+      viewer:
+        description: "查看者"
+        permissions:
+          - "agent:read"
+          - "workflow:read"
+
+      guest:
+        description: "访客"
+        permissions:
+          - "agent:read"
+
+  # 审计日志
+  audit:
+    enabled: true
+    log_level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+
+    # 事件类型配置
+    events:
+      user_login:
+        enabled: true
+        severity: "INFO"
+      user_created:
+        enabled: true
+        severity: "WARNING"
+      user_deleted:
+        enabled: true
+        severity: "ERROR"
+      agent_executed:
+        enabled: true
+        severity: "INFO"
+      workflow_executed:
+        enabled: true
+        severity: "INFO"
+      api_key_created:
+        enabled: true
+        severity: "WARNING"
+      api_key_revoked:
+        enabled: true
+        severity: "WARNING"
+      policy_changed:
+        enabled: true
+        severity: "ERROR"
+      security_event:
+        enabled: true
+        severity: "ERROR"
+
+    # 保留策略
+    retention:
+      free: 30  # 天
+      starter: 90
+      professional: 365
+      enterprise: 2555  # 7 年
+
+    # 存储配置
+    storage:
+      type: "postgresql"  # postgresql, elasticsearch, s3
+      connection_string: "${AUDIT_LOG_DB_URL}"
+      batch_size: 100
+      flush_interval: 60  # 秒
+
+  # API 密钥管理
+  api_keys:
+    enabled: true
+
+    # 密钥策略
+    policy:
+      min_length: 32
+      hash_algorithm: "sha256"
+      rotation_required: true
+      rotation_interval: 90  # 天
+
+    # 速率限制
+    rate_limiting:
+      enabled: true
+      default_limit: 1000  # 请求/分钟
+      burst_limit: 2000
+
+  # 安全策略
+  security:
+    # 密码策略
+    password_policy:
+      min_length: 12
+      require_uppercase: true
+      require_lowercase: true
+      require_numbers: true
+      require_special_chars: true
+      expiration_days: 90
+      history_count: 5
+
+    # MFA 配置
+    mfa:
+      enabled: true
+      required_for_admin: true
+      methods:
+        - totp
+        - sms
+        - email
+
+    # 会话管理
+    session:
+      timeout_minutes: 30
+      idle_timeout_minutes: 15
+      max_concurrent_sessions: 5
+
+    # IP 白名单
+    ip_whitelist:
+      enabled: false
+      ips: []
+
+    # 数据加密
+    encryption:
+      enabled: true
+      algorithm: "AES-256-GCM"
+      key_rotation_days: 90
+
+# ============================================================================
+# 订阅计划配置
+# ============================================================================
+plans:
+  free:
+    name: "免费版"
+    price: 0
+    currency: "USD"
+    billing_cycle: "monthly"
+
+    limits:
+      max_users: 1
+      max_teams: 1
+      max_api_keys: 1
+      max_agents: 10
+      max_workflows: 5
+      storage_gb: 1
+      api_calls_per_month: 10000
+
+    features:
+      sso: false
+      advanced_rbac: false
+      audit_logs: true
+      compliance_reports: false
+      priority_support: false
+      custom_domain: false
+      api_access: true
+      webhooks: false
+      integrations: 3
+
+    sla:
+      uptime_percentage: 99.0
+      response_time_hours: 48
+
+  starter:
+    name: "Starter 版"
+    price: 99
+    currency: "USD"
+    billing_cycle: "monthly"
+
+    limits:
+      max_users: 5
+      max_teams: 3
+      max_api_keys: 5
+      max_agents: 100
+      max_workflows: 50
+      storage_gb: 10
+      api_calls_per_month: 100000
+
+    features:
+      sso: false
+      advanced_rbac: false
+      audit_logs: true
+      compliance_reports: false
+      priority_support: true
+      custom_domain: false
+      api_access: true
+      webhooks: true
+      integrations: 10
+
+    sla:
+      uptime_percentage: 99.5
+      response_time_hours: 24
+
+  professional:
+    name: "Professional 版"
+    price: 499
+    currency: "USD"
+    billing_cycle: "monthly"
+
+    limits:
+      max_users: 50
+      max_teams: 10
+      max_api_keys: 20
+      max_agents: 1000
+      max_workflows: 500
+      storage_gb: 100
+      api_calls_per_month: 1000000
+
+    features:
+      sso: true
+      advanced_rbac: true
+      audit_logs: true
+      compliance_reports: true
+      priority_support: true
+      custom_domain: true
+      api_access: true
+      webhooks: true
+      integrations: 50
+
+    sla:
+      uptime_percentage: 99.5
+      response_time_hours: 12
+
+  enterprise:
+    name: "Enterprise 版"
+    price: "custom"
+    currency: "USD"
+    billing_cycle: "annual"
+
+    limits:
+      max_users: -1  # 无限
+      max_teams: -1
+      max_api_keys: -1
+      max_agents: -1
+      max_workflows: -1
+      storage_gb: -1
+      api_calls_per_month: -1
+
+    features:
+      sso: true
+      advanced_rbac: true
+      audit_logs: true
+      compliance_reports: true
+      priority_support: true
+      custom_domain: true
+      api_access: true
+      webhooks: true
+      integrations: -1  # 无限
+      dedicated_support: true
+      custom_integrations: true
+      on_premise_deployment: true
+
+    sla:
+      uptime_percentage: 99.9
+      response_time_hours: 4
+
+# ============================================================================
+# 使用量计费配置
+# ============================================================================
+usage_pricing:
+  enabled: true
+
+  # Agent 执行计费
+  agent_execution:
+    base_price: 0.01  # 美元/次
+    free_tier: 1000  # 免费额度
+    plan_overrides:
+      free: 100
+      starter: 10000
+      professional: 100000
+      enterprise: -1  # 无限
+
+  # 工作流执行计费
+  workflow_execution:
+    base_price: 0.05
+    free_tier: 100
+    plan_overrides:
+      free: 10
+      starter: 1000
+      professional: 10000
+      enterprise: -1
+
+  # 存储计费
+  storage:
+    base_price: 0.10  # 美元/GB/月
+    free_tier: 1  # GB
+    plan_overrides:
+      free: 1
+      starter: 10
+      professional: 100
+      enterprise: -1
+
+  # API 调用计费
+  api_calls:
+    base_price: 0.001  # 美元/次（超过限额）
+    free_tier: 10000
+    plan_overrides:
+      free: 1000
+      starter: 100000
+      professional: 1000000
+      enterprise: -1
+
+# ============================================================================
+# 数据库配置
+# ============================================================================
+database:
+  # 主数据库
+  primary:
+    type: "postgresql"
+    host: "${DB_HOST}"
+    port: 5432
+    database: "xagent_enterprise"
+    username: "${DB_USER}"
+    password: "${DB_PASSWORD}"
+    pool_size: 20
+    max_overflow: 10
+
+  # 审计日志数据库（可选）
+  audit:
+    type: "postgresql"
+    host: "${AUDIT_DB_HOST}"
+    port: 5432
+    database: "xagent_audit"
+    username: "${AUDIT_DB_USER}"
+    password: "${AUDIT_DB_PASSWORD}"
+    pool_size: 10
+
+  # 缓存
+  cache:
+    type: "redis"
+    host: "${REDIS_HOST}"
+    port: 6379
+    database: 0
+    password: "${REDIS_PASSWORD}"
+    ttl: 3600
+
+# ============================================================================
+# 监控和告警
+# ============================================================================
+monitoring:
+  enabled: true
+
+  # Prometheus 指标
+  prometheus:
+    enabled: true
+    port: 9090
+    path: "/metrics"
+
+  # 日志聚合
+  logging:
+    type: "elasticsearch"
+    host: "${ELASTICSEARCH_HOST}"
+    port: 9200
+    index_prefix: "xagent-enterprise"
+
+  # 告警规则
+  alerts:
+    - name: "高错误率"
+      condition: "error_rate > 0.05"
+      severity: "critical"
+      notification: "email,slack"
+
+    - name: "API 响应时间过长"
+      condition: "p99_latency > 5000"
+      severity: "warning"
+      notification: "slack"
+
+    - name: "数据库连接池耗尽"
+      condition: "db_pool_usage > 0.9"
+      severity: "critical"
+      notification: "email,pagerduty"
+
+# ============================================================================
+# 通知配置
+# ============================================================================
+notifications:
+  email:
+    enabled: true
+    smtp_host: "${SMTP_HOST}"
+    smtp_port: 587
+    smtp_user: "${SMTP_USER}"
+    smtp_password: "${SMTP_PASSWORD}"
+    from_address: "noreply@x-agent.example.com"
+
+  slack:
+    enabled: true
+    webhook_url: "${SLACK_WEBHOOK_URL}"
+
+  pagerduty:
+    enabled: false
+    api_key: "${PAGERDUTY_API_KEY}"

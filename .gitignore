@@ -1,0 +1,206 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.eggs/
+*.pyc
+*.pyo
+*.pyd
+
+# Testing
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+.mypy_cache/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+.ruff_cache/
+
+# Environment
+.venv/
+venv/
+.env
+*.env
+!*.env.example
+.xagent_runtime/
+
+# Project specific
+data/api_keys.json
+data/workflows.json
+data/tool_executions.json
+data/approvals.json
+data/workflow_schedules.json
+x_agent_core.egg-info/
+
+# Test / run artifacts (transient â€” never commit)
+baseline*.xml
+baseline*.txt
+baseline*.log
+smoke*.log
+smoke*.txt
+full_run.*
+run_full.*
+*_run.txt
+*_run.log
+parse_baseline.py
+junit*.xml
+test-results*.xml
+
+# Runtime state dumps (transient â€” never commit)
+data/agent_contexts/
+data/migrations/
+data/*.jsonl
+
+# æ²™ç®±ç¦»çº¿ä¾èµ– wheelï¼ˆCLAUDE.md æ²™ç®±æµ‹è¯•æ–¹æ¡ˆï¼Œå‹¿æäº¤ï¼‰
+.wheels/
+
+# ÔËĞĞÊ±Ô­×ÓĞ´ÁÙÊ±ÎÄ¼ş£¨²âÊÔ/ÔËĞĞ²úÉú£©
+data/*.tmp
+
+# ÅÜ²âÊÔ/µ÷ÊÔµÄÊä³ö²úÎï£¨¾ø²»Èë¿â£©
+*.log
+*.bak
+verify_*.txt
+full_run_*.txt
+hang*.txt
+locate_hang.txt
+wf_fix*.txt
+concurrent_fix.txt
+tests/EXECUTION_SUMMARY.txt
+tests/TEST_REPORT.txt
+# ÏÔÊ½·ÅĞĞÕæÒÀÀµÇåµ¥£¨·ÀÉÏÃæ¹æÔòÎóÉË£©
+!requirements.txt
+!requirements-dev.txt
+!requirements-lock.txt
+
+# ÔËĞĞÊ±Êı¾İ´æ´¢£¨³ÌĞò¶ÁĞ´²úÎï,¾ø²»Èë¿â£»store È±ÎÄ¼şÊ±×Ô¶¯´´½¨£©
+data/*.json
+data/*.jsonl
+
+# === A·½°¸Ê×´ÎÈë¿â:¹¤¾ß²úÎï/ÁÙÊ±ÎÄ¼ş(¾ø²»Èë¿â)===
+.codegraph/
+audit_reports/
+backup/
+~$*.docx
+~$*.xlsx
+*.tmp
+.claude/.write_test
+verify_final.xml
+verify_*.py
+
+# === ¸ù¼¶É¢ÂäµÄÒ»´ÎĞÔ½Å±¾/±¨¸æ(ÔëÒô,²»Èë¿â;×ÓÄ¿Â¼²»ÊÜÓ°Ïì)===
+/AGENT_*.md
+/ANALYTICS_*.md
+/*_REPORT.md
+/*_SUMMARY.md
+/fix_*.py
+/check_*.py
+/generate_*.py
+/run_*.py
+/verify_*.py
+/execute_git_integration*.py
+/git_integration.py
+/run_git_integration.py
+/integration_check.py
+/master_test_orchestrator.py
+/p2_integration.py
+/parse_signatures.py
+/performance_analyzer_advanced.py
+/performance_test_executor.py
+/find_missing_field_import.py
+/format_code.py
+/SECURITY_FIXES_REPORT.py
+
+# === Ç°¶Ë¹¹½¨²úÎï/ÒÀÀµ(¾ø²»Èë¿â)===
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+node_modules/
+
+# ±¾µØ¹¤¾ßÅäÖÃ/¶ş½øÖÆ±¨¸æ(²»Èë¿â)
+.claude/
+*.docx
+*.xlsx
+
+# backend ÏÂÉ¢Âä±¨¸æ(ÔëÒô)
+backend/*_REPORT.md
+backend/*_SUMMARY.md
+backend/*_GUIDE.md
+backend/*_CHECKLIST.md
+backend/*_DOCUMENTATION.md
+backend/*_REFERENCE.md
+backend/PERFORMANCE_OPTIMIZATION_REPORT.py
+
+# === ¸ù¼¶ÀúÊ·±¨¸æ/ÔëÒô(²¹È«)===
+/*_README.md
+/*_GUIDE.md
+/*_INDEX.md
+/*_PLAN.md
+/*_QUICKSTART.md
+/*_QUICK_REFERENCE.md
+/*_IMPLEMENTATION.md
+/*_MANIFEST.md
+/*_CHECKLIST.md
+/*_VERIFICATION.md
+/*_COMPLETE.md
+/COMMUNITY*.md
+/CICD*.md
+/CI_CD*.md
+/SKILL_MARKET_*.md
+/PLUGIN_MARKET_*.md
+/PERFORMANCE_OPTIMIZATION_*.md
+/STREAMING_*.md
+/API_*.md
+/AUDIT_*.md
+/BILLING_*.md
+/CODE_QUALITY_*.md
+/CONFIGURATION.md
+/CONTRIBUTING_EN.md
+/DATABASE_OPTIMIZATION_*.md
+/DOCKER_OPTIMIZATION.md
+/DOCS_QUICK_START.md
+/DOCUMENTATION_INDEX.md
+/EXAMPLE_SKILLS.md
+/FORUM_API_INTEGRATION.md
+/IMPORT_PATH_MAPPING.md
+/INTEGRATION_PLAN.md
+/MCP_TEST_MANIFEST.md
+/MONITORING_INDEX.md
+/NEW_SESSION_GUIDE.md
+/P2_INTEGRATION_README.md
+/TEST_*.md
+/TROUBLESHOOTING_*.md
+/TYPE_HINTS_*.md
+/security_cluster_decisions.md
+/X-Agent_*.md
+/±¾ÂÖ*.md
+/git_integration.sh
+/verify-kimi-helpers.ps1
+/competitive_analysis_report.md
+±¾ÂÖ°²È«ĞŞ¸´½»¸¶Çåµ¥*.md
+
+# ·ÅĞĞ .claude/skills/ ×÷ÎªÏîÄ¿×Ê²ú(¿ª·¢¼¼ÄÜ),ÆäÓà .claude ÈÔºöÂÔ
+!.claude/skills/
+!.claude/skills/**
+
+data/api_keys.json
+
+# === å•†ç”¨ä¿®å¤åŸºçº¿è¡¥å…… (2026-07-19) ===
+node_modules/
+logs/
+data/runs.jsonl
+data/*.jsonl
+data/runs/
+commercial_audit/node_modules/
+*.log
+.xagent_runtime/

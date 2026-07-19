@@ -1,0 +1,88 @@
+graph TB
+    subgraph "技能来源"
+        SKILLHUB[Skillhub<br/>官方技能商店]
+        OPENCLAW[OpenClaw<br/>社区生态]
+        HERMES[Hermes<br/>企业生态]
+        CUSTOM[自定义<br/>本地开发]
+    end
+
+    subgraph "统一技能市场"
+        MARKET[统一技能市场<br/>━━━━━━━━]
+        SEARCH[技能搜索<br/>向量+关键词]
+        RATING[评分系统<br/>用户评价]
+        VERSION[版本管理<br/>semver]
+        DEPLOY[一键安装<br/>依赖解析]
+    end
+
+    subgraph "插件系统核心"
+        PLUGIN_MGR[插件管理器]
+        LOADER[热加载器<br/>动态导入<br/>沙箱隔离]
+        LIFECYCLE[生命周期管理<br/>init/start/stop/destroy]
+        DEPENDENCY[依赖解析器<br/>pip/npm/apt]
+        CONFLICT[冲突检测<br/>版本/端口/资源]
+    end
+
+    subgraph "插件运行时"
+        RUNTIME[插件运行时]
+        PYTHON_SB[Python沙箱<br/>隔离进程]
+        NODE_SB[Node.js沙箱<br/>子进程]
+        WASM_SB[WASM沙箱<br/>高性能]
+    end
+
+    subgraph "插件开发"
+        SDK[Python SDK]
+        CLI[CLI脚手架]
+        DOCS[API文档]
+        TEMPLATES[项目模板]
+        TEST_FW[测试框架]
+    end
+
+    subgraph "安全层"
+        PERM_CHECK[权限检查<br/>文件/网络/进程]
+        CODE_SCAN[代码扫描<br/>AST/依赖审计]
+        RATE_LIMIT[调用限流]
+        AUDIT_LOG[审计日志]
+    end
+
+    SKILLHUB --> MARKET
+    OPENCLAW --> MARKET
+    HERMES --> MARKET
+    CUSTOM --> MARKET
+
+    MARKET --> SEARCH
+    MARKET --> RATING
+    MARKET --> VERSION
+    MARKET --> DEPLOY
+
+    DEPLOY --> PLUGIN_MGR
+
+    PLUGIN_MGR --> LOADER
+    PLUGIN_MGR --> LIFECYCLE
+    PLUGIN_MGR --> DEPENDENCY
+    PLUGIN_MGR --> CONFLICT
+
+    DEPENDENCY -->|"解析完成"| LOADER
+    CONFLICT -->|"无冲突"| LOADER
+
+    LOADER --> PERM_CHECK
+    PERM_CHECK --> CODE_SCAN
+    CODE_SCAN --> RATE_LIMIT
+    RATE_LIMIT --> RUNTIME
+
+    RUNTIME --> PYTHON_SB
+    RUNTIME --> NODE_SB
+    RUNTIME --> WASM_SB
+
+    LIFECYCLE -.-> RUNTIME
+    AUDIT_LOG -.-> RUNTIME
+    AUDIT_LOG -.-> LIFECYCLE
+
+    SDK --> TEMPLATES
+    SDK --> DOCS
+    CLI --> TEMPLATES
+    TEST_FW --> TEMPLATES
+
+    style MARKET fill:#4A90D9,color:#fff
+    style PLUGIN_MGR fill:#E67E22,color:#fff
+    style RUNTIME fill:#27AE60,color:#fff
+    style PERM_CHECK fill:#E74C3C,color:#fff

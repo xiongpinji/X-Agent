@@ -1,0 +1,143 @@
+# MCP服务器配置示例
+# 将此文件复制为 config/mcp_servers.yaml 并根据需要修改
+
+# MCP服务器列表
+mcp_servers:
+  # 文件系统服务器
+  - name: "filesystem"
+    url: "http://localhost:8001"
+    enabled: true
+    auto_register: true
+    timeout: 30.0
+    max_retries: 3
+    tags:
+      - "filesystem"
+      - "local"
+    description: "本地文件系统操作工具"
+
+  # 数据库服务器
+  - name: "database"
+    url: "http://localhost:8002"
+    enabled: true
+    auto_register: true
+    timeout: 30.0
+    max_retries: 3
+    tags:
+      - "database"
+      - "sql"
+    description: "数据库查询和操作工具"
+
+  # Web搜索服务器
+  - name: "web-search"
+    url: "http://localhost:8003"
+    enabled: true
+    auto_register: true
+    timeout: 30.0
+    max_retries: 3
+    tags:
+      - "search"
+      - "web"
+    description: "Web搜索和内容提取工具"
+
+  # Git操作服务器
+  - name: "git"
+    url: "http://localhost:8004"
+    enabled: false  # 默认禁用，需要时启用
+    auto_register: true
+    timeout: 30.0
+    max_retries: 3
+    tags:
+      - "git"
+      - "vcs"
+    description: "Git版本控制操作工具"
+
+  # 浏览器自动化服务器
+  - name: "browser"
+    url: "http://localhost:8005"
+    enabled: true
+    auto_register: true
+    timeout: 60.0  # 浏览器操作可能需要更长时间
+    max_retries: 2
+    tags:
+      - "browser"
+      - "automation"
+    description: "浏览器自动化和网页交互工具"
+
+# 全局配置
+global:
+  # 是否在启动时自动发现所有工具
+  auto_discover_on_startup: true
+
+  # 工具发现失败时的行为
+  # "ignore" - 忽略错误继续启动
+  # "warn" - 记录警告但继续启动
+  # "fail" - 启动失败
+  on_discovery_error: "warn"
+
+  # 工具刷新间隔（秒），0表示不自动刷新
+  refresh_interval: 0
+
+  # 是否启用MCP工具缓存
+  enable_cache: true
+
+  # 缓存TTL（秒）
+  cache_ttl: 300
+
+# 工具过滤规则（可选）
+filters:
+  # 只注册特定类别的工具
+  # allowed_categories:
+  #   - "file_system"
+  #   - "database"
+  #   - "web"
+
+  # 排除特定风险级别的工具
+  # excluded_risk_levels:
+  #   - "critical"
+
+  # 只注册包含特定标签的工具
+  # required_tags:
+  #   - "safe"
+
+  # 排除包含特定标签的工具
+  # excluded_tags:
+  #   - "experimental"
+
+# 安全配置
+security:
+  # 是否要求所有MCP工具调用都需要审批
+  require_approval: false
+
+  # 高风险工具是否需要审批
+  require_approval_for_high_risk: true
+
+  # 是否启用审计日志
+  enable_audit: true
+
+  # 审计日志最大条目数
+  max_audit_entries: 10000
+
+# 性能配置
+performance:
+  # 最大并发MCP请求数
+  max_concurrent_requests: 10
+
+  # 请求超时（秒）
+  default_timeout: 30.0
+
+  # 连接池大小
+  connection_pool_size: 10
+
+# 监控配置
+monitoring:
+  # 是否启用健康检查
+  enable_health_check: true
+
+  # 健康检查间隔（秒）
+  health_check_interval: 60
+
+  # 是否收集性能指标
+  collect_metrics: true
+
+  # 指标收集间隔（秒）
+  metrics_interval: 30

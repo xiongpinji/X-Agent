@@ -1,0 +1,93 @@
+graph TB
+    subgraph "创建入口"
+        DIALOG[对话式创建<br/>NLP→工作流]
+        CANVAS[画布拖拽<br/>ReactFlow]
+        TEMPLATE[模板库<br/>预定义流程]
+        IMPORT[导入<br/>JSON/YAML]
+    end
+
+    subgraph "工作流编辑器"
+        EDITOR[工作流编辑器]
+        NODE_LIB[节点库]
+        VALIDATOR[实时校验]
+        PREVIEW[执行预览]
+    end
+
+    subgraph "工作流引擎"
+        ENGINE[DAG执行引擎]
+        PARSER[DAG解析器<br/>拓扑排序]
+        SCHEDULER[节点调度器<br/>并行/串行]
+        EXECUTOR[节点执行器<br/>Python沙箱]
+        RETRY[重试管理器<br/>指数退避]
+    end
+
+    subgraph "节点类型"
+        LLM[LLM调用节点<br/>GPT-4/Claude]
+        CODE[代码执行节点<br/>Python/Shell]
+        HTTP[HTTP请求节点<br/>REST/gRPC]
+        COND[条件分支节点<br/>if/else/switch]
+        LOOP[循环节点<br/>for/while]
+        WAIT[等待节点<br/>定时/事件]
+        HUMAN[人工审批节点<br/>飞书/钉钉]
+        DATA[数据处理节点<br/>ETL/转换]
+    end
+
+    subgraph "运行时状态"
+        STATE[状态管理器]
+        CONTEXT[上下文传递]
+        CHECKPOINT[检查点/快照]
+        METRICS[执行指标]
+    end
+
+    subgraph "输出"
+        RESULT[执行结果]
+        LOG[执行日志]
+        ARTIFACT[产出物<br/>文件/数据]
+        CALLBACK[回调通知]
+    end
+
+    DIALOG --> EDITOR
+    CANVAS --> EDITOR
+    TEMPLATE --> EDITOR
+    IMPORT --> EDITOR
+
+    EDITOR --> NODE_LIB
+    EDITOR --> VALIDATOR
+    EDITOR --> PREVIEW
+
+    VALIDATOR -->|"校验通过"| ENGINE
+    VALIDATOR -->|"校验失败"| EDITOR
+
+    ENGINE --> PARSER
+    PARSER --> SCHEDULER
+    SCHEDULER --> EXECUTOR
+
+    EXECUTOR --> LLM
+    EXECUTOR --> CODE
+    EXECUTOR --> HTTP
+    EXECUTOR --> COND
+    EXECUTOR --> LOOP
+    EXECUTOR --> WAIT
+    EXECUTOR --> HUMAN
+    EXECUTOR --> DATA
+
+    EXECUTOR --> RETRY
+    RETRY -->|"重试"| EXECUTOR
+    RETRY -->|"失败"| RESULT
+
+    EXECUTOR --> STATE
+    STATE --> CONTEXT
+    STATE --> CHECKPOINT
+    STATE --> METRICS
+
+    CONTEXT --> EXECUTOR
+    EXECUTOR --> RESULT
+    RESULT --> LOG
+    RESULT --> ARTIFACT
+    RESULT --> CALLBACK
+
+    style ENGINE fill:#4A90D9,color:#fff
+    style PARSER fill:#3498DB,color:#fff
+    style SCHEDULER fill:#E67E22,color:#fff
+    style EXECUTOR fill:#27AE60,color:#fff
+    style STATE fill:#9B59B6,color:#fff

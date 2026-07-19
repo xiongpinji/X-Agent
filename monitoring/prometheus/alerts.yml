@@ -1,0 +1,275 @@
+groups:
+  - name: xagent_alerts
+    interval: 30s
+    rules:
+      # HTTP Error Rate Alerts
+      - alert: HighErrorRate
+        expr: rate(xagent_http_requests_total{status=~"5.."}[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+          component: api
+        annotations:
+          summary: "High HTTP error rate detected"
+          description: "Error rate is {{ $value | humanizePercentage }} requests/sec on {{ $labels.endpoint }}"
+
+      - alert: MediumErrorRate
+        expr: rate(xagent_http_requests_total{status=~"5.."}[5m]) > 0.01
+        for: 10m
+        labels:
+          severity: warning
+          component: api
+        annotations:
+          summary: "Medium HTTP error rate detected"
+          description: "Error rate is {{ $value | humanizePercentage }} requests/sec on {{ $labels.endpoint }}"
+
+      # Response Time Alerts
+      - alert: HighResponseTime
+        expr: histogram_quantile(0.95, rate(xagent_http_request_duration_seconds_bucket[5m])) > 2
+        for: 5m
+        labels:
+          severity: warning
+          component: api
+        annotations:
+          summary: "High response time detected"
+          description: "P95 response time is {{ $value | humanizeDuration }} for {{ $labels.endpoint }}"
+
+      - alert: VeryHighResponseTime
+        expr: histogram_quantile(0.99, rate(xagent_http_request_duration_seconds_bucket[5m])) > 5
+        for: 3m
+        labels:
+          severity: critical
+          component: api
+        annotations:
+          summary: "Very high response time detected"
+          description: "P99 response time is {{ $value | humanizeDuration }} for {{ $labels.endpoint }}"
+
+      # Agent Execution Alerts
+      - alert: HighAgentErrorRate
+        expr: rate(xagent_agent_executions_total{status="failed"}[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          component: agent
+        annotations:
+          summary: "High agent execution failure rate"
+          description: "Agent {{ $labels.agent_id }} has {{ $value | humanizePercentage }} failure rate"
+
+      - alert: LongRunningAgent
+        expr: xagent_agent_active_executions > 0 and time() - xagent_agent_execution_duration_seconds_sum / xagent_agent_execution_duration_seconds_count > 3600
+        for: 10m
+        labels:
+          severity: warning
+          component: agent
+        annotations:
+          summary: "Long running agent execution detected"
+          description: "Agent {{ $labels.agent_id }} has been running for more than 1 hour"
+
+      # Tool Execution Alerts
+      - alert: HighToolFailureRate
+        expr: rate(xagent_tool_calls_total{status="failed"}[5m]) > 0.2
+        for: 5m
+        labels:
+          severity: warning
+          component: tools
+        annotations:
+          summary: "High tool failure rate"
+          description: "Tool {{ $labels.tool_name }} has {{ $value | humanizePercentage }} failure rate"
+
+      - alert: SlowToolExecution
+        expr: histogram_quantile(0.95, rate(xagent_tool_call_duration_seconds_bucket[5m])) > 10
+        for: 5m
+        labels:
+          severity: warning
+          component: tools
+        annotations:
+          summary: "Slow tool execution detected"
+          description: "Tool {{ $labels.tool_name }} P95 duration is {{ $value | humanizeDuration }}"
+
+      # LLM Metrics Alerts
+      - alert: HighLLMErrorRate
+        expr: rate(xagent_llm_calls_total{status="failed"}[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          component: llm
+        annotations:
+          summary: "High LLM call failure rate"
+          description: "Model {{ $labels.model }} has {{ $value | humanizePercentage }} failure rate"
+
+      - alert: HighTokenUsage
+        expr: rate(xagent_llm_tokens_total[1h]) > 100000
+        for: 10m
+        labels:
+          severity: warning
+          component: llm
+        annotations:
+          summary: "High token usage rate"
+          description: "Token usage rate is {{ $value | humanize }} tokens/hour for {{ $labels.model }}"
+
+      # Memory System Alerts
+      - alert: HighMemoryOperationFailure
+        expr: rate(xagent_memory_operations_total{status="failed"}[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          component: memory
+        annotations:
+          summary: "High memory operation failure rate"
+          description: "Memory operation {{ $labels.operation }} has {{ $value | humanizePercentage }} failure rate"
+
+      - alert: SlowMemoryRetrieval
+        expr: histogram_quantile(0.95, rate(xagent_memory_retrieval_duration_seconds_bucket[5m])) > 1
+        for: 5m
+        labels:
+          severity: warning
+          component: memory
+        annotations:
+          summary: "Slow memory retrieval detected"
+          description: "Memory type {{ $labels.memory_type }} P95 retrieval time is {{ $value | humanizeDuration }}"
+
+      # Workflow Alerts
+      - alert: HighWorkflowFailureRate
+        expr: rate(xagent_workflow_executions_total{status="failed"}[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          component: workflow
+        annotations:
+          summary: "High workflow execution failure rate"
+          description: "Workflow {{ $labels.workflow_id }} has {{ $value | humanizePercentage }} failure rate"
+
+      - alert: LongRunningWorkflow
+        expr: xagent_workflow_execution_duration_seconds_sum / xagent_workflow_execution_duration_seconds_count > 1800
+        for: 10m
+        labels:
+          severity: warning
+          component: workflow
+        annotations:
+          summary: "Long running workflow detected"
+          description: "Workflow {{ $labels.workflow_id }} average duration is {{ $value | humanizeDuration }}"
+
+      # Database Alerts
+      - alert: HighDatabaseQueryFailureRate
+        expr: rate(xagent_db_queries_total{status="failed"}[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+          component: database
+        annotations:
+          summary: "High database query failure rate"
+          description: "Query type {{ $labels.query_type }} has {{ $value | humanizePercentage }} failure rate"
+
+      - alert: SlowDatabaseQueries
+        expr: histogram_quantile(0.95, rate(xagent_db_query_duration_seconds_bucket[5m])) > 1
+        for: 5m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "Slow database queries detected"
+          description: "Query type {{ $labels.query_type }} P95 duration is {{ $value | humanizeDuration }}"
+
+      - alert: DatabaseConnectionPoolExhausted
+        expr: xagent_db_active_connections / xagent_db_connection_pool_size > 0.9
+        for: 5m
+        labels:
+          severity: critical
+          component: database
+        annotations:
+          summary: "Database connection pool nearly exhausted"
+          description: "{{ $value | humanizePercentage }} of connection pool is in use"
+
+      # Cache Alerts
+      - alert: LowCacheHitRate
+        expr: rate(xagent_cache_hits_total[5m]) / (rate(xagent_cache_hits_total[5m]) + rate(xagent_cache_misses_total[5m])) < 0.5
+        for: 10m
+        labels:
+          severity: warning
+          component: cache
+        annotations:
+          summary: "Low cache hit rate"
+          description: "Cache {{ $labels.cache_name }} hit rate is {{ $value | humanizePercentage }}"
+
+      - alert: LargeCacheSize
+        expr: xagent_cache_size_bytes > 1073741824  # 1GB
+        for: 10m
+        labels:
+          severity: warning
+          component: cache
+        annotations:
+          summary: "Large cache size detected"
+          description: "Cache {{ $labels.cache_name }} size is {{ $value | humanize1024 }}B"
+
+      # Resource Alerts
+      - alert: HighCPUUsage
+        expr: xagent_cpu_usage_percent > 80
+        for: 5m
+        labels:
+          severity: warning
+          component: resources
+        annotations:
+          summary: "High CPU usage detected"
+          description: "CPU usage is {{ $value | humanize }}%"
+
+      - alert: HighMemoryUsage
+        expr: xagent_memory_usage_bytes > 2147483648  # 2GB
+        for: 5m
+        labels:
+          severity: warning
+          component: resources
+        annotations:
+          summary: "High memory usage detected"
+          description: "Memory usage is {{ $value | humanize1024 }}B"
+
+      - alert: HighDiskUsage
+        expr: xagent_disk_usage_bytes > 10737418240  # 10GB
+        for: 10m
+        labels:
+          severity: warning
+          component: resources
+        annotations:
+          summary: "High disk usage detected"
+          description: "Disk usage on {{ $labels.mount_point }} is {{ $value | humanize1024 }}B"
+
+      # Service Availability Alerts
+      - alert: ServiceDown
+        expr: up{job="xagent-backend"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: service
+        annotations:
+          summary: "X-Agent service is down"
+          description: "X-Agent backend service has been down for more than 1 minute"
+
+      - alert: WorkerDown
+        expr: up{job="xagent-workers"} == 0
+        for: 2m
+        labels:
+          severity: warning
+          component: service
+        annotations:
+          summary: "X-Agent worker is down"
+          description: "X-Agent worker {{ $labels.instance }} has been down for more than 2 minutes"
+
+      # Langfuse Integration Alerts
+      - alert: HighLangfuseAPIFailureRate
+        expr: rate(xagent_langfuse_api_calls_total{status="failed"}[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          component: langfuse
+        annotations:
+          summary: "High Langfuse API failure rate"
+          description: "Langfuse endpoint {{ $labels.endpoint }} has {{ $value | humanizePercentage }} failure rate"
+
+      - alert: LangfuseEventBacklog
+        expr: increase(xagent_langfuse_events_total[5m]) > 10000
+        for: 10m
+        labels:
+          severity: warning
+          component: langfuse
+        annotations:
+          summary: "Large Langfuse event backlog"
+          description: "{{ $value | humanize }} Langfuse events in last 5 minutes"

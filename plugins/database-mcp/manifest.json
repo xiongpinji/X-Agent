@@ -1,0 +1,238 @@
+{
+  "schema_version": "1.0",
+  "name": "database-mcp",
+  "version": "1.0.0",
+  "type": "mcp-plugin",
+  "xagent_compatibility": {
+    "min_version": "0.1.0",
+    "max_version": "1.0.0"
+  },
+  "metadata": {
+    "display_name": "数据库助手",
+    "description": "Database integration for X-Agent. Query, analyze, and manage PostgreSQL and MySQL databases directly from X-Agent.",
+    "description_zh": "数据库集成插件。直接在X-Agent中查询、分析和管理PostgreSQL和MySQL数据库。",
+    "author": "X-Agent Team",
+    "author_email": "team@x-agent.com",
+    "license": "MIT",
+    "homepage": "https://github.com/x-agent/database-mcp",
+    "repository": "https://github.com/x-agent/database-mcp",
+    "icon_url": "https://www.postgresql.org/media/img/about/press/elephant.png",
+    "category": "data"
+  },
+  "chinese": {
+    "name": "数据库助手",
+    "description": "这个插件让你可以在X-Agent中直接查询和管理数据库，支持PostgreSQL和MySQL，无需离开X-Agent。",
+    "usage": "1. 安装插件\n2. 配置数据库连接信息\n3. 在对话中使用数据库命令\n4. 查看查询结果",
+    "适合谁用": ["数据分析师", "数据库管理员", "开发者"],
+    "常见问题": [
+      {
+        "question": "支持哪些数据库？",
+        "answer": "目前支持PostgreSQL和MySQL。其他数据库可以通过扩展支持。"
+      },
+      {
+        "question": "如何配置数据库连接？",
+        "answer": "在插件配置中填入数据库主机、端口、用户名、密码和数据库名。"
+      },
+      {
+        "question": "查询结果如何导出？",
+        "answer": "支持导出为CSV、JSON、Excel等格式。"
+      }
+    ],
+    "tutorial": "https://example.com/database-plugin-tutorial"
+  },
+  "capabilities": {
+    "tools": true,
+    "resources": true,
+    "prompts": false
+  },
+  "permissions": {
+    "network": {
+      "required": true,
+      "domains": ["localhost", "127.0.0.1"]
+    },
+    "filesystem": {
+      "required": false,
+      "paths": []
+    },
+    "environment": {
+      "required": false,
+      "variables": []
+    }
+  },
+  "entry_point": {
+    "type": "python",
+    "module": "main",
+    "class": "DatabasePlugin"
+  },
+  "dependencies": {
+    "python": ">=3.11",
+    "packages": {
+      "psycopg2-binary": ">=2.9.0",
+      "mysql-connector-python": ">=8.0.0",
+      "pandas": ">=2.0.0",
+      "pydantic": ">=2.0.0"
+    }
+  },
+  "configuration": {
+    "db_type": {
+      "type": "string",
+      "required": true,
+      "default": "postgresql",
+      "description": "Database type (postgresql or mysql)",
+      "description_zh": "数据库类型（postgresql或mysql）"
+    },
+    "db_host": {
+      "type": "string",
+      "required": true,
+      "description": "Database host",
+      "description_zh": "数据库主机"
+    },
+    "db_port": {
+      "type": "integer",
+      "required": true,
+      "default": 5432,
+      "description": "Database port",
+      "description_zh": "数据库端口"
+    },
+    "db_user": {
+      "type": "string",
+      "required": true,
+      "description": "Database user",
+      "description_zh": "数据库用户"
+    },
+    "db_password": {
+      "type": "string",
+      "required": true,
+      "description": "Database password",
+      "description_zh": "数据库密码",
+      "secret": true
+    },
+    "db_name": {
+      "type": "string",
+      "required": true,
+      "description": "Database name",
+      "description_zh": "数据库名"
+    },
+    "timeout": {
+      "type": "integer",
+      "required": false,
+      "default": 30,
+      "description": "Query timeout in seconds",
+      "description_zh": "查询超时时间（秒）"
+    }
+  },
+  "tools": [
+    {
+      "name": "execute_query",
+      "description": "Execute a SQL query",
+      "description_zh": "执行SQL查询",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "SQL query"
+          },
+          "limit": {
+            "type": "integer",
+            "default": 100,
+            "description": "Maximum number of rows to return"
+          }
+        },
+        "required": ["query"]
+      }
+    },
+    {
+      "name": "list_tables",
+      "description": "List all tables in the database",
+      "description_zh": "列出数据库中的所有表",
+      "input_schema": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "get_table_schema",
+      "description": "Get table schema",
+      "description_zh": "获取表的架构",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "table_name": {
+            "type": "string",
+            "description": "Table name"
+          }
+        },
+        "required": ["table_name"]
+      }
+    },
+    {
+      "name": "export_query_result",
+      "description": "Export query result to file",
+      "description_zh": "将查询结果导出到文件",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "SQL query"
+          },
+          "format": {
+            "type": "string",
+            "default": "csv",
+            "description": "Export format (csv, json, excel)"
+          },
+          "filename": {
+            "type": "string",
+            "description": "Output filename"
+          }
+        },
+        "required": ["query", "filename"]
+      }
+    },
+    {
+      "name": "analyze_table",
+      "description": "Analyze table statistics",
+      "description_zh": "分析表的统计信息",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "table_name": {
+            "type": "string",
+            "description": "Table name"
+          }
+        },
+        "required": ["table_name"]
+      }
+    }
+  ],
+  "resources": [
+    {
+      "uri": "database://tables",
+      "name": "Tables",
+      "description": "Database tables",
+      "description_zh": "数据库表",
+      "mime_type": "application/json"
+    },
+    {
+      "uri": "database://schema",
+      "name": "Schema",
+      "description": "Database schema",
+      "description_zh": "数据库架构",
+      "mime_type": "application/json"
+    }
+  ],
+  "security": {
+    "sandbox": true,
+    "max_memory_mb": 1024,
+    "max_cpu_percent": 50,
+    "timeout_seconds": 300,
+    "allowed_protocols": ["tcp"],
+    "blocked_paths": ["/etc", "/root", "/sys"]
+  },
+  "quality_metrics": {
+    "code_quality_score": 8.0,
+    "test_coverage": 80,
+    "documentation_completeness": 85
+  }
+}

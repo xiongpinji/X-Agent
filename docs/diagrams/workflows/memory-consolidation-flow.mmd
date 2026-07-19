@@ -1,0 +1,55 @@
+flowchart TD
+    START([定时触发<br/>每1小时]) --> SCAN[扫描低层记忆<br/>L2/L3/L4层]
+    
+    SCAN --> BATCH{批量大小<br/>>100条?}
+    BATCH -->|是| SPLIT[分批处理<br/>100条/批]
+    BATCH -->|否| EVAL
+    
+    SPLIT --> EVAL[逐条评估巩固分数]
+    
+    EVAL --> CALC[计算多维评分]
+    
+    subgraph SCORING[评分计算]
+        TIME[时间因子<br/>exp-hours_since_access/24]
+        FREQ[频率因子<br/>1-exp-access_count/10]
+        IMP[重要性因子<br/>importance×0.2]
+        EMO[情感因子<br/>emotional_valence×0.15]
+        REL[相关性因子<br/>relevance×0.15]
+    end
+    
+    CALC --> TIME
+    CALC --> FREQ
+    CALC --> IMP
+    CALC --> EMO
+    CALC --> REL
+    
+    TIME --> MERGE[加权合并<br/>0.25+0.25+0.20+0.15+0.15]
+    FREQ --> MERGE
+    IMP --> MERGE
+    EMO --> MERGE
+    REL --> MERGE
+    
+    MERGE --> CHECK{分数 > 阈值?<br/>threshold=0.7-layer×0.02}
+    
+    CHECK -->|是| PROMOTE[提升层级<br/>Lx → Lx+1]
+    CHECK -->|否| CHECK_DECAY{分数 < 0.2?}
+    
+    CHECK_DECAY -->|是| DECAY[标记衰减<br/>归档或删除]
+    CHECK_DECAY -->|否| KEEP[保持当前层级<br/>更新访问时间]
+    
+    PROMOTE --> PK{是否已达<br/>L10?}
+    PK -->|是| FINAL[标记为永久记忆]
+    PK -->|否| INDEX[更新索引<br/>新层级+向量]
+    
+    INDEX --> NEXT([下一批])
+    DECAY --> NEXT
+    KEEP --> NEXT
+    FINAL --> NEXT
+    
+    NEXT --> BATCH
+
+    style START fill:#4A90D9,color:#fff
+    style PROMOTE fill:#27AE60,color:#fff
+    style DECAY fill:#E74C3C,color:#fff
+    style KEEP fill:#F39C12,color:#fff
+    style FINAL fill:#9B59B6,color:#fff

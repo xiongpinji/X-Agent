@@ -1,0 +1,17 @@
+# X-Agent Vision/Multimodal Optional Dependencies
+# These are LARGE (GB-scale) ML packages, only needed for vision/OCR/multimodal features.
+# Core service runs WITHOUT these (all ML imports are lazy/in-function).
+# Install only if you need image/video/OCR processing:  pip install -r requirements-vision.txt
+# Python >= 3.11
+
+# Vision Models & Image Processing
+# (numpy is declared in core requirements.txt — needed by memory/multimodal)
+Pillow==10.1.0
+opencv-python==4.8.1.78
+torch==2.1.2
+torchvision==0.16.2
+transformers==4.36.2
+clip-by-openai==1.0.0
+pytesseract==0.3.10
+paddleocr==2.7.0.3
+ultralytics==8.1.0

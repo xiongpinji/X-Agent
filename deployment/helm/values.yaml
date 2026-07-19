@@ -1,0 +1,187 @@
+# Default values for xagent
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+# Global settings
+global:
+  environment: production
+  logLevel: INFO
+  debug: false
+
+# Image configuration
+image:
+  repository: xagent
+  tag: latest
+  pullPolicy: Always
+
+# API Server configuration
+api:
+  enabled: true
+  replicas: 3
+  port: 8000
+  workers: 4
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "250m"
+    limits:
+      memory: "1Gi"
+      cpu: "500m"
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+
+# Celery Worker configuration
+worker:
+  enabled: true
+  replicas: 2
+  concurrency: 4
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "250m"
+    limits:
+      memory: "1Gi"
+      cpu: "500m"
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 8
+    targetCPUUtilizationPercentage: 75
+    targetMemoryUtilizationPercentage: 80
+
+# Celery Beat configuration
+beat:
+  enabled: true
+  replicas: 1
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "100m"
+    limits:
+      memory: "512Mi"
+      cpu: "200m"
+
+# PostgreSQL configuration
+postgres:
+  enabled: true
+  image: postgres:16-alpine
+  port: 5432
+  storage: 10Gi
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "250m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+
+# Redis configuration
+redis:
+  enabled: true
+  image: redis:7-alpine
+  port: 6379
+  storage: 5Gi
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "256Mi"
+      cpu: "200m"
+
+# Qdrant configuration
+qdrant:
+  enabled: true
+  image: qdrant/qdrant:latest
+  port: 6333
+  storage: 20Gi
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "250m"
+    limits:
+      memory: "1Gi"
+      cpu: "500m"
+
+# Neo4j configuration
+neo4j:
+  enabled: true
+  image: neo4j:5-community
+  port: 7687
+  storage: 15Gi
+  resources:
+    requests:
+      memory: "1Gi"
+      cpu: "500m"
+    limits:
+      memory: "2Gi"
+      cpu: "1000m"
+
+# Ingress configuration
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+  hosts:
+    - host: api.xagent.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: xagent-tls
+      hosts:
+        - api.xagent.example.com
+
+# Service configuration
+service:
+  type: ClusterIP
+  port: 8000
+
+# Secrets (should be overridden in production)
+secrets:
+  dbUser: xagent
+  dbPassword: change-me-in-production
+  redisPassword: change-me-in-production
+  qdrantApiKey: change-me-in-production
+  neo4jPassword: change-me-in-production
+  secretKey: change-me-in-production-use-strong-random-key
+
+# Database configuration
+database:
+  name: xagent_db
+  port: 5432
+
+# Redis configuration
+redis:
+  port: 6379
+
+# Qdrant configuration
+qdrant:
+  port: 6333
+
+# Neo4j configuration
+neo4j:
+  user: neo4j
+  port: 7687
+
+# Monitoring
+monitoring:
+  enabled: true
+  prometheus:
+    enabled: true
+    port: 9090
+  grafana:
+    enabled: true
+    port: 3000
+
+# Backup configuration
+backup:
+  enabled: true
+  schedule: "0 2 * * *"  # Daily at 2 AM
+  retention: 30  # days

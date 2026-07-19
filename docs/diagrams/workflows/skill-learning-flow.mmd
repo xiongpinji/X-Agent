@@ -1,0 +1,62 @@
+flowchart TD
+    START([技能学习触发]) --> SOURCE{学习来源?}
+    
+    SOURCE -->|观察| OBSERVE[观察用户操作<br/>记录交互序列]
+    SOURCE -->|描述| DESCRIBE[解析自然语言描述<br/>NLP意图提取]
+    SOURCE -->|组合| COMBINE[分析现有技能<br/>寻找可组合模式]
+    
+    OBSERVE --> EXTRACT_O[提取操作模式<br/>序列对齐<br/>去重/泛化]
+    DESCRIBE --> EXTRACT_D[提取需求要素<br/>输入/输出/步骤<br/>约束条件]
+    COMBINE --> EXTRACT_C[识别组合接口<br/>输入输出匹配<br/>依赖检查]
+    
+    EXTRACT_O --> GENERATE[代码生成]
+    EXTRACT_D --> GENERATE
+    EXTRACT_C --> GENERATE
+    
+    GENERATE --> GEN_PY[生成Python代码<br/>Jinja2模板<br/>AST构建]
+    
+    GEN_PY --> VERIFY{多层验证}
+    
+    subgraph VERIFICATION[验证流程]
+        SYNTAX[语法验证<br/>AST解析]
+        STATIC[静态分析<br/>Pylint/Mypy]
+        SECURITY[安全检查<br/>Bandit扫描]
+        SANDBOX[沙箱执行<br/>隔离环境]
+        PERF[性能测试<br/>超时/内存限制]
+    end
+    
+    VERIFY --> SYNTAX
+    SYNTAX -->|通过| STATIC
+    SYNTAX -->|失败| FIX[自动修复<br/>重试最多3次]
+    FIX --> SYNTAX
+    
+    STATIC -->|通过| SECURITY
+    STATIC -->|失败| REPORT[报告问题]
+    
+    SECURITY -->|通过| SANDBOX
+    SECURITY -->|禁止| REJECT[拒绝创建<br/>记录审计]
+    
+    SANDBOX -->|通过| PERF
+    SANDBOX -->|异常| DEBUG[调试分析<br/>错误定位]
+    DEBUG --> GENERATE
+    
+    PERF -->|达标| REGISTER[注册技能<br/>存入技能库<br/>L6程序记忆]
+    PERF -->|超限| OPTIMIZE[性能优化<br/>算法改进]
+    OPTIMIZE --> GENERATE
+    
+    REGISTER --> META[更新元数据<br/>版本/依赖/评分]
+    META --> PUBLISH{自动发布?}
+    
+    PUBLISH -->|是| MARKET[发布到技能市场]
+    PUBLISH -->|否| LOCAL[本地可用]
+    
+    MARKET --> DONE([技能就绪])
+    LOCAL --> DONE
+    REJECT --> END_REJECT([拒绝])
+    REPORT --> END_REPORT([待人工审核])
+
+    style GENERATE fill:#4A90D9,color:#fff
+    style VERIFY fill:#E67E22,color:#fff
+    style REGISTER fill:#27AE60,color:#fff
+    style REJECT fill:#E74C3C,color:#fff
+    style MARKET fill:#9B59B6,color:#fff

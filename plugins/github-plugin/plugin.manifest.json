@@ -1,0 +1,42 @@
+{
+  "name": "GitHub助手",
+  "version": "1.0.0",
+  "author": "X-Agent Team",
+  "description": "GitHub API integration for X-Agent. Manage repositories, issues, and pull requests directly from X-Agent.",
+  "description_zh": "GitHub API集成插件。直接在X-Agent中管理代码仓库、问题和拉取请求。",
+  "long_description": "This plugin provides comprehensive GitHub integration for X-Agent, allowing you to manage your repositories, track issues, and automate pull request workflows without leaving X-Agent.",
+  "long_description_zh": "这个插件为X-Agent提供全面的GitHub集成，让你可以在X-Agent中管理仓库、跟踪问题和自动化拉取请求工作流。",
+  "homepage": "https://github.com/x-agent/github-plugin",
+  "repository": "https://github.com/x-agent/github-plugin",
+  "license": "MIT",
+  "keywords": ["github", "git", "repository", "issue", "pull-request"],
+  "capabilities": [
+    "查看代码仓库",
+    "创建和管理问题",
+    "自动合并代码",
+    "查看项目统计",
+    "管理分支",
+    "创建发布版本"
+  ],
+  "dependencies": {
+    "python:PyGithub": "1.55",
+    "python:requests": "2.28.0"
+  },
+  "permissions": [
+    "github:read",
+    "github:write",
+    "github:admin"
+  ],
+  "entry_point": "github_plugin.main",
+  "icon_url": "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png",
+  "screenshots": [
+    "https://example.com/screenshot1.png",
+    "https://example.com/screenshot2.png"
+  ],
+  "category": "development",
+  "risk_level": "low",
+  "system_requirements": {
+    "os": ["Linux", "macOS", "Windows"],
+    "python_version": "3.8"
+  }
+}
