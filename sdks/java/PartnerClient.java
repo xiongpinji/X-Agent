@@ -25,7 +25,7 @@ import javax.crypto.spec.SecretKeySpec;
  *   PartnerResponse partner = client.getPartner("partner_id");
  */
 public class PartnerClient {
-    public static final String VERSION = "1.0.0";
+    public static final String VERSION = "0.2.0-alpha"; // 单一事实源: pyproject.toml
 
     private final String apiKey;
     private final String baseUrl;

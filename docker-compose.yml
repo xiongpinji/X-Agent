@@ -14,7 +14,9 @@ services:
       - "${DB_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./deployment/migrations/init.sql:/docker-entrypoint-initdb.d/01-init.sql
+      # P0-01: 原挂载的 deployment/migrations/init.sql 不存在(全新部署无 schema);
+      # 改指真实存在的 backend/migrations/init_schema.sql
+      - ./backend/migrations/init_schema.sql:/docker-entrypoint-initdb.d/01-init.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-xagent}"]
       interval: 10s
@@ -146,9 +148,8 @@ services:
       XAGENT_TELEGRAM_BOT_TOKEN: ${XAGENT_TELEGRAM_BOT_TOKEN:-}
       XAGENT_TELEGRAM_WEBHOOK_SECRET: ${XAGENT_TELEGRAM_WEBHOOK_SECRET:-}
       XAGENT_TELEGRAM_BASE_URL: ${XAGENT_TELEGRAM_BASE_URL:-}
-      # Celery still reads its conventional variables directly.
-      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:-redis_secure_password}@redis:6379/1
-      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:-redis_secure_password}@redis:6379/2
+      # P0-02: 后端无 Celery 应用(全代码库无 celery 引用), CELERY_BROKER_URL/CELERY_RESULT_BACKEND
+      # 为无效配置已移除; celery 依赖在 requirements.txt 保留但标注未使用, 待真 Celery 返工。
       API_HOST: 0.0.0.0
       API_PORT: 8000
       API_WORKERS: ${API_WORKERS:-4}
@@ -180,13 +181,14 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  # Celery Worker
+  # Workflow Worker (P0-02: 后端无 Celery 应用, workflow_worker 是 asyncio 轮询 worker,
+  # 直接以 python -m 启动; celery 依赖保留但未使用, 待真 Celery 返工)
   xagent-worker:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: xagent-worker
-    command: celery -A backend.app.workflow_worker worker --loglevel=info --concurrency=4
+    command: python -m backend.app.workflow_worker
     environment:
       XAGENT_APP_MODE: ${XAGENT_APP_MODE:-development}
       XAGENT_DATABASE_URL: postgresql+asyncpg://${DB_USER:-xagent}:${DB_PASSWORD:-xagent_secure_password}@postgres:5432/${DB_NAME:-xagent_db}
@@ -212,8 +214,6 @@ services:
       XAGENT_ENABLE_HIGH_RISK_TOOLS: ${XAGENT_ENABLE_HIGH_RISK_TOOLS:-false}
       XAGENT_PLAYWRIGHT_HEADLESS: ${XAGENT_PLAYWRIGHT_HEADLESS:-true}
       XAGENT_GITHUB_TOKEN: ${XAGENT_GITHUB_TOKEN:-}
-      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:-redis_secure_password}@redis:6379/1
-      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:-redis_secure_password}@redis:6379/2
     depends_on:
       - postgres
       - redis
@@ -231,13 +231,14 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  # Celery Beat (Scheduler)
+  # Workflow Scheduler (原 beat 角色; P0-02: 后端无 Celery 应用, 与 worker 同为
+  # asyncio 轮询进程 python -m backend.app.workflow_worker, 待真 Celery 返工后再拆分调度器)
   xagent-beat:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: xagent-beat
-    command: celery -A backend.app.workflow_worker beat --loglevel=info
+    command: python -m backend.app.workflow_worker
     environment:
       XAGENT_APP_MODE: ${XAGENT_APP_MODE:-development}
       XAGENT_DATABASE_URL: postgresql+asyncpg://${DB_USER:-xagent}:${DB_PASSWORD:-xagent_secure_password}@postgres:5432/${DB_NAME:-xagent_db}
@@ -247,8 +248,6 @@ services:
       XAGENT_AUDIT_HMAC_SECRET: ${XAGENT_AUDIT_HMAC_SECRET:-}
       XAGENT_JWT_SECRET: ${XAGENT_JWT_SECRET:-}
       XAGENT_ENCRYPTION_KEY: ${XAGENT_ENCRYPTION_KEY:-}
-      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:-redis_secure_password}@redis:6379/1
-      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:-redis_secure_password}@redis:6379/2
     depends_on:
       - postgres
       - redis

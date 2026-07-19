@@ -138,12 +138,13 @@ else
     check_pass "No default secrets found in .env"
 fi
 
-if [ -f ".env" ] && grep -q "SECRET_KEY" .env; then
-    SECRET_KEY=$(grep "SECRET_KEY" .env | cut -d'=' -f2)
-    if [ ${#SECRET_KEY} -lt 32 ]; then
-        check_fail "SECRET_KEY is too short (minimum 32 characters)"
+# P0-03: 应用密钥为 XAGENT_JWT_SECRET(backend/app/settings.py, env_prefix="XAGENT_"), 不再使用 SECRET_KEY
+if [ -f ".env" ] && grep -q "XAGENT_JWT_SECRET" .env; then
+    XAGENT_JWT_SECRET=$(grep "XAGENT_JWT_SECRET" .env | cut -d'=' -f2)
+    if [ ${#XAGENT_JWT_SECRET} -lt 32 ]; then
+        check_fail "XAGENT_JWT_SECRET is too short (minimum 32 characters)"
     else
-        check_pass "SECRET_KEY has sufficient length"
+        check_pass "XAGENT_JWT_SECRET has sufficient length"
     fi
 fi
 

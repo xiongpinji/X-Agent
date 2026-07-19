@@ -1,13 +1,15 @@
 """Enhanced memory API endpoints for hybrid memory system.
 
-Endpoints:
-- POST /api/v1/memory/store - Store memory with auto-tiering
-- GET /api/v1/memory/recall - Recall memories
-- GET /api/v1/memory/search - Search memories
-- POST /api/v1/memory/relate - Create relationships
-- GET /api/v1/memory/related/{memory_id} - Get related memories
-- POST /api/v1/memory/merge - Merge memories
-- GET /api/v1/memory/stats - Memory statistics
+Endpoints (all under the /api/v1/memory/enhanced prefix, separated from the
+primary memory API in backend/app/api/memory.py to avoid route conflicts):
+- POST /api/v1/memory/enhanced/store - Store memory with auto-tiering
+- POST /api/v1/memory/enhanced/recall - Recall memories
+- POST /api/v1/memory/enhanced/search - Search memories
+- POST /api/v1/memory/enhanced/relate - Create relationships
+- GET /api/v1/memory/enhanced/related/{memory_id} - Get related memories
+- POST /api/v1/memory/enhanced/merge - Merge memories
+- GET /api/v1/memory/enhanced/stats - Memory statistics
+- POST /api/v1/memory/enhanced/sync - Synchronize tiers
 """
 
 from __future__ import annotations
@@ -20,8 +22,11 @@ from pydantic import BaseModel, Field
 from backend.app.core.contracts import RunContext
 from backend.app.core.hybrid_memory_system import HybridMemorySystem, Memory, MemoryTierStats
 from backend.app.core.security import Principal
+from backend.app.dependencies import get_current_principal
 
-router = APIRouter(prefix="/api/v1/memory", tags=["memory"])
+router = APIRouter(prefix="/api/v1/memory/enhanced", tags=["memory-enhanced"])
+
+PrincipalDependency = Annotated[Principal, Depends(get_current_principal)]
 
 
 class StoreMemoryRequest(BaseModel):
@@ -42,6 +47,8 @@ class StoreMemoryResponse(BaseModel):
     tier: str
     category: str
     importance: float
+    degraded: bool = False
+    note: str | None = None
 
 
 class RecallMemoryRequest(BaseModel):
@@ -56,6 +63,8 @@ class RecallMemoryResponse(BaseModel):
 
     memories: list[Memory]
     count: int
+    degraded: bool = False
+    degraded_tiers: list[str] = Field(default_factory=list)
 
 
 class SearchMemoryRequest(BaseModel):
@@ -72,6 +81,8 @@ class SearchMemoryResponse(BaseModel):
     memories: list[Memory]
     count: int
     search_type: str
+    degraded: bool = False
+    degraded_tiers: list[str] = Field(default_factory=list)
 
 
 class RelateMemoriesRequest(BaseModel):
@@ -102,6 +113,8 @@ class MergeMemoriesResponse(BaseModel):
     merged_id: str
     source_count: int
     strategy: str
+    degraded: bool = False
+    note: str | None = None
 
 
 class MemoryStatsResponse(BaseModel):
@@ -113,6 +126,8 @@ class MemoryStatsResponse(BaseModel):
     total_count: int
     avg_importance: float
     last_sync: str | None
+    degraded: bool = False
+    degraded_tiers: list[str] = Field(default_factory=list)
 
 
 # Dependency injection
@@ -125,12 +140,37 @@ def get_hybrid_memory_system() -> HybridMemorySystem:
     from backend.app.core.memory_classifier import MemoryClassifier
     from backend.app.core.memory_merger import MemoryMerger
 
-    return HybridMemorySystem(
+    cold_store = ColdMemoryStore()
+    graph_store = GraphMemoryStore()
+    system = HybridMemorySystem(
         hot_store=HotMemoryStore(),
-        cold_store=ColdMemoryStore(),
-        graph_store=GraphMemoryStore(),
+        cold_store=cold_store,
+        graph_store=graph_store,
         classifier=MemoryClassifier(),
         merger=MemoryMerger(),
+    )
+    # Tiers whose backends are not configured would otherwise silently
+    # "succeed" without persisting anything; record them so endpoints can
+    # fail explicitly or flag the response as degraded instead.
+    degraded: list[str] = []
+    if getattr(cold_store, "qdrant_client", None) is None:
+        degraded.append("cold")
+    if getattr(graph_store, "neo4j_driver", None) is None:
+        degraded.append("graph")
+    system.degraded_tiers = tuple(degraded)
+    return system
+
+
+def _degraded_tiers(hybrid_memory: HybridMemorySystem) -> tuple[str, ...]:
+    """Return the tiers whose backends are unavailable for this system."""
+    return tuple(getattr(hybrid_memory, "degraded_tiers", ()))
+
+
+def _unavailable_tier_error(tier: str) -> HTTPException:
+    """Build an explicit 503 for operations needing an unavailable tier."""
+    return HTTPException(
+        status_code=503,
+        detail=f"Memory tier '{tier}' backend is not configured; the operation cannot be completed and would not persist.",
     )
 
 
@@ -152,7 +192,7 @@ def _context_from_principal(principal: Principal) -> RunContext:
 async def store_memory(
     request: StoreMemoryRequest,
     hybrid_memory: HybridMemoryDependency,
-    principal: Principal,
+    principal: PrincipalDependency,
 ) -> StoreMemoryResponse:
     """Store memory with automatic tier selection.
 
@@ -171,16 +211,35 @@ async def store_memory(
             metadata=request.metadata,
         )
 
+        degraded = set(_degraded_tiers(hybrid_memory))
+        requested_tier = request.tier
+        if requested_tier in degraded:
+            raise _unavailable_tier_error(requested_tier)
+
+        # Auto-tiering may select a tier whose backend is not configured;
+        # redirect to hot and flag the response instead of a silent no-op.
+        effective_tier = requested_tier
+        degraded_note: str | None = None
+        if requested_tier == "auto":
+            selected = hybrid_memory._select_tier(memory)
+            if selected in degraded:
+                effective_tier = "hot"
+                degraded_note = f"Tier '{selected}' backend is not configured; stored in hot tier instead."
+
         context = _context_from_principal(principal)
-        memory_id = await hybrid_memory.store(memory, tier=request.tier, context=context)
+        memory_id = await hybrid_memory.store(memory, tier=effective_tier, context=context)
 
         return StoreMemoryResponse(
             id=memory_id,
             tier=memory.tier,
             category=memory.category,
             importance=memory.importance,
+            degraded=degraded_note is not None,
+            note=degraded_note,
         )
 
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to store memory: {str(e)}")
 
@@ -189,7 +248,7 @@ async def store_memory(
 async def recall_memory(
     request: RecallMemoryRequest,
     hybrid_memory: HybridMemoryDependency,
-    principal: Principal,
+    principal: PrincipalDependency,
 ) -> RecallMemoryResponse:
     """Recall memories using hybrid search.
 
@@ -204,11 +263,16 @@ async def recall_memory(
             context=context,
         )
 
+        degraded = list(_degraded_tiers(hybrid_memory))
         return RecallMemoryResponse(
             memories=memories,
             count=len(memories),
+            degraded=bool(degraded),
+            degraded_tiers=degraded,
         )
 
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to recall memories: {str(e)}")
 
@@ -217,7 +281,7 @@ async def recall_memory(
 async def search_memory(
     request: SearchMemoryRequest,
     hybrid_memory: HybridMemoryDependency,
-    principal: Principal,
+    principal: PrincipalDependency,
 ) -> SearchMemoryResponse:
     """Search memories with specified strategy.
 
@@ -228,6 +292,12 @@ async def search_memory(
     - graph: Relationship-based search in graph tier
     """
     try:
+        degraded = set(_degraded_tiers(hybrid_memory))
+        if request.search_type == "semantic" and "cold" in degraded:
+            raise _unavailable_tier_error("cold")
+        if request.search_type == "graph" and "graph" in degraded:
+            raise _unavailable_tier_error("graph")
+
         context = _context_from_principal(principal)
         memories = await hybrid_memory.search(
             request.query,
@@ -236,12 +306,17 @@ async def search_memory(
             context=context,
         )
 
+        degraded_list = sorted(degraded)
         return SearchMemoryResponse(
             memories=memories,
             count=len(memories),
             search_type=request.search_type,
+            degraded=bool(degraded_list),
+            degraded_tiers=degraded_list,
         )
 
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to search memories: {str(e)}")
 
@@ -250,7 +325,7 @@ async def search_memory(
 async def relate_memories(
     request: RelateMemoriesRequest,
     hybrid_memory: HybridMemoryDependency,
-    principal: Principal,
+    principal: PrincipalDependency,
 ) -> RelateMemoriesResponse:
     """Create relationship between two memories.
 
@@ -258,6 +333,9 @@ async def relate_memories(
     relationship-based queries and knowledge graph traversal.
     """
     try:
+        if "graph" in _degraded_tiers(hybrid_memory):
+            raise _unavailable_tier_error("graph")
+
         success = await hybrid_memory.relate(
             request.memory_id1,
             request.memory_id2,
@@ -269,6 +347,8 @@ async def relate_memories(
             relation=request.relation,
         )
 
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to relate memories: {str(e)}")
 
@@ -279,7 +359,7 @@ async def get_related_memories(
     limit: int = Query(default=5, ge=1, le=50),
     *,
     hybrid_memory: HybridMemoryDependency,
-    principal: Principal = Depends(),
+    principal: PrincipalDependency,
 ) -> RecallMemoryResponse:
     """Get memories related to a specific memory.
 
@@ -294,11 +374,16 @@ async def get_related_memories(
             context=context,
         )
 
+        degraded = list(_degraded_tiers(hybrid_memory))
         return RecallMemoryResponse(
             memories=memories,
             count=len(memories),
+            degraded=bool(degraded),
+            degraded_tiers=degraded,
         )
 
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get related memories: {str(e)}")
 
@@ -307,7 +392,7 @@ async def get_related_memories(
 async def merge_memories(
     request: MergeMemoriesRequest,
     hybrid_memory: HybridMemoryDependency,
-    principal: Principal,
+    principal: PrincipalDependency,
 ) -> MergeMemoriesResponse:
     """Merge multiple memories into one.
 
@@ -331,16 +416,29 @@ async def merge_memories(
         # Merge
         merged = await hybrid_memory.merger.merge(memories, strategy=request.strategy)
 
-        # Store merged memory
+        # Store merged memory; auto-tiering may pick a tier whose backend is
+        # not configured — redirect to hot and flag instead of a silent no-op.
+        degraded = set(_degraded_tiers(hybrid_memory))
+        effective_tier = "auto"
+        degraded_note: str | None = None
+        selected = hybrid_memory._select_tier(merged)
+        if selected in degraded:
+            effective_tier = "hot"
+            degraded_note = f"Tier '{selected}' backend is not configured; stored in hot tier instead."
+
         context = _context_from_principal(principal)
-        merged_id = await hybrid_memory.store(merged, context=context)
+        merged_id = await hybrid_memory.store(merged, tier=effective_tier, context=context)
 
         return MergeMemoriesResponse(
             merged_id=merged_id,
             source_count=len(request.memory_ids),
             strategy=request.strategy,
+            degraded=degraded_note is not None,
+            note=degraded_note,
         )
 
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to merge memories: {str(e)}")
 
@@ -348,7 +446,7 @@ async def merge_memories(
 @router.get("/stats", response_model=MemoryStatsResponse)
 async def get_memory_stats(
     hybrid_memory: HybridMemoryDependency,
-    principal: Principal,
+    principal: PrincipalDependency,
 ) -> MemoryStatsResponse:
     """Get memory system statistics.
 
@@ -357,6 +455,7 @@ async def get_memory_stats(
     try:
         stats = await hybrid_memory.get_stats()
 
+        degraded = list(_degraded_tiers(hybrid_memory))
         return MemoryStatsResponse(
             hot_count=stats.hot_count,
             cold_count=stats.cold_count,
@@ -364,8 +463,12 @@ async def get_memory_stats(
             total_count=stats.total_count,
             avg_importance=stats.avg_importance,
             last_sync=stats.last_sync.isoformat() if stats.last_sync else None,
+            degraded=bool(degraded),
+            degraded_tiers=degraded,
         )
 
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get stats: {str(e)}")
 
@@ -373,7 +476,7 @@ async def get_memory_stats(
 @router.post("/sync")
 async def sync_tiers(
     hybrid_memory: HybridMemoryDependency,
-    principal: Principal,
+    principal: PrincipalDependency,
 ) -> dict[str, Any]:
     """Synchronize memories across tiers.
 
@@ -384,8 +487,20 @@ async def sync_tiers(
     - Deduplication across tiers
     """
     try:
+        # Sync migrates hot memories to the cold tier; with no cold backend
+        # the migration would not persist and the hot copy would be deleted.
+        # Fail explicitly instead of silently losing data.
+        degraded = set(_degraded_tiers(hybrid_memory))
+        if "cold" in degraded:
+            raise _unavailable_tier_error("cold")
+
         sync_stats = await hybrid_memory.sync_tiers()
+        if degraded:
+            sync_stats["degraded"] = True
+            sync_stats["degraded_tiers"] = sorted(degraded)
         return sync_stats
 
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to sync tiers: {str(e)}")

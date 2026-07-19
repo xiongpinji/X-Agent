@@ -114,6 +114,7 @@ validate_configurations() {
     local config_files=(
         "prometheus.yml"
         "alert_rules.yml"
+        "recording_rules.yml"
         "alertmanager.yml"
         "grafana/provisioning/datasources.yml"
         "elk/logstash.conf"

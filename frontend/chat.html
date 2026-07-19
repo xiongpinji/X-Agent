@@ -753,7 +753,7 @@ function removeThinking(){const t=document.getElementById('thk');if(t)t.remove()
 function toolCallsHtml(calls=[]) {
   if(!calls.length) return '';
   return `<div class="tcs">${calls.map(c=>{
-    const args=JSON.stringify(c.arguments_preview||,null,2);
+    const args=JSON.stringify(c.arguments_preview||'',null,2);
     const out=typeof c.output==='string'?c.output:JSON.stringify(c.output||'',null,2);
     return `<div class="tc" onclick="this.classList.toggle('op')">
       <div class="tc-h"><span>🔧</span><span class="tc-nm">${c.tool_name||'tool'}</span>
@@ -827,7 +827,7 @@ async function searchMemory() {
   const q = document.getElementById('memSearch').value.trim();
   if (!q) return loadMemory();
   try {
-    const data = await api('/api/v1/memory/search', {method:'POST', body:JSON.stringify({query:q,limit:20})});
+    const data = await api('/api/v1/memory/search', {method:'POST', body:JSON.stringify({query:q,top_k:20})});
     const items = data.items || data.results || data || [];
     if (!items.length) { document.getElementById('mem-list').innerHTML='<div class="empty"><div class="empty-icon">💾</div><div class="empty-txt">未找到相关记忆</div></div>'; return; }
     document.getElementById('mem-list').innerHTML = items.map(m=>`

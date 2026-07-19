@@ -40,24 +40,47 @@ class TenantIsolationMiddleware(BaseHTTPMiddleware):
         if any(request.url.path.startswith(path) for path in self.EXEMPT_PATHS):
             return await call_next(request)
 
-        # 从请求头获取租户ID
-        tenant_id = request.headers.get("x-tenant-id")
+        # SECURITY: 租户上下文只能派生自已认证的 principal。
+        # 绝不信任客户端提供的 x-tenant-id 头 —— 伪造该头即可跨租户访问。
+        principal: Principal | None = None
+        try:
+            from backend.app.dependencies import get_current_principal
 
-        # 如果没有提供租户ID，尝试从principal获取
-        if not tenant_id:
-            try:
-                from backend.app.dependencies import get_current_principal
-                principal = await get_current_principal(request)
-                tenant_id = principal.tenant_id
-            except Exception:
-                # 如果无法获取principal，使用默认租户
-                tenant_id = "default"
+            principal = get_current_principal(request)
+        except Exception:
+            # 凭证缺失/无效时不在中间件层阻断：交由路由层的
+            # get_current_principal 依赖抛出标准 401。此时不写入任何
+            # 租户上下文，避免隐式回落到 "default" 租户造成越权。
+            principal = None
 
-        # 将租户ID存储在request state中，供后续使用
+        if principal is None:
+            return await call_next(request)
+
+        tenant_id = principal.tenant_id
+
+        # 记录并忽略与 principal 不符的 x-tenant-id 头（疑似伪造/越权尝试）
+        header_tenant_id = request.headers.get("x-tenant-id")
+        if header_tenant_id and header_tenant_id != tenant_id:
+            logger.warning(
+                "Ignoring client-supplied x-tenant-id header: user=%s, "
+                "principal_tenant=%s, header_tenant=%s, path=%s",
+                principal.user_id,
+                tenant_id,
+                header_tenant_id,
+                request.url.path,
+            )
+
+        # 将 principal/tenant 写入请求上下文：
+        # - request.scope["principal"] 供 main.py 的内联租户校验中间件使用
+        # - request.state 供下游中间件(RequestContextMiddleware/request_tracer)与路由使用
+        request.scope["principal"] = principal
+        request.scope["tenant_id"] = tenant_id
+        request.state.principal = principal
         request.state.tenant_id = tenant_id
 
-        # 添加租户ID到响应头
         response = await call_next(request)
+
+        # 响应头回写派生自 principal 的租户ID（而非客户端提供的值）
         response.headers["x-tenant-id"] = tenant_id
 
         return response

@@ -284,7 +284,7 @@ class ApiClient {
 
   // Health check
   async healthCheck(): Promise<{ status: string; version: string }> {
-    const response = await this.client.get('/health')
+    const response = await this.client.get('/health/live')
     return response.data
   }
 }

@@ -3,15 +3,36 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
 
+from backend.app.api.errors import api_error
 from backend.app.api.linked_summary import LinkedSummaryEnvelope, build_linked_summary
 from backend.app.api.pagination import PaginationParams, apply_pagination
 from backend.app.core.audit import AuditChainVerification, AuditLogRecord, AuditStore
+from backend.app.core.contracts import ErrorCode
 from backend.app.core.security import Principal
 from backend.app.dependencies import enforce_scope, get_audit_store, get_current_principal
 
 router = APIRouter(prefix="/api/v1/audit-logs", tags=["audit"])
 AuditStoreDependency = Annotated[AuditStore, Depends(get_audit_store)]
 PrincipalDependency = Annotated[Principal, Depends(get_current_principal)]
+
+
+def _enforce_audit_tenant_scope(principal: Principal, tenant_id: str | None) -> str | None:
+    """强制审计查询的租户边界。
+
+    非 admin 角色（含 viewer）只能访问本租户的审计数据：
+    - 显式传入与本租户不符的 tenant_id，视为越权尝试，返回 403；
+    - 未传入时强制收敛到本租户。
+    admin 可指定任意租户过滤，或不指定（跨租户全量）。
+    """
+    if principal.role == "admin":
+        return tenant_id
+    if tenant_id is not None and tenant_id != principal.tenant_id:
+        raise api_error(
+            403,
+            ErrorCode.AUTHORIZATION_FAILED,
+            "Access denied: cannot access audit logs of another tenant.",
+        )
+    return principal.tenant_id
 
 
 @router.get("", response_model=dict[str, object])
@@ -51,6 +72,7 @@ async def list_audit_logs(
         Paginated audit logs
     """
     enforce_scope(principal, "audit:read")
+    tenant_id = _enforce_audit_tenant_scope(principal, tenant_id)
     records = audit_store.list(
         limit=10000,
         offset=0,
@@ -93,7 +115,7 @@ async def audit_summary(
     principal: PrincipalDependency,
 ) -> dict[str, object]:
     enforce_scope(principal, "audit:read")
-    items = audit_store.list(limit=1000)
+    items = audit_store.list(limit=1000, tenant_id=_enforce_audit_tenant_scope(principal, None))
     by_action: dict[str, int] = {}
     by_resource_type: dict[str, int] = {}
     by_outcome: dict[str, int] = {}
@@ -136,7 +158,7 @@ async def export_audit_logs_csv(
     """
     enforce_scope(principal, "audit:read")
     csv_content = audit_store.export_csv(
-        tenant_id=tenant_id,
+        tenant_id=_enforce_audit_tenant_scope(principal, tenant_id),
         actor_id=actor_id,
         action=action,
         resource_type=resource_type,
@@ -176,7 +198,7 @@ async def export_audit_logs_json(
     """
     enforce_scope(principal, "audit:read")
     records = audit_store.export_json(
-        tenant_id=tenant_id,
+        tenant_id=_enforce_audit_tenant_scope(principal, tenant_id),
         actor_id=actor_id,
         action=action,
         resource_type=resource_type,

@@ -149,7 +149,8 @@ scrape_configs:
   - job_name: 'x-agent-api'
     static_configs:
       - targets: ['localhost:8000']
-    metrics_path: '/metrics'
+    # 与 backend/app/api/metrics.py 实际挂载路径一致
+    metrics_path: '/api/v1/metrics/prometheus'
     scrape_interval: 10s
 ```
 
@@ -430,7 +431,7 @@ RETENTION_DAYS=30             # 保留天数
 docker-compose ps
 
 # 检查网络连接
-docker-compose exec prometheus curl http://x-agent-api:8000/metrics
+docker-compose exec prometheus curl http://x-agent-api:8000/api/v1/metrics/prometheus
 
 # 查看 Prometheus 日志
 docker-compose logs prometheus

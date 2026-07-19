@@ -245,8 +245,8 @@ verify_jaeger() {
 verify_metrics_collection() {
     print_header "Metrics Collection Verification"
 
-    # Check API metrics
-    if curl -sf http://localhost:8000/metrics > /dev/null 2>&1; then
+    # Check API metrics（当前真实指标端点为 /api/v1/metrics/prometheus）
+    if curl -sf http://localhost:8000/api/v1/metrics/prometheus > /dev/null 2>&1; then
         pass "API metrics endpoint is accessible"
     else
         warn "API metrics endpoint is not accessible"

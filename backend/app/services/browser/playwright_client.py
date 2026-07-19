@@ -13,6 +13,45 @@ except ImportError:  # pragma: no cover - optional runtime dependency
     sync_playwright = None  # type: ignore[assignment]
 
 
+def resolve_screenshot_path(path: str) -> str:
+    """Validate a screenshot output path and return its normalized absolute form.
+
+    Restricts writes to temp-like directories to prevent directory traversal
+    attacks. Shared by the sync client and the async automation service.
+    """
+    import os
+    from pathlib import Path
+
+    # Get the real absolute path
+    real_path = os.path.realpath(os.path.expanduser(path))
+
+    # Define allowed base directories
+    allowed_bases = [
+        os.path.realpath("/tmp"),
+        os.path.realpath("/var/tmp"),
+        os.path.realpath(os.path.expanduser("~/xagent_screenshots")),
+    ]
+
+    # On Windows, add temp directory
+    if os.name == "nt":
+        allowed_bases.append(os.path.realpath(os.environ.get("TEMP", "C:\\Temp")))
+
+    # Verify the real path is within allowed directories
+    is_allowed = False
+    for base in allowed_bases:
+        try:
+            Path(real_path).relative_to(base)
+            is_allowed = True
+            break
+        except ValueError:
+            continue
+
+    if not is_allowed:
+        raise ValueError(f"Screenshot path must be within allowed directories: {allowed_bases}")
+
+    return real_path
+
+
 @dataclass(slots=True)
 class BrowserActionResult:
     action: str
@@ -162,19 +201,23 @@ class PlaywrightBrowserClient:
 
     def goto(self, session_id: str, url: str) -> BrowserActionResult:
         session = self._require_session(session_id)
-        if session.page is not None:
-            session.page.goto(url, wait_until="domcontentloaded")
-        return session.record("goto", True, url=url, navigation_kind="real" if session.page is not None else "fallback")
+        if session.page is None:
+            # No silent fake success: fallback sessions cannot execute actions.
+            return session.record("goto", False, detail="Real browser unavailable; fallback navigation is not executed.", url=url, navigation_kind="fallback")
+        session.page.goto(url, wait_until="domcontentloaded")
+        return session.record("goto", True, url=url, navigation_kind="real")
 
     def click(self, session_id: str, selector: str) -> BrowserActionResult:
         """Click element with selector validation and timeout protection."""
         session = self._require_session(session_id)
         try:
             self._validate_selector(selector)
-            if session.page is not None:
-                # Set timeout to prevent hanging on complex selectors
-                session.page.click(selector, timeout=5000)  # 5 second timeout
-            return session.record("click", True, selector=selector, execution_mode="real" if session.page is not None else "fallback")
+            if session.page is None:
+                # No silent fake success: fallback sessions cannot execute actions.
+                raise RuntimeError("Real browser unavailable; fallback click is not executed.")
+            # Set timeout to prevent hanging on complex selectors
+            session.page.click(selector, timeout=5000)  # 5 second timeout
+            return session.record("click", True, selector=selector, execution_mode="real")
         except Exception as e:
             return session.record("click", False, detail=f"Click failed: {str(e)}", selector=selector)
 
@@ -183,56 +226,34 @@ class PlaywrightBrowserClient:
         session = self._require_session(session_id)
         try:
             self._validate_selector(selector)
-            if session.page is not None:
-                # Set timeout to prevent hanging on complex selectors
-                session.page.fill(selector, value, timeout=5000)  # 5 second timeout
-            return session.record("fill", True, selector=selector, value=value, execution_mode="real" if session.page is not None else "fallback")
+            if session.page is None:
+                # No silent fake success: fallback sessions cannot execute actions.
+                raise RuntimeError("Real browser unavailable; fallback fill is not executed.")
+            # Set timeout to prevent hanging on complex selectors
+            session.page.fill(selector, value, timeout=5000)  # 5 second timeout
+            return session.record("fill", True, selector=selector, value=value, execution_mode="real")
         except Exception as e:
             return session.record("fill", False, detail=f"Fill failed: {str(e)}", selector=selector, value=value)
 
     def screenshot(self, session_id: str, path: str) -> BrowserActionResult:
         """Take a screenshot with strict path validation to prevent directory traversal attacks."""
         import os
-        from pathlib import Path
 
         session = self._require_session(session_id)
 
         # Validate and normalize the path
         try:
-            # Get the real absolute path
-            real_path = os.path.realpath(os.path.expanduser(path))
-
-            # Define allowed base directories
-            allowed_bases = [
-                os.path.realpath("/tmp"),
-                os.path.realpath("/var/tmp"),
-                os.path.realpath(os.path.expanduser("~/xagent_screenshots")),
-            ]
-
-            # On Windows, add temp directory
-            if os.name == "nt":
-                allowed_bases.append(os.path.realpath(os.environ.get("TEMP", "C:\\Temp")))
-
-            # Verify the real path is within allowed directories
-            is_allowed = False
-            for base in allowed_bases:
-                try:
-                    Path(real_path).relative_to(base)
-                    is_allowed = True
-                    break
-                except ValueError:
-                    continue
-
-            if not is_allowed:
-                raise ValueError(f"Screenshot path must be within allowed directories: {allowed_bases}")
+            real_path = resolve_screenshot_path(path)
 
             # Ensure parent directory exists
             os.makedirs(os.path.dirname(real_path), exist_ok=True)
 
-            if session.page is not None:
-                session.page.screenshot(path=real_path, full_page=True)
+            if session.page is None:
+                # No silent fake success: fallback sessions cannot execute actions.
+                raise RuntimeError("Real browser unavailable; fallback screenshot is not executed.")
+            session.page.screenshot(path=real_path, full_page=True)
 
-            return session.record("screenshot", True, path=real_path, execution_mode="real" if session.page is not None else "fallback")
+            return session.record("screenshot", True, path=real_path, execution_mode="real")
         except Exception as e:
             return session.record("screenshot", False, detail=f"Screenshot failed: {str(e)}", path=path)
 
@@ -242,10 +263,12 @@ class PlaywrightBrowserClient:
         text = ""
         try:
             self._validate_selector(selector)
-            if session.page is not None:
-                # Set timeout to prevent hanging on complex selectors
-                text = session.page.locator(selector).inner_text(timeout=5000)
-            return session.record("extract_text", True, selector=selector, text=text, execution_mode="real" if session.page is not None else "fallback")
+            if session.page is None:
+                # No silent fake success: fallback sessions cannot execute actions.
+                raise RuntimeError("Real browser unavailable; fallback extract_text is not executed.")
+            # Set timeout to prevent hanging on complex selectors
+            text = session.page.locator(selector).inner_text(timeout=5000)
+            return session.record("extract_text", True, selector=selector, text=text, execution_mode="real")
         except Exception as e:
             return session.record("extract_text", False, detail=f"Extract text failed: {str(e)}", selector=selector)
 
@@ -254,10 +277,12 @@ class PlaywrightBrowserClient:
         session = self._require_session(session_id)
         try:
             self._validate_selector(selector)
-            if session.page is not None:
-                # Set timeout to prevent hanging on complex selectors
-                session.page.wait_for_selector(selector, timeout=10000)  # 10 second timeout
-            return session.record("wait_for", True, selector=selector, execution_mode="real" if session.page is not None else "fallback")
+            if session.page is None:
+                # No silent fake success: fallback sessions cannot execute actions.
+                raise RuntimeError("Real browser unavailable; fallback wait_for is not executed.")
+            # Set timeout to prevent hanging on complex selectors
+            session.page.wait_for_selector(selector, timeout=10000)  # 10 second timeout
+            return session.record("wait_for", True, selector=selector, execution_mode="real")
         except Exception as e:
             return session.record("wait_for", False, detail=f"Wait for failed: {str(e)}", selector=selector)
 

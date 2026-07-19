@@ -58,10 +58,10 @@
 
 ### 4. 应用集成检查
 
-- [ ] FastAPI应用已集成Prometheus中间件
+- [ ] FastAPI应用已集成Prometheus中间件（P0-04 backend 接线中，当前未生效）
 - [ ] 日志配置已初始化
 - [ ] Jaeger追踪已配置
-- [ ] /metrics端点已实现
+- [ ] /api/v1/metrics/prometheus 端点已实现（/metrics 端点待 P0-04 接线）
 - [ ] /health端点已实现
 - [ ] /ready端点已实现
 
@@ -140,11 +140,11 @@ docker run -p 8000:8000 x-agent:latest
 # 检查Prometheus目标
 curl http://localhost:9090/api/v1/targets
 
-# 查询指标
-curl 'http://localhost:9090/api/v1/query?query=xagent_http_requests_total'
+# 查询指标（当前真实产出为 xagent_{name}_total 系列 gauge）
+curl 'http://localhost:9090/api/v1/query?query=xagent_runs_total'
 
 # 检查应用metrics端点
-curl http://localhost:8000/metrics
+curl http://localhost:8000/api/v1/metrics/prometheus
 ```
 
 ### 2. 日志收集验证
@@ -292,7 +292,7 @@ docker exec x-agent-grafana tar czf /var/lib/grafana/backup.tar.gz /var/lib/graf
 curl http://localhost:8000/health
 
 # 检查metrics端点
-curl http://localhost:8000/metrics
+curl http://localhost:8000/api/v1/metrics/prometheus
 
 # 检查Prometheus配置
 curl http://localhost:9090/api/v1/targets

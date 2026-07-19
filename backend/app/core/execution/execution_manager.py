@@ -7,7 +7,7 @@ from typing import Any, Dict, Optional
 from uuid import uuid4
 from datetime import datetime
 
-from .python_sandbox import PythonSandbox
+from .python_sandbox import PythonSandbox  # ⚠ P0-18 降级: AST 黑名单, 仅限可信代码, 禁止用于不可信输入
 from .nodejs_executor import NodeJSExecutor
 
 logger = logging.getLogger(__name__)

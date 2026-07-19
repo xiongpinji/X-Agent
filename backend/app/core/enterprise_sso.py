@@ -315,12 +315,22 @@ class SAMLProcessor:
         return match.group(1) if match else ""
 
     def _verify_saml_response(self, saml_response_xml: str) -> None:
-        """验证SAML响应签名和条件"""
-        # 简化实现：在生产环境中应使用python3-saml库
-        if self.config.want_response_signed:
-            if "Signature" not in saml_response_xml:
-                raise ValueError("SAML response must be signed")
-        logger.debug("SAML response verification passed")
+        """验证SAML响应签名和条件（fail-closed）。
+
+        ⚠️⚠️ SECURITY (P0-05): 原实现仅检查 XML 中是否存在 "Signature" 字符串，
+        完全未做 XML DSig 签名验证，等同于没有验证，攻击者可任意伪造断言完成登录。
+        当前代码库未集成 python3-saml/signxml，无法执行真实验证，
+        因此此处 fail-closed：一律抛出异常拒绝处理 SAML 响应，绝不静默通过。
+        ➡️ 真 SSO 实现见 P1-02。
+
+        Raises:
+            ValueError: 始终抛出（fail-closed），直到 P1-02 落地真实签名验证。
+        """
+        raise ValueError(
+            "SAML response signature verification is not implemented; "
+            "refusing to process SAML response (fail-closed, P0-05). "
+            "真 SSO 实现见 P1-02（需接入 python3-saml/signxml 做真实 XML 签名验证）。"
+        )
 
     def _extract_assertion(self, saml_response_xml: str) -> SAMLAssertion:
         """从SAML响应中提取断言"""

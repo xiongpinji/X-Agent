@@ -304,16 +304,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Deploy to test environment
+      # TODO(P0-09): 占位 deploy——当前无真实 test 环境, 仅打印提示, 不执行任何部署动作。
+      # 接入真实环境后, 替换为下方被注释的部署脚本并移除本注释。
+      - name: Deploy to test environment (placeholder, TODO)
         run: |
-          echo "Deploying to test environment..."
-          # Add your deployment script here
+          echo "::notice title=TODO::Test-environment deploy is a placeholder - no real environment configured."
           # ./scripts/deploy-test-env.sh deploy
 
-      - name: Run smoke tests
+      # TODO(P0-09): 占位 smoke test——无真实 test 环境可探测; 接入后替换为真实冒烟脚本。
+      - name: Run smoke tests (placeholder, TODO)
         run: |
-          echo "Running smoke tests..."
-          # Add your smoke test script here
+          echo "::notice title=TODO::Smoke tests are a placeholder - no test environment to probe."
 
       - name: Notify deployment
         if: always()
@@ -324,7 +325,7 @@ jobs:
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: 'Test environment deployment completed!'
+              body: '⚠️ Test environment deploy 为占位步骤(TODO: 未接入真实环境)'
             })
 
   # ============================================================================

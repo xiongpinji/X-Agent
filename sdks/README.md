@@ -62,7 +62,7 @@ Add to `pom.xml`:
 <dependency>
     <groupId>io.xagent</groupId>
     <artifactId>partner-sdk</artifactId>
-    <version>1.0.0</version>
+    <version>0.2.0-alpha</version>
 </dependency>
 ```
 
@@ -181,9 +181,10 @@ MIT License - See LICENSE file for details
 
 ## Changelog
 
-### v1.0.0 (May 29, 2026)
+### 0.2.0-alpha (2026-07-19)
 
-- Initial release
+- 版本口径统一至 `pyproject.toml` 单一事实源 (0.2.0-alpha, 商用修复中)
+- 此前标记的 1.x 版本号为审计前过程性标记; SDK 尚未向 pip / npm / Go / Maven 任何包仓库实际发布 (见 commercial_audit/14)
 - Partner management endpoints
 - API key management
 - Webhook management

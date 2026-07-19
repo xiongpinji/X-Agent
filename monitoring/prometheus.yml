@@ -1,3 +1,29 @@
+# =============================================================================
+# X-Agent 权威 Prometheus 配置（唯一有效版本）
+#
+# 配置收敛说明（P0-04，2026-07-19）：
+#   原四套 prometheus.yml 已收敛为本文件一套：
+#     - 根目录 prometheus.yml              -> monitoring/archive/root-prometheus.yml
+#     - monitoring/prometheus/prometheus.yml -> monitoring/archive/prometheus/prometheus.yml
+#     - deployment/prometheus/prometheus.yml -> 不在本范围，由部署侧另行归档
+#   本文件即 monitoring/docker-compose.yml 与 monitoring/docker-compose.monitoring.yml
+#   挂载的同一份配置。
+#
+# 抓取路径与代码真实产出对齐（backend/app/main.py 实际挂载）：
+#   - 唯一已接线的指标端点：GET /api/v1/metrics/prometheus
+#       （backend/app/api/metrics.py，输出 xagent_{name}_total 系列 gauge：
+#         runs/traces/trace_events/memories/workflows/workflow_runs/
+#         workflow_schedules/audit_logs/api_keys/active_api_keys/approvals/
+#         pending_approvals）
+#   - /metrics 端点当前【不存在】；recording_rules.yml 引用的
+#     xagent_api_requests_total 等富指标由 backend 侧 P0-04 接线
+#     （PrometheusMiddleware + /metrics）后才会真实产生。
+#
+# 注意：生产模式（app_mode=production）下 require_api_key 强制为 true，
+#       抓取 /api/v1/metrics/prometheus 需携带 x-api-key 头，否则 401。
+#       生产部署时需在本配置中为 x-agent-api 任务补充认证头。
+# =============================================================================
+
 global:
   scrape_interval: 15s
   evaluation_interval: 15s
@@ -6,41 +32,47 @@ global:
     environment: '${ENVIRONMENT:-development}'
     cluster: '${CLUSTER_NAME:-default}'
 
-# Remote storage configuration for long-term retention
-remote_write:
-  - url: "http://prometheus-remote-storage:9009/api/v1/write"
-    queue_config:
-      capacity: 10000
-      max_shards: 200
-      min_shards: 1
-      max_samples_per_send: 500
-      batch_send_wait: 5s
-      min_backoff: 30ms
-      max_backoff: 100ms
+# TODO: remote_write 指向的 prometheus-remote-storage:9009 服务不存在于任何
+# 部署清单，已注释。待长期存储方案确定后再启用。
+# remote_write:
+#   - url: "http://prometheus-remote-storage:9009/api/v1/write"
+#     queue_config:
+#       capacity: 10000
+#       max_shards: 200
+#       min_shards: 1
+#       max_samples_per_send: 500
+#       batch_send_wait: 5s
+#       min_backoff: 30ms
+#       max_backoff: 100ms
 
 alerting:
   alertmanagers:
     - static_configs:
         - targets:
             - alertmanager:9093
-    - consul_sd_configs:
-        - server: 'consul:8500'
-          datacenter: 'dc1'
-          services: ['alertmanager']
+    # TODO: Consul 不存在于当前部署，consul 服务发现已注释。
+    # - consul_sd_configs:
+    #     - server: 'consul:8500'
+    #       datacenter: 'dc1'
+    #       services: ['alertmanager']
 
 rule_files:
   - 'alert_rules.yml'
   - 'recording_rules.yml'
+  # 注意：monitoring/docker-compose.monitoring.yml 当前仅挂载 alert_rules.yml，
+  # 尚未挂载 recording_rules.yml（compose 不在本次修复范围，已记录待办）。
+  # 在补齐挂载前直接以该 compose 启动 Prometheus 会因规则文件缺失而失败。
 
 scrape_configs:
-  # X-Agent API Server
+  # X-Agent API Server（唯一真实指标来源）
   - job_name: 'x-agent-api'
     static_configs:
       - targets: ['localhost:8000']
         labels:
           service: 'api'
           component: 'core'
-    metrics_path: '/metrics'
+    # 与 backend/app/api/metrics.py 实际挂载路径一致
+    metrics_path: '/api/v1/metrics/prometheus'
     scrape_interval: 10s
     scrape_timeout: 5s
     relabel_configs:
@@ -49,16 +81,17 @@ scrape_configs:
       - source_labels: [__scheme__]
         target_label: scheme
 
-  # X-Agent Worker
-  - job_name: 'x-agent-worker'
-    static_configs:
-      - targets: ['localhost:8001']
-        labels:
-          service: 'worker'
-          component: 'execution'
-    metrics_path: '/metrics'
-    scrape_interval: 10s
-    scrape_timeout: 5s
+  # TODO: X-Agent Worker 当前没有任何进程在 8001 暴露 /metrics，
+  # 抓取任务已注释。待 worker 进程补齐指标端点后恢复。
+  # - job_name: 'x-agent-worker'
+  #   static_configs:
+  #     - targets: ['localhost:8001']
+  #       labels:
+  #         service: 'worker'
+  #         component: 'execution'
+  #   metrics_path: '/metrics'
+  #   scrape_interval: 10s
+  #   scrape_timeout: 5s
 
   # PostgreSQL Exporter
   - job_name: 'postgres-exporter'
@@ -93,7 +126,7 @@ scrape_configs:
       - source_labels: [__address__]
         target_label: instance
 
-  # Qdrant Vector Database
+  # Qdrant Vector Database（原生暴露 /metrics）
   - job_name: 'qdrant'
     static_configs:
       - targets: ['qdrant:6333']
@@ -104,16 +137,18 @@ scrape_configs:
     scrape_interval: 15s
     scrape_timeout: 10s
 
-  # Elasticsearch
-  - job_name: 'elasticsearch'
-    static_configs:
-      - targets: ['elasticsearch:9200']
-        labels:
-          service: 'elasticsearch'
-          component: 'logging'
-    metrics_path: '/_prometheus/metrics'
-    scrape_interval: 15s
-    scrape_timeout: 10s
+  # TODO: 官方 elasticsearch:8.11.0 镜像未安装 prometheus exporter 插件，
+  # /_prometheus/metrics 恒 404，抓取任务已注释。如需 ES 指标请改用
+  # elasticsearch-exporter  sidecar 后再恢复。
+  # - job_name: 'elasticsearch'
+  #   static_configs:
+  #     - targets: ['elasticsearch:9200']
+  #       labels:
+  #         service: 'elasticsearch'
+  #         component: 'logging'
+  #   metrics_path: '/_prometheus/metrics'
+  #   scrape_interval: 15s
+  #   scrape_timeout: 10s
 
   # Prometheus self-monitoring
   - job_name: 'prometheus'
@@ -125,13 +160,13 @@ scrape_configs:
     scrape_interval: 15s
     scrape_timeout: 10s
 
-  # Service discovery via Consul (optional)
-  - job_name: 'consul-services'
-    consul_sd_configs:
-      - server: 'consul:8500'
-        datacenter: 'dc1'
-    relabel_configs:
-      - source_labels: [__meta_consul_service]
-        target_label: service
-      - source_labels: [__meta_consul_node]
-        target_label: node
+  # TODO: Consul 不存在于当前部署，consul-services 任务已注释。
+  # - job_name: 'consul-services'
+  #   consul_sd_configs:
+  #     - server: 'consul:8500'
+  #       datacenter: 'dc1'
+  #   relabel_configs:
+  #     - source_labels: [__meta_consul_service]
+  #       target_label: service
+  #     - source_labels: [__meta_consul_node]
+  #       target_label: node

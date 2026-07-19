@@ -1,19 +1,59 @@
 """
-Python代码执行沙箱 - 安全执行Python代码
+[降级标注 — 仅限可信代码, 禁止用于不可信输入] Python 代码执行沙箱
+
+⚠ 安全警告 (P0-18): 本模块基于 AST 黑名单 + 同进程 exec 实现, 不构成任何安全
+边界。属性链 / 字节码 / 内置对象图等绕过手段是公开常识, 黑名单式"安全"在
+Python 下形同虚设。
+
+- 仅限执行可信的、内部生成的代码(例如受信内部工具链)。
+- 不可信输入(LLM 生成代码、用户提交代码、第三方插件代码)必须走 Docker
+  隔离: ``backend.app.core.sandbox.docker_sandbox.DockerSandbox``
+  或 ``backend.app.core.sandbox.python_sandbox.PythonSandbox``。
+
+保留原因: ``ExecutionManager`` / ``OptimizedExecutionManager`` 及既有测试仍
+引用本模块; 直接删除属于更大范围重构。在统一迁移到 Docker 隔离之前, 本模块
+在实例化时会发出运行时警告。
 """
 
 import ast
 import asyncio
 import logging
 import sys
+import warnings
 from io import StringIO
 from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
+# 每进程只发一次降级警告, 避免刷屏。
+_TRUSTED_ONLY_WARNING_EMITTED = False
+
+_TRUSTED_ONLY_MESSAGE = (
+    "core.execution.python_sandbox.PythonSandbox 已降级 (P0-18): AST 黑名单"
+    "不构成安全边界, 仅限可信代码, 禁止用于不可信输入。不可信代码必须走 "
+    "Docker 隔离 (backend.app.core.sandbox.docker_sandbox / "
+    "backend.app.core.sandbox.python_sandbox)。"
+)
+
+
+def _emit_trusted_only_warning() -> None:
+    """发出一次性降级运行时警告 (logger + DeprecationWarning)。"""
+    global _TRUSTED_ONLY_WARNING_EMITTED
+    if _TRUSTED_ONLY_WARNING_EMITTED:
+        return
+    _TRUSTED_ONLY_WARNING_EMITTED = True
+    logger.warning(_TRUSTED_ONLY_MESSAGE)
+    warnings.warn(_TRUSTED_ONLY_MESSAGE, DeprecationWarning, stacklevel=3)
+
 
 class PythonSandbox:
-    """Python代码执行沙箱 - 提供安全的代码执行环境"""
+    """[仅限可信代码] Python代码执行沙箱 - 提供受限的代码执行环境。
+
+    ⚠ P0-18 降级标注: 本类基于 AST 黑名单, 不能隔离不可信代码。
+    不可信输入请使用 Docker 隔离沙箱
+    (``backend.app.core.sandbox.docker_sandbox.DockerSandbox`` /
+    ``backend.app.core.sandbox.python_sandbox.PythonSandbox``)。
+    """
 
     # 禁止的操作
     FORBIDDEN_NAMES = {
@@ -49,10 +89,13 @@ class PythonSandbox:
         """
         初始化Python沙箱
 
+        ⚠ 仅限可信代码 (P0-18); 不可信输入必须走 Docker 隔离沙箱。
+
         Args:
             timeout: 执行超时时间（秒）
             max_output: 最大输出大小（字节）
         """
+        _emit_trusted_only_warning()
         self.timeout = timeout
         self.max_output = max_output
 

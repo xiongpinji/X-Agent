@@ -41,6 +41,8 @@ pydantic>=2.9.0        # loosened: pydantic-core needs cp313 wheel (>=2.9)
 pydantic-settings>=2.4.0  # align with pydantic>=2.9
 
 # Task Queue & Caching
+# P0-02: celery 未使用 —— 全后端无 Celery 应用, 编排命令已改为 python -m backend.app.workflow_worker;
+# 依赖保留(含 kombu/billiard 等传递依赖), 待真 Celery 返工时再启用。
 celery==5.3.0
 redis>=5.0.0             # (pure-python, range ok)
 kombu>=5.3.4  # loosened (transitive dep, resolver-managed)

@@ -117,18 +117,20 @@ jobs:
         aws-region: us-east-1
       continue-on-error: true
 
-    - name: Deploy to staging
+    # TODO(P0-09): 占位 deploy——当前无真实 staging 集群, 仅打印镜像信息, 不执行任何部署动作。
+    # 接入真实基础设施后, 替换为下方被注释的 kubectl 命令(或 Helm)并移除本注释。
+    - name: Deploy to staging (placeholder, TODO)
       run: |
-        echo "Deploying to staging environment..."
-        echo "Image: ${{ needs.build.outputs.image-tag }}"
+        echo "::notice title=TODO::Staging deploy is a placeholder - no real cluster configured. Image: ${{ needs.build.outputs.image-tag }}"
         # kubectl set image deployment/xagent-api xagent-api=${{ needs.build.outputs.image-tag }} -n staging
         # kubectl rollout status deployment/xagent-api -n staging
       env:
         DEPLOY_KEY: ${{ secrets.STAGING_DEPLOY_KEY }}
 
-    - name: Run smoke tests
+    # TODO(P0-09): 占位 smoke test——无真实 staging 环境可探测; 接入后替换为真实健康检查。
+    - name: Run smoke tests (placeholder, TODO)
       run: |
-        echo "Running smoke tests..."
+        echo "::notice title=TODO::Smoke tests are a placeholder - no staging environment to probe."
         # curl -f https://staging.xagent.example.com/health || exit 1
       continue-on-error: true
 
@@ -141,7 +143,7 @@ jobs:
             issue_number: context.issue.number,
             owner: context.repo.owner,
             repo: context.repo.repo,
-            body: '✅ Deployed to staging: ${{ needs.build.outputs.image-tag }}'
+            body: '⚠️ Staging deploy 为占位步骤(TODO: 未接入真实集群), 镜像: ${{ needs.build.outputs.image-tag }}'
           });
       continue-on-error: true
 
@@ -163,18 +165,20 @@ jobs:
         aws-region: us-east-1
       continue-on-error: true
 
-    - name: Deploy to production
+    # TODO(P0-09): 占位 deploy——当前无真实 production 集群, 仅打印镜像信息, 不执行任何部署动作。
+    # 接入真实基础设施后, 替换为下方被注释的 kubectl 命令(或 Helm)并移除本注释。
+    - name: Deploy to production (placeholder, TODO)
       run: |
-        echo "Deploying to production environment..."
-        echo "Image: ${{ needs.build.outputs.image-tag }}"
+        echo "::notice title=TODO::Production deploy is a placeholder - no real cluster configured. Image: ${{ needs.build.outputs.image-tag }}"
         # kubectl set image deployment/xagent-api xagent-api=${{ needs.build.outputs.image-tag }} -n production
         # kubectl rollout status deployment/xagent-api -n production
       env:
         DEPLOY_KEY: ${{ secrets.PRODUCTION_DEPLOY_KEY }}
 
-    - name: Run health checks
+    # TODO(P0-09): 占位 health check——无真实 production 环境可探测; 接入后替换为真实健康检查。
+    - name: Run health checks (placeholder, TODO)
       run: |
-        echo "Running health checks..."
+        echo "::notice title=TODO::Health checks are a placeholder - no production environment to probe."
         # curl -f https://xagent.example.com/health || exit 1
       continue-on-error: true
 
@@ -197,7 +201,7 @@ jobs:
             issue_number: context.issue.number,
             owner: context.repo.owner,
             repo: context.repo.repo,
-            body: '🚀 Deployed to production: ${{ needs.build.outputs.image-tag }}'
+            body: '⚠️ Production deploy 为占位步骤(TODO: 未接入真实集群), 镜像: ${{ needs.build.outputs.image-tag }}'
           });
       continue-on-error: true
 
@@ -217,9 +221,11 @@ jobs:
         aws-region: us-east-1
       continue-on-error: true
 
-    - name: Rollback production deployment
+    # TODO(P0-09): 占位 rollback——当前无真实 production 集群, 不执行任何回滚动作。
+    # 接入真实基础设施后, 替换为下方被注释的 kubectl 命令并移除本注释。
+    - name: Rollback production deployment (placeholder, TODO)
       run: |
-        echo "Rolling back production deployment..."
+        echo "::notice title=TODO::Rollback is a placeholder - no real cluster configured."
         # kubectl rollout undo deployment/xagent-api -n production
         # kubectl rollout status deployment/xagent-api -n production
       continue-on-error: true
@@ -232,6 +238,6 @@ jobs:
             issue_number: context.issue.number,
             owner: context.repo.owner,
             repo: context.repo.repo,
-            body: '⚠️ Production deployment rolled back due to failure'
+            body: '⚠️ Production rollback 为占位步骤(TODO: 未接入真实集群), 未执行真实回滚'
           });
       continue-on-error: true

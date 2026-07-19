@@ -41,6 +41,15 @@ class AgentTaskStatus(StrEnum):
     TIMEOUT = "timeout"
 
 
+class AgentFactoryNotConfiguredError(RuntimeError):
+    """Raised when parallel execution has no real agent factory configured.
+
+    The executor no longer falls back to a simulated sleep-and-complete
+    implementation; callers (e.g. the REST API) must wire a real factory
+    (AgentLoop-based) or surface this error explicitly (HTTP 501).
+    """
+
+
 @dataclass
 class AgentTask:
     """Represents a task to be executed by an agent."""
@@ -209,6 +218,14 @@ class ParallelAgentExecutor:
                 isolation = IsolationMode(isolation)
             except ValueError:
                 raise ValueError(f"Unknown isolation mode: {isolation}")
+        if agent_factory is None:
+            # Fail fast: never simulate agent execution. The API layer maps
+            # this to HTTP 501 so callers get an explicit signal instead of
+            # fake "completed" results.
+            raise AgentFactoryNotConfiguredError(
+                "No agent_factory configured for parallel execution; "
+                "refusing to simulate agent results."
+            )
         max_parallel = max_parallel or self.max_workers
         batch_id = str(uuid.uuid4())
 
@@ -432,14 +449,19 @@ class ParallelAgentExecutor:
         isolation: IsolationMode,
         agent_factory: Optional[Callable],
     ) -> Any:
-        """Run the actual agent task. Override in subclass or provide factory."""
+        """Run the actual agent task via the provided factory.
+
+        Raises AgentFactoryNotConfiguredError when no factory is wired;
+        simulated execution has been removed (no more fake "completed").
+        """
         if agent_factory:
             agent = agent_factory(agent_id, isolation)
             return await agent.execute(task)
 
-        # Default implementation: simulate task execution
-        await asyncio.sleep(0.1)
-        return {"task_id": task.task_id, "status": "completed"}
+        raise AgentFactoryNotConfiguredError(
+            f"No agent_factory provided for task {task.task_id}; "
+            "simulated execution has been removed."
+        )
 
     async def get_batch_status(self, batch_id: str) -> dict[str, Any]:
         """Get the status of a batch execution."""

@@ -145,6 +145,8 @@ async def approve_request(
     principal: PrincipalDependency,
 ) -> ApprovalRequestRecord:
     enforce_scope(principal, "workflow:control")
+    _check_decision_authorization(approval_store, approval_id, principal)
+    decision = _bind_decision_to_principal(decision, principal)
     record = approval_store.approve(approval_id, decision)
     if record is None:
         raise api_error(404, ErrorCode.AUTHORIZATION_FAILED, "Approval request not found.")
@@ -161,11 +163,48 @@ async def reject_request(
     principal: PrincipalDependency,
 ) -> ApprovalRequestRecord:
     enforce_scope(principal, "workflow:control")
+    _check_decision_authorization(approval_store, approval_id, principal)
+    decision = _bind_decision_to_principal(decision, principal)
     record = approval_store.reject(approval_id, decision)
     if record is None:
         raise api_error(404, ErrorCode.AUTHORIZATION_FAILED, "Approval request not found.")
     _audit_decision(audit_store, "approval.reject", record)
     return record
+
+
+def _bind_decision_to_principal(
+    decision: ApprovalDecisionRequest,
+    principal: Principal,
+) -> ApprovalDecisionRequest:
+    """P0-07: decided_by 绝不接受请求体传入，强制绑定为已认证 principal 的身份。
+
+    请求体中的 decided_by 字段一律忽略并覆盖，防止审批人身份伪造。
+    """
+    return decision.model_copy(update={"decided_by": principal.user_id})
+
+
+def _check_decision_authorization(
+    approval_store: ApprovalStore,
+    approval_id: str,
+    principal: Principal,
+) -> None:
+    """P0-07: 审批决定（approve/reject）前的授权校验。
+
+    - 记录必须存在（404）；
+    - tenant_id 必须与已认证 principal 一致（403，防跨租户审批）；
+    - 职责分离（SoD）：审批请求的 actor 不得与审批人相同（403，防自审自批）。
+    """
+    record = approval_store.get(approval_id)
+    if record is None:
+        raise api_error(404, ErrorCode.AUTHORIZATION_FAILED, "Approval request not found.")
+    if principal.authenticated and principal.tenant_id != record.tenant_id:
+        raise api_error(403, ErrorCode.AUTHORIZATION_FAILED, "Approval tenant mismatch.")
+    if record.actor_id == principal.user_id:
+        raise api_error(
+            403,
+            ErrorCode.AUTHORIZATION_FAILED,
+            "Separation of duties violation: requester cannot decide their own approval request.",
+        )
 
 
 @router.post("/{approval_id}/execute", response_model=ToolCallRecord)

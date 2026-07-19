@@ -4,12 +4,15 @@ metadata:
   name: xagent-config
   namespace: {{ .Release.Namespace }}
 data:
-  ENVIRONMENT: {{ .Values.global.environment | quote }}
+  # P0-03: 应用配置统一 XAGENT_ 前缀(对照 backend/app/settings.py, env_prefix="XAGENT_", extra="ignore")
+  XAGENT_APP_MODE: {{ .Values.global.environment | quote }}
+  # LOG_LEVEL 由 backend/app/monitoring 与 core/config.py LogSettings(LOG_ 前缀)直接读取, 保持原名
   LOG_LEVEL: {{ .Values.global.logLevel | quote }}
-  DEBUG: {{ .Values.global.debug | quote }}
-  API_WORKERS: {{ .Values.api.workers | quote }}
-  JWT_ALGORITHM: "HS256"
-  JWT_EXPIRATION_HOURS: "24"
+  XAGENT_DEBUG: {{ .Values.global.debug | quote }}
+  XAGENT_API_WORKERS: {{ .Values.api.workers | quote }}
+  XAGENT_JWT_ALGORITHM: "HS256"
+  XAGENT_JWT_EXPIRATION_HOURS: "24"
+  # 以下为组合 URL 用的辅助变量(由 api-deployment 中 $(VAR) 引用), 非应用直读配置
   DB_NAME: {{ .Values.database.name | quote }}
   DB_PORT: {{ .Values.database.port | quote }}
   DB_USER: {{ .Values.secrets.dbUser | quote }}

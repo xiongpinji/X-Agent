@@ -36,26 +36,26 @@ spec:
       - name: xagent-worker
         image: xagent:latest
         imagePullPolicy: Always
+        # P0-02: 后端无 Celery 应用, workflow_worker 是 asyncio 轮询 worker,
+        # 直接以 python -m 启动; celery 依赖保留但未使用, 待真 Celery 返工
         command:
-        - celery
-        - -A
+        - python
+        - -m
         - backend.app.workflow_worker
-        - worker
-        - --loglevel=info
-        - --concurrency=4
         env:
-        - name: ENVIRONMENT
+        # P0-03: 应用配置统一 XAGENT_ 前缀(对照 backend/app/settings.py, env_prefix="XAGENT_")
+        - name: XAGENT_APP_MODE
           valueFrom:
             configMapKeyRef:
               name: xagent-config
-              key: ENVIRONMENT
+              key: XAGENT_APP_MODE
+        # LOG_LEVEL 由 backend/app/monitoring 与 core/config.py LogSettings(LOG_ 前缀)直接读取, 保持原名
         - name: LOG_LEVEL
           valueFrom:
             configMapKeyRef:
               name: xagent-config
               key: LOG_LEVEL
-        - name: DATABASE_URL
-          value: "postgresql://$(DB_USER):$(DB_PASSWORD)@postgres:5432/$(DB_NAME)"
+        # 以下为组合 URL 用的辅助变量; 必须先于 $(VAR) 引用定义(K8s 按顺序展开)
         - name: DB_USER
           valueFrom:
             configMapKeyRef:
@@ -71,36 +71,36 @@ spec:
             configMapKeyRef:
               name: xagent-config
               key: DB_NAME
-        - name: REDIS_URL
-          value: "redis://:$(REDIS_PASSWORD)@redis:6379/0"
         - name: REDIS_PASSWORD
           valueFrom:
             secretKeyRef:
               name: xagent-secrets
               key: REDIS_PASSWORD
-        - name: QDRANT_URL
+        - name: XAGENT_DATABASE_URL
+          value: "postgresql+asyncpg://$(DB_USER):$(DB_PASSWORD)@postgres:5432/$(DB_NAME)"
+        - name: XAGENT_REDIS_URL
+          value: "redis://:$(REDIS_PASSWORD)@redis:6379/0"
+        - name: XAGENT_QDRANT_URL
           value: "http://qdrant:6333"
-        - name: QDRANT_API_KEY
+        - name: XAGENT_QDRANT_API_KEY
           valueFrom:
             secretKeyRef:
               name: xagent-secrets
               key: QDRANT_API_KEY
-        - name: NEO4J_URI
+        # Neo4j (预留: 后端当前未消费 NEO4J 配置)
+        - name: XAGENT_NEO4J_URI
           value: "bolt://neo4j:7687"
-        - name: NEO4J_USER
+        - name: XAGENT_NEO4J_USER
           valueFrom:
             configMapKeyRef:
               name: xagent-config
               key: NEO4J_USER
-        - name: NEO4J_PASSWORD
+        - name: XAGENT_NEO4J_PASSWORD
           valueFrom:
             secretKeyRef:
               name: xagent-secrets
               key: NEO4J_PASSWORD
-        - name: CELERY_BROKER_URL
-          value: "redis://:$(REDIS_PASSWORD)@redis:6379/1"
-        - name: CELERY_RESULT_BACKEND
-          value: "redis://:$(REDIS_PASSWORD)@redis:6379/2"
+        # P0-02: CELERY_BROKER_URL/CELERY_RESULT_BACKEND 已移除(后端无 Celery 应用)
         resources:
           requests:
             memory: "512Mi"

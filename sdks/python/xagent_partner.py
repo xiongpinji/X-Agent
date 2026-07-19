@@ -27,7 +27,7 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-__version__ = "1.0.0"
+__version__ = "0.2.0-alpha"  # 单一事实源: pyproject.toml
 __all__ = [
     "PartnerClient",
     "PartnerAPIError",

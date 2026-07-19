@@ -29,6 +29,11 @@ docker-compose -f monitoring/docker-compose.monitoring.yml ps
 
 ### 3. 集成到应用
 
+当前应用实际挂载的指标端点是 `GET /api/v1/metrics/prometheus`
+（`backend/app/api/metrics.py`，已随 `main.py` 自动挂载，无需手动添加）。
+下方 `/metrics` 示例对应 `PrometheusMiddleware` 方案，需 backend 侧完成
+P0-04 接线后才生效：
+
 ```python
 from fastapi import FastAPI
 from backend.app.services.observability.monitoring_setup import setup_monitoring
@@ -44,6 +49,30 @@ async def metrics():
     from prometheus_client import generate_latest
     return Response(generate_latest(), media_type="text/plain; charset=utf-8")
 ```
+
+## 配置收敛状态（P0-04，2026-07-19）
+
+- **权威 Prometheus 配置仅一套**：`monitoring/prometheus.yml`（即两个
+  compose 文件挂载的同一份）。根目录 `prometheus.yml` 与原
+  `monitoring/prometheus/` 目录已归档至 `monitoring/archive/`。
+- **抓取路径已对齐代码真实产出**：`x-agent-api` 抓取
+  `/api/v1/metrics/prometheus`，输出 `xagent_{runs,traces,memories,
+  workflows,...}_total` 系列 gauge。
+- **告警规则**：`alert_rules.yml` 中的 `xagent:api:*` 等表达式经
+  `recording_rules.yml` 挂接，但其依赖的原始指标需 backend 侧
+  P0-04 接线（`PrometheusMiddleware` + `/metrics`）后才真实产出；
+  接线前录制规则类告警不触发，属预期。
+- **金丝雀自动回滚判据当前无效，待指标补齐**：
+  `deployment/canary/deploy-canary.sh` 的回滚判据引用
+  `http_requests_total{version=...}` 与
+  `http_request_duration_seconds_bucket{version=...}`，代码从未产生
+  这些指标（真实指标为 `xagent_api_requests_total`，且无 `version`
+  标签），查询结果恒为空、错误率恒被解析为 0，即**判据恒为"通过"，
+  回滚保护实际不存在**。修复需在 backend 指标接线后改写判据
+  （deployment/ 不在本次修复范围）。
+- **已知待办**：`monitoring/docker-compose.monitoring.yml` 尚未挂载
+  `recording_rules.yml`（compose 不在本次修复范围）；生产模式下抓取需
+  `x-api-key` 认证头。
 
 ## 文件结构
 
@@ -62,9 +91,11 @@ monitoring/
 │   └── provisioning/
 │       ├── datasources.yml            # Grafana数据源
 │       └── dashboards.yml             # Grafana仪表板
-└── prometheus/
-    ├── prometheus.yml                 # Prometheus配置副本
-    └── alerts.yml                     # 告警规则副本
+└── archive/                           # 已归档的旧配置（P0-04 收敛，勿直接使用）
+    ├── root-prometheus.yml            # 原根目录 prometheus.yml
+    └── prometheus/                    # 原 monitoring/prometheus/ 目录
+        ├── prometheus.yml
+        └── alerts.yml
 ```
 
 ## 核心组件
@@ -132,26 +163,31 @@ monitoring/
 
 ## 关键指标
 
-### API指标
+> 说明：以下为代码中已定义、待 P0-04 backend 接线（PrometheusMiddleware +
+> /metrics）后产出的指标；当前已接线端点 /api/v1/metrics/prometheus 实际产出
+> `xagent_{runs,traces,trace_events,memories,workflows,workflow_runs,
+> workflow_schedules,audit_logs,api_keys,active_api_keys,approvals,
+> pending_approvals}_total` 系列 gauge。
+
+### API指标（待接线后产出）
 ```
-xagent_http_requests_total{method, endpoint, status}
-xagent_http_request_duration_seconds{method, endpoint}
-xagent_http_request_size_bytes{method, endpoint}
-xagent_http_response_size_bytes{method, endpoint}
+xagent_api_requests_total{method, endpoint, status}
+xagent_api_request_duration_seconds{method, endpoint}
+xagent_api_request_size_bytes{method, endpoint}
+xagent_api_response_size_bytes{method, endpoint}
 ```
 
-### 错误指标
+### 错误指标（待接线后产出）
 ```
-xagent_errors_total{error_type, endpoint}
-xagent_exceptions_total{exception_type}
-xagent_db_query_errors_total{query_type, error_type}
+xagent_errors_total{error_type, severity}
+xagent_agent_errors_total{error_type}
 ```
 
-### 业务指标
+### 业务指标（待接线后产出）
 ```
-xagent_agent_runs_total{agent_id, status}
-xagent_agent_run_duration_seconds{agent_id}
-xagent_workflow_runs_total{workflow_id, status}
+xagent_agent_runs_total{status}
+xagent_agent_run_duration_seconds
+xagent_workflow_runs_total{status}
 xagent_tool_executions_total{tool_name, status}
 ```
 
@@ -287,7 +323,7 @@ sampler_config = {
 
 #### Prometheus无法连接应用
 ```bash
-curl http://localhost:8000/metrics
+curl http://localhost:8000/api/v1/metrics/prometheus
 curl http://localhost:9090/api/v1/targets
 ```
 

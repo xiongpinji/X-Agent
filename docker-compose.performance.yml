@@ -42,8 +42,10 @@ services:
       dockerfile: Dockerfile
     container_name: xagent-api-perf
     environment:
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/xagent
-      REDIS_URL: redis://redis:6379/0
+      # P0-03: 统一 XAGENT_ 前缀(对照 backend/app/settings.py, env_prefix="XAGENT_")
+      XAGENT_DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/xagent
+      XAGENT_REDIS_URL: redis://redis:6379/0
+      # LOG_LEVEL 由 backend/app/monitoring 与 core/config.py LogSettings(LOG_ 前缀)直接读取, 保持原名
       LOG_LEVEL: INFO
     ports:
       - "8000:8000"

@@ -102,7 +102,8 @@ from backend.app.monitoring_integration import setup_monitoring
 # 初始化
 metrics, tracing, health_checker = setup_monitoring(app)
 
-# 添加端点
+# 添加端点（注意：/metrics 方案需 P0-04 backend 接线后生效；
+# 当前已挂载的真实端点是 /api/v1/metrics/prometheus）
 @app.get("/metrics")
 async def prometheus_metrics():
     return Response(metrics.get_metrics(), media_type="text/plain")
@@ -155,11 +156,11 @@ netstat -tuln | grep LISTEN
 ### Prometheus 无法连接目标
 
 ```bash
-# 检查应用
-curl http://localhost:8000/metrics
+# 检查应用（当前真实指标端点）
+curl http://localhost:8000/api/v1/metrics/prometheus
 
 # 检查网络
-docker exec x-agent-prometheus curl http://x-agent-api:8000/metrics
+docker exec x-agent-prometheus curl http://x-agent-api:8000/api/v1/metrics/prometheus
 
 # 查看目标状态
 curl http://localhost:9090/api/v1/targets

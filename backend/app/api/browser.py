@@ -13,7 +13,7 @@ from backend.app.api.recovery_helpers import build_recovery_context, build_recov
 from backend.app.core.contracts import ErrorCode
 from backend.app.core.security import Principal
 from backend.app.dependencies import enforce_scope, get_current_principal
-from backend.app.services.browser.automation import browser_automation
+from backend.app.services.browser.automation import BrowserUnavailableError, browser_automation
 
 router = APIRouter(prefix="/api/v1/browser", tags=["browser"])
 PrincipalDependency = Annotated[Principal, Depends(get_current_principal)]
@@ -230,12 +230,21 @@ async def create_browser_session(
     if principal.role != "admin":
         user_id = principal.user_id
 
-    session = browser_automation.create_session(
-        trace_id=request.trace_id,
-        run_id=request.run_id,
-        tenant_id=request.tenant_id,
-        user_id=user_id,
-    )
+    try:
+        session = await browser_automation.create_session(
+            trace_id=request.trace_id,
+            run_id=request.run_id,
+            tenant_id=request.tenant_id,
+            user_id=user_id,
+        )
+    except BrowserUnavailableError as exc:
+        # No fallback mode: when the real browser backend is unavailable the
+        # API answers an explicit 503 instead of a fake success session.
+        raise api_error(
+            503,
+            ErrorCode.INTERNAL_ERROR,
+            f"Browser automation backend unavailable: {exc}",
+        ) from exc
     return _session_response(session)
 
 
@@ -255,7 +264,7 @@ async def browser_goto(
         raise api_error(400, ErrorCode.WORKFLOW_INVALID, "url is required.")
     if not _is_url_allowed(request.url):
         raise api_error(400, ErrorCode.VALIDATION_ERROR, "URL is not allowed.")
-    return _action_response(browser_automation.goto(session_id, request.url))
+    return _action_response(await browser_automation.goto(session_id, request.url))
 
 
 @router.post("/sessions/{session_id}/click", response_model=BrowserActionResponse)
@@ -272,7 +281,7 @@ async def browser_click(
         raise api_error(403, ErrorCode.AUTHORIZATION_FAILED, "Access denied.")
     if not request.selector:
         raise api_error(400, ErrorCode.WORKFLOW_INVALID, "selector is required.")
-    return _action_response(browser_automation.click(session_id, request.selector))
+    return _action_response(await browser_automation.click(session_id, request.selector))
 
 
 @router.post("/sessions/{session_id}/fill", response_model=BrowserActionResponse)
@@ -289,7 +298,7 @@ async def browser_fill(
         raise api_error(403, ErrorCode.AUTHORIZATION_FAILED, "Access denied.")
     if not request.selector or request.value is None:
         raise api_error(400, ErrorCode.WORKFLOW_INVALID, "selector and value are required.")
-    return _action_response(browser_automation.fill(session_id, request.selector, request.value))
+    return _action_response(await browser_automation.fill(session_id, request.selector, request.value))
 
 
 @router.post("/sessions/{session_id}/extract-text", response_model=BrowserActionResponse)
@@ -307,7 +316,7 @@ async def browser_extract_text(
     selector = request.selector or request.text
     if not selector:
         raise api_error(400, ErrorCode.WORKFLOW_INVALID, "selector is required.")
-    return _action_response(browser_automation.extract_text(session_id, selector))
+    return _action_response(await browser_automation.extract_text(session_id, selector))
 
 
 @router.post("/sessions/{session_id}/wait-for", response_model=BrowserActionResponse)
@@ -325,7 +334,7 @@ async def browser_wait_for(
     selector = request.selector or request.text
     if not selector:
         raise api_error(400, ErrorCode.WORKFLOW_INVALID, "selector is required.")
-    return _action_response(browser_automation.wait_for(session_id, selector))
+    return _action_response(await browser_automation.wait_for(session_id, selector))
 
 
 @router.post("/sessions/{session_id}/screenshot", response_model=BrowserActionResponse)
@@ -343,7 +352,7 @@ async def browser_screenshot(
     if not request.path:
         raise api_error(400, ErrorCode.WORKFLOW_INVALID, "path is required.")
     safe_path = _sanitize_screenshot_path(request.path)
-    return _action_response(browser_automation.screenshot(session_id, safe_path))
+    return _action_response(await browser_automation.screenshot(session_id, safe_path))
 
 
 @router.post("/sessions/{session_id}/close")
@@ -355,7 +364,7 @@ async def browser_close(
     session = browser_automation.get_session(session_id)
     if session is not None and not _can_access_session(session, principal):
         raise api_error(403, ErrorCode.AUTHORIZATION_FAILED, "Access denied.")
-    return {"closed": browser_automation.close(session_id)}
+    return {"closed": await browser_automation.close(session_id)}
 
 
 @router.delete("/sessions/{session_id}")
@@ -367,7 +376,7 @@ async def browser_delete_session(
     session = browser_automation.get_session(session_id)
     if session is not None and not _can_access_session(session, principal):
         raise api_error(403, ErrorCode.AUTHORIZATION_FAILED, "Access denied.")
-    return {"deleted": browser_automation.close(session_id)}
+    return {"deleted": await browser_automation.close(session_id)}
 
 
 def _action_response(result) -> BrowserActionResponse:

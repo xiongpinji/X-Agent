@@ -4,13 +4,17 @@ metadata:
   name: xagent-config
   namespace: xagent
 data:
-  ENVIRONMENT: "production"
+  # P0-03: 应用配置统一 XAGENT_ 前缀(对照 backend/app/settings.py, env_prefix="XAGENT_", extra="ignore")
+  XAGENT_APP_MODE: "production"
+  XAGENT_DEBUG: "false"
+  # LOG_LEVEL 由 backend/app/monitoring 与 core/config.py LogSettings(LOG_ 前缀)直接读取, 保持原名
   LOG_LEVEL: "INFO"
-  DEBUG: "false"
-  API_WORKERS: "4"
-  JWT_ALGORITHM: "HS256"
-  JWT_EXPIRATION_HOURS: "24"
+  XAGENT_API_WORKERS: "4"  # 预留: 当前 uvicorn 启动参数在 Dockerfile 固定, 未消费
+  XAGENT_JWT_ALGORITHM: "HS256"
+  XAGENT_JWT_EXPIRATION_HOURS: "24"  # 预留: 后端未消费, 待接线
+  # 以下为组合 URL 用的辅助变量(由 deployment 中 $(VAR) 引用)与基础设施端口, 非应用直读配置
   # Database
+  DB_USER: "xagent"  # 修复: 原 configmap 缺失该 key, 而 api/worker/beat 均以 configMapKeyRef 引用它
   DB_NAME: "xagent_db"
   DB_PORT: "5432"
   # Redis

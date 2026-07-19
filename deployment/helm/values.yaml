@@ -34,7 +34,8 @@ api:
     targetCPUUtilizationPercentage: 70
     targetMemoryUtilizationPercentage: 80
 
-# Celery Worker configuration
+# Workflow Worker configuration (P0-02: 当前为 asyncio 轮询进程 python -m backend.app.workflow_worker,
+# 非 Celery; celery 依赖保留但未使用, 待真 Celery 返工)
 worker:
   enabled: true
   replicas: 2
@@ -53,7 +54,7 @@ worker:
     targetCPUUtilizationPercentage: 75
     targetMemoryUtilizationPercentage: 80
 
-# Celery Beat configuration
+# Workflow Scheduler (原 beat 角色) configuration (P0-02: 非 Celery, 待真 Celery 返工后再拆分调度器)
 beat:
   enabled: true
   replicas: 1
@@ -144,13 +145,16 @@ service:
   port: 8000
 
 # Secrets (should be overridden in production)
+# P0-03: jwtSecret/encryptionKey 对应容器内 XAGENT_JWT_SECRET/XAGENT_ENCRYPTION_KEY,
+# 生产模式必须为 >=32 字符且含大写字母与数字的强随机值
 secrets:
   dbUser: xagent
   dbPassword: change-me-in-production
   redisPassword: change-me-in-production
   qdrantApiKey: change-me-in-production
   neo4jPassword: change-me-in-production
-  secretKey: change-me-in-production-use-strong-random-key
+  jwtSecret: change-me-in-production-use-strong-random-key
+  encryptionKey: change-me-in-production-use-strong-random-key
 
 # Database configuration
 database:

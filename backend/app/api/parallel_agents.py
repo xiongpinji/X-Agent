@@ -11,13 +11,15 @@ Endpoints:
 from __future__ import annotations
 
 import logging
-from typing import Annotated, Any, Optional
+from typing import Annotated, Any, Callable, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from backend.app.core.contracts import RunContext
 from backend.app.core.parallel_agent_executor import (
     ParallelAgentExecutor,
+    AgentFactoryNotConfiguredError,
     AgentTask,
     IsolationMode,
     BatchExecutionResult,
@@ -153,6 +155,85 @@ class PublishRequest(BaseModel):
     priority: str = "normal"
 
 
+# Real agent factory (AgentLoop-based)
+
+class _AgentLoopParallelAgent:
+    """Adapt the shared AgentLoop engine to the executor's agent protocol
+    (``async execute(task)``), following the same wiring pattern as
+    ``backend.app.core.agent_spawner``.
+    """
+
+    def __init__(
+        self,
+        agent_loop: Any,
+        agent_id: str,
+        isolation: IsolationMode,
+        principal: Principal,
+    ):
+        self._loop = agent_loop
+        self.agent_id = agent_id
+        self.isolation = isolation
+        self._principal = principal
+
+    async def execute(self, task: AgentTask) -> dict[str, Any]:
+        extra_context: dict[str, Any] = {
+            "task_id": task.task_id,
+            "description": task.description,
+            "constraints": list(task.constraints),
+            "success_criteria": list(task.success_criteria),
+            "isolation": self.isolation.value,
+            "parallel_agent_id": self.agent_id,
+        }
+        extra_context.update(task.metadata or {})
+        context = RunContext(
+            tenant_id=self._principal.tenant_id,
+            user_id=self._principal.user_id,
+            agent_id=self.agent_id,
+            permission_scope=list(getattr(self._principal, "scopes", None) or []),
+        )
+        response = await self._loop.run(context, task.goal, extra_context)
+        status_value = getattr(getattr(response, "status", None), "value", None) or str(
+            getattr(response, "status", "completed")
+        )
+        output = {
+            "status": status_value,
+            "answer": getattr(response, "answer", ""),
+            "iterations": getattr(response, "iterations", 0),
+            "trace_id": getattr(response, "trace_id", context.trace_id),
+            "error": getattr(response, "error", None),
+        }
+        if status_value.lower() == "failed":
+            # Surface the failure so the executor marks the task FAILED
+            # instead of reporting a fake success.
+            raise RuntimeError(output["error"] or "agent run failed")
+        return output
+
+
+def build_agent_loop_factory(
+    principal: Principal,
+) -> Callable[[str, IsolationMode], _AgentLoopParallelAgent]:
+    """Build a real agent_factory backed by the shared AgentLoop engine.
+
+    Raises AgentFactoryNotConfiguredError when the engine cannot be
+    constructed (e.g. LLM/tooling not configured) so the endpoint can
+    answer HTTP 501 instead of returning simulated results.
+    """
+    try:
+        # 惰性导入避免循环依赖（与 core/agent_spawner.py 同一模式）。
+        from backend.app.dependencies import get_agent
+
+        agent_loop = get_agent()
+    except Exception as exc:
+        raise AgentFactoryNotConfiguredError(
+            f"Parallel agent factory is not configured: {exc}"
+        ) from exc
+
+    def factory(agent_id: str, isolation: IsolationMode) -> _AgentLoopParallelAgent:
+        return _AgentLoopParallelAgent(agent_loop, agent_id, isolation, principal)
+
+    return factory
+
+
 # Endpoints
 
 @router.post("/spawn")
@@ -201,11 +282,17 @@ async def spawn_agents(
                 detail=f"Invalid isolation mode: {request.isolation}",
             )
 
+        # Build the real AgentLoop-backed factory for this request. Raises
+        # AgentFactoryNotConfiguredError (-> HTTP 501) when the engine is
+        # not configured, instead of falling back to simulated results.
+        agent_factory = build_agent_loop_factory(principal)
+
         # Execute agents
         batch_result = await executor.spawn_agents(
             tasks=tasks,
             isolation=isolation,
             max_parallel=request.max_parallel,
+            agent_factory=agent_factory,
         )
 
         # Aggregate results if requested
@@ -238,6 +325,9 @@ async def spawn_agents(
         else:
             return batch_result.to_dict()
 
+    except AgentFactoryNotConfiguredError as e:
+        logger.error(f"Parallel agent factory unavailable: {e}")
+        raise HTTPException(status_code=501, detail=str(e))
     except Exception as e:
         logger.error(f"Error spawning agents: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))

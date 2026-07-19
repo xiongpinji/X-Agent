@@ -1,3 +1,4 @@
+# 未接线（P0-11 审计标注）：本模块为宣传的企业级浏览器增强能力，但当前没有任何 API 消费方，未暴露到任何接口。按要求保留代码，待后续接线或归档。
 """
 Page analysis and structure extraction for browser automation.
 

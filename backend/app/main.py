@@ -100,14 +100,16 @@ from backend.app.core.hooks import (
     get_hook_manager,
     register_hooks_from_config,
 )
+from backend.app.core.tenant_isolation import TenantIsolationMiddleware
 from backend.app.core.tool_registry import ToolCatalog
+from backend.app.monitoring.middleware import MetricsMiddleware
 from backend.app.settings import get_settings
 
 
 def require_api_key_header(request: Request) -> None:
     if not settings.require_api_key:
         return
-    if request.url.path in {"/", "/health", "/ready", "/api/v1/channels/telegram/webhook"}:
+    if request.url.path in {"/", "/health", "/ready", "/metrics", "/api/v1/channels/telegram/webhook"}:
         return
     if request.headers.get("x-api-key"):
         return
@@ -359,6 +361,25 @@ app.add_middleware(
 # SECURITY: Add CSRF protection middleware
 app.add_middleware(CSRFProtectionMiddleware)
 
+# MONITORING: Wire the existing HTTP metrics middleware (backend.app.monitoring.middleware)
+# so request latency/status are recorded into the Prometheus registry.
+app.add_middleware(MetricsMiddleware)
+
+# SECURITY: Mount the real tenant isolation middleware (core/tenant_isolation.py)
+# so request.state.tenant_id is actually populated for downstream handlers.
+app.add_middleware(TenantIsolationMiddleware)
+
+# MONITORING: Prometheus scrape endpoint. Uses the same default registry that
+# core.metrics.metrics_collector records into. Degrade gracefully if the
+# optional dependency is absent.
+try:
+    from prometheus_client import make_asgi_app
+
+    app.mount("/metrics", make_asgi_app())
+    logger.info("Prometheus metrics endpoint mounted at /metrics")
+except ImportError:
+    logger.warning("prometheus_client not installed; /metrics endpoint not available")
+
 
 @app.middleware("http")
 async def rate_limit_middleware(request: Request, call_next):
@@ -380,7 +401,7 @@ async def rate_limit_middleware(request: Request, call_next):
 async def request_logging_middleware(request: Request, call_next):
     request_id = request.headers.get("x-request-id") or str(uuid4())
     started = time.perf_counter()
-    if settings.require_api_key and request.url.path not in {"/", "/health", "/ready", "/api/v1/channels/telegram/webhook"}:
+    if settings.require_api_key and request.url.path not in {"/", "/health", "/ready", "/metrics", "/api/v1/channels/telegram/webhook"}:
         if not request.headers.get("x-api-key"):
             response = JSONResponse({"detail": "Missing API key"}, status_code=401)
             response.headers["x-request-id"] = request_id
@@ -418,9 +439,14 @@ async def tenant_isolation_middleware(request: Request, call_next):
         return await call_next(request)
 
     try:
-        # Try to get the principal from the request
-        # This is a best-effort check; the actual auth happens in route handlers
-        principal = request.scope.get("principal")
+        # Resolve the principal directly: this previously read
+        # request.scope["principal"], which nothing ever populated, making the
+        # check dead code. Resolve via the standard dependency (best-effort;
+        # real auth still happens in route handlers) and publish it on
+        # scope/state so downstream handlers can reuse it.
+        principal = get_current_principal(request)
+        request.scope["principal"] = principal
+        request.state.principal = principal
         if principal and principal.role != "admin":
             # Check for tenant_id in query parameters
             tenant_id_param = request.query_params.get("tenant_id")

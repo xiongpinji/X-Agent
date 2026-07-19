@@ -1,42 +1,44 @@
+# P0-03: 环境变量占位符统一 XAGENT_ 前缀(对照 backend/app/settings.py, env_prefix="XAGENT_");
+# 其中 ${XAGENT_JWT_SECRET} 对应应用 JWT 签名密钥(原 ${SECRET_KEY}, 生产模式必须为强随机值)
 environment: production
 
 database:
-  host: ${DB_HOST:prod-db.example.com}
-  port: ${DB_PORT:5432}
-  name: ${DB_NAME:xagent_prod}
-  user: ${DB_USER:xagent}
-  password: ${DB_PASSWORD}
-  pool_size: ${DB_POOL_SIZE:20}
-  max_overflow: ${DB_MAX_OVERFLOW:10}
+  host: ${XAGENT_DB_HOST:prod-db.example.com}
+  port: ${XAGENT_DB_PORT:5432}
+  name: ${XAGENT_DB_NAME:xagent_prod}
+  user: ${XAGENT_DB_USER:xagent}
+  password: ${XAGENT_DB_PASSWORD}
+  pool_size: ${XAGENT_DB_POOL_SIZE:20}
+  max_overflow: ${XAGENT_DB_MAX_OVERFLOW:10}
   ssl_mode: require
   connection_timeout: 30
   statement_timeout: 300000
 
 redis:
-  host: ${REDIS_HOST:prod-redis.example.com}
-  port: ${REDIS_PORT:6379}
-  db: ${REDIS_DB:0}
-  password: ${REDIS_PASSWORD}
-  max_connections: ${REDIS_MAX_CONNECTIONS:50}
+  host: ${XAGENT_REDIS_HOST:prod-redis.example.com}
+  port: ${XAGENT_REDIS_PORT:6379}
+  db: ${XAGENT_REDIS_DB:0}
+  password: ${XAGENT_REDIS_PASSWORD}
+  max_connections: ${XAGENT_REDIS_MAX_CONNECTIONS:50}
   socket_timeout: 5
   socket_connect_timeout: 5
 
 qdrant:
-  host: ${QDRANT_HOST:prod-qdrant.example.com}
-  port: ${QDRANT_PORT:6333}
-  api_key: ${QDRANT_API_KEY}
+  host: ${XAGENT_QDRANT_HOST:prod-qdrant.example.com}
+  port: ${XAGENT_QDRANT_PORT:6333}
+  api_key: ${XAGENT_QDRANT_API_KEY}
   timeout: 30
   prefer_grpc: true
 
 neo4j:
-  uri: ${NEO4J_URI:bolt://prod-neo4j.example.com:7687}
-  user: ${NEO4J_USER:neo4j}
-  password: ${NEO4J_PASSWORD}
+  uri: ${XAGENT_NEO4J_URI:bolt://prod-neo4j.example.com:7687}
+  user: ${XAGENT_NEO4J_USER:neo4j}
+  password: ${XAGENT_NEO4J_PASSWORD}
   encrypted: true
   trust: TRUST_ALL_CERTIFICATES
 
 security:
-  secret_key: ${SECRET_KEY}
+  secret_key: ${XAGENT_JWT_SECRET}
   jwt_expiration: 3600
   jwt_algorithm: HS256
   cors_origins:
@@ -64,10 +66,10 @@ monitoring:
   prometheus_enabled: true
   prometheus_port: 9090
   jaeger_enabled: true
-  jaeger_host: ${JAEGER_HOST:prod-jaeger.example.com}
-  jaeger_port: ${JAEGER_PORT:6831}
+  jaeger_host: ${XAGENT_JAEGER_HOST:prod-jaeger.example.com}
+  jaeger_port: ${XAGENT_JAEGER_PORT:6831}
   sentry_enabled: true
-  sentry_dsn: ${SENTRY_DSN}
+  sentry_dsn: ${XAGENT_SENTRY_DSN}
   sentry_environment: production
   sentry_traces_sample_rate: 0.1
 
@@ -83,8 +85,8 @@ backup:
   retention_days: 30
   backup_path: /backups
   s3_enabled: true
-  s3_bucket: ${S3_BACKUP_BUCKET}
-  s3_region: ${S3_REGION:us-east-1}
+  s3_bucket: ${XAGENT_S3_BACKUP_BUCKET}
+  s3_region: ${XAGENT_S3_REGION:us-east-1}
 
 health_check:
   enabled: true

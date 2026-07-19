@@ -320,31 +320,20 @@ class SAMLManager:
     def _verify_signature(self, saml_response: bytes) -> bool:
         """Verify SAML Response signature.
 
-        Args:
-            saml_response: SAML Response XML bytes
+        ⚠️ SECURITY (P0-05): 原实现仅检查 XML 中是否存在 Signature 元素，
+        完全未做 XML DSig 签名验证，等同于没有验证，攻击者可任意伪造断言完成登录。
+        当前代码库未集成 python3-saml/signxml，无法执行真实验证，
+        因此此处 fail-closed：一律抛出异常拒绝处理，绝不静默通过。
+        ➡️ 真 SSO 实现见 P1-02。
 
-        Returns:
-            True if signature is valid
+        Raises:
+            ValueError: 始终抛出（fail-closed），直到 P1-02 落地真实签名验证。
         """
-        # Simplified signature verification
-        # Production should use cryptography library
-        try:
-            import xml.etree.ElementTree as ET
-            root = ET.fromstring(saml_response)
-
-            # Check for Signature element
-            namespaces = {'ds': 'http://www.w3.org/2000/09/xmldsig#'}
-            signature = root.find('.//ds:Signature', namespaces)
-
-            if signature is None:
-                self.logger.warning("No signature found in SAML Response")
-                return False
-
-            self.logger.debug("SAML Response signature verified")
-            return True
-        except Exception as e:
-            self.logger.error(f"Signature verification failed: {e}")
-            return False
+        raise ValueError(
+            "SAML signature verification is not implemented; "
+            "refusing to process SAML response (fail-closed, P0-05). "
+            "真 SSO 实现见 P1-02（需接入 python3-saml/signxml 做真实 XML 签名验证）。"
+        )
 
     def generate_logout_request(self, session_index: str) -> str:
         """Generate SAML LogoutRequest.
@@ -488,19 +477,73 @@ class OIDCManager:
     def decode_id_token(self, id_token: str) -> Dict[str, Any]:
         """Decode and validate ID token (JWT).
 
+        SECURITY (P0-05): 签名验证为强制项，严禁 verify_signature=False。
+        无法取得验证所需的密钥材料时（HS* 缺 client_secret、RS*/ES*/PS* 缺 JWKS），
+        一律 fail-closed 抛错拒绝登录，绝不允许静默通过。
+        完整 OIDC 实现（JWKS 拉取与轮换、nonce 校验等）见 P1-02。
+
         Args:
             id_token: ID token JWT
 
         Returns:
             Decoded token claims
+
+        Raises:
+            ValueError: 缺少密钥材料或令牌验证失败（fail-closed，拒绝登录）
         """
         try:
             import jwt
+        except ImportError as e:
+            # fail-closed：没有 JWT 库就无法验证签名，直接拒绝，绝不静默解码
+            self.logger.error("PyJWT is required to verify ID tokens but is not installed")
+            raise ValueError(
+                f"Cannot verify ID token: JWT library unavailable ({e}). "
+                "Refusing to authenticate (fail-closed, P0-05)."
+            ) from e
 
-            # Simplified decoding - production should validate signature
+        try:
+            header = jwt.get_unverified_header(id_token)
+            alg = str(header.get("alg") or "")
+
+            signing_key: Optional[Any] = None
+            if alg.startswith("HS") and self.config.client_secret:
+                # 对称算法：使用 client_secret 验证签名
+                signing_key = self.config.client_secret
+            elif alg.startswith(("RS", "ES", "PS")):
+                # 非对称算法：必须经由 discovery 文档取得 JWKS 才能验证签名
+                jwks_uri = (self._discovery_cache or {}).get("jwks_uri")
+                if jwks_uri:
+                    signing_key = jwt.PyJWKClient(jwks_uri).get_signing_key_from_jwt(id_token).key
+
+            if signing_key is None:
+                # fail-closed：没有任何密钥材料可验证签名时直接拒绝登录
+                raise ValueError(
+                    f"Cannot verify ID token signature (alg='{alg or 'unknown'}'): "
+                    "no key material available (client_secret for HS* or JWKS for RS*/ES*/PS*). "
+                    "Refusing to authenticate (fail-closed, P0-05)."
+                )
+
+            issuer = (self._discovery_cache or {}).get("issuer")
+            if self.config.validate_issuer and not issuer:
+                # fail-closed：配置了签发方校验但无可信 issuer 时拒绝登录
+                raise ValueError(
+                    "Issuer validation is enabled but no trusted issuer is known "
+                    "(discovery document not loaded). "
+                    "Refusing to authenticate (fail-closed, P0-05)."
+                )
+
             decoded = jwt.decode(
                 id_token,
-                options={"verify_signature": False}  # Should verify in production
+                signing_key,
+                algorithms=[alg],
+                audience=self.config.client_id if self.config.validate_audience else None,
+                issuer=issuer if self.config.validate_issuer else None,
+                options={
+                    "verify_signature": True,
+                    "verify_exp": True,
+                    "verify_aud": self.config.validate_audience,
+                    "verify_iss": self.config.validate_issuer,
+                },
             )
 
             self.logger.debug(f"Decoded ID token for user: {decoded.get('sub')}")

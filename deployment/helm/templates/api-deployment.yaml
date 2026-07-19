@@ -47,6 +47,15 @@ spec:
             name: xagent-config
         - secretRef:
             name: xagent-secrets
+        # P0-03: envFrom 仅注入零散 key, 应用实际读取的连接串在此由辅助变量组合
+        # (envFrom 变量先于 env 处理, 可被 $(VAR) 引用)
+        env:
+        - name: XAGENT_DATABASE_URL
+          value: "postgresql+asyncpg://$(DB_USER):$(DB_PASSWORD)@postgres:{{ .Values.database.port }}/$(DB_NAME)"
+        - name: XAGENT_REDIS_URL
+          value: "redis://:$(REDIS_PASSWORD)@redis:{{ .Values.redis.port }}/0"
+        - name: XAGENT_QDRANT_URL
+          value: "http://qdrant:{{ .Values.qdrant.port }}"
         resources:
           {{- toYaml .Values.api.resources | nindent 10 }}
         livenessProbe:
@@ -59,7 +68,8 @@ spec:
           failureThreshold: 3
         readinessProbe:
           httpGet:
-            path: /health
+            # P0: readiness 用 /ready 深探针(检查下游依赖), liveness 保持 /health 浅探针
+            path: /ready
             port: {{ .Values.api.port }}
           initialDelaySeconds: 10
           periodSeconds: 5

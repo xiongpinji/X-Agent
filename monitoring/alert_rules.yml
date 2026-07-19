@@ -1,3 +1,19 @@
+# =============================================================================
+# X-Agent 告警规则（权威版本，由 monitoring/prometheus.yml 挂接）
+#
+# 状态说明（P0-04，2026-07-19）：
+#   - xagent:api:* / xagent:agent:* / xagent:db:* / xagent:cache:* 等表达式
+#     引用 recording_rules.yml 的录制规则，recording_rules.yml 已在
+#     monitoring/prometheus.yml 的 rule_files 中挂接。
+#   - 但录制规则依赖的原始指标（xagent_api_requests_total 等）需 backend 侧
+#     P0-04 接线（PrometheusMiddleware + /metrics）后才会真实产出。
+#     在接线完成前，本文件中的录制规则类告警不会触发（表达式为空集），
+#     属预期行为，而非告警正常。
+#   - 当前真实可用的指标仅 /api/v1/metrics/prometheus 输出的
+#     xagent_{runs,traces,memories,workflows,...}_total 系列 gauge，
+#     本文件暂无基于这些指标的告警（TODO：补齐后添加）。
+#   - up{job=...} 类可用性告警立即有效，但依赖对应抓取任务存在。
+# =============================================================================
 groups:
   - name: x-agent-alerts
     interval: 30s
@@ -276,6 +292,8 @@ groups:
           description: "X-Agent API is not responding"
           runbook_url: "https://wiki.example.com/runbooks/api-down"
 
+      # TODO: x-agent-worker 抓取任务当前已在 prometheus.yml 中注释（worker 无指标端点），
+      # 本告警在 worker 指标端点补齐前不会触发。
       - alert: WorkerServiceDown
         expr: up{job="x-agent-worker"} == 0
         for: 1m

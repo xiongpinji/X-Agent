@@ -10,9 +10,29 @@ Features:
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from backend.app.core.hybrid_memory_system import Memory
+
+# Whitelist of relationship types allowed in Cypher MERGE clauses.
+# Relationship types cannot be parameterized in Cypher, so only these
+# fixed identifiers may be interpolated into the query text.
+ALLOWED_RELATION_TYPES: frozenset[str] = frozenset(
+    {
+        "related_to",
+        "depends_on",
+        "references",
+        "supersedes",
+        "part_of",
+        "caused_by",
+        "derived_from",
+        "supports",
+        "contradicts",
+        "duplicates",
+    }
+)
+_RELATION_TYPE_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]{0,63}$")
 
 
 class GraphPath(Memory):
@@ -96,6 +116,11 @@ class GraphMemoryStore:
         if not self.neo4j_driver:
             return False
 
+        # Cypher relationship types cannot be parameterized; enforce a strict
+        # whitelist (plus identifier-shape check) before interpolation.
+        if relation not in ALLOWED_RELATION_TYPES or not _RELATION_TYPE_RE.match(relation):
+            raise ValueError(f"Unsupported relation type: {relation!r}")
+
         try:
             with self.neo4j_driver.session(database=self.database) as session:
                 session.run(
@@ -132,6 +157,10 @@ class GraphMemoryStore:
         """
         if not self.neo4j_driver:
             return []
+
+        # Depth is interpolated into Cypher (variable-length bounds cannot be
+        # parameterized); coerce to a bounded int so it is always a literal.
+        depth = min(max(int(depth), 1), 5)
 
         try:
             with self.neo4j_driver.session(database=self.database) as session:

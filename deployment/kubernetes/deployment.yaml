@@ -41,44 +41,54 @@ spec:
           containerPort: 8000
           protocol: TCP
         env:
-        - name: ENVIRONMENT
+        # P0-03: 应用配置统一 XAGENT_ 前缀(对照 backend/app/settings.py, env_prefix="XAGENT_")
+        - name: XAGENT_APP_MODE
           value: "production"
+        # LOG_LEVEL 由 backend/app/monitoring 与 core/config.py LogSettings(LOG_ 前缀)直接读取, 保持原名
         - name: LOG_LEVEL
           value: "INFO"
-        - name: DATABASE_URL
+        - name: XAGENT_DATABASE_URL
           valueFrom:
             secretKeyRef:
               name: xagent-secrets
               key: database-url
-        - name: REDIS_URL
+        - name: XAGENT_REDIS_URL
           valueFrom:
             secretKeyRef:
               name: xagent-secrets
               key: redis-url
-        - name: QDRANT_URL
+        - name: XAGENT_QDRANT_URL
           valueFrom:
             secretKeyRef:
               name: xagent-secrets
               key: qdrant-url
-        - name: NEO4J_URI
+        # 预留: 后端当前未消费 NEO4J 配置
+        - name: XAGENT_NEO4J_URI
           valueFrom:
             secretKeyRef:
               name: xagent-secrets
               key: neo4j-uri
-        - name: SECRET_KEY
+        - name: XAGENT_JWT_SECRET
           valueFrom:
             secretKeyRef:
               name: xagent-secrets
               key: secret-key
-        - name: SENTRY_DSN
+        # 生产模式必需(Settings 校验); secret 需补充 encryption-key, 未提供时 Pod 将因校验失败而无法启动
+        - name: XAGENT_ENCRYPTION_KEY
+          valueFrom:
+            secretKeyRef:
+              name: xagent-secrets
+              key: encryption-key
+              optional: true
+        - name: XAGENT_SENTRY_DSN
           valueFrom:
             secretKeyRef:
               name: xagent-secrets
               key: sentry-dsn
               optional: true
-        - name: JAEGER_AGENT_HOST
+        - name: XAGENT_JAEGER_AGENT_HOST
           value: "jaeger-agent.monitoring"
-        - name: JAEGER_AGENT_PORT
+        - name: XAGENT_JAEGER_AGENT_PORT
           value: "6831"
         resources:
           requests:
@@ -97,7 +107,8 @@ spec:
           failureThreshold: 3
         readinessProbe:
           httpGet:
-            path: /health
+            # P0: readiness 用 /ready 深探针(检查下游依赖), liveness 保持 /health 浅探针
+            path: /ready
             port: http
           initialDelaySeconds: 10
           periodSeconds: 5

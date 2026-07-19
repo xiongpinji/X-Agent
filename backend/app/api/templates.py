@@ -16,7 +16,7 @@ from typing import Annotated, Any, Optional
 from fastapi import APIRouter, Depends, Query, HTTPException, status
 
 from backend.app.core.security import Principal
-from backend.app.core.workflows.template_system import (
+from backend.app.core.workflow.template_system import (
     WorkflowTemplate,
     TemplateRegistry,
     TemplateCategory,
