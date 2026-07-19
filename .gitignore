@@ -204,3 +204,8 @@ data/runs/
 commercial_audit/node_modules/
 *.log
 .xagent_runtime/
+
+# .env.<name> 变体不跟踪 (P0-08 收尾)
+.env.*
+!.env.example
+!.env.*.example
