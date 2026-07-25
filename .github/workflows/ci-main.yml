@@ -44,7 +44,7 @@ env:
   XAGENT_REQUIRE_API_KEY: "false"
 
 jobs:
-  # ─── Ruff Lint Gate (Blocking) ─────────────────────────────────────────────────
+  # --- Ruff Lint Gate (Blocking) -------------------------------------------------
   ruff-lint:
     name: Ruff Lint (blocking)
     runs-on: ubuntu-latest
@@ -76,7 +76,7 @@ jobs:
         continue-on-error: true
         run: ruff check backend tests --statistics || true
 
-  # ─── TypeScript Check (Blocking) ───────────────────────────────────────────────
+  # --- TypeScript Check (Blocking) -----------------------------------------------
   typescript-check:
     name: TypeScript Check (blocking)
     runs-on: ubuntu-latest
@@ -100,7 +100,7 @@ jobs:
         working-directory: frontend
         run: npx tsc --noEmit
 
-  # ─── Backend Unit Tests ────────────────────────────────────────────────────────
+  # --- Backend Unit Tests --------------------------------------------------------
   backend-test:
     name: Backend Tests
     runs-on: ubuntu-latest
@@ -179,7 +179,7 @@ jobs:
             coverage.xml
             htmlcov/
 
-  # ─── Security Scan (Non-blocking) ─────────────────────────────────────────────
+  # --- Security Scan (Non-blocking) ---------------------------------------------
   security-scan:
     name: Security Scan (non-blocking)
     runs-on: ubuntu-latest
@@ -200,7 +200,7 @@ jobs:
       - name: Bandit security scan
         run: bandit -r backend/app/ -ll --skip B101 || true
 
-  # ─── Frontend Build ────────────────────────────────────────────────────────────
+  # --- Frontend Build ------------------------------------------------------------
   frontend-build:
     name: Frontend Build
     runs-on: ubuntu-latest
@@ -225,7 +225,7 @@ jobs:
         working-directory: frontend
         run: npm run build
 
-  # ─── Docker Build ──────────────────────────────────────────────────────────────
+  # --- Docker Build --------------------------------------------------------------
   docker-build:
     name: Docker Build
     runs-on: ubuntu-latest
@@ -241,7 +241,7 @@ jobs:
       - name: Verify image
         run: docker run --rm xagent:ci python -c "from backend.app.main import app; print(f'Routes: {len(app.routes)}')"
 
-  # ─── Quality Gate Summary ──────────────────────────────────────────────────────
+  # --- Quality Gate Summary ------------------------------------------------------
   quality-gate:
     name: Quality Gate Summary
     runs-on: ubuntu-latest
