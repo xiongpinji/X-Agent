@@ -1,9 +1,11 @@
 name: Deploy to Production
 
 on:
-  push:
-    tags:
-      - 'v*'
+  # Disabled: requires AWS secrets (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION)
+  # Enable by uncommenting the push trigger below after configuring repository secrets
+  # push:
+  #   tags:
+  #     - 'v*'
   workflow_dispatch:
     inputs:
       version:
@@ -50,7 +52,7 @@ jobs:
           safety check --json > safety-report.json || true
 
       - name: Upload security reports
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: security-reports
           path: |
