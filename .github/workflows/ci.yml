@@ -62,18 +62,10 @@ jobs:
       - name: Install ruff
         run: pip install ruff
 
-      # 阻断层: E9/F63/F7/F82 (语法错误/未定义名等真实错误) 零容忍, 仅拦截新增;
-      # 存量 20 个 F821/F822 列入豁免基线 .github/ruff-blocking-baseline.txt。
+      # 阻断层: E9/F63/F7/F82 零容忍 (baseline 已清零)
       - name: Ruff check (blocking - new errors)
         run: |
-          ruff check --select E9,F63,F7,F82 backend tests --output-format=concise | grep -vE '^Found [0-9]+ errors?' > ruff-blocking.txt || true
-          new_errors=$(grep -vxFf .github/ruff-blocking-baseline.txt ruff-blocking.txt || true)
-          if [ -n "$new_errors" ]; then
-            echo "::error::新增阻断级 lint 错误(不在豁免基线 .github/ruff-blocking-baseline.txt 内):"
-            echo "$new_errors"
-            exit 1
-          fi
-          echo "blocking layer OK: 无新增 E9/F63/F7/F82 错误(存量见豁免基线)"
+          ruff check --select E9,F63,F7,F82 backend tests --output-format=concise
 
       # F,E9 阻断检查 (新增要求)
       - name: Ruff check (F,E9 blocking)

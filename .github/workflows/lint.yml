@@ -25,19 +25,10 @@ jobs:
         python -m pip install --upgrade pip
         pip install ruff
 
-    # 阻断层(2026-07-19, Phase 1 第三波): 仅拦截新增 E9/F63/F7/F82 真实错误,
-    # 存量 20 个列入豁免基线 .github/ruff-blocking-baseline.txt;
-    # TODO: 基线清零后改为直接 ruff check --select E9,F63,F7,F82 backend/ tests/
+    # 阻断层: E9/F63/F7/F82 真实错误直接拦截 (baseline 已清零)
     - name: Run ruff check (blocking)
       run: |
-        ruff check --select E9,F63,F7,F82 backend/ tests/ --output-format=concise | grep -vE '^Found [0-9]+ errors?' > ruff-blocking.txt || true
-        new_errors=$(grep -vxFf .github/ruff-blocking-baseline.txt ruff-blocking.txt || true)
-        if [ -n "$new_errors" ]; then
-          echo "::error::新增阻断级 lint 错误(不在豁免基线 .github/ruff-blocking-baseline.txt 内):"
-          echo "$new_errors"
-          exit 1
-        fi
-        echo "blocking layer OK: 无新增 E9/F63/F7/F82 错误(存量 20 个见豁免基线)"
+        ruff check --select E9,F63,F7,F82 backend/ tests/ --output-format=concise
 
     # 信息层: 全量 ruff 统计仅作观测, 存量 1 万+ lint 待分期清零, 见 commercial_audit
     - name: Run ruff check (informational)
