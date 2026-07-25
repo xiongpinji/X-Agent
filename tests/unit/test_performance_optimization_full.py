@@ -23,6 +23,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+# Skip entire module if psutil is not installed
+pytest.importorskip("psutil", reason="psutil not installed")
+
 from backend.app.core.performance_optimization import (
     AdaptiveRateLimiter,
     BatchLoader,

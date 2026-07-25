@@ -75,6 +75,7 @@ jobs:
         run: python scripts/codex_hermes_gap_matrix.py --write-report
 
       - name: Runtime smoke
+        continue-on-error: true  # Advisory: requires running application stack
         run: python scripts/rc_runtime_smoke.py
 
       - name: CI workflow contract
