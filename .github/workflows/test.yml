@@ -13,7 +13,7 @@ concurrency:
 jobs:
   unit-tests:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     strategy:
       matrix:
         python-version: ["3.11", "3.12"]
@@ -69,7 +69,7 @@ jobs:
         REDIS_URL: redis://localhost:6379
         QDRANT_URL: http://localhost:6333
       run: |
-        pytest tests/ -m "not e2e" --cov=backend --cov-report=xml --cov-report=html --cov-report=term-missing -v --tb=short --timeout=300
+        pytest tests/ -m "not e2e" -n auto --cov=backend --cov-report=xml --cov-report=html --cov-report=term-missing -v --tb=short --timeout=300
 
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v3

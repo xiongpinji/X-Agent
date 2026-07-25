@@ -81,6 +81,7 @@ test = [
     "pytest>=8.2.0",
     "pytest-cov>=4.0.0",
     "pytest-timeout>=2.3.0",
+    "pytest-xdist>=3.5.0",
     "locust>=2.20.0",
 ]
 monitoring = [
