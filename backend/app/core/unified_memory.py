@@ -5,10 +5,14 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import logging
+import math
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from backend.app.core.embeddings import EmbeddingProvider
 
 logger = logging.getLogger(__name__)
 
@@ -172,15 +176,85 @@ class MemoryGovernance:
 
 
 class UnifiedMemorySystem:
-    """Unified memory system integrating vector and graph storage."""
+    """Unified memory system integrating vector and graph storage.
 
-    def __init__(self) -> None:
+    When an ``EmbeddingProvider`` is supplied (via constructor or
+    ``set_embedding_provider``), memories are automatically embedded on store
+    and retrieval uses cosine-similarity over real vectors.  If the provider
+    is unavailable or embedding fails, the system degrades gracefully to
+    keyword-based retrieval (never crashes).
+    """
+
+    def __init__(self, embedding_provider: EmbeddingProvider | None = None) -> None:
         self.validator = MemoryValidator()
         self.conflict_resolver = MemoryConflictResolver()
         self.governance = MemoryGovernance()
         self.memories: dict[str, MemoryRecord] = {}
         self.relationships: dict[str, list[MemoryRelationship]] = {}
         self._lock = asyncio.Lock()
+        self._embedding_provider: EmbeddingProvider | None = embedding_provider
+        self._embedding_degraded = False
+        self._embedding_degraded_reason: str | None = None
+
+    # ------------------------------------------------------------------
+    # Embedding provider management
+    # ------------------------------------------------------------------
+
+    def set_embedding_provider(self, provider: EmbeddingProvider) -> None:
+        """Attach or replace the embedding provider at runtime."""
+        self._embedding_provider = provider
+        self._embedding_degraded = False
+        self._embedding_degraded_reason = None
+        logger.info(
+            "UnifiedMemorySystem: embedding provider attached (backend=%s)",
+            getattr(provider, "backend", "unknown"),
+        )
+
+    @property
+    def embedding_enabled(self) -> bool:
+        """Whether real embeddings are active (not degraded)."""
+        return self._embedding_provider is not None and not self._embedding_degraded
+
+    @property
+    def embedding_status(self) -> dict[str, Any]:
+        """Return embedding subsystem status for observability."""
+        if self._embedding_provider is None:
+            return {"enabled": False, "backend": None, "degraded": False}
+        return {
+            "enabled": True,
+            "backend": getattr(self._embedding_provider, "resolved_backend", "unknown"),
+            "degraded": self._embedding_degraded,
+            "degraded_reason": self._embedding_degraded_reason,
+        }
+
+    async def _embed_text(self, text: str) -> list[float] | None:
+        """Embed text using the provider; returns None on failure (graceful)."""
+        if self._embedding_provider is None:
+            return None
+        try:
+            return await self._embedding_provider.embed(text)
+        except Exception as exc:
+            if not self._embedding_degraded:
+                self._embedding_degraded = True
+                self._embedding_degraded_reason = str(exc)
+                logger.warning(
+                    "UnifiedMemorySystem: embedding failed (%s); "
+                    "degrading to keyword-based retrieval.",
+                    exc,
+                )
+            return None
+
+    @staticmethod
+    def _cosine_similarity(a: list[float], b: list[float]) -> float:
+        """Compute cosine similarity between two vectors."""
+        if not a or not b or len(a) != len(b):
+            return 0.0
+        dot = sum(x * y for x, y in zip(a, b, strict=True))
+        mag_a = math.sqrt(sum(x * x for x in a))
+        mag_b = math.sqrt(sum(x * x for x in b))
+        if mag_a == 0 or mag_b == 0:
+            return 0.0
+        return dot / (mag_a * mag_b)
 
     async def store_memory(
         self,
@@ -190,9 +264,18 @@ class UnifiedMemorySystem:
         metadata: dict[str, Any] | None = None,
         tags: list[str] | None = None,
     ) -> MemoryRecord:
-        """Store a new memory."""
+        """Store a new memory.
+
+        If no explicit ``embedding`` is provided and an embedding provider is
+        attached, the content is automatically embedded using the configured
+        real embedding backend (OpenAI, sentence-transformers, etc.).
+        """
         memory_id = self._generate_id(content)
         now = datetime.now()
+
+        # Auto-embed if no explicit embedding provided
+        if embedding is None:
+            embedding = await self._embed_text(content)
 
         record = MemoryRecord(
             id=memory_id,
@@ -235,7 +318,12 @@ class UnifiedMemorySystem:
         memory_type: MemoryType | None = None,
         top_k: int = 5,
     ) -> list[MemoryRecord]:
-        """Retrieve relevant memories."""
+        """Retrieve relevant memories using hybrid vector + keyword scoring.
+
+        When real embeddings are available, uses cosine similarity between the
+        query embedding and stored memory embeddings.  Falls back to keyword
+        overlap scoring when embeddings are unavailable or degraded.
+        """
         async with self._lock:
             candidates = list(self.memories.values())
 
@@ -243,12 +331,44 @@ class UnifiedMemorySystem:
         if memory_type:
             candidates = [m for m in candidates if m.memory_type == memory_type]
 
-        # Score by relevance (simple keyword matching)
-        query_words = set(query.lower().split())
-        for record in candidates:
-            content_words = set(record.content.lower().split())
-            overlap = len(query_words & content_words)
-            record.relevance_score = overlap / len(query_words) if query_words else 0.0
+        if not candidates:
+            return []
+
+        # Try vector-based retrieval first
+        query_embedding = await self._embed_text(query)
+        use_vector = (
+            query_embedding is not None
+            and any(m.embedding for m in candidates)
+        )
+
+        if use_vector:
+            # Hybrid scoring: 0.7 * cosine_similarity + 0.3 * keyword_overlap
+            query_words = set(query.lower().split())
+            for record in candidates:
+                vector_score = 0.0
+                if record.embedding and query_embedding:
+                    vector_score = self._cosine_similarity(
+                        query_embedding, record.embedding
+                    )
+                # Normalize cosine from [-1,1] to [0,1]
+                vector_score = (vector_score + 1.0) / 2.0
+
+                content_words = set(record.content.lower().split())
+                keyword_score = (
+                    len(query_words & content_words) / len(query_words)
+                    if query_words
+                    else 0.0
+                )
+                record.relevance_score = 0.7 * vector_score + 0.3 * keyword_score
+        else:
+            # Fallback: keyword-only scoring
+            query_words = set(query.lower().split())
+            for record in candidates:
+                content_words = set(record.content.lower().split())
+                overlap = len(query_words & content_words)
+                record.relevance_score = (
+                    overlap / len(query_words) if query_words else 0.0
+                )
 
         # Sort by relevance and return top-k
         candidates.sort(key=lambda m: m.relevance_score, reverse=True)
@@ -291,7 +411,9 @@ class UnifiedMemorySystem:
             relationships = self.relationships.get(memory_id, [])
 
             if relationship_type:
-                relationships = [r for r in relationships if r.relationship_type == relationship_type]
+                relationships = [
+                    r for r in relationships if r.relationship_type == relationship_type
+                ]
 
             related_ids = [r.target_id for r in relationships]
             return [self.memories[mid] for mid in related_ids if mid in self.memories]
@@ -303,7 +425,11 @@ class UnifiedMemorySystem:
         metadata: dict[str, Any] | None = None,
         tags: list[str] | None = None,
     ) -> MemoryRecord:
-        """Update an existing memory."""
+        """Update an existing memory.
+
+        When content changes and an embedding provider is available, the
+        embedding is automatically regenerated.
+        """
         async with self._lock:
             if memory_id not in self.memories:
                 raise ValueError(f"Memory {memory_id} not found")
@@ -313,6 +439,10 @@ class UnifiedMemorySystem:
 
             if content is not None:
                 record.content = content
+                # Re-embed on content change
+                new_embedding = await self._embed_text(content)
+                if new_embedding is not None:
+                    record.embedding = new_embedding
             if metadata is not None:
                 record.metadata.update(metadata)
             if tags is not None:
@@ -346,9 +476,12 @@ class UnifiedMemorySystem:
         """Get memory system statistics."""
         async with self._lock:
             type_counts = {}
+            embedded_count = 0
             for record in self.memories.values():
                 type_name = record.memory_type.value
                 type_counts[type_name] = type_counts.get(type_name, 0) + 1
+                if record.embedding:
+                    embedded_count += 1
 
             return {
                 "total_memories": len(self.memories),
@@ -358,6 +491,8 @@ class UnifiedMemorySystem:
                 "capacity_used_percent": (
                     self.governance.current_size / self.governance.max_memory_size * 100
                 ),
+                "embedded_memories": embedded_count,
+                "embedding": self.embedding_status,
             }
 
     @staticmethod
@@ -366,5 +501,50 @@ class UnifiedMemorySystem:
         return hashlib.sha256(content.encode()).hexdigest()[:16]
 
 
-# Global instance
+# ---------------------------------------------------------------------------
+# Factory: build a UnifiedMemorySystem wired with real embeddings
+# ---------------------------------------------------------------------------
+
+
+def build_unified_memory_system(
+    *,
+    embedding_backend: str = "auto",
+    openai_api_key: str | None = None,
+    openai_embedding_model: str = "text-embedding-3-small",
+    openai_embedding_dimensions: int | None = None,
+    embedding_dim: int = 384,
+) -> UnifiedMemorySystem:
+    """Create a UnifiedMemorySystem with real embedding support.
+
+    Graceful degradation: if the embedding provider cannot be constructed
+    (missing deps, no API key, etc.), the system is still returned but
+    operates in keyword-only mode (no crash).
+    """
+    provider = None
+    try:
+        from backend.app.core.embeddings import EmbeddingProvider
+
+        provider = EmbeddingProvider(
+            backend=embedding_backend,
+            model=openai_embedding_model,
+            dimensions=openai_embedding_dimensions or embedding_dim,
+            openai_api_key=openai_api_key,
+        )
+        logger.info(
+            "UnifiedMemorySystem: embedding provider created (backend=%s, model=%s)",
+            embedding_backend,
+            openai_embedding_model,
+        )
+    except Exception as exc:
+        logger.warning(
+            "UnifiedMemorySystem: failed to create embedding provider (%s); "
+            "running in keyword-only mode.",
+            exc,
+        )
+
+    return UnifiedMemorySystem(embedding_provider=provider)
+
+
+# Global instance (keyword-only by default; use build_unified_memory_system
+# or get_unified_memory() from dependencies for the embedding-wired version)
 unified_memory = UnifiedMemorySystem()

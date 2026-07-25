@@ -9,11 +9,13 @@ from fastapi import Request
 if TYPE_CHECKING:  # 仅类型标注, 运行时惰性导入(可选依赖 qdrant-client)
     from backend.app.core.advanced_rbac import AdvancedRBACEngine
     from backend.app.core.agent import AgentLoop
+    from backend.app.core.agent_context import AgentContextManager
     from backend.app.core.audit_shipper import AuditShipper
     from backend.app.core.memory import MemorySystem
     from backend.app.core.memory_postgres import PostgresMemorySystem
     from backend.app.core.memory_qdrant import QdrantMemorySystem
     from backend.app.core.orchestrator import Orchestrator
+    from backend.app.core.unified_memory import UnifiedMemorySystem
     from backend.app.core.workflows import (
         WorkflowExecutor,
         WorkflowRepository,
@@ -59,6 +61,34 @@ def get_memory() -> "MemorySystem | PostgresMemorySystem | QdrantMemorySystem":
         qdrant_url=settings.qdrant_url,
         qdrant_api_key=settings.qdrant_api_key,
         qdrant_strict=settings.app_mode == "production",
+        embedding_dim=settings.embedding_dim,
+    )
+
+
+@lru_cache
+def get_unified_memory() -> "UnifiedMemorySystem":
+    """Get the UnifiedMemorySystem wired with real embeddings (P1-13).
+
+    This provides an enhanced memory layer on top of the existing memory
+    pipeline, with automatic embedding generation and vector similarity
+    search.  Graceful degradation: if the embedding service is unavailable,
+    the system falls back to keyword-based retrieval without crashing.
+
+    Usage in routes::
+
+        from backend.app.dependencies import get_unified_memory
+        unified = get_unified_memory()
+        await unified.store_memory("...", MemoryType.FACT)
+        results = await unified.retrieve_memories("query")
+    """
+    from backend.app.core.unified_memory import build_unified_memory_system
+
+    settings = get_settings()
+    return build_unified_memory_system(
+        embedding_backend=settings.embedding_backend,
+        openai_api_key=settings.openai_api_key,
+        openai_embedding_model=settings.openai_embedding_model,
+        openai_embedding_dimensions=settings.openai_embedding_dimensions,
         embedding_dim=settings.embedding_dim,
     )
 
@@ -472,6 +502,16 @@ def get_workflow_scheduler() -> "WorkflowScheduler":
 
 
 @lru_cache
+def get_agent_context_manager() -> "AgentContextManager":
+    """P1-14: 返回共享的 AgentContextManager 实例（统一上下文容器、会话恢复、状态快照）。"""
+    from backend.app.core.agent_context import AgentContextManager
+
+    settings = get_settings()
+    storage_path = getattr(settings, "agent_context_store_path", None) or "data/agent_contexts"
+    return AgentContextManager(storage_path=storage_path)
+
+
+@lru_cache
 def get_agent() -> "AgentLoop":
     from backend.app.core.agent import AgentLoop
     from backend.app.core.llm import build_llm_router
@@ -498,6 +538,9 @@ def get_agent() -> "AgentLoop":
         max_iterations=settings.max_iterations,
         tracer=get_trace_store(),
         run_store=get_run_store(),
+        agent_context_manager=get_agent_context_manager(),
+        # P1-13: Wire UnifiedMemorySystem with real embeddings as enhanced layer
+        unified_memory=get_unified_memory(),
     )
 
 

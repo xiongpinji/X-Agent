@@ -66,6 +66,60 @@ async def load_all_plugins(principal: PrincipalDependency) -> dict[str, Any]:
     }
 
 
+@router.get("/health")
+async def plugin_health_check(principal: PrincipalDependency) -> dict[str, Any]:
+    """插件系统健康检查。
+
+    P1-12: 返回插件运行时状态、已加载插件数、可加载插件数、
+    ToolRegistry 桥接状态等信息。
+    """
+    enforce_scope(principal, SCOPE_PLUGIN_READ)
+    runtime = get_plugin_runtime()
+
+    # 扫描插件目录
+    all_plugins = runtime.scan(refresh=True)
+    loaded = runtime.list_loaded()
+    loadable = [p for p in all_plugins if p.status == "loadable"]
+    invalid = [p for p in all_plugins if p.status == "invalid"]
+
+    # 检查 ToolRegistry 桥接状态
+    registry = _get_runtime_tool_registry()
+    registry_available = registry is not None
+    registered_plugin_tools: list[str] = []
+    if registry_available:
+        try:
+            from backend.app.core.plugin_agent_adapter import PLUGIN_TOOL_PREFIX
+
+            tools_dict = getattr(registry, "_tools", {})
+            registered_plugin_tools = [
+                name for name in tools_dict if name.startswith(PLUGIN_TOOL_PREFIX)
+            ]
+        except Exception:
+            pass
+
+    # 总体健康状态
+    overall_status = "healthy"
+    if not runtime.plugins_dir.is_dir():
+        overall_status = "unhealthy"
+    elif invalid:
+        overall_status = "degraded"
+
+    return {
+        "status": overall_status,
+        "plugins_dir": str(runtime.plugins_dir),
+        "plugins_dir_exists": runtime.plugins_dir.is_dir(),
+        "total_plugins": len(all_plugins),
+        "loaded_count": len(loaded),
+        "loadable_count": len(loadable),
+        "invalid_count": len(invalid),
+        "loaded_plugins": loaded,
+        "invalid_plugins": [p.name for p in invalid],
+        "tool_registry_available": registry_available,
+        "registered_plugin_tools_count": len(registered_plugin_tools),
+        "registered_plugin_tools": registered_plugin_tools,
+    }
+
+
 @router.get("/{name}")
 async def get_plugin(name: str, principal: PrincipalDependency) -> dict[str, Any]:
     """获取单个插件状态"""

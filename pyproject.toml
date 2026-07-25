@@ -86,6 +86,9 @@ test = [
     "pytest-xdist>=3.5.0",
     "locust>=2.20.0",
 ]
+mcp = [
+    "mcp>=1.0.0",
+]
 monitoring = [
     "prometheus-client>=0.20.0",
 ]

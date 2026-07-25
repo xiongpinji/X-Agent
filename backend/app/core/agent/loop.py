@@ -23,8 +23,10 @@ if TYPE_CHECKING:
     from backend.app.core.approvals import ApprovalStore
     from backend.app.core.hooks import HookManager
     from backend.app.core.hooks.types import HookEvent
+    from backend.app.core.unified_memory import UnifiedMemorySystem
 import contextlib
 
+from backend.app.core.agent_context import AgentContextManager
 from backend.app.core.agent_runtime_adapter import AgentRuntimeAdapter
 from backend.app.core.agent_state_manager import AgentStateManager
 from backend.app.core.audit import AuditStore
@@ -101,6 +103,8 @@ class AgentLoop:
         context_window_size: int | None = None,
         context_strategy: str | None = None,
         context_reserve_output: int | None = None,
+        agent_context_manager: AgentContextManager | None = None,
+        unified_memory: UnifiedMemorySystem | None = None,
     ) -> None:
         self.llm = llm_router
         self.memory = memory
@@ -117,6 +121,8 @@ class AgentLoop:
         self.state_manager = AgentStateManager()
         self.runtime_adapter = AgentRuntimeAdapter(self.state_manager)
         self.approval_store = approval_store
+        # P1-13: UnifiedMemorySystem with real embeddings (enhanced layer)
+        self.unified_memory = unified_memory
         # 上下文管理（P1-14）：
         # - context_bridge：显式注入的桥接器（调用方持有，单会话语义，便于测试/集成波接线）。
         # - context_bridge_factory：按运行创建桥接器的工厂（并发生产接线推荐）。
@@ -148,6 +154,10 @@ class AgentLoop:
         self._bridge_ephemeral: bool = False
         self._compression_events: list[dict[str, object]] = []
         self._run_context_mgmt: dict[str, object] = {}
+        # P1-14: AgentContextManager — 统一上下文容器、会话恢复、状态快照
+        self.agent_context_manager = agent_context_manager
+        self._acm_session_id: str | None = None  # 当前运行的 ACM 会话 ID
+        self._acm_last_snapshot_id: str | None = None  # 最近一次快照 ID（用于压缩）
         # 控制平面 Hooks：默认挂载进程级全局 HookManager（惰性导入避免循环依赖）。
         # 空 HookManager 即为无操作，完全向后兼容。
         if hook_manager is None:
@@ -625,6 +635,35 @@ class AgentLoop:
                     restored_messages=self._active_bridge.restored_message_count,
                 )
 
+        # P1-14: AgentContextManager — 创建会话（失败显式降级，不阻断主循环）
+        self._acm_session_id = None
+        self._acm_last_snapshot_id = None
+        if self.agent_context_manager is not None:
+            try:
+                # 如果是恢复运行，尝试恢复已有 ACM 会话
+                _resume_id = str(run_extra.get("resume_trace_id") or "") if isinstance(run_extra, dict) else ""
+                _recovered = False
+                if _resume_id and session_id:
+                    # 尝试从上次会话恢复
+                    recovered_session = self.agent_context_manager.recover_session(session_id)
+                    if recovered_session is not None:
+                        self._acm_session_id = recovered_session.session_id
+                        _recovered = True
+                        self._run_context_mgmt["acm_recovered"] = True
+                        logger.debug("ACM session recovered: %s", recovered_session.session_id)
+                if not _recovered:
+                    acm_session = self.agent_context_manager.create_session(
+                        task=task,
+                        goal=task,
+                        max_iterations=self.max_iterations,
+                    )
+                    self._acm_session_id = acm_session.session_id
+                self._run_context_mgmt["acm_session_id"] = self._acm_session_id
+                logger.debug("ACM session created: %s", self._acm_session_id)
+            except Exception as exc:
+                logger.debug("ACM create_session failed (non-blocking): %s", exc)
+                self._run_context_mgmt["acm_error"] = f"create_session_failed: {exc}"
+
         # 第一阶段：初始化执行上下文
         compact_context, execution_frame, capability_decision, recovery_hint, tool_decision = await self._initialize_execution_context(
             context, task, run_extra
@@ -666,6 +705,18 @@ class AgentLoop:
         all_events = list(self._compression_events) + bridge_events
         self._run_context_mgmt["llm_compression_events"] = all_events
         result.execution_summary["context_management"] = dict(self._run_context_mgmt)
+
+        # P1-14: AgentContextManager — 更新会话状态为 completed/failed（失败静默降级）
+        if self.agent_context_manager is not None and self._acm_session_id is not None:
+            try:
+                final_status = "completed" if result.status == RunStatus.COMPLETED else "failed"
+                self.agent_context_manager.update_session_status(
+                    self._acm_session_id,
+                    final_status,
+                    metadata={"trace_id": context.trace_id, "answer_length": len(result.answer or "")},
+                )
+            except Exception as exc:
+                logger.debug("ACM session status update failed (non-blocking): %s", exc)
 
         return result
 
@@ -994,6 +1045,32 @@ class AgentLoop:
                 trajectory=trajectory,
                 extra_context=extra_context,
             )
+
+            # P1-14: AgentContextManager — 每次迭代后保存快照（失败静默降级）
+            if self.agent_context_manager is not None and self._acm_session_id is not None:
+                try:
+                    snapshot = self.agent_context_manager.create_snapshot(
+                        session_id=self._acm_session_id,
+                        task=task,
+                        goal=trajectory.goal,
+                        stage=trajectory.stage,
+                        subtasks=trajectory.subtasks,
+                        observations=observations[-10:],
+                        tool_results=[
+                            tc.model_dump(mode="json") if hasattr(tc, "model_dump") else {}
+                            for tc in tool_calls[-5:]
+                        ],
+                        reflections=trajectory.reflections[-5:],
+                        context_tokens=len(observations) * 200,  # 粗略估算
+                    )
+                    self._acm_last_snapshot_id = snapshot.id
+                    # P1-14: 上下文过大时压缩（观察超过 20 条或估算 token 超阈值）
+                    if len(observations) > 20 or (len(observations) * 200) > self.context_token_budget:
+                        compressed = self.agent_context_manager.compress_context(snapshot.id)
+                        if compressed:
+                            logger.debug("ACM context compressed for snapshot %s", snapshot.id)
+                except Exception as exc:
+                    logger.debug("ACM snapshot save failed (non-blocking): %s", exc)
 
         if not answer:
             answer = self._finalize_answer(task, trajectory, last_tool_result, extra_context)

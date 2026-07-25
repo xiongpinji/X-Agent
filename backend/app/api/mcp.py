@@ -28,6 +28,7 @@ from backend.app.core.mcp.tools.search_tool import (
     SearchOperationTool,
     SearchPermissionChecker,
 )
+from backend.app.core.mcp_client import get_mcp_client_manager
 from backend.app.core.security import Principal
 from backend.app.dependencies import enforce_scope, get_current_principal
 
@@ -630,3 +631,213 @@ async def invoke_mcp_tool(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"MCP tool invocation error: {e}",
         )
+
+
+# ─── P1-01: MCPClientManager 高层端点（连接管理 + 工具发现 + 调用）───────────────
+
+
+class ConnectServerRequest(BaseModel):
+    """MCP server connection request."""
+
+    name: str = ""
+    url: str = ""
+    transport: str = "http"
+    command: str | None = None
+    args: list[str] = []
+    env: dict[str, str] | None = None
+    cwd: str | None = None
+    headers: dict[str, str] | None = None
+    timeout: float = 30.0
+    max_retries: int = 3
+    enable_cache: bool = True
+
+
+class CallToolViaManagerRequest(BaseModel):
+    """Tool call request via MCPClientManager."""
+
+    tool_name: str
+    arguments: dict[str, Any] = {}
+
+
+@router.post("/client-manager/connect")
+async def cm_connect_server(
+    request: ConnectServerRequest,
+    principal: PrincipalDependency,
+) -> dict:
+    """Connect to an MCP server via MCPClientManager.
+
+    P1-01: 通过高层 MCPClientManager 连接 MCP 服务器。
+
+    Args:
+        request: 服务器连接配置
+        principal: Current principal
+
+    Returns:
+        连接结果（含 server_id）
+    """
+    enforce_scope(principal, "mcp:admin")
+
+    manager = get_mcp_client_manager()
+    try:
+        server_id = await manager.connect_server(request.model_dump())
+        return {
+            "success": True,
+            "server_id": server_id,
+            "message": "Connected to MCP server",
+            "timestamp": datetime.now().isoformat(),
+        }
+    except Exception as e:
+        logger.error(f"Failed to connect MCP server: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Failed to connect MCP server: {e}",
+        )
+
+
+@router.post("/client-manager/{server_id}/disconnect")
+async def cm_disconnect_server(
+    server_id: str,
+    principal: PrincipalDependency,
+) -> dict:
+    """Disconnect from an MCP server.
+
+    P1-01: 断开 MCPClientManager 中的服务器连接。
+
+    Args:
+        server_id: 服务器 ID
+        principal: Current principal
+
+    Returns:
+        断开结果
+    """
+    enforce_scope(principal, "mcp:admin")
+
+    manager = get_mcp_client_manager()
+    try:
+        await manager.disconnect_server(server_id)
+        return {
+            "success": True,
+            "server_id": server_id,
+            "message": "Server disconnected",
+            "timestamp": datetime.now().isoformat(),
+        }
+    except KeyError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e),
+        )
+
+
+@router.get("/client-manager/servers")
+async def cm_list_servers(
+    principal: PrincipalDependency,
+) -> dict:
+    """List all servers managed by MCPClientManager.
+
+    P1-01: 列出 MCPClientManager 管理的所有服务器连接。
+
+    Args:
+        principal: Current principal
+
+    Returns:
+        服务器列表
+    """
+    enforce_scope(principal, "mcp:read")
+
+    manager = get_mcp_client_manager()
+    servers = manager.get_all_server_info()
+    return {
+        "servers": servers,
+        "count": len(servers),
+        "sdk_available": manager.sdk_available,
+        "timestamp": datetime.now().isoformat(),
+    }
+
+
+@router.get("/client-manager/tools")
+async def cm_list_tools(
+    server_id: str | None = None,
+    principal: PrincipalDependency = None,
+) -> dict:
+    """List tools from MCPClientManager servers.
+
+    P1-01: 列出通过 MCPClientManager 发现的工具。
+
+    Args:
+        server_id: 可选，指定服务器 ID
+        principal: Current principal
+
+    Returns:
+        工具列表
+    """
+    enforce_scope(principal, "mcp:read")
+
+    manager = get_mcp_client_manager()
+    try:
+        tools = await manager.list_tools(server_id)
+        return {
+            "tools": tools,
+            "count": len(tools),
+            "timestamp": datetime.now().isoformat(),
+        }
+    except KeyError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e),
+        )
+
+
+@router.post("/client-manager/{server_id}/call-tool")
+async def cm_call_tool(
+    server_id: str,
+    request: CallToolViaManagerRequest,
+    principal: PrincipalDependency,
+) -> dict:
+    """Call a tool via MCPClientManager.
+
+    P1-01: 通过 MCPClientManager 调用指定服务器上的工具。
+
+    Args:
+        server_id: 服务器 ID
+        request: 工具调用请求
+        principal: Current principal
+
+    Returns:
+        工具执行结果
+    """
+    enforce_scope(principal, "mcp:execute")
+
+    manager = get_mcp_client_manager()
+    try:
+        result = await manager.call_tool(server_id, request.tool_name, request.arguments)
+        return result
+    except KeyError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e),
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"MCP tool execution failed: {e}",
+        )
+
+
+@router.get("/client-manager/health")
+async def cm_health_check(
+    principal: PrincipalDependency,
+) -> dict:
+    """Health check for MCPClientManager.
+
+    P1-01: MCPClientManager 健康检查。
+
+    Args:
+        principal: Current principal
+
+    Returns:
+        健康状态
+    """
+    enforce_scope(principal, "mcp:read")
+
+    manager = get_mcp_client_manager()
+    return await manager.health_check()
