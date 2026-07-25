@@ -5,8 +5,8 @@
 
 import asyncio
 import logging
-from typing import Optional, Dict, Any
 from datetime import datetime
+from typing import Any
 
 from backend.app.core.execution.optimized_execution_manager import OptimizedExecutionManager
 
@@ -35,9 +35,9 @@ class CodeExecutionService:
     async def execute_python(
         self,
         code: str,
-        context: Optional[Dict[str, Any]] = None,
-        allowed_imports: Optional[list] = None,
-    ) -> Dict[str, Any]:
+        context: dict[str, Any] | None = None,
+        allowed_imports: list | None = None,
+    ) -> dict[str, Any]:
         """执行Python代码"""
         logger.info(f"Executing Python code ({len(code)} chars)")
 
@@ -61,8 +61,8 @@ class CodeExecutionService:
     async def execute_nodejs(
         self,
         code: str,
-        modules: Optional[list] = None,
-    ) -> Dict[str, Any]:
+        modules: list | None = None,
+    ) -> dict[str, Any]:
         """执行Node.js代码"""
         logger.info(f"Executing Node.js code ({len(code)} chars)")
 
@@ -79,7 +79,7 @@ class CodeExecutionService:
 
         return result
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """获取统计信息"""
         pool_stats = self.manager.get_pool_stats()
 
@@ -186,7 +186,7 @@ async def demo_performance_comparison():
         execution_times = []
         pool_hits = 0
 
-        for i in range(20):
+        for _i in range(20):
             result = await service.execute_python("x = 1 + 1")
             execution_times.append(result.get("execution_time", 0))
             if result.get("pool_hit"):
@@ -200,7 +200,7 @@ async def demo_performance_comparison():
         max_time = max(execution_times)
         median_time = statistics.median(execution_times)
 
-        print(f"\nExecution Statistics:")
+        print("\nExecution Statistics:")
         print(f"  Average: {avg_time*1000:.2f}ms")
         print(f"  Min: {min_time*1000:.2f}ms")
         print(f"  Max: {max_time*1000:.2f}ms")
@@ -223,7 +223,7 @@ async def demo_monitoring():
     try:
         # 执行一些任务
         print("\nExecuting tasks...")
-        for i in range(10):
+        for _i in range(10):
             await service.execute_python("x = 1 + 1")
 
         # 获取统计信息

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-from backend.app.services.browser.advanced_monitoring import advanced_browser_monitoring
 
 
 async def example_network_monitoring():

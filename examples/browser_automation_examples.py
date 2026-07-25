@@ -5,10 +5,10 @@ Demonstrates how to use all advanced capabilities effectively.
 """
 
 import asyncio
-from backend.app.services.browser.enhanced_service import EnhancedBrowserAutomationService
-from backend.app.services.browser.waiter import WaitStrategy
-from backend.app.services.browser.stealth import StealthBrowser
 
+from backend.app.services.browser.enhanced_service import EnhancedBrowserAutomationService
+from backend.app.services.browser.stealth import StealthBrowser
+from backend.app.services.browser.waiter import WaitStrategy
 
 # ============================================================================
 # Example 1: Basic Navigation and Interaction
@@ -45,7 +45,7 @@ async def example_basic_navigation():
         )
 
         # Take screenshot
-        screenshot = await service.take_screenshot(
+        _screenshot = await service.take_screenshot(
             session.session_id,
             path="/tmp/screenshot.png",
         )
@@ -66,7 +66,7 @@ async def example_smart_locating():
     """
     Example: Use smart locator with multiple strategies and fallback.
     """
-    from backend.app.services.browser.smart_locator import SmartLocator, LocatorStrategy
+    from backend.app.services.browser.smart_locator import LocatorStrategy, SmartLocator
 
     locator = SmartLocator("session_1", max_retries=3)
 
@@ -103,8 +103,9 @@ async def example_smart_waiting():
     """
     Example: Use smart waiter with adaptive waiting strategy.
     """
-    from backend.app.services.browser.waiter import SmartWaiter
     from playwright.async_api import async_playwright
+
+    from backend.app.services.browser.waiter import SmartWaiter
 
     playwright = await async_playwright().start()
     browser = await playwright.chromium.launch(headless=True)
@@ -164,8 +165,9 @@ async def example_advanced_interactions():
     """
     Example: Use advanced interactions like drag & drop, file upload, etc.
     """
-    from backend.app.services.browser.interactions import AdvancedInteractions
     from playwright.async_api import async_playwright
+
+    from backend.app.services.browser.interactions import AdvancedInteractions
 
     playwright = await async_playwright().start()
     browser = await playwright.chromium.launch(headless=True)
@@ -240,8 +242,9 @@ async def example_page_analysis():
     """
     Example: Analyze page structure and extract data.
     """
-    from backend.app.services.browser.analyzer import PageAnalyzer
     from playwright.async_api import async_playwright
+
+    from backend.app.services.browser.analyzer import PageAnalyzer
 
     playwright = await async_playwright().start()
     browser = await playwright.chromium.launch(headless=True)
@@ -284,8 +287,9 @@ async def example_error_recovery():
     """
     Example: Handle errors with automatic recovery.
     """
-    from backend.app.services.browser.recovery import ErrorRecovery, ErrorType
     from playwright.async_api import async_playwright
+
+    from backend.app.services.browser.recovery import ErrorRecovery
 
     playwright = await async_playwright().start()
     browser = await playwright.chromium.launch(headless=True)
@@ -379,7 +383,6 @@ async def example_stealth_mode():
     """
     Example: Use stealth mode to avoid detection.
     """
-    from backend.app.services.browser.stealth import StealthBrowser
     from playwright.async_api import async_playwright
 
     stealth = StealthBrowser("session_1")

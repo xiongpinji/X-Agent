@@ -1,219 +1,174 @@
-"""Example script demonstrating LLM provider usage.
+"""Example script demonstrating LLM routing usage.
 
 Run with: python examples/llm_provider_example.py
+
+Environment variables:
+  OPENAI_API_KEY   - OpenAI API key (optional, falls back to mock)
+  DEEPSEEK_API_KEY - DeepSeek API key (optional)
+  ANTHROPIC_API_KEY - Anthropic API key (optional)
 """
 
 import asyncio
 import os
-from backend.app.core.llm_providers import (
-    LLMConfig,
-    LLMMessage,
-    ProviderType,
+
+from backend.app.core.llm import (
+    LLMResponse,
+    LLMRouter,
+    MockLLMBackend,
+    OpenAIBackend,
+    build_llm_router,
 )
-# MessageRole 未从包级 __init__ 再导出，需从 base 模块导入
-from backend.app.core.llm_providers.base import MessageRole
-from backend.app.core.llm_providers.factory import LLMProviderFactory, LLMRouter
 
 
-async def example_single_provider():
-    """Example: Using a single provider."""
+async def example_basic_chat():
+    """Example 1: Basic chat with LLMRouter."""
     print("=" * 60)
-    print("Example 1: Single Provider (OpenAI)")
+    print("Example 1: Basic Chat")
     print("=" * 60)
 
-    config = LLMConfig(
-        provider=ProviderType.OPENAI,
-        model="gpt-3.5-turbo",
-        api_key=os.getenv("OPENAI_API_KEY"),
-        max_tokens=100,
+    # Build router from settings (uses mock if no API keys)
+    router = build_llm_router(
+        llm_backend="openai",
+        fallback_order="openai",
+        openai_api_key=os.getenv("OPENAI_API_KEY"),
+        openai_model="gpt-4o-mini",
+        deepseek_api_key=os.getenv("DEEPSEEK_API_KEY"),
+        deepseek_model="deepseek-chat",
+        deepseek_base_url="https://api.deepseek.com",
     )
 
-    provider = LLMProviderFactory.create(config)
-
     messages = [
-        LLMMessage(role=MessageRole.SYSTEM, content="You are a helpful assistant."),
-        LLMMessage(role=MessageRole.USER, content="What is Python?"),
+        {"role": "system", "content": "You are a helpful assistant."},
+        {"role": "user", "content": "What is Python in one sentence?"},
     ]
 
-    print("\nSending request to OpenAI...")
-    response = await provider.complete(messages)
+    print("\nSending request...")
+    response: LLMResponse = await router.chat(messages, tools=[])
 
     print(f"\nResponse: {response.content}")
-    print(f"Provider: {response.provider}")
     print(f"Model: {response.model}")
-    print(f"Tokens - Prompt: {response.usage['prompt_tokens']}, Completion: {response.usage['completion_tokens']}")
-    print(f"Cost: ${response.cost_usd:.4f}")
-    print(f"Latency: {response.latency_ms:.2f}ms")
+    print(f"Tokens used: {response.tokens_used}")
+    print(f"Cost: ${response.cost:.4f}")
 
 
-async def example_streaming():
-    """Example: Streaming responses."""
+async def example_mock_backend():
+    """Example 2: Using MockLLMBackend for testing."""
     print("\n" + "=" * 60)
-    print("Example 2: Streaming Response")
+    print("Example 2: Mock Backend (no API key needed)")
     print("=" * 60)
 
-    config = LLMConfig(
-        provider=ProviderType.OPENAI,
-        model="gpt-3.5-turbo",
-        api_key=os.getenv("OPENAI_API_KEY"),
-        max_tokens=100,
-    )
-
-    provider = LLMProviderFactory.create(config)
+    # Create router with mock backend (useful for testing)
+    router = LLMRouter(backend=MockLLMBackend())
 
     messages = [
-        LLMMessage(role=MessageRole.USER, content="Count from 1 to 5"),
+        {"role": "user", "content": "Hello, world!"},
     ]
 
-    print("\nStreaming response from OpenAI:")
-    async for chunk in provider.stream(messages):
-        print(chunk.content, end="", flush=True)
-    print("\n")
+    print("\nSending request to mock backend...")
+    response = await router.chat(messages, tools=[])
+
+    print(f"\nResponse: {response.content}")
+    print(f"Model: {response.model}")
+    print("(Mock backend returns canned responses for testing)")
 
 
-async def example_multiple_providers():
-    """Example: Using multiple providers with router."""
+async def example_multi_backend_fallback():
+    """Example 3: Multiple backends with automatic fallback."""
     print("\n" + "=" * 60)
-    print("Example 3: Multiple Providers with Router")
+    print("Example 3: Multi-Backend Fallback")
     print("=" * 60)
 
-    router = LLMRouter()
+    backends = []
 
-    # Register OpenAI
+    # Add OpenAI if key available
     if os.getenv("OPENAI_API_KEY"):
-        openai_config = LLMConfig(
-            provider=ProviderType.OPENAI,
-            model="gpt-3.5-turbo",
+        backends.append(OpenAIBackend(
             api_key=os.getenv("OPENAI_API_KEY"),
-            max_tokens=100,
-        )
-        router.register("openai", openai_config)
-        print("Registered OpenAI provider")
+            model="gpt-4o-mini",
+        ))
+        print("Added OpenAI backend")
 
-    # Register Anthropic
-    if os.getenv("ANTHROPIC_API_KEY"):
-        anthropic_config = LLMConfig(
-            provider=ProviderType.ANTHROPIC,
-            model="claude-3-5-sonnet-20241022",
-            api_key=os.getenv("ANTHROPIC_API_KEY"),
-            max_tokens=100,
-        )
-        router.register("anthropic", anthropic_config)
-        print("Registered Anthropic provider")
+    # Always add mock as final fallback
+    backends.append(MockLLMBackend())
+    print("Added Mock backend (fallback)")
 
-    # Register Ollama
-    ollama_config = LLMConfig(
-        provider=ProviderType.OLLAMA,
-        model="llama2",
-        base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
-        max_tokens=100,
-    )
-    router.register("ollama", ollama_config)
-    print("Registered Ollama provider")
+    router = LLMRouter(backends=backends)
 
     messages = [
-        LLMMessage(role=MessageRole.USER, content="What is machine learning?"),
+        {"role": "user", "content": "Explain async/await in one sentence."},
     ]
 
-    # Use each provider
-    for provider_name in router.list_providers():
-        print(f"\nUsing {provider_name} provider:")
-        try:
-            provider = router.get(provider_name)
-            response = await provider.complete(messages)
-            print(f"Response: {response.content[:100]}...")
-            print(f"Cost: ${response.cost_usd:.4f}")
-        except Exception as e:
-            print(f"Error: {e}")
+    print("\nSending request (will fallback if primary fails)...")
+    response = await router.chat(messages, tools=[])
+
+    print(f"\nResponse: {response.content}")
+    print(f"Model: {response.model}")
 
 
-async def example_error_handling():
-    """Example: Error handling."""
+async def example_with_tools():
+    """Example 4: Chat with tool definitions."""
     print("\n" + "=" * 60)
-    print("Example 4: Error Handling")
+    print("Example 4: Chat with Tools")
     print("=" * 60)
 
-    from backend.app.core.llm_providers.base import (
-        LLMProviderAuthError,
-        LLMProviderError,
-    )
-
-    # Try with invalid API key
-    config = LLMConfig(
-        provider=ProviderType.OPENAI,
-        model="gpt-4",
-        api_key="invalid-key",
-        max_tokens=100,
-    )
-
-    provider = LLMProviderFactory.create(config)
+    router = LLMRouter(backend=MockLLMBackend())
 
     messages = [
-        LLMMessage(role=MessageRole.USER, content="Hello"),
+        {"role": "user", "content": "What's the weather in Tokyo?"},
     ]
 
-    print("\nTrying with invalid API key...")
-    try:
-        response = await provider.complete(messages)
-    except LLMProviderAuthError as e:
-        print(f"Authentication error (expected): {e}")
-    except LLMProviderError as e:
-        print(f"Provider error: {e}")
-
-
-async def example_cost_tracking():
-    """Example: Cost tracking."""
-    print("\n" + "=" * 60)
-    print("Example 5: Cost Tracking")
-    print("=" * 60)
-
-    config = LLMConfig(
-        provider=ProviderType.OPENAI,
-        model="gpt-3.5-turbo",
-        api_key=os.getenv("OPENAI_API_KEY"),
-        max_tokens=100,
-    )
-
-    provider = LLMProviderFactory.create(config)
-
-    messages = [
-        LLMMessage(role=MessageRole.USER, content="What is AI?"),
+    tools = [
+        {
+            "type": "function",
+            "function": {
+                "name": "get_weather",
+                "description": "Get current weather for a location",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "location": {"type": "string", "description": "City name"},
+                    },
+                    "required": ["location"],
+                },
+            },
+        }
     ]
 
-    print("\nMaking requests and tracking costs...")
-    for i in range(3):
-        response = await provider.complete(messages)
-        print(f"Request {i+1}: ${response.cost_usd:.4f}")
+    print("\nSending request with tool definitions...")
+    response = await router.chat(messages, tools=tools)
 
-    stats = provider.get_stats()
-    print(f"\nProvider Statistics:")
-    print(f"  Total requests: {stats['request_count']}")
-    print(f"  Total cost: ${stats['total_cost_usd']:.4f}")
+    print(f"\nResponse: {response.content}")
+    if response.tool_calls:
+        print(f"Tool calls: {response.tool_calls}")
 
 
 async def main():
     """Run all examples."""
-    print("\nLLM Provider Examples")
+    print("\nX-Agent LLM Routing Examples")
     print("=" * 60)
-
-    # Check for API keys
-    if not os.getenv("OPENAI_API_KEY"):
-        print("Warning: OPENAI_API_KEY not set. Some examples will be skipped.")
+    print(f"OPENAI_API_KEY: {'set' if os.getenv('OPENAI_API_KEY') else 'not set'}")
+    print(f"DEEPSEEK_API_KEY: {'set' if os.getenv('DEEPSEEK_API_KEY') else 'not set'}")
+    print()
 
     try:
-        # Run examples
-        if os.getenv("OPENAI_API_KEY"):
-            await example_single_provider()
-            await example_streaming()
-            await example_error_handling()
-            await example_cost_tracking()
+        # Always works (mock backend)
+        await example_mock_backend()
+        await example_multi_backend_fallback()
+        await example_with_tools()
 
-        await example_multiple_providers()
+        # Only works with API keys
+        if os.getenv("OPENAI_API_KEY"):
+            await example_basic_chat()
+        else:
+            print("\n[Skipped Example 1: Basic Chat - set OPENAI_API_KEY to run]")
 
     except Exception as e:
-        print(f"Error: {e}")
+        print(f"\nError: {e}")
         import traceback
         traceback.print_exc()
+
+    print("\n" + "=" * 60)
+    print("Examples complete!")
 
 
 if __name__ == "__main__":
