@@ -1,6 +1,6 @@
 {
   "name": "xagent-partner",
-  "version": "0.2.0-alpha",
+  "version": "0.3.0-alpha",
   "description": "X-Agent Partner API 官方 JavaScript/TypeScript SDK(当前以源码形式分发, 未发布至 npm)",
   "license": "MIT",
   "main": "dist/xagent-partner.js",
