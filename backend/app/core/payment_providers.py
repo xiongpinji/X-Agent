@@ -18,7 +18,7 @@ import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from decimal import Decimal
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 from uuid import uuid4
 
@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 # ─── Enums ────────────────────────────────────────────────────────────────────
 
 
-class PaymentStatus(str, Enum):
+class PaymentStatus(StrEnum):
     PENDING = "pending"
     SUCCEEDED = "succeeded"
     FAILED = "failed"
@@ -36,7 +36,7 @@ class PaymentStatus(str, Enum):
     CANCELLED = "cancelled"
 
 
-class SubscriptionStatus(str, Enum):
+class SubscriptionStatus(StrEnum):
     ACTIVE = "active"
     PAST_DUE = "past_due"
     CANCELLED = "cancelled"

@@ -209,6 +209,9 @@ class MemoryV2System:
         if self.storage_path:
             self._save_to_disk(memory)
 
+        # P1-03: Wire Neo4j graph memory — extract & index relations when enabled
+        await self._index_to_graph(memory)
+
         logger.info(f"Stored memory {memory.id} in tier {memory.tier}")
         return memory.id
 
@@ -648,6 +651,30 @@ class MemoryV2System:
                 f.write(memory.model_dump_json() + "\n")
         except Exception as e:
             logger.error(f"Failed to save memory to disk: {e}")
+
+    async def _index_to_graph(self, memory: MemoryV2Item) -> None:
+        """Index memory entities/relations to Neo4j graph (P1-03).
+
+        When neo4j_enabled=False or the graph tier is unavailable, this is a
+        silent no-op (honest degradation — debug log only).
+        """
+        try:
+            from backend.app.core.memory_neo4j import get_neo4j_graph_memory
+
+            graph_mem = get_neo4j_graph_memory()
+            if not graph_mem.available:
+                return
+
+            # Ensure connection is established
+            await graph_mem.connect()
+            await graph_mem.index_memory(
+                memory_id=memory.id,
+                content=memory.content,
+                category=memory.category.value if hasattr(memory.category, "value") else str(memory.category),
+            )
+        except Exception as exc:
+            # Graph indexing failure must never break memory storage
+            logger.debug(f"Neo4j graph indexing skipped: {exc}")
 
 
 # Global instance

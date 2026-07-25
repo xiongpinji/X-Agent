@@ -377,7 +377,12 @@ async def sso_status() -> dict[str, Any]:
         },
         "saml": {"status": "beta", "enabled": True, "require_signature": True, "message": "P1-05: 签名验证已启用"},
         "webauthn": {"status": "implemented", "features": ["registration", "authentication", "credential_management"]},
-        "ldap": {"status": "implemented", "requires": "ldap3 library"},
+        "ldap": {
+            "status": "implemented",
+            "configured": bool(os.environ.get("XAGENT_LDAP_SERVER_URL")),
+            "requires": "ldap3 library",
+            "features": ["bind_search", "attribute_mapping", "group_membership"],
+        },
         "jwt_backend": {
             "authlib_or_joserfc_available": AUTHLIB_AVAILABLE,
             "fallback": "builtin RS256/HS256 (cryptography)",
@@ -765,6 +770,206 @@ async def create_conditional_access_policy() -> None:
 async def list_conditional_access_policies() -> None:
     """条件访问策略列表 — 未实现 (501 fail-closed)。"""
     raise api_error(501, ErrorCode.VALIDATION_ERROR, _CONDITIONAL_ACCESS_NOT_IMPLEMENTED)
+
+
+# ============================================================================
+# LDAP Authentication — P1-05: 真实 ldap3 bind+search
+# ============================================================================
+
+from backend.app.core.sso.ldap_provider import LDAPConfig, LDAPProvider
+
+_ldap_provider: LDAPProvider | None = None
+
+
+def _get_ldap_provider() -> LDAPProvider:
+    """Get or create LDAP provider singleton from environment config."""
+    global _ldap_provider
+    if _ldap_provider is None:
+        server_url = os.environ.get("XAGENT_LDAP_SERVER_URL", "")
+        if not server_url:
+            raise api_error(
+                501,
+                ErrorCode.VALIDATION_ERROR,
+                "LDAP 未配置: 请设置 XAGENT_LDAP_SERVER_URL 环境变量",
+            )
+        config = LDAPConfig(
+            server_url=server_url,
+            bind_dn=os.environ.get("XAGENT_LDAP_BIND_DN"),
+            bind_password=os.environ.get("XAGENT_LDAP_BIND_PASSWORD"),
+            base_dn=os.environ.get("XAGENT_LDAP_BASE_DN", ""),
+            user_search_filter=os.environ.get("XAGENT_LDAP_USER_FILTER", "(uid={username})"),
+            use_ssl=os.environ.get("XAGENT_LDAP_USE_SSL", "false").lower() in ("true", "1", "yes"),
+            timeout=int(os.environ.get("XAGENT_LDAP_TIMEOUT", "10")),
+        )
+        _ldap_provider = LDAPProvider(config)
+    return _ldap_provider
+
+
+class LDAPLoginRequest(BaseModel):
+    """LDAP login request."""
+
+    username: str = Field(..., min_length=1)
+    password: str = Field(..., min_length=1)
+    tenant_id: str = Field(default="default")
+
+
+class LDAPLoginResponse(BaseModel):
+    """LDAP login response."""
+
+    access_token: str | None = None
+    token_type: str = "Bearer"
+    user: dict[str, Any]
+    session: dict[str, Any] = Field(default_factory=dict)
+
+
+@auth_router.post("/ldap/login", response_model=LDAPLoginResponse)
+async def ldap_login(req: LDAPLoginRequest) -> LDAPLoginResponse:
+    """P1-05: LDAP 认证 — 真实 ldap3 bind+search+属性映射.
+
+    Flow:
+    1. Connect to LDAP server (service account bind)
+    2. Search user DN by username
+    3. Bind with user DN + password (credential verification)
+    4. Fetch user attributes + groups
+    5. JIT provision local user
+    6. Issue local session
+    """
+    provider = _get_ldap_provider()
+
+    # Authenticate against LDAP directory
+    ldap_user = await provider.authenticate(req.username, req.password)
+    if ldap_user is None:
+        raise api_error(
+            401,
+            ErrorCode.AUTHENTICATION_FAILED,
+            "LDAP 认证失败: 用户名或密码错误",
+        )
+
+    # Map LDAP user to SSOUser for JIT provisioning
+    email = ldap_user.email or f"{ldap_user.username}@ldap.local"
+    sso_user = SSOUser(
+        uid=ldap_user.dn or ldap_user.username,
+        email=email,
+        name=ldap_user.display_name or ldap_user.username,
+        groups=ldap_user.groups,
+        attributes=ldap_user.attributes,
+        provider_user_id=ldap_user.username,
+        email_verified=False,
+    )
+
+    # JIT provisioning
+    try:
+        provisioned = await jit_provisioner.provision(
+            sso_user, tenant_id=req.tenant_id, provider_name="ldap"
+        )
+    except SSOError as exc:
+        raise api_error(503, ErrorCode.INTERNAL_ERROR, f"用户存储不可用: {exc}")
+
+    # Issue local session
+    local_session = session_issuer.issue(provisioned.user_id)
+
+    return LDAPLoginResponse(
+        access_token=local_session["access_token"] if local_session else None,
+        token_type="Bearer",
+        user={
+            "user_id": provisioned.user_id,
+            "email": provisioned.email,
+            "name": ldap_user.display_name or ldap_user.username,
+            "tenant_id": provisioned.tenant_id,
+            "groups": ldap_user.groups,
+        },
+        session={
+            "issued": local_session is not None,
+            "jit_provisioned": provisioned.created,
+            "storage_mode": provisioned.storage_mode,
+            **({}  if local_session else {"reason": "本地会话签发器不可用"}),
+        },
+    )
+
+
+@auth_router.post("/ldap/search")
+async def ldap_search_user(
+    username: str = Query(..., min_length=1),
+    principal: PrincipalDependency = None,  # type: ignore[assignment]
+) -> dict[str, Any]:
+    """P1-05: LDAP 用户搜索 (需认证)."""
+    if principal is None or not principal.authenticated:
+        raise api_error(401, ErrorCode.AUTHENTICATION_FAILED, "Authentication required.")
+
+    provider = _get_ldap_provider()
+    ldap_user = await provider.search_user(username)
+    if ldap_user is None:
+        raise api_error(404, ErrorCode.RESOURCE_NOT_FOUND, f"LDAP 用户未找到: {username}")
+
+    return {
+        "username": ldap_user.username,
+        "email": ldap_user.email,
+        "display_name": ldap_user.display_name,
+        "groups": ldap_user.groups,
+        "dn": ldap_user.dn,
+    }
+
+
+# ============================================================================
+# Unified SSO Entry Point — P1-05: 统一入口支持 OIDC + SAML + LDAP + WebAuthn
+# ============================================================================
+
+
+class UnifiedSSOStatusResponse(BaseModel):
+    """Unified SSO status response."""
+
+    protocols: dict[str, Any]
+    unified_entry: str = "/api/v1/sso/unified"
+
+
+@oidc_router.get("/unified", response_model=UnifiedSSOStatusResponse)
+async def unified_sso_entry(
+    tenant_id: str = Query(default="default"),
+) -> UnifiedSSOStatusResponse:
+    """P1-05: 统一 SSO 入口 — 返回所有可用协议及其端点.
+
+    Supports: OIDC (GA) + SAML (Beta) + LDAP + WebAuthn
+    """
+    _ensure_env_providers()
+
+    # Determine available providers for this tenant
+    oidc_providers = sso_manager.list_oidc_providers()
+    ldap_configured = bool(os.environ.get("XAGENT_LDAP_SERVER_URL"))
+    webauthn_rp_id = os.environ.get("XAGENT_WEBAUTHN_RP_ID", "localhost")
+
+    return UnifiedSSOStatusResponse(
+        protocols={
+            "oidc": {
+                "status": "GA",
+                "authorize_endpoint": "/api/v1/sso/oidc/{provider}/authorize",
+                "callback_endpoint": "/api/v1/sso/oidc/{provider}/callback",
+                "providers": [p["provider_name"] for p in oidc_providers],
+                "features": ["discovery", "jwks_verification", "state_nonce", "jit_provisioning"],
+            },
+            "saml": {
+                "status": "beta",
+                "login_endpoint": "/api/v1/sso/saml/{provider}/login",
+                "acs_endpoint": "/api/v1/sso/saml/{provider}/acs",
+                "require_signature": True,
+                "features": ["authn_request", "signature_verification"],
+            },
+            "ldap": {
+                "status": "implemented" if ldap_configured else "not_configured",
+                "login_endpoint": "/api/v1/auth/ldap/login",
+                "search_endpoint": "/api/v1/auth/ldap/search",
+                "features": ["bind_search", "attribute_mapping", "group_membership", "jit_provisioning"],
+            },
+            "webauthn": {
+                "status": "implemented",
+                "register_start": "/api/v1/auth/webauthn/register/start",
+                "register_complete": "/api/v1/auth/webauthn/register/complete",
+                "authenticate_start": "/api/v1/auth/webauthn/authenticate/start",
+                "authenticate_complete": "/api/v1/auth/webauthn/authenticate/complete",
+                "rp_id": webauthn_rp_id,
+                "features": ["registration", "authentication", "signature_verification", "credential_management"],
+            },
+        },
+    )
 
 
 # ============================================================================

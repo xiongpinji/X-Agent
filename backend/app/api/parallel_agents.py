@@ -43,9 +43,12 @@ from backend.app.core.agent_communication_bus import (
 from backend.app.core.contracts import RunContext
 from backend.app.core.parallel_agent_executor import (
     AgentFactoryNotConfiguredError,
+    AgentResult,
     AgentTask,
     IsolationMode,
     ParallelAgentExecutor,
+    ParallelAgentOrchestrator,
+    ParallelConfig,
 )
 from backend.app.core.result_aggregator import (
     AggregationConfig,
@@ -63,6 +66,7 @@ PrincipalDependency = Annotated[Principal, Depends(get_current_principal)]
 
 # Global instances
 _executor: ParallelAgentExecutor | None = None
+_orchestrator: ParallelAgentOrchestrator | None = None
 _bus: AgentCommunicationBus | None = None
 _aggregator: ResultAggregator | None = None
 
@@ -73,6 +77,20 @@ def get_executor() -> ParallelAgentExecutor:
     if _executor is None:
         _executor = ParallelAgentExecutor(max_workers=3)
     return _executor
+
+
+def get_orchestrator() -> ParallelAgentOrchestrator:
+    """Get or create the parallel agent orchestrator."""
+    global _orchestrator
+    if _orchestrator is None:
+        from backend.app.dependencies import get_llm_router
+
+        try:
+            llm_router = get_llm_router()
+        except Exception:
+            llm_router = None
+        _orchestrator = ParallelAgentOrchestrator(llm_router=llm_router)
+    return _orchestrator
 
 
 def get_bus() -> AgentCommunicationBus:
@@ -606,6 +624,139 @@ async def get_message_stats(
         return stats
     except Exception as e:
         logger.error(f"Error getting stats: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ─── Orchestrator Endpoints (P1-08) ─────────────────────────────────────────────
+
+
+class FanOutRequest(BaseModel):
+    """Request for fan-out parallel execution."""
+    task: str = Field(..., min_length=1, description="Parent task description")
+    subtasks: list[str] = Field(..., min_length=1, description="Subtask instructions")
+    max_parallel: int = Field(default=5, ge=1, le=20)
+    timeout_seconds: int = Field(default=300, ge=10, le=3600)
+    aggregation_strategy: str = Field(default="merge", pattern="^(first_success|majority_vote|merge)$")
+    token_budget: int = Field(default=100_000, ge=1000, le=1_000_000)
+
+
+class FanInRequest(BaseModel):
+    """Request for fan-in aggregation."""
+    results: list[dict[str, Any]] = Field(..., min_length=1, description="Agent results to aggregate")
+    aggregation: str = Field(default="merge", pattern="^(first_success|majority_vote|merge)$")
+
+
+class PipelineRequest(BaseModel):
+    """Request for pipeline execution."""
+    stages: list[str] = Field(..., min_length=1, description="Ordered stage instructions")
+    timeout_seconds: int = Field(default=300, ge=10, le=3600)
+    token_budget: int = Field(default=100_000, ge=1000, le=1_000_000)
+
+
+@router.post("/orchestrator/fan-out")
+async def orchestrator_fan_out(
+    request: FanOutRequest,
+    principal: PrincipalDependency,
+    orchestrator: ParallelAgentOrchestrator = Depends(get_orchestrator),
+) -> dict[str, Any]:
+    """Execute subtasks in parallel (fan-out pattern).
+
+    Each subtask gets an independent agent with its own context and LLM session.
+    Results are returned for all subtasks.
+    """
+    enforce_scope(principal, "agent:run")
+
+    try:
+        config = ParallelConfig(
+            max_parallel=request.max_parallel,
+            timeout_seconds=request.timeout_seconds,
+            aggregation_strategy=request.aggregation_strategy,
+            token_budget=request.token_budget,
+        )
+        results = await orchestrator.execute_fan_out(
+            task=request.task,
+            subtasks=request.subtasks,
+            config=config,
+        )
+        return {
+            "pattern": "fan_out",
+            "task": request.task,
+            "total_subtasks": len(request.subtasks),
+            "completed": sum(1 for r in results if r.status == "completed"),
+            "failed": sum(1 for r in results if r.status == "failed"),
+            "timeout": sum(1 for r in results if r.status == "timeout"),
+            "results": [r.to_dict() for r in results],
+        }
+    except Exception as e:
+        logger.error(f"Fan-out execution error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/orchestrator/fan-in")
+async def orchestrator_fan_in(
+    request: FanInRequest,
+    principal: PrincipalDependency,
+    orchestrator: ParallelAgentOrchestrator = Depends(get_orchestrator),
+) -> dict[str, Any]:
+    """Aggregate results from parallel agents (fan-in pattern).
+
+    Supports aggregation strategies: first_success, majority_vote, merge.
+    """
+    enforce_scope(principal, "agent:run")
+
+    try:
+        agent_results = [
+            AgentResult(
+                agent_id=r.get("agent_id", f"agent-{i}"),
+                status=r.get("status", "completed"),
+                output=r.get("output", ""),
+                error=r.get("error"),
+                duration_ms=r.get("duration_ms", 0.0),
+            )
+            for i, r in enumerate(request.results)
+        ]
+        result = await orchestrator.execute_fan_in(
+            results=agent_results,
+            aggregation=request.aggregation,
+        )
+        return {
+            "pattern": "fan_in",
+            "aggregation": request.aggregation,
+            "result": result.to_dict(),
+        }
+    except Exception as e:
+        logger.error(f"Fan-in aggregation error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/orchestrator/pipeline")
+async def orchestrator_pipeline(
+    request: PipelineRequest,
+    principal: PrincipalDependency,
+    orchestrator: ParallelAgentOrchestrator = Depends(get_orchestrator),
+) -> dict[str, Any]:
+    """Execute stages sequentially (pipeline pattern).
+
+    Each stage receives the output of the previous stage as context.
+    """
+    enforce_scope(principal, "agent:run")
+
+    try:
+        config = ParallelConfig(
+            timeout_seconds=request.timeout_seconds,
+            token_budget=request.token_budget,
+        )
+        result = await orchestrator.execute_pipeline(
+            stages=request.stages,
+            config=config,
+        )
+        return {
+            "pattern": "pipeline",
+            "total_stages": len(request.stages),
+            "result": result.to_dict(),
+        }
+    except Exception as e:
+        logger.error(f"Pipeline execution error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 

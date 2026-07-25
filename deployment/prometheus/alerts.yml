@@ -6,8 +6,8 @@ groups:
       - alert: HighErrorRate
         expr: |
           (
-            increase(xagent_errors_total[5m]) /
-            (increase(xagent_http_requests_total[5m]) + 1)
+            sum(rate(xagent_requests_total{status=~"5.."}[5m])) /
+            (sum(rate(xagent_requests_total[5m])) + 0.001)
           ) > 0.05
         for: 5m
         labels:
@@ -20,7 +20,7 @@ groups:
       # Slow Response Time Alert
       - alert: SlowResponseTime
         expr: |
-          histogram_quantile(0.95, rate(xagent_http_request_duration_seconds_bucket[5m])) > 2
+          histogram_quantile(0.95, sum(rate(xagent_request_duration_seconds_bucket[5m])) by (le)) > 2
         for: 5m
         labels:
           severity: warning
@@ -91,8 +91,8 @@ groups:
       - alert: AgentExecutionFailure
         expr: |
           (
-            increase(xagent_agent_executions_total{status="failed"}[5m]) /
-            (increase(xagent_agent_executions_total[5m]) + 1)
+            sum(rate(xagent_agent_runs_total{status="failure"}[5m])) /
+            (sum(rate(xagent_agent_runs_total[5m])) + 0.001)
           ) > 0.1
         for: 5m
         labels:
@@ -121,8 +121,8 @@ groups:
       - alert: LLMAPIFailure
         expr: |
           (
-            increase(xagent_llm_calls_total{status="failed"}[5m]) /
-            (increase(xagent_llm_calls_total[5m]) + 1)
+            sum(rate(xagent_llm_calls_total{status="failure"}[5m])) /
+            (sum(rate(xagent_llm_calls_total[5m])) + 0.001)
           ) > 0.05
         for: 5m
         labels:
@@ -174,8 +174,8 @@ groups:
       - alert: MemoryOperationFailure
         expr: |
           (
-            increase(xagent_memory_operations_total{status="failed"}[5m]) /
-            (increase(xagent_memory_operations_total[5m]) + 1)
+            sum(rate(xagent_memory_status_ops_total{status="failed"}[5m])) /
+            (sum(rate(xagent_memory_status_ops_total[5m])) + 0.001)
           ) > 0.05
         for: 5m
         labels:

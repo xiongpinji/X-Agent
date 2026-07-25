@@ -367,36 +367,44 @@ class PostgresRBACRepository:
 
     Replaces in-memory dict storage for production deployments.
     Requires asyncpg connection pool.
+    P0-05: Supports tenant_id for multi-tenant isolation.
     """
 
-    def __init__(self, pool) -> None:
+    def __init__(self, pool, tenant_id: str = "default") -> None:
         self._pool = pool
+        self._tenant_id = tenant_id
 
-    async def save_role(self, role: Role) -> None:
+    async def save_role(self, role: Role, tenant_id: str | None = None) -> None:
         """Persist role to PostgreSQL (upsert)."""
         import json
+        tid = tenant_id or self._tenant_id
         async with self._pool.acquire() as conn:
             await conn.execute(
                 """
-                INSERT INTO rbac_roles (id, name, description, permissions, parent_roles, created_at, updated_at)
-                VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7)
+                INSERT INTO rbac_roles (id, name, description, permissions, parent_roles, tenant_id, created_at, updated_at)
+                VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7, $8)
                 ON CONFLICT (id) DO UPDATE SET
                     name = EXCLUDED.name,
                     description = EXCLUDED.description,
                     permissions = EXCLUDED.permissions,
                     parent_roles = EXCLUDED.parent_roles,
+                    tenant_id = EXCLUDED.tenant_id,
                     updated_at = EXCLUDED.updated_at
                 """,
                 role.id, role.name, role.description,
                 json.dumps([p.model_dump(mode="json") for p in role.permissions]),
-                role.parent_roles, role.created_at, role.updated_at,
+                role.parent_roles, tid, role.created_at, role.updated_at,
             )
 
-    async def load_roles(self) -> dict[str, Role]:
-        """Load all roles from PostgreSQL."""
+    async def load_roles(self, tenant_id: str | None = None) -> dict[str, Role]:
+        """Load all roles from PostgreSQL (optionally filtered by tenant)."""
         import json
+        tid = tenant_id or self._tenant_id
         async with self._pool.acquire() as conn:
-            rows = await conn.fetch("SELECT * FROM rbac_roles")
+            rows = await conn.fetch(
+                "SELECT * FROM rbac_roles WHERE tenant_id = $1 OR tenant_id = 'default'",
+                tid,
+            )
         roles: dict[str, Role] = {}
         for row in rows:
             perms = [Permission(**p) for p in json.loads(row["permissions"])]
@@ -407,28 +415,33 @@ class PostgresRBACRepository:
             )
         return roles
 
-    async def save_assignment(self, assignment: RoleAssignment) -> None:
+    async def save_assignment(self, assignment: RoleAssignment, tenant_id: str | None = None) -> None:
         """Persist role assignment."""
+        import json
+        tid = tenant_id or self._tenant_id
         async with self._pool.acquire() as conn:
             await conn.execute(
                 """
-                INSERT INTO rbac_user_roles (id, user_id, role_id, assigned_by, assigned_at, expires_at, delegated_to, scope)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)
+                INSERT INTO rbac_user_roles (id, user_id, role_id, assigned_by, assigned_at, expires_at, delegated_to, scope, tenant_id, granted_at, granted_by)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10, $11)
                 ON CONFLICT (id) DO UPDATE SET
                     delegated_to = EXCLUDED.delegated_to,
                     expires_at = EXCLUDED.expires_at
                 """,
                 assignment.id, assignment.user_id, assignment.role_id,
                 assignment.assigned_by, assignment.assigned_at, assignment.expires_at,
-                assignment.delegated_to, __import__("json").dumps(assignment.scope),
+                assignment.delegated_to, json.dumps(assignment.scope),
+                tid, assignment.assigned_at, assignment.assigned_by,
             )
 
-    async def load_assignments(self, user_id: str) -> list[RoleAssignment]:
-        """Load assignments for a user."""
+    async def load_assignments(self, user_id: str, tenant_id: str | None = None) -> list[RoleAssignment]:
+        """Load assignments for a user (optionally filtered by tenant)."""
         import json
+        tid = tenant_id or self._tenant_id
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
-                "SELECT * FROM rbac_user_roles WHERE user_id = $1", user_id
+                "SELECT * FROM rbac_user_roles WHERE user_id = $1 AND tenant_id = $2",
+                user_id, tid,
             )
         return [
             RoleAssignment(
@@ -440,12 +453,13 @@ class PostgresRBACRepository:
             for row in rows
         ]
 
-    async def revoke_assignment(self, user_id: str, role_id: str) -> None:
+    async def revoke_assignment(self, user_id: str, role_id: str, tenant_id: str | None = None) -> None:
         """Revoke role from user."""
+        tid = tenant_id or self._tenant_id
         async with self._pool.acquire() as conn:
             await conn.execute(
-                "DELETE FROM rbac_user_roles WHERE user_id = $1 AND role_id = $2",
-                user_id, role_id,
+                "DELETE FROM rbac_user_roles WHERE user_id = $1 AND role_id = $2 AND tenant_id = $3",
+                user_id, role_id, tid,
             )
 
     async def log_audit(self, entry: AuditLogEntry) -> None:
@@ -454,7 +468,7 @@ class PostgresRBACRepository:
         async with self._pool.acquire() as conn:
             await conn.execute(
                 """
-                INSERT INTO rbac_audit_logs (id, timestamp, user_id, action, resource_type, resource_id, result, reason, attributes, ip_address, user_agent)
+                INSERT INTO rbac_audit_log (id, timestamp, user_id, action, resource_type, resource_id, result, reason, attributes, ip_address, user_agent)
                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, $11)
                 """,
                 entry.id, entry.timestamp, entry.user_id, entry.action,
@@ -470,12 +484,12 @@ class PostgresRBACRepository:
         async with self._pool.acquire() as conn:
             if user_id:
                 rows = await conn.fetch(
-                    "SELECT * FROM rbac_audit_logs WHERE user_id = $1 AND timestamp >= $2 ORDER BY timestamp DESC",
+                    "SELECT * FROM rbac_audit_log WHERE user_id = $1 AND timestamp >= $2 ORDER BY timestamp DESC",
                     user_id, cutoff,
                 )
             else:
                 rows = await conn.fetch(
-                    "SELECT * FROM rbac_audit_logs WHERE timestamp >= $1 ORDER BY timestamp DESC",
+                    "SELECT * FROM rbac_audit_log WHERE timestamp >= $1 ORDER BY timestamp DESC",
                     cutoff,
                 )
         return [

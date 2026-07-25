@@ -47,6 +47,7 @@ class WorkflowNodeType(StrEnum):
     WAIT = "wait"
     APPROVAL = "approval"
     OUTPUT = "output"
+    PARALLEL = "parallel"  # Explicit fan-out/fan-in marker for parallel branches
 
 
 class WorkflowRunStatus(StrEnum):
@@ -956,7 +957,8 @@ class WorkflowExecutor:
         ``"sequential"`` – force legacy single-thread order.
     parallel_error_strategy:
         ``"fail_fast"`` – abort the level on first failure (default).
-        ``"continue"`` – let remaining nodes in the level finish, then raise.
+        ``"continue"`` / ``"continue_others"`` – let remaining nodes in the
+        level finish, then raise.
     """
 
     def __init__(
@@ -1485,7 +1487,7 @@ class WorkflowExecutor:
                 except Exception as exc:
                     return (node, exc)
 
-        if self.parallel_error_strategy == "fail_fast":
+        if self.parallel_error_strategy in ("fail_fast",):
             # Launch all tasks; on first exception cancel the rest
             tasks = [asyncio.create_task(_run_bounded(n)) for n in nodes]
             results: list[tuple[WorkflowNode, Any, int] | tuple[WorkflowNode, Exception]] = []
@@ -1979,6 +1981,33 @@ class WorkflowExecutor:
                 result.setdefault("last_agent_trace_id", state.get("last_agent_trace_id"))
                 result.setdefault("recovery_hint", self._workflow_recovery_hint(state, error=None))
             return result
+
+        if node.type == WorkflowNodeType.PARALLEL:
+            # PARALLEL node: explicit fan-out/fan-in marker.
+            # Collects outputs from all upstream branches (predecessors) and
+            # merges them into a single dict keyed by source node id.
+            # Config options:
+            #   merge_strategy: "collect" (default) | "first" | "last"
+            #   branches: list of explicit source node ids to collect from
+            #             (if omitted, all predecessors via edges are used)
+            merge_strategy = str(node.config.get("merge_strategy", "collect")).lower()
+            branch_ids: list[str] = node.config.get("branches", [])
+            if not branch_ids:
+                # Infer predecessors from edges targeting this node
+                branch_ids = [
+                    edge.source for edge in definition.edges if edge.target == node.id
+                ]
+            branch_outputs = {
+                bid: state.get(bid) for bid in branch_ids if state.get(bid) is not None
+            }
+            if merge_strategy == "first":
+                first_val = next(iter(branch_outputs.values()), None)
+                return {"parallel_merge": "first", "result": first_val, "branches": branch_outputs}
+            if merge_strategy == "last":
+                last_val = list(branch_outputs.values())[-1] if branch_outputs else None
+                return {"parallel_merge": "last", "result": last_val, "branches": branch_outputs}
+            # Default: collect all branch outputs
+            return {"parallel_merge": "collect", "branches": branch_outputs, "branch_count": len(branch_outputs)}
 
         return self._render_value(node.config, state, inputs)
 

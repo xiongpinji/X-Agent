@@ -16,11 +16,13 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from backend.app.core.code_review.comment_generator import ReviewResult
+from backend.app.core.code_review.engine import CodeReviewEngine
 from backend.app.core.code_review.reviewer import CodeReviewer
 
 router = APIRouter(prefix="/api/v1/code-review", tags=["code-review"])
 
 _reviewer = CodeReviewer()
+_engine = CodeReviewEngine()
 
 
 # ─── 请求/响应模型 ────────────────────────────────────────────────────────────
@@ -217,6 +219,61 @@ async def approve_review(review_id: str):
         raise HTTPException(status_code=404, detail=f"Review {review_id} not found")
     result.approval = "approve"
     return {"review_id": review_id, "approval": "approve"}
+
+
+# ─── P1-07: Structured Code Review Engine Endpoints ────────────────────────────
+
+
+class EngineDiffRequest(BaseModel):
+    """Structured diff review request (P1-07 engine)."""
+    diff: str = Field(..., min_length=1, max_length=100_000, description="Unified diff text")
+    language: str = Field(default="python", description="Programming language")
+    context: str = Field(default="", description="Additional context for review")
+
+
+class EngineFileRequest(BaseModel):
+    """Structured file review request (P1-07 engine)."""
+    content: str = Field(..., min_length=1, max_length=200_000, description="File content")
+    file_path: str = Field(..., min_length=1, description="File path")
+    language: str = Field(default="python", description="Programming language")
+
+
+class EnginePRRequest(BaseModel):
+    """Structured PR review request (P1-07 engine)."""
+    pr_diff: str = Field(..., min_length=1, max_length=100_000, description="PR diff text")
+    title: str = Field(..., min_length=1, description="PR title")
+    description: str = Field(default="", description="PR description")
+
+
+@router.post("/engine/diff")
+async def engine_review_diff(req: EngineDiffRequest) -> dict:
+    """P1-07: LLM-powered structured diff review.
+
+    Returns structured comments with severity, category, line references,
+    suggestions, and an overall quality score (0-100).
+    """
+    result = await _engine.review_diff(req.diff, language=req.language, context=req.context)
+    return result.to_dict()
+
+
+@router.post("/engine/file")
+async def engine_review_file(req: EngineFileRequest) -> dict:
+    """P1-07: LLM-powered structured file review.
+
+    Reviews a single source file with full structured output.
+    """
+    result = await _engine.review_file(req.content, file_path=req.file_path, language=req.language)
+    return result.to_dict()
+
+
+@router.post("/engine/pr")
+async def engine_review_pr(req: EnginePRRequest) -> dict:
+    """P1-07: LLM-powered structured PR review.
+
+    Reviews a Pull Request considering its title and description context.
+    """
+    result = await _engine.review_pr(req.pr_diff, title=req.title, description=req.description)
+    return result.to_dict()
 
 
 # ─── 辅助 ─────────────────────────────────────────────────────────────────────

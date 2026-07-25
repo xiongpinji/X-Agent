@@ -553,7 +553,7 @@ async def list_discovered_mcp_tools(
     all_tools: list[dict[str, Any]] = []
 
     for tool_key, mcp_tool in discovery.discovered_tools.items():
-        server_name, tool_name = tool_key.split(":", 1)
+        server_name, _tool_name = tool_key.split(":", 1)
         tool_info = {
             "name": mcp_tool.name,
             "description": mcp_tool.description,

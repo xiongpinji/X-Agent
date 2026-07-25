@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import time
 from collections.abc import Callable
 
@@ -13,12 +14,37 @@ from backend.app.core.metrics import metrics_collector
 
 logger = logging.getLogger(__name__)
 
+# Pre-compiled patterns for path normalization (avoid cardinality explosion)
+_UUID_RE = re.compile(r"/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", re.IGNORECASE)
+_NUMERIC_RE = re.compile(r"/\d+")
+
+
+def _normalize_path(path: str) -> str:
+    """Normalize dynamic path segments to prevent high-cardinality labels.
+
+    Examples:
+        /api/v1/agents/3fa85f64-5717-4562-b3fc-2c963f66afa6 -> /api/v1/agents/:id
+        /api/v1/runs/12345 -> /api/v1/runs/:id
+    """
+    path = _UUID_RE.sub("/:id", path)
+    path = _NUMERIC_RE.sub("/:id", path)
+    return path
+
 
 class MetricsMiddleware(BaseHTTPMiddleware):
-    """Middleware for collecting HTTP metrics."""
+    """Middleware for collecting HTTP metrics into Prometheus counters.
+
+    Records both:
+    - Canonical metrics (backend.app.monitoring.metrics) with normalized paths
+    - Legacy metrics_collector (backend.app.core.metrics) for backward compat
+    """
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
         """Process request and collect metrics."""
+        # Skip the metrics scrape endpoint itself to avoid self-referential noise
+        if request.url.path == "/metrics":
+            return await call_next(request)
+
         start_time = time.perf_counter()
 
         # Extract request information
@@ -36,7 +62,26 @@ class MetricsMiddleware(BaseHTTPMiddleware):
             # Calculate duration
             duration = time.perf_counter() - start_time
 
-            # Record metrics
+            # --- Canonical Prometheus metrics (normalized path) ---
+            normalized = _normalize_path(path)
+            try:
+                from backend.app.monitoring.metrics import REQUEST_DURATION, REQUESTS_TOTAL
+
+                if REQUESTS_TOTAL is not None:
+                    REQUESTS_TOTAL.labels(
+                        method=method,
+                        path=normalized,
+                        status=status_code,
+                    ).inc()
+                if REQUEST_DURATION is not None:
+                    REQUEST_DURATION.labels(
+                        method=method,
+                        path=normalized,
+                    ).observe(duration)
+            except Exception:  # pragma: no cover
+                pass  # Never let metrics break request handling
+
+            # --- Legacy metrics_collector (backward compat) ---
             metrics_collector.record_http_request(
                 method=method,
                 endpoint=path,

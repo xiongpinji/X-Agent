@@ -1,6 +1,7 @@
 """Monitoring package for X-Agent.
 
-Live modules: middleware (HTTP metrics/logging/tracing middleware),
+Live modules: metrics (canonical Prometheus metric definitions),
+middleware (HTTP metrics/logging/tracing middleware),
 resource_monitor, tracing, logging_config.
 
 The former dead initialization helpers (initialize_monitoring,

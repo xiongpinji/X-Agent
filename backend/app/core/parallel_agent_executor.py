@@ -349,5 +349,325 @@ class ParallelAgentExecutor:
         }
 
 
-# Global singleton
+# ---------------------------------------------------------------------------
+# P1-08: ParallelAgentOrchestrator — high-level fan-out / fan-in / pipeline
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class ParallelConfig:
+    """Configuration for parallel agent orchestration."""
+
+    max_parallel: int = 5
+    timeout_seconds: int = 300
+    aggregation_strategy: str = "merge"  # "first_success" | "majority_vote" | "merge"
+    token_budget: int = 100_000
+    retry_on_failure: bool = False
+    max_retries: int = 2
+
+
+@dataclass
+class AgentResult:
+    """Result from a single sub-agent execution."""
+
+    agent_id: str = ""
+    status: str = "pending"  # pending | completed | failed | timeout
+    output: str = ""
+    error: str | None = None
+    duration_ms: float = 0.0
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dictionary representation."""
+        return {
+            "agent_id": self.agent_id,
+            "status": self.status,
+            "output": self.output,
+            "error": self.error,
+            "duration_ms": self.duration_ms,
+            "metadata": self.metadata,
+        }
+
+
+class ParallelAgentOrchestrator:
+    """High-level orchestrator for parallel agent patterns.
+
+    Supports three execution patterns:
+    - Fan-out: distribute subtasks to independent agents in parallel
+    - Fan-in: aggregate results from parallel agents
+    - Pipeline: execute stages sequentially, feeding output to next stage
+
+    Each sub-agent gets an independent context and LLM session.
+    Resource controls: max parallel count, token budget, timeout.
+    """
+
+    def __init__(
+        self,
+        llm_router: Any | None = None,
+        memory: Any | None = None,
+        tools: Any | None = None,
+    ) -> None:
+        self.llm_router = llm_router
+        self.memory = memory
+        self.tools = tools
+        self._execution_log: list[dict[str, Any]] = []
+
+    async def execute_fan_out(
+        self,
+        task: str,
+        subtasks: list[str],
+        config: ParallelConfig | None = None,
+    ) -> list[AgentResult]:
+        """Fan-out: execute multiple subtasks in parallel with independent agents.
+
+        Args:
+            task: The parent task description (for context).
+            subtasks: List of subtask instructions to execute in parallel.
+            config: Parallel execution configuration.
+
+        Returns:
+            List of AgentResult, one per subtask.
+        """
+        cfg = config or ParallelConfig()
+        semaphore = asyncio.Semaphore(cfg.max_parallel)
+
+        async def _run_subtask(index: int, subtask: str) -> AgentResult:
+            agent_id = f"fan-out-{index}-{uuid4().hex[:6]}"
+            async with semaphore:
+                start = time.time()
+                result = AgentResult(agent_id=agent_id, status="running")
+                try:
+                    output = await asyncio.wait_for(
+                        self._execute_agent(subtask, task_context=task),
+                        timeout=cfg.timeout_seconds,
+                    )
+                    result.status = "completed"
+                    result.output = output
+                except TimeoutError:
+                    result.status = "timeout"
+                    result.error = f"Subtask timed out after {cfg.timeout_seconds}s"
+                    logger.warning(f"Fan-out agent {agent_id} timed out")
+                except Exception as exc:
+                    result.status = "failed"
+                    result.error = str(exc)
+                    logger.error(f"Fan-out agent {agent_id} failed: {exc}")
+                finally:
+                    result.duration_ms = (time.time() - start) * 1000
+                return result
+
+        results = await asyncio.gather(
+            *[_run_subtask(i, st) for i, st in enumerate(subtasks)],
+            return_exceptions=True,
+        )
+
+        final_results: list[AgentResult] = []
+        for i, r in enumerate(results):
+            if isinstance(r, Exception):
+                final_results.append(AgentResult(
+                    agent_id=f"fan-out-{i}-error",
+                    status="failed",
+                    error=str(r),
+                ))
+            else:
+                final_results.append(r)
+
+        self._execution_log.append({
+            "pattern": "fan_out",
+            "task": task,
+            "subtask_count": len(subtasks),
+            "results": [r.to_dict() for r in final_results],
+            "timestamp": time.time(),
+        })
+        return final_results
+
+    async def execute_fan_in(
+        self,
+        results: list[AgentResult],
+        aggregation: str = "merge",
+    ) -> AgentResult:
+        """Fan-in: aggregate results from parallel agents.
+
+        Args:
+            results: List of AgentResult from fan-out execution.
+            aggregation: Aggregation strategy - "first_success", "majority_vote", "merge".
+
+        Returns:
+            A single aggregated AgentResult.
+        """
+        start = time.time()
+        agent_id = f"fan-in-{uuid4().hex[:6]}"
+
+        successful = [r for r in results if r.status == "completed"]
+
+        if not successful:
+            return AgentResult(
+                agent_id=agent_id,
+                status="failed",
+                error="No successful results to aggregate",
+                duration_ms=(time.time() - start) * 1000,
+            )
+
+        try:
+            if aggregation == "first_success":
+                output = successful[0].output
+            elif aggregation == "majority_vote":
+                output = self._majority_vote(successful)
+            else:  # "merge"
+                output = await self._merge_results(successful)
+
+            return AgentResult(
+                agent_id=agent_id,
+                status="completed",
+                output=output,
+                duration_ms=(time.time() - start) * 1000,
+                metadata={"aggregation": aggregation, "input_count": len(results)},
+            )
+        except Exception as exc:
+            logger.error(f"Fan-in aggregation failed: {exc}")
+            return AgentResult(
+                agent_id=agent_id,
+                status="failed",
+                error=str(exc),
+                duration_ms=(time.time() - start) * 1000,
+            )
+
+    async def execute_pipeline(
+        self,
+        stages: list[str],
+        config: ParallelConfig | None = None,
+    ) -> AgentResult:
+        """Pipeline: execute stages sequentially, feeding output to next stage.
+
+        Args:
+            stages: List of stage instructions to execute in order.
+            config: Parallel execution configuration (timeout applies per stage).
+
+        Returns:
+            Final AgentResult from the last pipeline stage.
+        """
+        cfg = config or ParallelConfig()
+        pipeline_id = f"pipeline-{uuid4().hex[:6]}"
+        start = time.time()
+        accumulated_output = ""
+
+        for i, stage in enumerate(stages):
+            stage_start = time.time()
+            stage_input = f"{stage}\n\nPrevious stage output:\n{accumulated_output}" if accumulated_output else stage
+
+            try:
+                output = await asyncio.wait_for(
+                    self._execute_agent(stage_input, task_context=f"Pipeline stage {i+1}/{len(stages)}"),
+                    timeout=cfg.timeout_seconds,
+                )
+                accumulated_output = output
+                logger.info(f"Pipeline {pipeline_id} stage {i+1} completed in {(time.time()-stage_start)*1000:.0f}ms")
+            except TimeoutError:
+                return AgentResult(
+                    agent_id=pipeline_id,
+                    status="timeout",
+                    error=f"Pipeline stage {i+1} timed out after {cfg.timeout_seconds}s",
+                    output=accumulated_output,
+                    duration_ms=(time.time() - start) * 1000,
+                )
+            except Exception as exc:
+                return AgentResult(
+                    agent_id=pipeline_id,
+                    status="failed",
+                    error=f"Pipeline stage {i+1} failed: {exc}",
+                    output=accumulated_output,
+                    duration_ms=(time.time() - start) * 1000,
+                )
+
+        self._execution_log.append({
+            "pattern": "pipeline",
+            "stages": len(stages),
+            "timestamp": time.time(),
+        })
+
+        return AgentResult(
+            agent_id=pipeline_id,
+            status="completed",
+            output=accumulated_output,
+            duration_ms=(time.time() - start) * 1000,
+            metadata={"stages_completed": len(stages)},
+        )
+
+    # ─── Internal helpers ─────────────────────────────────────────────────────
+
+    async def _execute_agent(self, instruction: str, task_context: str = "") -> str:
+        """Execute a single agent with independent context and LLM session.
+
+        Uses the project's AgentLoop when available, falls back to direct LLM call.
+        """
+        # Try AgentLoop-based execution first
+        try:
+            from backend.app.core.agent.loop import AgentLoop
+
+            loop = AgentLoop(
+                llm_router=self.llm_router,
+                memory=self.memory,
+                tools=self.tools,
+            )
+            context = {"task_context": task_context} if task_context else {}
+            run_result = await loop.run(context=context, task=instruction)
+            return run_result.output if hasattr(run_result, "output") else str(run_result)
+        except ImportError:
+            pass
+        except Exception as exc:
+            logger.debug(f"AgentLoop execution failed, falling back to LLM: {exc}")
+
+        # Fallback: direct LLM call
+        if self.llm_router:
+            messages = []
+            if task_context:
+                messages.append({"role": "system", "content": f"Context: {task_context}"})
+            messages.append({"role": "user", "content": instruction})
+            response = await self.llm_router.chat(messages, tools=[])
+            return response.content if hasattr(response, "content") else str(response)
+
+        raise RuntimeError("No LLM router or AgentLoop available for agent execution")
+
+    def _majority_vote(self, results: list[AgentResult]) -> str:
+        """Select the most common output via majority vote."""
+        from collections import Counter
+
+        outputs = [r.output.strip() for r in results if r.output.strip()]
+        if not outputs:
+            return ""
+        counter = Counter(outputs)
+        return counter.most_common(1)[0][0]
+
+    async def _merge_results(self, results: list[AgentResult]) -> str:
+        """Merge multiple outputs using LLM synthesis or concatenation."""
+        outputs = [r.output for r in results if r.output]
+        if not outputs:
+            return ""
+        if len(outputs) == 1:
+            return outputs[0]
+
+        # Try LLM-based synthesis
+        if self.llm_router:
+            try:
+                combined = "\n---\n".join(f"Agent {i+1} output:\n{o}" for i, o in enumerate(outputs))
+                prompt = (
+                    "Synthesize the following parallel agent outputs into a single "
+                    "coherent, comprehensive result. Remove duplicates and resolve "
+                    f"any conflicts:\n\n{combined[:8000]}"
+                )
+                messages = [{"role": "user", "content": prompt}]
+                response = await self.llm_router.chat(messages, tools=[])
+                return response.content if hasattr(response, "content") else str(response)
+            except Exception as exc:
+                logger.warning(f"LLM merge failed, falling back to concat: {exc}")
+
+        # Fallback: simple concatenation
+        return "\n\n---\n\n".join(outputs)
+
+    def get_execution_log(self, limit: int = 50) -> list[dict[str, Any]]:
+        """Get recent execution log entries."""
+        return self._execution_log[-limit:]
+
+
+# Global singletons
 parallel_executor = ParallelAgentExecutor()
+parallel_orchestrator = ParallelAgentOrchestrator()

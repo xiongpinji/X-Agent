@@ -106,15 +106,16 @@ class MetricsCollector:
             buckets=(0.01, 0.1, 0.5, 1.0, 5.0, 10.0, 30.0),
         )
 
-        # LLM Metrics
+        # LLM Metrics (per-model granularity; canonical backend-level metrics
+        # live in backend.app.monitoring.metrics)
         self.llm_calls_total = _get_or_create(Counter,
-            "xagent_llm_calls_total",
-            "Total LLM calls",
+            "xagent_llm_model_calls_total",
+            "Total LLM calls (per model)",
             ["model", "status"],
         )
         self.llm_tokens_total = _get_or_create(Counter,
-            "xagent_llm_tokens_total",
-            "Total LLM tokens used",
+            "xagent_llm_model_tokens_total",
+            "Total LLM tokens used (per model)",
             ["model", "token_type"],
         )
         self.llm_call_duration_seconds = _get_or_create(Histogram,
@@ -124,10 +125,11 @@ class MetricsCollector:
             buckets=(0.1, 0.5, 1.0, 5.0, 10.0, 30.0, 60.0),
         )
 
-        # Memory Metrics
+        # Memory Metrics (per-operation status; canonical backend-level metrics
+        # live in backend.app.monitoring.metrics)
         self.memory_operations_total = _get_or_create(Counter,
-            "xagent_memory_operations_total",
-            "Total memory operations",
+            "xagent_memory_status_ops_total",
+            "Total memory operations (per status)",
             ["operation", "status"],
         )
         self.memory_size_bytes = _get_or_create(Gauge,

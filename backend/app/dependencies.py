@@ -18,8 +18,8 @@ if TYPE_CHECKING:  # 仅类型标注, 运行时惰性导入(可选依赖 qdrant-
         WorkflowExecutor,
         WorkflowRepository,
         WorkflowRuntimeManager,
-        WorkflowScheduleStore,
         WorkflowScheduler,
+        WorkflowScheduleStore,
     )
 
 from backend.app.api.errors import api_error
@@ -425,12 +425,16 @@ def get_workflow_repository() -> "WorkflowRepository":
 def get_workflow_executor() -> "WorkflowExecutor":
     from backend.app.core.workflows import WorkflowExecutor
 
+    settings = get_settings()
     return WorkflowExecutor(
         agent=get_agent(),
         repository=get_workflow_repository(),
         tracer=get_trace_store(),
         approval_store=get_approval_store(),
         audit_store=get_audit_store(),
+        max_parallel=settings.workflow_max_parallel,
+        parallel_mode=settings.workflow_parallel_mode,
+        parallel_error_strategy=settings.workflow_parallel_error_strategy,
     )
 
 

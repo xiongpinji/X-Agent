@@ -65,6 +65,12 @@ class DatabaseConfig(BaseConfig):
     )
 
     # Workflow store
+    workflow_store_backend: str = Field(
+        default="db",
+        description="Workflow store backend (file, db, auto). "
+        "db=PostgreSQL/SQL (production), file=JSON files (dev), "
+        "auto=try db then fall back to file.",
+    )
     workflow_store_path: str = Field(
         default="data/workflows.json",
         description="Path to workflow store file (JSON format)",

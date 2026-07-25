@@ -750,7 +750,6 @@ def _register_all_routers() -> None:
     from backend.app.api.auth import router as auth_router
     from backend.app.api.backup_qdrant import router as backup_qdrant_router
     from backend.app.api.backup_scheduler import router as backup_scheduler_router
-    from backend.app.api.dr_status import router as dr_status_router
     from backend.app.api.browser import router as browser_router
     from backend.app.api.browser_advanced import router as browser_advanced_router
     from backend.app.api.channels import router as channels_router
@@ -761,6 +760,7 @@ def _register_all_routers() -> None:
     from backend.app.api.compliance import router as compliance_router
     from backend.app.api.desktop import router as desktop_router
     from backend.app.api.dispatch import router as dispatch_router
+    from backend.app.api.dr_status import router as dr_status_router
     from backend.app.api.enterprise_sso import router as enterprise_sso_router
     from backend.app.api.evolution import router as evolution_router
     from backend.app.api.execution import router as execution_router

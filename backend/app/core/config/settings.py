@@ -88,6 +88,28 @@ class Settings(BaseConfig):
         description="Qdrant API key",
     )
 
+    # Neo4j Graph Database Configuration (P1-03: optional graph memory tier)
+    neo4j_enabled: bool = Field(
+        default=False,
+        description="Enable Neo4j graph memory tier",
+    )
+    neo4j_url: str = Field(
+        default="bolt://localhost:7687",
+        description="Neo4j connection URL",
+    )
+    neo4j_user: str = Field(
+        default="neo4j",
+        description="Neo4j username",
+    )
+    neo4j_password: str = Field(
+        default="",
+        description="Neo4j password",
+    )
+    neo4j_database: str = Field(
+        default="neo4j",
+        description="Neo4j database name",
+    )
+
     # Agent Configuration
     max_iterations: int = Field(
         default=4,

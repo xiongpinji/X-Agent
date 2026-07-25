@@ -40,6 +40,8 @@ include = ["backend*", "cli*", "data*", "diagrams*", "packaging*", "scripts*", "
 exclude = ["frontend*"]
 
 [project.scripts]
+# NOTE: All CLI entry points rely on PYTHONUTF8=1 for correct handling of
+# Chinese characters in paths/args on Windows. See scripts/fix_windows_encoding.ps1.
 xagent = "cli.main:main_entry"
 xagent-workflow-worker = "backend.app.workflow_worker:main"
 xagent-desktop = "scripts.one_click_desktop:main"
@@ -86,6 +88,12 @@ test = [
 ]
 monitoring = [
     "prometheus-client>=0.20.0",
+]
+enterprise = [
+    "ldap3>=2.9.0",
+    "webauthn>=2.0.0",
+    "python3-saml>=1.16.0",
+    "authlib>=1.3.0",
 ]
 
 [tool.pytest.ini_options]

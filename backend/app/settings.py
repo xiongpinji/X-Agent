@@ -75,6 +75,10 @@ class Settings(BaseSettings):
     workflow_schedule_store_path: Path = PROJECT_ROOT / "data" / "workflow_schedules.json"
     # Workflow 存储后端: db=PostgreSQL(生产), file=JSON文件(dev), auto=尝试db降级file
     workflow_store_backend: str = "db"
+    # Workflow 并行 DAG 执行配置
+    workflow_max_parallel: int = 5  # 最大并行节点数 (semaphore limit)
+    workflow_parallel_mode: str = "auto"  # auto | parallel | sequential
+    workflow_parallel_error_strategy: str = "fail_fast"  # fail_fast | continue_others
     approval_store_path: Path = PROJECT_ROOT / "data" / "approvals.json"
     api_key_store_path: Path = PROJECT_ROOT / "data" / "api_keys.json"
     audit_store_path: Path = PROJECT_ROOT / "data" / "audit.jsonl"

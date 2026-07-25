@@ -156,7 +156,7 @@ _active_provider: NotificationProvider | None = None
 
 def get_notification_provider() -> NotificationProvider:
     """Get the active notification provider (singleton)."""
-    global _active_provider  # noqa: PLW0603
+    global _active_provider
     if _active_provider is None:
         _active_provider = _create_provider_from_settings()
     return _active_provider
@@ -164,7 +164,7 @@ def get_notification_provider() -> NotificationProvider:
 
 def set_notification_provider(provider: NotificationProvider) -> None:
     """Override the active provider (for testing)."""
-    global _active_provider  # noqa: PLW0603
+    global _active_provider
     _active_provider = provider
 
 
