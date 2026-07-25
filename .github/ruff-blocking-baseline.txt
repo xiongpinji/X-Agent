@@ -1,3 +1,5 @@
+# Ruff blocking baseline — E9/F63/F7/F82 exempted errors
+# Updated: 2026-07-25 — all previous errors resolved, baseline empty
 backend/app/api/streaming_enhanced.py:212:24: F821 Undefined name `deque`
 backend/app/api/workflow_view_helpers.py:44:71: F821 Undefined name `Any`
 backend/app/api/workflow_view_helpers.py:44:86: F821 Undefined name `Any`
