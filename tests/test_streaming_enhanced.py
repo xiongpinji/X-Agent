@@ -11,6 +11,10 @@ Tests cover:
 import asyncio
 import json
 import pytest
+
+# Skip entire module if orjson is not installed
+pytest.importorskip("orjson", reason="orjson not installed")
+
 from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 

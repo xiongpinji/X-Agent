@@ -1,6 +1,10 @@
 """Tests for Enterprise IM Integration"""
 
 import pytest
+
+# Skip entire module if aiohttp is not installed
+pytest.importorskip("aiohttp", reason="aiohttp not installed")
+
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from backend.app.integrations.enterprise.base import EnterpriseIMPlatform, MessageType

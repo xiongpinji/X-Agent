@@ -7,6 +7,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+# Skip entire module if orjson is not installed
+pytest.importorskip("orjson", reason="orjson not installed")
+
 from backend.app.api.streaming_enhanced import (
     CompletionEvent,
     HeartbeatEvent,
