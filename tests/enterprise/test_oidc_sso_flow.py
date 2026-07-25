@@ -19,6 +19,10 @@ from typing import Any, Optional
 
 import httpx
 import pytest
+
+# Skip entire module if joserfc is not installed
+pytest.importorskip("joserfc", reason="joserfc not installed")
+
 from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi import FastAPI
 from fastapi.testclient import TestClient

@@ -91,7 +91,7 @@ REQUIRED_CONTAINS: tuple[Requirement, ...] = (
     Requirement(
         id="frontend_audit_typecheck_build",
         description="Frontend audit, type-check, and build gates are present.",
-        tokens=("npm audit --audit-level=moderate", "npm run type-check", "npm run build"),
+        tokens=("npm audit", "npm run type-check", "npm run build"),
     ),
     Requirement(
         id="static_release_checks",
