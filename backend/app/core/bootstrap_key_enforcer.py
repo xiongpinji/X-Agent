@@ -12,9 +12,8 @@ import logging
 from datetime import UTC, datetime
 from pathlib import Path
 from threading import RLock
-from uuid import uuid4
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 

@@ -1,0 +1,9 @@
+schema_version: 1
+module_path: plugins
+title: X-Agent 插件生态与示例集
+scope:
+    - plugins/
+source_files: []
+depends_on: []
+related_to:
+    - path: backend

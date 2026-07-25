@@ -1,524 +1,353 @@
-"""
-Parallel Agent Executor - Manages concurrent execution of multiple agents.
+"""Real parallel agent execution with asyncio.gather (对标 Codex subagents / Hermes fan-out).
 
-Supports three isolation modes:
-- process: Full process isolation using multiprocessing
-- thread: Thread-based isolation (lighter weight, shared memory)
-- worktree: Git worktree isolation (for file system operations)
-"""
+P1-09 convergence: This is the CANONICAL parallel agent executor, used by
+``api/parallel_agents.py``. The older ``core/parallel_execution_engine.py``
+is DEPRECATED and retained only for benchmark backward compat.
 
+For structured orchestration (decompose + dependencies), see
+``core/collaboration/orchestrator.py`` (MultiAgentOrchestrator).
+For shared-context collaboration rooms, see ``core/collaboration/``.
+"""
 from __future__ import annotations
 
 import asyncio
 import logging
-import multiprocessing as mp
-import threading
 import time
-import uuid
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime, UTC
 from enum import StrEnum
-from typing import Any, Callable, Optional
-from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
+from typing import Any
+from uuid import uuid4
 
 logger = logging.getLogger(__name__)
 
 
 class IsolationMode(StrEnum):
-    """Isolation modes for parallel agent execution."""
-    PROCESS = "process"
-    THREAD = "thread"
-    WORKTREE = "worktree"
+    """Agent isolation mode for parallel execution."""
+    SHARED = "shared"  # Shared memory and tools
+    ISOLATED = "isolated"  # Independent context per agent
+    SANDBOXED = "sandboxed"  # Full sandbox isolation
+    THREAD = "thread"  # Thread-based isolation (alias for shared)
+    PROCESS = "process"  # Process-based isolation (alias for sandboxed)
 
 
 class AgentTaskStatus(StrEnum):
-    """Status of an agent task."""
+    """Status of a parallel agent task."""
     PENDING = "pending"
     RUNNING = "running"
     COMPLETED = "completed"
     FAILED = "failed"
-    CANCELLED = "cancelled"
     TIMEOUT = "timeout"
+    CANCELLED = "cancelled"
 
 
 class AgentFactoryNotConfiguredError(RuntimeError):
-    """Raised when parallel execution has no real agent factory configured.
-
-    The executor no longer falls back to a simulated sleep-and-complete
-    implementation; callers (e.g. the REST API) must wire a real factory
-    (AgentLoop-based) or surface this error explicitly (HTTP 501).
-    """
+    """Raised when agent factory is not configured but required."""
+    pass
 
 
 @dataclass
 class AgentTask:
-    """Represents a task to be executed by an agent."""
-    task_id: str = field(default_factory=lambda: str(uuid.uuid4()))
+    """A task to be executed by a parallel agent."""
+    id: str = field(default_factory=lambda: str(uuid4()))
+    # New API fields
     goal: str = ""
     description: str = ""
-    constraints: list[str] = field(default_factory=list)
-    success_criteria: list[str] = field(default_factory=list)
-    timeout_seconds: int = 300
-    retry_count: int = 0
-    max_retries: int = 3
-    metadata: dict[str, Any] = field(default_factory=dict)
-    dependencies: list[str] = field(default_factory=list)
+    timeout_seconds: float = 300.0
+    # Legacy API fields (kept for backward compat)
+    instruction: str = ""
+    context: dict[str, Any] = field(default_factory=dict)
+    priority: int = 0
+    timeout: float = 300.0
 
     def __post_init__(self):
-        if not self.task_id:
-            self.task_id = str(uuid.uuid4())
+        # Normalize: goal takes precedence over instruction
+        if self.goal and not self.instruction:
+            self.instruction = self.goal
+        if self.instruction and not self.goal:
+            self.goal = self.instruction
+        # Normalize timeout
+        if self.timeout_seconds != 300.0:
+            self.timeout = self.timeout_seconds
+        elif self.timeout != 300.0:
+            self.timeout_seconds = self.timeout
 
 
 @dataclass
-class AgentResult:
-    """Result from an agent execution."""
-    task_id: str
-    agent_id: str
-    status: AgentTaskStatus
-    output: Any = None
-    error: Optional[str] = None
-    error_type: Optional[str] = None
-    started_at: datetime = field(default_factory=lambda: datetime.now(UTC))
-    completed_at: Optional[datetime] = None
-    duration_seconds: float = 0.0
-    retry_attempts: int = 0
-    context: dict[str, Any] = field(default_factory=dict)
-    metadata: dict[str, Any] = field(default_factory=dict)
+class AgentTaskResult:
+    """Result from a parallel agent task."""
+    task_id: str = ""
+    status: str = "pending"  # pending, running, completed, failed, timeout
+    output: str = ""
+    error: str | None = None
+    duration: float = 0.0
+    tool_calls_count: int = 0
+    result: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
-        """Convert result to dictionary."""
+        """Convert to dictionary representation."""
         return {
             "task_id": self.task_id,
-            "agent_id": self.agent_id,
-            "status": self.status.value,
+            "status": self.status,
             "output": self.output,
             "error": self.error,
-            "error_type": self.error_type,
-            "started_at": self.started_at.isoformat(),
-            "completed_at": self.completed_at.isoformat() if self.completed_at else None,
-            "duration_seconds": self.duration_seconds,
-            "retry_attempts": self.retry_attempts,
-            "context": self.context,
-            "metadata": self.metadata,
+            "duration": self.duration,
+            "tool_calls_count": self.tool_calls_count,
+            "result": self.result,
         }
 
 
 @dataclass
-class BatchExecutionResult:
-    """Result of batch parallel execution."""
-    batch_id: str
-    total_tasks: int
-    completed_tasks: int
-    failed_tasks: int
-    cancelled_tasks: int
-    timeout_tasks: int
-    results: list[AgentResult] = field(default_factory=list)
-    started_at: datetime = field(default_factory=lambda: datetime.now(UTC))
-    completed_at: Optional[datetime] = None
+class SpawnResult:
+    """Result from spawn_agents batch execution."""
+    batch_id: str = ""
+    total_tasks: int = 0
+    results: list[AgentTaskResult] = field(default_factory=list)
     total_duration_seconds: float = 0.0
-    errors: list[str] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
-
-    def to_dict(self) -> dict[str, Any]:
-        """Convert to dictionary."""
-        return {
-            "batch_id": self.batch_id,
-            "total_tasks": self.total_tasks,
-            "completed_tasks": self.completed_tasks,
-            "failed_tasks": self.failed_tasks,
-            "cancelled_tasks": self.cancelled_tasks,
-            "timeout_tasks": self.timeout_tasks,
-            "results": [r.to_dict() for r in self.results],
-            "started_at": self.started_at.isoformat(),
-            "completed_at": self.completed_at.isoformat() if self.completed_at else None,
-            "total_duration_seconds": self.total_duration_seconds,
-            "errors": self.errors,
-            "metadata": self.metadata,
-        }
 
 
 class ParallelAgentExecutor:
-    """
-    Manages parallel execution of multiple agents with configurable isolation.
+    """Real parallel agent execution with asyncio.gather.
 
-    Features:
-    - Multiple isolation modes (process, thread, worktree)
-    - Task scheduling and distribution
-    - Result collection and aggregation
-    - Timeout control and error handling
-    - Retry mechanism
-    - Resource management
+    Supports:
+    - Configurable max concurrency via semaphore
+    - Per-task timeout
+    - Shared memory across agents
+    - Independent AgentLoop instances per task
+    - spawn_agents API for batch execution with agent_factory
     """
 
     def __init__(
         self,
-        max_workers: int = 3,
-        default_isolation: IsolationMode = IsolationMode.THREAD,
-        enable_process_pool: bool = True,
-        enable_thread_pool: bool = True,
+        llm_router=None,
+        memory=None,
+        tools=None,
+        max_concurrency: int = 4,
+        max_workers: int | None = None,  # alias for backward compat
     ):
-        """
-        Initialize the parallel agent executor.
-
-        Args:
-            max_workers: Maximum number of concurrent workers
-            default_isolation: Default isolation mode
-            enable_process_pool: Enable process pool executor
-            enable_thread_pool: Enable thread pool executor
-        """
-        self.max_workers = max_workers
-        self.default_isolation = default_isolation
-        self.batch_id_to_tasks: dict[str, list[AgentTask]] = {}
-        self.batch_id_to_results: dict[str, list[AgentResult]] = {}
-        self.batch_id_to_status: dict[str, str] = {}
-        self.active_batches: set[str] = set()
-        self.cancelled_batches: set[str] = set()
-
-        # Thread-safe locks
-        self._lock = asyncio.Lock()
-        self._batch_lock = threading.Lock()
-
-        # Executors
-        self.process_pool: Optional[ProcessPoolExecutor] = None
-        self.thread_pool: Optional[ThreadPoolExecutor] = None
-
-        if enable_process_pool:
-            self.process_pool = ProcessPoolExecutor(max_workers=max_workers)
-        if enable_thread_pool:
-            self.thread_pool = ThreadPoolExecutor(max_workers=max_workers)
+        self.llm_router = llm_router
+        self.memory = memory
+        self.tools = tools
+        self.max_concurrency = max_workers or max_concurrency
+        self._active_tasks: dict[str, AgentTaskResult] = {}
+        self._batches: dict[str, SpawnResult] = {}
 
     async def spawn_agents(
         self,
         tasks: list[AgentTask],
-        isolation: Optional[IsolationMode] = None,
-        max_parallel: Optional[int] = None,
-        agent_factory: Optional[Callable] = None,
-    ) -> BatchExecutionResult:
-        """
-        Spawn and execute multiple agents in parallel.
+        isolation: IsolationMode = IsolationMode.SHARED,
+        max_parallel: int | None = None,
+        agent_factory: Callable[[str, IsolationMode], Any] | None = None,
+    ) -> SpawnResult:
+        """Spawn multiple agents to execute tasks in parallel.
 
         Args:
             tasks: List of tasks to execute
-            isolation: Isolation mode (defaults to self.default_isolation)
-            max_parallel: Maximum parallel tasks (defaults to self.max_workers)
-            agent_factory: Factory function to create agent instances
+            isolation: Isolation mode for agents
+            max_parallel: Maximum parallel agents (defaults to max_concurrency)
+            agent_factory: Factory function (agent_id, isolation) -> agent with async execute(task)
 
         Returns:
-            BatchExecutionResult with all results
+            SpawnResult with batch_id, results, and metadata
+
+        Raises:
+            ValueError: If tasks is empty or isolation mode is invalid
+            AgentFactoryNotConfiguredError: If agent_factory is not provided
         """
+        # Validate inputs
         if not tasks:
-            raise ValueError("No tasks provided")
+            raise ValueError("tasks list cannot be empty")
 
-        isolation = isolation or self.default_isolation
-        # 校验隔离模式合法性：必须是 IsolationMode 成员。
-        # 提前校验可避免非法字符串进入执行流程后在元数据组装阶段
-        # 触发 AttributeError（str 无 .value），并保证向调用方抛出 ValueError。
-        if not isinstance(isolation, IsolationMode):
-            try:
-                isolation = IsolationMode(isolation)
-            except ValueError:
-                raise ValueError(f"Unknown isolation mode: {isolation}")
+        # Validate isolation mode
+        valid_modes = {m.value for m in IsolationMode}
+        isolation_value = isolation.value if isinstance(isolation, IsolationMode) else str(isolation)
+        if isolation_value not in valid_modes:
+            raise ValueError(f"Invalid isolation mode: {isolation}. Valid modes: {valid_modes}")
+
         if agent_factory is None:
-            # Fail fast: never simulate agent execution. The API layer maps
-            # this to HTTP 501 so callers get an explicit signal instead of
-            # fake "completed" results.
             raise AgentFactoryNotConfiguredError(
-                "No agent_factory configured for parallel execution; "
-                "refusing to simulate agent results."
+                "agent_factory is required for spawn_agents. "
+                "Provide a callable(agent_id, isolation) -> agent."
             )
-        max_parallel = max_parallel or self.max_workers
-        batch_id = str(uuid.uuid4())
 
-        async with self._lock:
-            self.batch_id_to_tasks[batch_id] = tasks
-            self.batch_id_to_results[batch_id] = []
-            self.batch_id_to_status[batch_id] = "running"
-            self.active_batches.add(batch_id)
-
-        logger.info(
-            f"Starting batch {batch_id} with {len(tasks)} tasks, "
-            f"isolation={isolation}, max_parallel={max_parallel}"
-        )
-
+        batch_id = str(uuid4())
+        concurrency = max_parallel or self.max_concurrency
+        semaphore = asyncio.Semaphore(concurrency)
         start_time = time.time()
-        results: list[AgentResult] = []
-        errors: list[str] = []
 
-        try:
-            if isolation == IsolationMode.PROCESS:
-                results = await self._execute_with_process_isolation(
-                    batch_id, tasks, max_parallel, agent_factory
-                )
-            elif isolation == IsolationMode.THREAD:
-                results = await self._execute_with_thread_isolation(
-                    batch_id, tasks, max_parallel, agent_factory
-                )
-            elif isolation == IsolationMode.WORKTREE:
-                results = await self._execute_with_worktree_isolation(
-                    batch_id, tasks, max_parallel, agent_factory
-                )
-            else:
-                raise ValueError(f"Unknown isolation mode: {isolation}")
-
-        except Exception as e:
-            logger.error(f"Error during batch execution {batch_id}: {e}", exc_info=True)
-            errors.append(str(e))
-
-        finally:
-            async with self._lock:
-                self.batch_id_to_results[batch_id] = results
-                self.active_batches.discard(batch_id)
-
-        # Calculate statistics
-        completed = sum(1 for r in results if r.status == AgentTaskStatus.COMPLETED)
-        failed = sum(1 for r in results if r.status == AgentTaskStatus.FAILED)
-        cancelled = sum(1 for r in results if r.status == AgentTaskStatus.CANCELLED)
-        timeout = sum(1 for r in results if r.status == AgentTaskStatus.TIMEOUT)
-
-        total_duration = time.time() - start_time
-
-        batch_result = BatchExecutionResult(
-            batch_id=batch_id,
-            total_tasks=len(tasks),
-            completed_tasks=completed,
-            failed_tasks=failed,
-            cancelled_tasks=cancelled,
-            timeout_tasks=timeout,
-            results=results,
-            completed_at=datetime.now(UTC),
-            total_duration_seconds=total_duration,
-            errors=errors,
-            metadata={
-                "isolation_mode": isolation.value,
-                "max_parallel": max_parallel,
-            },
-        )
-
-        logger.info(
-            f"Batch {batch_id} completed: {completed}/{len(tasks)} succeeded, "
-            f"duration={total_duration:.2f}s"
-        )
-
-        return batch_result
-
-    async def _execute_with_thread_isolation(
-        self,
-        batch_id: str,
-        tasks: list[AgentTask],
-        max_parallel: int,
-        agent_factory: Optional[Callable],
-    ) -> list[AgentResult]:
-        """Execute tasks with thread isolation."""
-        results: list[AgentResult] = []
-        semaphore = asyncio.Semaphore(max_parallel)
-
-        async def execute_task_with_semaphore(task: AgentTask) -> AgentResult:
+        async def run_one(task: AgentTask) -> AgentTaskResult:
             async with semaphore:
-                return await self._execute_single_task(
-                    batch_id, task, IsolationMode.THREAD, agent_factory
-                )
-
-        # Create tasks for all agents
-        execution_tasks = [
-            execute_task_with_semaphore(task) for task in tasks
-        ]
-
-        # Execute all tasks concurrently
-        results = await asyncio.gather(*execution_tasks, return_exceptions=False)
-
-        return results
-
-    async def _execute_with_process_isolation(
-        self,
-        batch_id: str,
-        tasks: list[AgentTask],
-        max_parallel: int,
-        agent_factory: Optional[Callable],
-    ) -> list[AgentResult]:
-        """Execute tasks with process isolation."""
-        results: list[AgentResult] = []
-        semaphore = asyncio.Semaphore(max_parallel)
-
-        async def execute_task_with_semaphore(task: AgentTask) -> AgentResult:
-            async with semaphore:
-                return await self._execute_single_task(
-                    batch_id, task, IsolationMode.PROCESS, agent_factory
-                )
-
-        execution_tasks = [
-            execute_task_with_semaphore(task) for task in tasks
-        ]
-
-        results = await asyncio.gather(*execution_tasks, return_exceptions=False)
-
-        return results
-
-    async def _execute_with_worktree_isolation(
-        self,
-        batch_id: str,
-        tasks: list[AgentTask],
-        max_parallel: int,
-        agent_factory: Optional[Callable],
-    ) -> list[AgentResult]:
-        """Execute tasks with git worktree isolation."""
-        results: list[AgentResult] = []
-        semaphore = asyncio.Semaphore(max_parallel)
-
-        async def execute_task_with_semaphore(task: AgentTask) -> AgentResult:
-            async with semaphore:
-                return await self._execute_single_task(
-                    batch_id, task, IsolationMode.WORKTREE, agent_factory
-                )
-
-        execution_tasks = [
-            execute_task_with_semaphore(task) for task in tasks
-        ]
-
-        results = await asyncio.gather(*execution_tasks, return_exceptions=False)
-
-        return results
-
-    async def _execute_single_task(
-        self,
-        batch_id: str,
-        task: AgentTask,
-        isolation: IsolationMode,
-        agent_factory: Optional[Callable],
-    ) -> AgentResult:
-        """Execute a single task with retry logic."""
-        agent_id = str(uuid.uuid4())
-        result = AgentResult(
-            task_id=task.task_id,
-            agent_id=agent_id,
-            status=AgentTaskStatus.PENDING,
-        )
-
-        for attempt in range(task.max_retries + 1):
-            try:
-                result.status = AgentTaskStatus.RUNNING
-                result.retry_attempts = attempt
-
-                # Execute task with timeout
+                agent_id = f"agent-{task.id[:8]}"
+                agent = agent_factory(agent_id, isolation)
+                result = AgentTaskResult(task_id=task.id, status="running")
+                task_start = time.time()
                 try:
                     output = await asyncio.wait_for(
-                        self._run_agent_task(task, agent_id, isolation, agent_factory),
+                        agent.execute(task),
                         timeout=task.timeout_seconds,
                     )
-                    result.output = output
-                    result.status = AgentTaskStatus.COMPLETED
-                    break
-
-                except asyncio.TimeoutError:
-                    result.status = AgentTaskStatus.TIMEOUT
+                    result.status = "completed"
+                    result.result = output if isinstance(output, dict) else {"output": output}
+                    result.output = str(output)
+                except TimeoutError:
+                    result.status = "timeout"
                     result.error = f"Task timed out after {task.timeout_seconds}s"
-                    result.error_type = "timeout"
-                    logger.warning(
-                        f"Task {task.task_id} timed out (attempt {attempt + 1}/{task.max_retries + 1})"
-                    )
+                except Exception as e:
+                    result.status = "failed"
+                    result.error = str(e)
+                finally:
+                    result.duration = time.time() - task_start
+                return result
 
-                    if attempt < task.max_retries:
-                        await asyncio.sleep(2 ** attempt)  # Exponential backoff
-                        continue
-                    break
+        results = await asyncio.gather(
+            *[run_one(task) for task in tasks],
+            return_exceptions=True,
+        )
 
-            except Exception as e:
-                result.status = AgentTaskStatus.FAILED
-                result.error = str(e)
-                result.error_type = type(e).__name__
-                logger.error(
-                    f"Task {task.task_id} failed (attempt {attempt + 1}/{task.max_retries + 1}): {e}",
-                    exc_info=True,
-                )
+        final_results = []
+        for i, r in enumerate(results):
+            if isinstance(r, Exception):
+                final_results.append(AgentTaskResult(
+                    task_id=tasks[i].id,
+                    status="failed",
+                    error=str(r),
+                ))
+            else:
+                final_results.append(r)
 
-                if attempt < task.max_retries:
-                    await asyncio.sleep(2 ** attempt)  # Exponential backoff
-                    continue
-                break
+        spawn_result = SpawnResult(
+            batch_id=batch_id,
+            total_tasks=len(tasks),
+            results=final_results,
+            total_duration_seconds=time.time() - start_time,
+            metadata={
+                "isolation_mode": isolation.value,
+                "max_parallel": concurrency,
+            },
+        )
+        self._batches[batch_id] = spawn_result
+        return spawn_result
 
-        result.completed_at = datetime.now(UTC)
-        result.duration_seconds = (
-            result.completed_at - result.started_at
-        ).total_seconds()
+    async def get_batch_status(self, batch_id: str) -> dict[str, Any]:
+        """Get status of a batch execution."""
+        batch = self._batches.get(batch_id)
+        if batch is None:
+            return {"batch_id": batch_id, "error": "Batch not found"}
+        completed = sum(1 for r in batch.results if r.status in ("completed", "failed", "timeout"))
+        return {
+            "batch_id": batch_id,
+            "total_tasks": batch.total_tasks,
+            "completed_tasks": completed,
+            "is_active": completed < batch.total_tasks,
+            "status": "completed" if completed >= batch.total_tasks else "running",
+        }
+
+    async def get_batch_results(self, batch_id: str) -> list[AgentTaskResult]:
+        """Get results of a batch execution."""
+        batch = self._batches.get(batch_id)
+        if batch is None:
+            return []
+        return batch.results
+
+    async def cancel_batch(self, batch_id: str) -> bool:
+        """Cancel a batch execution (best-effort).
+
+        Returns:
+            True if batch was found and cancellation was attempted, False otherwise.
+        """
+        batch = self._batches.get(batch_id)
+        if batch is None:
+            return False
+        # Mark pending tasks as cancelled
+        for result in batch.results:
+            if result.status == "pending":
+                result.status = "cancelled"
+        return True
+
+    async def execute_parallel(
+        self,
+        tasks: list[AgentTask],
+        max_concurrency: int | None = None,
+    ) -> list[AgentTaskResult]:
+        """Execute multiple agent tasks in parallel (legacy API)."""
+        concurrency = max_concurrency or self.max_concurrency
+        semaphore = asyncio.Semaphore(concurrency)
+
+        async def run_one(task: AgentTask) -> AgentTaskResult:
+            async with semaphore:
+                return await self._execute_single(task)
+
+        results = await asyncio.gather(
+            *[run_one(task) for task in tasks],
+            return_exceptions=True,
+        )
+
+        final_results = []
+        for i, result in enumerate(results):
+            if isinstance(result, Exception):
+                final_results.append(AgentTaskResult(
+                    task_id=tasks[i].id,
+                    status="failed",
+                    error=str(result),
+                ))
+            else:
+                final_results.append(result)
+
+        return final_results
+
+    async def _execute_single(self, task: AgentTask) -> AgentTaskResult:
+        """Execute a single agent task with timeout."""
+        result = AgentTaskResult(task_id=task.id, status="running")
+        self._active_tasks[task.id] = result
+        start_time = time.time()
+
+        try:
+            from backend.app.core.agent.loop import AgentLoop
+
+            loop = AgentLoop(
+                llm_router=self.llm_router,
+                memory=self.memory,
+                tools=self.tools,
+            )
+
+            run_result = await asyncio.wait_for(
+                loop.run(context=task.context, task=task.instruction),
+                timeout=task.timeout,
+            )
+
+            result.status = "completed"
+            result.output = run_result.output if hasattr(run_result, "output") else str(run_result)
+            result.tool_calls_count = len(getattr(run_result, "tool_calls", []))
+
+        except TimeoutError:
+            result.status = "timeout"
+            result.error = f"Task timed out after {task.timeout}s"
+            logger.warning(f"Task {task.id} timed out")
+
+        except Exception as e:
+            result.status = "failed"
+            result.error = str(e)
+            logger.error(f"Task {task.id} failed: {e}")
+
+        finally:
+            result.duration = time.time() - start_time
+            self._active_tasks.pop(task.id, None)
 
         return result
 
-    async def _run_agent_task(
-        self,
-        task: AgentTask,
-        agent_id: str,
-        isolation: IsolationMode,
-        agent_factory: Optional[Callable],
-    ) -> Any:
-        """Run the actual agent task via the provided factory.
+    def get_active_tasks(self) -> dict[str, AgentTaskResult]:
+        """Get currently active tasks."""
+        return dict(self._active_tasks)
 
-        Raises AgentFactoryNotConfiguredError when no factory is wired;
-        simulated execution has been removed (no more fake "completed").
-        """
-        if agent_factory:
-            agent = agent_factory(agent_id, isolation)
-            return await agent.execute(task)
+    def get_stats(self) -> dict[str, Any]:
+        """Get executor statistics."""
+        return {
+            "max_concurrency": self.max_concurrency,
+            "active_tasks": len(self._active_tasks),
+            "total_batches": len(self._batches),
+        }
 
-        raise AgentFactoryNotConfiguredError(
-            f"No agent_factory provided for task {task.task_id}; "
-            "simulated execution has been removed."
-        )
 
-    async def get_batch_status(self, batch_id: str) -> dict[str, Any]:
-        """Get the status of a batch execution."""
-        async with self._lock:
-            if batch_id not in self.batch_id_to_tasks:
-                raise ValueError(f"Batch {batch_id} not found")
-
-            tasks = self.batch_id_to_tasks[batch_id]
-            results = self.batch_id_to_results.get(batch_id, [])
-            status = self.batch_id_to_status.get(batch_id, "unknown")
-
-            return {
-                "batch_id": batch_id,
-                "status": status,
-                "total_tasks": len(tasks),
-                "completed_results": len(results),
-                "is_active": batch_id in self.active_batches,
-            }
-
-    async def get_batch_results(self, batch_id: str) -> list[AgentResult]:
-        """Get results from a batch execution."""
-        async with self._lock:
-            if batch_id not in self.batch_id_to_results:
-                raise ValueError(f"Batch {batch_id} not found")
-            return self.batch_id_to_results[batch_id]
-
-    async def cancel_batch(self, batch_id: str) -> bool:
-        """Cancel a batch execution.
-
-        Returns True for any known batch (whether still running or already
-        finished); returns False only for an unknown batch_id. spawn_agents
-        removes the batch from active_batches in its finally block, so we
-        must check batch_id_to_tasks (the authoritative "batch exists" set)
-        rather than active_batches — otherwise cancelling a just-completed
-        batch would wrongly return False.
-        """
-        async with self._lock:
-            if batch_id not in self.batch_id_to_tasks:
-                return False
-
-            self.cancelled_batches.add(batch_id)
-            self.batch_id_to_status[batch_id] = "cancelled"
-            self.active_batches.discard(batch_id)
-            logger.info(f"Batch {batch_id} cancelled")
-            return True
-
-    def shutdown(self):
-        """Shutdown executors and cleanup resources."""
-        if self.process_pool:
-            self.process_pool.shutdown(wait=True)
-        if self.thread_pool:
-            self.thread_pool.shutdown(wait=True)
-        logger.info("ParallelAgentExecutor shutdown complete")
-
-    def __del__(self):
-        """Cleanup on deletion."""
-        try:
-            self.shutdown()
-        except Exception as e:
-            logger.error(f"Error during shutdown: {e}")
+# Global singleton
+parallel_executor = ParallelAgentExecutor()

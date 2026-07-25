@@ -10,14 +10,14 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from enum import Enum
-from typing import Optional, Any
 from datetime import datetime
+from enum import StrEnum
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
-class LocatorStrategy(str, Enum):
+class LocatorStrategy(StrEnum):
     """Element locator strategies."""
 
     CSS = "css"
@@ -33,12 +33,12 @@ class LocatorResult:
     """Result of element location attempt."""
 
     found: bool
-    element: Optional[Any] = None
-    strategy_used: Optional[LocatorStrategy] = None
+    element: Any | None = None
+    strategy_used: LocatorStrategy | None = None
     attempts: int = 0
     retry_count: int = 0
     time_taken_ms: float = 0.0
-    error: Optional[str] = None
+    error: str | None = None
     metadata: dict = None
 
     def __post_init__(self):
@@ -79,11 +79,11 @@ class SmartLocator:
 
     def find_element(
         self,
-        strategies: Optional[list[str | LocatorStrategy]] = None,
-        css_selector: Optional[str] = None,
-        xpath: Optional[str] = None,
-        text: Optional[str] = None,
-        element_id: Optional[str] = None,
+        strategies: list[str | LocatorStrategy] | None = None,
+        css_selector: str | None = None,
+        xpath: str | None = None,
+        text: str | None = None,
+        element_id: str | None = None,
         fallback_to_ai: bool = True,
         use_cache: bool = True,
     ) -> LocatorResult:
@@ -183,11 +183,11 @@ class SmartLocator:
 
     def find_element_with_retry(
         self,
-        strategies: Optional[list[str | LocatorStrategy]] = None,
-        css_selector: Optional[str] = None,
-        xpath: Optional[str] = None,
-        text: Optional[str] = None,
-        element_id: Optional[str] = None,
+        strategies: list[str | LocatorStrategy] | None = None,
+        css_selector: str | None = None,
+        xpath: str | None = None,
+        text: str | None = None,
+        element_id: str | None = None,
     ) -> LocatorResult:
         """
         Find element with automatic retry on failure.
@@ -231,10 +231,10 @@ class SmartLocator:
     def _try_strategy(
         self,
         strategy: LocatorStrategy,
-        css_selector: Optional[str] = None,
-        xpath: Optional[str] = None,
-        text: Optional[str] = None,
-        element_id: Optional[str] = None,
+        css_selector: str | None = None,
+        xpath: str | None = None,
+        text: str | None = None,
+        element_id: str | None = None,
     ) -> LocatorResult:
         """Try a specific locator strategy."""
         try:
@@ -298,10 +298,10 @@ class SmartLocator:
 
     def _try_ai_detection(
         self,
-        css_selector: Optional[str] = None,
-        xpath: Optional[str] = None,
-        text: Optional[str] = None,
-        element_id: Optional[str] = None,
+        css_selector: str | None = None,
+        xpath: str | None = None,
+        text: str | None = None,
+        element_id: str | None = None,
     ) -> LocatorResult:
         """Try AI-based element detection."""
         self.logger.debug("Attempting AI-based element detection")
@@ -315,10 +315,10 @@ class SmartLocator:
 
     def _build_cache_key(
         self,
-        css_selector: Optional[str],
-        xpath: Optional[str],
-        text: Optional[str],
-        element_id: Optional[str],
+        css_selector: str | None,
+        xpath: str | None,
+        text: str | None,
+        element_id: str | None,
     ) -> str:
         """Build cache key from locator parameters."""
         parts = [

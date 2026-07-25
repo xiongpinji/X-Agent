@@ -8,9 +8,8 @@ and path tracing capabilities using Neo4j.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
-from typing import Optional
 from collections import defaultdict, deque
+from dataclasses import dataclass, field
 
 logger = logging.getLogger(__name__)
 
@@ -93,7 +92,7 @@ class EnhancedMemoryGraph:
         self,
         memory_id: str,
         depth: int = 2,
-        relation_types: Optional[list[str]] = None,
+        relation_types: list[str] | None = None,
         limit: int = 20,
     ) -> list[tuple[str, float]]:
         """
@@ -151,8 +150,8 @@ class EnhancedMemoryGraph:
         self,
         source_id: str,
         target_id: str,
-        relation_types: Optional[list[str]] = None,
-    ) -> Optional[MemoryPath]:
+        relation_types: list[str] | None = None,
+    ) -> MemoryPath | None:
         """
         Trace a path between two memories.
 
@@ -165,7 +164,7 @@ class EnhancedMemoryGraph:
             MemoryPath if path exists, None otherwise
         """
         if source_id not in self.nodes or target_id not in self.nodes:
-            self.logger.warning(f"Source or target memory not found")
+            self.logger.warning("Source or target memory not found")
             return None
 
         # BFS to find shortest path
@@ -202,8 +201,8 @@ class EnhancedMemoryGraph:
                     queue.append(
                         (
                             next_id,
-                            path_nodes + [next_id],
-                            path_relations + [relation],
+                            [*path_nodes, next_id],
+                            [*path_relations, relation],
                             new_strength,
                         )
                     )

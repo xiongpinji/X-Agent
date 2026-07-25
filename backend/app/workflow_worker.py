@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import contextlib
 import logging
 from uuid import uuid4
 
@@ -126,7 +127,7 @@ class WorkflowSchedulerService:
     def running(self) -> bool:
         return self._task is not None and not self._task.done()
 
-    async def start(self) -> "WorkflowSchedulerService":
+    async def start(self) -> WorkflowSchedulerService:
         """Start the polling loop. Safe to call more than once."""
         if self.running:
             return self
@@ -154,7 +155,7 @@ class WorkflowSchedulerService:
         if task is not None:
             try:
                 await asyncio.wait_for(task, timeout=self.interval_seconds + 10)
-            except (asyncio.TimeoutError, asyncio.CancelledError):
+            except (TimeoutError, asyncio.CancelledError):
                 task.cancel()
 
     async def _loop(self, scheduler: WorkflowScheduler, audit_store: AuditStore) -> None:
@@ -167,12 +168,10 @@ class WorkflowSchedulerService:
                     lease_seconds=self.lease_seconds,
                 )
                 audit_triggered_records(audit_store, records, worker_id=self.worker_id)
-            except Exception:  # noqa: BLE001 - a bad tick must not kill the loop
+            except Exception:
                 logger.exception("Workflow scheduler tick failed; continuing next interval.")
-            try:
+            with contextlib.suppress(asyncio.TimeoutError):
                 await asyncio.wait_for(self._stopping.wait(), timeout=self.interval_seconds)
-            except asyncio.TimeoutError:
-                pass
 
 
 def build_parser() -> argparse.ArgumentParser:

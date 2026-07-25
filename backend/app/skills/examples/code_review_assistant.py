@@ -2,8 +2,8 @@
 示例技能1: 代码审查助手
 """
 
-from typing import Dict, Any, List
 import logging
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +16,7 @@ class CodeReviewAssistant:
         self.version = "1.0.0"
         self.author = "X-Agent Team"
 
-    def execute(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
+    def execute(self, input_data: dict[str, Any]) -> dict[str, Any]:
         """
         执行代码审查
 
@@ -53,7 +53,7 @@ class CodeReviewAssistant:
             logger.error(f"代码审查失败: {e}")
             return {"status": "error", "error": str(e)}
 
-    def _analyze_code(self, code: str, language: str, focus: List[str]) -> List[Dict[str, Any]]:
+    def _analyze_code(self, code: str, language: str, focus: list[str]) -> list[dict[str, Any]]:
         """分析代码"""
         issues = []
 
@@ -68,7 +68,7 @@ class CodeReviewAssistant:
 
         return issues
 
-    def _check_security(self, code: str, language: str) -> List[Dict[str, Any]]:
+    def _check_security(self, code: str, language: str) -> list[dict[str, Any]]:
         """检查安全问题"""
         issues = []
 
@@ -93,7 +93,7 @@ class CodeReviewAssistant:
 
         return issues
 
-    def _check_performance(self, code: str, language: str) -> List[Dict[str, Any]]:
+    def _check_performance(self, code: str, language: str) -> list[dict[str, Any]]:
         """检查性能问题"""
         issues = []
 
@@ -108,23 +108,22 @@ class CodeReviewAssistant:
 
         return issues
 
-    def _check_style(self, code: str, language: str) -> List[Dict[str, Any]]:
+    def _check_style(self, code: str, language: str) -> list[dict[str, Any]]:
         """检查代码风格"""
         issues = []
 
         # 检查命名规范
-        if language == "python":
-            if "CamelCase" in code:
-                issues.append({
-                    "type": "style",
-                    "severity": "low",
-                    "message": "Python 建议使用 snake_case 命名变量",
-                    "line": "N/A",
-                })
+        if language == "python" and "CamelCase" in code:
+            issues.append({
+                "type": "style",
+                "severity": "low",
+                "message": "Python 建议使用 snake_case 命名变量",
+                "line": "N/A",
+            })
 
         return issues
 
-    def _generate_summary(self, issues: List[Dict[str, Any]]) -> str:
+    def _generate_summary(self, issues: list[dict[str, Any]]) -> str:
         """生成总结"""
         if not issues:
             return "代码质量良好，未发现问题"
@@ -135,7 +134,7 @@ class CodeReviewAssistant:
 
         return f"发现 {len(issues)} 个问题: {critical} 个严重, {high} 个高, {medium} 个中等"
 
-    def _calculate_score(self, issues: List[Dict[str, Any]]) -> float:
+    def _calculate_score(self, issues: list[dict[str, Any]]) -> float:
         """计算代码质量分数"""
         if not issues:
             return 100.0

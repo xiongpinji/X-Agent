@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Optional
-from datetime import datetime
-import httpx
 import os
-from urllib.parse import urlencode
+from datetime import datetime
+from typing import Any
+
+import httpx
 
 logger = logging.getLogger(__name__)
 
@@ -22,15 +22,15 @@ class SearchAuditLog:
             max_entries: Maximum number of log entries to keep
         """
         self.max_entries = max_entries
-        self.entries: list[Dict[str, Any]] = []
+        self.entries: list[dict[str, Any]] = []
 
     def log(
         self,
         operation: str,
         query: str,
         success: bool,
-        details: Optional[Dict[str, Any]] = None,
-        error: Optional[str] = None,
+        details: dict[str, Any] | None = None,
+        error: str | None = None,
     ) -> None:
         """Log a search operation.
 
@@ -57,7 +57,7 @@ class SearchAuditLog:
         log_level = logging.INFO if success else logging.WARNING
         logger.log(log_level, f"Audit: {operation} '{query}' - {success}")
 
-    def get_entries(self, limit: int = 100) -> list[Dict[str, Any]]:
+    def get_entries(self, limit: int = 100) -> list[dict[str, Any]]:
         """Get recent audit log entries.
 
         Args:
@@ -76,7 +76,7 @@ class SearchAuditLog:
 class SearchPermissionChecker:
     """Permission checker for search operations."""
 
-    def __init__(self, allowed_operations: Optional[Dict[str, bool]] = None):
+    def __init__(self, allowed_operations: dict[str, bool] | None = None):
         """Initialize permission checker.
 
         Args:
@@ -113,10 +113,10 @@ class SearchOperationTool:
 
     def __init__(
         self,
-        api_key: Optional[str] = None,
-        search_engine_id: Optional[str] = None,
-        permission_checker: Optional[SearchPermissionChecker] = None,
-        audit_log: Optional[SearchAuditLog] = None,
+        api_key: str | None = None,
+        search_engine_id: str | None = None,
+        permission_checker: SearchPermissionChecker | None = None,
+        audit_log: SearchAuditLog | None = None,
     ):
         """Initialize search operation tool.
 
@@ -138,7 +138,7 @@ class SearchOperationTool:
         query: str,
         num_results: int = 10,
         search_type: str = "web",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Perform a search.
 
         Args:
@@ -162,7 +162,7 @@ class SearchOperationTool:
                 "error": f"Unsupported search type: {search_type}",
             }
 
-    async def search_web(self, query: str, num_results: int = 10) -> Dict[str, Any]:
+    async def search_web(self, query: str, num_results: int = 10) -> dict[str, Any]:
         """Search the web using Google Custom Search API.
 
         Args:
@@ -242,7 +242,7 @@ class SearchOperationTool:
                 "status": "failed",
             }
 
-    async def search_news(self, query: str, num_results: int = 10) -> Dict[str, Any]:
+    async def search_news(self, query: str, num_results: int = 10) -> dict[str, Any]:
         """Search news (placeholder - requires news API).
 
         Args:
@@ -275,7 +275,7 @@ class SearchOperationTool:
             "status": "not_implemented",
         }
 
-    async def extract_content(self, url: str) -> Dict[str, Any]:
+    async def extract_content(self, url: str) -> dict[str, Any]:
         """Extract content from URL.
 
         Args:
@@ -311,7 +311,7 @@ class SearchOperationTool:
         except httpx.HTTPError as e:
             return {
                 "url": url,
-                "error": f"HTTP error: {str(e)}",
+                "error": f"HTTP error: {e!s}",
                 "status": "failed",
             }
         except Exception as e:
@@ -358,7 +358,7 @@ class SearchOperationTool:
         content = re.sub(r"\s+", " ", content)  # Normalize whitespace
         return content.strip()
 
-    def _extract_metadata(self, html: str) -> Dict[str, str]:
+    def _extract_metadata(self, html: str) -> dict[str, str]:
         """Extract metadata from HTML."""
         import re
 
@@ -390,7 +390,7 @@ class SearchOperationTool:
         """Close the client."""
         await self.client.aclose()
 
-    def get_audit_logs(self, limit: int = 100) -> list[Dict[str, Any]]:
+    def get_audit_logs(self, limit: int = 100) -> list[dict[str, Any]]:
         """Get audit logs.
 
         Args:
@@ -401,7 +401,7 @@ class SearchOperationTool:
         """
         return self.audit_log.get_entries(limit)
 
-    def set_permissions(self, permissions: Dict[str, bool]) -> None:
+    def set_permissions(self, permissions: dict[str, bool]) -> None:
         """Set permissions for operations.
 
         Args:
@@ -410,7 +410,7 @@ class SearchOperationTool:
         for operation, allowed in permissions.items():
             self.permission_checker.set_permission(operation, allowed)
 
-    def get_permissions(self) -> Dict[str, bool]:
+    def get_permissions(self) -> dict[str, bool]:
         """Get current permissions.
 
         Returns:

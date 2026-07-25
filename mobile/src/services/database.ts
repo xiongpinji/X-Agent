@@ -1,7 +1,8 @@
 // mobile/src/services/database.ts
 // SQLite数据库管理
+// 说明：SDK 50 中异步 API（openDatabaseAsync/runAsync 等）位于 expo-sqlite/next 子路径
 
-import * as SQLite from 'expo-sqlite';
+import * as SQLite from 'expo-sqlite/next';
 import { Task, WorkflowRun, SyncQueue } from '../types';
 
 const DB_NAME = 'xagent.db';
@@ -104,11 +105,11 @@ class Database {
         task.priority,
         JSON.stringify(task.parameters),
         task.result ? JSON.stringify(task.result) : null,
-        task.error,
+        task.error ?? null,
         task.createdAt.toISOString(),
         task.updatedAt.toISOString(),
-        task.startedAt?.toISOString(),
-        task.completedAt?.toISOString(),
+        task.startedAt?.toISOString() ?? null,
+        task.completedAt?.toISOString() ?? null,
         task.syncStatus,
         new Date().toISOString(),
       ]
@@ -224,7 +225,7 @@ class Database {
 
     await this.db.runAsync(
       'UPDATE sync_queue SET status = ?, error = ? WHERE id = ?',
-      [status, error, id]
+      [status, error ?? null, id]
     );
   }
 

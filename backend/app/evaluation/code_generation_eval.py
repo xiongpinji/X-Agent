@@ -5,11 +5,11 @@ This module provides comprehensive evaluation metrics for generated code includi
 syntax correctness, functionality, quality, performance, and security assessments.
 """
 
-from typing import Dict, List, Any, Optional, Tuple
-from dataclasses import dataclass
-from enum import Enum
 import logging
 import re
+from dataclasses import dataclass
+from enum import Enum
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -32,19 +32,19 @@ class MetricScore:
     metric: EvaluationMetric
     score: float  # 0-100
     details: str
-    issues: List[str]
-    recommendations: List[str]
+    issues: list[str]
+    recommendations: list[str]
 
 
 @dataclass
 class EvaluationReport:
     """Comprehensive code evaluation report."""
     overall_score: float  # 0-100
-    metric_scores: Dict[str, MetricScore]
+    metric_scores: dict[str, MetricScore]
     summary: str
-    strengths: List[str]
-    weaknesses: List[str]
-    recommendations: List[str]
+    strengths: list[str]
+    weaknesses: list[str]
+    recommendations: list[str]
     timestamp: str
 
 
@@ -60,8 +60,8 @@ class CodeGenerationEvaluator:
         self,
         code: str,
         language: str,
-        expected_functionality: Optional[str] = None,
-        test_cases: Optional[List[Dict[str, Any]]] = None
+        expected_functionality: str | None = None,
+        test_cases: list[dict[str, Any]] | None = None
     ) -> EvaluationReport:
         """
         Perform comprehensive code evaluation.
@@ -170,7 +170,7 @@ class CodeGenerationEvaluator:
         self,
         code: str,
         language: str,
-        expected_functionality: Optional[str] = None
+        expected_functionality: str | None = None
     ) -> MetricScore:
         """Evaluate functionality completeness."""
         issues = []
@@ -411,8 +411,8 @@ class CodeGenerationEvaluator:
 
     def _analyze_strengths_weaknesses(
         self,
-        metric_scores: Dict[str, MetricScore]
-    ) -> Tuple[List[str], List[str]]:
+        metric_scores: dict[str, MetricScore]
+    ) -> tuple[list[str], list[str]]:
         """Analyze strengths and weaknesses."""
         strengths = []
         weaknesses = []
@@ -429,8 +429,8 @@ class CodeGenerationEvaluator:
 
     def _generate_recommendations(
         self,
-        metric_scores: Dict[str, MetricScore]
-    ) -> List[str]:
+        metric_scores: dict[str, MetricScore]
+    ) -> list[str]:
         """Generate recommendations."""
         recommendations = []
 
@@ -443,7 +443,7 @@ class CodeGenerationEvaluator:
     def _generate_summary(
         self,
         overall_score: float,
-        metric_scores: Dict[str, MetricScore]
+        metric_scores: dict[str, MetricScore]
     ) -> str:
         """Generate evaluation summary."""
         if overall_score >= 90:

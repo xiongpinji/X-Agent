@@ -7,9 +7,10 @@ from __future__ import annotations
 
 import asyncio
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable, List, Optional
-from datetime import datetime, UTC
+from datetime import UTC, datetime
+from typing import Any
 
 
 @dataclass
@@ -26,7 +27,7 @@ class PerformanceMonitor:
     """Performance monitoring system."""
 
     def __init__(self, window_size: int = 1000):
-        self.metrics: List[PerformanceMetric] = []
+        self.metrics: list[PerformanceMetric] = []
         self.window_size = window_size
 
     def record_metric(self, name: str, duration_ms: float, **tags) -> None:
@@ -52,7 +53,7 @@ class PerformanceMonitor:
         index = int(len(sorted_metrics) * percentile / 100)
         return sorted_metrics[index].duration_ms
 
-    def get_metrics_by_name(self, name: str) -> List[PerformanceMetric]:
+    def get_metrics_by_name(self, name: str) -> list[PerformanceMetric]:
         """Get metrics by name."""
         return [m for m in self.metrics if m.name == name]
 
@@ -93,9 +94,9 @@ class AsyncOptimizer:
 
     async def run_concurrent(
         self,
-        tasks: List[Callable],
+        tasks: list[Callable],
         max_concurrent: int = 5
-    ) -> List[Any]:
+    ) -> list[Any]:
         """Run tasks concurrently with limit."""
         semaphore = asyncio.Semaphore(max_concurrent)
 
@@ -115,15 +116,15 @@ class AsyncOptimizer:
         """Run coroutine with timeout."""
         try:
             return await asyncio.wait_for(coro, timeout=timeout)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             raise TimeoutError(f"Task exceeded {timeout}s timeout")
 
     async def batch_async_operations(
         self,
-        items: List[Any],
+        items: list[Any],
         operation: Callable,
         batch_size: int = 10
-    ) -> List[Any]:
+    ) -> list[Any]:
         """Batch async operations."""
         results = []
         for i in range(0, len(items), batch_size):
@@ -156,7 +157,7 @@ class LLMOptimizer:
 
         return '\n'.join(unique_lines)
 
-    async def call_with_cache(self, request: dict[str, Any]) -> Optional[Any]:
+    async def call_with_cache(self, request: dict[str, Any]) -> Any | None:
         """Call LLM with caching."""
         import hashlib
         import json
@@ -178,9 +179,9 @@ class LLMOptimizer:
 
     async def batch_requests(
         self,
-        requests: List[dict[str, Any]],
+        requests: list[dict[str, Any]],
         batch_size: int = 5
-    ) -> List[Any]:
+    ) -> list[Any]:
         """Batch LLM requests."""
         results = []
 
@@ -194,7 +195,7 @@ class LLMOptimizer:
         return results
 
 
-def monitor_performance(monitor: PerformanceMonitor, name: Optional[str] = None):
+def monitor_performance(monitor: PerformanceMonitor, name: str | None = None):
     """Performance monitoring decorator."""
     def decorator(func):
         async def async_wrapper(*args, **kwargs):

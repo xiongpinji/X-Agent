@@ -94,10 +94,42 @@ class QdrantVectorClient:
         *,
         tenant_id: str | None = None,
         query: str,
+        query_embedding: list[float] | None = None,
         top_k: int = 5,
     ) -> list[VectorRecord]:
         if tenant_id is None:
             return []
+
+        # Use real Qdrant vector search when available
+        if self._client is not None and qmodels is not None and query_embedding:
+            try:
+                self.ensure_collection(collection, vector_size=len(query_embedding))
+                results = self._client.query_points(
+                    collection_name=collection,
+                    query=query_embedding,
+                    limit=top_k,
+                    query_filter=qmodels.Filter(
+                        must=[qmodels.FieldCondition(
+                            key="tenant_id",
+                            match=qmodels.MatchValue(value=tenant_id),
+                        )]
+                    ),
+                    with_payload=True,
+                )
+                records = []
+                for point in results.points:
+                    payload = point.payload or {}
+                    records.append(VectorRecord(
+                        id=str(point.id),
+                        tenant_id=tenant_id,
+                        text=payload.get("text", ""),
+                        payload=payload,
+                    ))
+                return records
+            except Exception:
+                pass  # Fall through to keyword search
+
+        # Fallback: keyword-based search on local cache
         items = [
             record
             for record in self._collections.get(collection, [])

@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any
+
 import asyncpg
 
 
@@ -16,13 +17,13 @@ class DatabaseOperationTool:
             connection_string: PostgreSQL connection string
         """
         self.connection_string = connection_string
-        self.pool: Optional[asyncpg.Pool] = None
+        self.pool: asyncpg.Pool | None = None
 
     async def initialize(self) -> None:
         """Initialize database connection pool."""
         self.pool = await asyncpg.create_pool(self.connection_string)
 
-    async def execute_query(self, query: str, params: Optional[List[Any]] = None) -> List[Dict[str, Any]]:
+    async def execute_query(self, query: str, params: list[Any] | None = None) -> list[dict[str, Any]]:
         """Execute a SELECT query.
 
         Args:
@@ -39,7 +40,7 @@ class DatabaseOperationTool:
             rows = await conn.fetch(query, *(params or []))
             return [dict(row) for row in rows]
 
-    async def execute_update(self, query: str, params: Optional[List[Any]] = None) -> Dict[str, Any]:
+    async def execute_update(self, query: str, params: list[Any] | None = None) -> dict[str, Any]:
         """Execute an INSERT/UPDATE/DELETE query.
 
         Args:
@@ -59,7 +60,7 @@ class DatabaseOperationTool:
                 "affected_rows": int(result.split()[-1]) if result else 0,
             }
 
-    async def get_table_schema(self, table_name: str) -> Dict[str, Any]:
+    async def get_table_schema(self, table_name: str) -> dict[str, Any]:
         """Get table schema.
 
         Args:
@@ -90,7 +91,7 @@ class DatabaseOperationTool:
             ]
             return {"table": table_name, "columns": columns}
 
-    async def list_tables(self) -> Dict[str, Any]:
+    async def list_tables(self) -> dict[str, Any]:
         """List all tables in the database.
 
         Returns:

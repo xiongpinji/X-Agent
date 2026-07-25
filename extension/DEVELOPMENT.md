@@ -59,7 +59,7 @@ extension/
 ├── mcp-client.js                 # MCP客户端
 ├── tab-group-manager.js          # 标签组管理器
 ├── storage-manager.js            # 存储管理器
-├── native-messaging-host.json    # 原生消息主机配置
+├── native-messaging-host.json.example  # 原生消息主机配置模板(安装见 NATIVE_MESSAGING_SETUP.md)
 ├── options.html                  # 选项页面
 ├── options.js                    # 选项页面逻辑
 ├── options.css                   # 选项页面样式
@@ -310,14 +310,13 @@ npm run test:coverage
 
 ### 构建与打包
 
+本扩展无打包构建步骤（webpack 已移除）：`background.js` 为 ES Module
+（`manifest.json` 中 `background.type = "module"`），`content.js` / `popup.js` /
+`injected.js` 为经典脚本，全部由 Chrome 直接加载。开发时修改源码后在
+`chrome://extensions/` 点击"重新加载"即可。
+
 ```bash
-# 开发构建
-npm run build:dev
-
-# 生产构建
-npm run build:prod
-
-# 打包为CRX
+# 打包为 zip(直接打包源码目录, 用于上传 Web Store)
 npm run package
 ```
 

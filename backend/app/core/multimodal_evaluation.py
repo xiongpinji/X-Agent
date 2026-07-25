@@ -14,13 +14,11 @@ from __future__ import annotations
 import math
 import time
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
-import numpy as np
 
-
-class MetricType(str, Enum):
+class MetricType(StrEnum):
     """指标类型枚举"""
     ACCURACY = "accuracy"
     PRECISION = "precision"
@@ -70,7 +68,7 @@ class FusionEvaluator:
             return 0.0
 
         # 计算欧氏距离
-        distance = math.sqrt(sum((a - b) ** 2 for a, b in zip(fused_output, ground_truth)))
+        distance = math.sqrt(sum((a - b) ** 2 for a, b in zip(fused_output, ground_truth, strict=False)))
 
         # 转换为准确率
         accuracy = max(0.0, 1.0 - distance / (threshold + 1.0))
@@ -480,10 +478,7 @@ class MultimodalEvaluator:
         )
 
         # F1分数
-        if precision + recall > 0:
-            f1 = 2 * (precision * recall) / (precision + recall)
-        else:
-            f1 = 0.0
+        f1 = 2 * (precision * recall) / (precision + recall) if precision + recall > 0 else 0.0
 
         metrics[MetricType.F1_SCORE] = EvaluationMetric(
             metric_type=MetricType.F1_SCORE,

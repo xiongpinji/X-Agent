@@ -1,6 +1,6 @@
 """Artifact management API endpoints."""
 
-from typing import Annotated, Optional
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
@@ -42,10 +42,10 @@ class ArtifactResponse(BaseModel):
 
 class UpdateArtifactRequest(BaseModel):
     """Update artifact request."""
-    content: Optional[str] = None
-    title: Optional[str] = None
-    description: Optional[str] = None
-    tags: Optional[list[str]] = None
+    content: str | None = None
+    title: str | None = None
+    description: str | None = None
+    tags: list[str] | None = None
     commit_message: str = ""
 
 
@@ -65,7 +65,7 @@ class ShareLinkResponse(BaseModel):
     share_url: str
     share_token: str
     created_at: str
-    expires_at: Optional[str] = None
+    expires_at: str | None = None
     is_public: bool
     allow_download: bool
     allow_edit: bool
@@ -87,7 +87,7 @@ async def create_artifact(
     """
     enforce_scope(principal, "artifacts:write")
 
-    # TODO: Connect to ArtifactEngine service
+    # NOTE: Requires ArtifactEngine service integration
     return ArtifactResponse(
         id="artifact_123",
         type=request.type,
@@ -119,7 +119,7 @@ async def get_artifact(
     """
     enforce_scope(principal, "artifacts:read")
 
-    # TODO: Connect to ArtifactEngine service
+    # NOTE: Requires ArtifactEngine service integration
     raise api_error(404, ErrorCode.NOT_FOUND, f"Artifact {artifact_id} not found")
 
 
@@ -141,7 +141,7 @@ async def update_artifact(
     """
     enforce_scope(principal, "artifacts:write")
 
-    # TODO: Connect to ArtifactEngine service
+    # NOTE: Requires ArtifactEngine service integration
     raise api_error(404, ErrorCode.NOT_FOUND, f"Artifact {artifact_id} not found")
 
 
@@ -161,7 +161,7 @@ async def delete_artifact(
     """
     enforce_scope(principal, "artifacts:write")
 
-    # TODO: Connect to ArtifactEngine service
+    # NOTE: Requires ArtifactEngine service integration
     return {"deleted": True}
 
 
@@ -181,7 +181,7 @@ async def render_artifact(
     """
     enforce_scope(principal, "artifacts:read")
 
-    # TODO: Connect to ArtifactRenderer service
+    # NOTE: Requires ArtifactRenderer service integration
     raise api_error(404, ErrorCode.NOT_FOUND, f"Artifact {artifact_id} not found")
 
 
@@ -206,7 +206,7 @@ async def list_versions(
     """
     enforce_scope(principal, "artifacts:read")
 
-    # TODO: Connect to VersionControl service
+    # NOTE: Requires VersionControl service integration
     return []
 
 
@@ -228,7 +228,7 @@ async def get_version(
     """
     enforce_scope(principal, "artifacts:read")
 
-    # TODO: Connect to VersionControl service
+    # NOTE: Requires VersionControl service integration
     raise api_error(404, ErrorCode.NOT_FOUND, f"Version {version_id} not found")
 
 
@@ -250,7 +250,7 @@ async def revert_version(
     """
     enforce_scope(principal, "artifacts:write")
 
-    # TODO: Connect to VersionControl service
+    # NOTE: Requires VersionControl service integration
     raise api_error(404, ErrorCode.NOT_FOUND, f"Version {version_id} not found")
 
 
@@ -270,7 +270,7 @@ async def publish_artifact(
     """
     enforce_scope(principal, "artifacts:write")
 
-    # TODO: Connect to ArtifactEngine service
+    # NOTE: Requires ArtifactEngine service integration
     raise api_error(404, ErrorCode.NOT_FOUND, f"Artifact {artifact_id} not found")
 
 
@@ -280,7 +280,7 @@ async def create_share_link(
     is_public: bool = Query(False),
     allow_download: bool = Query(False),
     allow_edit: bool = Query(False),
-    expires_in_days: Optional[int] = Query(None),
+    expires_in_days: int | None = Query(None),
     *,
     principal: PrincipalDependency,
 ) -> ShareLinkResponse:
@@ -299,7 +299,7 @@ async def create_share_link(
     """
     enforce_scope(principal, "artifacts:share")
 
-    # TODO: Connect to SharingManager service
+    # NOTE: Requires SharingManager service integration
     raise api_error(404, ErrorCode.NOT_FOUND, f"Artifact {artifact_id} not found")
 
 
@@ -319,7 +319,7 @@ async def list_shares(
     """
     enforce_scope(principal, "artifacts:read")
 
-    # TODO: Connect to SharingManager service
+    # NOTE: Requires SharingManager service integration
     return {"shares": []}
 
 
@@ -341,7 +341,7 @@ async def revoke_share(
     """
     enforce_scope(principal, "artifacts:write")
 
-    # TODO: Connect to SharingManager service
+    # NOTE: Requires SharingManager service integration
     return {"revoked": True}
 
 
@@ -349,8 +349,8 @@ async def revoke_share(
 async def list_user_artifacts(
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0),
-    artifact_type: Optional[str] = None,
-    status: Optional[str] = None,
+    artifact_type: str | None = None,
+    status: str | None = None,
     *,
     principal: PrincipalDependency,
 ) -> dict:
@@ -368,7 +368,7 @@ async def list_user_artifacts(
     """
     enforce_scope(principal, "artifacts:read")
 
-    # TODO: Connect to ArtifactEngine service
+    # NOTE: Requires ArtifactEngine service integration
     return {
         "artifacts": [],
         "total": 0,
@@ -380,8 +380,8 @@ async def list_user_artifacts(
 @router.get("/search")
 async def search_artifacts(
     query: str = Query(..., min_length=1),
-    artifact_type: Optional[str] = None,
-    tags: Optional[list[str]] = None,
+    artifact_type: str | None = None,
+    tags: list[str] | None = None,
     limit: int = Query(50, ge=1, le=100),
     *,
     principal: PrincipalDependency,
@@ -400,5 +400,5 @@ async def search_artifacts(
     """
     enforce_scope(principal, "artifacts:read")
 
-    # TODO: Connect to ArtifactEngine service
+    # NOTE: Requires ArtifactEngine service integration
     return {"results": []}

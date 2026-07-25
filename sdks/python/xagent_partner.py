@@ -3,8 +3,9 @@ X-Agent Partner SDK for Python.
 
 A comprehensive SDK for integrating with X-Agent Partner API.
 
-Installation:
-    pip install xagent-partner-sdk
+Installation (local build, not published to PyPI):
+    pip install ./sdks/python        # from repository root
+    # or: python -m pip wheel ./sdks/python --no-deps -w dist
 
 Usage:
     from xagent_partner import PartnerClient
@@ -27,7 +28,7 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-__version__ = "0.2.0-alpha"  # 单一事实源: pyproject.toml
+__version__ = "0.2.0-alpha"  # 版本单一事实源: pyproject.toml 通过 [tool.setuptools.dynamic] 动态读取本值
 __all__ = [
     "PartnerClient",
     "PartnerAPIError",
@@ -140,25 +141,39 @@ class PartnerClient:
 
                 # Handle client errors
                 if response.status_code == 401:
+                    error_data = response.json()
                     raise PartnerAuthError(
-                        "Unauthorized",
+                        error_data.get("detail") or "Unauthorized",
                         status_code=401,
-                        response=response.json(),
+                        response=error_data,
                     )
 
                 if response.status_code == 404:
+                    error_data = response.json()
                     raise PartnerNotFoundError(
-                        "Resource not found",
+                        error_data.get("detail") or "Resource not found",
                         status_code=404,
-                        response=response.json(),
+                        response=error_data,
                     )
 
                 if response.status_code >= 400:
-                    raise PartnerAPIError(
-                        response.json().get("error", {}).get("message", "API error"),
-                        status_code=response.status_code,
-                        response=response.json(),
+                    error_data = response.json()
+                    message = (
+                        error_data.get("error", {}).get("message")
+                        or error_data.get("detail")  # FastAPI HTTPException shape
+                        or "API error"
                     )
+                    if not isinstance(message, str):
+                        message = str(message)
+                    raise PartnerAPIError(
+                        message,
+                        status_code=response.status_code,
+                        response=error_data,
+                    )
+
+                # No-content responses (e.g., 204 from DELETE endpoints)
+                if response.status_code == 204 or not response.content:
+                    return {}
 
                 return response.json()
 

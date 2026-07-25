@@ -2,7 +2,7 @@
 技能注册表 - 管理已注册的技能
 """
 
-from typing import Dict, List, Optional
+
 from .skill_base import Skill, SkillMetadata
 
 
@@ -10,8 +10,8 @@ class SkillRegistry:
     """技能注册表 - 存储和管理所有已注册的技能"""
 
     def __init__(self):
-        self._skills: Dict[str, Skill] = {}
-        self._metadata: Dict[str, SkillMetadata] = {}
+        self._skills: dict[str, Skill] = {}
+        self._metadata: dict[str, SkillMetadata] = {}
 
     def register(self, skill: Skill) -> None:
         """
@@ -50,7 +50,7 @@ class SkillRegistry:
             return True
         return False
 
-    def get(self, skill_name: str) -> Optional[Skill]:
+    def get(self, skill_name: str) -> Skill | None:
         """
         获取技能
 
@@ -62,7 +62,7 @@ class SkillRegistry:
         """
         return self._skills.get(skill_name)
 
-    def get_metadata(self, skill_name: str) -> Optional[SkillMetadata]:
+    def get_metadata(self, skill_name: str) -> SkillMetadata | None:
         """
         获取技能元数据
 
@@ -74,7 +74,7 @@ class SkillRegistry:
         """
         return self._metadata.get(skill_name)
 
-    def list_skills(self) -> List[str]:
+    def list_skills(self) -> list[str]:
         """
         列出所有已注册的技能
 
@@ -83,7 +83,7 @@ class SkillRegistry:
         """
         return list(self._skills.keys())
 
-    def list_metadata(self) -> List[SkillMetadata]:
+    def list_metadata(self) -> list[SkillMetadata]:
         """
         列出所有技能的元数据
 
@@ -104,7 +104,7 @@ class SkillRegistry:
         """
         return skill_name in self._skills
 
-    def get_by_capability(self, capability: str) -> List[Skill]:
+    def get_by_capability(self, capability: str) -> list[Skill]:
         """
         根据能力获取技能
 
@@ -120,7 +120,7 @@ class SkillRegistry:
                 result.append(skill)
         return result
 
-    def get_by_tag(self, tag: str) -> List[Skill]:
+    def get_by_tag(self, tag: str) -> list[Skill]:
         """
         根据标签获取技能
 
@@ -150,11 +150,7 @@ class SkillRegistry:
         if not skill:
             return False
 
-        for dep in skill.get_dependencies():
-            if not self.exists(dep):
-                return False
-
-        return True
+        return all(self.exists(dep) for dep in skill.get_dependencies())
 
     def clear(self) -> None:
         """清空所有已注册的技能"""

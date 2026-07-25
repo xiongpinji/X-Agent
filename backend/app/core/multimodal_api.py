@@ -7,27 +7,23 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
+from backend.app.core.multimodal_evaluation import (
+    get_evaluator,
+)
 from backend.app.core.multimodal_fusion import (
     FusionStrategy,
     Modality,
     ModalityFeature,
-    MultimodalFusion,
     get_fusion_manager,
 )
 from backend.app.core.multimodal_generation import (
     GenerationRequest,
     GenerationType,
-    MultimodalGenerator,
     get_generator,
 )
 from backend.app.core.multimodal_retrieval import (
-    MultimodalRetriever,
     RetrievalType,
     get_retriever,
-)
-from backend.app.core.multimodal_evaluation import (
-    MultimodalEvaluator,
-    get_evaluator,
 )
 
 

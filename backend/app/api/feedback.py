@@ -4,30 +4,29 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, UTC
-from typing import Optional, Annotated
+from datetime import UTC, datetime
+from typing import Annotated
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
 from backend.app.core.feedback_analyzer import feedback_analyzer
-from backend.app.models.feedback import (
-    FeedbackStorePostgres,
-    FeedbackType,
-    FeedbackSeverity,
-    FeedbackStatus,
-)
-from backend.app.core.session import SessionManager
 from backend.app.core.security import Principal
 from backend.app.dependencies import get_current_principal
+from backend.app.models.feedback import (
+    FeedbackSeverity,
+    FeedbackStatus,
+    FeedbackStorePostgres,
+    FeedbackType,
+)
 
 logger = logging.getLogger("xagent.feedback")
 
 router = APIRouter(prefix="/api/v1/feedback", tags=["feedback"])
 
 # 全局反馈存储实例
-_feedback_store: Optional[FeedbackStorePostgres] = None
+_feedback_store: FeedbackStorePostgres | None = None
 
 
 def get_feedback_store() -> FeedbackStorePostgres:
@@ -45,7 +44,7 @@ class FeedbackCreateRequest(BaseModel):
     title: str = Field(..., min_length=1, max_length=500, description="反馈标题")
     description: str = Field(..., min_length=1, max_length=5000, description="反馈描述")
     severity: str = Field(..., description="严重程度: low, medium, high, critical")
-    metadata: Optional[dict] = Field(None, description="额外元数据")
+    metadata: dict | None = Field(None, description="额外元数据")
 
 
 class FeedbackResponse(BaseModel):
@@ -57,14 +56,14 @@ class FeedbackResponse(BaseModel):
     description: str
     severity: str
     status: str
-    sentiment: Optional[str]
-    sentiment_score: Optional[float]
-    priority_score: Optional[float]
-    category: Optional[str]
-    tags: Optional[list[str]]
+    sentiment: str | None
+    sentiment_score: float | None
+    priority_score: float | None
+    category: str | None
+    tags: list[str] | None
     created_at: str
     updated_at: str
-    resolved_at: Optional[str]
+    resolved_at: str | None
 
     class Config:
         from_attributes = True
@@ -76,7 +75,7 @@ class FeedbackAnalysisResponse(BaseModel):
     sentiment_type: str
     sentiment_score: float
     category: str
-    subcategory: Optional[str]
+    subcategory: str | None
     tags: list[str]
     priority_score: float
     urgency_score: float
@@ -271,9 +270,9 @@ async def get_feedback(
 
 @router.get("/", response_model=FeedbackListResponse)
 async def list_feedback(
-    feedback_type: Optional[str] = Query(None, description="反馈类型过滤"),
-    status_filter: Optional[str] = Query(None, alias="status", description="状态过滤"),
-    severity: Optional[str] = Query(None, description="严重程度过滤"),
+    feedback_type: str | None = Query(None, description="反馈类型过滤"),
+    status_filter: str | None = Query(None, alias="status", description="状态过滤"),
+    severity: str | None = Query(None, description="严重程度过滤"),
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
     principal: Annotated[Principal, Depends(get_current_principal)] = None,
@@ -379,7 +378,7 @@ async def get_feedback_analysis(
 @router.patch("/{feedback_id}", response_model=FeedbackResponse)
 async def update_feedback(
     feedback_id: str,
-    new_status: Optional[str] = Query(None, alias="status", description="新状态"),
+    new_status: str | None = Query(None, alias="status", description="新状态"),
     principal: Annotated[Principal, Depends(get_current_principal)] = None,
 ) -> FeedbackResponse:
     """更新反馈状态"""

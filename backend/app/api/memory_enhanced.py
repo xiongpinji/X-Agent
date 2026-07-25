@@ -20,7 +20,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from backend.app.core.contracts import RunContext
-from backend.app.core.hybrid_memory_system import HybridMemorySystem, Memory, MemoryTierStats
+from backend.app.core.hybrid_memory_system import HybridMemorySystem, Memory
 from backend.app.core.security import Principal
 from backend.app.dependencies import get_current_principal
 
@@ -241,7 +241,7 @@ async def store_memory(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to store memory: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to store memory: {e!s}")
 
 
 @router.post("/recall", response_model=RecallMemoryResponse)
@@ -274,7 +274,7 @@ async def recall_memory(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to recall memories: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to recall memories: {e!s}")
 
 
 @router.post("/search", response_model=SearchMemoryResponse)
@@ -318,7 +318,7 @@ async def search_memory(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to search memories: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to search memories: {e!s}")
 
 
 @router.post("/relate", response_model=RelateMemoriesResponse)
@@ -350,7 +350,7 @@ async def relate_memories(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to relate memories: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to relate memories: {e!s}")
 
 
 @router.get("/related/{memory_id}", response_model=RecallMemoryResponse)
@@ -385,7 +385,7 @@ async def get_related_memories(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get related memories: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get related memories: {e!s}")
 
 
 @router.post("/merge", response_model=MergeMemoriesResponse)
@@ -440,7 +440,7 @@ async def merge_memories(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to merge memories: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to merge memories: {e!s}")
 
 
 @router.get("/stats", response_model=MemoryStatsResponse)
@@ -470,7 +470,7 @@ async def get_memory_stats(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get stats: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get stats: {e!s}")
 
 
 @router.post("/sync")
@@ -503,4 +503,4 @@ async def sync_tiers(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to sync tiers: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to sync tiers: {e!s}")

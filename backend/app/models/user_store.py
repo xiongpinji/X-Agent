@@ -5,14 +5,12 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import UTC, datetime, timedelta
-from typing import Optional
+from datetime import UTC, datetime
 
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.models import UserStoreModel
 from backend.app.core.session import SessionManager
+from backend.app.models import UserStoreModel
 
 logger = logging.getLogger(__name__)
 
@@ -26,9 +24,9 @@ class UserStorePostgres:
         email: str,
         password_hash: str,
         tenant_id: str = "default",
-        full_name: Optional[str] = None,
+        full_name: str | None = None,
         role: str = "user",
-        metadata: Optional[dict] = None,
+        metadata: dict | None = None,
     ) -> UserStoreModel:
         """创建用户"""
         async with SessionManager.get_session() as session:
@@ -46,14 +44,14 @@ class UserStorePostgres:
             logger.info(f"用户创建成功: {user_id}")
             return user
 
-    async def get_user_by_id(self, user_id: str) -> Optional[UserStoreModel]:
+    async def get_user_by_id(self, user_id: str) -> UserStoreModel | None:
         """根据ID获取用户"""
         async with SessionManager.get_session() as session:
             stmt = select(UserStoreModel).where(UserStoreModel.user_id == user_id)
             result = await session.execute(stmt)
             return result.scalar_one_or_none()
 
-    async def get_user_by_email(self, email: str, tenant_id: str = "default") -> Optional[UserStoreModel]:
+    async def get_user_by_email(self, email: str, tenant_id: str = "default") -> UserStoreModel | None:
         """根据邮箱获取用户"""
         async with SessionManager.get_session() as session:
             stmt = select(UserStoreModel).where(
@@ -66,7 +64,7 @@ class UserStorePostgres:
         self,
         user_id: str,
         **kwargs,
-    ) -> Optional[UserStoreModel]:
+    ) -> UserStoreModel | None:
         """更新用户"""
         async with SessionManager.get_session() as session:
             stmt = select(UserStoreModel).where(UserStoreModel.user_id == user_id)
@@ -140,42 +138,42 @@ class UserStorePostgres:
             result = await session.execute(stmt)
             return len(result.scalars().all())
 
-    async def update_last_login(self, user_id: str) -> Optional[UserStoreModel]:
+    async def update_last_login(self, user_id: str) -> UserStoreModel | None:
         """更新最后登录时间"""
         return await self.update_user(
             user_id,
             last_login_at=datetime.now(UTC),
         )
 
-    async def verify_user(self, user_id: str) -> Optional[UserStoreModel]:
+    async def verify_user(self, user_id: str) -> UserStoreModel | None:
         """验证用户"""
         return await self.update_user(
             user_id,
             is_verified=True,
         )
 
-    async def deactivate_user(self, user_id: str) -> Optional[UserStoreModel]:
+    async def deactivate_user(self, user_id: str) -> UserStoreModel | None:
         """停用用户"""
         return await self.update_user(
             user_id,
             is_active=False,
         )
 
-    async def activate_user(self, user_id: str) -> Optional[UserStoreModel]:
+    async def activate_user(self, user_id: str) -> UserStoreModel | None:
         """激活用户"""
         return await self.update_user(
             user_id,
             is_active=True,
         )
 
-    async def get_metadata(self, user_id: str) -> Optional[dict]:
+    async def get_metadata(self, user_id: str) -> dict | None:
         """获取用户元数据"""
         user = await self.get_user_by_id(user_id)
         if not user or not user.metadata_json:
             return None
         return json.loads(user.metadata_json)
 
-    async def set_metadata(self, user_id: str, metadata: dict) -> Optional[UserStoreModel]:
+    async def set_metadata(self, user_id: str, metadata: dict) -> UserStoreModel | None:
         """设置用户元数据"""
         return await self.update_user(
             user_id,

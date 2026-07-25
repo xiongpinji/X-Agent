@@ -8,19 +8,19 @@ analyzer, recovery, pool, and stealth.
 
 from __future__ import annotations
 
-import asyncio
+import contextlib
 import logging
 import time
 from dataclasses import dataclass
-from typing import Optional, Any, Callable, List
+from typing import Any
 
-from backend.app.services.browser.smart_locator import SmartLocator, LocatorStrategy
-from backend.app.services.browser.waiter import SmartWaiter, WaitStrategy
-from backend.app.services.browser.interactions import AdvancedInteractions, InteractionType
 from backend.app.services.browser.analyzer import PageAnalyzer, PageStructure
-from backend.app.services.browser.recovery import ErrorRecovery, ErrorType
-from backend.app.services.browser.pool import BrowserPool, BrowserPoolManager
+from backend.app.services.browser.interactions import AdvancedInteractions
+from backend.app.services.browser.pool import BrowserPoolManager
+from backend.app.services.browser.recovery import ErrorRecovery
+from backend.app.services.browser.smart_locator import SmartLocator
 from backend.app.services.browser.stealth import StealthBrowser
+from backend.app.services.browser.waiter import SmartWaiter, WaitStrategy
 
 logger = logging.getLogger(__name__)
 
@@ -77,7 +77,7 @@ class EnhancedBrowserAutomationService:
         self,
         session_id: str,
         page: Any,
-        enable_stealth: Optional[bool] = None,
+        enable_stealth: bool | None = None,
     ) -> AutomationSession:
         """
         Create an enhanced automation session.
@@ -140,10 +140,8 @@ class EnhancedBrowserAutomationService:
         try:
             session = self.sessions.pop(session_id, None)
             if session:
-                try:
+                with contextlib.suppress(Exception):
                     await session.page.close()
-                except Exception:
-                    pass
                 self.logger.info(f"Closed session {session_id}")
                 return True
             return False
@@ -293,7 +291,7 @@ class EnhancedBrowserAutomationService:
             await session.recovery.handle_error(session.page, e)
             return False
 
-    async def analyze_page(self, session_id: str) -> Optional[PageStructure]:
+    async def analyze_page(self, session_id: str) -> PageStructure | None:
         """
         Analyze page structure.
 
@@ -316,7 +314,7 @@ class EnhancedBrowserAutomationService:
         self,
         session_id: str,
         selector: str,
-    ) -> Optional[str]:
+    ) -> str | None:
         """
         Extract text from element.
 
@@ -342,8 +340,8 @@ class EnhancedBrowserAutomationService:
     async def take_screenshot(
         self,
         session_id: str,
-        path: Optional[str] = None,
-    ) -> Optional[bytes]:
+        path: str | None = None,
+    ) -> bytes | None:
         """
         Take screenshot.
 
@@ -427,7 +425,7 @@ class EnhancedBrowserAutomationService:
             session.error_count += 1
             return False
 
-    def get_session_stats(self, session_id: str) -> Optional[dict]:
+    def get_session_stats(self, session_id: str) -> dict | None:
         """Get session statistics."""
         try:
             session = self._get_session(session_id)

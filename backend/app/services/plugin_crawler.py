@@ -2,20 +2,19 @@
 
 from __future__ import annotations
 
-import asyncio
+import hashlib
 import json
 import logging
-from datetime import datetime, UTC
-from pathlib import Path
-from typing import Optional, Any
 from dataclasses import dataclass, field
-from enum import Enum
-import hashlib
+from datetime import UTC, datetime
+from enum import StrEnum
+from pathlib import Path
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
-class RepositoryProvider(str, Enum):
+class RepositoryProvider(StrEnum):
     """仓库提供商"""
     GITHUB = "github"
     GITEE = "gitee"
@@ -29,7 +28,7 @@ class RepositoryConfig:
     owner: str
     repo: str
     branch: str = "main"
-    token: Optional[str] = None
+    token: str | None = None
 
 
 @dataclass
@@ -110,10 +109,6 @@ class PluginCrawler:
         try:
             # 模拟GitHub API调用
             # 实际应用中应使用 PyGithub 或 httpx
-            search_url = (
-                f"https://api.github.com/search/repositories?"
-                f"q={query}+language:{language}&sort=stars&order=desc&per_page={max_results}"
-            )
 
             # 这里应该进行实际的HTTP请求
             # 为了演示，我们返回模拟数据
@@ -161,10 +156,6 @@ class PluginCrawler:
         plugins = []
         try:
             # 模拟Gitee API调用
-            search_url = (
-                f"https://gitee.com/api/v5/search/repositories?"
-                f"q={query}&sort=stars_count&order=desc&per_page={max_results}"
-            )
 
             # 这里应该进行实际的HTTP请求
             mock_repos = [
@@ -194,7 +185,7 @@ class PluginCrawler:
 
     async def _extract_plugin_metadata(
         self, repo: dict[str, Any], provider: RepositoryProvider
-    ) -> Optional[PluginMetadata]:
+    ) -> PluginMetadata | None:
         """从仓库提取插件元数据"""
         try:
             repo_name = repo.get("name", "")
@@ -254,7 +245,7 @@ class PluginCrawler:
 
     async def _fetch_manifest(
         self, repo_url: str, provider: RepositoryProvider
-    ) -> Optional[dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """获取插件manifest文件"""
         try:
             # 构建manifest URL

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import inspect
 import json
-import os
+import logging
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
@@ -13,18 +13,28 @@ from typing import TYPE_CHECKING, Any
 from pydantic import BaseModel, Field
 
 from backend.app.core.approvals import ApprovalStatus, ApprovalStore
-from backend.app.core.contracts import RiskLevel, RunContext, ToolCallRecord, ToolPolicyVerdict, AgentPlanStepRecord
+from backend.app.core.contracts import (
+    RiskLevel,
+    RunContext,
+    ToolCallRecord,
+    ToolPolicyVerdict,
+)
 from backend.app.core.policy import ToolPolicyEngine
 from backend.app.settings import PROJECT_ROOT
 
+if TYPE_CHECKING:
+    from backend.app.core.prompt_guard.engine import PromptGuard
+
 import contextvars as _contextvars
+
+logger = logging.getLogger(__name__)
 
 # Per-run override for the file-tool sandbox root. Defaults to PROJECT_ROOT.
 # Set via set_tool_root_override() so sandbox/issue-to-PR tasks can operate on
 # a cloned repo dir while keeping the same within-root containment guarantee
 # (paths are still confined to whichever root is active). contextvars keeps
 # this coroutine-safe so concurrent agent runs don't leak roots into each other.
-_tool_root_override: "_contextvars.ContextVar[str | None]" = _contextvars.ContextVar(
+_tool_root_override: _contextvars.ContextVar[str | None] = _contextvars.ContextVar(
     "xagent_tool_root_override", default=None
 )
 
@@ -39,7 +49,7 @@ def reset_tool_root_override(token) -> None:
     _tool_root_override.reset(token)
 
 
-def _active_tool_base() -> "Path":
+def _active_tool_base() -> Path:
     """The currently-allowed root: per-run override if set, else PROJECT_ROOT."""
     override = _tool_root_override.get()
     return Path(override).resolve() if override else Path(PROJECT_ROOT).resolve()
@@ -72,10 +82,7 @@ _FORBIDDEN_PATHS = {
 def _is_path_forbidden(path: Path) -> bool:
     """Check if path is in forbidden system directories."""
     path_str = str(path).lower()
-    for forbidden in _FORBIDDEN_PATHS:
-        if path_str.startswith(forbidden.lower()):
-            return True
-    return False
+    return any(path_str.startswith(forbidden.lower()) for forbidden in _FORBIDDEN_PATHS)
 
 
 def _resolve_tool_path(path: str) -> Path:
@@ -216,7 +223,8 @@ class ToolRegistry:
         policy_engine: ToolPolicyEngine | None = None,
         approval_store: ApprovalStore | None = None,
         execution_store: ToolExecutionStore | None = None,
-        hook_manager: "HookManager | None" = None,
+        hook_manager: HookManager | None = None,
+        prompt_guard: PromptGuard | None = None,
     ) -> None:
         # ``policy_engine`` is optional so the registry can be constructed with
         # no arguments (the agent-v2 integration suite and other lightweight
@@ -228,6 +236,14 @@ class ToolRegistry:
         self._approval_store = approval_store
         self._execution_store = execution_store
         self._hook_manager = hook_manager
+        # P2-04: PromptGuard — indirect prompt injection defense at tool output chokepoint
+        if prompt_guard is None:
+            try:
+                from backend.app.core.prompt_guard.engine import get_prompt_guard
+                prompt_guard = get_prompt_guard()
+            except Exception:
+                prompt_guard = None
+        self._prompt_guard = prompt_guard
         self._tools: dict[str, ToolDefinition] = {}
 
     def register(
@@ -451,6 +467,27 @@ class ToolRegistry:
                 output = await self._run_post_tool_hooks(
                     context, tool, arguments, output
                 )
+            # P2-04: PromptGuard — scan tool output for indirect prompt injection
+            if self._prompt_guard is not None and output is not None:
+                scan_result = self._prompt_guard.scan_tool_output(name, output)
+                if scan_result.is_malicious:
+                    logger.warning(
+                        "P2-04 PromptGuard BLOCKED tool output: tool=%s confidence=%.2f signals=%d",
+                        name, scan_result.confidence, len(scan_result.signals),
+                    )
+                    record = ToolCallRecord(
+                        tool_name=name,
+                        success=False,
+                        error=f"[PromptGuard] Tool output blocked: potential prompt injection detected (confidence={scan_result.confidence:.2f})",
+                        policy=verdict,
+                        risk_level=tool.risk_level,
+                        latency_ms=self._elapsed_ms(started),
+                        arguments_preview=arguments_preview,
+                        trace_id=context.trace_id,
+                        request_id=context.request_id,
+                    )
+                    self._record_execution(context, record)
+                    return record
             approval_id: str | None = None
             if tool.risk_level in {RiskLevel.HIGH, RiskLevel.CRITICAL} and self._approval_store is not None:
                 approval = self._approval_store.create_tool_approval(
@@ -475,7 +512,7 @@ class ToolRegistry:
             )
             self._record_execution(context, record)
             return record
-        except Exception as exc:  # noqa: BLE001 - tool failures must be captured, not leaked
+        except Exception as exc:
             record = ToolCallRecord(
                 tool_name=name,
                 success=False,
@@ -730,6 +767,30 @@ class ToolRegistry:
     def _record_execution(self, context: RunContext, record: ToolCallRecord) -> None:
         if self._execution_store is not None:
             self._execution_store.record(context, record)
+        # P1-04: Prometheus metrics — record tool call
+        try:
+            from backend.app.core.metrics import metrics_collector
+            metrics_collector.record_tool_call(
+                tool_name=record.tool_name,
+                status="success" if record.success else "error",
+                duration_seconds=record.latency_ms / 1000 if record.latency_ms else 0,
+            )
+        except Exception:
+            pass  # Metrics must never break tool execution
+        # P2-06: OTel metrics — record tool execution
+        try:
+            from backend.app.core.otel_exporter import get_otel_exporter
+            exporter = get_otel_exporter()
+            if exporter.is_active:
+                exporter.record_tool_execution(
+                    tool_name=record.tool_name,
+                    success=record.success,
+                    latency_ms=record.latency_ms,
+                    trace_id=record.trace_id or "",
+                    risk_level=record.risk_level.value if record.risk_level else "low",
+                )
+        except Exception:
+            pass  # OTel must never break tool execution
 
     @staticmethod
     def _build_rollback_artifact(tool_name: str, arguments: dict[str, Any], output: Any) -> dict[str, Any]:
@@ -857,7 +918,7 @@ class ToolRegistry:
 
         try:
             output = await tool.handler(**approval.arguments)
-            rollback_artifact = self._build_rollback_artifact(tool.name, approval.arguments, output)
+            self._build_rollback_artifact(tool.name, approval.arguments, output)
             self._approval_store.mark_executed(
                 approval.id,
                 executed_by=context.user_id,
@@ -877,7 +938,7 @@ class ToolRegistry:
             )
             self._record_execution(context, record)
             return record
-        except Exception as exc:  # noqa: BLE001 - approved tool failures are result data
+        except Exception as exc:
             record = ToolCallRecord(
                 tool_name=tool.name,
                 success=False,
@@ -1103,31 +1164,6 @@ async def assess_change_impact(root: str = ".", target: str = "", query: str = "
     }
 
 
-async def assess_change_impact(root: str = ".", target: str = "", limit: int = 20) -> dict[str, Any]:
-    base = _resolve_tool_root(root)
-    if not base.exists():
-        return {"root": str(base), "impact": []}
-    target_name = Path(target).name.lower() if target else ""
-    entrypoints = await analyze_entrypoints(root, limit=limit)
-    dependencies = await analyze_dependencies(root, limit=limit)
-    impact: list[dict[str, Any]] = []
-    for item in entrypoints.get("entrypoints", []):
-        score = int(item.get("score", 0)) + (1 if target_name and target_name in str(item.get("path", "")).lower() else 0)
-        impact.append({"path": item.get("path"), "reason": "entrypoint", "score": score})
-    for item in dependencies.get("dependencies", []):
-        score = int(item.get("import_count", 0)) + (1 if target_name and target_name in str(item.get("path", "")).lower() else 0)
-        impact.append({"path": item.get("path"), "reason": "dependency_hotspot", "score": score})
-    if target:
-        impact.append({"path": target, "reason": "target", "score": 100})
-    impact.sort(key=lambda item: (-int(item.get("score", 0)), str(item.get("path", ""))))
-    unique: dict[str, dict[str, Any]] = {}
-    for item in impact:
-        path = str(item.get("path", ""))
-        if path and path not in unique:
-            unique[path] = item
-    return {"root": str(base), "target": target, "impact": list(unique.values())[: max(1, limit)], "count": len(unique)}
-
-
 async def preview_batch_patches(patches: list[dict[str, Any]], root: str = ".") -> dict[str, Any]:
     base = _resolve_tool_root(root)
     if not base.exists():
@@ -1278,7 +1314,7 @@ def build_default_tool_registry(
     policy_engine: ToolPolicyEngine,
     approval_store: ApprovalStore | None = None,
     execution_store: ToolExecutionStore | None = None,
-    hook_manager: "HookManager | None" = None,
+    hook_manager: HookManager | None = None,
 ) -> ToolRegistry:
     # Attach the process-global HookManager by default so configured hooks
     # fire at the execute() chokepoint. An empty manager (no hooks registered)
@@ -1312,4 +1348,147 @@ def build_default_tool_registry(
     registry.register("summarize_text", "Summarize a short text locally.", summarize_text)
     registry.register("normalize_text", "Normalize whitespace in text.", normalize_text)
     registry.register("extract_keywords", "Extract simple keywords from text.", extract_keywords)
+    # P1-10 协作委派工具(集成波接线): 惰性导入避免 collaboration 包依赖
+    # 进入 tools.py 模块导入路径(潜在循环依赖)。
+    from backend.app.core.collaboration.delegation import delegate_subtask
+
+    registry.register(
+        "delegate_subtask",
+        "Delegate a subtask to a capability-matched sub-agent.",
+        delegate_subtask,
+    )
+
+    # P1-08 并行委派工具: 允许 Agent 主动发起并行子任务
+    async def delegate_parallel(
+        tasks: list[dict[str, str]],
+        max_parallel: int = 3,
+        timeout_seconds: float = 300.0,
+    ) -> dict[str, Any]:
+        """Delegate multiple tasks to parallel sub-agents.
+
+        Args:
+            tasks: List of task dicts, each with 'goal' and optional 'description'
+            max_parallel: Maximum number of parallel agents (default 3)
+            timeout_seconds: Timeout per task in seconds (default 300)
+
+        Returns:
+            Dict with batch_id, results, and summary statistics
+        """
+        from backend.app.core.parallel_agent_executor import (
+            AgentTask,
+            IsolationMode,
+            ParallelAgentExecutor,
+        )
+
+        executor = ParallelAgentExecutor(max_workers=max_parallel)
+        agent_tasks = [
+            AgentTask(
+                goal=t.get("goal", ""),
+                description=t.get("description", ""),
+                timeout_seconds=timeout_seconds,
+            )
+            for t in tasks
+        ]
+
+        # Use a simple agent factory that creates AgentLoop instances
+        def agent_factory(agent_id: str, isolation: IsolationMode):
+            from backend.app.core.agent.loop import AgentLoop
+            from backend.app.dependencies import get_llm_router, get_memory, get_tool_registry
+
+            return _ParallelAgentWrapper(
+                AgentLoop(
+                    llm_router=get_llm_router(),
+                    memory=get_memory(),
+                    tools=get_tool_registry(),
+                ),
+                agent_id,
+            )
+
+        result = await executor.spawn_agents(
+            tasks=agent_tasks,
+            isolation=IsolationMode.ISOLATED,
+            max_parallel=max_parallel,
+            agent_factory=agent_factory,
+        )
+        return {
+            "batch_id": result.batch_id,
+            "total_tasks": result.total_tasks,
+            "completed": result.completed_tasks,
+            "failed": result.failed_tasks,
+            "duration_seconds": result.total_duration_seconds,
+            "results": [
+                {"task_id": r.task_id, "status": r.status, "output": r.output, "error": r.error}
+                for r in result.results
+            ],
+        }
+
+    registry.register(
+        "delegate_parallel",
+        "Delegate multiple tasks to parallel sub-agents for concurrent execution.",
+        delegate_parallel,
+        risk_level=RiskLevel.MEDIUM,
+    )
+
+    # P1-07 代码审查工具: 允许 Agent 主动发起代码审查
+    async def code_review(
+        diff_text: str,
+        language: str = "",
+        focus_areas: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Review code diff for bugs, security issues, performance problems, and style.
+
+        Args:
+            diff_text: Unified diff text to review
+            language: Programming language (python/typescript/go/rust/java)
+            focus_areas: Focus areas (logic/security/performance/style)
+
+        Returns:
+            Structured review result with findings
+        """
+        from backend.app.core.code_review.reviewer import CodeReviewer
+
+        reviewer = CodeReviewer()
+        result = await reviewer.review_diff(
+            diff_text, language=language, focus_areas=focus_areas
+        )
+        return {
+            "review_id": result.review_id,
+            "approval": result.approval,
+            "risk_level": result.risk_level,
+            "summary": result.summary,
+            "blocking_count": result.blocking_count,
+            "suggestion_count": result.suggestion_count,
+            "comments": [
+                {
+                    "file": c.file_path,
+                    "line": c.line,
+                    "severity": c.severity.value,
+                    "message": c.message,
+                    "suggestion": c.suggestion,
+                }
+                for c in result.comments
+            ],
+        }
+
+    registry.register(
+        "code_review",
+        "Review code diff for bugs, security vulnerabilities, performance issues, and style problems.",
+        code_review,
+        risk_level=RiskLevel.LOW,
+    )
     return registry
+
+
+class _ParallelAgentWrapper:
+    """Wrapper to adapt AgentLoop to the parallel executor interface."""
+
+    def __init__(self, loop, agent_id: str):
+        self._loop = loop
+        self._agent_id = agent_id
+
+    async def execute(self, task):
+        from backend.app.core.contracts import RunContext
+
+        context = RunContext(agent_id=self._agent_id)
+        result = await self._loop.run(context, task.goal or task.instruction)
+        return result.answer if hasattr(result, "answer") else str(result)

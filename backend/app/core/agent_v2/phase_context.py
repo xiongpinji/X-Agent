@@ -19,7 +19,7 @@ from backend.app.core.contracts import (
 )
 
 if TYPE_CHECKING:
-    from backend.app.core.agent import AgentLoop, AgentPlanStep, AgentTrajectory
+    from backend.app.core.agent import AgentLoop, AgentTrajectory
 
 
 @dataclass

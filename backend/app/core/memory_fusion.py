@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import asyncio
 from dataclasses import dataclass, field
 from typing import Any
 
 import numpy as np
-from backend.app.core.embeddings import EmbeddingModel, DeterministicEmbeddingModel
+
+from backend.app.core.embeddings import DeterministicEmbeddingModel, EmbeddingModel
 from backend.app.core.memory_graph import MemoryGraph
 
 
@@ -96,7 +96,7 @@ class MemoryFusion:
         unique_memories = []
         seen = set()
 
-        for i, memory in enumerate(memories):
+        for i, _memory in enumerate(memories):
             if i in seen:
                 continue
 

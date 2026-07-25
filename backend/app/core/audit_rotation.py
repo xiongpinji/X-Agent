@@ -1,9 +1,9 @@
 """审计日志轮转与留存管理(P1-04)。
 
 能力:
-- 按大小轮转(默认 64 MiB, 可配置/可关闭)
+- 按大小轮转(默认 50 MB, 可配置/可关闭)
 - 按日期轮转(默认开启, 跨 UTC 日自动切到新文件)
-- 可配置留存期(默认 90 天; 合规档 7 年)与自动清理过期段
+- 可配置留存期(默认 30 天; 合规档 7 年)与自动清理过期段
 
 轮转段命名: ``{stem}-{YYYYMMDD}-{HHMMSS}-{seq:04d}{suffix}``,
 例如 ``audit-20260720-153012-0001.jsonl``, 统一存放在
@@ -28,14 +28,14 @@ from threading import RLock
 
 from pydantic import BaseModel, Field
 
-DEFAULT_RETENTION_DAYS = 90
-"""默认留存期: 90 天。"""
+DEFAULT_RETENTION_DAYS = 30
+"""默认留存期: 30 天。"""
 
 COMPLIANCE_RETENTION_DAYS = 365 * 7
 """合规档留存期: 7 年(SOC2/ISO27001 常见要求)。"""
 
-DEFAULT_MAX_BYTES = 64 * 1024 * 1024
-"""默认单文件上限: 64 MiB。"""
+DEFAULT_MAX_BYTES = 50 * 1024 * 1024
+"""默认单文件上限: 50 MB。"""
 
 _SEGMENT_NAME_RE = re.compile(
     r"^(?P<stem>.+)-(?P<day>\d{8})-(?P<time>\d{6})-(?P<seq>\d{4})(?P<suffix>\.[^.]+)$"
@@ -49,7 +49,7 @@ class AuditRotationConfig(BaseModel):
         max_bytes: 活动文件达到该字节数即轮转; ``0`` 表示关闭按大小轮转。
         rotate_daily: 跨 UTC 日期时自动轮转。
         retention_days: 轮转段留存天数; ``0`` 表示永久保留(不自动清理)。
-            默认 90 天; 合规档见 :meth:`compliance` (7 年)。
+            默认 30 天; 合规档见 :meth:`compliance` (7 年)。
         archive_dir: 轮转段存放目录; ``None`` 时用活动文件旁的
             ``<stem>_segments/``。
     """
@@ -73,10 +73,32 @@ class AuditLogRotator:
     供 ``AuditStore`` 在每次追加前调用 :meth:`maybe_rotate`;
     留存清理由 :meth:`cleanup_expired` 显式触发(或经 store 的
     ``cleanup_expired_segments``)。
+
+    也支持简化构造::
+
+        rotator = AuditLogRotator(log_path="data/audit.jsonl", max_size_mb=50, retention_days=30)
+        if rotator.should_rotate():
+            archive = rotator.rotate()
+        deleted = rotator.cleanup_old()
+        stats = rotator.get_stats()
     """
 
-    def __init__(self, config: AuditRotationConfig | None = None) -> None:
-        self.config = config or AuditRotationConfig()
+    def __init__(
+        self,
+        config: AuditRotationConfig | None = None,
+        *,
+        log_path: str | Path | None = None,
+        max_size_mb: int = 50,
+        retention_days: int = 30,
+    ) -> None:
+        if config is not None:
+            self.config = config
+        else:
+            self.config = AuditRotationConfig(
+                max_bytes=max_size_mb * 1024 * 1024,
+                retention_days=retention_days,
+            )
+        self._log_path: Path | None = Path(log_path) if log_path else None
         self._lock = RLock()
 
     # ------------------------------------------------------------------ paths
@@ -112,17 +134,17 @@ class AuditLogRotator:
                 return None
 
             marker_day = self._ensure_marker(live_path, now)
-            should_rotate = False
+            do_rotate = False
 
             if self.config.rotate_daily and now.date() > marker_day:
-                should_rotate = True
+                do_rotate = True
             if (
                 self.config.max_bytes > 0
                 and live_path.stat().st_size >= self.config.max_bytes
             ):
-                should_rotate = True
+                do_rotate = True
 
-            if not should_rotate:
+            if not do_rotate:
                 return None
 
             return self._rotate(live_path, now)
@@ -216,3 +238,80 @@ class AuditLogRotator:
         """按时间顺序返回完整链文件列表: [最旧段 ... 最新段, 当前活动文件]。"""
         live_path = Path(live_path)
         return [*self.list_segments(live_path), live_path]
+
+    # ------------------------------------------------------- simplified API (P1-04)
+
+    def _resolve_path(self, live_path: Path | None = None) -> Path:
+        """解析活动日志路径: 优先参数, 其次构造时传入的 log_path。"""
+        path = live_path or self._log_path
+        if path is None:
+            raise ValueError(
+                "No log_path provided. Pass log_path to constructor or method."
+            )
+        return Path(path)
+
+    def should_rotate(self, live_path: Path | None = None) -> bool:
+        """判断当前活动文件是否需要轮转(达到大小上限或跨日期)。"""
+        path = self._resolve_path(live_path)
+        if not path.exists() or path.stat().st_size == 0:
+            return False
+        now = datetime.now(UTC)
+        marker_day = self._ensure_marker(path, now)
+        if self.config.rotate_daily and now.date() > marker_day:
+            return True
+        return self.config.max_bytes > 0 and path.stat().st_size >= self.config.max_bytes
+
+    def rotate(self, live_path: Path | None = None) -> str:
+        """强制执行轮转, 返回新归档段文件路径(字符串)。
+
+        若活动文件不存在或为空, 返回空字符串。
+        """
+        path = self._resolve_path(live_path)
+        if not path.exists() or path.stat().st_size == 0:
+            return ""
+        now = datetime.now(UTC)
+        with self._lock:
+            segment = self._rotate(path, now)
+        return str(segment)
+
+    def cleanup_old(self, live_path: Path | None = None) -> int:
+        """清理过期轮转段, 返回被删除的文件数量。"""
+        path = self._resolve_path(live_path)
+        deleted = self.cleanup_expired(path)
+        return len(deleted)
+
+    def get_stats(self, live_path: Path | None = None) -> dict[str, object]:
+        """获取轮转统计信息: 总大小、文件数、最旧/最新段。"""
+        path = self._resolve_path(live_path)
+        segments = self.list_segments(path)
+
+        total_size = 0
+        oldest: str | None = None
+        newest: str | None = None
+
+        for seg in segments:
+            if seg.exists():
+                total_size += seg.stat().st_size
+
+        # 加上活动文件
+        active_size = 0
+        if path.exists():
+            active_size = path.stat().st_size
+            total_size += active_size
+
+        if segments:
+            oldest = segments[0].name
+            newest = segments[-1].name
+
+        return {
+            "active_file": str(path),
+            "active_size_bytes": active_size,
+            "total_size_bytes": total_size,
+            "total_size_mb": round(total_size / (1024 * 1024), 2),
+            "segment_count": len(segments),
+            "oldest_segment": oldest,
+            "newest_segment": newest,
+            "max_size_mb": round(self.config.max_bytes / (1024 * 1024), 1),
+            "retention_days": self.config.retention_days,
+            "rotation_enabled": self.config.max_bytes > 0 or self.config.rotate_daily,
+        }

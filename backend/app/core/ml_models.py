@@ -11,8 +11,7 @@ Provides:
 
 from __future__ import annotations
 
-import json
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from threading import RLock
 from typing import Any
 
@@ -417,7 +416,7 @@ class ModelEvaluator:
             return 0.0
 
         aps = []
-        for recs, relevant in zip(recommendations, relevant_items_list):
+        for recs, relevant in zip(recommendations, relevant_items_list, strict=False):
             ap = 0.0
             hits = 0
             for i, item in enumerate(recs):

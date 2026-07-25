@@ -6,7 +6,6 @@ across multiple programming languages with best practices, type safety, and prop
 error handling.
 """
 
-from typing import Dict, List, Any
 from dataclasses import dataclass
 
 
@@ -502,7 +501,7 @@ def get_optimization_prompt(code: str) -> str:
     return CODE_OPTIMIZATION_PROMPT.format(code=code)
 
 
-def get_language_patterns(language: str) -> Dict[str, str]:
+def get_language_patterns(language: str) -> dict[str, str]:
     """Get language-specific code patterns."""
     patterns_map = {
         "python": PYTHON_PATTERNS,

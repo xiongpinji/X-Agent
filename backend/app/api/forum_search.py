@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Optional
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
 
-from backend.app.api.errors import api_error
-from backend.app.core.contracts import ErrorCode
 from backend.app.core.security import Principal
 from backend.app.dependencies import get_current_principal
 from backend.app.models.forum import forum_store

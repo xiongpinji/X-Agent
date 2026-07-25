@@ -6,18 +6,15 @@ Initializes local database, encryption, and configuration.
 """
 
 import argparse
-import json
 import logging
-import os
 import sys
 from pathlib import Path
 
 from backend.local import (
-    LocalConfig,
-    ConfigManager,
     DatabaseConfig,
-    LocalDatabase,
     EncryptionManager,
+    LocalConfig,
+    LocalDatabase,
 )
 
 logging.basicConfig(
@@ -75,7 +72,7 @@ def initialize_encryption(config: LocalConfig) -> EncryptionManager:
     logger.info("Initializing encryption...")
 
     encryption_manager = EncryptionManager()
-    master_key = encryption_manager.generate_master_key()
+    encryption_manager.generate_master_key()
 
     logger.info("Master key generated")
     logger.info(f"Encryption algorithm: {config.encryption_algorithm}")
@@ -180,7 +177,7 @@ def main():
             db = initialize_database(config)
 
             # Initialize encryption
-            encryption_manager = initialize_encryption(config)
+            initialize_encryption(config)
 
             # Save configuration
             save_configuration(config, config_path)

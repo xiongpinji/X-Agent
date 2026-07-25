@@ -10,11 +10,11 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from backend.app.core.agent_phases import (
-    InitializationPhase,
-    PlanningPhase,
-    ExecutionPhase,
     CompletionPhase,
+    ExecutionPhase,
+    InitializationPhase,
     PhaseContext,
+    PlanningPhase,
 )
 from backend.app.core.contracts import AgentRunResponse, TraceEvent
 
@@ -83,7 +83,7 @@ async def refactored_run(
 
     # Phase 3: Execution
     execution_phase = ExecutionPhase()
-    answer, tool_calls = await execution_phase.execute(phase_ctx, plan)
+    answer, _tool_calls = await execution_phase.execute(phase_ctx, plan)
 
     # Phase 4: Completion
     completion_phase = CompletionPhase()

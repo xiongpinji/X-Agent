@@ -4,15 +4,13 @@ import gzip
 import hashlib
 import io
 import logging
-from abc import ABC, abstractmethod
-from typing import Optional
-
-from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
-from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives import serialization
 import os
+from abc import ABC, abstractmethod
+
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
 logger = logging.getLogger(__name__)
 
@@ -136,11 +134,11 @@ class AES256GCMEncryption(EncryptionProvider):
 class BackupEncryption:
     """Backup encryption manager."""
 
-    def __init__(self, master_key: Optional[bytes] = None):
+    def __init__(self, master_key: bytes | None = None):
         self.encryption = AES256GCMEncryption()
         self.master_key = master_key or os.urandom(32)  # 256-bit key
 
-    def derive_key(self, password: str, salt: Optional[bytes] = None) -> tuple[bytes, bytes]:
+    def derive_key(self, password: str, salt: bytes | None = None) -> tuple[bytes, bytes]:
         """Derive encryption key from password using PBKDF2."""
         if salt is None:
             salt = os.urandom(16)
@@ -158,7 +156,7 @@ class BackupEncryption:
     def encrypt_backup(
         self,
         data: bytes,
-        key: Optional[bytes] = None,
+        key: bytes | None = None,
     ) -> tuple[bytes, bytes]:
         """Encrypt backup data."""
         encryption_key = key or self.master_key
@@ -168,7 +166,7 @@ class BackupEncryption:
         self,
         ciphertext: bytes,
         iv: bytes,
-        key: Optional[bytes] = None,
+        key: bytes | None = None,
     ) -> bytes:
         """Decrypt backup data."""
         decryption_key = key or self.master_key
@@ -239,7 +237,7 @@ class BackupProcessor:
 
     def __init__(
         self,
-        encryption_key: Optional[bytes] = None,
+        encryption_key: bytes | None = None,
         compression_level: int = 9,
         enable_encryption: bool = True,
         enable_compression: bool = True,
@@ -288,7 +286,7 @@ class BackupProcessor:
     def restore_backup(
         self,
         processed_data: bytes,
-        iv: Optional[bytes] = None,
+        iv: bytes | None = None,
     ) -> bytes:
         """Restore backup data (decrypt and decompress)."""
         try:

@@ -377,6 +377,47 @@ class SQLWorkflowRepository(WorkflowRepository):
             "latest_run_status": latest_run.status if latest_run else None,
         }
 
+    def cancel_run(self, run_id: str, *, error: str | None = None) -> WorkflowRunRecord | None:
+        """Cancel a running or paused run by id.
+
+        Returns the updated record, or None if the run does not exist or is
+        already in a terminal state.
+        """
+        run = self.get_run(run_id)
+        if run is None:
+            return None
+        if run.status in (
+            WorkflowRunStatus.COMPLETED, WorkflowRunStatus.FAILED, WorkflowRunStatus.CANCELED
+        ):
+            return run
+        updated = run.model_copy(update={
+            "status": WorkflowRunStatus.CANCELED,
+            "completed_at": datetime.now(UTC),
+            "error": error or "Workflow run canceled.",
+        })
+        self.record_run(updated)
+        return updated
+
+    def replay_run(self, run_id: str) -> WorkflowRunRecord | None:
+        """Create a new run that replays an existing run's workflow with the
+        same inputs. Returns the new run record, or None if the source run
+        does not exist.
+        """
+        source = self.get_run(run_id)
+        if source is None:
+            return None
+        new_run = WorkflowRunRecord(
+            workflow_id=source.workflow_id,
+            workflow_name=source.workflow_name,
+            status=WorkflowRunStatus.DRAFT,
+            tenant_id=source.tenant_id,
+            user_id=source.user_id,
+            inputs=dict(source.inputs),
+            snapshot={**source.snapshot, "replay_of": run_id},
+        )
+        self.record_run(new_run)
+        return new_run
+
     # -- row <-> model conversion -----------------------------------------
     @staticmethod
     def _row_to_definition(row: WorkflowDefinitionRow) -> WorkflowDefinition:
@@ -680,7 +721,7 @@ def build_workflow_repository(
         return SQLWorkflowRepository(create_workflow_engine(database_url))
     try:
         return SQLWorkflowRepository(create_workflow_engine(database_url))
-    except Exception as exc:  # noqa: BLE001 - explicit degradation for dev
+    except Exception as exc:
         logger.warning(
             "Workflow SQL store unavailable (%s); falling back to JSON file storage. "
             "Set %s=file to silence this, or fix the database configuration.",
@@ -709,7 +750,7 @@ def build_workflow_schedule_store(
         return SQLWorkflowScheduleStore(create_workflow_engine(database_url))
     try:
         return SQLWorkflowScheduleStore(create_workflow_engine(database_url))
-    except Exception as exc:  # noqa: BLE001 - explicit degradation for dev
+    except Exception as exc:
         logger.warning(
             "Workflow schedule SQL store unavailable (%s); falling back to JSON file "
             "storage. Set %s=file to silence this, or fix the database configuration.",

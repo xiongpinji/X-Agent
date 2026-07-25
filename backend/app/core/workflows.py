@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
 import os
@@ -16,8 +17,18 @@ from uuid import uuid4
 from pydantic import BaseModel, Field
 
 from backend.app.core.approvals import ApprovalStore
-from backend.app.core.contracts import RiskLevel, RunContext, TraceEvent, TaskFrame, PlanFrame, ExecutionFrame, RecoveryFrame
 from backend.app.core.audit import AuditStore
+from backend.app.core.contracts import (
+    ExecutionFrame,
+    PlanFrame,
+    RecoveryFrame,
+    RiskLevel,
+    RunContext,
+    TaskFrame,
+    TraceEvent,
+)
+from backend.app.core.evolution import LearningRecord, evolution_store
+from backend.app.core.open_source_store import open_source_discovery_store
 from backend.app.core.tracing import TraceStore
 from backend.app.services.observability.langfuse_client import langfuse_client
 
@@ -574,15 +585,48 @@ class WorkflowRepository:
             snapshot=self.run_snapshot(workflow_id),
         )
 
-    def run_snapshot(self, workflow_id: str) -> dict[str, Any]:
-        runs = self.list_runs(workflow_id=workflow_id, limit=1)
-        latest_run = runs[0] if runs else None
-        return {
-            "workflow_id": workflow_id,
-            "run_count": self.count_runs(workflow_id),
-            "latest_run_id": latest_run.run_id if latest_run else None,
-            "latest_run_status": latest_run.status if latest_run else None,
-        }
+    def cancel_run(self, run_id: str, *, error: str | None = None) -> WorkflowRunRecord | None:
+        """Cancel a running or paused run by id.
+
+        Returns the updated record, or None if the run does not exist or is
+        already in a terminal state.
+        """
+        with self._lock:
+            run = self._runs.get(run_id)
+            if run is None:
+                return None
+            if run.status in (
+                WorkflowRunStatus.COMPLETED, WorkflowRunStatus.FAILED, WorkflowRunStatus.CANCELED
+            ):
+                return run
+            updated = run.model_copy(update={
+                "status": WorkflowRunStatus.CANCELED,
+                "completed_at": datetime.now(UTC),
+                "error": error or "Workflow run canceled.",
+            })
+            self._runs[run_id] = updated
+            self._append_run(updated)
+            return updated
+
+    def replay_run(self, run_id: str) -> WorkflowRunRecord | None:
+        """Create a new run that replays an existing run's workflow with the
+        same inputs. Returns the new run record, or None if the source run
+        does not exist.
+        """
+        source = self._runs.get(run_id)
+        if source is None:
+            return None
+        new_run = WorkflowRunRecord(
+            workflow_id=source.workflow_id,
+            workflow_name=source.workflow_name,
+            status=WorkflowRunStatus.DRAFT,
+            tenant_id=source.tenant_id,
+            user_id=source.user_id,
+            inputs=dict(source.inputs),
+            snapshot={**source.snapshot, "replay_of": run_id},
+        )
+        self.record_run(new_run)
+        return new_run
 
     def _validate_definition(self, definition: WorkflowDefinition) -> None:
         node_ids = [node.id for node in definition.nodes]
@@ -672,10 +716,8 @@ class WorkflowRepository:
                 self._def_version_persisted = version
             except BaseException:
                 # Clean up the temp file on any failure; don't leave litter.
-                try:
+                with contextlib.suppress(OSError):
                     os.unlink(tmp_name)
-                except OSError:
-                    pass
                 raise
 
     def _load_runs(self) -> None:
@@ -898,6 +940,25 @@ class WorkflowScheduleStore:
 
 
 class WorkflowExecutor:
+    """Execute workflow DAGs with optional parallel branch execution.
+
+    Parallel mode groups nodes into topological levels (nodes within the same
+    level have no mutual dependencies) and executes each level concurrently via
+    ``asyncio.gather`` with a configurable semaphore limit.
+
+    Parameters
+    ----------
+    max_parallel:
+        Maximum number of nodes executing concurrently (semaphore limit).
+    parallel_mode:
+        ``"auto"`` – parallel when a level has >1 node, sequential otherwise.
+        ``"parallel"`` – always use level-based execution.
+        ``"sequential"`` – force legacy single-thread order.
+    parallel_error_strategy:
+        ``"fail_fast"`` – abort the level on first failure (default).
+        ``"continue"`` – let remaining nodes in the level finish, then raise.
+    """
+
     def __init__(
         self,
         *,
@@ -906,12 +967,19 @@ class WorkflowExecutor:
         tracer: TraceStore | None = None,
         approval_store: ApprovalStore | None = None,
         audit_store: AuditStore | None = None,
+        max_parallel: int = 5,
+        parallel_mode: str = "auto",
+        parallel_error_strategy: str = "fail_fast",
     ) -> None:
         self.agent = agent
         self.repository = repository
         self.tracer = tracer
         self.approval_store = approval_store
         self.audit_store = audit_store
+        self.max_parallel = max_parallel
+        self.parallel_mode = parallel_mode
+        self.parallel_error_strategy = parallel_error_strategy
+        self._semaphore = asyncio.Semaphore(max_parallel)
         self._paused: set[str] = set()
 
     async def execute(
@@ -1003,146 +1071,39 @@ class WorkflowExecutor:
             )
 
         try:
-            for index, node_id in enumerate(ordered_nodes):
-                if run_id in self._paused:
-                    self.repository.update_run_status(run_id, WorkflowRunStatus.PAUSED, resume_cursor=index)
-                    await self.pause_checkpoint(run_id)
-                    if run_id not in self._paused:
-                        self.repository.update_run_status(run_id, WorkflowRunStatus.RUNNING, resume_cursor=index)
-                    else:
-                        continue
-                record_state = self.repository.get_run(run_id)
-                if record_state is not None and index < record_state.resume_cursor:
-                    continue
-                if pause_checkpoint is not None:
-                    await pause_checkpoint(run_id)
-                if run_id in self._paused:
-                    continue
-                node = node_map[node_id]
-                incoming_edges = [edge for edge in definition.edges if edge.target == node.id]
-                if incoming_edges and not any(
-                    self._evaluate_edge_condition(edge, state, inputs) for edge in incoming_edges
-                ):
-                    continue
-                matched_edges = [edge for edge in incoming_edges if self._evaluate_edge_condition(edge, state, inputs)]
-                state["active_node_id"] = node.id
-                state["active_edge_ids"] = [edge.source for edge in matched_edges]
-                state["recovery_hint"] = self._workflow_recovery_hint(state, error=None)
-                self._record_event(
-                    run_context,
-                    "workflow.node.started",
-                    node_id=node.id,
-                    node_type=node.type.value,
+            use_parallel = self.parallel_mode in ("auto", "parallel")
+            if use_parallel:
+                await self._execute_levels(
+                    definition=definition,
+                    run_id=run_id,
+                    run_context=run_context,
+                    node_map=node_map,
+                    state=state,
+                    inputs=inputs,
+                    outputs=outputs,
+                    node_results=node_results,
+                    ordered_nodes=ordered_nodes,
+                    approved_approvals=approved_approvals or {},
+                    pause_checkpoint=pause_checkpoint,
+                    worker_id=worker_id,
+                    resume_cursor=resume_record.resume_cursor if resume_record else 0,
                 )
-                started_at = datetime.now(UTC)
-                attempts = 1
-                try:
-                    output, attempts = await self._execute_node_with_policy(
-                        run_context,
-                        node,
-                        definition,
-                        state,
-                        inputs,
-                        approved_approvals or {},
-                    )
-                    state[node.id] = output
-                    state["recovery_hint"] = self._workflow_recovery_hint(state, error=None)
-                    if node.type == WorkflowNodeType.OUTPUT:
-                        outputs[node.id] = output
-                    node_result = WorkflowNodeResult(
-                        node_id=node.id,
-                        node_type=node.type,
-                        status=WorkflowRunStatus.COMPLETED,
-                        attempts=attempts,
-                        output=output,
-                        started_at=started_at,
-                        completed_at=datetime.now(UTC),
-                        agent_trace_id=output.get("trace_id") if isinstance(output, dict) else None,
-                    )
-                    node_results.append(node_result)
-                    state["node_results"] = node_results
-                    self._record_event(
-                        run_context,
-                        "workflow.node.completed",
-                        node_id=node.id,
-                        node_type=node.type.value,
-                    )
-                    self._persist_progress(run_id, node_results, index + 1, worker_id)
-                except WorkflowApprovalRequired as exc:
-                    node_result = WorkflowNodeResult(
-                        node_id=node.id,
-                        node_type=node.type,
-                        status=WorkflowRunStatus.NEEDS_APPROVAL,
-                        output={"approval_id": exc.approval_id},
-                        started_at=started_at,
-                        completed_at=datetime.now(UTC),
-                    )
-                    node_results.append(node_result)
-                    state["node_results"] = node_results
-                    state["pending_approval_id"] = exc.approval_id
-                    state["pending_node_id"] = node.id
-                    self._record_event(
-                        run_context,
-                        "workflow.node.needs_approval",
-                        node_id=node.id,
-                        node_type=node.type.value,
-                        approval_id=exc.approval_id,
-                    )
-                    # The approval node itself is NOT settled: keep the cursor
-                    # on it so a crash-resume re-enters the approval branch.
-                    self._persist_progress(run_id, node_results, index, worker_id)
-                    raise
-                except Exception as exc:  # noqa: BLE001 - surfaced as workflow failure
-                    if isinstance(exc, WorkflowNodeExecutionError):
-                        attempts = exc.attempts
-                    recovery_hint = self._workflow_recovery_hint(state, error=str(exc))
-                    compensation_output, compensation_error = await self._execute_compensation(
-                        run_context,
-                        node,
-                        state,
-                        inputs,
-                        recovery_hint=recovery_hint,
-                    )
-                    node_result = WorkflowNodeResult(
-                        node_id=node.id,
-                        node_type=node.type,
-                        status=WorkflowRunStatus.FAILED,
-                        attempts=attempts,
-                        error=str(exc),
-                        started_at=started_at,
-                        completed_at=datetime.now(UTC),
-                        compensated=(
-                            compensation_output is not None or compensation_error is not None
-                        ),
-                        compensation_output=compensation_output,
-                        compensation_error=compensation_error,
-                    )
-                    node_results.append(node_result)
-                    state["node_results"] = node_results
-                    state["last_failure"] = {
-                        "node_id": node.id,
-                        "node_type": node.type.value,
-                        "error": str(exc),
-                        "recovery_hint": recovery_hint,
-                    }
-                    self._record_event(
-                        run_context,
-                        "workflow.node.failed",
-                        node_id=node.id,
-                        node_type=node.type.value,
-                        error=str(exc),
-                    )
-                    await self._capture_node_failure(
-                        run_context,
-                        definition,
-                        node,
-                        input_state=inputs,
-                        state=state,
-                        error=str(exc),
-                        compensation_output=compensation_output,
-                        compensation_error=compensation_error,
-                    )
-                    raise
+            else:
+                await self._execute_sequential(
+                    definition=definition,
+                    run_id=run_id,
+                    run_context=run_context,
+                    node_map=node_map,
+                    ordered_nodes=ordered_nodes,
+                    state=state,
+                    inputs=inputs,
+                    outputs=outputs,
+                    node_results=node_results,
+                    approved_approvals=approved_approvals or {},
+                    pause_checkpoint=pause_checkpoint,
+                    worker_id=worker_id,
+                    resume_cursor=resume_record.resume_cursor if resume_record else 0,
+                )
             record = WorkflowRunRecord(
                 run_id=run_id,
                 workflow_id=definition.id,
@@ -1243,7 +1204,7 @@ class WorkflowExecutor:
                 details={"status": record.status.value, "approval_id": exc.approval_id},
             )
             return record
-        except Exception as exc:  # noqa: BLE001 - normalized workflow error contract
+        except Exception as exc:
             record = WorkflowRunRecord(
                 run_id=run_id,
                 workflow_id=definition.id,
@@ -1298,7 +1259,7 @@ class WorkflowExecutor:
                 resume_cursor=resume_cursor,
                 worker_id=worker_id,
             )
-        except Exception:  # noqa: BLE001 - checkpoint degradation is logged, not silent
+        except Exception:
             logger.warning(
                 "Failed to persist workflow run progress (run_id=%s, cursor=%s); "
                 "crash recovery will resume from the last persisted checkpoint.",
@@ -1306,6 +1267,439 @@ class WorkflowExecutor:
                 resume_cursor,
                 exc_info=True,
             )
+
+    # ------------------------------------------------------------------
+    # Parallel level-based execution
+    # ------------------------------------------------------------------
+
+    async def _execute_levels(
+        self,
+        *,
+        definition: WorkflowDefinition,
+        run_id: str,
+        run_context: RunContext,
+        node_map: dict[str, WorkflowNode],
+        state: dict[str, Any],
+        inputs: dict[str, Any],
+        outputs: dict[str, Any],
+        node_results: list[WorkflowNodeResult],
+        ordered_nodes: list[str],
+        approved_approvals: dict[str, str],
+        pause_checkpoint: Callable[[str], Awaitable[None]] | None,
+        worker_id: str | None,
+        resume_cursor: int,
+    ) -> None:
+        """Execute workflow nodes grouped by topological level in parallel.
+
+        Nodes within the same level have no mutual dependencies and run
+        concurrently (bounded by ``self._semaphore``).  The flat
+        ``ordered_nodes`` index is used for cursor compatibility with the
+        sequential path and crash-recovery resume.
+        """
+        levels = self._topological_levels(definition)
+        # Build flat-index lookup for cursor tracking
+        flat_index: dict[str, int] = {nid: idx for idx, nid in enumerate(ordered_nodes)}
+
+        for level in levels:
+            # --- Pause gate (checked between levels) ---
+            if run_id in self._paused:
+                level_start_idx = min(flat_index[n.id] for n in level)
+                self.repository.update_run_status(run_id, WorkflowRunStatus.PAUSED, resume_cursor=level_start_idx)
+                await self.pause_checkpoint(run_id)  # type: ignore[misc]
+                if run_id in self._paused:
+                    continue
+                self.repository.update_run_status(run_id, WorkflowRunStatus.RUNNING, resume_cursor=level_start_idx)
+
+            if pause_checkpoint is not None:
+                await pause_checkpoint(run_id)
+            if run_id in self._paused:
+                continue
+
+            # --- Filter nodes eligible for execution ---
+            eligible: list[WorkflowNode] = []
+            for node in level:
+                idx = flat_index[node.id]
+                # Skip already-settled nodes (resume)
+                if idx < resume_cursor:
+                    continue
+                # Edge-condition gate
+                incoming_edges = [e for e in definition.edges if e.target == node.id]
+                if incoming_edges and not any(
+                    self._evaluate_edge_condition(e, state, inputs) for e in incoming_edges
+                ):
+                    continue
+                eligible.append(node)
+
+            if not eligible:
+                continue
+
+            # --- Execute eligible nodes in parallel (semaphore-bounded) ---
+            self._record_event(
+                run_context,
+                "workflow.level.started",
+                level_size=len(eligible),
+                node_ids=[n.id for n in eligible],
+            )
+
+            results = await self._execute_parallel_level_bounded(
+                eligible, run_context, definition, state, inputs, approved_approvals
+            )
+
+            # --- Process results ---
+            first_error: Exception | None = None
+            for result in results:
+                node = result[0]
+                started_at = datetime.now(UTC)
+                if isinstance(result[1], Exception):
+                    exc = result[1]
+                    # Handle approval-required specially
+                    if isinstance(exc, WorkflowApprovalRequired):
+                        node_result = WorkflowNodeResult(
+                            node_id=node.id,
+                            node_type=node.type,
+                            status=WorkflowRunStatus.NEEDS_APPROVAL,
+                            output={"approval_id": exc.approval_id},
+                            started_at=started_at,
+                            completed_at=datetime.now(UTC),
+                        )
+                        node_results.append(node_result)
+                        state["node_results"] = node_results
+                        state["pending_approval_id"] = exc.approval_id
+                        state["pending_node_id"] = node.id
+                        self._record_event(
+                            run_context,
+                            "workflow.node.needs_approval",
+                            node_id=node.id,
+                            node_type=node.type.value,
+                            approval_id=exc.approval_id,
+                        )
+                        self._persist_progress(run_id, node_results, flat_index[node.id], worker_id)
+                        raise exc
+                    # Regular failure
+                    attempts = exc.attempts if isinstance(exc, WorkflowNodeExecutionError) else 1
+                    recovery_hint = self._workflow_recovery_hint(state, error=str(exc))
+                    compensation_output, compensation_error = await self._execute_compensation(
+                        run_context, node, state, inputs, recovery_hint=recovery_hint
+                    )
+                    node_result = WorkflowNodeResult(
+                        node_id=node.id,
+                        node_type=node.type,
+                        status=WorkflowRunStatus.FAILED,
+                        attempts=attempts,
+                        error=str(exc),
+                        started_at=started_at,
+                        completed_at=datetime.now(UTC),
+                        compensated=(compensation_output is not None or compensation_error is not None),
+                        compensation_output=compensation_output,
+                        compensation_error=compensation_error,
+                    )
+                    node_results.append(node_result)
+                    state["node_results"] = node_results
+                    state["last_failure"] = {
+                        "node_id": node.id,
+                        "node_type": node.type.value,
+                        "error": str(exc),
+                        "recovery_hint": recovery_hint,
+                    }
+                    self._record_event(
+                        run_context,
+                        "workflow.node.failed",
+                        node_id=node.id,
+                        node_type=node.type.value,
+                        error=str(exc),
+                    )
+                    await self._capture_node_failure(
+                        run_context, definition, node,
+                        input_state=inputs, state=state, error=str(exc),
+                        compensation_output=compensation_output,
+                        compensation_error=compensation_error,
+                    )
+                    if first_error is None:
+                        first_error = exc
+                else:
+                    # Success: result = (node, output, attempts)
+                    output, attempts = result[1], result[2]
+                    state[node.id] = output
+                    if node.type == WorkflowNodeType.OUTPUT:
+                        outputs[node.id] = output
+                    node_result = WorkflowNodeResult(
+                        node_id=node.id,
+                        node_type=node.type,
+                        status=WorkflowRunStatus.COMPLETED,
+                        attempts=attempts,
+                        output=output,
+                        started_at=started_at,
+                        completed_at=datetime.now(UTC),
+                        agent_trace_id=output.get("trace_id") if isinstance(output, dict) else None,
+                    )
+                    node_results.append(node_result)
+                    state["node_results"] = node_results
+                    self._record_event(
+                        run_context,
+                        "workflow.node.completed",
+                        node_id=node.id,
+                        node_type=node.type.value,
+                    )
+
+            # Persist progress after the entire level settles
+            level_end_idx = max(flat_index[n.id] for n in eligible) + 1
+            self._persist_progress(run_id, node_results, level_end_idx, worker_id)
+
+            # Error strategy: raise after level completes
+            if first_error is not None:
+                raise first_error
+
+    async def _execute_parallel_level_bounded(
+        self,
+        nodes: list[WorkflowNode],
+        run_context: RunContext,
+        definition: WorkflowDefinition,
+        state: dict[str, Any],
+        inputs: dict[str, Any],
+        approved_approvals: dict[str, str],
+    ) -> list[tuple[WorkflowNode, Any, int] | tuple[WorkflowNode, Exception]]:
+        """Execute nodes in parallel bounded by ``self._semaphore``.
+
+        When ``parallel_error_strategy == 'fail_fast'``, cancels remaining
+        tasks on first failure.  With ``'continue'``, all nodes run to
+        completion regardless of individual failures.
+        """
+        if len(nodes) == 1:
+            node = nodes[0]
+            try:
+                async with self._semaphore:
+                    output, attempts = await self._execute_node_with_policy(
+                        run_context, node, definition, state, inputs, approved_approvals
+                    )
+                return [(node, output, attempts)]
+            except Exception as exc:
+                return [(node, exc)]
+
+        async def _run_bounded(node: WorkflowNode) -> tuple[WorkflowNode, Any, int] | tuple[WorkflowNode, Exception]:
+            async with self._semaphore:
+                try:
+                    output, attempts = await self._execute_node_with_policy(
+                        run_context, node, definition, state, inputs, approved_approvals
+                    )
+                    return (node, output, attempts)
+                except Exception as exc:
+                    return (node, exc)
+
+        if self.parallel_error_strategy == "fail_fast":
+            # Launch all tasks; on first exception cancel the rest
+            tasks = [asyncio.create_task(_run_bounded(n)) for n in nodes]
+            results: list[tuple[WorkflowNode, Any, int] | tuple[WorkflowNode, Exception]] = []
+            try:
+                for coro in asyncio.as_completed(tasks):
+                    result = await coro
+                    results.append(result)
+                    if isinstance(result[1], Exception) and not isinstance(result[1], WorkflowApprovalRequired):
+                        # Cancel remaining tasks
+                        for t in tasks:
+                            if not t.done():
+                                t.cancel()
+                        # Gather cancelled tasks to suppress CancelledError
+                        for t in tasks:
+                            if not t.done():
+                                with contextlib.suppress(asyncio.CancelledError):
+                                    await t
+                        break
+            except asyncio.CancelledError:
+                for t in tasks:
+                    if not t.done():
+                        t.cancel()
+                raise
+            # Collect any remaining completed results
+            for t in tasks:
+                if t.done() and not t.cancelled():
+                    r = t.result()
+                    if r not in results:
+                        results.append(r)
+            return results
+        else:
+            # continue strategy: run all to completion
+            gathered = await asyncio.gather(*[_run_bounded(n) for n in nodes])
+            return list(gathered)
+
+    # ------------------------------------------------------------------
+    # Sequential execution (legacy path)
+    # ------------------------------------------------------------------
+
+    async def _execute_sequential(
+        self,
+        *,
+        definition: WorkflowDefinition,
+        run_id: str,
+        run_context: RunContext,
+        node_map: dict[str, WorkflowNode],
+        ordered_nodes: list[str],
+        state: dict[str, Any],
+        inputs: dict[str, Any],
+        outputs: dict[str, Any],
+        node_results: list[WorkflowNodeResult],
+        approved_approvals: dict[str, str],
+        pause_checkpoint: Callable[[str], Awaitable[None]] | None,
+        worker_id: str | None,
+        resume_cursor: int,
+    ) -> None:
+        """Execute nodes sequentially in topological order (legacy path)."""
+        for index, node_id in enumerate(ordered_nodes):
+            if run_id in self._paused:
+                self.repository.update_run_status(run_id, WorkflowRunStatus.PAUSED, resume_cursor=index)
+                await self.pause_checkpoint(run_id)  # type: ignore[misc]
+                if run_id not in self._paused:
+                    self.repository.update_run_status(run_id, WorkflowRunStatus.RUNNING, resume_cursor=index)
+                else:
+                    continue
+            record_state = self.repository.get_run(run_id)
+            if record_state is not None and index < record_state.resume_cursor:
+                continue
+            if pause_checkpoint is not None:
+                await pause_checkpoint(run_id)
+            if run_id in self._paused:
+                continue
+            node = node_map[node_id]
+            incoming_edges = [edge for edge in definition.edges if edge.target == node.id]
+            if incoming_edges and not any(
+                self._evaluate_edge_condition(edge, state, inputs) for edge in incoming_edges
+            ):
+                continue
+            matched_edges = [edge for edge in incoming_edges if self._evaluate_edge_condition(edge, state, inputs)]
+            state["active_node_id"] = node.id
+            state["active_edge_ids"] = [edge.source for edge in matched_edges]
+            state["recovery_hint"] = self._workflow_recovery_hint(state, error=None)
+            self._record_event(
+                run_context,
+                "workflow.node.started",
+                node_id=node.id,
+                node_type=node.type.value,
+            )
+            started_at = datetime.now(UTC)
+            attempts = 1
+            try:
+                output, attempts = await self._execute_node_with_policy(
+                    run_context, node, definition, state, inputs, approved_approvals
+                )
+                state[node.id] = output
+                state["recovery_hint"] = self._workflow_recovery_hint(state, error=None)
+                if node.type == WorkflowNodeType.OUTPUT:
+                    outputs[node.id] = output
+                node_result = WorkflowNodeResult(
+                    node_id=node.id,
+                    node_type=node.type,
+                    status=WorkflowRunStatus.COMPLETED,
+                    attempts=attempts,
+                    output=output,
+                    started_at=started_at,
+                    completed_at=datetime.now(UTC),
+                    agent_trace_id=output.get("trace_id") if isinstance(output, dict) else None,
+                )
+                node_results.append(node_result)
+                state["node_results"] = node_results
+                self._record_event(
+                    run_context,
+                    "workflow.node.completed",
+                    node_id=node.id,
+                    node_type=node.type.value,
+                )
+                self._persist_progress(run_id, node_results, index + 1, worker_id)
+            except WorkflowApprovalRequired as exc:
+                node_result = WorkflowNodeResult(
+                    node_id=node.id,
+                    node_type=node.type,
+                    status=WorkflowRunStatus.NEEDS_APPROVAL,
+                    output={"approval_id": exc.approval_id},
+                    started_at=started_at,
+                    completed_at=datetime.now(UTC),
+                )
+                node_results.append(node_result)
+                state["node_results"] = node_results
+                state["pending_approval_id"] = exc.approval_id
+                state["pending_node_id"] = node.id
+                self._record_event(
+                    run_context,
+                    "workflow.node.needs_approval",
+                    node_id=node.id,
+                    node_type=node.type.value,
+                    approval_id=exc.approval_id,
+                )
+                self._persist_progress(run_id, node_results, index, worker_id)
+                raise
+            except Exception as exc:
+                if isinstance(exc, WorkflowNodeExecutionError):
+                    attempts = exc.attempts
+                recovery_hint = self._workflow_recovery_hint(state, error=str(exc))
+                compensation_output, compensation_error = await self._execute_compensation(
+                    run_context, node, state, inputs, recovery_hint=recovery_hint
+                )
+                node_result = WorkflowNodeResult(
+                    node_id=node.id,
+                    node_type=node.type,
+                    status=WorkflowRunStatus.FAILED,
+                    attempts=attempts,
+                    error=str(exc),
+                    started_at=started_at,
+                    completed_at=datetime.now(UTC),
+                    compensated=(compensation_output is not None or compensation_error is not None),
+                    compensation_output=compensation_output,
+                    compensation_error=compensation_error,
+                )
+                node_results.append(node_result)
+                state["node_results"] = node_results
+                state["last_failure"] = {
+                    "node_id": node.id,
+                    "node_type": node.type.value,
+                    "error": str(exc),
+                    "recovery_hint": recovery_hint,
+                }
+                self._record_event(
+                    run_context,
+                    "workflow.node.failed",
+                    node_id=node.id,
+                    node_type=node.type.value,
+                    error=str(exc),
+                )
+                await self._capture_node_failure(
+                    run_context, definition, node,
+                    input_state=inputs, state=state, error=str(exc),
+                    compensation_output=compensation_output,
+                    compensation_error=compensation_error,
+                )
+                raise
+
+    def _topological_levels(self, definition: WorkflowDefinition) -> list[list[WorkflowNode]]:
+        """Group nodes into levels for parallel execution via topological sort.
+
+        Nodes within the same level have no dependencies on each other and can
+        be executed concurrently. This enables parallel branch execution for
+        DAG workflows with independent paths.
+        """
+        in_degree: dict[str, int] = {}
+        adjacency: dict[str, list[str]] = {}
+        nodes_by_id = {n.id: n for n in definition.nodes}
+
+        for node in definition.nodes:
+            in_degree[node.id] = 0
+            adjacency[node.id] = []
+
+        for edge in definition.edges:
+            adjacency[edge.source].append(edge.target)
+            in_degree[edge.target] = in_degree.get(edge.target, 0) + 1
+
+        levels: list[list[WorkflowNode]] = []
+        queue = [nid for nid, deg in in_degree.items() if deg == 0]
+
+        while queue:
+            levels.append([nodes_by_id[nid] for nid in queue if nid in nodes_by_id])
+            next_queue: list[str] = []
+            for nid in queue:
+                for neighbor in adjacency.get(nid, []):
+                    in_degree[neighbor] -= 1
+                    if in_degree[neighbor] == 0:
+                        next_queue.append(neighbor)
+            queue = next_queue
+
+        return levels
 
     async def resume(
         self,
@@ -1380,7 +1774,7 @@ class WorkflowExecutor:
                 raise
             except WorkflowApprovalRequired:
                 raise
-            except asyncio.TimeoutError as exc:
+            except TimeoutError as exc:
                 last_error = exc
                 self._record_event(
                     run_context,
@@ -1392,7 +1786,7 @@ class WorkflowExecutor:
                     timeout_ms=timeout_ms,
                     error=str(exc),
                 )
-            except Exception as exc:  # noqa: BLE001 - retries normalize transient node failures
+            except Exception as exc:
                 last_error = exc
                 self._record_event(
                     run_context,
@@ -1621,7 +2015,7 @@ class WorkflowExecutor:
                 record = await self.agent.tools.execute(run_context, tool_name, arguments)
                 return record.model_dump(mode="json"), None
             raise WorkflowExecutionError(f"Unsupported compensation type: {compensation_type}")
-        except Exception as exc:  # noqa: BLE001 - compensation failure is attached to node result
+        except Exception as exc:
             return None, str(exc)
 
     def _evaluate_edge_condition(self, edge: WorkflowEdge, state: dict[str, Any], inputs: dict[str, Any]) -> bool:
@@ -2195,7 +2589,7 @@ class WorkflowRuntimeManager:
                     self.executor.resume(run.run_id, worker_id=self.worker_id)
                 )
                 self._tasks[run.run_id] = task
-                task.add_done_callback(lambda _: self._cleanup_run(run.run_id))
+                task.add_done_callback(lambda _, _run_id=run.run_id: self._cleanup_run(_run_id))
                 record = self.repository.get_run(run.run_id) or run
                 langfuse_client.log(
                     "workflow.run.recovered",
@@ -2428,7 +2822,7 @@ class WorkflowScheduler:
                         WorkflowScheduleStatus.TRIGGERED,
                         run_id=run.run_id,
                     )
-            except Exception as exc:  # noqa: BLE001 - schedule failures are persisted
+            except Exception as exc:
                 if record.cron:
                     # A failed occurrence must not kill the recurring series:
                     # re-arm for the next fire time with the error recorded

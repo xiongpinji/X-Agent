@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Optional
+from typing import Annotated
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from backend.app.core.security import Principal
-from backend.app.dependencies import enforce_scope, get_current_principal
+from backend.app.dependencies import get_current_principal
 from backend.app.services.browser.advanced_monitoring import advanced_browser_monitoring
 
 router = APIRouter(prefix="/api/v1/browser/advanced", tags=["browser-advanced"])
@@ -17,7 +18,7 @@ PrincipalDependency = Annotated[Principal, Depends(get_current_principal)]
 # Request/Response models
 class NetworkRequestsRequest(BaseModel):
     session_id: str
-    url_pattern: Optional[str] = None
+    url_pattern: str | None = None
 
 
 class NetworkRequestsResponse(BaseModel):
@@ -60,7 +61,7 @@ class ElementRefResponse(BaseModel):
 class ElementActionRequest(BaseModel):
     session_id: str
     ref: str
-    value: Optional[str] = None
+    value: str | None = None
 
 
 class ElementActionResponse(BaseModel):
@@ -70,7 +71,7 @@ class ElementActionResponse(BaseModel):
 
 class ConsoleMessagesRequest(BaseModel):
     session_id: str
-    pattern: Optional[str] = None
+    pattern: str | None = None
     only_errors: bool = False
 
 
@@ -78,7 +79,7 @@ class ConsoleMessageResponse(BaseModel):
     type: str
     text: str
     timestamp: float
-    location: Optional[str] = None
+    location: str | None = None
 
 
 class ConsoleMessagesResponse(BaseModel):
@@ -105,8 +106,8 @@ class FoundElement(BaseModel):
     selector: str
     confidence: float
     reason: str
-    text: Optional[str] = None
-    tag_name: Optional[str] = None
+    text: str | None = None
+    tag_name: str | None = None
 
 
 class FindElementResponse(BaseModel):
@@ -124,9 +125,9 @@ class SnapshotRequest(BaseModel):
 
 class SnapshotResponse(BaseModel):
     dom: dict
-    accessibility: Optional[dict] = None
-    network: Optional[dict] = None
-    console: Optional[dict] = None
+    accessibility: dict | None = None
+    network: dict | None = None
+    console: dict | None = None
     timestamp: float
     label: str
 

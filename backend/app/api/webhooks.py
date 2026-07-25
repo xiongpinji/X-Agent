@@ -1,17 +1,16 @@
 """Enterprise IM Webhook Handlers"""
 
 import json
-import hashlib
-import hmac
-from typing import Dict, Any
-from fastapi import APIRouter, Request, HTTPException, status
+from typing import Any
+
+from fastapi import APIRouter, HTTPException, Request
 
 router = APIRouter(prefix="/api/v1/webhooks", tags=["webhooks"])
 
 
 # DingTalk Webhook Handler
 @router.post("/dingtalk/callback")
-async def dingtalk_callback(request: Request) -> Dict[str, Any]:
+async def dingtalk_callback(request: Request) -> dict[str, Any]:
     """Handle DingTalk webhook callbacks"""
     try:
         body = await request.body()
@@ -61,13 +60,13 @@ def _verify_dingtalk_signature(timestamp: str, sign: str, body: bytes) -> bool:
     return True
 
 
-async def _handle_dingtalk_user_event(data: Dict[str, Any], event_type: str) -> Dict[str, Any]:
+async def _handle_dingtalk_user_event(data: dict[str, Any], event_type: str) -> dict[str, Any]:
     """Handle DingTalk user events"""
     # Process user event
     return {"status": "ok"}
 
 
-async def _handle_dingtalk_approval_event(data: Dict[str, Any]) -> Dict[str, Any]:
+async def _handle_dingtalk_approval_event(data: dict[str, Any]) -> dict[str, Any]:
     """Handle DingTalk approval events"""
     # Process approval event
     return {"status": "ok"}
@@ -75,7 +74,7 @@ async def _handle_dingtalk_approval_event(data: Dict[str, Any]) -> Dict[str, Any
 
 # Feishu Webhook Handler
 @router.post("/feishu/callback")
-async def feishu_callback(request: Request) -> Dict[str, Any]:
+async def feishu_callback(request: Request) -> dict[str, Any]:
     """Handle Feishu webhook callbacks"""
     try:
         body = await request.body()
@@ -127,19 +126,19 @@ def _verify_feishu_signature(timestamp: str, sign: str, body: bytes) -> bool:
     return True
 
 
-async def _handle_feishu_message_event(event: Dict[str, Any]) -> Dict[str, Any]:
+async def _handle_feishu_message_event(event: dict[str, Any]) -> dict[str, Any]:
     """Handle Feishu message events"""
     # Process message event
     return {"status": "ok"}
 
 
-async def _handle_feishu_user_event(event: Dict[str, Any], event_type: str) -> Dict[str, Any]:
+async def _handle_feishu_user_event(event: dict[str, Any], event_type: str) -> dict[str, Any]:
     """Handle Feishu user events"""
     # Process user event
     return {"status": "ok"}
 
 
-async def _handle_feishu_approval_event(event: Dict[str, Any], event_type: str) -> Dict[str, Any]:
+async def _handle_feishu_approval_event(event: dict[str, Any], event_type: str) -> dict[str, Any]:
     """Handle Feishu approval events"""
     # Process approval event
     return {"status": "ok"}
@@ -147,7 +146,7 @@ async def _handle_feishu_approval_event(event: Dict[str, Any], event_type: str) 
 
 # WeChat Work Webhook Handler
 @router.post("/wechat_work/callback")
-async def wechat_work_callback(request: Request) -> Dict[str, Any]:
+async def wechat_work_callback(request: Request) -> dict[str, Any]:
     """Handle WeChat Work webhook callbacks"""
     try:
         # Get query parameters
@@ -196,7 +195,7 @@ def _verify_wechat_work_signature(msg_signature: str, timestamp: str, nonce: str
     return True
 
 
-def _parse_wechat_work_xml(body: bytes) -> Dict[str, Any]:
+def _parse_wechat_work_xml(body: bytes) -> dict[str, Any]:
     """Parse WeChat Work XML body"""
     # Simple XML parsing - in production use proper XML parser
     import xml.etree.ElementTree as ET
@@ -210,13 +209,13 @@ def _parse_wechat_work_xml(body: bytes) -> Dict[str, Any]:
         return {}
 
 
-async def _handle_wechat_work_user_event(data: Dict[str, Any], event_type: str) -> Dict[str, Any]:
+async def _handle_wechat_work_user_event(data: dict[str, Any], event_type: str) -> dict[str, Any]:
     """Handle WeChat Work user events"""
     # Process user event
     return {"status": "ok"}
 
 
-async def _handle_wechat_work_approval_event(data: Dict[str, Any]) -> Dict[str, Any]:
+async def _handle_wechat_work_approval_event(data: dict[str, Any]) -> dict[str, Any]:
     """Handle WeChat Work approval events"""
     # Process approval event
     return {"status": "ok"}

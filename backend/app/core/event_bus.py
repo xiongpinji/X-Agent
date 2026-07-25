@@ -10,14 +10,14 @@ import asyncio
 import logging
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from enum import Enum
-from typing import Any, Callable, Protocol
+from enum import StrEnum
+from typing import Any, Protocol
 from uuid import uuid4
 
 logger = logging.getLogger(__name__)
 
 
-class EventType(str, Enum):
+class EventType(StrEnum):
     """Event types in the system."""
 
     # Agent execution events

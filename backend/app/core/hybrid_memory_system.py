@@ -20,14 +20,13 @@ legacy memory representations; use ``Memory.to_canonical()`` /
 from __future__ import annotations
 
 import asyncio
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from typing import Any
 
 from pydantic import BaseModel, Field
 
 from backend.app.core.contracts import RunContext
 from backend.app.core.embeddings import EmbeddingModel
-from backend.app.core.memory import MemoryItem, MemoryScope
 from backend.app.core.memory_dedup_adapter import (
     CanonicalMemory,
     canonical_from_hybrid_memory,
@@ -57,7 +56,7 @@ class Memory(BaseModel):
         return canonical_from_hybrid_memory(self)
 
     @classmethod
-    def from_canonical(cls, canonical: CanonicalMemory) -> "Memory":
+    def from_canonical(cls, canonical: CanonicalMemory) -> Memory:
         """Build a tier Memory from the canonical model."""
         return hybrid_memory_from_canonical(canonical)
 
@@ -137,7 +136,7 @@ class HybridMemorySystem:
         # Detect duplicates
         duplicates = await self._detect_duplicates(memory)
         if duplicates:
-            merged = await self.merger.merge([memory] + duplicates)
+            merged = await self.merger.merge([memory, *duplicates])
             memory = merged
 
         # Select tier
@@ -328,7 +327,7 @@ class HybridMemorySystem:
             # Rebuild indexes
             await self.hot_store.rebuild_index()
 
-        except Exception as e:
+        except Exception:
             stats["errors"] += 1
 
         stats["timestamp"] = datetime.now(UTC).isoformat()
@@ -465,7 +464,7 @@ class HybridMemorySystem:
         """Calculate cosine similarity between embeddings."""
         if not emb1 or not emb2 or len(emb1) != len(emb2):
             return 0.0
-        dot_product = sum(a * b for a, b in zip(emb1, emb2))
+        dot_product = sum(a * b for a, b in zip(emb1, emb2, strict=False))
         magnitude1 = sum(a * a for a in emb1) ** 0.5
         magnitude2 = sum(b * b for b in emb2) ** 0.5
         if magnitude1 == 0 or magnitude2 == 0:

@@ -17,6 +17,12 @@ import typer
 from cli import __version__
 from cli.config import CLIConfig, load_config
 from cli.console import print_error, print_info
+# Shared config state lives in cli.state to avoid a circular import between
+# this module (which mounts command apps) and cli.commands.* (which read the
+# config). Re-exported here for backward compatibility.
+from cli.state import get_current_config, set_current_config
+
+__all__ = ["app", "get_current_config", "set_current_config", "main_entry"]
 
 # Configure logging
 logging.basicConfig(
@@ -24,33 +30,6 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger("xagent.cli")
-
-# Global state for CLI context
-_current_config: CLIConfig | None = None
-
-
-def get_current_config() -> CLIConfig:
-    """Get current CLI configuration.
-
-    Returns:
-        Current CLIConfig instance
-
-    Raises:
-        RuntimeError: If config not initialized
-    """
-    if _current_config is None:
-        raise RuntimeError("CLI config not initialized")
-    return _current_config
-
-
-def set_current_config(config: CLIConfig) -> None:
-    """Set current CLI configuration.
-
-    Args:
-        config: CLIConfig instance to set
-    """
-    global _current_config
-    _current_config = config
 
 
 # Create main Typer app
@@ -137,7 +116,7 @@ def main(
 # ============================================================================
 # Mount command apps implemented in Wave 2.
 
-from cli.commands import agent_app, init_app, tools_app, workflow_app, hooks_app, approvals_app, github_app, gateway_app
+from cli.commands import agent_app, init_app, tools_app, workflow_app, hooks_app, approvals_app, github_app, gateway_app, chat_app, review_app, memory_app, skill_app
 
 app.add_typer(agent_app, name="agent", help="Agent management commands")
 app.add_typer(tools_app, name="tools", help="Tool management commands")
@@ -147,6 +126,10 @@ app.add_typer(hooks_app, name="hooks", help="Hook management commands")
 app.add_typer(approvals_app, name="approvals", help="Approval request management commands")
 app.add_typer(github_app, name="github", help="GitHub automation commands")
 app.add_typer(gateway_app, name="gateway", help="Gateway and scheduler commands")
+app.add_typer(chat_app, name="chat", help="Interactive agent chat")
+app.add_typer(review_app, name="review", help="Code review commands")
+app.add_typer(memory_app, name="memory", help="Memory search and management")
+app.add_typer(skill_app, name="skill", help="Evolved skill management")
 
 # ============================================================================
 # STANDALONE COMMANDS

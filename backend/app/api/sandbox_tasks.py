@@ -21,17 +21,17 @@ Security:
 from __future__ import annotations
 
 import asyncio
-
+import contextlib
 import logging
-from typing import Annotated, Any, Optional
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, Field
 
 from backend.app.api.errors import api_error
 from backend.app.core.contracts import ErrorCode
-from backend.app.dependencies import get_current_principal, enforce_scope
 from backend.app.core.security import Principal
+from backend.app.dependencies import enforce_scope, get_current_principal
 
 logger = logging.getLogger(__name__)
 
@@ -57,9 +57,9 @@ class TaskSubmitResponse(BaseModel):
 class TaskStatusResponse(BaseModel):
     task_id: str
     status: str
-    backend: Optional[str] = None
+    backend: str | None = None
     steps: list[dict[str, Any]] = Field(default_factory=list)
-    error: Optional[str] = None
+    error: str | None = None
 
 
 # ----- module-level orchestrator (lazy singleton) -----
@@ -77,10 +77,9 @@ def _get_orchestrator():
     if _orchestrator is not None:
         return _orchestrator
 
-    import asyncio
-    from backend.app.core.task_queue import TaskQueue
-    from backend.app.core.sandbox.orchestrator import SandboxOrchestrator
     from backend.app.core.sandbox.docker_sandbox import SandboxSpec
+    from backend.app.core.sandbox.orchestrator import SandboxOrchestrator
+    from backend.app.core.task_queue import TaskQueue
 
     async def _command_handler(sandbox, task, result):
         cmd = task.payload.get("command", "")
@@ -154,10 +153,8 @@ async def stop_sandbox_worker() -> None:
     _worker_running = False
     if _worker_task is not None:
         _worker_task.cancel()
-        try:
+        with contextlib.suppress(Exception, asyncio.CancelledError):
             await _worker_task
-        except (Exception, asyncio.CancelledError):
-            pass
         _worker_task = None
 
 
@@ -167,7 +164,6 @@ async def submit_task(
 ) -> TaskSubmitResponse:
     """Submit a task for isolated sandbox execution (fire-and-forget)."""
     enforce_scope(principal, "sandbox:run")
-    import asyncio
 
     orch = _get_orchestrator()
     task_id = await orch.submit(
@@ -222,9 +218,9 @@ async def _run_issue_pipeline(event: Any, token: str) -> None:
     """
     from backend.app.core.github_integration import GitHubAPIClient
     from backend.app.core.pipelines import (
+        AgentFixRunner,
         IssueToPRPipeline,
         PipelineConfig,
-        AgentFixRunner,
     )
 
     key = f"issue-{event.issue_number}"
@@ -253,7 +249,8 @@ async def github_webhook(request: Request) -> dict[str, Any]:
     execution).
     """
     import os
-    from backend.app.core.github_integration import verify_signature, parse_issue_event
+
+    from backend.app.core.github_integration import parse_issue_event, verify_signature
 
     secret = os.environ.get("XAGENT_GITHUB_WEBHOOK_SECRET", "")
     body = await request.body()

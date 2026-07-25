@@ -1,0 +1,50 @@
+# P2-05: Nginx Ingress 流量路由配置 (配合 Argo Rollouts)
+#
+# Argo Rollouts 在金丝雀期间自动创建 canary ingress (xagent-ingress-canary),
+# 通过 nginx.ingress.kubernetes.io/canary-weight 注解实现权重分流。
+# 本文件提供:
+#   1. 稳定版 Ingress 的补充注解 (确保与 Rollout trafficRouting 兼容)
+#   2. 可选的 header-based 路由 (开发/测试人员手动指定走 canary)
+#
+# 注意: canary ingress 由 Argo Rollouts controller 自动管理, 无需手动创建。
+# 本文件仅定义 stable ingress 的增强注解。
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: xagent-ingress
+  namespace: xagent
+  labels:
+    app: xagent-api
+    app.kubernetes.io/managed-by: argo-rollouts
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+    # Argo Rollouts Nginx traffic routing 所需注解
+    # controller 会自动在 canary ingress 上设置 canary-weight
+    nginx.ingress.kubernetes.io/canary-by-header: "X-Canary"
+    nginx.ingress.kubernetes.io/canary-by-header-value: "always"
+    # 连接超时与重试 (金丝雀切换期间避免请求丢失)
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "10"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "120"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "120"
+    nginx.ingress.kubernetes.io/proxy-next-upstream: "error timeout http_502 http_503"
+    nginx.ingress.kubernetes.io/proxy-next-upstream-tries: "2"
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts:
+    - api.xagent.example.com
+    secretName: xagent-tls
+  rules:
+  - host: api.xagent.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: xagent-api
+            port:
+              number: 8000

@@ -1,25 +1,34 @@
 import logging
 from functools import lru_cache
 from hashlib import sha256
-from secrets import compare_digest
-from secrets import token_urlsafe
+from secrets import compare_digest, token_urlsafe
+from typing import TYPE_CHECKING
 
 from fastapi import Request
 
+if TYPE_CHECKING:  # 仅类型标注, 运行时惰性导入(可选依赖 qdrant-client)
+    from backend.app.core.advanced_rbac import AdvancedRBACEngine
+    from backend.app.core.agent import AgentLoop
+    from backend.app.core.audit_shipper import AuditShipper
+    from backend.app.core.memory import MemorySystem
+    from backend.app.core.memory_postgres import PostgresMemorySystem
+    from backend.app.core.memory_qdrant import QdrantMemorySystem
+    from backend.app.core.orchestrator import Orchestrator
+    from backend.app.core.workflows import (
+        WorkflowExecutor,
+        WorkflowRepository,
+        WorkflowRuntimeManager,
+        WorkflowScheduleStore,
+        WorkflowScheduler,
+    )
+
 from backend.app.api.errors import api_error
-from backend.app.core.agent import AgentLoop
 from backend.app.core.approvals import ApprovalStore
 from backend.app.core.audit import AuditStore
 from backend.app.core.browser import BrowserAutomationStore, browser_automation_store
 from backend.app.core.contracts import ErrorCode
-from backend.app.core.orchestrator import Orchestrator
-from backend.app.core.embeddings import build_embedding_model
-from backend.app.core.llm import build_llm_router
-from backend.app.core.memory import MemorySystem
-from backend.app.core.memory_postgres import PostgresMemorySystem
+from backend.app.core.desktop import DesktopAutomationStore, desktop_automation_store
 from backend.app.core.policy import ToolPolicyEngine
-from backend.app.services.observability.langfuse_client import langfuse_client
-from backend.app.services.memory.indexer import memory_indexer
 from backend.app.core.runs import RunStore
 from backend.app.core.security import (
     ROLE_SCOPES,
@@ -31,19 +40,11 @@ from backend.app.core.security import (
 from backend.app.core.tools import ToolExecutionStore, build_default_tool_registry
 from backend.app.core.tracing import TraceStore, build_tracer
 from backend.app.core.tracing_postgres import PostgresTraceStore
-from backend.app.core.workflows import (
-    WorkflowExecutor,
-    WorkflowRepository,
-    WorkflowRuntimeManager,
-    WorkflowScheduler,
-    WorkflowScheduleStore,
-)
-from backend.app.core.desktop import DesktopAutomationStore, desktop_automation_store
 from backend.app.settings import get_settings
 
 
 @lru_cache
-def get_memory() -> MemorySystem | PostgresMemorySystem:
+def get_memory() -> "MemorySystem | PostgresMemorySystem | QdrantMemorySystem":
     settings = get_settings()
     return build_memory_system(
         memory_backend=settings.memory_backend,
@@ -55,6 +56,10 @@ def get_memory() -> MemorySystem | PostgresMemorySystem:
         openai_embedding_dimensions=settings.openai_embedding_dimensions,
         postgres_enable_vector_search=settings.postgres_enable_vector_search,
         postgres_vector_dimensions=settings.postgres_vector_dimensions,
+        qdrant_url=settings.qdrant_url,
+        qdrant_api_key=settings.qdrant_api_key,
+        qdrant_strict=settings.app_mode == "production",
+        embedding_dim=settings.embedding_dim,
     )
 
 
@@ -63,13 +68,21 @@ def build_memory_system(
     memory_backend: str,
     database_url: str,
     memory_store_path,
-    embedding_backend: str = "local",
+    embedding_backend: str = "auto",
     openai_api_key: str | None = None,
     openai_embedding_model: str = "text-embedding-3-small",
     openai_embedding_dimensions: int | None = None,
     postgres_enable_vector_search: bool = False,
     postgres_vector_dimensions: int = 1536,
-) -> MemorySystem | PostgresMemorySystem:
+    qdrant_url: str | None = None,
+    qdrant_api_key: str | None = None,
+    qdrant_strict: bool = False,
+    embedding_dim: int = 384,
+) -> "MemorySystem | PostgresMemorySystem | QdrantMemorySystem":
+    from backend.app.core.embeddings import build_embedding_model
+    from backend.app.core.memory import MemorySystem
+    from backend.app.core.memory_postgres import PostgresMemorySystem
+
     if memory_backend == "postgres":
         embedding_model = None
         if postgres_enable_vector_search:
@@ -91,6 +104,19 @@ def build_memory_system(
         openai_embedding_model=openai_embedding_model,
         openai_embedding_dimensions=openai_embedding_dimensions,
     )
+    if memory_backend == "qdrant":
+        # P1-13 真实 Qdrant 后端(集成波接线, 按 core/memory_qdrant.py 说明)。
+        # strict=True(生产)缺包/连不上显式 RuntimeError; 否则 WARNING 后显式
+        # 降级到 JSONL/内存后端(可经 backend_status/degraded_reason 观测), 不静默。
+        from backend.app.core.memory_qdrant import build_qdrant_memory_system
+
+        return build_qdrant_memory_system(
+            url=qdrant_url,
+            api_key=qdrant_api_key,
+            embedding_model=embedding_model,
+            strict=qdrant_strict,
+            fallback_storage_path=memory_store_path,
+        )
     if memory_backend == "memory":
         return MemorySystem(embedding_model=embedding_model)
     return MemorySystem(storage_path=memory_store_path, embedding_model=embedding_model)
@@ -123,6 +149,34 @@ def get_trace_store() -> TraceStore | PostgresTraceStore:
 def get_run_store() -> RunStore:
     settings = get_settings()
     return RunStore(storage_path=settings.run_store_path)
+
+
+@lru_cache
+def get_graph_memory_store():
+    """Get the Neo4j graph memory store (optional, for memory relationship graphs).
+
+    Returns a GraphMemoryStore instance. When neo4j_enabled=False or the neo4j
+    package is not installed, returns a no-op degraded store (reads return empty,
+    writes are silently dropped). Check `.available` to verify real persistence.
+    """
+    from backend.app.core.graph_memory_store import GraphMemoryStore
+
+    settings = get_settings()
+    if not settings.neo4j_enabled:
+        return GraphMemoryStore(neo4j_driver=None)
+    try:
+        return GraphMemoryStore.create_driver(
+            uri=settings.neo4j_url,
+            auth=(settings.neo4j_user, settings.neo4j_password),
+            database=settings.neo4j_database,
+        )
+    except Exception as exc:
+        logging.getLogger(__name__).warning(
+            "Neo4j graph store unavailable (%s); falling back to no-op degraded mode. "
+            "Set neo4j_enabled=false to silence this, or fix the Neo4j configuration.",
+            exc,
+        )
+        return GraphMemoryStore(neo4j_driver=None)
 
 
 @lru_cache
@@ -163,10 +217,56 @@ def get_audit_store() -> AuditStore:
             "Set XAGENT_AUDIT_HMAC_SECRET for stable audit signatures "
             "(required in production)."
         )
-    return AuditStore(
-        storage_path=settings.audit_store_path,
-        hmac_secret=hmac_secret,
+    return _attach_audit_shipper_hook(
+        AuditStore(
+            storage_path=settings.audit_store_path,
+            hmac_secret=hmac_secret,
+        )
     )
+
+
+# ---------------------------------------------------------------------------
+# 审计外送(P1-04)挂钩
+# ---------------------------------------------------------------------------
+# shipper 生命周期由 main.py startup/shutdown 管理(build_shipper + start/stop,
+# 配置缺省时保持 None 不启用)。写入点挂钩放在 get_audit_store: AuditStore.record
+# 成功落库后非阻塞 enqueue; 外送失败只记日志, 绝不影响审计写入本身。
+_audit_shipper: "AuditShipper | None" = None
+
+
+def set_audit_shipper(shipper: "AuditShipper | None") -> None:
+    """注册/清除进程级审计外送 shipper(main.py lifespan 调用)。"""
+    global _audit_shipper
+    _audit_shipper = shipper
+
+
+def get_audit_shipper() -> "AuditShipper | None":
+    """返回当前审计外送 shipper(未启用为 None)。"""
+    return _audit_shipper
+
+
+def _attach_audit_shipper_hook(store: AuditStore) -> AuditStore:
+    """包装 AuditStore.record, 写入成功后 enqueue 到已注册的 shipper。
+
+    shipper 在调用时读取(而非包装时绑定), 因此 lru_cache 单例构造一次即可,
+    之后 set_audit_shipper 的注册/清除即时生效。未注册时为零开销 no-op。
+    """
+    original_record = store.record
+
+    def record_and_enqueue(*args, **kwargs):
+        record = original_record(*args, **kwargs)
+        shipper = _audit_shipper
+        if shipper is not None:
+            try:
+                shipper.enqueue_event(record)
+            except Exception:
+                logging.getLogger("xagent.dependencies").warning(
+                    "audit shipper enqueue failed", exc_info=True
+                )
+        return record
+
+    store.record = record_and_enqueue  # type: ignore[method-assign]
+    return store
 
 
 @lru_cache
@@ -184,6 +284,46 @@ def get_approval_store() -> ApprovalStore:
 @lru_cache
 def get_rbac_policy() -> RBACPolicy:
     return RBACPolicy()
+
+
+_rbac_engine: "AdvancedRBACEngine | None" = None
+
+
+async def get_rbac_engine() -> "AdvancedRBACEngine":
+    """Get the AdvancedRBACEngine with optional persistent storage (P0-05).
+
+    In production (admin_store_backend=postgres), uses PostgresRBACRepository
+    for persistent role/assignment storage. In development, uses in-memory.
+    """
+    global _rbac_engine
+    if _rbac_engine is None:
+        from backend.app.core.advanced_rbac import AdvancedRBACEngine, PostgresRBACRepository
+
+        settings = get_settings()
+        storage = None
+
+        # Use persistent storage in production or when explicitly configured
+        if settings.admin_store_backend in {"postgres", "postgresql", "db", "sql"}:
+            try:
+                import asyncpg
+                # Extract connection info from database_url
+                # database_url format: postgresql+asyncpg://user:pass@host:port/db
+                db_url = settings.database_url
+                if "+asyncpg" in db_url:
+                    db_url = db_url.replace("+asyncpg", "")
+                pool = await asyncpg.create_pool(db_url, min_size=1, max_size=5)
+                storage = PostgresRBACRepository(pool)
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).warning(
+                    f"Failed to create RBAC PostgreSQL storage, falling back to memory: {e}"
+                )
+                storage = None
+
+        _rbac_engine = AdvancedRBACEngine(storage=storage)
+        await _rbac_engine.initialize()
+
+    return _rbac_engine
 
 
 def get_current_principal(request: Request) -> Principal:
@@ -269,16 +409,22 @@ def enforce_scope(principal: Principal, scope: str) -> None:
 
 
 @lru_cache
-def get_workflow_repository() -> WorkflowRepository:
+def get_workflow_repository() -> "WorkflowRepository":
+    from backend.app.core.workflow_store import build_workflow_repository
+
     settings = get_settings()
-    return WorkflowRepository(
+    return build_workflow_repository(
+        backend=settings.workflow_store_backend,
+        database_url=settings.database_url,
         definition_path=settings.workflow_store_path,
         run_path=settings.workflow_run_store_path,
     )
 
 
 @lru_cache
-def get_workflow_executor() -> WorkflowExecutor:
+def get_workflow_executor() -> "WorkflowExecutor":
+    from backend.app.core.workflows import WorkflowExecutor
+
     return WorkflowExecutor(
         agent=get_agent(),
         repository=get_workflow_repository(),
@@ -289,7 +435,9 @@ def get_workflow_executor() -> WorkflowExecutor:
 
 
 @lru_cache
-def get_workflow_runtime() -> WorkflowRuntimeManager:
+def get_workflow_runtime() -> "WorkflowRuntimeManager":
+    from backend.app.core.workflows import WorkflowRuntimeManager
+
     return WorkflowRuntimeManager(
         executor=get_workflow_executor(),
         repository=get_workflow_repository(),
@@ -297,13 +445,21 @@ def get_workflow_runtime() -> WorkflowRuntimeManager:
 
 
 @lru_cache
-def get_workflow_schedule_store() -> WorkflowScheduleStore:
+def get_workflow_schedule_store() -> "WorkflowScheduleStore":
+    from backend.app.core.workflow_store import build_workflow_schedule_store
+
     settings = get_settings()
-    return WorkflowScheduleStore(storage_path=settings.workflow_schedule_store_path)
+    return build_workflow_schedule_store(
+        backend=settings.workflow_store_backend,
+        database_url=settings.database_url,
+        storage_path=settings.workflow_schedule_store_path,
+    )
 
 
 @lru_cache
-def get_workflow_scheduler() -> WorkflowScheduler:
+def get_workflow_scheduler() -> "WorkflowScheduler":
+    from backend.app.core.workflows import WorkflowScheduler
+
     return WorkflowScheduler(
         repository=get_workflow_repository(),
         runtime=get_workflow_runtime(),
@@ -312,7 +468,10 @@ def get_workflow_scheduler() -> WorkflowScheduler:
 
 
 @lru_cache
-def get_agent() -> AgentLoop:
+def get_agent() -> "AgentLoop":
+    from backend.app.core.agent import AgentLoop
+    from backend.app.core.llm import build_llm_router
+
     settings = get_settings()
     policy = ToolPolicyEngine(enable_high_risk_tools=settings.enable_high_risk_tools)
     tools = build_default_tool_registry(
@@ -339,5 +498,24 @@ def get_agent() -> AgentLoop:
 
 
 @lru_cache
-def get_orchestrator() -> Orchestrator:
+def get_orchestrator() -> "Orchestrator":
+    from backend.app.core.orchestrator import Orchestrator
+
     return Orchestrator()
+
+
+@lru_cache
+def get_llm_router():
+    """Return the shared LLMRouter instance (cached)."""
+    from backend.app.core.llm import build_llm_router
+
+    settings = get_settings()
+    return build_llm_router(
+        llm_backend=settings.llm_backend,
+        fallback_order=settings.llm_fallback_order,
+        openai_api_key=settings.openai_api_key,
+        openai_model=settings.openai_model,
+        deepseek_api_key=settings.deepseek_api_key,
+        deepseek_model=settings.deepseek_model,
+        deepseek_base_url=settings.deepseek_base_url,
+    )

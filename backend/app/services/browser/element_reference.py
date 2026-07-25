@@ -2,18 +2,17 @@
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass, field
-from typing import Any, Optional
-from enum import Enum
+from enum import StrEnum
+from typing import Any
 
 try:
-    from playwright.async_api import Page, Locator, ElementHandle
+    from playwright.async_api import ElementHandle, Locator, Page
 except ImportError:
     Page = Locator = ElementHandle = object  # type: ignore[assignment]
 
 
-class ElementType(str, Enum):
+class ElementType(StrEnum):
     """Types of elements."""
     BUTTON = "button"
     INPUT = "input"
@@ -43,17 +42,17 @@ class ElementReference:
     element_type: ElementType
     text: str = ""
     attributes: list[ElementAttribute] = field(default_factory=list)
-    aria_label: Optional[str] = None
-    aria_role: Optional[str] = None
-    placeholder: Optional[str] = None
-    title: Optional[str] = None
+    aria_label: str | None = None
+    aria_role: str | None = None
+    placeholder: str | None = None
+    title: str | None = None
     visible: bool = True
     enabled: bool = True
-    bounding_box: Optional[dict[str, float]] = None
-    selector: Optional[str] = None
-    xpath: Optional[str] = None
+    bounding_box: dict[str, float] | None = None
+    selector: str | None = None
+    xpath: str | None = None
     children_count: int = 0
-    parent_ref: Optional[str] = None
+    parent_ref: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -83,7 +82,7 @@ class ElementTree:
     elements: dict[str, ElementReference] = field(default_factory=dict)
     timestamp: float = field(default_factory=lambda: __import__("time").time())
 
-    def get_element(self, ref: str) -> Optional[ElementReference]:
+    def get_element(self, ref: str) -> ElementReference | None:
         """Get an element by reference."""
         return self.elements.get(ref)
 
@@ -106,7 +105,7 @@ class ElementReferenceSystem:
         self.page = page
         self._ref_counter = 0
         self._element_map: dict[str, Any] = {}  # ref -> element handle
-        self._tree: Optional[ElementTree] = None
+        self._tree: ElementTree | None = None
 
     async def build_element_tree(self, page: Page) -> ElementTree:
         """Build the accessibility tree for the page."""
@@ -167,7 +166,7 @@ class ElementReferenceSystem:
 
         return elements
 
-    async def _extract_element_info(self, locator: Locator, ref: str) -> Optional[ElementReference]:
+    async def _extract_element_info(self, locator: Locator, ref: str) -> ElementReference | None:
         """Extract information about an element."""
         try:
             tag_name = await locator.evaluate("el => el.tagName.toLowerCase()")
@@ -228,7 +227,7 @@ class ElementReferenceSystem:
         except Exception:
             return None
 
-    def _determine_element_type(self, tag_name: str, aria_role: Optional[str]) -> ElementType:
+    def _determine_element_type(self, tag_name: str, aria_role: str | None) -> ElementType:
         """Determine the type of element."""
         if aria_role:
             role_map = {
@@ -286,13 +285,13 @@ class ElementReferenceSystem:
         except Exception:
             return False
 
-    async def get_element_by_ref(self, ref: str) -> Optional[ElementReference]:
+    async def get_element_by_ref(self, ref: str) -> ElementReference | None:
         """Get element information by reference."""
         if self._tree:
             return self._tree.get_element(ref)
         return None
 
-    def get_tree(self) -> Optional[ElementTree]:
+    def get_tree(self) -> ElementTree | None:
         """Get the current element tree."""
         return self._tree
 

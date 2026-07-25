@@ -53,7 +53,7 @@ class CacheConfig(BaseModel):
 class LLMConfig(BaseModel):
     """LLM configuration."""
 
-    backend: str = Field(default="mock", description="LLM backend: mock, openai, deepseek")
+    backend: str = Field(default="auto", description="LLM backend: auto, mock, openai, deepseek, anthropic, ollama")
     fallback_order: str = Field(default="", description="Fallback LLM order (comma-separated)")
     openai_api_key: str | None = Field(default=None, description="OpenAI API key")
     openai_model: str = Field(default="gpt-4o-mini", description="OpenAI model name")
@@ -66,11 +66,12 @@ class LLMConfig(BaseModel):
 class MemoryConfig(BaseModel):
     """Memory system configuration."""
 
-    backend: str = Field(default="memory", description="Memory backend: memory, postgres, qdrant")
+    backend: str = Field(default="postgres", description="Memory backend: memory, postgres, qdrant")
     store_path: Path = Field(default=PROJECT_ROOT / "data" / "memory.jsonl", description="Memory store path")
-    embedding_backend: str = Field(default="local", description="Embedding backend: local, openai")
+    embedding_backend: str = Field(default="auto", description="Embedding backend: auto, local, sentence-transformers, openai")
     embedding_model: str = Field(default="text-embedding-3-small", description="Embedding model name")
-    embedding_dimensions: int | None = Field(default=None, description="Embedding dimensions")
+    embedding_dim: int = Field(default=384, description="Embedding vector dimensions")
+    embedding_dimensions: int | None = Field(default=None, description="Embedding dimensions (OpenAI-specific)")
     qdrant_url: str = Field(default="http://localhost:6333", description="Qdrant server URL")
     qdrant_api_key: str | None = Field(default=None, description="Qdrant API key")
     enable_vector_search: bool = Field(default=False, description="Enable vector search")

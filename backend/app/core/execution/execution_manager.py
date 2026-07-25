@@ -3,12 +3,14 @@
 """
 
 import logging
-from typing import Any, Dict, Optional
-from uuid import uuid4
 from datetime import datetime
+from typing import Any
+from uuid import uuid4
 
-from .python_sandbox import PythonSandbox  # ⚠ P0-18 降级: AST 黑名单, 仅限可信代码, 禁止用于不可信输入
 from .nodejs_executor import NodeJSExecutor
+from .python_sandbox import (
+    PythonSandbox,  # ⚠ P0-18 降级: AST 黑名单, 仅限可信代码, 禁止用于不可信输入
+)
 
 logger = logging.getLogger(__name__)
 
@@ -26,15 +28,15 @@ class ExecutionManager:
         self.timeout = timeout
         self.python_sandbox = PythonSandbox(timeout=timeout)
         self.nodejs_executor = NodeJSExecutor(timeout=timeout)
-        self._execution_history: Dict[str, Dict[str, Any]] = {}
+        self._execution_history: dict[str, dict[str, Any]] = {}
 
     async def execute(
         self,
         code: str,
         language: str = "python",
-        context: Optional[Dict[str, Any]] = None,
+        context: dict[str, Any] | None = None,
         **kwargs,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         执行代码
 
@@ -95,9 +97,9 @@ class ExecutionManager:
     async def execute_python(
         self,
         code: str,
-        context: Optional[Dict[str, Any]] = None,
-        allowed_imports: Optional[list] = None,
-    ) -> Dict[str, Any]:
+        context: dict[str, Any] | None = None,
+        allowed_imports: list | None = None,
+    ) -> dict[str, Any]:
         """
         执行Python代码
 
@@ -119,8 +121,8 @@ class ExecutionManager:
     async def execute_nodejs(
         self,
         code: str,
-        modules: Optional[list] = None,
-    ) -> Dict[str, Any]:
+        modules: list | None = None,
+    ) -> dict[str, Any]:
         """
         执行Node.js代码
 
@@ -135,7 +137,7 @@ class ExecutionManager:
             return await self.nodejs_executor.execute_with_modules(code, modules)
         return await self.execute(code, language="nodejs")
 
-    def get_execution_history(self, execution_id: str) -> Optional[Dict[str, Any]]:
+    def get_execution_history(self, execution_id: str) -> dict[str, Any] | None:
         """
         获取执行历史
 

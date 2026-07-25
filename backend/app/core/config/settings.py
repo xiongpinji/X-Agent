@@ -2,17 +2,15 @@
 
 import logging
 from functools import lru_cache
-from pathlib import Path
-from typing import Optional
 
 from pydantic import Field, field_validator
 
-from .base import BaseConfig, Environment
-from .database import DatabaseConfig
+from .base import BaseConfig
 from .cache import CacheConfig
-from .security import SecurityConfig
+from .database import DatabaseConfig
 from .observability import ObservabilityConfig
-from .validator import ConfigValidator, ConfigValidationError
+from .security import SecurityConfig
+from .validator import ConfigValidationError, ConfigValidator
 
 logger = logging.getLogger(__name__)
 
@@ -22,14 +20,14 @@ class Settings(BaseConfig):
 
     # LLM Configuration
     llm_backend: str = Field(
-        default="mock",
-        description="LLM backend (mock, openai, deepseek, anthropic)",
+        default="auto",
+        description="LLM backend (auto, mock, openai, deepseek, anthropic, ollama)",
     )
     llm_fallback_order: str = Field(
         default="",
         description="Comma-separated list of LLM backends to try in order",
     )
-    openai_api_key: Optional[str] = Field(
+    openai_api_key: str | None = Field(
         default=None,
         description="OpenAI API key",
     )
@@ -37,7 +35,7 @@ class Settings(BaseConfig):
         default="gpt-4o-mini",
         description="OpenAI model name",
     )
-    deepseek_api_key: Optional[str] = Field(
+    deepseek_api_key: str | None = Field(
         default=None,
         description="DeepSeek API key",
     )
@@ -45,29 +43,37 @@ class Settings(BaseConfig):
         default="deepseek-chat",
         description="DeepSeek model name",
     )
-    deepseek_base_url: Optional[str] = Field(
+    deepseek_base_url: str | None = Field(
         default=None,
         description="DeepSeek base URL",
     )
-    anthropic_api_key: Optional[str] = Field(
+    anthropic_api_key: str | None = Field(
         default=None,
         description="Anthropic API key",
     )
 
     # Memory Configuration
     memory_backend: str = Field(
-        default="memory",
+        default="postgres",
         description="Memory backend (memory, jsonl, postgres, qdrant)",
     )
     embedding_backend: str = Field(
-        default="local",
-        description="Embedding backend (local, openai)",
+        default="auto",
+        description="Embedding backend (auto, local, sentence-transformers, openai)",
+    )
+    embedding_model: str = Field(
+        default="text-embedding-3-small",
+        description="Embedding model name (XAGENT_EMBEDDING_MODEL)",
+    )
+    embedding_dim: int = Field(
+        default=384,
+        description="Embedding vector dimensions (XAGENT_EMBEDDING_DIM)",
     )
     openai_embedding_model: str = Field(
         default="text-embedding-3-small",
         description="OpenAI embedding model",
     )
-    openai_embedding_dimensions: Optional[int] = Field(
+    openai_embedding_dimensions: int | None = Field(
         default=None,
         description="OpenAI embedding dimensions",
     )
@@ -77,7 +83,7 @@ class Settings(BaseConfig):
         default="http://localhost:6333",
         description="Qdrant vector database URL",
     )
-    qdrant_api_key: Optional[str] = Field(
+    qdrant_api_key: str | None = Field(
         default=None,
         description="Qdrant API key",
     )
@@ -137,42 +143,42 @@ class Settings(BaseConfig):
         default="https://skillhub.cn",
         description="SkillHub URL",
     )
-    skillhub_api_key: Optional[str] = Field(
+    skillhub_api_key: str | None = Field(
         default=None,
         description="SkillHub API key",
     )
 
     # Feishu Integration
-    feishu_app_id: Optional[str] = Field(
+    feishu_app_id: str | None = Field(
         default=None,
         description="Feishu app ID",
     )
-    feishu_app_secret: Optional[str] = Field(
+    feishu_app_secret: str | None = Field(
         default=None,
         description="Feishu app secret",
     )
-    feishu_encrypt_key: Optional[str] = Field(
+    feishu_encrypt_key: str | None = Field(
         default=None,
         description="Feishu event callback encrypt key",
     )
     # DingTalk Integration
-    dingtalk_webhook_url: Optional[str] = Field(
+    dingtalk_webhook_url: str | None = Field(
         default=None,
         description="DingTalk webhook URL",
     )
 
     # WeChat Integration
-    wechat_app_id: Optional[str] = Field(
+    wechat_app_id: str | None = Field(
         default=None,
         description="WeChat app ID",
     )
-    wechat_app_secret: Optional[str] = Field(
+    wechat_app_secret: str | None = Field(
         default=None,
         description="WeChat app secret",
     )
 
     # Email Configuration
-    smtp_host: Optional[str] = Field(
+    smtp_host: str | None = Field(
         default=None,
         description="SMTP host",
     )
@@ -182,11 +188,11 @@ class Settings(BaseConfig):
         le=65535,
         description="SMTP port",
     )
-    smtp_user: Optional[str] = Field(
+    smtp_user: str | None = Field(
         default=None,
         description="SMTP username",
     )
-    smtp_password: Optional[str] = Field(
+    smtp_password: str | None = Field(
         default=None,
         description="SMTP password",
     )
@@ -196,15 +202,15 @@ class Settings(BaseConfig):
     )
 
     # S3 Storage Configuration
-    s3_endpoint: Optional[str] = Field(
+    s3_endpoint: str | None = Field(
         default=None,
         description="S3 endpoint URL",
     )
-    s3_access_key: Optional[str] = Field(
+    s3_access_key: str | None = Field(
         default=None,
         description="S3 access key",
     )
-    s3_secret_key: Optional[str] = Field(
+    s3_secret_key: str | None = Field(
         default=None,
         description="S3 secret key",
     )
@@ -217,7 +223,7 @@ class Settings(BaseConfig):
     @classmethod
     def validate_llm_backend(cls, v: str) -> str:
         """Validate LLM backend."""
-        valid_backends = ["mock", "openai", "deepseek", "anthropic"]
+        valid_backends = ["auto", "mock", "openai", "deepseek", "anthropic", "ollama"]
         if v not in valid_backends:
             raise ValueError(f"Invalid llm_backend: {v}. Must be one of: {valid_backends}")
         return v
@@ -235,7 +241,12 @@ class Settings(BaseConfig):
     @classmethod
     def validate_embedding_backend(cls, v: str) -> str:
         """Validate embedding backend."""
-        valid_backends = ["local", "openai"]
+        # "auto": 自动检测最佳后端(P1-13): OpenAI(有key) → ST(有包) → hash fallback
+        # "sentence-transformers": 真实本地嵌入, 由 core.embeddings 惰性加载
+        valid_backends = [
+            "auto", "local", "hash", "openai",
+            "sentence-transformers", "st", "local-st",
+        ]
         if v not in valid_backends:
             raise ValueError(f"Invalid embedding_backend: {v}. Must be one of: {valid_backends}")
         return v

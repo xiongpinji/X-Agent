@@ -5,14 +5,14 @@ Author: X-Agent Team
 Version: 1.0.0
 """
 
-from typing import Any, Dict, Optional
-from datetime import datetime, UTC
+from datetime import UTC, datetime
+from typing import Any
 
 
 class SlackNotifications:
     """Slack notifications plugin"""
 
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: dict[str, Any]):
         """Initialize plugin with configuration"""
         self.config = config
         self.name = "Slack Notifications"
@@ -20,7 +20,7 @@ class SlackNotifications:
         self.webhook_url = config.get("webhook_url", "")
         self.bot_token = config.get("bot_token", "")
 
-    def execute(self, action: str, params: Dict[str, Any]) -> Dict[str, Any]:
+    def execute(self, action: str, params: dict[str, Any]) -> dict[str, Any]:
         """Execute plugin action"""
         if action == "send_message":
             return self._send_message(params)
@@ -37,7 +37,7 @@ class SlackNotifications:
         else:
             raise ValueError(f"Unknown action: {action}")
 
-    def _send_message(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _send_message(self, params: dict[str, Any]) -> dict[str, Any]:
         """Send message to Slack channel"""
         channel = params.get("channel")
         text = params.get("text")
@@ -55,7 +55,7 @@ class SlackNotifications:
             },
         }
 
-    def _send_notification(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _send_notification(self, params: dict[str, Any]) -> dict[str, Any]:
         """Send rich notification"""
         channel = params.get("channel")
         title = params.get("title")
@@ -76,7 +76,7 @@ class SlackNotifications:
             },
         }
 
-    def _create_channel(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _create_channel(self, params: dict[str, Any]) -> dict[str, Any]:
         """Create Slack channel"""
         channel_name = params.get("channel_name")
         description = params.get("description", "")
@@ -94,7 +94,7 @@ class SlackNotifications:
             },
         }
 
-    def _list_channels(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _list_channels(self, params: dict[str, Any]) -> dict[str, Any]:
         """List Slack channels"""
         return {
             "status": "success",
@@ -114,7 +114,7 @@ class SlackNotifications:
             ],
         }
 
-    def _send_file(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _send_file(self, params: dict[str, Any]) -> dict[str, Any]:
         """Send file to Slack"""
         channel = params.get("channel")
         file_path = params.get("file_path")
@@ -133,7 +133,7 @@ class SlackNotifications:
             },
         }
 
-    def _get_user_info(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _get_user_info(self, params: dict[str, Any]) -> dict[str, Any]:
         """Get Slack user information"""
         user_id = params.get("user_id")
 
@@ -170,13 +170,13 @@ class SlackNotifications:
 plugin = None
 
 
-def initialize(config: Dict[str, Any]) -> None:
+def initialize(config: dict[str, Any]) -> None:
     """Initialize plugin"""
     global plugin
     plugin = SlackNotifications(config)
 
 
-def execute(action: str, params: Dict[str, Any]) -> Dict[str, Any]:
+def execute(action: str, params: dict[str, Any]) -> dict[str, Any]:
     """Execute plugin action"""
     if plugin is None:
         raise RuntimeError("Plugin not initialized")

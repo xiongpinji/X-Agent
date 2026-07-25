@@ -10,7 +10,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import datetime, timedelta
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 from uuid import uuid4
 
@@ -19,7 +19,7 @@ from pydantic import BaseModel, Field
 logger = logging.getLogger(__name__)
 
 
-class QuestionType(str, Enum):
+class QuestionType(StrEnum):
     """Types of interactive questions."""
     SINGLE_CHOICE = "single_choice"
     MULTIPLE_CHOICE = "multiple_choice"
@@ -29,7 +29,7 @@ class QuestionType(str, Enum):
     CODE_REVIEW = "code_review"
 
 
-class QuestionStatus(str, Enum):
+class QuestionStatus(StrEnum):
     """Question status."""
     PENDING = "pending"
     ANSWERED = "answered"
@@ -237,7 +237,7 @@ class InteractiveQuestionManager:
                 await asyncio.wait_for(event.wait(), timeout=timeout)
             else:
                 await event.wait()
-        except asyncio.TimeoutError:
+        except TimeoutError:
             self.timeout_question(question_id)
 
         # Return the answer

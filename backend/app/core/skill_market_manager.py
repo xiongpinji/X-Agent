@@ -3,18 +3,24 @@
 from __future__ import annotations
 
 import logging
-from typing import Optional, list, dict, Any
-from datetime import datetime, UTC
+from datetime import UTC, datetime
+from typing import Any, dict, list
 
-from backend.app.core.skill_market_models import (
-    SkillRecord, SkillCategory, SkillStatus, SkillInstallRequest,
-    SkillUninstallRequest, SkillExecuteRequest, SkillSearchRequest,
-    SkillInstallationProgress, SkillUsageRecord, SkillRecommendation,
-)
-from backend.app.core.skill_classifier import SkillClassifier, SkillTagger
 from backend.app.core.skill_adapter import SkillAdapter
+from backend.app.core.skill_classifier import SkillClassifier, SkillTagger
 from backend.app.core.skill_content_generator import SkillContentGenerator
-from backend.app.core.skill_crawler import SkillCrawler, SkillCacheManager
+from backend.app.core.skill_crawler import SkillCacheManager, SkillCrawler
+from backend.app.core.skill_market_models import (
+    SkillCategory,
+    SkillExecuteRequest,
+    SkillInstallationProgress,
+    SkillInstallRequest,
+    SkillRecommendation,
+    SkillRecord,
+    SkillStatus,
+    SkillUninstallRequest,
+    SkillUsageRecord,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -34,8 +40,8 @@ class SkillMarketManager:
 
     async def discover_skills(
         self,
-        category: Optional[SkillCategory] = None,
-        tag: Optional[str] = None,
+        category: SkillCategory | None = None,
+        tag: str | None = None,
         limit: int = 20,
     ) -> list[SkillRecord]:
         """发现技能"""
@@ -88,7 +94,7 @@ class SkillMarketManager:
         results.sort(key=lambda x: x[1], reverse=True)
         return [s[0] for s in results[:limit]]
 
-    async def get_skill_info(self, skill_id: str) -> Optional[SkillRecord]:
+    async def get_skill_info(self, skill_id: str) -> SkillRecord | None:
         """获取技能详情"""
         return self.skills.get(skill_id)
 
@@ -383,19 +389,19 @@ class SkillMarketManager:
                     await self.add_skill(skill)
 
                 except Exception as e:
-                    logger.error(f"处理技能 {skill_data['name']} 失败: {str(e)}")
+                    logger.error(f"处理技能 {skill_data['name']} 失败: {e!s}")
                     continue
 
             logger.info(f"同步完成，共添加 {len(skills_data)} 个技能")
             return len(skills_data)
 
         except Exception as e:
-            logger.error(f"同步技能失败: {str(e)}", exc_info=True)
+            logger.error(f"同步技能失败: {e!s}", exc_info=True)
             return 0
 
 
 # 全局实例
-_skill_market_manager: Optional[SkillMarketManager] = None
+_skill_market_manager: SkillMarketManager | None = None
 
 
 def get_skill_market_manager() -> SkillMarketManager:

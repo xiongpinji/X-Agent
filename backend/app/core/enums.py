@@ -1,9 +1,9 @@
 """Enumerations for agent execution and recovery."""
 
-from enum import Enum
+from enum import StrEnum
 
 
-class StepKind(str, Enum):
+class StepKind(StrEnum):
     """Agent plan step kinds."""
 
     OBSERVE = "observe"
@@ -12,7 +12,7 @@ class StepKind(str, Enum):
     FINAL = "final"
 
 
-class RecoveryBranch(str, Enum):
+class RecoveryBranch(StrEnum):
     """Recovery branch types for agent execution."""
 
     CONTINUE = "continue"
@@ -31,7 +31,7 @@ class RecoveryBranch(str, Enum):
     DESKTOP_OBSERVE = "desktop_observe"
 
 
-class TaskMode(str, Enum):
+class TaskMode(StrEnum):
     """Task execution modes."""
 
     EDIT = "edit"
@@ -41,7 +41,7 @@ class TaskMode(str, Enum):
     GENERAL = "general"
 
 
-class TaskIntent(str, Enum):
+class TaskIntent(StrEnum):
     """Task intent classification."""
 
     CODE_CHANGE = "code_change"
@@ -52,7 +52,7 @@ class TaskIntent(str, Enum):
     GENERAL = "general"
 
 
-class ToolCategory(str, Enum):
+class ToolCategory(StrEnum):
     """Tool categories for prioritization."""
 
     READ = "read"

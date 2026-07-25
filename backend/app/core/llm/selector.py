@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from enum import Enum
-from typing import Any, Optional
 import random
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
+from enum import Enum
+from typing import Any
 
 
 class TaskType(Enum):
@@ -62,8 +62,8 @@ class SelectionContext:
 
     task_type: TaskType = TaskType.UNKNOWN
     strategy: SelectionStrategy = SelectionStrategy.BALANCED
-    budget_usd: Optional[float] = None
-    max_latency_ms: Optional[float] = None
+    budget_usd: float | None = None
+    max_latency_ms: float | None = None
     required_quality_score: float = 0.0
     input_tokens: int = 0
     expected_output_tokens: int = 100
@@ -89,7 +89,7 @@ class SelectionResult:
 class ModelSelector:
     """Intelligent model selector based on task characteristics and constraints."""
 
-    def __init__(self, profiles: Optional[list[ModelProfile]] = None):
+    def __init__(self, profiles: list[ModelProfile] | None = None):
         """Initialize model selector.
 
         Args:
@@ -524,7 +524,7 @@ class ModelSelector:
         success: bool,
         latency_ms: float,
         tokens_used: int,
-        quality_score: Optional[float] = None,
+        quality_score: float | None = None,
     ) -> None:
         """Record model performance for future selection."""
         if model_name not in self._performance_history:

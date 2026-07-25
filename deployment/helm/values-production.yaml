@@ -67,7 +67,7 @@ beat:
 # 并在 external.* 填写外部端点。默认仍启用集群内单副本(适合演示/中小规模)。
 postgres:
   enabled: true
-  image: postgres:16-alpine
+  image: pgvector/pgvector:pg16
   port: 5432
   storage: 50Gi
   terminationGracePeriodSeconds: 60
@@ -112,7 +112,7 @@ qdrant:
       cpu: "1000m"
 
 neo4j:
-  enabled: true
+  enabled: false
   image: neo4j:5-community
   port: 7687
   httpPort: 7474
@@ -134,6 +134,35 @@ external:
   redisHost: ""
   qdrantHost: ""
   neo4jHost: ""
+
+# P1 新增应用环境变量
+appEnv:
+  workflowStoreBackend: postgres
+  neo4jEnabled: false
+  pythonUtf8: "1"
+
+# SSO / 身份认证配置 (P1)
+sso:
+  saml:
+    enabled: false
+    entityId: ""
+    acsUrl: ""
+    idpMetadataUrl: ""
+    idpEntityId: ""
+    nameIdFormat: "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress"
+  ldap:
+    enabled: false
+    serverUrl: ""
+    baseDn: ""
+    bindDn: ""
+    bindPassword: ""
+    userSearchFilter: "(uid={username})"
+    useTls: true
+  webauthn:
+    enabled: false
+    rpId: ""
+    rpName: "X-Agent"
+    origin: ""
 
 ingress:
   enabled: true

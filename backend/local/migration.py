@@ -6,19 +6,13 @@ Handles database schema initialization and data migration.
 
 from __future__ import annotations
 
-import json
 import logging
-from datetime import datetime, UTC
-from pathlib import Path
-from typing import Optional
+from datetime import UTC, datetime
 
-from backend.local.database import LocalDatabase, DatabaseConfig
+from backend.local.database import DatabaseConfig, LocalDatabase
 from backend.local.schema import (
     ALL_TABLES,
     SCHEMA_VERSION,
-    ENTITY_TYPES,
-    SYNC_OPERATIONS,
-    SYNC_STATES,
 )
 
 logger = logging.getLogger(__name__)
@@ -54,7 +48,7 @@ class DatabaseMigration:
                 # sqlite3 的 execute() 一次只能跑一条,必须用 executescript()。
                 for table_sql in ALL_TABLES:
                     cursor.executescript(table_sql)
-                    logger.debug(f"Created table from schema")
+                    logger.debug("Created table from schema")
 
                 # Create views
                 self._create_views(cursor)

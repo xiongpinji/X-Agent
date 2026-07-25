@@ -148,6 +148,8 @@ export class APIClient {
   }
 
   // Agent Run APIs
+  // Aligned with real backend routes: POST /api/v1/agent/run/stream exists;
+  // run lookup/list live under /api/v1/agents/runs (plural).
   async startAgentRun(task: string, extraContext?: Record<string, any>): Promise<AgentRun> {
     return this.request<AgentRun>('POST', '/agent/run/stream', {
       task,
@@ -156,7 +158,7 @@ export class APIClient {
   }
 
   async getAgentRun(runId: string): Promise<AgentRun> {
-    return this.request<AgentRun>('GET', `/agent/runs/${encodeURIComponent(runId)}`);
+    return this.request<AgentRun>('GET', `/agents/runs/${encodeURIComponent(runId)}`);
   }
 
   async listAgentRuns(limit?: number, offset?: number): Promise<{ items: AgentRun[]; total: number }> {
@@ -165,12 +167,15 @@ export class APIClient {
     if (offset) params.append('offset', String(offset));
     return this.request<{ items: AgentRun[]; total: number }>(
       'GET',
-      `/agent/runs?${params}`
+      `/agents/runs?${params}`
     );
   }
 
   async cancelAgentRun(runId: string): Promise<void> {
-    return this.request<void>('POST', `/agent/runs/${encodeURIComponent(runId)}/cancel`);
+    // The backend exposes no run-cancellation endpoint
+    // (only POST /api/v1/agents/{agent_id}/cancel for agents). Fail loudly
+    // instead of issuing a request that can only 404.
+    throw new Error(`Run cancellation is not supported by the backend yet (run: ${runId})`);
   }
 
   // Task APIs
@@ -186,7 +191,8 @@ export class APIClient {
   }
 
   async updateTask(taskId: string, updates: Partial<Task>): Promise<Task> {
-    return this.request<Task>('PATCH', `/tasks/${encodeURIComponent(taskId)}`, updates);
+    // Backend exposes PUT /api/v1/tasks/{task_id} (no PATCH).
+    return this.request<Task>('PUT', `/tasks/${encodeURIComponent(taskId)}`, updates);
   }
 
   // Question APIs

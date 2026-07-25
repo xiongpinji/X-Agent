@@ -2,10 +2,10 @@
 
 import hashlib
 import hmac
-import json
 import time
-from typing import List, Dict, Any, Optional
 from datetime import datetime
+from typing import Any
+
 import aiohttp
 
 from .base import EnterpriseIMPlatform, MessageType
@@ -14,15 +14,15 @@ from .base import EnterpriseIMPlatform, MessageType
 class DingTalkIntegration(EnterpriseIMPlatform):
     """DingTalk enterprise IM platform integration"""
 
-    def __init__(self, app_key: str, app_secret: str, corp_id: str = None):
+    def __init__(self, app_key: str, app_secret: str, corp_id: str | None = None):
         super().__init__("dingtalk")
         self.app_key = app_key
         self.app_secret = app_secret
         self.corp_id = corp_id
-        self.access_token: Optional[str] = None
-        self.token_expire_time: Optional[datetime] = None
+        self.access_token: str | None = None
+        self.token_expire_time: datetime | None = None
         self.base_url = "https://oapi.dingtalk.com"
-        self.session: Optional[aiohttp.ClientSession] = None
+        self.session: aiohttp.ClientSession | None = None
 
     async def _get_session(self) -> aiohttp.ClientSession:
         """Get or create aiohttp session"""
@@ -92,7 +92,7 @@ class DingTalkIntegration(EnterpriseIMPlatform):
             print(f"DingTalk send_message failed: {e}")
             return False
 
-    async def send_card(self, user_id: str, card: Dict[str, Any]) -> bool:
+    async def send_card(self, user_id: str, card: dict[str, Any]) -> bool:
         """Send a card message to a user"""
         if not await self._ensure_token():
             return False
@@ -153,7 +153,7 @@ class DingTalkIntegration(EnterpriseIMPlatform):
             print(f"DingTalk send_markdown failed: {e}")
             return False
 
-    async def get_user_info(self, user_id: str) -> Dict[str, Any]:
+    async def get_user_info(self, user_id: str) -> dict[str, Any]:
         """Get user information"""
         if not await self._ensure_token():
             return {}
@@ -176,7 +176,7 @@ class DingTalkIntegration(EnterpriseIMPlatform):
             print(f"DingTalk get_user_info failed: {e}")
             return {}
 
-    async def sync_contacts(self) -> List[Dict[str, Any]]:
+    async def sync_contacts(self) -> list[dict[str, Any]]:
         """Sync contacts from DingTalk"""
         if not await self._ensure_token():
             return []
@@ -213,7 +213,7 @@ class DingTalkIntegration(EnterpriseIMPlatform):
             print(f"DingTalk sync_contacts failed: {e}")
             return []
 
-    async def sync_departments(self) -> List[Dict[str, Any]]:
+    async def sync_departments(self) -> list[dict[str, Any]]:
         """Sync departments from DingTalk"""
         if not await self._ensure_token():
             return []
@@ -239,7 +239,7 @@ class DingTalkIntegration(EnterpriseIMPlatform):
             print(f"DingTalk sync_departments failed: {e}")
             return []
 
-    async def create_approval(self, template_id: str, data: Dict[str, Any]) -> str:
+    async def create_approval(self, template_id: str, data: dict[str, Any]) -> str:
         """Create an approval workflow instance"""
         if not await self._ensure_token():
             return ""
@@ -266,7 +266,7 @@ class DingTalkIntegration(EnterpriseIMPlatform):
             print(f"DingTalk create_approval failed: {e}")
             return ""
 
-    async def get_approval_status(self, approval_id: str) -> Dict[str, Any]:
+    async def get_approval_status(self, approval_id: str) -> dict[str, Any]:
         """Get approval workflow status"""
         if not await self._ensure_token():
             return {}
@@ -337,7 +337,7 @@ class DingTalkIntegration(EnterpriseIMPlatform):
             print(f"DingTalk download_file failed: {e}")
             return b""
 
-    async def send_robot_message(self, webhook_url: str, message: Dict[str, Any]) -> bool:
+    async def send_robot_message(self, webhook_url: str, message: dict[str, Any]) -> bool:
         """Send a message via DingTalk robot webhook"""
         try:
             session = await self._get_session()

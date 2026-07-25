@@ -16,7 +16,7 @@ import React, { useEffect, useState } from 'react';
 import { useAgentStore } from '../store/agentStore';
 import StreamingOutput from '../components/StreamingOutput';
 import TaskList from '../components/TaskList';
-import InteractiveQuestion, { InteractiveQuestions } from '../components/InteractiveQuestion';
+import { InteractiveQuestions } from '../components/InteractiveQuestion';
 import FilePreview from '../components/FilePreview';
 import ProgressIndicator from '../components/ProgressIndicator';
 import FolderSelector from '../components/FolderSelector';
@@ -37,15 +37,15 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
     isRunning,
     isConnected,
     error,
-    tasks,
-    messages,
+    tasks: _tasks,
+    messages: _messages,
     pendingQuestions,
     selectedFilePath,
     startRun,
     stopRun,
     fetchTasks,
     fetchPendingQuestions,
-    selectFile,
+    selectFile: _selectFile,
     clearError,
   } = useAgentStore();
 
@@ -198,8 +198,9 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
 
               {showAdvanced && (
                 <div className="advanced-options">
-                  <label className="form-label">Extra Context (JSON)</label>
+                  <label htmlFor="extra-context" className="form-label">Extra Context (JSON)</label>
                   <textarea
+                    id="extra-context"
                     value={extraContext}
                     onChange={(e) => setExtraContext(e.target.value)}
                     placeholder='{"path":"backend/app/core/agent.py"}'
@@ -271,7 +272,7 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
       {runId && (
         <div className="workspace-bottom-panel">
           <h2 className="panel-title">Tasks</h2>
-          <TaskList runId={runId} onTaskClick={(task) => {}} />
+          <TaskList runId={runId} onTaskClick={(_task) => {}} />
         </div>
       )}
     </div>

@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Any, Optional
-from datetime import datetime, timedelta
 from collections import defaultdict
-import json
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta
+from typing import Any
 
 
 @dataclass
@@ -88,8 +87,8 @@ class CostRecord:
     success: bool
     latency_ms: float
     task_type: str = "unknown"
-    user_id: Optional[str] = None
-    session_id: Optional[str] = None
+    user_id: str | None = None
+    session_id: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
@@ -122,9 +121,9 @@ class CostTracker:
         success: bool,
         latency_ms: float,
         task_type: str = "unknown",
-        user_id: Optional[str] = None,
-        session_id: Optional[str] = None,
-        metadata: Optional[dict[str, Any]] = None,
+        user_id: str | None = None,
+        session_id: str | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> None:
         """Record an LLM API call."""
         record = CostRecord(

@@ -14,8 +14,6 @@ import asyncio
 import logging
 import re
 from dataclasses import dataclass
-from pathlib import Path
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -38,11 +36,11 @@ class GitResult:
 class GitOperations:
     """Thin async wrapper over the git CLI scoped to a working directory."""
 
-    def __init__(self, cwd: Optional[str] = None, timeout: float = 120.0):
+    def __init__(self, cwd: str | None = None, timeout: float = 120.0):
         self.cwd = cwd
         self.timeout = timeout
 
-    async def _run(self, *args: str, cwd: Optional[str] = None) -> GitResult:
+    async def _run(self, *args: str, cwd: str | None = None) -> GitResult:
         work_dir = cwd or self.cwd
         proc = await asyncio.create_subprocess_exec(
             "git", *args,
@@ -52,7 +50,7 @@ class GitOperations:
         )
         try:
             out_b, err_b = await asyncio.wait_for(proc.communicate(), timeout=self.timeout)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             proc.kill()
             await proc.wait()
             return GitResult(success=False, exit_code=124, stderr="git command timed out")
@@ -67,7 +65,7 @@ class GitOperations:
             exit_code=proc.returncode or 0,
         )
 
-    async def clone(self, repo_url: str, dest: str, depth: Optional[int] = 1) -> GitResult:
+    async def clone(self, repo_url: str, dest: str, depth: int | None = 1) -> GitResult:
         """Clone a repo (shallow by default) into dest."""
         args = ["clone"]
         if depth:
@@ -84,7 +82,7 @@ class GitOperations:
     async def add_all(self) -> GitResult:
         return await self._run("add", "-A")
 
-    async def commit(self, message: str, author: Optional[str] = None) -> GitResult:
+    async def commit(self, message: str, author: str | None = None) -> GitResult:
         args = ["commit", "-m", message]
         if author:
             args += ["--author", author]

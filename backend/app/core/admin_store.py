@@ -25,9 +25,8 @@ from __future__ import annotations
 
 import json
 import logging
-from collections.abc import MutableMapping
+from collections.abc import Iterator, MutableMapping
 from datetime import UTC, datetime, timedelta
-from typing import Iterator, Optional
 
 import bcrypt
 from sqlalchemy import (
@@ -103,10 +102,10 @@ class AdminUserModel(AdminStoreBase):
     display_name: Mapped[str] = mapped_column(String(255), nullable=False, default="User")
     role: Mapped[str] = mapped_column(String(50), nullable=False, default="developer")
     tenant_id: Mapped[str] = mapped_column(String(36), nullable=False, default="default")
-    password_hash: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
     password_history_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
     failed_login_attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    locked_until: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
     )
@@ -152,7 +151,7 @@ class AdminTenantModel(AdminStoreBase):
 # 公共辅助
 # ---------------------------------------------------------------------------
 
-def _as_utc(value: Optional[datetime]) -> Optional[datetime]:
+def _as_utc(value: datetime | None) -> datetime | None:
     """把数据库读出的 datetime 规范化为带 UTC 时区。
 
     sqlite 无原生时区支持, SQLAlchemy 读出为 naive datetime(按 UTC 写入);
@@ -267,7 +266,7 @@ class SqlUserStore:
                 ) from exc
         return record
 
-    def _load_model(self, session: Session, user_id: str) -> Optional[AdminUserModel]:
+    def _load_model(self, session: Session, user_id: str) -> AdminUserModel | None:
         return session.get(AdminUserModel, user_id)
 
     def count(self) -> int:

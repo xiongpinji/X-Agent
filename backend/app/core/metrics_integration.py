@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import time
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from backend.app.core.metrics import metrics_collector
 
@@ -84,7 +85,7 @@ async def execute_agent_with_metrics(agent_id: str, task: str) -> Any:
         duration = time.perf_counter() - start
         record_agent_execution(agent_id, "success", duration)
         return result
-    except Exception as e:
+    except Exception:
         duration = time.perf_counter() - start
         record_agent_execution(agent_id, "failed", duration)
         raise
@@ -100,7 +101,7 @@ async def execute_tool_with_metrics(tool_name: str, **kwargs) -> Any:
         duration = time.perf_counter() - start
         record_tool_call(tool_name, "success", duration)
         return result
-    except Exception as e:
+    except Exception:
         duration = time.perf_counter() - start
         record_tool_call(tool_name, "failed", duration)
         raise
@@ -120,7 +121,7 @@ async def call_llm_with_metrics(model: str, prompt: str) -> dict:
 
         record_llm_call(model, "success", duration, input_tokens, output_tokens)
         return response
-    except Exception as e:
+    except Exception:
         duration = time.perf_counter() - start
         record_llm_call(model, "failed", duration)
         raise
@@ -136,7 +137,7 @@ async def retrieve_memory_with_metrics(query: str) -> list:
         duration = time.perf_counter() - start
         record_memory_operation("retrieval", "success", duration)
         return results
-    except Exception as e:
+    except Exception:
         duration = time.perf_counter() - start
         record_memory_operation("retrieval", "failed", duration)
         raise
@@ -152,7 +153,7 @@ async def execute_workflow_with_metrics(workflow_id: str) -> Any:
         duration = time.perf_counter() - start
         record_workflow_execution(workflow_id, "success", duration)
         return result
-    except Exception as e:
+    except Exception:
         duration = time.perf_counter() - start
         record_workflow_execution(workflow_id, "failed", duration)
         raise
@@ -168,7 +169,7 @@ async def query_database_with_metrics(query_type: str, query: str) -> Any:
         duration = time.perf_counter() - start
         record_db_query(query_type, "success", duration)
         return result
-    except Exception as e:
+    except Exception:
         duration = time.perf_counter() - start
         record_db_query(query_type, "failed", duration)
         raise
@@ -189,7 +190,7 @@ async def get_from_cache_with_metrics(cache_name: str, key: str) -> Any:
             value = await fetch_from_source(key)
             await set_in_cache(cache_name, key, value)
             return value
-    except Exception as e:
+    except Exception:
         record_cache_operation(cache_name, hit=False)
         raise
 
@@ -224,7 +225,7 @@ def with_metrics(metric_type: str, **metric_labels):
                     )
 
                 return result
-            except Exception as e:
+            except Exception:
                 duration = time.perf_counter() - start
 
                 if metric_type == "agent_execution":

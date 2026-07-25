@@ -1,0 +1,10 @@
+schema_version: 1
+module_path: monitoring
+title: X-Agent 可观测性监控栈（Prometheus/Grafana/ELK/Jaeger）
+scope:
+    - monitoring/
+source_files: []
+depends_on: []
+related_to:
+    - path: backend
+    - path: deployment

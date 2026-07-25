@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Any
-
 
 class ParallelToolPrompt:
     """Generates prompts to teach LLM about parallel tool calling."""

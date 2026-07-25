@@ -3,8 +3,8 @@
 """
 
 import logging
-from typing import Any, Dict, List, Optional
 from pathlib import Path
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -19,25 +19,25 @@ class DocumentProcessor:
     def _initialize_processors(self) -> None:
         """初始化各种文档处理器"""
         try:
-            from docx import Document
+            from docx import Document  # noqa: F401
             self._processors["docx"] = self._process_docx
         except ImportError:
             logger.warning("python-docx not installed, DOCX support disabled")
 
         try:
-            import PyPDF2
+            import PyPDF2  # noqa: F401
             self._processors["pdf"] = self._process_pdf
         except ImportError:
             logger.warning("PyPDF2 not installed, PDF support disabled")
 
         try:
-            from pptx import Presentation
+            from pptx import Presentation  # noqa: F401
             self._processors["pptx"] = self._process_pptx
         except ImportError:
             logger.warning("python-pptx not installed, PPTX support disabled")
 
         try:
-            import openpyxl
+            import openpyxl  # noqa: F401
             self._processors["xlsx"] = self._process_xlsx
         except ImportError:
             logger.warning("openpyxl not installed, XLSX support disabled")
@@ -47,7 +47,7 @@ class DocumentProcessor:
         file_path: str,
         operation: str,
         **kwargs
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         处理文档
 
@@ -86,7 +86,7 @@ class DocumentProcessor:
         file_path: str,
         operation: str,
         **kwargs
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """处理Word文档"""
         try:
             from docx import Document
@@ -128,7 +128,7 @@ class DocumentProcessor:
         file_path: str,
         operation: str,
         **kwargs
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """处理PDF文档"""
         try:
             import PyPDF2
@@ -168,7 +168,7 @@ class DocumentProcessor:
         file_path: str,
         operation: str,
         **kwargs
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """处理PowerPoint文档"""
         try:
             from pptx import Presentation
@@ -211,7 +211,7 @@ class DocumentProcessor:
         file_path: str,
         operation: str,
         **kwargs
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """处理Excel文档"""
         try:
             import openpyxl

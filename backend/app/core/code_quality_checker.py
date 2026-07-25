@@ -5,12 +5,11 @@ This module provides comprehensive code quality analysis including syntax checki
 style validation, complexity analysis, security scanning, and improvement suggestions.
 """
 
-from typing import List, Dict, Any, Optional, Tuple
-from dataclasses import dataclass
-from enum import Enum
-import re
 import ast
 import logging
+import re
+from dataclasses import dataclass
+from enum import Enum
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +31,7 @@ class Issue:
     message: str
     severity: IssueSeverity
     code: str
-    suggestion: Optional[str] = None
+    suggestion: str | None = None
 
 
 @dataclass
@@ -45,7 +44,7 @@ class ComplexityReport:
     classes_count: int
     average_function_length: float
     max_nesting_depth: int
-    issues: List[str]
+    issues: list[str]
 
 
 @dataclass
@@ -64,7 +63,7 @@ class Suggestion:
     category: str
     description: str
     priority: str
-    example: Optional[str] = None
+    example: str | None = None
 
 
 class CodeQualityChecker:
@@ -75,7 +74,7 @@ class CodeQualityChecker:
         self.python_issues = []
         self.security_patterns = self._init_security_patterns()
 
-    def _init_security_patterns(self) -> Dict[str, Tuple[str, str]]:
+    def _init_security_patterns(self) -> dict[str, tuple[str, str]]:
         """Initialize security vulnerability patterns."""
         return {
             "sql_injection": (
@@ -100,7 +99,7 @@ class CodeQualityChecker:
             ),
         }
 
-    def check_syntax(self, code: str, language: str) -> List[Issue]:
+    def check_syntax(self, code: str, language: str) -> list[Issue]:
         """
         Check code for syntax errors.
 
@@ -122,7 +121,7 @@ class CodeQualityChecker:
 
         return issues
 
-    def _check_python_syntax(self, code: str) -> List[Issue]:
+    def _check_python_syntax(self, code: str) -> list[Issue]:
         """Check Python syntax."""
         issues = []
         try:
@@ -140,13 +139,13 @@ class CodeQualityChecker:
             issues.append(Issue(
                 line=0,
                 column=0,
-                message=f"Parse error: {str(e)}",
+                message=f"Parse error: {e!s}",
                 severity=IssueSeverity.HIGH,
                 code="E002"
             ))
         return issues
 
-    def _check_javascript_syntax(self, code: str) -> List[Issue]:
+    def _check_javascript_syntax(self, code: str) -> list[Issue]:
         """Check JavaScript/TypeScript syntax."""
         issues = []
         # Basic regex-based checks
@@ -161,7 +160,7 @@ class CodeQualityChecker:
             ))
         return issues
 
-    def _check_java_syntax(self, code: str) -> List[Issue]:
+    def _check_java_syntax(self, code: str) -> list[Issue]:
         """Check Java syntax."""
         issues = []
         # Basic regex-based checks
@@ -175,7 +174,7 @@ class CodeQualityChecker:
             ))
         return issues
 
-    def check_style(self, code: str, language: str) -> List[Issue]:
+    def check_style(self, code: str, language: str) -> list[Issue]:
         """
         Check code style and formatting.
 
@@ -195,7 +194,7 @@ class CodeQualityChecker:
 
         return issues
 
-    def _check_python_style(self, code: str) -> List[Issue]:
+    def _check_python_style(self, code: str) -> list[Issue]:
         """Check Python code style (PEP 8)."""
         issues = []
         lines = code.split('\n')
@@ -245,7 +244,7 @@ class CodeQualityChecker:
 
         return issues
 
-    def _check_javascript_style(self, code: str) -> List[Issue]:
+    def _check_javascript_style(self, code: str) -> list[Issue]:
         """Check JavaScript/TypeScript code style."""
         issues = []
         lines = code.split('\n')
@@ -373,9 +372,7 @@ class CodeQualityChecker:
         """Calculate cognitive complexity."""
         complexity = 0
         for node in ast.walk(tree):
-            if isinstance(node, (ast.If, ast.While, ast.For)):
-                complexity += 1
-            elif isinstance(node, ast.ExceptHandler):
+            if isinstance(node, (ast.If, ast.While, ast.For, ast.ExceptHandler)):
                 complexity += 1
         return complexity
 
@@ -391,7 +388,7 @@ class CodeQualityChecker:
                 max_depth = max(max_depth, child_depth)
         return max_depth
 
-    def check_security(self, code: str, language: str) -> List[SecurityIssue]:
+    def check_security(self, code: str, language: str) -> list[SecurityIssue]:
         """
         Check code for security vulnerabilities.
 
@@ -411,7 +408,7 @@ class CodeQualityChecker:
 
         return issues
 
-    def _check_python_security(self, code: str) -> List[SecurityIssue]:
+    def _check_python_security(self, code: str) -> list[SecurityIssue]:
         """Check Python code for security issues."""
         issues = []
         lines = code.split('\n')
@@ -429,7 +426,7 @@ class CodeQualityChecker:
 
         return issues
 
-    def _check_javascript_security(self, code: str) -> List[SecurityIssue]:
+    def _check_javascript_security(self, code: str) -> list[SecurityIssue]:
         """Check JavaScript/TypeScript code for security issues."""
         issues = []
         lines = code.split('\n')
@@ -457,7 +454,7 @@ class CodeQualityChecker:
 
         return issues
 
-    def suggest_improvements(self, code: str, language: str) -> List[Suggestion]:
+    def suggest_improvements(self, code: str, language: str) -> list[Suggestion]:
         """
         Suggest code improvements.
 
@@ -497,13 +494,12 @@ class CodeQualityChecker:
             ))
 
         # Check for error handling
-        if language.lower() == "python":
-            if 'try:' not in code:
-                suggestions.append(Suggestion(
-                    category="Error Handling",
-                    description="Add try-except blocks for error handling",
-                    priority="medium"
-                ))
+        if language.lower() == "python" and 'try:' not in code:
+            suggestions.append(Suggestion(
+                category="Error Handling",
+                description="Add try-except blocks for error handling",
+                priority="medium"
+            ))
 
         # Check for logging
         if 'logger' not in code and 'logging' not in code:

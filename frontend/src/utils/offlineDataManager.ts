@@ -28,7 +28,7 @@ class OfflineDataManager {
     pendingItems: 0,
     failedItems: 0,
   };
-  private listeners: Map<string, Set<Function>> = new Map();
+  private listeners: Map<string, Set<(...args: unknown[]) => void>> = new Map();
   private syncInterval: number | null = null;
 
   constructor() {
@@ -345,7 +345,7 @@ class OfflineDataManager {
   /**
    * Add event listener
    */
-  on(event: string, callback: Function): void {
+  on(event: string, callback: (...args: unknown[]) => void): void {
     if (!this.listeners.has(event)) {
       this.listeners.set(event, new Set());
     }
@@ -355,7 +355,7 @@ class OfflineDataManager {
   /**
    * Remove event listener
    */
-  off(event: string, callback: Function): void {
+  off(event: string, callback: (...args: unknown[]) => void): void {
     this.listeners.get(event)?.delete(callback);
   }
 

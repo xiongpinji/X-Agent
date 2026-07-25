@@ -1,17 +1,18 @@
 """Enterprise IM Integration API Endpoints"""
 
-from typing import List, Dict, Any, Optional, Annotated
-from fastapi import APIRouter, Depends, HTTPException, status
+from typing import Annotated, Any
+
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
 from backend.app.api.errors import api_error
 from backend.app.core.contracts import ErrorCode
 from backend.app.core.security import Principal
 from backend.app.dependencies import enforce_scope, get_current_principal
-from backend.app.integrations.enterprise.manager import EnterpriseIMManager
-from backend.app.integrations.enterprise.message_router import MessageRouter, EventType
-from backend.app.integrations.enterprise.user_mapping import UserMapping
 from backend.app.integrations.enterprise.base import MessageType
+from backend.app.integrations.enterprise.manager import EnterpriseIMManager
+from backend.app.integrations.enterprise.message_router import MessageRouter
+from backend.app.integrations.enterprise.user_mapping import UserMapping
 
 router = APIRouter(prefix="/api/v1/enterprise-im", tags=["enterprise-im"])
 PrincipalDependency = Annotated[Principal, Depends(get_current_principal)]
@@ -26,9 +27,9 @@ _user_mapping = UserMapping()
 class PlatformConfigRequest(BaseModel):
     """Platform configuration request"""
     platform: str = Field(..., min_length=1, max_length=50)
-    credentials: Dict[str, str] = Field(...)
+    credentials: dict[str, str] = Field(...)
     enabled: bool = True
-    metadata: Dict[str, Any] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class SendMessageRequest(BaseModel):
@@ -43,12 +44,12 @@ class SendCardRequest(BaseModel):
     """Send card message request"""
     platform: str = Field(..., min_length=1, max_length=50)
     user_id: str = Field(..., min_length=1, max_length=200)
-    card: Dict[str, Any] = Field(...)
+    card: dict[str, Any] = Field(...)
 
 
 class BroadcastMessageRequest(BaseModel):
     """Broadcast message request"""
-    platforms: List[str] = Field(default_factory=list)
+    platforms: list[str] = Field(default_factory=list)
     message: str = Field(..., min_length=1, max_length=10000)
     msg_type: str = Field(default="text", pattern="^(text|markdown|card)$")
 
@@ -57,7 +58,7 @@ class CreateApprovalRequest(BaseModel):
     """Create approval request"""
     platform: str = Field(..., min_length=1, max_length=50)
     template_id: str = Field(..., min_length=1, max_length=200)
-    data: Dict[str, Any] = Field(...)
+    data: dict[str, Any] = Field(...)
 
 
 class UserMappingRequest(BaseModel):
@@ -65,7 +66,7 @@ class UserMappingRequest(BaseModel):
     internal_user_id: str = Field(..., min_length=1, max_length=200)
     platform: str = Field(..., min_length=1, max_length=50)
     platform_user_id: str = Field(..., min_length=1, max_length=200)
-    metadata: Dict[str, Any] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 # Platform Configuration Endpoints
@@ -73,7 +74,7 @@ class UserMappingRequest(BaseModel):
 async def configure_platform(
     request: PlatformConfigRequest,
     principal: PrincipalDependency,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Configure a platform"""
     enforce_scope(principal, "security:manage")
 
@@ -115,7 +116,7 @@ async def configure_platform(
 @router.get("/platforms")
 async def list_platforms(
     principal: PrincipalDependency,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """List all configured platforms"""
     enforce_scope(principal, "security:manage")
 
@@ -132,7 +133,7 @@ async def list_platforms(
 async def get_platform_status(
     platform: str,
     principal: PrincipalDependency,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Get platform status"""
     enforce_scope(principal, "security:manage")
 
@@ -147,7 +148,7 @@ async def get_platform_status(
 async def health_check_platform(
     platform: str,
     principal: PrincipalDependency,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Check platform health"""
     enforce_scope(principal, "security:manage")
 
@@ -170,7 +171,7 @@ async def health_check_platform(
 async def send_message(
     request: SendMessageRequest,
     principal: PrincipalDependency,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Send a message to a user"""
     enforce_scope(principal, "security:manage")
 
@@ -196,7 +197,7 @@ async def send_message(
 async def broadcast_message(
     request: BroadcastMessageRequest,
     principal: PrincipalDependency,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Broadcast a message to all users"""
     enforce_scope(principal, "security:manage")
 
@@ -222,7 +223,7 @@ async def broadcast_message(
 async def send_card(
     request: SendCardRequest,
     principal: PrincipalDependency,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Send a card message"""
     enforce_scope(principal, "security:manage")
 
@@ -245,9 +246,9 @@ async def send_card(
 # Contacts Endpoints
 @router.post("/contacts/sync")
 async def sync_contacts(
-    platform: Optional[str] = None,
+    platform: str | None = None,
     principal: PrincipalDependency = None,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Sync contacts from platforms"""
     enforce_scope(principal, "security:manage")
 
@@ -281,9 +282,9 @@ async def sync_contacts(
 
 @router.get("/contacts/users")
 async def list_users(
-    platform: Optional[str] = None,
+    platform: str | None = None,
     principal: PrincipalDependency = None,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """List users"""
     enforce_scope(principal, "security:manage")
 
@@ -303,9 +304,9 @@ async def list_users(
 
 @router.get("/contacts/departments")
 async def list_departments(
-    platform: Optional[str] = None,
+    platform: str | None = None,
     principal: PrincipalDependency = None,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """List departments"""
     enforce_scope(principal, "security:manage")
 
@@ -339,7 +340,7 @@ async def list_departments(
 async def create_approval(
     request: CreateApprovalRequest,
     principal: PrincipalDependency,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Create an approval"""
     enforce_scope(principal, "security:manage")
 
@@ -366,7 +367,7 @@ async def get_approval(
     approval_id: str,
     platform: str,
     principal: PrincipalDependency,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Get approval status"""
     enforce_scope(principal, "security:manage")
 
@@ -390,7 +391,7 @@ async def get_approval(
 async def map_user(
     request: UserMappingRequest,
     principal: PrincipalDependency,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Map a user across platforms"""
     enforce_scope(principal, "security:manage")
 
@@ -419,7 +420,7 @@ async def map_user(
 async def get_user_mappings(
     internal_user_id: str,
     principal: PrincipalDependency,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Get user mappings"""
     enforce_scope(principal, "security:manage")
 
@@ -440,7 +441,7 @@ async def get_user_mappings(
 @router.get("/stats/delivery")
 async def get_delivery_stats(
     principal: PrincipalDependency,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Get message delivery statistics"""
     enforce_scope(principal, "security:manage")
 
@@ -453,7 +454,7 @@ async def get_delivery_stats(
 @router.get("/stats/mapping")
 async def get_mapping_stats(
     principal: PrincipalDependency,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Get user mapping statistics"""
     enforce_scope(principal, "security:manage")
 
@@ -463,7 +464,7 @@ async def get_mapping_stats(
 @router.get("/stats/sync")
 async def get_sync_stats(
     principal: PrincipalDependency,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Get sync statistics"""
     enforce_scope(principal, "security:manage")
 

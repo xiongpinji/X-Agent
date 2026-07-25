@@ -95,7 +95,7 @@ STORYBOARD_GATES = [
 ]
 
 # 合成前完整质量门（含素材检查）
-PRE_COMPOSE_GATES = STORYBOARD_GATES + [gate_missing_assets]
+PRE_COMPOSE_GATES = [*STORYBOARD_GATES, gate_missing_assets]
 
 
 def run_gates(sb: Storyboard, gates=None) -> list[QualityGate]:

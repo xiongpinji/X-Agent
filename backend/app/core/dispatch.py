@@ -306,7 +306,7 @@ def _score_candidates(context: DispatchContext, org_view: dict[str, object], dep
         "agent_score": float(len(agent_view.get("child_agents") or [])) * 0.1,
         "session_score": 1.0 if session_view.get("session_summary") else 0.0,
         "collaboration_score": 1.0 if collaboration_view.get("selected_room") else 0.0,
-        "memory_score": float(len((session_view.get("session_layers") or []))) * 0.05,
+        "memory_score": float(len(session_view.get("session_layers") or [])) * 0.05,
         "replay_score": 1.0 if replay_audit_view.get("replay_hints") else 0.0,
         "audit_score": 1.0 if replay_audit_view.get("audit_hints") else 0.0,
     }
@@ -406,7 +406,7 @@ def _build_suggestion(context: DispatchContext, org_view: dict[str, object], dep
         next_actions.append(DispatchAction(action="open_replay_view", target=context.trace_id, reason="Replay hints are available for recovery.", priority=60, required_scope=["workflow:create"], parameters={"trace_id": context.trace_id}))
     if replay_audit_view.get("audit_hints"):
         next_actions.append(DispatchAction(action="open_audit_chain", target=context.trace_id, reason="Audit hints are available for validation.", priority=55, required_scope=["audit:read"], parameters={"trace_id": context.trace_id}))
-    workflow = DispatchWorkflow(
+    DispatchWorkflow(
         trace_id=context.trace_id,
         task=context.task,
         steps=[

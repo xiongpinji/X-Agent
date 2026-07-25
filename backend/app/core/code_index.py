@@ -53,7 +53,7 @@ class CodeIndex:
         return {"root": str(base), "count": len(self._files), "files": [file.__dict__ for file in self._files[: max(1, limit)]]}
 
     def related_files(self, query: str, limit: int = 10) -> list[dict[str, Any]]:
-        terms = [term for term in self._normalize_terms(query)]
+        terms = list(self._normalize_terms(query))
         scored: list[tuple[int, IndexedFile]] = []
         for file in self._files:
             haystack = f"{file.path} {file.suffix} {' '.join(file.keywords)} {' '.join(file.symbols)} {' '.join(file.imports)}".lower()

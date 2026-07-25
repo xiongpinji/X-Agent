@@ -16,10 +16,10 @@ const STATIC_ASSETS = [
   '/manifest.json',
 ];
 
-const API_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
-const STALE_WHILE_REVALIDATE_DURATION = 24 * 60 * 60 * 1000; // 24 hours
+const _API_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+const _STALE_WHILE_REVALIDATE_DURATION = 24 * 60 * 60 * 1000; // 24 hours
 
-interface CacheEntry {
+interface _CacheEntry {
   timestamp: number;
   data: Response;
 }

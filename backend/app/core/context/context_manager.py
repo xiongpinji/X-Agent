@@ -6,16 +6,26 @@ Coordinates context compression, session recovery, and hybrid memory management.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
-from backend.app.core.context_compactor import (
-    CompactionMetrics,
-    CompactionResult,
-    ContextCompactor,
+from backend.app.core.context.code_index import (
+    CodebaseIndex,
+    CodeMatch,
+    IndexStats,
+)
+from backend.app.core.context.compression import (
+    CompressedContext,
+    ContextCompressor,
+)
+from backend.app.core.context.retrieval import (
+    ContextItem,
+    ContextRetriever,
+    RetrievalWeights,
 )
 from backend.app.core.context.session_recovery import (
     Message,
@@ -23,20 +33,10 @@ from backend.app.core.context.session_recovery import (
     SessionState,
     SessionStats,
 )
-from backend.app.core.context.compression import (
-    ContextCompressor,
-    CompressedContext,
-    KeyInfo,
-)
-from backend.app.core.context.retrieval import (
-    ContextRetriever,
-    ContextItem,
-    RetrievalWeights,
-)
-from backend.app.core.context.code_index import (
-    CodebaseIndex,
-    CodeMatch,
-    IndexStats,
+from backend.app.core.context_compactor import (
+    CompactionMetrics,
+    CompactionResult,
+    ContextCompactor,
 )
 
 logger = logging.getLogger(__name__)
@@ -51,7 +51,7 @@ class ContextMetrics:
     compressed_tokens: int = 0
     compression_ratio: float = 1.0
     compression_count: int = 0
-    last_compression_time: Optional[datetime] = None
+    last_compression_time: datetime | None = None
     average_compression_duration_ms: float = 0.0
     memory_usage_mb: float = 0.0
 
@@ -102,25 +102,25 @@ class ContextManager:
         self._codebase_index = codebase_index
 
         # Current session state
-        self._current_session: Optional[SessionState] = None
-        self._session_id: Optional[str] = None
+        self._current_session: SessionState | None = None
+        self._session_id: str | None = None
 
         # Metrics
         self._metrics = ContextMetrics()
 
         # Locks for thread safety
         self._lock = asyncio.Lock()
-        self._save_task: Optional[asyncio.Task] = None
+        self._save_task: asyncio.Task | None = None
 
         logger.info("ContextManager initialized")
 
     @property
-    def current_session(self) -> Optional[SessionState]:
+    def current_session(self) -> SessionState | None:
         """当前活跃会话（只读视图；无活跃会话时为 None）。"""
         return self._current_session
 
     @property
-    def current_session_id(self) -> Optional[str]:
+    def current_session_id(self) -> str | None:
         """当前活跃会话 ID（无活跃会话时为 None）。"""
         return self._session_id
 
@@ -219,7 +219,7 @@ class ContextManager:
                 # Add to session
                 self._current_session.messages.append(message)
                 self._current_session.total_tokens += token_count
-                self._current_session.updated_at = datetime.now(timezone.utc)
+                self._current_session.updated_at = datetime.now(UTC)
 
                 # Update metrics
                 self._metrics.total_messages += 1
@@ -362,7 +362,7 @@ class ContextManager:
             older_messages = all_messages[:-min_keep]
             original_tokens = sum(msg.token_count for msg in all_messages)
             messages_before = len(all_messages)
-            started_at = datetime.now(timezone.utc)
+            started_at = datetime.now(UTC)
 
             summary_message: Message | None = None
             kept_older: list[Message] = []
@@ -437,7 +437,7 @@ class ContextManager:
             compressed_tokens = self._current_session.total_tokens
             compression_ratio = compressed_tokens / original_tokens if original_tokens > 0 else 1.0
 
-            finished_at = datetime.now(timezone.utc)
+            finished_at = datetime.now(UTC)
             duration_ms = (finished_at - started_at).total_seconds() * 1000
 
             self._current_session.compression_history.append(
@@ -657,10 +657,8 @@ class ContextManager:
         """Stop automatic session saving."""
         if self._save_task:
             self._save_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._save_task
-            except asyncio.CancelledError:
-                pass
             self._save_task = None
             logger.info("Stopped auto-save loop")
 

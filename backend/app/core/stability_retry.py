@@ -21,20 +21,21 @@ from __future__ import annotations
 import logging
 import random
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from enum import Enum
+from enum import StrEnum
 from threading import RLock
-from typing import Any, Callable, Optional, TypeVar
+from typing import Any, TypeVar
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
 
 
-class RetryStrategy(str, Enum):
+class RetryStrategy(StrEnum):
     """Retry strategies"""
     EXPONENTIAL_BACKOFF = "exponential_backoff"
     LINEAR_BACKOFF = "linear_backoff"
@@ -128,7 +129,7 @@ class RetryContext:
         self.attempt_count = 0
         self.retry_count = 0
         self.total_backoff_time = 0.0
-        self.last_exception: Optional[Exception] = None
+        self.last_exception: Exception | None = None
         self.start_time = time.time()
 
     def should_retry(self, exception: Exception) -> bool:
@@ -159,7 +160,7 @@ class RetryContext:
 
         return delay
 
-    def record_attempt(self, success: bool, exception: Optional[Exception] = None) -> None:
+    def record_attempt(self, success: bool, exception: Exception | None = None) -> None:
         """Record an attempt"""
         self.attempt_count += 1
         if exception:

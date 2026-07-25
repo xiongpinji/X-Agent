@@ -8,12 +8,11 @@ import json
 import logging
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Optional
 
-from backend.app.models.user_store import get_user_store
+from backend.app.core.database import init_db_manager
 from backend.app.models.api_key_store import get_api_key_store
 from backend.app.models.approval_store import get_approval_store
-from backend.app.core.database import init_db_manager
+from backend.app.models.user_store import get_user_store
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +23,7 @@ class DataMigrator:
     def __init__(
         self,
         database_url: str,
-        redis_url: Optional[str] = None,
+        redis_url: str | None = None,
     ):
         self.database_url = database_url
         self.redis_url = redis_url
@@ -50,7 +49,7 @@ class DataMigrator:
             return 0
 
         try:
-            with open(json_file, "r") as f:
+            with open(json_file) as f:
                 data = json.load(f)
 
             user_store = get_user_store()
@@ -88,7 +87,7 @@ class DataMigrator:
             return 0
 
         try:
-            with open(json_file, "r") as f:
+            with open(json_file) as f:
                 data = json.load(f)
 
             api_key_store = get_api_key_store()
@@ -128,7 +127,7 @@ class DataMigrator:
             return 0
 
         try:
-            with open(json_file, "r") as f:
+            with open(json_file) as f:
                 data = json.load(f)
 
             approval_store = get_approval_store()
@@ -184,7 +183,7 @@ class DataMigrator:
 
 async def run_migration(
     database_url: str,
-    redis_url: Optional[str] = None,
+    redis_url: str | None = None,
     data_dir: Path = Path("data"),
 ) -> dict:
     """运行完整的数据迁移"""

@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-import json
 import logging
-import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import uuid4
@@ -461,15 +459,14 @@ class SessionManager:
                 return False, f"IP blocked: {ip_address}"
 
             # Check device trust
-            if "require_trusted_device" in policy.conditions:
-                if device_id:
-                    sessions = self._device_sessions.get(device_id, [])
-                    trusted = any(
-                        self.get_session(sid) and self.get_session(sid).trusted_device
-                        for sid in sessions
-                    )
-                    if not trusted:
-                        return False, "Device not trusted"
+            if "require_trusted_device" in policy.conditions and device_id:
+                sessions = self._device_sessions.get(device_id, [])
+                trusted = any(
+                    self.get_session(sid) and self.get_session(sid).trusted_device
+                    for sid in sessions
+                )
+                if not trusted:
+                    return False, "Device not trusted"
 
         return True, "Access allowed"
 

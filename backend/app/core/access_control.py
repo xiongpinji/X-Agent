@@ -12,7 +12,7 @@ Provides:
 from __future__ import annotations
 
 import logging
-from typing import Callable, Optional
+from collections.abc import Callable
 
 from fastapi import HTTPException, Request, status
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -76,7 +76,7 @@ class AccessControlMiddleware(BaseHTTPMiddleware):
         return response
 
     @staticmethod
-    def _extract_api_key(request: Request) -> Optional[str]:
+    def _extract_api_key(request: Request) -> str | None:
         """Extract API key from request."""
         # Check Authorization header
         auth_header = request.headers.get("Authorization", "")
@@ -94,7 +94,7 @@ class AccessControlMiddleware(BaseHTTPMiddleware):
         return None
 
     @staticmethod
-    def _get_client_ip(request: Request) -> Optional[str]:
+    def _get_client_ip(request: Request) -> str | None:
         """Get client IP address."""
         # Check X-Forwarded-For header (for proxies)
         if "X-Forwarded-For" in request.headers:
@@ -133,7 +133,7 @@ class PermissionChecker:
         self,
         request: Request,
         permission: PermissionLevel,
-        resource_id: Optional[str] = None,
+        resource_id: str | None = None,
     ) -> None:
         """Check if request has required permission.
 
@@ -260,7 +260,7 @@ class AuditLoggingMiddleware(BaseHTTPMiddleware):
         return response
 
     @staticmethod
-    def _get_client_ip(request: Request) -> Optional[str]:
+    def _get_client_ip(request: Request) -> str | None:
         """Get client IP address."""
         if "X-Forwarded-For" in request.headers:
             return request.headers["X-Forwarded-For"].split(",")[0].strip()

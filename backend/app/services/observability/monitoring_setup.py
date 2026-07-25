@@ -3,13 +3,12 @@
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
 from fastapi import FastAPI
 
-from backend.app.services.observability.prometheus_middleware import PrometheusMiddleware
-from backend.app.services.observability.logging_config import setup_logging
 from backend.app.services.observability.jaeger_tracing import setup_jaeger_tracing
+from backend.app.services.observability.logging_config import setup_logging
+from backend.app.services.observability.prometheus_middleware import PrometheusMiddleware
 from backend.app.settings import get_settings
 
 logger = logging.getLogger(__name__)
@@ -22,7 +21,7 @@ class MonitoringSetup:
         self.settings = get_settings()
         self.jaeger_config = None
 
-    def setup_logging(self, log_level: str = "INFO", log_dir: Optional[str] = None) -> None:
+    def setup_logging(self, log_level: str = "INFO", log_dir: str | None = None) -> None:
         """Setup structured logging."""
         try:
             setup_logging(
@@ -46,7 +45,7 @@ class MonitoringSetup:
     def setup_jaeger(
         self,
         app: FastAPI,
-        engine: Optional[object] = None,
+        engine: object | None = None,
     ) -> None:
         """Setup Jaeger distributed tracing."""
         try:
@@ -75,9 +74,9 @@ class MonitoringSetup:
     def setup_all(
         self,
         app: FastAPI,
-        engine: Optional[object] = None,
+        engine: object | None = None,
         log_level: str = "INFO",
-        log_dir: Optional[str] = None,
+        log_dir: str | None = None,
     ) -> None:
         """Setup all monitoring components."""
         logger.info("Starting monitoring setup...")
@@ -96,7 +95,7 @@ class MonitoringSetup:
 
 def setup_monitoring(
     app: FastAPI,
-    engine: Optional[object] = None,
+    engine: object | None = None,
 ) -> MonitoringSetup:
     """Setup monitoring for X-Agent application."""
     monitoring = MonitoringSetup()

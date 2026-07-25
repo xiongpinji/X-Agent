@@ -1,0 +1,117 @@
+# P2-05: Argo Rollouts AnalysisTemplate — Prometheus 指标门控
+# 金丝雀每步推进前自动查询 Prometheus, 不达标则自动回滚
+#
+# 指标来源: 后端 /api/v1/metrics/prometheus 暴露的 http_requests_total / http_request_duration_seconds
+# 前置条件: Prometheus 已部署且可被 AnalysisRun Pod 访问 (默认 http://prometheus.monitoring:9090)
+---
+# 成功率分析: 5xx 错误率 < 1%
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: xagent-canary-success-rate
+  namespace: xagent
+spec:
+  args:
+  - name: canary-hash
+    value: "unknown"
+  metrics:
+  - name: success-rate
+    interval: 60s
+    # 连续 3 次失败才判定不通过 (避免瞬时抖动误回滚)
+    failureLimit: 3
+    successCondition: result[0] >= 0.99
+    provider:
+      prometheus:
+        address: http://prometheus.monitoring.svc.cluster.local:9090
+        query: |
+          sum(rate(
+            http_requests_total{
+              app="xagent-api",
+              pod_template_hash="{{args.canary-hash}}",
+              status!~"5.."
+            }[5m]
+          ))
+          /
+          sum(rate(
+            http_requests_total{
+              app="xagent-api",
+              pod_template_hash="{{args.canary-hash}}"
+            }[5m]
+          ))
+---
+# 延迟分析: P95 < 1s
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: xagent-canary-latency
+  namespace: xagent
+spec:
+  args:
+  - name: canary-hash
+    value: "unknown"
+  metrics:
+  - name: latency-p95
+    interval: 60s
+    failureLimit: 3
+    successCondition: result[0] <= 1.0
+    provider:
+      prometheus:
+        address: http://prometheus.monitoring.svc.cluster.local:9090
+        query: |
+          histogram_quantile(0.95,
+            sum(rate(
+              http_request_duration_seconds_bucket{
+                app="xagent-api",
+                pod_template_hash="{{args.canary-hash}}"
+              }[5m]
+            )) by (le)
+          )
+---
+# 后台持续分析 (Background Analysis): 整个金丝雀期间持续监控
+# 与 step-level analysis 互补, 覆盖步骤间 pause 期间的异常
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: xagent-canary-background
+  namespace: xagent
+spec:
+  args:
+  - name: canary-hash
+    value: "unknown"
+  metrics:
+  - name: error-rate-bg
+    interval: 30s
+    failureLimit: 5
+    successCondition: result[0] < 0.02
+    provider:
+      prometheus:
+        address: http://prometheus.monitoring.svc.cluster.local:9090
+        query: |
+          sum(rate(
+            http_requests_total{
+              app="xagent-api",
+              pod_template_hash="{{args.canary-hash}}",
+              status=~"5.."
+            }[2m]
+          ))
+          /
+          sum(rate(
+            http_requests_total{
+              app="xagent-api",
+              pod_template_hash="{{args.canary-hash}}"
+            }[2m]
+          ))
+  - name: pod-restarts-bg
+    interval: 60s
+    failureLimit: 2
+    successCondition: result[0] <= 1
+    provider:
+      prometheus:
+        address: http://prometheus.monitoring.svc.cluster.local:9090
+        query: |
+          sum(increase(
+            kube_pod_container_status_restarts_total{
+              namespace="xagent",
+              pod=~"xagent-api-rollout-{{args.canary-hash}}.*"
+            }[5m]
+          ))

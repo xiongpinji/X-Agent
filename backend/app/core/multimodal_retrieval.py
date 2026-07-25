@@ -14,13 +14,11 @@ from __future__ import annotations
 import asyncio
 import math
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
-import numpy as np
 
-
-class RetrievalType(str, Enum):
+class RetrievalType(StrEnum):
     """检索类型枚举"""
     TEXT_TO_IMAGE = "text_to_image"
     IMAGE_TO_TEXT = "image_to_text"
@@ -154,7 +152,7 @@ class ModalityIndexer:
         if not vec1 or not vec2:
             return 0.0
 
-        dot_product = sum(a * b for a, b in zip(vec1, vec2))
+        dot_product = sum(a * b for a, b in zip(vec1, vec2, strict=False))
         norm1 = math.sqrt(sum(a * a for a in vec1))
         norm2 = math.sqrt(sum(b * b for b in vec2))
 
@@ -248,7 +246,7 @@ class CrossModalRetriever:
 
         # 合并结果
         combined = []
-        for modality, matches in zip(all_modalities, modality_results):
+        for modality, matches in zip(all_modalities, modality_results, strict=False):
             for item_id, score in matches:
                 combined.append((item_id, score, modality))
 

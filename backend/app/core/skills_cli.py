@@ -3,16 +3,13 @@
 from __future__ import annotations
 
 import asyncio
-import sys
-from pathlib import Path
-from typing import Any
 import json
+import sys
 
-from .skills_loader import get_skill_loader
-from .skills_registry import get_skill_registry
 from .skills_executor import get_skill_executor
+from .skills_loader import get_skill_loader
 from .skills_marketplace import get_skill_marketplace
-from .skills_core import SkillMetadata, SkillCapability
+from .skills_registry import get_skill_registry
 
 
 class SkillCLI:
@@ -84,11 +81,11 @@ class SkillCLI:
             print(f"Downloads: {rating.download_count}")
 
         if installation:
-            print(f"\nInstalled: Yes")
+            print("\nInstalled: Yes")
             print(f"Install Path: {installation.install_path}")
             print(f"Installed At: {installation.installed_at}")
         else:
-            print(f"\nInstalled: No")
+            print("\nInstalled: No")
 
     async def install_skill(self, skill_id: str, user_id: str = "") -> None:
         """Install a skill"""
@@ -130,7 +127,7 @@ class SkillCLI:
         # Load input data
         input_data = {}
         if input_file:
-            with open(input_file, "r") as f:
+            with open(input_file) as f:
                 input_data = json.load(f)
 
         print(f"Executing skill: {skill_name}...")
@@ -141,7 +138,7 @@ class SkillCLI:
         )
 
         if result.success:
-            print(f"Execution successful!")
+            print("Execution successful!")
             print(f"Output: {json.dumps(result.data, indent=2, default=str)}")
             print(f"Execution time: {result.execution_time_ms:.2f}ms")
         else:
@@ -257,7 +254,7 @@ async def main():
             await cli.show_help()
 
     except Exception as e:
-        print(f"Error: {str(e)}", file=sys.stderr)
+        print(f"Error: {e!s}", file=sys.stderr)
         sys.exit(1)
 
 

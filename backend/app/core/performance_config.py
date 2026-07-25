@@ -81,9 +81,9 @@ async def setup_performance_optimizations(app: FastAPI) -> None:
     # 2. Setup Multi-Level Cache
     logger.info("Setting up multi-level cache...")
     from backend.app.core.cache_optimization import (
-        MultiLevelCache,
-        CacheWarmer,
         CachePreloader,
+        CacheWarmer,
+        MultiLevelCache,
     )
 
     # Assuming Redis client is available
@@ -117,7 +117,7 @@ async def setup_performance_optimizations(app: FastAPI) -> None:
 
     # 3. Setup Performance Monitoring
     logger.info("Setting up performance monitoring...")
-    from backend.app.core.performance_monitor import PerformanceMonitor, PerformanceAlert
+    from backend.app.core.performance_monitor import PerformanceAlert, PerformanceMonitor
 
     monitor = PerformanceMonitor(window_size=PerformanceConfig.METRICS_WINDOW_SIZE)
     app.state.monitor = monitor
@@ -132,11 +132,11 @@ async def setup_performance_optimizations(app: FastAPI) -> None:
     # 4. Add Middleware
     logger.info("Adding performance middleware...")
     from backend.app.core.performance_middleware import (
-        PerformanceMonitoringMiddleware,
-        ResponseCompressionMiddleware,
         CacheHeaderMiddleware,
-        RequestDeduplicationMiddleware,
+        PerformanceMonitoringMiddleware,
         RateLimitingMiddleware,
+        RequestDeduplicationMiddleware,
+        ResponseCompressionMiddleware,
     )
 
     # Add middleware in reverse order (they execute in reverse order)
@@ -172,8 +172,9 @@ async def shutdown_performance_optimizations(app: FastAPI) -> None:
 # API ENDPOINT EXAMPLES WITH OPTIMIZATION
 # ============================================================================
 
-from fastapi import APIRouter, Depends, Query, Request
-from backend.app.core.api_optimization import ResponseOptimizer, PaginationHelper
+from fastapi import APIRouter, Query, Request
+
+from backend.app.core.api_optimization import PaginationHelper, ResponseOptimizer
 
 router = APIRouter(prefix="/api/v1", tags=["optimized"])
 

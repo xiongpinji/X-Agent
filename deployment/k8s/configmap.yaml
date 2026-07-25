@@ -24,3 +24,28 @@ data:
   # Neo4j
   NEO4J_PORT: "7687"
   NEO4J_USER: "neo4j"
+  # P1: Python UTF-8 模式 (PEP 540)
+  PYTHONUTF8: "1"
+  # P1: 工作流存储后端
+  XAGENT_WORKFLOW_STORE_BACKEND: "postgres"
+  # P1: Neo4j 功能开关 (默认关闭)
+  XAGENT_NEO4J_ENABLED: "false"
+  # P1: SSO - SAML
+  XAGENT_SAML_ENABLED: "false"
+  XAGENT_SAML_ENTITY_ID: ""
+  XAGENT_SAML_ACS_URL: ""
+  XAGENT_SAML_IDP_METADATA_URL: ""
+  XAGENT_SAML_IDP_ENTITY_ID: ""
+  XAGENT_SAML_NAME_ID_FORMAT: "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress"
+  # P1: SSO - LDAP
+  XAGENT_LDAP_ENABLED: "false"
+  XAGENT_LDAP_SERVER_URL: ""
+  XAGENT_LDAP_BASE_DN: ""
+  XAGENT_LDAP_BIND_DN: ""
+  XAGENT_LDAP_USER_SEARCH_FILTER: "(uid={username})"
+  XAGENT_LDAP_USE_TLS: "true"
+  # P1: SSO - WebAuthn
+  XAGENT_WEBAUTHN_ENABLED: "false"
+  XAGENT_WEBAUTHN_RP_ID: ""
+  XAGENT_WEBAUTHN_RP_NAME: "X-Agent"
+  XAGENT_WEBAUTHN_ORIGIN: ""

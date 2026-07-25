@@ -3,11 +3,9 @@
 from __future__ import annotations
 
 import logging
-import asyncio
-from typing import Optional, list
 from dataclasses import dataclass
-from datetime import datetime, UTC
-import json
+from datetime import UTC, datetime
+from typing import list
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +50,6 @@ class SkillCrawler:
         limit: int = 30,
     ) -> list[RepositoryInfo]:
         """搜索GitHub上的技能仓库"""
-        repos = []
 
         # 模拟搜索结果（实际应该调用GitHub API）
         # 这里返回示例数据
@@ -96,7 +93,6 @@ class SkillCrawler:
         limit: int = 30,
     ) -> list[RepositoryInfo]:
         """搜索Gitee上的技能仓库"""
-        repos = []
 
         # 模拟搜索结果
         example_repos = [
@@ -123,7 +119,7 @@ class SkillCrawler:
         return example_repos[:limit]
 
     @staticmethod
-    async def fetch_skill_md(repo_url: str) -> Optional[str]:
+    async def fetch_skill_md(repo_url: str) -> str | None:
         """获取仓库中的SKILL.md文件"""
         # 模拟获取SKILL.md内容
         # 实际应该从GitHub/Gitee API获取
@@ -178,7 +174,7 @@ def add(a, b):
 
     @staticmethod
     async def crawl_all_skills(
-        sources: list[str] = None,
+        sources: list[str] | None = None,
         limit: int = 100,
     ) -> list[dict]:
         """爬取所有技能"""
@@ -230,7 +226,7 @@ class SkillCacheManager:
         self.cache_dir = cache_dir
         self.cache = {}
 
-    def get(self, key: str) -> Optional[dict]:
+    def get(self, key: str) -> dict | None:
         """获取缓存"""
         return self.cache.get(key)
 
@@ -292,7 +288,7 @@ class SkillUpdateScheduler:
             logger.info(f"技能列表更新完成，共 {len(skills)} 个技能")
             return skills
         except Exception as e:
-            logger.error(f"技能更新失败: {str(e)}", exc_info=True)
+            logger.error(f"技能更新失败: {e!s}", exc_info=True)
             return []
         finally:
             self.is_updating = False

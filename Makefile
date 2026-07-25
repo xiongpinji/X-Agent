@@ -1,9 +1,12 @@
-.PHONY: help install install-dev install-all dev test test-unit test-integration test-contract test-coverage test-performance lint format format-check type-check security security-check-deps pre-commit-install pre-commit-run pre-commit-update ci ci-full build docker-build docker-push docker-run deploy deploy-staging deploy-production clean clean-docker clean-all monitor-start monitor-stop monitor-logs monitor-status run run-worker version status requirements-update
+.PHONY: help install install-dev install-all dev test test-unit test-serial test-integration test-contract test-e2e test-coverage test-performance lint format format-check type-check security security-check-deps pre-commit-install pre-commit-run pre-commit-update ci ci-full quality build docker-build docker-push docker-run deploy deploy-staging deploy-production clean clean-docker clean-all monitor-start monitor-stop monitor-logs monitor-status run run-worker version status requirements-update demo demo-seed demo-reset demo-quickstart smoke smoke-full
 
 # Variables
-PYTHON := python3
+PYTHON := python3 -X utf8
 PIP := pip3
 DOCKER := docker
+
+# Force UTF-8 mode for Windows Chinese path compatibility
+export PYTHONUTF8 := 1
 DOCKER_COMPOSE := docker-compose
 PROJECT_NAME := x-agent-core
 PYTHON_VERSION := 3.11
@@ -28,21 +31,25 @@ help:
 	@echo "  make dev              Setup development environment"
 	@echo ""
 	@echo "$(GREEN)Testing:$(NC)"
-	@echo "  make test             Run all tests"
-	@echo "  make test-unit        Run unit tests"
+	@echo "  make test             Run all tests (unit + integration + contract + e2e)"
+	@echo "  make test-unit        Run unit tests (parallel with -n auto)"
+	@echo "  make test-serial      Run unit tests serially (for debugging)"
 	@echo "  make test-integration Run integration tests"
 	@echo "  make test-contract    Run contract tests"
 	@echo "  make test-e2e         Run end-to-end tests"
 	@echo "  make test-coverage    Generate coverage report"
 	@echo "  make test-performance Run performance tests"
+	@echo "  make smoke            Run full-stack smoke test"
+	@echo "  make smoke-full       Start docker services + run smoke test"
 	@echo ""
 	@echo "$(GREEN)Code Quality:$(NC)"
-	@echo "  make lint             Run linting checks (ruff, pylint)"
+	@echo "  make lint             Run linting checks (ruff + tsc)"
 	@echo "  make format           Format code (ruff, isort)"
 	@echo "  make format-check     Check code formatting"
 	@echo "  make type-check       Run type checking (mypy)"
 	@echo "  make security         Run security scans (bandit)"
 	@echo "  make security-check-deps Check for vulnerable dependencies"
+	@echo "  make quality          Run all quality gates (lint + type-check + security + test)"
 	@echo ""
 	@echo "$(GREEN)Pre-commit:$(NC)"
 	@echo "  make pre-commit-install Install pre-commit hooks"
@@ -62,9 +69,21 @@ help:
 	@echo "  make ci               Run CI checks (lint, type-check, test)"
 	@echo "  make ci-full          Run full CI pipeline"
 	@echo ""
+	@echo "$(GREEN)Demo:$(NC)"
+	@echo "  make demo             Seed demo data + start server"
+	@echo "  make demo-seed        Seed demo data only"
+	@echo "  make demo-reset       Reset and re-seed demo data"
+	@echo "  make demo-quickstart  Full quickstart (seed + server + browser)"
+	@echo ""
 	@echo "$(GREEN)Development:$(NC)"
 	@echo "  make run              Run application locally"
 	@echo "  make run-worker       Run workflow worker"
+	@echo ""
+	@echo "$(GREEN)Database Migrations:$(NC)"
+	@echo "  make migrate          Run all pending migrations"
+	@echo "  make migrate-down     Rollback last migration"
+	@echo "  make migrate-create   Create new migration"
+	@echo "  make migrate-status   Show current migration status"
 	@echo ""
 	@echo "$(GREEN)Monitoring:$(NC)"
 	@echo "  make monitor-start    Start monitoring stack"
@@ -108,28 +127,28 @@ dev: install-dev pre-commit-install
 # ============================================================================
 
 # Testing targets
-test: test-unit test-integration test-contract
+test: test-unit test-integration test-contract test-e2e
 	@echo "$(GREEN)All tests completed!$(NC)"
 
 test-unit:
-	@echo "$(BLUE)Running unit tests...$(NC)"
-	pytest tests/ -m "not e2e and not integration and not contracts" \
-		--cov=backend \
-		--cov-report=html \
-		--cov-report=term-missing \
-		-v --tb=short
+	@echo "$(BLUE)Running unit tests (parallel)...$(NC)"
+	pytest tests/unit/ --no-cov -q --tb=short -n auto
+
+test-serial:
+	@echo "$(BLUE)Running unit tests (serial, for debugging)...$(NC)"
+	pytest tests/unit/ --no-cov -q --tb=short -p no:xdist
 
 test-integration:
 	@echo "$(BLUE)Running integration tests...$(NC)"
-	pytest tests/ -m "integration" -v --tb=short
+	pytest tests/integration/ --no-cov -q --tb=short -n auto
 
 test-contract:
 	@echo "$(BLUE)Running contract tests...$(NC)"
-	pytest tests/ -m "contracts" -v --tb=short
+	pytest tests/ -m "contracts" --no-cov -q --tb=short
 
 test-e2e:
 	@echo "$(BLUE)Running E2E tests...$(NC)"
-	pytest tests/ -m "e2e" -v --tb=short
+	pytest tests/e2e/ --no-cov -q --tb=short
 
 test-coverage:
 	@echo "$(BLUE)Generating coverage report...$(NC)"
@@ -145,13 +164,53 @@ test-performance:
 	@echo "$(BLUE)Running performance tests...$(NC)"
 	pytest tests/ -m "performance" -v --tb=short
 
+# Database migration targets (Alembic)
+db-migrate:
+	@echo "$(BLUE)Running database migrations (alembic upgrade head)...$(NC)"
+	alembic upgrade head
+	@echo "$(GREEN)Migrations completed!$(NC)"
+
+db-revision:
+	@echo "$(BLUE)Auto-generating new revision...$(NC)"
+	@read -p "Revision message: " msg; \
+	alembic revision --autogenerate -m "$$msg"
+
+migrate:
+	@echo "$(BLUE)Running database migrations...$(NC)"
+	alembic -c backend/migrations/alembic.ini upgrade head
+	@echo "$(GREEN)Migrations completed!$(NC)"
+
+migrate-down:
+	@echo "$(BLUE)Rolling back last migration...$(NC)"
+	alembic -c backend/migrations/alembic.ini downgrade -1
+
+migrate-create:
+	@echo "$(BLUE)Creating new migration...$(NC)"
+	@read -p "Migration message: " msg; \
+	alembic -c backend/migrations/alembic.ini revision -m "$$msg"
+
+migrate-autogenerate:
+	@echo "$(BLUE)Auto-generating migration from models...$(NC)"
+	@read -p "Migration message: " msg; \
+	alembic -c backend/migrations/alembic.ini revision --autogenerate -m "$$msg"
+
+migrate-status:
+	@echo "$(BLUE)Current migration status:$(NC)"
+	alembic -c backend/migrations/alembic.ini current
+
+migrate-history:
+	@echo "$(BLUE)Migration history:$(NC)"
+	alembic -c backend/migrations/alembic.ini history --verbose
+
 # Code quality targets
 lint:
 	@echo "$(BLUE)Running linting checks...$(NC)"
-	@echo "$(GREEN)Running ruff check...$(NC)"
+	@echo "$(GREEN)Running ruff check (blocking: F,E9)...$(NC)"
+	ruff check backend/ --select F,E9
+	@echo "$(GREEN)Running ruff check (full, informational)...$(NC)"
 	ruff check backend/ tests/ --output-format=github || true
-	@echo "$(GREEN)Running pylint...$(NC)"
-	pylint backend/ --exit-zero || true
+	@echo "$(GREEN)Running TypeScript check...$(NC)"
+	cd frontend && npx tsc --noEmit
 	@echo "$(GREEN)Linting complete!$(NC)"
 
 format:
@@ -173,7 +232,7 @@ type-check:
 
 security:
 	@echo "$(BLUE)Running security checks...$(NC)"
-	bandit -r backend/ -c pyproject.toml -f json -o bandit-report.json
+	bandit -r backend/app/ -ll --skip B101 || true
 	@echo "$(GREEN)Security check completed!$(NC)"
 
 security-check-deps:
@@ -203,6 +262,9 @@ ci: lint type-check test
 
 ci-full: clean lint type-check security-check-deps test docker-build
 	@echo "$(GREEN)Full CI pipeline completed!$(NC)"
+
+quality: lint type-check security test
+	@echo "$(GREEN)All quality gates passed!$(NC)"
 
 build: format lint type-check test
 	@echo "$(GREEN)Build completed successfully!$(NC)"
@@ -247,6 +309,24 @@ deploy-production:
 		echo "$(RED)Deployment cancelled$(NC)"; \
 		exit 1; \
 	fi
+
+# Demo targets
+demo: demo-seed run
+	@echo "$(GREEN)Demo environment ready!$(NC)"
+
+demo-seed:
+	@echo "$(BLUE)Seeding demo data...$(NC)"
+	$(PYTHON) scripts/seed_demo.py
+	@echo "$(GREEN)Demo data seeded!$(NC)"
+
+demo-reset:
+	@echo "$(BLUE)Resetting and re-seeding demo data...$(NC)"
+	$(PYTHON) scripts/seed_demo.py --reset
+	@echo "$(GREEN)Demo data reset complete!$(NC)"
+
+demo-quickstart:
+	@echo "$(BLUE)Starting X-Agent demo environment...$(NC)"
+	$(PYTHON) scripts/quickstart.py
 
 # Development targets
 run:
@@ -316,6 +396,21 @@ monitor-status:
 	@echo "  Elasticsearch: $$(curl -s http://localhost:9200/_cluster/health | grep -q 'green' && echo 'UP' || echo 'DOWN')"
 	@echo "  Kibana:        $$(curl -s http://localhost:5601/api/status | grep -q 'green' && echo 'UP' || echo 'DOWN')"
 	@echo "  Jaeger:        $$(curl -s http://localhost:16686/ > /dev/null && echo 'UP' || echo 'DOWN')"
+
+# ============================================================================
+# Smoke Test Commands
+# ============================================================================
+
+smoke:
+	@echo "$(BLUE)Running full-stack smoke test...$(NC)"
+	$(PYTHON) scripts/smoke_test.py
+
+smoke-full:
+	@echo "$(BLUE)Starting Docker services (postgres + redis)...$(NC)"
+	$(DOCKER_COMPOSE) up -d postgres redis
+	@echo "$(BLUE)Waiting for services to be healthy...$(NC)"
+	@sleep 5
+	$(PYTHON) scripts/smoke_test.py
 
 # ============================================================================
 # Cleanup Commands

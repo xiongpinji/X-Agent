@@ -11,7 +11,13 @@ from backend.app.core.agent import AgentLoop
 from backend.app.core.agent_serializers import serialize_run_view
 from backend.app.core.contracts import AgentRunRecord, AgentRunResponse, ErrorCode, RunContext
 from backend.app.core.security import Principal
-from backend.app.dependencies import enforce_scope, get_agent, get_current_principal, get_run_store, get_trace_store
+from backend.app.dependencies import (
+    enforce_scope,
+    get_agent,
+    get_current_principal,
+    get_run_store,
+    get_trace_store,
+)
 
 router = APIRouter(prefix="/api/v1/runs", tags=["runs"])
 AgentDependency = Annotated[AgentLoop, Depends(get_agent)]

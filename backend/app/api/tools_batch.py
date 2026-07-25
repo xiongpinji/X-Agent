@@ -6,8 +6,8 @@ from fastapi import APIRouter, Depends
 
 from backend.app.api.errors import api_error
 from backend.app.core.contracts import ErrorCode
-from backend.app.dependencies import get_agent, get_current_principal, enforce_scope
 from backend.app.core.security import Principal
+from backend.app.dependencies import enforce_scope, get_agent, get_current_principal
 
 router = APIRouter(prefix="/api/v1/tools/batch", tags=["tools-batch"])
 AgentDependency = Annotated[object, Depends(get_agent)]
@@ -97,7 +97,7 @@ async def execute_batch(
         raise api_error(
             500,
             ErrorCode.INTERNAL_ERROR,
-            f"Batch execution failed: {str(exc)}",
+            f"Batch execution failed: {exc!s}",
         )
 
 
@@ -172,7 +172,7 @@ async def analyze_dependencies(
         raise api_error(
             500,
             ErrorCode.INTERNAL_ERROR,
-            f"Dependency analysis failed: {str(exc)}",
+            f"Dependency analysis failed: {exc!s}",
         )
 
 
@@ -220,7 +220,7 @@ async def get_cache_stats(
         raise api_error(
             500,
             ErrorCode.INTERNAL_ERROR,
-            f"Failed to get cache stats: {str(exc)}",
+            f"Failed to get cache stats: {exc!s}",
         )
 
 
@@ -267,5 +267,5 @@ async def clear_cache(
         raise api_error(
             500,
             ErrorCode.INTERNAL_ERROR,
-            f"Failed to clear cache: {str(exc)}",
+            f"Failed to clear cache: {exc!s}",
         )

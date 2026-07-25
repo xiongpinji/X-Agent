@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import random
-from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from pathlib import Path
@@ -146,9 +145,7 @@ class ABExperiment(BaseModel):
         """Check if experiment is currently running."""
         if self.status != ExperimentStatus.RUNNING:
             return False
-        if self.end_date and datetime.now(UTC) > self.end_date:
-            return False
-        return True
+        return not (self.end_date and datetime.now(UTC) > self.end_date)
 
 
 class ABTestingSystem:

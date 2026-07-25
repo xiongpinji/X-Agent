@@ -530,7 +530,7 @@ X-Agent浏览器扩展使用条款
 
 ### 步骤4: 打包扩展
 ```bash
-npm run build:prod
+# 无构建步骤, 源码即产物
 npm run package
 ```
 

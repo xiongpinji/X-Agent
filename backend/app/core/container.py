@@ -15,11 +15,9 @@ from __future__ import annotations
 import asyncio
 import inspect
 import threading
-from abc import ABC, abstractmethod
-from collections import defaultdict
 from contextlib import asynccontextmanager, contextmanager
 from dataclasses import dataclass, field
-from typing import Any, Callable, Generic, Protocol, TypeVar, Union, cast, get_type_hints, overload
+from typing import Any, Protocol, TypeVar, get_type_hints
 
 T = TypeVar("T")
 P = TypeVar("P")
@@ -80,7 +78,7 @@ class ServiceDescriptor:
     """Describes a registered service."""
 
     service_type: type
-    factory: Union[ServiceFactory, AsyncServiceFactory, type]
+    factory: ServiceFactory | AsyncServiceFactory | type
     scope: str = Scope.SINGLETON
     is_async: bool = False
     instance: Any = None
@@ -110,7 +108,7 @@ class Container:
     def register(
         self,
         service_type: type[T],
-        factory: Union[ServiceFactory[T], type[T], None] = None,
+        factory: ServiceFactory[T] | type[T] | None = None,
         scope: str = Scope.SINGLETON,
     ) -> Container:
         """
@@ -174,7 +172,7 @@ class Container:
     def singleton(
         self,
         service_type: type[T],
-        factory: Union[ServiceFactory[T], type[T], None] = None,
+        factory: ServiceFactory[T] | type[T] | None = None,
     ) -> Container:
         """Register a singleton service."""
         return self.register(service_type, factory, Scope.SINGLETON)
@@ -182,7 +180,7 @@ class Container:
     def transient(
         self,
         service_type: type[T],
-        factory: Union[ServiceFactory[T], type[T], None] = None,
+        factory: ServiceFactory[T] | type[T] | None = None,
     ) -> Container:
         """Register a transient service."""
         return self.register(service_type, factory, Scope.TRANSIENT)
@@ -210,7 +208,7 @@ class Container:
             # Check for circular dependencies
             service_name = service_type.__name__
             if service_name in self._resolution_stack:
-                raise CircularDependencyError(self._resolution_stack + [service_name])
+                raise CircularDependencyError([*self._resolution_stack, service_name])
 
             # Return cached singleton
             if descriptor.is_singleton() and descriptor.instance is not None:
@@ -249,7 +247,7 @@ class Container:
             # Check for circular dependencies
             service_name = service_type.__name__
             if service_name in self._resolution_stack:
-                raise CircularDependencyError(self._resolution_stack + [service_name])
+                raise CircularDependencyError([*self._resolution_stack, service_name])
 
             # Return cached singleton
             if descriptor.is_singleton() and descriptor.instance is not None:

@@ -12,9 +12,9 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
+from collections.abc import Iterator
 from dataclasses import dataclass, field
-from typing import Any, Iterator, Optional
-from datetime import timezone
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -219,10 +219,7 @@ class ContextCompressor:
         }.get(category, 0.5)
 
         position_ratio = position / total_length if total_length > 0 else 0
-        if position_ratio < 0.2 or position_ratio > 0.8:
-            position_factor = 1.2
-        else:
-            position_factor = 1.0
+        position_factor = 1.2 if position_ratio < 0.2 or position_ratio > 0.8 else 1.0
 
         return min(base_importance * position_factor, 1.0)
 

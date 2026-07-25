@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Optional
 
 import numpy as np
 
@@ -63,8 +62,8 @@ class HybridRetriever:
         self,
         query: str,
         memories: list[dict],
-        embeddings: Optional[np.ndarray] = None,
-        top_k: Optional[int] = None,
+        embeddings: np.ndarray | None = None,
+        top_k: int | None = None,
         use_hybrid: bool = True,
     ) -> list[RetrievalResult]:
         """
@@ -99,7 +98,7 @@ class HybridRetriever:
         self,
         query: str,
         memories: list[dict],
-        embeddings: Optional[np.ndarray],
+        embeddings: np.ndarray | None,
         top_k: int,
     ) -> list[RetrievalResult]:
         """Perform hybrid search combining vector and keyword scores."""
@@ -145,7 +144,7 @@ class HybridRetriever:
         self,
         query: str,
         memories: list[dict],
-        embeddings: Optional[np.ndarray],
+        embeddings: np.ndarray | None,
         top_k: int,
     ) -> list[RetrievalResult]:
         """Perform vector-only search."""
@@ -234,7 +233,7 @@ class HybridRetriever:
 
         # Create fixed-size embedding
         embedding = np.zeros(100)
-        for i, (word, freq) in enumerate(sorted(word_freq.items())[:100]):
+        for i, (_word, freq) in enumerate(sorted(word_freq.items())[:100]):
             embedding[i] = freq / len(words) if words else 0
 
         return embedding
@@ -272,8 +271,8 @@ class HybridRetriever:
         self,
         queries: list[str],
         memories: list[dict],
-        embeddings: Optional[np.ndarray] = None,
-        top_k: Optional[int] = None,
+        embeddings: np.ndarray | None = None,
+        top_k: int | None = None,
     ) -> list[list[RetrievalResult]]:
         """
         Perform batch search for multiple queries.

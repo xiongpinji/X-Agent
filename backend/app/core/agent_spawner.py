@@ -27,19 +27,20 @@ whenever a spawn requests them.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import multiprocessing
 import queue as queue_module
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, UTC
-from enum import Enum
-from typing import Optional, Any, Dict, List
+from datetime import UTC, datetime
+from enum import StrEnum
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
-class AgentStatus(str, Enum):
+class AgentStatus(StrEnum):
     """Status of an agent."""
 
     INITIALIZING = "initializing"
@@ -51,7 +52,7 @@ class AgentStatus(str, Enum):
     TERMINATED = "terminated"
 
 
-class IsolationLevel(str, Enum):
+class IsolationLevel(StrEnum):
     """Isolation level for agent execution.
 
     ``NONE`` is thread-level (in-process asyncio); ``"thread"`` is accepted
@@ -69,7 +70,7 @@ class IsolationLevel(str, Enum):
 CONTAINER_SANDBOX_PATH = "backend.app.core.sandbox.docker_sandbox"
 
 
-def _normalize_isolation(isolation: Optional[str]) -> IsolationLevel:
+def _normalize_isolation(isolation: str | None) -> IsolationLevel:
     """Normalize the isolation input into an :class:`IsolationLevel`.
 
     ``"thread"`` is accepted as an alias of ``"none"`` (in-process asyncio).
@@ -106,13 +107,13 @@ class AgentConfig:
 
     agent_type: str
     task: str
-    context: Dict[str, Any] = field(default_factory=dict)
-    isolation: Optional[IsolationLevel] = None
+    context: dict[str, Any] = field(default_factory=dict)
+    isolation: IsolationLevel | None = None
     max_iterations: int = 10
     timeout_seconds: int = 3600
     memory_limit_mb: int = 512
     cpu_limit_percent: int = 100
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -123,12 +124,12 @@ class AgentInstance:
     config: AgentConfig
     status: AgentStatus = AgentStatus.INITIALIZING
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
-    error: Optional[str] = None
-    result: Optional[Any] = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    error: str | None = None
+    result: Any | None = None
     iterations: int = 0
-    task_id: Optional[str] = None
+    task_id: str | None = None
 
 
 class AgentSpawner:
@@ -146,8 +147,8 @@ class AgentSpawner:
             max_concurrent_agents: Maximum number of concurrent agents
         """
         self.max_concurrent_agents = max_concurrent_agents
-        self.agents: Dict[str, AgentInstance] = {}
-        self.agent_tasks: Dict[str, asyncio.Task] = {}
+        self.agents: dict[str, AgentInstance] = {}
+        self.agent_tasks: dict[str, asyncio.Task] = {}
         self.logger = logger
         # 并发上限检查与实例登记必须原子化，避免竞态下超额创建（B2）。
         self._spawn_lock = asyncio.Lock()
@@ -156,8 +157,8 @@ class AgentSpawner:
         self,
         agent_type: str,
         task: str,
-        context: Dict[str, Any],
-        isolation: Optional[str] = None,
+        context: dict[str, Any],
+        isolation: str | None = None,
         **kwargs,
     ) -> str:
         """
@@ -249,8 +250,8 @@ class AgentSpawner:
                 return
 
             # Build the real agent engine + run context (惰性导入避免循环依赖)。
-            from backend.app.dependencies import get_agent
             from backend.app.core.contracts import RunContext
+            from backend.app.dependencies import get_agent
 
             agent_loop = get_agent()
             agent_loop.max_iterations = agent.config.max_iterations
@@ -292,7 +293,7 @@ class AgentSpawner:
             else:
                 self.logger.info(f"Agent {agent_id} completed successfully")
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             agent.status = AgentStatus.FAILED
             agent.error = "Execution timeout"
             agent.completed_at = datetime.now(UTC)
@@ -349,11 +350,11 @@ class AgentSpawner:
                 loop.run_in_executor(None, _blocking_queue_get, result_queue, timeout),
                 timeout=timeout + 5,
             )
-        except (asyncio.TimeoutError, queue_module.Empty) as exc:
+        except (TimeoutError, queue_module.Empty) as exc:
             if process.is_alive():
                 process.terminate()
                 process.join(timeout=5)
-            raise asyncio.TimeoutError(
+            raise TimeoutError(
                 f"Process-isolated agent {agent.agent_id} exceeded timeout of {timeout}s"
             ) from exc
         finally:
@@ -404,10 +405,8 @@ class AgentSpawner:
             task = self.agent_tasks[agent_id]
             if not task.done():
                 task.cancel()
-                try:
+                with contextlib.suppress(asyncio.CancelledError):
                     await task
-                except asyncio.CancelledError:
-                    pass
 
         agent.status = AgentStatus.TERMINATED
         agent.completed_at = datetime.now(UTC)
@@ -415,7 +414,7 @@ class AgentSpawner:
         self.logger.info(f"Agent {agent_id} terminated")
         return True
 
-    async def get_agent_status(self, agent_id: str) -> Optional[Dict[str, Any]]:
+    async def get_agent_status(self, agent_id: str) -> dict[str, Any] | None:
         """
         Get the status of an agent.
 
@@ -447,9 +446,9 @@ class AgentSpawner:
 
     async def list_agents(
         self,
-        status: Optional[str] = None,
-        agent_type: Optional[str] = None,
-    ) -> List[Dict[str, Any]]:
+        status: str | None = None,
+        agent_type: str | None = None,
+    ) -> list[dict[str, Any]]:
         """
         List agents with optional filtering.
 
@@ -483,8 +482,8 @@ class AgentSpawner:
     async def wait_for_agent(
         self,
         agent_id: str,
-        timeout_seconds: Optional[int] = None,
-    ) -> Optional[Dict[str, Any]]:
+        timeout_seconds: int | None = None,
+    ) -> dict[str, Any] | None:
         """
         Wait for an agent to complete.
 
@@ -503,13 +502,13 @@ class AgentSpawner:
                 self.agent_tasks[agent_id],
                 timeout=timeout_seconds,
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             self.logger.warning(f"Timeout waiting for agent {agent_id}")
             return None
 
         return await self.get_agent_status(agent_id)
 
-    def get_agent_count(self, status: Optional[str] = None) -> int:
+    def get_agent_count(self, status: str | None = None) -> int:
         """
         Get count of agents.
 
@@ -557,7 +556,7 @@ class AgentSpawner:
         self.logger.info(f"Cleaned up {cleaned} completed agents")
         return cleaned
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """
         Get spawner statistics.
 
@@ -649,12 +648,10 @@ def _process_worker_entry(config_payload: dict, result_queue) -> None:
         )
         if status_value.lower() == "failed":
             message["error"] = getattr(response, "error", None) or "agent run failed"
-    except Exception as exc:  # noqa: BLE001 - child must report, never die silently
+    except Exception as exc:
         message["error"] = f"{type(exc).__name__}: {exc}"
-    try:
+    with contextlib.suppress(Exception):
         result_queue.put(message)
-    except Exception:  # noqa: BLE001 - queue broken (parent gone); nothing else to do
-        pass
 
 
 # Global instance

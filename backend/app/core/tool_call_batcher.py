@@ -132,7 +132,7 @@ class ToolCallBatcher:
 
         # For each group, keep only one representative
         merged = []
-        for args_key, group in by_args.items():
+        for _args_key, group in by_args.items():
             # Keep the first call in the group
             merged.append(group[0])
 

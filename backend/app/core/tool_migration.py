@@ -4,16 +4,14 @@
 from __future__ import annotations
 
 import asyncio
-import json
-from dataclasses import dataclass, asdict, field
+from collections.abc import Callable
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from enum import Enum
-from pathlib import Path
-from typing import Any, Callable, Optional
-from uuid import uuid4
+from enum import StrEnum
+from typing import Any
 
 
-class ExecutionStrategy(str, Enum):
+class ExecutionStrategy(StrEnum):
     """执行策略"""
     SEQUENTIAL = "sequential"
     PARALLEL = "parallel"
@@ -196,7 +194,7 @@ class ToolParallelExecutor:
                 execution_time_ms=execution_time,
                 timestamp=datetime.now(UTC).isoformat(),
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             execution_time = (datetime.now(UTC) - start_time).total_seconds() * 1000
             return ToolExecutionResult(
                 tool_id=tool_id,
@@ -345,12 +343,7 @@ class ToolDependencyGraph:
             rec_stack.remove(tool_id)
             return False
 
-        for tool_id in self.dependencies:
-            if tool_id not in visited:
-                if has_cycle(tool_id):
-                    return True
-
-        return False
+        return any(tool_id not in visited and has_cycle(tool_id) for tool_id in self.dependencies)
 
 
 class ToolResultAggregator:

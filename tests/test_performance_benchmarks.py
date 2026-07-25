@@ -5,6 +5,12 @@ import time
 import pytest
 from typing import List
 
+# P1-09: agent_collaboration 已归档至 archive/dead_code_2026-07-20/
+pytest.importorskip(
+    "backend.app.core.agent_collaboration",
+    reason="agent_collaboration archived (P1-09)",
+)
+
 from backend.app.core.memory_fusion import Memory, MemoryFusion
 from backend.app.core.agent_collaboration import AgentCollaboration, AgentMessage, MessageType
 from backend.app.services.browser.enhanced_automation import EnhancedBrowserAutomation

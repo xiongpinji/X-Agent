@@ -6,9 +6,10 @@ import asyncio
 import functools
 import logging
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable, TypeVar, cast
+from typing import Any, TypeVar
 
 logger = logging.getLogger(__name__)
 
@@ -94,7 +95,7 @@ class CircuitBreaker:
             result = await coro
             await self._record_success()
             return result
-        except self.expected_exception as exc:
+        except self.expected_exception:
             await self._record_failure()
             raise
 

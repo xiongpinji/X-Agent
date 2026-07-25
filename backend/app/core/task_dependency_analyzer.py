@@ -12,10 +12,9 @@ Features:
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
-from typing import Any, Optional, Set, List, Dict
 from collections import defaultdict, deque
-
+from dataclasses import dataclass, field
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -25,8 +24,8 @@ class Task:
     """Represents a task in the dependency graph."""
     task_id: str
     name: str = ""
-    dependencies: List[str] = field(default_factory=list)
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    dependencies: list[str] = field(default_factory=list)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     def __hash__(self):
         return hash(self.task_id)
@@ -40,8 +39,8 @@ class Task:
 @dataclass
 class Cycle:
     """Represents a cycle in the dependency graph."""
-    tasks: List[str]
-    path: List[str] = field(default_factory=list)
+    tasks: list[str]
+    path: list[str] = field(default_factory=list)
 
     def __str__(self):
         return f"Cycle: {' -> '.join(self.path)}"
@@ -50,13 +49,13 @@ class Cycle:
 @dataclass
 class ExecutionPlan:
     """Represents an execution plan with task layers."""
-    layers: List[List[str]] = field(default_factory=list)
+    layers: list[list[str]] = field(default_factory=list)
     total_tasks: int = 0
     critical_path_length: int = 0
     parallelism_factor: float = 0.0
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "layers": self.layers,
@@ -72,9 +71,9 @@ class DAG:
 
     def __init__(self):
         """Initialize the DAG."""
-        self.nodes: Dict[str, Task] = {}
-        self.edges: Dict[str, Set[str]] = defaultdict(set)
-        self.reverse_edges: Dict[str, Set[str]] = defaultdict(set)
+        self.nodes: dict[str, Task] = {}
+        self.edges: dict[str, set[str]] = defaultdict(set)
+        self.reverse_edges: dict[str, set[str]] = defaultdict(set)
 
     def add_task(self, task: Task) -> None:
         """Add a task to the graph."""
@@ -91,15 +90,15 @@ class DAG:
         self.edges[from_task].add(to_task)
         self.reverse_edges[to_task].add(from_task)
 
-    def get_dependencies(self, task_id: str) -> Set[str]:
+    def get_dependencies(self, task_id: str) -> set[str]:
         """Get all dependencies of a task."""
         return self.edges.get(task_id, set()).copy()
 
-    def get_dependents(self, task_id: str) -> Set[str]:
+    def get_dependents(self, task_id: str) -> set[str]:
         """Get all tasks that depend on this task."""
         return self.reverse_edges.get(task_id, set()).copy()
 
-    def get_all_tasks(self) -> List[Task]:
+    def get_all_tasks(self) -> list[Task]:
         """Get all tasks in the graph."""
         return list(self.nodes.values())
 
@@ -122,11 +121,11 @@ class TaskDependencyAnalyzer:
 
     def __init__(self):
         """Initialize the analyzer."""
-        self.dag: Optional[DAG] = None
-        self.cycles: List[Cycle] = []
-        self.execution_plan: Optional[ExecutionPlan] = None
+        self.dag: DAG | None = None
+        self.cycles: list[Cycle] = []
+        self.execution_plan: ExecutionPlan | None = None
 
-    def build_dependency_graph(self, tasks: List[Task]) -> DAG:
+    def build_dependency_graph(self, tasks: list[Task]) -> DAG:
         """
         Build a dependency graph from tasks.
 
@@ -152,7 +151,7 @@ class TaskDependencyAnalyzer:
 
         return dag
 
-    def detect_cycles(self, dag: Optional[DAG] = None) -> List[Cycle]:
+    def detect_cycles(self, dag: DAG | None = None) -> list[Cycle]:
         """
         Detect cycles in the dependency graph.
 
@@ -166,10 +165,10 @@ class TaskDependencyAnalyzer:
         if not dag:
             return []
 
-        cycles: List[Cycle] = []
-        visited: Set[str] = set()
-        rec_stack: Set[str] = set()
-        path: List[str] = []
+        cycles: list[Cycle] = []
+        visited: set[str] = set()
+        rec_stack: set[str] = set()
+        path: list[str] = []
 
         def dfs(node: str) -> None:
             """Depth-first search to detect cycles."""
@@ -183,7 +182,7 @@ class TaskDependencyAnalyzer:
                 elif neighbor in rec_stack:
                     # Found a cycle
                     cycle_start = path.index(neighbor)
-                    cycle_path = path[cycle_start:] + [neighbor]
+                    cycle_path = [*path[cycle_start:], neighbor]
                     cycle_tasks = cycle_path[:-1]
                     cycles.append(Cycle(tasks=cycle_tasks, path=cycle_path))
 
@@ -204,7 +203,7 @@ class TaskDependencyAnalyzer:
 
         return cycles
 
-    def topological_sort(self, dag: Optional[DAG] = None) -> List[str]:
+    def topological_sort(self, dag: DAG | None = None) -> list[str]:
         """
         Perform topological sort on the DAG.
 
@@ -223,7 +222,7 @@ class TaskDependencyAnalyzer:
             raise ValueError("Cannot perform topological sort on graph with cycles")
 
         # Kahn's algorithm
-        in_degree: Dict[str, int] = defaultdict(int)
+        in_degree: dict[str, int] = defaultdict(int)
         queue: deque[str] = deque()
 
         # Calculate in-degrees
@@ -235,7 +234,7 @@ class TaskDependencyAnalyzer:
             if degree == 0:
                 queue.append(task_id)
 
-        sorted_tasks: List[str] = []
+        sorted_tasks: list[str] = []
 
         while queue:
             node = queue.popleft()
@@ -256,8 +255,8 @@ class TaskDependencyAnalyzer:
 
     def build_execution_plan(
         self,
-        tasks: List[Task],
-        max_parallel: Optional[int] = None,
+        tasks: list[Task],
+        max_parallel: int | None = None,
     ) -> ExecutionPlan:
         """
         Build an execution plan with task layers.
@@ -278,16 +277,16 @@ class TaskDependencyAnalyzer:
             raise ValueError(f"Cannot build execution plan: {len(cycles)} cycles detected")
 
         # Build layers
-        layers: List[List[str]] = []
-        completed: Set[str] = set()
-        remaining: Set[str] = set(dag.nodes.keys())
+        layers: list[list[str]] = []
+        completed: set[str] = set()
+        remaining: set[str] = set(dag.nodes.keys())
 
         while remaining:
             # Find tasks with all dependencies satisfied
-            current_layer: List[str] = []
+            current_layer: list[str] = []
 
             for task_id in remaining:
-                task = dag.nodes[task_id]
+                dag.nodes[task_id]
                 deps = dag.get_dependencies(task_id)
 
                 if all(dep in completed for dep in deps):
@@ -330,7 +329,7 @@ class TaskDependencyAnalyzer:
 
         return plan
 
-    def get_critical_path(self, dag: Optional[DAG] = None) -> List[str]:
+    def get_critical_path(self, dag: DAG | None = None) -> list[str]:
         """
         Get the critical path (longest dependency chain).
 
@@ -345,7 +344,7 @@ class TaskDependencyAnalyzer:
             return []
 
         # Find longest path using dynamic programming
-        memo: Dict[str, int] = {}
+        memo: dict[str, int] = {}
 
         def longest_path_length(task_id: str) -> int:
             """Calculate longest path from this task."""
@@ -372,7 +371,7 @@ class TaskDependencyAnalyzer:
                 critical_task = task_id
 
         # Reconstruct path
-        path: List[str] = []
+        path: list[str] = []
         current = critical_task
 
         while current:
@@ -387,7 +386,7 @@ class TaskDependencyAnalyzer:
 
         return list(reversed(path))
 
-    def analyze_parallelism(self, dag: Optional[DAG] = None) -> Dict[str, Any]:
+    def analyze_parallelism(self, dag: DAG | None = None) -> dict[str, Any]:
         """
         Analyze parallelism opportunities.
 
@@ -431,9 +430,9 @@ class TaskDependencyAnalyzer:
 
     def optimize_execution_order(
         self,
-        tasks: List[Task],
+        tasks: list[Task],
         strategy: str = "greedy",
-    ) -> List[str]:
+    ) -> list[str]:
         """
         Optimize task execution order.
 
@@ -470,7 +469,7 @@ class TaskDependencyAnalyzer:
             # Default: topological sort
             return self.topological_sort(dag)
 
-    def validate_dependencies(self, tasks: List[Task]) -> List[str]:
+    def validate_dependencies(self, tasks: list[Task]) -> list[str]:
         """
         Validate task dependencies.
 
@@ -480,7 +479,7 @@ class TaskDependencyAnalyzer:
         Returns:
             List of validation errors
         """
-        errors: List[str] = []
+        errors: list[str] = []
         task_ids = {t.task_id for t in tasks}
 
         for task in tasks:

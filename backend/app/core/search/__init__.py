@@ -1,15 +1,20 @@
 """Search module."""
 
-from backend.app.core.search.search_engine import SearchEngine, GoogleSearch, BingSearch, DuckDuckGoSearch
 from backend.app.core.search.content_extractor import ContentExtractor
-from backend.app.core.search.search_cache import SearchCache, RedisSearchCache
+from backend.app.core.search.search_cache import RedisSearchCache, SearchCache
+from backend.app.core.search.search_engine import (
+    BingSearch,
+    DuckDuckGoSearch,
+    GoogleSearch,
+    SearchEngine,
+)
 
 __all__ = [
-    "SearchEngine",
-    "GoogleSearch",
     "BingSearch",
-    "DuckDuckGoSearch",
     "ContentExtractor",
-    "SearchCache",
+    "DuckDuckGoSearch",
+    "GoogleSearch",
     "RedisSearchCache",
+    "SearchCache",
+    "SearchEngine",
 ]

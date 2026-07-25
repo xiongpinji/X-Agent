@@ -1,16 +1,17 @@
 """Analytics system integration example."""
 
-from fastapi import FastAPI
 from contextlib import asynccontextmanager
 
+from fastapi import FastAPI
+
 from backend.app.core.analytics import (
-    AnalyticsCollector,
-    AnalyticsStorage,
     AnalyticsAggregator,
+    AnalyticsCollector,
     AnalyticsReporter,
+    AnalyticsStorage,
 )
-from backend.app.core.analytics.middleware import AnalyticsMiddleware
 from backend.app.core.analytics.config import AnalyticsConfig
+from backend.app.core.analytics.middleware import AnalyticsMiddleware
 from backend.app.settings import get_settings
 
 

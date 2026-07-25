@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import time
-from typing import Callable
+from collections.abc import Callable
 
 from fastapi import Request
 from prometheus_client import generate_latest
@@ -11,11 +11,11 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 
 from backend.app.services.observability.prometheus_metrics import (
-    http_requests_total,
+    errors_total,
     http_request_duration_seconds,
     http_request_size_bytes,
+    http_requests_total,
     http_response_size_bytes,
-    errors_total,
 )
 
 

@@ -1,0 +1,11 @@
+{
+  "snapshot_id": "1c21a9f1-07a8-4459-9530-9836eb77d0d9",
+  "session_id": "test_session",
+  "timestamp": "2026-07-23T04:22:20.387233+00:00",
+  "message_count": 5,
+  "token_count": 1484,
+  "compressed_token_count": 0,
+  "compression_ratio": 0.0,
+  "storage_path": "D:\\AI\u7f16\u7a0b\u5e93\\\u9879\u76ee\u5e93\\\u8fdb\u884c\u4e2d\u7684\u9879\u76ee\\X-Agent\\data\\sessions\\test_session",
+  "metadata": {}
+}

@@ -18,7 +18,7 @@ import logging.handlers
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 
 class StructuredFormatter(logging.Formatter):
@@ -96,14 +96,14 @@ class LoggerFactory:
     _configured = False
     _log_level = logging.INFO
     _log_format = "plain"  # "plain" or "json"
-    _log_dir: Optional[Path] = None
+    _log_dir: Path | None = None
 
     @classmethod
     def configure(
         cls,
         level: int = logging.INFO,
         format_type: str = "plain",
-        log_dir: Optional[str] = None,
+        log_dir: str | None = None,
     ) -> None:
         """Configure the logger factory.
 
@@ -138,10 +138,7 @@ class LoggerFactory:
         logger.setLevel(cls._log_level)
 
         # Create formatter
-        if cls._log_format == "json":
-            formatter = StructuredFormatter()
-        else:
-            formatter = PlainFormatter()
+        formatter = StructuredFormatter() if cls._log_format == "json" else PlainFormatter()
 
         # Add console handler
         console_handler = logging.StreamHandler(sys.stdout)
@@ -269,7 +266,7 @@ def get_logger(name: str) -> logging.Logger:
 def configure_logging(
     level: int = logging.INFO,
     format_type: str = "plain",
-    log_dir: Optional[str] = None,
+    log_dir: str | None = None,
 ) -> None:
     """Configure logging globally.
 

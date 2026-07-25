@@ -66,7 +66,6 @@ async def create_short_drama_storyboard(
     duration_seconds: int = 60,
 ) -> dict[str, Any]:
     """从一句话需求生成故事板。返回故事板 JSON。"""
-    from backend.app.core.llm import LLMRouter
 
     def make_llm_caller():
         try:
@@ -90,7 +89,8 @@ async def create_short_drama_storyboard(
                 return str(resp.content if hasattr(resp, "content") else (resp or {}).get("content", ""))
             return caller
         except Exception as exc:
-            import logging; logging.getLogger(__name__).warning("creative_studio llm unavailable: %s", exc)
+            import logging
+            logging.getLogger(__name__).warning("creative_studio llm unavailable: %s", exc)
             return None
 
     agent = ShortDramaProducerAgent(llm_caller=make_llm_caller(), max_shots=8)

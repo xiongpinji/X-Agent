@@ -3,15 +3,16 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import UTC, datetime, timedelta
-from enum import Enum
-from typing import Any, Callable, Optional
-from uuid import uuid4
+from datetime import UTC, datetime
+from enum import StrEnum
 from threading import RLock
+from typing import Any
+from uuid import uuid4
 
 
-class NotificationType(str, Enum):
+class NotificationType(StrEnum):
     """Types of notifications."""
     DOCUMENT_SHARED = "document_shared"
     PERMISSION_GRANTED = "permission_granted"
@@ -25,7 +26,7 @@ class NotificationType(str, Enum):
     ACTIVITY_SUMMARY = "activity_summary"
 
 
-class NotificationChannel(str, Enum):
+class NotificationChannel(StrEnum):
     """Notification delivery channels."""
     WEBSOCKET = "websocket"
     EMAIL = "email"
@@ -33,7 +34,7 @@ class NotificationChannel(str, Enum):
     IN_APP = "in_app"
 
 
-class NotificationPriority(str, Enum):
+class NotificationPriority(StrEnum):
     """Notification priority levels."""
     LOW = "low"
     NORMAL = "normal"
@@ -48,8 +49,8 @@ class NotificationPreference:
     enabled: bool = True
     channels: dict[NotificationType, list[NotificationChannel]] = field(default_factory=dict)
     frequency: str = "immediate"  # "immediate", "hourly", "daily", "weekly"
-    quiet_hours_start: Optional[str] = None  # "HH:MM"
-    quiet_hours_end: Optional[str] = None
+    quiet_hours_start: str | None = None  # "HH:MM"
+    quiet_hours_end: str | None = None
     aggregate_similar: bool = True
     max_notifications_per_day: int = 100
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -85,11 +86,11 @@ class Notification:
     title: str
     content: str
     created_at: datetime
-    read_at: Optional[datetime] = None
+    read_at: datetime | None = None
     priority: NotificationPriority = NotificationPriority.NORMAL
-    related_resource_id: Optional[str] = None
-    related_resource_type: Optional[str] = None
-    action_url: Optional[str] = None
+    related_resource_id: str | None = None
+    related_resource_type: str | None = None
+    action_url: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
     delivery_status: dict[NotificationChannel, str] = field(default_factory=dict)
 
@@ -122,7 +123,7 @@ class NotificationBatch:
     notification_type: NotificationType
     notifications: list[Notification] = field(default_factory=list)
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
-    sent_at: Optional[datetime] = None
+    sent_at: datetime | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def add_notification(self, notification: Notification) -> None:
@@ -160,10 +161,10 @@ class NotificationStore:
         title: str,
         content: str,
         priority: NotificationPriority = NotificationPriority.NORMAL,
-        related_resource_id: Optional[str] = None,
-        related_resource_type: Optional[str] = None,
-        action_url: Optional[str] = None,
-        metadata: Optional[dict[str, Any]] = None,
+        related_resource_id: str | None = None,
+        related_resource_type: str | None = None,
+        action_url: str | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> Notification:
         """Create a new notification."""
         with self._lock:
@@ -188,7 +189,7 @@ class NotificationStore:
 
             return notification
 
-    def get_notification(self, notification_id: str) -> Optional[Notification]:
+    def get_notification(self, notification_id: str) -> Notification | None:
         """Get a notification by ID."""
         return self._notifications.get(notification_id)
 
@@ -299,7 +300,7 @@ class NotificationStore:
             self._batches[batch.batch_id] = batch
             return batch
 
-    def get_batch(self, batch_id: str) -> Optional[NotificationBatch]:
+    def get_batch(self, batch_id: str) -> NotificationBatch | None:
         """Get a batch by ID."""
         return self._batches.get(batch_id)
 
@@ -322,8 +323,8 @@ class NotificationService:
     def __init__(self, store: NotificationStore):
         self.store = store
         self._websocket_handlers: dict[str, list[Callable]] = {}
-        self._email_handler: Optional[Callable] = None
-        self._push_handler: Optional[Callable] = None
+        self._email_handler: Callable | None = None
+        self._push_handler: Callable | None = None
         self._lock = RLock()
 
     def register_websocket_handler(self, user_id: str, handler: Callable) -> None:
@@ -354,10 +355,10 @@ class NotificationService:
         title: str,
         content: str,
         priority: NotificationPriority = NotificationPriority.NORMAL,
-        related_resource_id: Optional[str] = None,
-        related_resource_type: Optional[str] = None,
-        action_url: Optional[str] = None,
-        metadata: Optional[dict[str, Any]] = None,
+        related_resource_id: str | None = None,
+        related_resource_type: str | None = None,
+        action_url: str | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> Notification:
         """Send a notification to a user."""
         notification = self.store.create_notification(
@@ -396,7 +397,7 @@ class NotificationService:
 
             notification.delivery_status[channel] = "delivered"
         except Exception as e:
-            notification.delivery_status[channel] = f"failed: {str(e)}"
+            notification.delivery_status[channel] = f"failed: {e!s}"
 
     async def _deliver_websocket(self, notification: Notification) -> None:
         """Deliver notification via WebSocket."""

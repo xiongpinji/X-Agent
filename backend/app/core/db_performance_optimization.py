@@ -6,11 +6,11 @@ Implements all 5 optimization areas with production-ready configurations.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from typing import Any, Optional
-import json
+from typing import Any
 
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -221,7 +221,7 @@ class QueryOptimizationPlan:
     def get_n1_queries(self) -> list[dict[str, Any]]:
         """Identify potential N+1 query patterns."""
         n1_candidates = []
-        for query_hash, stats in self.query_stats.items():
+        for _query_hash, stats in self.query_stats.items():
             if stats.execution_count >= self.n1_detection_threshold:
                 n1_candidates.append({
                     "query": stats.query_text[:100],
@@ -364,7 +364,7 @@ class PartitioningStrategy:
         try:
             # Create partitioned table
             column = config["column"]
-            interval = config["interval"]
+            config["interval"]
 
             sql = f"""
             CREATE TABLE IF NOT EXISTS {table}_partitioned (
@@ -389,7 +389,7 @@ class PartitioningStrategy:
 
         config = self.PARTITION_TABLES[table]
         retention_months = config["retention_months"]
-        cutoff_date = datetime.now() - timedelta(days=retention_months * 30)
+        datetime.now() - timedelta(days=retention_months * 30)
 
         results = {
             "table": table,

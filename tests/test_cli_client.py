@@ -431,11 +431,26 @@ class TestLocalClient:
     @pytest.mark.asyncio
     async def test_local_client_run_agent(self):
         """Test run_agent executes task locally."""
+        from backend.app.core.agent.loop import AgentRunResponse, RunContext
+
         config = CLIConfig(mode="local")
         client = LocalClient(config)
 
+        # Wave A: AgentLoop.run(context, task, extra_context) returns
+        # AgentRunResponse; permission_scope travels on the RunContext.
         mock_agent = AsyncMock()
-        mock_agent.run.return_value = {"output": "result"}
+        mock_agent.run.return_value = AgentRunResponse(
+            trace_id="trace-test",
+            agent_id="agent-test",
+            status="completed",
+            answer="result",
+            iterations=1,
+            memory_hits=0,
+            tool_calls=[],
+            events=[],
+            plan=[],
+            execution_summary={},
+        )
 
         with patch(
             "backend.app.dependencies.get_agent",
@@ -449,7 +464,14 @@ class TestLocalClient:
 
             assert result["task"] == "test"
             assert result["mode"] == "local"
+            assert result["trace_id"] == "trace-test"
+            assert result["status"] == "completed"
             mock_agent.run.assert_called_once()
+            call_args = mock_agent.run.call_args
+            assert isinstance(call_args.args[0], RunContext)
+            assert call_args.args[0].permission_scope == ["read"]
+            assert call_args.args[1] == "test"
+            assert call_args.args[2] == {"key": "val"}
 
     @pytest.mark.asyncio
     async def test_local_client_list_agents(self):

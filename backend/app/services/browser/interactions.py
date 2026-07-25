@@ -12,13 +12,13 @@ import asyncio
 import logging
 import os
 from dataclasses import dataclass
-from enum import Enum
-from typing import Optional, Any, List
+from enum import StrEnum
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
-class InteractionType(str, Enum):
+class InteractionType(StrEnum):
     """Types of browser interactions."""
     CLICK = "click"
     DOUBLE_CLICK = "double_click"
@@ -39,8 +39,8 @@ class InteractionResult:
     success: bool
     interaction_type: InteractionType
     time_taken_ms: float
-    element_selector: Optional[str] = None
-    error: Optional[str] = None
+    element_selector: str | None = None
+    error: str | None = None
     metadata: dict = None
 
     def __post_init__(self):
@@ -502,7 +502,7 @@ class AdvancedInteractions:
         self,
         page: Any,
         iframe_selector: str,
-    ) -> Optional[Any]:
+    ) -> Any | None:
         """
         Get iframe page object for interaction.
 

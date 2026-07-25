@@ -2,15 +2,18 @@
 // 认证状态管理
 
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AuthState, User } from '../types';
 import * as SecureStore from 'expo-secure-store';
 
 interface AuthStore extends AuthState {
+  loading: boolean;
+
   // Actions
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
-  refreshToken: () => Promise<void>;
+  refreshAccessToken: () => Promise<void>;
   enableBiometric: () => Promise<void>;
   disableBiometric: () => Promise<void>;
   setUser: (user: User) => void;
@@ -22,8 +25,10 @@ export const useAuthStore = create<AuthStore>()(
     (set, get) => ({
       isAuthenticated: false,
       biometricEnabled: false,
+      loading: false,
 
       login: async (email: string, password: string) => {
+        set({ loading: true });
         try {
           // 调用后端API
           const response = await fetch('https://api.xagent.local/auth/login', {
@@ -46,8 +51,10 @@ export const useAuthStore = create<AuthStore>()(
             token: data.token,
             refreshToken: data.refreshToken,
             expiresAt: new Date(data.expiresAt),
+            loading: false,
           });
         } catch (error) {
+          set({ loading: false });
           console.error('Login error:', error);
           throw error;
         }
@@ -69,7 +76,7 @@ export const useAuthStore = create<AuthStore>()(
         }
       },
 
-      refreshToken: async () => {
+      refreshAccessToken: async () => {
         try {
           const refreshToken = await SecureStore.getItemAsync('refreshToken');
           if (!refreshToken) throw new Error('No refresh token');
@@ -113,6 +120,7 @@ export const useAuthStore = create<AuthStore>()(
     }),
     {
       name: 'auth-store',
+      storage: createJSONStorage(() => AsyncStorage),
       partialize: (state) => ({
         isAuthenticated: state.isAuthenticated,
         user: state.user,

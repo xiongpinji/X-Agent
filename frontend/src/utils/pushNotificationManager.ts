@@ -32,7 +32,7 @@ interface PushSubscription {
 class PushNotificationManager {
   private registration: ServiceWorkerRegistration | null = null;
   private subscription: PushSubscription | null = null;
-  private listeners: Map<string, Set<Function>> = new Map();
+  private listeners: Map<string, Set<(...args: unknown[]) => void>> = new Map();
 
   constructor() {
     this.initializeListeners();
@@ -254,7 +254,7 @@ class PushNotificationManager {
    */
   private urlBase64ToUint8Array(base64String: string): Uint8Array {
     const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
-    const base64 = (base64String + padding).replace(/\-/g, '+').replace(/_/g, '/');
+    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
 
     const rawData = window.atob(base64);
     const outputArray = new Uint8Array(rawData.length);
@@ -297,7 +297,7 @@ class PushNotificationManager {
   /**
    * Add event listener
    */
-  on(event: string, callback: Function): void {
+  on(event: string, callback: (...args: unknown[]) => void): void {
     if (!this.listeners.has(event)) {
       this.listeners.set(event, new Set());
     }
@@ -307,7 +307,7 @@ class PushNotificationManager {
   /**
    * Remove event listener
    */
-  off(event: string, callback: Function): void {
+  off(event: string, callback: (...args: unknown[]) => void): void {
     this.listeners.get(event)?.delete(callback);
   }
 

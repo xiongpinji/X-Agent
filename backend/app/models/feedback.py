@@ -3,24 +3,20 @@
 """
 from __future__ import annotations
 
-import json
 import logging
 from datetime import UTC, datetime
-from typing import Optional
-from enum import Enum
+from enum import StrEnum
 
 from sqlalchemy import (
+    JSON,
     Column,
-    String,
-    Text,
     DateTime,
     Float,
-    Integer,
-    JSON,
     Index,
+    String,
+    Text,
     select,
 )
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import declarative_base
 
 from backend.app.core.session import SessionManager
@@ -30,7 +26,7 @@ logger = logging.getLogger(__name__)
 Base = declarative_base()
 
 
-class FeedbackType(str, Enum):
+class FeedbackType(StrEnum):
     """反馈类型"""
     BUG = "bug"
     FEATURE = "feature"
@@ -38,7 +34,7 @@ class FeedbackType(str, Enum):
     OTHER = "other"
 
 
-class FeedbackSeverity(str, Enum):
+class FeedbackSeverity(StrEnum):
     """反馈严重程度"""
     LOW = "low"
     MEDIUM = "medium"
@@ -46,7 +42,7 @@ class FeedbackSeverity(str, Enum):
     CRITICAL = "critical"
 
 
-class FeedbackStatus(str, Enum):
+class FeedbackStatus(StrEnum):
     """反馈状态"""
     NEW = "new"
     ACKNOWLEDGED = "acknowledged"
@@ -55,7 +51,7 @@ class FeedbackStatus(str, Enum):
     CLOSED = "closed"
 
 
-class SentimentType(str, Enum):
+class SentimentType(StrEnum):
     """情感类型"""
     POSITIVE = "positive"
     NEUTRAL = "neutral"
@@ -129,7 +125,7 @@ class FeedbackStorePostgres:
         title: str,
         description: str,
         severity: str,
-        metadata: Optional[dict] = None,
+        metadata: dict | None = None,
     ) -> FeedbackModel:
         """创建反馈"""
         async with SessionManager.get_session() as session:
@@ -149,7 +145,7 @@ class FeedbackStorePostgres:
             logger.info(f"反馈创建成功: {feedback_id}")
             return feedback
 
-    async def get_feedback_by_id(self, feedback_id: str) -> Optional[FeedbackModel]:
+    async def get_feedback_by_id(self, feedback_id: str) -> FeedbackModel | None:
         """根据ID获取反馈"""
         async with SessionManager.get_session() as session:
             stmt = select(FeedbackModel).where(FeedbackModel.id == feedback_id)
@@ -159,10 +155,10 @@ class FeedbackStorePostgres:
     async def list_feedback(
         self,
         tenant_id: str,
-        user_id: Optional[str] = None,
-        feedback_type: Optional[str] = None,
-        status: Optional[str] = None,
-        severity: Optional[str] = None,
+        user_id: str | None = None,
+        feedback_type: str | None = None,
+        status: str | None = None,
+        severity: str | None = None,
         skip: int = 0,
         limit: int = 100,
     ) -> list[FeedbackModel]:
@@ -187,7 +183,7 @@ class FeedbackStorePostgres:
         self,
         feedback_id: str,
         **kwargs,
-    ) -> Optional[FeedbackModel]:
+    ) -> FeedbackModel | None:
         """更新反馈"""
         async with SessionManager.get_session() as session:
             stmt = select(FeedbackModel).where(FeedbackModel.id == feedback_id)
@@ -217,10 +213,10 @@ class FeedbackStorePostgres:
         priority_score: float,
         urgency_score: float,
         impact_score: float,
-        subcategory: Optional[str] = None,
-        keywords: Optional[list[str]] = None,
-        entities: Optional[dict] = None,
-        analysis_metadata: Optional[dict] = None,
+        subcategory: str | None = None,
+        keywords: list[str] | None = None,
+        entities: dict | None = None,
+        analysis_metadata: dict | None = None,
     ) -> FeedbackAnalysisModel:
         """创建反馈分析"""
         async with SessionManager.get_session() as session:
@@ -244,7 +240,7 @@ class FeedbackStorePostgres:
             logger.info(f"反馈分析创建成功: {analysis_id}")
             return analysis
 
-    async def get_analysis_by_feedback_id(self, feedback_id: str) -> Optional[FeedbackAnalysisModel]:
+    async def get_analysis_by_feedback_id(self, feedback_id: str) -> FeedbackAnalysisModel | None:
         """根据反馈ID获取分析"""
         async with SessionManager.get_session() as session:
             stmt = select(FeedbackAnalysisModel).where(FeedbackAnalysisModel.feedback_id == feedback_id)
@@ -254,8 +250,8 @@ class FeedbackStorePostgres:
     async def count_feedback(
         self,
         tenant_id: str,
-        status: Optional[str] = None,
-        severity: Optional[str] = None,
+        status: str | None = None,
+        severity: str | None = None,
     ) -> int:
         """统计反馈数量"""
         async with SessionManager.get_session() as session:

@@ -2,10 +2,11 @@
 翻译管理API端点
 """
 
-from fastapi import APIRouter, HTTPException, File, UploadFile
-from typing import Dict, Any
-from pydantic import BaseModel
 import json
+from typing import Any
+
+from fastapi import APIRouter, File, HTTPException, UploadFile
+from pydantic import BaseModel
 
 from backend.app.core.i18n import Language, TranslationManager
 from backend.app.core.translation_quality import TranslationQualityChecker, check_all_translations
@@ -21,7 +22,7 @@ class TranslationUpdateRequest(BaseModel):
 
 class BulkTranslationUpdateRequest(BaseModel):
     language: str
-    translations: Dict[str, Any]
+    translations: dict[str, Any]
 
 
 class TranslationExportRequest(BaseModel):
@@ -43,7 +44,7 @@ async def update_translation(request: TranslationUpdateRequest):
             "value": request.value,
         }
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=f"Invalid language: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"Invalid language: {e!s}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -55,7 +56,7 @@ async def bulk_update_translations(request: BulkTranslationUpdateRequest):
         lang = Language(request.language)
         manager = TranslationManager()
 
-        def update_nested(obj: Dict, prefix: str = ""):
+        def update_nested(obj: dict, prefix: str = ""):
             for key, value in obj.items():
                 full_key = f"{prefix}.{key}" if prefix else key
                 if isinstance(value, dict):
@@ -72,7 +73,7 @@ async def bulk_update_translations(request: BulkTranslationUpdateRequest):
             "updated_count": len(request.translations),
         }
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=f"Invalid language: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"Invalid language: {e!s}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -95,7 +96,7 @@ async def upload_translation(language: str, file: UploadFile = File(...)):
             "filename": file.filename,
         }
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=f"Invalid language: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"Invalid language: {e!s}")
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="Invalid JSON format")
     except Exception as e:
@@ -115,7 +116,7 @@ async def export_translation(language: str):
             "translations": translations,
         }
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=f"Invalid language: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"Invalid language: {e!s}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -148,7 +149,7 @@ async def get_completeness():
 async def get_missing_keys(language: str):
     """获取缺失的翻译键"""
     try:
-        lang = Language(language)
+        Language(language)
         checker = TranslationQualityChecker()
         missing = checker.check_missing_keys()
         return {
@@ -157,7 +158,7 @@ async def get_missing_keys(language: str):
             "count": len(missing.get(language, [])),
         }
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=f"Invalid language: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"Invalid language: {e!s}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -166,7 +167,7 @@ async def get_missing_keys(language: str):
 async def get_extra_keys(language: str):
     """获取多余的翻译键"""
     try:
-        lang = Language(language)
+        Language(language)
         checker = TranslationQualityChecker()
         extra = checker.check_extra_keys()
         return {
@@ -175,7 +176,7 @@ async def get_extra_keys(language: str):
             "count": len(extra.get(language, [])),
         }
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=f"Invalid language: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"Invalid language: {e!s}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -184,7 +185,7 @@ async def get_extra_keys(language: str):
 async def get_empty_values(language: str):
     """获取空值"""
     try:
-        lang = Language(language)
+        Language(language)
         checker = TranslationQualityChecker()
         empty = checker.check_empty_values()
         return {
@@ -193,7 +194,7 @@ async def get_empty_values(language: str):
             "count": len(empty.get(language, [])),
         }
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=f"Invalid language: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"Invalid language: {e!s}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -202,7 +203,7 @@ async def get_empty_values(language: str):
 async def get_parameter_consistency(language: str):
     """获取参数一致性检查"""
     try:
-        lang = Language(language)
+        Language(language)
         checker = TranslationQualityChecker()
         inconsistencies = checker.check_parameter_consistency()
         return {
@@ -211,7 +212,7 @@ async def get_parameter_consistency(language: str):
             "count": len(inconsistencies.get(language, [])),
         }
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=f"Invalid language: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"Invalid language: {e!s}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -220,7 +221,7 @@ async def get_parameter_consistency(language: str):
 async def get_length_consistency(language: str):
     """获取长度一致性检查"""
     try:
-        lang = Language(language)
+        Language(language)
         checker = TranslationQualityChecker()
         length_issues = checker.check_length_consistency()
         return {
@@ -229,7 +230,7 @@ async def get_length_consistency(language: str):
             "count": len(length_issues.get(language, [])),
         }
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=f"Invalid language: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"Invalid language: {e!s}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -239,9 +240,10 @@ async def validate_translation(language: str):
     """验证翻译文件"""
     try:
         from pathlib import Path
+
         from backend.app.core.translation_quality import TranslationValidator
 
-        lang = Language(language)
+        Language(language)
         lang_file = Path("locales") / f"{language}.json"
 
         if not lang_file.exists():
@@ -257,6 +259,6 @@ async def validate_translation(language: str):
             "overall_valid": syntax_valid and encoding_valid,
         }
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=f"Invalid language: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"Invalid language: {e!s}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

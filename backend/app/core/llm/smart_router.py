@@ -136,7 +136,7 @@ class SmartLLMRouter(LLMRouter):
 
         try:
             ranked = self.selector.rank_candidates(context)
-        except Exception as exc:  # noqa: BLE001 - explicit degrade, logged
+        except Exception as exc:
             logger.warning(
                 "Smart routing selection failed (%s); using configured backend order.",
                 exc,
@@ -192,5 +192,5 @@ class SmartLLMRouter(LLMRouter):
                 latency_ms=getattr(response, "latency_ms", 0.0),
                 tokens_used=getattr(response, "tokens_used", 0),
             )
-        except Exception as exc:  # noqa: BLE001 - metrics must never break chat
+        except Exception as exc:
             logger.warning("Failed to record selector performance: %s", exc)

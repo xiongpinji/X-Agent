@@ -74,6 +74,24 @@ spec:
           value: "postgresql+asyncpg://$(DB_USER):$(DB_PASSWORD)@postgres:5432/$(DB_NAME)"
         - name: XAGENT_REDIS_URL
           value: "redis://:$(REDIS_PASSWORD)@redis:6379/0"
+        # P1: Python UTF-8 模式
+        - name: PYTHONUTF8
+          valueFrom:
+            configMapKeyRef:
+              name: xagent-config
+              key: PYTHONUTF8
+        # P1: 工作流存储后端
+        - name: XAGENT_WORKFLOW_STORE_BACKEND
+          valueFrom:
+            configMapKeyRef:
+              name: xagent-config
+              key: XAGENT_WORKFLOW_STORE_BACKEND
+        # P1: Neo4j 功能开关
+        - name: XAGENT_NEO4J_ENABLED
+          valueFrom:
+            configMapKeyRef:
+              name: xagent-config
+              key: XAGENT_NEO4J_ENABLED
         # P0-02: CELERY_BROKER_URL/CELERY_RESULT_BACKEND 已移除(后端无 Celery 应用)
         resources:
           requests:

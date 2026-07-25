@@ -1,0 +1,11 @@
+schema_version: 1
+module_path: deployment
+title: X-Agent 生产部署与运维编排
+scope:
+    - deployment/
+    - k8s/
+source_files: []
+depends_on: []
+related_to:
+    - path: docs
+    - path: monitoring

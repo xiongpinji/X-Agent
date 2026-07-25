@@ -2,30 +2,31 @@
 
 from __future__ import annotations
 
-from datetime import datetime, UTC
-from enum import Enum
-from typing import Optional, Any
+from datetime import UTC, datetime
+from enum import StrEnum
+from typing import Any
+
 from pydantic import BaseModel, Field
 
 __all__ = [
     "SkillCategory",
-    "SkillStatus",
-    "SkillRiskLevel",
-    "SkillManifest",
-    "SkillRecord",
     "SkillCategoryInfo",
-    "SkillInstallRequest",
-    "SkillUninstallRequest",
-    "SkillExecuteRequest",
-    "SkillSearchRequest",
-    "SkillInstallationProgress",
-    "SkillUsageRecord",
-    "SkillRecommendation",
     "SkillComment",
+    "SkillExecuteRequest",
+    "SkillInstallRequest",
+    "SkillInstallationProgress",
+    "SkillManifest",
+    "SkillRecommendation",
+    "SkillRecord",
+    "SkillRiskLevel",
+    "SkillSearchRequest",
+    "SkillStatus",
+    "SkillUninstallRequest",
+    "SkillUsageRecord",
 ]
 
 
-class SkillCategory(str, Enum):
+class SkillCategory(StrEnum):
     """技能分类"""
     OFFICE = "office"
     DESIGN = "design"
@@ -37,7 +38,7 @@ class SkillCategory(str, Enum):
     CREATIVITY = "creativity"
 
 
-class SkillStatus(str, Enum):
+class SkillStatus(StrEnum):
     """技能状态"""
     DRAFT = "draft"
     PUBLISHED = "published"
@@ -48,7 +49,7 @@ class SkillStatus(str, Enum):
     ERROR = "error"
 
 
-class SkillRiskLevel(str, Enum):
+class SkillRiskLevel(StrEnum):
     """风险等级"""
     LOW = "low"
     MEDIUM = "medium"
@@ -101,12 +102,12 @@ class SkillRecord(BaseModel):
     usage_count: int = Field(default=0, description="使用次数")
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC), description="创建时间")
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC), description="更新时间")
-    published_at: Optional[datetime] = Field(default=None, description="发布时间")
+    published_at: datetime | None = Field(default=None, description="发布时间")
     is_installed: bool = Field(default=False, description="是否已安装")
     is_enabled: bool = Field(default=False, description="是否已启用")
     is_favorite: bool = Field(default=False, description="是否已收藏")
-    install_path: Optional[str] = Field(default=None, description="安装路径")
-    install_time: Optional[datetime] = Field(default=None, description="安装时间")
+    install_path: str | None = Field(default=None, description="安装路径")
+    install_time: datetime | None = Field(default=None, description="安装时间")
     comments: list = Field(default_factory=list, description="评论列表")
     source_repo: str = Field(default="", description="源仓库")
     source_url: str = Field(default="", description="源URL")
@@ -127,7 +128,7 @@ class SkillCategoryInfo(BaseModel):
 class SkillInstallRequest(BaseModel):
     """安装请求"""
     skill_id: str = Field(..., description="技能ID")
-    version: Optional[str] = Field(default=None, description="版本")
+    version: str | None = Field(default=None, description="版本")
     config: dict = Field(default_factory=dict, description="配置")
     auto_enable: bool = Field(default=True, description="自动启用")
 
@@ -149,7 +150,7 @@ class SkillExecuteRequest(BaseModel):
 class SkillSearchRequest(BaseModel):
     """搜索请求"""
     query: str = Field(..., description="搜索词")
-    category: Optional[SkillCategory] = Field(default=None, description="分类")
+    category: SkillCategory | None = Field(default=None, description="分类")
     sort_by: str = Field(default="rating", description="排序方式")
     limit: int = Field(default=20, description="限制数量")
     offset: int = Field(default=0, description="偏移量")
@@ -161,7 +162,7 @@ class SkillInstallationProgress(BaseModel):
     status: str = Field(..., description="状态")
     progress: int = Field(default=0, description="进度百分比")
     message: str = Field(default="", description="消息")
-    error: Optional[str] = Field(default=None, description="错误信息")
+    error: str | None = Field(default=None, description="错误信息")
 
 
 class SkillUsageRecord(BaseModel):
@@ -172,7 +173,7 @@ class SkillUsageRecord(BaseModel):
     input_data: dict[str, Any] = Field(default_factory=dict, description="输入数据")
     output_data: dict[str, Any] = Field(default_factory=dict, description="输出数据")
     status: str = Field(..., description="状态")
-    error: Optional[str] = Field(default=None, description="错误信息")
+    error: str | None = Field(default=None, description="错误信息")
     duration_ms: int = Field(default=0, description="执行时间（毫秒）")
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC), description="创建时间")
 

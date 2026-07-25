@@ -6,18 +6,18 @@ Supports multiple audio formats, languages, and provides confidence scores.
 
 from __future__ import annotations
 
-import asyncio
+import contextlib
 import io
 import logging
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
-class AudioFormat(str, Enum):
+class AudioFormat(StrEnum):
     """Supported audio formats for speech recognition."""
     MP3 = "mp3"
     MP4 = "mp4"
@@ -192,10 +192,8 @@ class WhisperSpeechRecognizer:
             raise SpeechRecognitionError(f"Transcription failed: {exc}") from exc
         finally:
             if isinstance(audio_file, (str, Path)):
-                try:
+                with contextlib.suppress(Exception):
                     audio_data.close()
-                except Exception:
-                    pass
 
     async def translate(
         self,
@@ -256,10 +254,8 @@ class WhisperSpeechRecognizer:
             raise SpeechRecognitionError(f"Translation failed: {exc}") from exc
         finally:
             if isinstance(audio_file, (str, Path)):
-                try:
+                with contextlib.suppress(Exception):
                     audio_data.close()
-                except Exception:
-                    pass
 
     async def _get_audio_duration(self, audio_file: str | Path | bytes) -> float:
         """Get audio duration in seconds.
@@ -295,10 +291,8 @@ class WhisperSpeechRecognizer:
                     return Path(audio_file).stat().st_size / 16000.0
             finally:
                 if isinstance(audio_file, (str, Path)):
-                    try:
+                    with contextlib.suppress(Exception):
                         audio_data.close()
-                    except Exception:
-                        pass
 
         except Exception as exc:
             logger.warning(f"Could not determine audio duration: {exc}")
@@ -398,10 +392,8 @@ class LocalSpeechRecognizer:
                 return 0.0
             finally:
                 if isinstance(audio_file, (str, Path)):
-                    try:
+                    with contextlib.suppress(Exception):
                         audio_data.close()
-                    except Exception:
-                        pass
 
         except Exception:
             return 0.0

@@ -4,19 +4,15 @@
 """
 from __future__ import annotations
 
-import json
 import logging
-from datetime import UTC, datetime, timedelta
-from decimal import Decimal
-from enum import Enum
-from typing import Optional
+from datetime import UTC, datetime
+from enum import StrEnum
 
 from sqlalchemy import (
     JSON,
     Boolean,
     Column,
     DateTime,
-    Enum as SQLEnum,
     ForeignKey,
     Index,
     Integer,
@@ -24,25 +20,25 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
-    create_engine,
-    select,
 )
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.orm import declarative_base, relationship
+from sqlalchemy import (
+    Enum as SQLEnum,
+)
+from sqlalchemy.orm import declarative_base
 
 logger = logging.getLogger(__name__)
 
 Base = declarative_base()
 
 
-class BillingModel(str, Enum):
+class BillingModel(StrEnum):
     """计费模型"""
     PAY_AS_YOU_GO = "pay_as_you_go"  # 按量计费
     SUBSCRIPTION = "subscription"    # 订阅计费
     HYBRID = "hybrid"                # 混合计费
 
 
-class SubscriptionStatus(str, Enum):
+class SubscriptionStatus(StrEnum):
     """订阅状态"""
     ACTIVE = "active"
     PAUSED = "paused"
@@ -50,7 +46,7 @@ class SubscriptionStatus(str, Enum):
     EXPIRED = "expired"
 
 
-class PaymentStatus(str, Enum):
+class PaymentStatus(StrEnum):
     """支付状态"""
     PENDING = "pending"
     COMPLETED = "completed"
@@ -58,7 +54,7 @@ class PaymentStatus(str, Enum):
     REFUNDED = "refunded"
 
 
-class PaymentMethod(str, Enum):
+class PaymentMethod(StrEnum):
     """支付方式"""
     STRIPE = "stripe"
     ALIPAY = "alipay"
@@ -66,7 +62,7 @@ class PaymentMethod(str, Enum):
     BANK_TRANSFER = "bank_transfer"
 
 
-class InvoiceStatus(str, Enum):
+class InvoiceStatus(StrEnum):
     """发票状态"""
     DRAFT = "draft"
     ISSUED = "issued"

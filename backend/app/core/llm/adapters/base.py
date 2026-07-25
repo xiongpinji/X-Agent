@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
-from typing import Any, Optional, AsyncIterator
+from typing import Any
 
 
 @dataclass
@@ -30,7 +31,7 @@ class LLMAdapter(ABC):
     async def chat(
         self,
         messages: list[dict[str, str]],
-        tools: Optional[list[dict[str, Any]]] = None,
+        tools: list[dict[str, Any]] | None = None,
         **kwargs,
     ) -> AdapterResponse:
         """Send a chat request."""
@@ -40,7 +41,7 @@ class LLMAdapter(ABC):
     async def stream_chat(
         self,
         messages: list[dict[str, str]],
-        tools: Optional[list[dict[str, Any]]] = None,
+        tools: list[dict[str, Any]] | None = None,
         **kwargs,
     ) -> AsyncIterator[str]:
         """Stream a chat response."""

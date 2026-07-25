@@ -6,18 +6,18 @@ Provides precise code manipulation at AST level with formatting and refactoring 
 from __future__ import annotations
 
 import ast
-import asyncio
 import difflib
 import re
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Any
+
 import black
 import isort
 
 
-class EditType(str, Enum):
+class EditType(StrEnum):
     """Types of code edits supported."""
     INSERT = "insert"
     REPLACE = "replace"
@@ -58,14 +58,14 @@ class EditResult:
     edits_applied: int
     errors: list[str] = field(default_factory=list)
     diff: str = ""
-    formatted_content: Optional[str] = None
+    formatted_content: str | None = None
 
 
 class ASTAnalyzer:
     """Analyzes Python code using AST for precise editing."""
 
     @staticmethod
-    def find_function(code: str, function_name: str) -> Optional[tuple[int, int]]:
+    def find_function(code: str, function_name: str) -> tuple[int, int] | None:
         """Find function definition line range."""
         try:
             tree = ast.parse(code)
@@ -77,7 +77,7 @@ class ASTAnalyzer:
             return None
 
     @staticmethod
-    def find_class(code: str, class_name: str) -> Optional[tuple[int, int]]:
+    def find_class(code: str, class_name: str) -> tuple[int, int] | None:
         """Find class definition line range."""
         try:
             tree = ast.parse(code)
@@ -102,7 +102,7 @@ class ASTAnalyzer:
             return []
 
     @staticmethod
-    def validate_syntax(code: str) -> tuple[bool, Optional[str]]:
+    def validate_syntax(code: str) -> tuple[bool, str | None]:
         """Validate Python syntax."""
         try:
             ast.parse(code)
@@ -154,7 +154,7 @@ class CodeRefactorer:
         """Extract lines into a new method."""
         lines = code.split('\n')
         extracted_lines = lines[start_line:end_line]
-        extracted_code = '\n'.join(extracted_lines)
+        '\n'.join(extracted_lines)
 
         # Create method signature
         method_def = f"def {method_name}():\n"
@@ -162,7 +162,7 @@ class CodeRefactorer:
             method_def += f"    {line}\n"
 
         # Replace original with method call
-        new_lines = lines[:start_line] + [f"    {method_name}()"] + lines[end_line:]
+        new_lines = [*lines[:start_line], f"    {method_name}()", *lines[end_line:]]
         new_code = '\n'.join(new_lines)
 
         return new_code, method_def
@@ -292,7 +292,7 @@ class MultiFileEditor:
                     del lines[edit.start_line:edit.end_line]
                     applied += 1
             except Exception as e:
-                errors.append(f"Edit failed at line {edit.start_line}: {str(e)}")
+                errors.append(f"Edit failed at line {edit.start_line}: {e!s}")
 
         new_content = '\n'.join(lines)
 

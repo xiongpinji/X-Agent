@@ -15,7 +15,8 @@ import gzip
 import io
 import json
 import logging
-from typing import Any, Callable, TypeVar
+from collections.abc import Callable
+from typing import Any, TypeVar
 
 from fastapi import Request, Response
 from fastapi.responses import StreamingResponse

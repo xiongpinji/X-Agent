@@ -9,7 +9,7 @@ ShortDramaProducerAgent 调度以下子代理。每个子代理是一个"角色 
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from backend.app.core.creative_studio.knowledge import knowledge_pack_for
 

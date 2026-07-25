@@ -2,10 +2,16 @@
 // 根导航配置
 
 import React from 'react';
-import { NavigationContainer } from '@react-navigation/native';
+import {
+  NavigationContainer,
+  DefaultTheme,
+  Theme as NavTheme,
+} from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+
+type IconName = React.ComponentProps<typeof MaterialCommunityIcons>['name'];
 import { useTheme } from '../theme';
 import { useAuthStore } from '../store/authStore';
 import {
@@ -27,7 +33,7 @@ const AuthStack = () => {
     <Stack.Navigator
       screenOptions={{
         headerShown: false,
-        cardStyle: { backgroundColor: theme.colors.background },
+        contentStyle: { backgroundColor: theme.colors.background },
       }}
     >
       <Stack.Screen name="Login" component={LoginScreen} />
@@ -69,12 +75,12 @@ const MainTabs = () => {
           marginTop: 4,
         },
         tabBarIcon: ({ color, size }) => {
-          let iconName = 'home-outline';
+          let iconName: IconName = 'home-outline';
 
           if (route.name === 'Home') {
             iconName = 'home-outline';
           } else if (route.name === 'Tasks') {
-            iconName = 'list-box-outline';
+            iconName = 'format-list-bulleted';
           } else if (route.name === 'Workflows') {
             iconName = 'play-circle-outline';
           } else if (route.name === 'Settings') {
@@ -124,24 +130,26 @@ export const RootNavigator = () => {
   const { theme } = useTheme();
   const { isAuthenticated } = useAuthStore();
 
+  const navTheme: NavTheme = {
+    ...DefaultTheme,
+    dark: theme.isDark,
+    colors: {
+      ...DefaultTheme.colors,
+      primary: theme.colors.primary,
+      background: theme.colors.background,
+      card: theme.colors.surface,
+      text: theme.colors.text,
+      border: theme.colors.border,
+      notification: theme.colors.error,
+    },
+  };
+
   return (
-    <NavigationContainer
-      theme={{
-        dark: theme.isDark,
-        colors: {
-          primary: theme.colors.primary,
-          background: theme.colors.background,
-          card: theme.colors.surface,
-          text: theme.colors.text,
-          border: theme.colors.border,
-          notification: theme.colors.error,
-        },
-      }}
-    >
+    <NavigationContainer theme={navTheme}>
       <Stack.Navigator
         screenOptions={{
           headerShown: false,
-          cardStyle: { backgroundColor: theme.colors.background },
+          contentStyle: { backgroundColor: theme.colors.background },
         }}
       >
         {isAuthenticated ? (
@@ -149,7 +157,7 @@ export const RootNavigator = () => {
             name="MainTabs"
             component={MainTabs}
             options={{
-              animationEnabled: false,
+              animation: 'none',
             }}
           />
         ) : (
@@ -157,7 +165,7 @@ export const RootNavigator = () => {
             name="Auth"
             component={AuthStack}
             options={{
-              animationEnabled: false,
+              animation: 'none',
             }}
           />
         )}

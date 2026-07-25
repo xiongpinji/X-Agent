@@ -1,7 +1,6 @@
 """Enterprise IM Platform Manager"""
 
-from typing import Dict, List, Any, Optional, Callable
-from datetime import datetime
+from typing import Any
 
 from .base import EnterpriseIMPlatform, MessageType
 from .dingtalk import DingTalkIntegration
@@ -13,10 +12,10 @@ class EnterpriseIMManager:
     """Unified manager for enterprise IM platforms"""
 
     def __init__(self):
-        self.platforms: Dict[str, EnterpriseIMPlatform] = {}
-        self.platform_configs: Dict[str, Dict[str, Any]] = {}
+        self.platforms: dict[str, EnterpriseIMPlatform] = {}
+        self.platform_configs: dict[str, dict[str, Any]] = {}
 
-    def register_platform(self, name: str, platform: EnterpriseIMPlatform, config: Dict[str, Any] = None):
+    def register_platform(self, name: str, platform: EnterpriseIMPlatform, config: dict[str, Any] | None = None):
         """Register a platform instance"""
         self.platforms[name] = platform
         if config:
@@ -29,16 +28,16 @@ class EnterpriseIMManager:
         if name in self.platform_configs:
             del self.platform_configs[name]
 
-    def get_platform(self, name: str) -> Optional[EnterpriseIMPlatform]:
+    def get_platform(self, name: str) -> EnterpriseIMPlatform | None:
         """Get a platform instance"""
         return self.platforms.get(name)
 
-    def list_platforms(self) -> List[str]:
+    def list_platforms(self) -> list[str]:
         """List all registered platforms"""
         return list(self.platforms.keys())
 
     async def create_dingtalk_platform(
-        self, app_key: str, app_secret: str, corp_id: str = None
+        self, app_key: str, app_secret: str, corp_id: str | None = None
     ) -> bool:
         """Create and register DingTalk platform"""
         try:
@@ -69,7 +68,7 @@ class EnterpriseIMManager:
             return False
 
     async def create_wechat_work_platform(
-        self, corp_id: str, corp_secret: str, agent_id: str = None
+        self, corp_id: str, corp_secret: str, agent_id: str | None = None
     ) -> bool:
         """Create and register WeChat Work platform"""
         try:
@@ -105,10 +104,10 @@ class EnterpriseIMManager:
 
     async def send_message_to_all(
         self,
-        user_mappings: Dict[str, str],
+        user_mappings: dict[str, str],
         message: str,
         msg_type: MessageType = MessageType.TEXT,
-    ) -> Dict[str, bool]:
+    ) -> dict[str, bool]:
         """Send a message to all platforms"""
         results = {}
         for platform_name, user_id in user_mappings.items():
@@ -118,7 +117,7 @@ class EnterpriseIMManager:
         return results
 
     async def send_card_to_platform(
-        self, platform_name: str, user_id: str, card: Dict[str, Any]
+        self, platform_name: str, user_id: str, card: dict[str, Any]
     ) -> bool:
         """Send a card message to a user on a specific platform"""
         platform = self.get_platform(platform_name)
@@ -145,7 +144,7 @@ class EnterpriseIMManager:
             print(f"Failed to send markdown on {platform_name}: {e}")
             return False
 
-    async def sync_contacts_from_all(self) -> Dict[str, List[Dict[str, Any]]]:
+    async def sync_contacts_from_all(self) -> dict[str, list[dict[str, Any]]]:
         """Sync contacts from all platforms"""
         results = {}
         for platform_name, platform in self.platforms.items():
@@ -156,7 +155,7 @@ class EnterpriseIMManager:
                 results[platform_name] = []
         return results
 
-    async def sync_departments_from_all(self) -> Dict[str, List[Dict[str, Any]]]:
+    async def sync_departments_from_all(self) -> dict[str, list[dict[str, Any]]]:
         """Sync departments from all platforms"""
         results = {}
         for platform_name, platform in self.platforms.items():
@@ -169,7 +168,7 @@ class EnterpriseIMManager:
 
     async def get_user_info_from_platform(
         self, platform_name: str, user_id: str
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Get user info from a specific platform"""
         platform = self.get_platform(platform_name)
         if not platform:
@@ -182,7 +181,7 @@ class EnterpriseIMManager:
             return {}
 
     async def create_approval_on_platform(
-        self, platform_name: str, template_id: str, data: Dict[str, Any]
+        self, platform_name: str, template_id: str, data: dict[str, Any]
     ) -> str:
         """Create an approval on a specific platform"""
         platform = self.get_platform(platform_name)
@@ -197,7 +196,7 @@ class EnterpriseIMManager:
 
     async def get_approval_status_from_platform(
         self, platform_name: str, approval_id: str
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Get approval status from a specific platform"""
         platform = self.get_platform(platform_name)
         if not platform:
@@ -237,7 +236,7 @@ class EnterpriseIMManager:
             print(f"Failed to download file from {platform_name}: {e}")
             return b""
 
-    async def health_check_all(self) -> Dict[str, bool]:
+    async def health_check_all(self) -> dict[str, bool]:
         """Check health of all platforms"""
         results = {}
         for platform_name, platform in self.platforms.items():
@@ -248,7 +247,7 @@ class EnterpriseIMManager:
                 results[platform_name] = False
         return results
 
-    def get_connection_status_all(self) -> Dict[str, Dict[str, Any]]:
+    def get_connection_status_all(self) -> dict[str, dict[str, Any]]:
         """Get connection status of all platforms"""
         results = {}
         for platform_name, platform in self.platforms.items():

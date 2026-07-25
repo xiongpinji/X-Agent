@@ -23,20 +23,19 @@ P1-10 架构裁决（单一事实来源）：
 """
 from __future__ import annotations
 
-import json
 from datetime import UTC, datetime
 from pathlib import Path
 from threading import RLock
-from typing import Any, Callable
+from typing import Any
 
 from backend.app.core.contracts import RiskLevel
 from backend.app.core.tool_schema import (
-    ToolSchema,
-    ToolCategory,
-    ToolRiskLevel,
-    ToolStatus,
     ToolAuditEntry,
+    ToolCategory,
     ToolLifecycleEvent,
+    ToolRiskLevel,
+    ToolSchema,
+    ToolStatus,
 )
 
 # 风险等级严重度顺序（单一事实来源，供映射与"取较高者"比较使用）。

@@ -23,7 +23,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from backend.app.core.context import ContextManager, SessionMetadata, SessionStats
+from backend.app.core.context import ContextManager
 from backend.app.core.security import Principal
 from backend.app.dependencies import enforce_scope, get_current_principal
 

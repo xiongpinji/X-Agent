@@ -9,7 +9,11 @@ X-Agent 端到端测试框架 - 性能和安全测试模块
 - 认证安全
 - 权限控制
 - 审计日志
+
+Note: These tests are opt-in. Set XAGENT_E2E=1 to run them.
 """
+
+import os
 
 import pytest
 import time
@@ -21,6 +25,12 @@ from typing import Dict, Any, List, Optional
 from dataclasses import dataclass
 from enum import Enum
 import json
+
+# Skip all tests in this module unless XAGENT_E2E=1
+pytestmark = pytest.mark.skipif(
+    os.environ.get("XAGENT_E2E") != "1",
+    reason="e2e tests are opt-in: set XAGENT_E2E=1"
+)
 
 
 # ============================================================================

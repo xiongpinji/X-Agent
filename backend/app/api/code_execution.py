@@ -5,7 +5,7 @@ Code execution API endpoints with security controls and audit logging.
 from __future__ import annotations
 
 import logging
-from typing import Annotated, Optional
+from typing import Annotated
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
@@ -17,8 +17,8 @@ from backend.app.core.code_executor import (
     ExecutionLanguage,
 )
 from backend.app.core.contracts import ErrorCode
-from backend.app.dependencies import get_agent, get_current_principal, enforce_scope
 from backend.app.core.security import Principal
+from backend.app.dependencies import enforce_scope, get_agent, get_current_principal
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +62,7 @@ class CodeExecutionResponse(BaseModel):
     exit_code: int
     execution_time: float
     status: str
-    error: Optional[str] = None
+    error: str | None = None
     execution_id: str
     language: str
     resource_usage: dict = Field(default_factory=dict)
@@ -141,7 +141,7 @@ async def execute_python_code(
         raise api_error(
             500,
             ErrorCode.INTERNAL_ERROR,
-            f"Code execution failed: {str(e)}",
+            f"Code execution failed: {e!s}",
         )
 
 
@@ -218,7 +218,7 @@ async def execute_javascript_code(
         raise api_error(
             500,
             ErrorCode.INTERNAL_ERROR,
-            f"Code execution failed: {str(e)}",
+            f"Code execution failed: {e!s}",
         )
 
 
@@ -295,7 +295,7 @@ async def execute_bash_command(
         raise api_error(
             500,
             ErrorCode.INTERNAL_ERROR,
-            f"Code execution failed: {str(e)}",
+            f"Code execution failed: {e!s}",
         )
 
 

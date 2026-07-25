@@ -2,74 +2,92 @@
 
 Official SDKs for integrating with X-Agent Partner API.
 
+> **分发方式(重要)**: 所有 SDK 当前以**本地构建 / 源码形式分发**,
+> **均未发布到 PyPI / npm / Go 模块代理 / Maven Central**。
+> 下方不提供 `pip install` / `npm install` / `go get` / Maven 坐标等线上安装方式,
+> 请按各语言的"本地使用"说明操作。
+
 ## Available SDKs
 
-- **Python**: `xagent-partner-sdk`
-- **JavaScript/TypeScript**: `xagent-partner-sdk`
-- **Go**: `github.com/xagent/partner-sdk-go`
-- **Java**: `io.xagent:partner-sdk`
+| 语言 | 包名 / 模块 | 形态 |
+|------|-------------|------|
+| Python | `xagent-partner`(模块 `xagent_partner`) | pyproject.toml 打包, 本地构建 wheel/sdist |
+| JavaScript/TypeScript | `xagent-partner` | tsc 编译产物 + 源码, 本地 `npm pack` / file: 依赖 |
+| Go | `github.com/xagent/partner-sdk-go`(仅模块标识) | 单文件源码 + go.mod, replace 指令引用 |
+| Java | `io.xagent.partner`(包名) | 两个 .java 源码文件, 拷贝引入 |
 
 ## Quick Start
 
 ### Python
 
 ```bash
-pip install xagent-partner-sdk
+# 从仓库根目录本地安装(或先构建 wheel: python -m pip wheel ./sdks/python --no-deps)
+pip install ./sdks/python
 ```
 
 ```python
 from xagent_partner import PartnerClient
 
-client = PartnerClient(api_key="xag_partner_xxx")
+client = PartnerClient(api_key="xag_partner_xxx", base_url="https://your-instance.example.com")
 partner = client.get_partner("partner_id")
 print(partner)
 ```
 
+详见 [python/README.md](./python/README.md)。
+
 ### JavaScript/TypeScript
 
 ```bash
-npm install xagent-partner-sdk
+cd sdks/javascript && npm install && npm run build   # tsc 编译到 dist/
+npm install ./sdks/javascript                        # 在宿主项目中以 file: 依赖引入
+# 或: npm pack ./sdks/javascript 产出 tarball 后安装
 ```
 
 ```typescript
-import { PartnerClient } from 'xagent-partner-sdk';
+import { PartnerClient } from 'xagent-partner';
 
-const client = new PartnerClient({ apiKey: 'xag_partner_xxx' });
+const client = new PartnerClient({
+  apiKey: 'xag_partner_xxx',
+  baseUrl: 'https://your-instance.example.com',
+});
 const partner = await client.getPartner('partner_id');
 console.log(partner);
 ```
 
+详见 [javascript/README.md](./javascript/README.md)。
+
 ### Go
 
-```bash
-go get github.com/xagent/partner-sdk-go
+```go.mod
+// 仓库未公开托管, 通过本地 replace 引用
+require github.com/xagent/partner-sdk-go v0.2.0-alpha
+replace github.com/xagent/partner-sdk-go => /path/to/X-Agent/sdks/go
 ```
 
 ```go
 import "github.com/xagent/partner-sdk-go"
 
 client := xagent.NewPartnerClient(xagent.PartnerClientConfig{
-    APIKey: "xag_partner_xxx",
+    APIKey:  "xag_partner_xxx",
+    BaseURL: "https://your-instance.example.com",
 })
 partner, err := client.GetPartner("partner_id")
 ```
 
+详见 [go/README.md](./go/README.md)。
+
 ### Java
 
-Add to `pom.xml`:
-
-```xml
-<dependency>
-    <groupId>io.xagent</groupId>
-    <artifactId>partner-sdk</artifactId>
-    <version>0.2.0-alpha</version>
-</dependency>
-```
+将 `java/PartnerClient.java` 与 `java/PartnerAPIException.java` 拷贝到你的项目
+(保持 `io.xagent.partner` 包结构), 并添加依赖 `jackson-databind` 与 `jackson-datatype-jsr310`。
 
 ```java
-PartnerClient client = new PartnerClient("xag_partner_xxx");
+PartnerClient client = new PartnerClient("xag_partner_xxx", "https://your-instance.example.com",
+    Duration.ofSeconds(30), 3);
 PartnerClient.PartnerResponse partner = client.getPartner("partner_id");
 ```
+
+详见 [java/README.md](./java/README.md)。
 
 ## Features
 
@@ -101,6 +119,9 @@ All SDKs provide specific exception types:
 | `PartnerAuthError` | 401 | Authentication failed |
 | `PartnerNotFoundError` | 404 | Resource not found |
 | `PartnerRateLimitError` | 429 | Rate limit exceeded |
+
+后端错误响应为 FastAPI 形状(`{"detail": "..."}`), 各 SDK 的异常 `message`
+会提取该 `detail` 字段(兼容 `{"error": {"message": "..."}}` 形状)。
 
 ## Rate Limiting
 
@@ -159,20 +180,19 @@ if PartnerClient.verify_webhook_signature(request_body, signature, secret):
 
 ## Examples
 
-See [SDK Examples](./sdk_examples.md) for detailed examples in each language.
+See [SDK Examples](../docs/sdk_examples.md) for detailed examples in each language.
 
 ## Documentation
 
-- **API Reference**: [Partner API Reference](./partner_api_reference.md)
-- **Integration Guide**: [Partner Integration Guide](./partner_integration_guide.md)
-- **Portal Overview**: [Partner Portal Overview](./partner_portal_overview.md)
-- **Examples**: [SDK Examples](./sdk_examples.md)
+- **API Reference**: [Partner API Reference](../docs/partner_api_reference.md)
+- **Integration Guide**: [Partner Integration Guide](../docs/partner_integration_guide.md)
+- **Portal Overview**: [Partner Portal Overview](../docs/partner_portal_overview.md)
+- **Examples**: [SDK Examples](../docs/sdk_examples.md)
 
 ## Support
 
 - **Documentation**: https://docs.x-agent.io/partners
 - **Email**: partners@x-agent.io
-- **GitHub Issues**: https://github.com/xagent/partner-sdk-*/issues
 - **Support Portal**: https://support.x-agent.io
 
 ## License
@@ -180,6 +200,17 @@ See [SDK Examples](./sdk_examples.md) for detailed examples in each language.
 MIT License - See LICENSE file for details
 
 ## Changelog
+
+### 0.2.0-alpha (2026-07-20)
+
+- Python: 新增 `pyproject.toml`(包名 `xagent-partner`, 版本动态读取 `__version__`), `pip wheel` 构建与 stub-server 行为验证通过
+- JavaScript: 新增 `package.json` + `tsconfig.json`, `tsc --strict` 编译与 stub-server 行为验证通过
+- Go/Java: 补充各自 README, 明确标注"源码形式分发, 未发布到包仓库"
+- 修复四类 SDK 对后端 DELETE 端点 204 空响应体解析崩溃的问题
+- 修复异常消息未提取后端 FastAPI `{"detail": ...}` 字段的问题
+- 修复 Java SDK 列表端点按包装对象反序列化(后端实际返回裸数组)、Instant 缺少 jsr310 模块的问题
+- 修复 JavaScript 异长签名 `timingSafeEqual` 抛异常、Java 签名比较非常量时间的问题
+- README 移除 pip/npm/go get/Maven 线上安装方式的虚假宣称, 统一为本地构建/源码分发说明
 
 ### 0.2.0-alpha (2026-07-19)
 

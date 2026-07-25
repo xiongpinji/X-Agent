@@ -10,18 +10,17 @@ Measures:
 """
 
 import asyncio
-import time
 import statistics
-from typing import Any, Dict, List, Tuple
+import time
 from dataclasses import dataclass
+from typing import Any
 
 from backend.app.core.parallel_execution_engine import (
-    ParallelToolExecutor,
     ParallelAgentExecutor,
-    ToolDefinition,
-    ToolCall,
+    ParallelToolExecutor,
     PriorityLevel,
-    ExecutionStatus,
+    ToolCall,
+    ToolDefinition,
 )
 
 
@@ -45,8 +44,8 @@ class PerformanceBenchmark:
     """Benchmark suite for parallel execution engine."""
 
     def __init__(self):
-        self.results: List[BenchmarkResult] = []
-        self.latencies: List[float] = []
+        self.results: list[BenchmarkResult] = []
+        self.latencies: list[float] = []
 
     async def benchmark_tool_execution(
         self,
@@ -69,7 +68,7 @@ class PerformanceBenchmark:
         self.latencies = []
 
         # Define a simple tool
-        async def simple_tool(task_id: int) -> Dict[str, Any]:
+        async def simple_tool(task_id: int) -> dict[str, Any]:
             """Simple tool that simulates work."""
             await asyncio.sleep(tool_duration_ms / 1000.0)
             return {"task_id": task_id, "result": "done"}
@@ -94,7 +93,7 @@ class PerformanceBenchmark:
 
         # Execute and measure
         start_time = time.time()
-        results = await executor.execute_tools(tool_calls)
+        await executor.execute_tools(tool_calls)
         total_duration = (time.time() - start_time) * 1000
 
         # Collect latencies
@@ -133,7 +132,7 @@ class PerformanceBenchmark:
                 self.agent_id = agent_id
                 self.duration_ms = duration_ms
 
-            async def run(self, task: str, context: Dict[str, Any]) -> Dict[str, Any]:
+            async def run(self, task: str, context: dict[str, Any]) -> dict[str, Any]:
                 """Run the agent."""
                 await asyncio.sleep(self.duration_ms / 1000.0)
                 return {"agent_id": self.agent_id, "result": "done"}
@@ -147,7 +146,7 @@ class PerformanceBenchmark:
 
         # Execute and measure
         start_time = time.time()
-        results = await executor.execute_agents(
+        await executor.execute_agents(
             agent_ids=agent_ids,
             task="benchmark task",
             context={},
@@ -185,7 +184,7 @@ class PerformanceBenchmark:
         self.latencies = []
 
         # Define tool
-        async def dag_tool(task_id: int) -> Dict[str, Any]:
+        async def dag_tool(task_id: int) -> dict[str, Any]:
             """Tool for DAG execution."""
             await asyncio.sleep(0.05)  # 50ms per task
             return {"task_id": task_id, "result": "done"}
@@ -219,7 +218,7 @@ class PerformanceBenchmark:
 
         # Execute and measure
         start_time = time.time()
-        results = await executor.execute_tools(tool_calls)
+        await executor.execute_tools(tool_calls)
         total_duration = (time.time() - start_time) * 1000
 
         # Collect latencies
@@ -235,7 +234,7 @@ class PerformanceBenchmark:
             task_count=total_tasks,
         )
 
-    async def benchmark_scalability(self) -> List[BenchmarkResult]:
+    async def benchmark_scalability(self) -> list[BenchmarkResult]:
         """
         Benchmark scalability with increasing task counts.
 
@@ -254,7 +253,7 @@ class PerformanceBenchmark:
 
         return results
 
-    async def benchmark_concurrency_impact(self) -> List[BenchmarkResult]:
+    async def benchmark_concurrency_impact(self) -> list[BenchmarkResult]:
         """
         Benchmark impact of concurrency limits.
 
@@ -273,7 +272,7 @@ class PerformanceBenchmark:
 
         return results
 
-    async def benchmark_serial_vs_parallel(self) -> Tuple[BenchmarkResult, BenchmarkResult]:
+    async def benchmark_serial_vs_parallel(self) -> tuple[BenchmarkResult, BenchmarkResult]:
         """
         Compare serial vs parallel execution.
 
@@ -326,7 +325,7 @@ class PerformanceBenchmark:
         self.results.append(result)
         return result
 
-    def print_results(self, results: List[BenchmarkResult]) -> None:
+    def print_results(self, results: list[BenchmarkResult]) -> None:
         """Print benchmark results in a formatted table."""
         print("\n" + "=" * 120)
         print("BENCHMARK RESULTS")

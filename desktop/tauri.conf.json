@@ -1,11 +1,15 @@
 {
   "build": {
-    "beforeDevCommand": "npm run dev",
-    "beforeBuildCommand": "npm run build",
-    "devPath": "http://localhost:5173",
-    "frontendDist": "../frontend/dist"
+    "beforeDevCommand": "npm --prefix ../frontend run dev",
+    "beforeBuildCommand": "npm --prefix ../frontend run build",
+    "devPath": "http://localhost:3000",
+    "distDir": "../frontend/dist"
   },
-  "app": {
+  "package": {
+    "productName": "X-Agent",
+    "version": "0.1.0"
+  },
+  "tauri": {
     "windows": [
       {
         "title": "X-Agent",
@@ -28,13 +32,7 @@
       "iconPath": "icons/icon.png",
       "iconAsTemplate": true,
       "menuOnLeftClick": false
-    }
-  },
-  "package": {
-    "productName": "X-Agent",
-    "version": "0.1.0"
-  },
-  "tauri": {
+    },
     "allowlist": {
       "all": false,
       "shell": {

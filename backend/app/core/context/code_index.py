@@ -1,11 +1,12 @@
 from __future__ import annotations
+
 import logging
 import re
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -15,8 +16,8 @@ class CodeMatch:
     line_number: int
     content: str
     relevance_score: float
-    context_lines: List[str] = field(default_factory=list)
-    def to_dict(self) -> Dict[str, Any]:
+    context_lines: list[str] = field(default_factory=list)
+    def to_dict(self) -> dict[str, Any]:
         return {
             "file_path": str(self.file_path),
             "line_number": self.line_number,
@@ -29,11 +30,11 @@ class CodeMatch:
 class FileNode:
     path: Path
     file_type: str
-    symbols: List[str] = field(default_factory=list)
-    imports: List[str] = field(default_factory=list)
+    symbols: list[str] = field(default_factory=list)
+    imports: list[str] = field(default_factory=list)
     size: int = 0
-    last_modified: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    def to_dict(self) -> Dict[str, Any]:
+    last_modified: datetime = field(default_factory=lambda: datetime.now(UTC))
+    def to_dict(self) -> dict[str, Any]:
         return {
             "path": str(self.path),
             "file_type": self.file_type,
@@ -49,7 +50,7 @@ class DependencyEdge:
     to_file: Path
     import_statement: str
     edge_type: str = "import"
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "from_file": str(self.from_file),
             "to_file": str(self.to_file),
@@ -59,9 +60,9 @@ class DependencyEdge:
 
 @dataclass
 class DependencyGraph:
-    nodes: Dict[Path, FileNode] = field(default_factory=dict)
-    edges: List[DependencyEdge] = field(default_factory=list)
-    def to_dict(self) -> Dict[str, Any]:
+    nodes: dict[Path, FileNode] = field(default_factory=dict)
+    edges: list[DependencyEdge] = field(default_factory=list)
+    def to_dict(self) -> dict[str, Any]:
         return {
             "nodes": {str(k): v.to_dict() for k, v in self.nodes.items()},
             "edges": [e.to_dict() for e in self.edges],
@@ -73,8 +74,8 @@ class IndexStats:
     indexed_files: int = 0
     total_symbols: int = 0
     index_time_seconds: float = 0.0
-    last_updated: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    def to_dict(self) -> Dict[str, Any]:
+    last_updated: datetime = field(default_factory=lambda: datetime.now(UTC))
+    def to_dict(self) -> dict[str, Any]:
         return {
             "total_files": self.total_files,
             "indexed_files": self.indexed_files,
@@ -115,12 +116,12 @@ class CodebaseIndex:
         "coverage",
     }
     def __init__(self) -> None:
-        self._files: Dict[Path, FileNode] = {}
-        self._file_contents: Dict[Path, str] = {}
+        self._files: dict[Path, FileNode] = {}
+        self._file_contents: dict[Path, str] = {}
         self._dependency_graph: DependencyGraph = DependencyGraph()
         self._stats = IndexStats()
-        self._root_path: Optional[Path] = None
-    def build_index(self, root_path: Path | str, patterns: Optional[List[str]] = None) -> IndexStats:
+        self._root_path: Path | None = None
+    def build_index(self, root_path: Path | str, patterns: list[str] | None = None) -> IndexStats:
         start_time = time.time()
         root_path = Path(root_path).resolve()
         if not root_path.exists():
@@ -142,10 +143,10 @@ class CodebaseIndex:
         self._stats.indexed_files = len(self._files)
         self._stats.total_symbols = sum(len(node.symbols) for node in self._files.values())
         self._stats.index_time_seconds = time.time() - start_time
-        self._stats.last_updated = datetime.now(timezone.utc)
+        self._stats.last_updated = datetime.now(UTC)
         logger.info(f"Index complete: {self._stats.indexed_files} files, {self._stats.total_symbols} symbols, {self._stats.index_time_seconds:.2f}s")
         return self._stats
-    def update_index(self, changed_files: List[Path | str]) -> IndexStats:
+    def update_index(self, changed_files: list[Path | str]) -> IndexStats:
         start_time = time.time()
         updated_count = 0
         for file_path in changed_files:
@@ -169,11 +170,11 @@ class CodebaseIndex:
         # reflects additions/removals — mirrors build_index().
         self._stats.indexed_files = len(self._files)
         self._stats.index_time_seconds = time.time() - start_time
-        self._stats.last_updated = datetime.now(timezone.utc)
+        self._stats.last_updated = datetime.now(UTC)
         logger.info(f"Incremental update complete: {updated_count} files updated")
         return self._stats
-    def search(self, query: str, file_types: Optional[List[str]] = None, limit: int = 20) -> List[CodeMatch]:
-        results: List[Tuple[float, CodeMatch]] = []
+    def search(self, query: str, file_types: list[str] | None = None, limit: int = 20) -> list[CodeMatch]:
+        results: list[tuple[float, CodeMatch]] = []
         query_terms = self._normalize_query(query)
         for file_path, node in self._files.items():
             if file_types and node.file_type not in file_types:
@@ -197,15 +198,15 @@ class CodebaseIndex:
                     if edge.to_file in self._files:
                         graph.nodes[edge.to_file] = self._files[edge.to_file]
         return graph
-    def get_dependents(self, file_path: Path | str) -> List[Path]:
+    def get_dependents(self, file_path: Path | str) -> list[Path]:
         file_path = Path(file_path).resolve()
-        dependents: Set[Path] = set()
+        dependents: set[Path] = set()
         for edge in self._dependency_graph.edges:
             if edge.to_file == file_path:
                 dependents.add(edge.from_file)
         return list(dependents)
-    def _scan_files(self, root_path: Path, patterns: Optional[List[str]] = None) -> List[Path]:
-        files: List[Path] = []
+    def _scan_files(self, root_path: Path, patterns: list[str] | None = None) -> list[Path]:
+        files: list[Path] = []
         for path in root_path.rglob("*"):
             if not path.is_file():
                 continue
@@ -228,11 +229,11 @@ class CodebaseIndex:
         size = file_path.stat().st_size
         symbols = self._extract_symbols(content, file_type)
         imports = self._extract_imports(content, file_type)
-        node = FileNode(path=file_path, file_type=file_type, symbols=symbols, imports=imports, size=size, last_modified=datetime.fromtimestamp(file_path.stat().st_mtime, tz=timezone.utc))
+        node = FileNode(path=file_path, file_type=file_type, symbols=symbols, imports=imports, size=size, last_modified=datetime.fromtimestamp(file_path.stat().st_mtime, tz=UTC))
         self._files[file_path] = node
         self._file_contents[file_path] = content
-    def _extract_symbols(self, content: str, file_type: str) -> List[str]:
-        symbols: List[str] = []
+    def _extract_symbols(self, content: str, file_type: str) -> list[str]:
+        symbols: list[str] = []
         if file_type == "python":
             patterns = [r"^\s*(?:async\s+)?def\s+(\w+)", r"^\s*class\s+(\w+)"]
         elif file_type in ("typescript", "javascript"):
@@ -246,8 +247,8 @@ class CodebaseIndex:
                     if match and match not in symbols:
                         symbols.append(match)
         return symbols[:100]
-    def _extract_imports(self, content: str, file_type: str) -> List[str]:
-        imports: List[str] = []
+    def _extract_imports(self, content: str, file_type: str) -> list[str]:
+        imports: list[str] = []
         if file_type == "python":
             patterns = [r"^import\s+(.+?)(?:\s+as\s+\w+)?$", r"^from\s+(.+?)\s+import"]
         elif file_type in ("typescript", "javascript"):
@@ -272,8 +273,8 @@ class CodebaseIndex:
                     if target_file in self._files:
                         edge = DependencyEdge(from_file=file_path, to_file=target_file, import_statement=import_stmt, edge_type="import")
                         self._dependency_graph.edges.append(edge)
-    def _resolve_import(self, from_file: Path, import_stmt: str) -> List[Path]:
-        targets: List[Path] = []
+    def _resolve_import(self, from_file: Path, import_stmt: str) -> list[Path]:
+        targets: list[Path] = []
         if not self._root_path:
             return targets
         import_path = import_stmt.strip().strip("\'\"" )
@@ -284,20 +285,20 @@ class CodebaseIndex:
                 if base_dir.parent != base_dir:
                     base_dir = base_dir.parent
             remaining = parts[-1].replace("/", "\\")
-            for ext in self.SUPPORTED_EXTENSIONS.keys():
+            for ext in self.SUPPORTED_EXTENSIONS:
                 candidate = base_dir / (remaining + ext)
                 if candidate in self._files:
                     targets.append(candidate)
         else:
             import_path = import_path.replace("/", "\\").replace(".", "\\")
-            for file_path in self._files.keys():
+            for file_path in self._files:
                 if import_path in str(file_path):
                     targets.append(file_path)
         return targets
-    def _normalize_query(self, query: str) -> List[str]:
+    def _normalize_query(self, query: str) -> list[str]:
         terms = re.split(r"[\s\-_/\\]+", query.lower())
         return [term for term in terms if term and len(term) > 1]
-    def _calculate_relevance(self, query_terms: List[str], node: FileNode, file_path: Path) -> float:
+    def _calculate_relevance(self, query_terms: list[str], node: FileNode, file_path: Path) -> float:
         score = 0.0
         file_name = file_path.name.lower()
         for term in query_terms:
@@ -316,8 +317,8 @@ class CodebaseIndex:
             if term in path_str:
                 score += 1.0
         return score
-    def _find_matches_in_file(self, file_path: Path, query_terms: List[str]) -> List[Tuple[int, str, List[str]]]:
-        matches: List[Tuple[int, str, List[str]]] = []
+    def _find_matches_in_file(self, file_path: Path, query_terms: list[str]) -> list[tuple[int, str, list[str]]]:
+        matches: list[tuple[int, str, list[str]]] = []
         if file_path not in self._file_contents:
             return matches
         content = self._file_contents[file_path]
@@ -332,7 +333,7 @@ class CodebaseIndex:
         return matches[:10]
     def get_stats(self) -> IndexStats:
         return self._stats
-    def get_file_info(self, file_path: Path | str) -> Optional[Dict[str, Any]]:
+    def get_file_info(self, file_path: Path | str) -> dict[str, Any] | None:
         file_path = Path(file_path).resolve()
         if file_path not in self._files:
             return None
@@ -345,8 +346,8 @@ class CodebaseIndex:
             "size": node.size,
             "last_modified": node.last_modified.isoformat(),
         }
-    def list_files(self, file_type: Optional[str] = None) -> List[Dict[str, Any]]:
-        files: List[Dict[str, Any]] = []
+    def list_files(self, file_type: str | None = None) -> list[dict[str, Any]]:
+        files: list[dict[str, Any]] = []
         for file_path, node in self._files.items():
             if file_type and node.file_type != file_type:
                 continue
@@ -359,7 +360,7 @@ class CodebaseIndex:
             })
         return sorted(files, key=lambda x: x["path"])
 
-_global_index: Optional[CodebaseIndex] = None
+_global_index: CodebaseIndex | None = None
 
 def get_codebase_index() -> CodebaseIndex:
     global _global_index

@@ -9,8 +9,7 @@ import os
 import tempfile
 import uuid
 from dataclasses import dataclass, field
-from typing import Any, Optional
-from datetime import datetime
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +24,7 @@ class SandboxConfig:
     max_output_bytes: int = 10 * 1024 * 1024  # 10MB
     enable_network: bool = False
     enable_file_system: bool = True
-    temp_dir: Optional[str] = None
+    temp_dir: str | None = None
     docker_image: str = "python:3.11-slim"
     container_name_prefix: str = "xagent-python"
 
@@ -40,8 +39,8 @@ class ExecutionResult:
     return_value: Any = None
     execution_time_ms: float = 0.0
     memory_used_mb: float = 0.0
-    error_code: Optional[str] = None
-    error_message: Optional[str] = None
+    error_code: str | None = None
+    error_message: str | None = None
     execution_id: str = field(default_factory=lambda: uuid.uuid4().hex[:8])
 
 
@@ -105,7 +104,6 @@ class PythonSandbox:
         "site",
         "warnings",
         "contextlib",
-        "abc",
         "rlcompleter",
         # Popular data science libraries (if installed)
         "numpy",
@@ -156,17 +154,17 @@ class PythonSandbox:
         "__globals__",
     }
 
-    def __init__(self, config: Optional[SandboxConfig] = None):
+    def __init__(self, config: SandboxConfig | None = None):
         """Initialize Python sandbox.
 
         Args:
             config: Sandbox configuration
         """
         self.config = config or SandboxConfig()
-        self._container_id: Optional[str] = None
-        self._temp_dir: Optional[str] = None
+        self._container_id: str | None = None
+        self._temp_dir: str | None = None
 
-    async def execute(self, code: str, variables: Optional[dict[str, Any]] = None) -> ExecutionResult:
+    async def execute(self, code: str, variables: dict[str, Any] | None = None) -> ExecutionResult:
         """Execute Python code in sandbox.
 
         Args:
@@ -204,7 +202,7 @@ class PythonSandbox:
             result.execution_time_ms = (time.perf_counter() - start_time) * 1000
             return result
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return ExecutionResult(
                 success=False,
                 error_code="TIMEOUT",
@@ -223,7 +221,7 @@ class PythonSandbox:
             # Cleanup
             await self._cleanup()
 
-    def _validate_code(self, code: str) -> Optional[str]:
+    def _validate_code(self, code: str) -> str | None:
         """Validate code for dangerous patterns.
 
         Args:
@@ -396,7 +394,6 @@ finally:
             ExecutionResult
         """
         import time
-        import subprocess
 
         start_time = time.perf_counter()
 
@@ -417,7 +414,7 @@ finally:
                 stdout, stderr = await asyncio.wait_for(
                     process.communicate(), timeout=self.config.timeout_seconds
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 process.kill()
                 await process.wait()
                 raise
@@ -446,7 +443,7 @@ finally:
                     execution_time_ms=(time.perf_counter() - start_time) * 1000,
                 )
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             raise
         except Exception as e:
             logger.exception(f"Direct execution error: {e}")
@@ -481,7 +478,7 @@ finally:
 class PythonSandboxPool:
     """Pool of reusable Python sandbox containers for performance."""
 
-    def __init__(self, config: Optional[SandboxConfig] = None, pool_size: int = 5):
+    def __init__(self, config: SandboxConfig | None = None, pool_size: int = 5):
         """Initialize sandbox pool.
 
         Args:
@@ -507,7 +504,7 @@ class PythonSandboxPool:
         self._initialized = True
         logger.info(f"Initialized Python sandbox pool with {self.pool_size} containers")
 
-    async def execute(self, code: str, variables: Optional[dict[str, Any]] = None) -> ExecutionResult:
+    async def execute(self, code: str, variables: dict[str, Any] | None = None) -> ExecutionResult:
         """Execute code using a sandbox from the pool.
 
         Args:

@@ -5,12 +5,16 @@ This module demonstrates how to use the new streaming, task management,
 and interactive question APIs.
 """
 
-from typing import Any
 import asyncio
-from backend.app.api.streaming import event_store, StreamEvent, MessageEvent, ProgressEvent, CompletionEvent
-from backend.app.core.interactive_questions import question_manager, InteractiveQuestion, QuestionType, QuestionOption
-from backend.app.api.tasks_ui import task_store, TaskModel, TaskStatus, TaskPriority
 
+from backend.app.api.streaming import CompletionEvent, MessageEvent, ProgressEvent, event_store
+from backend.app.api.tasks_ui import TaskModel, TaskPriority, TaskStatus, task_store
+from backend.app.core.interactive_questions import (
+    InteractiveQuestion,
+    QuestionOption,
+    QuestionType,
+    question_manager,
+)
 
 # ============================================================================
 # Example 1: Streaming Events
@@ -141,7 +145,7 @@ async def example_task_management():
     )
     subtask3 = task_store.create(subtask3)
 
-    print(f"Created 3 subtasks with dependencies")
+    print("Created 3 subtasks with dependencies")
 
     # Update task progress
     task_store.update(subtask1.task_id, {
@@ -231,15 +235,15 @@ async def example_interactive_questions():
 
     # Answer confirmation
     question_manager.answer_question(confirmation_q.question_id, True)
-    print(f"Answered confirmation question")
+    print("Answered confirmation question")
 
     # Answer choice
     question_manager.answer_question(choice_q.question_id, "staging")
-    print(f"Answered choice question")
+    print("Answered choice question")
 
     # Answer text
     question_manager.answer_question(text_q.question_id, "Deploying bug fixes for issue #123")
-    print(f"Answered text question")
+    print("Answered text question")
 
     # Get history
     history = question_manager.get_history(run_id=run_id)

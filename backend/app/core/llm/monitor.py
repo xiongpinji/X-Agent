@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Any, Optional
-from datetime import datetime, timedelta
-from collections import defaultdict
 import statistics
+from collections import defaultdict
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta
+from typing import Any
 
 
 @dataclass
@@ -93,8 +93,8 @@ class PerformanceMonitor:
         latency_ms: float,
         tokens_used: int,
         cost_usd: float,
-        quality_score: Optional[float] = None,
-        metadata: Optional[dict[str, Any]] = None,
+        quality_score: float | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> None:
         """Record a request."""
         if model_name not in self.metrics:
@@ -182,7 +182,7 @@ class PerformanceMonitor:
         if len(self._alerts) > 1000:
             self._alerts = self._alerts[-1000:]
 
-    def get_metrics(self, model_name: str) -> Optional[ModelMetrics]:
+    def get_metrics(self, model_name: str) -> ModelMetrics | None:
         """Get metrics for a model."""
         return self.metrics.get(model_name)
 
@@ -200,7 +200,7 @@ class PerformanceMonitor:
 
         return comparison
 
-    def get_best_model_for(self, criteria: str) -> Optional[str]:
+    def get_best_model_for(self, criteria: str) -> str | None:
         """Get best model for a criteria."""
         if not self.metrics:
             return None
@@ -247,7 +247,6 @@ class PerformanceMonitor:
             return {}
 
         # Split into time buckets
-        bucket_size_minutes = 60
         buckets = defaultdict(list)
 
         for log in recent_logs:

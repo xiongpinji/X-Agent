@@ -30,12 +30,7 @@ cd x-agent-core/extension
 npm install
 ```
 
-3. **构建开发版本**
-```bash
-npm run build:dev
-```
-
-4. **加载到Chrome**
+3. **加载到Chrome**(无构建步骤, 直接加载源码目录)
 - 打开 `chrome://extensions/`
 - 启用右上角的"开发者模式"
 - 点击"加载未打包的扩展程序"
@@ -48,10 +43,9 @@ npm run build:dev
 ### 开发工作流
 
 ```bash
-# 启动监视模式（自动重新构建）
-npm run watch
+# 本扩展无构建步骤; 修改源码后在 chrome://extensions/ 点击"重新加载"
 
-# 在另一个终端运行测试
+# 运行测试(监视模式)
 npm test -- --watch
 
 # 代码检查
@@ -86,23 +80,20 @@ if (DEBUG) {
 
 ## 生产环境部署
 
-### 构建生产版本
+### 打包生产版本
+
+本扩展无 webpack 构建步骤（已于 0.2.0-alpha 移除）：源码即产物。
+`manifest.json` 中 `background.type = "module"`，Chrome 原生解析 ES Module。
 
 ```bash
-# 生产构建（压缩和优化）
-npm run build:prod
-
-# 验证构建输出
-ls -la dist/
+# 直接打包源码目录为 zip(排除 node_modules/tests/文档/脚本)
+npm run package
 ```
 
 ### 性能优化
 
-1. **代码压缩**
-```bash
-# 使用webpack生产模式自动压缩
-npm run build:prod
-```
+1. **代码体积**
+- 源码直接发布, 无压缩流水线; 如需压缩可在上传前使用 Chrome 开发者模式的"打包扩展程序"功能
 
 2. **资源优化**
 - 压缩图片资源
@@ -253,8 +244,7 @@ npm run package
 git tag v1.0.1
 git push origin v1.0.1
 
-# 构建和发布
-npm run build:prod
+# 打包和发布
 npm run package
 # 上传到Web Store
 ```
@@ -355,9 +345,8 @@ git tag v1.0.1
 git push origin main --tags
 ```
 
-3. **构建和发布**
+3. **打包和发布**
 ```bash
-npm run build:prod
 npm run package
 # 上传到Web Store
 ```

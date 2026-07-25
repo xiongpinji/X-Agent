@@ -3,7 +3,14 @@ from typing import Annotated
 from fastapi import APIRouter, Depends
 
 from backend.app.core.security import Principal
-from backend.app.dependencies import enforce_scope, get_approval_store, get_run_store, get_trace_store, get_agent, get_current_principal
+from backend.app.dependencies import (
+    enforce_scope,
+    get_agent,
+    get_approval_store,
+    get_current_principal,
+    get_run_store,
+    get_trace_store,
+)
 
 router = APIRouter(prefix="/api/v1/ops", tags=["ops"])
 PrincipalDependency = Annotated[Principal, Depends(get_current_principal)]

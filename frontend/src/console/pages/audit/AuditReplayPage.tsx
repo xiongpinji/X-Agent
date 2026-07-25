@@ -161,7 +161,7 @@ function TraceSummaryCard({ envelope, traceSummary, dispatch }: { envelope: Link
   );
 }
 
-function ReplayTimeline({ envelope, traceSummary, messages, selectedMessageId, onSelectMessage }: { envelope: LinkedSummaryEnvelope | null; traceSummary: { trace_id?: string; event_count?: number; last_event?: string; task?: string } | null; messages: RealtimeMessage[]; selectedMessageId?: string | null; onSelectMessage?: (messageId: string) => void; }) {
+function ReplayTimeline({ envelope: _envelope, traceSummary: _traceSummary, messages, selectedMessageId, onSelectMessage }: { envelope: LinkedSummaryEnvelope | null; traceSummary: { trace_id?: string; event_count?: number; last_event?: string; task?: string } | null; messages: RealtimeMessage[]; selectedMessageId?: string | null; onSelectMessage?: (messageId: string) => void; }) {
   return (
     <section className="rounded-2xl border p-4">
       <div className="flex items-center justify-between">
@@ -197,7 +197,7 @@ function ReplayTimeline({ envelope, traceSummary, messages, selectedMessageId, o
   );
 }
 
-function DecisionPathPanel({ envelope, auditSummary, dispatch }: { envelope: LinkedSummaryEnvelope | null; auditSummary: { count?: number; by_action?: Record<string, number>; by_resource_type?: Record<string, number>; by_outcome?: Record<string, number> } | null; dispatch: DispatchResult | null }) {
+function DecisionPathPanel({ envelope: _envelope, auditSummary, dispatch }: { envelope: LinkedSummaryEnvelope | null; auditSummary: { count?: number; by_action?: Record<string, number>; by_resource_type?: Record<string, number>; by_outcome?: Record<string, number> } | null; dispatch: DispatchResult | null }) {
   const actionSummary = auditSummary?.by_action ? Object.entries(auditSummary.by_action).slice(0, 4) : [];
   return (
     <section className="rounded-2xl border p-4">
@@ -230,7 +230,7 @@ function DecisionPathPanel({ envelope, auditSummary, dispatch }: { envelope: Lin
   );
 }
 
-function AuditTrailPanel({ envelope, auditSummary, realtime }: { envelope: LinkedSummaryEnvelope | null; auditSummary: { count?: number; by_action?: Record<string, number>; by_resource_type?: Record<string, number>; by_outcome?: Record<string, number> } | null; realtime: RealtimeSnapshot }) {
+function AuditTrailPanel({ envelope: _envelope, auditSummary: _auditSummary, realtime }: { envelope: LinkedSummaryEnvelope | null; auditSummary: { count?: number; by_action?: Record<string, number>; by_resource_type?: Record<string, number>; by_outcome?: Record<string, number> } | null; realtime: RealtimeSnapshot }) {
   return (
     <section className="rounded-2xl border p-4">
       <h3 className="font-semibold">审计轨迹</h3>

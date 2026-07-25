@@ -7,18 +7,18 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from enum import Enum
+from datetime import UTC, datetime
+from enum import StrEnum
 from uuid import uuid4
 
 from pydantic import BaseModel, Field
 
 
 def _utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
-class StoryboardStatus(str, Enum):
+class StoryboardStatus(StrEnum):
     """故事板生命周期状态。"""
 
     DRAFT = "draft"  # 刚由制作人生成大纲
@@ -29,7 +29,7 @@ class StoryboardStatus(str, Enum):
     FAILED = "failed"
 
 
-class AspectRatio(str, Enum):
+class AspectRatio(StrEnum):
     """画面比例。短剧默认竖屏 9:16。"""
 
     VERTICAL = "9:16"

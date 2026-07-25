@@ -11,7 +11,7 @@ export interface StepIndicatorProps extends React.HTMLAttributes<HTMLDivElement>
 }
 
 export const StepIndicator = React.forwardRef<HTMLDivElement, StepIndicatorProps>(
-  ({ steps, currentStep, className, ...props }, ref) => {
+  ({ steps, currentStep: _currentStep, className, ...props }, ref) => {
     const getStatusColor = (status?: string) => {
       switch (status) {
         case 'completed':

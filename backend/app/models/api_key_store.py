@@ -6,13 +6,11 @@ from __future__ import annotations
 import json
 import logging
 from datetime import UTC, datetime
-from typing import Optional
 
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.models import APIKeyStoreModel
 from backend.app.core.session import SessionManager
+from backend.app.models import APIKeyStoreModel
 
 logger = logging.getLogger(__name__)
 
@@ -29,8 +27,8 @@ class APIKeyStorePostgres:
         tenant_id: str,
         name: str,
         role: str = "developer",
-        scopes: Optional[list[str]] = None,
-        expires_at: Optional[datetime] = None,
+        scopes: list[str] | None = None,
+        expires_at: datetime | None = None,
     ) -> APIKeyStoreModel:
         """创建API密钥"""
         async with SessionManager.get_session() as session:
@@ -50,21 +48,21 @@ class APIKeyStorePostgres:
             logger.info(f"API密钥创建成功: {key_prefix}")
             return api_key
 
-    async def get_api_key_by_id(self, key_id: str) -> Optional[APIKeyStoreModel]:
+    async def get_api_key_by_id(self, key_id: str) -> APIKeyStoreModel | None:
         """根据ID获取API密钥"""
         async with SessionManager.get_session() as session:
             stmt = select(APIKeyStoreModel).where(APIKeyStoreModel.key_id == key_id)
             result = await session.execute(stmt)
             return result.scalar_one_or_none()
 
-    async def get_api_key_by_hash(self, key_hash: str) -> Optional[APIKeyStoreModel]:
+    async def get_api_key_by_hash(self, key_hash: str) -> APIKeyStoreModel | None:
         """根据哈希获取API密钥"""
         async with SessionManager.get_session() as session:
             stmt = select(APIKeyStoreModel).where(APIKeyStoreModel.key_hash == key_hash)
             result = await session.execute(stmt)
             return result.scalar_one_or_none()
 
-    async def get_api_key_by_prefix(self, key_prefix: str) -> Optional[APIKeyStoreModel]:
+    async def get_api_key_by_prefix(self, key_prefix: str) -> APIKeyStoreModel | None:
         """根据前缀获取API密钥"""
         async with SessionManager.get_session() as session:
             stmt = select(APIKeyStoreModel).where(APIKeyStoreModel.key_prefix == key_prefix)
@@ -92,7 +90,7 @@ class APIKeyStorePostgres:
             result = await session.execute(stmt)
             return result.scalars().all()
 
-    async def revoke_api_key(self, key_id: str) -> Optional[APIKeyStoreModel]:
+    async def revoke_api_key(self, key_id: str) -> APIKeyStoreModel | None:
         """撤销API密钥"""
         async with SessionManager.get_session() as session:
             stmt = select(APIKeyStoreModel).where(APIKeyStoreModel.key_id == key_id)
@@ -109,7 +107,7 @@ class APIKeyStorePostgres:
             logger.info(f"API密钥已撤销: {key_id}")
             return api_key
 
-    async def update_last_used(self, key_id: str) -> Optional[APIKeyStoreModel]:
+    async def update_last_used(self, key_id: str) -> APIKeyStoreModel | None:
         """更新最后使用时间"""
         async with SessionManager.get_session() as session:
             stmt = select(APIKeyStoreModel).where(APIKeyStoreModel.key_id == key_id)
@@ -150,10 +148,7 @@ class APIKeyStorePostgres:
             return False
 
         # 检查是否过期
-        if api_key.expires_at and datetime.now(UTC) > api_key.expires_at:
-            return False
-
-        return True
+        return not (api_key.expires_at and datetime.now(UTC) > api_key.expires_at)
 
     async def get_scopes(self, key_id: str) -> list[str]:
         """获取API密钥的权限范围"""

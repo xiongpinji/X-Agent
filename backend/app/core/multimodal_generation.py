@@ -16,13 +16,13 @@ from __future__ import annotations
 import asyncio
 import time
 from dataclasses import dataclass, field
-from enum import Enum
-from typing import Any, Awaitable
+from enum import StrEnum
+from typing import Any
 
 import numpy as np
 
 
-class GenerationType(str, Enum):
+class GenerationType(StrEnum):
     """生成类型枚举"""
     TEXT_TO_IMAGE = "text_to_image"
     IMAGE_TO_TEXT = "image_to_text"
@@ -125,7 +125,7 @@ class TextEncoder:
         if not vec1 or not vec2:
             return 0.0
 
-        dot_product = sum(a * b for a, b in zip(vec1, vec2))
+        dot_product = sum(a * b for a, b in zip(vec1, vec2, strict=False))
         norm1 = np.sqrt(sum(a * a for a in vec1))
         norm2 = np.sqrt(sum(b * b for b in vec2))
 
@@ -143,7 +143,6 @@ class ImageGenerator:
 
     async def generate_from_text(self, text: str, parameters: dict[str, Any] | None = None) -> list[float]:
         """从文本生成图像特征"""
-        params = parameters or {}
 
         # 模拟图像生成过程
         await asyncio.sleep(0.1)
@@ -190,7 +189,7 @@ class VideoGenerator:
         frames = []
         np.random.seed(hash(text) % 2**32)
 
-        for i in range(num_frames):
+        for _i in range(num_frames):
             frame_features = np.random.randn(self.frame_dim).tolist()
             frames.append(frame_features)
 
@@ -223,7 +222,6 @@ class AudioGenerator:
 
     async def generate_from_text(self, text: str, parameters: dict[str, Any] | None = None) -> list[float]:
         """从文本生成音频特征"""
-        params = parameters or {}
 
         # 模拟音频生成过程
         await asyncio.sleep(0.15)
@@ -381,12 +379,8 @@ class MultimodalGenerator:
         score = 0.8  # 基础分数
 
         # 根据输出数据调整分数
-        if isinstance(output_data, str):
-            if len(output_data) > 0:
-                score += 0.1
-        elif isinstance(output_data, list):
-            if len(output_data) > 0:
-                score += 0.1
+        if isinstance(output_data, (str, list)) and len(output_data) > 0:
+            score += 0.1
 
         # 根据参数调整分数
         if request.parameters:

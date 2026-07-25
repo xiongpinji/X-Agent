@@ -15,16 +15,17 @@ import asyncio
 import logging
 import random
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
-from enum import Enum
-from typing import Any, Callable, Generic, TypeVar
+from enum import StrEnum
+from typing import Any, TypeVar
 
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
 
 
-class ErrorSeverity(str, Enum):
+class ErrorSeverity(StrEnum):
     """Error severity levels."""
 
     CRITICAL = "critical"
@@ -34,7 +35,7 @@ class ErrorSeverity(str, Enum):
     INFO = "info"
 
 
-class ErrorCategory(str, Enum):
+class ErrorCategory(StrEnum):
     """Error categories."""
 
     AUTHENTICATION = "authentication"
@@ -281,7 +282,7 @@ class CircuitBreaker:
     - HALF_OPEN: Testing if service recovered
     """
 
-    class State(str, Enum):
+    class State(StrEnum):
         CLOSED = "closed"
         OPEN = "open"
         HALF_OPEN = "half_open"
@@ -331,7 +332,7 @@ class CircuitBreaker:
 
             return result
 
-        except Exception as e:
+        except Exception:
             async with self._lock:
                 self._failure_count += 1
                 self._last_failure_time = time.time()
@@ -484,7 +485,7 @@ class SafeErrorResponse:
         if context:
             extra["context"] = context
 
-        logger.error(f"Error details", extra=extra, exc_info=True)
+        logger.error("Error details", extra=extra, exc_info=True)
 
     @staticmethod
     def sanitize_error_message(message: str) -> str:

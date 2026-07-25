@@ -135,10 +135,7 @@ class MemoryClassifier:
             similarity = self._content_similarity(memory.content, existing_mem.content)
 
             # High similarity = duplicate
-            if similarity > 0.85:
-                duplicates.append(existing_mem.id)
-            # Medium similarity + same category = likely duplicate
-            elif similarity > 0.7 and memory.category == existing_mem.category:
+            if similarity > 0.85 or (similarity > 0.7 and memory.category == existing_mem.category):
                 duplicates.append(existing_mem.id)
 
         return duplicates
@@ -162,10 +159,7 @@ class MemoryClassifier:
             return True
 
         # Expire old, never-accessed memories
-        if age_days > 90 and memory.access_count == 0 and memory.importance < 0.5:
-            return True
-
-        return False
+        return bool(age_days > 90 and memory.access_count == 0 and memory.importance < 0.5)
 
     def get_expiration_date(self, memory: Memory) -> datetime | None:
         """Get expiration date for memory.

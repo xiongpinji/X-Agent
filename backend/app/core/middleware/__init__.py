@@ -11,16 +11,16 @@ Provides:
 from __future__ import annotations
 
 from .base import BaseMiddleware, MiddlewareChain
-from .logging_middleware import StructuredLoggingMiddleware
 from .error_handler import ErrorHandlingMiddleware
+from .logging_middleware import StructuredLoggingMiddleware
 from .performance_monitor import PerformanceMonitorMiddleware
 from .request_tracer import RequestTracerMiddleware
 
 __all__ = [
     "BaseMiddleware",
-    "MiddlewareChain",
-    "StructuredLoggingMiddleware",
     "ErrorHandlingMiddleware",
+    "MiddlewareChain",
     "PerformanceMonitorMiddleware",
     "RequestTracerMiddleware",
+    "StructuredLoggingMiddleware",
 ]

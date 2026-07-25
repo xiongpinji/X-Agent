@@ -7,7 +7,6 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
-from backend.app.api.auth import PrincipalDependency
 from backend.app.core.security import Principal
 from backend.app.dependencies import get_current_principal
 

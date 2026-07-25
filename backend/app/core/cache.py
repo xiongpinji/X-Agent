@@ -16,8 +16,9 @@ import json
 import logging
 import time
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from functools import wraps
-from typing import Any, Callable, Generic, TypeVar
+from typing import Any, Generic, TypeVar
 
 logger = logging.getLogger(__name__)
 
@@ -110,7 +111,7 @@ class MemoryCacheBackend(CacheBackend[T]):
         async with self._lock:
             if key not in self._cache:
                 return False
-            value, expiry = self._cache[key]
+            _value, expiry = self._cache[key]
             if expiry is not None and time.time() > expiry:
                 del self._cache[key]
                 del self._access_times[key]

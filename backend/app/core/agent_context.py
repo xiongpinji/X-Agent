@@ -4,10 +4,10 @@ Agent引擎迁移准备 - 统一上下文容器、会话恢复、状态快照
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, asdict, field
+from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 from uuid import uuid4
 
 

@@ -333,11 +333,7 @@ class LLMMonitoring:
                 continue
 
             should_alert = False
-            if rule.condition == "greater_than" and metric.value > rule.threshold:
-                should_alert = True
-            elif rule.condition == "less_than" and metric.value < rule.threshold:
-                should_alert = True
-            elif rule.condition == "equals" and metric.value == rule.threshold:
+            if (rule.condition == "greater_than" and metric.value > rule.threshold) or (rule.condition == "less_than" and metric.value < rule.threshold) or (rule.condition == "equals" and metric.value == rule.threshold):
                 should_alert = True
 
             if should_alert:

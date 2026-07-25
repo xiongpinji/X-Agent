@@ -10,7 +10,7 @@ configured signing_secret.
 from __future__ import annotations
 
 import hmac
-from typing import Any, Optional
+from typing import Any
 
 from backend.app.core.channels.base import (
     ChannelAdapter,
@@ -24,7 +24,7 @@ class TelegramAdapter(ChannelAdapter):
 
     _API = "https://api.telegram.org"
 
-    def __init__(self, config: Optional[ChannelConfig] = None):
+    def __init__(self, config: ChannelConfig | None = None):
         super().__init__(config)
         self._base = (self.config.base_url or self._API).rstrip("/")
 
@@ -49,7 +49,7 @@ class TelegramAdapter(ChannelAdapter):
             return False
         return hmac.compare_digest(expected, provided)
 
-    def parse_inbound(self, payload: dict[str, Any]) -> Optional[ChannelMessage]:
+    def parse_inbound(self, payload: dict[str, Any]) -> ChannelMessage | None:
         message = payload.get("message") or payload.get("edited_message")
         if not message:
             return None

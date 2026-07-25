@@ -1,8 +1,12 @@
+"""Prometheus metrics endpoint for X-Agent."""
+from __future__ import annotations
+
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Response
 from fastapi.responses import PlainTextResponse
 
+from backend.app.core.security import Principal
 from backend.app.dependencies import (
     enforce_scope,
     get_api_key_store,
@@ -15,7 +19,23 @@ from backend.app.dependencies import (
     get_workflow_repository,
     get_workflow_schedule_store,
 )
-from backend.app.core.security import Principal
+
+# ---------------------------------------------------------------------------
+# Prometheus client integration (optional dependency)
+# ---------------------------------------------------------------------------
+try:
+    from prometheus_client import (
+        CONTENT_TYPE_LATEST,
+        Counter,
+        Gauge,
+        Histogram,
+        generate_latest,
+    )
+
+    PROMETHEUS_AVAILABLE = True
+except ImportError:
+    PROMETHEUS_AVAILABLE = False
+    CONTENT_TYPE_LATEST = "text/plain; version=0.0.4; charset=utf-8"
 
 router = APIRouter(prefix="/api/v1/metrics", tags=["metrics"])
 PrincipalDependency = Annotated[Principal, Depends(get_current_principal)]
@@ -27,6 +47,85 @@ RunStoreDependency = Annotated[object, Depends(get_run_store)]
 TraceStoreDependency = Annotated[object, Depends(get_trace_store)]
 WorkflowRepositoryDependency = Annotated[object, Depends(get_workflow_repository)]
 WorkflowScheduleStoreDependency = Annotated[object, Depends(get_workflow_schedule_store)]
+
+# ---------------------------------------------------------------------------
+# Real Prometheus metric definitions (Phase 2.6)
+# ---------------------------------------------------------------------------
+if PROMETHEUS_AVAILABLE:
+    from prometheus_client import REGISTRY as _REGISTRY
+
+    def _get_or_create(metric_cls, name, *args, **kwargs):
+        """Get existing metric or create new one (avoids duplicate registration)."""
+        try:
+            return metric_cls(name, *args, **kwargs)
+        except ValueError:
+            # Already registered - retrieve from registry
+            return _REGISTRY._names_to_collectors.get(name.removesuffix("_total").removesuffix("_created"))
+
+    # Agent execution metrics
+    AGENT_RUNS_TOTAL = _get_or_create(
+        Counter,
+        "xagent_agent_runs_total",
+        "Total agent runs",
+        ["status"],
+    )
+    AGENT_RUN_DURATION = _get_or_create(
+        Histogram,
+        "xagent_agent_run_duration_seconds",
+        "Agent run duration",
+        buckets=[0.5, 1, 2, 5, 10, 30, 60, 120, 300],
+    )
+
+    # LLM backend metrics
+    LLM_CALLS_TOTAL = _get_or_create(
+        Counter,
+        "xagent_llm_calls_total",
+        "LLM API calls",
+        ["backend", "model"],
+    )
+    LLM_TOKENS_TOTAL = _get_or_create(
+        Counter,
+        "xagent_llm_tokens_total",
+        "LLM tokens consumed",
+        ["backend", "type"],
+    )
+
+    # Memory subsystem metrics
+    MEMORY_OPS_TOTAL = _get_or_create(
+        Counter,
+        "xagent_memory_ops_total",
+        "Memory operations",
+        ["op", "layer"],
+    )
+
+    # Workflow metrics
+    WORKFLOW_RUNS_TOTAL = _get_or_create(
+        Counter,
+        "xagent_workflow_runs_total",
+        "Workflow runs",
+        ["status"],
+    )
+
+    # Connection metrics
+    ACTIVE_CONNECTIONS = _get_or_create(
+        Gauge,
+        "xagent_active_connections",
+        "Active SSE connections",
+    )
+
+
+@router.get("/metrics")
+async def metrics_endpoint() -> Response:
+    """Expose Prometheus metrics in standard exposition format."""
+    if not PROMETHEUS_AVAILABLE:
+        return Response(
+            content="# prometheus_client not installed\n",
+            media_type="text/plain",
+        )
+    return Response(
+        content=generate_latest(),
+        media_type=CONTENT_TYPE_LATEST,
+    )
 
 
 @router.get("/summary")

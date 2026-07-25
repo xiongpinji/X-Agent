@@ -6,13 +6,11 @@ from __future__ import annotations
 import json
 import logging
 from datetime import UTC, datetime
-from typing import Optional
 
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.models import ApprovalStoreModel
 from backend.app.core.session import SessionManager
+from backend.app.models import ApprovalStoreModel
 
 logger = logging.getLogger(__name__)
 
@@ -50,14 +48,14 @@ class ApprovalStorePostgres:
             logger.info(f"审批请求创建成功: {approval_id}")
             return approval
 
-    async def get_approval_by_id(self, approval_id: str) -> Optional[ApprovalStoreModel]:
+    async def get_approval_by_id(self, approval_id: str) -> ApprovalStoreModel | None:
         """根据ID获取审批"""
         async with SessionManager.get_session() as session:
             stmt = select(ApprovalStoreModel).where(ApprovalStoreModel.approval_id == approval_id)
             result = await session.execute(stmt)
             return result.scalar_one_or_none()
 
-    async def get_approval_by_request_id(self, request_id: str) -> Optional[ApprovalStoreModel]:
+    async def get_approval_by_request_id(self, request_id: str) -> ApprovalStoreModel | None:
         """根据请求ID获取审批"""
         async with SessionManager.get_session() as session:
             stmt = select(ApprovalStoreModel).where(ApprovalStoreModel.request_id == request_id)
@@ -109,8 +107,8 @@ class ApprovalStorePostgres:
         self,
         approval_id: str,
         approved_by: str,
-        reason: Optional[str] = None,
-    ) -> Optional[ApprovalStoreModel]:
+        reason: str | None = None,
+    ) -> ApprovalStoreModel | None:
         """批准审批请求"""
         async with SessionManager.get_session() as session:
             stmt = select(ApprovalStoreModel).where(ApprovalStoreModel.approval_id == approval_id)
@@ -133,8 +131,8 @@ class ApprovalStorePostgres:
         self,
         approval_id: str,
         approved_by: str,
-        reason: Optional[str] = None,
-    ) -> Optional[ApprovalStoreModel]:
+        reason: str | None = None,
+    ) -> ApprovalStoreModel | None:
         """拒绝审批请求"""
         async with SessionManager.get_session() as session:
             stmt = select(ApprovalStoreModel).where(ApprovalStoreModel.approval_id == approval_id)
@@ -186,7 +184,7 @@ class ApprovalStorePostgres:
             logger.info(f"清理了 {len(expired_approvals)} 个过期的审批")
             return len(expired_approvals)
 
-    async def get_details(self, approval_id: str) -> Optional[dict]:
+    async def get_details(self, approval_id: str) -> dict | None:
         """获取审批详情"""
         approval = await self.get_approval_by_id(approval_id)
         if not approval:

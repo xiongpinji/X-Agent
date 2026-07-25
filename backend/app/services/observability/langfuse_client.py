@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from backend.app.services.observability.event_exporter import observability_exporter
 from backend.app.settings import get_settings
 
@@ -47,18 +49,23 @@ class LangfuseClient:
         """
         event = observability_exporter.export(event_type, **payload)
         if self._client is not None:
-            trace = self._client.trace(id=event.trace_id or payload.get("trace_id"))
-            trace.event(
-                name=event_type,
-                metadata={
-                    **event.payload,
-                    "tenant_id": event.tenant_id,
-                    "user_id": event.user_id,
-                    "run_id": event.run_id,
-                    "workflow_id": event.workflow_id,
-                    "agent_id": event.agent_id,
-                },
-            )
+            try:
+                trace = self._client.trace(id=event.trace_id or payload.get("trace_id"))
+                trace.event(
+                    name=event_type,
+                    metadata={
+                        **event.payload,
+                        "tenant_id": event.tenant_id,
+                        "user_id": event.user_id,
+                        "run_id": event.run_id,
+                        "workflow_id": event.workflow_id,
+                        "agent_id": event.agent_id,
+                    },
+                )
+            except (AttributeError, TypeError, Exception):
+                # Langfuse client may not have trace method in test/mock environments
+                # or may fail due to network issues - gracefully degrade to in-memory only
+                pass
         return event
 
     def events(self) -> list[Any]:

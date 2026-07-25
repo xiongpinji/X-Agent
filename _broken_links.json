@@ -1,0 +1,131 @@
+{
+ "SUPPORT.md": [
+  "./SECURITY.md",
+  "./CONFIGURATION.md#llm-configuration"
+ ],
+ "docs/README.md": [
+  "./DEVELOPMENT.md",
+  "./WORKFLOWS.md",
+  "./MEMORY.md",
+  "./LLM_ROUTER.md",
+  "./BROWSER.md",
+  "./OBSERVABILITY.md",
+  "./APPROVALS.md",
+  "./POLICIES.md",
+  "./CONFIGURATION.md",
+  "./DEVELOPMENT.md"
+ ],
+ "docs/README_EN.md": [
+  "./DEVELOPMENT.md",
+  "./WORKFLOWS.md",
+  "./MEMORY.md",
+  "./LLM_ROUTER.md",
+  "./BROWSER.md",
+  "./OBSERVABILITY.md",
+  "./APPROVALS.md",
+  "./POLICIES.md",
+  "./CONFIGURATION.md"
+ ],
+ "docs/admin/subscription/SUBSCRIPTION_README.md": [
+  "./docs/SUBSCRIPTION_API.md",
+  "./docs/SUBSCRIPTION_OPERATIONS.md",
+  "./docs/SUBSCRIPTION_INTEGRATION.md",
+  "./docs/SUBSCRIPTION_TEST_REPORT.md"
+ ],
+ "docs/concepts/architecture/ARCHITECTURE.md": [
+  "./DEVELOPMENT.md"
+ ],
+ "docs/concepts/design/02-技术设计/11-API错误码参考.md": [
+  "../SECURITY_BEST_PRACTICES.md"
+ ],
+ "docs/concepts/design/02-技术设计/14-记忆系统高级配置.md": [
+  "../PERFORMANCE_OPTIMIZATION.md"
+ ],
+ "docs/concepts/design/02-技术设计/15-浏览器和桌面自动化高级技巧.md": [
+  "../BROWSER_AUTOMATION.md",
+  "../DESKTOP_AUTOMATION.md",
+  "../PERFORMANCE_OPTIMIZATION.md"
+ ],
+ "docs/concepts/design/02-技术设计/16-示例代码维护规范.md": [
+  "../CODE_STYLE_GUIDE.md",
+  "../TESTING_GUIDE.md",
+  "../DOCUMENTATION_GUIDE.md"
+ ],
+ "docs/concepts/features/MEMORY_FUSION_README.md": [
+  "MEMORY_FUSION_INTEGRATION_GUIDE.md",
+  "MEMORY_FUSION_PROJECT_SUMMARY.md"
+ ],
+ "docs/concepts/features/advanced-features-guide.md": [
+  "../case-studies/",
+  "../api/"
+ ],
+ "docs/concepts/features/memory_v2_complete_guide.md": [
+  "memory_system_v2_architecture.md",
+  "../tests/test_memory_v2_performance.py",
+  "memory_v2_migration.md"
+ ],
+ "docs/developer/DEVELOPER_GUIDE.md": [
+  "DEVELOPER_GUIDE_EN.md"
+ ],
+ "docs/developer/plugins/MCP_INTEGRATION_GUIDE.md": [
+  "./api_reference.md"
+ ],
+ "docs/developer/reports/DOCUMENTATION_INDEX.md": [
+  "CHANGELOG_NEW.md"
+ ],
+ "docs/developer/reports/DOCUMENTATION_INDEX_COMPLETE.md": [
+  "./CONFIGURATION.md",
+  "./DEVELOPMENT.md",
+  "./DEVELOPMENT.md"
+ ],
+ "docs/developer/reports/DOCUMENTATION_NAVIGATION_INDEX.md": [
+  "backend/SECURITY_AUDIT_REPORT.md",
+  "backend/SECURITY_AUDIT_REPORT.md"
+ ],
+ "docs/developer/reports/INDEX.md": [
+  "../DEVELOPER_GUIDE.md",
+  "../DEVELOPER_GUIDE.md#代码规范",
+  "../DEVELOPER_GUIDE.md",
+  "../backend/SECURITY_AUDIT_REPORT.md"
+ ],
+ "docs/developer/reports/MEMORY_FUSION_DELIVERABLES.md": [
+  "MEMORY_FUSION_INTEGRATION_GUIDE.md",
+  "MEMORY_FUSION_PROJECT_SUMMARY.md"
+ ],
+ "docs/developer/tutorials/CODE_GENERATION_QUALITY.md": [
+  "./code_generation.py",
+  "./code_quality_checker.py",
+  "./code_formatter.py",
+  "./code_generation_workflow.py",
+  "./code_generation_eval.py"
+ ],
+ "docs/developer/tutorials/USER_MANUAL.md": [
+  "USER_MANUAL_EN.md"
+ ],
+ "docs/operations/deployment/DEPLOYMENT_GUIDE.md": [
+  "DEPLOYMENT_GUIDE_EN.md"
+ ],
+ "docs/operations/deployment/ROLLBACK_PROCEDURE.md": [
+  "PRODUCTION_DEPLOYMENT_GUIDE.md",
+  "PRODUCTION_CHECKLIST.md"
+ ],
+ "docs/operations/setup/QUICK_START.md": [
+  "INTEGRATION_PLAN.md",
+  "INTEGRATION_VERIFICATION_REPORT.md",
+  "ROLLBACK_PLAN.md"
+ ],
+ "docs/operations/support/FAQ.md": [
+  "../backend/SECURITY_AUDIT_REPORT.md",
+  "./OBSERVABILITY.md"
+ ],
+ "docs/operations/support/FAQ_EN.md": [
+  "./DEVELOPMENT.md",
+  "./CONFIGURATION.md",
+  "./OBSERVABILITY.md"
+ ],
+ "examples/README.md": [
+  "../best-practices/README.md",
+  "../troubleshooting/COMMON_ISSUES.md",
+  "../faq/README.md"
+ ]
+}

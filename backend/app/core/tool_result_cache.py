@@ -144,7 +144,7 @@ class ToolResultCache:
         if args is None:
             # Clear all entries for this tool
             keys_to_delete = [
-                key for key in self._cache.keys() if key.startswith(f"{tool_name}:")
+                key for key in self._cache if key.startswith(f"{tool_name}:")
             ]
             for key in keys_to_delete:
                 del self._cache[key]

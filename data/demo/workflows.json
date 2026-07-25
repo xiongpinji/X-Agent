@@ -1,0 +1,154 @@
+[
+  {
+    "name": "Daily Report Generator",
+    "description": "每日自动收集数据、分析趋势并生成报告的工作流",
+    "nodes": [
+      {
+        "id": "collect_data",
+        "type": "tool",
+        "config": {
+          "tool_name": "data_collector",
+          "sources": [
+            "database",
+            "api_metrics",
+            "user_activity"
+          ]
+        }
+      },
+      {
+        "id": "analyze",
+        "type": "agent",
+        "config": {
+          "agent_type": "data_analyst",
+          "task": "分析收集到的数据，识别关键趋势和异常"
+        }
+      },
+      {
+        "id": "generate_report",
+        "type": "agent",
+        "config": {
+          "agent_type": "report_writer",
+          "task": "根据分析结果生成结构化的每日报告"
+        }
+      },
+      {
+        "id": "output",
+        "type": "output",
+        "config": {
+          "format": "markdown",
+          "destination": "reports/daily"
+        }
+      }
+    ],
+    "edges": [
+      {
+        "source": "collect_data",
+        "target": "analyze"
+      },
+      {
+        "source": "analyze",
+        "target": "generate_report"
+      },
+      {
+        "source": "generate_report",
+        "target": "output"
+      }
+    ]
+  },
+  {
+    "name": "Code Review Pipeline",
+    "description": "自动化代码审查流水线：静态分析 → AI 审查 → 人工审批",
+    "nodes": [
+      {
+        "id": "input_code",
+        "type": "input",
+        "config": {
+          "description": "待审查的代码变更 (diff 或 PR 链接)"
+        }
+      },
+      {
+        "id": "static_analysis",
+        "type": "tool",
+        "config": {
+          "tool_name": "linter",
+          "rules": [
+            "ruff",
+            "mypy",
+            "bandit"
+          ]
+        }
+      },
+      {
+        "id": "ai_review",
+        "type": "agent",
+        "config": {
+          "agent_type": "code_reviewer",
+          "task": "审查代码质量、安全性、性能，给出改进建议"
+        }
+      },
+      {
+        "id": "quality_gate",
+        "type": "condition",
+        "config": {
+          "left": "${static_analysis.exit_code}",
+          "operator": "equals",
+          "right": "0"
+        }
+      },
+      {
+        "id": "approval",
+        "type": "approval",
+        "config": {
+          "approvers": [
+            "tech_lead"
+          ],
+          "timeout_hours": 24
+        }
+      },
+      {
+        "id": "output_pass",
+        "type": "output",
+        "config": {
+          "status": "approved",
+          "format": "json"
+        }
+      },
+      {
+        "id": "output_fail",
+        "type": "output",
+        "config": {
+          "status": "rejected",
+          "format": "json"
+        }
+      }
+    ],
+    "edges": [
+      {
+        "source": "input_code",
+        "target": "static_analysis"
+      },
+      {
+        "source": "static_analysis",
+        "target": "ai_review"
+      },
+      {
+        "source": "ai_review",
+        "target": "quality_gate"
+      },
+      {
+        "source": "quality_gate",
+        "target": "approval",
+        "condition": "true"
+      },
+      {
+        "source": "quality_gate",
+        "target": "output_fail",
+        "condition": "false"
+      },
+      {
+        "source": "approval",
+        "target": "output_pass"
+      }
+    ]
+  }
+]

@@ -19,9 +19,10 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Any, Callable
+from typing import Any
 
 from backend.app.core.exceptions import ServiceUnavailableError
 
@@ -107,7 +108,7 @@ class CircuitBreaker:
 
             return result
 
-        except Exception as e:
+        except Exception:
             async with self._lock:
                 await self._on_failure()
 
@@ -144,9 +145,7 @@ class CircuitBreaker:
         self.metrics.failure_count += 1
         self.metrics.last_failure_time = time.time()
 
-        if self.metrics.state == CircuitBreakerState.HALF_OPEN:
-            self._transition_to_open()
-        elif self.metrics.failure_count >= self.config.failure_threshold:
+        if self.metrics.state == CircuitBreakerState.HALF_OPEN or self.metrics.failure_count >= self.config.failure_threshold:
             self._transition_to_open()
 
     def _transition_to_open(self) -> None:

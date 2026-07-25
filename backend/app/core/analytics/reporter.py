@@ -6,17 +6,15 @@ import csv
 import io
 import json
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 from uuid import uuid4
 
+from .aggregator import AnalyticsAggregator
 from .models import (
-    Report,
-    AggregationLevel,
     CostAnalysis,
     PerformanceAnalysis,
-    UserBehaviorAnalysis,
+    Report,
 )
-from .aggregator import AnalyticsAggregator
 
 
 class AnalyticsReporter:
@@ -123,10 +121,7 @@ class AnalyticsReporter:
             Generated report
         """
         start_time = datetime(year, month, 1)
-        if month == 12:
-            end_time = datetime(year + 1, 1, 1)
-        else:
-            end_time = datetime(year, month + 1, 1)
+        end_time = datetime(year + 1, 1, 1) if month == 12 else datetime(year, month + 1, 1)
         end_time = end_time.replace(hour=23, minute=59, second=59)
 
         cost_analysis = await self.aggregator.get_cost_analysis(

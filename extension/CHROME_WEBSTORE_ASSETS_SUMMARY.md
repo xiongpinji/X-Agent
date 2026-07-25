@@ -361,7 +361,7 @@ X-Agent Browser Extension - Intelligent web automation. Auto-identify elements, 
 
 2. **打包扩展**
    ```bash
-   npm run build:prod
+   # 无构建步骤, 直接打包
    npm run package
    ```
 

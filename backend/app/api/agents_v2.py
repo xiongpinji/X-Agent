@@ -7,19 +7,18 @@ Provides endpoints for spawning, managing, and coordinating agents.
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Any, Annotated, Optional, List
+from typing import Annotated, Any
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, Query
-from fastapi.responses import JSONResponse
 
 from backend.app.api.errors import api_error
+from backend.app.core.agent_coordinator import CoordinationStrategy, agent_coordinator
+from backend.app.core.agent_spawner import agent_spawner
 from backend.app.core.contracts import ErrorCode
+from backend.app.core.parallel_executor import Task, parallel_executor
 from backend.app.core.security import Principal
-from backend.app.core.agent_spawner import agent_spawner, AgentStatus
-from backend.app.core.agent_coordinator import agent_coordinator, CoordinationStrategy
-from backend.app.core.parallel_executor import parallel_executor, Task, TaskStatus
-from backend.app.dependencies import get_current_principal, enforce_scope
+from backend.app.dependencies import enforce_scope, get_current_principal
 
 router = APIRouter(prefix="/api/v2/agents", tags=["agents_v2"])
 PrincipalDependency = Annotated[Principal, Depends(get_current_principal)]
@@ -136,8 +135,8 @@ async def terminate_agent(
 
 @router.get("")
 async def list_agents(
-    status: Optional[str] = Query(None),
-    agent_type: Optional[str] = Query(None),
+    status: str | None = Query(None),
+    agent_type: str | None = Query(None),
     principal: PrincipalDependency = None,
 ) -> dict[str, object]:
     """
@@ -324,7 +323,7 @@ async def get_spawner_stats(
 @router.post("/{agent_id}/wait")
 async def wait_for_agent(
     agent_id: str,
-    timeout_seconds: Optional[int] = Query(None),
+    timeout_seconds: int | None = Query(None),
     principal: PrincipalDependency = None,
 ) -> dict[str, object]:
     """

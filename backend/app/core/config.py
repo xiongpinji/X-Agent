@@ -13,8 +13,6 @@ Usage:
 
 from __future__ import annotations
 
-from typing import Optional
-
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings
 
@@ -30,7 +28,7 @@ class LogSettings(BaseSettings):
 
     level: str = Field(default="INFO", description="Log level")
     format: str = Field(default="plain", description="Log format (plain or json)")
-    directory: Optional[str] = Field(default=None, description="Log directory")
+    directory: str | None = Field(default=None, description="Log directory")
 
     class Config:
         """Pydantic config."""
@@ -227,7 +225,7 @@ class Settings(BaseSettings):
 
 
 # Global settings instance
-_settings: Optional[Settings] = None
+_settings: Settings | None = None
 
 
 def get_settings() -> Settings:

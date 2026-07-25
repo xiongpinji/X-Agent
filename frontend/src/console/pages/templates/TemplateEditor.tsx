@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Card, Button, Input, Select, Textarea, Badge, Modal, Tabs, Alert } from "@/components/ui";
+import { Card, Button, Input, Select, Textarea, Tabs, Alert } from "@/components/ui";
 
 interface TemplateParameter {
   name: string;
@@ -215,8 +215,9 @@ export function TemplateEditor({ templateId, onSave, onCancel }: TemplateEditorP
         {activeTab === "basic" && (
           <div className="space-y-4 mt-4">
             <div>
-              <label className="block text-sm font-medium mb-1">Template Name</label>
+              <label htmlFor="template-name" className="block text-sm font-medium mb-1">Template Name</label>
               <Input
+                id="template-name"
                 value={template.name || ""}
                 onChange={(e) => setTemplate({ ...template, name: e.target.value })}
                 placeholder="Enter template name"
@@ -224,8 +225,9 @@ export function TemplateEditor({ templateId, onSave, onCancel }: TemplateEditorP
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-1">Description</label>
+              <label htmlFor="template-description" className="block text-sm font-medium mb-1">Description</label>
               <Textarea
+                id="template-description"
                 value={template.description || ""}
                 onChange={(e) => setTemplate({ ...template, description: e.target.value })}
                 placeholder="Enter template description"
@@ -235,8 +237,9 @@ export function TemplateEditor({ templateId, onSave, onCancel }: TemplateEditorP
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium mb-1">Category</label>
+                <label htmlFor="template-category" className="block text-sm font-medium mb-1">Category</label>
                 <Select
+                  id="template-category"
                   value={template.category || "custom"}
                   onChange={(e) => setTemplate({ ...template, category: e.target.value })}
                 >
@@ -249,8 +252,9 @@ export function TemplateEditor({ templateId, onSave, onCancel }: TemplateEditorP
               </div>
 
               <div>
-                <label className="block text-sm font-medium mb-1">Version</label>
+                <label htmlFor="template-version" className="block text-sm font-medium mb-1">Version</label>
                 <Input
+                  id="template-version"
                   value={template.version || "1.0.0"}
                   onChange={(e) => setTemplate({ ...template, version: e.target.value })}
                   placeholder="1.0.0"
@@ -259,8 +263,9 @@ export function TemplateEditor({ templateId, onSave, onCancel }: TemplateEditorP
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-1">Tags</label>
+              <label htmlFor="template-tags" className="block text-sm font-medium mb-1">Tags</label>
               <Input
+                id="template-tags"
                 value={(template.tags || []).join(", ")}
                 onChange={(e) => setTemplate({ ...template, tags: e.target.value.split(",").map((t) => t.trim()) })}
                 placeholder="tag1, tag2, tag3"

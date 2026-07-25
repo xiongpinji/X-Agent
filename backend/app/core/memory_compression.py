@@ -9,8 +9,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
-from typing import Optional
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -256,11 +255,11 @@ class MemoryCompressor:
 
         return compressed
 
-    def get_compressed_memory(self, memory_id: str) -> Optional[CompressedMemory]:
+    def get_compressed_memory(self, memory_id: str) -> CompressedMemory | None:
         """Get a compressed memory by ID."""
         return self.compressed_memories.get(memory_id)
 
-    def decompress_memory(self, memory_id: str) -> Optional[str]:
+    def decompress_memory(self, memory_id: str) -> str | None:
         """Get original content of a compressed memory."""
         compressed = self.compressed_memories.get(memory_id)
         if compressed:

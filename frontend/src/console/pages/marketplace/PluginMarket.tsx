@@ -123,7 +123,7 @@ const PluginMarket: React.FC = () => {
           auto_enable: true,
         }),
       });
-      const data = await response.json();
+      const _data = await response.json();
 
       // 更新插件状态
       setPlugins(plugins.map(p =>
@@ -143,7 +143,7 @@ const PluginMarket: React.FC = () => {
   // 卸载插件
   const handleUninstall = async (pluginId: string) => {
     try {
-      const response = await fetch(`/api/v1/plugin-market/plugins/${pluginId}/uninstall`, {
+      const _response = await fetch(`/api/v1/plugin-market/plugins/${pluginId}/uninstall`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -305,7 +305,13 @@ const PluginCard: React.FC<PluginCardProps> = ({
   return (
     <div className="bg-white rounded-lg shadow-sm hover:shadow-md transition overflow-hidden">
       {/* 卡片头部 */}
-      <div className="p-6 cursor-pointer hover:bg-gray-50" onClick={onSelect}>
+      <div
+        role="button"
+        tabIndex={0}
+        className="p-6 cursor-pointer hover:bg-gray-50"
+        onClick={onSelect}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onSelect?.(); }}
+      >
         <div className="flex items-start justify-between mb-4">
           <div className="flex-1">
             <h3 className="text-lg font-semibold text-gray-900">{plugin.manifest.name}</h3>

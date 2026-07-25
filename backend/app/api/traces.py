@@ -5,25 +5,24 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query
 
 from backend.app.api.errors import api_error
-from backend.app.api.linked_summary import LinkedSummaryEnvelope, build_linked_summary
+from backend.app.api.linked_summary import build_linked_summary
 from backend.app.api.recovery_helpers import build_recovery_context
-from backend.app.core.agent_serializers import serialize_run_view
 from backend.app.core.approvals import ApprovalStore
 from backend.app.core.audit import AuditStore
 from backend.app.core.contracts import ErrorCode, TraceDetail, TraceSummary
 from backend.app.core.memory import MemorySystem
-from backend.app.core.security import Principal
 from backend.app.core.runs import RunStore
+from backend.app.core.security import Principal
 from backend.app.core.tools import ToolExecutionStore
 from backend.app.dependencies import (
     enforce_scope,
+    get_agent,
     get_approval_store,
     get_audit_store,
     get_current_principal,
     get_memory,
     get_run_store,
     get_trace_store,
-    get_agent,
 )
 
 router = APIRouter(prefix="/api/v1/traces", tags=["traces"])

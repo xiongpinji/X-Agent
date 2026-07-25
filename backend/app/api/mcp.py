@@ -1,23 +1,35 @@
-"""MCP API endpoints with enhanced features."""
+"""MCP API endpoints with enhanced features.
+
+P1-01: 官方 MCP SDK 集成 — 工具发现与管理 API。
+"""
 
 import logging
-from typing import Annotated, Optional, List, Dict, Any
 from datetime import datetime
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 
-from backend.app.api.errors import api_error
-from backend.app.core.contracts import ErrorCode
-from backend.app.core.mcp import MCPServer, MCPRequest, MCPResponse
-from backend.app.core.mcp.client import MCPClient
+from backend.app.core.mcp import MCPRequest, MCPResponse, MCPServer
 from backend.app.core.mcp.adapter import MCPToolAdapter
+from backend.app.core.mcp.client import MCPClient
 from backend.app.core.mcp.config import MCPConfig
-from backend.app.core.mcp.tools.file_tool import FileOperationTool, AuditLog as FileAuditLog, PermissionChecker as FilePermissionChecker
-from backend.app.core.mcp.tools.search_tool import SearchOperationTool, SearchAuditLog, SearchPermissionChecker
-from backend.app.core.mcp.tools.browser_tool import BrowserTool, BrowserAuditLog, BrowserPermissionChecker
-from backend.app.dependencies import get_current_principal, enforce_scope
+from backend.app.core.mcp.manager import get_mcp_manager
+from backend.app.core.mcp.tools.browser_tool import (
+    BrowserAuditLog,
+    BrowserPermissionChecker,
+    BrowserTool,
+)
+from backend.app.core.mcp.tools.file_tool import AuditLog as FileAuditLog
+from backend.app.core.mcp.tools.file_tool import FileOperationTool
+from backend.app.core.mcp.tools.file_tool import PermissionChecker as FilePermissionChecker
+from backend.app.core.mcp.tools.search_tool import (
+    SearchAuditLog,
+    SearchOperationTool,
+    SearchPermissionChecker,
+)
 from backend.app.core.security import Principal
+from backend.app.dependencies import enforce_scope, get_current_principal
 
 logger = logging.getLogger(__name__)
 
@@ -25,16 +37,16 @@ router = APIRouter(prefix="/api/v1/mcp", tags=["mcp"])
 PrincipalDependency = Annotated[Principal, Depends(get_current_principal)]
 
 # Global instances
-_mcp_adapter: Optional[MCPToolAdapter] = None
-_mcp_config: Optional[MCPConfig] = None
-_mcp_server: Optional[MCPServer] = None
+_mcp_adapter: MCPToolAdapter | None = None
+_mcp_config: MCPConfig | None = None
+_mcp_server: MCPServer | None = None
 
 
 class ToolExecutionRequest(BaseModel):
     """Tool execution request."""
 
     tool_name: str
-    arguments: Optional[Dict[str, Any]] = None
+    arguments: dict[str, Any] | None = None
 
 
 class ToolExecutionResponse(BaseModel):
@@ -42,9 +54,9 @@ class ToolExecutionResponse(BaseModel):
 
     tool_name: str
     success: bool
-    result: Optional[Dict[str, Any]] = None
-    error: Optional[str] = None
-    error_code: Optional[str] = None
+    result: dict[str, Any] | None = None
+    error: str | None = None
+    error_code: str | None = None
     timestamp: str
 
 
@@ -53,14 +65,14 @@ class HealthCheckResponse(BaseModel):
 
     status: str
     timestamp: str
-    components: Dict[str, str]
+    components: dict[str, str]
 
 
 class AuditLogResponse(BaseModel):
     """Audit log response."""
 
     tool_category: str
-    entries: List[Dict[str, Any]]
+    entries: list[dict[str, Any]]
     count: int
     timestamp: str
 
@@ -69,7 +81,7 @@ class PermissionUpdateRequest(BaseModel):
     """Permission update request."""
 
     tool_category: str
-    permissions: Dict[str, bool]
+    permissions: dict[str, bool]
 
 
 def initialize_mcp_system(
@@ -324,7 +336,7 @@ async def health_check(
 
 @router.get("/audit-logs", response_model=AuditLogResponse)
 async def get_audit_logs(
-    tool_category: Optional[str] = None,
+    tool_category: str | None = None,
     *,
     principal: PrincipalDependency,
     adapter: MCPToolAdapter = Depends(get_mcp_adapter),
@@ -369,7 +381,7 @@ async def get_permissions(
     tool_category: str,
     principal: PrincipalDependency,
     adapter: MCPToolAdapter = Depends(get_mcp_adapter),
-) -> Dict[str, bool]:
+) -> dict[str, bool]:
     """Get permissions for a tool category.
 
     Args:
@@ -398,7 +410,7 @@ async def update_permissions(
     request: PermissionUpdateRequest,
     principal: PrincipalDependency,
     adapter: MCPToolAdapter = Depends(get_mcp_adapter),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Update permissions for a tool category.
 
     Args:
@@ -453,3 +465,168 @@ async def get_mcp_status(
         "tools": [t.name for t in tools],
         "timestamp": datetime.now().isoformat(),
     }
+
+
+# ─── P1-01: MCP Manager 集成端点（官方 SDK 工具发现与管理）───────────────────
+
+
+class ToolInvokeRequest(BaseModel):
+    """Tool invocation request body."""
+
+    arguments: dict[str, Any] = {}
+
+
+@router.get("/servers")
+async def list_mcp_servers(
+    principal: PrincipalDependency,
+) -> dict:
+    """List configured MCP servers and their connection status.
+
+    P1-01: 返回所有已配置的 MCP 服务器及其连接状态。
+
+    Args:
+        principal: Current principal
+
+    Returns:
+        Server list with status info
+    """
+    enforce_scope(principal, "mcp:read")
+
+    manager = get_mcp_manager()
+    if manager is None:
+        return {
+            "servers": [],
+            "count": 0,
+            "mcp_enabled": False,
+            "message": "MCP manager not initialized (XAGENT_MCP_ENABLED=false or no config)",
+            "timestamp": datetime.now().isoformat(),
+        }
+
+    stats = manager.get_stats()
+    servers_info = []
+    for server_name, server_stats in stats.get("servers", {}).get("servers", {}).items():
+        servers_info.append({
+            "name": server_name,
+            "connected": server_stats.get("connected", False),
+            "transport": server_stats.get("transport", "unknown"),
+            "server_info": server_stats.get("server_info", {}),
+        })
+
+    return {
+        "servers": servers_info,
+        "count": len(servers_info),
+        "mcp_enabled": True,
+        "initialized": manager.initialized,
+        "timestamp": datetime.now().isoformat(),
+    }
+
+
+@router.get("/discovered-tools")
+async def list_discovered_mcp_tools(
+    principal: PrincipalDependency,
+) -> dict:
+    """List all discovered MCP tools from connected servers.
+
+    P1-01: 返回通过官方 MCP SDK 发现的所有工具。
+
+    Args:
+        principal: Current principal
+
+    Returns:
+        Discovered tools grouped by server
+    """
+    enforce_scope(principal, "mcp:read")
+
+    manager = get_mcp_manager()
+    if manager is None:
+        return {
+            "tools": [],
+            "count": 0,
+            "servers": {},
+            "message": "MCP manager not initialized",
+            "timestamp": datetime.now().isoformat(),
+        }
+
+    # 从 discovery 层获取已发现的工具
+    discovery = manager.discovery
+    tools_by_server: dict[str, list[dict[str, Any]]] = {}
+    all_tools: list[dict[str, Any]] = []
+
+    for tool_key, mcp_tool in discovery.discovered_tools.items():
+        server_name, tool_name = tool_key.split(":", 1)
+        tool_info = {
+            "name": mcp_tool.name,
+            "description": mcp_tool.description,
+            "input_schema": mcp_tool.input_schema,
+            "server": server_name,
+            "registered_name": f"mcp_{server_name}_{mcp_tool.name}",
+        }
+        tools_by_server.setdefault(server_name, []).append(tool_info)
+        all_tools.append(tool_info)
+
+    return {
+        "tools": all_tools,
+        "count": len(all_tools),
+        "servers": tools_by_server,
+        "timestamp": datetime.now().isoformat(),
+    }
+
+
+@router.post("/tools/{server_name}/{tool_name}/invoke")
+async def invoke_mcp_tool(
+    server_name: str,
+    tool_name: str,
+    request: ToolInvokeRequest,
+    principal: PrincipalDependency,
+) -> dict:
+    """Invoke a specific MCP tool on a specific server.
+
+    P1-01: 通过官方 MCP SDK 调用指定服务器上的工具。
+
+    Args:
+        server_name: MCP server name
+        tool_name: Tool name on the server
+        request: Invocation request with arguments
+        principal: Current principal
+
+    Returns:
+        Tool execution result
+    """
+    enforce_scope(principal, "mcp:execute")
+
+    manager = get_mcp_manager()
+    if manager is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="MCP manager not initialized (XAGENT_MCP_ENABLED=false or no config)",
+        )
+
+    # 检查服务器是否已连接
+    client = manager.discovery.servers.get(server_name)
+    if client is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"MCP server '{server_name}' not found or not connected",
+        )
+
+    try:
+        result = await client.call_tool(tool_name, request.arguments)
+        return {
+            "success": True,
+            "server": server_name,
+            "tool": tool_name,
+            "result": result,
+            "timestamp": datetime.now().isoformat(),
+        }
+    except ValueError as e:
+        # 工具级失败（远端返回 isError=True）
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"MCP tool execution failed: {e}",
+        )
+    except Exception as e:
+        logger.error(f"Error invoking MCP tool {server_name}/{tool_name}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"MCP tool invocation error: {e}",
+        )

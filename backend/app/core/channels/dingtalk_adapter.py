@@ -12,7 +12,7 @@ import base64
 import hashlib
 import hmac
 import time
-from typing import Any, Optional
+from typing import Any
 
 from backend.app.core.channels.base import (
     ChannelAdapter,
@@ -24,7 +24,7 @@ from backend.app.core.channels.base import (
 class DingTalkAdapter(ChannelAdapter):
     name = "dingtalk"
 
-    def __init__(self, config: Optional[ChannelConfig] = None):
+    def __init__(self, config: ChannelConfig | None = None):
         super().__init__(config)
         # base_url holds the full robot webhook URL for outbound.
         self._webhook = self.config.base_url
@@ -67,7 +67,7 @@ class DingTalkAdapter(ChannelAdapter):
         expected = base64.b64encode(digest).decode("utf-8")
         return hmac.compare_digest(expected, provided)
 
-    def parse_inbound(self, payload: dict[str, Any]) -> Optional[ChannelMessage]:
+    def parse_inbound(self, payload: dict[str, Any]) -> ChannelMessage | None:
         text_obj = payload.get("text", {}) or {}
         content = text_obj.get("content")
         if not content:

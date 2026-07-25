@@ -151,7 +151,7 @@ class FeishuBridge:
     def calculate_lark_signature(*, timestamp: str, nonce: str, encrypt_key: str, body: bytes) -> str:
         """Calculate Feishu/Lark event-callback signature for signed events."""
 
-        raw = f"{timestamp}{nonce}{encrypt_key}".encode("utf-8") + body
+        raw = f"{timestamp}{nonce}{encrypt_key}".encode() + body
         return hashlib.sha256(raw).hexdigest()
 
     def _verify_lark_signature(self, *, timestamp: str, nonce: str, body: bytes, signature: str) -> bool:
@@ -168,7 +168,7 @@ class FeishuBridge:
     def _verify_legacy_signature(self, *, timestamp: str, nonce: str, body: bytes, signature: str) -> bool:
         if not self.app_secret:
             return False
-        raw = f"{timestamp}\n{nonce}\n".encode("utf-8") + body
+        raw = f"{timestamp}\n{nonce}\n".encode() + body
         digest = hmac.new(self.app_secret.encode("utf-8"), raw, hashlib.sha256).digest()
         expected = base64.b64encode(digest).decode("utf-8")
         return hmac.compare_digest(expected, signature)

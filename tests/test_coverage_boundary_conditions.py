@@ -8,6 +8,8 @@
 - 记忆容量限制
 - 并发执行
 """
+import os
+
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 from backend.app.core.agent import AgentLoop
@@ -19,6 +21,10 @@ from backend.app.core.tool_schema import ToolCallInput
 from backend.app.core.tools import build_default_tool_registry
 
 
+@pytest.mark.skipif(
+    not os.environ.get("XAGENT_OPENAI_API_KEY") and not os.environ.get("OPENAI_API_KEY"),
+    reason="Requires real LLM API key (XAGENT_OPENAI_API_KEY or OPENAI_API_KEY)",
+)
 class TestBoundaryConditions:
     """边界条件测试"""
 

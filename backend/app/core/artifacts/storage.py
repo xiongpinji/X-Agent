@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+import json
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 from uuid import uuid4
-import json
 
 from pydantic import BaseModel, Field
 
@@ -18,10 +18,10 @@ class Artifact(BaseModel):
     name: str
     type: str  # html, chart, dashboard, table
     content: str
-    metadata: Dict[str, Any] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    tags: List[str] = Field(default_factory=list)
+    tags: list[str] = Field(default_factory=list)
     description: str = ""
 
 
@@ -54,7 +54,7 @@ class ArtifactStorage:
 
         return artifact.id
 
-    async def load_artifact(self, artifact_id: str) -> Optional[Artifact]:
+    async def load_artifact(self, artifact_id: str) -> Artifact | None:
         """Load artifact from storage.
 
         Args:
@@ -67,7 +67,7 @@ class ArtifactStorage:
         if not artifact_path.exists():
             return None
 
-        with open(artifact_path, "r", encoding="utf-8") as f:
+        with open(artifact_path, encoding="utf-8") as f:
             data = json.load(f)
 
         return Artifact(**data)
@@ -90,11 +90,11 @@ class ArtifactStorage:
 
     async def list_artifacts(
         self,
-        artifact_type: Optional[str] = None,
-        tags: Optional[List[str]] = None,
+        artifact_type: str | None = None,
+        tags: list[str] | None = None,
         limit: int = 100,
         offset: int = 0,
-    ) -> List[Artifact]:
+    ) -> list[Artifact]:
         """List artifacts with optional filtering.
 
         Args:
@@ -128,7 +128,7 @@ class ArtifactStorage:
         # Apply pagination
         return artifacts[offset : offset + limit]
 
-    async def search_artifacts(self, query: str, limit: int = 50) -> List[Artifact]:
+    async def search_artifacts(self, query: str, limit: int = 50) -> list[Artifact]:
         """Search artifacts by name or description.
 
         Args:
@@ -152,7 +152,7 @@ class ArtifactStorage:
         results.sort(key=lambda a: a.created_at, reverse=True)
         return results[:limit]
 
-    async def update_artifact(self, artifact_id: str, updates: Dict[str, Any]) -> Optional[Artifact]:
+    async def update_artifact(self, artifact_id: str, updates: dict[str, Any]) -> Artifact | None:
         """Update artifact.
 
         Args:
@@ -174,7 +174,7 @@ class ArtifactStorage:
         await self.save_artifact(artifact)
         return artifact
 
-    async def get_artifact_stats(self) -> Dict[str, Any]:
+    async def get_artifact_stats(self) -> dict[str, Any]:
         """Get storage statistics.
 
         Returns:

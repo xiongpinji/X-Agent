@@ -2,6 +2,7 @@ package io.xagent.partner;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URLEncoder;
@@ -9,6 +10,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
@@ -25,7 +27,7 @@ import javax.crypto.spec.SecretKeySpec;
  *   PartnerResponse partner = client.getPartner("partner_id");
  */
 public class PartnerClient {
-    public static final String VERSION = "0.2.0-alpha"; // 单一事实源: pyproject.toml
+    public static final String VERSION = "0.2.0-alpha"; // 与 sdks/python/xagent_partner.py 的 __version__ 保持一致
 
     private final String apiKey;
     private final String baseUrl;
@@ -51,6 +53,8 @@ public class PartnerClient {
             .connectTimeout(timeout)
             .build();
         this.objectMapper = new ObjectMapper();
+        // 后端时间字段为 ISO-8601 字符串; java.time.Instant 需要 jsr310 模块支持
+        this.objectMapper.registerModule(new JavaTimeModule());
     }
 
     // ========================================================================
@@ -65,7 +69,7 @@ public class PartnerClient {
         return headers;
     }
 
-    private <T> T makeRequest(String method, String endpoint, Object body, Map<String, String> params, Class<T> responseType) throws PartnerAPIException {
+    private String makeRequestRaw(String method, String endpoint, Object body, Map<String, String> params) throws PartnerAPIException {
         String url = baseUrl + endpoint;
 
         if (params != null && !params.isEmpty()) {
@@ -114,7 +118,7 @@ public class PartnerClient {
                         Thread.sleep(Long.parseLong(retryAfter) * 1000L);
                         continue;
                     }
-                    Map<String, Object> errorResponse = objectMapper.readValue(response.body(), Map.class);
+                    Map<String, Object> errorResponse = readErrorBody(response.body());
                     throw new PartnerRateLimitException("Rate limit exceeded", errorResponse);
                 }
 
@@ -129,21 +133,24 @@ public class PartnerClient {
 
                 // Handle client errors
                 if (response.statusCode() == 401) {
-                    Map<String, Object> errorResponse = objectMapper.readValue(response.body(), Map.class);
-                    throw new PartnerAuthException("Unauthorized", errorResponse);
+                    Map<String, Object> errorResponse = readErrorBody(response.body());
+                    String detail = errorDetail(errorResponse);
+                    throw new PartnerAuthException(detail != null ? detail : "Unauthorized", errorResponse);
                 }
 
                 if (response.statusCode() == 404) {
-                    Map<String, Object> errorResponse = objectMapper.readValue(response.body(), Map.class);
-                    throw new PartnerNotFoundException("Resource not found", errorResponse);
+                    Map<String, Object> errorResponse = readErrorBody(response.body());
+                    String detail = errorDetail(errorResponse);
+                    throw new PartnerNotFoundException(detail != null ? detail : "Resource not found", errorResponse);
                 }
 
                 if (response.statusCode() >= 400) {
-                    Map<String, Object> errorResponse = objectMapper.readValue(response.body(), Map.class);
-                    throw new PartnerAPIException("API error", response.statusCode(), errorResponse);
+                    Map<String, Object> errorResponse = readErrorBody(response.body());
+                    String detail = errorDetail(errorResponse);
+                    throw new PartnerAPIException(detail != null ? detail : "API error", response.statusCode(), errorResponse);
                 }
 
-                return objectMapper.readValue(response.body(), responseType);
+                return response.body();
 
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
@@ -163,6 +170,65 @@ public class PartnerClient {
         }
 
         throw new PartnerAPIException("Max retries exceeded");
+    }
+
+    private <T> T makeRequest(String method, String endpoint, Object body, Map<String, String> params, Class<T> responseType) throws PartnerAPIException {
+        String responseBody = makeRequestRaw(method, endpoint, body, params);
+        if (responseBody == null || responseBody.isEmpty()) {
+            // 204 No Content (如 DELETE 端点) 或空响应体: 无内容可反序列化
+            return null;
+        }
+        try {
+            return objectMapper.readValue(responseBody, responseType);
+        } catch (IOException e) {
+            throw new PartnerAPIException("Failed to parse response: " + e.getMessage());
+        }
+    }
+
+    private <T> List<T> makeListRequest(String method, String endpoint, Map<String, String> params, Class<T> elementType) throws PartnerAPIException {
+        String responseBody = makeRequestRaw(method, endpoint, null, params);
+        if (responseBody == null || responseBody.isEmpty()) {
+            return new ArrayList<>();
+        }
+        try {
+            // 后端列表端点直接返回 JSON 数组, 无 {"items": [...]} 包装对象
+            return objectMapper.readValue(responseBody,
+                objectMapper.getTypeFactory().constructCollectionType(List.class, elementType));
+        } catch (IOException e) {
+            throw new PartnerAPIException("Failed to parse response: " + e.getMessage());
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> readErrorBody(String body) {
+        try {
+            if (body == null || body.isEmpty()) {
+                return new HashMap<>();
+            }
+            return objectMapper.readValue(body, Map.class);
+        } catch (IOException e) {
+            return new HashMap<>();
+        }
+    }
+
+    private String errorDetail(Map<String, Object> errorResponse) {
+        if (errorResponse == null) {
+            return null;
+        }
+        // FastAPI HTTPException 形状: {"detail": "..."}
+        Object detail = errorResponse.get("detail");
+        if (detail instanceof String) {
+            return (String) detail;
+        }
+        // 兼容 {"error": {"message": "..."}} 形状
+        Object error = errorResponse.get("error");
+        if (error instanceof Map) {
+            Object message = ((Map<?, ?>) error).get("message");
+            if (message instanceof String) {
+                return (String) message;
+            }
+        }
+        return null;
     }
 
     // ========================================================================
@@ -188,8 +254,8 @@ public class PartnerClient {
             params.put("integration_type", integrationType);
         }
 
-        PartnerListResponse response = makeRequest("GET", "/api/v1/partners", null, params, PartnerListResponse.class);
-        return response.partners != null ? response.partners : new ArrayList<>();
+        // 后端直接返回 JSON 数组 (list[PartnerResponse]), 无包装对象
+        return makeListRequest("GET", "/api/v1/partners", params, PartnerResponse.class);
     }
 
     public PartnerResponse updatePartner(String partnerId, Map<String, Object> updates) throws PartnerAPIException {
@@ -220,8 +286,8 @@ public class PartnerClient {
             params.put("status_filter", statusFilter);
         }
 
-        APIKeyListResponse response = makeRequest("GET", "/api/v1/partners/" + partnerId + "/api-keys", null, params, APIKeyListResponse.class);
-        return response.keys != null ? response.keys : new ArrayList<>();
+        // 后端直接返回 JSON 数组
+        return makeListRequest("GET", "/api/v1/partners/" + partnerId + "/api-keys", params, APIKeyResponse.class);
     }
 
     public APIKeyResponse rotateAPIKey(String partnerId, String keyId) throws PartnerAPIException {
@@ -241,8 +307,8 @@ public class PartnerClient {
     }
 
     public List<WebhookResponse> listWebhooks(String partnerId) throws PartnerAPIException {
-        WebhookListResponse response = makeRequest("GET", "/api/v1/partners/" + partnerId + "/webhooks", null, null, WebhookListResponse.class);
-        return response.webhooks != null ? response.webhooks : new ArrayList<>();
+        // 后端直接返回 JSON 数组
+        return makeListRequest("GET", "/api/v1/partners/" + partnerId + "/webhooks", null, WebhookResponse.class);
     }
 
     public WebhookResponse updateWebhook(String partnerId, String webhookId, Map<String, Object> updates) throws PartnerAPIException {
@@ -297,8 +363,8 @@ public class PartnerClient {
             params.put("priority_filter", priorityFilter);
         }
 
-        SupportTicketListResponse response = makeRequest("GET", "/api/v1/partners/" + partnerId + "/support/tickets", null, params, SupportTicketListResponse.class);
-        return response.tickets != null ? response.tickets : new ArrayList<>();
+        // 后端直接返回 JSON 数组
+        return makeListRequest("GET", "/api/v1/partners/" + partnerId + "/support/tickets", params, SupportTicketResponse.class);
     }
 
     public SupportTicketResponse getSupportTicket(String partnerId, String ticketId) throws PartnerAPIException {
@@ -331,7 +397,10 @@ public class PartnerClient {
             mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
             byte[] expectedSignatureBytes = mac.doFinal(requestBody);
             String expectedSignature = bytesToHex(expectedSignatureBytes);
-            return expectedSignature.equals(signature);
+            // 常量时间比较, 与后端 hmac.compare_digest 及其他语言 SDK 行为一致
+            return MessageDigest.isEqual(
+                expectedSignature.getBytes(StandardCharsets.UTF_8),
+                signature.getBytes(StandardCharsets.UTF_8));
         } catch (Exception e) {
             return false;
         }
@@ -422,11 +491,6 @@ public class PartnerClient {
         public int monthlyLimit;
     }
 
-    public static class PartnerListResponse {
-        @JsonProperty("partners")
-        public List<PartnerResponse> partners;
-    }
-
     public static class APIKeyRequest {
         @JsonProperty("name")
         public String name;
@@ -485,11 +549,6 @@ public class PartnerClient {
         public String status;
     }
 
-    public static class APIKeyListResponse {
-        @JsonProperty("keys")
-        public List<APIKeyResponse> keys;
-    }
-
     public static class WebhookRequest {
         @JsonProperty("event_type")
         public String eventType;
@@ -534,11 +593,6 @@ public class PartnerClient {
 
         @JsonProperty("failure_count")
         public int failureCount;
-    }
-
-    public static class WebhookListResponse {
-        @JsonProperty("webhooks")
-        public List<WebhookResponse> webhooks;
     }
 
     public static class UsageResponse {
@@ -643,10 +697,5 @@ public class PartnerClient {
 
         @JsonProperty("resolution_notes")
         public String resolutionNotes;
-    }
-
-    public static class SupportTicketListResponse {
-        @JsonProperty("tickets")
-        public List<SupportTicketResponse> tickets;
     }
 }

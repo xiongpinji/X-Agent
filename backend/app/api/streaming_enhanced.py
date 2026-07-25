@@ -13,21 +13,27 @@ Features:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import time
-from collections import defaultdict
+from collections import defaultdict, deque
+from collections.abc import AsyncGenerator
 from datetime import datetime, timedelta
-from typing import Annotated, Any, AsyncGenerator, Callable
-from uuid import uuid4
+from typing import Annotated, Any
 
 import orjson
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 
 from backend.app.core.agent import AgentLoop
-from backend.app.core.contracts import RunContext, ErrorCode
 from backend.app.core.security import Principal
-from backend.app.dependencies import enforce_scope, get_agent, get_current_principal, get_run_store, get_trace_store
+from backend.app.dependencies import (
+    enforce_scope,
+    get_agent,
+    get_current_principal,
+    get_run_store,
+    get_trace_store,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -184,10 +190,8 @@ class OptimizedEventStore:
         """Stop background cleanup task."""
         if self._cleanup_task:
             self._cleanup_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._cleanup_task
-            except asyncio.CancelledError:
-                pass
 
     async def _cleanup_loop(self):
         """Periodically clean up old events and dead connections."""
@@ -373,7 +377,6 @@ async def _stream_events_optimized(
     last_heartbeat = time.time()
     event_batch: list[dict[str, Any]] = []
     batch_start_time = time.time()
-    serialization_time = 0.0
 
     try:
         while True:
@@ -399,7 +402,7 @@ async def _stream_events_optimized(
                     batch_start_time = time.time()
                     last_heartbeat = time.time()
 
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 # Send batched events
                 if event_batch:
                     await _send_event_batch(event_batch, run_id)
@@ -414,7 +417,7 @@ async def _stream_events_optimized(
                         "run_id": run_id,
                     }
                     event_json = orjson.dumps(heartbeat)
-                    yield f"event: heartbeat\n"
+                    yield "event: heartbeat\n"
                     yield f"data: {event_json.decode('utf-8')}\n\n"
                     last_heartbeat = time.time()
 
@@ -432,7 +435,7 @@ async def _stream_events_optimized(
             "recoverable": False,
         }
         event_json = orjson.dumps(error_event)
-        yield f"event: error\n"
+        yield "event: error\n"
         yield f"data: {event_json.decode('utf-8')}\n\n"
 
 

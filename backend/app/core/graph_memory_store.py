@@ -92,7 +92,7 @@ class GraphMemoryStore:
         auth: tuple[str, str] | None = None,
         database: str = "neo4j",
         **driver_kwargs: Any,
-    ) -> "GraphMemoryStore":
+    ) -> GraphMemoryStore:
         """Build a store with a real Neo4j driver; fails explicitly if unavailable."""
         if not NEO4J_AVAILABLE:
             raise RuntimeError(
@@ -406,7 +406,6 @@ class GraphMemoryStore:
             Memory object or None
         """
         try:
-            from datetime import UTC, datetime
 
             props = dict(node)
             return Memory(
@@ -434,7 +433,6 @@ class GraphMemoryStore:
             GraphPath object or None
         """
         try:
-            from datetime import UTC, datetime
 
             nodes = path.nodes
             if not nodes:

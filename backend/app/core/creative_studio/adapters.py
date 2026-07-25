@@ -14,7 +14,6 @@ from __future__ import annotations
 import asyncio
 import logging
 import shutil
-import subprocess
 from pathlib import Path
 
 from backend.app.core.creative_studio.media import (
@@ -100,7 +99,8 @@ class GPTImage2Adapter(MediaProvider):
             return False
 
     async def generate(self, request: MediaRequest) -> MediaResult:
-        import time, base64
+        import base64
+        import time
         t0 = time.perf_counter()
         try:
             from openai import AsyncOpenAI
@@ -152,7 +152,8 @@ class PlaceholderImageAdapter(MediaProvider):
 
 def _write_placeholder_png(path: str) -> None:
     """写入最小 1×1 红色 PNG（纯 stdlib，无 Pillow）。"""
-    import struct, zlib
+    import struct
+    import zlib
     def chunk(tag, data):
         return (struct.pack(">I", len(data)) + tag + data
                 + struct.pack(">I", zlib.crc32(tag + data) & 0xFFFFFFFF))
@@ -206,7 +207,7 @@ class FFmpegAdapter(MediaProvider):
             cmd = [
                 "ffmpeg", "-y",
                 "-f", "concat", "-safe", "0", "-i", str(concat_txt),
-                "-vf", f"scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:-1:-1",
+                "-vf", "scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:-1:-1",
                 "-c:v", "libx264", "-pix_fmt", "yuv420p", "-r", "25",
             ]
             if audio_path and Path(audio_path).exists():

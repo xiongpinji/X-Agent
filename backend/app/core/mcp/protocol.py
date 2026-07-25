@@ -17,8 +17,9 @@
 
 from __future__ import annotations
 
-from typing import Any, Callable, Dict, Optional
+from collections.abc import Callable
 from datetime import UTC, datetime
+from typing import Any
 from uuid import uuid4
 
 from pydantic import BaseModel, Field
@@ -30,7 +31,7 @@ class MCPRequest(BaseModel):
     type: str
     id: str = Field(default_factory=lambda: str(uuid4()))
     method: str
-    params: Dict[str, Any] = Field(default_factory=dict)
+    params: dict[str, Any] = Field(default_factory=dict)
     timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
@@ -39,8 +40,8 @@ class MCPResponse(BaseModel):
 
     type: str
     id: str
-    result: Optional[Dict[str, Any]] = None
-    error: Optional[Dict[str, Any]] = None
+    result: dict[str, Any] | None = None
+    error: dict[str, Any] | None = None
     timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
@@ -49,7 +50,7 @@ class MCPMessage(BaseModel):
 
     type: str
     id: str = Field(default_factory=lambda: str(uuid4()))
-    content: Dict[str, Any] = Field(default_factory=dict)
+    content: dict[str, Any] = Field(default_factory=dict)
     timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
@@ -63,10 +64,10 @@ class MCPTool(BaseModel):
 
     name: str
     description: str
-    input_schema: Dict[str, Any]
-    output_schema: Optional[Dict[str, Any]] = None
+    input_schema: dict[str, Any]
+    output_schema: dict[str, Any] | None = None
     tags: list[str] = Field(default_factory=list)
-    annotations: Dict[str, Any] = Field(default_factory=dict)
+    annotations: dict[str, Any] = Field(default_factory=dict)
 
 
 class MCPServer:
@@ -81,17 +82,17 @@ class MCPServer:
         """
         self.host = host
         self.port = port
-        self.tools: Dict[str, Callable] = {}
-        self.tool_definitions: Dict[str, MCPTool] = {}
+        self.tools: dict[str, Callable] = {}
+        self.tool_definitions: dict[str, MCPTool] = {}
 
     def register_tool(
         self,
         name: str,
         tool: Callable,
         description: str = "",
-        input_schema: Optional[Dict[str, Any]] = None,
-        output_schema: Optional[Dict[str, Any]] = None,
-        tags: Optional[list[str]] = None,
+        input_schema: dict[str, Any] | None = None,
+        output_schema: dict[str, Any] | None = None,
+        tags: list[str] | None = None,
     ) -> None:
         """Register a tool with the MCP server.
 
@@ -176,7 +177,7 @@ class MCPServer:
                 error={"code": "TOOL_ERROR", "message": str(e)},
             )
 
-    def get_tool_definition(self, name: str) -> Optional[MCPTool]:
+    def get_tool_definition(self, name: str) -> MCPTool | None:
         """Get tool definition by name."""
         return self.tool_definitions.get(name)
 

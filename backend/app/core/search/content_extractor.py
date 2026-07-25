@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
-import httpx
 import re
+from typing import Any
+
+import httpx
 
 
 class ContentExtractor:
@@ -19,7 +20,7 @@ class ContentExtractor:
         self.timeout = timeout
         self.client = httpx.AsyncClient(timeout=timeout)
 
-    async def extract(self, url: str) -> Dict[str, Any]:
+    async def extract(self, url: str) -> dict[str, Any]:
         """Extract content from URL.
 
         Args:
@@ -91,7 +92,7 @@ class ContentExtractor:
         text = re.sub(r"\s+", " ", text)
         return text[:2000]  # Return first 2000 characters
 
-    def _extract_metadata(self, html: str) -> Dict[str, str]:
+    def _extract_metadata(self, html: str) -> dict[str, str]:
         """Extract metadata from HTML.
 
         Args:

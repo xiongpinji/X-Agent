@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-import os
 import json
+import logging
+import os
 import shutil
 import subprocess
 from pathlib import Path
-from typing import Optional, Dict, Any
-from datetime import datetime, UTC
-import logging
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -234,7 +233,7 @@ def test_validate_input(skill):
         author: str,
         category: str,
         icon_emoji: str = "🎯",
-        output_dir: Optional[str] = None,
+        output_dir: str | None = None,
     ) -> str:
         """创建技能脚手架"""
         if output_dir is None:
@@ -332,7 +331,7 @@ class SkillTester:
     """技能本地测试工具"""
 
     @staticmethod
-    async def test_skill(skill_dir: str) -> Dict[str, Any]:
+    async def test_skill(skill_dir: str) -> dict[str, Any]:
         """运行技能测试"""
         skill_path = Path(skill_dir)
 
@@ -365,7 +364,7 @@ class SkillPackager:
     """技能打包工具"""
 
     @staticmethod
-    def package_skill(skill_dir: str, output_dir: Optional[str] = None) -> str:
+    def package_skill(skill_dir: str, output_dir: str | None = None) -> str:
         """打包技能"""
         skill_path = Path(skill_dir)
 
@@ -409,8 +408,8 @@ class SkillPublisher:
     async def publish_skill(
         self,
         skill_dir: str,
-        version: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        version: str | None = None,
+    ) -> dict[str, Any]:
         """发布技能到市场"""
         skill_path = Path(skill_dir)
 
@@ -428,7 +427,7 @@ class SkillPublisher:
 
             # 读取 README
             readme_file = skill_path / "README.md"
-            readme_content = readme_file.read_text() if readme_file.exists() else ""
+            readme_file.read_text() if readme_file.exists() else ""
 
             # 准备发布数据
             publish_data = {
@@ -471,7 +470,7 @@ class SkillCLI:
     """技能开发命令行工具"""
 
     @staticmethod
-    def create_command(args: Dict[str, Any]) -> None:
+    def create_command(args: dict[str, Any]) -> None:
         """创建技能命令"""
         skill_dir = SkillScaffold.create_skill(
             skill_name=args["name"],
@@ -486,13 +485,13 @@ class SkillCLI:
         print(f"技能已创建: {skill_dir}")
 
     @staticmethod
-    async def test_command(args: Dict[str, Any]) -> None:
+    async def test_command(args: dict[str, Any]) -> None:
         """测试技能命令"""
         result = await SkillTester.test_skill(args["skill_dir"])
         print(json.dumps(result, indent=2, ensure_ascii=False))
 
     @staticmethod
-    def package_command(args: Dict[str, Any]) -> None:
+    def package_command(args: dict[str, Any]) -> None:
         """打包技能命令"""
         output_path = SkillPackager.package_skill(
             args["skill_dir"],
@@ -501,7 +500,7 @@ class SkillCLI:
         print(f"技能已打包: {output_path}")
 
     @staticmethod
-    async def publish_command(args: Dict[str, Any]) -> None:
+    async def publish_command(args: dict[str, Any]) -> None:
         """发布技能命令"""
         publisher = SkillPublisher(
             args["api_url"],

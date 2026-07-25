@@ -14,7 +14,8 @@ import json
 import logging
 import time
 import uuid
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from starlette.requests import Request
 from starlette.responses import Response
@@ -49,7 +50,7 @@ class RequestTracerMiddleware(BaseMiddleware):
             "correlation_id_header", self.DEFAULT_CORRELATION_ID_HEADER
         )
         self.langfuse_enabled = config.get("langfuse_enabled", False)
-        self.langfuse_client = config.get("langfuse_client", None)
+        self.langfuse_client = config.get("langfuse_client")
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
         """Trace request."""

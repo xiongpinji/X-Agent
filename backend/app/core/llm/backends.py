@@ -11,12 +11,20 @@ legacy callers and the newer enhanced-routing code share one namespace.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import time
+from collections.abc import AsyncGenerator
 from dataclasses import dataclass, field
-from typing import Any, AsyncGenerator
+from typing import Any
 
 logger = logging.getLogger(__name__)
+
+# OpenAI SDK is an optional dependency; import gracefully.
+try:
+    from openai import APIError as _OpenAIAPIError
+except ImportError:  # pragma: no cover
+    _OpenAIAPIError = None  # type: ignore[assignment,misc]
 
 
 def _normalize_tool_parameters(parameters: Any) -> dict[str, Any]:
@@ -131,7 +139,7 @@ def get_pricing_table() -> dict[str, dict[str, float]]:
         if table:
             _PRICING_TABLE_CACHE = table
             return _PRICING_TABLE_CACHE
-    except Exception as exc:  # noqa: BLE001 - explicit degrade with logging
+    except Exception as exc:
         logger.warning(
             "Falling back to built-in LLM pricing table: %s", exc
         )
@@ -222,7 +230,10 @@ class MockLLMBackend(BaseLLMBackend):
             tokens_used=len(task_line.split()),
         )
 class OpenAIBackend(BaseLLMBackend):
-    """Full-featured OpenAI API backend with streaming, retries, rate limiting, and cost tracking."""
+    """Full-featured OpenAI API backend with streaming, retries, rate limiting, and cost tracking.
+    
+    Uses a persistent AsyncOpenAI client with connection pooling for efficiency.
+    """
 
     def __init__(
         self,
@@ -235,6 +246,7 @@ class OpenAIBackend(BaseLLMBackend):
         retry_delay: float = 1.0,
         rate_limit_rpm: int = 3500,
         timeout: float = 30.0,
+        max_connections: int = 100,
     ) -> None:
         self.name = name
         self.api_key = api_key
@@ -244,8 +256,51 @@ class OpenAIBackend(BaseLLMBackend):
         self.retry_delay = retry_delay
         self.rate_limit_rpm = rate_limit_rpm
         self.timeout = timeout
+        self.max_connections = max_connections
         self._request_times: list[float] = []
         self._lock = asyncio.Lock()
+        self._client: Any = None  # Persistent client with connection pool
+        self._client_lock = asyncio.Lock()
+
+    async def _get_client(self) -> Any:
+        """Get or create the persistent AsyncOpenAI client with connection pooling."""
+        if self._client is None:
+            async with self._client_lock:
+                if self._client is None:
+                    try:
+                        import httpx
+                        from openai import AsyncOpenAI
+                        
+                        # Create HTTP client with connection pooling
+                        http_client = httpx.AsyncClient(
+                            limits=httpx.Limits(
+                                max_connections=self.max_connections,
+                                max_keepalive_connections=20,
+                                keepalive_expiry=30,
+                            ),
+                            timeout=httpx.Timeout(self.timeout, connect=10.0),
+                        )
+                        
+                        client_kwargs: dict[str, Any] = {
+                            "api_key": self.api_key,
+                            "http_client": http_client,
+                            "max_retries": 0,  # We handle retries ourselves
+                        }
+                        if self.base_url:
+                            client_kwargs["base_url"] = self.base_url
+                        
+                        self._client = AsyncOpenAI(**client_kwargs)
+                        logger.info(f"OpenAI client initialized with connection pool (max_connections={self.max_connections})")
+                    except ImportError as exc:
+                        raise LLMBackendError("openai package is not installed") from exc
+        return self._client
+
+    async def close(self) -> None:
+        """Close the persistent client and release connections."""
+        if self._client:
+            with contextlib.suppress(Exception):
+                await self._client.close()
+            self._client = None
 
     async def _check_rate_limit(self) -> None:
         """Check and enforce rate limiting."""
@@ -277,7 +332,7 @@ class OpenAIBackend(BaseLLMBackend):
         try:
             await self._check_rate_limit()
             return await asyncio.wait_for(coro_factory(), timeout=self.timeout)
-        except (asyncio.TimeoutError, Exception) as exc:
+        except (TimeoutError, Exception) as exc:
             if attempt < self.max_retries:
                 delay = self.retry_delay * (2 ** attempt)
                 logger.warning(
@@ -291,17 +346,8 @@ class OpenAIBackend(BaseLLMBackend):
         messages: list[dict[str, str]],
         tools: list[dict[str, Any]],
     ) -> LLMResponse:
-        """Send a chat request to OpenAI API."""
-        try:
-            from openai import APIError, AsyncOpenAI
-        except ImportError as exc:
-            raise LLMBackendError("openai package is not installed") from exc
-
-        client_kwargs: dict[str, Any] = {"api_key": self.api_key}
-        if self.base_url:
-            client_kwargs["base_url"] = self.base_url
-
-        client = AsyncOpenAI(**client_kwargs)
+        """Send a chat request to OpenAI API using persistent connection pool."""
+        client = await self._get_client()
         start_time = time.time()
 
         try:
@@ -365,9 +411,9 @@ class OpenAIBackend(BaseLLMBackend):
                 latency_ms=latency_ms,
             )
 
-        except APIError as exc:
-            raise LLMBackendError(f"{self.name} API error: {exc}") from exc
         except Exception as exc:
+            if _OpenAIAPIError is not None and isinstance(exc, _OpenAIAPIError):
+                raise LLMBackendError(f"{self.name} API error: {exc}") from exc
             raise LLMBackendError(f"{self.name} backend failed: {exc}") from exc
 
     async def stream_chat(
@@ -446,7 +492,7 @@ class OpenAIResponsesBackend(BaseLLMBackend):
         tools: list[dict[str, Any]],
     ) -> LLMResponse:
         try:
-            from openai import APIError, AsyncOpenAI
+            from openai import AsyncOpenAI
         except ImportError as exc:  # pragma: no cover - dependency exists in project deps
             raise LLMBackendError("openai package is not installed") from exc
 
@@ -460,9 +506,9 @@ class OpenAIResponsesBackend(BaseLLMBackend):
                 model=self.model,
                 input=self._to_response_input(messages),
             )
-        except APIError as exc:
-            raise LLMBackendError(f"{self.name} API error: {exc}") from exc
-        except Exception as exc:  # noqa: BLE001 - provider failures are normalized for fallback
+        except Exception as exc:
+            if _OpenAIAPIError is not None and isinstance(exc, _OpenAIAPIError):
+                raise LLMBackendError(f"{self.name} API error: {exc}") from exc
             raise LLMBackendError(f"{self.name} backend failed: {exc}") from exc
 
         output_text = getattr(response, "output_text", None)
@@ -548,6 +594,30 @@ class LLMRouter:
         if self._quota_manager is not None:
             await self._quota_manager.check_quota(tenant_id, user_id)
 
+        # ─── MoA 路径: 多模型并行推理 + 聚合 ────────────────────────────────
+        try:
+            from backend.app.settings import get_settings
+            _s = get_settings()
+            if _s.moa_enabled and len(self._backends) >= 2:
+                from backend.app.core.llm.moa import MoAConfig, MoAEngine
+                moa_engine = MoAEngine(backends=list(self._backends))
+                moa_cfg = MoAConfig(
+                    enabled=True,
+                    strategy=_s.moa_strategy,
+                    timeout_per_model=_s.moa_timeout,
+                    min_responses=_s.moa_min_responses,
+                )
+                response = await moa_engine.generate(messages, tools, moa_cfg)
+                if self._quota_manager is not None:
+                    await self._quota_manager.record_usage(
+                        tenant_id, user_id, response.tokens_used, response.cost
+                    )
+                return response
+        except ImportError:
+            pass  # MoA 模块不可用时降级到顺序路由
+        except Exception as moa_exc:
+            logger.warning("MoA path failed, falling back to sequential: %s", moa_exc)
+
         last_error: Exception | None = None
         for backend in self._order_backends(
             messages, tools, task_type=task_type, strategy=strategy
@@ -562,6 +632,31 @@ class LLMRouter:
                     tenant_id, user_id, response.tokens_used, response.cost
                 )
             self._on_backend_success(backend, response)
+            # P1-04: Prometheus metrics — record LLM call
+            try:
+                from backend.app.core.metrics import metrics_collector
+                metrics_collector.record_llm_call(
+                    model=response.model,
+                    status="success",
+                    duration_seconds=response.latency_ms / 1000 if response.latency_ms else 0,
+                    input_tokens=response.tokens_used.get("input", 0) if isinstance(response.tokens_used, dict) else 0,
+                    output_tokens=response.tokens_used.get("output", 0) if isinstance(response.tokens_used, dict) else 0,
+                )
+            except Exception:
+                pass  # Metrics must never break LLM calls
+            # P2-06: OTel metrics — record LLM call
+            try:
+                from backend.app.core.otel_exporter import get_otel_exporter
+                _exporter = get_otel_exporter()
+                if _exporter.is_active:
+                    _exporter.record_llm_call(
+                        model=response.model,
+                        tokens_used=response.tokens_used,
+                        latency_ms=response.latency_ms,
+                        tenant_id=tenant_id or "",
+                    )
+            except Exception:
+                pass  # OTel must never break LLM calls
             return response
         raise LLMBackendError(f"No LLM backend completed successfully: {last_error}")
 
@@ -651,7 +746,14 @@ def build_llm_router(
             backends.append(MockLLMBackend())
 
     if not backends:
-        backends.append(MockLLMBackend())
+        if llm_backend == "mock" or "mock" in requested:
+            backends.append(MockLLMBackend())
+        else:
+            raise RuntimeError(
+                "No LLM API key configured. Set XAGENT_OPENAI_API_KEY or "
+                "XAGENT_DEEPSEEK_API_KEY or XAGENT_ANTHROPIC_API_KEY. "
+                "Use XAGENT_LLM_BACKEND=mock for testing."
+            )
 
     # --- Quota wiring (token-metered, stored in the existing cache layer) ---
     if quota_manager is None:

@@ -6,7 +6,7 @@ from typing import Any
 from uuid import uuid4
 
 from backend.app.core.channels.base import ChannelRegistry, get_channel_registry
-from backend.app.core.workflows import WorkflowScheduleRecord, WorkflowScheduler
+from backend.app.core.workflows import WorkflowScheduler, WorkflowScheduleRecord
 
 
 @dataclass

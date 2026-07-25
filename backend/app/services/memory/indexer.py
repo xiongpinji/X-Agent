@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from backend.app.services.memory.qdrant_client import VectorRecord, vector_client
+from backend.app.services.memory.qdrant_client import vector_client
 from backend.app.services.observability.langfuse_client import langfuse_client
 
 

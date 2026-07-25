@@ -2,13 +2,17 @@
 国际化API端点
 """
 
+from typing import Any
+
 from fastapi import APIRouter, HTTPException, Query
-from typing import Dict, Any, List
 from pydantic import BaseModel
 
 from backend.app.core.i18n import (
-    Language, Region, Locale, LocalizationConfig,
-    TranslationManager, I18nManager, i18n
+    Language,
+    Locale,
+    LocalizationConfig,
+    Region,
+    i18n,
 )
 
 router = APIRouter(prefix="/api/i18n", tags=["i18n"])
@@ -30,7 +34,7 @@ class LocaleResponse(BaseModel):
 
 class TranslationResponse(BaseModel):
     language: str
-    translations: Dict[str, Any]
+    translations: dict[str, Any]
 
 
 class SupportedLanguageResponse(BaseModel):
@@ -43,7 +47,7 @@ class SupportedRegionResponse(BaseModel):
     name: str
 
 
-@router.get("/supported-languages", response_model=List[SupportedLanguageResponse])
+@router.get("/supported-languages", response_model=list[SupportedLanguageResponse])
 async def get_supported_languages():
     """获取支持的语言列表"""
     return [
@@ -55,7 +59,7 @@ async def get_supported_languages():
     ]
 
 
-@router.get("/supported-regions", response_model=List[SupportedRegionResponse])
+@router.get("/supported-regions", response_model=list[SupportedRegionResponse])
 async def get_supported_regions():
     """获取支持的地区列表"""
     return [
@@ -79,7 +83,7 @@ async def set_locale(request: LocaleRequest):
         i18n.set_locale(language, region)
         return {"status": "success", "locale": str(Locale(language, region))}
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=f"Invalid language or region: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"Invalid language or region: {e!s}")
 
 
 @router.get("/locale", response_model=LocaleResponse)
@@ -157,6 +161,7 @@ async def format_date(
     """格式化日期"""
     try:
         from datetime import datetime
+
         import pytz
 
         lang = Language(language)

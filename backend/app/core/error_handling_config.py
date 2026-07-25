@@ -7,7 +7,6 @@ This file provides practical configuration examples for different scenarios.
 from backend.app.core.circuit_breaker import CircuitBreakerConfig
 from backend.app.core.retry import RetryConfig
 
-
 # ============================================================================
 # RETRY CONFIGURATIONS
 # ============================================================================

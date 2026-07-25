@@ -7,18 +7,18 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import UTC, datetime, timedelta
-from enum import Enum
-from typing import Any, Callable, Generic, TypeVar
+from datetime import UTC, datetime
+from enum import StrEnum
+from typing import Any, TypeVar
 
 logger = logging.getLogger("xagent.error_handling")
 
 T = TypeVar("T")
 
 
-class ErrorSeverity(str, Enum):
+class ErrorSeverity(StrEnum):
     """Error severity levels."""
 
     CRITICAL = "critical"
@@ -127,7 +127,7 @@ class CircuitBreaker:
 
             self._on_success()
             return result
-        except self._expected_exception as e:
+        except self._expected_exception:
             self._on_failure()
             raise
 

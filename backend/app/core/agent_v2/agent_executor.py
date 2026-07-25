@@ -8,17 +8,13 @@ recovery, completion).
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from backend.app.core.agent_v2.state_manager import AgentState, AgentStateManager
 from backend.app.core.contracts import AgentRunResponse, RunContext, RunStatus
 
 if TYPE_CHECKING:
     from backend.app.core.agent_phases import (
-        CompletionPhase,
-        ExecutionPhase,
-        InitializationPhase,
-        PlanningPhase,
         PhaseContext,
     )
 
@@ -147,7 +143,7 @@ class AgentExecutor:
             # Handle execution error
             self.state_manager.transition_to(AgentState.FAILED)
             logger.error(
-                f"Agent execution failed: {str(e)}",
+                f"Agent execution failed: {e!s}",
                 extra={
                     "trace_id": context.trace_id,
                     "state": self.state_manager.current_state.value,
@@ -249,7 +245,7 @@ class AgentExecutor:
         self,
         context: RunContext,
         error: Exception,
-        phase_context: Optional[PhaseContext] = None,
+        phase_context: PhaseContext | None = None,
     ) -> AgentRunResponse:
         """Build error response.
 

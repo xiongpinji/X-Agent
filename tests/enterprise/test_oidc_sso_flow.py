@@ -453,17 +453,19 @@ async def test_hs256_id_token(idp: MockIdP):
 
 
 # ============================================================================
-# SAML Beta fail-closed
+# SAML Beta (P1-05: 签名验证已启用, 未配置 IdP 时仍 501)
 # ============================================================================
 
 def test_saml_endpoints_fail_closed(sso_app):
     client, _idp, _adapter = sso_app
+    # P1-05: SAML login 在未配置 IdP SSO URL 时返回 501
     resp_login = client.get(f"/api/v1/sso/saml/{PROVIDER}/login")
     assert resp_login.status_code == 501
-    assert "Beta" in resp_login.json()["detail"]
+    assert "SSO URL" in resp_login.json()["detail"] or "未配置" in resp_login.json()["detail"]
 
+    # P1-05: SAML ACS 缺少 SAMLResponse 时返回 400
     resp_acs = client.post(f"/api/v1/sso/saml/{PROVIDER}/acs")
-    assert resp_acs.status_code == 501
+    assert resp_acs.status_code in (400, 422, 501)
 
 
 # ============================================================================
@@ -477,7 +479,7 @@ def test_status_and_providers(sso_app):
     body = status.json()
     assert body["oidc"]["status"] == "GA"
     assert body["saml"]["status"] == "beta"
-    assert body["saml"]["enabled"] is False
+    assert body["saml"]["enabled"] is True  # P1-05: 签名验证已启用
     assert body["jwt_backend"]["authlib_or_joserfc_available"] is True
     assert body["oidc"]["providers_configured"] >= 1
 

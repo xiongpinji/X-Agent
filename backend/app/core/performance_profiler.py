@@ -12,9 +12,10 @@ import io
 import logging
 import pstats
 import time
+from collections.abc import Callable
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Any, Callable, TypeVar
+from typing import Any, TypeVar
 
 logger = logging.getLogger(__name__)
 

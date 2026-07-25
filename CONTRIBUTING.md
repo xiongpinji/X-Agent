@@ -344,8 +344,8 @@ Any other relevant information
 
 ## Additional Resources
 
-- [Architecture Guide](./docs/ARCHITECTURE.md)
-- [API Documentation](./docs/API.md)
-- [Development Setup](./INSTALL.md#development-setup)
+- [Architecture Guide](./docs/concepts/architecture/ARCHITECTURE.md)
+- [API Documentation](./docs/developer/api/API.md)
+- [Development Setup](./docs/operations/setup/INSTALL.md#development-setup)
 
 Thank you for contributing to X-Agent Core!

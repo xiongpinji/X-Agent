@@ -292,9 +292,7 @@ def _event_matches_filter(event: UnifiedMessageEvent, stream_filter: MessageStre
     if domain == "workflow" and not stream_filter.include_workflow:
         return False
 
-    if stream_filter.since and event.timestamp < stream_filter.since:
-        return False
-    return True
+    return not (stream_filter.since and event.timestamp < stream_filter.since)
 
 
 def _serialize_sse(event: UnifiedMessageEvent, event_name: str | None = None) -> str:
@@ -403,7 +401,7 @@ async def stream_messages(
                         continue
                     replay_ids.add(event.event_id)
                     yield _serialize_sse(event, event.event_type)
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     heartbeat = UnifiedMessageEvent(
                         event_type="system.notification",
                         tenant_id=stream_filter.tenant_id,

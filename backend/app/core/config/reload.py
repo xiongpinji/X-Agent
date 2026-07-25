@@ -3,8 +3,9 @@
 import asyncio
 import logging
 import threading
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any
 
 from watchdog.events import FileModifiedEvent, FileSystemEventHandler
 from watchdog.observers import Observer
@@ -21,7 +22,7 @@ class ConfigReloadError(Exception):
 class ConfigChangeListener:
     """Listener for configuration changes."""
 
-    def __init__(self, callback: Callable[[Dict[str, Any]], None]):
+    def __init__(self, callback: Callable[[dict[str, Any]], None]):
         """Initialize listener.
 
         Args:
@@ -29,7 +30,7 @@ class ConfigChangeListener:
         """
         self.callback = callback
 
-    def on_change(self, changes: Dict[str, Any]) -> None:
+    def on_change(self, changes: dict[str, Any]) -> None:
         """Handle configuration change.
 
         Args:
@@ -85,10 +86,10 @@ class ConfigReloader:
             config_path: Path to configuration file to watch
         """
         self.config_path = config_path
-        self.listeners: List[ConfigChangeListener] = []
-        self.observer: Optional[Observer] = None
+        self.listeners: list[ConfigChangeListener] = []
+        self.observer: Observer | None = None
         self.reload_lock = threading.Lock()
-        self._previous_config: Optional[Dict[str, Any]] = None
+        self._previous_config: dict[str, Any] | None = None
 
     def add_listener(self, listener: ConfigChangeListener) -> None:
         """Add configuration change listener.
@@ -153,7 +154,7 @@ class ConfigReloader:
 class ConfigSnapshot:
     """Snapshot of configuration state for rollback."""
 
-    def __init__(self, config_data: Dict[str, Any], timestamp: float):
+    def __init__(self, config_data: dict[str, Any], timestamp: float):
         """Initialize snapshot.
 
         Args:
@@ -163,7 +164,7 @@ class ConfigSnapshot:
         self.config_data = config_data.copy()
         self.timestamp = timestamp
 
-    def restore(self) -> Dict[str, Any]:
+    def restore(self) -> dict[str, Any]:
         """Restore configuration from snapshot.
 
         Returns:
@@ -182,9 +183,9 @@ class ConfigRollbackManager:
             max_snapshots: Maximum number of snapshots to keep
         """
         self.max_snapshots = max_snapshots
-        self.snapshots: List[ConfigSnapshot] = []
+        self.snapshots: list[ConfigSnapshot] = []
 
-    def create_snapshot(self, config_data: Dict[str, Any]) -> None:
+    def create_snapshot(self, config_data: dict[str, Any]) -> None:
         """Create configuration snapshot.
 
         Args:
@@ -200,7 +201,7 @@ class ConfigRollbackManager:
 
         logger.info(f"Created configuration snapshot (total: {len(self.snapshots)})")
 
-    def rollback_to_previous(self) -> Optional[Dict[str, Any]]:
+    def rollback_to_previous(self) -> dict[str, Any] | None:
         """Rollback to previous configuration snapshot.
 
         Returns:
@@ -213,10 +214,10 @@ class ConfigRollbackManager:
         # Remove current snapshot and get previous
         self.snapshots.pop()
         previous = self.snapshots[-1]
-        logger.info(f"Rolled back to previous configuration")
+        logger.info("Rolled back to previous configuration")
         return previous.restore()
 
-    def rollback_to_snapshot(self, index: int) -> Optional[Dict[str, Any]]:
+    def rollback_to_snapshot(self, index: int) -> dict[str, Any] | None:
         """Rollback to specific snapshot.
 
         Args:
@@ -233,7 +234,7 @@ class ConfigRollbackManager:
         logger.info(f"Rolled back to snapshot {index}")
         return snapshot.restore()
 
-    def list_snapshots(self) -> List[Dict[str, Any]]:
+    def list_snapshots(self) -> list[dict[str, Any]]:
         """List all available snapshots.
 
         Returns:

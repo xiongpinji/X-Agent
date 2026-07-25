@@ -1,0 +1,12 @@
+schema_version: 1
+module_path: config_prompts_templates
+title: 配置、提示词与多语言资源
+scope:
+    - config/
+    - prompts/
+    - templates/
+    - locales/
+source_files: []
+depends_on: []
+related_to:
+    - path: backend

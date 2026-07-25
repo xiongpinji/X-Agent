@@ -1,9 +1,9 @@
 version: '3.9'
 
 services:
-  # PostgreSQL Database
+  # PostgreSQL Database (pgvector image — includes vector extension for embeddings)
   postgres:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg16
     container_name: xagent-postgres
     environment:
       POSTGRES_USER: ${DB_USER:-xagent}
@@ -101,6 +101,45 @@ services:
     networks:
       - xagent-network
     restart: unless-stopped
+    profiles:
+      - neo4j  # Optional: only starts with: docker-compose --profile neo4j up
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # PostgreSQL Replica (DR testing — optional profile)
+  # Start with: docker-compose --profile dr up
+  postgres-replica:
+    image: pgvector/pgvector:pg16
+    container_name: xagent-postgres-replica
+    environment:
+      POSTGRES_USER: ${DB_USER:-xagent}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-xagent_secure_password}
+      POSTGRES_DB: ${DB_NAME:-xagent_db}
+      # Streaming replication settings
+      POSTGRES_MASTER_HOST: postgres
+      POSTGRES_MASTER_PORT: 5432
+      POSTGRES_REPLICATION_USER: ${DR_REPLICATION_USER:-replicator}
+      POSTGRES_REPLICATION_PASSWORD: ${DR_REPLICATION_PASSWORD:-replicator_password}
+    ports:
+      - "${DR_REPLICA_PORT:-5433}:5432"
+    volumes:
+      - postgres_replica_data:/var/lib/postgresql/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-xagent}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - xagent-network
+    restart: unless-stopped
+    profiles:
+      - dr  # Optional: only starts with: docker-compose --profile dr up
     logging:
       driver: "json-file"
       options:
@@ -122,7 +161,7 @@ services:
       XAGENT_QDRANT_API_KEY: ${QDRANT_API_KEY:-qdrant_secure_key}
       XAGENT_MEMORY_BACKEND: ${XAGENT_MEMORY_BACKEND:-postgres}
       XAGENT_TRACE_BACKEND: ${XAGENT_TRACE_BACKEND:-jsonl}
-      XAGENT_LLM_BACKEND: ${XAGENT_LLM_BACKEND:-mock}
+      XAGENT_LLM_BACKEND: ${XAGENT_LLM_BACKEND:-auto}
       XAGENT_LLM_FALLBACK_ORDER: ${XAGENT_LLM_FALLBACK_ORDER:-}
       XAGENT_OPENAI_API_KEY: ${XAGENT_OPENAI_API_KEY:-}
       XAGENT_OPENAI_MODEL: ${XAGENT_OPENAI_MODEL:-gpt-4o-mini}
@@ -148,6 +187,15 @@ services:
       XAGENT_TELEGRAM_BOT_TOKEN: ${XAGENT_TELEGRAM_BOT_TOKEN:-}
       XAGENT_TELEGRAM_WEBHOOK_SECRET: ${XAGENT_TELEGRAM_WEBHOOK_SECRET:-}
       XAGENT_TELEGRAM_BASE_URL: ${XAGENT_TELEGRAM_BASE_URL:-}
+      # P1-09: Workflow parallel execution store
+      XAGENT_WORKFLOW_STORE_BACKEND: ${XAGENT_WORKFLOW_STORE_BACKEND:-postgres}
+      # P1-04: Neo4j knowledge graph (optional, requires --profile neo4j)
+      XAGENT_NEO4J_ENABLED: ${XAGENT_NEO4J_ENABLED:-false}
+      XAGENT_NEO4J_URI: bolt://neo4j:7687
+      XAGENT_NEO4J_USER: ${NEO4J_USER:-neo4j}
+      XAGENT_NEO4J_PASSWORD: ${NEO4J_PASSWORD:-neo4j_secure_password}
+      # UTF-8 mode for Chinese paths/content
+      PYTHONUTF8: "1"
       # P0-02: 后端无 Celery 应用(全代码库无 celery 引用), CELERY_BROKER_URL/CELERY_RESULT_BACKEND
       # 为无效配置已移除; celery 依赖在 requirements.txt 保留但标注未使用, 待真 Celery 返工。
       API_HOST: 0.0.0.0
@@ -161,8 +209,6 @@ services:
       redis:
         condition: service_healthy
       qdrant:
-        condition: service_healthy
-      neo4j:
         condition: service_healthy
     volumes:
       - ./backend:/app/backend
@@ -197,7 +243,7 @@ services:
       XAGENT_QDRANT_API_KEY: ${QDRANT_API_KEY:-qdrant_secure_key}
       XAGENT_MEMORY_BACKEND: ${XAGENT_MEMORY_BACKEND:-postgres}
       XAGENT_TRACE_BACKEND: ${XAGENT_TRACE_BACKEND:-jsonl}
-      XAGENT_LLM_BACKEND: ${XAGENT_LLM_BACKEND:-mock}
+      XAGENT_LLM_BACKEND: ${XAGENT_LLM_BACKEND:-auto}
       XAGENT_LLM_FALLBACK_ORDER: ${XAGENT_LLM_FALLBACK_ORDER:-}
       XAGENT_OPENAI_API_KEY: ${XAGENT_OPENAI_API_KEY:-}
       XAGENT_OPENAI_MODEL: ${XAGENT_OPENAI_MODEL:-gpt-4o-mini}
@@ -214,11 +260,11 @@ services:
       XAGENT_ENABLE_HIGH_RISK_TOOLS: ${XAGENT_ENABLE_HIGH_RISK_TOOLS:-false}
       XAGENT_PLAYWRIGHT_HEADLESS: ${XAGENT_PLAYWRIGHT_HEADLESS:-true}
       XAGENT_GITHUB_TOKEN: ${XAGENT_GITHUB_TOKEN:-}
+      PYTHONUTF8: "1"
     depends_on:
       - postgres
       - redis
       - qdrant
-      - neo4j
     volumes:
       - ./backend:/app/backend
       - ./logs:/app/logs
@@ -265,6 +311,8 @@ services:
 
 volumes:
   postgres_data:
+    driver: local
+  postgres_replica_data:
     driver: local
   redis_data:
     driver: local

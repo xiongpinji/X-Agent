@@ -9,14 +9,13 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from enum import Enum
-from typing import Optional
 from datetime import datetime
+from enum import Enum, StrEnum
 
 logger = logging.getLogger(__name__)
 
 
-class TaskStatus(str, Enum):
+class TaskStatus(StrEnum):
     """Task status enumeration."""
 
     PENDING = "pending"
@@ -45,16 +44,16 @@ class Task:
     description: str
     priority: TaskPriority = TaskPriority.NORMAL
     status: TaskStatus = TaskStatus.PENDING
-    assigned_agent_id: Optional[str] = None
+    assigned_agent_id: str | None = None
     created_at: datetime = field(default_factory=datetime.now)
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
     estimated_duration_seconds: int = 0
     actual_duration_seconds: int = 0
     dependencies: list[str] = field(default_factory=list)
     metadata: dict = field(default_factory=dict)
-    result: Optional[dict] = None
-    error: Optional[str] = None
+    result: dict | None = None
+    error: str | None = None
 
 
 @dataclass
@@ -89,7 +88,7 @@ class AllocationResult:
     """Result of task allocation."""
 
     task_id: str
-    assigned_agent_id: Optional[str]
+    assigned_agent_id: str | None
     allocation_score: float
     reason: str
     metadata: dict = field(default_factory=dict)
@@ -119,7 +118,7 @@ class TaskDispatcher:
         self,
         agent_id: str,
         max_concurrent_tasks: int = 5,
-        capabilities: Optional[list[str]] = None,
+        capabilities: list[str] | None = None,
     ) -> None:
         """
         Register an agent with the dispatcher.
@@ -188,7 +187,7 @@ class TaskDispatcher:
     def allocate_tasks(
         self,
         tasks: list[Task],
-        available_agents: Optional[list[str]] = None,
+        available_agents: list[str] | None = None,
     ) -> list[AllocationResult]:
         """
         Allocate tasks to available agents.
@@ -246,7 +245,7 @@ class TaskDispatcher:
         self,
         task: Task,
         available_agents: list[str],
-    ) -> Optional[str]:
+    ) -> str | None:
         """Find the best agent for a task."""
         best_agent_id = None
         best_score = -1.0
@@ -308,8 +307,8 @@ class TaskDispatcher:
         self,
         task_id: str,
         status: TaskStatus,
-        result: Optional[dict] = None,
-        error: Optional[str] = None,
+        result: dict | None = None,
+        error: str | None = None,
     ) -> bool:
         """
         Update task status.
@@ -364,13 +363,13 @@ class TaskDispatcher:
 
         return True
 
-    def get_task_status(self, task_id: str) -> Optional[TaskStatus]:
+    def get_task_status(self, task_id: str) -> TaskStatus | None:
         """Get task status."""
         if task_id in self.tasks:
             return self.tasks[task_id].status
         return None
 
-    def get_agent_load(self, agent_id: str) -> Optional[float]:
+    def get_agent_load(self, agent_id: str) -> float | None:
         """Get agent load percentage."""
         if agent_id in self.agent_capacities:
             return self.agent_capacities[agent_id].load_percentage()

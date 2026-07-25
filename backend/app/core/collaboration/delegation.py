@@ -24,8 +24,9 @@ Honesty rules enforced here:
 from __future__ import annotations
 
 import threading
+from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
-from typing import Any, Callable, Sequence
+from typing import Any
 from uuid import uuid4
 
 from pydantic import BaseModel, Field
@@ -49,7 +50,7 @@ class NoCapableAgentError(DelegationError):
     layer) should surface this as an explicit client-visible error.
     """
 
-    def __init__(self, required: Sequence[str], pool: Sequence["CandidateSpec"]) -> None:
+    def __init__(self, required: Sequence[str], pool: Sequence[CandidateSpec]) -> None:
         self.required = list(required)
         self.pool_ids = [candidate.agent_id for candidate in pool]
         super().__init__(

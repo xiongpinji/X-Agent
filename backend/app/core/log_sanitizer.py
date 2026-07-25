@@ -4,7 +4,6 @@ SECURITY: Prevents accidental exposure of sensitive data in logs.
 """
 
 import re
-from typing import Any, Optional
 
 
 class LogSanitizer:
@@ -176,9 +175,8 @@ class LogFilter:
             True to allow record, False to reject
         """
         # Sanitize message
-        if hasattr(record, "msg"):
-            if isinstance(record.msg, str):
-                record.msg = self.sanitizer.sanitize_string(record.msg)
+        if hasattr(record, "msg") and isinstance(record.msg, str):
+            record.msg = self.sanitizer.sanitize_string(record.msg)
 
         # Sanitize args
         if hasattr(record, "args"):

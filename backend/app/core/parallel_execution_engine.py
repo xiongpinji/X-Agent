@@ -1,6 +1,17 @@
 """
 Advanced Parallel Execution Engine for X-Agent.
 
+.. deprecated::
+    DEPRECATED (P1-09 convergence): This module is superseded by
+    ``backend.app.core.parallel_agent_executor`` which provides the same
+    ParallelAgentExecutor concept with real AgentLoop integration and is
+    the canonical implementation used by the production API
+    (``backend.app.api.parallel_agents``).
+
+    This module is retained ONLY for backward compatibility with existing
+    benchmarks (``parallel_execution_benchmark.py``). Do NOT add new code
+    here; use ``parallel_agent_executor`` instead.
+
 Provides:
 - ParallelAgentExecutor: Multi-agent parallel execution with intelligent task distribution
 - ParallelToolExecutor: Tool DAG execution with dependency analysis
@@ -23,18 +34,26 @@ import inspect
 import logging
 import time
 import uuid
+import warnings
 from collections import defaultdict, deque
+from collections.abc import Callable, Coroutine
 from dataclasses import dataclass, field
-from datetime import datetime, UTC, timedelta
-from enum import Enum
-from typing import Any, Callable, Coroutine, Dict, List, Optional, Set, Tuple
-from threading import RLock, Condition
-from queue import Queue as ThreadSafeQueue
+from datetime import UTC, datetime
+from enum import Enum, StrEnum
+from threading import RLock
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
+warnings.warn(
+    "backend.app.core.parallel_execution_engine is DEPRECATED (P1-09 convergence). "
+    "Use backend.app.core.parallel_agent_executor instead.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
-class ExecutionStatus(str, Enum):
+
+class ExecutionStatus(StrEnum):
     """Execution status enumeration."""
     PENDING = "pending"
     READY = "ready"
@@ -85,7 +104,7 @@ class ObjectPool:
             obj.reset()
         self.pool.append(obj)
 
-    def get_stats(self) -> Dict[str, int]:
+    def get_stats(self) -> dict[str, int]:
         """Get pool statistics."""
         return {
             "pool_size": len(self.pool),
@@ -130,14 +149,14 @@ class ExecutionMetrics:
     """Metrics for execution tracking."""
     task_id: str = ""
     start_time: datetime = field(default_factory=lambda: datetime.now(UTC))
-    end_time: Optional[datetime] = None
+    end_time: datetime | None = None
     duration_ms: float = 0.0
     attempts: int = 0
     max_attempts: int = 3
     status: ExecutionStatus = ExecutionStatus.PENDING
-    error: Optional[str] = None
-    result: Optional[Any] = None
-    resource_usage: Dict[str, float] = field(default_factory=dict)
+    error: str | None = None
+    result: Any | None = None
+    resource_usage: dict[str, float] = field(default_factory=dict)
 
     def reset(self) -> None:
         """Reset metrics for reuse."""
@@ -174,11 +193,11 @@ class ToolDefinition:
     """Definition of a tool that can be executed."""
     name: str
     handler: Callable[..., Coroutine[Any, Any, Any]]
-    dependencies: List[str] = field(default_factory=list)
+    dependencies: list[str] = field(default_factory=list)
     timeout_seconds: int = 30
     retry_count: int = 1
     priority: PriorityLevel = PriorityLevel.NORMAL
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -186,11 +205,11 @@ class ToolCall:
     """A tool call with arguments."""
     tool_id: str
     tool_name: str
-    arguments: Dict[str, Any] = field(default_factory=dict)
-    depends_on: List[str] = field(default_factory=list)
+    arguments: dict[str, Any] = field(default_factory=dict)
+    depends_on: list[str] = field(default_factory=list)
     priority: PriorityLevel = PriorityLevel.NORMAL
     timeout_seconds: int = 30
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -200,7 +219,7 @@ class Message:
     sender_id: str = ""
     recipient_id: str = ""
     message_type: str = "data"
-    payload: Dict[str, Any] = field(default_factory=dict)
+    payload: dict[str, Any] = field(default_factory=dict)
     timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
     priority: PriorityLevel = PriorityLevel.NORMAL
     requires_ack: bool = False
@@ -211,10 +230,10 @@ class DAGBuilder:
     """Builds and analyzes execution DAGs."""
 
     def __init__(self):
-        self.nodes: Dict[str, ToolCall] = {}
-        self.edges: Dict[str, Set[str]] = defaultdict(set)
-        self.in_degree: Dict[str, int] = defaultdict(int)
-        self.out_degree: Dict[str, int] = defaultdict(int)
+        self.nodes: dict[str, ToolCall] = {}
+        self.edges: dict[str, set[str]] = defaultdict(set)
+        self.in_degree: dict[str, int] = defaultdict(int)
+        self.out_degree: dict[str, int] = defaultdict(int)
 
     def add_node(self, tool_call: ToolCall) -> None:
         """Add a node to the DAG."""
@@ -230,7 +249,7 @@ class DAGBuilder:
             self.out_degree[from_id] += 1
             self.in_degree[to_id] += 1
 
-    def build_from_calls(self, tool_calls: List[ToolCall]) -> None:
+    def build_from_calls(self, tool_calls: list[ToolCall]) -> None:
         """Build DAG from tool calls."""
         for call in tool_calls:
             self.add_node(call)
@@ -239,7 +258,7 @@ class DAGBuilder:
             for dep_id in call.depends_on:
                 self.add_edge(dep_id, call.tool_id)
 
-    def get_ready_nodes(self, completed: Set[str]) -> List[str]:
+    def get_ready_nodes(self, completed: set[str]) -> list[str]:
         """Get nodes ready for execution.
 
         A node is ready when it has not completed yet and every node it
@@ -257,7 +276,7 @@ class DAGBuilder:
                 ready.append(node_id)
         return ready
 
-    def get_execution_order(self) -> List[str]:
+    def get_execution_order(self) -> list[str]:
         """Get topological sort of DAG."""
         in_degree = self.in_degree.copy()
         queue = deque([node_id for node_id, degree in in_degree.items() if degree == 0])
@@ -291,8 +310,8 @@ class AgentCommunicationBus:
 
     def __init__(self, max_queue_size: int = 1000):
         self.max_queue_size = max_queue_size
-        self.message_queues: Dict[str, LockFreeQueue] = {}
-        self.message_history: Dict[str, deque] = defaultdict(lambda: deque(maxlen=5000))
+        self.message_queues: dict[str, LockFreeQueue] = {}
+        self.message_history: dict[str, deque] = defaultdict(lambda: deque(maxlen=5000))
         self.lock = RLock()
         self.message_pool = ObjectPool(Message, initial_size=100)
 
@@ -316,7 +335,7 @@ class AgentCommunicationBus:
             logger.warning(f"Message queue full for agent {recipient_id}")
             return False
 
-    async def receive_message(self, agent_id: str, timeout_seconds: float = 5.0) -> Optional[Message]:
+    async def receive_message(self, agent_id: str, timeout_seconds: float = 5.0) -> Message | None:
         """Receive a message for an agent."""
         if agent_id not in self.message_queues:
             with self.lock:
@@ -328,10 +347,10 @@ class AgentCommunicationBus:
         try:
             message = await asyncio.wait_for(queue.get(), timeout=timeout_seconds)
             return message
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return None
 
-    async def broadcast_message(self, message: Message, agent_ids: List[str]) -> int:
+    async def broadcast_message(self, message: Message, agent_ids: list[str]) -> int:
         """Broadcast a message to multiple agents."""
         sent_count = 0
         tasks = []
@@ -352,12 +371,12 @@ class AgentCommunicationBus:
 
         return sent_count
 
-    def get_message_history(self, agent_id: str, limit: int = 100) -> List[Message]:
+    def get_message_history(self, agent_id: str, limit: int = 100) -> list[Message]:
         """Get message history for an agent."""
         history = self.message_history.get(agent_id, deque())
         return list(history)[-limit:]
 
-    def get_queue_stats(self) -> Dict[str, Any]:
+    def get_queue_stats(self) -> dict[str, Any]:
         """Get statistics about message queues."""
         stats = {}
         for agent_id, queue in self.message_queues.items():
@@ -375,9 +394,9 @@ class ParallelToolExecutor:
 
     def __init__(self, max_concurrent: int = 10):
         self.max_concurrent = max_concurrent
-        self.tools: Dict[str, ToolDefinition] = {}
-        self.metrics: Dict[str, ExecutionMetrics] = {}
-        self.results: Dict[str, Any] = {}
+        self.tools: dict[str, ToolDefinition] = {}
+        self.metrics: dict[str, ExecutionMetrics] = {}
+        self.results: dict[str, Any] = {}
         self.lock = RLock()
         self.semaphore = asyncio.Semaphore(max_concurrent)
 
@@ -387,7 +406,7 @@ class ParallelToolExecutor:
             self.tools[tool_def.name] = tool_def
             logger.info(f"Registered tool: {tool_def.name}")
 
-    async def execute_tools(self, tool_calls: List[ToolCall]) -> Dict[str, Any]:
+    async def execute_tools(self, tool_calls: list[ToolCall]) -> dict[str, Any]:
         """Execute multiple tools with dependency resolution."""
         # Build DAG
         dag = DAGBuilder()
@@ -402,7 +421,7 @@ class ParallelToolExecutor:
                 self.metrics[call.tool_id] = ExecutionMetrics(task_id=call.tool_id)
 
         # Execute in topological order
-        completed: Set[str] = set()
+        completed: set[str] = set()
         execution_order = dag.get_execution_order()
 
         for tool_id in execution_order:
@@ -411,7 +430,7 @@ class ParallelToolExecutor:
 
         return self.results.copy()
 
-    def _resolve_arguments(self, tool_call: ToolCall, tool_def: ToolDefinition) -> Dict[str, Any]:
+    def _resolve_arguments(self, tool_call: ToolCall, tool_def: ToolDefinition) -> dict[str, Any]:
         """Inject dependency results into a tool call's arguments.
 
         Tools declared via `depends_on` execute after their dependencies, but
@@ -427,7 +446,7 @@ class ParallelToolExecutor:
 
         Calls without dependencies are returned unchanged.
         """
-        args: Dict[str, Any] = dict(tool_call.arguments)
+        args: dict[str, Any] = dict(tool_call.arguments)
         if not tool_call.depends_on:
             return args
 
@@ -475,7 +494,7 @@ class ParallelToolExecutor:
 
         return args
 
-    async def _execute_tool_with_retry(self, tool_call: ToolCall, completed: Set[str]) -> None:
+    async def _execute_tool_with_retry(self, tool_call: ToolCall, completed: set[str]) -> None:
         """Execute a tool with retry logic."""
         tool_def = self.tools.get(tool_call.tool_name)
         if not tool_def:
@@ -503,7 +522,7 @@ class ParallelToolExecutor:
                 logger.info(f"Tool {tool_call.tool_name} completed in {metrics.duration_ms:.2f}ms")
                 return
 
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 error_msg = f"Timeout after {tool_def.timeout_seconds}s"
                 if attempt < tool_def.retry_count:
                     logger.warning(f"Tool {tool_call.tool_name} timed out, retrying...")
@@ -521,12 +540,12 @@ class ParallelToolExecutor:
                     metrics.mark_failed(error_msg)
                     raise
 
-    def get_metrics(self) -> Dict[str, ExecutionMetrics]:
+    def get_metrics(self) -> dict[str, ExecutionMetrics]:
         """Get execution metrics."""
         with self.lock:
             return self.metrics.copy()
 
-    def get_execution_stats(self) -> Dict[str, Any]:
+    def get_execution_stats(self) -> dict[str, Any]:
         """Get execution statistics."""
         with self.lock:
             metrics_list = list(self.metrics.values())
@@ -548,13 +567,13 @@ class ParallelToolExecutor:
 class ParallelAgentExecutor:
     """Executes multiple agents in parallel with intelligent task distribution."""
 
-    def __init__(self, max_agents: int = 10, communication_bus: Optional[AgentCommunicationBus] = None):
+    def __init__(self, max_agents: int = 10, communication_bus: AgentCommunicationBus | None = None):
         self.max_agents = max_agents
         self.communication_bus = communication_bus or AgentCommunicationBus()
-        self.agents: Dict[str, Any] = {}
-        self.agent_tasks: Dict[str, List[str]] = defaultdict(list)
-        self.agent_results: Dict[str, Any] = {}
-        self.agent_metrics: Dict[str, Dict[str, Any]] = {}
+        self.agents: dict[str, Any] = {}
+        self.agent_tasks: dict[str, list[str]] = defaultdict(list)
+        self.agent_results: dict[str, Any] = {}
+        self.agent_metrics: dict[str, dict[str, Any]] = {}
         self.lock = RLock()
         self.semaphore = asyncio.Semaphore(max_agents)
 
@@ -574,10 +593,10 @@ class ParallelAgentExecutor:
 
     async def execute_agents(
         self,
-        agent_ids: List[str],
+        agent_ids: list[str],
         task: str,
-        context: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, Any]:
+        context: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         """Execute multiple agents in parallel."""
         context = context or {}
 
@@ -596,7 +615,7 @@ class ParallelAgentExecutor:
         results = await asyncio.gather(*tasks, return_exceptions=False)
 
         with self.lock:
-            for agent_id, result in zip(agent_ids, results):
+            for agent_id, result in zip(agent_ids, results, strict=False):
                 self.agent_results[agent_id] = result
 
         return self.agent_results.copy()
@@ -605,7 +624,7 @@ class ParallelAgentExecutor:
         self,
         agent_id: str,
         task: str,
-        context: Dict[str, Any],
+        context: dict[str, Any],
     ) -> Any:
         """Execute a single agent safely."""
         async with self.semaphore:
@@ -631,7 +650,7 @@ class ParallelAgentExecutor:
                 logger.error(f"Agent {agent_id} failed: {e}")
                 raise
 
-    async def _call_agent(self, agent: Any, task: str, context: Dict[str, Any]) -> Any:
+    async def _call_agent(self, agent: Any, task: str, context: dict[str, Any]) -> Any:
         """Call an agent's run method."""
         if hasattr(agent, "run") and callable(agent.run):
             if asyncio.iscoroutinefunction(agent.run):
@@ -641,12 +660,12 @@ class ParallelAgentExecutor:
         else:
             raise ValueError("Agent does not have a callable run method")
 
-    def get_agent_metrics(self) -> Dict[str, Dict[str, Any]]:
+    def get_agent_metrics(self) -> dict[str, dict[str, Any]]:
         """Get metrics for all agents."""
         with self.lock:
             return self.agent_metrics.copy()
 
-    def get_execution_stats(self) -> Dict[str, Any]:
+    def get_execution_stats(self) -> dict[str, Any]:
         """Get execution statistics."""
         with self.lock:
             metrics_list = list(self.agent_metrics.values())
@@ -671,9 +690,9 @@ class TaskScheduler:
     def __init__(self, max_concurrent: int = 10):
         self.max_concurrent = max_concurrent
         self.task_queue: asyncio.PriorityQueue = asyncio.PriorityQueue()
-        self.running_tasks: Dict[str, asyncio.Task] = {}
-        self.completed_tasks: Set[str] = set()
-        self.failed_tasks: Dict[str, str] = {}
+        self.running_tasks: dict[str, asyncio.Task] = {}
+        self.completed_tasks: set[str] = set()
+        self.failed_tasks: dict[str, str] = {}
         self.lock = RLock()
 
     async def schedule_task(
@@ -731,7 +750,7 @@ class TaskScheduler:
                 self.failed_tasks[task_id] = str(e)
             logger.error(f"Task {task_id} failed: {e}")
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Get scheduler statistics."""
         with self.lock:
             return {
@@ -747,8 +766,8 @@ class ExecutionMonitor:
     """Monitors and collects metrics for parallel execution."""
 
     def __init__(self):
-        self.execution_history: List[Dict[str, Any]] = []
-        self.performance_metrics: Dict[str, List[float]] = defaultdict(list)
+        self.execution_history: list[dict[str, Any]] = []
+        self.performance_metrics: dict[str, list[float]] = defaultdict(list)
         self.lock = RLock()
 
     def record_execution(
@@ -756,7 +775,7 @@ class ExecutionMonitor:
         execution_id: str,
         duration_ms: float,
         status: ExecutionStatus,
-        resource_usage: Optional[Dict[str, float]] = None,
+        resource_usage: dict[str, float] | None = None,
     ) -> None:
         """Record an execution."""
         with self.lock:
@@ -774,7 +793,7 @@ class ExecutionMonitor:
             if len(self.execution_history) > 10000:
                 self.execution_history = self.execution_history[-5000:]
 
-    def get_performance_stats(self) -> Dict[str, Any]:
+    def get_performance_stats(self) -> dict[str, Any]:
         """Get performance statistics."""
         with self.lock:
             durations = self.performance_metrics.get("duration_ms", [])
@@ -792,7 +811,7 @@ class ExecutionMonitor:
                 "p99_duration_ms": sorted(durations)[int(len(durations) * 0.99)],
             }
 
-    def get_execution_history(self, limit: int = 100) -> List[Dict[str, Any]]:
+    def get_execution_history(self, limit: int = 100) -> list[dict[str, Any]]:
         """Get execution history."""
         with self.lock:
             return self.execution_history[-limit:]

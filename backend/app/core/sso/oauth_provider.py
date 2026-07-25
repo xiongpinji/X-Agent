@@ -2,13 +2,10 @@
 
 from __future__ import annotations
 
-import hashlib
-import json
 import logging
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
-from enum import Enum
-from typing import Any
+from enum import StrEnum
 from uuid import uuid4
 
 import httpx
@@ -17,7 +14,7 @@ from pydantic import BaseModel, Field
 logger = logging.getLogger(__name__)
 
 
-class OAuthProvider(str, Enum):
+class OAuthProvider(StrEnum):
     """Supported OAuth providers."""
 
     GOOGLE = "google"

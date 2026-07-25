@@ -13,7 +13,7 @@ export interface StreamEvent {
   sequence?: number;
 }
 
-export interface MessageEvent extends StreamEvent {
+export interface SSEMessageEvent extends StreamEvent {
   event_type: 'message';
   content: string;
   role: 'assistant' | 'user' | 'system';
@@ -59,7 +59,7 @@ export interface CompletionEvent extends StreamEvent {
 }
 
 export type AnyStreamEvent =
-  | MessageEvent
+  | SSEMessageEvent
   | ToolCallEvent
   | ToolResultEvent
   | ProgressEvent
@@ -125,8 +125,10 @@ export class SSEClient {
         this.handleMessage(event, onMessage, onError);
       });
 
-      this.eventSource.addEventListener('error', (event) => {
-        this.handleMessage(event, onMessage, onError);
+      this.eventSource.addEventListener('error', (_event) => {
+        // SSE error events are generic Event, not MessageEvent
+        const err = new Error('SSE connection error');
+        onError?.(err);
       });
 
       this.eventSource.addEventListener('completion', (event) => {
@@ -163,7 +165,7 @@ export class SSEClient {
   }
 
   private handleMessage(
-    event: MessageEvent,
+    event: globalThis.MessageEvent,
     onMessage: (event: AnyStreamEvent) => void,
     onError?: (error: Error) => void
   ): void {

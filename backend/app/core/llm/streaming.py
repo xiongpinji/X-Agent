@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Any, AsyncIterator, Optional, Callable
-from datetime import datetime
 import asyncio
 import json
+from collections.abc import AsyncIterator, Callable
+from dataclasses import dataclass, field
+from datetime import datetime
+from typing import Any
 
 
 @dataclass
@@ -30,7 +31,7 @@ class StreamingResponse:
     start_time: datetime = field(default_factory=datetime.now)
     chunks: list[StreamChunk] = field(default_factory=list)
     is_complete: bool = False
-    error: Optional[str] = None
+    error: str | None = None
     total_tokens: int = 0
 
     def add_chunk(self, chunk: StreamChunk) -> None:
@@ -80,7 +81,7 @@ class StreamManager:
         self.active_streams[request_id] = stream
         return stream
 
-    def get_stream(self, request_id: str) -> Optional[StreamingResponse]:
+    def get_stream(self, request_id: str) -> StreamingResponse | None:
         """Get an active stream."""
         return self.active_streams.get(request_id)
 
@@ -91,7 +92,7 @@ class StreamManager:
             stream.add_chunk(chunk)
             self._notify_callbacks(chunk)
 
-    def complete_stream(self, request_id: str) -> Optional[StreamingResponse]:
+    def complete_stream(self, request_id: str) -> StreamingResponse | None:
         """Mark a stream as complete and return it."""
         stream = self.get_stream(request_id)
         if stream:
@@ -100,7 +101,7 @@ class StreamManager:
             return stream
         return None
 
-    def error_stream(self, request_id: str, error: str) -> Optional[StreamingResponse]:
+    def error_stream(self, request_id: str, error: str) -> StreamingResponse | None:
         """Mark a stream as errored."""
         stream = self.get_stream(request_id)
         if stream:

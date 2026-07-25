@@ -4,12 +4,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from enum import Enum
-from typing import Optional
+from enum import StrEnum
 from uuid import uuid4
 
 
-class PostStatus(str, Enum):
+class PostStatus(StrEnum):
     """Post status enumeration."""
     DRAFT = "draft"
     PUBLISHED = "published"
@@ -17,7 +16,7 @@ class PostStatus(str, Enum):
     DELETED = "deleted"
 
 
-class ModerationStatus(str, Enum):
+class ModerationStatus(StrEnum):
     """Content moderation status."""
     PENDING = "pending"
     APPROVED = "approved"
@@ -25,7 +24,7 @@ class ModerationStatus(str, Enum):
     FLAGGED = "flagged"
 
 
-class UserReputation(str, Enum):
+class UserReputation(StrEnum):
     """User reputation levels."""
     NEWBIE = "newbie"  # 0-50 points
     MEMBER = "member"  # 50-200 points
@@ -88,7 +87,7 @@ class ForumComment:
     content: str = ""
     author_id: str = ""
     author_name: str = ""
-    parent_comment_id: Optional[str] = None  # For nested replies
+    parent_comment_id: str | None = None  # For nested replies
     status: PostStatus = PostStatus.PUBLISHED
     moderation_status: ModerationStatus = ModerationStatus.APPROVED
     created_at: datetime = field(default_factory=datetime.utcnow)
@@ -117,7 +116,7 @@ class ForumComment:
 
 
 @dataclass
-class UserReputation:
+class UserReputationProfile:
     """User reputation model."""
     user_id: str = ""
     username: str = ""
@@ -151,8 +150,8 @@ class UserLike:
     """User like/vote model."""
     id: str = field(default_factory=lambda: str(uuid4()))
     user_id: str = ""
-    post_id: Optional[str] = None
-    comment_id: Optional[str] = None
+    post_id: str | None = None
+    comment_id: str | None = None
     created_at: datetime = field(default_factory=datetime.utcnow)
 
     def model_dump(self, mode: str = "python") -> dict:
@@ -265,7 +264,7 @@ class ForumStore:
         """Initialize forum store."""
         self.posts: dict[str, ForumPost] = {}
         self.comments: dict[str, ForumComment] = {}
-        self.user_reputations: dict[str, UserReputation] = {}
+        self.user_reputations: dict[str, UserReputationProfile] = {}
         self.likes: dict[str, UserLike] = {}
         self.bookmarks: dict[str, UserBookmark] = {}
         self.follows: dict[str, UserFollow] = {}
@@ -279,14 +278,14 @@ class ForumStore:
         self._update_user_reputation(post.author_id, 10)  # +10 points for posting
         return post
 
-    def get_post(self, post_id: str) -> Optional[ForumPost]:
+    def get_post(self, post_id: str) -> ForumPost | None:
         """Get a post by ID."""
         post = self.posts.get(post_id)
         if post:
             post.view_count += 1
         return post
 
-    def update_post(self, post_id: str, post: ForumPost) -> Optional[ForumPost]:
+    def update_post(self, post_id: str, post: ForumPost) -> ForumPost | None:
         """Update a post."""
         if post_id in self.posts:
             post.updated_at = datetime.utcnow()
@@ -303,8 +302,8 @@ class ForumStore:
 
     def list_posts(
         self,
-        category: Optional[str] = None,
-        tag: Optional[str] = None,
+        category: str | None = None,
+        tag: str | None = None,
         status: PostStatus = PostStatus.PUBLISHED,
         limit: int = 20,
         offset: int = 0,
@@ -346,7 +345,7 @@ class ForumStore:
         self._update_user_reputation(comment.author_id, 5)  # +5 points for commenting
         return comment
 
-    def get_comment(self, comment_id: str) -> Optional[ForumComment]:
+    def get_comment(self, comment_id: str) -> ForumComment | None:
         """Get a comment by ID."""
         return self.comments.get(comment_id)
 
@@ -362,7 +361,7 @@ class ForumStore:
         total = len(comments)
         return comments[offset : offset + limit], total
 
-    def update_comment(self, comment_id: str, comment: ForumComment) -> Optional[ForumComment]:
+    def update_comment(self, comment_id: str, comment: ForumComment) -> ForumComment | None:
         """Update a comment."""
         if comment_id in self.comments:
             comment.updated_at = datetime.utcnow()
@@ -480,14 +479,14 @@ class ForumStore:
         return [f.following_id for f in self.follows.values() if f.follower_id == user_id]
 
     # Reputation operations
-    def get_user_reputation(self, user_id: str) -> Optional[UserReputation]:
+    def get_user_reputation(self, user_id: str) -> UserReputationProfile | None:
         """Get user reputation."""
         return self.user_reputations.get(user_id)
 
     def _update_user_reputation(self, user_id: str, points: int) -> None:
         """Update user reputation points."""
         if user_id not in self.user_reputations:
-            self.user_reputations[user_id] = UserReputation(user_id=user_id)
+            self.user_reputations[user_id] = UserReputationProfile(user_id=user_id)
 
         rep = self.user_reputations[user_id]
         rep.reputation_points += points
@@ -550,9 +549,8 @@ class ForumStore:
 
             elif rule.rule_type == "length":
                 max_length = int(rule.pattern)
-                if len(content) > max_length:
-                    if rule.action == "reject":
-                        return ModerationStatus.REJECTED, f"Content exceeds maximum length: {rule.name}"
+                if len(content) > max_length and rule.action == "reject":
+                    return ModerationStatus.REJECTED, f"Content exceeds maximum length: {rule.name}"
 
         return ModerationStatus.APPROVED, ""
 

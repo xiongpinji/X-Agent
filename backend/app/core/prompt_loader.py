@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import re
-from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -61,7 +60,7 @@ class PromptVersionManager:
 class PromptLoader:
     """Loads prompts from files with variable substitution and validation."""
 
-    def __init__(self, base_path: str | Path = None):
+    def __init__(self, base_path: str | Path | None = None):
         """Initialize loader with optional base path."""
         self.base_path = Path(base_path) if base_path else Path(__file__).parent.parent.parent / "prompts"
         self._cache: dict[str, PromptSchema] = {}

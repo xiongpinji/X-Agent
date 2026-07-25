@@ -7,7 +7,6 @@ from pydantic import BaseModel, Field
 
 from backend.app.api.errors import api_error
 from backend.app.core.contracts import ErrorCode, RunContext
-from backend.app.core.memory import MemoryConsolidationResult
 from backend.app.core.security import Principal
 from backend.app.dependencies import enforce_scope, get_current_principal, get_memory
 

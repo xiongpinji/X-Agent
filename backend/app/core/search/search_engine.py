@@ -2,14 +2,15 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any
+
 import httpx
 
 
 class SearchEngine:
     """Base search engine class."""
 
-    async def search(self, query: str, num_results: int = 10) -> List[Dict[str, Any]]:
+    async def search(self, query: str, num_results: int = 10) -> list[dict[str, Any]]:
         """Search for results.
 
         Args:
@@ -36,7 +37,7 @@ class GoogleSearch(SearchEngine):
         self.cx = cx
         self.client = httpx.AsyncClient()
 
-    async def search(self, query: str, num_results: int = 10) -> List[Dict[str, Any]]:
+    async def search(self, query: str, num_results: int = 10) -> list[dict[str, Any]]:
         """Search using Google Custom Search API.
 
         Args:
@@ -70,7 +71,7 @@ class GoogleSearch(SearchEngine):
 
             return results
         except Exception as e:
-            raise RuntimeError(f"Google search failed: {str(e)}")
+            raise RuntimeError(f"Google search failed: {e!s}")
 
     async def close(self) -> None:
         """Close the client."""
@@ -84,7 +85,7 @@ class DuckDuckGoSearch(SearchEngine):
         """Initialize DuckDuckGo Search."""
         self.client = httpx.AsyncClient()
 
-    async def search(self, query: str, num_results: int = 10) -> List[Dict[str, Any]]:
+    async def search(self, query: str, num_results: int = 10) -> list[dict[str, Any]]:
         """Search using DuckDuckGo.
 
         Args:
@@ -115,7 +116,7 @@ class BingSearch(SearchEngine):
         self.api_key = api_key
         self.client = httpx.AsyncClient()
 
-    async def search(self, query: str, num_results: int = 10) -> List[Dict[str, Any]]:
+    async def search(self, query: str, num_results: int = 10) -> list[dict[str, Any]]:
         """Search using Bing Search API.
 
         Args:
@@ -145,7 +146,7 @@ class BingSearch(SearchEngine):
 
             return results
         except Exception as e:
-            raise RuntimeError(f"Bing search failed: {str(e)}")
+            raise RuntimeError(f"Bing search failed: {e!s}")
 
     async def close(self) -> None:
         """Close the client."""

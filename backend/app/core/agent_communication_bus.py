@@ -13,17 +13,15 @@ Features:
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
-import time
 import uuid
-from dataclasses import dataclass, field
-from datetime import datetime, UTC
-from enum import StrEnum
-from typing import Any, Callable, Optional
 from collections import defaultdict
-from heapq import heappush, heappop
-
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
+from enum import StrEnum
+from heapq import heappop, heappush
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -51,16 +49,16 @@ class Message:
     """Represents a message in the communication bus."""
     message_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     from_agent: str = ""
-    to_agent: Optional[str] = None
+    to_agent: str | None = None
     message_type: MessageType = MessageType.DIRECT
-    topic: Optional[str] = None
+    topic: str | None = None
     content: Any = None
     priority: MessagePriority = MessagePriority.NORMAL
     timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
-    correlation_id: Optional[str] = None
-    reply_to: Optional[str] = None
+    correlation_id: str | None = None
+    reply_to: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
-    ttl_seconds: Optional[int] = None
+    ttl_seconds: int | None = None
     delivered: bool = False
     delivery_attempts: int = 0
 
@@ -121,7 +119,7 @@ class MessageQueue:
         heappush(self.messages, (priority_rank, self._counter, message))
         self._counter += 1
 
-    def get(self) -> Optional[Message]:
+    def get(self) -> Message | None:
         """Get highest priority message from queue."""
         if not self.messages:
             return None
@@ -197,10 +195,10 @@ class AgentCommunicationBus:
         to_agent: str,
         content: Any,
         priority: MessagePriority = MessagePriority.NORMAL,
-        correlation_id: Optional[str] = None,
-        reply_to: Optional[str] = None,
-        ttl_seconds: Optional[int] = None,
-        metadata: Optional[dict[str, Any]] = None,
+        correlation_id: str | None = None,
+        reply_to: str | None = None,
+        ttl_seconds: int | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> str:
         """
         Send a direct message from one agent to another.
@@ -256,9 +254,9 @@ class AgentCommunicationBus:
         from_agent: str,
         content: Any,
         priority: MessagePriority = MessagePriority.NORMAL,
-        exclude_agents: Optional[list[str]] = None,
-        ttl_seconds: Optional[int] = None,
-        metadata: Optional[dict[str, Any]] = None,
+        exclude_agents: list[str] | None = None,
+        ttl_seconds: int | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> str:
         """
         Broadcast a message to all agents.
@@ -297,10 +295,10 @@ class AgentCommunicationBus:
         self,
         topic: str,
         content: Any,
-        from_agent: Optional[str] = None,
+        from_agent: str | None = None,
         priority: MessagePriority = MessagePriority.NORMAL,
-        ttl_seconds: Optional[int] = None,
-        metadata: Optional[dict[str, Any]] = None,
+        ttl_seconds: int | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> str:
         """
         Publish a message to a topic.
@@ -343,7 +341,7 @@ class AgentCommunicationBus:
         self,
         agent_id: str,
         topic: str,
-        handler: Optional[Callable] = None,
+        handler: Callable | None = None,
     ) -> None:
         """
         Subscribe an agent to a topic.
@@ -376,7 +374,7 @@ class AgentCommunicationBus:
 
         logger.debug(f"Agent {agent_id} unsubscribed from topic {topic}")
 
-    async def receive_message(self, agent_id: str) -> Optional[Message]:
+    async def receive_message(self, agent_id: str) -> Message | None:
         """
         Receive the next message for an agent.
 
@@ -396,7 +394,7 @@ class AgentCommunicationBus:
 
         return message
 
-    async def receive_broadcast(self) -> Optional[Message]:
+    async def receive_broadcast(self) -> Message | None:
         """
         Receive the next broadcast message.
 
@@ -412,7 +410,7 @@ class AgentCommunicationBus:
 
         return message
 
-    async def receive_topic_message(self, topic: str) -> Optional[Message]:
+    async def receive_topic_message(self, topic: str) -> Message | None:
         """
         Receive the next message for a topic.
 
@@ -494,8 +492,8 @@ class AgentCommunicationBus:
     async def get_message_history(
         self,
         limit: int = 100,
-        agent_id: Optional[str] = None,
-        topic: Optional[str] = None,
+        agent_id: str | None = None,
+        topic: str | None = None,
     ) -> list[Message]:
         """
         Get message history with optional filtering.

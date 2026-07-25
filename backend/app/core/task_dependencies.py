@@ -7,9 +7,8 @@ Manages task dependencies and execution order.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
-from typing import Optional, Dict, List, Set
 from collections import defaultdict, deque
+from dataclasses import dataclass, field
 
 logger = logging.getLogger(__name__)
 
@@ -19,8 +18,8 @@ class TaskDependency:
     """Represents a task dependency."""
 
     task_id: str
-    depends_on: List[str] = field(default_factory=list)
-    dependents: List[str] = field(default_factory=list)
+    depends_on: list[str] = field(default_factory=list)
+    dependents: list[str] = field(default_factory=list)
 
 
 class TaskDependencyManager:
@@ -32,7 +31,7 @@ class TaskDependencyManager:
 
     def __init__(self):
         """Initialize the dependency manager."""
-        self.dependencies: Dict[str, TaskDependency] = {}
+        self.dependencies: dict[str, TaskDependency] = {}
         self.logger = logger
 
     def add_task(self, task_id: str) -> None:
@@ -84,7 +83,7 @@ class TaskDependencyManager:
     def add_dependencies(
         self,
         task_id: str,
-        depends_on: List[str],
+        depends_on: list[str],
     ) -> bool:
         """
         Add multiple dependencies for a task.
@@ -131,7 +130,7 @@ class TaskDependencyManager:
 
         return False
 
-    def resolve_dependencies(self, task_id: str) -> List[str]:
+    def resolve_dependencies(self, task_id: str) -> list[str]:
         """
         Get all dependencies for a task (transitive closure).
 
@@ -165,7 +164,7 @@ class TaskDependencyManager:
 
         return all_deps
 
-    def get_execution_order(self, task_ids: List[str]) -> List[str]:
+    def get_execution_order(self, task_ids: list[str]) -> list[str]:
         """
         Get execution order for tasks (topological sort).
 
@@ -214,7 +213,7 @@ class TaskDependencyManager:
 
         return result
 
-    def get_ready_tasks(self, task_ids: List[str], completed_tasks: Set[str]) -> List[str]:
+    def get_ready_tasks(self, task_ids: list[str], completed_tasks: set[str]) -> list[str]:
         """
         Get tasks that are ready to execute.
 
@@ -238,7 +237,7 @@ class TaskDependencyManager:
 
         return ready
 
-    def get_blocked_tasks(self, task_ids: List[str], completed_tasks: Set[str]) -> List[str]:
+    def get_blocked_tasks(self, task_ids: list[str], completed_tasks: set[str]) -> list[str]:
         """
         Get tasks that are blocked by incomplete dependencies.
 
@@ -262,7 +261,7 @@ class TaskDependencyManager:
 
         return blocked
 
-    def get_dependents(self, task_id: str) -> List[str]:
+    def get_dependents(self, task_id: str) -> list[str]:
         """
         Get all tasks that depend on this task.
 
@@ -277,7 +276,7 @@ class TaskDependencyManager:
 
         return self.dependencies[task_id].dependents.copy()
 
-    def get_dependencies(self, task_id: str) -> List[str]:
+    def get_dependencies(self, task_id: str) -> list[str]:
         """
         Get direct dependencies for a task.
 
@@ -350,7 +349,7 @@ class TaskDependencyManager:
 
         return False
 
-    def _has_cycle(self, task_ids: List[str]) -> bool:
+    def _has_cycle(self, task_ids: list[str]) -> bool:
         """
         Check if there's a cycle in the dependency graph.
 
@@ -380,14 +379,9 @@ class TaskDependencyManager:
             rec_stack.remove(node)
             return False
 
-        for node in task_ids:
-            if node not in visited:
-                if visit(node):
-                    return True
+        return any(node not in visited and visit(node) for node in task_ids)
 
-        return False
-
-    def get_dependency_graph(self) -> Dict[str, List[str]]:
+    def get_dependency_graph(self) -> dict[str, list[str]]:
         """
         Get the complete dependency graph.
 
@@ -399,7 +393,7 @@ class TaskDependencyManager:
             for task_id, dep in self.dependencies.items()
         }
 
-    def get_stats(self) -> Dict[str, int]:
+    def get_stats(self) -> dict[str, int]:
         """
         Get dependency graph statistics.
 

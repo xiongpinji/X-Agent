@@ -1,0 +1,97 @@
+Advanced Browser Monitoring Examples
+
+==================================================
+
+=== Network Monitoring Example ===
+
+
+==================================================
+
+=== Element Reference Example ===
+
+
+==================================================
+
+=== Console Monitoring Example ===
+
+
+==================================================
+
+=== Natural Language Locator Example ===
+
+
+==================================================
+
+=== Page Snapshot Example ===
+
+
+==================================================
+
+=== Complete Workflow Example ===
+
+
+    # 1. Create session with monitoring
+    session = await advanced_browser_monitoring.create_session("session_1", page)
+
+    # 2. Navigate to page
+    await page.goto("https://example.com/search")
+
+    # 3. Capture initial state
+    await advanced_browser_monitoring.capture_snapshot(
+        "session_1",
+        label="initial"
+    )
+
+    # 4. Find search input using natural language
+    elements = await advanced_browser_monitoring.find_elements_by_description(
+        "session_1",
+        "search input",
+        limit=1
+    )
+
+    # 5. Build element tree to get references
+    tree = await advanced_browser_monitoring.build_element_tree("session_1")
+
+    # 6. Fill search input
+    if elements:
+        await page.fill(elements[0]['selector'], "test query")
+
+    # 7. Find and click search button
+    buttons = await advanced_browser_monitoring.find_elements_by_description(
+        "session_1",
+        "search button",
+        limit=1
+    )
+    if buttons:
+        await page.click(buttons[0]['selector'])
+
+    # 8. Wait for results
+    await page.wait_for_load_state("networkidle")
+
+    # 9. Capture final state
+    await advanced_browser_monitoring.capture_snapshot(
+        "session_1",
+        label="after_search"
+    )
+
+    # 10. Compare states
+    diff = await advanced_browser_monitoring.compare_snapshots(
+        "session_1",
+        "initial",
+        "after_search"
+    )
+    print(f"Page changed: {diff['dom_changed']}")
+
+    # 11. Check for errors
+    errors = await advanced_browser_monitoring.get_console_errors("session_1")
+    if errors:
+        print(f"Found {len(errors)} console errors")
+
+    # 12. Get network summary
+    summary = await advanced_browser_monitoring.get_network_summary("session_1")
+    print(f"Network requests: {summary['total_requests']}")
+    print(f"Failed requests: {summary['failed_responses']}")
+
+    # 13. Close session
+    await advanced_browser_monitoring.close_session("session_1")
+    

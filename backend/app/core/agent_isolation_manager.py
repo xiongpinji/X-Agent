@@ -14,19 +14,18 @@ from __future__ import annotations
 import asyncio
 import logging
 import multiprocessing as mp
-import os
-import psutil
 import shutil
 import subprocess
 import tempfile
 import threading
 from dataclasses import dataclass, field
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 from uuid import uuid4
 
+import psutil
 
 logger = logging.getLogger(__name__)
 
@@ -54,10 +53,10 @@ class IsolatedEnvironment:
     agent_id: str = ""
     isolation_type: IsolationType = IsolationType.THREAD
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
-    process: Optional[mp.Process] = None
-    thread: Optional[threading.Thread] = None
-    worktree_path: Optional[Path] = None
-    temp_dir: Optional[Path] = None
+    process: mp.Process | None = None
+    thread: threading.Thread | None = None
+    worktree_path: Path | None = None
+    temp_dir: Path | None = None
     resource_limits: ResourceLimits = field(default_factory=ResourceLimits)
     is_active: bool = False
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -106,7 +105,7 @@ class AgentIsolationManager:
         self,
         agent_id: str,
         isolation_type: IsolationType = IsolationType.THREAD,
-        resource_limits: Optional[ResourceLimits] = None,
+        resource_limits: ResourceLimits | None = None,
     ) -> IsolatedEnvironment:
         """
         Create an isolated execution environment.
@@ -257,7 +256,7 @@ class AgentIsolationManager:
             except Exception as e:
                 logger.error(f"Error during environment cleanup: {e}", exc_info=True)
 
-    async def get_environment(self, env_id: str) -> Optional[IsolatedEnvironment]:
+    async def get_environment(self, env_id: str) -> IsolatedEnvironment | None:
         """Get an environment by ID."""
         async with self._lock:
             return self.environments.get(env_id)

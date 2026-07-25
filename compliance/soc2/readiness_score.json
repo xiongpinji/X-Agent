@@ -1,0 +1,75 @@
+{
+  "generated_at": "2026-07-24T12:21:50.785424+00:00",
+  "overall_readiness": "93.3%",
+  "verification_method": "automated (backend.app.core.compliance_evidence)",
+  "dimensions": {
+    "technical_controls": {
+      "score": 93.3,
+      "note": "Auto-verified via evidence collector",
+      "controls_verified": 18
+    },
+    "access_control": {
+      "score": 60.0,
+      "note": "RBAC, JWT, tenant isolation, SSO/SCIM"
+    },
+    "encryption": {
+      "score": 100.0,
+      "note": "KMS, encryption at rest/in transit"
+    },
+    "audit_trail": {
+      "score": 100.0,
+      "note": "HMAC chain, rotation, WORM retention"
+    },
+    "availability": {
+      "score": 100.0,
+      "note": "Monitoring, backup, DR, circuit breakers"
+    },
+    "change_management": {
+      "score": 100.0,
+      "note": "CI/CD, code review, automated testing"
+    },
+    "risk_mitigation": {
+      "score": 100.0,
+      "note": "Vulnerability mgmt, GDPR, data retention"
+    }
+  },
+  "evidence_summary": {
+    "total_categories": 6,
+    "passed": 5,
+    "partial": 1,
+    "failed": 0,
+    "controls_verified": [
+      "CC6.1",
+      "CC6.2",
+      "CC6.3",
+      "CC6.4",
+      "CC6.5",
+      "CC6.6",
+      "CC6.7",
+      "CC7.1",
+      "CC7.2",
+      "CC7.3",
+      "CC7.4",
+      "CC8.1",
+      "CC8.2",
+      "CC8.3",
+      "CC8.4",
+      "CC9.1",
+      "CC9.2",
+      "CC9.3"
+    ],
+    "controls_count": 18
+  },
+  "blockers": [
+    "管理层审批策略文档",
+    "积累 3-6 个月运营证据",
+    "聘请 CPA 事务所执行审计",
+    "安排第三方渗透测试"
+  ],
+  "recommended_timeline": {
+    "week_1_2": "管理层审批策略文档 + 全员培训",
+    "week_3_4": "补充手动证据 + 运营记录积累",
+    "month_2_3": "内部审计 + 差距修复",
+    "month_4_6": "外部审计 (SOC 2 Type I)"
+  }
+}

@@ -7,9 +7,10 @@ including task dependencies, progress tracking, and status management.
 
 from __future__ import annotations
 
+import contextlib
 import logging
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Annotated, Any
 from uuid import uuid4
 
@@ -25,7 +26,7 @@ router = APIRouter(prefix="/api/v1/tasks", tags=["tasks"])
 PrincipalDependency = Annotated[Principal, Depends(get_current_principal)]
 
 
-class TaskStatus(str, Enum):
+class TaskStatus(StrEnum):
     """Task status enumeration."""
     PENDING = "pending"
     IN_PROGRESS = "in_progress"
@@ -34,7 +35,7 @@ class TaskStatus(str, Enum):
     CANCELLED = "cancelled"
 
 
-class TaskPriority(str, Enum):
+class TaskPriority(StrEnum):
     """Task priority levels."""
     LOW = "low"
     MEDIUM = "medium"
@@ -178,10 +179,8 @@ class TaskStore:
         if task_id in self.tasks:
             task = self.tasks.pop(task_id)
             if task.run_id and task.run_id in self.task_index:
-                try:
+                with contextlib.suppress(ValueError):
                     self.task_index[task.run_id].remove(task_id)
-                except ValueError:
-                    pass
             return True
         return False
 

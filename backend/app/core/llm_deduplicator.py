@@ -12,8 +12,9 @@ import asyncio
 import hashlib
 import logging
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -129,7 +130,7 @@ class LLMDeduplicator:
     async def _get_embedding(
         self,
         text: str,
-        embedding_func: Optional[Callable[[str], Any]] = None,
+        embedding_func: Callable[[str], Any] | None = None,
     ) -> list[float]:
         """Get embedding for text, using cache if available."""
         text_hash = hashlib.md5(text.encode()).hexdigest()
@@ -178,7 +179,7 @@ class LLMDeduplicator:
         vec1 = vec1[:min_len]
         vec2 = vec2[:min_len]
 
-        dot_product = sum(a * b for a, b in zip(vec1, vec2))
+        dot_product = sum(a * b for a, b in zip(vec1, vec2, strict=False))
         norm1 = sum(a * a for a in vec1) ** 0.5
         norm2 = sum(b * b for b in vec2) ** 0.5
 
@@ -190,8 +191,8 @@ class LLMDeduplicator:
     async def check_semantic_similarity(
         self,
         messages: list[dict[str, str]],
-        embedding_func: Optional[Callable[[str], Any]] = None,
-    ) -> Optional[RequestSignature]:
+        embedding_func: Callable[[str], Any] | None = None,
+    ) -> RequestSignature | None:
         """Check if similar request exists in in-flight requests.
 
         Returns the signature of a similar in-flight request if found.
@@ -207,11 +208,11 @@ class LLMDeduplicator:
             return None
 
         # Get embedding for current request
-        current_embedding = await self._get_embedding(main_content, embedding_func)
+        await self._get_embedding(main_content, embedding_func)
 
         # Check against in-flight requests
         async with self._in_flight_lock:
-            for signature in self._in_flight.keys():
+            for _signature in self._in_flight:
                 # Extract content from signature (we need to store it)
                 # For now, we'll skip semantic matching for in-flight
                 pass
@@ -312,8 +313,8 @@ class LLMDeduplicator:
     async def get_in_flight_response(
         self,
         signature: RequestSignature,
-        timeout: Optional[float] = None,
-    ) -> Optional[Any]:
+        timeout: float | None = None,
+    ) -> Any | None:
         """Get response from an in-flight request.
 
         Returns None if request is not in flight or times out.
@@ -327,7 +328,7 @@ class LLMDeduplicator:
             timeout = timeout or self._in_flight_timeout
             response = await asyncio.wait_for(future, timeout=timeout)
             return response
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.warning(f"In-flight request timeout: {signature.content_hash[:8]}")
             return None
         except Exception as e:
@@ -344,7 +345,7 @@ class LLMDeduplicator:
         expired = []
 
         async with self._in_flight_lock:
-            for signature, future in self._in_flight.items():
+            for signature, _future in self._in_flight.items():
                 age = current_time - signature.timestamp
                 if age > max_age:
                     expired.append(signature)
@@ -396,7 +397,7 @@ class LLMDeduplicator:
 
 
 # Global deduplicator instance
-_deduplicator: Optional[LLMDeduplicator] = None
+_deduplicator: LLMDeduplicator | None = None
 
 
 def get_deduplicator() -> LLMDeduplicator:

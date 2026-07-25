@@ -10,11 +10,10 @@
 """
 from __future__ import annotations
 
-import json
 import logging
-from datetime import UTC, datetime, timedelta
-from enum import Enum
-from typing import Any, Optional
+from datetime import UTC, datetime
+from enum import StrEnum
+from typing import Any
 from uuid import uuid4
 
 from pydantic import BaseModel, Field
@@ -26,7 +25,7 @@ logger = logging.getLogger(__name__)
 # 集群配置模型
 # ============================================================================
 
-class ClusterType(str, Enum):
+class ClusterType(StrEnum):
     """集群类型"""
     KUBERNETES = "kubernetes"
     DOCKER_SWARM = "docker_swarm"
@@ -34,7 +33,7 @@ class ClusterType(str, Enum):
     STANDALONE = "standalone"
 
 
-class NodeRole(str, Enum):
+class NodeRole(StrEnum):
     """节点角色"""
     MASTER = "master"
     WORKER = "worker"
@@ -47,13 +46,13 @@ class ClusterConfig(BaseModel):
     cluster_name: str
     cluster_type: ClusterType
     region: str
-    availability_zone: Optional[str] = None
+    availability_zone: str | None = None
     environment: str = "production"  # "development", "staging", "production"
     api_endpoint: str
-    kubeconfig_path: Optional[str] = None
-    ca_cert_path: Optional[str] = None
-    client_cert_path: Optional[str] = None
-    client_key_path: Optional[str] = None
+    kubeconfig_path: str | None = None
+    ca_cert_path: str | None = None
+    client_cert_path: str | None = None
+    client_key_path: str | None = None
     namespace: str = "default"
     is_active: bool = True
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
@@ -109,10 +108,10 @@ class ServiceInstance(BaseModel):
     status: str = "running"  # "pending", "running", "failed", "terminated"
     ready: bool = False
     restart_count: int = 0
-    last_state: Optional[dict[str, Any]] = None
+    last_state: dict[str, Any] | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    started_at: Optional[datetime] = None
-    terminated_at: Optional[datetime] = None
+    started_at: datetime | None = None
+    terminated_at: datetime | None = None
 
 
 class LoadBalancerConfig(BaseModel):
@@ -152,7 +151,7 @@ class ConfigEntry(BaseModel):
     key: str
     value: Any
     value_type: str = "string"  # "string", "json", "yaml", "binary"
-    cluster_id: Optional[str] = None
+    cluster_id: str | None = None
     namespace: str = "default"
     version: int = 1
     is_encrypted: bool = False
@@ -168,7 +167,7 @@ class ConfigCenter:
         self._configs: dict[str, ConfigEntry] = {}
         self._config_history: dict[str, list[ConfigEntry]] = {}
 
-    def set_config(self, key: str, value: Any, cluster_id: Optional[str] = None, namespace: str = "default") -> ConfigEntry:
+    def set_config(self, key: str, value: Any, cluster_id: str | None = None, namespace: str = "default") -> ConfigEntry:
         """设置配置"""
         config_id = f"config_{uuid4().hex}"
         entry = ConfigEntry(
@@ -190,12 +189,12 @@ class ConfigCenter:
         logger.info(f"Set config: {config_key}")
         return entry
 
-    def get_config(self, key: str, cluster_id: Optional[str] = None, namespace: str = "default") -> Optional[ConfigEntry]:
+    def get_config(self, key: str, cluster_id: str | None = None, namespace: str = "default") -> ConfigEntry | None:
         """获取配置"""
         config_key = f"{cluster_id or 'global'}:{namespace}:{key}"
         return self._configs.get(config_key)
 
-    def delete_config(self, key: str, cluster_id: Optional[str] = None, namespace: str = "default") -> bool:
+    def delete_config(self, key: str, cluster_id: str | None = None, namespace: str = "default") -> bool:
         """删除配置"""
         config_key = f"{cluster_id or 'global'}:{namespace}:{key}"
         if config_key in self._configs:
@@ -204,12 +203,12 @@ class ConfigCenter:
             return True
         return False
 
-    def get_config_history(self, key: str, cluster_id: Optional[str] = None, namespace: str = "default") -> list[ConfigEntry]:
+    def get_config_history(self, key: str, cluster_id: str | None = None, namespace: str = "default") -> list[ConfigEntry]:
         """获取配置历史"""
         config_key = f"{cluster_id or 'global'}:{namespace}:{key}"
         return self._config_history.get(config_key, [])
 
-    def list_configs(self, cluster_id: Optional[str] = None, namespace: str = "default") -> list[ConfigEntry]:
+    def list_configs(self, cluster_id: str | None = None, namespace: str = "default") -> list[ConfigEntry]:
         """列出配置"""
         prefix = f"{cluster_id or 'global'}:{namespace}:"
         return [
@@ -240,7 +239,7 @@ class ClusterManager:
         logger.info(f"Registered cluster: {config.cluster_id} ({config.cluster_name})")
         return config
 
-    def get_cluster(self, cluster_id: str) -> Optional[ClusterConfig]:
+    def get_cluster(self, cluster_id: str) -> ClusterConfig | None:
         """获取集群配置"""
         return self._clusters.get(cluster_id)
 
@@ -258,7 +257,7 @@ class ClusterManager:
         """获取集群节点"""
         return [node for node in self._nodes.values() if node.cluster_id == cluster_id]
 
-    def update_node_status(self, node_id: str, status: str) -> Optional[ClusterNode]:
+    def update_node_status(self, node_id: str, status: str) -> ClusterNode | None:
         """更新节点状态"""
         node = self._nodes.get(node_id)
         if node:
@@ -273,7 +272,7 @@ class ClusterManager:
         logger.info(f"Deployed service: {deployment.service_name} in cluster {deployment.cluster_id}")
         return deployment
 
-    def get_deployment(self, deployment_id: str) -> Optional[ServiceDeployment]:
+    def get_deployment(self, deployment_id: str) -> ServiceDeployment | None:
         """获取部署配置"""
         return self._deployments.get(deployment_id)
 
@@ -291,7 +290,7 @@ class ClusterManager:
         """获取部署的所有实例"""
         return [i for i in self._instances.values() if i.deployment_id == deployment_id]
 
-    def update_instance_status(self, instance_id: str, status: str, ready: bool = False) -> Optional[ServiceInstance]:
+    def update_instance_status(self, instance_id: str, status: str, ready: bool = False) -> ServiceInstance | None:
         """更新实例状态"""
         instance = self._instances.get(instance_id)
         if instance:
@@ -308,7 +307,7 @@ class ClusterManager:
         logger.info(f"Registered service: {registry.service_name}")
         return registry
 
-    def discover_service(self, service_name: str, cluster_id: str) -> Optional[ServiceRegistry]:
+    def discover_service(self, service_name: str, cluster_id: str) -> ServiceRegistry | None:
         """发现服务"""
         for registry in self._registries.values():
             if registry.service_name == service_name and registry.cluster_id == cluster_id:
@@ -328,11 +327,11 @@ class ClusterManager:
         logger.info(f"Setup load balancer: {lb_config.lb_id} for {lb_config.service_name}")
         return lb_config
 
-    def get_load_balancer(self, lb_id: str) -> Optional[LoadBalancerConfig]:
+    def get_load_balancer(self, lb_id: str) -> LoadBalancerConfig | None:
         """获取负载均衡器配置"""
         return self._load_balancers.get(lb_id)
 
-    def select_instance(self, lb_id: str, service_name: str, cluster_id: str) -> Optional[ServiceInstance]:
+    def select_instance(self, lb_id: str, service_name: str, cluster_id: str) -> ServiceInstance | None:
         """使用负载均衡器选择实例"""
         lb_config = self._load_balancers.get(lb_id)
         if not lb_config:
@@ -393,13 +392,13 @@ class TraceSpan(BaseModel):
     """追踪跨度"""
     span_id: str = Field(default_factory=lambda: f"span_{uuid4().hex}")
     trace_id: str
-    parent_span_id: Optional[str] = None
+    parent_span_id: str | None = None
     operation_name: str
     service_name: str
     cluster_id: str
     start_time: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    end_time: Optional[datetime] = None
-    duration_ms: Optional[float] = None
+    end_time: datetime | None = None
+    duration_ms: float | None = None
     status: str = "ok"  # "ok", "error"
     tags: dict[str, Any] = Field(default_factory=dict)
     logs: list[dict[str, Any]] = Field(default_factory=list)
@@ -427,7 +426,7 @@ class DistributedTracer:
         logger.debug(f"Started trace: {trace_id} span: {span.span_id}")
         return span
 
-    def end_span(self, span_id: str, status: str = "ok") -> Optional[TraceSpan]:
+    def end_span(self, span_id: str, status: str = "ok") -> TraceSpan | None:
         """结束跨度"""
         span = self._active_spans.get(span_id)
         if span:

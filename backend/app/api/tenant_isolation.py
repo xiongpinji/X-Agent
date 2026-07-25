@@ -6,8 +6,6 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends
 
-from backend.app.api.errors import api_error
-from backend.app.core.contracts import ErrorCode
 from backend.app.core.security import Principal
 from backend.app.core.tenant_isolation import TenantIsolationValidator
 from backend.app.dependencies import enforce_scope, get_current_principal

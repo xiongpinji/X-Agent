@@ -5,15 +5,14 @@ Author: X-Agent Team
 Version: 1.0.0
 """
 
-from typing import Any, Dict, Optional
-import json
-from datetime import datetime, UTC
+from datetime import UTC, datetime
+from typing import Any
 
 
 class GitHubIntegration:
     """GitHub integration plugin"""
 
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: dict[str, Any]):
         """Initialize plugin with configuration"""
         self.config = config
         self.name = "GitHub Integration"
@@ -21,7 +20,7 @@ class GitHubIntegration:
         self.github_token = config.get("github_token", "")
         self.base_url = "https://api.github.com"
 
-    def execute(self, action: str, params: Dict[str, Any]) -> Dict[str, Any]:
+    def execute(self, action: str, params: dict[str, Any]) -> dict[str, Any]:
         """Execute plugin action"""
         if action == "list_repos":
             return self._list_repos(params)
@@ -38,7 +37,7 @@ class GitHubIntegration:
         else:
             raise ValueError(f"Unknown action: {action}")
 
-    def _list_repos(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _list_repos(self, params: dict[str, Any]) -> dict[str, Any]:
         """List user repositories"""
         username = params.get("username")
         if not username:
@@ -57,7 +56,7 @@ class GitHubIntegration:
             ],
         }
 
-    def _get_repo(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _get_repo(self, params: dict[str, Any]) -> dict[str, Any]:
         """Get repository details"""
         owner = params.get("owner")
         repo = params.get("repo")
@@ -79,7 +78,7 @@ class GitHubIntegration:
             },
         }
 
-    def _create_issue(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _create_issue(self, params: dict[str, Any]) -> dict[str, Any]:
         """Create GitHub issue"""
         owner = params.get("owner")
         repo = params.get("repo")
@@ -101,7 +100,7 @@ class GitHubIntegration:
             },
         }
 
-    def _list_issues(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _list_issues(self, params: dict[str, Any]) -> dict[str, Any]:
         """List repository issues"""
         owner = params.get("owner")
         repo = params.get("repo")
@@ -122,7 +121,7 @@ class GitHubIntegration:
             ],
         }
 
-    def _create_pull_request(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _create_pull_request(self, params: dict[str, Any]) -> dict[str, Any]:
         """Create pull request"""
         owner = params.get("owner")
         repo = params.get("repo")
@@ -146,7 +145,7 @@ class GitHubIntegration:
             },
         }
 
-    def _list_pull_requests(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _list_pull_requests(self, params: dict[str, Any]) -> dict[str, Any]:
         """List pull requests"""
         owner = params.get("owner")
         repo = params.get("repo")
@@ -187,13 +186,13 @@ class GitHubIntegration:
 plugin = None
 
 
-def initialize(config: Dict[str, Any]) -> None:
+def initialize(config: dict[str, Any]) -> None:
     """Initialize plugin"""
     global plugin
     plugin = GitHubIntegration(config)
 
 
-def execute(action: str, params: Dict[str, Any]) -> Dict[str, Any]:
+def execute(action: str, params: dict[str, Any]) -> dict[str, Any]:
     """Execute plugin action"""
     if plugin is None:
         raise RuntimeError("Plugin not initialized")

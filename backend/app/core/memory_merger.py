@@ -226,7 +226,7 @@ class MemoryMerger:
     @staticmethod
     def _merge_related_ids(*id_lists: list[str]) -> list[str]:
         """Merge related ID lists, removing duplicates."""
-        merged = list(set(id for ids in id_lists for id in ids))
+        merged = list({id for ids in id_lists for id in ids})
         return merged[:50]  # Limit to 50 related IDs
 
     def detect_merge_candidates(

@@ -1,12 +1,12 @@
 """Base class for Enterprise IM Platform Integration"""
 
 from abc import ABC, abstractmethod
-from typing import List, Dict, Any, Optional, Callable
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
+from typing import Any
 
 
-class MessageType(str, Enum):
+class MessageType(StrEnum):
     """Message types supported by enterprise IM platforms"""
     TEXT = "text"
     MARKDOWN = "markdown"
@@ -16,7 +16,7 @@ class MessageType(str, Enum):
     LINK = "link"
 
 
-class ApprovalStatus(str, Enum):
+class ApprovalStatus(StrEnum):
     """Approval workflow status"""
     PENDING = "pending"
     APPROVED = "approved"
@@ -31,7 +31,7 @@ class EnterpriseIMPlatform(ABC):
     def __init__(self, platform_name: str):
         self.platform_name = platform_name
         self.is_connected = False
-        self.last_sync_time: Optional[datetime] = None
+        self.last_sync_time: datetime | None = None
 
     @abstractmethod
     async def authenticate(self) -> bool:
@@ -44,7 +44,7 @@ class EnterpriseIMPlatform(ABC):
         pass
 
     @abstractmethod
-    async def send_card(self, user_id: str, card: Dict[str, Any]) -> bool:
+    async def send_card(self, user_id: str, card: dict[str, Any]) -> bool:
         """Send a card message to a user"""
         pass
 
@@ -54,27 +54,27 @@ class EnterpriseIMPlatform(ABC):
         pass
 
     @abstractmethod
-    async def get_user_info(self, user_id: str) -> Dict[str, Any]:
+    async def get_user_info(self, user_id: str) -> dict[str, Any]:
         """Get user information"""
         pass
 
     @abstractmethod
-    async def sync_contacts(self) -> List[Dict[str, Any]]:
+    async def sync_contacts(self) -> list[dict[str, Any]]:
         """Sync contacts from the platform"""
         pass
 
     @abstractmethod
-    async def sync_departments(self) -> List[Dict[str, Any]]:
+    async def sync_departments(self) -> list[dict[str, Any]]:
         """Sync departments from the platform"""
         pass
 
     @abstractmethod
-    async def create_approval(self, template_id: str, data: Dict[str, Any]) -> str:
+    async def create_approval(self, template_id: str, data: dict[str, Any]) -> str:
         """Create an approval workflow instance"""
         pass
 
     @abstractmethod
-    async def get_approval_status(self, approval_id: str) -> Dict[str, Any]:
+    async def get_approval_status(self, approval_id: str) -> dict[str, Any]:
         """Get approval workflow status"""
         pass
 
@@ -100,7 +100,7 @@ class EnterpriseIMPlatform(ABC):
         """Get platform name"""
         return self.platform_name
 
-    def get_connection_status(self) -> Dict[str, Any]:
+    def get_connection_status(self) -> dict[str, Any]:
         """Get connection status"""
         return {
             "platform": self.platform_name,

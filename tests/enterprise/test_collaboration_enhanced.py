@@ -1,6 +1,13 @@
 """Comprehensive tests for collaboration system."""
 
 import pytest
+
+# P1-09: collaboration_enhanced 已归档至 archive/dead_code_2026-07-20/
+pytest.importorskip(
+    "backend.app.core.collaboration_enhanced",
+    reason="collaboration_enhanced archived (P1-09)",
+)
+
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 

@@ -73,11 +73,11 @@ beat:
       memory: "512Mi"
       cpu: "200m"
 
-# PostgreSQL configuration
+# PostgreSQL configuration (P1: 使用 pgvector 镜像以支持向量扩展)
 # enabled=false 时依赖外部数据库, 必须设置 external.postgresHost (见 templates/_helpers.tpl)
 postgres:
   enabled: true
-  image: postgres:16-alpine
+  image: pgvector/pgvector:pg16
   port: 5432
   storage: 10Gi
   terminationGracePeriodSeconds: 60
@@ -125,10 +125,10 @@ qdrant:
       memory: "1Gi"
       cpu: "500m"
 
-# Neo4j configuration
+# Neo4j configuration (P1: 图数据库, 默认关闭; 启用后需配置 neo4j 连接)
 # enabled=false 时依赖外部 Neo4j, 必须设置 external.neo4jHost
 neo4j:
-  enabled: true
+  enabled: false
   image: neo4j:5-community
   port: 7687
   httpPort: 7474
@@ -152,6 +152,38 @@ external:
   redisHost: ""
   qdrantHost: ""
   neo4jHost: ""
+
+# P1 新增应用环境变量
+appEnv:
+  # 工作流存储后端: postgres | neo4j
+  workflowStoreBackend: postgres
+  # Neo4j 功能开关 (与 neo4j.enabled 联动)
+  neo4jEnabled: false
+  # Python UTF-8 模式 (PEP 540), 避免 Windows/非 UTF-8 locale 下编码问题
+  pythonUtf8: "1"
+
+# SSO / 身份认证配置 (P1: SAML, LDAP, WebAuthn)
+sso:
+  saml:
+    enabled: false
+    entityId: ""
+    acsUrl: ""
+    idpMetadataUrl: ""
+    idpEntityId: ""
+    nameIdFormat: "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress"
+  ldap:
+    enabled: false
+    serverUrl: ""
+    baseDn: ""
+    bindDn: ""
+    bindPassword: ""
+    userSearchFilter: "(uid={username})"
+    useTls: true
+  webauthn:
+    enabled: false
+    rpId: ""
+    rpName: "X-Agent"
+    origin: ""
 
 # Ingress configuration
 ingress:

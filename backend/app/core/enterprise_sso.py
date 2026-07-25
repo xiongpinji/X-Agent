@@ -12,12 +12,10 @@ from __future__ import annotations
 
 import base64
 import hashlib
-import json
 import logging
 import secrets
-import time
 from datetime import UTC, datetime, timedelta
-from typing import Any, Optional
+from typing import Any
 from uuid import uuid4
 
 from pydantic import BaseModel, Field
@@ -33,19 +31,19 @@ class SAMLConfig(BaseModel):
     """SAML 2.0配置"""
     entity_id: str = Field(..., description="Service Provider Entity ID")
     assertion_consumer_service_url: str = Field(..., description="ACS URL")
-    single_logout_service_url: Optional[str] = None
-    certificate_path: Optional[str] = None
-    private_key_path: Optional[str] = None
+    single_logout_service_url: str | None = None
+    certificate_path: str | None = None
+    private_key_path: str | None = None
     idp_entity_id: str = Field(..., description="Identity Provider Entity ID")
     idp_sso_url: str = Field(..., description="IdP SSO URL")
-    idp_slo_url: Optional[str] = None
-    idp_certificate: Optional[str] = None
+    idp_slo_url: str | None = None
+    idp_certificate: str | None = None
     name_id_format: str = "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress"
     want_assertions_signed: bool = True
     want_response_signed: bool = True
     sign_requests: bool = True
     encrypt_assertions: bool = False
-    metadata_url: Optional[str] = None
+    metadata_url: str | None = None
 
 
 class SAMLAssertion(BaseModel):
@@ -57,7 +55,7 @@ class SAMLAssertion(BaseModel):
     attribute_statement: dict[str, list[str]]
     conditions: dict[str, Any]
     authn_statement: dict[str, Any]
-    signature: Optional[str] = None
+    signature: str | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
@@ -78,8 +76,8 @@ class SAMLResponse(BaseModel):
     in_response_to: str
     issuer: str
     status_code: str
-    assertion: Optional[SAMLAssertion] = None
-    relay_state: Optional[str] = None
+    assertion: SAMLAssertion | None = None
+    relay_state: str | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
@@ -94,18 +92,18 @@ class OAuthConfig(BaseModel):
     authorization_endpoint: str
     token_endpoint: str
     userinfo_endpoint: str
-    jwks_uri: Optional[str] = None
+    jwks_uri: str | None = None
     issuer: str
     scopes: list[str] = Field(default_factory=lambda: ["openid", "profile", "email"])
     # P1-02: 放宽为可选 — api/enterprise_sso.py 的配置端点不传该字段;
     # 但 exchange_code_for_token 时若仍缺失会显式报错 (fail-closed)
-    redirect_uri: Optional[str] = None
+    redirect_uri: str | None = None
     response_type: str = "code"
     grant_type: str = "authorization_code"
     token_endpoint_auth_method: str = "client_secret_basic"
     id_token_signed_alg: str = "RS256"
-    userinfo_signed_response_alg: Optional[str] = None
-    metadata_url: Optional[str] = None
+    userinfo_signed_response_alg: str | None = None
+    metadata_url: str | None = None
     http_timeout_seconds: float = 10.0
 
 
@@ -113,14 +111,14 @@ class OAuthAuthorizationRequest(BaseModel):
     """OAuth授权请求"""
     request_id: str
     client_id: str
-    redirect_uri: Optional[str] = None
+    redirect_uri: str | None = None
     scope: str
     state: str
-    nonce: Optional[str] = None
-    code_challenge: Optional[str] = None
+    nonce: str | None = None
+    code_challenge: str | None = None
     code_challenge_method: str = "S256"
     # P1-02: 保存 PKCE verifier 供 token 交换时使用 (此前丢失导致 PKCE 流程无法闭环)
-    code_verifier: Optional[str] = None
+    code_verifier: str | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
@@ -129,8 +127,8 @@ class OAuthToken(BaseModel):
     access_token: str
     token_type: str = "Bearer"
     expires_in: int
-    refresh_token: Optional[str] = None
-    id_token: Optional[str] = None
+    refresh_token: str | None = None
+    id_token: str | None = None
     scope: str
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
@@ -146,12 +144,12 @@ class OAuthUserInfo(BaseModel):
     sub: str
     email: str
     email_verified: bool = False
-    name: Optional[str] = None
-    given_name: Optional[str] = None
-    family_name: Optional[str] = None
-    picture: Optional[str] = None
-    locale: Optional[str] = None
-    updated_at: Optional[int] = None
+    name: str | None = None
+    given_name: str | None = None
+    family_name: str | None = None
+    picture: str | None = None
+    locale: str | None = None
+    updated_at: int | None = None
     custom_claims: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -165,10 +163,10 @@ class IdentityProvider(BaseModel):
     provider_type: str  # "saml", "oauth", "oidc"
     tenant_id: str
     name: str
-    description: Optional[str] = None
+    description: str | None = None
     is_active: bool = True
-    saml_config: Optional[SAMLConfig] = None
-    oauth_config: Optional[OAuthConfig] = None
+    saml_config: SAMLConfig | None = None
+    oauth_config: OAuthConfig | None = None
     attribute_mappings: dict[str, str] = Field(
         default_factory=lambda: {
             "email": "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress",
@@ -187,9 +185,9 @@ class FederatedIdentity(BaseModel):
     provider_id: str
     provider_user_id: str
     email: str
-    name: Optional[str] = None
+    name: str | None = None
     attributes: dict[str, Any] = Field(default_factory=dict)
-    last_login_at: Optional[datetime] = None
+    last_login_at: datetime | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
@@ -201,13 +199,13 @@ class SSOSession(BaseModel):
     tenant_id: str
     provider_id: str
     access_token: str
-    refresh_token: Optional[str] = None
-    id_token: Optional[str] = None
+    refresh_token: str | None = None
+    id_token: str | None = None
     token_expiry: datetime
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     last_activity_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    ip_address: Optional[str] = None
-    user_agent: Optional[str] = None
+    ip_address: str | None = None
+    user_agent: str | None = None
     is_active: bool = True
 
     @property
@@ -272,7 +270,7 @@ class SAMLProcessor:
     <samlp:NameIDPolicy Format="{auth_request.name_id_format}" AllowCreate="true"/>
 </samlp:AuthnRequest>"""
 
-    def process_saml_response(self, saml_response_b64: str, relay_state: Optional[str] = None) -> SAMLResponse:
+    def process_saml_response(self, saml_response_b64: str, relay_state: str | None = None) -> SAMLResponse:
         """处理SAML响应
 
         Args:
@@ -407,7 +405,7 @@ class OAuthProcessor:
         # 可注入 httpx.Client (同步); None 时按需创建
         self._http_client = http_client
 
-    def _post(self, url: str, **kwargs: Any) -> "httpx.Response":  # noqa: F821
+    def _post(self, url: str, **kwargs: Any) -> httpx.Response:  # noqa: F821
         import httpx
 
         timeout = kwargs.pop("timeout", self.config.http_timeout_seconds)
@@ -416,7 +414,7 @@ class OAuthProcessor:
         with httpx.Client() as client:
             return client.post(url, timeout=timeout, **kwargs)
 
-    def _get(self, url: str, **kwargs: Any) -> "httpx.Response":  # noqa: F821
+    def _get(self, url: str, **kwargs: Any) -> httpx.Response:  # noqa: F821
         import httpx
 
         timeout = kwargs.pop("timeout", self.config.http_timeout_seconds)
@@ -545,19 +543,19 @@ class OAuthProcessor:
         logger.info("Exchanged authorization code for token (state validated)")
         return token
 
-    def _verify_id_token(self, id_token: str, *, expected_nonce: Optional[str] = None) -> dict[str, Any]:
+    def _verify_id_token(self, id_token: str, *, expected_nonce: str | None = None) -> dict[str, Any]:
         """验证 id_token 签名与 claims (复用 saml_sso 的验签器, fail-closed)。"""
         from backend.app.core.saml_sso import (
             SSOAuthenticationError,
-            verify_jwt_signature,
             validate_claims,
+            verify_jwt_signature,
         )
 
-        jwks: Optional[dict[str, Any]] = None
-        secret: Optional[str] = None
+        jwks: dict[str, Any] | None = None
+        secret: str | None = None
 
-        import json as _json
         import base64 as _b64
+        import json as _json
 
         try:
             header = _json.loads(_b64.urlsafe_b64decode(id_token.split(".")[0] + "=="))
@@ -711,11 +709,11 @@ class SSOSessionManager:
         tenant_id: str,
         provider_id: str,
         access_token: str,
-        refresh_token: Optional[str] = None,
-        id_token: Optional[str] = None,
+        refresh_token: str | None = None,
+        id_token: str | None = None,
         token_expiry_seconds: int = 3600,
-        ip_address: Optional[str] = None,
-        user_agent: Optional[str] = None,
+        ip_address: str | None = None,
+        user_agent: str | None = None,
     ) -> SSOSession:
         """创建SSO会话"""
         session_id = f"sso_{uuid4().hex}"
@@ -740,7 +738,7 @@ class SSOSessionManager:
         logger.info(f"Created SSO session: {session_id} for user: {user_id}")
         return session
 
-    def get_session(self, session_id: str) -> Optional[SSOSession]:
+    def get_session(self, session_id: str) -> SSOSession | None:
         """获取会话"""
         session = self._sessions.get(session_id)
         if session and not session.is_expired:
@@ -806,8 +804,8 @@ class FederatedIdentityManager:
         provider_id: str,
         provider_user_id: str,
         email: str,
-        name: Optional[str] = None,
-        attributes: Optional[dict[str, Any]] = None,
+        name: str | None = None,
+        attributes: dict[str, Any] | None = None,
     ) -> FederatedIdentity:
         """链接联合身份"""
         identity_id = f"fed_{uuid4().hex}"
@@ -827,7 +825,7 @@ class FederatedIdentityManager:
         logger.info(f"Linked federated identity: {identity_id} for user: {user_id}")
         return identity
 
-    def get_identity_by_provider(self, provider_id: str, provider_user_id: str) -> Optional[FederatedIdentity]:
+    def get_identity_by_provider(self, provider_id: str, provider_user_id: str) -> FederatedIdentity | None:
         """根据提供者获取身份"""
         identity_id = self._provider_user_index.get((provider_id, provider_user_id))
         if identity_id:
@@ -851,7 +849,7 @@ class FederatedIdentityManager:
             return True
         return False
 
-    def update_last_login(self, identity_id: str) -> Optional[FederatedIdentity]:
+    def update_last_login(self, identity_id: str) -> FederatedIdentity | None:
         """更新最后登录时间"""
         identity = self._identities.get(identity_id)
         if identity:

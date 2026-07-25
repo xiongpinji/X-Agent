@@ -1,10 +1,10 @@
 from __future__ import annotations
 
+import asyncio
+import contextlib
 from dataclasses import dataclass, field
 from typing import Any
 from uuid import uuid4
-
-import asyncio
 
 try:
     from playwright.sync_api import Browser, BrowserContext, Page, sync_playwright
@@ -78,14 +78,10 @@ class BrowserSession:
     def record(self, action: str, ok: bool, detail: str = "", **data: Any) -> BrowserActionResult:
         enriched = dict(data)
         if self.page is not None:
-            try:
+            with contextlib.suppress(Exception):
                 enriched.setdefault("page_url", self.page.url)
-            except Exception:
-                pass
-            try:
+            with contextlib.suppress(Exception):
                 enriched.setdefault("page_title", self.page.title())
-            except Exception:
-                pass
         result = BrowserActionResult(action=action, ok=ok, detail=detail, data=enriched)
         self.actions.append(result)
         if "url" in data:
@@ -219,7 +215,7 @@ class PlaywrightBrowserClient:
             session.page.click(selector, timeout=5000)  # 5 second timeout
             return session.record("click", True, selector=selector, execution_mode="real")
         except Exception as e:
-            return session.record("click", False, detail=f"Click failed: {str(e)}", selector=selector)
+            return session.record("click", False, detail=f"Click failed: {e!s}", selector=selector)
 
     def fill(self, session_id: str, selector: str, value: str) -> BrowserActionResult:
         """Fill input field with selector validation and timeout protection."""
@@ -233,7 +229,7 @@ class PlaywrightBrowserClient:
             session.page.fill(selector, value, timeout=5000)  # 5 second timeout
             return session.record("fill", True, selector=selector, value=value, execution_mode="real")
         except Exception as e:
-            return session.record("fill", False, detail=f"Fill failed: {str(e)}", selector=selector, value=value)
+            return session.record("fill", False, detail=f"Fill failed: {e!s}", selector=selector, value=value)
 
     def screenshot(self, session_id: str, path: str) -> BrowserActionResult:
         """Take a screenshot with strict path validation to prevent directory traversal attacks."""
@@ -255,7 +251,7 @@ class PlaywrightBrowserClient:
 
             return session.record("screenshot", True, path=real_path, execution_mode="real")
         except Exception as e:
-            return session.record("screenshot", False, detail=f"Screenshot failed: {str(e)}", path=path)
+            return session.record("screenshot", False, detail=f"Screenshot failed: {e!s}", path=path)
 
     def extract_text(self, session_id: str, selector: str) -> BrowserActionResult:
         """Extract text with selector validation and timeout protection."""
@@ -270,7 +266,7 @@ class PlaywrightBrowserClient:
             text = session.page.locator(selector).inner_text(timeout=5000)
             return session.record("extract_text", True, selector=selector, text=text, execution_mode="real")
         except Exception as e:
-            return session.record("extract_text", False, detail=f"Extract text failed: {str(e)}", selector=selector)
+            return session.record("extract_text", False, detail=f"Extract text failed: {e!s}", selector=selector)
 
     def wait_for(self, session_id: str, selector: str) -> BrowserActionResult:
         """Wait for element with selector validation and timeout protection."""
@@ -284,7 +280,7 @@ class PlaywrightBrowserClient:
             session.page.wait_for_selector(selector, timeout=10000)  # 10 second timeout
             return session.record("wait_for", True, selector=selector, execution_mode="real")
         except Exception as e:
-            return session.record("wait_for", False, detail=f"Wait for failed: {str(e)}", selector=selector)
+            return session.record("wait_for", False, detail=f"Wait for failed: {e!s}", selector=selector)
 
     def _require_session(self, session_id: str) -> BrowserSession:
         session = self._sessions.get(session_id)

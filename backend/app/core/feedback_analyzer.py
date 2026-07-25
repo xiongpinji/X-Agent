@@ -5,8 +5,6 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import Optional
-from enum import Enum
 
 logger = logging.getLogger(__name__)
 
@@ -83,7 +81,7 @@ class FeedbackAnalyzer:
     def _init_sentiment_model(self):
         """初始化情感分析模型"""
         try:
-            from textblob import TextBlob
+            from textblob import TextBlob  # noqa: F401
             self.sentiment_model = "textblob"
             logger.info("TextBlob情感分析模型已加载")
         except ImportError:
@@ -135,7 +133,7 @@ class FeedbackAnalyzer:
 
         return sentiment_type, sentiment_score
 
-    def categorize_feedback(self, text: str, feedback_type: str) -> tuple[str, Optional[str], list[str]]:
+    def categorize_feedback(self, text: str, feedback_type: str) -> tuple[str, str | None, list[str]]:
         """
         分类反馈
         返回: (category, subcategory, tags)
@@ -169,7 +167,7 @@ class FeedbackAnalyzer:
         text_lower = text.lower()
 
         # 从所有关键词中提取
-        for category, keywords in self.CATEGORY_KEYWORDS.items():
+        for _category, keywords in self.CATEGORY_KEYWORDS.items():
             for keyword in keywords:
                 if keyword in text_lower and keyword not in tags:
                     tags.append(keyword)

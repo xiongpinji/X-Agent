@@ -8,8 +8,8 @@ from __future__ import annotations
 import logging
 import math
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
-from typing import Any, Optional
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from backend.app.core.context.session_recovery import Message
 
@@ -340,7 +340,7 @@ class ContextRetriever:
         if weights is None:
             weights = RetrievalWeights()
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         if time_window_hours:
             time_start = now - timedelta(hours=time_window_hours)
         else:
@@ -362,10 +362,7 @@ class ContextRetriever:
 
             time_diff = (now - message.timestamp).total_seconds()
             max_time_diff = (now - time_start).total_seconds()
-            if max_time_diff > 0:
-                recency_score = 1.0 - (time_diff / max_time_diff)
-            else:
-                recency_score = 1.0
+            recency_score = 1.0 - time_diff / max_time_diff if max_time_diff > 0 else 1.0
 
             importance_score = message.importance
 

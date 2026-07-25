@@ -1,5 +1,4 @@
 import React, { ReactNode } from 'react'
-import { Alert } from './Alert'
 import { Button } from './Button'
 import { AriaBuilder, announceToScreenReader } from '@/utils/accessibility'
 
@@ -38,7 +37,7 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     const errorCount = this.state.errorCount + 1
 
-    this.setState((prevState) => ({
+    this.setState(() => ({
       errorInfo,
       errorCount,
     }))

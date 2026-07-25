@@ -1,0 +1,30 @@
+{
+  "name": "xagent-partner",
+  "version": "0.2.0-alpha",
+  "description": "X-Agent Partner API 官方 JavaScript/TypeScript SDK(当前以源码形式分发, 未发布至 npm)",
+  "license": "MIT",
+  "main": "dist/xagent-partner.js",
+  "types": "dist/xagent-partner.d.ts",
+  "files": [
+    "dist",
+    "xagent-partner.ts",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "prepack": "tsc -p tsconfig.json"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.5.0"
+  },
+  "keywords": [
+    "x-agent",
+    "partner",
+    "sdk",
+    "api-client"
+  ]
+}

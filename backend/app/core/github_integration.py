@@ -19,7 +19,7 @@ import hashlib
 import hmac
 import logging
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +56,7 @@ class IssueEvent:
     default_branch: str = "main"
 
 
-def parse_issue_event(payload: dict[str, Any]) -> Optional[IssueEvent]:
+def parse_issue_event(payload: dict[str, Any]) -> IssueEvent | None:
     """Extract an IssueEvent from a GitHub webhook payload, or None if not
     an actionable issue event."""
     if "issue" not in payload or "repository" not in payload:

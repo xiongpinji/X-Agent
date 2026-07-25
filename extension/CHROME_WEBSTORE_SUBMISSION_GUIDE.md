@@ -73,9 +73,7 @@
 ### 1.4 扩展包准备
 
 ```bash
-# 构建生产版本
-npm run build:prod
-
+# 无构建步骤(webpack 已移除), 直接打包
 # 打包扩展
 npm run package
 

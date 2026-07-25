@@ -4,12 +4,15 @@ from __future__ import annotations
 
 import logging
 import re
-import json
-from pathlib import Path
-from typing import Optional, Any
 from dataclasses import dataclass
+from typing import Any
 
-from backend.app.core.skill_market_models import SkillManifest, SkillRecord, SkillCategory, SkillStatus
+from backend.app.core.skill_market_models import (
+    SkillCategory,
+    SkillManifest,
+    SkillRecord,
+    SkillStatus,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -250,7 +253,7 @@ class SkillParameterValidator:
     def validate_parameters(
         skill_id: str,
         input_data: dict[str, Any],
-        expected_params: dict[str, str] = None,
+        expected_params: dict[str, str] | None = None,
     ) -> tuple[bool, list[str]]:
         """验证技能参数"""
         errors = []

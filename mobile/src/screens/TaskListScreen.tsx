@@ -49,7 +49,7 @@ export const TaskListScreen: React.FC<TaskListScreenProps> = ({ navigation }) =>
     >
       <View style={styles.taskHeader}>
         <Text style={styles.taskTitle}>{item.title}</Text>
-        <View style={[styles.statusBadge, styles[`status_${item.status}`]]}>
+        <View style={[styles.statusBadge, (styles as any)[`status_${item.status}`]]}>
           <Text style={styles.statusText}>{item.status}</Text>
         </View>
       </View>

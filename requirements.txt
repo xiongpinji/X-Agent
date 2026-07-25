@@ -6,6 +6,7 @@
 # Core Framework
 fastapi>=0.115.0         # loosened: 0.115.0 incompatible with modern starlette; resolver picks compatible pair (sandbox-validated on 0.133.x)
 uvicorn[standard]>=0.30.0
+gunicorn>=21.2.0           # production WSGI/ASGI server with multi-worker support
 starlette>=0.37.2  # loosened (transitive dep, resolver-managed)
 
 # API & HTTP
@@ -38,6 +39,7 @@ playwright==1.48.0
 asyncpg>=0.30.0        # loosened: 0.30+ ships cp313 wheels
 psycopg[binary]>=3.2.2   # loosened: cp313 wheels in 3.2.2+
 sqlalchemy>=2.0.30       # loosened for Python 3.13 C-ext wheels
+alembic>=1.13.0          # database migration framework
 aiosqlite>=0.20.0        # async SQLite driver — REQUIRED for default DATABASE_URL=sqlite:///
 
 # Vector Database
@@ -82,6 +84,7 @@ typing-extensions>=4.11.0  # loosened: openai requires >=4.11
 # Security & Cryptography (CRITICAL: Using bcrypt 4.1.2+ for secure password hashing)
 bcrypt>=4.2.0          # loosened for Python 3.13
 cryptography>=43.0.1   # loosened for Python 3.13
+ldap3>=2.9.1           # P1-05: LDAP enterprise directory integration
 
 # Network & Protocol
 h11>=0.14.0  # loosened (transitive dep, resolver-managed)

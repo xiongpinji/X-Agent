@@ -13,15 +13,15 @@ from backend.app.core.channels.base import (
     ChannelRegistry,
     get_channel_registry,
 )
+from backend.app.core.channels.dingtalk_adapter import DingTalkAdapter
+from backend.app.core.channels.discord_adapter import DiscordAdapter
 from backend.app.core.channels.router import (
     ChannelRouter,
     ChannelRouterError,
     ChannelSignatureError,
     default_channel_dispatch,
 )
-from backend.app.core.channels.discord_adapter import DiscordAdapter
 from backend.app.core.channels.telegram_adapter import TelegramAdapter
-from backend.app.core.channels.dingtalk_adapter import DingTalkAdapter
 
 __all__ = [
     "ChannelAdapter",
@@ -32,9 +32,9 @@ __all__ = [
     "ChannelRouter",
     "ChannelRouterError",
     "ChannelSignatureError",
-    "default_channel_dispatch",
-    "get_channel_registry",
+    "DingTalkAdapter",
     "DiscordAdapter",
     "TelegramAdapter",
-    "DingTalkAdapter",
+    "default_channel_dispatch",
+    "get_channel_registry",
 ]

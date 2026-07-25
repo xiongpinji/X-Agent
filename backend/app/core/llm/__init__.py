@@ -9,6 +9,11 @@ callers and the enhanced-routing submodules share a single namespace.
 """
 
 # Legacy backend classes + core router (moved here from the old llm.py module).
+from .adapters.base import LLMAdapter
+from .adapters.deepseek_adapter import DeepSeekAdapter
+from .adapters.local_adapter import LocalAdapter
+from .adapters.openai_adapter import OpenAIAdapter
+from .anthropic_backend import AnthropicBackend
 from .backends import (
     BaseLLMBackend,
     LLMBackendError,
@@ -21,18 +26,11 @@ from .backends import (
     build_llm_router,
     get_pricing_table,
 )
-
-# Enhanced routing / optimization components.
-from .selector import ModelSelector, ModelProfile, SelectionStrategy, TaskType
 from .cost_optimizer import CostOptimizer, CostTracker, TokenEstimator
-from .fallback import FallbackStrategy, FallbackManager
-from .streaming import StreamingResponse, StreamManager
-from .prompt_optimizer import PromptOptimizer, PromptTemplate
-from .monitor import PerformanceMonitor, ModelMetrics
-from .adapters.base import LLMAdapter
-from .adapters.openai_adapter import OpenAIAdapter
-from .adapters.deepseek_adapter import DeepSeekAdapter
-from .adapters.local_adapter import LocalAdapter
+from .fallback import FallbackManager, FallbackStrategy
+from .llm_settings import LLMFeatureSettings, get_llm_feature_settings
+from .monitor import ModelMetrics, PerformanceMonitor
+from .ollama_backend import OllamaBackend
 
 # P1-08 routing convergence: external profiles, new providers, smart routing,
 # tenant/user token quotas.
@@ -44,57 +42,59 @@ from .profiles import (
     load_model_profiles,
     pricing_table_from_profiles,
 )
-from .llm_settings import LLMFeatureSettings, get_llm_feature_settings
-from .anthropic_backend import AnthropicBackend
-from .ollama_backend import OllamaBackend
+from .prompt_optimizer import PromptOptimizer, PromptTemplate
 from .quota import QuotaExceededError, TokenQuotaManager
+
+# Enhanced routing / optimization components.
+from .selector import ModelProfile, ModelSelector, SelectionStrategy, TaskType
 from .smart_router import SmartLLMRouter, classify_task
+from .streaming import StreamingResponse, StreamManager
 
 __all__ = [
+    "AnthropicBackend",
     # Legacy backends + core router
     "BaseLLMBackend",
-    "LLMBackendError",
-    "LLMResponse",
-    "LLMRouter",
-    "MockLLMBackend",
-    "OpenAIBackend",
-    "OpenAIResponsesBackend",
-    "TokenUsage",
-    "build_llm_router",
-    "get_pricing_table",
-    # Enhanced routing / optimization
-    "ModelSelector",
-    "ModelProfile",
-    "SelectionStrategy",
-    "TaskType",
     "CostOptimizer",
     "CostTracker",
-    "TokenEstimator",
-    "FallbackStrategy",
-    "FallbackManager",
-    "StreamingResponse",
-    "StreamManager",
-    "PromptOptimizer",
-    "PromptTemplate",
-    "PerformanceMonitor",
-    "ModelMetrics",
-    "LLMAdapter",
-    "OpenAIAdapter",
     "DeepSeekAdapter",
+    "FallbackManager",
+    "FallbackStrategy",
+    "LLMAdapter",
+    "LLMBackendError",
+    "LLMFeatureSettings",
+    "LLMResponse",
+    "LLMRouter",
     "LocalAdapter",
+    "MockLLMBackend",
+    "ModelMetrics",
+    "ModelProfile",
     # P1-08 routing convergence
     "ModelProfileConfig",
     "ModelProfileLoadError",
+    # Enhanced routing / optimization
+    "ModelSelector",
+    "OllamaBackend",
+    "OpenAIAdapter",
+    "OpenAIBackend",
+    "OpenAIResponsesBackend",
+    "PerformanceMonitor",
+    "PromptOptimizer",
+    "PromptTemplate",
+    "QuotaExceededError",
     "QuotaFileConfig",
+    "SelectionStrategy",
+    "SmartLLMRouter",
+    "StreamManager",
+    "StreamingResponse",
+    "TaskType",
+    "TokenEstimator",
+    "TokenQuotaManager",
+    "TokenUsage",
+    "build_llm_router",
     "build_selector",
+    "classify_task",
+    "get_llm_feature_settings",
+    "get_pricing_table",
     "load_model_profiles",
     "pricing_table_from_profiles",
-    "LLMFeatureSettings",
-    "get_llm_feature_settings",
-    "AnthropicBackend",
-    "OllamaBackend",
-    "QuotaExceededError",
-    "TokenQuotaManager",
-    "SmartLLMRouter",
-    "classify_task",
 ]

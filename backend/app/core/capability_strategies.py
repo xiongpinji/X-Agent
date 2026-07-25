@@ -9,7 +9,6 @@ with composable, testable strategy objects.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any
 
 from backend.app.core.contracts import CapabilityDecision, OrchestrationContext
 

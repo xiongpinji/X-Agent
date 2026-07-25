@@ -62,7 +62,7 @@ function validateRequiredField(issues: ConsoleValidationIssue[], payload: Consol
   }
 }
 
-function normalizeSection(section: unknown): Record<string, unknown> | null {
+function _normalizeSection(section: unknown): Record<string, unknown> | null {
   return isRecord(section) ? section : null;
 }
 

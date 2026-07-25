@@ -6,7 +6,7 @@
  */
 
 import React, { useMemo } from 'react';
-import { useStreamingEvents, StreamEvent, MetricsData } from '../hooks/useStreamingEvents';
+import { useStreamingEvents } from '../hooks/useStreamingEvents';
 
 interface MetricCard {
   label: string;
@@ -52,7 +52,6 @@ export const LiveMetrics: React.FC<LiveMetricsProps> = ({
     });
 
     // Tool Results Count
-    const toolResults = events.filter((e) => e.event_type === 'tool_result').length;
     const successfulTools = events.filter((e) => e.event_type === 'tool_result' && e.success).length;
     cards.push({
       label: 'Success Rate',

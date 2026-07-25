@@ -1,0 +1,8 @@
+schema_version: 1
+module_path: cli
+title: X-Agent CLI 命令行入口与命令路由
+scope:
+    - cli/
+source_files: []
+depends_on: []
+related_to: []

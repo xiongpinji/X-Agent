@@ -13,12 +13,9 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
-from datetime import datetime, UTC, timedelta
-from typing import Optional
 import math
-
-import numpy as np
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +63,7 @@ class MemoryImportanceScorer:
 
     def __init__(
         self,
-        weights: Optional[ImportanceWeights] = None,
+        weights: ImportanceWeights | None = None,
         temporal_decay_factor: float = 0.95,
         max_access_count: int = 1000,
         feedback_scale: float = 1.0,
@@ -97,7 +94,7 @@ class MemoryImportanceScorer:
         access_count: int = 0,
         association_count: int = 0,
         user_feedback: float = 0.0,
-        current_time: Optional[datetime] = None,
+        current_time: datetime | None = None,
     ) -> ImportanceScores:
         """
         计算记忆的重要性评分。
@@ -216,10 +213,10 @@ class MemoryImportanceScorer:
 
     def adjust_weights(
         self,
-        access_frequency_weight: Optional[float] = None,
-        temporal_decay_weight: Optional[float] = None,
-        association_weight: Optional[float] = None,
-        user_feedback_weight: Optional[float] = None,
+        access_frequency_weight: float | None = None,
+        temporal_decay_weight: float | None = None,
+        association_weight: float | None = None,
+        user_feedback_weight: float | None = None,
     ) -> None:
         """
         动态调整评分权重。
@@ -267,7 +264,7 @@ class MemoryImportanceScorer:
     def batch_compute_importance(
         self,
         memories: list[dict],
-        current_time: Optional[datetime] = None,
+        current_time: datetime | None = None,
     ) -> dict[str, ImportanceScores]:
         """
         批量计算记忆重要性。

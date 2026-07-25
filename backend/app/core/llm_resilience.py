@@ -15,16 +15,15 @@ import time
 from typing import Any
 
 from backend.app.core.circuit_breaker import CircuitBreakerConfig, get_circuit_breaker_registry
+from backend.app.core.error_monitor import get_error_monitor
 from backend.app.core.exceptions import (
     ErrorCode,
-    ErrorSeverity,
     NetworkError,
     ServiceUnavailableError,
 )
-from backend.app.core.error_monitor import get_error_monitor
 from backend.app.core.fallback import get_degradation_policy
 from backend.app.core.llm import LLMResponse, LLMRouter
-from backend.app.core.retry import RetryConfig, retry
+from backend.app.core.retry import retry
 
 logger = logging.getLogger(__name__)
 

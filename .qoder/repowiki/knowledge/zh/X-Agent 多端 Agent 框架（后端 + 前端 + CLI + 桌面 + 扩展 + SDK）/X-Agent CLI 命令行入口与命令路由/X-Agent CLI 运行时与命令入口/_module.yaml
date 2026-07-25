@@ -1,0 +1,14 @@
+schema_version: 1
+module_path: cli/runtime
+title: X-Agent CLI 运行时与命令入口
+scope:
+    - cli/main.py
+    - cli/client.py
+    - cli/config.py
+    - cli/console.py
+    - cli/repl.py
+    - cli/state.py
+source_files: []
+depends_on: []
+related_to:
+    - path: backend

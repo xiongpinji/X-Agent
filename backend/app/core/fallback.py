@@ -13,9 +13,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Any, Callable, Generic, TypeVar
+from typing import Any, TypeVar
 
 logger = logging.getLogger(__name__)
 

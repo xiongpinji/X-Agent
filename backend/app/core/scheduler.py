@@ -8,16 +8,17 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from dataclasses import dataclass, field
-from datetime import datetime, UTC, timedelta
-from enum import Enum
-from typing import Optional, Any, Dict, List, Callable, Coroutine
 import uuid
+from collections.abc import Callable, Coroutine
+from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
+from enum import StrEnum
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
-class ScheduleType(str, Enum):
+class ScheduleType(StrEnum):
     """Types of schedules."""
 
     CRON = "cron"
@@ -25,7 +26,7 @@ class ScheduleType(str, Enum):
     ONCE = "once"
 
 
-class ScheduleStatus(str, Enum):
+class ScheduleStatus(StrEnum):
     """Status of a scheduled task."""
 
     ACTIVE = "active"
@@ -43,16 +44,16 @@ class ScheduledTask:
     name: str
     coroutine: Callable[[], Coroutine[Any, Any, Any]]
     schedule_type: ScheduleType
-    cron_expression: Optional[str] = None
-    interval_seconds: Optional[int] = None
-    run_at: Optional[datetime] = None
+    cron_expression: str | None = None
+    interval_seconds: int | None = None
+    run_at: datetime | None = None
     status: ScheduleStatus = ScheduleStatus.ACTIVE
-    max_runs: Optional[int] = None
+    max_runs: int | None = None
     run_count: int = 0
-    last_run_at: Optional[datetime] = None
-    next_run_at: Optional[datetime] = None
+    last_run_at: datetime | None = None
+    next_run_at: datetime | None = None
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -62,10 +63,10 @@ class ScheduleExecution:
     execution_id: str
     task_id: str
     started_at: datetime
-    completed_at: Optional[datetime] = None
+    completed_at: datetime | None = None
     status: str = "running"
-    result: Optional[Any] = None
-    error: Optional[str] = None
+    result: Any | None = None
+    error: str | None = None
     duration_seconds: float = 0.0
 
 
@@ -78,9 +79,9 @@ class CronScheduler:
 
     def __init__(self):
         """Initialize the scheduler."""
-        self.scheduled_tasks: Dict[str, ScheduledTask] = {}
-        self.execution_history: Dict[str, List[ScheduleExecution]] = {}
-        self.running_tasks: Dict[str, asyncio.Task] = {}
+        self.scheduled_tasks: dict[str, ScheduledTask] = {}
+        self.execution_history: dict[str, list[ScheduleExecution]] = {}
+        self.running_tasks: dict[str, asyncio.Task] = {}
         self.logger = logger
 
     def schedule_cron(
@@ -219,7 +220,7 @@ class CronScheduler:
                 now = datetime.now(UTC)
 
                 # Check all scheduled tasks (snapshot: 迭代期间 _execute_task/取消可能改字典，B5)
-                for task_id, task in list(self.scheduled_tasks.items()):
+                for _task_id, task in list(self.scheduled_tasks.items()):
                     if task.status != ScheduleStatus.ACTIVE:
                         continue
 
@@ -359,7 +360,7 @@ class CronScheduler:
         self.logger.info(f"Task {task_id} cancelled")
         return True
 
-    def get_task_status(self, task_id: str) -> Optional[Dict[str, Any]]:
+    def get_task_status(self, task_id: str) -> dict[str, Any] | None:
         """
         Get status of a scheduled task.
 
@@ -388,7 +389,7 @@ class CronScheduler:
             "created_at": task.created_at.isoformat(),
         }
 
-    def list_tasks(self, status: Optional[str] = None) -> List[Dict[str, Any]]:
+    def list_tasks(self, status: str | None = None) -> list[dict[str, Any]]:
         """
         List scheduled tasks.
 
@@ -412,7 +413,7 @@ class CronScheduler:
         self,
         task_id: str,
         limit: int = 10,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Get execution history for a task.
 
@@ -454,7 +455,7 @@ class CronScheduler:
         # In production, use croniter library
         return datetime.now(UTC) + timedelta(days=1)
 
-    def get_scheduler_stats(self) -> Dict[str, Any]:
+    def get_scheduler_stats(self) -> dict[str, Any]:
         """
         Get scheduler statistics.
 

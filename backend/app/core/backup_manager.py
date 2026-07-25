@@ -1,28 +1,24 @@
 """Core backup and recovery manager."""
 
 import asyncio
-import json
 import logging
-from datetime import datetime, timedelta
-from typing import Any, Optional
+from datetime import datetime
 from uuid import uuid4
 
-from backend.app.models.backup import (
-    BackupMetadata,
-    BackupManifest,
-    BackupSchedule,
-    BackupStatus,
-    BackupType,
-    BackupStorageType,
-    RestorePoint,
-    RestoreStatus,
-    BackupAlert,
-)
+from backend.app.core.backup_encryption import BackupProcessor
 from backend.app.core.backup_storage import (
     BackupStorageProvider,
-    create_backup_storage,
 )
-from backend.app.core.backup_encryption import BackupProcessor
+from backend.app.models.backup import (
+    BackupAlert,
+    BackupMetadata,
+    BackupSchedule,
+    BackupStatus,
+    BackupStorageType,
+    BackupType,
+    RestorePoint,
+    RestoreStatus,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +29,7 @@ class BackupManager:
     def __init__(
         self,
         storage_provider: BackupStorageProvider,
-        encryption_key: Optional[bytes] = None,
+        encryption_key: bytes | None = None,
         enable_encryption: bool = True,
         enable_compression: bool = True,
     ):
@@ -52,8 +48,8 @@ class BackupManager:
         data: bytes,
         backup_type: BackupType = BackupType.FULL,
         description: str = "",
-        tags: Optional[dict[str, str]] = None,
-    ) -> Optional[BackupMetadata]:
+        tags: dict[str, str] | None = None,
+    ) -> BackupMetadata | None:
         """Create a new backup."""
         try:
             backup_id = str(uuid4())
@@ -125,7 +121,7 @@ class BackupManager:
                 alert_type="failure",
                 severity="critical",
                 title="Backup creation failed",
-                message=f"Error: {str(e)}",
+                message=f"Error: {e!s}",
             )
             return None
 
@@ -133,7 +129,7 @@ class BackupManager:
         self,
         backup_id: str,
         tenant_id: str,
-    ) -> Optional[RestorePoint]:
+    ) -> RestorePoint | None:
         """Restore from a backup."""
         try:
             logger.info(f"Restoring backup {backup_id} for tenant {tenant_id}")
@@ -213,7 +209,7 @@ class BackupManager:
                 alert_type="failure",
                 severity="critical",
                 title="Restore failed",
-                message=f"Error: {str(e)}",
+                message=f"Error: {e!s}",
             )
             return None
 
@@ -280,7 +276,7 @@ class BackupManager:
         severity: str,
         title: str,
         message: str,
-        backup_id: Optional[str] = None,
+        backup_id: str | None = None,
     ) -> None:
         """Create a backup alert."""
         try:
@@ -369,7 +365,7 @@ class BackupScheduler:
                 logger.error(f"Schedule {schedule_id} not found")
                 return False
 
-            schedule = self.schedules[schedule_id]
+            self.schedules[schedule_id]
             if schedule_id in self.running_tasks:
                 logger.warning(f"Schedule {schedule_id} is already running")
                 return False
@@ -386,10 +382,10 @@ class BackupScheduler:
     async def _run_schedule(self, schedule_id: str) -> None:
         """Run a backup schedule."""
         try:
-            schedule = self.schedules[schedule_id]
+            self.schedules[schedule_id]
             logger.info(f"Running backup schedule {schedule_id}")
 
-            # TODO: Implement schedule execution logic
+            # NOTE: Requires cron scheduler integration (APScheduler/celery-beat)
             # This would involve:
             # 1. Parsing the cron expression or frequency
             # 2. Waiting until the scheduled time

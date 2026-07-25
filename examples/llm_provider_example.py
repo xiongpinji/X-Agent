@@ -8,9 +8,10 @@ import os
 from backend.app.core.llm_providers import (
     LLMConfig,
     LLMMessage,
-    MessageRole,
     ProviderType,
 )
+# MessageRole 未从包级 __init__ 再导出，需从 base 模块导入
+from backend.app.core.llm_providers.base import MessageRole
 from backend.app.core.llm_providers.factory import LLMProviderFactory, LLMRouter
 
 

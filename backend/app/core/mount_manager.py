@@ -9,13 +9,10 @@ from __future__ import annotations
 import json
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from pathlib import Path
 from threading import RLock
-from typing import Optional, Literal
-
-from pydantic import BaseModel, Field
-
+from typing import Literal
 
 MountMode = Literal["ro", "rw"]
 
@@ -71,7 +68,7 @@ class MountPoint:
 class MountManager:
     """Manages mounted directories for flexible file access."""
 
-    def __init__(self, storage_path: Optional[Path] = None) -> None:
+    def __init__(self, storage_path: Path | None = None) -> None:
         """Initialize mount manager.
 
         Args:
@@ -87,7 +84,7 @@ class MountManager:
         self,
         user_id: str,
         host_path: str,
-        mount_path: Optional[str] = None,
+        mount_path: str | None = None,
         mode: MountMode = "rw",
     ) -> MountPoint:
         """Mount a directory for user access.
@@ -128,7 +125,7 @@ class MountManager:
         counter = 1
         original_mount_path = mount_path
         while any(m.mount_path == mount_path for m in self._mounts.values()):
-            base, ext = mount_path.rsplit(".", 1) if "." in mount_path else (mount_path, "")
+            _base, _ext = mount_path.rsplit(".", 1) if "." in mount_path else (mount_path, "")
             mount_path = f"{original_mount_path}_{counter}"
             counter += 1
 
@@ -169,7 +166,7 @@ class MountManager:
 
         return True
 
-    def get_mount(self, mount_id: str) -> Optional[MountPoint]:
+    def get_mount(self, mount_id: str) -> MountPoint | None:
         """Get mount by ID.
 
         Args:
@@ -192,7 +189,7 @@ class MountManager:
         mounts = [m for m in self._mounts.values() if m.user_id == user_id]
         return sorted(mounts, key=lambda m: m.created_at, reverse=True)
 
-    def find_mount_by_path(self, user_id: str, mount_path: str) -> Optional[MountPoint]:
+    def find_mount_by_path(self, user_id: str, mount_path: str) -> MountPoint | None:
         """Find mount by virtual path.
 
         Args:
@@ -207,7 +204,7 @@ class MountManager:
                 return mount
         return None
 
-    def resolve_mount_path(self, user_id: str, virtual_path: str) -> Optional[Path]:
+    def resolve_mount_path(self, user_id: str, virtual_path: str) -> Path | None:
         """Resolve virtual mount path to host path.
 
         Args:
@@ -262,14 +259,12 @@ class MountManager:
 
         if operation == "read":
             return mount.is_readable()
-        elif operation == "write":
-            return mount.is_writable()
-        elif operation == "delete":
+        elif operation == "write" or operation == "delete":
             return mount.is_writable()
 
         return False
 
-    def update_mount_mode(self, mount_id: str, mode: MountMode) -> Optional[MountPoint]:
+    def update_mount_mode(self, mount_id: str, mode: MountMode) -> MountPoint | None:
         """Update mount access mode.
 
         Args:
@@ -290,7 +285,7 @@ class MountManager:
 
         return mount
 
-    def update_mount_metadata(self, mount_id: str, metadata: dict) -> Optional[MountPoint]:
+    def update_mount_metadata(self, mount_id: str, metadata: dict) -> MountPoint | None:
         """Update mount metadata.
 
         Args:
@@ -311,7 +306,7 @@ class MountManager:
 
         return mount
 
-    def get_mount_stats(self, mount_id: str) -> Optional[dict]:
+    def get_mount_stats(self, mount_id: str) -> dict | None:
         """Get mount statistics.
 
         Args:

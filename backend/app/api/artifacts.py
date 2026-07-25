@@ -1,14 +1,14 @@
 """Artifacts API endpoints."""
 
-from typing import Annotated, Optional
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
 
 from backend.app.api.errors import api_error
+from backend.app.core.artifacts import Artifact, ArtifactRenderer, ArtifactStorage
 from backend.app.core.contracts import ErrorCode
-from backend.app.core.artifacts import Artifact, ArtifactStorage, ArtifactRenderer
-from backend.app.dependencies import get_current_principal, enforce_scope
 from backend.app.core.security import Principal
+from backend.app.dependencies import enforce_scope, get_current_principal
 
 router = APIRouter(prefix="/api/v1/artifacts", tags=["artifacts"])
 PrincipalDependency = Annotated[Principal, Depends(get_current_principal)]
@@ -40,8 +40,8 @@ async def create_artifact(
 
 @router.get("")
 async def list_artifacts(
-    artifact_type: Optional[str] = Query(None),
-    tags: Optional[str] = Query(None),
+    artifact_type: str | None = Query(None),
+    tags: str | None = Query(None),
     limit: int = Query(100, ge=1, le=1000),
     offset: int = Query(0, ge=0),
     *,
@@ -172,7 +172,7 @@ async def render_artifact(
         html = await artifact_renderer.render(artifact)
         return {"html": html, "artifact_id": artifact_id}
     except Exception as e:
-        raise api_error(400, ErrorCode.INVALID_REQUEST, f"Render failed: {str(e)}")
+        raise api_error(400, ErrorCode.INVALID_REQUEST, f"Render failed: {e!s}")
 
 
 @router.get("/search")

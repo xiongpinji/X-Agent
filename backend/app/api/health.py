@@ -5,9 +5,8 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import datetime
-from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, HTTPException, status
 
 from backend.app.core.metrics import metrics_collector
 from backend.app.dependencies import (
@@ -48,6 +47,42 @@ class HealthCheckResult:
         }
 
 
+async def check_redis() -> HealthCheckResult:
+    """Check Redis connectivity."""
+    import time
+
+    start = time.perf_counter()
+    try:
+        from backend.app.core.redis_client import get_redis
+        redis = get_redis()
+        if redis.is_available:
+            pong = await redis.ping()
+            latency = (time.perf_counter() - start) * 1000
+            if pong:
+                return HealthCheckResult(
+                    "redis",
+                    HealthStatus.HEALTHY,
+                    "Redis connected",
+                    latency,
+                )
+        latency = (time.perf_counter() - start) * 1000
+        return HealthCheckResult(
+            "redis",
+            HealthStatus.DEGRADED,
+            "Redis not configured, using in-memory fallback",
+            latency,
+        )
+    except Exception as e:
+        latency = (time.perf_counter() - start) * 1000
+        logger.error(f"Redis health check failed: {e}")
+        return HealthCheckResult(
+            "redis",
+            HealthStatus.DEGRADED,
+            f"Redis check failed: {e!s}",
+            latency,
+        )
+
+
 async def check_database() -> HealthCheckResult:
     """Check database connectivity."""
     import time
@@ -69,7 +104,7 @@ async def check_database() -> HealthCheckResult:
         return HealthCheckResult(
             "database",
             HealthStatus.UNHEALTHY,
-            f"Database check failed: {str(e)}",
+            f"Database check failed: {e!s}",
             latency,
         )
 
@@ -97,7 +132,7 @@ async def check_memory_store() -> HealthCheckResult:
         return HealthCheckResult(
             "memory_store",
             HealthStatus.UNHEALTHY,
-            f"Memory store check failed: {str(e)}",
+            f"Memory store check failed: {e!s}",
             latency,
         )
 
@@ -123,7 +158,7 @@ async def check_audit_store() -> HealthCheckResult:
         return HealthCheckResult(
             "audit_store",
             HealthStatus.UNHEALTHY,
-            f"Audit store check failed: {str(e)}",
+            f"Audit store check failed: {e!s}",
             latency,
         )
 
@@ -149,7 +184,7 @@ async def check_approval_store() -> HealthCheckResult:
         return HealthCheckResult(
             "approval_store",
             HealthStatus.UNHEALTHY,
-            f"Approval store check failed: {str(e)}",
+            f"Approval store check failed: {e!s}",
             latency,
         )
 
@@ -167,6 +202,7 @@ async def liveness_probe() -> dict:
 async def readiness_probe() -> dict:
     """Readiness probe - indicates if the service is ready to handle requests."""
     checks = await asyncio.gather(
+        check_redis(),
         check_database(),
         check_memory_store(),
         check_audit_store(),
@@ -199,6 +235,7 @@ async def readiness_probe() -> dict:
 async def detailed_health_check() -> dict:
     """Detailed health check with all dependencies."""
     checks = await asyncio.gather(
+        check_redis(),
         check_database(),
         check_memory_store(),
         check_audit_store(),

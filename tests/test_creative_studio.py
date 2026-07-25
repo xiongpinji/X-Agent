@@ -237,13 +237,24 @@ async def test_registry_no_provider_returns_failure():
 
 # ───── tool integration ─────
 
-def test_creative_tools_registered_in_default_registry():
+def test_creative_tools_registered_via_explicit_wiring():
+    """真实契约：creative 工具不在默认注册表中，需显式调用 register_creative_tools 接线。
+
+    build_default_tool_registry（backend/app/core/tools.py）从未注册 creative 工具；
+    creative_studio/wiring.py 导出 register_creative_tools 作为显式接线入口。
+    """
     from backend.app.core.tools import build_default_tool_registry
     from backend.app.core.policy import ToolPolicyEngine
+    from backend.app.core.creative_studio.wiring import register_creative_tools
+
     reg = build_default_tool_registry(ToolPolicyEngine(enable_high_risk_tools=True))
+    names = {t["name"] for t in reg.manifest()}
+    # 默认注册表不含 creative 工具（既有契约，从未包含）
+    assert "create_short_drama_storyboard" not in names
+
+    register_creative_tools(reg)
     names = {t["name"] for t in reg.manifest()}
     assert "create_short_drama_storyboard" in names
     assert "generate_shot_image" in names
-
     assert "synthesize_voiceover" in names
     assert "compose_short_drama" in names

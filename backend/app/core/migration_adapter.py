@@ -4,13 +4,13 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Optional
+from typing import Any
 
-from backend.app.models.user_store import UserStorePostgres, get_user_store
-from backend.app.models.api_key_store import APIKeyStorePostgres, get_api_key_store
-from backend.app.models.approval_store import ApprovalStorePostgres, get_approval_store
-from backend.app.models.rate_limiter import RateLimiterRedis, get_rate_limiter
-from backend.app.models.csrf_token_store import CSRFTokenStoreRedis, get_csrf_token_store
+from backend.app.models.api_key_store import get_api_key_store
+from backend.app.models.approval_store import get_approval_store
+from backend.app.models.csrf_token_store import get_csrf_token_store
+from backend.app.models.rate_limiter import get_rate_limiter
+from backend.app.models.user_store import get_user_store
 
 logger = logging.getLogger(__name__)
 
@@ -223,7 +223,7 @@ class MigrationAdapter:
             logger.error(f"创建CSRF令牌失败: {e}")
             raise
 
-    async def validate_csrf_token(self, **kwargs) -> tuple[bool, Optional[dict]]:
+    async def validate_csrf_token(self, **kwargs) -> tuple[bool, dict | None]:
         """验证CSRF令牌 - 从新存储读取"""
         return await self.new_csrf_token_store.validate_token(**kwargs)
 

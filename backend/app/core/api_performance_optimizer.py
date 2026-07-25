@@ -14,7 +14,7 @@ import asyncio
 import logging
 import time
 from dataclasses import dataclass, field
-from typing import Any, Callable, Optional
+from typing import Any
 
 logger = logging.getLogger("xagent.api_perf")
 
@@ -271,7 +271,7 @@ class QueryBatcher:
                 self.batch_event.wait(),
                 timeout=self.batch_timeout_ms / 1000,
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             self.batch_event.set()
 
         return None

@@ -24,9 +24,8 @@ import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from threading import RLock
-from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
@@ -310,7 +309,7 @@ class DistributedLockManager:
 
 
 # Global lock manager instance
-_lock_manager: Optional[DistributedLockManager] = None
+_lock_manager: DistributedLockManager | None = None
 
 
 def get_lock_manager(redis_client=None) -> DistributedLockManager:

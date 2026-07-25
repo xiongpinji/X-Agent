@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Optional
+from typing import Any
 
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
@@ -66,7 +66,7 @@ async def configure_saml(request: SAMLConfigRequest) -> dict[str, Any]:
             idp_entity_id=request.idp_entity_id,
             idp_sso_url=request.idp_sso_url,
         )
-        processor = SAMLProcessor(config)
+        SAMLProcessor(config)
 
         return {
             "status": "success",
@@ -113,7 +113,7 @@ async def configure_oauth(request: OAuthConfigRequest) -> dict[str, Any]:
             userinfo_endpoint=request.userinfo_endpoint,
             issuer=request.issuer,
         )
-        processor = OAuthProcessor(config)
+        OAuthProcessor(config)
 
         return {
             "status": "success",

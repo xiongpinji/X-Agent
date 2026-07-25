@@ -13,13 +13,12 @@ This module provides deep code analysis capabilities including:
 from __future__ import annotations
 
 import ast
-import json
 import logging
 import re
 from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 from uuid import uuid4
 
 logger = logging.getLogger(__name__)
@@ -81,13 +80,13 @@ class CodeSymbol:
     line_end: int
     column_start: int = 0
     column_end: int = 0
-    docstring: Optional[str] = None
-    signature: Optional[str] = None
-    return_type: Optional[str] = None
+    docstring: str | None = None
+    signature: str | None = None
+    return_type: str | None = None
     parameters: list[dict[str, Any]] = field(default_factory=list)
     decorators: list[str] = field(default_factory=list)
     modifiers: list[str] = field(default_factory=list)
-    parent: Optional[str] = None
+    parent: str | None = None
     children: list[str] = field(default_factory=list)
     references: list[str] = field(default_factory=list)
     complexity: int = 1
@@ -171,8 +170,8 @@ class CodeAnalysis:
     exports: list[str] = field(default_factory=list)
     patterns: list[DesignPattern] = field(default_factory=list)
     metrics: CodeMetrics = field(default_factory=CodeMetrics)
-    intent: Optional[str] = None
-    summary: Optional[str] = None
+    intent: str | None = None
+    summary: str | None = None
     issues: list[str] = field(default_factory=list)
     analysis_id: str = field(default_factory=lambda: str(uuid4()))
 
@@ -203,7 +202,7 @@ class PythonAnalyzer(ast.NodeVisitor):
         self.symbols: list[CodeSymbol] = []
         self.dependencies: list[CodeDependency] = []
         self.imports: list[str] = []
-        self.current_class: Optional[str] = None
+        self.current_class: str | None = None
         self.metrics = CodeMetrics()
         self._lines = source.split("\n")
 
@@ -374,7 +373,7 @@ class CodeUnderstandingEngine:
         self.analyses: dict[str, CodeAnalysis] = {}
         self.dependency_graph: dict[str, list[str]] = {}
 
-    def analyze_file(self, file_path: str, language: Optional[CodeLanguage] = None) -> CodeAnalysis:
+    def analyze_file(self, file_path: str, language: CodeLanguage | None = None) -> CodeAnalysis:
         """Analyze a single file."""
         path = Path(file_path)
         if not path.exists():
@@ -397,7 +396,7 @@ class CodeUnderstandingEngine:
         self.analyses[file_path] = analysis
         return analysis
 
-    def analyze_project(self, root_path: str, extensions: Optional[list[str]] = None) -> dict[str, CodeAnalysis]:
+    def analyze_project(self, root_path: str, extensions: list[str] | None = None) -> dict[str, CodeAnalysis]:
         """Analyze all files in a project."""
         if extensions is None:
             extensions = [".py", ".js", ".ts", ".go", ".rs", ".java", ".cpp"]

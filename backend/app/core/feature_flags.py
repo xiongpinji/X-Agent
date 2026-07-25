@@ -9,13 +9,12 @@ from __future__ import annotations
 import hashlib
 import logging
 from dataclasses import dataclass
-from enum import Enum
-from typing import Optional
+from enum import StrEnum
 
 logger = logging.getLogger(__name__)
 
 
-class FeatureFlag(str, Enum):
+class FeatureFlag(StrEnum):
     """Available feature flags."""
 
     USE_AGENT_V2 = "use_agent_v2"
@@ -74,8 +73,8 @@ class FeatureFlagManager:
     def is_enabled(
         self,
         flag: FeatureFlag,
-        tenant_id: Optional[str] = None,
-        user_id: Optional[str] = None,
+        tenant_id: str | None = None,
+        user_id: str | None = None,
     ) -> bool:
         """Check if a feature flag is enabled for a user/tenant.
 
@@ -175,7 +174,7 @@ class FeatureFlagManager:
             f"rollout={rollout_percentage}%"
         )
 
-    def get_flag_config(self, flag: FeatureFlag) -> Optional[FeatureFlagConfig]:
+    def get_flag_config(self, flag: FeatureFlag) -> FeatureFlagConfig | None:
         """Get feature flag configuration.
 
         Args:
@@ -196,7 +195,7 @@ class FeatureFlagManager:
 
 
 # Global feature flag manager instance
-_feature_flag_manager: Optional[FeatureFlagManager] = None
+_feature_flag_manager: FeatureFlagManager | None = None
 
 
 def get_feature_flag_manager() -> FeatureFlagManager:

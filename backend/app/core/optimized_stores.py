@@ -5,9 +5,12 @@ Replaces inefficient query patterns with batch loading and caching.
 
 from __future__ import annotations
 
-from typing import Any, Optional
-from backend.app.core.query_cache import cached_query, get_query_cache, CacheConfig, init_query_cache
-from backend.app.core.query_optimizer import get_query_optimizer, track_query
+from typing import Any
+
+from backend.app.core.query_cache import (
+    cached_query,
+    get_query_cache,
+)
 
 
 class OptimizedRunStore:

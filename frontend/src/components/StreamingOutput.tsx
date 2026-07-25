@@ -20,7 +20,7 @@ interface StreamingConsoleProps {
 }
 
 // Memoized event renderer
-const EventRenderer = React.memo(({ event, index, showTimestamps }: {
+const EventRenderer = React.memo(({ event, showTimestamps }: {
   event: StreamEvent;
   index: number;
   showTimestamps: boolean;
@@ -76,7 +76,7 @@ const EventRenderer = React.memo(({ event, index, showTimestamps }: {
         </div>
       );
 
-    case 'log':
+    case 'log': {
       const logLevel = (event as any).level || 'info';
       const logColors = {
         debug: 'bg-gray-50 border-gray-400 text-gray-700',
@@ -95,6 +95,7 @@ const EventRenderer = React.memo(({ event, index, showTimestamps }: {
           </div>
         </div>
       );
+    }
 
     case 'error':
       return (

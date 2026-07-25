@@ -6,38 +6,55 @@ Endpoints:
 - GET /api/v1/agents/parallel/{batch_id}/status - Get batch status
 - GET /api/v1/agents/parallel/{batch_id}/results - Get batch results
 - POST /api/v1/agents/parallel/{batch_id}/cancel - Cancel batch
+
+P1-09 Collaboration Module Convergence
+---------------------------------------
+This is ONE of three distinct multi-agent API surfaces (NOT duplicates):
+
+- collaboration  /api/v1/collaboration
+    Shared-context rooms, messaging, delegation.
+- multi_agent  /api/v1/multi-agent
+    Structured orchestration (decompose -> execute with dependencies).
+- parallel_agents (THIS)  /api/v1/agents/parallel
+    Independent fan-out execution + communication bus.
+
+Cross-references:
+    - backend.app.api.collaboration (collaboration rooms API)
+    - backend.app.api.multi_agent (orchestration API, P2-01)
+    - backend.app.core.parallel_agent_executor (core executor)
+
+NOTE: backend.app.core.parallel_execution_engine is DEPRECATED;
+    use backend.app.core.parallel_agent_executor instead.
 """
 
 from __future__ import annotations
 
 import logging
-from typing import Annotated, Any, Callable, Optional
+from collections.abc import Callable
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from backend.app.core.agent_communication_bus import (
+    AgentCommunicationBus,
+    MessagePriority,
+)
 from backend.app.core.contracts import RunContext
 from backend.app.core.parallel_agent_executor import (
-    ParallelAgentExecutor,
     AgentFactoryNotConfiguredError,
     AgentTask,
     IsolationMode,
-    BatchExecutionResult,
-)
-from backend.app.core.agent_communication_bus import (
-    AgentCommunicationBus,
-    Message,
-    MessagePriority,
+    ParallelAgentExecutor,
 )
 from backend.app.core.result_aggregator import (
-    ResultAggregator,
     AggregationConfig,
-    MergeStrategy,
     ConflictResolution,
+    MergeStrategy,
+    ResultAggregator,
 )
 from backend.app.core.security import Principal
 from backend.app.dependencies import enforce_scope, get_current_principal
-
 
 logger = logging.getLogger(__name__)
 
@@ -45,9 +62,9 @@ router = APIRouter(prefix="/api/v1/agents/parallel", tags=["parallel_agents"])
 PrincipalDependency = Annotated[Principal, Depends(get_current_principal)]
 
 # Global instances
-_executor: Optional[ParallelAgentExecutor] = None
-_bus: Optional[AgentCommunicationBus] = None
-_aggregator: Optional[ResultAggregator] = None
+_executor: ParallelAgentExecutor | None = None
+_bus: AgentCommunicationBus | None = None
+_aggregator: ResultAggregator | None = None
 
 
 def get_executor() -> ParallelAgentExecutor:
@@ -92,7 +109,7 @@ class SpawnAgentsRequest(BaseModel):
     """Request to spawn parallel agents."""
     tasks: list[TaskRequest]
     isolation: str = "thread"
-    max_parallel: Optional[int] = None
+    max_parallel: int | None = None
     aggregate_results: bool = True
     merge_strategy: str = "merge"
     conflict_resolution: str = "keep_last"
@@ -113,7 +130,7 @@ class TaskResultResponse(BaseModel):
     agent_id: str
     status: str
     output: Any = None
-    error: Optional[str] = None
+    error: str | None = None
     duration_seconds: float = 0.0
     retry_attempts: int = 0
 
@@ -138,7 +155,7 @@ class MessageRequest(BaseModel):
     to_agent: str
     content: Any
     priority: str = "normal"
-    ttl_seconds: Optional[int] = None
+    ttl_seconds: int | None = None
 
 
 class BroadcastRequest(BaseModel):
@@ -589,4 +606,71 @@ async def get_message_stats(
         return stats
     except Exception as e:
         logger.error(f"Error getting stats: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ─── Ultra 4-Agent 并行端点 ────────────────────────────────────────────────────
+
+
+class UltraRequest(BaseModel):
+    """Request for Ultra 4-Agent parallel execution."""
+    task: str
+    max_agents: int = Field(default=4, ge=2, le=8)
+    budget_tokens_per_agent: int = Field(default=50000, ge=1000, le=200000)
+    timeout_seconds: int = Field(default=600, ge=60, le=3600)
+    merge_strategy: str = "synthesize"  # synthesize | concat | vote
+
+
+@router.post("/ultra")
+async def ultra_execute(
+    request: UltraRequest,
+    principal: PrincipalDependency,
+) -> dict[str, Any]:
+    """
+    Ultra 模式: 协调者拆分任务 → N 个 Agent 并行执行 → 聚合结果。
+
+    对标 Codex Ultra 4-Agent 并行模式。
+    """
+    enforce_scope(principal, "agent:run")
+
+    from backend.app.settings import settings
+    if not settings.ultra_mode_enabled:
+        raise HTTPException(status_code=403, detail="Ultra mode is not enabled")
+
+    try:
+        from backend.app.core.ultra_mode import UltraConfig, UltraOrchestrator
+        from backend.app.dependencies import get_agent, get_llm_router
+
+        agent_loop = get_agent()
+        llm_router = get_llm_router()
+
+        config = UltraConfig(
+            max_agents=min(request.max_agents, settings.ultra_max_agents),
+            budget_tokens_per_agent=request.budget_tokens_per_agent,
+            timeout_seconds=request.timeout_seconds,
+            merge_strategy=request.merge_strategy,
+        )
+
+        # agent_factory: (task_description) -> coroutine returning output str
+        async def agent_factory(task_description: str) -> str:
+            context = RunContext(
+                tenant_id=principal.tenant_id,
+                user_id=principal.user_id,
+                agent_id=f"ultra-{principal.agent_id}",
+                permission_scope=list(getattr(principal, "scopes", None) or []),
+            )
+            response = await agent_loop.run(context, task_description, {})
+            return getattr(response, "answer", "") or ""
+
+        orchestrator = UltraOrchestrator(
+            agent_factory=agent_factory,
+            llm_router=llm_router,
+        )
+        result = await orchestrator.execute(request.task, {}, config)
+        return result.to_dict()
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Ultra execution error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))

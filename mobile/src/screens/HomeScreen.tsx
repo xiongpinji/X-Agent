@@ -224,8 +224,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
 };
 
 // Stat Card Component
+type IconName = React.ComponentProps<typeof MaterialCommunityIcons>['name'];
+
 interface StatCardProps {
-  icon: string;
+  icon: IconName;
   label: string;
   value: number;
   color: string;
@@ -265,7 +267,7 @@ const StatCard: React.FC<StatCardProps> = ({
 
 // Action Button Component
 interface ActionButtonProps {
-  icon: string;
+  icon: IconName;
   label: string;
   color: string;
   onPress?: () => void;

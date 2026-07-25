@@ -2,12 +2,13 @@
 技能API端点 - 提供技能管理和执行接口
 """
 
-from typing import Annotated, List
+from typing import Annotated
+
 from fastapi import APIRouter, Depends, HTTPException
 
-from backend.app.core.skills import SkillLoader, SkillRegistry, SkillContext
-from backend.app.dependencies import get_current_principal, enforce_scope
 from backend.app.core.security import Principal
+from backend.app.core.skills import SkillContext, SkillLoader, SkillRegistry
+from backend.app.dependencies import enforce_scope, get_current_principal
 
 router = APIRouter(prefix="/api/v1/skills", tags=["skills"])
 PrincipalDependency = Annotated[Principal, Depends(get_current_principal)]

@@ -52,7 +52,7 @@ async def get_overview(principal: PrincipalDependency) -> dict[str, object]:
         memory_count = snapshot.get("count", memory.count())
         if hasattr(memory_count, "__await__"):
             memory_count = await memory_count
-    except Exception:  # noqa: BLE001 - 总览面板不应因单域故障而 500
+    except Exception:
         memory_count = 0
 
     return {
@@ -92,7 +92,7 @@ async def draft_overview(payload: dict[str, object], principal: PrincipalDepende
         trace_ids=[],
     )
     recovery_plan = verification.get("recovery_plan", {})
-    recovery = build_recovery_context(
+    build_recovery_context(
         status=verification.get("status", "draft"),
         resource_type="overview", 
         resource_id=task,

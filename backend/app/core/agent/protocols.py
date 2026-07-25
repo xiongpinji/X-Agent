@@ -4,9 +4,11 @@ Core interfaces for AgentLoop refactoring using Protocol-based design.
 Defines the contracts for each component following SOLID principles.
 """
 
-from typing import Protocol, Any, Awaitable, Callable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from backend.app.core.contracts import RunContext, ToolCallRecord, TraceEvent
+from typing import Any, Protocol
+
+from backend.app.core.contracts import RunContext, TraceEvent
 
 
 @dataclass

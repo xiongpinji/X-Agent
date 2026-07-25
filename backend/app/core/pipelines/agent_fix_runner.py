@@ -326,7 +326,7 @@ class AgentFixRunner:
             tools_map[name] = original
 
     async def __call__(self, sandbox: Any, issue: Any, workspace: str) -> bool:
-        from backend.app.core.contracts import RunContext, RiskLevel, RunStatus
+        from backend.app.core.contracts import RiskLevel, RunContext, RunStatus
 
         clone_dir = self._resolve_clone_dir(workspace)
         agent = self._get_agent()

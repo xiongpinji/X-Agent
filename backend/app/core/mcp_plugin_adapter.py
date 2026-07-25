@@ -11,7 +11,7 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
 from threading import RLock
-from typing import Any, Optional
+from typing import Any
 from uuid import uuid4
 
 from pydantic import BaseModel, Field, validator
@@ -100,11 +100,11 @@ class MCPPlugin:
     manifest: MCPManifest = None
     plugin_path: Path = None
     status: MCPPluginStatus = MCPPluginStatus.UNLOADED
-    process: Optional[subprocess.Popen] = None
+    process: subprocess.Popen | None = None
     config: dict[str, Any] = field(default_factory=dict)
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
-    error_message: Optional[str] = None
+    error_message: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary"""
@@ -140,7 +140,7 @@ class MCPPluginAdapter:
             raise FileNotFoundError(f"Manifest not found: {manifest_file}")
 
         try:
-            with open(manifest_file, "r", encoding="utf-8") as f:
+            with open(manifest_file, encoding="utf-8") as f:
                 manifest_data = json.load(f)
 
             manifest = MCPManifest(**manifest_data)
@@ -380,7 +380,7 @@ class MCPPluginAdapter:
             logger.error(f"Failed to update config for {plugin.manifest.name}: {e}")
             return False
 
-    def get_plugin(self, plugin_id: str) -> Optional[MCPPlugin]:
+    def get_plugin(self, plugin_id: str) -> MCPPlugin | None:
         """Get plugin by ID"""
         with self._lock:
             return self._plugins.get(plugin_id)
@@ -495,9 +495,9 @@ class MCPPluginAdapter:
         schema = tool_def.get("input_schema", {})
         required = schema.get("required", [])
 
-        for field in required:
-            if field not in args:
-                raise ValueError(f"Required field missing: {field}")
+        for field_name in required:
+            if field_name not in args:
+                raise ValueError(f"Required field missing: {field_name}")
 
     @staticmethod
     def _validate_config(manifest: MCPManifest, config: dict[str, Any]) -> None:

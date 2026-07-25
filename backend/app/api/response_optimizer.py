@@ -12,9 +12,10 @@ from __future__ import annotations
 import gzip
 import json
 import logging
-from typing import Any, Generic, TypeVar, Callable
-from dataclasses import dataclass, asdict
-from datetime import datetime, UTC
+from collections.abc import Callable
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from typing import Any, Generic, TypeVar
 
 try:
     import orjson
@@ -198,10 +199,7 @@ class ResponseCompressor:
         Returns:
             True if data should be compressed
         """
-        if isinstance(data, str):
-            size = len(data.encode("utf-8"))
-        else:
-            size = len(data)
+        size = len(data.encode("utf-8")) if isinstance(data, str) else len(data)
 
         return size > min_size
 

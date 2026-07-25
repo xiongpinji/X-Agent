@@ -18,11 +18,12 @@ from __future__ import annotations
 
 import logging
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from enum import Enum
+from enum import StrEnum
 from threading import RLock
-from typing import Any, Callable, Generic, TypeVar
+from typing import Any, Generic, TypeVar
 
 from pydantic import BaseModel, Field
 
@@ -31,7 +32,7 @@ logger = logging.getLogger(__name__)
 T = TypeVar("T")
 
 
-class CircuitBreakerState(str, Enum):
+class CircuitBreakerState(StrEnum):
     """Circuit breaker states"""
     CLOSED = "closed"
     OPEN = "open"
@@ -113,7 +114,7 @@ class CircuitBreaker(Generic[T]):
             result = func(*args, **kwargs)
             self._on_success()
             return result
-        except self.config.expected_exception as e:
+        except self.config.expected_exception:
             self._on_failure()
             raise
 
@@ -149,7 +150,7 @@ class CircuitBreaker(Generic[T]):
             result = await func(*args, **kwargs)
             self._on_success()
             return result
-        except self.config.expected_exception as e:
+        except self.config.expected_exception:
             self._on_failure()
             raise
 

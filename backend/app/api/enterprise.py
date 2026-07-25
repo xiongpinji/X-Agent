@@ -5,7 +5,7 @@ Enterprise API routes for multi-tenancy, SSO, team management, and compliance.
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
-from typing import Any, Optional
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
@@ -26,7 +26,7 @@ from backend.app.core.enterprise import (
 router = APIRouter(prefix="/api/v1/enterprise", tags=["enterprise"])
 
 # Global enterprise service instance
-_enterprise_service: Optional[EnterpriseService] = None
+_enterprise_service: EnterpriseService | None = None
 
 
 def get_enterprise_service() -> EnterpriseService:
@@ -351,7 +351,7 @@ async def create_api_key(
 @router.get("/tenants/{tenant_id}/api-keys", response_model=list[APIKey])
 async def list_api_keys(
     tenant_id: str,
-    user_id: Optional[str] = Query(None),
+    user_id: str | None = Query(None),
     service: EnterpriseService = Depends(get_enterprise_service),
 ) -> list[APIKey]:
     """List API keys."""
@@ -387,9 +387,9 @@ async def revoke_api_key(
 @router.get("/tenants/{tenant_id}/audit-logs", response_model=list[AuditLog])
 async def list_audit_logs(
     tenant_id: str,
-    start_date: Optional[datetime] = Query(None),
-    end_date: Optional[datetime] = Query(None),
-    event_type: Optional[str] = Query(None),
+    start_date: datetime | None = Query(None),
+    end_date: datetime | None = Query(None),
+    event_type: str | None = Query(None),
     service: EnterpriseService = Depends(get_enterprise_service),
 ) -> list[AuditLog]:
     """List audit logs for a tenant."""

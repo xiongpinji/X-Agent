@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react'
 import { useAppStore } from '@/store/appStore'
-import { apiClient } from '@/services/api'
+import { apiClient, DashboardMetrics } from '@/services/api'
+import { useI18n } from '@/i18n/context'
 import { Activity, Users, Zap, Clock } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -9,6 +10,9 @@ interface DashboardStats {
   activeTasks: number
   totalTools: number
   uptime: string
+  requestCount: number
+  errorRate: string
+  avgLatency: string
 }
 
 // Memoized StatCard component
@@ -77,12 +81,16 @@ const QuickActionButton: React.FC<{
 QuickActionButton.displayName = 'QuickActionButton'
 
 export const Dashboard: React.FC = React.memo(() => {
-  const { theme, isLoading, setLoading, setError } = useAppStore()
+  const { theme, setLoading, setError } = useAppStore()
+  const { t } = useI18n()
   const [stats, setStats] = useState<DashboardStats>({
     totalAgents: 0,
     activeTasks: 0,
     totalTools: 0,
-    uptime: '99.9%',
+    uptime: '—',
+    requestCount: 0,
+    errorRate: '—',
+    avgLatency: '—',
   })
 
   useEffect(() => {
@@ -92,16 +100,27 @@ export const Dashboard: React.FC = React.memo(() => {
   const loadDashboardData = useCallback(async () => {
     try {
       setLoading(true)
-      const [agents, tools] = await Promise.all([
+      const [agents, tools, tasks, metricsResp] = await Promise.all([
         apiClient.listAgents(),
         apiClient.listTools(),
+        apiClient.listTasks(1, 100),
+        apiClient.getMetrics().catch(() => null),
       ])
+
+      const activeTasks = tasks.items.filter(
+        (t) => t.status === 'in_progress' || t.status === 'pending'
+      ).length
+
+      const metrics: DashboardMetrics = metricsResp || {}
 
       setStats({
         totalAgents: agents.length,
-        activeTasks: 0,
+        activeTasks,
         totalTools: tools.length,
-        uptime: '99.9%',
+        uptime: String(metrics.uptime || metrics.uptime_percent || '—'),
+        requestCount: metrics.total_requests || metrics.request_count || 0,
+        errorRate: metrics.error_rate != null ? `${(metrics.error_rate * 100).toFixed(1)}%` : '—',
+        avgLatency: metrics.avg_latency_ms != null ? `${Math.round(metrics.avg_latency_ms)}ms` : '—',
       })
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Failed to load dashboard')
@@ -114,35 +133,36 @@ export const Dashboard: React.FC = React.memo(() => {
   const statCards = useMemo(() => [
     {
       icon: <Users size={24} />,
-      label: 'Total Agents',
+      label: t('dashboard.totalAgents', 'Total Agents'),
       value: stats.totalAgents,
       color: 'blue' as const,
     },
     {
       icon: <Activity size={24} />,
-      label: 'Active Tasks',
+      label: t('dashboard.activeTasks', 'Active Tasks'),
       value: stats.activeTasks,
       color: 'green' as const,
     },
     {
       icon: <Zap size={24} />,
-      label: 'Total Tools',
+      label: t('dashboard.totalTools', 'Total Tools'),
       value: stats.totalTools,
       color: 'purple' as const,
     },
     {
       icon: <Clock size={24} />,
-      label: 'Uptime',
+      label: t('dashboard.uptime', 'Uptime'),
       value: stats.uptime,
       color: 'orange' as const,
     },
-  ], [stats])
+  ], [stats, t])
 
   const quickActions = useMemo(() => [
-    { label: 'Start New Chat', href: '/chat' },
-    { label: 'Create Task', href: '/tasks' },
-    { label: 'Manage Tools', href: '/tools' },
-  ], [])
+    { label: t('dashboard.startNewChat', 'Start New Chat'), href: '/chat' },
+    { label: t('dashboard.createTask', 'Create Task'), href: '/tasks' },
+    { label: t('dashboard.manageWorkflows', 'Workflows'), href: '/workflows' },
+    { label: t('dashboard.manageTools', 'Manage Tools'), href: '/tools' },
+  ], [t])
 
   return (
     <div className={clsx(
@@ -156,13 +176,13 @@ export const Dashboard: React.FC = React.memo(() => {
             'text-4xl font-bold mb-2',
             theme === 'dark' ? 'text-white' : 'text-slate-900'
           )}>
-            Dashboard
+            {t('dashboard.title', 'Dashboard')}
           </h1>
           <p className={clsx(
             'text-lg',
             theme === 'dark' ? 'text-slate-400' : 'text-slate-600'
           )}>
-            Welcome to X-Agent Control Center
+            {t('dashboard.subtitle', 'Welcome to X-Agent Control Center')}
           </p>
         </div>
 
@@ -188,9 +208,9 @@ export const Dashboard: React.FC = React.memo(() => {
             'text-xl font-bold mb-4',
             theme === 'dark' ? 'text-white' : 'text-slate-900'
           )}>
-            Quick Actions
+            {t('dashboard.quickActions', 'Quick Actions')}
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             {quickActions.map((action, index) => (
               <QuickActionButton
                 key={index}
@@ -210,13 +230,21 @@ export const Dashboard: React.FC = React.memo(() => {
             'text-xl font-bold mb-4',
             theme === 'dark' ? 'text-white' : 'text-slate-900'
           )}>
-            Recent Activity
+            {t('dashboard.systemMetrics', 'System Metrics')}
           </h2>
-          <div className={clsx(
-            'text-center py-8',
-            theme === 'dark' ? 'text-slate-400' : 'text-slate-500'
-          )}>
-            <p>No recent activity</p>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className={clsx('p-4 rounded-lg', theme === 'dark' ? 'bg-slate-800' : 'bg-slate-50')}>
+              <p className={clsx('text-xs mb-1', theme === 'dark' ? 'text-slate-400' : 'text-slate-500')}>{t('dashboard.requests', 'Total Requests')}</p>
+              <p className="text-lg font-bold">{stats.requestCount}</p>
+            </div>
+            <div className={clsx('p-4 rounded-lg', theme === 'dark' ? 'bg-slate-800' : 'bg-slate-50')}>
+              <p className={clsx('text-xs mb-1', theme === 'dark' ? 'text-slate-400' : 'text-slate-500')}>{t('dashboard.errorRate', 'Error Rate')}</p>
+              <p className="text-lg font-bold">{stats.errorRate}</p>
+            </div>
+            <div className={clsx('p-4 rounded-lg', theme === 'dark' ? 'bg-slate-800' : 'bg-slate-50')}>
+              <p className={clsx('text-xs mb-1', theme === 'dark' ? 'text-slate-400' : 'text-slate-500')}>{t('dashboard.avgLatency', 'Avg Latency')}</p>
+              <p className="text-lg font-bold">{stats.avgLatency}</p>
+            </div>
           </div>
         </div>
       </div>

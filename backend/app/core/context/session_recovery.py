@@ -9,15 +9,12 @@ import asyncio
 import json
 import logging
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 from uuid import uuid4
 
 logger = logging.getLogger(__name__)
-
-# Python 3.10 compatibility: UTC timezone
-UTC = timezone.utc
 
 
 @dataclass
@@ -27,7 +24,7 @@ class Message:
     id: str = field(default_factory=lambda: str(uuid4()))
     role: str = "user"  # user, assistant, system, tool
     content: str = ""
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
     metadata: dict = field(default_factory=dict)
     importance: float = 0.5
     compressed: bool = False
@@ -66,9 +63,9 @@ class SessionState:
     context_window: int = 128_000
     compression_history: list[dict[str, Any]] = field(default_factory=list)
     metadata: dict = field(default_factory=dict)
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    last_checkpoint: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    last_checkpoint: datetime = field(default_factory=lambda: datetime.now(UTC))
     total_tokens: int = 0
     compressed_tokens: int = 0
 
@@ -106,7 +103,7 @@ class SessionSnapshot:
 
     snapshot_id: str = field(default_factory=lambda: str(uuid4()))
     session_id: str = ""
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
     message_count: int = 0
     token_count: int = 0
     compressed_token_count: int = 0
@@ -136,11 +133,11 @@ class SessionMetadata:
     session_id: str
     agent_id: str
     title: str = ""
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     message_count: int = 0
     token_count: int = 0
-    last_snapshot: Optional[datetime] = None
+    last_snapshot: datetime | None = None
     tenant_id: str = ""
 
 
@@ -217,7 +214,7 @@ class SessionRecovery:
                 # Create snapshot
                 snapshot = SessionSnapshot(
                     session_id=session_state.session_id,
-                    timestamp=datetime.now(timezone.utc),
+                    timestamp=datetime.now(UTC),
                     message_count=len(session_state.messages),
                     token_count=session_state.total_tokens,
                     compressed_token_count=session_state.compressed_tokens,
@@ -246,7 +243,7 @@ class SessionRecovery:
                     agent_id=session_state.agent_id,
                     title=session_state.metadata.get("title", ""),
                     created_at=session_state.created_at,
-                    updated_at=datetime.now(timezone.utc),
+                    updated_at=datetime.now(UTC),
                     message_count=len(session_state.messages),
                     token_count=session_state.total_tokens,
                     last_snapshot=datetime.now(UTC),

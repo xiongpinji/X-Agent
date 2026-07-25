@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
-import json
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -158,7 +157,6 @@ class MemoryGovernance:
 
     async def should_retain(self, record: MemoryRecord) -> bool:
         """Check if memory should be retained."""
-        from datetime import timedelta
         age = datetime.now() - record.updated_at
         return age.days < self.retention_days
 

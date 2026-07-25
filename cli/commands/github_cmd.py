@@ -8,7 +8,7 @@ import typer
 
 from backend.app.core.pipelines.issue_to_pr import dry_run_issue_to_pr
 from cli.console import print_error, print_json, print_success
-from cli.main import get_current_config
+from cli.state import get_current_config
 
 github_app = typer.Typer(
     name="github",

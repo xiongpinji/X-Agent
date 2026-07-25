@@ -11,7 +11,6 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -450,7 +449,7 @@ groups:
     interval: 30s
     rules:
       - alert: HighErrorRate
-        expr: rate(http_requests_total{status=~"5.."}[5m]) > 0.05
+        expr: rate(xagent_http_requests_total{status=~"5.."}[5m]) > 0.05
         for: 5m
         labels:
           severity: critical
@@ -459,7 +458,7 @@ groups:
           description: "Error rate is {{ $value }} errors per second"
 
       - alert: HighLatency
-        expr: histogram_quantile(0.95, http_request_duration_seconds) > 1
+        expr: histogram_quantile(0.95, rate(xagent_http_request_duration_seconds_bucket[5m])) > 1
         for: 5m
         labels:
           severity: warning
@@ -467,14 +466,23 @@ groups:
           summary: "High latency detected"
           description: "P95 latency is {{ $value }} seconds"
 
-      - alert: DatabaseConnectionPoolExhausted
-        expr: db_connection_pool_available < 5
-        for: 2m
+      - alert: HighLLMErrorRate
+        expr: rate(xagent_llm_calls_total{status="error"}[5m]) > 0.1
+        for: 5m
         labels:
-          severity: critical
+          severity: warning
         annotations:
-          summary: "Database connection pool exhausted"
-          description: "Available connections: {{ $value }}"
+          summary: "High LLM error rate"
+          description: "LLM error rate is {{ $value }} errors per second"
+
+      - alert: HighAgentFailureRate
+        expr: rate(xagent_agent_executions_total{status="failed"}[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High agent failure rate"
+          description: "Agent failure rate is {{ $value }} failures per second"
 
       - alert: HighMemoryUsage
         expr: container_memory_usage_bytes / container_spec_memory_limit_bytes > 0.9

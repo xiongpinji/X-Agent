@@ -58,6 +58,7 @@ def stdio_config() -> MCPServerConfig:
     )
 
 
+@pytest.mark.timeout(45)
 class TestStdioEndToEnd:
     """发现 → 注册（双写）→ Agent 主循环可调用 的全链路。"""
 
@@ -188,6 +189,7 @@ class TestStdioEndToEnd:
             await discovery.close_all()
 
 
+@pytest.mark.timeout(45)
 class TestStreamableHttpEndToEnd:
     """Streamable HTTP 传输的真实连通验证（uvicorn + FastMCP HTTP app）。"""
 

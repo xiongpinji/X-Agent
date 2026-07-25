@@ -231,7 +231,7 @@ class EnterpriseFeatures:
                 }
             },
             "ha_summary": {
-                "regions": len(set(n.region for n in self.high_availability.nodes.values())),
+                "regions": len({n.region for n in self.high_availability.nodes.values()}),
                 "total_nodes": len(self.high_availability.nodes),
                 "failovers_30d": len(self.high_availability.get_failover_history(30))
             },

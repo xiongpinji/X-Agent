@@ -3,8 +3,9 @@
 覆盖:
 - 按大小轮转(rotator 直测 + AuditStore 集成)
 - 按日期轮转(注入时间)
-- 留存清理: 默认 90 天 / 合规档 7 年 / 0=永久保留
+- 留存清理: 默认 30 天 / 合规档 7 年 / 0=永久保留
 - 轮转后进程内链验证 + 跨段文件链验证
+- 简化 API: should_rotate / rotate / cleanup_old / get_stats
 """
 
 from __future__ import annotations
@@ -111,7 +112,7 @@ def test_date_based_rotation(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_retention_cleanup_default_90_days(tmp_path: Path) -> None:
+def test_retention_cleanup_default_30_days(tmp_path: Path) -> None:
     live = tmp_path / "audit.jsonl"
     live.write_text("", encoding="utf-8")
     archive = tmp_path / "audit_segments"
@@ -119,13 +120,13 @@ def test_retention_cleanup_default_90_days(tmp_path: Path) -> None:
     now = datetime(2026, 7, 20, tzinfo=UTC)
     old_day = (now - timedelta(days=120)).strftime("%Y%m%d")
     edge_day = (now - timedelta(days=91)).strftime("%Y%m%d")
-    kept_day = (now - timedelta(days=30)).strftime("%Y%m%d")
+    kept_day = (now - timedelta(days=10)).strftime("%Y%m%d")
 
     old_seg = _make_segment(archive, "audit", old_day)
     edge_seg = _make_segment(archive, "audit", edge_day)
     kept_seg = _make_segment(archive, "audit", kept_day)
 
-    rotator = AuditLogRotator(AuditRotationConfig())  # 默认 90 天
+    rotator = AuditLogRotator(AuditRotationConfig())  # 默认 30 天
     deleted = rotator.cleanup_expired(live, now=now)
 
     assert set(deleted) == {old_seg, edge_seg}
@@ -248,3 +249,68 @@ def test_store_without_rotation_unchanged(tmp_path: Path) -> None:
     reloaded = AuditStore(storage_path=live, hmac_secret="s")
     assert reloaded.count() == 5
     assert reloaded.verify_chain().valid is True
+
+
+# ---------------------------------------------------------------------------
+# 简化 API: should_rotate / rotate / cleanup_old / get_stats
+# ---------------------------------------------------------------------------
+
+
+def test_simplified_should_rotate(tmp_path: Path) -> None:
+    live = tmp_path / "audit.jsonl"
+    rotator = AuditLogRotator(log_path=live, max_size_mb=1, retention_days=30)
+    # 覆盖 max_bytes 为小值以便测试
+    rotator.config.max_bytes = 512
+    rotator.config.rotate_daily = False
+
+    # 空文件 / 不存在 → 不需轮转
+    assert rotator.should_rotate() is False
+
+    _write_lines(live, 50)  # 超过 512 bytes
+    assert rotator.should_rotate() is True
+
+
+def test_simplified_rotate(tmp_path: Path) -> None:
+    live = tmp_path / "audit.jsonl"
+    rotator = AuditLogRotator(log_path=live, max_size_mb=50, retention_days=30)
+
+    # 空文件 → 返回空字符串
+    assert rotator.rotate() == ""
+
+    _write_lines(live, 10)
+    archive_path = rotator.rotate()
+    assert archive_path != ""
+    assert Path(archive_path).exists()
+    assert not live.exists()  # 活动文件已被轮转走
+
+
+def test_simplified_cleanup_old(tmp_path: Path) -> None:
+    live = tmp_path / "audit.jsonl"
+    live.write_text("", encoding="utf-8")
+    archive = tmp_path / "audit_segments"
+
+    now = datetime.now(UTC)
+    old_day = (now - timedelta(days=60)).strftime("%Y%m%d")
+    _make_segment(archive, "audit", old_day)
+
+    rotator = AuditLogRotator(log_path=live, max_size_mb=50, retention_days=30)
+    deleted_count = rotator.cleanup_old()
+    assert deleted_count == 1
+
+
+def test_simplified_get_stats(tmp_path: Path) -> None:
+    live = tmp_path / "audit.jsonl"
+    _write_lines(live, 10)
+
+    rotator = AuditLogRotator(log_path=live, max_size_mb=50, retention_days=30)
+    stats = rotator.get_stats()
+
+    assert stats["active_file"] == str(live)
+    assert stats["active_size_bytes"] > 0
+    assert stats["total_size_bytes"] > 0
+    assert stats["segment_count"] == 0
+    assert stats["max_size_mb"] == 50.0
+    assert stats["retention_days"] == 30
+    assert stats["rotation_enabled"] is True
+    assert stats["oldest_segment"] is None
+    assert stats["newest_segment"] is None

@@ -9,10 +9,10 @@ import asyncio
 import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import Any, Callable, Optional
+from typing import Any
 from uuid import uuid4
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
@@ -383,7 +383,7 @@ class NudgeMemoryLayer:
                     task.error = str(e)
                     logger.error(f"Task {task.task_id} failed: {e}")
 
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 # No task available, continue
                 continue
             except Exception as e:

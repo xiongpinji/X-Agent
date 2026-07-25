@@ -10,11 +10,10 @@ from __future__ import annotations
 import json
 import shutil
 import uuid
-from dataclasses import dataclass, field, asdict
-from datetime import datetime, timedelta, UTC
+from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from threading import RLock
-from typing import Optional
 
 from pydantic import BaseModel, Field
 
@@ -23,7 +22,7 @@ class WorkspaceConfig(BaseModel):
     """Configuration for workspace creation."""
     workspace_type: str = Field(..., description="Type: 'project', 'temporary', 'upload'")
     max_size_mb: int = Field(default=1000, description="Maximum size in MB")
-    ttl_hours: Optional[int] = Field(default=None, description="Time to live in hours")
+    ttl_hours: int | None = Field(default=None, description="Time to live in hours")
     read_only: bool = Field(default=False, description="Read-only workspace")
 
 
@@ -37,7 +36,7 @@ class Workspace:
     created_at: datetime
     updated_at: datetime
     max_size_mb: int
-    ttl_hours: Optional[int]
+    ttl_hours: int | None
     read_only: bool
     metadata: dict = field(default_factory=dict)
 
@@ -94,7 +93,7 @@ class Workspace:
 class WorkspaceManager:
     """Manages user workspaces with isolation and lifecycle management."""
 
-    def __init__(self, base_path: Path, storage_path: Optional[Path] = None) -> None:
+    def __init__(self, base_path: Path, storage_path: Path | None = None) -> None:
         """Initialize workspace manager.
 
         Args:
@@ -113,7 +112,7 @@ class WorkspaceManager:
         self,
         user_id: str,
         workspace_type: str,
-        config: Optional[WorkspaceConfig] = None,
+        config: WorkspaceConfig | None = None,
     ) -> Workspace:
         """Create a new workspace for a user.
 
@@ -162,7 +161,7 @@ class WorkspaceManager:
 
         return workspace
 
-    def get_workspace(self, workspace_id: str) -> Optional[Workspace]:
+    def get_workspace(self, workspace_id: str) -> Workspace | None:
         """Get workspace by ID.
 
         Args:
@@ -173,7 +172,7 @@ class WorkspaceManager:
         """
         return self._workspaces.get(workspace_id)
 
-    def list_workspaces(self, user_id: str, workspace_type: Optional[str] = None) -> list[Workspace]:
+    def list_workspaces(self, user_id: str, workspace_type: str | None = None) -> list[Workspace]:
         """List workspaces for a user.
 
         Args:
@@ -261,7 +260,7 @@ class WorkspaceManager:
             return workspaces[0]
         return self.create_workspace(user_id, workspace_type)
 
-    def update_workspace_metadata(self, workspace_id: str, metadata: dict) -> Optional[Workspace]:
+    def update_workspace_metadata(self, workspace_id: str, metadata: dict) -> Workspace | None:
         """Update workspace metadata.
 
         Args:

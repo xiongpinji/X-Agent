@@ -1,21 +1,94 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends
+from pydantic import BaseModel, Field
 
 from backend.app.api.errors import api_error
 from backend.app.core.contracts import ErrorCode
-from backend.app.dependencies import get_agent, get_current_principal, enforce_scope
 from backend.app.core.security import Principal
+from backend.app.dependencies import enforce_scope, get_agent, get_current_principal
 
 router = APIRouter(prefix="/api/v1/tools", tags=["tools"])
 AgentDependency = Annotated[object, Depends(get_agent)]
 PrincipalDependency = Annotated[Principal, Depends(get_current_principal)]
 
 
+class ToolUpdateRequest(BaseModel):
+    enabled: bool | None = None
+    config: dict | None = None
+
+
+class ToolTestRequest(BaseModel):
+    parameters: dict = Field(default_factory=dict)
+
+
 @router.get("")
 async def list_tools(agent: AgentDependency, principal: PrincipalDependency) -> list[dict]:
     enforce_scope(principal, "tools:read")
     return agent.tools.manifest()
+
+
+@router.put("/{tool_name}")
+async def update_tool(
+    tool_name: str,
+    request: ToolUpdateRequest,
+    agent: AgentDependency,
+    principal: PrincipalDependency,
+) -> dict:
+    """Update tool configuration (enable/disable, config)."""
+    enforce_scope(principal, "tools:write")
+    manifest = agent.tools.manifest()
+    tool = next((t for t in manifest if t.get("name") == tool_name), None)
+    if tool is None:
+        raise api_error(404, ErrorCode.RUN_NOT_FOUND, f"Tool '{tool_name}' not found.", trace_id=tool_name)
+
+    # Apply updates to tool registry if supported
+    if hasattr(agent.tools, "set_enabled") and request.enabled is not None:
+        agent.tools.set_enabled(tool_name, request.enabled)
+    if hasattr(agent.tools, "update_config") and request.config is not None:
+        agent.tools.update_config(tool_name, request.config)
+
+    return {
+        "name": tool_name,
+        "enabled": request.enabled if request.enabled is not None else True,
+        "config": request.config or {},
+        "status": "updated",
+    }
+
+
+@router.post("/{tool_name}/test")
+async def test_tool(
+    tool_name: str,
+    request: ToolTestRequest,
+    agent: AgentDependency,
+    principal: PrincipalDependency,
+) -> dict:
+    """Test a tool with given parameters without side effects."""
+    enforce_scope(principal, "tools:write")
+    manifest = agent.tools.manifest()
+    tool = next((t for t in manifest if t.get("name") == tool_name), None)
+    if tool is None:
+        raise api_error(404, ErrorCode.RUN_NOT_FOUND, f"Tool '{tool_name}' not found.", trace_id=tool_name)
+
+    # Attempt dry-run execution
+    try:
+        if hasattr(agent.tools, "dry_run"):
+            result = await agent.tools.dry_run(tool_name, request.parameters)
+        elif hasattr(agent.tools, "execute"):
+            result = await agent.tools.execute(tool_name, request.parameters, dry_run=True)
+        else:
+            result = {"message": "Dry-run not supported for this tool", "parameters": request.parameters}
+        return {
+            "name": tool_name,
+            "status": "success",
+            "result": result,
+        }
+    except Exception as e:
+        return {
+            "name": tool_name,
+            "status": "error",
+            "error": str(e),
+        }
 
 
 @router.get("/executions/{execution_id}")

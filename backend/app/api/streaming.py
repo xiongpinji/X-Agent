@@ -13,19 +13,27 @@ Provides real-time streaming of agent execution events including:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
+from collections.abc import AsyncGenerator
 from datetime import datetime
-from typing import Annotated, Any, AsyncGenerator
+from typing import Annotated, Any
 from uuid import uuid4
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Body, Depends, Query
 from pydantic import BaseModel, Field
 
 from backend.app.core.agent import AgentLoop
-from backend.app.core.contracts import RunContext, ErrorCode
+from backend.app.core.contracts import RunContext
 from backend.app.core.security import Principal
-from backend.app.dependencies import enforce_scope, get_agent, get_current_principal, get_run_store, get_trace_store
+from backend.app.dependencies import (
+    enforce_scope,
+    get_agent,
+    get_current_principal,
+    get_run_store,
+    get_trace_store,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -215,10 +223,8 @@ class StreamEventStore:
 
             # Clean up dead queues
             for queue in dead_queues:
-                try:
+                with contextlib.suppress(ValueError):
                     self.subscribers[run_id].remove(queue)
-                except ValueError:
-                    pass
 
     def subscribe(self, run_id: str) -> asyncio.Queue:
         """Subscribe to events for a run."""
@@ -286,7 +292,7 @@ async def _stream_events(
     heartbeat_interval: float = 30.0,
 ) -> AsyncGenerator[str, None]:
     """Stream events from queue as SSE format."""
-    last_heartbeat = asyncio.get_event_loop().time()
+    asyncio.get_event_loop().time()
 
     try:
         while True:
@@ -299,13 +305,13 @@ async def _stream_events(
                 yield f"event: {event.event_type}\n"
                 yield f"data: {event_json}\n\n"
 
-                last_heartbeat = asyncio.get_event_loop().time()
+                asyncio.get_event_loop().time()
 
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 # Send heartbeat
                 heartbeat = HeartbeatEvent(run_id=run_id)
                 event_json = json.dumps(heartbeat.model_dump())
-                yield f"event: heartbeat\n"
+                yield "event: heartbeat\n"
                 yield f"data: {event_json}\n\n"
 
     except asyncio.CancelledError:
@@ -320,8 +326,24 @@ async def _stream_events(
             recoverable=False,
         )
         event_json = json.dumps(error_event.model_dump())
-        yield f"event: error\n"
+        yield "event: error\n"
         yield f"data: {event_json}\n\n"
+
+
+# B-4 FIX: /stream/health must be registered BEFORE /stream/{run_id}
+# to prevent "health" from being captured as a run_id parameter.
+@router.get("/stream/health")
+async def stream_health() -> dict[str, Any]:
+    """
+    Get health status of the streaming service.
+
+    Returns:
+        Health status
+    """
+    return {
+        "status": "healthy",
+        "store_stats": event_store.get_stats(),
+    }
 
 
 @router.get("/stream/{run_id}")
@@ -676,16 +698,4 @@ async def get_stream_stats(
         "store_stats": event_store.get_stats(),
     }
 
-
-@router.get("/stream/health")
-async def stream_health() -> dict[str, Any]:
-    """
-    Get health status of the streaming service.
-
-    Returns:
-        Health status
-    """
-    return {
-        "status": "healthy",
-        "store_stats": event_store.get_stats(),
-    }
+# B-4: /stream/health moved before /stream/{run_id} to fix route shadowing

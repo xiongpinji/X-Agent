@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel
@@ -16,7 +16,6 @@ from backend.app.core.enterprise_audit import (
     AuditLogEntry,
     AuditLogFilter,
     AuditLogStore,
-    AuditSeverity,
     DashboardDataProvider,
 )
 
@@ -33,10 +32,10 @@ dashboard_provider = DashboardDataProvider(audit_log_store, audit_analyzer)
 class AuditLogQueryRequest(BaseModel):
     """审计日志查询请求"""
     tenant_id: str
-    user_id: Optional[str] = None
-    event_type: Optional[str] = None
-    start_time: Optional[str] = None
-    end_time: Optional[str] = None
+    user_id: str | None = None
+    event_type: str | None = None
+    start_time: str | None = None
+    end_time: str | None = None
     limit: int = 100
     offset: int = 0
 
@@ -46,9 +45,9 @@ class AuditLogCreateRequest(BaseModel):
     tenant_id: str
     event_type: str
     action: str
-    user_id: Optional[str] = None
-    resource_type: Optional[str] = None
-    resource_id: Optional[str] = None
+    user_id: str | None = None
+    resource_type: str | None = None
+    resource_id: str | None = None
     status: str = "success"
     details: dict[str, Any] = {}
 
@@ -196,7 +195,7 @@ async def get_resource_audit_trail(resource_id: str) -> dict[str, Any]:
 
 
 @router.post("/verify-chain", response_model=dict[str, Any])
-async def verify_log_chain(start_log_id: Optional[str] = None) -> dict[str, Any]:
+async def verify_log_chain(start_log_id: str | None = None) -> dict[str, Any]:
     """验证日志链完整性"""
     try:
         is_valid = audit_log_store.verify_log_chain(start_log_id)

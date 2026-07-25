@@ -1,0 +1,9 @@
+schema_version: 1
+module_path: frontend
+title: X-Agent Web 前端控制台与反馈仪表盘
+scope:
+    - frontend/
+source_files: []
+depends_on: []
+related_to:
+    - path: backend

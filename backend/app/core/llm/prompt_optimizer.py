@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Any, Optional
-from datetime import datetime
 import re
+from dataclasses import dataclass, field
+from datetime import datetime
+from typing import Any
 
 
 @dataclass
@@ -17,7 +17,7 @@ class PromptTemplate:
     variables: list[str] = field(default_factory=list)
     description: str = ""
     task_type: str = "general"
-    model_optimized_for: Optional[str] = None
+    model_optimized_for: str | None = None
     created_at: datetime = field(default_factory=datetime.now)
     usage_count: int = 0
     average_quality_score: float = 0.0
@@ -130,7 +130,7 @@ Content:""",
         """Register a new prompt template."""
         self.templates[template.name] = template
 
-    def get_template(self, name: str) -> Optional[PromptTemplate]:
+    def get_template(self, name: str) -> PromptTemplate | None:
         """Get a template by name."""
         return self.templates.get(name)
 

@@ -13,10 +13,10 @@ Usage:
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 
 
-class ErrorType(str, Enum):
+class ErrorType(StrEnum):
     """Error types for tool execution and verification.
 
     Attributes:
@@ -40,7 +40,7 @@ class ErrorType(str, Enum):
     UNKNOWN = "unknown"
 
 
-class ToolName(str, Enum):
+class ToolName(StrEnum):
     """Standard tool names used in the system.
 
     Attributes:
@@ -62,7 +62,7 @@ class ToolName(str, Enum):
     SUMMARIZE = "summarize_text"
 
 
-class ExecutionState(str, Enum):
+class ExecutionState(StrEnum):
     """Agent execution states.
 
     Attributes:
@@ -84,7 +84,7 @@ class ExecutionState(str, Enum):
     FAILED = "failed"
 
 
-class CapabilityName(str, Enum):
+class CapabilityName(StrEnum):
     """Capability names for routing.
 
     Attributes:
@@ -102,7 +102,7 @@ class CapabilityName(str, Enum):
     CODE = "code"
 
 
-class TaskKeyword(str, Enum):
+class TaskKeyword(StrEnum):
     """Keywords for task classification.
 
     Attributes:

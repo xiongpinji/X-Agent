@@ -7,7 +7,7 @@ Tests deduplication algorithms with various memory sizes and configurations.
 from __future__ import annotations
 
 import time
-from datetime import datetime, timedelta, UTC
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import numpy as np
@@ -15,7 +15,6 @@ import numpy as np
 from backend.app.core.memory_deduplication_enhanced import (
     Memory,
     MemoryDeduplicatorEnhanced,
-    DeduplicationResult,
 )
 
 

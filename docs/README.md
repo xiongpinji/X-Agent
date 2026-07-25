@@ -1,268 +1,59 @@
-# X-Agent Core Documentation
+# X-Agent 文档总索引
 
-Welcome to the X-Agent Core documentation. This is your comprehensive guide to understanding, installing, and contributing to the X-Agent Core project.
+本目录是 X-Agent 的完整文档中心。全部文档按读者角色收敛为四个分册：
 
-## Quick Navigation
+| 分册 | 读者 | 内容 |
+|------|------|------|
+| [concepts/](./concepts/README.md) | 所有人 | 概念、架构、功能设计、项目规划 |
+| [operations/](./operations/README.md) | 运维 / 部署工程师 | 安装、配置、部署、监控、故障排除、发布 |
+| [admin/](./admin/README.md) | 管理员 / 安全合规 | 安全、SSO、租户与企业功能、订阅计费、审计 |
+| [developer/](./developer/README.md) | 开发者 / 贡献者 | API、SDK、插件开发、教程、贡献指南、历史报告 |
 
-### Getting Started
+## 快速入口
 
-- **[README](../README.md)** - Project overview and quick start guide
-- **[Installation Guide](../INSTALL.md)** - Detailed setup instructions for all platforms
-- **[Quick Start](./QUICKSTART.md)** - 5-minute setup guide
+- **项目概览**: [根目录 README](../README.md) · [项目总览与开发指南](./concepts/项目总览与开发指南.md) · [PROJECT_SUMMARY](./concepts/PROJECT_SUMMARY.md)
+- **安装与快速开始**: [INSTALL](./operations/setup/INSTALL.md) · [QUICKSTART](./operations/setup/QUICKSTART.md)
+- **部署**: [DEPLOYMENT](./operations/deployment/DEPLOYMENT.md) · [商用部署 Runbook](./operations/deployment/COMMERCIAL_DEPLOYMENT_RUNBOOK.md) · [发布就绪清单](./operations/deployment/RELEASE_READINESS.md)
+- **API 参考**: [API 完整参考](./developer/api/API.md) · [错误码](./developer/api/API_ERROR_CODES.md) · [OpenAPI Schema](./developer/api/openapi.json)
+- **安全**: [安全指南](./admin/security/SECURITY_GUIDE.md) · [SSO 配置](./admin/sso/SSO_CONFIGURATION.md)
+- **贡献**: [CONTRIBUTING](../CONTRIBUTING.md) · [开发者指南](./developer/DEVELOPER_GUIDE.md)
+- **示例代码**: [examples/ 目录](../examples/README.md)
 
-### Development
-
-- **[Contributing Guide](../CONTRIBUTING.md)** - How to contribute to the project
-- **[Development Setup](./DEVELOPMENT.md)** - Detailed development environment setup
-- **[Architecture Guide](./ARCHITECTURE.md)** - System design and component overview
-- **[API Documentation](./API.md)** - REST API reference
-
-### Features & Usage
-
-- **[Workflows](./WORKFLOWS.md)** - Creating and managing workflows
-- **[Memory System](./MEMORY.md)** - Understanding the memory and context system
-- **[LLM Router](./LLM_ROUTER.md)** - Multi-LLM provider configuration
-- **[Browser Automation](./BROWSER.md)** - Web interaction and automation
-- **[Observability](./OBSERVABILITY.md)** - Tracing and monitoring
-- **[Approvals](./APPROVALS.md)** - Human-in-the-loop approval workflows
-- **[Policies](./POLICIES.md)** - Policy engine and constraints
-
-### Examples & Tutorials
-
-- **[User Guide](./user-guide/README.md)** - Product overview and core concepts
-- **[Getting Started](./tutorials/GETTING_STARTED.md)** - 5-minute quick start
-- **[Agent Basics](./tutorials/01-agent-basics.md)** - Agent usage tutorial
-- **[Workflow Orchestration](./tutorials/02-workflow-orchestration.md)** - Workflow guide
-- **[Memory System](./tutorials/03-memory-system.md)** - Memory system tutorial
-- **[Browser Automation](./tutorials/04-browser-automation.md)** - Browser automation guide
-- **[Examples](./examples/README.md)** - Code examples and use cases
-- **[Best Practices](./best-practices/README.md)** - Best practices guide
-- **[Troubleshooting](./troubleshooting/COMMON_ISSUES.md)** - Common issues and solutions
-- **[FAQ](./faq/README.md)** - Frequently asked questions
-- **[Video Scripts](./video-scripts/README.md)** - Video tutorial scripts
-
-### Reference
-
-- **[API Reference](./API.md)** - Complete API endpoint documentation
-- **[Configuration](./CONFIGURATION.md)** - Environment variables and settings
-- **[Database Schema](./DATABASE.md)** - PostgreSQL schema reference
-- **[Changelog](../CHANGELOG.md)** - Version history and release notes
-- **[License](../LICENSE)** - MIT License
-
-## Documentation Structure
+## 分册结构
 
 ```
 docs/
-├── README.md                           # This file - Documentation index
-├── user-guide/
-│   └── README.md                      # Product overview and core concepts
-├── tutorials/
-│   ├── GETTING_STARTED.md             # 5-minute quick start
-│   ├── 01-agent-basics.md             # Agent usage tutorial
-│   ├── 02-workflow-orchestration.md   # Workflow orchestration guide
-│   ├── 03-memory-system.md            # Memory system tutorial
-│   └── 04-browser-automation.md       # Browser automation guide
-├── best-practices/
-│   └── README.md                      # Best practices guide
-├── troubleshooting/
-│   └── COMMON_ISSUES.md               # Common issues and solutions
-├── faq/
-│   └── README.md                      # Frequently asked questions
-├── video-scripts/
-│   └── README.md                      # Video tutorial scripts
-├── QUICKSTART.md                      # 5-minute setup
-├── INSTALLATION.md                    # Detailed installation
-├── DEVELOPMENT.md                     # Development setup
-├── ARCHITECTURE.md                    # System architecture
-├── API.md                             # API reference
-├── WORKFLOWS.md                       # Workflow guide
-├── MEMORY.md                          # Memory system
-├── LLM_ROUTER.md                      # LLM configuration
-├── BROWSER.md                         # Browser automation
-├── OBSERVABILITY.md                   # Tracing & monitoring
-├── APPROVALS.md                       # Approval workflows
-├── POLICIES.md                        # Policy engine
-├── CONFIGURATION.md                   # Configuration guide
-├── DATABASE.md                        # Database schema
-└── TROUBLESHOOTING.md                 # Common issues
+├── README.md                 # 本索引
+├── concepts/                 # 概念与架构
+│   ├── architecture/         # 系统架构、数据层、并发模型
+│   ├── features/             # 记忆/工作流/浏览器/技能/多模态等功能说明
+│   ├── planning/             # 项目规划、竞品分析、路线图
+│   ├── design/               # 技术设计文档(中文系列)
+│   ├── case-studies/         # 案例
+│   └── diagrams/             # Mermaid 架构图
+├── operations/               # 安装/部署/运维
+│   ├── setup/                # 安装、快速开始、配置
+│   ├── deployment/           # 部署、发布、升级、回滚、灾备、CI/CD
+│   ├── monitoring/           # 监控与性能
+│   └── support/              # 故障排除、FAQ、客户支持
+├── admin/                    # 安全/租户/审计
+│   ├── security/             # 安全指南与决策
+│   ├── sso/                  # 单点登录(OIDC/SAML/SCIM)
+│   ├── enterprise/           # 企业功能、租户、合作伙伴
+│   ├── subscription/         # 订阅与计费
+│   └── audit/                # 审计与整改
+└── developer/                # API/SDK/贡献
+    ├── api/                  # REST API 参考与集成指南
+    ├── sdk/                  # SDK、CLI、示例说明
+    ├── plugins/              # 插件、MCP、技能市场开发
+    ├── tutorials/            # 教程、用户手册、培训材料
+    ├── best-practices/       # 最佳实践
+    ├── contributing/         # 贡献、测试、文档规范
+    ├── reference/            # 速查表
+    ├── specs/                # 规格说明
+    └── reports/              # 历史开发报告(归档)
 ```
 
-## Key Concepts
+## 文档迁移说明
 
-### Agents
-
-Autonomous entities that can reason, plan, and execute tasks using LLMs. Agents maintain state through the memory system and can interact with external tools and services.
-
-### Workflows
-
-Sequences of steps that define how agents should execute tasks. Workflows support branching, error handling, and conditional logic.
-
-### Memory
-
-A persistent, searchable knowledge base that agents use for context and reasoning. Combines structured data (PostgreSQL) with semantic search (Qdrant).
-
-### Tools
-
-External services and APIs that agents can invoke. Includes browser automation, API calls, database queries, and custom integrations.
-
-### Observability
-
-Complete tracing and monitoring of agent execution, including request correlation, performance metrics, and error tracking.
-
-## Common Tasks
-
-### I want to...
-
-- **Get started quickly** → [Quick Start](./tutorials/GETTING_STARTED.md)
-- **Understand the product** → [User Guide](./user-guide/README.md)
-- **Learn Agent basics** → [Agent Tutorial](./tutorials/01-agent-basics.md)
-- **Learn workflow orchestration** → [Workflow Tutorial](./tutorials/02-workflow-orchestration.md)
-- **Learn memory system** → [Memory Tutorial](./tutorials/03-memory-system.md)
-- **Learn browser automation** → [Browser Automation Tutorial](./tutorials/04-browser-automation.md)
-- **See code examples** → [Examples](../examples/README.md)
-- **Follow best practices** → [Best Practices](./best-practices/README.md)
-- **Troubleshoot issues** → [Troubleshooting](./troubleshooting/COMMON_ISSUES.md)
-- **Find answers to common questions** → [FAQ](./faq/README.md)
-- **Watch video tutorials** → [Video Scripts](./video-scripts/README.md)
-- **Set up development environment** → [Development Setup](./DEVELOPMENT.md)
-- **Understand the architecture** → [Architecture Guide](./ARCHITECTURE.md)
-- **Contribute to the project** → [Contributing Guide](../CONTRIBUTING.md)
-
-## System Requirements
-
-- **Python**: 3.11 or higher
-- **PostgreSQL**: 14 or higher
-- **RAM**: 4GB minimum (8GB recommended)
-- **Disk Space**: 2GB for installation
-
-See [Installation Guide](../INSTALL.md#system-requirements) for detailed requirements.
-
-## Installation Methods
-
-### Standard Installation
-```bash
-git clone https://github.com/x-agent/x-agent-core.git
-cd x-agent-core
-python -m venv venv
-source venv/bin/activate
-pip install -e ".[dev]"
-```
-
-### Docker Installation
-```bash
-git clone https://github.com/x-agent/x-agent-core.git
-cd x-agent-core
-docker-compose up -d
-```
-
-See [Installation Guide](../INSTALL.md) for detailed instructions.
-
-## Architecture Overview
-
-```
-┌─────────────────────────────────────────────────────────┐
-│                    API Layer (FastAPI)                   │
-│  /workflows  /agents  /tools  /memory  /approvals        │
-└─────────────────────────────────────────────────────────┘
-                            ↓
-┌─────────────────────────────────────────────────────────┐
-│                  Core Services Layer                      │
-│  LLM Router  │  Memory System  │  Policy Engine          │
-│  Workflow    │  Approval       │  Audit                  │
-└─────────────────────────────────────────────────────────┘
-                            ↓
-┌─────────────────────────────────────────────────────────┐
-│              Infrastructure Layer                         │
-│  PostgreSQL  │  Qdrant  │  Playwright  │  Langfuse       │
-└─────────────────────────────────────────────────────────┘
-```
-
-See [Architecture Guide](./ARCHITECTURE.md) for detailed information.
-
-## API Quick Reference
-
-### Workflows
-- `POST /api/workflows` - Create workflow
-- `GET /api/workflows/{id}` - Get workflow
-- `PUT /api/workflows/{id}` - Update workflow
-- `DELETE /api/workflows/{id}` - Delete workflow
-- `POST /api/workflows/{id}/execute` - Execute workflow
-
-### Agents
-- `POST /api/agents` - Create agent
-- `GET /api/agents/{id}` - Get agent
-- `POST /api/agents/{id}/run` - Run agent
-
-### Memory
-- `POST /api/memory/store` - Store memory
-- `GET /api/memory/search` - Search memory
-- `GET /api/memory/{id}` - Get memory item
-
-See [API Documentation](./API.md) for complete reference.
-
-## Support & Community
-
-- **GitHub Issues**: [Report bugs or request features](https://github.com/x-agent/x-agent-core/issues)
-- **Discussions**: [Community discussions](https://github.com/x-agent/x-agent-core/discussions)
-- **Email**: dev@x-agent.dev
-- **Documentation**: [Full documentation](./README.md)
-
-## Documentation Statistics
-
-- **User Guide**: 1 document
-- **Tutorials**: 5 documents (Quick Start + 4 feature tutorials)
-- **Best Practices**: 1 document (5 topics)
-- **Troubleshooting**: 1 document (7 problem categories)
-- **FAQ**: 1 document (32 questions)
-- **Examples**: 1 document (8 examples)
-- **Video Scripts**: 1 document (6 videos)
-
-**Total**: 11 user-facing documents covering 50+ topics
-
-## Recommended Learning Path
-
-### Beginners (1-2 weeks)
-1. Read [User Guide](./user-guide/README.md)
-2. Complete [Quick Start](./tutorials/GETTING_STARTED.md)
-3. Learn [Agent Basics](./tutorials/01-agent-basics.md)
-4. Run [Example Code](../examples/README.md)
-
-### Intermediate (2-4 weeks)
-1. Learn [Workflow Orchestration](./tutorials/02-workflow-orchestration.md)
-2. Learn [Memory System](./tutorials/03-memory-system.md)
-3. Learn [Browser Automation](./tutorials/04-browser-automation.md)
-4. Read [Best Practices](./best-practices/README.md)
-
-### Advanced (4+ weeks)
-1. Build complete projects
-2. Optimize performance and costs
-3. Implement security best practices
-4. Deploy to production
-
-## Contributing
-
-We welcome contributions! See [Contributing Guide](../CONTRIBUTING.md) for:
-- Development workflow
-- Code standards
-- Pull request process
-- Testing guidelines
-
-## License
-
-X-Agent Core is licensed under the MIT License. See [LICENSE](../LICENSE) for details.
-
-## Roadmap
-
-- **Q2 2025**: Multi-agent collaboration framework
-- **Q3 2025**: Advanced reasoning with chain-of-thought
-- **Q4 2025**: Custom model fine-tuning support
-- **2026**: Enterprise features (SSO, advanced audit, compliance)
-
-See [Changelog](../CHANGELOG.md) for version history.
-
----
-
-**Last Updated**: 2025-05-27
-**Version**: 0.2.0
-**Status**: Active Development
-**Documentation Version**: Complete User Documentation System
+2026-07-20 文档收敛(P1-21): 原散落在仓库根目录与 `docs/` 平铺的 320+ 篇文档已按四分册归类移动，受影响的对内链接已批量修复。历史文档索引(INDEX、DOCUMENTATION_INDEX 等)保留在 [developer/reports/](./developer/reports/) 仅供参考，以本索引为准。

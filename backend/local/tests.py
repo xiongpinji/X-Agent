@@ -4,33 +4,29 @@ X-Agent Local Endpoint Tests
 Comprehensive test suite for local database, sync, encryption, and configuration.
 """
 
-import asyncio
 import json
 import os
-import pytest
 import tempfile
-from datetime import datetime, UTC
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock
 
-from backend.local.config import LocalConfig, ConfigManager
+import pytest
+
+from backend.local.config import ConfigManager, LocalConfig
 from backend.local.database import DatabaseConfig, LocalDatabase
 from backend.local.encryption import (
+    EncryptedDataStore,
     EncryptionConfig,
     EncryptionManager,
-    SensitiveDataClassifier,
-    EncryptedDataStore,
     KeyRotationManager,
+    SensitiveDataClassifier,
 )
 from backend.local.sync_client import (
-    SyncClient,
-    SyncOperation,
-    SyncConflict,
-    SyncBatch,
     ConflictResolutionStrategy,
     ConflictResolver,
+    SyncClient,
+    SyncConflict,
 )
-
 
 # ============================================================================
 # FIXTURES
@@ -378,7 +374,7 @@ class TestSyncClient:
         sync_client.set_offline_mode(True)
         assert sync_client._offline_mode
 
-        queue_id = await sync_client.enqueue_operation(
+        await sync_client.enqueue_operation(
             entity_type="memory",
             entity_id="mem-123",
             operation="UPDATE",

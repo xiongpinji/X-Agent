@@ -8,14 +8,14 @@ import {
   StyleSheet,
   TouchableOpacity,
   ViewStyle,
-  ProgressBarAndroid,
-  ProgressViewIOS,
-  Platform,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../theme';
 import { WorkflowRun } from '../types';
 import { formatDate, getStatusColor } from '../utils/formatters';
+import { ProgressBar } from './ProgressBar';
+
+type IconName = React.ComponentProps<typeof MaterialCommunityIcons>['name'];
 
 interface WorkflowCardProps {
   workflow: WorkflowRun;
@@ -32,10 +32,10 @@ export const WorkflowCard: React.FC<WorkflowCardProps> = ({
 }) => {
   const { theme } = useTheme();
 
-  const statusColor = getStatusColor(workflow.status, theme);
+  const statusColor = getStatusColor(workflow.status, theme.colors);
   const progress = workflow.progress / 100;
 
-  const getStatusIcon = () => {
+  const getStatusIcon = (): IconName => {
     switch (workflow.status) {
       case 'pending':
         return 'clock-outline';
@@ -110,21 +110,11 @@ export const WorkflowCard: React.FC<WorkflowCardProps> = ({
             {workflow.progress}%
           </Text>
         </View>
-        {Platform.OS === 'ios' ? (
-          <ProgressViewIOS
-            value={progress}
-            progressTintColor={statusColor}
-            style={styles.progressBar}
-          />
-        ) : (
-          <ProgressBarAndroid
-            styleAttr="Horizontal"
-            indeterminate={false}
-            progress={progress}
-            color={statusColor}
-            style={styles.progressBar}
-          />
-        )}
+        <ProgressBar
+          progress={progress}
+          color={statusColor}
+          style={styles.progressBar}
+        />
       </View>
 
       <View style={styles.nodesSection}>

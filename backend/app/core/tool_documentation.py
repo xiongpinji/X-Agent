@@ -47,7 +47,7 @@ class ToolDocumentationGenerator:
 """
 
         if tool.permissions:
-            doc += f"""## Permissions Required
+            doc += """## Permissions Required
 
 """
             for perm in tool.permissions:
@@ -63,14 +63,14 @@ class ToolDocumentationGenerator:
                 doc += f"### {example.name}\n\n"
                 doc += f"{example.description}\n\n"
                 doc += "**Input:**\n```json\n"
-                doc += self._format_json(example.input)
+                doc += ToolDocumentationGenerator._format_json(example.input)
                 doc += "\n```\n\n"
                 doc += "**Output:**\n```json\n"
-                doc += self._format_json(example.output)
+                doc += ToolDocumentationGenerator._format_json(example.output)
                 doc += "\n```\n\n"
 
         if tool.dependencies:
-            doc += f"""## Dependencies
+            doc += """## Dependencies
 
 """
             for dep in tool.dependencies:
@@ -78,7 +78,7 @@ class ToolDocumentationGenerator:
             doc += "\n"
 
         if tool.tags:
-            doc += f"""## Tags
+            doc += """## Tags
 
 """
             for tag in tool.tags:
@@ -179,19 +179,20 @@ class ToolDocumentationGenerator:
         params_str = ", ".join(params)
         return_type = tool.returns.type
 
-        return f"""async def {tool.name}({params_str}) -> {return_type}:
+        return (
+            f"""async def {tool.name}({params_str}) -> {return_type}:
     \"\"\"
     {tool.description}
 
     Args:
 """
-        + "\n".join(
-            [
-                f"        {param.name}: {param.description}"
-                for param in tool.parameters
-            ]
-        )
-        + f"""
+            + "\n".join(
+                [
+                    f"        {param.name}: {param.description}"
+                    for param in tool.parameters
+                ]
+            )
+            + f"""
 
     Returns:
         {tool.returns.description}
@@ -201,6 +202,7 @@ class ToolDocumentationGenerator:
     \"\"\"
     pass
 """
+        )
 
     @staticmethod
     def _format_json(obj: Any, indent: int = 2) -> str:

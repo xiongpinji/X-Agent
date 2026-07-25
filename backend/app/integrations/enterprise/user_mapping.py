@@ -1,7 +1,7 @@
 """User Mapping Management for Enterprise IM Platforms"""
 
-from typing import Dict, List, Any, Optional
 from datetime import datetime
+from typing import Any
 
 
 class UserMapping:
@@ -9,20 +9,20 @@ class UserMapping:
 
     def __init__(self):
         # Internal user ID -> {platform: platform_user_id}
-        self.user_mappings: Dict[str, Dict[str, str]] = {}
+        self.user_mappings: dict[str, dict[str, str]] = {}
         # Platform user ID -> internal user ID (for reverse lookup)
-        self.reverse_mappings: Dict[str, Dict[str, str]] = {}
+        self.reverse_mappings: dict[str, dict[str, str]] = {}
         # User metadata
-        self.user_metadata: Dict[str, Dict[str, Any]] = {}
+        self.user_metadata: dict[str, dict[str, Any]] = {}
         # Sync history
-        self.sync_history: List[Dict[str, Any]] = []
+        self.sync_history: list[dict[str, Any]] = []
 
     async def map_user(
         self,
         internal_user_id: str,
         platform: str,
         platform_user_id: str,
-        metadata: Dict[str, Any] = None,
+        metadata: dict[str, Any] | None = None,
     ) -> bool:
         """Map an internal user to a platform user"""
         try:
@@ -47,7 +47,7 @@ class UserMapping:
             print(f"Failed to map user: {e}")
             return False
 
-    async def unmap_user(self, internal_user_id: str, platform: str = None) -> bool:
+    async def unmap_user(self, internal_user_id: str, platform: str | None = None) -> bool:
         """Unmap a user from a platform or all platforms"""
         try:
             if internal_user_id not in self.user_mappings:
@@ -78,7 +78,7 @@ class UserMapping:
             print(f"Failed to unmap user: {e}")
             return False
 
-    async def get_platform_user_id(self, internal_user_id: str, platform: str) -> Optional[str]:
+    async def get_platform_user_id(self, internal_user_id: str, platform: str) -> str | None:
         """Get platform user ID for an internal user"""
         try:
             if internal_user_id in self.user_mappings:
@@ -88,7 +88,7 @@ class UserMapping:
             print(f"Failed to get platform user ID: {e}")
             return None
 
-    async def get_internal_user_id(self, platform: str, platform_user_id: str) -> Optional[str]:
+    async def get_internal_user_id(self, platform: str, platform_user_id: str) -> str | None:
         """Get internal user ID for a platform user"""
         try:
             if platform in self.reverse_mappings:
@@ -98,7 +98,7 @@ class UserMapping:
             print(f"Failed to get internal user ID: {e}")
             return None
 
-    async def get_user_mappings(self, internal_user_id: str) -> Dict[str, str]:
+    async def get_user_mappings(self, internal_user_id: str) -> dict[str, str]:
         """Get all platform mappings for an internal user"""
         try:
             return self.user_mappings.get(internal_user_id, {})
@@ -106,7 +106,7 @@ class UserMapping:
             print(f"Failed to get user mappings: {e}")
             return {}
 
-    async def get_user_metadata(self, internal_user_id: str, platform: str = None) -> Dict[str, Any]:
+    async def get_user_metadata(self, internal_user_id: str, platform: str | None = None) -> dict[str, Any]:
         """Get user metadata"""
         try:
             if internal_user_id not in self.user_metadata:
@@ -124,7 +124,7 @@ class UserMapping:
         self,
         internal_user_id: str,
         platform: str,
-        metadata: Dict[str, Any],
+        metadata: dict[str, Any],
     ) -> bool:
         """Update user metadata"""
         try:
@@ -144,7 +144,7 @@ class UserMapping:
         self,
         platform: str,
         platform_user_id: str,
-        user_info: Dict[str, Any],
+        user_info: dict[str, Any],
     ) -> bool:
         """Sync user information from a platform"""
         try:
@@ -170,8 +170,8 @@ class UserMapping:
     async def bulk_sync_users(
         self,
         platform: str,
-        users: List[Dict[str, Any]],
-    ) -> Dict[str, Any]:
+        users: list[dict[str, Any]],
+    ) -> dict[str, Any]:
         """Bulk sync users from a platform"""
         results = {
             "total": len(users),
@@ -201,7 +201,7 @@ class UserMapping:
 
         return results
 
-    async def get_all_users(self) -> List[Dict[str, Any]]:
+    async def get_all_users(self) -> list[dict[str, Any]]:
         """Get all mapped users"""
         users = []
         for internal_user_id, mappings in self.user_mappings.items():
@@ -213,7 +213,7 @@ class UserMapping:
             users.append(user)
         return users
 
-    async def get_users_by_platform(self, platform: str) -> List[Dict[str, Any]]:
+    async def get_users_by_platform(self, platform: str) -> list[dict[str, Any]]:
         """Get all users mapped to a specific platform"""
         users = []
         if platform in self.reverse_mappings:
@@ -226,7 +226,7 @@ class UserMapping:
                 users.append(user)
         return users
 
-    async def search_user(self, query: str) -> List[Dict[str, Any]]:
+    async def search_user(self, query: str) -> list[dict[str, Any]]:
         """Search for users by internal ID or platform user ID"""
         results = []
 
@@ -239,7 +239,7 @@ class UserMapping:
                 })
 
         # Search in platform user IDs
-        for platform, reverse_map in self.reverse_mappings.items():
+        for _platform, reverse_map in self.reverse_mappings.items():
             for platform_user_id, internal_user_id in reverse_map.items():
                 if query.lower() in platform_user_id.lower():
                     if not any(r["internal_user_id"] == internal_user_id for r in results):
@@ -256,7 +256,7 @@ class UserMapping:
         platform_user_id: str,
         internal_user_id: str,
         status: str,
-        error: str = None,
+        error: str | None = None,
     ):
         """Log sync operation"""
         log_entry = {
@@ -273,11 +273,11 @@ class UserMapping:
         if len(self.sync_history) > 1000:
             self.sync_history = self.sync_history[-1000:]
 
-    def get_sync_history(self, limit: int = 100) -> List[Dict[str, Any]]:
+    def get_sync_history(self, limit: int = 100) -> list[dict[str, Any]]:
         """Get sync history"""
         return self.sync_history[-limit:]
 
-    def get_sync_stats(self) -> Dict[str, Any]:
+    def get_sync_stats(self) -> dict[str, Any]:
         """Get sync statistics"""
         if not self.sync_history:
             return {
@@ -298,7 +298,7 @@ class UserMapping:
             "success_rate": success / total if total > 0 else 0.0,
         }
 
-    def get_mapping_stats(self) -> Dict[str, Any]:
+    def get_mapping_stats(self) -> dict[str, Any]:
         """Get mapping statistics"""
         total_users = len(self.user_mappings)
         platform_counts = {}

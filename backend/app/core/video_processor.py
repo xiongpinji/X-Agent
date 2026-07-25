@@ -11,18 +11,16 @@ Comprehensive video processing capabilities including:
 
 from __future__ import annotations
 
-import asyncio
-import io
 import logging
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
-class VideoFormat(str, Enum):
+class VideoFormat(StrEnum):
     """Video file formats."""
     MP4 = "mp4"
     AVI = "avi"
@@ -186,7 +184,7 @@ class VideoProcessor:
     def _check_opencv() -> bool:
         """Check if OpenCV is available."""
         try:
-            import cv2
+            import cv2  # noqa: F401
             return True
         except ImportError:
             logger.warning("OpenCV not available, some features will be limited")
@@ -428,8 +426,6 @@ class VideoProcessor:
 
         try:
             import subprocess
-            import tempfile
-            import json
 
             video_path = Path(video_file)
             if not video_path.exists():
@@ -444,7 +440,7 @@ class VideoProcessor:
                 "-",
             ]
 
-            result = subprocess.run(
+            subprocess.run(
                 cmd,
                 capture_output=True,
                 timeout=300,
@@ -452,15 +448,14 @@ class VideoProcessor:
 
             # Parse output to extract scene times
             scenes = []
-            scene_id = 0
 
             # Simple scene detection: divide video into equal segments
             metadata = await self.get_metadata(video_file)
             segment_duration = metadata.duration / max(1, int(metadata.duration / 10))
 
-            for i in range(int(metadata.duration / segment_duration)):
-                start_time = i * segment_duration
-                end_time = min((i + 1) * segment_duration, metadata.duration)
+            for scene_id in range(int(metadata.duration / segment_duration)):
+                start_time = scene_id * segment_duration
+                end_time = min((scene_id + 1) * segment_duration, metadata.duration)
 
                 scenes.append(
                     Scene(
@@ -473,7 +468,6 @@ class VideoProcessor:
                         confidence=0.8,
                     )
                 )
-                scene_id += 1
 
             logger.info(f"Detected {len(scenes)} scenes in video")
             return scenes
@@ -560,15 +554,7 @@ class VideoProcessor:
                     "high": ["-crf", "18"],
                 }
 
-                cmd = [
-                    "ffmpeg",
-                    "-i", str(video_path),
-                    "-c:v", "libx264",
-                    "-c:a", "aac",
-                ] + quality_settings.get(quality, quality_settings["medium"]) + [
-                    "-y",
-                    tmp_out.name,
-                ]
+                cmd = ["ffmpeg", "-i", str(video_path), "-c:v", "libx264", "-c:a", "aac", *quality_settings.get(quality, quality_settings["medium"]), "-y", tmp_out.name]
 
                 result = subprocess.run(
                     cmd,

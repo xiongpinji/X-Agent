@@ -7,10 +7,10 @@ Monitors task execution and queue metrics.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
-from datetime import datetime, UTC, timedelta
-from typing import Optional, Any, Dict, List
 from collections import defaultdict
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -28,8 +28,8 @@ class TaskMetrics:
     avg_duration_seconds: float = 0.0
     min_duration_seconds: float = float("inf")
     max_duration_seconds: float = 0.0
-    last_execution_at: Optional[datetime] = None
-    last_error: Optional[str] = None
+    last_execution_at: datetime | None = None
+    last_error: str | None = None
     success_rate: float = 0.0
 
 
@@ -62,10 +62,10 @@ class TaskMonitor:
             retention_hours: How long to retain metrics
         """
         self.retention_hours = retention_hours
-        self.task_metrics: Dict[str, TaskMetrics] = {}
-        self.execution_times: Dict[str, List[float]] = defaultdict(list)
-        self.execution_errors: Dict[str, List[str]] = defaultdict(list)
-        self.queue_history: List[Dict[str, Any]] = []
+        self.task_metrics: dict[str, TaskMetrics] = {}
+        self.execution_times: dict[str, list[float]] = defaultdict(list)
+        self.execution_errors: dict[str, list[str]] = defaultdict(list)
+        self.queue_history: list[dict[str, Any]] = []
         self.logger = logger
 
     def record_task_execution(
@@ -74,7 +74,7 @@ class TaskMonitor:
         name: str,
         duration_seconds: float,
         success: bool,
-        error: Optional[str] = None,
+        error: str | None = None,
     ) -> None:
         """
         Record a task execution.
@@ -164,7 +164,7 @@ class TaskMonitor:
 
         self.logger.debug(f"Recorded queue metrics: size={queue_size}")
 
-    def get_task_metrics(self, task_id: str) -> Optional[TaskMetrics]:
+    def get_task_metrics(self, task_id: str) -> TaskMetrics | None:
         """
         Get metrics for a task.
 
@@ -213,7 +213,7 @@ class TaskMonitor:
             throughput_per_minute=throughput,
         )
 
-    def get_all_task_metrics(self) -> List[TaskMetrics]:
+    def get_all_task_metrics(self) -> list[TaskMetrics]:
         """
         Get metrics for all tasks.
 
@@ -222,7 +222,7 @@ class TaskMonitor:
         """
         return list(self.task_metrics.values())
 
-    def get_top_tasks_by_duration(self, limit: int = 10) -> List[TaskMetrics]:
+    def get_top_tasks_by_duration(self, limit: int = 10) -> list[TaskMetrics]:
         """
         Get top tasks by average duration.
 
@@ -240,7 +240,7 @@ class TaskMonitor:
 
         return tasks[:limit]
 
-    def get_top_tasks_by_failures(self, limit: int = 10) -> List[TaskMetrics]:
+    def get_top_tasks_by_failures(self, limit: int = 10) -> list[TaskMetrics]:
         """
         Get top tasks by failure count.
 
@@ -262,7 +262,7 @@ class TaskMonitor:
         self,
         task_id: str,
         limit: int = 100,
-    ) -> List[float]:
+    ) -> list[float]:
         """
         Get execution time history for a task.
 
@@ -282,7 +282,7 @@ class TaskMonitor:
         self,
         task_id: str,
         limit: int = 100,
-    ) -> List[str]:
+    ) -> list[str]:
         """
         Get error history for a task.
 
@@ -301,7 +301,7 @@ class TaskMonitor:
     def get_queue_history(
         self,
         hours: int = 1,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Get queue metrics history.
 
@@ -318,7 +318,7 @@ class TaskMonitor:
             if datetime.fromisoformat(m["timestamp"]) >= cutoff
         ]
 
-    def get_health_status(self) -> Dict[str, Any]:
+    def get_health_status(self) -> dict[str, Any]:
         """
         Get overall health status.
 
@@ -334,10 +334,7 @@ class TaskMonitor:
             m.successful_executions for m in self.task_metrics.values()
         )
 
-        if total_executions == 0:
-            success_rate = 1.0
-        else:
-            success_rate = total_successful / total_executions
+        success_rate = 1.0 if total_executions == 0 else total_successful / total_executions
 
         # Determine health status
         if success_rate >= 0.95:
@@ -361,7 +358,7 @@ class TaskMonitor:
             "problematic_tasks": problematic_tasks,
         }
 
-    def get_performance_summary(self) -> Dict[str, Any]:
+    def get_performance_summary(self) -> dict[str, Any]:
         """
         Get performance summary.
 
@@ -398,7 +395,7 @@ class TaskMonitor:
             if datetime.fromisoformat(m["timestamp"]) >= cutoff
         ]
 
-    def reset_metrics(self, task_id: Optional[str] = None) -> None:
+    def reset_metrics(self, task_id: str | None = None) -> None:
         """
         Reset metrics.
 

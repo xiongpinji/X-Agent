@@ -16,8 +16,6 @@ import logging
 import re
 from collections import defaultdict, deque
 from dataclasses import dataclass, field
-from typing import Optional, Any
-import math
 
 import numpy as np
 
@@ -96,7 +94,7 @@ class GraphEnhancer:
         self,
         memory_id: str,
         content: str,
-        metadata: Optional[dict] = None,
+        metadata: dict | None = None,
     ) -> None:
         """
         将记忆添加到图谱。
@@ -338,13 +336,13 @@ class GraphEnhancer:
             return []
 
         # 初始化标签
-        labels = {node_id: node_id for node_id in self.entities.keys()}
+        labels = {node_id: node_id for node_id in self.entities}
 
         # 迭代更新标签
         for _ in range(10):
             new_labels = labels.copy()
 
-            for node_id in self.entities.keys():
+            for node_id in self.entities:
                 # 获取邻居的标签
                 neighbor_labels = defaultdict(int)
 
@@ -413,7 +411,7 @@ class GraphEnhancer:
 
         coefficients = []
 
-        for node_id in self.entities.keys():
+        for node_id in self.entities:
             neighbors = set()
 
             for relation in self.relations.get(node_id, []):

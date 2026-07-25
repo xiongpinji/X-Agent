@@ -11,12 +11,12 @@ import json
 import logging
 import os
 from base64 import b64decode, b64encode
-from typing import Any, Optional
+from typing import Any
 
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.backends import default_backend
 
 logger = logging.getLogger(__name__)
 
@@ -54,14 +54,14 @@ class EncryptionConfig:
 class EncryptionManager:
     """Manages encryption/decryption operations."""
 
-    def __init__(self, config: Optional[EncryptionConfig] = None):
+    def __init__(self, config: EncryptionConfig | None = None):
         """Initialize encryption manager.
 
         Args:
             config: Encryption configuration
         """
         self.config = config or EncryptionConfig()
-        self._master_key: Optional[bytes] = None
+        self._master_key: bytes | None = None
         self._key_cache: dict[int, bytes] = {}
 
     def set_master_key(self, key: bytes) -> None:
@@ -88,7 +88,7 @@ class EncryptionManager:
         self.set_master_key(key)
         return key
 
-    def derive_key_from_password(self, password: str, salt: Optional[bytes] = None) -> tuple[bytes, bytes]:
+    def derive_key_from_password(self, password: str, salt: bytes | None = None) -> tuple[bytes, bytes]:
         """Derive encryption key from password.
 
         Args:
@@ -115,7 +115,7 @@ class EncryptionManager:
     def encrypt(
         self,
         plaintext: str | bytes | dict,
-        associated_data: Optional[bytes] = None,
+        associated_data: bytes | None = None,
     ) -> dict[str, str]:
         """Encrypt data using AES-256-GCM.
 
@@ -161,7 +161,7 @@ class EncryptionManager:
         encrypted_data: str,
         iv: str,
         salt: str,
-        associated_data: Optional[bytes] = None,
+        associated_data: bytes | None = None,
     ) -> bytes:
         """Decrypt data using AES-256-GCM.
 
@@ -199,7 +199,7 @@ class EncryptionManager:
         encrypted_data: str,
         iv: str,
         salt: str,
-        associated_data: Optional[bytes] = None,
+        associated_data: bytes | None = None,
     ) -> str:
         """Decrypt data to string.
 
@@ -220,7 +220,7 @@ class EncryptionManager:
         encrypted_data: str,
         iv: str,
         salt: str,
-        associated_data: Optional[bytes] = None,
+        associated_data: bytes | None = None,
     ) -> dict:
         """Decrypt data to dictionary.
 
@@ -283,7 +283,7 @@ class SensitiveDataClassifier:
     }
 
     @classmethod
-    def is_sensitive(cls, data: Any, data_type: Optional[str] = None) -> bool:
+    def is_sensitive(cls, data: Any, data_type: str | None = None) -> bool:
         """Check if data is sensitive.
 
         Args:
@@ -298,15 +298,11 @@ class SensitiveDataClassifier:
 
         # Check content for sensitive patterns
         if isinstance(data, dict):
-            for key in data.keys():
+            for key in data:
                 if cls._matches_pattern(key):
                     return True
 
-        if isinstance(data, str):
-            if cls._matches_pattern(data):
-                return True
-
-        return False
+        return bool(isinstance(data, str) and cls._matches_pattern(data))
 
     @classmethod
     def _matches_pattern(cls, text: str) -> bool:
@@ -326,7 +322,7 @@ class SensitiveDataClassifier:
         return False
 
     @classmethod
-    def classify(cls, data: Any, data_type: Optional[str] = None) -> str:
+    def classify(cls, data: Any, data_type: str | None = None) -> str:
         """Classify data sensitivity level.
 
         Args:
@@ -461,7 +457,7 @@ class KeyRotationManager:
         self.encryption_manager.set_master_key(new_key)
         return new_version
 
-    def get_key_version(self, version: int) -> Optional[bytes]:
+    def get_key_version(self, version: int) -> bytes | None:
         """Get a specific key version.
 
         Args:

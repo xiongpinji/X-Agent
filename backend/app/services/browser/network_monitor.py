@@ -5,8 +5,7 @@ from __future__ import annotations
 import re
 import time
 from dataclasses import dataclass, field
-from typing import Any, Optional
-from datetime import datetime
+from typing import Any
 
 try:
     from playwright.async_api import Page, Request, Response
@@ -20,7 +19,7 @@ class NetworkRequest:
     url: str
     method: str
     headers: dict[str, str] = field(default_factory=dict)
-    post_data: Optional[str] = None
+    post_data: str | None = None
     timestamp: float = field(default_factory=time.time)
     resource_type: str = ""
 
@@ -42,7 +41,7 @@ class NetworkResponse:
     status: int
     status_text: str
     headers: dict[str, str] = field(default_factory=dict)
-    body: Optional[str] = None
+    body: str | None = None
     timestamp: float = field(default_factory=time.time)
     request_timestamp: float = 0.0
 
@@ -132,7 +131,7 @@ class NetworkMonitor:
         except Exception:
             pass
 
-    def get_requests(self, url_pattern: Optional[str] = None) -> list[NetworkRequest]:
+    def get_requests(self, url_pattern: str | None = None) -> list[NetworkRequest]:
         """Get all captured requests, optionally filtered by URL pattern."""
         requests = list(self._requests.values())
 
@@ -145,7 +144,7 @@ class NetworkMonitor:
 
         return sorted(requests, key=lambda r: r.timestamp)
 
-    def get_responses(self, url_pattern: Optional[str] = None) -> list[NetworkResponse]:
+    def get_responses(self, url_pattern: str | None = None) -> list[NetworkResponse]:
         """Get all captured responses, optionally filtered by URL pattern."""
         responses = self._responses
 
@@ -158,7 +157,7 @@ class NetworkMonitor:
 
         return sorted(responses, key=lambda r: r.timestamp)
 
-    def get_request_by_url(self, url: str) -> Optional[NetworkRequest]:
+    def get_request_by_url(self, url: str) -> NetworkRequest | None:
         """Get a specific request by URL."""
         return self._requests.get(url)
 

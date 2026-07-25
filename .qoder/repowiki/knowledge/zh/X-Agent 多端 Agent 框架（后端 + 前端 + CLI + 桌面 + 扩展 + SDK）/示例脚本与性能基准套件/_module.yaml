@@ -1,0 +1,10 @@
+schema_version: 1
+module_path: examples_and_benchmarks
+title: 示例脚本与性能基准套件
+scope:
+    - examples/
+    - benchmarks/
+source_files: []
+depends_on: []
+related_to:
+    - path: backend

@@ -14,6 +14,8 @@ import { useTheme } from '../theme';
 import { Task } from '../types';
 import { formatDate, getPriorityColor, getStatusColor } from '../utils/formatters';
 
+type IconName = React.ComponentProps<typeof MaterialCommunityIcons>['name'];
+
 interface TaskCardProps {
   task: Task;
   onPress?: () => void;
@@ -29,10 +31,10 @@ export const TaskCard: React.FC<TaskCardProps> = ({
 }) => {
   const { theme } = useTheme();
 
-  const statusColor = getStatusColor(task.status, theme);
-  const priorityColor = getPriorityColor(task.priority, theme);
+  const statusColor = getStatusColor(task.status, theme.colors);
+  const priorityColor = getPriorityColor(task.priority, theme.colors);
 
-  const getStatusIcon = () => {
+  const getStatusIcon = (): IconName => {
     switch (task.status) {
       case 'pending':
         return 'clock-outline';
@@ -47,7 +49,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
     }
   };
 
-  const getPriorityIcon = () => {
+  const getPriorityIcon = (): IconName => {
     switch (task.priority) {
       case 'high':
         return 'alert';

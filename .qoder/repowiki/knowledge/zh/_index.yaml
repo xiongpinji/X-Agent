@@ -1,0 +1,288 @@
+# 知识卡导出索引文件
+schema_version: 1
+locale: zh-CN
+branch: main
+nodes_managed: true
+exported_at: "2026-07-20T08:23:26Z"
+modules:
+    "":
+        dir_name: X-Agent 多端 Agent 框架（后端 + 前端 + CLI + 桌面 + 扩展 + SDK）
+        title: X-Agent 多端 Agent 框架（后端 + 前端 + CLI + 桌面 + 扩展 + SDK）
+        scope:
+            - README.md
+            - CONTRIBUTING.md
+            - .gitignore
+            - pyproject.toml
+            - Makefile
+            - Dockerfile
+            - docker-compose.yml
+            - requirements.txt
+            - .bandit
+            - .coveragerc
+            - .env.example
+            - .flake8
+            - .gitattributes
+            - .last-run.json
+            - .mcp.json
+            - .pre-commit-config.yaml
+            - ARCHITECTURE_OPTIMIZATION_INTEGRATION_GUIDE.py
+            - CHANGELOG.md
+            - CLAUDE.md
+            - CODE_OF_CONDUCT.md
+            - LICENSE
+            - MEMORY_DEDUPLICATION_EXAMPLES.py
+            - PULL_REQUEST_TEMPLATE.md
+            - ROADMAP.md
+            - SKILLS_IMPLEMENTATION_COMPLETE.txt
+            - SUPPORT.md
+            - _bmm_out.txt
+            - _broken_links.json
+            - _doc_final_check.py
+            - _doc_link_fix.py
+            - _doc_link_fix2.py
+            - _doc_migration_build.py
+            - _doc_move_map.json
+            - _out_scope_refs.json
+            - batch_clean_uvicorn.ps1
+            - benchmark_concurrency.py
+            - cleanup_sensitive_info.py
+            - cleanup_uvicorn.ps1
+            - competitive_analysis_data.json
+            - database_benchmark.py
+            - dependency-pip-audit-report.json
+            - dependency-safety-report.json
+            - deploy.sh
+            - docker-compose.performance.yml
+            - docker-compose.postgres.yml
+            - docker-compose.test.yml
+            - find_uvicorn.ps1
+            - git-commit-en.bat
+            - git-commit.bat
+            - git-init-en.bat
+            - git_normalization.py
+            - inspect_pid.ps1
+            - locustfile.py
+            - mypy.ini
+            - package_xagent_desktop.bat
+            - performance_tests.py
+            - plan.md
+            - probe_backend_http.ps1
+            - pytest.ini
+            - pytest_comprehensive.ini
+            - quick-git-init.bat
+            - requirements-dev.txt
+            - requirements-embeddings.txt
+            - requirements-lock.txt
+            - requirements-vision.txt
+            - run_backend_once.ps1
+            - run_git_setup.bat
+            - sbom.json
+            - setup-git-flow.bat
+            - setup_git.ps1
+            - setup_git_flow.py
+            - start_xagent_dev_web.bat
+            - stop_uvicorn.ps1
+        source_files: []
+        children:
+            - backend
+            - chrome_extension
+            - cli
+            - cloud_services
+            - config_prompts_templates
+            - deployment
+            - desktop_app
+            - docs
+            - examples_and_benchmarks
+            - frontend
+            - monitoring
+            - plugins
+            - sdks
+            - skills_system
+            - tests_and_data
+        depends_on: []
+        related_to: []
+    backend:
+        dir_name: X-Agent FastAPI 后端服务（HTTP API + CLI + 进程入口）
+        title: X-Agent FastAPI 后端服务（HTTP API + CLI + 进程入口）
+        scope:
+            - backend/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: cli/runtime
+            - path: cloud_services
+            - path: config_prompts_templates
+            - path: desktop_app
+            - path: examples_and_benchmarks
+            - path: frontend
+            - path: monitoring
+            - path: plugins
+            - path: sdks
+            - path: skills_system
+            - path: tests_and_data
+    chrome_extension:
+        dir_name: X-Agent Chrome 浏览器扩展
+        title: X-Agent Chrome 浏览器扩展
+        scope:
+            - extension/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: desktop_app
+    cli:
+        dir_name: X-Agent CLI 命令行入口与命令路由
+        title: X-Agent CLI 命令行入口与命令路由
+        scope:
+            - cli/
+        source_files: []
+        children:
+            - cli/runtime
+        depends_on: []
+        related_to: []
+    cli/runtime:
+        dir_name: X-Agent CLI 运行时与命令入口
+        title: X-Agent CLI 运行时与命令入口
+        scope:
+            - cli/main.py
+            - cli/client.py
+            - cli/config.py
+            - cli/console.py
+            - cli/repl.py
+            - cli/state.py
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: backend
+    cloud_services:
+        dir_name: X-Agent 云端同步与加密服务
+        title: X-Agent 云端同步与加密服务
+        scope:
+            - cloud/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: backend
+    config_prompts_templates:
+        dir_name: 配置、提示词与多语言资源
+        title: 配置、提示词与多语言资源
+        scope:
+            - config/
+            - prompts/
+            - templates/
+            - locales/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: backend
+    deployment:
+        dir_name: X-Agent 生产部署与运维编排
+        title: X-Agent 生产部署与运维编排
+        scope:
+            - deployment/
+            - k8s/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: docs
+            - path: monitoring
+    desktop_app:
+        dir_name: X-Agent 桌面客户端（Tauri + Vue）
+        title: X-Agent 桌面客户端（Tauri + Vue）
+        scope:
+            - desktop/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: backend
+            - path: chrome_extension
+    docs:
+        dir_name: 项目文档与CI_CD配置中心
+        title: 项目文档与CI/CD配置中心
+        scope:
+            - docs/
+            - .github/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: deployment
+    examples_and_benchmarks:
+        dir_name: 示例脚本与性能基准套件
+        title: 示例脚本与性能基准套件
+        scope:
+            - examples/
+            - benchmarks/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: backend
+    frontend:
+        dir_name: X-Agent Web 前端控制台与反馈仪表盘
+        title: X-Agent Web 前端控制台与反馈仪表盘
+        scope:
+            - frontend/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: backend
+    monitoring:
+        dir_name: X-Agent 可观测性监控栈（Prometheus_Grafana_ELK_Jaeger）
+        title: X-Agent 可观测性监控栈（Prometheus/Grafana/ELK/Jaeger）
+        scope:
+            - monitoring/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: backend
+            - path: deployment
+    plugins:
+        dir_name: X-Agent 插件生态与示例集
+        title: X-Agent 插件生态与示例集
+        scope:
+            - plugins/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: backend
+    sdks:
+        dir_name: X-Agent Partner SDK（多语言客户端）
+        title: X-Agent Partner SDK（多语言客户端）
+        scope:
+            - sdks/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: backend
+    skills_system:
+        dir_name: 可插拔技能目录与内置技能实现
+        title: 可插拔技能目录与内置技能实现
+        scope:
+            - skills/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: backend
+    tests_and_data:
+        dir_name: 测试套件与持久化数据（tests_ + data_）
+        title: 测试套件与持久化数据（tests/ + data/）
+        scope:
+            - tests/
+            - data/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: backend

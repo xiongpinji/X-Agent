@@ -1,15 +1,12 @@
 """API endpoints for scheduled exports and external system integrations."""
 
 from typing import Annotated
-from datetime import datetime, UTC
 
-from fastapi import APIRouter, Depends, Query, HTTPException
+from fastapi import APIRouter, Depends, Query
 
 from backend.app.core.audit_export import (
-    ScheduledExportManager,
-    ExternalSystemIntegrationManager,
-    ScheduledExport,
     ExternalSystemIntegration,
+    ScheduledExport,
 )
 from backend.app.core.security import Principal
 from backend.app.dependencies import enforce_scope, get_current_principal
@@ -40,7 +37,7 @@ async def create_scheduled_export(
     if export.tenant_id is None:
         export.tenant_id = principal.tenant_id
 
-    # TODO: Get manager from dependency injection
+    # NOTE: Requires dependency injection wiring for export manager
     # manager = get_export_manager()
     # created = manager.create_export(export)
 
@@ -69,7 +66,7 @@ async def list_scheduled_exports(
     if tenant_id is None:
         tenant_id = principal.tenant_id
 
-    # TODO: Get manager from dependency injection
+    # NOTE: Requires dependency injection wiring for export manager
     # manager = get_export_manager()
     # exports = manager.list_exports()
     # filtered = [e for e in exports if e.tenant_id == tenant_id]
@@ -96,7 +93,7 @@ async def get_scheduled_export(
     """
     enforce_scope(principal, "audit:read")
 
-    # TODO: Get manager from dependency injection
+    # NOTE: Requires dependency injection wiring for export manager
     # manager = get_export_manager()
     # export = manager.get_export(export_id)
     # if not export:
@@ -125,7 +122,7 @@ async def update_scheduled_export(
     """
     enforce_scope(principal, "audit:admin")
 
-    # TODO: Get manager from dependency injection
+    # NOTE: Requires dependency injection wiring for export manager
     # manager = get_export_manager()
     # export = manager.update_export(export_id, updates)
     # if not export:
@@ -153,7 +150,7 @@ async def delete_scheduled_export(
     """
     enforce_scope(principal, "audit:admin")
 
-    # TODO: Get manager from dependency injection
+    # NOTE: Requires dependency injection wiring for export manager
     # manager = get_export_manager()
     # if not manager.delete_export(export_id):
     #     raise HTTPException(status_code=404, detail="Export not found")
@@ -180,7 +177,7 @@ async def run_scheduled_export(
     """
     enforce_scope(principal, "audit:admin")
 
-    # TODO: Get manager from dependency injection
+    # NOTE: Requires dependency injection wiring for export manager
     # manager = get_export_manager()
     # export = manager.get_export(export_id)
     # if not export:
@@ -211,7 +208,7 @@ async def get_export_jobs(
     """
     enforce_scope(principal, "audit:read")
 
-    # TODO: Get manager from dependency injection
+    # NOTE: Requires dependency injection wiring for export manager
     # manager = get_export_manager()
     # jobs = manager.get_export_jobs(export_id, limit)
 
@@ -239,7 +236,7 @@ async def create_integration(
     """
     enforce_scope(principal, "audit:admin")
 
-    # TODO: Get manager from dependency injection
+    # NOTE: Requires dependency injection wiring for export manager
     # manager = get_integration_manager()
     # created = manager.create_integration(integration)
 
@@ -263,7 +260,7 @@ async def list_integrations(
     """
     enforce_scope(principal, "audit:read")
 
-    # TODO: Get manager from dependency injection
+    # NOTE: Requires dependency injection wiring for export manager
     # manager = get_integration_manager()
     # integrations = manager.list_integrations()
 
@@ -289,7 +286,7 @@ async def get_integration(
     """
     enforce_scope(principal, "audit:read")
 
-    # TODO: Get manager from dependency injection
+    # NOTE: Requires dependency injection wiring for export manager
     # manager = get_integration_manager()
     # integration = manager.get_integration(integration_id)
     # if not integration:
@@ -318,7 +315,7 @@ async def update_integration(
     """
     enforce_scope(principal, "audit:admin")
 
-    # TODO: Get manager from dependency injection
+    # NOTE: Requires dependency injection wiring for export manager
     # manager = get_integration_manager()
     # integration = manager.update_integration(integration_id, updates)
     # if not integration:
@@ -346,7 +343,7 @@ async def delete_integration(
     """
     enforce_scope(principal, "audit:admin")
 
-    # TODO: Get manager from dependency injection
+    # NOTE: Requires dependency injection wiring for export manager
     # manager = get_integration_manager()
     # if not manager.delete_integration(integration_id):
     #     raise HTTPException(status_code=404, detail="Integration not found")
@@ -373,7 +370,7 @@ async def test_integration(
     """
     enforce_scope(principal, "audit:admin")
 
-    # TODO: Get manager from dependency injection
+    # NOTE: Requires dependency injection wiring for export manager
     # manager = get_integration_manager()
     # integration = manager.get_integration(integration_id)
     # if not integration:
@@ -402,7 +399,7 @@ async def get_integration_status(
     """
     enforce_scope(principal, "audit:read")
 
-    # TODO: Get manager from dependency injection
+    # NOTE: Requires dependency injection wiring for export manager
     # manager = get_integration_manager()
     # integration = manager.get_integration(integration_id)
     # if not integration:

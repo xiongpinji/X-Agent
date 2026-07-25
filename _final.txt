@@ -1,0 +1,354 @@
+============================= test session starts =============================
+platform win32 -- Python 3.13.13, pytest-8.4.2, pluggy-1.6.0
+rootdir: D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent
+configfile: pytest.ini
+plugins: anyio-4.13.0, asyncio-0.25.3, cov-7.1.0, timeout-2.3.1, xdist-3.8.0
+asyncio: mode=Mode.AUTO, asyncio_default_fixture_loop_scope=function
+timeout: 60.0s
+timeout method: thread
+timeout func_only: False
+collected 2950 items / 1 skipped
+
+tests\unit\core\context\test_code_index.py ............................. [  0%]
+                                                                         [  0%]
+tests\unit\core\context\test_compression.py ..............               [  1%]
+tests\unit\core\context\test_retrieval.py ........................       [  2%]
+tests\unit\test_agent_loop.py ...................                        [  2%]
+tests\unit\test_agent_loop_full.py ..................................... [  4%]
+............................................                             [  5%]
+tests\unit\test_api_batch3_part1.py ......EEEEEEEEEEEEEEEEEEEE.........E [  6%]
+EEEEEEEEEEEEEEEEE                                                        [  7%]
+tests\unit\test_api_batch3_part2.py .................................... [  8%]
+........................................................................ [ 11%]
+..............................                                           [ 12%]
+tests\unit\test_api_batch4.py ..................                         [ 12%]
+tests\unit\test_code_review.py ....................                      [ 13%]
+tests\unit\test_collaboration_deep.py .................................. [ 14%]
+                                                                         [ 14%]
+tests\unit\test_enterprise_batch5.py ...........................         [ 15%]
+tests\unit\test_enterprise_cluster_audit_deep.py ....................... [ 16%]
+.............................................................            [ 18%]
+tests\unit\test_enterprise_deep.py ..................................... [ 19%]
+................................                                         [ 20%]
+tests\unit\test_evolution_engine.py .................                    [ 21%]
+tests\unit\test_goals_api.py ............                                [ 21%]
+tests\unit\test_llm_backends.py ................................         [ 22%]
+tests\unit\test_loop_deep.py ........................................... [ 24%]
+........................................................................ [ 26%]
+......................................                                   [ 27%]
+tests\unit\test_main_deep.py ..........................FFFFF...          [ 29%]
+tests\unit\test_main_full.py .........................FFFFFFFFF......... [ 30%]
+...                                                                      [ 30%]
+tests\unit\test_memory_store_full.py ................................... [ 31%]
+........................................................                 [ 33%]
+tests\unit\test_memory_system.py .........................               [ 34%]
+tests\unit\test_migration_export_shipper_deep.py ....................... [ 35%]
+........................................................................ [ 37%]
+....................                                                     [ 38%]
+tests\unit\test_performance_full.py .................................... [ 39%]
+.........................                                                [ 40%]
+tests\unit\test_performance_optimization_full.py ....................... [ 41%]
+.....................................                                    [ 42%]
+tests\unit\test_pools_full.py .......................................... [ 44%]
+.......                                                                  [ 44%]
+tests\unit\test_rate_limiter.py ..............                           [ 44%]
+tests\unit\test_redis_client_full.py ................................... [ 45%]
+....................                                                     [ 46%]
+tests\unit\test_services_batch7.py ..................................... [ 47%]
+...............................                                          [ 48%]
+tests\unit\test_skill_code_batch6.py ................................... [ 50%]
+............................................                             [ 51%]
+tests\unit\test_streaming_enhanced_deep.py ............................. [ 52%]
+................                                                         [ 53%]
+tests\unit\test_subscription_deep.py ................................... [ 54%]
+..                                                                       [ 54%]
+tests\unit\test_tail_batch8_part1.py ................................... [ 55%]
+..........                                                               [ 55%]
+tests\unit\test_tail_batch8_part2.py ................s...............    [ 56%]
+tests\unit\test_tail_batch8_part3.py ...............................s... [ 58%]
+................s.................                                       [ 59%]
+tests\unit\test_tenant_isolation_security.py ........                    [ 59%]
+tests\unit\test_tools_deep.py .......................................... [ 60%]
+..................................                                       [ 62%]
+tests\unit\test_tools_full.py ..........s............................... [ 63%]
+..................................................                       [ 65%]
+tests\unit\test_ui_tars_deep.py ........................................ [ 66%]
+.............................................                            [ 68%]
+tests\unit\test_workflow_store_deep.py ................................. [ 69%]
+................................................                         [ 70%]
+tests\unit\test_workflows.py ........................................... [ 72%]
+.                                                                        [ 72%]
+tests\unit\test_workflows_deep.py ...................................... [ 73%]
+.............................................                            [ 75%]
+tests\unit\test_workflows_full.py ...................................... [ 76%]
+........................................................................ [ 78%]
+.........................                                                [ 79%]
+tests\integration\test_agent_v2_integration.py ......................... [ 80%]
+..                                                                       [ 80%]
+tests\integration\test_auth_api.py .............                         [ 81%]
+tests\integration\test_mcp_e2e.py ..........................             [ 82%]
+tests\integration\test_memory_api.py sssssss                             [ 82%]
+tests\integration\test_p1_features.py .......................            [ 83%]
+tests\integration\test_workflow_api.py sssssssss                         [ 83%]
+tests\e2e\test_agent_fix_real_llm.py s                                   [ 83%]
+tests\e2e\test_browser_e2e.py sss                                        [ 83%]
+tests\e2e\test_desktop_e2e.py s                                          [ 83%]
+tests\e2e\test_desktop_macro_e2e.py s                                    [ 83%]
+tests\e2e\test_execution_reporting.py sssssss                            [ 83%]
+tests\e2e\test_functional_e2e.py ssssssssssssssssssssss                  [ 84%]
+tests\e2e\test_offline_e2e.py ssssssssssssss                             [ 84%]
+tests\e2e\test_open_source_catalog_e2e.py ss                             [ 85%]
+tests\e2e\test_open_source_e2e.py ss                                     [ 85%]
+tests\e2e\test_performance_security_e2e.py sssssssssssssssssss           [ 85%]
+tests\e2e\test_smoke_api.py ssssssssssssssss                             [ 86%]
+tests\e2e\test_sync_e2e.py ssssssssss                                    [ 86%]
+tests\e2e\test_user_journey.py sss                                       [ 86%]
+tests\e2e\test_user_journey_api.py ssssssssss                            [ 87%]
+tests\e2e\test_workflow_e2e.py s                                         [ 87%]
+tests\enterprise\test_agent_v2.py ...........................            [ 88%]
+tests\enterprise\test_analytics.py ..........                            [ 88%]
+tests\enterprise\test_api_key_manager.py ............................... [ 89%]
+.                                                                        [ 89%]
+tests\enterprise\test_architecture_optimization.py .........             [ 89%]
+tests\enterprise\test_audit_enhanced.py ..................               [ 90%]
+tests\enterprise\test_backup.py .....................                    [ 91%]
+tests\enterprise\test_billing.py ...............                         [ 91%]
+tests\enterprise\test_forum.py ......................                    [ 92%]
+tests\enterprise\test_memory_deduplication.py .......................... [ 93%]
+.                                                                        [ 93%]
+tests\enterprise\test_memory_v2_performance.py sssssssssss               [ 93%]
+tests\enterprise\test_oidc_sso_flow.py .................                 [ 94%]
+tests\enterprise\test_personalization.py .......................         [ 94%]
+tests\enterprise\test_scim_api.py ................................       [ 96%]
+tests\enterprise\test_sso.py ...................................         [ 97%]
+tests\enterprise\test_subscription_management.py ...............         [ 97%]
+tests\enterprise\test_tools.py s.s...................................... [ 99%]
+.........................                                                [100%]
+
+=================================== ERRORS ====================================
+___________ ERROR at setup of TestAuthAPI.test_login_missing_fields ___________
+E   RecursionError: maximum recursion depth exceeded
+!!! Recursion detected (same locals & position)
+________ ERROR at setup of TestAuthAPI.test_login_invalid_credentials _________
+E   RecursionError: maximum recursion depth exceeded
+!!! Recursion detected (same locals & position)
+______________ ERROR at setup of TestAuthAPI.test_login_success _______________
+E   RecursionError: maximum recursion depth exceeded
+!!! Recursion detected (same locals & position)
+______________ ERROR at setup of TestAuthAPI.test_login_lockout _______________
+E   RecursionError: maximum recursion depth exceeded
+!!! Recursion detected (same locals & position)
+_________________ ERROR at setup of TestAuthAPI.test_refresh __________________
+E   RecursionError: maximum recursion depth exceeded
+!!! Recursion detected (same locals & position)
+__________________ ERROR at setup of TestAuthAPI.test_logout __________________
+E   RecursionError: maximum recursion depth exceeded
+!!! Recursion detected (same locals & position)
+_____________ ERROR at setup of TestAuthAPI.test_logout_no_token ______________
+E   RecursionError: maximum recursion depth exceeded
+!!! Recursion detected (same locals & position)
+__________ ERROR at setup of TestAuthAPI.test_oauth_missing_provider __________
+E   RecursionError: maximum recursion depth exceeded
+!!! Recursion detected (same locals & position)
+________ ERROR at setup of TestAuthAPI.test_oauth_unsupported_provider ________
+E   RecursionError: maximum recursion depth exceeded
+!!! Recursion detected (same locals & position)
+____________ ERROR at setup of TestAuthAPI.test_oauth_missing_code ____________
+E   RecursionError: maximum recursion depth exceeded
+!!! Recursion detected (same locals & position)
+__________ ERROR at setup of TestAuthAPI.test_oauth_not_implemented ___________
+E   RecursionError: maximum recursion depth exceeded
+!!! Recursion detected (same locals & position)
+________ ERROR at setup of TestAuthAPI.test_verify_email_missing_token ________
+E   RecursionError: maximum recursion depth exceeded
+!!! Recursion detected (same locals & position)
+_______ ERROR at setup of TestAuthAPI.test_verify_email_not_implemented _______
+E   RecursionError: maximum recursion depth exceeded
+!!! Recursion detected (same locals & position)
+_______ ERROR at setup of TestAuthAPI.test_reset_password_request_flow ________
+E   RecursionError: maximum recursion depth exceeded
+!!! Recursion detected (same locals & position)
+_______ ERROR at setup of TestAuthAPI.test_reset_password_unknown_email _______
+E   RecursionError: maximum recursion depth exceeded
+!!! Recursion detected (same locals & position)
+______ ERROR at setup of TestAuthAPI.test_reset_password_invalid_params _______
+E   RecursionError: maximum recursion depth exceeded
+!!! Recursion detected (same locals & position)
+__ ERROR at setup of TestAuthAPI.test_reset_password_complete_weak_password ___
+E   RecursionError: maximum recursion depth exceeded
+!!! Recursion detected (same locals & position)
+__ ERROR at setup of TestAuthAPI.test_reset_password_complete_invalid_token ___
+E   RecursionError: maximum recursion depth exceeded
+!!! Recursion detected (same locals & position)
+____________________ ERROR at setup of TestAuthAPI.test_me ____________________
+E   RecursionError: maximum recursion depth exceeded
+!!! Recursion detected (same locals & position)
+________________ ERROR at setup of TestAuthAPI.test_update_me _________________
+E   RecursionError: maximum recursion depth exceeded
+!!! Recursion detected (same locals & position)
+______________ ERROR at setup of TestAgentsAPI.test_list_agents _______________
+E   RecursionError: maximum recursion depth exceeded
+!!! Recursion detected (same locals & position)
+______________ ERROR at setup of TestAgentsAPI.test_create_agent ______________
+E   RecursionError: maximum recursion depth exceeded
+!!! Recursion detected (same locals & position)
+____________ ERROR at setup of TestAgentsAPI.test_get_agent_detail ____________
+E   RecursionError: maximum recursion depth exceeded
+!!! Recursion detected (same locals & position)
+__________ ERROR at setup of TestAgentsAPI.test_get_agent_not_found ___________
+E   RecursionError: maximum recursion depth exceeded
+!!! Recursion detected (same locals & position)
+______________ ERROR at setup of TestAgentsAPI.test_update_agent ______________
+E   RecursionError: maximum recursion depth exceeded
+!!! Recursion detected (same locals & position)
+_________ ERROR at setup of TestAgentsAPI.test_update_agent_not_found _________
+E   RecursionError: maximum recursion depth exceeded
+!!! Recursion detected (same locals & position)
+______________ ERROR at setup of TestAgentsAPI.test_delete_agent ______________
+E   RecursionError: maximum recursion depth exceeded
+!!! Recursion detected (same locals & position)
+__________ ERROR at setup of TestAgentsAPI.test_delete_default_agent __________
+E   RecursionError: maximum recursion depth exceeded
+!!! Recursion detected (same locals & position)
+_________ ERROR at setup of TestAgentsAPI.test_delete_agent_not_found _________
+E   RecursionError: maximum recursion depth exceeded
+!!! Recursion detected (same locals & position)
+______________ ERROR at setup of TestAgentsAPI.test_pause_agent _______________
+E   RecursionError: maximum recursion depth exceeded
+!!! Recursion detected (same locals & position)
+______________ ERROR at setup of TestAgentsAPI.test_resume_agent ______________
+E   RecursionError: maximum recursion depth exceeded
+!!! Recursion detected (same locals & position)
+______________ ERROR at setup of TestAgentsAPI.test_cancel_agent ______________
+E   RecursionError: maximum recursion depth exceeded
+!!! Recursion detected (same locals & position)
+_________ ERROR at setup of TestAgentsAPI.test_pause_agent_not_found __________
+E   RecursionError: maximum recursion depth exceeded
+!!! Recursion detected (same locals & position)
+_______________ ERROR at setup of TestAgentsAPI.test_run_agent ________________
+E   RecursionError: maximum recursion depth exceeded
+!!! Recursion detected (same locals & position)
+_________ ERROR at setup of TestAgentsAPI.test_run_agent_missing_task _________
+E   RecursionError: maximum recursion depth exceeded
+!!! Recursion detected (same locals & position)
+____________ ERROR at setup of TestAgentsAPI.test_run_agent_stream ____________
+E   RecursionError: maximum recursion depth exceeded
+!!! Recursion detected (same locals & position)
+____________ ERROR at setup of TestAgentsAPI.test_list_agent_runs _____________
+E   RecursionError: maximum recursion depth exceeded
+!!! Recursion detected (same locals & position)
+________ ERROR at setup of TestAgentsAPI.test_get_agent_run_not_found _________
+E   RecursionError: maximum recursion depth exceeded
+!!! Recursion detected (same locals & position)
+================================== FAILURES ===================================
+D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\tests\unit\test_main_deep.py:284: assert 503 == 200
+D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\tests\unit\test_main_deep.py:291: assert 503 == 200
+D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\tests\unit\test_main_deep.py:296: assert 503 == 200
+D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\tests\unit\test_main_deep.py:303: assert 503 == 404
+D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\tests\unit\test_main_deep.py:308: assert 503 in (200, 401, 403)
+D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\tests\unit\test_main_full.py:306: assert 503 == 200
+D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\tests\unit\test_main_full.py:313: assert 503 == 200
+D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\tests\unit\test_main_full.py:319: assert 503 in (200, 500)
+D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\tests\unit\test_main_full.py:323: assert 503 in (200, 500)
+D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\tests\unit\test_main_full.py:327: assert 503 in (200, 500)
+D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\tests\unit\test_main_full.py:332: assert 503 in (200, 404)
+D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\tests\unit\test_main_full.py:336: assert 503 == 404
+D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\tests\unit\test_main_full.py:340: assert 503 == 200
+D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\tests\unit\test_main_full.py:348: assert 503 in (200, 401, 403)
+============================== warnings summary ===============================
+venv\Lib\site-packages\fastapi\testclient.py:1
+  D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+tests\e2e\test_execution_reporting.py:26
+  D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\tests\e2e\test_execution_reporting.py:26: PytestCollectionWarning: cannot collect test class 'TestStatus' because it has a __init__ constructor (from: tests/e2e/test_execution_reporting.py)
+    class TestStatus(str, Enum):
+
+tests\e2e\test_execution_reporting.py:44
+  D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\tests\e2e\test_execution_reporting.py:44: PytestCollectionWarning: cannot collect test class 'TestResult' because it has a __init__ constructor (from: tests/e2e/test_execution_reporting.py)
+    @dataclass
+
+tests\e2e\test_execution_reporting.py:77
+  D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\tests\e2e\test_execution_reporting.py:77: PytestCollectionWarning: cannot collect test class 'TestExecutionReport' because it has a __init__ constructor (from: tests/e2e/test_execution_reporting.py)
+    @dataclass
+
+tests\e2e\test_execution_reporting.py:98
+  D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\tests\e2e\test_execution_reporting.py:98: PytestCollectionWarning: cannot collect test class 'TestExecutionManager' because it has a __init__ constructor (from: tests/e2e/test_execution_reporting.py)
+    class TestExecutionManager:
+
+tests/unit/test_subscription_deep.py::TestCreateSubscription::test_create_free_subscription
+tests/unit/test_subscription_deep.py::TestCreateSubscription::test_create_paid_subscription_with_trial
+  D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\backend\app\services\subscription.py:95: RuntimeWarning: coroutine 'AsyncMockMixin._execute_mock_call' was never awaited
+    session.add(subscription)
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/unit/test_subscription_deep.py::TestCreateSubscription::test_create_free_subscription
+tests/unit/test_subscription_deep.py::TestCreateSubscription::test_create_paid_subscription_with_trial
+  D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\backend\app\services\subscription.py:537: RuntimeWarning: coroutine 'AsyncMockMixin._execute_mock_call' was never awaited
+    session.add(quota)
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/unit/test_subscription_deep.py::TestCreateSubscription::test_create_free_subscription
+tests/unit/test_subscription_deep.py::TestCreateSubscription::test_create_paid_subscription_with_trial
+  D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\backend\app\services\subscription.py:591: RuntimeWarning: coroutine 'AsyncMockMixin._execute_mock_call' was never awaited
+    session.add(history)
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED tests/unit/test_main_deep.py::TestRouteHandlers::test_health - assert ...
+FAILED tests/unit/test_main_deep.py::TestRouteHandlers::test_api_key_status
+FAILED tests/unit/test_main_deep.py::TestRouteHandlers::test_csrf_token_endpoint
+FAILED tests/unit/test_main_deep.py::TestRouteHandlers::test_spa_fallback_unknown_path_404
+FAILED tests/unit/test_main_deep.py::TestRouteHandlers::test_entry_endpoint
+FAILED tests/unit/test_main_full.py::TestRouteHandlers::test_health - assert ...
+FAILED tests/unit/test_main_full.py::TestRouteHandlers::test_api_key_status
+FAILED tests/unit/test_main_full.py::TestRouteHandlers::test_root - assert 50...
+FAILED tests/unit/test_main_full.py::TestRouteHandlers::test_chat_page - asse...
+FAILED tests/unit/test_main_full.py::TestRouteHandlers::test_console_page - a...
+FAILED tests/unit/test_main_full.py::TestRouteHandlers::test_spa_fallback_known_prefix
+FAILED tests/unit/test_main_full.py::TestRouteHandlers::test_spa_fallback_unknown_prefix
+FAILED tests/unit/test_main_full.py::TestRouteHandlers::test_csrf_token_endpoint
+FAILED tests/unit/test_main_full.py::TestRouteHandlers::test_entry_endpoint
+ERROR tests/unit/test_api_batch3_part1.py::TestAuthAPI::test_login_missing_fields
+ERROR tests/unit/test_api_batch3_part1.py::TestAuthAPI::test_login_invalid_credentials
+ERROR tests/unit/test_api_batch3_part1.py::TestAuthAPI::test_login_success - ...
+ERROR tests/unit/test_api_batch3_part1.py::TestAuthAPI::test_login_lockout - ...
+ERROR tests/unit/test_api_batch3_part1.py::TestAuthAPI::test_refresh - Recurs...
+ERROR tests/unit/test_api_batch3_part1.py::TestAuthAPI::test_logout - Recursi...
+ERROR tests/unit/test_api_batch3_part1.py::TestAuthAPI::test_logout_no_token
+ERROR tests/unit/test_api_batch3_part1.py::TestAuthAPI::test_oauth_missing_provider
+ERROR tests/unit/test_api_batch3_part1.py::TestAuthAPI::test_oauth_unsupported_provider
+ERROR tests/unit/test_api_batch3_part1.py::TestAuthAPI::test_oauth_missing_code
+ERROR tests/unit/test_api_batch3_part1.py::TestAuthAPI::test_oauth_not_implemented
+ERROR tests/unit/test_api_batch3_part1.py::TestAuthAPI::test_verify_email_missing_token
+ERROR tests/unit/test_api_batch3_part1.py::TestAuthAPI::test_verify_email_not_implemented
+ERROR tests/unit/test_api_batch3_part1.py::TestAuthAPI::test_reset_password_request_flow
+ERROR tests/unit/test_api_batch3_part1.py::TestAuthAPI::test_reset_password_unknown_email
+ERROR tests/unit/test_api_batch3_part1.py::TestAuthAPI::test_reset_password_invalid_params
+ERROR tests/unit/test_api_batch3_part1.py::TestAuthAPI::test_reset_password_complete_weak_password
+ERROR tests/unit/test_api_batch3_part1.py::TestAuthAPI::test_reset_password_complete_invalid_token
+ERROR tests/unit/test_api_batch3_part1.py::TestAuthAPI::test_me - RecursionEr...
+ERROR tests/unit/test_api_batch3_part1.py::TestAuthAPI::test_update_me - Recu...
+ERROR tests/unit/test_api_batch3_part1.py::TestAgentsAPI::test_list_agents - ...
+ERROR tests/unit/test_api_batch3_part1.py::TestAgentsAPI::test_create_agent
+ERROR tests/unit/test_api_batch3_part1.py::TestAgentsAPI::test_get_agent_detail
+ERROR tests/unit/test_api_batch3_part1.py::TestAgentsAPI::test_get_agent_not_found
+ERROR tests/unit/test_api_batch3_part1.py::TestAgentsAPI::test_update_agent
+ERROR tests/unit/test_api_batch3_part1.py::TestAgentsAPI::test_update_agent_not_found
+ERROR tests/unit/test_api_batch3_part1.py::TestAgentsAPI::test_delete_agent
+ERROR tests/unit/test_api_batch3_part1.py::TestAgentsAPI::test_delete_default_agent
+ERROR tests/unit/test_api_batch3_part1.py::TestAgentsAPI::test_delete_agent_not_found
+ERROR tests/unit/test_api_batch3_part1.py::TestAgentsAPI::test_pause_agent - ...
+ERROR tests/unit/test_api_batch3_part1.py::TestAgentsAPI::test_resume_agent
+ERROR tests/unit/test_api_batch3_part1.py::TestAgentsAPI::test_cancel_agent
+ERROR tests/unit/test_api_batch3_part1.py::TestAgentsAPI::test_pause_agent_not_found
+ERROR tests/unit/test_api_batch3_part1.py::TestAgentsAPI::test_run_agent - Re...
+ERROR tests/unit/test_api_batch3_part1.py::TestAgentsAPI::test_run_agent_missing_task
+ERROR tests/unit/test_api_batch3_part1.py::TestAgentsAPI::test_run_agent_stream
+ERROR tests/unit/test_api_batch3_part1.py::TestAgentsAPI::test_list_agent_runs
+ERROR tests/unit/test_api_batch3_part1.py::TestAgentsAPI::test_get_agent_run_not_found
+= 14 failed, 2753 passed, 146 skipped, 11 warnings, 38 errors in 1598.84s (0:26:38) =

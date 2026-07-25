@@ -151,7 +151,7 @@ class PerformanceMonitor {
     if (name === 'CLS') {
       rating = value <= 0.1 ? 'good' : value <= 0.25 ? 'needs-improvement' : 'poor';
     } else {
-      const poorThreshold = threshold * 1.5;
+      const _poorThreshold = threshold * 1.5;
       const needsImprovementThreshold = threshold * 1.25;
 
       if (value <= threshold) {

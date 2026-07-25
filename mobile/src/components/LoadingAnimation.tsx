@@ -10,6 +10,7 @@ import {
   Text,
 } from 'react-native';
 import { useTheme } from '../theme';
+import { formatTimeAgo } from '../utils/formatters';
 
 interface LoadingAnimationProps {
   visible: boolean;
@@ -170,10 +171,10 @@ export const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({
   });
 
   return (
-    <View style={styles.syncContainer}>
+    <View style={syncStyles.syncContainer}>
       <Animated.View
         style={[
-          styles.syncIcon,
+          syncStyles.syncIcon,
           status === 'syncing' && { transform: [{ rotate: rotation }] },
         ]}
       >
@@ -181,7 +182,7 @@ export const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({
       </Animated.View>
       <Text
         style={[
-          styles.syncText,
+          syncStyles.syncText,
           { color: getStatusColor() },
         ]}
       >
@@ -279,14 +280,14 @@ export const ErrorAlert: React.FC<ErrorAlertProps> = ({
   return (
     <Animated.View
       style={[
-        styles.alertContainer,
+        alertStyles.alertContainer,
         {
           backgroundColor: getBackgroundColor(),
           transform: [{ translateY: slideAnim }],
         },
       ]}
     >
-      <Text style={[styles.alertText, { color: getTextColor() }]}>
+      <Text style={[alertStyles.alertText, { color: getTextColor() }]}>
         {message}
       </Text>
     </Animated.View>
@@ -306,6 +307,3 @@ const alertStyles = StyleSheet.create({
     fontWeight: '500',
   },
 });
-
-// 合并样式
-Object.assign(styles, syncStyles, alertStyles);

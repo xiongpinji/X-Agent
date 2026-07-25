@@ -9,12 +9,12 @@ Responsibilities:
   - Prioritize tools based on context
 """
 
-from typing import Any
 import json
+from typing import Any
 
+from backend.app.core.agent.protocols import PlanStep, TaskProfile
 from backend.app.core.contracts import RunContext
 from backend.app.core.llm import LLMRouter
-from backend.app.core.agent.protocols import PlanStep, TaskProfile
 
 
 class TaskPlanner:

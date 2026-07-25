@@ -1,21 +1,21 @@
 """Backup monitoring and health check API endpoints."""
 
 import logging
-from pathlib import Path
-from typing import Annotated, Optional
 from datetime import datetime
 from functools import lru_cache
+from pathlib import Path
+from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 
-from backend.app.core.security import Principal
 from backend.app.core.backup_monitoring import (
-    BackupMonitor,
+    AlertThreshold,
     BackupHealthCheck,
     BackupMetricsCollector,
-    AlertThreshold,
+    BackupMonitor,
 )
+from backend.app.core.security import Principal
 from backend.app.dependencies import enforce_scope, get_current_principal
 
 logger = logging.getLogger(__name__)
@@ -92,14 +92,14 @@ class AlertResponse(BaseModel):
     """Response for alert."""
     alert_id: str
     tenant_id: str
-    backup_id: Optional[str]
+    backup_id: str | None
     alert_type: str
     severity: str
     title: str
     message: str
     created_at: datetime
-    acknowledged_at: Optional[datetime]
-    resolved_at: Optional[datetime]
+    acknowledged_at: datetime | None
+    resolved_at: datetime | None
 
 
 class AlertListResponse(BaseModel):
@@ -152,7 +152,7 @@ class StatisticsResponse(BaseModel):
 async def list_alerts(
     limit: int = Query(100, ge=1, le=1000),
     offset: int = Query(0, ge=0),
-    severity: Optional[str] = None,
+    severity: str | None = None,
     *,
     principal: PrincipalDependency,
 ) -> AlertListResponse:
@@ -197,7 +197,7 @@ async def list_alerts(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error listing alerts: {str(e)}",
+            detail=f"Error listing alerts: {e!s}",
         )
 
 
@@ -274,7 +274,7 @@ async def resolve_alert(
 @router.get("/health", response_model=HealthCheckResponse)
 async def get_health_status(
     principal: PrincipalDependency,
-    storage_path: Optional[str] = Query(None, description="Storage path for backups"),
+    storage_path: str | None = Query(None, description="Storage path for backups"),
 ) -> HealthCheckResponse:
     """Get backup system health status.
 
@@ -366,7 +366,7 @@ async def get_statistics(
 @router.get("/dashboard")
 async def get_dashboard(
     principal: PrincipalDependency,
-    storage_path: Optional[str] = Query(None, description="Storage path for backups"),
+    storage_path: str | None = Query(None, description="Storage path for backups"),
 ) -> dict:
     """Get backup dashboard data.
 

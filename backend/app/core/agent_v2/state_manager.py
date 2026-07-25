@@ -7,11 +7,10 @@ through different phases (initialization, planning, execution, recovery, complet
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from enum import Enum
-from typing import Optional
+from enum import StrEnum
 
 
-class AgentState(str, Enum):
+class AgentState(StrEnum):
     """Agent execution states."""
 
     IDLE = "idle"
@@ -83,7 +82,7 @@ class AgentStateManager:
         self.state_history: list[tuple[AgentState, datetime]] = [
             (AgentState.IDLE, datetime.now(UTC))
         ]
-        self._paused_state: Optional[AgentState] = None
+        self._paused_state: AgentState | None = None
 
     def transition_to(self, new_state: AgentState) -> None:
         """Transition to a new state.
@@ -152,7 +151,7 @@ class AgentStateManager:
         """
         return self.current_state == AgentState.PAUSED
 
-    def get_paused_state(self) -> Optional[AgentState]:
+    def get_paused_state(self) -> AgentState | None:
         """Get the state before pause.
 
         Returns:

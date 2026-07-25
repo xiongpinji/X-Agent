@@ -1,14 +1,13 @@
 """Observability configuration module."""
 
-from enum import Enum
-from typing import Optional
+from enum import StrEnum
 
 from pydantic import Field, field_validator
 
 from .base import BaseConfig
 
 
-class LogLevel(str, Enum):
+class LogLevel(StrEnum):
     """Log level enumeration."""
 
     DEBUG = "DEBUG"
@@ -18,14 +17,14 @@ class LogLevel(str, Enum):
     CRITICAL = "CRITICAL"
 
 
-class LogFormat(str, Enum):
+class LogFormat(StrEnum):
     """Log format enumeration."""
 
     JSON = "json"
     TEXT = "text"
 
 
-class LogOutput(str, Enum):
+class LogOutput(StrEnum):
     """Log output enumeration."""
 
     STDOUT = "stdout"
@@ -82,15 +81,15 @@ class ObservabilityConfig(BaseConfig):
         default=False,
         description="Enable Langfuse integration",
     )
-    langfuse_public_key: Optional[str] = Field(
+    langfuse_public_key: str | None = Field(
         default=None,
         description="Langfuse public key",
     )
-    langfuse_secret_key: Optional[str] = Field(
+    langfuse_secret_key: str | None = Field(
         default=None,
         description="Langfuse secret key",
     )
-    langfuse_host: Optional[str] = Field(
+    langfuse_host: str | None = Field(
         default=None,
         description="Langfuse host URL",
     )
@@ -116,7 +115,7 @@ class ObservabilityConfig(BaseConfig):
         default=False,
         description="Enable Sentry error tracking",
     )
-    sentry_dsn: Optional[str] = Field(
+    sentry_dsn: str | None = Field(
         default=None,
         description="Sentry DSN",
     )

@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 import hashlib
-from dataclasses import dataclass
 from datetime import datetime
-from typing import Optional
 
 from pydantic import BaseModel, Field
 
@@ -19,7 +17,7 @@ class ArtifactVersion(BaseModel):
     author: str = Field(..., description="Author user ID")
     message: str = Field(default="", description="Commit message")
     created_at: datetime = Field(default_factory=datetime.utcnow)
-    parent_version_id: Optional[str] = Field(default=None, description="Parent version ID")
+    parent_version_id: str | None = Field(default=None, description="Parent version ID")
     metadata: dict = Field(default_factory=dict, description="Version metadata")
 
 
@@ -45,7 +43,7 @@ class VersionControl:
         content: str,
         message: str,
         author: str,
-        metadata: dict = None,
+        metadata: dict | None = None,
     ) -> ArtifactVersion:
         """Create new version.
 
@@ -79,7 +77,7 @@ class VersionControl:
         await self.storage.save_version(version)
         return version
 
-    async def get_version(self, version_id: str) -> Optional[ArtifactVersion]:
+    async def get_version(self, version_id: str) -> ArtifactVersion | None:
         """Get specific version.
 
         Args:
@@ -90,7 +88,7 @@ class VersionControl:
         """
         return await self.storage.get_version(version_id)
 
-    async def get_latest(self, artifact_id: str) -> Optional[ArtifactVersion]:
+    async def get_latest(self, artifact_id: str) -> ArtifactVersion | None:
         """Get latest version of artifact.
 
         Args:
@@ -147,7 +145,7 @@ class VersionControl:
         removed = []
         modified = []
 
-        for i, (line1, line2) in enumerate(zip(lines1, lines2)):
+        for i, (line1, line2) in enumerate(zip(lines1, lines2, strict=False)):
             if line1 != line2:
                 modified.append({
                     "line": i + 1,

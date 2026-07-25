@@ -7,15 +7,11 @@ and failures to continuously improve agent performance.
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
-
-from pydantic import BaseModel, Field
-
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -44,12 +40,12 @@ class Task:
     """A task executed by the agent."""
     task_id: str
     description: str
-    input_data: Dict[str, Any]
-    output_data: Dict[str, Any]
+    input_data: dict[str, Any]
+    output_data: dict[str, Any]
     execution_time: float
     success: bool
-    error: Optional[str] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    error: str | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -60,9 +56,9 @@ class Feedback:
     feedback_type: FeedbackType
     content: str
     rating: float  # 0-1
-    suggestions: List[str] = field(default_factory=list)
+    suggestions: list[str] = field(default_factory=list)
     timestamp: datetime = field(default_factory=datetime.now)
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -72,8 +68,8 @@ class Error:
     task_id: str
     error_type: ErrorType
     message: str
-    traceback: Optional[str] = None
-    context: Dict[str, Any] = field(default_factory=dict)
+    traceback: str | None = None
+    context: dict[str, Any] = field(default_factory=dict)
     timestamp: datetime = field(default_factory=datetime.now)
 
 
@@ -85,9 +81,9 @@ class Knowledge:
     content: str
     confidence: float  # 0-1
     source: str  # Where this knowledge came from
-    related_tasks: List[str] = field(default_factory=list)
+    related_tasks: list[str] = field(default_factory=list)
     timestamp: datetime = field(default_factory=datetime.now)
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -96,12 +92,12 @@ class LearningPattern:
     pattern_id: str
     pattern_type: str
     description: str
-    conditions: Dict[str, Any]
-    actions: List[str]
+    conditions: dict[str, Any]
+    actions: list[str]
     success_rate: float
     num_occurrences: int
     confidence: float
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 class LearningSystem:
@@ -109,11 +105,11 @@ class LearningSystem:
 
     def __init__(self):
         """Initialize learning system."""
-        self.knowledge_base: List[Knowledge] = []
-        self.learning_patterns: List[LearningPattern] = []
-        self.task_history: List[Task] = []
-        self.feedback_history: List[Feedback] = []
-        self.error_history: List[Error] = []
+        self.knowledge_base: list[Knowledge] = []
+        self.learning_patterns: list[LearningPattern] = []
+        self.task_history: list[Task] = []
+        self.feedback_history: list[Feedback] = []
+        self.error_history: list[Error] = []
         self.learning_metrics = {
             "total_tasks": 0,
             "successful_tasks": 0,
@@ -238,7 +234,7 @@ class LearningSystem:
     async def _extract_success_pattern(
         self,
         task: Task,
-        feedback: Optional[Feedback],
+        feedback: Feedback | None,
     ) -> None:
         """Extract patterns from successful tasks.
 
@@ -323,7 +319,7 @@ class LearningSystem:
         self,
         task: Task,
         error: Error,
-        error_analysis: Dict[str, Any],
+        error_analysis: dict[str, Any],
     ) -> None:
         """Extract patterns from errors.
 
@@ -377,7 +373,7 @@ class LearningSystem:
                 self.learning_patterns.append(pattern)
                 logger.debug(f"Identified generalized pattern: {pattern.pattern_id}")
 
-    async def _analyze_error(self, error: Error) -> Dict[str, Any]:
+    async def _analyze_error(self, error: Error) -> dict[str, Any]:
         """Analyze an error to understand root cause.
 
         Args:
@@ -432,7 +428,7 @@ class LearningSystem:
 
         return analysis
 
-    async def _generate_recovery_strategies(self, error: Error) -> List[str]:
+    async def _generate_recovery_strategies(self, error: Error) -> list[str]:
         """Generate recovery strategies for an error.
 
         Args:
@@ -470,7 +466,7 @@ class LearningSystem:
 
         return strategies
 
-    def _find_similar_knowledge(self, knowledge: Knowledge) -> Optional[Knowledge]:
+    def _find_similar_knowledge(self, knowledge: Knowledge) -> Knowledge | None:
         """Find similar knowledge in knowledge base.
 
         Args:
@@ -507,7 +503,7 @@ class LearningSystem:
 
         logger.debug(f"Merged knowledge: {existing.knowledge_id}")
 
-    def _group_similar_tasks(self) -> Dict[str, List[Task]]:
+    def _group_similar_tasks(self) -> dict[str, list[Task]]:
         """Group similar tasks from history.
 
         Args:
@@ -526,7 +522,7 @@ class LearningSystem:
 
         return groups
 
-    def _extract_common_conditions(self, tasks: List[Task]) -> Dict[str, Any]:
+    def _extract_common_conditions(self, tasks: list[Task]) -> dict[str, Any]:
         """Extract common conditions from tasks.
 
         Args:
@@ -540,7 +536,7 @@ class LearningSystem:
             return tasks[0].input_data
         return {}
 
-    def _extract_common_actions(self, tasks: List[Task]) -> List[str]:
+    def _extract_common_actions(self, tasks: list[Task]) -> list[str]:
         """Extract common actions from tasks.
 
         Args:
@@ -584,7 +580,7 @@ class LearningSystem:
         self.learning_metrics["knowledge_items"] = len(self.knowledge_base)
         self.learning_metrics["patterns_discovered"] = len(self.learning_patterns)
 
-    def get_learning_metrics(self) -> Dict[str, Any]:
+    def get_learning_metrics(self) -> dict[str, Any]:
         """Get current learning metrics.
 
         Returns:
@@ -592,7 +588,7 @@ class LearningSystem:
         """
         return self.learning_metrics.copy()
 
-    def get_knowledge_base(self) -> List[Knowledge]:
+    def get_knowledge_base(self) -> list[Knowledge]:
         """Get knowledge base.
 
         Returns:
@@ -600,7 +596,7 @@ class LearningSystem:
         """
         return self.knowledge_base.copy()
 
-    def get_patterns(self) -> List[LearningPattern]:
+    def get_patterns(self) -> list[LearningPattern]:
         """Get discovered patterns.
 
         Returns:
@@ -608,7 +604,7 @@ class LearningSystem:
         """
         return self.learning_patterns.copy()
 
-    def get_high_confidence_patterns(self, threshold: float = 0.8) -> List[LearningPattern]:
+    def get_high_confidence_patterns(self, threshold: float = 0.8) -> list[LearningPattern]:
         """Get high-confidence patterns.
 
         Args:

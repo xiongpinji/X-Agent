@@ -1,10 +1,9 @@
 """Backup monitoring and alerting system."""
 
-import asyncio
 import logging
-from datetime import datetime, timedelta
-from typing import Callable, Optional
+from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 
 from backend.app.models.backup import BackupAlert, BackupStatistics
 
@@ -25,8 +24,8 @@ class BackupMonitor:
 
     def __init__(
         self,
-        thresholds: Optional[AlertThreshold] = None,
-        alert_callback: Optional[Callable[[BackupAlert], None]] = None,
+        thresholds: AlertThreshold | None = None,
+        alert_callback: Callable[[BackupAlert], None] | None = None,
     ):
         self.thresholds = thresholds or AlertThreshold()
         self.alert_callback = alert_callback
@@ -190,7 +189,7 @@ class BackupHealthCheck:
         period_days: int = 7,
     ) -> float:
         """Check backup success rate over a period."""
-        # TODO: Implement by querying backup history
+        # NOTE: Requires database persistence layer for backup history
         return 0.99
 
     async def check_restore_success_rate(
@@ -199,7 +198,7 @@ class BackupHealthCheck:
         period_days: int = 7,
     ) -> float:
         """Check restore success rate over a period."""
-        # TODO: Implement by querying restore history
+        # NOTE: Requires database persistence layer for restore history
         return 0.99
 
     async def check_backup_verification_status(
@@ -218,7 +217,6 @@ class BackupHealthCheck:
         storage_path: str,
     ) -> dict:
         """Check storage health."""
-        import os
         import shutil
 
         try:

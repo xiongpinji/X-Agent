@@ -4,46 +4,51 @@ import json
 import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
-from backend.app.core.contracts import AgentRunResponse, AgentPlanStepRecord, ExecutionFrame, PlanFrame, RecoveryFrame, RunContext, RunStatus, TaskFrame, TraceEvent, ToolCallRecord, ToolDecision, ToolPolicyVerdict
+from backend.app.core.contracts import (
+    AgentPlanStepRecord,
+    AgentRunResponse,
+    ExecutionFrame,
+    PlanFrame,
+    RecoveryFrame,
+    RunContext,
+    RunStatus,
+    TaskFrame,
+    ToolCallRecord,
+    TraceEvent,
+)
 
 if TYPE_CHECKING:
-    from backend.app.core.hooks import HookManager
     from backend.app.core.approvals import ApprovalStore
+    from backend.app.core.hooks import HookManager
+    from backend.app.core.hooks.types import HookEvent
+import contextlib
+
+from backend.app.core.agent_runtime_adapter import AgentRuntimeAdapter
+from backend.app.core.agent_state_manager import AgentStateManager
+from backend.app.core.audit import AuditStore
+from backend.app.core.browser import BrowserAutomationStore
+from backend.app.core.code_index import code_index
 from backend.app.core.context.agent_integration import (
     AgentLoopContextBridge,
     fit_messages_to_token_budget,
 )
 from backend.app.core.context_compactor import ContextCompactor
-from backend.app.core.evolution import CapabilityVersion, LearningRecord, ReflectionRecord, evolution_store
+from backend.app.core.desktop import DesktopAutomationStore
+from backend.app.core.evolution import ReflectionRecord, evolution_store
+from backend.app.core.execution_planner import execution_planner
 from backend.app.core.llm import LLMRouter
 from backend.app.core.memory import MemorySystem
 from backend.app.core.open_source_store import open_source_discovery_store
-from backend.app.core.tools import ToolRegistry, apply_text_patch, write_file
-from backend.app.core.browser import BrowserAutomationStore
-from backend.app.core.desktop import DesktopAutomationStore
-from backend.app.core.tracing import TraceStore
-from backend.app.core.audit import AuditStore
-from backend.app.core.workflows import WorkflowRepository
-from backend.app.core.tracing import tracer as default_tracer
-from backend.app.core.runs import RunStore
 from backend.app.core.orchestrator import Orchestrator
-from backend.app.core.verification import VerificationEngine
 from backend.app.core.repair_loop import RepairLoop
-from backend.app.core.code_index import code_index
+from backend.app.core.runs import RunStore
 from backend.app.core.test_mapper import TestMappingResult, test_mapper
-from backend.app.core.execution_planner import execution_planner
-from backend.app.core.agent_state_manager import AgentStateManager
-from backend.app.core.agent_runtime_adapter import AgentRuntimeAdapter
-from backend.app.core.agent_phases import (
-    InitializationPhase,
-    PlanningPhase,
-    ExecutionPhase,
-    CompletionPhase,
-    PhaseContext,
-)
-from backend.app.core.enums import StepKind, RecoveryBranch
+from backend.app.core.tools import ToolRegistry
+from backend.app.core.tracing import TraceStore
+from backend.app.core.tracing import tracer as default_tracer
+from backend.app.core.verification import VerificationEngine
 from backend.app.services.observability.langfuse_client import langfuse_client
 
 logger = logging.getLogger(__name__)
@@ -88,11 +93,14 @@ class AgentLoop:
         orchestrator: Orchestrator | None = None,
         verification_engine: VerificationEngine | None = None,
         repair_loop: RepairLoop | None = None,
-        hook_manager: "HookManager | None" = None,
-        approval_store: "ApprovalStore | None" = None,
+        hook_manager: HookManager | None = None,
+        approval_store: ApprovalStore | None = None,
         context_bridge: AgentLoopContextBridge | None = None,
         context_bridge_factory: Callable[[], AgentLoopContextBridge] | None = None,
         context_token_budget: int = 24_000,
+        context_window_size: int | None = None,
+        context_strategy: str | None = None,
+        context_reserve_output: int | None = None,
     ) -> None:
         self.llm = llm_router
         self.memory = memory
@@ -114,9 +122,22 @@ class AgentLoop:
         # - context_bridge_factory：按运行创建桥接器的工厂（并发生产接线推荐）。
         # - 两者都缺省时，带 session_id 的运行会按需创建临时桥接器（存储于 data/sessions）。
         # - context_token_budget：发给 LLM 的消息列表 token 预算，超阈值自动压缩。
+        # - context_window_size / context_strategy / context_reserve_output：
+        #   从 settings 读取（XAGENT_CONTEXT_*），显式传入时覆盖。
         self.context_bridge = context_bridge
         self.context_bridge_factory = context_bridge_factory
         self.context_token_budget = context_token_budget
+        # P1-14: 从 settings 读取上下文管理配置（显式参数优先）
+        _settings = self._load_settings_safe()
+        self.context_window_size: int = context_window_size or (
+            _settings.context_window_size if _settings else 128_000
+        )
+        self.context_strategy: str = context_strategy or (
+            _settings.context_strategy if _settings else "sliding_window"
+        )
+        self.context_reserve_output: int = context_reserve_output or (
+            _settings.context_reserve_output if _settings else 4096
+        )
         self._llm_message_compactor = ContextCompactor(
             token_limit=context_token_budget,
             compression_threshold=0.85,
@@ -134,6 +155,15 @@ class AgentLoop:
 
             hook_manager = get_hook_manager()
         self.hook_manager = hook_manager
+
+    @staticmethod
+    def _load_settings_safe():
+        """P1-14: 安全加载 settings，失败时返回 None（显式降级）。"""
+        try:
+            from backend.app.settings import get_settings
+            return get_settings()
+        except Exception:
+            return None
 
     def _acquire_context_bridge(self, session_id: str | None) -> AgentLoopContextBridge | None:
         """按优先级获取本次运行的上下文桥接器。
@@ -171,6 +201,67 @@ class AgentLoop:
         if self._active_bridge is not None:
             return self._active_bridge.fit_messages(messages)
         return fit_messages_to_token_budget(self._llm_message_compactor, messages)
+
+    async def _prepare_llm_context(
+        self,
+        context: RunContext,
+        messages: list[dict[str, str]],
+    ) -> list[dict[str, str]]:
+        """P1-14: 在 LLM 调用前准备上下文——按配置策略压缩/裁剪消息。
+
+        使用 settings 中的配置：
+        - context_window_size: 上下文窗口总 token 数 (XAGENT_CONTEXT_WINDOW_SIZE)
+        - context_strategy: 压缩策略 sliding_window|summarize|hybrid (XAGENT_CONTEXT_STRATEGY)
+        - context_reserve_output: 为输出预留的 token 数 (XAGENT_CONTEXT_RESERVE_OUTPUT)
+
+        有效预算 = min(context_window_size - reserve_output, context_token_budget, bridge.token_budget)
+
+        显式降级：桥接器不可用或压缩失败时回退到简单截断，绝不阻断主循环。
+        """
+        # 计算有效 token 预算：取多个限制的最小值
+        effective_budget = min(
+            self.context_window_size - self.context_reserve_output,
+            self.context_token_budget,
+        )
+        if self._active_bridge is not None:
+            effective_budget = min(effective_budget, self._active_bridge.token_budget)
+            try:
+                prepared = await self._active_bridge.prepare_context(
+                    messages,
+                    max_tokens=effective_budget + self.context_reserve_output,  # prepare_context 内部会减去 reserve
+                    strategy=self.context_strategy,
+                    priority=["system", "recent", "memory", "history"],
+                    reserve_output=self.context_reserve_output,
+                )
+                # 记录压缩事件（prepare_context 内部已记录到 bridge.compression_events）
+                if len(prepared) != len(messages):
+                    self._emit_trace(
+                        context,
+                        "agent.context.compressed",
+                        strategy=self.context_strategy,
+                        messages_before=len(messages),
+                        messages_after=len(prepared),
+                        effective_budget=effective_budget,
+                        reserve_output=self.context_reserve_output,
+                    )
+                return prepared
+            except Exception as exc:
+                logger.warning("prepare_context failed, falling back to fit_messages: %s", exc)
+
+        # 回退：使用本地 compactor 做简单截断
+        fitted, compression_meta = self._fit_llm_messages(messages)
+        if compression_meta:
+            self._compression_events.append(compression_meta)
+            self._emit_trace(
+                context,
+                "agent.context.compressed",
+                original_tokens=compression_meta.get("original_tokens"),
+                compressed_tokens=compression_meta.get("compressed_tokens"),
+                messages_before=compression_meta.get("messages_before"),
+                messages_after=compression_meta.get("messages_after"),
+                strategy=compression_meta.get("strategy"),
+            )
+        return fitted
 
     async def _open_context_session(
         self,
@@ -351,10 +442,10 @@ class AgentLoop:
 
         state = self.state_manager.attach_execution_frame(state, execution_frame)
 
-        orchestration_context, capability_decision, recovery_hint = await self.orchestrator.prepare(
+        _orchestration_context, capability_decision, recovery_hint = await self.orchestrator.prepare(
             task_frame, execution_frame, metadata={"task": task, **compact_context}
         )
-        draft_plan = self.orchestrator.draft_plan(task_frame, execution_frame, metadata={"task": task, **compact_context})
+        self.orchestrator.draft_plan(task_frame, execution_frame, metadata={"task": task, **compact_context})
         tool_decision = self.orchestrator.select_tool(task_frame, execution_frame, metadata={"task": task, **compact_context})
 
         return compact_context, execution_frame, capability_decision, recovery_hint, tool_decision
@@ -430,7 +521,7 @@ class AgentLoop:
 
     async def _fire_lifecycle_hook(
         self,
-        event: "HookEvent",
+        event: HookEvent,
         context: RunContext,
         task: str,
         extra_context: dict | None,
@@ -540,12 +631,12 @@ class AgentLoop:
         )
 
         # 第二阶段：准备执行计划
-        compact_context, execution_frame, state = await self._prepare_execution_plan(
+        compact_context, execution_frame, _state = await self._prepare_execution_plan(
             context, task, compact_context, execution_frame, capability_decision, recovery_hint, tool_decision
         )
 
         # 第三阶段：设置轨迹和计划
-        trajectory, plan, resume_payload = await self._setup_trajectory_and_plan(
+        trajectory, plan, _resume_payload = await self._setup_trajectory_and_plan(
             context, task, run_extra, execution_frame, compact_context,
             compact_context.get("draft_plan"), tool_decision, recovery_hint
         )
@@ -564,10 +655,16 @@ class AgentLoop:
 
         # 会话持久化（P1-14）：记录最终答案并保存快照；失败显式记录 error。
         had_bridge = self._active_bridge is not None
+        # P1-14: 在关闭前捕获桥接器的压缩事件（prepare_context 记录在 bridge 中）
+        bridge_events: list[dict[str, object]] = []
+        if had_bridge and self._active_bridge is not None:
+            bridge_events = list(self._active_bridge.compression_events)
         if had_bridge:
             await self._close_context_session(result.answer or answer, context)
         self._run_context_mgmt.setdefault("enabled", had_bridge)
-        self._run_context_mgmt["llm_compression_events"] = list(self._compression_events)
+        # 合并本地和桥接器的压缩事件
+        all_events = list(self._compression_events) + bridge_events
+        self._run_context_mgmt["llm_compression_events"] = all_events
         result.execution_summary["context_management"] = dict(self._run_context_mgmt)
 
         return result
@@ -688,7 +785,7 @@ class AgentLoop:
     ) -> list[AgentPlanStep]:
         """过滤已恢复的计划步骤。"""
         if resume_payload.get("completed_kinds"):
-            completed_kinds = set(str(kind) for kind in resume_payload.get("completed_kinds", []))
+            completed_kinds = {str(kind) for kind in resume_payload.get("completed_kinds", [])}
             # 具体工具步骤（含真实 tool_name）是 resume 要重新尝试的主线执行动作。
             # 不能因"上一轮 plan 出现过同类 kind"就被整类删除——上一轮 plan 几乎
             # 总含 tool 步骤，按 kind 整类删会让 resume 永远无法再执行任何工具，
@@ -765,10 +862,8 @@ class AgentLoop:
         # 将调用方传入的 retry_budget 注入执行摘要，供修复流程消费；
         # 显式的 0 表示“禁止重试”，必须保留（不能被 or 默认值覆盖）。
         if "retry_budget" in extra_context:
-            try:
+            with contextlib.suppress(TypeError, ValueError):
                 execution_frame.execution_summary["retry_budget"] = int(extra_context["retry_budget"])
-            except (TypeError, ValueError):
-                pass
 
         iteration = 0
         while iteration < self.max_iterations and plan:
@@ -883,6 +978,22 @@ class AgentLoop:
                         )
                     except Exception as record_exc:
                         logger.debug("Session observation record failed: %s", record_exc)
+
+            # P2-09: 迭代级 checkpoint — 每次迭代结束后保存运行态快照,
+            # 崩溃/超时后可从最近 checkpoint 恢复执行。
+            self._save_iteration_checkpoint(
+                context=context,
+                task=task,
+                iteration=iteration,
+                plan=plan,
+                completed_steps=plan_records,
+                tool_calls=tool_calls,
+                observations=observations,
+                answer_so_far=answer,
+                memory_hits=memory_hits,
+                trajectory=trajectory,
+                extra_context=extra_context,
+            )
 
         if not answer:
             answer = self._finalize_answer(task, trajectory, last_tool_result, extra_context)
@@ -1005,14 +1116,12 @@ class AgentLoop:
             observation = self._stringify(record.output)
             observations.append(observation)
             trajectory.observations.append(observation)
-            last_tool_result = observation
 
             if step.tool_name in {"apply_text_patch", "write_file"}:
                 verification = await self._verify_write_result(context, step, record)
                 if verification:
                     trajectory.observations.append(verification)
                     observations.append(verification)
-                    last_tool_result = verification
                     return ""
 
                 retry_step = await self._repair_write_step(context, trajectory, step, record, extra_context)
@@ -1345,9 +1454,59 @@ class AgentLoop:
             **self._run_context_mgmt,
         }
 
+        # ─── Completion Contracts 证据驱动完成 ───────────────────────────────
+        evidence_result: dict[str, Any] | None = None
+        try:
+            from backend.app.settings import get_settings as _get_cc_settings
+            _cc_settings = _get_cc_settings()
+            if _cc_settings.completion_contract_enabled and tool_calls:
+                from backend.app.core.evidence import (
+                    EvidenceCollector,
+                    EvidenceStorage,
+                    EvidenceVerifier,
+                )
+                _cc_collector = EvidenceCollector(run_id=context.trace_id)
+                for _tc in tool_calls:
+                    _tc_output = str(_tc.output) if _tc.output else ""
+                    _tc_name = getattr(_tc, "tool_name", "") or ""
+                    _tc_success = getattr(_tc, "success", True)
+                    if _tc_name in ("run_tests", "execute_command", "run_command"):
+                        _cc_collector.collect_test_result(_tc_output[:2000], passed=_tc_success)
+                    elif _tc_name in ("write_file", "apply_text_patch", "apply_batch_patch"):
+                        _tc_path = ""
+                        if hasattr(_tc, "arguments") and isinstance(_tc.arguments, dict):
+                            _tc_path = str(_tc.arguments.get("path", ""))
+                        _cc_collector.collect_diff(_tc_output[:2000], file_path=_tc_path)
+                    else:
+                        _cc_collector.collect_log(f"Tool: {_tc_name}\nResult: {_tc_output[:500]}", level="DEBUG")
+                _cc_evidence = _cc_collector.finalize()
+                _cc_policy: dict[str, Any] = {
+                    "min_items": _cc_settings.completion_min_evidence,
+                    "require_test": _cc_settings.completion_require_test,
+                    "require_diff": _cc_settings.completion_require_diff,
+                }
+                _cc_verifier = EvidenceVerifier()
+                _cc_passed, _cc_notes = _cc_verifier.verify_with_policy(_cc_evidence, _cc_policy)
+                EvidenceStorage().save(_cc_evidence)
+                evidence_result = {
+                    "enabled": True,
+                    "passed": _cc_passed,
+                    "notes": _cc_notes,
+                    "item_count": _cc_evidence.item_count,
+                }
+                self._emit_trace(
+                    context, "agent.completion_contract.verified",
+                    passed=_cc_passed, notes=_cc_notes, items=_cc_evidence.item_count,
+                )
+        except Exception as _cc_exc:
+            logger.debug("Completion contract check skipped: %s", _cc_exc)
+            evidence_result = {"enabled": False, "error": str(_cc_exc)}
+
         # 构建运行视图
         run_view = self.runtime_adapter.build_run_view(state, status=RunStatus.COMPLETED.value, answer=answer)
         execution_summary["run_view"] = run_view.model_dump()
+        if evidence_result is not None:
+            execution_summary["completion_contract"] = evidence_result
 
         # 发出完成事件
         completed = self._emit_trace(context, "agent.completed", task=task, answer=answer, memory_id=memory_id)
@@ -1395,6 +1554,40 @@ class AgentLoop:
         await self._fire_lifecycle_hook(
             HookEvent.AGENT_STOP, context, task, extra_context
         )
+
+        # P1-04: Prometheus metrics — record agent execution
+        try:
+            from backend.app.core.metrics import metrics_collector
+            # Use iteration count as a proxy for duration (actual duration requires start time tracking)
+            metrics_collector.record_agent_execution(
+                agent_id=context.agent_id or "default",
+                status="success",
+                duration_seconds=len(plan_records) * 0.5,  # ~0.5s per iteration estimate
+            )
+        except Exception:
+            pass  # Metrics must never break agent execution
+
+        # P1-06: Self-evolution hook — record trajectory for skill distillation
+        try:
+            from backend.app.core.evolution_engine import evolution_engine
+
+            trajectory_data = {
+                "tool_calls": [
+                    {"name": tc.tool_name, "success": tc.success, "latency_ms": tc.latency_ms}
+                    for tc in tool_calls
+                ],
+                "observations": observations[:10],
+                "plan_steps": [step.instruction for step in plan_records],
+            }
+            result_data = {
+                "status": "completed",
+                "output": answer[:500],
+                "iterations": len(plan_records),
+                "tool_count": len(tool_calls),
+            }
+            await evolution_engine.on_task_complete(trajectory_data, result_data)
+        except Exception:
+            pass  # Evolution must never break agent execution
 
         return result
 
@@ -1462,7 +1655,7 @@ class AgentLoop:
             dumped = value.model_dump(mode="json")  # type: ignore[attr-defined]
             return dumped if isinstance(dumped, dict) else {"value": dumped}
         if hasattr(value, "__dict__"):
-            return dict(getattr(value, "__dict__"))
+            return dict(value.__dict__)
         return {"value": value}
 
     def _test_mapping_from_context(self, value: object) -> TestMappingResult | None:
@@ -1528,12 +1721,9 @@ class AgentLoop:
         # 这类被编排上下文污染的大 blob —— "verify"/"plan"/"test" 等词会命中
         # 脚手架/编排步骤描述，使平凡查询被分解出 5 个子任务，
         # 导致 complexity = 0.25 + 0.12*5 = 0.85 > 0.75，branch 被错误推成 "careful_continue"。
-        task_words = {
-            token
-            for token in "".join(
+        task_words = set("".join(
                 ch if ch.isalnum() else " " for ch in task.lower()
-            ).split()
-        }
+            ).split())
         cues = [
             ("understand request", {"analyze", "understand", "inspect", "review", "explain", "summarize"}),
             ("locate relevant files", {"find", "search", "locate", "where", "discover"}),
@@ -1781,16 +1971,26 @@ class AgentLoop:
         """
         query = " ".join([trajectory.task, trajectory.goal, trajectory.stage, json.dumps(self._compress_context(extra_context), ensure_ascii=False, default=str)])
         hits = await self.memory.search_with_scores(context, query=query, layers=[3, 4, 5], top_k=4)
-        return [
-            {
+        # P2-04: PromptGuard — scan recalled memory for injection before injecting into context
+        from backend.app.core.prompt_guard.engine import get_prompt_guard
+        _guard = get_prompt_guard()
+        results = []
+        for hit in hits:
+            scan = _guard.scan_memory_content(hit.item.id, hit.item.content)
+            if scan.is_malicious:
+                logger.warning(
+                    "P2-04 PromptGuard filtered poisoned memory: id=%s confidence=%.2f",
+                    hit.item.id, scan.confidence,
+                )
+                continue  # skip poisoned memory
+            results.append({
                 "id": hit.item.id,
                 "content": hit.item.content[:300],
                 "layer": hit.item.layer,
                 "score": hit.score,
                 "tags": hit.item.tags,
-            }
-            for hit in hits
-        ]
+            })
+        return results
 
     def _extract_browser_context(self, extra_context: dict[str, object]) -> dict[str, object]:
         """提取浏览器自动化上下文。
@@ -1923,19 +2123,8 @@ class AgentLoop:
                     "(use as background, most recent last):\n" + session_recap
                 ),
             })
-        # Token 级上下文压缩（P1-14）：超阈值自动摘要/裁剪发给 LLM 的消息
-        messages, compression_meta = self._fit_llm_messages(messages)
-        if compression_meta:
-            self._compression_events.append(compression_meta)
-            self._emit_trace(
-                context,
-                "agent.context.compressed",
-                original_tokens=compression_meta.get("original_tokens"),
-                compressed_tokens=compression_meta.get("compressed_tokens"),
-                messages_before=compression_meta.get("messages_before"),
-                messages_after=compression_meta.get("messages_after"),
-                strategy=compression_meta.get("strategy"),
-            )
+        # P1-14: 上下文管理——按配置策略压缩/裁剪发给 LLM 的消息
+        messages = await self._prepare_llm_context(context, messages)
         response = await self.llm.chat(messages, self.tools.definitions_for_llm())
         plan_text = response.content or ""
         if response.tool_calls:
@@ -1998,7 +2187,7 @@ class AgentLoop:
             )
             if needs_reflect:
                 leading = [step for step in steps if step.kind not in {"reflect", "final"}]
-                steps = leading[: max(0, self.max_iterations - 1)] + [reflect_steps[0]]
+                steps = [*leading[:max(0, self.max_iterations - 1)], reflect_steps[0]]
             else:
                 steps = steps[: self.max_iterations]
         trajectory.steps = steps
@@ -2078,6 +2267,62 @@ class AgentLoop:
                     ),
                 )
         return reflection
+
+    def _save_iteration_checkpoint(
+        self,
+        context: RunContext,
+        task: str,
+        iteration: int,
+        plan: list,
+        completed_steps: list,
+        tool_calls: list,
+        observations: list[str],
+        answer_so_far: str,
+        memory_hits: int,
+        trajectory: AgentTrajectory,
+        extra_context: dict,
+    ) -> None:
+        """P2-09: 保存迭代级 checkpoint (best-effort, 失败不阻断主循环)."""
+        try:
+            import uuid
+
+            from backend.app.core.checkpoint import CheckpointData, get_checkpoint_store
+
+            store = get_checkpoint_store()
+            checkpoint = CheckpointData(
+                checkpoint_id=f"{context.trace_id}-iter{iteration}-{uuid.uuid4().hex[:8]}",
+                trace_id=context.trace_id,
+                agent_id=context.agent_id,
+                tenant_id=getattr(context, "tenant_id", ""),
+                user_id=getattr(context, "user_id", ""),
+                task=task,
+                iteration=iteration,
+                max_iterations=self.max_iterations,
+                status="running",
+                remaining_steps=[
+                    {"kind": s.kind, "instruction": s.instruction, "tool_name": s.tool_name, "arguments": s.arguments}
+                    for s in plan
+                ],
+                completed_steps=[
+                    r.model_dump(mode="json") if hasattr(r, "model_dump") else {"kind": getattr(r, "kind", ""), "instruction": getattr(r, "instruction", "")}
+                    for r in completed_steps
+                ],
+                tool_calls=[
+                    tc.model_dump(mode="json") if hasattr(tc, "model_dump") else {}
+                    for tc in tool_calls
+                ],
+                observations=observations[-20:],  # 保留最近 20 条
+                answer_so_far=answer_so_far[:2000],
+                memory_hits=memory_hits,
+                trajectory_goal=trajectory.goal,
+                trajectory_stage=trajectory.stage,
+                trajectory_reflections=trajectory.reflections[-5:],
+                extra_context={k: v for k, v in (extra_context or {}).items() if isinstance(v, (str, int, float, bool, list, dict))},
+                session_id=getattr(context, "session_id", None),
+            )
+            store.save(checkpoint)
+        except Exception as exc:
+            logger.debug("Checkpoint save failed (non-blocking): %s", exc)
 
     def _finalize_answer(self, task: str, trajectory: AgentTrajectory, last_tool_result: str | None, extra_context: dict[str, object]) -> str:
         for step in reversed(trajectory.steps):
@@ -2216,7 +2461,7 @@ class AgentLoop:
                 AgentPlanStep(kind="reflect", instruction=f"Reflect and adapt for {task_profile.get('intent', 'task')}"),
                 AgentPlanStep(kind="final", instruction="Finalize adapted recovery plan"),
             ])
-        self._emit_trace(context, "agent.plan.reordered", reason=record.error or "tool failure", confidence=reduced_confidence, reroute=reroute, fallback=[step.model_dump(mode="json") for step in fallback_steps])
+        self._emit_trace(context, "agent.plan.reordered", reason=record.error or "tool failure", confidence=reduced_confidence, reroute=reroute, fallback=[{"kind": s.kind, "instruction": s.instruction, "tool_name": s.tool_name, "arguments": s.arguments} for s in fallback_steps])
         if reroute:
             trajectory.subtasks = reroute
             trajectory.current_subtask_index = 0
@@ -2446,7 +2691,7 @@ class AgentLoop:
         next_action_note = str(task_profile.get("next_action") or "none")
         analysis_posture = "evidence-first" if task_profile.get("mode") == "analyze" else "balanced"
         discovery_posture = "find-first" if task_profile.get("mode") == "search" else "balanced"
-        recovery_posture = "resume" if trajectory.stage.startswith("resuming") else "fresh"
+        "resume" if trajectory.stage.startswith("resuming") else "fresh"
         replan_guidance: list[str] = []
         if extra_context.get("_after_reflect_replan") and task_profile.get("intent") == "code_change":
             mutating_tools = {"write_file", "apply_text_patch", "apply_batch_patch"}
@@ -2552,12 +2797,9 @@ class AgentLoop:
         # 旧实现用 `token in text` 子串匹配,且 text 含 json.dumps(extra_context)
         # 这类被编排上下文污染的大 blob —— "now" 会命中 "unknown"/"knowledge" 等,
         # 使平凡查询被误判为 0.7,从而把 branch 错误地推成 "urgent_continue"。
-        urgency_words = {
-            token
-            for token in "".join(
+        urgency_words = set("".join(
                 ch if ch.isalnum() else " " for ch in f"{trajectory.task} {trajectory.goal}".lower()
-            ).split()
-        }
+            ).split())
         urgency = 0.7 if urgency_words & {"urgent", "asap", "now", "immediately", "blocking"} else 0.4
         return {
             "mode": mode,
@@ -2621,7 +2863,7 @@ class AgentLoop:
             points = 0
             if workflow_context and any(token in name for token in ["workflow", "approval", "audit", "trace", "memory"]):
                 points += 5
-            if approval_context and approval_context.get("pending_count") or approval_context.get("requires_approval"):
+            if (approval_context and approval_context.get("pending_count")) or approval_context.get("requires_approval"):
                 if any(token in name for token in ["inspect", "summarize", "read", "plan", "trace"]):
                     points += 4
             if browser_context and browser_context.get("active_count", 0):
@@ -2669,7 +2911,7 @@ class AgentLoop:
                 f"Resume trace: {extra_context.get('resume_trace_id') or trajectory.stage}",
                 f"Current stage: {trajectory.stage}",
                 f"Completed subtasks: {json.dumps(trajectory.subtasks, ensure_ascii=False, default=str)}",
-                f"Resume guidance: continue from the remaining work only, skip already completed observations or obvious duplicates.",
+                "Resume guidance: continue from the remaining work only, skip already completed observations or obvious duplicates.",
             ]
         )
 
@@ -2697,12 +2939,10 @@ class AgentLoop:
             if step.kind == "tool" and any(token in tool_name for token in ["write", "patch", "delete", "deploy", "execute"]):
                 return True
         if workflow and step.kind == "tool" and not any(token in tool_name for token in ["workflow", "trace", "audit", "memory", "read", "inspect", "summarize", "analyze"]):
-            return False if any(token in tool_name for token in ["browser", "desktop"]) else False
+            return False
         if browser and browser.get("active_count", 0) and step.kind == "tool" and any(token in tool_name for token in ["desktop"]):
             return True
-        if desktop and desktop.get("active_count", 0) and step.kind == "tool" and any(token in tool_name for token in ["browser"]):
-            return True
-        return False
+        return bool(desktop and desktop.get("active_count", 0) and step.kind == "tool" and any(token in tool_name for token in ["browser"]))
 
     def _system_prompt(self) -> str:
         """获取系统提示词。
@@ -2791,7 +3031,7 @@ class AgentLoop:
             preference_terms.extend(["desktop", "window", "screen", "ui", "click", "input"])
         if not preference_terms:
             return self._align_plan_with_subtasks(plan, trajectory)
-        focused_terms = set(term.lower() for term in preference_terms)
+        focused_terms = {term.lower() for term in preference_terms}
         aligned: list[AgentPlanStep] = []
         for step in plan:
             lowered = step.instruction.lower()

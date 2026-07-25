@@ -11,6 +11,10 @@ from cli.commands.hooks_cmd import hooks_app
 from cli.commands.approvals_cmd import approvals_app
 from cli.commands.github_cmd import github_app
 from cli.commands.gateway_cmd import gateway_app
+from cli.commands.chat_cmd import chat_app
+from cli.commands.review_cmd import review_app
+from cli.commands.memory_cmd import memory_app
+from cli.commands.skill_cmd import skill_app
 
 __all__ = [
     "agent_app",
@@ -21,4 +25,8 @@ __all__ = [
     "approvals_app",
     "github_app",
     "gateway_app",
+    "chat_app",
+    "review_app",
+    "memory_app",
+    "skill_app",
 ]

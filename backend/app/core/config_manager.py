@@ -1,18 +1,19 @@
 """Configuration management for X-Agent production environment."""
 
-import os
 import json
-import yaml
-from pathlib import Path
-from typing import Dict, Any, Optional
-from dataclasses import dataclass, asdict
-from enum import Enum
 import logging
+import os
+from dataclasses import asdict, dataclass
+from enum import StrEnum
+from pathlib import Path
+from typing import Any
+
+import yaml
 
 logger = logging.getLogger(__name__)
 
 
-class Environment(str, Enum):
+class Environment(StrEnum):
     """Deployment environments."""
     DEVELOPMENT = "development"
     STAGING = "staging"
@@ -42,7 +43,7 @@ class RedisConfig:
     """Redis configuration."""
     host: str
     port: int = 6379
-    password: Optional[str] = None
+    password: str | None = None
     db: int = 0
     ssl: bool = False
 
@@ -58,7 +59,7 @@ class RedisConfig:
 class QdrantConfig:
     """Qdrant configuration."""
     url: str
-    api_key: Optional[str] = None
+    api_key: str | None = None
     timeout: int = 30
 
 
@@ -104,7 +105,7 @@ class LoggingConfig:
     """Logging configuration."""
     level: str = "INFO"
     format: str = "json"
-    file: Optional[str] = None
+    file: str | None = None
     max_size_mb: int = 100
     backup_count: int = 10
     mask_sensitive: bool = True
@@ -126,7 +127,7 @@ class AppConfig:
     monitoring: MonitoringConfig = None
     logging: LoggingConfig = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return asdict(self)
 
@@ -291,10 +292,10 @@ class AppConfig:
 class ConfigManager:
     """Manages application configuration."""
 
-    _instance: Optional[AppConfig] = None
+    _instance: AppConfig | None = None
 
     @classmethod
-    def initialize(cls, config_file: Optional[str] = None, environment: Optional[Environment] = None) -> AppConfig:
+    def initialize(cls, config_file: str | None = None, environment: Environment | None = None) -> AppConfig:
         """Initialize configuration manager."""
 
         if config_file:
@@ -318,7 +319,7 @@ class ConfigManager:
         return cls._instance
 
     @classmethod
-    def reload(cls, config_file: Optional[str] = None) -> AppConfig:
+    def reload(cls, config_file: str | None = None) -> AppConfig:
         """Reload configuration."""
         cls._instance = None
         return cls.initialize(config_file)

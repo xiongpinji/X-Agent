@@ -6,15 +6,11 @@ and managing file access.
 
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Optional
-
-from fastapi import APIRouter, HTTPException, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from backend.app.core.filesystem_manager import create_file_system_manager, FileSystemManager
+from backend.app.core.filesystem_manager import FileSystemManager, create_file_system_manager
 from backend.app.settings import PROJECT_ROOT
-
 
 router = APIRouter(prefix="/api/v1/workspace", tags=["workspace"])
 
@@ -24,7 +20,7 @@ class WorkspaceCreateRequest(BaseModel):
     """Request to create workspace."""
     workspace_type: str = Field(..., description="Type: 'project', 'temporary', 'upload'")
     max_size_mb: int = Field(default=1000, description="Maximum size in MB")
-    ttl_hours: Optional[int] = Field(default=None, description="Time to live in hours")
+    ttl_hours: int | None = Field(default=None, description="Time to live in hours")
 
 
 class WorkspaceResponse(BaseModel):
@@ -34,7 +30,7 @@ class WorkspaceResponse(BaseModel):
     path: str
     created_at: str
     max_size_mb: int
-    ttl_hours: Optional[int]
+    ttl_hours: int | None
     size_mb: float
     is_expired: bool
 
@@ -42,7 +38,7 @@ class WorkspaceResponse(BaseModel):
 class MountDirectoryRequest(BaseModel):
     """Request to mount directory."""
     host_path: str = Field(..., description="Host filesystem path")
-    mount_path: Optional[str] = Field(default=None, description="Virtual mount path")
+    mount_path: str | None = Field(default=None, description="Virtual mount path")
     read_only: bool = Field(default=False, description="Mount as read-only")
 
 
@@ -64,7 +60,7 @@ class PathValidationRequest(BaseModel):
 class PathValidationResponse(BaseModel):
     """Path validation result."""
     allowed: bool
-    reason: Optional[str] = None
+    reason: str | None = None
 
 
 class AuditLogEntry(BaseModel):
@@ -73,7 +69,7 @@ class AuditLogEntry(BaseModel):
     operation: str
     path: str
     success: bool
-    reason: Optional[str] = None
+    reason: str | None = None
 
 
 # Dependency to get file system manager
@@ -140,7 +136,7 @@ async def create_workspace(
 
 @router.get("/list", response_model=list[WorkspaceResponse])
 async def list_workspaces(
-    workspace_type: Optional[str] = Query(None, description="Filter by type"),
+    workspace_type: str | None = Query(None, description="Filter by type"),
     fs_manager: FileSystemManager = Depends(get_fs_manager),
 ) -> list[WorkspaceResponse]:
     """List workspaces for user.

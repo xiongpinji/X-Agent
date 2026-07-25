@@ -3,9 +3,9 @@
 """
 
 import logging
-from typing import Any, Dict, List, Optional
-from dataclasses import dataclass
 import time
+from dataclasses import dataclass
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -31,13 +31,13 @@ class ObjectDetector:
     def _initialize_models(self) -> None:
         """初始化检测模型"""
         try:
-            import ultralytics
+            import ultralytics  # noqa: F401
             self._yolo_available = True
         except ImportError:
             logger.warning("ultralytics not installed, YOLOv8 disabled")
 
         try:
-            import torchvision
+            import torchvision  # noqa: F401
             self._rcnn_available = True
         except ImportError:
             logger.warning("torchvision not installed, Faster R-CNN disabled")
@@ -47,7 +47,7 @@ class ObjectDetector:
         image_path: str,
         confidence_threshold: float = 0.5,
         **kwargs
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """检测对象"""
         start_time = time.time()
 
@@ -75,7 +75,7 @@ class ObjectDetector:
         image_path: str,
         confidence_threshold: float,
         **kwargs
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """使用YOLOv8检测对象"""
         if not self._yolo_available:
             return {"success": False, "error": "YOLOv8 not installed"}
@@ -122,7 +122,7 @@ class ObjectDetector:
         image_path: str,
         confidence_threshold: float,
         **kwargs
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """使用Faster R-CNN检测对象"""
         if not self._rcnn_available:
             return {"success": False, "error": "Faster R-CNN not installed"}
@@ -144,11 +144,11 @@ class ObjectDetector:
                 predictions = model([image_tensor])
 
             detections = []
-            for i, (box, score, label) in enumerate(
+            for _i, (box, score, label) in enumerate(
                 zip(
                     predictions[0]["boxes"],
                     predictions[0]["scores"],
-                    predictions[0]["labels"],
+                    predictions[0]["labels"], strict=False,
                 )
             ):
                 if score >= confidence_threshold:
@@ -178,9 +178,9 @@ class ObjectDetector:
     async def detect_specific_objects(
         self,
         image_path: str,
-        target_labels: List[str],
+        target_labels: list[str],
         **kwargs
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """检测特定类型的对象"""
         result = await self.detect_objects(image_path, **kwargs)
 
@@ -203,7 +203,7 @@ class ObjectDetector:
         self,
         image_path: str,
         **kwargs
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """获取对象统计信息"""
         result = await self.detect_objects(image_path, **kwargs)
 

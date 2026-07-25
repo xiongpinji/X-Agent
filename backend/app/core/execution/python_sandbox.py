@@ -16,12 +16,11 @@ Python 下形同虚设。
 """
 
 import ast
-import asyncio
 import logging
 import sys
 import warnings
 from io import StringIO
-from typing import Any, Dict, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -102,9 +101,9 @@ class PythonSandbox:
     async def execute(
         self,
         code: str,
-        context: Optional[Dict[str, Any]] = None,
-        allowed_imports: Optional[list] = None,
-    ) -> Dict[str, Any]:
+        context: dict[str, Any] | None = None,
+        allowed_imports: list | None = None,
+    ) -> dict[str, Any]:
         """
         执行Python代码
 
@@ -171,7 +170,7 @@ class PythonSandbox:
             logger.error(f"Error executing Python code: {e}")
             return {"success": False, "error": str(e)}
 
-    def _is_safe(self, code: str, allowed_imports: Optional[list] = None) -> bool:
+    def _is_safe(self, code: str, allowed_imports: list | None = None) -> bool:
         """
         检查代码是否安全
 
@@ -196,10 +195,9 @@ class PythonSandbox:
                 return False
 
             # 检查禁止的属性访问
-            if isinstance(node, ast.Attribute):
-                if node.attr in self.FORBIDDEN_NAMES:
-                    logger.warning(f"Forbidden attribute accessed: {node.attr}")
-                    return False
+            if isinstance(node, ast.Attribute) and node.attr in self.FORBIDDEN_NAMES:
+                logger.warning(f"Forbidden attribute accessed: {node.attr}")
+                return False
 
             # 检查导入
             if isinstance(node, ast.Import):
@@ -209,20 +207,19 @@ class PythonSandbox:
                         logger.warning(f"Forbidden module imported: {module_name}")
                         return False
 
-            if isinstance(node, ast.ImportFrom):
-                if node.module:
-                    module_name = node.module.split(".")[0]
-                    if module_name in self.FORBIDDEN_MODULES and module_name not in allowed_imports:
-                        logger.warning(f"Forbidden module imported: {module_name}")
-                        return False
+            if isinstance(node, ast.ImportFrom) and node.module:
+                module_name = node.module.split(".")[0]
+                if module_name in self.FORBIDDEN_MODULES and module_name not in allowed_imports:
+                    logger.warning(f"Forbidden module imported: {module_name}")
+                    return False
 
         return True
 
     def _prepare_globals(
         self,
-        context: Dict[str, Any],
-        allowed_imports: Optional[list] = None,
-    ) -> Dict[str, Any]:
+        context: dict[str, Any],
+        allowed_imports: list | None = None,
+    ) -> dict[str, Any]:
         """
         准备执行全局变量
 

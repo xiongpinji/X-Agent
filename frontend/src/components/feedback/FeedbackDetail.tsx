@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { Feedback } from '@/services/feedback'
-import { X, Send, Edit2, Save, AlertCircle, CheckCircle, Clock } from 'lucide-react'
+import { X, Send, Edit2, Save } from 'lucide-react'
 import clsx from 'clsx'
 
 interface FeedbackDetailProps {
@@ -214,13 +214,14 @@ export const FeedbackDetail: React.FC<FeedbackDetailProps> = ({
             {isEditing ? (
               <div className="space-y-3">
                 <div>
-                  <label className={clsx(
+                  <label htmlFor="feedback-status" className={clsx(
                     'block text-xs font-semibold mb-1',
                     theme === 'dark' ? 'text-slate-400' : 'text-slate-600'
                   )}>
                     Status
                   </label>
                   <select
+                    id="feedback-status"
                     value={editedStatus}
                     onChange={(e) => setEditedStatus(e.target.value as Feedback['status'])}
                     className={clsx(
@@ -238,13 +239,14 @@ export const FeedbackDetail: React.FC<FeedbackDetailProps> = ({
                 </div>
 
                 <div>
-                  <label className={clsx(
+                  <label htmlFor="feedback-priority" className={clsx(
                     'block text-xs font-semibold mb-1',
                     theme === 'dark' ? 'text-slate-400' : 'text-slate-600'
                   )}>
                     Priority
                   </label>
                   <select
+                    id="feedback-priority"
                     value={editedPriority}
                     onChange={(e) => setEditedPriority(e.target.value as Feedback['priority'])}
                     className={clsx(

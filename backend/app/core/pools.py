@@ -11,10 +11,12 @@ Implements:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable, Generic, TypeVar
+from typing import Any, Generic, TypeVar
 
 logger = logging.getLogger(__name__)
 
@@ -148,7 +150,7 @@ class ConnectionPool(Generic[T]):
             self._stats.total_acquired += 1
             self._stats.peak_active = max(self._stats.peak_active, self._stats.active_connections)
             return conn
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.error(f"[{self._name}] Timeout waiting for available connection")
             self._stats.errors += 1
             self._stats.last_error = "Timeout waiting for connection"
@@ -171,10 +173,8 @@ class ConnectionPool(Generic[T]):
         """Close all connections in the pool."""
         if self._health_check_task:
             self._health_check_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._health_check_task
-            except asyncio.CancelledError:
-                pass
 
         async with self._lock:
             for conn in self._all_connections:
@@ -199,7 +199,7 @@ class ConnectionPool(Generic[T]):
     async def _close_connection(self, conn: T) -> None:
         """Close a connection."""
         if hasattr(conn, "close"):
-            close_method = getattr(conn, "close")
+            close_method = conn.close
             if asyncio.iscoroutinefunction(close_method):
                 await close_method()
             else:
@@ -260,48 +260,134 @@ class ConnectionPool(Generic[T]):
 
 
 class PostgresPool:
-    """PostgreSQL connection pool using asyncpg."""
+    """PostgreSQL connection pool using asyncpg native pooling.
+
+    Uses asyncpg.create_pool() for optimal connection management with
+    built-in health checks, statement timeout, and connection recycling.
+    """
 
     def __init__(self, database_url: str, config: PoolConfig | None = None) -> None:
-        self._database_url = database_url
+        # Strip SQLAlchemy driver prefix for raw asyncpg
+        self._database_url = database_url.replace("+asyncpg", "").replace("+psycopg", "")
         self._config = config or PoolConfig()
-        self._pool: ConnectionPool | None = None
+        self._pool: Any | None = None  # asyncpg.Pool
+        self._stats = PoolStats()
 
     async def initialize(self) -> None:
-        """Initialize the PostgreSQL pool."""
+        """Initialize the PostgreSQL pool using asyncpg.create_pool."""
         if self._pool is not None:
             return
 
-        async def create_pg_connection():
+        try:
             import asyncpg
 
-            return await asyncpg.connect(self._database_url)
+            self._pool = await asyncpg.create_pool(
+                self._database_url,
+                min_size=self._config.min_size,
+                max_size=self._config.max_size,
+                command_timeout=self._config.timeout,
+                max_inactive_connection_lifetime=self._config.idle_timeout,
+            )
+            self._stats.total_connections = self._pool.get_min_size()
+            logger.info(
+                f"[postgres] Native asyncpg pool initialized "
+                f"(min={self._config.min_size}, max={self._config.max_size})"
+            )
+        except ImportError:
+            # Fallback to generic pool if asyncpg not available
+            logger.warning("[postgres] asyncpg not available, using generic pool")
 
-        self._pool = ConnectionPool(create_pg_connection, self._config, name="postgres")
-        await self._pool.initialize()
+            async def create_pg_connection():
+                import asyncpg as _asyncpg
+                return await _asyncpg.connect(self._database_url)
+
+            self._pool = ConnectionPool(create_pg_connection, self._config, name="postgres")
+            await self._pool.initialize()
+        except Exception as e:
+            logger.error(f"[postgres] Failed to create pool: {e}")
+            self._stats.errors += 1
+            self._stats.last_error = str(e)
+            raise
 
     async def acquire(self):
-        """Acquire a connection."""
+        """Acquire a connection from the pool."""
         if self._pool is None:
             await self.initialize()
-        return await self._pool.acquire()
+
+        if hasattr(self._pool, 'acquire'):
+            # Native asyncpg pool
+            conn = await self._pool.acquire()
+            self._stats.total_acquired += 1
+            self._stats.active_connections += 1
+            self._stats.peak_active = max(self._stats.peak_active, self._stats.active_connections)
+            return conn
+        else:
+            # Generic ConnectionPool fallback
+            return await self._pool.acquire()
 
     async def release(self, conn) -> None:
-        """Release a connection."""
-        if self._pool is not None:
+        """Release a connection back to the pool."""
+        if self._pool is None:
+            return
+
+        if hasattr(self._pool, 'release'):
             await self._pool.release(conn)
+            self._stats.active_connections = max(0, self._stats.active_connections - 1)
+            self._stats.total_released += 1
+        else:
+            await self._pool.release(conn)
+
+    async def execute(self, query: str, *args) -> str:
+        """Execute a query directly using a pooled connection."""
+        if self._pool is None:
+            await self.initialize()
+        if hasattr(self._pool, 'execute'):
+            return await self._pool.execute(query, *args)
+        conn = await self.acquire()
+        try:
+            return await conn.execute(query, *args)
+        finally:
+            await self.release(conn)
+
+    async def fetch(self, query: str, *args) -> list:
+        """Fetch rows directly using a pooled connection."""
+        if self._pool is None:
+            await self.initialize()
+        if hasattr(self._pool, 'fetch'):
+            return await self._pool.fetch(query, *args)
+        conn = await self.acquire()
+        try:
+            return await conn.fetch(query, *args)
+        finally:
+            await self.release(conn)
+
+    async def fetchrow(self, query: str, *args):
+        """Fetch a single row directly using a pooled connection."""
+        if self._pool is None:
+            await self.initialize()
+        if hasattr(self._pool, 'fetchrow'):
+            return await self._pool.fetchrow(query, *args)
+        conn = await self.acquire()
+        try:
+            return await conn.fetchrow(query, *args)
+        finally:
+            await self.release(conn)
 
     async def close(self) -> None:
         """Close the pool."""
         if self._pool is not None:
-            await self._pool.close()
+            if hasattr(self._pool, 'close'):
+                await self._pool.close()
             self._pool = None
+            logger.info("[postgres] Pool closed")
 
     def get_stats(self) -> PoolStats:
         """Get pool statistics."""
-        if self._pool is None:
-            return PoolStats()
-        return self._pool.get_stats()
+        if self._pool is not None and hasattr(self._pool, 'get_size'):
+            self._stats.total_connections = self._pool.get_size()
+            self._stats.idle_connections = self._pool.get_idle_size()
+            self._stats.active_connections = self._stats.total_connections - self._stats.idle_connections
+        return self._stats
 
 
 class RedisPool:

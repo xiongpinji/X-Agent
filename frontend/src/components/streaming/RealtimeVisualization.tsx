@@ -50,7 +50,7 @@ export const RealtimeTaskList: React.FC<RealtimeTaskListProps> = ({
   runId,
   onTaskClick,
   maxTasks = 50,
-  autoScroll = true,
+  autoScroll: _autoScroll = true,
 }) => {
   const [tasks, setTasks] = useState<Map<string, TaskStatus>>(new Map());
   const [isConnected, setIsConnected] = useState(false);
@@ -172,7 +172,10 @@ export const RealtimeTaskList: React.FC<RealtimeTaskListProps> = ({
           sortedTasks.map((task) => (
             <div
               key={task.task_id}
+              role="button"
+              tabIndex={0}
               onClick={() => onTaskClick?.(task)}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onTaskClick?.(task); }}
               className={`p-3 rounded-lg border cursor-pointer transition-all hover:shadow-md ${
                 statusColors[task.status] || 'bg-gray-50'
               }`}

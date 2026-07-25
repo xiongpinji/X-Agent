@@ -5,6 +5,12 @@ import pytest
 import time
 from typing import Any
 
+# P1-09: parallel/ 包已归档至 archive/dead_code_2026-07-20/
+pytest.importorskip(
+    "backend.app.core.parallel.tool_executor",
+    reason="parallel package archived (P1-09)",
+)
+
 from backend.app.core.parallel.tool_executor import (
     ParallelToolExecutor,
     ToolCall,

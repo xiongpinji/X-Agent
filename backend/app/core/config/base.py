@@ -1,14 +1,13 @@
 """Base configuration module with environment detection and common settings."""
 
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
-from typing import Optional
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-class Environment(str, Enum):
+class Environment(StrEnum):
     """Application environment enumeration."""
 
     DEVELOPMENT = "development"

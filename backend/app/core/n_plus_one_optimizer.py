@@ -10,9 +10,10 @@ Performance Target: 25% reduction in API response time
 from __future__ import annotations
 
 import logging
-from typing import Any, Callable, TypeVar, Generic, Optional
-from dataclasses import dataclass, field
 from collections import defaultdict
+from collections.abc import Callable
+from dataclasses import dataclass
+from typing import Any, Generic, TypeVar
 
 logger = logging.getLogger(__name__)
 
@@ -85,10 +86,10 @@ class DataLoader(Generic[K, T]):
             # Batch load
             try:
                 results = await self.batch_fn(keys)
-                result_map = {key: result for key, result in zip(keys, results)}
+                result_map = dict(zip(keys, results, strict=False))
 
                 # Resolve futures and cache
-                for key, future in zip(keys, futures):
+                for key, future in zip(keys, futures, strict=False):
                     result = result_map.get(key)
                     if self.config.enable_caching:
                         self._cache[key] = result

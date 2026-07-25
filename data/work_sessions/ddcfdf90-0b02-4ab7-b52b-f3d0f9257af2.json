@@ -1,0 +1,37 @@
+{
+  "session_id": "ddcfdf90-0b02-4ab7-b52b-f3d0f9257af2",
+  "goal": "Goal B",
+  "status": "active",
+  "started_at": "2026-07-23T08:46:58.017417+00:00",
+  "completed_at": null,
+  "max_duration_hours": 8.0,
+  "current_milestone_index": 0,
+  "milestones": [
+    {
+      "index": 0,
+      "title": "研究与分析",
+      "status": "pending",
+      "output": "",
+      "duration_seconds": 0.0
+    },
+    {
+      "index": 1,
+      "title": "实现与执行",
+      "status": "pending",
+      "output": "",
+      "duration_seconds": 0.0
+    },
+    {
+      "index": 2,
+      "title": "验证与总结",
+      "status": "pending",
+      "output": "",
+      "duration_seconds": 0.0
+    }
+  ],
+  "artifacts": [],
+  "connected_apps": [
+    "file"
+  ],
+  "total_tokens_used": 0
+}

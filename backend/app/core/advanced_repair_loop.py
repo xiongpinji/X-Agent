@@ -4,14 +4,15 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from enum import Enum
-from typing import Any, Callable
+from enum import StrEnum
+from typing import Any
 
 from backend.app.core.verification import VerificationEngine
 
 
-class RepairStrategy(str, Enum):
+class RepairStrategy(StrEnum):
     """Strategies for repairing failures."""
     RETRY = "retry"
     FALLBACK = "fallback"
@@ -19,7 +20,7 @@ class RepairStrategy(str, Enum):
     ESCALATE = "escalate"
 
 
-class FailureCategory(str, Enum):
+class FailureCategory(StrEnum):
     """Categories of failures."""
     TRANSIENT = "transient"
     PERMANENT = "permanent"
@@ -271,7 +272,7 @@ class AdvancedRepairLoop:
                     )
 
                 return True, result
-            except Exception as e:
+            except Exception:
                 if attempt == self.max_retries - 1:
                     failure.recovery_attempted = True
                     failure.recovery_successful = False

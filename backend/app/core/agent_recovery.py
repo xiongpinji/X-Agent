@@ -8,15 +8,16 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime, UTC, timedelta
-from enum import Enum
-from typing import Optional, Any, Dict, List, Callable
+from datetime import UTC, datetime, timedelta
+from enum import StrEnum
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
-class FailureType(str, Enum):
+class FailureType(StrEnum):
     """Types of agent failures."""
 
     TIMEOUT = "timeout"
@@ -26,7 +27,7 @@ class FailureType(str, Enum):
     UNKNOWN = "unknown"
 
 
-class RecoveryStrategy(str, Enum):
+class RecoveryStrategy(StrEnum):
     """Strategies for recovering from failures."""
 
     RETRY = "retry"
@@ -44,7 +45,7 @@ class FailureEvent:
     failure_type: FailureType
     error_message: str
     timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
-    context: Dict[str, Any] = field(default_factory=dict)
+    context: dict[str, Any] = field(default_factory=dict)
     recovery_attempted: bool = False
     recovery_successful: bool = False
 
@@ -58,9 +59,9 @@ class RecoveryPlan:
     strategy: RecoveryStrategy
     max_retries: int = 3
     retry_delay_seconds: int = 5
-    fallback_agent_id: Optional[str] = None
-    escalation_handler: Optional[Callable] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    fallback_agent_id: str | None = None
+    escalation_handler: Callable | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 class AgentRecovery:
@@ -78,16 +79,16 @@ class AgentRecovery:
             health_check_interval_seconds: Interval for health checks
         """
         self.health_check_interval = health_check_interval_seconds
-        self.failure_history: Dict[str, List[FailureEvent]] = {}
-        self.recovery_plans: Dict[str, RecoveryPlan] = {}
-        self.monitored_agents: Dict[str, Any] = {}
+        self.failure_history: dict[str, list[FailureEvent]] = {}
+        self.recovery_plans: dict[str, RecoveryPlan] = {}
+        self.monitored_agents: dict[str, Any] = {}
         self.logger = logger
 
     async def detect_failure(
         self,
         agent_id: str,
         agent: Any,
-    ) -> Optional[FailureEvent]:
+    ) -> FailureEvent | None:
         """
         Detect if an agent has failed.
 
@@ -232,7 +233,7 @@ class AgentRecovery:
     async def _recover_fallback(
         self,
         agent_id: str,
-        fallback_agent_id: Optional[str] = None,
+        fallback_agent_id: str | None = None,
         **kwargs,
     ) -> bool:
         """
@@ -267,7 +268,7 @@ class AgentRecovery:
     async def _recover_escalate(
         self,
         agent_id: str,
-        escalation_handler: Optional[Callable] = None,
+        escalation_handler: Callable | None = None,
         **kwargs,
     ) -> bool:
         """
@@ -385,7 +386,7 @@ class AgentRecovery:
         self,
         agent_id: str,
         hours: int = 24,
-    ) -> List[FailureEvent]:
+    ) -> list[FailureEvent]:
         """
         Get failure history for an agent.
 
@@ -405,7 +406,7 @@ class AgentRecovery:
             if event.timestamp >= cutoff
         ]
 
-    def get_recovery_stats(self) -> Dict[str, Any]:
+    def get_recovery_stats(self) -> dict[str, Any]:
         """
         Get recovery statistics.
 

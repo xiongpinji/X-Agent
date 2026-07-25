@@ -4,8 +4,7 @@ CSRF令牌存储 - Redis实现
 from __future__ import annotations
 
 import logging
-from datetime import UTC, datetime, timedelta
-from typing import Optional
+from datetime import UTC, datetime
 
 import redis.asyncio as redis
 
@@ -17,9 +16,16 @@ logger = logging.getLogger(__name__)
 class CSRFTokenStoreRedis:
     """Redis CSRF令牌存储实现"""
 
-    def __init__(self, redis_client: Optional[redis.Redis] = None):
+    def __init__(self, redis_client: redis.Redis | None = None):
         self.redis_client = redis_client
         self.default_ttl_seconds = 3600  # 1小时
+
+    @staticmethod
+    def _to_str(value) -> str:
+        """将 Redis 返回值统一转为 str（兼容 bytes/str）"""
+        if isinstance(value, bytes):
+            return value.decode("utf-8")
+        return str(value) if value is not None else ""
 
     async def _get_redis(self) -> redis.Redis:
         """获取Redis客户端"""
@@ -47,7 +53,7 @@ class CSRFTokenStoreRedis:
         tenant_id: str,
         user_id: str,
         session_id: str,
-        ttl_seconds: Optional[int] = None,
+        ttl_seconds: int | None = None,
     ) -> bool:
         """创建CSRF令牌"""
         redis_client = await self._get_redis()
@@ -85,7 +91,7 @@ class CSRFTokenStoreRedis:
         self,
         token_hash: str,
         session_id: str,
-    ) -> tuple[bool, Optional[dict]]:
+    ) -> tuple[bool, dict | None]:
         """验证CSRF令牌"""
         redis_client = await self._get_redis()
 
@@ -99,10 +105,14 @@ class CSRFTokenStoreRedis:
                 logger.warning(f"CSRF令牌不存在或已过期: {token_hash}")
                 return False, None
 
-            # 检查会话是否匹配
-            if token_data.get("session_id") != session_id:
+            # 检查会话是否匹配（兼容 fakeredis 返回 bytes 的情况）
+            stored_session = self._to_str(token_data.get(b"session_id") or token_data.get("session_id"))
+            if stored_session != session_id:
                 logger.warning(f"CSRF令牌会话不匹配: {token_hash}")
                 return False, None
+
+            # 统一将 token_data 的 key/value 转为 str
+            token_data = {self._to_str(k): self._to_str(v) for k, v in token_data.items()}
 
             # 检查令牌是否在会话中
             is_in_session = await redis_client.sismember(session_key, token_hash)
@@ -127,7 +137,7 @@ class CSRFTokenStoreRedis:
             # 获取令牌信息以获取会话ID
             token_data = await redis_client.hgetall(key)
             if token_data:
-                session_id = token_data.get("session_id")
+                session_id = self._to_str(token_data.get(b"session_id") or token_data.get("session_id"))
                 if session_id:
                     session_key = self._make_session_key(session_id)
                     await redis_client.srem(session_key, token_hash)
@@ -166,7 +176,7 @@ class CSRFTokenStoreRedis:
             logger.error(f"撤销会话令牌失败: {e}")
             return 0
 
-    async def get_token_info(self, token_hash: str) -> Optional[dict]:
+    async def get_token_info(self, token_hash: str) -> dict | None:
         """获取令牌信息"""
         redis_client = await self._get_redis()
 

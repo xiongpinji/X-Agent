@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import secrets
 from datetime import datetime, timedelta
-from typing import Optional
 
 from pydantic import BaseModel, Field
 
@@ -16,7 +15,7 @@ class ArtifactShare(BaseModel):
     owner: str = Field(..., description="Share owner user ID")
     share_token: str = Field(..., description="Share access token")
     created_at: datetime = Field(default_factory=datetime.utcnow)
-    expires_at: Optional[datetime] = Field(default=None, description="Expiration time")
+    expires_at: datetime | None = Field(default=None, description="Expiration time")
     is_public: bool = Field(default=False, description="Public share")
     allow_download: bool = Field(default=False, description="Allow downloading")
     allow_edit: bool = Field(default=False, description="Allow editing")
@@ -53,7 +52,7 @@ class SharingManager:
         is_public: bool = False,
         allow_download: bool = False,
         allow_edit: bool = False,
-        expires_in_days: Optional[int] = None,
+        expires_in_days: int | None = None,
     ) -> ArtifactShare:
         """Create share link for artifact.
 
@@ -86,7 +85,7 @@ class SharingManager:
         await self.storage.save_share(share)
         return share
 
-    async def get_share(self, share_id: str) -> Optional[ArtifactShare]:
+    async def get_share(self, share_id: str) -> ArtifactShare | None:
         """Get share by ID.
 
         Args:
@@ -103,7 +102,7 @@ class SharingManager:
 
         return share
 
-    async def get_share_by_token(self, share_token: str) -> Optional[ArtifactShare]:
+    async def get_share_by_token(self, share_token: str) -> ArtifactShare | None:
         """Get share by token.
 
         Args:
@@ -123,7 +122,7 @@ class SharingManager:
     async def list_shares(
         self,
         artifact_id: str,
-        owner: Optional[str] = None,
+        owner: str | None = None,
     ) -> list[ArtifactShare]:
         """List shares for artifact.
 
@@ -139,10 +138,10 @@ class SharingManager:
     async def update_share(
         self,
         share_id: str,
-        allow_download: Optional[bool] = None,
-        allow_edit: Optional[bool] = None,
-        expires_in_days: Optional[int] = None,
-    ) -> Optional[ArtifactShare]:
+        allow_download: bool | None = None,
+        allow_edit: bool | None = None,
+        expires_in_days: int | None = None,
+    ) -> ArtifactShare | None:
         """Update share settings.
 
         Args:
@@ -238,7 +237,7 @@ class SharingManager:
     async def check_access(
         self,
         share_id: str,
-        user_id: Optional[str] = None,
+        user_id: str | None = None,
         action: str = "view",
     ) -> bool:
         """Check if user has access to shared artifact.

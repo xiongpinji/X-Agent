@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import dataclasses
-
 from typing import Annotated
 
 from fastapi import APIRouter, Depends
@@ -14,7 +13,12 @@ from backend.app.core.replay import replay_engine
 from backend.app.core.security import Principal
 from backend.app.core.test_mapper import test_mapper
 from backend.app.core.verification import VerificationEngine
-from backend.app.dependencies import enforce_scope, get_audit_store, get_current_principal, get_memory
+from backend.app.dependencies import (
+    enforce_scope,
+    get_audit_store,
+    get_current_principal,
+    get_memory,
+)
 
 router = APIRouter(prefix="/api/v1/replay", tags=["replay"])
 PrincipalDependency = Annotated[Principal, Depends(get_current_principal)]
@@ -60,7 +64,7 @@ async def draft_replay(payload: dict[str, object], principal: PrincipalDependenc
         },
         "memory": {
             "summary": memory_summary,
-            "layers": [layer if isinstance(layer, dict) else layer for layer in memory_layers],
+            "layers": list(memory_layers),
             "items": [item.model_dump(mode="json") if hasattr(item, "model_dump") else item for item in memory_items],
         },
     }

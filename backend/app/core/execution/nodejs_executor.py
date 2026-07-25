@@ -6,7 +6,7 @@ import asyncio
 import logging
 import tempfile
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -28,8 +28,8 @@ class NodeJSExecutor:
     async def execute(
         self,
         code: str,
-        context: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, Any]:
+        context: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         """
         执行Node.js代码
 
@@ -64,7 +64,7 @@ class NodeJSExecutor:
             logger.error(f"Error executing Node.js code: {e}")
             return {"success": False, "error": str(e)}
 
-    async def _run_nodejs(self, file_path: str) -> Dict[str, Any]:
+    async def _run_nodejs(self, file_path: str) -> dict[str, Any]:
         """
         运行Node.js文件
 
@@ -87,7 +87,7 @@ class NodeJSExecutor:
                     process.communicate(),
                     timeout=self.timeout,
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 process.kill()
                 await process.wait()
                 return {
@@ -121,8 +121,8 @@ class NodeJSExecutor:
     async def execute_with_modules(
         self,
         code: str,
-        modules: Optional[list] = None,
-    ) -> Dict[str, Any]:
+        modules: list | None = None,
+    ) -> dict[str, Any]:
         """
         执行Node.js代码并支持模块
 

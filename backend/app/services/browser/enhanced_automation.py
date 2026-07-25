@@ -5,14 +5,15 @@ from __future__ import annotations
 
 import asyncio
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
-from enum import Enum
-from typing import Any, Callable
+from enum import StrEnum
+from typing import Any
 
-from playwright.async_api import Page, Browser, BrowserContext
+from playwright.async_api import Browser, BrowserContext, Page
 
 
-class WaitStrategy(str, Enum):
+class WaitStrategy(StrEnum):
     """Strategies for waiting in browser automation."""
     NETWORK_IDLE = "network_idle"
     DOM_CONTENT = "domcontentloaded"
@@ -21,7 +22,7 @@ class WaitStrategy(str, Enum):
     CUSTOM = "custom"
 
 
-class ElementDetectionMethod(str, Enum):
+class ElementDetectionMethod(StrEnum):
     """Methods for detecting elements."""
     CSS_SELECTOR = "css_selector"
     XPATH = "xpath"

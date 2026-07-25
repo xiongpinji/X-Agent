@@ -7,19 +7,17 @@ Provides endpoints for managing scheduled tasks.
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Any, Annotated, Optional
-from uuid import uuid4
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Query
-from fastapi.responses import JSONResponse
 
 from backend.app.api.errors import api_error
 from backend.app.core.contracts import ErrorCode
+from backend.app.core.scheduler import cron_scheduler
 from backend.app.core.security import Principal
-from backend.app.core.scheduler import cron_scheduler, ScheduleStatus
-from backend.app.core.task_queue import task_queue, TaskPriority
 from backend.app.core.task_monitor import task_monitor
-from backend.app.dependencies import get_current_principal, enforce_scope
+from backend.app.core.task_queue import TaskPriority, task_queue
+from backend.app.dependencies import enforce_scope, get_current_principal
 
 router = APIRouter(prefix="/api/scheduler", tags=["scheduler"])
 PrincipalDependency = Annotated[Principal, Depends(get_current_principal)]
@@ -96,7 +94,7 @@ async def create_scheduled_task(
 
 @router.get("/tasks")
 async def list_scheduled_tasks(
-    status: Optional[str] = Query(None),
+    status: str | None = Query(None),
     principal: PrincipalDependency = None,
 ) -> dict[str, object]:
     """

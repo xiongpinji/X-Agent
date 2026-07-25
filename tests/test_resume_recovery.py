@@ -307,7 +307,10 @@ async def test_resume_run_reuses_previous_subtask_state() -> None:
         tracer=DummyTracer(),
         run_store=store,
         repair_loop=DummyRepairLoop(),
-        max_iterations=3,
+        # resume 时 _apply_execution_plan 会注入脚手架步骤（reflect×5 + tool），
+        # 计划膨胀为 8 步；max_iterations=3 会在 final 之前截断（既有行为）。
+        # 放宽到 10 以覆盖完整 resume 链路。
+        max_iterations=10,
     )
     result = await loop.run(
         RunContext(trace_id="resume-target", agent_id="agent-a", session_id="session-1"),

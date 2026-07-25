@@ -2,10 +2,8 @@
 示例技能集合 - 10个完整的示例技能
 """
 
-from typing import Dict, Any, List, Optional
 import logging
-import json
-from datetime import datetime
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +18,7 @@ class DocumentGeneratorAssistant:
         self.version = "1.0.0"
         self.author = "X-Agent Team"
 
-    def execute(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
+    def execute(self, input_data: dict[str, Any]) -> dict[str, Any]:
         """生成文档"""
         try:
             doc_type = input_data.get("type", "api")  # api, user_manual, readme
@@ -163,7 +161,7 @@ class TestCaseGenerator:
         self.version = "1.0.0"
         self.author = "X-Agent Team"
 
-    def execute(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
+    def execute(self, input_data: dict[str, Any]) -> dict[str, Any]:
         """生成测试用例"""
         try:
             code = input_data.get("code", "")
@@ -188,7 +186,7 @@ class TestCaseGenerator:
             logger.error(f"测试生成失败: {e}")
             return {"status": "error", "error": str(e)}
 
-    def _generate_tests(self, code: str, language: str, test_type: str) -> List[str]:
+    def _generate_tests(self, code: str, language: str, test_type: str) -> list[str]:
         """生成测试用例"""
         tests = []
 
@@ -222,7 +220,7 @@ class BugFixAssistant:
         self.version = "1.0.0"
         self.author = "X-Agent Team"
 
-    def execute(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
+    def execute(self, input_data: dict[str, Any]) -> dict[str, Any]:
         """分析和修复Bug"""
         try:
             code = input_data.get("code", "")
@@ -247,7 +245,7 @@ class BugFixAssistant:
             logger.error(f"Bug分析失败: {e}")
             return {"status": "error", "error": str(e)}
 
-    def _analyze_bugs(self, code: str, error: str, language: str) -> List[Dict[str, Any]]:
+    def _analyze_bugs(self, code: str, error: str, language: str) -> list[dict[str, Any]]:
         """分析Bug"""
         bugs = []
 
@@ -269,7 +267,7 @@ class BugFixAssistant:
 
         return bugs
 
-    def _generate_fixes(self, bugs: List[Dict[str, Any]], code: str, language: str) -> List[str]:
+    def _generate_fixes(self, bugs: list[dict[str, Any]], code: str, language: str) -> list[str]:
         """生成修复建议"""
         fixes = []
 
@@ -292,7 +290,7 @@ class PerformanceOptimizer:
         self.version = "1.0.0"
         self.author = "X-Agent Team"
 
-    def execute(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
+    def execute(self, input_data: dict[str, Any]) -> dict[str, Any]:
         """优化性能"""
         try:
             code = input_data.get("code", "")
@@ -316,7 +314,7 @@ class PerformanceOptimizer:
             logger.error(f"性能分析失败: {e}")
             return {"status": "error", "error": str(e)}
 
-    def _analyze_performance(self, code: str, language: str) -> List[Dict[str, Any]]:
+    def _analyze_performance(self, code: str, language: str) -> list[dict[str, Any]]:
         """分析性能问题"""
         issues = []
 
@@ -336,7 +334,7 @@ class PerformanceOptimizer:
 
         return issues
 
-    def _generate_suggestions(self, issues: List[Dict[str, Any]], language: str) -> List[str]:
+    def _generate_suggestions(self, issues: list[dict[str, Any]], language: str) -> list[str]:
         """生成优化建议"""
         suggestions = []
 
@@ -359,7 +357,7 @@ class SecurityAuditor:
         self.version = "1.0.0"
         self.author = "X-Agent Team"
 
-    def execute(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
+    def execute(self, input_data: dict[str, Any]) -> dict[str, Any]:
         """执行安全审计"""
         try:
             code = input_data.get("code", "")
@@ -383,7 +381,7 @@ class SecurityAuditor:
             logger.error(f"安全审计失败: {e}")
             return {"status": "error", "error": str(e)}
 
-    def _scan_vulnerabilities(self, code: str, language: str) -> List[Dict[str, Any]]:
+    def _scan_vulnerabilities(self, code: str, language: str) -> list[dict[str, Any]]:
         """扫描漏洞"""
         vulnerabilities = []
 
@@ -403,7 +401,7 @@ class SecurityAuditor:
 
         return vulnerabilities
 
-    def _calculate_risk_score(self, vulnerabilities: List[Dict[str, Any]]) -> float:
+    def _calculate_risk_score(self, vulnerabilities: list[dict[str, Any]]) -> float:
         """计算风险分数"""
         if not vulnerabilities:
             return 0.0
@@ -413,7 +411,7 @@ class SecurityAuditor:
 
         return min(100.0, total_score * 10)
 
-    def _generate_recommendations(self, vulnerabilities: List[Dict[str, Any]]) -> List[str]:
+    def _generate_recommendations(self, vulnerabilities: list[dict[str, Any]]) -> list[str]:
         """生成建议"""
         recommendations = []
 
@@ -436,7 +434,7 @@ class DataAnalysisAssistant:
         self.version = "1.0.0"
         self.author = "X-Agent Team"
 
-    def execute(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
+    def execute(self, input_data: dict[str, Any]) -> dict[str, Any]:
         """分析数据"""
         try:
             data = input_data.get("data", [])
@@ -455,7 +453,7 @@ class DataAnalysisAssistant:
             logger.error(f"数据分析失败: {e}")
             return {"status": "error", "error": str(e)}
 
-    def _analyze_data(self, data: List[Any], analysis_type: str) -> Dict[str, Any]:
+    def _analyze_data(self, data: list[Any], analysis_type: str) -> dict[str, Any]:
         """分析数据"""
         if analysis_type == "summary":
             return {
@@ -482,11 +480,11 @@ class APIDesignAssistant:
         self.version = "1.0.0"
         self.author = "X-Agent Team"
 
-    def execute(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
+    def execute(self, input_data: dict[str, Any]) -> dict[str, Any]:
         """设计API"""
         try:
             api_spec = input_data.get("spec", {})
-            validation_type = input_data.get("validation", "full")
+            input_data.get("validation", "full")
 
             if not api_spec:
                 raise ValueError("API规范不能为空")
@@ -506,7 +504,7 @@ class APIDesignAssistant:
             logger.error(f"API设计失败: {e}")
             return {"status": "error", "error": str(e)}
 
-    def _validate_api(self, spec: Dict[str, Any]) -> Dict[str, Any]:
+    def _validate_api(self, spec: dict[str, Any]) -> dict[str, Any]:
         """验证API规范"""
         issues = []
 
@@ -521,7 +519,7 @@ class APIDesignAssistant:
             "issues": issues,
         }
 
-    def _generate_design_suggestions(self, spec: Dict[str, Any]) -> List[str]:
+    def _generate_design_suggestions(self, spec: dict[str, Any]) -> list[str]:
         """生成设计建议"""
         suggestions = []
 
@@ -533,7 +531,7 @@ class APIDesignAssistant:
 
         return suggestions
 
-    def _calculate_design_score(self, validation: Dict[str, Any]) -> float:
+    def _calculate_design_score(self, validation: dict[str, Any]) -> float:
         """计算设计分数"""
         return 100.0 if validation["valid"] else 70.0
 
@@ -548,7 +546,7 @@ class UIDesignReviewer:
         self.version = "1.0.0"
         self.author = "X-Agent Team"
 
-    def execute(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
+    def execute(self, input_data: dict[str, Any]) -> dict[str, Any]:
         """审查UI设计"""
         try:
             design_spec = input_data.get("spec", {})
@@ -571,7 +569,7 @@ class UIDesignReviewer:
             logger.error(f"UI审查失败: {e}")
             return {"status": "error", "error": str(e)}
 
-    def _review_design(self, spec: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def _review_design(self, spec: dict[str, Any]) -> list[dict[str, Any]]:
         """审查设计"""
         issues = []
 
@@ -583,7 +581,7 @@ class UIDesignReviewer:
 
         return issues
 
-    def _generate_recommendations(self, issues: List[Dict[str, Any]]) -> List[str]:
+    def _generate_recommendations(self, issues: list[dict[str, Any]]) -> list[str]:
         """生成建议"""
         recommendations = []
 
@@ -595,7 +593,7 @@ class UIDesignReviewer:
 
         return recommendations
 
-    def _calculate_usability_score(self, issues: List[Dict[str, Any]]) -> float:
+    def _calculate_usability_score(self, issues: list[dict[str, Any]]) -> float:
         """计算可用性分数"""
         return max(0, 100 - len(issues) * 10)
 
@@ -610,7 +608,7 @@ class ProjectManagementAssistant:
         self.version = "1.0.0"
         self.author = "X-Agent Team"
 
-    def execute(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
+    def execute(self, input_data: dict[str, Any]) -> dict[str, Any]:
         """管理项目"""
         try:
             project = input_data.get("project", {})
@@ -636,7 +634,7 @@ class ProjectManagementAssistant:
             logger.error(f"项目管理失败: {e}")
             return {"status": "error", "error": str(e)}
 
-    def _analyze_project(self, project: Dict[str, Any]) -> Dict[str, Any]:
+    def _analyze_project(self, project: dict[str, Any]) -> dict[str, Any]:
         """分析项目"""
         return {
             "name": project.get("name", "Unknown"),
@@ -645,7 +643,7 @@ class ProjectManagementAssistant:
             "risks": [],
         }
 
-    def _plan_project(self, project: Dict[str, Any]) -> Dict[str, Any]:
+    def _plan_project(self, project: dict[str, Any]) -> dict[str, Any]:
         """规划项目"""
         return {
             "phases": [
@@ -657,7 +655,7 @@ class ProjectManagementAssistant:
             "total_duration": "13 weeks",
         }
 
-    def _track_progress(self, project: Dict[str, Any]) -> Dict[str, Any]:
+    def _track_progress(self, project: dict[str, Any]) -> dict[str, Any]:
         """跟踪进度"""
         return {
             "progress": 45,
@@ -669,14 +667,13 @@ class ProjectManagementAssistant:
 
 # 导出所有技能
 __all__ = [
-    "CodeReviewAssistant",
-    "DocumentGeneratorAssistant",
-    "TestCaseGenerator",
-    "BugFixAssistant",
-    "PerformanceOptimizer",
-    "SecurityAuditor",
-    "DataAnalysisAssistant",
     "APIDesignAssistant",
-    "UIDesignReviewer",
+    "BugFixAssistant",
+    "DataAnalysisAssistant",
+    "DocumentGeneratorAssistant",
+    "PerformanceOptimizer",
     "ProjectManagementAssistant",
+    "SecurityAuditor",
+    "TestCaseGenerator",
+    "UIDesignReviewer",
 ]

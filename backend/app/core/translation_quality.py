@@ -4,7 +4,7 @@
 
 import json
 from pathlib import Path
-from typing import Dict, List, Tuple
+
 from backend.app.core.i18n import Language
 
 
@@ -13,7 +13,7 @@ class TranslationQualityChecker:
 
     def __init__(self, locales_dir: str = "locales"):
         self.locales_dir = Path(locales_dir)
-        self.translations: Dict[str, Dict] = {}
+        self.translations: dict[str, dict] = {}
         self._load_translations()
 
     def _load_translations(self):
@@ -21,10 +21,10 @@ class TranslationQualityChecker:
         for lang in Language:
             lang_file = self.locales_dir / f"{lang.value}.json"
             if lang_file.exists():
-                with open(lang_file, 'r', encoding='utf-8') as f:
+                with open(lang_file, encoding='utf-8') as f:
                     self.translations[lang.value] = json.load(f)
 
-    def check_completeness(self) -> Dict[str, float]:
+    def check_completeness(self) -> dict[str, float]:
         """检查翻译完整性"""
         if not self.translations:
             return {}
@@ -39,7 +39,7 @@ class TranslationQualityChecker:
 
         return completeness
 
-    def check_missing_keys(self) -> Dict[str, List[str]]:
+    def check_missing_keys(self) -> dict[str, list[str]]:
         """检查缺失的翻译键"""
         if not self.translations:
             return {}
@@ -51,11 +51,11 @@ class TranslationQualityChecker:
             if lang == 'en':
                 continue
             lang_keys = self._get_all_keys(translations)
-            missing[lang] = sorted(list(reference_keys - lang_keys))
+            missing[lang] = sorted(reference_keys - lang_keys)
 
         return missing
 
-    def check_extra_keys(self) -> Dict[str, List[str]]:
+    def check_extra_keys(self) -> dict[str, list[str]]:
         """检查多余的翻译键"""
         if not self.translations:
             return {}
@@ -67,11 +67,11 @@ class TranslationQualityChecker:
             if lang == 'en':
                 continue
             lang_keys = self._get_all_keys(translations)
-            extra[lang] = sorted(list(lang_keys - reference_keys))
+            extra[lang] = sorted(lang_keys - reference_keys)
 
         return extra
 
-    def check_empty_values(self) -> Dict[str, List[str]]:
+    def check_empty_values(self) -> dict[str, list[str]]:
         """检查空值"""
         empty = {}
 
@@ -82,7 +82,7 @@ class TranslationQualityChecker:
 
         return empty
 
-    def check_parameter_consistency(self) -> Dict[str, List[Tuple[str, str, str]]]:
+    def check_parameter_consistency(self) -> dict[str, list[tuple[str, str, str]]]:
         """检查参数一致性"""
         if not self.translations:
             return {}
@@ -106,7 +106,7 @@ class TranslationQualityChecker:
 
         return inconsistencies
 
-    def check_length_consistency(self) -> Dict[str, List[Tuple[str, int, int]]]:
+    def check_length_consistency(self) -> dict[str, list[tuple[str, int, int]]]:
         """检查长度一致性"""
         if not self.translations:
             return {}
@@ -131,7 +131,7 @@ class TranslationQualityChecker:
 
         return length_issues
 
-    def generate_report(self) -> Dict:
+    def generate_report(self) -> dict:
         """生成完整的质量检查报告"""
         return {
             "completeness": self.check_completeness(),
@@ -142,7 +142,7 @@ class TranslationQualityChecker:
             "length_consistency": self.check_length_consistency(),
         }
 
-    def _get_all_keys(self, obj: Dict, prefix: str = "") -> set:
+    def _get_all_keys(self, obj: dict, prefix: str = "") -> set:
         """递归获取所有键"""
         keys = set()
         for key, value in obj.items():
@@ -153,7 +153,7 @@ class TranslationQualityChecker:
                 keys.add(full_key)
         return keys
 
-    def _find_empty_values(self, obj: Dict, prefix: str = "") -> List[str]:
+    def _find_empty_values(self, obj: dict, prefix: str = "") -> list[str]:
         """递归查找空值"""
         empty = []
         for key, value in obj.items():
@@ -164,7 +164,7 @@ class TranslationQualityChecker:
                 empty.append(full_key)
         return empty
 
-    def _extract_parameters(self, obj: Dict, prefix: str = "") -> Dict[str, set]:
+    def _extract_parameters(self, obj: dict, prefix: str = "") -> dict[str, set]:
         """提取所有参数"""
         import re
         params = {}
@@ -181,7 +181,7 @@ class TranslationQualityChecker:
 
         return params
 
-    def _get_lengths(self, obj: Dict, prefix: str = "") -> Dict[str, int]:
+    def _get_lengths(self, obj: dict, prefix: str = "") -> dict[str, int]:
         """获取所有值的长度"""
         lengths = {}
         for key, value in obj.items():
@@ -197,34 +197,34 @@ class TranslationValidator:
     """翻译验证器"""
 
     @staticmethod
-    def validate_json_syntax(file_path: Path) -> Tuple[bool, str]:
+    def validate_json_syntax(file_path: Path) -> tuple[bool, str]:
         """验证JSON语法"""
         try:
-            with open(file_path, 'r', encoding='utf-8') as f:
+            with open(file_path, encoding='utf-8') as f:
                 json.load(f)
             return True, "Valid JSON"
         except json.JSONDecodeError as e:
-            return False, f"JSON syntax error: {str(e)}"
+            return False, f"JSON syntax error: {e!s}"
         except Exception as e:
-            return False, f"Error: {str(e)}"
+            return False, f"Error: {e!s}"
 
     @staticmethod
-    def validate_encoding(file_path: Path) -> Tuple[bool, str]:
+    def validate_encoding(file_path: Path) -> tuple[bool, str]:
         """验证文件编码"""
         try:
-            with open(file_path, 'r', encoding='utf-8') as f:
+            with open(file_path, encoding='utf-8') as f:
                 f.read()
             return True, "Valid UTF-8 encoding"
         except UnicodeDecodeError:
             return False, "Invalid UTF-8 encoding"
         except Exception as e:
-            return False, f"Error: {str(e)}"
+            return False, f"Error: {e!s}"
 
     @staticmethod
-    def validate_structure(file_path: Path, reference_structure: Dict) -> Tuple[bool, List[str]]:
+    def validate_structure(file_path: Path, reference_structure: dict) -> tuple[bool, list[str]]:
         """验证结构一致性"""
         try:
-            with open(file_path, 'r', encoding='utf-8') as f:
+            with open(file_path, encoding='utf-8') as f:
                 data = json.load(f)
 
             errors = []
@@ -234,7 +234,7 @@ class TranslationValidator:
             return False, [str(e)]
 
     @staticmethod
-    def _check_structure(data: Dict, reference: Dict, path: str, errors: List[str]):
+    def _check_structure(data: dict, reference: dict, path: str, errors: list[str]):
         """递归检查结构"""
         for key, ref_value in reference.items():
             current_path = f"{path}.{key}" if path else key
@@ -247,7 +247,7 @@ class TranslationValidator:
                     TranslationValidator._check_structure(data[key], ref_value, current_path, errors)
 
 
-def check_all_translations(locales_dir: str = "locales") -> Dict:
+def check_all_translations(locales_dir: str = "locales") -> dict:
     """检查所有翻译"""
     checker = TranslationQualityChecker(locales_dir)
     report = checker.generate_report()

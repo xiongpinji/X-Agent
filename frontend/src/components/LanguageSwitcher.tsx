@@ -7,8 +7,9 @@ export const LanguageSwitcher: React.FC = () => {
   return (
     <div className="flex gap-4 p-4">
       <div>
-        <label className="block text-sm font-medium mb-2">Language</label>
+        <label htmlFor="language-select" className="block text-sm font-medium mb-2">Language</label>
         <select
+          id="language-select"
           value={language}
           onChange={(e) => setLanguage(e.target.value)}
           className="px-3 py-2 border rounded-md"
@@ -22,8 +23,9 @@ export const LanguageSwitcher: React.FC = () => {
       </div>
 
       <div>
-        <label className="block text-sm font-medium mb-2">Region</label>
+        <label htmlFor="region-select" className="block text-sm font-medium mb-2">Region</label>
         <select
+          id="region-select"
           value={region}
           onChange={(e) => setRegion(e.target.value)}
           className="px-3 py-2 border rounded-md"

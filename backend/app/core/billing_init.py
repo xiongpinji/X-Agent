@@ -4,38 +4,36 @@
 from __future__ import annotations
 
 import logging
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from uuid import uuid4
 
-from sqlalchemy.ext.asyncio import AsyncSession
-
+from backend.app.core.billing_config import BILLING_CONFIG
+from backend.app.core.payment_providers import (
+    AlipayProvider,
+    PaymentProviderFactory,
+    StripeProvider,
+    WechatProvider,
+)
+from backend.app.core.session import SessionManager
 from backend.app.models.billing import (
     Base,
     BillingModel,
     PricingTier,
     PromotionCode,
 )
-from backend.app.core.billing_config import BILLING_CONFIG
-from backend.app.core.payment_providers import (
-    PaymentProviderFactory,
-    StripeProvider,
-    AlipayProvider,
-    WechatProvider,
-)
-from backend.app.core.session import SessionManager
-from datetime import UTC, datetime, timedelta
 
 logger = logging.getLogger(__name__)
 
 
 async def initialize_billing_system(
-    stripe_api_key: str = None,
-    alipay_app_id: str = None,
-    alipay_private_key: str = None,
-    alipay_public_key: str = None,
-    wechat_mch_id: str = None,
-    wechat_api_key: str = None,
-    wechat_cert_path: str = None,
+    stripe_api_key: str | None = None,
+    alipay_app_id: str | None = None,
+    alipay_private_key: str | None = None,
+    alipay_public_key: str | None = None,
+    wechat_mch_id: str | None = None,
+    wechat_api_key: str | None = None,
+    wechat_cert_path: str | None = None,
 ) -> None:
     """初始化计费系统"""
     logger.info("初始化计费系统...")
@@ -237,7 +235,7 @@ async def initialize_billing_on_startup(app) -> None:
 
         logger.info("计费系统启动初始化完成")
     except Exception as e:
-        logger.error(f"计费系统启动初始化失败: {str(e)}")
+        logger.error(f"计费系统启动初始化失败: {e!s}")
         raise
 
 
@@ -248,6 +246,7 @@ async def check_subscription_renewals() -> None:
     logger.info("检查订阅续费...")
 
     from sqlalchemy import select
+
     from backend.app.models.billing import Subscription, SubscriptionStatus
 
     async with SessionManager.get_session() as session:
@@ -255,7 +254,7 @@ async def check_subscription_renewals() -> None:
         now = datetime.now(UTC)
         stmt = select(Subscription).where(
             (Subscription.status == SubscriptionStatus.ACTIVE)
-            & (Subscription.auto_renew == True)
+            & (Subscription.auto_renew)
             & (Subscription.renewal_date <= now)
         )
         result = await session.execute(stmt)
@@ -273,8 +272,9 @@ async def generate_monthly_invoices() -> None:
     """生成月度发票"""
     logger.info("生成月度发票...")
 
-    from backend.app.core.billing_engine import get_billing_engine
     from sqlalchemy import select
+
+    from backend.app.core.billing_engine import get_billing_engine
     from backend.app.models.billing import Subscription, SubscriptionStatus
 
     billing_engine = get_billing_engine()
@@ -303,7 +303,7 @@ async def generate_monthly_invoices() -> None:
                     logger.info(f"生成发票: {invoice.invoice_number}")
             except Exception as e:
                 logger.error(
-                    f"生成发票失败 (subscription={subscription.id}): {str(e)}"
+                    f"生成发票失败 (subscription={subscription.id}): {e!s}"
                 )
 
     logger.info("月度发票生成完成")
@@ -314,6 +314,7 @@ async def cleanup_expired_data() -> None:
     logger.info("清理过期数据...")
 
     from sqlalchemy import delete
+
     from backend.app.models.billing import BillingHistory
 
     async with SessionManager.get_session() as session:

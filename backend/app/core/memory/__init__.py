@@ -2,100 +2,100 @@
 记忆融合系统包初始化模块。
 """
 
-from backend.app.core.memory.store import (
-    MemoryScope,
-    MemoryRevision,
-    MemoryItem,
-    SessionRecord,
-    MemorySearchHit,
-    MemoryConsolidationResult,
-    MemoryUpdateResult,
-    MemoryRollbackResult,
-    MemoryPollutionReport,
-    MemoryExportBundle,
-    MemorySystem,
-    memory_system,
-    InMemoryMemorySystem,
+from backend.app.core.memory.analytics import (
+    AnalyticsReport,
+    CoverageAnalysis,
+    MemoryAnalytics,
+    MemoryQualityMetrics,
+)
+from backend.app.core.memory.fusion_system import AdvancedMemoryFusionSystem
+from backend.app.core.memory.graph_enhancer import (
+    Entity,
+    GraphEnhancer,
+    GraphStats,
+    Relation,
+)
+from backend.app.core.memory.importance import (
+    ImportanceScores,
+    ImportanceWeights,
+    MemoryImportanceScorer,
+)
+from backend.app.core.memory.lifecycle import (
+    LifecycleEvent,
+    LifecyclePolicy,
+    LifecycleStats,
+    MemoryLifecycleManager,
+    MemoryState,
 )
 from backend.app.core.memory.merger import (
     MemoryMerger,
     MergedMemory,
     MergeStats,
 )
-from backend.app.core.memory.importance import (
-    MemoryImportanceScorer,
-    ImportanceScores,
-    ImportanceWeights,
-)
 from backend.app.core.memory.retrieval_optimizer import (
-    RetrieverOptimizer,
     RetrievalResult,
     RetrievalStats,
+    RetrieverOptimizer,
 )
-from backend.app.core.memory.graph_enhancer import (
-    GraphEnhancer,
-    Entity,
-    Relation,
-    GraphStats,
+from backend.app.core.memory.store import (
+    InMemoryMemorySystem,
+    MemoryConsolidationResult,
+    MemoryExportBundle,
+    MemoryItem,
+    MemoryPollutionReport,
+    MemoryRevision,
+    MemoryRollbackResult,
+    MemoryScope,
+    MemorySearchHit,
+    MemorySystem,
+    MemoryUpdateResult,
+    SessionRecord,
+    memory_system,
 )
-from backend.app.core.memory.lifecycle import (
-    MemoryLifecycleManager,
-    MemoryState,
-    LifecyclePolicy,
-    LifecycleEvent,
-    LifecycleStats,
-)
-from backend.app.core.memory.analytics import (
-    MemoryAnalytics,
-    MemoryQualityMetrics,
-    CoverageAnalysis,
-    AnalyticsReport,
-)
-from backend.app.core.memory.fusion_system import AdvancedMemoryFusionSystem
 
 __all__ = [
-    # Store (L1-L10 core memory system)
-    "MemoryScope",
-    "MemoryRevision",
-    "MemoryItem",
-    "SessionRecord",
-    "MemorySearchHit",
-    "MemoryConsolidationResult",
-    "MemoryUpdateResult",
-    "MemoryRollbackResult",
-    "MemoryPollutionReport",
-    "MemoryExportBundle",
-    "MemorySystem",
-    "memory_system",
-    "InMemoryMemorySystem",
-    # Merger
-    "MemoryMerger",
-    "MergedMemory",
-    "MergeStats",
-    # Importance
-    "MemoryImportanceScorer",
-    "ImportanceScores",
-    "ImportanceWeights",
-    # Retrieval
-    "RetrieverOptimizer",
-    "RetrievalResult",
-    "RetrievalStats",
+    # System
+    "AdvancedMemoryFusionSystem",
+    "AnalyticsReport",
+    "CoverageAnalysis",
+    "Entity",
     # Graph
     "GraphEnhancer",
-    "Entity",
-    "Relation",
     "GraphStats",
-    # Lifecycle
-    "MemoryLifecycleManager",
-    "MemoryState",
-    "LifecyclePolicy",
+    "ImportanceScores",
+    "ImportanceWeights",
+    "InMemoryMemorySystem",
     "LifecycleEvent",
+    "LifecyclePolicy",
     "LifecycleStats",
     # Analytics
     "MemoryAnalytics",
+    "MemoryConsolidationResult",
+    "MemoryExportBundle",
+    # Importance
+    "MemoryImportanceScorer",
+    "MemoryItem",
+    # Lifecycle
+    "MemoryLifecycleManager",
+    # Merger
+    "MemoryMerger",
+    "MemoryPollutionReport",
     "MemoryQualityMetrics",
-    "CoverageAnalysis",
-    "AnalyticsReport",
-    # System
-    "AdvancedMemoryFusionSystem",
+    "MemoryRevision",
+    "MemoryRollbackResult",
+    # Store (L1-L10 core memory system)
+    "MemoryScope",
+    "MemorySearchHit",
+    "MemoryState",
+    "MemorySystem",
+    "MemoryUpdateResult",
+    "MergeStats",
+    "MergedMemory",
+    "Relation",
+    "RetrievalResult",
+    "RetrievalStats",
+    # Retrieval
+    "RetrieverOptimizer",
+    "SessionRecord",
+    "memory_system",
 ]

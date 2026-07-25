@@ -12,7 +12,7 @@ Implements query optimization techniques:
 from __future__ import annotations
 
 import logging
-from typing import Any, Callable, TypeVar
+from typing import Any, TypeVar
 
 import asyncpg
 

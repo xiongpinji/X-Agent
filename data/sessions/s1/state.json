@@ -1,0 +1,735 @@
+{
+  "session_id": "s1",
+  "agent_id": "test-agent",
+  "tenant_id": "test-tenant",
+  "messages": [
+    {
+      "id": "93d59a72-2448-46db-b4a4-027b08fa2c52",
+      "role": "system",
+      "content": "Context compressed. Key observations: 21",
+      "timestamp": "2026-07-24T21:11:41.920559+00:00",
+      "metadata": {},
+      "importance": 0.5,
+      "compressed": true,
+      "token_count": 8
+    },
+    {
+      "id": "57c12a72-f39a-43de-8304-96875fc862d8",
+      "role": "user",
+      "content": "test",
+      "timestamp": "2026-07-23T03:36:22.015544+00:00",
+      "metadata": {
+        "trace_id": "trace-test-001",
+        "event": "task"
+      },
+      "importance": 0.8,
+      "compressed": false,
+      "token_count": 1
+    },
+    {
+      "id": "57c12a72-f39a-43de-8304-96875fc862d8",
+      "role": "user",
+      "content": "test",
+      "timestamp": "2026-07-23T03:36:22.015544+00:00",
+      "metadata": {
+        "trace_id": "trace-test-001",
+        "event": "task"
+      },
+      "importance": 0.8,
+      "compressed": false,
+      "token_count": 1
+    },
+    {
+      "id": "57c12a72-f39a-43de-8304-96875fc862d8",
+      "role": "user",
+      "content": "test",
+      "timestamp": "2026-07-23T03:36:22.015544+00:00",
+      "metadata": {
+        "trace_id": "trace-test-001",
+        "event": "task"
+      },
+      "importance": 0.8,
+      "compressed": false,
+      "token_count": 1
+    },
+    {
+      "id": "57c12a72-f39a-43de-8304-96875fc862d8",
+      "role": "user",
+      "content": "test",
+      "timestamp": "2026-07-23T03:36:22.015544+00:00",
+      "metadata": {
+        "trace_id": "trace-test-001",
+        "event": "task"
+      },
+      "importance": 0.8,
+      "compressed": false,
+      "token_count": 1
+    },
+    {
+      "id": "57c12a72-f39a-43de-8304-96875fc862d8",
+      "role": "user",
+      "content": "test",
+      "timestamp": "2026-07-23T03:36:22.015544+00:00",
+      "metadata": {
+        "trace_id": "trace-test-001",
+        "event": "task"
+      },
+      "importance": 0.8,
+      "compressed": false,
+      "token_count": 1
+    },
+    {
+      "id": "57c12a72-f39a-43de-8304-96875fc862d8",
+      "role": "user",
+      "content": "test",
+      "timestamp": "2026-07-23T03:36:22.015544+00:00",
+      "metadata": {
+        "trace_id": "trace-test-001",
+        "event": "task"
+      },
+      "importance": 0.8,
+      "compressed": false,
+      "token_count": 1
+    },
+    {
+      "id": "57c12a72-f39a-43de-8304-96875fc862d8",
+      "role": "user",
+      "content": "test",
+      "timestamp": "2026-07-23T03:36:22.015544+00:00",
+      "metadata": {
+        "trace_id": "trace-test-001",
+        "event": "task"
+      },
+      "importance": 0.8,
+      "compressed": false,
+      "token_count": 1
+    },
+    {
+      "id": "57c12a72-f39a-43de-8304-96875fc862d8",
+      "role": "user",
+      "content": "test",
+      "timestamp": "2026-07-23T03:36:22.015544+00:00",
+      "metadata": {
+        "trace_id": "trace-test-001",
+        "event": "task"
+      },
+      "importance": 0.8,
+      "compressed": false,
+      "token_count": 1
+    },
+    {
+      "id": "57c12a72-f39a-43de-8304-96875fc862d8",
+      "role": "user",
+      "content": "test",
+      "timestamp": "2026-07-23T03:36:22.015544+00:00",
+      "metadata": {
+        "trace_id": "trace-test-001",
+        "event": "task"
+      },
+      "importance": 0.8,
+      "compressed": false,
+      "token_count": 1
+    },
+    {
+      "id": "57c12a72-f39a-43de-8304-96875fc862d8",
+      "role": "user",
+      "content": "test",
+      "timestamp": "2026-07-23T03:36:22.015544+00:00",
+      "metadata": {
+        "trace_id": "trace-test-001",
+        "event": "task"
+      },
+      "importance": 0.8,
+      "compressed": false,
+      "token_count": 1
+    },
+    {
+      "id": "57c12a72-f39a-43de-8304-96875fc862d8",
+      "role": "user",
+      "content": "test",
+      "timestamp": "2026-07-23T03:36:22.015544+00:00",
+      "metadata": {
+        "trace_id": "trace-test-001",
+        "event": "task"
+      },
+      "importance": 0.8,
+      "compressed": false,
+      "token_count": 1
+    },
+    {
+      "id": "57c12a72-f39a-43de-8304-96875fc862d8",
+      "role": "user",
+      "content": "test",
+      "timestamp": "2026-07-23T03:36:22.015544+00:00",
+      "metadata": {
+        "trace_id": "trace-test-001",
+        "event": "task"
+      },
+      "importance": 0.8,
+      "compressed": false,
+      "token_count": 1
+    },
+    {
+      "id": "57c12a72-f39a-43de-8304-96875fc862d8",
+      "role": "user",
+      "content": "test",
+      "timestamp": "2026-07-23T03:36:22.015544+00:00",
+      "metadata": {
+        "trace_id": "trace-test-001",
+        "event": "task"
+      },
+      "importance": 0.8,
+      "compressed": false,
+      "token_count": 1
+    },
+    {
+      "id": "57c12a72-f39a-43de-8304-96875fc862d8",
+      "role": "user",
+      "content": "test",
+      "timestamp": "2026-07-23T03:36:22.015544+00:00",
+      "metadata": {
+        "trace_id": "trace-test-001",
+        "event": "task"
+      },
+      "importance": 0.8,
+      "compressed": false,
+      "token_count": 1
+    },
+    {
+      "id": "57c12a72-f39a-43de-8304-96875fc862d8",
+      "role": "user",
+      "content": "test",
+      "timestamp": "2026-07-23T03:36:22.015544+00:00",
+      "metadata": {
+        "trace_id": "trace-test-001",
+        "event": "task"
+      },
+      "importance": 0.8,
+      "compressed": false,
+      "token_count": 1
+    },
+    {
+      "id": "57c12a72-f39a-43de-8304-96875fc862d8",
+      "role": "user",
+      "content": "test",
+      "timestamp": "2026-07-23T03:36:22.015544+00:00",
+      "metadata": {
+        "trace_id": "trace-test-001",
+        "event": "task"
+      },
+      "importance": 0.8,
+      "compressed": false,
+      "token_count": 1
+    },
+    {
+      "id": "57c12a72-f39a-43de-8304-96875fc862d8",
+      "role": "user",
+      "content": "test",
+      "timestamp": "2026-07-23T03:36:22.015544+00:00",
+      "metadata": {
+        "trace_id": "trace-test-001",
+        "event": "task"
+      },
+      "importance": 0.8,
+      "compressed": false,
+      "token_count": 1
+    },
+    {
+      "id": "57c12a72-f39a-43de-8304-96875fc862d8",
+      "role": "user",
+      "content": "test",
+      "timestamp": "2026-07-23T03:36:22.015544+00:00",
+      "metadata": {
+        "trace_id": "trace-test-001",
+        "event": "task"
+      },
+      "importance": 0.8,
+      "compressed": false,
+      "token_count": 1
+    },
+    {
+      "id": "57c12a72-f39a-43de-8304-96875fc862d8",
+      "role": "user",
+      "content": "test",
+      "timestamp": "2026-07-23T03:36:22.015544+00:00",
+      "metadata": {
+        "trace_id": "trace-test-001",
+        "event": "task"
+      },
+      "importance": 0.8,
+      "compressed": false,
+      "token_count": 1
+    },
+    {
+      "id": "57c12a72-f39a-43de-8304-96875fc862d8",
+      "role": "user",
+      "content": "test",
+      "timestamp": "2026-07-23T03:36:22.015544+00:00",
+      "metadata": {
+        "trace_id": "trace-test-001",
+        "event": "task"
+      },
+      "importance": 0.8,
+      "compressed": false,
+      "token_count": 1
+    },
+    {
+      "id": "286f9f87-f8ba-40b4-bac2-79efd116e573",
+      "role": "assistant",
+      "content": "X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 48 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 36 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 60 earlier messages omitted)\n[user] test\n[assistant] X-Agent P\u2026\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 38 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 62 earlier messages omitted)\n[user] test\n[assistant] X-Agent P\u2026\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 40 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 28 earlier messages omitted; 1 compression(s) applied before)\n\u2026\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 42 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 30 earlier messages omitted; 1 compression(s) applied before)\n\u2026\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 44 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 32 earlier messages omitted; 1 compression(s) applied before)\n\u2026\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 46 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 34 earlier messages omitted; 1 compression(s) applied before)\n\u2026",
+      "timestamp": "2026-07-24T20:33:56.657833+00:00",
+      "metadata": {
+        "trace_id": "trace-test-001",
+        "event": "final_answer"
+      },
+      "importance": 0.9,
+      "compressed": false,
+      "token_count": 614
+    },
+    {
+      "id": "57c12a72-f39a-43de-8304-96875fc862d8",
+      "role": "user",
+      "content": "test",
+      "timestamp": "2026-07-23T03:36:22.015544+00:00",
+      "metadata": {
+        "trace_id": "trace-test-001",
+        "event": "task"
+      },
+      "importance": 0.8,
+      "compressed": false,
+      "token_count": 1
+    },
+    {
+      "id": "a32f38f5-81f5-48db-aa75-467b89651d84",
+      "role": "assistant",
+      "content": "X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 50 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 38 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 62 earlier messages omitted)\n[user] test\n[assistant] X-Agent P\u2026\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 40 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 28 earlier messages omitted; 1 compression(s) applied before)\n\u2026\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 42 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 30 earlier messages omitted; 1 compression(s) applied before)\n\u2026\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 44 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 32 earlier messages omitted; 1 compression(s) applied before)\n\u2026\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 46 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 34 earlier messages omitted; 1 compression(s) applied before)\n\u2026\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 48 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 36 earlier messages omitted; 1 compression(s) applied before)\n\u2026",
+      "timestamp": "2026-07-24T20:37:54.828762+00:00",
+      "metadata": {
+        "trace_id": "trace-test-001",
+        "event": "final_answer"
+      },
+      "importance": 0.9,
+      "compressed": false,
+      "token_count": 612
+    },
+    {
+      "id": "57c12a72-f39a-43de-8304-96875fc862d8",
+      "role": "user",
+      "content": "test",
+      "timestamp": "2026-07-23T03:36:22.015544+00:00",
+      "metadata": {
+        "trace_id": "trace-test-001",
+        "event": "task"
+      },
+      "importance": 0.8,
+      "compressed": false,
+      "token_count": 1
+    },
+    {
+      "id": "268078be-978b-4c87-ba8f-2d72b3c7218e",
+      "role": "assistant",
+      "content": "X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 52 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 40 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 28 earlier messages omitted; 1 compression(s) applied before)\n\u2026\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 42 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 30 earlier messages omitted; 1 compression(s) applied before)\n\u2026\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 44 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 32 earlier messages omitted; 1 compression(s) applied before)\n\u2026\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 46 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 34 earlier messages omitted; 1 compression(s) applied before)\n\u2026\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 48 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 36 earlier messages omitted; 1 compression(s) applied before)\n\u2026\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 50 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 38 earlier messages omitted; 1 compression(s) applied before)\n\u2026",
+      "timestamp": "2026-07-24T20:40:18.864449+00:00",
+      "metadata": {
+        "trace_id": "trace-test-001",
+        "event": "final_answer"
+      },
+      "importance": 0.9,
+      "compressed": false,
+      "token_count": 610
+    },
+    {
+      "id": "57c12a72-f39a-43de-8304-96875fc862d8",
+      "role": "user",
+      "content": "test",
+      "timestamp": "2026-07-23T03:36:22.015544+00:00",
+      "metadata": {
+        "trace_id": "trace-test-001",
+        "event": "task"
+      },
+      "importance": 0.8,
+      "compressed": false,
+      "token_count": 1
+    },
+    {
+      "id": "d0782885-400a-44c2-b443-abb8cae63673",
+      "role": "assistant",
+      "content": "X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 54 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 42 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 30 earlier messages omitted; 1 compression(s) applied before)\n\u2026\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 44 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 32 earlier messages omitted; 1 compression(s) applied before)\n\u2026\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 46 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 34 earlier messages omitted; 1 compression(s) applied before)\n\u2026\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 48 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 36 earlier messages omitted; 1 compression(s) applied before)\n\u2026\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 50 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 38 earlier messages omitted; 1 compression(s) applied before)\n\u2026\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 52 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 40 earlier messages omitted; 1 compression(s) applied before)\n\u2026",
+      "timestamp": "2026-07-24T20:44:14.053249+00:00",
+      "metadata": {
+        "trace_id": "trace-test-001",
+        "event": "final_answer"
+      },
+      "importance": 0.9,
+      "compressed": false,
+      "token_count": 610
+    },
+    {
+      "id": "57c12a72-f39a-43de-8304-96875fc862d8",
+      "role": "user",
+      "content": "test",
+      "timestamp": "2026-07-23T03:36:22.015544+00:00",
+      "metadata": {
+        "trace_id": "trace-test-001",
+        "event": "task"
+      },
+      "importance": 0.8,
+      "compressed": false,
+      "token_count": 1
+    },
+    {
+      "id": "1be14a95-c64c-4f7a-b716-dac123a666f9",
+      "role": "assistant",
+      "content": "X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 56 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 44 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 32 earlier messages omitted; 1 compression(s) applied before)\n\u2026\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 46 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 34 earlier messages omitted; 1 compression(s) applied before)\n\u2026\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 48 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 36 earlier messages omitted; 1 compression(s) applied before)\n\u2026\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 50 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 38 earlier messages omitted; 1 compression(s) applied before)\n\u2026\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 52 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 40 earlier messages omitted; 1 compression(s) applied before)\n\u2026\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 54 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 42 earlier messages omitted; 1 compression(s) applied before)\n\u2026",
+      "timestamp": "2026-07-24T20:46:40.469431+00:00",
+      "metadata": {
+        "trace_id": "trace-test-001",
+        "event": "final_answer"
+      },
+      "importance": 0.9,
+      "compressed": false,
+      "token_count": 610
+    },
+    {
+      "id": "57c12a72-f39a-43de-8304-96875fc862d8",
+      "role": "user",
+      "content": "test",
+      "timestamp": "2026-07-23T03:36:22.015544+00:00",
+      "metadata": {
+        "trace_id": "trace-test-001",
+        "event": "task"
+      },
+      "importance": 0.8,
+      "compressed": false,
+      "token_count": 1
+    },
+    {
+      "id": "74b8af74-9d76-4d89-91ac-c2b9fc19592e",
+      "role": "assistant",
+      "content": "X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 58 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 46 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 34 earlier messages omitted; 1 compression(s) applied before)\n\u2026\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 48 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 36 earlier messages omitted; 1 compression(s) applied before)\n\u2026\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 50 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 38 earlier messages omitted; 1 compression(s) applied before)\n\u2026\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 52 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 40 earlier messages omitted; 1 compression(s) applied before)\n\u2026\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 54 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 42 earlier messages omitted; 1 compression(s) applied before)\n\u2026\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 56 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 44 earlier messages omitted; 1 compression(s) applied before)\n\u2026",
+      "timestamp": "2026-07-24T20:50:36.228013+00:00",
+      "metadata": {
+        "trace_id": "trace-test-001",
+        "event": "final_answer"
+      },
+      "importance": 0.9,
+      "compressed": false,
+      "token_count": 610
+    },
+    {
+      "id": "57c12a72-f39a-43de-8304-96875fc862d8",
+      "role": "user",
+      "content": "test",
+      "timestamp": "2026-07-23T03:36:22.015544+00:00",
+      "metadata": {
+        "trace_id": "trace-test-001",
+        "event": "task"
+      },
+      "importance": 0.8,
+      "compressed": false,
+      "token_count": 1
+    },
+    {
+      "id": "da57bd06-5c6e-4c93-9814-92d43ae312f4",
+      "role": "assistant",
+      "content": "X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 60 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 48 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 36 earlier messages omitted; 1 compression(s) applied before)\n\u2026\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 50 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 38 earlier messages omitted; 1 compression(s) applied before)\n\u2026\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 52 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 40 earlier messages omitted; 1 compression(s) applied before)\n\u2026\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 54 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 42 earlier messages omitted; 1 compression(s) applied before)\n\u2026\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 56 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 44 earlier messages omitted; 1 compression(s) applied before)\n\u2026\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 58 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 46 earlier messages omitted; 1 compression(s) applied before)\n\u2026",
+      "timestamp": "2026-07-24T20:52:59.281462+00:00",
+      "metadata": {
+        "trace_id": "trace-test-001",
+        "event": "final_answer"
+      },
+      "importance": 0.9,
+      "compressed": false,
+      "token_count": 610
+    },
+    {
+      "id": "57c12a72-f39a-43de-8304-96875fc862d8",
+      "role": "user",
+      "content": "test",
+      "timestamp": "2026-07-23T03:36:22.015544+00:00",
+      "metadata": {
+        "trace_id": "trace-test-001",
+        "event": "task"
+      },
+      "importance": 0.8,
+      "compressed": false,
+      "token_count": 1
+    },
+    {
+      "id": "317a8a2c-73c4-4974-9477-643ca6c7885a",
+      "role": "assistant",
+      "content": "X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 62 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 50 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 38 earlier messages omitted; 1 compression(s) applied before)\n\u2026\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 52 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 40 earlier messages omitted; 1 compression(s) applied before)\n\u2026\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 54 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 42 earlier messages omitted; 1 compression(s) applied before)\n\u2026\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 56 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 44 earlier messages omitted; 1 compression(s) applied before)\n\u2026\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 58 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 46 earlier messages omitted; 1 compression(s) applied before)\n\u2026\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 60 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 48 earlier messages omitted; 1 compression(s) applied before)\n\u2026",
+      "timestamp": "2026-07-24T20:56:35.161242+00:00",
+      "metadata": {
+        "trace_id": "trace-test-001",
+        "event": "final_answer"
+      },
+      "importance": 0.9,
+      "compressed": false,
+      "token_count": 610
+    },
+    {
+      "id": "57c12a72-f39a-43de-8304-96875fc862d8",
+      "role": "user",
+      "content": "test",
+      "timestamp": "2026-07-23T03:36:22.015544+00:00",
+      "metadata": {
+        "trace_id": "trace-test-001",
+        "event": "task"
+      },
+      "importance": 0.8,
+      "compressed": false,
+      "token_count": 1
+    },
+    {
+      "id": "12139e3f-2da9-4933-b329-35da5661f399",
+      "role": "assistant",
+      "content": "X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 64 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 52 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 40 earlier messages omitted; 1 compression(s) applied before)\n\u2026\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 54 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 42 earlier messages omitted; 1 compression(s) applied before)\n\u2026\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 56 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 44 earlier messages omitted; 1 compression(s) applied before)\n\u2026\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 58 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 46 earlier messages omitted; 1 compression(s) applied before)\n\u2026\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 60 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 48 earlier messages omitted; 1 compression(s) applied before)\n\u2026\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 62 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 50 earlier messages omitted; 1 compression(s) applied before)\n\u2026",
+      "timestamp": "2026-07-24T21:00:08.520748+00:00",
+      "metadata": {
+        "trace_id": "trace-test-001",
+        "event": "final_answer"
+      },
+      "importance": 0.9,
+      "compressed": false,
+      "token_count": 610
+    },
+    {
+      "id": "57c12a72-f39a-43de-8304-96875fc862d8",
+      "role": "user",
+      "content": "test",
+      "timestamp": "2026-07-23T03:36:22.015544+00:00",
+      "metadata": {
+        "trace_id": "trace-test-001",
+        "event": "task"
+      },
+      "importance": 0.8,
+      "compressed": false,
+      "token_count": 1
+    },
+    {
+      "id": "82140095-f3f9-41cd-b19b-50ce917d2f34",
+      "role": "assistant",
+      "content": "X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 66 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 54 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 42 earlier messages omitted; 1 compression(s) applied before)\n\u2026\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 56 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 44 earlier messages omitted; 1 compression(s) applied before)\n\u2026\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 58 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 46 earlier messages omitted; 1 compression(s) applied before)\n\u2026\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 60 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 48 earlier messages omitted; 1 compression(s) applied before)\n\u2026\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 62 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 50 earlier messages omitted; 1 compression(s) applied before)\n\u2026\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 64 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 52 earlier messages omitted; 1 compression(s) applied before)\n\u2026",
+      "timestamp": "2026-07-24T21:03:42.078078+00:00",
+      "metadata": {
+        "trace_id": "trace-test-001",
+        "event": "final_answer"
+      },
+      "importance": 0.9,
+      "compressed": false,
+      "token_count": 610
+    },
+    {
+      "id": "57c12a72-f39a-43de-8304-96875fc862d8",
+      "role": "user",
+      "content": "test",
+      "timestamp": "2026-07-23T03:36:22.015544+00:00",
+      "metadata": {
+        "trace_id": "trace-test-001",
+        "event": "task"
+      },
+      "importance": 0.8,
+      "compressed": false,
+      "token_count": 1
+    },
+    {
+      "id": "1636f89e-0a1b-41fb-9e5a-4385e79f54a4",
+      "role": "assistant",
+      "content": "X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 68 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 56 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 44 earlier messages omitted; 1 compression(s) applied before)\n\u2026\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 58 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 46 earlier messages omitted; 1 compression(s) applied before)\n\u2026\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 60 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 48 earlier messages omitted; 1 compression(s) applied before)\n\u2026\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 62 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 50 earlier messages omitted; 1 compression(s) applied before)\n\u2026\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 64 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 52 earlier messages omitted; 1 compression(s) applied before)\n\u2026\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 66 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 54 earlier messages omitted; 1 compression(s) applied before)\n\u2026",
+      "timestamp": "2026-07-24T21:08:38.076948+00:00",
+      "metadata": {
+        "trace_id": "trace-test-001",
+        "event": "final_answer"
+      },
+      "importance": 0.9,
+      "compressed": false,
+      "token_count": 610
+    },
+    {
+      "id": "6dc048b2-647b-4e87-926e-1332db7478f8",
+      "role": "user",
+      "content": "test",
+      "timestamp": "2026-07-24T21:11:32.879717+00:00",
+      "metadata": {
+        "trace_id": "trace-test-001",
+        "event": "task"
+      },
+      "importance": 0.8,
+      "compressed": false,
+      "token_count": 1
+    },
+    {
+      "id": "8cf11f26-a467-4880-9e49-14aff50af744",
+      "role": "assistant",
+      "content": "X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 70 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 58 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 46 earlier messages omitted; 1 compression(s) applied before)\n\u2026\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 60 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 48 earlier messages omitted; 1 compression(s) applied before)\n\u2026\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 62 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 50 earlier messages omitted; 1 compression(s) applied before)\n\u2026\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 64 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 52 earlier messages omitted; 1 compression(s) applied before)\n\u2026\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 66 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 54 earlier messages omitted; 1 compression(s) applied before)\n\u2026\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 68 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 56 earlier messages omitted; 1 compression(s) applied before)\n\u2026",
+      "timestamp": "2026-07-24T21:11:41.872622+00:00",
+      "metadata": {
+        "trace_id": "trace-test-001",
+        "event": "final_answer"
+      },
+      "importance": 0.9,
+      "compressed": false,
+      "token_count": 610
+    },
+    {
+      "id": "43ce276c-d28b-41bc-82dc-5e9c288fe7fb",
+      "role": "user",
+      "content": "test",
+      "timestamp": "2026-07-24T21:14:30.285668+00:00",
+      "metadata": {
+        "trace_id": "trace-test-001",
+        "event": "task"
+      },
+      "importance": 0.8,
+      "compressed": false,
+      "token_count": 1
+    },
+    {
+      "id": "a4d42402-7ecd-4b04-bde5-701c656d062a",
+      "role": "assistant",
+      "content": "X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 32 earlier messages omitted; 2 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 60 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 48 earlier messages omitted; 1 compression(s) applied before)\n\u2026\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 62 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 50 earlier messages omitted; 1 compression(s) applied before)\n\u2026\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 64 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 52 earlier messages omitted; 1 compression(s) applied before)\n\u2026\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 66 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 54 earlier messages omitted; 1 compression(s) applied before)\n\u2026\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 68 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 56 earlier messages omitted; 1 compression(s) applied before)\n\u2026\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 70 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 58 earlier messages omitted; 1 compression(s) applied before)\n\u2026",
+      "timestamp": "2026-07-24T21:14:38.165506+00:00",
+      "metadata": {
+        "trace_id": "trace-test-001",
+        "event": "final_answer"
+      },
+      "importance": 0.9,
+      "compressed": false,
+      "token_count": 610
+    },
+    {
+      "id": "611a382e-94cb-48f2-aff0-8ab2811d2762",
+      "role": "user",
+      "content": "test",
+      "timestamp": "2026-07-24T21:21:07.618143+00:00",
+      "metadata": {
+        "trace_id": "trace-test-001",
+        "event": "task"
+      },
+      "importance": 0.8,
+      "compressed": false,
+      "token_count": 1
+    },
+    {
+      "id": "c0ea00ca-1feb-41b6-8c1d-c6ab1809be0d",
+      "role": "assistant",
+      "content": "X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 34 earlier messages omitted; 2 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 62 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 50 earlier messages omitted; 1 compression(s) applied before)\n\u2026\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 64 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 52 earlier messages omitted; 1 compression(s) applied before)\n\u2026\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 66 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 54 earlier messages omitted; 1 compression(s) applied before)\n\u2026\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 68 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 56 earlier messages omitted; 1 compression(s) applied before)\n\u2026\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 70 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 58 earlier messages omitted; 1 compression(s) applied before)\n\u2026\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 32 earlier messages omitted; 2 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 60 earlier messages omitted; 1 compression(s) applied before)\n\u2026",
+      "timestamp": "2026-07-24T21:21:15.647292+00:00",
+      "metadata": {
+        "trace_id": "trace-test-001",
+        "event": "final_answer"
+      },
+      "importance": 0.9,
+      "compressed": false,
+      "token_count": 610
+    },
+    {
+      "id": "8f550f03-4172-4dd3-8837-66c79efbd7e5",
+      "role": "user",
+      "content": "test",
+      "timestamp": "2026-07-24T21:24:04.661901+00:00",
+      "metadata": {
+        "trace_id": "trace-test-001",
+        "event": "task"
+      },
+      "importance": 0.8,
+      "compressed": false,
+      "token_count": 1
+    },
+    {
+      "id": "ce478a07-196c-4d8c-a4ce-6c389769ccba",
+      "role": "assistant",
+      "content": "X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 36 earlier messages omitted; 2 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 64 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 52 earlier messages omitted; 1 compression(s) applied before)\n\u2026\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 66 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 54 earlier messages omitted; 1 compression(s) applied before)\n\u2026\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 68 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 56 earlier messages omitted; 1 compression(s) applied before)\n\u2026\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 70 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 58 earlier messages omitted; 1 compression(s) applied before)\n\u2026\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 32 earlier messages omitted; 2 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 60 earlier messages omitted; 1 compression(s) applied before)\n\u2026\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 34 earlier messages omitted; 2 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 62 earlier messages omitted; 1 compression(s) applied before)\n\u2026",
+      "timestamp": "2026-07-24T21:24:13.011655+00:00",
+      "metadata": {
+        "trace_id": "trace-test-001",
+        "event": "final_answer"
+      },
+      "importance": 0.9,
+      "compressed": false,
+      "token_count": 610
+    },
+    {
+      "id": "649a32ed-f322-4ac9-8a00-2aec129aa3df",
+      "role": "user",
+      "content": "test",
+      "timestamp": "2026-07-24T21:27:06.448608+00:00",
+      "metadata": {
+        "trace_id": "trace-test-001",
+        "event": "task"
+      },
+      "importance": 0.8,
+      "compressed": false,
+      "token_count": 1
+    },
+    {
+      "id": "14b8a7e1-3f00-44f6-ab56-964a24e6f088",
+      "role": "assistant",
+      "content": "X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 38 earlier messages omitted; 2 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 66 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 54 earlier messages omitted; 1 compression(s) applied before)\n\u2026\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 68 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 56 earlier messages omitted; 1 compression(s) applied before)\n\u2026\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 70 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 58 earlier messages omitted; 1 compression(s) applied before)\n\u2026\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 32 earlier messages omitted; 2 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 60 earlier messages omitted; 1 compression(s) applied before)\n\u2026\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 34 earlier messages omitted; 2 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 62 earlier messages omitted; 1 compression(s) applied before)\n\u2026\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 36 earlier messages omitted; 2 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 64 earlier messages omitted; 1 compression(s) applied before)\n\u2026",
+      "timestamp": "2026-07-24T21:27:14.499912+00:00",
+      "metadata": {
+        "trace_id": "trace-test-001",
+        "event": "final_answer"
+      },
+      "importance": 0.9,
+      "compressed": false,
+      "token_count": 610
+    },
+    {
+      "id": "6e389481-fb5f-4aae-b7b4-fb1ee61ed933",
+      "role": "user",
+      "content": "test",
+      "timestamp": "2026-07-24T21:31:33.127775+00:00",
+      "metadata": {
+        "trace_id": "trace-test-001",
+        "event": "task"
+      },
+      "importance": 0.8,
+      "compressed": false,
+      "token_count": 1
+    },
+    {
+      "id": "d162109d-a314-4b6a-a8bc-505ceaed467a",
+      "role": "assistant",
+      "content": "X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 40 earlier messages omitted; 2 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 68 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 56 earlier messages omitted; 1 compression(s) applied before)\n\u2026\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 70 earlier messages omitted; 1 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 58 earlier messages omitted; 1 compression(s) applied before)\n\u2026\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 32 earlier messages omitted; 2 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 60 earlier messages omitted; 1 compression(s) applied before)\n\u2026\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 34 earlier messages omitted; 2 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 62 earlier messages omitted; 1 compression(s) applied before)\n\u2026\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 36 earlier messages omitted; 2 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 64 earlier messages omitted; 1 compression(s) applied before)\n\u2026\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 38 earlier messages omitted; 2 compression(s) applied before)\n[user] test\n[assistant] X-Agent Phase 0 mock response: Recovered session context from previous conversation (use as background, most recent last):\n(\u2026 66 earlier messages omitted; 1 compression(s) applied before)\n\u2026",
+      "timestamp": "2026-07-24T21:31:41.118703+00:00",
+      "metadata": {
+        "trace_id": "trace-test-001",
+        "event": "final_answer"
+      },
+      "importance": 0.9,
+      "compressed": false,
+      "token_count": 610
+    }
+  ],
+  "context_window": 128000,
+  "compression_history": [
+    {
+      "timestamp": "2026-07-24T19:42:47.218782+00:00",
+      "original_tokens": 20645,
+      "compressed_tokens": 6790,
+      "ratio": 0.32889319447808185,
+      "strategy": "legacy",
+      "messages_before": 76,
+      "messages_after": 40,
+      "kept_recent": 3
+    },
+    {
+      "timestamp": "2026-07-24T21:11:41.920677+00:00",
+      "original_tokens": 20346,
+      "compressed_tokens": 7365,
+      "ratio": 0.3619876142730758,
+      "strategy": "legacy",
+      "messages_before": 84,
+      "messages_after": 44,
+      "kept_recent": 3
+    }
+  ],
+  "metadata": {},
+  "created_at": "2026-07-23T03:36:22.015544+00:00",
+  "updated_at": "2026-07-24T21:31:41.120131+00:00",
+  "last_checkpoint": "2026-07-23T03:36:22.015544+00:00",
+  "total_tokens": 10420,
+  "compressed_tokens": 7365
+}

@@ -56,7 +56,7 @@
 ### 第4步: 打包扩展
 
 ```bash
-npm run build:prod
+# 无构建步骤, 源码即产物
 npm run package
 # 生成: x-agent-extension.zip
 ```

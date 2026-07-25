@@ -5,20 +5,20 @@ Author: X-Agent Team
 Version: 1.0.0
 """
 
-from typing import Any, Dict, List, Optional
-from datetime import datetime, UTC
+from datetime import UTC, datetime
+from typing import Any
 
 
 class CodeReview:
     """Code review plugin"""
 
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: dict[str, Any]):
         """Initialize plugin with configuration"""
         self.config = config
         self.name = "Code Review"
         self.version = "1.0.0"
 
-    def execute(self, action: str, params: Dict[str, Any]) -> Dict[str, Any]:
+    def execute(self, action: str, params: dict[str, Any]) -> dict[str, Any]:
         """Execute plugin action"""
         if action == "review_code":
             return self._review_code(params)
@@ -35,7 +35,7 @@ class CodeReview:
         else:
             raise ValueError(f"Unknown action: {action}")
 
-    def _review_code(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _review_code(self, params: dict[str, Any]) -> dict[str, Any]:
         """Review code"""
         code = params.get("code", "")
         language = params.get("language", "python")
@@ -54,7 +54,7 @@ class CodeReview:
             },
         }
 
-    def _check_style(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _check_style(self, params: dict[str, Any]) -> dict[str, Any]:
         """Check code style"""
         code = params.get("code", "")
         style_guide = params.get("style_guide", "pep8")
@@ -74,10 +74,10 @@ class CodeReview:
             },
         }
 
-    def _detect_issues(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _detect_issues(self, params: dict[str, Any]) -> dict[str, Any]:
         """Detect code issues"""
         code = params.get("code", "")
-        severity = params.get("min_severity", "warning")
+        params.get("min_severity", "warning")
 
         if not code:
             raise ValueError("code is required")
@@ -100,7 +100,7 @@ class CodeReview:
             ],
         }
 
-    def _suggest_improvements(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _suggest_improvements(self, params: dict[str, Any]) -> dict[str, Any]:
         """Suggest code improvements"""
         code = params.get("code", "")
 
@@ -123,7 +123,7 @@ class CodeReview:
             ],
         }
 
-    def _check_security(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _check_security(self, params: dict[str, Any]) -> dict[str, Any]:
         """Check for security issues"""
         code = params.get("code", "")
 
@@ -145,7 +145,7 @@ class CodeReview:
             },
         }
 
-    def _generate_report(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _generate_report(self, params: dict[str, Any]) -> dict[str, Any]:
         """Generate code review report"""
         code = params.get("code", "")
         title = params.get("title", "Code Review Report")
@@ -193,13 +193,13 @@ class CodeReview:
 plugin = None
 
 
-def initialize(config: Dict[str, Any]) -> None:
+def initialize(config: dict[str, Any]) -> None:
     """Initialize plugin"""
     global plugin
     plugin = CodeReview(config)
 
 
-def execute(action: str, params: Dict[str, Any]) -> Dict[str, Any]:
+def execute(action: str, params: dict[str, Any]) -> dict[str, Any]:
     """Execute plugin action"""
     if plugin is None:
         raise RuntimeError("Plugin not initialized")

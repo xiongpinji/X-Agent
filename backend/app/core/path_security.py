@@ -4,7 +4,6 @@ SECURITY: All file operations must use these utilities to validate paths.
 """
 
 from pathlib import Path
-from typing import Optional
 
 from backend.app.api.errors import api_error
 from backend.app.core.contracts import ErrorCode
@@ -13,7 +12,7 @@ from backend.app.core.contracts import ErrorCode
 class PathSecurityValidator:
     """Validates file paths to prevent directory traversal attacks."""
 
-    def __init__(self, sandbox_root: Optional[Path] = None):
+    def __init__(self, sandbox_root: Path | None = None):
         """Initialize path validator with optional sandbox root.
 
         Args:
@@ -84,7 +83,7 @@ class PathSecurityValidator:
             raise api_error(
                 400,
                 ErrorCode.VALIDATION_ERROR,
-                f"Invalid path: {str(e)}",
+                f"Invalid path: {e!s}",
                 details={"path": str(path)},
             )
 
@@ -157,10 +156,10 @@ class PathSecurityValidator:
 
 
 # Global path validator instance
-_path_validator: Optional[PathSecurityValidator] = None
+_path_validator: PathSecurityValidator | None = None
 
 
-def get_path_validator(sandbox_root: Optional[Path] = None) -> PathSecurityValidator:
+def get_path_validator(sandbox_root: Path | None = None) -> PathSecurityValidator:
     """Get or create global path validator instance.
 
     Args:

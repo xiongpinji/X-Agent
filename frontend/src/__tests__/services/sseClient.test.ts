@@ -2,7 +2,7 @@
  * SSE Client Tests
  */
 
-import { SSEClient, StreamEvent } from '../services/sseClient';
+import { SSEClient } from '../services/sseClient';
 
 describe('SSEClient', () => {
   let client: SSEClient;

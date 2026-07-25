@@ -17,8 +17,9 @@ import functools
 import logging
 import random
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable, TypeVar, overload
+from typing import Any, TypeVar
 
 from backend.app.core.exceptions import XAgentException
 

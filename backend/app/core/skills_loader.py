@@ -2,17 +2,16 @@
 
 from __future__ import annotations
 
+import asyncio
 import importlib
 import importlib.util
 import logging
 import sys
-from pathlib import Path
-from typing import Any, Callable
 from dataclasses import dataclass, field
-from datetime import datetime, UTC
-import asyncio
+from datetime import UTC, datetime
+from typing import Any
 
-from .skills_core import SkillMetadata, SkillProtocol, SkillStatus
+from .skills_core import SkillMetadata
 
 logger = logging.getLogger(__name__)
 
@@ -95,7 +94,7 @@ class SkillLoader:
                 return True, None
 
             except Exception as e:
-                error = f"Error loading skill {skill_name}: {str(e)}"
+                error = f"Error loading skill {skill_name}: {e!s}"
                 self._record_error(skill_name, "exception", error)
                 logger.error(error, exc_info=True)
                 return False, error
@@ -126,7 +125,7 @@ class SkillLoader:
                 return True, None
 
             except Exception as e:
-                error = f"Error unloading skill {skill_name}: {str(e)}"
+                error = f"Error unloading skill {skill_name}: {e!s}"
                 logger.error(error, exc_info=True)
                 return False, error
 
@@ -221,7 +220,7 @@ class SkillLoader:
         parts1 = [int(x) for x in v1.split(".")]
         parts2 = [int(x) for x in v2.split(".")]
 
-        for p1, p2 in zip(parts1, parts2):
+        for p1, p2 in zip(parts1, parts2, strict=False):
             if p1 < p2:
                 return -1
             if p1 > p2:
@@ -259,8 +258,8 @@ def get_skill_loader() -> SkillLoader:
 
 
 __all__ = [
-    "SkillLoader",
-    "SkillLoadError",
     "DependencyInfo",
+    "SkillLoadError",
+    "SkillLoader",
     "get_skill_loader",
 ]

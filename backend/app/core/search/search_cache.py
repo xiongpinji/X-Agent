@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
 import hashlib
 import json
 import time
+from typing import Any
 
 
 class SearchCache:
@@ -18,7 +18,7 @@ class SearchCache:
             ttl: Time to live for cache entries in seconds
         """
         self.ttl = ttl
-        self.cache: Dict[str, Dict[str, Any]] = {}
+        self.cache: dict[str, dict[str, Any]] = {}
 
     def _get_cache_key(self, query: str, search_type: str = "web") -> str:
         """Generate cache key.
@@ -33,7 +33,7 @@ class SearchCache:
         key_str = f"{search_type}:{query}"
         return hashlib.md5(key_str.encode()).hexdigest()
 
-    async def get(self, query: str, search_type: str = "web") -> Optional[List[Dict[str, Any]]]:
+    async def get(self, query: str, search_type: str = "web") -> list[dict[str, Any]] | None:
         """Get cached search results.
 
         Args:
@@ -58,7 +58,7 @@ class SearchCache:
     async def set(
         self,
         query: str,
-        results: List[Dict[str, Any]],
+        results: list[dict[str, Any]],
         search_type: str = "web",
     ) -> None:
         """Cache search results.
@@ -96,7 +96,7 @@ class SearchCache:
 
         return len(expired_keys)
 
-    async def get_stats(self) -> Dict[str, Any]:
+    async def get_stats(self) -> dict[str, Any]:
         """Get cache statistics.
 
         Returns:
@@ -137,7 +137,7 @@ class RedisSearchCache:
         key_str = f"search:{search_type}:{query}"
         return hashlib.md5(key_str.encode()).hexdigest()
 
-    async def get(self, query: str, search_type: str = "web") -> Optional[List[Dict[str, Any]]]:
+    async def get(self, query: str, search_type: str = "web") -> list[dict[str, Any]] | None:
         """Get cached search results.
 
         Args:
@@ -158,7 +158,7 @@ class RedisSearchCache:
     async def set(
         self,
         query: str,
-        results: List[Dict[str, Any]],
+        results: list[dict[str, Any]],
         search_type: str = "web",
     ) -> None:
         """Cache search results.
@@ -175,7 +175,7 @@ class RedisSearchCache:
         """Clear all cache entries."""
         await self.redis.flushdb()
 
-    async def get_stats(self) -> Dict[str, Any]:
+    async def get_stats(self) -> dict[str, Any]:
         """Get cache statistics.
 
         Returns:

@@ -7,7 +7,7 @@ import typer
 from backend.app.core.channels.gateway import GatewayService
 from backend.app.dependencies import get_workflow_scheduler
 from cli.console import print_error, print_json, print_success
-from cli.main import get_current_config
+from cli.state import get_current_config
 
 gateway_app = typer.Typer(
     name="gateway",

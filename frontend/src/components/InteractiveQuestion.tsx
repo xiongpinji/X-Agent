@@ -106,11 +106,12 @@ export const InteractiveQuestion: React.FC<InteractiveQuestionProps> = ({
         if (!question.options.length) return true;
         return question.options.some((opt) => opt.value === value);
 
-      case 'multiple_choice':
+      case 'multiple_choice': {
         if (!Array.isArray(value)) return false;
         if (!question.options.length) return true;
         const validValues = new Set(question.options.map((opt) => opt.value));
         return value.every((v) => validValues.has(v));
+      }
 
       case 'text_input':
         if (typeof value !== 'string') return false;
@@ -324,7 +325,7 @@ export const InteractiveQuestions: React.FC<InteractiveQuestionsProps> = ({
   onQuestionsUpdate,
 }) => {
   const [questions, setQuestions] = useState<InteractiveQuestion[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [, setLoading] = useState(false);
 
   const fetchPendingQuestions = async () => {
     try {

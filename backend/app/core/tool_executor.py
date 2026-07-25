@@ -5,15 +5,16 @@ from __future__ import annotations
 
 import asyncio
 import time
-from typing import Any, Callable, TypeVar
+from collections.abc import Callable
+from typing import Any, TypeVar
 
+from backend.app.core.tool_registry import ToolCatalog
 from backend.app.core.tool_schema import (
     ToolCallInput,
     ToolCallOutput,
-    ToolSchema,
     ToolRiskLevel,
+    ToolSchema,
 )
-from backend.app.core.tool_registry import ToolCatalog
 
 T = TypeVar("T")
 
@@ -89,9 +90,8 @@ class ToolWrapper:
                     raise ToolPermissionError(tool_name, scope)
 
         # 审批检查
-        if tool.requires_approval:
-            if not self.approval_checker(tool_name, tool.risk_level):
-                raise ToolApprovalRequired(tool_name, tool.risk_level)
+        if tool.requires_approval and not self.approval_checker(tool_name, tool.risk_level):
+            raise ToolApprovalRequired(tool_name, tool.risk_level)
 
         # 参数验证
         validation_error = self._validate_parameters(tool, tool_input.arguments)

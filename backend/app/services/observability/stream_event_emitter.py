@@ -6,21 +6,21 @@ Provides utilities for emitting events to the streaming API during agent executi
 
 from __future__ import annotations
 
-import asyncio
 import logging
-from typing import Any, Callable, Optional
+from collections.abc import Callable
 from functools import wraps
+from typing import Any
 
 from backend.app.api.streaming import (
-    event_store,
-    MessageEvent,
-    ToolCallEvent,
-    ToolResultEvent,
-    ProgressEvent,
     ErrorEvent,
     LogEvent,
+    MessageEvent,
     MetricEvent,
+    ProgressEvent,
     TaskStatusEvent,
+    ToolCallEvent,
+    ToolResultEvent,
+    event_store,
 )
 
 logger = logging.getLogger(__name__)
@@ -88,7 +88,7 @@ class StreamEventEmitter:
         current_step: str,
         total_steps: int,
         completed_steps: int,
-        estimated_time_remaining: Optional[int] = None,
+        estimated_time_remaining: int | None = None,
     ) -> None:
         """Emit a progress event."""
         event = ProgressEvent(
@@ -109,7 +109,7 @@ class StreamEventEmitter:
         self,
         error_code: str,
         error_message: str,
-        error_details: Optional[dict[str, Any]] = None,
+        error_details: dict[str, Any] | None = None,
         recoverable: bool = False,
     ) -> None:
         """Emit an error event."""
@@ -160,7 +160,7 @@ class StreamEventEmitter:
         task_id: str,
         status: str,
         title: str = "",
-        details: Optional[dict[str, Any]] = None,
+        details: dict[str, Any] | None = None,
     ) -> None:
         """Emit a task status event."""
         event = TaskStatusEvent(
@@ -221,7 +221,7 @@ def stream_event(event_type: str) -> Callable:
 
 
 # Global emitter instance (should be created per run)
-_emitter: Optional[StreamEventEmitter] = None
+_emitter: StreamEventEmitter | None = None
 
 
 def get_emitter(run_id: str) -> StreamEventEmitter:

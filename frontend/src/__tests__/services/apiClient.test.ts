@@ -2,7 +2,7 @@
  * API Client Tests
  */
 
-import { APIClient, AgentRun, Task } from '../services/apiClient';
+import { APIClient, AgentRun } from '../services/apiClient';
 
 describe('APIClient', () => {
   let client: APIClient;
@@ -65,7 +65,7 @@ describe('APIClient', () => {
 
     expect(result).toEqual(mockRun);
     expect(global.fetch).toHaveBeenCalledWith(
-      '/api/v1/agent/runs/test-run-1',
+      '/api/v1/agents/runs/test-run-1',
       expect.any(Object)
     );
   });

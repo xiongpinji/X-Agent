@@ -9,11 +9,12 @@ Provides utilities to detect and fix N+1 query patterns:
 
 from __future__ import annotations
 
-import time
-from dataclasses import dataclass, field
-from typing import Any, Callable, TypeVar, Generic, Optional
-from collections import defaultdict
 import asyncio
+import time
+from collections import defaultdict
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from typing import Any, Generic, TypeVar
 
 T = TypeVar("T")
 K = TypeVar("K")
@@ -310,7 +311,7 @@ def track_query(query_type: str):
                     query_id, query_type, execution_time, row_count
                 )
                 return result
-            except Exception as e:
+            except Exception:
                 optimizer.analyzer.end_query(query_id, query_type, 0, 0)
                 raise
 
@@ -333,7 +334,7 @@ def track_query(query_type: str):
                     query_id, query_type, execution_time, row_count
                 )
                 return result
-            except Exception as e:
+            except Exception:
                 optimizer.analyzer.end_query(query_id, query_type, 0, 0)
                 raise
 

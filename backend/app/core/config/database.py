@@ -1,6 +1,5 @@
 """Database configuration module."""
 
-from typing import Optional
 
 from pydantic import Field, field_validator
 
@@ -88,7 +87,7 @@ class DatabaseConfig(BaseConfig):
         default="data/audit.jsonl",
         description="Path to audit store file (JSONL format)",
     )
-    audit_hmac_secret: Optional[str] = Field(
+    audit_hmac_secret: str | None = Field(
         default=None,
         description="HMAC secret for audit log integrity verification",
     )
@@ -105,7 +104,7 @@ class DatabaseConfig(BaseConfig):
 
     @field_validator("audit_hmac_secret")
     @classmethod
-    def validate_audit_hmac_secret(cls, v: Optional[str], info) -> Optional[str]:
+    def validate_audit_hmac_secret(cls, v: str | None, info) -> str | None:
         """Enforce audit HMAC secret in production."""
         if not v and info.data.get("environment") == Environment.PRODUCTION:
             raise ValueError(

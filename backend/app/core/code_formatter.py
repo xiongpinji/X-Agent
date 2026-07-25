@@ -5,9 +5,8 @@ This module provides code formatting and optimization capabilities for multiple
 programming languages including Python, JavaScript/TypeScript, and Java.
 """
 
-from typing import List, Dict, Any, Optional
-import re
 import logging
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -111,10 +110,7 @@ class CodeFormatter:
                 indent_level = max(0, indent_level - 1)
 
             # Add indentation
-            if stripped:
-                formatted_line = '  ' * indent_level + stripped
-            else:
-                formatted_line = ''
+            formatted_line = '  ' * indent_level + stripped if stripped else ''
 
             formatted_lines.append(formatted_line)
 
@@ -150,10 +146,7 @@ class CodeFormatter:
                 indent_level = max(0, indent_level - 1)
 
             # Add indentation
-            if stripped:
-                formatted_line = '    ' * indent_level + stripped
-            else:
-                formatted_line = ''
+            formatted_line = '    ' * indent_level + stripped if stripped else ''
 
             formatted_lines.append(formatted_line)
 

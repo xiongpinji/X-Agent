@@ -295,7 +295,7 @@ class S3WormExporter(AuditExporter):
         self._client = client
         self._boto3: Any = None
         try:
-            import boto3  # type: ignore
+            import boto3  # type: ignore[import-untyped]
 
             self._boto3 = boto3
         except ImportError:
@@ -370,15 +370,32 @@ class AuditShipper:
         ...
         await shipper.stop()           # 尽量排空队列后退出
 
+    简化 API (P1-04)::
+
+        shipper = AuditShipper(webhook_url="https://example.com/audit")
+        ok = await shipper.ship(event_dict)
+        count = await shipper.ship_batch([event1, event2])
+
     ``enqueue`` 面向异步请求处理线程调用(asyncio 单线程语义);
     队列满时不阻塞, 直接落入死信并计 dropped。
     """
 
     def __init__(
         self,
-        exporters: list[AuditExporter],
+        exporters: list[AuditExporter] | None = None,
         config: AuditShipperConfig | None = None,
+        *,
+        webhook_url: str | None = None,
+        syslog_host: str | None = None,
+        syslog_port: int = 514,
     ) -> None:
+        # 支持简化构造: AuditShipper(webhook_url=..., syslog_host=...)
+        if exporters is None:
+            exporters = []
+            if webhook_url:
+                exporters.append(WebhookExporter(webhook_url))
+            if syslog_host:
+                exporters.append(SyslogExporter(syslog_host, port=syslog_port))
         self.exporters = list(exporters)
         self.config = config or AuditShipperConfig()
         self._queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue(
@@ -527,6 +544,77 @@ class AuditShipper:
                     )
         except OSError:
             logger.exception("audit shipper failed to write dead letter file %s", path)
+
+    # ------------------------------------------------------- simplified API (P1-04)
+
+    async def ship(self, event: dict[str, Any]) -> bool:
+        """直接发送单条审计事件到所有已配置通道(同步等待结果)。
+
+        返回 True 表示至少一个通道发送成功; 无通道或全部失败返回 False。
+        失败时写入死信队列(如已配置)。
+        """
+        if not self.exporters:
+            return self.enqueue(event)
+        success = False
+        for exporter in self.exporters:
+            try:
+                await exporter.send([event])
+                self._stats["sent"] += 1
+                success = True
+            except Exception as exc:
+                logger.warning(
+                    "audit ship single event via %s failed: %s", exporter.name, exc
+                )
+                self._exporter_errors[exporter.name] = (
+                    self._exporter_errors.get(exporter.name, 0) + 1
+                )
+        if not success:
+            self._stats["failed_batches"] += 1
+            self._dead_letter([event], reason="ship_all_exporters_failed")
+        return success
+
+    async def ship_batch(self, events: list[dict[str, Any]]) -> int:
+        """批量发送审计事件, 返回成功发送的事件总数。
+
+        对每个通道尝试发送整批; 通道失败时按指数退避重试,
+        最终失败写入死信队列。
+        """
+        if not events:
+            return 0
+        if not self.exporters:
+            # 无通道时入队(后台 worker 处理)
+            count = 0
+            for event in events:
+                if self.enqueue(event):
+                    count += 1
+            return count
+
+        total_sent = 0
+        for exporter in self.exporters:
+            delay = self.config.retry_base_delay_seconds
+            sent = False
+            for attempt in range(1, self.config.retry_attempts + 1):
+                try:
+                    await exporter.send(events)
+                    total_sent += len(events)
+                    sent = True
+                    break
+                except Exception as exc:
+                    self._exporter_errors[exporter.name] = (
+                        self._exporter_errors.get(exporter.name, 0) + 1
+                    )
+                    logger.warning(
+                        "audit ship_batch via %s failed (attempt %d/%d): %s",
+                        exporter.name, attempt, self.config.retry_attempts, exc,
+                    )
+                    if attempt < self.config.retry_attempts:
+                        await asyncio.sleep(delay)
+                        delay = min(delay * 2, self.config.retry_max_delay_seconds)
+            if not sent:
+                self._stats["failed_batches"] += 1
+                self._dead_letter(events, reason=f"{exporter.name}_batch_exhausted")
+        self._stats["sent"] += total_sent
+        return total_sent
 
     # ----------------------------------------------------------------- misc
 

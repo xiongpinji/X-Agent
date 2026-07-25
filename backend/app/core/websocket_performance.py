@@ -11,11 +11,12 @@ Optimizes WebSocket connections for real-time communication:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
 import time
 from dataclasses import dataclass, field
-from typing import Any, Callable, Optional
+from typing import Any
 
 logger = logging.getLogger("xagent.websocket_perf")
 
@@ -82,12 +83,12 @@ class WebSocketConnectionPool:
             if connection_id in self.connections:
                 del self.connections[connection_id]
 
-    async def get_connection(self, connection_id: str) -> Optional[Any]:
+    async def get_connection(self, connection_id: str) -> Any | None:
         """Get connection from pool."""
         async with self._lock:
             return self.connections.get(connection_id)
 
-    async def broadcast_message(self, message: dict[str, Any], exclude_id: Optional[str] = None) -> int:
+    async def broadcast_message(self, message: dict[str, Any], exclude_id: str | None = None) -> int:
         """Broadcast message to all connections."""
         sent_count = 0
         async with self._lock:
@@ -108,7 +109,7 @@ class WebSocketConnectionPool:
 
         return sent_count
 
-    async def get_metrics(self, connection_id: str) -> Optional[WebSocketMetrics]:
+    async def get_metrics(self, connection_id: str) -> WebSocketMetrics | None:
         """Get metrics for a connection."""
         async with self._lock:
             return self.metrics.get(connection_id)
@@ -153,13 +154,11 @@ class MessageBatcher:
 
     async def get_batch(self) -> list[dict[str, Any]]:
         """Get pending messages as a batch."""
-        try:
+        with contextlib.suppress(asyncio.TimeoutError):
             await asyncio.wait_for(
                 self.batch_event.wait(),
                 timeout=self.batch_timeout_ms / 1000,
             )
-        except asyncio.TimeoutError:
-            pass
 
         async with self._lock:
             batch = self.pending_messages.copy()

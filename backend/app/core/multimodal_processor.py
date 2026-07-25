@@ -7,14 +7,10 @@ multiple modalities of input and generating multimodal outputs.
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, List, Optional, Union
-
-from pydantic import BaseModel, Field
-
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -38,9 +34,9 @@ class Image:
     """Image data."""
     data: bytes
     media_type: MediaType
-    width: Optional[int] = None
-    height: Optional[int] = None
-    metadata: Dict[str, Any] = None
+    width: int | None = None
+    height: int | None = None
+    metadata: dict[str, Any] = None
 
     def __post_init__(self):
         """Post-initialization processing."""
@@ -53,10 +49,10 @@ class Audio:
     """Audio data."""
     data: bytes
     media_type: MediaType
-    duration: Optional[float] = None
-    sample_rate: Optional[int] = None
-    channels: Optional[int] = None
-    metadata: Dict[str, Any] = None
+    duration: float | None = None
+    sample_rate: int | None = None
+    channels: int | None = None
+    metadata: dict[str, Any] = None
 
     def __post_init__(self):
         """Post-initialization processing."""
@@ -69,11 +65,11 @@ class Video:
     """Video data."""
     data: bytes
     media_type: MediaType
-    duration: Optional[float] = None
-    fps: Optional[float] = None
-    width: Optional[int] = None
-    height: Optional[int] = None
-    metadata: Dict[str, Any] = None
+    duration: float | None = None
+    fps: float | None = None
+    width: int | None = None
+    height: int | None = None
+    metadata: dict[str, Any] = None
 
     def __post_init__(self):
         """Post-initialization processing."""
@@ -85,12 +81,12 @@ class Video:
 class ImageUnderstanding:
     """Understanding of an image."""
     description: str
-    objects: List[str]
-    text: Optional[str] = None
-    colors: List[str] = None
+    objects: list[str]
+    text: str | None = None
+    colors: list[str] = None
     composition: str = ""
     confidence: float = 0.0
-    metadata: Dict[str, Any] = None
+    metadata: dict[str, Any] = None
 
     def __post_init__(self):
         """Post-initialization processing."""
@@ -106,8 +102,8 @@ class AudioTranscription:
     text: str
     language: str
     confidence: float
-    segments: List[Dict[str, Any]] = None
-    metadata: Dict[str, Any] = None
+    segments: list[dict[str, Any]] = None
+    metadata: dict[str, Any] = None
 
     def __post_init__(self):
         """Post-initialization processing."""
@@ -121,11 +117,11 @@ class AudioTranscription:
 class VideoAnalysis:
     """Analysis of a video."""
     description: str
-    key_frames: List[ImageUnderstanding]
-    transcription: Optional[AudioTranscription] = None
-    scenes: List[str] = None
+    key_frames: list[ImageUnderstanding]
+    transcription: AudioTranscription | None = None
+    scenes: list[str] = None
     duration: float = 0.0
-    metadata: Dict[str, Any] = None
+    metadata: dict[str, Any] = None
 
     def __post_init__(self):
         """Post-initialization processing."""
@@ -149,7 +145,7 @@ class MultimodalProcessor:
         self.vision_client = vision_client
         self.audio_client = audio_client
         self.video_client = video_client
-        self.processing_history: List[Dict[str, Any]] = []
+        self.processing_history: list[dict[str, Any]] = []
 
     async def process_image(
         self,
@@ -184,14 +180,14 @@ class MultimodalProcessor:
             "result": understanding,
         })
 
-        logger.info(f"Image processing completed")
+        logger.info("Image processing completed")
 
         return understanding
 
     async def process_audio(
         self,
         audio: Audio,
-        language: Optional[str] = None,
+        language: str | None = None,
     ) -> AudioTranscription:
         """Transcribe and analyze audio.
 
@@ -222,7 +218,7 @@ class MultimodalProcessor:
             "result": transcription,
         })
 
-        logger.info(f"Audio processing completed")
+        logger.info("Audio processing completed")
 
         return transcription
 
@@ -286,17 +282,17 @@ class MultimodalProcessor:
             "result": analysis,
         })
 
-        logger.info(f"Video processing completed")
+        logger.info("Video processing completed")
 
         return analysis
 
     async def generate_image(
         self,
         prompt: str,
-        style: Optional[str] = None,
+        style: str | None = None,
         size: str = "1024x1024",
         num_images: int = 1,
-    ) -> List[Image]:
+    ) -> list[Image]:
         """Generate images from text prompt.
 
         Args:
@@ -379,7 +375,7 @@ class MultimodalProcessor:
             "language": language,
         })
 
-        logger.info(f"Generated audio")
+        logger.info("Generated audio")
 
         return audio
 
@@ -419,7 +415,7 @@ class MultimodalProcessor:
 
         return description
 
-    async def detect_objects(self, image: Image) -> List[Dict[str, Any]]:
+    async def detect_objects(self, image: Image) -> list[dict[str, Any]]:
         """Detect objects in image.
 
         Args:
@@ -440,7 +436,7 @@ class MultimodalProcessor:
 
         return objects
 
-    async def classify_image(self, image: Image) -> Dict[str, float]:
+    async def classify_image(self, image: Image) -> dict[str, float]:
         """Classify image into categories.
 
         Args:
@@ -462,7 +458,7 @@ class MultimodalProcessor:
 
         return classifications
 
-    async def detect_faces(self, image: Image) -> List[Dict[str, Any]]:
+    async def detect_faces(self, image: Image) -> list[dict[str, Any]]:
         """Detect faces in image.
 
         Args:
@@ -514,7 +510,7 @@ class MultimodalProcessor:
         self,
         video: Video,
         num_frames: int = 5,
-    ) -> List[Image]:
+    ) -> list[Image]:
         """Extract frames from video.
 
         Args:
@@ -545,9 +541,9 @@ class MultimodalProcessor:
     async def combine_modalities(
         self,
         text: str,
-        image: Optional[Image] = None,
-        audio: Optional[Audio] = None,
-    ) -> Dict[str, Any]:
+        image: Image | None = None,
+        audio: Audio | None = None,
+    ) -> dict[str, Any]:
         """Combine multiple modalities for comprehensive understanding.
 
         Args:
@@ -588,7 +584,7 @@ class MultimodalProcessor:
 
         return result
 
-    def get_processing_history(self) -> List[Dict[str, Any]]:
+    def get_processing_history(self) -> list[dict[str, Any]]:
         """Get processing history.
 
         Returns:
@@ -596,7 +592,7 @@ class MultimodalProcessor:
         """
         return self.processing_history.copy()
 
-    def get_processing_stats(self) -> Dict[str, Any]:
+    def get_processing_stats(self) -> dict[str, Any]:
         """Get processing statistics.
 
         Returns:

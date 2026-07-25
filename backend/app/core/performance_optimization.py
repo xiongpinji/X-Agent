@@ -12,15 +12,16 @@ X-Agent 后端性能全面优化模块
 from __future__ import annotations
 
 import asyncio
+import functools
+import gc
 import logging
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime, UTC, timedelta
-from typing import Any, Callable, Optional, TypeVar, Generic
-from collections import defaultdict
-import functools
+from datetime import UTC, datetime, timedelta
+from typing import Any, Generic, TypeVar
+
 import psutil
-import gc
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +58,7 @@ class ResponseCache:
         self.misses = 0
         self.lock = asyncio.Lock()
 
-    async def get(self, key: str) -> Optional[Any]:
+    async def get(self, key: str) -> Any | None:
         """获取缓存值"""
         async with self.lock:
             if key in self.cache:
@@ -99,7 +100,7 @@ class ResponseCache:
     async def invalidate(self, pattern: str) -> int:
         """按模式失效缓存"""
         async with self.lock:
-            keys_to_delete = [k for k in self.cache.keys() if pattern in k]
+            keys_to_delete = [k for k in self.cache if pattern in k]
             for key in keys_to_delete:
                 self.current_size_bytes -= self.cache[key].size_bytes
                 del self.cache[key]
@@ -119,7 +120,7 @@ class ResponseCache:
         }
 
 
-def cached_response(ttl_seconds: int = 300, key_builder: Optional[Callable] = None):
+def cached_response(ttl_seconds: int = 300, key_builder: Callable | None = None):
     """API响应缓存装饰器"""
     def decorator(func: Callable) -> Callable:
         cache = ResponseCache()
@@ -130,7 +131,7 @@ def cached_response(ttl_seconds: int = 300, key_builder: Optional[Callable] = No
             if key_builder:
                 cache_key = key_builder(*args, **kwargs)
             else:
-                cache_key = f"{func.__name__}:{str(args)}:{str(kwargs)}"
+                cache_key = f"{func.__name__}:{args!s}:{kwargs!s}"
 
             # 尝试从缓存获取
             cached_value = await cache.get(cache_key)
@@ -187,6 +188,7 @@ class QueryOptimizer:
                 "p95_ms": 0,
                 "p99_ms": 0,
                 "slow_queries": 0,
+                "total_queries": 0,
             }
 
         return {
@@ -253,9 +255,9 @@ class BatchLoader(Generic[K, T]):
 
             try:
                 results = await self.batch_fn(keys)
-                result_map = {key: result for key, result in zip(keys, results)}
+                result_map = dict(zip(keys, results, strict=False))
 
-                for key, future in zip(keys, futures):
+                for key, future in zip(keys, futures, strict=False):
                     result = result_map.get(key)
                     self._cache[key] = result
                     if not future.done():
@@ -280,14 +282,14 @@ class BatchLoader(Generic[K, T]):
 class MultiLayerCache:
     """多层缓存系统 - L1内存缓存 + L2 Redis缓存"""
 
-    def __init__(self, redis_client: Optional[Any] = None, l1_max_size_mb: int = 50):
+    def __init__(self, redis_client: Any | None = None, l1_max_size_mb: int = 50):
         self.l1_cache = ResponseCache(max_size_mb=l1_max_size_mb)
         self.redis_client = redis_client
         self.l1_hits = 0
         self.l2_hits = 0
         self.misses = 0
 
-    async def get(self, key: str) -> Optional[Any]:
+    async def get(self, key: str) -> Any | None:
         """获取值 - 先查L1，再查L2"""
         # L1缓存
         value = await self.l1_cache.get(key)
@@ -423,7 +425,7 @@ class OptimizedConnectionPool:
                             self._available.get(),
                             timeout=self._timeout,
                         )
-                    except asyncio.TimeoutError:
+                    except TimeoutError:
                         logger.error("获取连接超时")
                         self._stats.errors += 1
                         raise

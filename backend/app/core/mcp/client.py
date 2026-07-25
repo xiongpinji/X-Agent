@@ -19,11 +19,12 @@ enable_cache=...)``；``MCPConnectionPool`` / ``MCPResultCache`` 原样保留。
 from __future__ import annotations
 
 import asyncio
-import logging
-from typing import Any, Dict, List, Optional, Tuple
-from datetime import datetime, timedelta
+import contextlib
 import hashlib
 import json
+import logging
+from datetime import datetime, timedelta
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +76,7 @@ class MCPConnectionPool:
         self.active_connections -= 1
         self.semaphore.release()
 
-    def get_stats(self) -> Dict[str, int]:
+    def get_stats(self) -> dict[str, int]:
         """Get connection pool statistics."""
         return {
             "active": self.active_connections,
@@ -94,15 +95,15 @@ class MCPResultCache:
             ttl_seconds: Time-to-live for cached results in seconds
         """
         self.ttl_seconds = ttl_seconds
-        self.cache: Dict[str, Tuple[Any, datetime]] = {}
+        self.cache: dict[str, tuple[Any, datetime]] = {}
 
-    def _make_key(self, tool_name: str, args: Dict[str, Any]) -> str:
+    def _make_key(self, tool_name: str, args: dict[str, Any]) -> str:
         """Generate cache key from tool name and arguments."""
         args_str = json.dumps(args, sort_keys=True, default=str)
         key_str = f"{tool_name}:{args_str}"
         return hashlib.md5(key_str.encode()).hexdigest()
 
-    def get(self, tool_name: str, args: Dict[str, Any]) -> Optional[Any]:
+    def get(self, tool_name: str, args: dict[str, Any]) -> Any | None:
         """Get cached result if available and not expired.
 
         Args:
@@ -124,7 +125,7 @@ class MCPResultCache:
         logger.debug(f"Cache hit for {tool_name}")
         return result
 
-    def set(self, tool_name: str, args: Dict[str, Any], result: Any) -> None:
+    def set(self, tool_name: str, args: dict[str, Any], result: Any) -> None:
         """Cache a tool result.
 
         Args:
@@ -139,7 +140,7 @@ class MCPResultCache:
         """Clear all cached results."""
         self.cache.clear()
 
-    def get_stats(self) -> Dict[str, int]:
+    def get_stats(self) -> dict[str, int]:
         """Get cache statistics."""
         return {"size": len(self.cache), "ttl_seconds": self.ttl_seconds}
 
@@ -165,7 +166,7 @@ class MCPClient:
 
     def __init__(
         self,
-        server_url: Optional[str] = None,
+        server_url: str | None = None,
         timeout: float = 30.0,
         max_retries: int = 3,
         retry_backoff_factor: float = 2.0,
@@ -174,11 +175,11 @@ class MCPClient:
         enable_cache: bool = True,
         *,
         transport: str = "http",
-        command: Optional[str] = None,
-        args: Optional[List[str]] = None,
-        env: Optional[Dict[str, str]] = None,
-        cwd: Optional[str] = None,
-        headers: Optional[Dict[str, str]] = None,
+        command: str | None = None,
+        args: list[str] | None = None,
+        env: dict[str, str] | None = None,
+        cwd: str | None = None,
+        headers: dict[str, str] | None = None,
     ):
         transport = (transport or "http").lower()
         if transport not in {"http", "stdio"}:
@@ -209,7 +210,7 @@ class MCPClient:
         self._session: Any = None  # mcp.ClientSession
         self._exit_stack: Any = None  # contextlib.AsyncExitStack
         self._connect_lock = asyncio.Lock()
-        self._server_info: Dict[str, Any] = {}
+        self._server_info: dict[str, Any] = {}
 
         logger.info(
             "MCPClient initialized: transport=%s, target=%s, retries=%s, cache=%s",
@@ -278,10 +279,8 @@ class MCPClient:
                 init_result = await session.initialize()
             except BaseException as exc:
                 # 握手/传输失败：完整回滚，不允许留下半连接状态。
-                try:
+                with contextlib.suppress(BaseException):
                     await stack.aclose()
-                except BaseException:  # noqa: BLE001 - 清理失败不掩盖原始错误
-                    pass
                 if isinstance(exc, asyncio.CancelledError):
                     # SDK 内部的 anyio task group 在连接失败清理时会把
                     # CancelledError 抛给调用方——这是传输失败而非调用方
@@ -311,7 +310,7 @@ class MCPClient:
     # MCP RPC
     # ------------------------------------------------------------------
 
-    async def list_tools(self) -> List[Dict[str, Any]]:
+    async def list_tools(self) -> list[dict[str, Any]]:
         """列出远端 MCP server 的全部工具（自动处理分页）。
 
         Returns:
@@ -320,10 +319,10 @@ class MCPClient:
             ``tags`` / ``annotations``。
         """
 
-        async def _list() -> List[Dict[str, Any]]:
+        async def _list() -> list[dict[str, Any]]:
             await self.connect()
-            tools: List[Dict[str, Any]] = []
-            cursor: Optional[str] = None
+            tools: list[dict[str, Any]] = []
+            cursor: str | None = None
             while True:
                 result = await self._session.list_tools(cursor=cursor)
                 for tool in result.tools:
@@ -335,7 +334,7 @@ class MCPClient:
 
         return await self._rpc_with_retry("tools/list", _list)
 
-    async def call_tool(self, tool_name: str, args: Dict[str, Any]) -> Any:
+    async def call_tool(self, tool_name: str, args: dict[str, Any]) -> Any:
         """调用远端 MCP 工具。
 
         Returns:
@@ -371,8 +370,8 @@ class MCPClient:
         return output
 
     async def call_tools_batch(
-        self, calls: List[Tuple[str, Dict[str, Any]]]
-    ) -> List[Any]:
+        self, calls: list[tuple[str, dict[str, Any]]]
+    ) -> list[Any]:
         """Call multiple tools concurrently.
 
         Args:
@@ -402,13 +401,13 @@ class MCPClient:
             logger.error(f"Health check failed: {e}")
             return False
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Get client statistics.
 
         Returns:
             Dictionary with connection pool, cache and transport stats
         """
-        stats: Dict[str, Any] = {
+        stats: dict[str, Any] = {
             "connection_pool": self.connection_pool.get_stats(),
             "transport": self.transport,
             "connected": self.connected,
@@ -433,12 +432,12 @@ class MCPClient:
         if stack is not None:
             try:
                 await stack.aclose()
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 # anyio 取消作用域要求 __aexit__ 与 __aenter__ 处于同一任务；
                 # 跨任务关闭时记录告警而不是让关停流程崩溃。
                 logger.warning(f"MCP client close raised (suppressed): {e}")
 
-    async def __aenter__(self) -> "MCPClient":
+    async def __aenter__(self) -> MCPClient:
         """Async context manager entry."""
         await self.connect()
         return self
@@ -462,7 +461,7 @@ class MCPClient:
                 return await fn()
             except ValueError:
                 raise
-            except Exception as e:  # noqa: BLE001 - 传输/协议错误均可重试
+            except Exception as e:
                 last_error = e
                 await self._reset_connection()
                 if attempt < self.max_retries:
@@ -486,7 +485,7 @@ class MCPClient:
         raise last_error  # type: ignore[misc]
 
     @staticmethod
-    def _normalize_tool(tool: Any) -> Dict[str, Any]:
+    def _normalize_tool(tool: Any) -> dict[str, Any]:
         """官方 ``mcp.types.Tool`` → 发现层使用的 snake_case 字典。"""
         annotations = getattr(tool, "annotations", None)
         return {
@@ -505,7 +504,7 @@ class MCPClient:
     @staticmethod
     def _result_text(result: Any) -> str:
         """提取 CallToolResult 的文本内容（用于错误消息）。"""
-        texts: List[str] = []
+        texts: list[str] = []
         for block in getattr(result, "content", None) or []:
             if getattr(block, "type", None) == "text":
                 texts.append(getattr(block, "text", ""))
@@ -522,7 +521,7 @@ class MCPClient:
         structured = getattr(result, "structuredContent", None)
         if structured is not None:
             return structured
-        parts: List[Any] = []
+        parts: list[Any] = []
         for block in getattr(result, "content", None) or []:
             if getattr(block, "type", None) == "text":
                 parts.append(getattr(block, "text", ""))

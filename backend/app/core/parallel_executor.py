@@ -9,15 +9,16 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Callable, Coroutine
 from dataclasses import dataclass, field
-from datetime import datetime, UTC
-from enum import Enum
-from typing import Optional, Any, Dict, List, Callable, Coroutine
+from datetime import UTC, datetime
+from enum import StrEnum
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
-class TaskStatus(str, Enum):
+class TaskStatus(StrEnum):
     """Status of a task."""
 
     PENDING = "pending"
@@ -35,9 +36,9 @@ class Task:
     name: str
     coroutine: Callable[[], Coroutine[Any, Any, Any]]
     priority: int = 0
-    timeout_seconds: Optional[int] = None
+    timeout_seconds: int | None = None
     retry_count: int = 0
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -47,10 +48,10 @@ class TaskResult:
     task_id: str
     name: str
     status: TaskStatus
-    result: Optional[Any] = None
-    error: Optional[str] = None
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
+    result: Any | None = None
+    error: str | None = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
     duration_seconds: float = 0.0
     attempts: int = 1
 
@@ -74,9 +75,9 @@ class ParallelExecutor:
 
     async def execute_parallel(
         self,
-        tasks: List[Task],
-        max_concurrent: Optional[int] = None,
-    ) -> List[TaskResult]:
+        tasks: list[Task],
+        max_concurrent: int | None = None,
+    ) -> list[TaskResult]:
         """
         Execute multiple tasks in parallel.
 
@@ -88,7 +89,7 @@ class ParallelExecutor:
             List of task results
         """
         max_concurrent = max_concurrent or self.max_concurrent
-        results: Dict[str, TaskResult] = {}
+        results: dict[str, TaskResult] = {}
         semaphore = asyncio.Semaphore(max_concurrent)
 
         async def execute_with_semaphore(task: Task) -> TaskResult:
@@ -116,10 +117,10 @@ class ParallelExecutor:
 
     async def execute_with_dependencies(
         self,
-        tasks: List[Task],
-        dependencies: Dict[str, List[str]],
-        max_concurrent: Optional[int] = None,
-    ) -> List[TaskResult]:
+        tasks: list[Task],
+        dependencies: dict[str, list[str]],
+        max_concurrent: int | None = None,
+    ) -> list[TaskResult]:
         """
         Execute tasks considering dependencies.
 
@@ -132,7 +133,7 @@ class ParallelExecutor:
             List of task results
         """
         max_concurrent = max_concurrent or self.max_concurrent
-        results: Dict[str, TaskResult] = {}
+        results: dict[str, TaskResult] = {}
         task_map = {task.task_id: task for task in tasks}
         semaphore = asyncio.Semaphore(max_concurrent)
 
@@ -228,7 +229,7 @@ class ParallelExecutor:
                 )
                 return result
 
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 result.error = f"Timeout after {task.timeout_seconds}s"
                 if attempt < task.retry_count:
                     self.logger.warning(
@@ -264,7 +265,7 @@ class ParallelExecutor:
 
         return result
 
-    def _has_cycle(self, dependencies: Dict[str, List[str]]) -> bool:
+    def _has_cycle(self, dependencies: dict[str, list[str]]) -> bool:
         """
         Detect if there's a cycle in dependencies.
 
@@ -291,18 +292,13 @@ class ParallelExecutor:
             rec_stack.remove(node)
             return False
 
-        for node in dependencies:
-            if node not in visited:
-                if visit(node):
-                    return True
-
-        return False
+        return any(node not in visited and visit(node) for node in dependencies)
 
     async def execute_batch(
         self,
-        task_batches: List[List[Task]],
-        max_concurrent: Optional[int] = None,
-    ) -> List[List[TaskResult]]:
+        task_batches: list[list[Task]],
+        max_concurrent: int | None = None,
+    ) -> list[list[TaskResult]]:
         """
         Execute tasks in sequential batches.
 
@@ -323,8 +319,8 @@ class ParallelExecutor:
 
     def get_execution_stats(
         self,
-        results: List[TaskResult],
-    ) -> Dict[str, Any]:
+        results: list[TaskResult],
+    ) -> dict[str, Any]:
         """
         Get statistics about task execution.
 

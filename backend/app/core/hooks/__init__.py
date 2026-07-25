@@ -16,6 +16,18 @@ Public API:
 
 from __future__ import annotations
 
+from backend.app.core.hooks.config import (
+    DEFAULT_CONFIG_RELPATH,
+    HookDefinition,
+    HooksConfig,
+)
+from backend.app.core.hooks.executors import (
+    CommandHook,
+    PythonHook,
+    build_hook,
+    load_hooks_from_config,
+    register_hooks_from_config,
+)
 from backend.app.core.hooks.manager import (
     HookManager,
     get_hook_manager,
@@ -29,35 +41,23 @@ from backend.app.core.hooks.types import (
     HookEvent,
     HookResult,
 )
-from backend.app.core.hooks.config import (
-    DEFAULT_CONFIG_RELPATH,
-    HookDefinition,
-    HooksConfig,
-)
-from backend.app.core.hooks.executors import (
-    CommandHook,
-    PythonHook,
-    build_hook,
-    load_hooks_from_config,
-    register_hooks_from_config,
-)
 
 __all__ = [
+    "DEFAULT_CONFIG_RELPATH",
+    "CommandHook",
     "Hook",
     "HookAction",
     "HookContext",
     "HookDecision",
-    "HookEvent",
-    "HookResult",
-    "HookManager",
-    "get_hook_manager",
-    "set_hook_manager",
-    "DEFAULT_CONFIG_RELPATH",
     "HookDefinition",
+    "HookEvent",
+    "HookManager",
+    "HookResult",
     "HooksConfig",
-    "CommandHook",
     "PythonHook",
     "build_hook",
+    "get_hook_manager",
     "load_hooks_from_config",
     "register_hooks_from_config",
+    "set_hook_manager",
 ]

@@ -12,14 +12,11 @@ Features:
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from enum import StrEnum
-from typing import Any, Callable, Optional
-from collections import defaultdict
-
-from pydantic import BaseModel
-
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -51,8 +48,8 @@ class AggregationConfig:
     deduplicate: bool = True
     validate_results: bool = True
     merge_contexts: bool = True
-    custom_merge_fn: Optional[Callable] = None
-    custom_conflict_fn: Optional[Callable] = None
+    custom_merge_fn: Callable | None = None
+    custom_conflict_fn: Callable | None = None
     timeout_seconds: int = 300
 
 
@@ -100,7 +97,7 @@ class ResultAggregator:
     - Validating aggregated results
     """
 
-    def __init__(self, config: Optional[AggregationConfig] = None):
+    def __init__(self, config: AggregationConfig | None = None):
         """
         Initialize the result aggregator.
 
@@ -114,7 +111,7 @@ class ResultAggregator:
     async def collect_results(
         self,
         results: list[Any],
-        config: Optional[AggregationConfig] = None,
+        config: AggregationConfig | None = None,
     ) -> AggregatedResult:
         """
         Collect and aggregate results from multiple agents.
@@ -228,7 +225,7 @@ class ResultAggregator:
     async def resolve_conflicts(
         self,
         results: list[Any],
-        config: Optional[AggregationConfig] = None,
+        config: AggregationConfig | None = None,
     ) -> dict[str, Any]:
         """
         Detect and resolve conflicts in results.
@@ -469,7 +466,6 @@ class ResultAggregator:
 
     async def _call_async(self, fn: Callable, *args, **kwargs) -> Any:
         """Call function, handling both sync and async."""
-        import asyncio
         import inspect
 
         if inspect.iscoroutinefunction(fn):
@@ -520,7 +516,7 @@ class ResultAggregatorFactory:
     @staticmethod
     def create_custom_aggregator(
         merge_fn: Callable,
-        conflict_fn: Optional[Callable] = None,
+        conflict_fn: Callable | None = None,
     ) -> ResultAggregator:
         """Create aggregator with custom merge function."""
         config = AggregationConfig(

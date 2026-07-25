@@ -4,30 +4,27 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime, timedelta
-from typing import Any, Optional
+from typing import Any
 
 from sqlalchemy import (
-    Column,
-    String,
-    DateTime,
-    Integer,
-    Boolean,
-    Text,
     JSON,
+    Boolean,
+    Column,
+    DateTime,
     Index,
-    create_engine,
-    select,
+    Integer,
+    String,
+    Text,
     and_,
-    or_,
+    create_engine,
 )
-from sqlalchemy.orm import declarative_base, Session, sessionmaker
+from sqlalchemy.orm import declarative_base, sessionmaker
 from sqlalchemy.pool import NullPool
 
 from backend.app.core.audit_enhanced import (
+    AuditAnalytics,
     AuditLogRecord,
     AuditSearchCriteria,
-    AuditAnalytics,
-    ComplianceReport,
 )
 
 Base = declarative_base()
@@ -454,7 +451,7 @@ class PostgresAuditStore:
             records_to_archive = session.query(AuditLogTable).filter(
                 and_(
                     AuditLogTable.created_at < cutoff_date,
-                    AuditLogTable.archived == False,
+                    not AuditLogTable.archived,
                 )
             ).all()
 

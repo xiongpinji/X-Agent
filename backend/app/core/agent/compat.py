@@ -6,31 +6,34 @@ Provides deprecation warnings for migration path.
 """
 
 import warnings
-from typing import Any, Awaitable, Callable
+from collections.abc import Awaitable, Callable
+from typing import Any
 
+from backend.app.core.agent.coordinator import AgentCoordinator
+from backend.app.core.agent.executor import ToolExecutor
+from backend.app.core.agent.memory_manager import MemoryManager
+from backend.app.core.agent.planner import TaskPlanner
+from backend.app.core.agent.state_manager import StateManager
+from backend.app.core.agent_runtime_adapter import AgentRuntimeAdapter
+from backend.app.core.agent_state_manager import AgentStateManager
+from backend.app.core.audit import AuditStore
+from backend.app.core.browser import BrowserAutomationStore
 from backend.app.core.contracts import (
-    RunContext, AgentRunResponse, TraceEvent, ToolCallRecord,
-    ExecutionFrame, TaskFrame, RecoveryFrame,
+    AgentRunResponse,
+    RecoveryFrame,
+    RunContext,
+    TraceEvent,
 )
+from backend.app.core.desktop import DesktopAutomationStore
 from backend.app.core.llm import LLMRouter
 from backend.app.core.memory import MemorySystem
-from backend.app.core.tools import ToolRegistry
-from backend.app.core.browser import BrowserAutomationStore
-from backend.app.core.desktop import DesktopAutomationStore
-from backend.app.core.tracing import TraceStore, tracer as default_tracer
-from backend.app.core.audit import AuditStore
-from backend.app.core.runs import RunStore
 from backend.app.core.orchestrator import Orchestrator
-from backend.app.core.verification import VerificationEngine
 from backend.app.core.repair_loop import RepairLoop
-from backend.app.core.agent_state_manager import AgentStateManager
-from backend.app.core.agent_runtime_adapter import AgentRuntimeAdapter
-
-from backend.app.core.agent.executor import ToolExecutor
-from backend.app.core.agent.planner import TaskPlanner
-from backend.app.core.agent.memory_manager import MemoryManager
-from backend.app.core.agent.state_manager import StateManager
-from backend.app.core.agent.coordinator import AgentCoordinator
+from backend.app.core.runs import RunStore
+from backend.app.core.tools import ToolRegistry
+from backend.app.core.tracing import TraceStore
+from backend.app.core.tracing import tracer as default_tracer
+from backend.app.core.verification import VerificationEngine
 
 
 class AgentLoopCompat:

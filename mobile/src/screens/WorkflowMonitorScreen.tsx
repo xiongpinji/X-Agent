@@ -7,12 +7,10 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  ProgressBarAndroid,
-  ProgressViewIOS,
-  Platform,
   ActivityIndicator,
 } from 'react-native';
 import { WorkflowRun, WorkflowNode } from '../types';
+import { ProgressBar } from '../components/ProgressBar';
 
 interface WorkflowMonitorScreenProps {
   navigation: any;
@@ -23,7 +21,7 @@ export const WorkflowMonitorScreen: React.FC<WorkflowMonitorScreenProps> = ({
   navigation,
   route,
 }) => {
-  const { workflowId } = route.params;
+  const { workflowId } = route.params ?? {};
   const [workflow, setWorkflow] = useState<WorkflowRun | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -55,19 +53,7 @@ export const WorkflowMonitorScreen: React.FC<WorkflowMonitorScreenProps> = ({
     return (
       <View style={styles.progressContainer}>
         <Text style={styles.progressLabel}>Progress: {workflow.progress}%</Text>
-        {Platform.OS === 'android' ? (
-          <ProgressBarAndroid
-            styleAttr="Horizontal"
-            indeterminate={false}
-            progress={progress}
-            style={styles.progressBar}
-          />
-        ) : (
-          <ProgressViewIOS
-            progress={progress}
-            style={styles.progressBar}
-          />
-        )}
+        <ProgressBar progress={progress} style={styles.progressBar} />
       </View>
     );
   };
@@ -76,7 +62,7 @@ export const WorkflowMonitorScreen: React.FC<WorkflowMonitorScreenProps> = ({
     <View key={node.id} style={styles.nodeItem}>
       <View style={styles.nodeHeader}>
         <Text style={styles.nodeName}>{node.name}</Text>
-        <View style={[styles.nodeStatus, styles[`nodeStatus_${node.status}`]]}>
+        <View style={[styles.nodeStatus, (styles as any)[`nodeStatus_${node.status}`]]}>
           <Text style={styles.nodeStatusText}>{node.status}</Text>
         </View>
       </View>
@@ -109,7 +95,7 @@ export const WorkflowMonitorScreen: React.FC<WorkflowMonitorScreenProps> = ({
     <ScrollView style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Workflow Monitor</Text>
-        <View style={[styles.statusBadge, styles[`status_${workflow.status}`]]}>
+        <View style={[styles.statusBadge, (styles as any)[`status_${workflow.status}`]]}>
           <Text style={styles.statusText}>{workflow.status}</Text>
         </View>
       </View>

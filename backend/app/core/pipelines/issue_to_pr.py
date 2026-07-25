@@ -18,10 +18,10 @@ from __future__ import annotations
 
 import logging
 import re
-from dataclasses import asdict
-from dataclasses import dataclass, field
+from collections.abc import Awaitable, Callable
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, Awaitable, Callable, Optional
+from typing import Any
 
 from backend.app.core.git_ops import GitOperations
 from backend.app.core.github_integration import GitHubAPIClient, IssueEvent
@@ -43,10 +43,10 @@ class PipelineResult:
 
     issue_number: int
     status: str  # "pr_opened" | "no_changes" | "tests_failed" | "fix_failed" | "error"
-    pr_url: Optional[str] = None
-    branch: Optional[str] = None
+    pr_url: str | None = None
+    branch: str | None = None
     test_output: str = ""
-    error: Optional[str] = None
+    error: str | None = None
     steps: list[str] = field(default_factory=list)
 
     def log(self, msg: str) -> None:
@@ -59,8 +59,8 @@ class PipelineConfig:
     """Configuration for the pipeline."""
 
     test_command: str = "pytest -q"
-    install_command: Optional[str] = "pip install -r requirements.txt"
-    base_branch_override: Optional[str] = None
+    install_command: str | None = "pip install -r requirements.txt"
+    base_branch_override: str | None = None
     bot_name: str = "X-Agent Bot"
     bot_email: str = "bot@xagent.dev"
     sandbox_image: str = "python:3.11-slim"
@@ -268,7 +268,7 @@ class IssueToPRPipeline:
         self,
         github: GitHubAPIClient,
         fix_runner: FixRunner,
-        config: Optional[PipelineConfig] = None,
+        config: PipelineConfig | None = None,
     ):
         self._github = github
         self._fix_runner = fix_runner

@@ -1,13 +1,14 @@
 import React, { useEffect, useState } from 'react'
 import { useAppStore } from '@/store/appStore'
 import { apiClient, Memory } from '@/services/api'
+import { useI18n } from '@/i18n/context'
 import { Search, Plus, Trash2, Edit2, Tag } from 'lucide-react'
 import clsx from 'clsx'
 
 export const MemoryPage: React.FC = () => {
-  const { theme, memories, setMemories, isLoading, setLoading, setError } = useAppStore()
+  const { theme, memories, setMemories, isLoading: _isLoading, setLoading, setError } = useAppStore()
+  const { t } = useI18n()
   const [searchQuery, setSearchQuery] = useState('')
-  const [selectedMemory, setSelectedMemory] = useState<Memory | null>(null)
   const [showModal, setShowModal] = useState(false)
   const [filteredMemories, setFilteredMemories] = useState<Memory[]>([])
 
@@ -46,17 +47,6 @@ export const MemoryPage: React.FC = () => {
     }
   }
 
-  const handleDeleteMemory = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this memory?')) return
-
-    try {
-      await apiClient.deleteMemory(id)
-      setMemories(memories.filter((m) => m.id !== id))
-    } catch (error) {
-      setError(error instanceof Error ? error.message : 'Failed to delete memory')
-    }
-  }
-
   return (
     <div className={clsx(
       'p-8',
@@ -70,24 +60,21 @@ export const MemoryPage: React.FC = () => {
               'text-3xl font-bold mb-2',
               theme === 'dark' ? 'text-white' : 'text-slate-900'
             )}>
-              Memory Management
+              {t('memory.title', 'Memory Management')}
             </h1>
             <p className={clsx(
               'text-sm',
               theme === 'dark' ? 'text-slate-400' : 'text-slate-600'
             )}>
-              Browse and manage your agent memories
+              {t('memory.subtitle', 'Browse and manage your agent memories')}
             </p>
           </div>
           <button
-            onClick={() => {
-              setSelectedMemory(null)
-              setShowModal(true)
-            }}
+            onClick={() => setShowModal(true)}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
           >
             <Plus size={20} />
-            New Memory
+            {t('memory.newMemory', 'New Memory')}
           </button>
         </div>
 
@@ -99,12 +86,13 @@ export const MemoryPage: React.FC = () => {
               ? 'bg-slate-900 border border-slate-700'
               : 'bg-white border border-slate-300'
           )}>
-            <Search size={20} className={theme === 'dark' ? 'text-slate-400' : 'text-slate-600'} />
+            <Search size={20} className={theme === 'dark' ? 'text-slate-400' : 'text-slate-600'} aria-hidden="true" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search memories..."
+              placeholder={t('memory.searchPlaceholder', 'Search memories...')}
+              aria-label={t('memory.searchMemories', 'Search memories')}
               className={clsx(
                 'flex-1 bg-transparent outline-none text-sm',
                 theme === 'dark' ? 'text-white placeholder-slate-500' : 'text-slate-900 placeholder-slate-400'
@@ -124,43 +112,30 @@ export const MemoryPage: React.FC = () => {
                 'text-lg font-medium mb-2',
                 theme === 'dark' ? 'text-slate-400' : 'text-slate-500'
               )}>
-                {searchQuery ? 'No memories found' : 'No memories yet'}
+                {searchQuery ? t('memory.noFound', 'No memories found') : t('memory.noYet', 'No memories yet')}
               </p>
               <p className={clsx(
                 'text-sm',
                 theme === 'dark' ? 'text-slate-500' : 'text-slate-600'
               )}>
-                {searchQuery ? 'Try a different search query' : 'Create a new memory to get started'}
+                {searchQuery ? t('memory.tryDifferent', 'Try a different search query') : t('memory.createToStart', 'Create a new memory to get started')}
               </p>
             </div>
           ) : (
             filteredMemories.map((memory) => (
-              <MemoryCard
-                key={memory.id}
-                memory={memory}
-                onEdit={() => {
-                  setSelectedMemory(memory)
-                  setShowModal(true)
-                }}
-                onDelete={() => handleDeleteMemory(memory.id)}
-              />
+              <MemoryCard key={memory.id} memory={memory} />
             ))
           )}
         </div>
       </div>
 
-      {/* Memory Modal */}
+      {/* Memory Modal (create only — the backend has no update endpoint) */}
       {showModal && (
         <MemoryModal
-          memory={selectedMemory}
-          onClose={() => {
-            setShowModal(false)
-            setSelectedMemory(null)
-          }}
+          onClose={() => setShowModal(false)}
           onSave={() => {
             loadMemories()
             setShowModal(false)
-            setSelectedMemory(null)
           }}
         />
       )}
@@ -170,12 +145,15 @@ export const MemoryPage: React.FC = () => {
 
 interface MemoryCardProps {
   memory: Memory
-  onEdit: () => void
-  onDelete: () => void
 }
 
-const MemoryCard: React.FC<MemoryCardProps> = ({ memory, onEdit, onDelete }) => {
+const MemoryCard: React.FC<MemoryCardProps> = ({ memory }) => {
   const { theme } = useAppStore()
+  const { t } = useI18n()
+
+  // The backend exposes no PUT/DELETE /memory/{id} endpoints, so edit and
+  // delete are disabled and explicitly marked "coming soon".
+  const comingSoon = t('common.comingSoon', 'Coming soon')
 
   return (
     <div className={clsx(
@@ -190,7 +168,7 @@ const MemoryCard: React.FC<MemoryCardProps> = ({ memory, onEdit, onDelete }) => 
             'text-sm font-medium mb-2',
             theme === 'dark' ? 'text-slate-400' : 'text-slate-600'
           )}>
-            {memory.type}
+            {t('memory.layer', 'Layer')} {memory.layer}
           </p>
           <p className={clsx(
             'text-sm line-clamp-2',
@@ -201,26 +179,28 @@ const MemoryCard: React.FC<MemoryCardProps> = ({ memory, onEdit, onDelete }) => 
         </div>
         <div className="flex items-center gap-2 ml-4">
           <button
-            onClick={onEdit}
+            disabled
             className={clsx(
-              'p-2 rounded-lg transition-colors',
+              'p-2 rounded-lg transition-colors opacity-50 cursor-not-allowed',
               theme === 'dark'
-                ? 'hover:bg-slate-800 text-slate-400'
-                : 'hover:bg-slate-200 text-slate-600'
+                ? 'text-slate-400'
+                : 'text-slate-600'
             )}
-            title="Edit"
+            title={`${t('memory.editMemory', 'Edit')} (${comingSoon})`}
+            aria-label={`${t('memory.editMemory', 'Edit')} (${comingSoon})`}
           >
             <Edit2 size={16} />
           </button>
           <button
-            onClick={onDelete}
+            disabled
             className={clsx(
-              'p-2 rounded-lg transition-colors',
+              'p-2 rounded-lg transition-colors opacity-50 cursor-not-allowed',
               theme === 'dark'
-                ? 'hover:bg-red-900/20 text-red-400'
-                : 'hover:bg-red-100 text-red-600'
+                ? 'text-red-400'
+                : 'text-red-600'
             )}
-            title="Delete"
+            title={`${t('memory.deleteMemory', 'Delete')} (${comingSoon})`}
+            aria-label={`${t('memory.deleteMemory', 'Delete')} (${comingSoon})`}
           >
             <Trash2 size={16} />
           </button>
@@ -240,7 +220,7 @@ const MemoryCard: React.FC<MemoryCardProps> = ({ memory, onEdit, onDelete }) => 
                   : 'bg-blue-100 text-blue-700'
               )}
             >
-              <Tag size={12} />
+              <Tag size={12} aria-hidden="true" />
               {tag}
             </span>
           ))}
@@ -252,7 +232,7 @@ const MemoryCard: React.FC<MemoryCardProps> = ({ memory, onEdit, onDelete }) => 
         'mt-4 pt-4 border-t text-xs',
         theme === 'dark' ? 'border-slate-700 text-slate-500' : 'border-slate-200 text-slate-600'
       )}>
-        <p>Created: {new Date(memory.createdAt).toLocaleString()}</p>
+        <p>{t('memory.createdAt', 'Created')}: {new Date(memory.createdAt).toLocaleString()}</p>
         {memory.relevance !== undefined && (
           <p>Relevance: {(memory.relevance * 100).toFixed(0)}%</p>
         )}
@@ -262,31 +242,25 @@ const MemoryCard: React.FC<MemoryCardProps> = ({ memory, onEdit, onDelete }) => 
 }
 
 interface MemoryModalProps {
-  memory: Memory | null
   onClose: () => void
   onSave: () => void
 }
 
-const MemoryModal: React.FC<MemoryModalProps> = ({ memory, onClose, onSave }) => {
+const MemoryModal: React.FC<MemoryModalProps> = ({ onClose, onSave }) => {
   const { theme, isLoading, setLoading, setError } = useAppStore()
-  const [content, setContent] = useState(memory?.content || '')
-  const [type, setType] = useState(memory?.type || 'note')
-  const [tags, setTags] = useState(memory?.tags?.join(', ') || '')
+  const { t } = useI18n()
+  const [content, setContent] = useState('')
+  const [importance, setImportance] = useState(0.5)
+  const [tags, setTags] = useState('')
 
   const handleSave = async () => {
     try {
       setLoading(true)
-      const data = {
+      await apiClient.createMemory({
         content,
-        type,
-        tags: tags.split(',').map((t) => t.trim()).filter(Boolean),
-      }
-
-      if (memory) {
-        await apiClient.updateMemory(memory.id, data)
-      } else {
-        await apiClient.createMemory(data)
-      }
+        importance,
+        tags: tags.split(',').map((tag) => tag.trim()).filter(Boolean),
+      })
 
       onSave()
     } catch (error) {
@@ -297,7 +271,12 @@ const MemoryModal: React.FC<MemoryModalProps> = ({ memory, onClose, onSave }) =>
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+    <div
+      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+      role="dialog"
+      aria-modal="true"
+      aria-label={t('memory.newMemory', 'New Memory')}
+    >
       <div className={clsx(
         'rounded-lg p-6 max-w-md w-full mx-4',
         theme === 'dark' ? 'bg-slate-900' : 'bg-white'
@@ -306,42 +285,22 @@ const MemoryModal: React.FC<MemoryModalProps> = ({ memory, onClose, onSave }) =>
           'text-2xl font-bold mb-4',
           theme === 'dark' ? 'text-white' : 'text-slate-900'
         )}>
-          {memory ? 'Edit Memory' : 'New Memory'}
+          {t('memory.newMemory', 'New Memory')}
         </h2>
 
         <div className="space-y-4 mb-6">
           <div>
-            <label className={clsx(
-              'block text-sm font-medium mb-2',
-              theme === 'dark' ? 'text-slate-300' : 'text-slate-700'
-            )}>
-              Type
-            </label>
-            <select
-              value={type}
-              onChange={(e) => setType(e.target.value)}
+            <label
+              htmlFor="memory-content"
               className={clsx(
-                'w-full px-3 py-2 rounded-lg text-sm',
-                theme === 'dark'
-                  ? 'bg-slate-800 text-white border border-slate-700'
-                  : 'bg-slate-50 text-slate-900 border border-slate-300'
+                'block text-sm font-medium mb-2',
+                theme === 'dark' ? 'text-slate-300' : 'text-slate-700'
               )}
             >
-              <option value="note">Note</option>
-              <option value="context">Context</option>
-              <option value="insight">Insight</option>
-              <option value="reference">Reference</option>
-            </select>
-          </div>
-
-          <div>
-            <label className={clsx(
-              'block text-sm font-medium mb-2',
-              theme === 'dark' ? 'text-slate-300' : 'text-slate-700'
-            )}>
-              Content
+              {t('memory.content', 'Content')}
             </label>
             <textarea
+              id="memory-content"
               value={content}
               onChange={(e) => setContent(e.target.value)}
               className={clsx(
@@ -351,18 +310,44 @@ const MemoryModal: React.FC<MemoryModalProps> = ({ memory, onClose, onSave }) =>
                   : 'bg-slate-50 text-slate-900 border border-slate-300'
               )}
               rows={6}
-              placeholder="Enter memory content..."
+              placeholder={t('memory.contentPlaceholder', 'Enter memory content...')}
             />
           </div>
 
           <div>
-            <label className={clsx(
-              'block text-sm font-medium mb-2',
-              theme === 'dark' ? 'text-slate-300' : 'text-slate-700'
-            )}>
-              Tags (comma-separated)
+            <label
+              htmlFor="memory-importance"
+              className={clsx(
+                'block text-sm font-medium mb-2',
+                theme === 'dark' ? 'text-slate-300' : 'text-slate-700'
+              )}
+            >
+              {t('memory.importance', 'Importance')} ({importance.toFixed(2)})
             </label>
             <input
+              id="memory-importance"
+              type="range"
+              min={0}
+              max={1}
+              step={0.05}
+              value={importance}
+              onChange={(e) => setImportance(Number(e.target.value))}
+              className="w-full"
+            />
+          </div>
+
+          <div>
+            <label
+              htmlFor="memory-tags"
+              className={clsx(
+                'block text-sm font-medium mb-2',
+                theme === 'dark' ? 'text-slate-300' : 'text-slate-700'
+              )}
+            >
+              {t('memory.tags', 'Tags')}
+            </label>
+            <input
+              id="memory-tags"
               type="text"
               value={tags}
               onChange={(e) => setTags(e.target.value)}
@@ -387,14 +372,14 @@ const MemoryModal: React.FC<MemoryModalProps> = ({ memory, onClose, onSave }) =>
                 : 'bg-slate-200 hover:bg-slate-300 text-slate-900'
             )}
           >
-            Cancel
+            {t('common.cancel', 'Cancel')}
           </button>
           <button
             onClick={handleSave}
             disabled={isLoading || !content.trim()}
             className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50"
           >
-            {isLoading ? 'Saving...' : 'Save'}
+            {isLoading ? t('common.loading', 'Saving...') : t('common.save', 'Save')}
           </button>
         </div>
       </div>

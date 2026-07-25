@@ -6,26 +6,26 @@ from __future__ import annotations
 import logging
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
-from typing import Optional
 from uuid import uuid4
 
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.app.core.notifications import notification_service
+from backend.app.core.session import SessionManager
+from backend.app.core.subscription_manager import (
+    SubscriptionEvent,
+    get_subscription_manager,
+)
 from backend.app.models.billing import (
+    BillingHistory,
     Invoice,
     InvoiceStatus,
     Payment,
     PaymentStatus,
+    PricingTier,
     Subscription,
     SubscriptionStatus,
-    PricingTier,
-    BillingHistory,
-)
-from backend.app.core.session import SessionManager
-from backend.app.core.subscription_manager import (
-    get_subscription_manager,
-    SubscriptionEvent,
 )
 
 logger = logging.getLogger(__name__)
@@ -42,7 +42,7 @@ class SubscriptionAutomation:
             stmt = select(Subscription).where(
                 and_(
                     Subscription.status == SubscriptionStatus.ACTIVE,
-                    Subscription.auto_renew == True,
+                    Subscription.auto_renew,
                     Subscription.renewal_date <= now,
                 )
             )
@@ -102,7 +102,7 @@ class SubscriptionAutomation:
                     )
                     logger.error(
                         f"自动续费异常: subscription={subscription.id}, "
-                        f"error={str(e)}"
+                        f"error={e!s}"
                     )
 
             await session.commit()
@@ -251,7 +251,7 @@ class SubscriptionAutomation:
 
                 try:
                     # 重试支付
-                    # TODO: 调用支付提供商重试
+                    # NOTE: Requires real payment SDK integration (Stripe/PayPal)
                     retry_count += 1
 
                     # 更新重试次数
@@ -266,7 +266,7 @@ class SubscriptionAutomation:
 
                 except Exception as e:
                     logger.error(
-                        f"支付重试异常: payment={payment.id}, error={str(e)}"
+                        f"支付重试异常: payment={payment.id}, error={e!s}"
                     )
 
             await session.commit()
@@ -332,7 +332,7 @@ class SubscriptionAutomation:
         invoice: Invoice,
     ) -> dict:
         """处理续费支付"""
-        # TODO: 调用支付提供商处理支付
+        # NOTE: Requires real payment SDK integration (Stripe/PayPal)
         # 这里是简化实现
 
         payment = Payment(
@@ -389,11 +389,15 @@ class SubscriptionAutomation:
             f"days_until_expiration={days_until_expiration}"
         )
 
-        # TODO: 发送邮件/站内信通知
+        await notification_service.send_email(
+            to=subscription.user_id,
+            subject=f"订阅即将到期提醒 ({days_until_expiration}天)",
+            body=f"您的订阅 {subscription.id} 将在 {days_until_expiration} 天后到期，请及时续费。",
+        )
 
 
 # 全局实例
-_subscription_automation: Optional[SubscriptionAutomation] = None
+_subscription_automation: SubscriptionAutomation | None = None
 
 
 def get_subscription_automation() -> SubscriptionAutomation:

@@ -4,8 +4,8 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator
 
 import redis.asyncio as redis
 from sqlalchemy.ext.asyncio import (

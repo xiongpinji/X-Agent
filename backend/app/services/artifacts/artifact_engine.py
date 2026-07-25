@@ -2,17 +2,14 @@
 
 from __future__ import annotations
 
-import json
 import uuid
-from dataclasses import dataclass, field
 from datetime import datetime
-from enum import Enum
-from typing import Any, Optional
+from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
 
-class ArtifactType(str, Enum):
+class ArtifactType(StrEnum):
     """Supported artifact types."""
     HTML = "html"
     REACT = "react"
@@ -26,7 +23,7 @@ class ArtifactType(str, Enum):
     VISUALIZATION = "visualization"
 
 
-class ArtifactStatus(str, Enum):
+class ArtifactStatus(StrEnum):
     """Artifact lifecycle status."""
     DRAFT = "draft"
     PUBLISHED = "published"
@@ -79,11 +76,11 @@ class ArtifactEngine:
         title: str,
         author: str,
         description: str = "",
-        tags: list[str] = None,
+        tags: list[str] | None = None,
         is_public: bool = False,
-        dependencies: list[str] = None,
-        sandbox_config: dict = None,
-        render_config: dict = None,
+        dependencies: list[str] | None = None,
+        sandbox_config: dict | None = None,
+        render_config: dict | None = None,
     ) -> Artifact:
         """Create new artifact.
 
@@ -132,7 +129,7 @@ class ArtifactEngine:
 
         return artifact
 
-    async def get(self, artifact_id: str) -> Optional[Artifact]:
+    async def get(self, artifact_id: str) -> Artifact | None:
         """Get artifact by ID.
 
         Args:
@@ -147,10 +144,10 @@ class ArtifactEngine:
         self,
         artifact_id: str,
         content: str,
-        title: Optional[str] = None,
-        description: Optional[str] = None,
-        tags: Optional[list[str]] = None,
-        author: Optional[str] = None,
+        title: str | None = None,
+        description: str | None = None,
+        tags: list[str] | None = None,
+        author: str | None = None,
         commit_message: str = "",
     ) -> Artifact:
         """Update artifact content and metadata.
@@ -257,8 +254,8 @@ class ArtifactEngine:
     async def list_by_author(
         self,
         author: str,
-        status: Optional[ArtifactStatus] = None,
-        artifact_type: Optional[ArtifactType] = None,
+        status: ArtifactStatus | None = None,
+        artifact_type: ArtifactType | None = None,
         limit: int = 50,
         offset: int = 0,
     ) -> tuple[list[Artifact], int]:
@@ -285,8 +282,8 @@ class ArtifactEngine:
     async def search(
         self,
         query: str,
-        artifact_type: Optional[ArtifactType] = None,
-        tags: Optional[list[str]] = None,
+        artifact_type: ArtifactType | None = None,
+        tags: list[str] | None = None,
         limit: int = 50,
     ) -> list[Artifact]:
         """Search artifacts.

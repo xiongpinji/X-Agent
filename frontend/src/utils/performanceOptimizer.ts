@@ -25,7 +25,7 @@ class PerformanceOptimizer {
   private metrics: Partial<PerformanceMetrics> = {};
   private resourceTimings: ResourceTiming[] = [];
   private observers: Map<string, PerformanceObserver> = new Map();
-  private listeners: Map<string, Set<Function>> = new Map();
+  private listeners: Map<string, Set<(...args: unknown[]) => void>> = new Map();
 
   constructor() {
     this.initializeListeners();
@@ -349,7 +349,7 @@ ${this.generateRecommendations()}
   /**
    * Add event listener
    */
-  on(event: string, callback: Function): void {
+  on(event: string, callback: (...args: unknown[]) => void): void {
     if (!this.listeners.has(event)) {
       this.listeners.set(event, new Set());
     }
@@ -359,7 +359,7 @@ ${this.generateRecommendations()}
   /**
    * Remove event listener
    */
-  off(event: string, callback: Function): void {
+  off(event: string, callback: (...args: unknown[]) => void): void {
     this.listeners.get(event)?.delete(callback);
   }
 

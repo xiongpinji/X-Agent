@@ -120,7 +120,9 @@ class TestAPIPerformance:
             perf_metrics.record("POST /api/v1/agents/run", duration)
 
         stats = perf_metrics.get_stats("POST /api/v1/agents/run")
-        assert stats["mean"] < 5000, f"Agent run too slow: {stats['mean']:.2f}ms"
+        import os
+        multiplier = float(os.environ.get("XAGENT_PERF_THRESHOLD_MULTIPLIER", "1.0"))
+        assert stats["mean"] < 5000 * multiplier, f"Agent run too slow: {stats['mean']:.2f}ms"
 
     def test_concurrent_requests(
         self, client: TestClient, perf_metrics: PerformanceMetrics

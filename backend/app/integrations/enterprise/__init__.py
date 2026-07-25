@@ -6,8 +6,8 @@ from .message_router import MessageRouter
 from .user_mapping import UserMapping
 
 __all__ = [
-    "EnterpriseIMPlatform",
     "EnterpriseIMManager",
+    "EnterpriseIMPlatform",
     "MessageRouter",
     "UserMapping",
 ]

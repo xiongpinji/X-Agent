@@ -4,22 +4,22 @@ Comprehensive tests for stability enhancement modules.
 Tests circuit breaker, degradation, distributed lock, and retry mechanisms.
 """
 
-import pytest
 import time
-from unittest.mock import Mock, patch
+
+import pytest
 
 from backend.app.core.stability_circuit_breaker import (
     CircuitBreaker,
     CircuitBreakerConfig,
-    CircuitBreakerState,
     CircuitBreakerException,
+    CircuitBreakerState,
     get_circuit_breaker_registry,
 )
 from backend.app.core.stability_degradation import (
-    DegradationStrategy,
     DegradationLevel,
-    FeatureStatus,
+    DegradationStrategy,
     FeatureConfig,
+    FeatureStatus,
     get_degradation_strategy,
 )
 from backend.app.core.stability_distributed_lock import (
@@ -28,10 +28,10 @@ from backend.app.core.stability_distributed_lock import (
     get_lock_manager,
 )
 from backend.app.core.stability_retry import (
-    RetryExecutor,
-    RetryConfig,
-    RetryStrategy,
     RetryableException,
+    RetryConfig,
+    RetryExecutor,
+    RetryStrategy,
     get_retry_registry,
 )
 
@@ -59,8 +59,8 @@ class TestCircuitBreaker:
             raise Exception("Test failure")
 
         # Trigger failures
-        for i in range(3):
-            with pytest.raises(Exception):
+        for _i in range(3):
+            with pytest.raises(Exception):  # noqa: B017
                 breaker.call(failing_func)
 
         assert breaker.state == CircuitBreakerState.OPEN
@@ -79,7 +79,7 @@ class TestCircuitBreaker:
             raise Exception("Test failure")
 
         # Open the circuit
-        with pytest.raises(Exception):
+        with pytest.raises(Exception):  # noqa: B017
             breaker.call(failing_func)
 
         # Should reject immediately
@@ -99,7 +99,7 @@ class TestCircuitBreaker:
         breaker = CircuitBreaker(config)
 
         # Open circuit
-        with pytest.raises(Exception):
+        with pytest.raises(Exception):  # noqa: B017
             breaker.call(lambda: 1 / 0)
 
         assert breaker.state == CircuitBreakerState.OPEN

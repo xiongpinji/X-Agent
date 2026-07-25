@@ -12,7 +12,6 @@ import {
   selectOverviewPageData,
   selectRoleCatalogData,
   selectShellUiData,
-  selectTraceData,
   selectWorkflowData,
 } from "./state/consoleSelectors";
 import {
@@ -40,6 +39,8 @@ import { ExecutionOverviewPage } from "./pages/execution/ExecutionOverviewPage";
 import { OrganizationCenterOverviewPage } from "./pages/organization/OrganizationCenterOverviewPage";
 import { MarketplaceOverviewPage } from "./pages/marketplace/MarketplaceOverviewPage";
 import { NavigationOverviewPage } from "./pages/navigation/NavigationOverviewPage";
+import { NavigationSearchPage } from "./pages/navigation/NavigationSearchPage";
+import { NavigationShortcutsPage } from "./pages/navigation/NavigationShortcutsPage";
 import { OrganizationStructurePage } from "./pages/organization/OrganizationStructurePage";
 import { OrganizationRolesPage } from "./pages/organization/OrganizationRolesPage";
 import { OrganizationAuditPage } from "./pages/organization/OrganizationAuditPage";
@@ -236,12 +237,6 @@ export function ConsoleShell() {
               if (actionKey === "open_execution") dispatch({ type: "page/set", payload: "execution_overview" });
               if (actionKey === "open_agents") dispatch({ type: "page/set", payload: "organization_graph" });
             }}
-            onOpenPendingItem={(itemKey) => {
-              if (itemKey === "pending_execution") dispatch({ type: "page/set", payload: "execution_overview" });
-              if (itemKey === "pending_audit") dispatch({ type: "page/set", payload: "audit" });
-              if (itemKey === "pending_tools") dispatch({ type: "page/set", payload: "tools_overview" });
-              if (itemKey === "pending_org") dispatch({ type: "page/set", payload: "org_overview" });
-            }}
           />
         );
       case "create_agent":
@@ -357,9 +352,9 @@ export function ConsoleShell() {
             toolCalls={executionDetailData.toolCalls}
             linkedTitles={executionDetailData.linkedTitles}
             onBack={() => dispatch({ type: "page/set", payload: "execution_overview" })}
-            onOpenRecovery={(runId) => dispatch({ type: "page/set", payload: "execution_recovery" })}
+            onOpenRecovery={(_runId) => dispatch({ type: "page/set", payload: "execution_recovery" })}
             onOpenAudit={(runId) => dispatch({ type: "audit/setSelectedMessage", payload: runId })}
-            onOpenDispatch={(runId) => dispatch({ type: "page/set", payload: "execution_dispatch" })}
+            onOpenDispatch={(_runId) => dispatch({ type: "page/set", payload: "execution_dispatch" })}
           />
         );
       case "execution_recovery":
@@ -371,7 +366,7 @@ export function ConsoleShell() {
             recoverySummary={executionRecoveryData.recoverySummary}
             recommendation={executionRecoveryData.recommendation}
             onBack={() => dispatch({ type: "page/set", payload: "execution_overview" })}
-            onOpenDetail={(runId) => dispatch({ type: "page/set", payload: "execution_detail" })}
+            onOpenDetail={(_runId) => dispatch({ type: "page/set", payload: "execution_detail" })}
             onOpenAudit={(runId) => dispatch({ type: "audit/setSelectedMessage", payload: runId })}
           />
         );
@@ -384,8 +379,8 @@ export function ConsoleShell() {
             reasoning={executionDispatchData.reasoning}
             impact={executionDispatchData.impact}
             onBack={() => dispatch({ type: "page/set", payload: "execution_overview" })}
-            onOpenDetail={(runId) => dispatch({ type: "page/set", payload: "execution_detail" })}
-            onOpenRecovery={(runId) => dispatch({ type: "page/set", payload: "execution_recovery" })}
+            onOpenDetail={(_runId) => dispatch({ type: "page/set", payload: "execution_detail" })}
+            onOpenRecovery={(_runId) => dispatch({ type: "page/set", payload: "execution_recovery" })}
           />
         );
       case "tools_overview":

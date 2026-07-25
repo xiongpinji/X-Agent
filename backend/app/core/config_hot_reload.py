@@ -11,14 +11,15 @@ Implements:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
 import os
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from cryptography.fernet import Fernet
-from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
@@ -131,10 +132,8 @@ class ConfigurationHotReload:
         self._monitoring = False
         if self._monitor_task:
             self._monitor_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._monitor_task
-            except asyncio.CancelledError:
-                pass
         logger.info("Stopped monitoring configuration file")
 
     async def _monitor_loop(self) -> None:

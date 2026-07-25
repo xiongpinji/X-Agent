@@ -11,14 +11,15 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
-from enum import Enum
-from typing import Optional, Any, Callable, List
+from enum import StrEnum
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
-class ErrorType(str, Enum):
+class ErrorType(StrEnum):
     """Types of errors that can occur."""
     NETWORK_ERROR = "network_error"
     TIMEOUT = "timeout"
@@ -31,7 +32,7 @@ class ErrorType(str, Enum):
     UNKNOWN = "unknown"
 
 
-class RecoveryStrategy(str, Enum):
+class RecoveryStrategy(StrEnum):
     """Recovery strategies for errors."""
     RETRY = "retry"
     RELOAD = "reload"
@@ -48,11 +49,11 @@ class ErrorContext:
     error_type: ErrorType
     error_message: str
     timestamp: float
-    page_url: Optional[str] = None
-    page_title: Optional[str] = None
-    screenshot_path: Optional[str] = None
+    page_url: str | None = None
+    page_title: str | None = None
+    screenshot_path: str | None = None
     recovery_attempted: bool = False
-    recovery_strategy: Optional[RecoveryStrategy] = None
+    recovery_strategy: RecoveryStrategy | None = None
     recovery_successful: bool = False
 
 
@@ -70,7 +71,7 @@ class ErrorRecovery:
         """
         self.session_id = session_id
         self.logger = logger
-        self.error_history: List[ErrorContext] = []
+        self.error_history: list[ErrorContext] = []
         self.recovery_handlers: dict[ErrorType, Callable] = {}
         self.max_retries = 3
         self.retry_delay = 2.0
@@ -79,7 +80,7 @@ class ErrorRecovery:
         self,
         page: Any,
         error: Exception,
-        context: Optional[dict] = None,
+        context: dict | None = None,
     ) -> bool:
         """
         Handle an error with automatic recovery.
@@ -122,8 +123,8 @@ class ErrorRecovery:
     async def retry_operation(
         self,
         operation: Callable,
-        max_retries: Optional[int] = None,
-        delay: Optional[float] = None,
+        max_retries: int | None = None,
+        delay: float | None = None,
         backoff: bool = True,
     ) -> Any:
         """

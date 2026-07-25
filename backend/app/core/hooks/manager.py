@@ -196,7 +196,7 @@ class HookManager:
         """
         try:
             return await hook(context)
-        except Exception as exc:  # noqa: BLE001 - hook faults must not crash the agent
+        except Exception as exc:
             name = getattr(hook, "name", repr(hook))
             logger.error(
                 "Hook %s raised for event %s: %s",
@@ -235,7 +235,7 @@ class HookManager:
                 tenant_id=context.tenant_id if context.tenant_id != "default" else None,
             )
             await bus.publish(event)
-        except Exception as exc:  # noqa: BLE001 - observability must never break control flow
+        except Exception as exc:
             logger.debug("Hook observability publish skipped: %s", exc)
 
 

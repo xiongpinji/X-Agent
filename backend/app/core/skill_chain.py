@@ -4,19 +4,17 @@ X-Agent 技能链系统 - 支持技能组合、链式执行、并行执行、条
 
 from __future__ import annotations
 
-import logging
 import asyncio
+import logging
 import uuid
-from typing import Any, Dict, List, Optional, Callable, Union
 from dataclasses import dataclass, field
-from datetime import datetime, UTC
-from enum import Enum
-import json
+from datetime import UTC, datetime
+from enum import StrEnum
+from typing import Any
 
 from .skill_system_v2 import (
-    SkillExecutionContext,
-    SkillExecutionResult,
     ExecutionStatus,
+    SkillExecutionResult,
     get_skill_executor,
     get_skill_registry,
 )
@@ -24,7 +22,7 @@ from .skill_system_v2 import (
 logger = logging.getLogger(__name__)
 
 
-class ChainType(str, Enum):
+class ChainType(StrEnum):
     """链类型"""
     SEQUENTIAL = "sequential"  # 顺序执行
     PARALLEL = "parallel"  # 并行执行
@@ -32,7 +30,7 @@ class ChainType(str, Enum):
     LOOP = "loop"  # 循环执行
 
 
-class LoopType(str, Enum):
+class LoopType(StrEnum):
     """循环类型"""
     FOR = "for"  # 固定次数循环
     WHILE = "while"  # 条件循环
@@ -45,15 +43,15 @@ class ChainStep:
     step_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     name: str = ""
     skill_name: str = ""
-    input_mapping: Dict[str, str] = field(default_factory=dict)  # 输入映射
-    output_mapping: Dict[str, str] = field(default_factory=dict)  # 输出映射
+    input_mapping: dict[str, str] = field(default_factory=dict)  # 输入映射
+    output_mapping: dict[str, str] = field(default_factory=dict)  # 输出映射
     retry_count: int = 0
     retry_delay_ms: int = 1000
     timeout_seconds: int = 300
     skip_on_error: bool = False
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """转换为字典"""
         return {
             "step_id": self.step_id,
@@ -73,10 +71,10 @@ class ChainStep:
 class ConditionalStep:
     """条件步骤"""
     condition: str  # 条件表达式，如 "result.success == true"
-    then_steps: List[ChainStep] = field(default_factory=list)
-    else_steps: List[ChainStep] = field(default_factory=list)
+    then_steps: list[ChainStep] = field(default_factory=list)
+    else_steps: list[ChainStep] = field(default_factory=list)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """转换为字典"""
         return {
             "condition": self.condition,
@@ -93,10 +91,10 @@ class LoopStep:
     loop_condition: str = ""  # WHILE循环条件
     loop_variable: str = "item"  # FOREACH循环变量
     loop_items: str = ""  # FOREACH循环项目来源
-    steps: List[ChainStep] = field(default_factory=list)
+    steps: list[ChainStep] = field(default_factory=list)
     break_on_error: bool = False
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """转换为字典"""
         return {
             "loop_type": self.loop_type.value,
@@ -116,27 +114,22 @@ class SkillChain:
     name: str = ""
     description: str = ""
     chain_type: ChainType = ChainType.SEQUENTIAL
-    steps: List[Union[ChainStep, ConditionalStep, LoopStep]] = field(default_factory=list)
-    input_schema: Dict[str, Any] = field(default_factory=dict)
-    output_schema: Dict[str, Any] = field(default_factory=dict)
+    steps: list[ChainStep | ConditionalStep | LoopStep] = field(default_factory=list)
+    input_schema: dict[str, Any] = field(default_factory=dict)
+    output_schema: dict[str, Any] = field(default_factory=dict)
     timeout_seconds: int = 3600
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """转换为字典"""
         return {
             "chain_id": self.chain_id,
             "name": self.name,
             "description": self.description,
             "chain_type": self.chain_type.value,
-            "steps": [
-                s.to_dict() if isinstance(s, ChainStep)
-                else s.to_dict() if isinstance(s, ConditionalStep)
-                else s.to_dict()
-                for s in self.steps
-            ],
+            "steps": [s.to_dict() for s in self.steps],
             "input_schema": self.input_schema,
             "output_schema": self.output_schema,
             "timeout_seconds": self.timeout_seconds,
@@ -154,13 +147,13 @@ class ChainExecutionContext:
     chain_name: str = ""
     user_id: str = ""
     tenant_id: str = ""
-    input_data: Dict[str, Any] = field(default_factory=dict)
-    output_data: Dict[str, Any] = field(default_factory=dict)
-    step_results: Dict[str, SkillExecutionResult] = field(default_factory=dict)
+    input_data: dict[str, Any] = field(default_factory=dict)
+    output_data: dict[str, Any] = field(default_factory=dict)
+    step_results: dict[str, SkillExecutionResult] = field(default_factory=dict)
     status: ExecutionStatus = ExecutionStatus.PENDING
-    error: Optional[str] = None
-    start_time: Optional[datetime] = None
-    end_time: Optional[datetime] = None
+    error: str | None = None
+    start_time: datetime | None = None
+    end_time: datetime | None = None
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def get_duration_ms(self) -> float:
@@ -169,7 +162,7 @@ class ChainExecutionContext:
             return (self.end_time - self.start_time).total_seconds() * 1000
         return 0.0
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """转换为字典"""
         return {
             "execution_id": self.execution_id,
@@ -200,7 +193,7 @@ class SkillChainExecutor:
         # rather than un-awaited coroutines.
         self.executor = executor
         self.registry = registry
-        self._execution_history: Dict[str, ChainExecutionContext] = {}
+        self._execution_history: dict[str, ChainExecutionContext] = {}
 
     async def _ensure_runtime(self) -> None:
         """Lazily resolve the global async executor/registry if not injected."""
@@ -212,7 +205,7 @@ class SkillChainExecutor:
     async def execute_chain(
         self,
         chain: SkillChain,
-        input_data: Dict[str, Any],
+        input_data: dict[str, Any],
         user_id: str = "",
         tenant_id: str = "",
     ) -> ChainExecutionContext:
@@ -256,7 +249,7 @@ class SkillChainExecutor:
         except Exception as e:
             context.status = ExecutionStatus.FAILED
             context.error = str(e)
-            logger.error(f"Chain execution failed: {str(e)}", exc_info=True)
+            logger.error(f"Chain execution failed: {e!s}", exc_info=True)
 
         finally:
             context.end_time = datetime.now(UTC)
@@ -305,7 +298,7 @@ class SkillChainExecutor:
 
         results = await asyncio.gather(*[t[1] for t in tasks], return_exceptions=True)
 
-        for (step_id, _), result in zip(tasks, results):
+        for (step_id, _), result in zip(tasks, results, strict=False):
             if isinstance(result, Exception):
                 context.step_results[step_id] = SkillExecutionResult(
                     success=False,
@@ -342,7 +335,7 @@ class SkillChainExecutor:
     async def _execute_step(
         self,
         step: ChainStep,
-        input_data: Dict[str, Any],
+        input_data: dict[str, Any],
         context: ChainExecutionContext,
     ) -> SkillExecutionResult:
         """执行单个步骤"""
@@ -363,7 +356,7 @@ class SkillChainExecutor:
     async def _execute_conditional_step(
         self,
         step: ConditionalStep,
-        input_data: Dict[str, Any],
+        input_data: dict[str, Any],
         context: ChainExecutionContext,
     ) -> None:
         """执行条件步骤"""
@@ -382,7 +375,7 @@ class SkillChainExecutor:
     async def _execute_loop_step(
         self,
         step: LoopStep,
-        input_data: Dict[str, Any],
+        input_data: dict[str, Any],
         context: ChainExecutionContext,
     ) -> None:
         """执行循环步骤"""
@@ -421,8 +414,8 @@ class SkillChainExecutor:
                         break
 
     def _apply_input_mapping(
-        self, mapping: Dict[str, str], input_data: Dict[str, Any]
-    ) -> Dict[str, Any]:
+        self, mapping: dict[str, str], input_data: dict[str, Any]
+    ) -> dict[str, Any]:
         """应用输入映射"""
         result = {}
         for target, source in mapping.items():
@@ -432,10 +425,10 @@ class SkillChainExecutor:
 
     def _apply_output_mapping(
         self,
-        mapping: Dict[str, str],
-        output_data: Dict[str, Any],
-        current_data: Dict[str, Any],
-    ) -> Dict[str, Any]:
+        mapping: dict[str, str],
+        output_data: dict[str, Any],
+        current_data: dict[str, Any],
+    ) -> dict[str, Any]:
         """应用输出映射"""
         result = current_data.copy()
         for target, source in mapping.items():
@@ -444,7 +437,7 @@ class SkillChainExecutor:
         return result
 
     def _evaluate_condition(
-        self, condition: str, data: Dict[str, Any]
+        self, condition: str, data: dict[str, Any]
     ) -> bool:
         """评估条件表达式"""
         try:
@@ -452,12 +445,12 @@ class SkillChainExecutor:
             # 例如: "result.success == true", "data.count > 10"
             return eval(condition, {"__builtins__": {}}, data)
         except Exception as e:
-            logger.error(f"Condition evaluation failed: {str(e)}")
+            logger.error(f"Condition evaluation failed: {e!s}")
             return False
 
     def _get_loop_items(
-        self, loop_items: str, data: Dict[str, Any]
-    ) -> List[Any]:
+        self, loop_items: str, data: dict[str, Any]
+    ) -> list[Any]:
         """获取循环项目"""
         try:
             # 支持从数据中获取循环项目
@@ -468,18 +461,18 @@ class SkillChainExecutor:
                 value = value[part]
             return value if isinstance(value, list) else [value]
         except Exception as e:
-            logger.error(f"Failed to get loop items: {str(e)}")
+            logger.error(f"Failed to get loop items: {e!s}")
             return []
 
     async def get_execution_history(
         self, execution_id: str
-    ) -> Optional[ChainExecutionContext]:
+    ) -> ChainExecutionContext | None:
         """获取执行历史"""
         return self._execution_history.get(execution_id)
 
     async def list_execution_history(
         self, chain_id: str, limit: int = 100
-    ) -> List[ChainExecutionContext]:
+    ) -> list[ChainExecutionContext]:
         """列出执行历史"""
         results = []
         for context in self._execution_history.values():
@@ -489,7 +482,7 @@ class SkillChainExecutor:
 
 
 # Global instance
-_chain_executor: Optional[SkillChainExecutor] = None
+_chain_executor: SkillChainExecutor | None = None
 
 
 def get_skill_chain_executor() -> SkillChainExecutor:
@@ -501,13 +494,13 @@ def get_skill_chain_executor() -> SkillChainExecutor:
 
 
 __all__ = [
-    "ChainType",
-    "LoopType",
+    "ChainExecutionContext",
     "ChainStep",
+    "ChainType",
     "ConditionalStep",
     "LoopStep",
+    "LoopType",
     "SkillChain",
-    "ChainExecutionContext",
     "SkillChainExecutor",
     "get_skill_chain_executor",
 ]

@@ -6,21 +6,19 @@ Provides multi-tenancy, SSO, team collaboration, RBAC, and audit logging.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
-from enum import Enum
-from pathlib import Path
+from datetime import UTC, datetime
+from enum import StrEnum
 from threading import RLock
-from typing import Any, Optional
+from typing import Any
 from uuid import uuid4
 
 from pydantic import BaseModel, Field
-
 
 # ============================================================================
 # ENUMS
 # ============================================================================
 
-class TenantPlan(str, Enum):
+class TenantPlan(StrEnum):
     """Tenant subscription plans."""
     FREE = "free"
     STARTER = "starter"
@@ -28,7 +26,7 @@ class TenantPlan(str, Enum):
     ENTERPRISE = "enterprise"
 
 
-class RoleType(str, Enum):
+class RoleType(StrEnum):
     """Role-based access control types."""
     SUPER_ADMIN = "super_admin"
     TENANT_ADMIN = "tenant_admin"
@@ -38,7 +36,7 @@ class RoleType(str, Enum):
     GUEST = "guest"
 
 
-class PermissionType(str, Enum):
+class PermissionType(StrEnum):
     """Fine-grained permissions."""
     # Tenant management
     TENANT_READ = "tenant:read"
@@ -73,7 +71,7 @@ class PermissionType(str, Enum):
     INTEGRATION_MANAGE = "integration:manage"
 
 
-class AuditEventType(str, Enum):
+class AuditEventType(StrEnum):
     """Types of audit events."""
     USER_LOGIN = "user_login"
     USER_LOGOUT = "user_logout"
@@ -112,21 +110,21 @@ class EnterpriseUser(BaseModel):
     permissions: list[PermissionType] = Field(default_factory=list)
 
     # SSO integration
-    sso_provider: Optional[str] = None  # "okta", "azure_ad", "google", etc.
-    sso_id: Optional[str] = None
+    sso_provider: str | None = None  # "okta", "azure_ad", "google", etc.
+    sso_id: str | None = None
 
     # Account status
     is_active: bool = True
     is_verified: bool = False
 
     # Metadata
-    department: Optional[str] = None
-    manager_id: Optional[str] = None
-    phone: Optional[str] = None
+    department: str | None = None
+    manager_id: str | None = None
+    phone: str | None = None
 
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    last_login: Optional[datetime] = None
+    last_login: datetime | None = None
 
 
 class Team(BaseModel):
@@ -134,7 +132,7 @@ class Team(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid4()))
     tenant_id: str
     name: str
-    description: Optional[str] = None
+    description: str | None = None
 
     # Team members
     owner_id: str
@@ -155,18 +153,18 @@ class EnterpriseTenant(BaseModel):
     plan: TenantPlan = TenantPlan.FREE
 
     # Organization info
-    organization_name: Optional[str] = None
-    industry: Optional[str] = None
-    country: Optional[str] = None
+    organization_name: str | None = None
+    industry: str | None = None
+    country: str | None = None
 
     # Billing
-    billing_email: Optional[str] = None
-    billing_address: Optional[str] = None
-    tax_id: Optional[str] = None
+    billing_email: str | None = None
+    billing_address: str | None = None
+    tax_id: str | None = None
 
     # SSO configuration
     sso_enabled: bool = False
-    sso_provider: Optional[str] = None
+    sso_provider: str | None = None
     sso_config: dict[str, Any] = Field(default_factory=dict)
 
     # Security policies
@@ -202,14 +200,14 @@ class APIKey(BaseModel):
     permissions: list[PermissionType] = Field(default_factory=list)
 
     # Rate limiting
-    rate_limit: Optional[int] = None  # requests per minute
+    rate_limit: int | None = None  # requests per minute
 
     # Expiration
-    expires_at: Optional[datetime] = None
+    expires_at: datetime | None = None
 
     # Status
     is_active: bool = True
-    last_used: Optional[datetime] = None
+    last_used: datetime | None = None
 
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
@@ -220,8 +218,8 @@ class AuditLog(BaseModel):
     tenant_id: str
 
     event_type: AuditEventType
-    actor_id: Optional[str] = None
-    actor_email: Optional[str] = None
+    actor_id: str | None = None
+    actor_email: str | None = None
 
     resource_type: str  # "user", "team", "agent", "workflow", etc.
     resource_id: str
@@ -232,12 +230,12 @@ class AuditLog(BaseModel):
     changes: dict[str, Any] = Field(default_factory=dict)
 
     # Context
-    ip_address: Optional[str] = None
-    user_agent: Optional[str] = None
+    ip_address: str | None = None
+    user_agent: str | None = None
 
     # Status
     status: str = "success"  # "success", "failure"
-    error_message: Optional[str] = None
+    error_message: str | None = None
 
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
@@ -248,7 +246,7 @@ class AccessPolicy(BaseModel):
     tenant_id: str
 
     name: str
-    description: Optional[str] = None
+    description: str | None = None
 
     # Policy rules
     rules: list[dict[str, Any]] = Field(default_factory=list)
@@ -302,12 +300,12 @@ class EnterpriseUserStore:
             self._records[user.id] = user
             return user
 
-    def get(self, user_id: str) -> Optional[EnterpriseUser]:
+    def get(self, user_id: str) -> EnterpriseUser | None:
         """Get user by ID."""
         with self._lock:
             return self._records.get(user_id)
 
-    def get_by_email(self, email: str) -> Optional[EnterpriseUser]:
+    def get_by_email(self, email: str) -> EnterpriseUser | None:
         """Get user by email."""
         with self._lock:
             for user in self._records.values():
@@ -320,7 +318,7 @@ class EnterpriseUserStore:
         with self._lock:
             return [u for u in self._records.values() if u.tenant_id == tenant_id]
 
-    def update(self, user_id: str, updates: dict[str, Any]) -> Optional[EnterpriseUser]:
+    def update(self, user_id: str, updates: dict[str, Any]) -> EnterpriseUser | None:
         """Update user."""
         with self._lock:
             user = self._records.get(user_id)
@@ -354,7 +352,7 @@ class TeamStore:
             self._records[team.id] = team
             return team
 
-    def get(self, team_id: str) -> Optional[Team]:
+    def get(self, team_id: str) -> Team | None:
         """Get team by ID."""
         with self._lock:
             return self._records.get(team_id)
@@ -398,7 +396,7 @@ class EnterpriseTenantStore:
             self._records[tenant.id] = tenant
             return tenant
 
-    def get(self, tenant_id: str) -> Optional[EnterpriseTenant]:
+    def get(self, tenant_id: str) -> EnterpriseTenant | None:
         """Get tenant by ID."""
         with self._lock:
             return self._records.get(tenant_id)
@@ -408,7 +406,7 @@ class EnterpriseTenantStore:
         with self._lock:
             return list(self._records.values())
 
-    def update(self, tenant_id: str, updates: dict[str, Any]) -> Optional[EnterpriseTenant]:
+    def update(self, tenant_id: str, updates: dict[str, Any]) -> EnterpriseTenant | None:
         """Update tenant."""
         with self._lock:
             tenant = self._records.get(tenant_id)
@@ -434,7 +432,7 @@ class APIKeyStore:
             self._records[api_key.id] = api_key
             return api_key
 
-    def get(self, key_id: str) -> Optional[APIKey]:
+    def get(self, key_id: str) -> APIKey | None:
         """Get API key by ID."""
         with self._lock:
             return self._records.get(key_id)
@@ -467,7 +465,7 @@ class AuditLogStore:
             self._records.append(event)
             return event
 
-    def get(self, log_id: str) -> Optional[AuditLog]:
+    def get(self, log_id: str) -> AuditLog | None:
         """Get audit log by ID."""
         with self._lock:
             for log in self._records:
@@ -478,9 +476,9 @@ class AuditLogStore:
     def list_by_tenant(
         self,
         tenant_id: str,
-        start_date: Optional[datetime] = None,
-        end_date: Optional[datetime] = None,
-        event_type: Optional[AuditEventType] = None,
+        start_date: datetime | None = None,
+        end_date: datetime | None = None,
+        event_type: AuditEventType | None = None,
     ) -> list[AuditLog]:
         """List audit logs for a tenant."""
         with self._lock:
@@ -536,12 +534,8 @@ class EnterpriseService:
             return True
 
         # Tenant admin can access tenant resources
-        if user.role == RoleType.TENANT_ADMIN:
-            # Would need to check if resource belongs to user's tenant
-            return True
-
         # Other roles have limited access
-        return False
+        return user.role == RoleType.TENANT_ADMIN
 
     def log_event(
         self,
@@ -550,12 +544,12 @@ class EnterpriseService:
         resource_type: str,
         resource_id: str,
         action: str,
-        actor_id: Optional[str] = None,
-        actor_email: Optional[str] = None,
-        changes: Optional[dict[str, Any]] = None,
-        ip_address: Optional[str] = None,
+        actor_id: str | None = None,
+        actor_email: str | None = None,
+        changes: dict[str, Any] | None = None,
+        ip_address: str | None = None,
         status: str = "success",
-        error_message: Optional[str] = None,
+        error_message: str | None = None,
     ) -> AuditLog:
         """Log an audit event."""
         event = AuditLog(

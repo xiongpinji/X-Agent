@@ -14,8 +14,8 @@ P1-01 / P1-10 裁决：
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Optional, Tuple
 from dataclasses import dataclass, field
+from typing import Any
 
 from backend.app.core.mcp.client import MCPClient
 from backend.app.core.mcp.protocol import MCPTool
@@ -25,11 +25,11 @@ from backend.app.core.tool_registry import (
     max_catalog_risk,
 )
 from backend.app.core.tool_schema import (
-    ToolSchema,
     ToolCategory,
     ToolParameter,
     ToolReturn,
     ToolRiskLevel,
+    ToolSchema,
     ToolStatus,
 )
 
@@ -53,17 +53,17 @@ class MCPServerConfig:
     name: str
     url: str = ""
     transport: str = "http"
-    command: Optional[str] = None
-    args: List[str] = field(default_factory=list)
-    env: Optional[Dict[str, str]] = None
-    cwd: Optional[str] = None
-    headers: Optional[Dict[str, str]] = None
+    command: str | None = None
+    args: list[str] = field(default_factory=list)
+    env: dict[str, str] | None = None
+    cwd: str | None = None
+    headers: dict[str, str] | None = None
     enabled: bool = True
     auto_register: bool = True
     timeout: float = 30.0
     max_retries: int = 3
-    tags: List[str] = None
-    risk_level: Optional[str] = None
+    tags: list[str] = None
+    risk_level: str | None = None
 
     def __post_init__(self):
         if self.tags is None:
@@ -91,6 +91,7 @@ class MCPToolDiscovery:
         self,
         tool_registry: ToolCatalog,
         runtime_registry: Any | None = None,
+        server_whitelist: list[str] | None = None,
     ):
         """初始化MCP工具发现器
 
@@ -99,19 +100,22 @@ class MCPToolDiscovery:
             runtime_registry: 唯一的运行时 ToolRegistry（core/tools.py）。
                 缺省时尝试 ``tool_registry.runtime_registry``（显式组合绑定）；
                 仍为 None 则只写目录、不桥接（向后兼容，但主循环调不到）。
+            server_whitelist: P2-04 服务器白名单。None=允许所有（向后兼容），
+                非空列表则仅允许列表中的服务器名连接。
         """
         self.tool_registry = tool_registry
         if runtime_registry is None:
             runtime_registry = getattr(tool_registry, "runtime_registry", None)
         self.runtime_registry = runtime_registry
-        self.servers: Dict[str, MCPClient] = {}
-        self.discovered_tools: Dict[str, MCPTool] = {}
+        self._server_whitelist = set(server_whitelist) if server_whitelist is not None else None
+        self.servers: dict[str, MCPClient] = {}
+        self.discovered_tools: dict[str, MCPTool] = {}
         # registered_name -> (server_name, mcp_tool_name)：执行路由的唯一事实来源。
-        self._tool_routes: Dict[str, Tuple[str, str]] = {}
+        self._tool_routes: dict[str, tuple[str, str]] = {}
         # server_name -> [registered_name]：用于服务器下线时的工具清理。
-        self._server_tools: Dict[str, List[str]] = {}
+        self._server_tools: dict[str, list[str]] = {}
         # server_name -> MCPServerConfig：整站配置（含风险等级下限）。
-        self._server_configs: Dict[str, MCPServerConfig] = {}
+        self._server_configs: dict[str, MCPServerConfig] = {}
 
     async def add_server(self, config: MCPServerConfig) -> bool:
         """添加MCP服务器
@@ -124,6 +128,14 @@ class MCPToolDiscovery:
         """
         if not config.enabled:
             logger.info(f"Server {config.name} is disabled, skipping")
+            return False
+
+        # P2-04: MCP 服务器白名单 — 仅允许已配置的服务器连接
+        if self._server_whitelist is not None and config.name not in self._server_whitelist:
+            logger.warning(
+                "P2-04: MCP server '%s' rejected — not in whitelist %s",
+                config.name, self._server_whitelist,
+            )
             return False
 
         try:
@@ -161,7 +173,7 @@ class MCPToolDiscovery:
             logger.error(f"Failed to add server {config.name}: {e}")
             return False
 
-    async def discover_tools(self, server_name: str) -> List[MCPTool]:
+    async def discover_tools(self, server_name: str) -> list[MCPTool]:
         """从指定服务器发现工具
 
         Args:
@@ -188,6 +200,19 @@ class MCPToolDiscovery:
                     tags=tool_data.get("tags", []),
                     annotations=tool_data.get("annotations") or {},
                 )
+
+                # P2-04: PromptGuard — scan MCP tool description for injection
+                from backend.app.core.prompt_guard.engine import get_prompt_guard
+                _guard = get_prompt_guard()
+                desc_scan = _guard.scan_mcp_description(server_name, tool.description)
+                if desc_scan.is_malicious:
+                    logger.warning(
+                        "P2-04 PromptGuard rejected MCP tool '%s' from '%s': "
+                        "description injection detected (confidence=%.2f)",
+                        tool.name, server_name, desc_scan.confidence,
+                    )
+                    continue  # skip this tool
+
                 tools.append(tool)
 
                 # 缓存工具定义
@@ -201,7 +226,7 @@ class MCPToolDiscovery:
             logger.error(f"Failed to discover tools from {server_name}: {e}")
             return []
 
-    async def discover_all_tools(self) -> Dict[str, List[MCPTool]]:
+    async def discover_all_tools(self) -> dict[str, list[MCPTool]]:
         """从所有服务器发现工具
 
         Returns:
@@ -219,8 +244,8 @@ class MCPToolDiscovery:
         self,
         server_name: str,
         mcp_tool: MCPTool,
-        tags: Optional[List[str]] = None,
-    ) -> Optional[ToolSchema]:
+        tags: list[str] | None = None,
+    ) -> ToolSchema | None:
         """注册单个MCP工具：目录（ToolCatalog）+ 运行时注册表（桥接）
 
         Args:
@@ -324,14 +349,14 @@ class MCPToolDiscovery:
         _mcp_tool_handler.__name__ = f"mcp_handler_{server_name}_{mcp_tool_name}"
         return _mcp_tool_handler
 
-    def resolve_route(self, registered_name: str) -> Optional[Tuple[str, str]]:
+    def resolve_route(self, registered_name: str) -> tuple[str, str] | None:
         """查询注册工具名的执行路由 (server_name, mcp_tool_name)。"""
         return self._tool_routes.get(registered_name)
 
     async def discover_and_register_tools(
         self,
         server_name: str,
-        tags: Optional[List[str]] = None,
+        tags: list[str] | None = None,
     ) -> int:
         """发现并注册指定服务器的所有工具
 
@@ -356,8 +381,8 @@ class MCPToolDiscovery:
 
     async def discover_and_register_all(
         self,
-        tags: Optional[List[str]] = None,
-    ) -> Dict[str, int]:
+        tags: list[str] | None = None,
+    ) -> dict[str, int]:
         """发现并注册所有服务器的工具
 
         Args:
@@ -378,7 +403,7 @@ class MCPToolDiscovery:
         self,
         server_name: str,
         mcp_tool: MCPTool,
-        extra_tags: Optional[List[str]] = None,
+        extra_tags: list[str] | None = None,
     ) -> ToolSchema:
         """将MCP工具转换为ToolSchema
 
@@ -391,7 +416,7 @@ class MCPToolDiscovery:
             ToolSchema实例
         """
         # 合并标签
-        tags = ["mcp", f"mcp:{server_name}"] + mcp_tool.tags
+        tags = ["mcp", f"mcp:{server_name}", *mcp_tool.tags]
         if extra_tags:
             tags.extend(extra_tags)
 
@@ -456,7 +481,7 @@ class MCPToolDiscovery:
     @staticmethod
     def _json_schema_to_parameters(
         input_schema: Any,
-    ) -> List[ToolParameter]:
+    ) -> list[ToolParameter]:
         """JSON Schema object → ToolParameter 列表（保留字段名/类型/必填）。"""
         if not isinstance(input_schema, dict):
             return []
@@ -464,7 +489,7 @@ class MCPToolDiscovery:
         if not isinstance(properties, dict):
             return []
         required = set(input_schema.get("required") or [])
-        parameters: List[ToolParameter] = []
+        parameters: list[ToolParameter] = []
         for prop_name, prop_schema in properties.items():
             if not isinstance(prop_schema, dict):
                 prop_schema = {}
@@ -539,7 +564,7 @@ class MCPToolDiscovery:
         # 服务器声明只读 → LOW；否则默认 LOW
         return ToolRiskLevel.LOW
 
-    async def refresh_tools(self, server_name: Optional[str] = None) -> Dict[str, int]:
+    async def refresh_tools(self, server_name: str | None = None) -> dict[str, int]:
         """刷新工具列表
 
         Args:
@@ -582,7 +607,7 @@ class MCPToolDiscovery:
             if self.runtime_registry is not None:
                 try:
                     self.runtime_registry.unregister(registered_name)
-                except Exception as e:  # noqa: BLE001
+                except Exception as e:
                     logger.warning(
                         "Failed to unregister %s from runtime registry: %s",
                         registered_name,
@@ -590,7 +615,7 @@ class MCPToolDiscovery:
                     )
             try:
                 self.tool_registry.unregister(registered_name)
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 logger.warning(
                     "Failed to unregister %s from tool catalog: %s",
                     registered_name,
@@ -605,7 +630,7 @@ class MCPToolDiscovery:
         logger.info(f"Removed MCP server: {server_name}")
         return True
 
-    def get_server_stats(self) -> Dict[str, Any]:
+    def get_server_stats(self) -> dict[str, Any]:
         """获取服务器统计信息
 
         Returns:

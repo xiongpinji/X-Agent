@@ -3,11 +3,11 @@ import clsx from 'clsx'
 import { useAppStore } from '@/store/appStore'
 import { apiClient } from '@/services/api'
 import { Button, Card, CardBody, DataTable, EmptyState, LoadingState } from '@/components/ui'
-import { Plus, Eye, Trash2, CheckCircle, Clock, AlertCircle } from 'lucide-react'
+import { Plus, CheckCircle, Clock, AlertCircle } from 'lucide-react'
 
 export const OptimizedTasksPage: React.FC = () => {
   const { theme, tasks, setTasks, isLoading, setLoading, setError } = useAppStore()
-  const [selectedTask, setSelectedTask] = useState<any>(null)
+  const [_selectedTask, setSelectedTask] = useState<any>(null)
 
   useEffect(() => {
     loadTasks()
@@ -25,7 +25,7 @@ export const OptimizedTasksPage: React.FC = () => {
     }
   }
 
-  const handleDeleteTask = async (id: string) => {
+  const _handleDeleteTask = async (id: string) => {
     if (!confirm('Are you sure?')) return
     try {
       await apiClient.deleteTask(id)
@@ -39,7 +39,7 @@ export const OptimizedTasksPage: React.FC = () => {
     switch (status) {
       case 'completed':
         return <CheckCircle size={16} className="text-green-500" />
-      case 'running':
+      case 'in_progress':
         return <Clock size={16} className="text-blue-500 animate-spin" />
       case 'failed':
         return <AlertCircle size={16} className="text-red-500" />
@@ -71,7 +71,7 @@ export const OptimizedTasksPage: React.FC = () => {
         <div className="w-32 bg-slate-200 dark:bg-slate-700 rounded-full h-2">
           <div
             className="bg-blue-600 h-2 rounded-full transition-all"
-            style={{ width: `${value}%` }}
+            style={{ width: `${Math.round(value * 100)}%` }}
           />
         </div>
       ),

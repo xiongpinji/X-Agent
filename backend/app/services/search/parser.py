@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 import re
-from typing import Optional
 from urllib.parse import urlparse
 
 from pydantic import BaseModel
 
-from backend.app.services.search.search_engine import SearchResult, SearchResponse
+from backend.app.services.search.search_engine import SearchResponse, SearchResult
 
 
 class ParsedContent(BaseModel):
@@ -53,7 +52,7 @@ class SearchResultParser:
         words = text.split()
         entities = []
 
-        for i, word in enumerate(words):
+        for _i, word in enumerate(words):
             # Look for capitalized words (potential proper nouns)
             if word and word[0].isupper() and len(word) > 2:
                 # Avoid common words

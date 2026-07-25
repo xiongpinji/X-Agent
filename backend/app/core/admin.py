@@ -9,8 +9,6 @@ from uuid import uuid4
 import bcrypt
 from pydantic import BaseModel, Field, field_validator
 
-from backend.app.core.security import APIKeyCreateRequest, APIKeyCreateResponse, APIKeyRecord, APIKeyStore, Principal
-
 
 class AuthLoginRequest(BaseModel):
     email: str
@@ -241,6 +239,7 @@ def _hash_password(password: str) -> str:
 # ---------------------------------------------------------------------------
 
 _SQL_BACKEND_ALIASES = {"postgres", "postgresql", "sql", "database", "db"}
+_FILE_BACKEND_ALIASES = {"file", "json"}
 
 
 def _resolve_admin_store_config(
@@ -272,16 +271,23 @@ def _resolve_admin_store_config(
 def create_user_store(
     backend: str | None = None,
     database_url: str | None = None,
-) -> "UserStore | SqlUserStoreProtocol":
+) -> UserStore | SqlUserStoreProtocol:
     """按配置创建用户存储。
 
-    - ``memory``: 进程内存后端(默认, 仅 dev/测试; 重启即丢, 不可多实例共享)
+    - ``memory``: 进程内存后端(仅测试; 重启即丢, 不可多实例共享)
+    - ``file``(别名 json): JSON 文件后端(dev/单实例; 重启不丢, 不可多实例共享)
     - ``postgres``(别名 postgresql/sql/database/db): SQL 后端, 状态外置,
       支持多实例共享(P1-03)。需要 ``database_url``(生产为 Postgres DSN)。
     """
     resolved_backend, resolved_url = _resolve_admin_store_config(backend, database_url)
     if resolved_backend == "memory":
         return UserStore()
+    if resolved_backend in _FILE_BACKEND_ALIASES:
+        from backend.app.core.admin_store_file import FileUserStore
+        from backend.app.settings import get_settings
+
+        store_path = get_settings().admin_store_path
+        return FileUserStore(store_path)
     if resolved_backend in _SQL_BACKEND_ALIASES:
         if not resolved_url:
             raise ValueError(
@@ -292,18 +298,24 @@ def create_user_store(
 
         return SqlUserStore(resolved_url)
     raise ValueError(
-        f"未知用户存储后端: {resolved_backend!r}; 合法值: memory, postgres"
+        f"未知用户存储后端: {resolved_backend!r}; 合法值: memory, file, postgres"
     )
 
 
 def create_tenant_store(
     backend: str | None = None,
     database_url: str | None = None,
-) -> "TenantStore | SqlTenantStoreProtocol":
+) -> TenantStore | SqlTenantStoreProtocol:
     """按配置创建租户存储(后端取值与 create_user_store 相同)。"""
     resolved_backend, resolved_url = _resolve_admin_store_config(backend, database_url)
     if resolved_backend == "memory":
         return TenantStore()
+    if resolved_backend in _FILE_BACKEND_ALIASES:
+        from backend.app.core.admin_store_file import FileTenantStore
+        from backend.app.settings import get_settings
+
+        store_path = get_settings().admin_store_path
+        return FileTenantStore(store_path)
     if resolved_backend in _SQL_BACKEND_ALIASES:
         if not resolved_url:
             raise ValueError(
@@ -314,7 +326,7 @@ def create_tenant_store(
 
         return SqlTenantStore(resolved_url)
     raise ValueError(
-        f"未知租户存储后端: {resolved_backend!r}; 合法值: memory, postgres"
+        f"未知租户存储后端: {resolved_backend!r}; 合法值: memory, file, postgres"
     )
 
 
@@ -323,7 +335,7 @@ if TYPE_CHECKING:
     from backend.app.core.admin_store import SqlUserStore as SqlUserStoreProtocol
 
 
-# 全局存储单例: 按 settings 装配(默认 memory; XAGENT_ADMIN_STORE_BACKEND=postgres
-# 时切换为 SQL 后端)。生产模式下 settings 守卫(P1-19)会拒绝 memory 后端。
+# 全局存储单例: 按 settings 装配(默认 file; XAGENT_ADMIN_STORE_BACKEND=postgres
+# 时切换为 SQL 后端)。生产模式下 settings 守卫(P1-19)会拒绝 memory/file 后端。
 user_store = create_user_store()
 tenant_store = create_tenant_store()

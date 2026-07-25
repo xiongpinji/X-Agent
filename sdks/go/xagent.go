@@ -14,7 +14,7 @@ import (
 	"time"
 )
 
-const Version = "0.2.0-alpha" // 单一事实源: pyproject.toml
+const Version = "0.2.0-alpha" // 与 sdks/python/xagent_partner.py 的 __version__ 保持一致
 
 // ============================================================================
 // TYPES

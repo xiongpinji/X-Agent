@@ -18,15 +18,16 @@ from __future__ import annotations
 
 import contextvars
 import logging
-from typing import Any, Dict, Optional, List, Callable, Tuple
+from collections.abc import Callable
 from datetime import datetime
+from typing import Any
 from uuid import uuid4
 
 from backend.app.core.contracts import RiskLevel, RunContext
 from backend.app.core.mcp.client import MCPClient
-from backend.app.core.mcp.tools.file_tool import FileOperationTool, PermissionChecker as FilePermissionChecker
-from backend.app.core.mcp.tools.search_tool import SearchOperationTool, SearchPermissionChecker
-from backend.app.core.mcp.tools.browser_tool import BrowserTool, BrowserPermissionChecker
+from backend.app.core.mcp.tools.browser_tool import BrowserTool
+from backend.app.core.mcp.tools.file_tool import FileOperationTool
+from backend.app.core.mcp.tools.search_tool import SearchOperationTool
 from backend.app.core.tool_schema import ToolCallInput, ToolCallOutput
 from backend.app.core.tools import ToolRegistry
 
@@ -35,7 +36,7 @@ logger = logging.getLogger(__name__)
 # 工具内部 PermissionError → ToolCallOutput.error_code 的传递通道
 # （registry.execute 会把异常收敛为 record.error 字符串，错误码经此
 # contextvar 跨调用边界带回；协程安全，并发执行互不漏串）。
-_adapter_error_code: "contextvars.ContextVar[Optional[str]]" = contextvars.ContextVar(
+_adapter_error_code: contextvars.ContextVar[str | None] = contextvars.ContextVar(
     "xagent_mcp_adapter_error_code", default=None
 )
 
@@ -47,7 +48,7 @@ class MCPToolAdapter:
     """
 
     # name -> (description, category, risk_level)
-    _LEGACY_TOOL_META: Dict[str, Tuple[str, str, RiskLevel]] = {
+    _LEGACY_TOOL_META: dict[str, tuple[str, str, RiskLevel]] = {
         "file_read": ("Read file content", "file", RiskLevel.LOW),
         "file_write": ("Write content to file", "file", RiskLevel.HIGH),
         "file_list": ("List files in directory", "file", RiskLevel.LOW),
@@ -66,12 +67,12 @@ class MCPToolAdapter:
 
     def __init__(
         self,
-        mcp_client: Optional[MCPClient] = None,
-        file_tool: Optional[FileOperationTool] = None,
-        search_tool: Optional[SearchOperationTool] = None,
-        browser_tool: Optional[BrowserTool] = None,
+        mcp_client: MCPClient | None = None,
+        file_tool: FileOperationTool | None = None,
+        search_tool: SearchOperationTool | None = None,
+        browser_tool: BrowserTool | None = None,
         *,
-        runtime_registry: Optional[ToolRegistry] = None,
+        runtime_registry: ToolRegistry | None = None,
         approval_store: Any = None,
         execution_store: Any = None,
         hook_manager: Any = None,
@@ -129,7 +130,7 @@ class MCPToolAdapter:
 
     def _register_tools(self) -> None:
         """把所有可用 legacy 工具注册进运行时注册表（替代原裸 dict）。"""
-        handlers: Dict[str, Callable] = {}
+        handlers: dict[str, Callable] = {}
         if self.file_tool:
             handlers.update(
                 {
@@ -255,8 +256,8 @@ class MCPToolAdapter:
         )
 
     async def execute_tools_batch(
-        self, tool_inputs: List[ToolCallInput]
-    ) -> List[ToolCallOutput]:
+        self, tool_inputs: list[ToolCallInput]
+    ) -> list[ToolCallOutput]:
         """Execute multiple tool calls concurrently.
 
         Args:
@@ -270,7 +271,7 @@ class MCPToolAdapter:
         tasks = [self.execute_tool(tool_input) for tool_input in tool_inputs]
         return await asyncio.gather(*tasks)
 
-    def get_available_tools(self) -> List[Dict[str, Any]]:
+    def get_available_tools(self) -> list[dict[str, Any]]:
         """Get list of available tools（以运行时注册表为唯一事实来源）.
 
         Returns:
@@ -291,7 +292,7 @@ class MCPToolAdapter:
             )
         return tools
 
-    def get_audit_logs(self, tool_category: Optional[str] = None) -> Dict[str, Any]:
+    def get_audit_logs(self, tool_category: str | None = None) -> dict[str, Any]:
         """Get audit logs from all tools.
 
         Args:
@@ -314,7 +315,7 @@ class MCPToolAdapter:
         return logs
 
     def set_tool_permissions(
-        self, tool_category: str, permissions: Dict[str, bool]
+        self, tool_category: str, permissions: dict[str, bool]
     ) -> None:
         """Set permissions for a tool category.
 
@@ -329,7 +330,7 @@ class MCPToolAdapter:
         elif tool_category == "browser" and self.browser_tool:
             self.browser_tool.set_permissions(permissions)
 
-    def get_tool_permissions(self, tool_category: str) -> Dict[str, bool]:
+    def get_tool_permissions(self, tool_category: str) -> dict[str, bool]:
         """Get permissions for a tool category.
 
         Args:
@@ -346,7 +347,7 @@ class MCPToolAdapter:
             return self.browser_tool.get_permissions()
         return {}
 
-    async def health_check(self) -> Dict[str, Any]:
+    async def health_check(self) -> dict[str, Any]:
         """Check health of all MCP tools.
 
         Returns:
@@ -365,7 +366,7 @@ class MCPToolAdapter:
                 is_healthy = await self.mcp_client.health_check()
                 status["mcp_client"] = "healthy" if is_healthy else "unhealthy"
             except Exception as e:
-                status["mcp_client"] = f"error: {str(e)}"
+                status["mcp_client"] = f"error: {e!s}"
 
         if self.file_tool:
             status["file_tool"] = "ready"

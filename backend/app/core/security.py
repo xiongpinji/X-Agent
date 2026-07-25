@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import json
 from datetime import UTC, datetime
 from pathlib import Path
@@ -223,12 +224,10 @@ class APIKeyStore:
                 "Failed to load API key store from %s: %s. Starting empty.",
                 self._storage_path, exc,
             )
-            try:
+            with contextlib.suppress(OSError):
                 self._storage_path.rename(
                     self._storage_path.with_suffix(self._storage_path.suffix + ".bak")
                 )
-            except OSError:
-                pass
 
     def _persist(self) -> None:
         if self._storage_path is None:

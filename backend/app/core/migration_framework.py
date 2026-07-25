@@ -4,15 +4,16 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, asdict, field
+from collections.abc import Callable
+from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
-from typing import Any, Callable, Generic, TypeVar
+from typing import Any, Generic, TypeVar
 from uuid import uuid4
 
 
-class MigrationStatus(str, Enum):
+class MigrationStatus(StrEnum):
     """迁移状态"""
     PENDING = "pending"
     IN_PROGRESS = "in_progress"
@@ -21,7 +22,7 @@ class MigrationStatus(str, Enum):
     ROLLED_BACK = "rolled_back"
 
 
-class MigrationPhase(str, Enum):
+class MigrationPhase(StrEnum):
     """迁移阶段"""
     PREPARATION = "preparation"
     VALIDATION = "validation"

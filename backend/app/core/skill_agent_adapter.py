@@ -29,7 +29,8 @@ from __future__ import annotations
 import logging
 import time
 import uuid
-from typing import Any, Awaitable, Callable, Dict, List, Optional
+from collections.abc import Awaitable, Callable
+from typing import Any
 
 from backend.app.core.skills import Skill, SkillContext, SkillLoader
 
@@ -51,14 +52,14 @@ def skill_tool_name(skill_name: str) -> str:
     return f"{SKILL_TOOL_PREFIX}{skill_name}"
 
 
-def skill_name_from_tool(tool_name: str) -> Optional[str]:
+def skill_name_from_tool(tool_name: str) -> str | None:
     """工具名 → 技能名；非技能工具返回 None"""
     if tool_name.startswith(SKILL_TOOL_PREFIX):
         return tool_name[len(SKILL_TOOL_PREFIX):]
     return None
 
 
-def get_skill_parameters_schema(skill: Skill) -> Dict[str, Any]:
+def get_skill_parameters_schema(skill: Skill) -> dict[str, Any]:
     """获取技能的参数 schema（未声明时退化为宽松 object）"""
     schema = getattr(skill, "parameters_schema", None)
     if isinstance(schema, dict) and schema:
@@ -66,7 +67,7 @@ def get_skill_parameters_schema(skill: Skill) -> Dict[str, Any]:
     return {"type": "object", "properties": {}, "additionalProperties": True}
 
 
-async def list_skill_tools(loader: Optional[SkillLoader] = None) -> List[Dict[str, Any]]:
+async def list_skill_tools(loader: SkillLoader | None = None) -> list[dict[str, Any]]:
     """列出所有可消费的技能工具描述。
 
     返回: [{name, description, parameters_schema, risk_level, required_scope, skill_name}]
@@ -76,7 +77,7 @@ async def list_skill_tools(loader: Optional[SkillLoader] = None) -> List[Dict[st
     if not loader.list_loaded_skills():
         await loader.load_all_skills()
 
-    tools: List[Dict[str, Any]] = []
+    tools: list[dict[str, Any]] = []
     for skill_name in loader.list_loaded_skills():
         skill = loader.get_skill(skill_name)
         if skill is None:
@@ -95,9 +96,9 @@ async def list_skill_tools(loader: Optional[SkillLoader] = None) -> List[Dict[st
 
 def build_skill_tool_handler(
     skill_name: str,
-    loader: Optional[SkillLoader] = None,
-    context_defaults: Optional[Dict[str, Optional[str]]] = None,
-) -> Callable[..., Awaitable[Dict[str, Any]]]:
+    loader: SkillLoader | None = None,
+    context_defaults: dict[str, str | None] | None = None,
+) -> Callable[..., Awaitable[dict[str, Any]]]:
     """为指定技能构建 ToolRegistry 兼容的 handler（async (**kwargs) -> dict）。
 
     Args:
@@ -107,7 +108,7 @@ def build_skill_tool_handler(
     """
     defaults = dict(context_defaults or {})
 
-    async def _handler(**kwargs: Any) -> Dict[str, Any]:
+    async def _handler(**kwargs: Any) -> dict[str, Any]:
         nonlocal loader
         if loader is None:
             loader = SkillLoader()
@@ -153,9 +154,9 @@ def build_skill_tool_handler(
 
 async def register_skills_into_tool_registry(
     tool_registry: Any,
-    loader: Optional[SkillLoader] = None,
-    context_defaults: Optional[Dict[str, Optional[str]]] = None,
-) -> List[str]:
+    loader: SkillLoader | None = None,
+    context_defaults: dict[str, str | None] | None = None,
+) -> list[str]:
     """把所有已加载技能注册进 AgentLoop 的 ToolRegistry（集成波入口）。
 
     Args:
@@ -173,7 +174,7 @@ async def register_skills_into_tool_registry(
     if not loader.list_loaded_skills():
         await loader.load_all_skills()
 
-    registered: List[str] = []
+    registered: list[str] = []
     for skill_name in loader.list_loaded_skills():
         skill = loader.get_skill(skill_name)
         if skill is None:
@@ -196,13 +197,13 @@ async def register_skills_into_tool_registry(
 
 
 __all__ = [
-    "SKILL_TOOL_PREFIX",
-    "DEFAULT_SKILL_RISK_LEVEL",
     "DEFAULT_SKILL_REQUIRED_SCOPE",
-    "skill_tool_name",
-    "skill_name_from_tool",
+    "DEFAULT_SKILL_RISK_LEVEL",
+    "SKILL_TOOL_PREFIX",
+    "build_skill_tool_handler",
     "get_skill_parameters_schema",
     "list_skill_tools",
-    "build_skill_tool_handler",
     "register_skills_into_tool_registry",
+    "skill_name_from_tool",
+    "skill_tool_name",
 ]

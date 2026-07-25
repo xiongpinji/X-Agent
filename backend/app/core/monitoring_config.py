@@ -7,11 +7,10 @@ tracking Agent V2 deployment health and performance.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import Enum
-from typing import Optional
+from enum import StrEnum
 
 
-class MetricType(str, Enum):
+class MetricType(StrEnum):
     """Metric types."""
 
     COUNTER = "counter"
@@ -20,7 +19,7 @@ class MetricType(str, Enum):
     SUMMARY = "summary"
 
 
-class AlertSeverity(str, Enum):
+class AlertSeverity(StrEnum):
     """Alert severity levels."""
 
     INFO = "info"

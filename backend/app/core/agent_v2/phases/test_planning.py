@@ -8,11 +8,13 @@ Verifies:
 - Complexity metrics
 """
 
+from unittest.mock import AsyncMock, MagicMock
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
-from backend.app.core.agent_v2.phases.planning import PlanningPhase
+
 from backend.app.core.agent import AgentPlanStep, AgentTrajectory
 from backend.app.core.agent_phases import PhaseContext
+from backend.app.core.agent_v2.phases.planning import PlanningPhase
 from backend.app.core.contracts import (
     ExecutionFrame,
     PlanFrame,
@@ -151,7 +153,7 @@ async def test_planning_phase_with_resume(phase_context):
     phase_context.loop.run_store.get = MagicMock(return_value=previous_run)
 
     phase = PlanningPhase()
-    plan = await phase.execute(phase_context)
+    await phase.execute(phase_context)
 
     # Should emit resumed event
     phase_context.loop._emit_trace.assert_any_call(
@@ -170,7 +172,7 @@ async def test_planning_phase_deduplicates_steps(phase_context):
     )
 
     phase = PlanningPhase()
-    plan = await phase.execute(phase_context)
+    await phase.execute(phase_context)
 
     # Deduplication should be called
     assert phase_context.loop._dedupe_plan_steps.called

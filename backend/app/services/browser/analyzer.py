@@ -8,15 +8,14 @@ Analyzes page structure, identifies forms, buttons, links, and extracts data.
 from __future__ import annotations
 
 import logging
-import json
-from dataclasses import dataclass, asdict
-from enum import Enum
-from typing import Optional, Any, List, Dict
+from dataclasses import dataclass
+from enum import StrEnum
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
-class ElementType(str, Enum):
+class ElementType(StrEnum):
     """Types of page elements."""
     BUTTON = "button"
     LINK = "link"
@@ -36,12 +35,12 @@ class PageElement:
     """Represents a page element."""
     element_type: ElementType
     selector: str
-    text: Optional[str] = None
-    tag: Optional[str] = None
-    attributes: Dict[str, str] = None
+    text: str | None = None
+    tag: str | None = None
+    attributes: dict[str, str] = None
     visible: bool = True
     clickable: bool = False
-    bounding_box: Optional[Dict[str, float]] = None
+    bounding_box: dict[str, float] | None = None
 
     def __post_init__(self):
         if self.attributes is None:
@@ -52,10 +51,10 @@ class PageElement:
 class FormInfo:
     """Information about a form."""
     selector: str
-    method: Optional[str] = None
-    action: Optional[str] = None
-    fields: List[PageElement] = None
-    submit_button: Optional[PageElement] = None
+    method: str | None = None
+    action: str | None = None
+    fields: list[PageElement] = None
+    submit_button: PageElement | None = None
 
     def __post_init__(self):
         if self.fields is None:
@@ -67,14 +66,14 @@ class PageStructure:
     """Complete page structure analysis."""
     url: str
     title: str
-    buttons: List[PageElement]
-    links: List[PageElement]
-    forms: List[FormInfo]
-    inputs: List[PageElement]
-    headings: List[PageElement]
-    tables: List[PageElement]
-    images: List[PageElement]
-    metadata: Dict[str, Any] = None
+    buttons: list[PageElement]
+    links: list[PageElement]
+    forms: list[FormInfo]
+    inputs: list[PageElement]
+    headings: list[PageElement]
+    tables: list[PageElement]
+    images: list[PageElement]
+    metadata: dict[str, Any] = None
 
     def __post_init__(self):
         if self.metadata is None:
@@ -143,7 +142,7 @@ class PageAnalyzer:
             self.logger.error(f"Page analysis failed: {e}")
             raise
 
-    async def _extract_buttons(self, page: Any) -> List[PageElement]:
+    async def _extract_buttons(self, page: Any) -> list[PageElement]:
         """Extract all buttons from page."""
         try:
             buttons = []
@@ -174,7 +173,7 @@ class PageAnalyzer:
             self.logger.error(f"Button extraction failed: {e}")
             return []
 
-    async def _extract_links(self, page: Any) -> List[PageElement]:
+    async def _extract_links(self, page: Any) -> list[PageElement]:
         """Extract all links from page."""
         try:
             links = []
@@ -205,7 +204,7 @@ class PageAnalyzer:
             self.logger.error(f"Link extraction failed: {e}")
             return []
 
-    async def _extract_forms(self, page: Any) -> List[FormInfo]:
+    async def _extract_forms(self, page: Any) -> list[FormInfo]:
         """Extract all forms from page."""
         try:
             forms = []
@@ -250,7 +249,7 @@ class PageAnalyzer:
             self.logger.error(f"Form extraction failed: {e}")
             return []
 
-    async def _extract_form_fields(self, page: Any, form_selector: str) -> List[PageElement]:
+    async def _extract_form_fields(self, page: Any, form_selector: str) -> list[PageElement]:
         """Extract fields from a form."""
         try:
             fields = []
@@ -286,7 +285,7 @@ class PageAnalyzer:
             self.logger.error(f"Form field extraction failed: {e}")
             return []
 
-    async def _extract_inputs(self, page: Any) -> List[PageElement]:
+    async def _extract_inputs(self, page: Any) -> list[PageElement]:
         """Extract all input elements from page."""
         try:
             inputs = []
@@ -321,7 +320,7 @@ class PageAnalyzer:
             self.logger.error(f"Input extraction failed: {e}")
             return []
 
-    async def _extract_headings(self, page: Any) -> List[PageElement]:
+    async def _extract_headings(self, page: Any) -> list[PageElement]:
         """Extract all headings from page."""
         try:
             headings = []
@@ -350,7 +349,7 @@ class PageAnalyzer:
             self.logger.error(f"Heading extraction failed: {e}")
             return []
 
-    async def _extract_tables(self, page: Any) -> List[PageElement]:
+    async def _extract_tables(self, page: Any) -> list[PageElement]:
         """Extract all tables from page."""
         try:
             tables = []
@@ -385,7 +384,7 @@ class PageAnalyzer:
             self.logger.error(f"Table extraction failed: {e}")
             return []
 
-    async def _extract_images(self, page: Any) -> List[PageElement]:
+    async def _extract_images(self, page: Any) -> list[PageElement]:
         """Extract all images from page."""
         try:
             images = []
@@ -440,7 +439,7 @@ class PageAnalyzer:
             self.logger.error(f"Text extraction failed: {e}")
             return ""
 
-    async def extract_table_data(self, page: Any, selector: str) -> List[Dict[str, str]]:
+    async def extract_table_data(self, page: Any, selector: str) -> list[dict[str, str]]:
         """Extract data from table."""
         try:
             data = []

@@ -4,7 +4,6 @@ SQLAlchemy ORM模型 - 用户存储
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Optional
 
 from sqlalchemy import Boolean, DateTime, Index, String, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -25,7 +24,7 @@ class UserStoreModel(Base):
     # 基本信息
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
-    full_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    full_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     # 租户信息
     tenant_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
@@ -47,13 +46,13 @@ class UserStoreModel(Base):
         onupdate=lambda: datetime.now(UTC),
         nullable=False,
     )
-    last_login_at: Mapped[Optional[datetime]] = mapped_column(
+    last_login_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
 
     # 元数据
-    metadata_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    metadata_json: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # 索引
     __table_args__ = (
@@ -95,15 +94,15 @@ class APIKeyStoreModel(Base):
         default=lambda: datetime.now(UTC),
         nullable=False,
     )
-    expires_at: Mapped[Optional[datetime]] = mapped_column(
+    expires_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
-    revoked_at: Mapped[Optional[datetime]] = mapped_column(
+    revoked_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
-    last_used_at: Mapped[Optional[datetime]] = mapped_column(
+    last_used_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
@@ -145,8 +144,8 @@ class ApprovalStoreModel(Base):
         nullable=False,
         index=True,
     )  # pending, approved, rejected
-    approved_by: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
-    approval_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    approved_by: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    approval_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # 时间戳
     created_at: Mapped[datetime] = mapped_column(
@@ -158,7 +157,7 @@ class ApprovalStoreModel(Base):
         DateTime(timezone=True),
         nullable=False,
     )
-    approved_at: Mapped[Optional[datetime]] = mapped_column(
+    approved_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )

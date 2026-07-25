@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import logging
-from typing import Any, Dict, Optional, List
-from datetime import datetime
 import asyncio
+import logging
+from datetime import datetime
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -20,14 +20,14 @@ class BrowserAuditLog:
             max_entries: Maximum number of log entries to keep
         """
         self.max_entries = max_entries
-        self.entries: list[Dict[str, Any]] = []
+        self.entries: list[dict[str, Any]] = []
 
     def log(
         self,
         operation: str,
-        details: Optional[Dict[str, Any]] = None,
+        details: dict[str, Any] | None = None,
         success: bool = True,
-        error: Optional[str] = None,
+        error: str | None = None,
     ) -> None:
         """Log a browser operation.
 
@@ -52,7 +52,7 @@ class BrowserAuditLog:
         log_level = logging.INFO if success else logging.WARNING
         logger.log(log_level, f"Audit: {operation} - {success}")
 
-    def get_entries(self, limit: int = 100) -> list[Dict[str, Any]]:
+    def get_entries(self, limit: int = 100) -> list[dict[str, Any]]:
         """Get recent audit log entries.
 
         Args:
@@ -71,7 +71,7 @@ class BrowserAuditLog:
 class BrowserPermissionChecker:
     """Permission checker for browser operations."""
 
-    def __init__(self, allowed_operations: Optional[Dict[str, bool]] = None):
+    def __init__(self, allowed_operations: dict[str, bool] | None = None):
         """Initialize permission checker.
 
         Args:
@@ -114,8 +114,8 @@ class BrowserTool:
 
     def __init__(
         self,
-        permission_checker: Optional[BrowserPermissionChecker] = None,
-        audit_log: Optional[BrowserAuditLog] = None,
+        permission_checker: BrowserPermissionChecker | None = None,
+        audit_log: BrowserAuditLog | None = None,
     ):
         """Initialize browser tool.
 
@@ -128,7 +128,7 @@ class BrowserTool:
         self.browser = None
         self.page = None
 
-    async def navigate(self, url: str) -> Dict[str, Any]:
+    async def navigate(self, url: str) -> dict[str, Any]:
         """Navigate to a URL.
 
         Args:
@@ -158,7 +158,7 @@ class BrowserTool:
             self.audit_log.log("navigate", {"url": url}, False, error=str(e))
             raise
 
-    async def click(self, selector: str) -> Dict[str, Any]:
+    async def click(self, selector: str) -> dict[str, Any]:
         """Click an element.
 
         Args:
@@ -187,7 +187,7 @@ class BrowserTool:
             self.audit_log.log("click", {"selector": selector}, False, error=str(e))
             raise
 
-    async def type_text(self, selector: str, text: str) -> Dict[str, Any]:
+    async def type_text(self, selector: str, text: str) -> dict[str, Any]:
         """Type text into an element.
 
         Args:
@@ -218,7 +218,7 @@ class BrowserTool:
             self.audit_log.log("type", {"selector": selector}, False, error=str(e))
             raise
 
-    async def screenshot(self, filename: Optional[str] = None) -> Dict[str, Any]:
+    async def screenshot(self, filename: str | None = None) -> dict[str, Any]:
         """Take a screenshot.
 
         Args:
@@ -247,7 +247,7 @@ class BrowserTool:
             self.audit_log.log("screenshot", {}, False, error=str(e))
             raise
 
-    async def scroll(self, direction: str = "down", amount: int = 3) -> Dict[str, Any]:
+    async def scroll(self, direction: str = "down", amount: int = 3) -> dict[str, Any]:
         """Scroll the page.
 
         Args:
@@ -278,7 +278,7 @@ class BrowserTool:
             self.audit_log.log("scroll", {"direction": direction}, False, error=str(e))
             raise
 
-    async def wait(self, duration: float) -> Dict[str, Any]:
+    async def wait(self, duration: float) -> dict[str, Any]:
         """Wait for a duration.
 
         Args:
@@ -308,7 +308,7 @@ class BrowserTool:
             self.audit_log.log("wait", {"duration": duration}, False, error=str(e))
             raise
 
-    async def get_page_content(self) -> Dict[str, Any]:
+    async def get_page_content(self) -> dict[str, Any]:
         """Get page content.
 
         Returns:
@@ -334,7 +334,7 @@ class BrowserTool:
             self.audit_log.log("get_page_content", {}, False, error=str(e))
             raise
 
-    async def execute_script(self, script: str) -> Dict[str, Any]:
+    async def execute_script(self, script: str) -> dict[str, Any]:
         """Execute JavaScript on the page.
 
         Args:
@@ -363,7 +363,7 @@ class BrowserTool:
             self.audit_log.log("execute_script", {}, False, error=str(e))
             raise
 
-    def get_audit_logs(self, limit: int = 100) -> list[Dict[str, Any]]:
+    def get_audit_logs(self, limit: int = 100) -> list[dict[str, Any]]:
         """Get audit logs.
 
         Args:
@@ -374,7 +374,7 @@ class BrowserTool:
         """
         return self.audit_log.get_entries(limit)
 
-    def set_permissions(self, permissions: Dict[str, bool]) -> None:
+    def set_permissions(self, permissions: dict[str, bool]) -> None:
         """Set permissions for operations.
 
         Args:
@@ -383,7 +383,7 @@ class BrowserTool:
         for operation, allowed in permissions.items():
             self.permission_checker.set_permission(operation, allowed)
 
-    def get_permissions(self) -> Dict[str, bool]:
+    def get_permissions(self) -> dict[str, bool]:
         """Get current permissions.
 
         Returns:

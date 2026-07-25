@@ -1,32 +1,31 @@
 from __future__ import annotations
 
+import asyncio
+import json
 from datetime import UTC, datetime
 from typing import Annotated, Any
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, Query, Request
+from fastapi.responses import StreamingResponse
 
 from backend.app.api.errors import api_error
-from backend.app.api.linked_summary import LinkedSummaryEnvelope, build_linked_summary
+from backend.app.api.linked_summary import build_linked_summary
 from backend.app.api.workflow_view_model import build_workflow_run_view_model
-from backend.app.core.approvals import ApprovalStore
 from backend.app.core.audit import AuditStore
 from backend.app.core.contracts import ErrorCode
 from backend.app.core.memory import MemorySystem
-from backend.app.core.security import Principal
+from backend.app.core.security import ROLE_SCOPES, Principal
 from backend.app.core.workflows import (
     WorkflowDefinition,
     WorkflowExecutionError,
     WorkflowRunRecord,
     WorkflowRunRequest,
     WorkflowRunStatus,
-    WorkflowScheduleRequest,
-    WorkflowScheduleStatus,
-    WorkflowScheduleStore,
     WorkflowScheduler,
-    WorkflowNodeType,
+    WorkflowScheduleRequest,
+    WorkflowScheduleStore,
 )
-from backend.app.core.security import ROLE_SCOPES
 from backend.app.dependencies import (
     enforce_scope,
     get_approval_store,
@@ -668,3 +667,57 @@ async def get_workflow_run_correlation(run_id: str, repository: WorkflowReposito
     payload["audit_anchors"] = _build_audit_anchors(timeline)
     payload["snapshot"] = run.model_dump(mode="json")
     return payload
+
+
+@router.get("/runs/{run_id}/stream")
+async def stream_workflow_run(
+    run_id: str,
+    repository: WorkflowRepositoryDependency,
+    principal: PrincipalDependency,
+):
+    """SSE endpoint for real-time workflow run status updates.
+
+    Streams node-level status changes: pending → running → completed/failed.
+    """
+    enforce_scope(principal, "workflow:run")
+
+    async def event_generator():
+        # Send initial status
+        run = repository.get_run(run_id)
+        if run is None:
+            yield f"data: {json.dumps({'event': 'error', 'message': 'Run not found'})}\n\n"
+            return
+
+        yield f"data: {json.dumps({'event': 'connected', 'run_id': run_id, 'status': run.status.value})}\n\n"
+
+        # Poll for status updates (in production, use Redis pub/sub)
+        last_cursor = run.resume_cursor or 0
+        nodes = run.snapshot.get("nodes", []) if run.snapshot else []
+        max_polls = 60  # Max 60 seconds of polling
+
+        for _ in range(max_polls):
+            await asyncio.sleep(1)
+            current_run = repository.get_run(run_id)
+            if current_run is None:
+                break
+
+            current_cursor = current_run.resume_cursor or 0
+            if current_cursor > last_cursor:
+                # Send node progress updates
+                for i in range(last_cursor, min(current_cursor, len(nodes))):
+                    node = nodes[i] if i < len(nodes) else {}
+                    yield f"data: {json.dumps({'event': 'node_completed', 'node_index': i, 'node_id': node.get('id', f'node-{i}'), 'status': 'completed'})}\n\n"
+                last_cursor = current_cursor
+
+            if current_run.status.value in ("completed", "failed", "cancelled"):
+                yield f"data: {json.dumps({'event': 'run_finished', 'status': current_run.status.value, 'run_id': run_id})}\n\n"
+                return
+
+        # Timeout
+        yield f"data: {json.dumps({'event': 'timeout', 'run_id': run_id})}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"},
+    )

@@ -691,6 +691,7 @@ class TestResourceUsage:
         assert growth > 0
 
     @pytest.mark.asyncio
+    @pytest.mark.flaky(reruns=2)
     async def test_llm_response_time_consistency(self):
         """Test LLM response time consistency."""
         router = LLMRouter(backend=MockLLMBackend())

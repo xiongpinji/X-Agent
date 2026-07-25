@@ -17,25 +17,25 @@ from __future__ import annotations
 import os
 import secrets
 import time
+import uuid
 from collections import defaultdict
-from typing import Callable
+from collections.abc import Callable
 
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from backend.app.api.errors import api_error
-from backend.app.core.contracts import ErrorCode
-
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
-    """Rate limiting middleware to prevent brute force and DoS attacks.
+    """Rate limiting middleware using Redis (with in-memory fallback).
 
-    Implements per-IP and per-endpoint rate limiting.
+    Implements per-IP and per-endpoint rate limiting with sliding window.
+    Uses Redis sorted sets for distributed rate limiting across workers.
     """
 
     def __init__(self, app, requests_per_minute: int = 60):
         super().__init__(app)
         self.requests_per_minute = requests_per_minute
+        # In-memory fallback for when Redis is unavailable
         self.request_times: dict[str, list[float]] = defaultdict(list)
         self.sensitive_endpoints = {
             "/api/v1/auth/login",
@@ -43,6 +43,19 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             "/api/v1/auth/refresh",
         }
         self.sensitive_rate_limit = 10  # 10 requests per minute for sensitive endpoints
+        self._redis = None
+        self._redis_checked = False
+
+    async def _get_redis(self):
+        """Lazy-load Redis client."""
+        if not self._redis_checked:
+            self._redis_checked = True
+            try:
+                from backend.app.core.redis_client import get_redis
+                self._redis = get_redis()
+            except Exception:
+                self._redis = None
+        return self._redis
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
         """Apply rate limiting based on client IP and endpoint."""
@@ -57,25 +70,53 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             rate_limit = self.requests_per_minute
 
         # Create key for tracking
-        key = f"{client_ip}:{endpoint}"
+        key = f"ratelimit:{client_ip}:{endpoint}"
 
-        # Clean up old requests (older than 1 minute)
-        self.request_times[key] = [ts for ts in self.request_times[key] if now - ts < 60]
+        # Try Redis-based rate limiting first
+        redis = await self._get_redis()
+        if redis and redis.is_available:
+            try:
+                allowed = await self._check_redis_rate(redis, key, rate_limit, now)
+                if not allowed:
+                    return Response(
+                        content='{"error": "Rate limit exceeded"}',
+                        status_code=429,
+                        media_type="application/json",
+                    )
+                return await call_next(request)
+            except Exception:
+                pass  # Fall through to in-memory
 
-        # Check rate limit
-        if len(self.request_times[key]) >= rate_limit:
+        # In-memory fallback
+        mem_key = f"{client_ip}:{endpoint}"
+        self.request_times[mem_key] = [ts for ts in self.request_times[mem_key] if now - ts < 60]
+
+        if len(self.request_times[mem_key]) >= rate_limit:
             return Response(
                 content='{"error": "Rate limit exceeded"}',
                 status_code=429,
                 media_type="application/json",
             )
 
-        # Record this request
-        self.request_times[key].append(now)
+        self.request_times[mem_key].append(now)
+        return await call_next(request)
 
-        # Process request
-        response = await call_next(request)
-        return response
+    async def _check_redis_rate(self, redis, key: str, limit: int, now: float) -> bool:
+        """Check rate limit using Redis sorted set (sliding window)."""
+        window_start = now - 60
+        member = f"{now}:{uuid.uuid4().hex[:8]}"
+
+        redis.pipeline()
+        # Remove old entries outside the window
+        await redis.zremrangebyscore(key, 0, window_start)
+        # Add current request
+        await redis.zadd(key, {member: now})
+        # Count requests in window
+        count = await redis.zcard(key)
+        # Set expiry on the key
+        await redis.expire(key, 120)
+
+        return count <= limit
 
 
 # Documented CSP exception (P1-06):

@@ -8,9 +8,9 @@ from __future__ import annotations
 
 import json
 import logging
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -126,7 +126,7 @@ class LocalConfig:
             logger.warning(f"Config file not found: {file_path}, using defaults")
             return cls()
 
-        with open(file_path, "r") as f:
+        with open(file_path) as f:
             if file_path.suffix == ".json":
                 return cls.from_json(f.read())
             else:
@@ -150,8 +150,8 @@ class LocalConfig:
 class ConfigManager:
     """Manages local configuration."""
 
-    _instance: Optional[ConfigManager] = None
-    _config: Optional[LocalConfig] = None
+    _instance: ConfigManager | None = None
+    _config: LocalConfig | None = None
 
     def __new__(cls) -> ConfigManager:
         """Singleton pattern."""
@@ -165,7 +165,7 @@ class ConfigManager:
             self._config = LocalConfig()
 
     @classmethod
-    def initialize(cls, config: Optional[LocalConfig] = None) -> None:
+    def initialize(cls, config: LocalConfig | None = None) -> None:
         """Initialize configuration.
 
         Args:

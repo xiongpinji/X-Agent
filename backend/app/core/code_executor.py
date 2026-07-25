@@ -13,7 +13,6 @@ This module provides sandboxed code execution for Python, JavaScript, and Bash w
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import os
 import re
@@ -22,10 +21,10 @@ import sys
 import tempfile
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 from uuid import uuid4
 
 logger = logging.getLogger(__name__)
@@ -56,7 +55,7 @@ class ExecutionResult:
     exit_code: int
     execution_time: float
     status: ExecutionStatus
-    error: Optional[str] = None
+    error: str | None = None
     execution_id: str = field(default_factory=lambda: str(uuid4()))
     timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
     language: ExecutionLanguage = ExecutionLanguage.PYTHON
@@ -88,7 +87,7 @@ class ExecutionConfig:
     max_disk_usage: int = 100  # MB
     allow_network: bool = False
     allow_file_system_write: bool = False
-    temp_dir: Optional[str] = None
+    temp_dir: str | None = None
     environment_vars: dict[str, str] = field(default_factory=dict)
     max_output_size: int = 1024 * 1024  # 1MB
 
@@ -154,7 +153,7 @@ class SecurityValidator:
     ]
 
     @staticmethod
-    def validate_python(code: str) -> tuple[bool, Optional[str]]:
+    def validate_python(code: str) -> tuple[bool, str | None]:
         """Validate Python code for security violations."""
         for pattern in SecurityValidator.DANGEROUS_PYTHON_PATTERNS:
             if re.search(pattern, code, re.IGNORECASE):
@@ -162,7 +161,7 @@ class SecurityValidator:
         return True, None
 
     @staticmethod
-    def validate_javascript(code: str) -> tuple[bool, Optional[str]]:
+    def validate_javascript(code: str) -> tuple[bool, str | None]:
         """Validate JavaScript code for security violations."""
         for pattern in SecurityValidator.DANGEROUS_JS_PATTERNS:
             if re.search(pattern, code, re.IGNORECASE):
@@ -170,7 +169,7 @@ class SecurityValidator:
         return True, None
 
     @staticmethod
-    def validate_bash(command: str) -> tuple[bool, Optional[str]]:
+    def validate_bash(command: str) -> tuple[bool, str | None]:
         """Validate Bash command for security violations."""
         for pattern in SecurityValidator.DANGEROUS_BASH_PATTERNS:
             if re.search(pattern, command, re.IGNORECASE):
@@ -181,7 +180,7 @@ class SecurityValidator:
 class CodeExecutor:
     """Secure code executor with multi-language support."""
 
-    def __init__(self, config: Optional[ExecutionConfig] = None):
+    def __init__(self, config: ExecutionConfig | None = None):
         """Initialize code executor with configuration."""
         self.config = config or ExecutionConfig()
         self.validator = SecurityValidator()
@@ -194,7 +193,7 @@ class CodeExecutor:
         else:
             self.config.temp_dir = tempfile.gettempdir()
 
-    async def execute_python(self, code: str, timeout: Optional[int] = None) -> ExecutionResult:
+    async def execute_python(self, code: str, timeout: int | None = None) -> ExecutionResult:
         """Execute Python code in a sandboxed environment."""
         timeout = timeout or self.config.timeout
         execution_id = str(uuid4())
@@ -243,7 +242,7 @@ class CodeExecutor:
                 except Exception as e:
                     logger.warning(f"Failed to cleanup temp file {temp_file}: {e}")
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             execution_time = time.time() - start_time
             logger.warning(f"Python execution timeout after {execution_time}s")
             return ExecutionResult(
@@ -272,7 +271,7 @@ class CodeExecutor:
                 language=ExecutionLanguage.PYTHON,
             )
 
-    async def execute_javascript(self, code: str, timeout: Optional[int] = None) -> ExecutionResult:
+    async def execute_javascript(self, code: str, timeout: int | None = None) -> ExecutionResult:
         """Execute JavaScript code in a sandboxed environment."""
         timeout = timeout or self.config.timeout
         execution_id = str(uuid4())
@@ -321,7 +320,7 @@ class CodeExecutor:
                 except Exception as e:
                     logger.warning(f"Failed to cleanup temp file {temp_file}: {e}")
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             execution_time = time.time() - start_time
             logger.warning(f"JavaScript execution timeout after {execution_time}s")
             return ExecutionResult(
@@ -350,7 +349,7 @@ class CodeExecutor:
                 language=ExecutionLanguage.JAVASCRIPT,
             )
 
-    async def execute_bash(self, command: str, timeout: Optional[int] = None) -> ExecutionResult:
+    async def execute_bash(self, command: str, timeout: int | None = None) -> ExecutionResult:
         """Execute Bash command in a sandboxed environment."""
         timeout = timeout or self.config.timeout
         execution_id = str(uuid4())
@@ -381,7 +380,7 @@ class CodeExecutor:
             result.language = ExecutionLanguage.BASH
             return result
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             execution_time = time.time() - start_time
             logger.warning(f"Bash execution timeout after {execution_time}s")
             return ExecutionResult(
@@ -444,11 +443,11 @@ class CodeExecutor:
                     process.communicate(),
                     timeout=timeout,
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 process.kill()
                 await process.wait()
                 execution_time = time.time() - start_time
-                raise asyncio.TimeoutError(f"Process timeout after {timeout}s")
+                raise TimeoutError(f"Process timeout after {timeout}s")
 
             execution_time = time.time() - start_time
 
@@ -475,9 +474,9 @@ class CodeExecutor:
                 execution_id=execution_id,
             )
 
-        except asyncio.TimeoutError as e:
+        except TimeoutError as e:
             execution_time = time.time() - start_time
-            raise asyncio.TimeoutError(str(e))
+            raise TimeoutError(str(e))
         except Exception as e:
             execution_time = time.time() - start_time
             raise Exception(f"Subprocess execution failed: {e}")
@@ -486,12 +485,12 @@ class CodeExecutor:
 class ExecutionEnvironmentManager:
     """Manages isolated execution environments."""
 
-    def __init__(self, base_dir: Optional[str] = None):
+    def __init__(self, base_dir: str | None = None):
         """Initialize environment manager."""
         self.base_dir = base_dir or tempfile.gettempdir()
         self.environments: dict[str, dict[str, Any]] = {}
 
-    def create_environment(self, env_id: str, config: Optional[ExecutionConfig] = None) -> str:
+    def create_environment(self, env_id: str, config: ExecutionConfig | None = None) -> str:
         """Create a new isolated execution environment."""
         env_path = os.path.join(self.base_dir, f"env_{env_id}")
         Path(env_path).mkdir(parents=True, exist_ok=True)
@@ -555,6 +554,6 @@ class ExecutionEnvironmentManager:
             logger.error(f"Failed to cleanup environment {env_id}: {e}")
             return False
 
-    def get_environment_info(self, env_id: str) -> Optional[dict[str, Any]]:
+    def get_environment_info(self, env_id: str) -> dict[str, Any] | None:
         """Get information about an execution environment."""
         return self.environments.get(env_id)

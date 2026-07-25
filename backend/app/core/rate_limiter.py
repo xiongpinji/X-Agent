@@ -5,7 +5,6 @@ and DoS attacks.
 """
 
 import time
-from typing import Optional
 
 from backend.app.api.errors import api_error
 from backend.app.core.contracts import ErrorCode
@@ -140,7 +139,7 @@ class RateLimiter:
 
 
 # Global rate limiter instance
-_rate_limiter: Optional[RateLimiter] = None
+_rate_limiter: RateLimiter | None = None
 
 
 def get_rate_limiter(redis_client=None) -> RateLimiter:

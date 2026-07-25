@@ -25,12 +25,12 @@ import tempfile
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 # Cached probe result: None = not probed yet, bool = probed.
-_DOCKER_AVAILABLE: Optional[bool] = None
+_DOCKER_AVAILABLE: bool | None = None
 
 
 @dataclass
@@ -42,7 +42,7 @@ class SandboxSpec:
     memory_limit_mb: int = 512
     cpu_limit: float = 1.0  # number of CPUs
     enable_network: bool = False
-    workspace_path: Optional[str] = None  # host dir mounted at /workspace
+    workspace_path: str | None = None  # host dir mounted at /workspace
     env: dict[str, str] = field(default_factory=dict)
     name_prefix: str = "xagent-sbx"
 
@@ -57,8 +57,8 @@ class SandboxResult:
     stderr: str = ""
     duration_ms: float = 0.0
     backend: str = "subprocess"  # "docker" | "subprocess"
-    container_id: Optional[str] = None
-    error: Optional[str] = None
+    container_id: str | None = None
+    error: str | None = None
 
 
 def is_docker_available() -> bool:
@@ -147,19 +147,19 @@ class DockerSandbox:
             await sbx.run("python main.py")
     """
 
-    def __init__(self, spec: Optional[SandboxSpec] = None):
+    def __init__(self, spec: SandboxSpec | None = None):
         self.spec = spec or SandboxSpec()
-        self._container_id: Optional[str] = None
+        self._container_id: str | None = None
         self._client: Any = None
         self._use_docker: bool = is_docker_available()
         self._owns_workspace: bool = False
-        self._workspace: Optional[Path] = None
+        self._workspace: Path | None = None
 
     @property
     def backend(self) -> str:
         return "docker" if self._use_docker else "subprocess"
 
-    async def __aenter__(self) -> "DockerSandbox":
+    async def __aenter__(self) -> DockerSandbox:
         await self.start()
         return self
 
@@ -186,7 +186,7 @@ class DockerSandbox:
         if self._owns_workspace and self._workspace and self._workspace.exists():
             shutil.rmtree(self._workspace, ignore_errors=True)
 
-    async def run(self, command: str, timeout: Optional[float] = None) -> SandboxResult:
+    async def run(self, command: str, timeout: float | None = None) -> SandboxResult:
         """Execute a shell command inside the sandbox."""
         import time
 
@@ -199,7 +199,7 @@ class DockerSandbox:
                 res = await self._subprocess_run(command, eff_timeout)
             res.duration_ms = (time.perf_counter() - t0) * 1000
             return res
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return SandboxResult(
                 success=False, exit_code=124, backend=self.backend,
                 error=f"command timed out after {eff_timeout}s",
@@ -249,7 +249,7 @@ class DockerSandbox:
             )
         try:
             stdout_b, stderr_b = await asyncio.wait_for(proc.communicate(), timeout=timeout)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             await _kill_process_tree(proc)
             raise
         return SandboxResult(

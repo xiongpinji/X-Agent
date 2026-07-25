@@ -9,24 +9,23 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime, UTC, timedelta
-from enum import Enum
-from typing import Any, Callable, Optional
+from datetime import UTC, datetime, timedelta
+from enum import StrEnum
 from uuid import uuid4
 
 logger = logging.getLogger(__name__)
 
 
-class SyncDirection(str, Enum):
+class SyncDirection(StrEnum):
     """Sync direction."""
     UPLOAD = "upload"
     DOWNLOAD = "download"
     BIDIRECTIONAL = "bidirectional"
 
 
-class ConflictResolutionStrategy(str, Enum):
+class ConflictResolutionStrategy(StrEnum):
     """Conflict resolution strategies."""
     LAST_WRITE_WINS = "last_write_wins"
     LOCAL_WINS = "local_wins"
@@ -48,7 +47,7 @@ class SyncOperation:
     cloud_version: int = 0
     timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
     status: str = "pending"  # pending, syncing, completed, failed
-    error: Optional[str] = None
+    error: str | None = None
     retry_count: int = 0
     max_retries: int = 3
 
@@ -65,8 +64,8 @@ class SyncConflict:
     local_version: int = 0
     cloud_version: int = 0
     timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
-    resolution_strategy: Optional[ConflictResolutionStrategy] = None
-    resolved_data: Optional[dict] = None
+    resolution_strategy: ConflictResolutionStrategy | None = None
+    resolved_data: dict | None = None
 
 
 @dataclass
@@ -76,9 +75,9 @@ class SyncBatch:
     operations: list[SyncOperation] = field(default_factory=list)
     conflicts: list[SyncConflict] = field(default_factory=list)
     started_at: datetime = field(default_factory=lambda: datetime.now(UTC))
-    completed_at: Optional[datetime] = None
+    completed_at: datetime | None = None
     status: str = "pending"  # pending, syncing, completed, failed
-    error: Optional[str] = None
+    error: str | None = None
 
 
 class SyncClient:
@@ -88,7 +87,7 @@ class SyncClient:
         self,
         db,
         cloud_api_client,
-        conflict_resolver: Optional[ConflictResolver] = None,
+        conflict_resolver: ConflictResolver | None = None,
         default_strategy: ConflictResolutionStrategy = ConflictResolutionStrategy.LAST_WRITE_WINS,
     ):
         """Initialize sync client.
@@ -108,7 +107,7 @@ class SyncClient:
         self._sync_lock = asyncio.Lock()
         self._pending_operations: list[SyncOperation] = []
         self._offline_mode = False
-        self._last_sync_time: Optional[datetime] = None
+        self._last_sync_time: datetime | None = None
         self._sync_callbacks: list[Callable] = []
 
     def register_sync_callback(self, callback: Callable) -> None:
@@ -487,7 +486,7 @@ class ConflictResolver:
         self,
         conflict: SyncConflict,
         default_strategy: ConflictResolutionStrategy,
-    ) -> Optional[Resolution]:
+    ) -> Resolution | None:
         """Resolve a conflict.
 
         Args:

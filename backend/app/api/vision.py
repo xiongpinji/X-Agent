@@ -2,36 +2,36 @@
 视觉模型API端点
 """
 
-from typing import List, Optional, Dict, Any
-from fastapi import APIRouter, File, UploadFile, Query, Depends
-from pydantic import BaseModel
 import logging
 import tempfile
 from pathlib import Path
+from typing import Any
+
+from fastapi import APIRouter, File, UploadFile
+from pydantic import BaseModel
 
 from backend.app.core.vision_model import (
+    VisionModelManager,
     VisionModelType,
     VisionTask,
-    VisionModelManager,
-    VisionModelFactory,
 )
-from backend.app.core.vision_processors.ocr_processor import OCRProcessor
 from backend.app.core.vision_processors.object_detector import ObjectDetector
+from backend.app.core.vision_processors.ocr_processor import OCRProcessor
 from backend.app.core.vision_processors.scene_analyzer import SceneAnalyzer
-from backend.app.core.vision_processors.vqa_processor import VQAProcessor
 from backend.app.core.vision_processors.similarity_searcher import SimilaritySearcher
+from backend.app.core.vision_processors.vqa_processor import VQAProcessor
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/vision", tags=["vision"])
 
 # 全局管理器实例
-_vision_manager: Optional[VisionModelManager] = None
-_ocr_processor: Optional[OCRProcessor] = None
-_object_detector: Optional[ObjectDetector] = None
-_scene_analyzer: Optional[SceneAnalyzer] = None
-_vqa_processor: Optional[VQAProcessor] = None
-_similarity_searcher: Optional[SimilaritySearcher] = None
+_vision_manager: VisionModelManager | None = None
+_ocr_processor: OCRProcessor | None = None
+_object_detector: ObjectDetector | None = None
+_scene_analyzer: SceneAnalyzer | None = None
+_vqa_processor: VQAProcessor | None = None
+_similarity_searcher: SimilaritySearcher | None = None
 
 
 def get_vision_manager() -> VisionModelManager:
@@ -121,8 +121,8 @@ class SimilaritySearchRequest(BaseModel):
 class VisionResponse(BaseModel):
     """视觉处理响应"""
     success: bool
-    data: Optional[Dict[str, Any]] = None
-    error: Optional[str] = None
+    data: dict[str, Any] | None = None
+    error: str | None = None
     latency_ms: float = 0.0
 
 
@@ -335,7 +335,7 @@ async def compute_embedding(
 
 
 @router.get("/models")
-async def list_available_models() -> Dict[str, Any]:
+async def list_available_models() -> dict[str, Any]:
     """列出可用模型"""
     return {
         "models": [
@@ -358,6 +358,6 @@ async def list_available_models() -> Dict[str, Any]:
 
 
 @router.get("/health")
-async def health_check() -> Dict[str, str]:
+async def health_check() -> dict[str, str]:
     """健康检查"""
     return {"status": "healthy", "service": "vision-models"}

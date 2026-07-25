@@ -7,6 +7,7 @@ incremental update mechanisms.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 from dataclasses import dataclass, field
@@ -327,15 +328,11 @@ class MemoryPersistence:
                 tags_str = line.split(":", 1)[1].strip()
                 entry.tags = [t.strip() for t in tags_str.split(",")]
             elif line.startswith("**Created:**"):
-                try:
+                with contextlib.suppress(Exception):
                     entry.created_at = datetime.fromisoformat(line.split(":", 1)[1].strip())
-                except Exception:
-                    pass
             elif line.startswith("**Updated:**"):
-                try:
+                with contextlib.suppress(Exception):
                     entry.updated_at = datetime.fromisoformat(line.split(":", 1)[1].strip())
-                except Exception:
-                    pass
 
         entry.content = "\n".join(content_lines).strip()
         return entry

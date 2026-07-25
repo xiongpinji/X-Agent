@@ -3,8 +3,8 @@
 """
 
 import logging
-from typing import Any, Dict, List, Optional
 import time
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -20,13 +20,13 @@ class VQAProcessor:
     def _initialize_models(self) -> None:
         """初始化模型"""
         try:
-            from transformers import BlipProcessor, BlipForQuestionAnswering
+            from transformers import BlipForQuestionAnswering, BlipProcessor  # noqa: F401
             self._blip_available = True
         except ImportError:
             logger.warning("transformers not installed, BLIP VQA disabled")
 
         try:
-            import clip
+            import clip  # noqa: F401
             self._clip_available = True
         except ImportError:
             logger.warning("clip not installed, CLIP VQA disabled")
@@ -36,7 +36,7 @@ class VQAProcessor:
         image_path: str,
         question: str,
         **kwargs
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """回答关于图像的问题"""
         start_time = time.time()
 
@@ -64,15 +64,15 @@ class VQAProcessor:
         image_path: str,
         question: str,
         **kwargs
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """使用BLIP回答问题"""
         if not self._blip_available:
             return {"success": False, "error": "BLIP not installed"}
 
         try:
-            from transformers import BlipProcessor, BlipForQuestionAnswering
-            from PIL import Image
             import torch
+            from PIL import Image
+            from transformers import BlipForQuestionAnswering, BlipProcessor
 
             processor = BlipProcessor.from_pretrained("Salesforce/blip-vqa-base")
             model = BlipForQuestionAnswering.from_pretrained("Salesforce/blip-vqa-base")
@@ -103,7 +103,7 @@ class VQAProcessor:
         image_path: str,
         question: str,
         **kwargs
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """使用CLIP回答问题（基于分类）"""
         if not self._clip_available:
             return {"success": False, "error": "CLIP not installed"}
@@ -131,7 +131,7 @@ class VQAProcessor:
 
             answer_scores = {
                 answer: float(prob)
-                for answer, prob in zip(possible_answers, probs[0])
+                for answer, prob in zip(possible_answers, probs[0], strict=False)
             }
 
             best_answer = max(answer_scores, key=answer_scores.get)
@@ -154,9 +154,9 @@ class VQAProcessor:
     async def batch_answer_questions(
         self,
         image_path: str,
-        questions: List[str],
+        questions: list[str],
         **kwargs
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """批量回答问题"""
         try:
             answers = []
@@ -187,7 +187,7 @@ class VQAProcessor:
             return {"success": False, "error": str(e)}
 
     @staticmethod
-    def _generate_possible_answers(question: str) -> List[str]:
+    def _generate_possible_answers(question: str) -> list[str]:
         """根据问题生成可能的答案"""
         question_lower = question.lower()
 
@@ -219,7 +219,7 @@ class VQAProcessor:
         self,
         question: str,
         **kwargs
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """分析问题类型"""
         question_lower = question.lower()
 

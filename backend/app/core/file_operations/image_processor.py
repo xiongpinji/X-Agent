@@ -3,8 +3,8 @@
 """
 
 import logging
-from typing import Any, Dict, Optional
 from pathlib import Path
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -20,13 +20,13 @@ class ImageProcessor:
     def _initialize_libraries(self) -> None:
         """初始化图像处理库"""
         try:
-            from PIL import Image
+            from PIL import Image  # noqa: F401
             self._pil_available = True
         except ImportError:
             logger.warning("Pillow not installed, basic image support disabled")
 
         try:
-            import cv2
+            import cv2  # noqa: F401
             self._cv2_available = True
         except ImportError:
             logger.warning("OpenCV not installed, advanced image support disabled")
@@ -36,7 +36,7 @@ class ImageProcessor:
         image_path: str,
         operation: str,
         **kwargs
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         处理图像
 
@@ -78,7 +78,7 @@ class ImageProcessor:
         width: int,
         height: int,
         **kwargs
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """调整图像大小"""
         if not self._pil_available:
             return {"success": False, "error": "Pillow not installed"}
@@ -106,7 +106,7 @@ class ImageProcessor:
         image_path: str,
         target_format: str,
         **kwargs
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """转换图像格式"""
         if not self._pil_available:
             return {"success": False, "error": "Pillow not installed"}
@@ -145,7 +145,7 @@ class ImageProcessor:
         image_path: str,
         filter_type: str,
         **kwargs
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """应用图像滤镜"""
         if not self._pil_available:
             return {"success": False, "error": "Pillow not installed"}
@@ -181,7 +181,7 @@ class ImageProcessor:
             logger.error(f"Error applying filter: {e}")
             return {"success": False, "error": str(e)}
 
-    async def _get_info(self, image_path: str) -> Dict[str, Any]:
+    async def _get_info(self, image_path: str) -> dict[str, Any]:
         """获取图像信息"""
         if not self._pil_available:
             return {"success": False, "error": "Pillow not installed"}
@@ -211,7 +211,7 @@ class ImageProcessor:
         right: int,
         bottom: int,
         **kwargs
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """裁剪图像"""
         if not self._pil_available:
             return {"success": False, "error": "Pillow not installed"}
@@ -239,7 +239,7 @@ class ImageProcessor:
         image_path: str,
         angle: float,
         **kwargs
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """旋转图像"""
         if not self._pil_available:
             return {"success": False, "error": "Pillow not installed"}

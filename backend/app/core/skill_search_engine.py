@@ -3,11 +3,9 @@
 from __future__ import annotations
 
 import logging
-from typing import Optional, List, Dict, Any, Tuple
-from datetime import datetime, UTC
 from dataclasses import dataclass, field
-import re
 from difflib import SequenceMatcher
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +19,7 @@ class SearchResult:
     description: str
     relevance_score: float  # 0-1
     match_type: str  # exact, partial, fuzzy, semantic
-    matched_fields: List[str] = field(default_factory=list)
+    matched_fields: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -29,16 +27,16 @@ class SearchSuggestion:
     """搜索建议"""
     query: str
     frequency: int = 0
-    category: Optional[str] = None
+    category: str | None = None
 
 
 class SkillSearchEngine:
     """技能搜索引擎"""
 
     def __init__(self):
-        self.search_history: Dict[str, int] = {}  # query -> frequency
-        self.search_cache: Dict[str, List[SearchResult]] = {}  # query -> results
-        self.skills_index: Dict[str, Any] = {}  # skill_id -> indexed_data
+        self.search_history: dict[str, int] = {}  # query -> frequency
+        self.search_cache: dict[str, list[SearchResult]] = {}  # query -> results
+        self.skills_index: dict[str, Any] = {}  # skill_id -> indexed_data
 
     def index_skill(
         self,
@@ -47,9 +45,9 @@ class SkillSearchEngine:
         name_zh: str,
         description: str,
         description_zh: str,
-        keywords: List[str],
+        keywords: list[str],
         category: str,
-        tags: List[str],
+        tags: list[str],
     ) -> bool:
         """索引技能"""
         try:
@@ -71,15 +69,15 @@ class SkillSearchEngine:
             logger.info(f"索引技能: {skill_id}")
             return True
         except Exception as e:
-            logger.error(f"索引技能失败: {str(e)}")
+            logger.error(f"索引技能失败: {e!s}")
             return False
 
     def search(
         self,
         query: str,
-        filters: Optional[Dict[str, Any]] = None,
+        filters: dict[str, Any] | None = None,
         limit: int = 20,
-    ) -> List[SearchResult]:
+    ) -> list[SearchResult]:
         """综合搜索 - 结合多种搜索方法"""
         try:
             if not query or len(query.strip()) == 0:
@@ -88,7 +86,7 @@ class SkillSearchEngine:
             query = query.strip()
 
             # 检查缓存
-            cache_key = f"{query}:{str(filters)}"
+            cache_key = f"{query}:{filters!s}"
             if cache_key in self.search_cache:
                 return self.search_cache[cache_key][:limit]
 
@@ -127,10 +125,10 @@ class SkillSearchEngine:
             return results[:limit]
 
         except Exception as e:
-            logger.error(f"搜索失败: {str(e)}")
+            logger.error(f"搜索失败: {e!s}")
             return []
 
-    def _exact_search(self, query: str) -> List[SearchResult]:
+    def _exact_search(self, query: str) -> list[SearchResult]:
         """精确搜索"""
         results = []
         query_lower = query.lower()
@@ -161,7 +159,7 @@ class SkillSearchEngine:
 
         return results
 
-    def _partial_search(self, query: str) -> List[SearchResult]:
+    def _partial_search(self, query: str) -> list[SearchResult]:
         """部分匹配搜索"""
         results = []
         query_lower = query.lower()
@@ -206,11 +204,11 @@ class SkillSearchEngine:
 
         return results
 
-    def fuzzy_search(self, query: str, threshold: float = 0.6) -> List[SearchResult]:
+    def fuzzy_search(self, query: str, threshold: float = 0.6) -> list[SearchResult]:
         """模糊搜索"""
         return self._fuzzy_search(query, threshold)
 
-    def _fuzzy_search(self, query: str, threshold: float = 0.6) -> List[SearchResult]:
+    def _fuzzy_search(self, query: str, threshold: float = 0.6) -> list[SearchResult]:
         """模糊搜索 - 使用相似度匹配"""
         results = []
         query_lower = query.lower()
@@ -260,11 +258,11 @@ class SkillSearchEngine:
 
         return results
 
-    def semantic_search(self, query: str, limit: int = 10) -> List[SearchResult]:
+    def semantic_search(self, query: str, limit: int = 10) -> list[SearchResult]:
         """语义搜索"""
         return self._semantic_search(query, limit)
 
-    def _semantic_search(self, query: str, limit: int = 10) -> List[SearchResult]:
+    def _semantic_search(self, query: str, limit: int = 10) -> list[SearchResult]:
         """语义搜索 - 基于关键词和标签的语义相似度"""
         results = []
         query_lower = query.lower()
@@ -297,7 +295,7 @@ class SkillSearchEngine:
         results.sort(key=lambda r: r.relevance_score, reverse=True)
         return results[:limit]
 
-    def get_suggestions(self, query: str, limit: int = 10) -> List[str]:
+    def get_suggestions(self, query: str, limit: int = 10) -> list[str]:
         """获取搜索建议"""
         try:
             if not query or len(query.strip()) == 0:
@@ -307,7 +305,7 @@ class SkillSearchEngine:
             suggestions = set()
 
             # 1. 从搜索历史中获取
-            for search_query in self.search_history.keys():
+            for search_query in self.search_history:
                 if search_query.lower().startswith(query_lower):
                     suggestions.add(search_query)
 
@@ -334,10 +332,10 @@ class SkillSearchEngine:
             return suggestions_list[:limit]
 
         except Exception as e:
-            logger.error(f"获取搜索建议失败: {str(e)}")
+            logger.error(f"获取搜索建议失败: {e!s}")
             return []
 
-    def _get_popular_searches(self, limit: int = 10) -> List[str]:
+    def _get_popular_searches(self, limit: int = 10) -> list[str]:
         """获取热门搜索"""
         popular = sorted(
             self.search_history.items(),
@@ -346,7 +344,7 @@ class SkillSearchEngine:
         )
         return [query for query, _ in popular[:limit]]
 
-    def get_search_history(self, user_id: str = "", limit: int = 20) -> List[str]:
+    def get_search_history(self, user_id: str = "", limit: int = 20) -> list[str]:
         """获取搜索历史"""
         # 注: 这里简化实现，实际应该按用户存储
         popular = sorted(
@@ -364,9 +362,9 @@ class SkillSearchEngine:
 
     def _apply_filters(
         self,
-        results: List[SearchResult],
-        filters: Dict[str, Any],
-    ) -> List[SearchResult]:
+        results: list[SearchResult],
+        filters: dict[str, Any],
+    ) -> list[SearchResult]:
         """应用过滤器"""
         filtered = results
 
@@ -398,7 +396,7 @@ class SkillSearchEngine:
         self.search_cache.clear()
         logger.info("搜索缓存已清除")
 
-    def get_search_stats(self) -> Dict[str, Any]:
+    def get_search_stats(self) -> dict[str, Any]:
         """获取搜索统计"""
         return {
             "total_searches": sum(self.search_history.values()),
@@ -409,7 +407,7 @@ class SkillSearchEngine:
 
 
 # 全局实例
-_skill_search_engine: Optional[SkillSearchEngine] = None
+_skill_search_engine: SkillSearchEngine | None = None
 
 
 def get_skill_search_engine() -> SkillSearchEngine:
@@ -421,8 +419,8 @@ def get_skill_search_engine() -> SkillSearchEngine:
 
 
 __all__ = [
-    "SkillSearchEngine",
     "SearchResult",
     "SearchSuggestion",
+    "SkillSearchEngine",
     "get_skill_search_engine",
 ]

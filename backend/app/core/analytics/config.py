@@ -1,7 +1,6 @@
 """Configuration for analytics system."""
 
 from dataclasses import dataclass
-from typing import Optional
 
 
 @dataclass
@@ -39,7 +38,7 @@ class AnalyticsConfig:
 
     # Alerting settings
     enable_alerting: bool = False
-    alert_webhook_url: Optional[str] = None
+    alert_webhook_url: str | None = None
 
     # Export settings
     enable_json_export: bool = True

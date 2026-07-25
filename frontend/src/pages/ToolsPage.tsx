@@ -1,14 +1,14 @@
 import React, { useEffect, useState } from 'react'
 import { useAppStore } from '@/store/appStore'
 import { apiClient, Tool } from '@/services/api'
-import { Settings, Play, BarChart3, ToggleLeft, ToggleRight } from 'lucide-react'
+import { useI18n } from '@/i18n/context'
+import { Settings, Play, ToggleLeft } from 'lucide-react'
 import clsx from 'clsx'
 
 export const ToolsPage: React.FC = () => {
   const { theme, tools, setTools, isLoading, setLoading, setError } = useAppStore()
-  const [selectedTool, setSelectedTool] = useState<Tool | null>(null)
-  const [showTestModal, setShowTestModal] = useState(false)
-  const [testParams, setTestParams] = useState<Record<string, any>>({})
+  const { t } = useI18n()
+  const [loadError, setLoadError] = useState<string | null>(null)
 
   useEffect(() => {
     loadTools()
@@ -17,35 +17,13 @@ export const ToolsPage: React.FC = () => {
   const loadTools = async () => {
     try {
       setLoading(true)
+      setLoadError(null)
       const data = await apiClient.listTools()
       setTools(data)
     } catch (error) {
-      setError(error instanceof Error ? error.message : 'Failed to load tools')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleToggleTool = async (tool: Tool) => {
-    try {
-      const updated = await apiClient.updateTool(tool.id, {
-        enabled: !tool.enabled,
-      })
-      setTools(tools.map((t) => (t.id === tool.id ? updated : t)))
-    } catch (error) {
-      setError(error instanceof Error ? error.message : 'Failed to update tool')
-    }
-  }
-
-  const handleTestTool = async () => {
-    if (!selectedTool) return
-
-    try {
-      setLoading(true)
-      const result = await apiClient.testTool(selectedTool.id, testParams)
-      alert(`Test result: ${JSON.stringify(result, null, 2)}`)
-    } catch (error) {
-      setError(error instanceof Error ? error.message : 'Failed to test tool')
+      const message = error instanceof Error ? error.message : 'Failed to load tools'
+      setLoadError(message)
+      setError(message)
     } finally {
       setLoading(false)
     }
@@ -63,73 +41,63 @@ export const ToolsPage: React.FC = () => {
             'text-3xl font-bold mb-2',
             theme === 'dark' ? 'text-white' : 'text-slate-900'
           )}>
-            Tools
+            {t('tools.title', 'Tools')}
           </h1>
           <p className={clsx(
             'text-sm',
             theme === 'dark' ? 'text-slate-400' : 'text-slate-600'
           )}>
-            Manage and configure available tools
+            {t('tools.subtitle', 'Manage and configure available tools')}
           </p>
         </div>
+
+        {loadError && (
+          <div
+            role="alert"
+            className={clsx(
+              'mb-6 rounded-lg border px-4 py-3 text-sm',
+              theme === 'dark'
+                ? 'border-red-900 bg-red-950/40 text-red-300'
+                : 'border-red-200 bg-red-50 text-red-700'
+            )}
+          >
+            {loadError}
+          </div>
+        )}
 
         {/* Tools Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {tools.map((tool) => (
-            <ToolCard
-              key={tool.id}
-              tool={tool}
-              onToggle={() => handleToggleTool(tool)}
-              onTest={() => {
-                setSelectedTool(tool)
-                setShowTestModal(true)
-              }}
-              onConfigure={() => {
-                setSelectedTool(tool)
-              }}
-            />
+            <ToolCard key={tool.id} tool={tool} />
           ))}
         </div>
 
-        {tools.length === 0 && (
+        {tools.length === 0 && !isLoading && !loadError && (
           <div className={clsx(
             'text-center py-12',
             theme === 'dark' ? 'text-slate-400' : 'text-slate-500'
           )}>
-            <p className="text-lg font-medium mb-2">No tools available</p>
-            <p className="text-sm">Tools will appear here once configured</p>
+            <p className="text-lg font-medium mb-2">{t('tools.noTools', 'No tools available')}</p>
+            <p className="text-sm">{t('tools.toolsAppear', 'Tools will appear here once configured')}</p>
           </div>
         )}
       </div>
-
-      {/* Test Modal */}
-      {showTestModal && selectedTool && (
-        <ToolTestModal
-          tool={selectedTool}
-          params={testParams}
-          onParamsChange={setTestParams}
-          onTest={handleTestTool}
-          onClose={() => {
-            setShowTestModal(false)
-            setSelectedTool(null)
-            setTestParams({})
-          }}
-          isLoading={isLoading}
-        />
-      )}
     </div>
   )
 }
 
 interface ToolCardProps {
   tool: Tool
-  onToggle: () => void
-  onTest: () => void
-  onConfigure: () => void
 }
 
-const ToolCard: React.FC<ToolCardProps> = ({ tool, onToggle, onTest, onConfigure }) => {
+const ToolCard: React.FC<ToolCardProps> = ({ tool }) => {
   const { theme } = useAppStore()
+  const { t } = useI18n()
+
+  // The backend exposes only GET /api/v1/tools (read-only manifest); there is
+  // no toggle, test, or configure endpoint, so those actions are disabled and
+  // explicitly marked "coming soon".
+  const comingSoon = t('common.comingSoon', 'Coming soon')
 
   return (
     <div className={clsx(
@@ -151,20 +119,16 @@ const ToolCard: React.FC<ToolCardProps> = ({ tool, onToggle, onTest, onConfigure
             'text-sm',
             theme === 'dark' ? 'text-slate-400' : 'text-slate-600'
           )}>
-            {tool.category}
+            {t('tools.riskLevel', 'Risk level')}: {tool.riskLevel}
           </p>
         </div>
         <button
-          onClick={onToggle}
-          className={clsx(
-            'p-2 rounded-lg transition-colors',
-            tool.enabled
-              ? 'bg-green-500/10 text-green-600'
-              : 'bg-slate-500/10 text-slate-600'
-          )}
-          title={tool.enabled ? 'Disable' : 'Enable'}
+          disabled
+          className="p-2 rounded-lg transition-colors opacity-50 cursor-not-allowed bg-slate-500/10 text-slate-600"
+          title={`${t('tools.configure', 'Configure')} (${comingSoon})`}
+          aria-label={`${t('tools.configure', 'Configure')} (${comingSoon})`}
         >
-          {tool.enabled ? <ToggleRight size={20} /> : <ToggleLeft size={20} />}
+          <ToggleLeft size={20} />
         </button>
       </div>
 
@@ -176,165 +140,36 @@ const ToolCard: React.FC<ToolCardProps> = ({ tool, onToggle, onTest, onConfigure
         {tool.description}
       </p>
 
-      {/* Stats */}
-      {tool.stats && (
-        <div className="grid grid-cols-3 gap-2 mb-4 pb-4 border-b border-slate-700">
-          <div>
-            <p className={clsx(
-              'text-xs font-medium',
-              theme === 'dark' ? 'text-slate-400' : 'text-slate-600'
-            )}>
-              Usage
-            </p>
-            <p className={clsx(
-              'text-lg font-bold',
-              theme === 'dark' ? 'text-white' : 'text-slate-900'
-            )}>
-              {tool.stats.usageCount}
-            </p>
-          </div>
-          <div>
-            <p className={clsx(
-              'text-xs font-medium',
-              theme === 'dark' ? 'text-slate-400' : 'text-slate-600'
-            )}>
-              Success
-            </p>
-            <p className={clsx(
-              'text-lg font-bold',
-              theme === 'dark' ? 'text-white' : 'text-slate-900'
-            )}>
-              {(tool.stats.successRate * 100).toFixed(0)}%
-            </p>
-          </div>
-          <div>
-            <p className={clsx(
-              'text-xs font-medium',
-              theme === 'dark' ? 'text-slate-400' : 'text-slate-600'
-            )}>
-              Avg Time
-            </p>
-            <p className={clsx(
-              'text-lg font-bold',
-              theme === 'dark' ? 'text-white' : 'text-slate-900'
-            )}>
-              {tool.stats.avgExecutionTime.toFixed(0)}ms
-            </p>
-          </div>
-        </div>
-      )}
-
       {/* Actions */}
       <div className="flex gap-2">
         <button
-          onClick={onTest}
+          disabled
           className={clsx(
-            'flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
+            'flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors opacity-50 cursor-not-allowed',
             theme === 'dark'
-              ? 'bg-blue-600/20 text-blue-400 hover:bg-blue-600/30'
-              : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+              ? 'bg-blue-600/20 text-blue-400'
+              : 'bg-blue-100 text-blue-700'
           )}
+          title={`${t('tools.test', 'Test')} (${comingSoon})`}
+          aria-label={`${t('tools.test', 'Test')} (${comingSoon})`}
         >
           <Play size={16} />
-          Test
+          {t('tools.test', 'Test')}
         </button>
         <button
-          onClick={onConfigure}
+          disabled
           className={clsx(
-            'flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
+            'flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors opacity-50 cursor-not-allowed',
             theme === 'dark'
-              ? 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-              : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
+              ? 'bg-slate-700 text-slate-300'
+              : 'bg-slate-200 text-slate-700'
           )}
+          title={`${t('tools.configure', 'Config')} (${comingSoon})`}
+          aria-label={`${t('tools.configure', 'Config')} (${comingSoon})`}
         >
           <Settings size={16} />
-          Config
+          {t('tools.configure', 'Config')}
         </button>
-      </div>
-    </div>
-  )
-}
-
-interface ToolTestModalProps {
-  tool: Tool
-  params: Record<string, any>
-  onParamsChange: (params: Record<string, any>) => void
-  onTest: () => void
-  onClose: () => void
-  isLoading: boolean
-}
-
-const ToolTestModal: React.FC<ToolTestModalProps> = ({
-  tool,
-  params,
-  onParamsChange,
-  onTest,
-  onClose,
-  isLoading,
-}) => {
-  const { theme } = useAppStore()
-
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className={clsx(
-        'rounded-lg p-6 max-w-md w-full mx-4',
-        theme === 'dark' ? 'bg-slate-900' : 'bg-white'
-      )}>
-        <h2 className={clsx(
-          'text-2xl font-bold mb-4',
-          theme === 'dark' ? 'text-white' : 'text-slate-900'
-        )}>
-          Test {tool.name}
-        </h2>
-
-        <div className="space-y-4 mb-6">
-          <div>
-            <label className={clsx(
-              'block text-sm font-medium mb-2',
-              theme === 'dark' ? 'text-slate-300' : 'text-slate-700'
-            )}>
-              Test Parameters
-            </label>
-            <textarea
-              value={JSON.stringify(params, null, 2)}
-              onChange={(e) => {
-                try {
-                  onParamsChange(JSON.parse(e.target.value))
-                } catch {
-                  // Invalid JSON, ignore
-                }
-              }}
-              className={clsx(
-                'w-full px-3 py-2 rounded-lg text-sm font-mono',
-                theme === 'dark'
-                  ? 'bg-slate-800 text-white border border-slate-700'
-                  : 'bg-slate-50 text-slate-900 border border-slate-300'
-              )}
-              rows={6}
-            />
-          </div>
-        </div>
-
-        <div className="flex gap-2">
-          <button
-            onClick={onClose}
-            className={clsx(
-              'flex-1 px-4 py-2 rounded-lg font-medium transition-colors',
-              theme === 'dark'
-                ? 'bg-slate-700 hover:bg-slate-600 text-white'
-                : 'bg-slate-200 hover:bg-slate-300 text-slate-900'
-            )}
-          >
-            Cancel
-          </button>
-          <button
-            onClick={onTest}
-            disabled={isLoading}
-            className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50"
-          >
-            {isLoading ? 'Testing...' : 'Test'}
-          </button>
-        </div>
       </div>
     </div>
   )

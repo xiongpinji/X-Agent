@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 import re
-from typing import Optional
 from dataclasses import dataclass, field
-from datetime import datetime
 
 
 @dataclass
@@ -13,7 +11,7 @@ class SearchIndex:
     """Full-text search index for forum content."""
 
     # Inverted index: word -> set of (post_id, comment_id)
-    word_index: dict[str, set[tuple[str, Optional[str]]]] = field(default_factory=dict)
+    word_index: dict[str, set[tuple[str, str | None]]] = field(default_factory=dict)
     # Tag index: tag -> set of post_ids
     tag_index: dict[str, set[str]] = field(default_factory=dict)
     # Author index: author_id -> set of post_ids
@@ -68,7 +66,7 @@ class SearchIndex:
                 self.word_index[word] = set()
             self.word_index[word].add((post_id, comment_id))
 
-    def search(self, query: str, limit: int = 20) -> list[tuple[str, Optional[str]]]:
+    def search(self, query: str, limit: int = 20) -> list[tuple[str, str | None]]:
         """Search for posts and comments.
 
         Returns:

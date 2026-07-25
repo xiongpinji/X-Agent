@@ -1,0 +1,80 @@
+schema_version: 1
+module_path: ""
+title: X-Agent 多端 Agent 框架（后端 + 前端 + CLI + 桌面 + 扩展 + SDK）
+scope:
+    - README.md
+    - CONTRIBUTING.md
+    - .gitignore
+    - pyproject.toml
+    - Makefile
+    - Dockerfile
+    - docker-compose.yml
+    - requirements.txt
+    - .bandit
+    - .coveragerc
+    - .env.example
+    - .flake8
+    - .gitattributes
+    - .last-run.json
+    - .mcp.json
+    - .pre-commit-config.yaml
+    - ARCHITECTURE_OPTIMIZATION_INTEGRATION_GUIDE.py
+    - CHANGELOG.md
+    - CLAUDE.md
+    - CODE_OF_CONDUCT.md
+    - LICENSE
+    - MEMORY_DEDUPLICATION_EXAMPLES.py
+    - PULL_REQUEST_TEMPLATE.md
+    - ROADMAP.md
+    - SKILLS_IMPLEMENTATION_COMPLETE.txt
+    - SUPPORT.md
+    - _bmm_out.txt
+    - _broken_links.json
+    - _doc_final_check.py
+    - _doc_link_fix.py
+    - _doc_link_fix2.py
+    - _doc_migration_build.py
+    - _doc_move_map.json
+    - _out_scope_refs.json
+    - batch_clean_uvicorn.ps1
+    - benchmark_concurrency.py
+    - cleanup_sensitive_info.py
+    - cleanup_uvicorn.ps1
+    - competitive_analysis_data.json
+    - database_benchmark.py
+    - dependency-pip-audit-report.json
+    - dependency-safety-report.json
+    - deploy.sh
+    - docker-compose.performance.yml
+    - docker-compose.postgres.yml
+    - docker-compose.test.yml
+    - find_uvicorn.ps1
+    - git-commit-en.bat
+    - git-commit.bat
+    - git-init-en.bat
+    - git_normalization.py
+    - inspect_pid.ps1
+    - locustfile.py
+    - mypy.ini
+    - package_xagent_desktop.bat
+    - performance_tests.py
+    - plan.md
+    - probe_backend_http.ps1
+    - pytest.ini
+    - pytest_comprehensive.ini
+    - quick-git-init.bat
+    - requirements-dev.txt
+    - requirements-embeddings.txt
+    - requirements-lock.txt
+    - requirements-vision.txt
+    - run_backend_once.ps1
+    - run_git_setup.bat
+    - sbom.json
+    - setup-git-flow.bat
+    - setup_git.ps1
+    - setup_git_flow.py
+    - start_xagent_dev_web.bat
+    - stop_uvicorn.ps1
+source_files: []
+depends_on: []
+related_to: []

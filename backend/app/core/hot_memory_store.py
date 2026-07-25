@@ -11,6 +11,7 @@ Features:
 
 from __future__ import annotations
 
+import contextlib
 import json
 import re
 from datetime import UTC, datetime
@@ -259,7 +260,6 @@ class HotMemoryStore:
         metadata: dict[str, Any] = {}
 
         # Parse header section
-        in_metadata = False
         in_json = False
         json_lines: list[str] = []
 
@@ -267,30 +267,20 @@ class HotMemoryStore:
             if line.startswith("**Category:**"):
                 category = line.split(":**", 1)[1].strip()
             elif line.startswith("**Importance:**"):
-                try:
+                with contextlib.suppress(ValueError):
                     importance = float(line.split(":**", 1)[1].strip())
-                except ValueError:
-                    pass
             elif line.startswith("**Created:**"):
-                try:
+                with contextlib.suppress(ValueError):
                     created_at = datetime.fromisoformat(line.split(":**", 1)[1].strip())
-                except ValueError:
-                    pass
             elif line.startswith("**Updated:**"):
-                try:
+                with contextlib.suppress(ValueError):
                     updated_at = datetime.fromisoformat(line.split(":**", 1)[1].strip())
-                except ValueError:
-                    pass
             elif line.startswith("**Accessed:**"):
-                try:
+                with contextlib.suppress(ValueError):
                     accessed_at = datetime.fromisoformat(line.split(":**", 1)[1].strip())
-                except ValueError:
-                    pass
             elif line.startswith("**Access Count:**"):
-                try:
+                with contextlib.suppress(ValueError):
                     access_count = int(line.split(":**", 1)[1].strip())
-                except ValueError:
-                    pass
             elif line.startswith("**Tags:**"):
                 tags_str = line.split(":**", 1)[1].strip()
                 tags = [t.strip() for t in tags_str.split(",")]
@@ -303,10 +293,8 @@ class HotMemoryStore:
                 in_json = True
             elif line == "```" and in_json:
                 in_json = False
-                try:
+                with contextlib.suppress(json.JSONDecodeError):
                     metadata = json.loads("\n".join(json_lines))
-                except json.JSONDecodeError:
-                    pass
                 json_lines = []
             elif in_json:
                 json_lines.append(line)

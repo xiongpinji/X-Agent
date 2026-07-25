@@ -18,4 +18,4 @@ def build_index_response(frontend_dir: Path) -> FileResponse:
 # ``main`` remains the single source of truth.
 # Prefer ``uvicorn backend.app.main:app`` in new docs/scripts.
 # ---------------------------------------------------------------------------
-from backend.app.main import app  # noqa: E402,F401
+from backend.app.main import app  # noqa: F401

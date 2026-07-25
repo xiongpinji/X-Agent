@@ -1,0 +1,136 @@
+============================= test session starts =============================
+platform win32 -- Python 3.13.13, pytest-8.4.2, pluggy-1.6.0
+rootdir: D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent
+configfile: pytest.ini
+plugins: anyio-4.13.0, asyncio-0.25.3, cov-7.1.0, timeout-2.3.1, xdist-3.8.0
+asyncio: mode=Mode.AUTO, asyncio_default_fixture_loop_scope=function
+timeout: 30.0s
+timeout method: thread
+timeout func_only: False
+collected 2353 items
+
+tests\unit\core\context\test_code_index.py ............................. [  1%]
+                                                                         [  1%]
+tests\unit\core\context\test_compression.py ..............               [  1%]
+tests\unit\core\context\test_retrieval.py ........................       [  2%]
+tests\unit\test_agent_loop.py ...................                        [  3%]
+tests\unit\test_agent_loop_full.py ..................................... [  5%]
+............................................                             [  7%]
+tests\unit\test_api_batch3_part1.py .................................... [  8%]
+.................                                                        [  9%]
+tests\unit\test_api_batch3_part2.py .................................... [ 10%]
+........................................................................ [ 13%]
+..............................                                           [ 15%]
+tests\unit\test_api_batch4.py ..................                         [ 15%]
+tests\unit\test_code_review.py ....................                      [ 16%]
+tests\unit\test_collaboration_deep.py .................................. [ 18%]
+                                                                         [ 18%]
+tests\unit\test_enterprise_batch5.py ...........................         [ 19%]
+tests\unit\test_enterprise_cluster_audit_deep.py ....................... [ 20%]
+.............................................................            [ 22%]
+tests\unit\test_enterprise_deep.py ..................................... [ 24%]
+................................                                         [ 25%]
+tests\unit\test_evolution_engine.py .................                    [ 26%]
+tests\unit\test_goals_api.py ............                                [ 27%]
+tests\unit\test_llm_backends.py ................................         [ 28%]
+tests\unit\test_loop_deep.py ........................................... [ 30%]
+........................................................................ [ 33%]
+......................................                                   [ 35%]
+tests\unit\test_main_deep.py FFFF............................F.          [ 36%]
+tests\unit\test_main_full.py FFFF....................................... [ 38%]
+F..                                                                      [ 38%]
+tests\unit\test_memory_store_full.py ................................... [ 39%]
+........................................................                 [ 42%]
+tests\unit\test_memory_system.py .........................               [ 43%]
+tests\unit\test_migration_export_shipper_deep.py ....................... [ 44%]
+........................................................................ [ 47%]
+....................                                                     [ 48%]
+tests\unit\test_performance_full.py .................................... [ 49%]
+.........................                                                [ 50%]
+tests\unit\test_performance_optimization_full.py ....................... [ 51%]
+.....................................                                    [ 53%]
+tests\unit\test_pools_full.py .......................................... [ 55%]
+.......                                                                  [ 55%]
+tests\unit\test_rate_limiter.py ..............                           [ 56%]
+tests\unit\test_redis_client_full.py ................................... [ 57%]
+....................                                                     [ 58%]
+tests\unit\test_services_batch7.py ..................................... [ 59%]
+...............................                                          [ 61%]
+tests\unit\test_skill_code_batch6.py ................................... [ 62%]
+............................................                             [ 64%]
+tests\unit\test_streaming_enhanced_deep.py ............................. [ 65%]
+................                                                         [ 66%]
+tests\unit\test_subscription_deep.py ................................... [ 68%]
+..                                                                       [ 68%]
+tests\unit\test_tail_batch8_part1.py ................................... [ 69%]
+..........                                                               [ 70%]
+tests\unit\test_tail_batch8_part2.py ................s...............    [ 71%]
+tests\unit\test_tail_batch8_part3.py ...............................s... [ 72%]
+................s.................                                       [ 74%]
+tests\unit\test_tenant_isolation_security.py ........                    [ 74%]
+tests\unit\test_tools_deep.py .......................................... [ 76%]
+..................................                                       [ 77%]
+tests\unit\test_tools_full.py ..........s............................... [ 79%]
+..................................................                       [ 81%]
+tests\unit\test_ui_tars_deep.py ........................................ [ 83%]
+.............................................                            [ 85%]
+tests\unit\test_workflow_store_deep.py ................................. [ 86%]
+................................................                         [ 88%]
+tests\unit\test_workflows.py ........................................... [ 90%]
+.                                                                        [ 90%]
+tests\unit\test_workflows_deep.py ...................................... [ 92%]
+.............................................                            [ 94%]
+tests\unit\test_workflows_full.py ...................................... [ 95%]
+........................................................................ [ 98%]
+.........................                                                [100%]
+
+================================== FAILURES ===================================
+D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\tests\unit\test_main_deep.py:26: AssertionError: assert (True, 0) is True
+D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\tests\unit\test_main_deep.py:32: AssertionError: assert (False, 60) is False
+D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\tests\unit\test_main_deep.py:38: AssertionError: assert (True, 0) is True
+D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\tests\unit\test_main_deep.py:44: AssertionError: assert (True, 0) is True
+D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\tests\unit\test_main_deep.py:332: assert 429 in [422, 422, 422, 422, 422, 422, ...]
+D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\tests\unit\test_main_full.py:36: AssertionError: assert (True, 0) is True
+D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\tests\unit\test_main_full.py:42: AssertionError: assert (False, 60) is False
+D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\tests\unit\test_main_full.py:48: AssertionError: assert (True, 0) is True
+D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\tests\unit\test_main_full.py:52: AssertionError: assert (True, 0) is True
+D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\tests\unit\test_main_full.py:468: assert 422 == 429
+============================== warnings summary ===============================
+venv\Lib\site-packages\fastapi\testclient.py:1
+  D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+tests/unit/test_subscription_deep.py::TestCreateSubscription::test_create_free_subscription
+tests/unit/test_subscription_deep.py::TestCreateSubscription::test_create_paid_subscription_with_trial
+  D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\backend\app\services\subscription.py:95: RuntimeWarning: coroutine 'AsyncMockMixin._execute_mock_call' was never awaited
+    session.add(subscription)
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/unit/test_subscription_deep.py::TestCreateSubscription::test_create_free_subscription
+tests/unit/test_subscription_deep.py::TestCreateSubscription::test_create_paid_subscription_with_trial
+  D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\backend\app\services\subscription.py:537: RuntimeWarning: coroutine 'AsyncMockMixin._execute_mock_call' was never awaited
+    session.add(quota)
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/unit/test_subscription_deep.py::TestCreateSubscription::test_create_free_subscription
+tests/unit/test_subscription_deep.py::TestCreateSubscription::test_create_paid_subscription_with_trial
+  D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\backend\app\services\subscription.py:591: RuntimeWarning: coroutine 'AsyncMockMixin._execute_mock_call' was never awaited
+    session.add(history)
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED tests/unit/test_main_deep.py::TestRateLimiter::test_allows_within_limit
+FAILED tests/unit/test_main_deep.py::TestRateLimiter::test_blocks_over_limit
+FAILED tests/unit/test_main_deep.py::TestRateLimiter::test_different_keys_independent
+FAILED tests/unit/test_main_deep.py::TestRateLimiter::test_window_expiry - As...
+FAILED tests/unit/test_main_deep.py::TestRateLimitMiddleware::test_login_rate_limit
+FAILED tests/unit/test_main_full.py::TestRateLimiter::test_is_allowed_under_limit
+FAILED tests/unit/test_main_full.py::TestRateLimiter::test_is_allowed_over_limit
+FAILED tests/unit/test_main_full.py::TestRateLimiter::test_is_allowed_window_expires
+FAILED tests/unit/test_main_full.py::TestRateLimiter::test_is_allowed_new_key
+FAILED tests/unit/test_main_full.py::TestMiddlewareIntegration::test_rate_limit_login
+===== 10 failed, 2339 passed, 4 skipped, 7 warnings in 1325.78s (0:22:05) =====

@@ -7,7 +7,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from backend.app.core.llm_ab_testing import ExperimentStatus, TrafficAllocationStrategy, VariantType
-from backend.app.core.llm_evaluation import EvaluationMethod, EvaluationMetric
+from backend.app.core.llm_evaluation import EvaluationMethod
 from backend.app.core.llm_manager import LLMManager
 from backend.app.core.llm_monitoring import AlertSeverity, MetricType
 from backend.app.core.prompt_engineering import PromptType

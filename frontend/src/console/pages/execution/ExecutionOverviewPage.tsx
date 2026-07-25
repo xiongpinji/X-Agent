@@ -72,7 +72,7 @@ export function ExecutionOverviewPage(props: ExecutionOverviewPageProps) {
   const riskLevel = props.riskLevel ?? "中等";
   const resourceType = props.resourceType ?? "execution_control_overview";
   const resourceId = props.resourceId ?? "-";
-  const recommendations = props.recommendations ?? demoRecommendations;
+  const _recommendations = props.recommendations ?? demoRecommendations;
 
   return (
     <div className="space-y-4">

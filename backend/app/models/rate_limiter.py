@@ -4,8 +4,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import UTC, datetime, timedelta
-from typing import Optional
+from datetime import UTC, datetime
 
 import redis.asyncio as redis
 
@@ -17,7 +16,7 @@ logger = logging.getLogger(__name__)
 class RateLimiterRedis:
     """Redis速率限制器实现 - 使用滑动窗口算法"""
 
-    def __init__(self, redis_client: Optional[redis.Redis] = None):
+    def __init__(self, redis_client: redis.Redis | None = None):
         self.redis_client = redis_client
 
     async def _get_redis(self) -> redis.Redis:

@@ -6,15 +6,17 @@
 
 import asyncio
 import time
+from datetime import UTC, datetime
+
 import numpy as np
-from datetime import datetime, UTC
-from backend.app.core.memory.merger import MemoryMerger
-from backend.app.core.memory.importance import MemoryImportanceScorer
-from backend.app.core.memory.retrieval_optimizer import RetrieverOptimizer
-from backend.app.core.memory.graph_enhancer import GraphEnhancer
-from backend.app.core.memory.lifecycle import MemoryLifecycleManager
+
 from backend.app.core.memory.analytics import MemoryAnalytics
 from backend.app.core.memory.fusion_system import AdvancedMemoryFusionSystem
+from backend.app.core.memory.graph_enhancer import GraphEnhancer
+from backend.app.core.memory.importance import MemoryImportanceScorer
+from backend.app.core.memory.lifecycle import MemoryLifecycleManager
+from backend.app.core.memory.merger import MemoryMerger
+from backend.app.core.memory.retrieval_optimizer import RetrieverOptimizer
 
 
 class PerformanceBenchmark:
@@ -55,7 +57,7 @@ class PerformanceBenchmark:
             embeddings = self.generate_embeddings(count)
 
             start_time = time.time()
-            merged, stats = await merger.merge_memories(memories, embeddings)
+            _merged, stats = await merger.merge_memories(memories, embeddings)
             elapsed = time.time() - start_time
 
             results[count] = {
@@ -82,7 +84,7 @@ class PerformanceBenchmark:
             memories = self.generate_test_memories(count)
 
             start_time = time.time()
-            scores = scorer.batch_compute_importance(memories)
+            scorer.batch_compute_importance(memories)
             elapsed = time.time() - start_time
 
             results[count] = {
@@ -259,7 +261,7 @@ class PerformanceBenchmark:
             result = await system.process_memories(memories, embeddings)
             elapsed = time.time() - start_time
 
-            stats = system.get_system_stats()
+            system.get_system_stats()
 
             results[count] = {
                 "count": count,

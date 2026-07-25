@@ -5,14 +5,14 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from backend.app.core.prompt_loader import PromptVersionManager, prompt_loader
 from backend.app.core.prompt_schema import PromptSchema
-from backend.app.core.prompt_loader import prompt_loader, PromptVersionManager
 
 
 class PromptRegistry:
     """Central registry for all prompts in the system."""
 
-    def __init__(self, base_path: str | Path = None):
+    def __init__(self, base_path: str | Path | None = None):
         """Initialize registry with optional base path."""
         self.base_path = Path(base_path) if base_path else Path(__file__).parent.parent.parent / "prompts"
         self._prompts: dict[str, PromptSchema] = {}
@@ -34,7 +34,7 @@ class PromptRegistry:
         # Register version
         prompt_loader.register_version(prompt_id, prompt.metadata.version)
 
-    def get_prompt(self, prompt_id: str, version: str = None) -> PromptSchema | None:
+    def get_prompt(self, prompt_id: str, version: str | None = None) -> PromptSchema | None:
         """Get a prompt by ID and optional version."""
         prompt = self._prompts.get(prompt_id)
         if not prompt:
@@ -55,7 +55,7 @@ class PromptRegistry:
         """List all registered prompts."""
         return list(self._prompts.values())
 
-    def load_from_directory(self, directory: str | Path = None) -> int:
+    def load_from_directory(self, directory: str | Path | None = None) -> int:
         """Load all prompts from a directory structure."""
         if directory is None:
             directory = self.base_path

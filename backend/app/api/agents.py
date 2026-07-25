@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Any, Annotated
+from typing import Annotated, Any
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends
@@ -10,7 +10,14 @@ from fastapi.responses import StreamingResponse
 from backend.app.api.errors import api_error
 from backend.app.core.contracts import ErrorCode, RunContext
 from backend.app.core.security import Principal
-from backend.app.dependencies import enforce_scope, get_agent, get_audit_store, get_run_store, get_trace_store, get_current_principal
+from backend.app.dependencies import (
+    enforce_scope,
+    get_agent,
+    get_audit_store,
+    get_current_principal,
+    get_run_store,
+    get_trace_store,
+)
 
 router = APIRouter(prefix="/api/v1/agents", tags=["agents"])
 PrincipalDependency = Annotated[Principal, Depends(get_current_principal)]

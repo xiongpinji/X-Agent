@@ -1,4 +1,9 @@
 import React, { createContext, useContext, useState, useCallback } from 'react';
+import enTranslations from './translations/en.json';
+import zhTranslations from './translations/zh.json';
+import jaTranslations from './translations/ja.json';
+import koTranslations from './translations/ko.json';
+import esTranslations from './translations/es.json';
 
 interface I18nContextType {
   language: string;
@@ -20,11 +25,11 @@ interface Translations {
 }
 
 const translations: Record<string, Translations> = {
-  en: require('./translations/en.json'),
-  zh: require('./translations/zh.json'),
-  ja: require('./translations/ja.json'),
-  ko: require('./translations/ko.json'),
-  es: require('./translations/es.json'),
+  en: enTranslations,
+  zh: zhTranslations,
+  ja: jaTranslations,
+  ko: koTranslations,
+  es: esTranslations,
 };
 
 const localizationConfig = {
@@ -135,7 +140,7 @@ export const I18nProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return parts.join(fmt.decimal);
   }, [region]);
 
-  const formatCurrency = useCallback((amount: number, currency?: string): string => {
+  const formatCurrency = useCallback((amount: number, _currency?: string): string => {
     const regionKey = region as keyof typeof localizationConfig.currencyFormat;
     const fmt = localizationConfig.currencyFormat[regionKey] || { symbol: '$', position: 'prefix', space: false };
     const formattedAmount = formatNumber(amount, 2);

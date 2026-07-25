@@ -9,6 +9,6 @@ P1-12 交付物：基于现存资产接线的插件系统
 由集成波决定挂载时机）。
 """
 
-from .runtime import PluginRuntime, PluginInfo, get_plugin_runtime
+from .runtime import PluginInfo, PluginRuntime, get_plugin_runtime
 
-__all__ = ["PluginRuntime", "PluginInfo", "get_plugin_runtime"]
+__all__ = ["PluginInfo", "PluginRuntime", "get_plugin_runtime"]

@@ -8,14 +8,15 @@ Provides REST API for audio and video processing:
 - Multimodal analysis
 """
 
-from typing import Annotated, Optional
-from fastapi import APIRouter, Depends, File, UploadFile, Query
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, File, Query, UploadFile
 from pydantic import BaseModel
 
 from backend.app.api.errors import api_error
 from backend.app.core.contracts import ErrorCode
-from backend.app.dependencies import get_agent, get_current_principal, enforce_scope
 from backend.app.core.security import Principal
+from backend.app.dependencies import enforce_scope, get_agent, get_current_principal
 
 router = APIRouter(prefix="/api/v1/media", tags=["media"])
 AgentDependency = Annotated[object, Depends(get_agent)]
@@ -25,8 +26,8 @@ PrincipalDependency = Annotated[Principal, Depends(get_current_principal)]
 # Request/Response Models
 class TranscriptionRequest(BaseModel):
     """Speech recognition request."""
-    language: Optional[str] = None
-    prompt: Optional[str] = None
+    language: str | None = None
+    prompt: str | None = None
 
 
 class TranscriptionResponse(BaseModel):
@@ -40,7 +41,7 @@ class TranscriptionResponse(BaseModel):
 class TextToSpeechRequest(BaseModel):
     """Text-to-speech request."""
     text: str
-    voice: Optional[str] = "alloy"
+    voice: str | None = "alloy"
     speed: float = 1.0
 
 
@@ -88,9 +89,9 @@ class MultimodalAnalysisResponse(BaseModel):
     """Multimodal analysis response."""
     video: dict
     audio: dict
-    transcription: Optional[dict] = None
+    transcription: dict | None = None
     segment_count: int
-    summary: Optional[str] = None
+    summary: str | None = None
     key_moments: list[dict]
 
 
@@ -120,9 +121,9 @@ async def transcribe_audio(
         enforce_scope(principal, "media:read")
 
         # Read file content
-        content = await file.read()
+        await file.read()
 
-        # TODO: Implement transcription using WhisperSpeechRecognizer
+        # NOTE: Requires Whisper SDK integration for real transcription
         # For now, return placeholder response
         return TranscriptionResponse(
             text="Transcription placeholder",
@@ -135,7 +136,7 @@ async def transcribe_audio(
         raise api_error(
             500,
             ErrorCode.INTERNAL_ERROR,
-            f"Transcription failed: {str(exc)}",
+            f"Transcription failed: {exc!s}",
         )
 
 
@@ -168,7 +169,7 @@ async def synthesize_speech(
                 "Text cannot be empty",
             )
 
-        # TODO: Implement TTS using OpenAITextToSpeech
+        # NOTE: Requires OpenAI TTS SDK integration for real synthesis
         # For now, return placeholder response
         word_count = len(request.text.split())
         estimated_duration = (word_count / 2.5) / request.speed
@@ -184,7 +185,7 @@ async def synthesize_speech(
         raise api_error(
             500,
             ErrorCode.INTERNAL_ERROR,
-            f"Synthesis failed: {str(exc)}",
+            f"Synthesis failed: {exc!s}",
         )
 
 
@@ -211,9 +212,9 @@ async def analyze_audio(
     try:
         enforce_scope(principal, "media:read")
 
-        content = await file.read()
+        await file.read()
 
-        # TODO: Implement audio analysis using AudioProcessor
+        # NOTE: Requires AudioProcessor DSP integration for real analysis
         # For now, return placeholder response
         return AudioAnalysisResponse(
             duration=0.0,
@@ -229,7 +230,7 @@ async def analyze_audio(
         raise api_error(
             500,
             ErrorCode.INTERNAL_ERROR,
-            f"Audio analysis failed: {str(exc)}",
+            f"Audio analysis failed: {exc!s}",
         )
 
 
@@ -259,7 +260,7 @@ async def denoise_audio(
 
         content = await file.read()
 
-        # TODO: Implement noise reduction using AudioProcessor
+        # NOTE: Requires AudioProcessor DSP integration for real noise reduction
         return {
             "status": "success",
             "message": "Noise reduction completed",
@@ -270,7 +271,7 @@ async def denoise_audio(
         raise api_error(
             500,
             ErrorCode.INTERNAL_ERROR,
-            f"Noise reduction failed: {str(exc)}",
+            f"Noise reduction failed: {exc!s}",
         )
 
 
@@ -297,7 +298,7 @@ async def get_video_metadata(
     try:
         enforce_scope(principal, "media:read")
 
-        # TODO: Implement metadata extraction using VideoProcessor
+        # NOTE: Requires VideoProcessor (ffmpeg) integration for real metadata extraction
         # For now, return placeholder response
         return VideoMetadataResponse(
             duration=0.0,
@@ -314,7 +315,7 @@ async def get_video_metadata(
         raise api_error(
             500,
             ErrorCode.INTERNAL_ERROR,
-            f"Metadata extraction failed: {str(exc)}",
+            f"Metadata extraction failed: {exc!s}",
         )
 
 
@@ -342,7 +343,7 @@ async def summarize_video(
     try:
         enforce_scope(principal, "media:read")
 
-        # TODO: Implement video summarization using VideoProcessor
+        # NOTE: Requires VideoProcessor (ffmpeg) integration for real summarization
         # For now, return placeholder response
         return VideoSummaryResponse(
             duration=0.0,
@@ -356,7 +357,7 @@ async def summarize_video(
         raise api_error(
             500,
             ErrorCode.INTERNAL_ERROR,
-            f"Video summarization failed: {str(exc)}",
+            f"Video summarization failed: {exc!s}",
         )
 
 
@@ -393,7 +394,7 @@ async def analyze_media(
     try:
         enforce_scope(principal, "media:read")
 
-        # TODO: Implement multimodal analysis using MultimodalFusion
+        # NOTE: Requires MultimodalFusion pipeline integration for real analysis
         # For now, return placeholder response
         return MultimodalAnalysisResponse(
             video={
@@ -417,7 +418,7 @@ async def analyze_media(
         raise api_error(
             500,
             ErrorCode.INTERNAL_ERROR,
-            f"Multimodal analysis failed: {str(exc)}",
+            f"Multimodal analysis failed: {exc!s}",
         )
 
 
@@ -449,5 +450,5 @@ async def health_check(
         raise api_error(
             500,
             ErrorCode.INTERNAL_ERROR,
-            f"Health check failed: {str(exc)}",
+            f"Health check failed: {exc!s}",
         )

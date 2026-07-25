@@ -1,0 +1,112 @@
+[
+  {
+    "objective": "完成用户认证模块重构，支持 OIDC 和 SAML 协议",
+    "status": "active",
+    "checkpoints": [
+      {
+        "label": "OIDC discovery endpoint 配置完成",
+        "done": true
+      },
+      {
+        "label": "SAML metadata 交换实现",
+        "done": true
+      },
+      {
+        "label": "Token 刷新机制",
+        "done": false
+      },
+      {
+        "label": "集成测试通过",
+        "done": false
+      }
+    ]
+  },
+  {
+    "objective": "将 API 响应时间 P99 降低到 200ms 以内",
+    "status": "active",
+    "checkpoints": [
+      {
+        "label": "性能基线测量",
+        "done": true
+      },
+      {
+        "label": "数据库查询优化",
+        "done": true
+      },
+      {
+        "label": "缓存层引入",
+        "done": false
+      },
+      {
+        "label": "负载测试验证",
+        "done": false
+      }
+    ]
+  },
+  {
+    "objective": "构建自动化 CI/CD 流水线，实现每日自动部署",
+    "status": "active",
+    "checkpoints": [
+      {
+        "label": "GitHub Actions 工作流配置",
+        "done": true
+      },
+      {
+        "label": "Docker 镜像自动构建",
+        "done": true
+      },
+      {
+        "label": "Staging 环境自动部署",
+        "done": true
+      },
+      {
+        "label": "Production 蓝绿部署",
+        "done": false
+      }
+    ]
+  },
+  {
+    "objective": "实现多租户数据隔离和配额管理",
+    "status": "completed",
+    "checkpoints": [
+      {
+        "label": "租户模型设计",
+        "done": true
+      },
+      {
+        "label": "数据隔离中间件",
+        "done": true
+      },
+      {
+        "label": "配额限制实现",
+        "done": true
+      },
+      {
+        "label": "计费集成",
+        "done": true
+      }
+    ]
+  },
+  {
+    "objective": "完成产品文档国际化 (中/英/日)",
+    "status": "active",
+    "checkpoints": [
+      {
+        "label": "i18n 框架搭建",
+        "done": true
+      },
+      {
+        "label": "中文文档完善",
+        "done": true
+      },
+      {
+        "label": "英文文档翻译",
+        "done": false
+      },
+      {
+        "label": "日文文档翻译",
+        "done": false
+      }
+    ]
+  }
+]

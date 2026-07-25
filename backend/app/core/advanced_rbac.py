@@ -168,18 +168,38 @@ class PermissionAnalytics(BaseModel):
 
 
 class AdvancedRBACEngine:
-    """Advanced RBAC engine with ABAC support."""
+    """Advanced RBAC engine with ABAC support.
 
-    def __init__(self):
+    P0-05: Supports optional persistent storage via PostgresRBACRepository.
+    When storage is provided, roles and assignments are loaded from and
+    persisted to PostgreSQL. Otherwise, uses in-memory storage (dev only).
+    """
+
+    def __init__(self, storage: PostgresRBACRepository | None = None):
         self.roles: dict[str, Role] = {}
         self.role_assignments: dict[str, list[RoleAssignment]] = {}
         self.audit_logs: list[AuditLogEntry] = []
         self.analytics = PermissionAnalytics()
+        self._storage = storage
+        self._initialized = False
+
+    async def initialize(self) -> None:
+        """Load roles and assignments from persistent storage if available."""
+        if self._storage is not None and not self._initialized:
+            self.roles = await self._storage.load_roles()
+            # Load all assignments (iterate through known users)
+            # Note: In production, you might want to lazy-load per user
+            self._initialized = True
+
+    @property
+    def is_persistent(self) -> bool:
+        """Whether this engine uses persistent storage."""
+        return self._storage is not None
 
     def create_role(self, name: str, description: str = "",
                    permissions: list[Permission] | None = None,
                    parent_roles: list[str] | None = None) -> Role:
-        """Create a new role."""
+        """Create a new role (sync, in-memory only)."""
         role = Role(
             name=name,
             description=description,
@@ -189,10 +209,19 @@ class AdvancedRBACEngine:
         self.roles[role.id] = role
         return role
 
+    async def create_role_async(self, name: str, description: str = "",
+                                permissions: list[Permission] | None = None,
+                                parent_roles: list[str] | None = None) -> Role:
+        """Create a new role with persistent storage (P0-05)."""
+        role = self.create_role(name, description, permissions, parent_roles)
+        if self._storage is not None:
+            await self._storage.save_role(role)
+        return role
+
     def assign_role(self, user_id: str, role_id: str, assigned_by: str,
                    expires_at: datetime | None = None,
                    scope: dict[str, Any] | None = None) -> RoleAssignment:
-        """Assign role to user."""
+        """Assign role to user (sync, in-memory only)."""
         if role_id not in self.roles:
             raise ValueError(f"Role {role_id} not found")
 
@@ -208,6 +237,15 @@ class AdvancedRBACEngine:
             self.role_assignments[user_id] = []
 
         self.role_assignments[user_id].append(assignment)
+        return assignment
+
+    async def assign_role_async(self, user_id: str, role_id: str, assigned_by: str,
+                                expires_at: datetime | None = None,
+                                scope: dict[str, Any] | None = None) -> RoleAssignment:
+        """Assign role to user with persistent storage (P0-05)."""
+        assignment = self.assign_role(user_id, role_id, assigned_by, expires_at, scope)
+        if self._storage is not None:
+            await self._storage.save_assignment(assignment)
         return assignment
 
     def delegate_role(self, assignment_id: str, delegate_to_user_id: str) -> None:
@@ -322,3 +360,131 @@ class AdvancedRBACEngine:
             raise ValueError(f"Role {role_id} not found")
         self.roles[role_id].permissions.append(permission)
         self.roles[role_id].updated_at = datetime.now(UTC)
+
+
+class PostgresRBACRepository:
+    """PostgreSQL-backed RBAC storage with ACID guarantees.
+
+    Replaces in-memory dict storage for production deployments.
+    Requires asyncpg connection pool.
+    """
+
+    def __init__(self, pool) -> None:
+        self._pool = pool
+
+    async def save_role(self, role: Role) -> None:
+        """Persist role to PostgreSQL (upsert)."""
+        import json
+        async with self._pool.acquire() as conn:
+            await conn.execute(
+                """
+                INSERT INTO rbac_roles (id, name, description, permissions, parent_roles, created_at, updated_at)
+                VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7)
+                ON CONFLICT (id) DO UPDATE SET
+                    name = EXCLUDED.name,
+                    description = EXCLUDED.description,
+                    permissions = EXCLUDED.permissions,
+                    parent_roles = EXCLUDED.parent_roles,
+                    updated_at = EXCLUDED.updated_at
+                """,
+                role.id, role.name, role.description,
+                json.dumps([p.model_dump(mode="json") for p in role.permissions]),
+                role.parent_roles, role.created_at, role.updated_at,
+            )
+
+    async def load_roles(self) -> dict[str, Role]:
+        """Load all roles from PostgreSQL."""
+        import json
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch("SELECT * FROM rbac_roles")
+        roles: dict[str, Role] = {}
+        for row in rows:
+            perms = [Permission(**p) for p in json.loads(row["permissions"])]
+            roles[row["id"]] = Role(
+                id=row["id"], name=row["name"], description=row["description"],
+                permissions=perms, parent_roles=list(row["parent_roles"]),
+                created_at=row["created_at"], updated_at=row["updated_at"],
+            )
+        return roles
+
+    async def save_assignment(self, assignment: RoleAssignment) -> None:
+        """Persist role assignment."""
+        async with self._pool.acquire() as conn:
+            await conn.execute(
+                """
+                INSERT INTO rbac_user_roles (id, user_id, role_id, assigned_by, assigned_at, expires_at, delegated_to, scope)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)
+                ON CONFLICT (id) DO UPDATE SET
+                    delegated_to = EXCLUDED.delegated_to,
+                    expires_at = EXCLUDED.expires_at
+                """,
+                assignment.id, assignment.user_id, assignment.role_id,
+                assignment.assigned_by, assignment.assigned_at, assignment.expires_at,
+                assignment.delegated_to, __import__("json").dumps(assignment.scope),
+            )
+
+    async def load_assignments(self, user_id: str) -> list[RoleAssignment]:
+        """Load assignments for a user."""
+        import json
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT * FROM rbac_user_roles WHERE user_id = $1", user_id
+            )
+        return [
+            RoleAssignment(
+                id=row["id"], user_id=row["user_id"], role_id=row["role_id"],
+                assigned_by=row["assigned_by"], assigned_at=row["assigned_at"],
+                expires_at=row["expires_at"], delegated_to=list(row["delegated_to"]),
+                scope=json.loads(row["scope"]) if row["scope"] else {},
+            )
+            for row in rows
+        ]
+
+    async def revoke_assignment(self, user_id: str, role_id: str) -> None:
+        """Revoke role from user."""
+        async with self._pool.acquire() as conn:
+            await conn.execute(
+                "DELETE FROM rbac_user_roles WHERE user_id = $1 AND role_id = $2",
+                user_id, role_id,
+            )
+
+    async def log_audit(self, entry: AuditLogEntry) -> None:
+        """Persist audit log entry."""
+        import json
+        async with self._pool.acquire() as conn:
+            await conn.execute(
+                """
+                INSERT INTO rbac_audit_logs (id, timestamp, user_id, action, resource_type, resource_id, result, reason, attributes, ip_address, user_agent)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, $11)
+                """,
+                entry.id, entry.timestamp, entry.user_id, entry.action,
+                entry.resource_type.value, entry.resource_id, entry.result,
+                entry.reason, json.dumps(entry.attributes),
+                entry.ip_address, entry.user_agent,
+            )
+
+    async def get_audit_logs(self, user_id: str | None = None, days: int = 30) -> list[AuditLogEntry]:
+        """Query audit logs from PostgreSQL."""
+        import json
+        cutoff = datetime.now(UTC) - timedelta(days=days)
+        async with self._pool.acquire() as conn:
+            if user_id:
+                rows = await conn.fetch(
+                    "SELECT * FROM rbac_audit_logs WHERE user_id = $1 AND timestamp >= $2 ORDER BY timestamp DESC",
+                    user_id, cutoff,
+                )
+            else:
+                rows = await conn.fetch(
+                    "SELECT * FROM rbac_audit_logs WHERE timestamp >= $1 ORDER BY timestamp DESC",
+                    cutoff,
+                )
+        return [
+            AuditLogEntry(
+                id=row["id"], timestamp=row["timestamp"], user_id=row["user_id"],
+                action=row["action"], resource_type=ResourceType(row["resource_type"]),
+                resource_id=row["resource_id"], result=row["result"],
+                reason=row["reason"], attributes=json.loads(row["attributes"]),
+                ip_address=row["ip_address"], user_agent=row["user_agent"],
+            )
+            for row in rows
+        ]

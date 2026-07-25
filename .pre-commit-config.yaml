@@ -49,6 +49,16 @@ repos:
         additional_dependencies: ['bandit[toml]']
         files: ^backend/
 
+  # TypeScript type checking
+  - repo: local
+    hooks:
+      - id: tsc-noemit
+        name: TypeScript check (tsc --noEmit)
+        entry: bash -c 'cd frontend && npx tsc --noEmit'
+        language: system
+        files: ^frontend/.*\.(ts|tsx)$
+        pass_filenames: false
+
   # Check for secrets
   - repo: https://github.com/Yelp/detect-secrets
     rev: v1.4.0

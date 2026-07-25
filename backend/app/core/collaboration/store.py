@@ -19,8 +19,6 @@ from pathlib import Path
 from threading import RLock
 from uuid import uuid4
 
-from backend.app.core.memory import MemoryScope
-
 
 @dataclass
 class CollaborationMessage:
@@ -44,7 +42,7 @@ class CollaborationMessage:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, object]) -> "CollaborationMessage":
+    def from_dict(cls, data: dict[str, object]) -> CollaborationMessage:
         return cls(
             message_id=str(data["message_id"]),
             room_id=str(data["room_id"]),
@@ -102,7 +100,7 @@ class CollaborationRoom:
         return data
 
     @classmethod
-    def from_dict(cls, data: dict[str, object]) -> "CollaborationRoom":
+    def from_dict(cls, data: dict[str, object]) -> CollaborationRoom:
         return cls(
             room_id=str(data["room_id"]),
             topic=str(data["topic"]),

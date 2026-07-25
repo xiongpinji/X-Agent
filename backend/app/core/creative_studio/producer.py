@@ -14,7 +14,8 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any, Awaitable, Callable
+from collections.abc import Awaitable, Callable
+from typing import Any
 
 from backend.app.core.creative_studio.media import MediaProviderRegistry, media_registry
 from backend.app.core.creative_studio.prompt_compiler import compile_storyboard_prompts
@@ -80,7 +81,7 @@ class ShortDramaProducerAgent:
             return ""
         try:
             return await self._llm(role.full_system_prompt(), user_prompt)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.warning("sub-agent %s call failed: %s", sub_agent_id, exc)
             return ""
 

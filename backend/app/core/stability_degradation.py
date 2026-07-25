@@ -17,18 +17,19 @@ Features:
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import UTC, datetime
-from enum import Enum
+from enum import StrEnum
 from threading import RLock
-from typing import Any, Callable, Optional
+from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
 
-class DegradationLevel(str, Enum):
+class DegradationLevel(StrEnum):
     """Degradation levels"""
     NORMAL = "normal"
     DEGRADED = "degraded"
@@ -36,7 +37,7 @@ class DegradationLevel(str, Enum):
     MAINTENANCE = "maintenance"
 
 
-class FeatureStatus(str, Enum):
+class FeatureStatus(StrEnum):
     """Feature status"""
     ENABLED = "enabled"
     DISABLED = "disabled"
@@ -64,7 +65,7 @@ class FeatureConfig:
     name: str
     critical: bool = False
     has_fallback: bool = False
-    fallback_impl: Optional[Callable] = None
+    fallback_impl: Callable | None = None
     cache_enabled: bool = False
     cache_ttl: int = 300
 

@@ -3,18 +3,14 @@
 from __future__ import annotations
 
 import asyncio
-import hashlib
-import json
 import time
 from dataclasses import dataclass, field
 from typing import Any
 
-from backend.app.core.contracts import RunContext, ToolCallRecord, RiskLevel
+from backend.app.core.contracts import RunContext
 from backend.app.core.tool_dependency_analyzer import (
-    ToolDependencyAnalyzer,
-    DependencyGraph,
-    ExecutionPlan,
     ExecutionLayer,
+    ToolDependencyAnalyzer,
 )
 from backend.app.core.tool_result_cache import ToolResultCache
 
@@ -430,7 +426,7 @@ class ParallelToolExecutor:
                         retry_attempt=attempt,
                     )
 
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 last_error = f"Tool execution timeout after {call.timeout_seconds}s"
                 if attempt < call.retry_count:
                     await asyncio.sleep(0.1 * (2 ** attempt))

@@ -12,11 +12,12 @@ This module provides intelligent context awareness including:
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 from uuid import uuid4
 
 logger = logging.getLogger(__name__)
@@ -28,10 +29,10 @@ class ProjectStructure:
     root: str
     name: str
     language: str
-    framework: Optional[str] = None
-    package_manager: Optional[str] = None
-    test_framework: Optional[str] = None
-    build_tool: Optional[str] = None
+    framework: str | None = None
+    package_manager: str | None = None
+    test_framework: str | None = None
+    build_tool: str | None = None
     directories: dict[str, str] = field(default_factory=dict)  # name -> purpose
     key_files: list[str] = field(default_factory=list)
     entry_points: list[str] = field(default_factory=list)
@@ -62,7 +63,7 @@ class ArchitecturePattern:
     layers: list[str] = field(default_factory=list)
     components: list[str] = field(default_factory=list)
     dependencies: dict[str, list[str]] = field(default_factory=dict)
-    description: Optional[str] = None
+    description: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
@@ -84,7 +85,7 @@ class CodeConvention:
     pattern: str  # regex or description
     examples: list[str] = field(default_factory=list)
     enforcement_level: str = "recommended"  # "required", "recommended", "optional"
-    description: Optional[str] = None
+    description: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
@@ -102,13 +103,13 @@ class CodeConvention:
 class ProjectContext:
     """Complete project context for code generation."""
     project_structure: ProjectStructure
-    architecture_pattern: Optional[ArchitecturePattern] = None
+    architecture_pattern: ArchitecturePattern | None = None
     conventions: list[CodeConvention] = field(default_factory=list)
     common_imports: dict[str, list[str]] = field(default_factory=dict)
     module_organization: dict[str, list[str]] = field(default_factory=dict)
     testing_patterns: list[str] = field(default_factory=list)
-    documentation_style: Optional[str] = None
-    error_handling_style: Optional[str] = None
+    documentation_style: str | None = None
+    error_handling_style: str | None = None
     async_patterns: list[str] = field(default_factory=list)
     context_id: str = field(default_factory=lambda: str(uuid4()))
 
@@ -171,7 +172,7 @@ class ProjectStructureAnalyzer:
         )
 
     @staticmethod
-    def _detect_language_and_framework(root: Path) -> tuple[str, Optional[str]]:
+    def _detect_language_and_framework(root: Path) -> tuple[str, str | None]:
         """Detect programming language and framework."""
         # Check for language indicators
         if (root / "package.json").exists():
@@ -189,7 +190,7 @@ class ProjectStructureAnalyzer:
         return "python", None
 
     @staticmethod
-    def _detect_js_framework(root: Path) -> Optional[str]:
+    def _detect_js_framework(root: Path) -> str | None:
         """Detect JavaScript framework."""
         try:
             package_json = json.loads((root / "package.json").read_text())
@@ -215,7 +216,7 @@ class ProjectStructureAnalyzer:
         return None
 
     @staticmethod
-    def _detect_python_framework(root: Path) -> Optional[str]:
+    def _detect_python_framework(root: Path) -> str | None:
         """Detect Python framework."""
         # Check for framework indicators in common files
         for file_path in root.rglob("*.py"):
@@ -235,7 +236,7 @@ class ProjectStructureAnalyzer:
         return None
 
     @staticmethod
-    def _detect_package_manager(root: Path) -> Optional[str]:
+    def _detect_package_manager(root: Path) -> str | None:
         """Detect package manager."""
         if (root / "package.json").exists():
             if (root / "yarn.lock").exists():
@@ -257,7 +258,7 @@ class ProjectStructureAnalyzer:
         return None
 
     @staticmethod
-    def _detect_build_tool(root: Path) -> Optional[str]:
+    def _detect_build_tool(root: Path) -> str | None:
         """Detect build tool."""
         if (root / "Makefile").exists():
             return "make"
@@ -275,7 +276,7 @@ class ProjectStructureAnalyzer:
         return None
 
     @staticmethod
-    def _detect_test_framework(root: Path) -> Optional[str]:
+    def _detect_test_framework(root: Path) -> str | None:
         """Detect test framework."""
         for file_path in root.rglob("*.py"):
             try:
@@ -403,7 +404,7 @@ class ArchitecturePatternDetector:
     """Detect architecture patterns in projects."""
 
     @staticmethod
-    def detect(project_structure: ProjectStructure) -> Optional[ArchitecturePattern]:
+    def detect(project_structure: ProjectStructure) -> ArchitecturePattern | None:
         """Detect architecture pattern."""
         directories = project_structure.directories
 
@@ -467,10 +468,8 @@ class ConventionLearner:
         for file_path in root.rglob(f"*{ext}"):
             if len(samples) >= sample_size:
                 break
-            try:
+            with contextlib.suppress(Exception):
                 samples.append(file_path.read_text(encoding="utf-8", errors="ignore"))
-            except Exception:
-                pass
 
         if not samples:
             return conventions
@@ -498,7 +497,7 @@ class ConventionLearner:
         return conventions
 
     @staticmethod
-    def _analyze_naming(samples: list[str], language: str) -> Optional[CodeConvention]:
+    def _analyze_naming(samples: list[str], language: str) -> CodeConvention | None:
         """Analyze naming conventions."""
         if language == "python":
             return CodeConvention(
@@ -522,7 +521,7 @@ class ConventionLearner:
         return None
 
     @staticmethod
-    def _analyze_documentation(samples: list[str], language: str) -> Optional[CodeConvention]:
+    def _analyze_documentation(samples: list[str], language: str) -> CodeConvention | None:
         """Analyze documentation style."""
         if language == "python":
             return CodeConvention(
@@ -546,7 +545,7 @@ class ConventionLearner:
         return None
 
     @staticmethod
-    def _analyze_error_handling(samples: list[str], language: str) -> Optional[CodeConvention]:
+    def _analyze_error_handling(samples: list[str], language: str) -> CodeConvention | None:
         """Analyze error handling patterns."""
         if language == "python":
             return CodeConvention(
@@ -570,7 +569,7 @@ class ConventionLearner:
         return None
 
     @staticmethod
-    def _analyze_imports(samples: list[str], language: str) -> Optional[CodeConvention]:
+    def _analyze_imports(samples: list[str], language: str) -> CodeConvention | None:
         """Analyze import organization."""
         if language == "python":
             return CodeConvention(
@@ -623,7 +622,7 @@ class ContextAwareEngine:
         self.project_contexts[project_root] = context
         return context
 
-    def get_context(self, project_root: str) -> Optional[ProjectContext]:
+    def get_context(self, project_root: str) -> ProjectContext | None:
         """Get cached project context."""
         return self.project_contexts.get(project_root)
 
@@ -657,7 +656,7 @@ class ContextAwareEngine:
 
         return f"{context.project_structure.root}/{target_dir}/{file_name}"
 
-    def _detect_documentation_style(self, structure: ProjectStructure) -> Optional[str]:
+    def _detect_documentation_style(self, structure: ProjectStructure) -> str | None:
         """Detect documentation style."""
         if structure.language == "python":
             return "docstring"
@@ -665,7 +664,7 @@ class ContextAwareEngine:
             return "jsdoc"
         return None
 
-    def _detect_error_handling_style(self, structure: ProjectStructure) -> Optional[str]:
+    def _detect_error_handling_style(self, structure: ProjectStructure) -> str | None:
         """Detect error handling style."""
         if structure.language == "python":
             return "exceptions"

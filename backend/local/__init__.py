@@ -4,46 +4,46 @@ X-Agent Local Endpoint Package
 Provides local data management, encryption, and synchronization capabilities.
 """
 
-from backend.local.config import LocalConfig, ConfigManager, load_default_config
+from backend.local.config import ConfigManager, LocalConfig, load_default_config
 from backend.local.database import DatabaseConfig, LocalDatabase
 from backend.local.encryption import (
+    EncryptedDataStore,
     EncryptionConfig,
     EncryptionManager,
-    SensitiveDataClassifier,
-    EncryptedDataStore,
     KeyRotationManager,
+    SensitiveDataClassifier,
 )
 from backend.local.sync_client import (
-    SyncClient,
-    SyncOperation,
-    SyncConflict,
-    SyncBatch,
-    SyncDirection,
     ConflictResolutionStrategy,
     ConflictResolver,
+    SyncBatch,
+    SyncClient,
+    SyncConflict,
+    SyncDirection,
+    SyncOperation,
 )
 
 __version__ = "1.0.0"
 __all__ = [
-    # Config
-    "LocalConfig",
     "ConfigManager",
-    "load_default_config",
+    "ConflictResolutionStrategy",
+    "ConflictResolver",
     # Database
     "DatabaseConfig",
-    "LocalDatabase",
+    "EncryptedDataStore",
     # Encryption
     "EncryptionConfig",
     "EncryptionManager",
-    "SensitiveDataClassifier",
-    "EncryptedDataStore",
     "KeyRotationManager",
+    # Config
+    "LocalConfig",
+    "LocalDatabase",
+    "SensitiveDataClassifier",
+    "SyncBatch",
     # Sync
     "SyncClient",
-    "SyncOperation",
     "SyncConflict",
-    "SyncBatch",
     "SyncDirection",
-    "ConflictResolutionStrategy",
-    "ConflictResolver",
+    "SyncOperation",
+    "load_default_config",
 ]

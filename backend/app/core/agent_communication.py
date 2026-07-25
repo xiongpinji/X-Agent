@@ -7,18 +7,18 @@ supporting both synchronous and asynchronous communication.
 
 from __future__ import annotations
 
-import json
 import logging
 import uuid
-from dataclasses import dataclass, field, asdict
+from collections.abc import Callable
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
-from enum import Enum
-from typing import Optional, Callable, Any
+from enum import Enum, StrEnum
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
-class MessageType(str, Enum):
+class MessageType(StrEnum):
     """Types of messages between agents."""
 
     TASK_REQUEST = "task_request"
@@ -50,8 +50,8 @@ class AgentMessage:
     payload: dict = field(default_factory=dict)
     priority: MessagePriority = MessagePriority.NORMAL
     timestamp: datetime = field(default_factory=datetime.now)
-    correlation_id: Optional[str] = None
-    reply_to: Optional[str] = None
+    correlation_id: str | None = None
+    reply_to: str | None = None
     metadata: dict = field(default_factory=dict)
     ttl_seconds: int = 3600
 
@@ -93,13 +93,13 @@ class MessageQueue:
         self.messages.sort(key=lambda m: m.priority.value, reverse=True)
         return True
 
-    def dequeue(self) -> Optional[AgentMessage]:
+    def dequeue(self) -> AgentMessage | None:
         """Remove and return highest priority message."""
         if self.messages:
             return self.messages.pop(0)
         return None
 
-    def peek(self) -> Optional[AgentMessage]:
+    def peek(self) -> AgentMessage | None:
         """View highest priority message without removing."""
         if self.messages:
             return self.messages[0]
@@ -153,8 +153,8 @@ class AgentMessenger:
         message_type: MessageType,
         payload: dict,
         priority: MessagePriority = MessagePriority.NORMAL,
-        correlation_id: Optional[str] = None,
-        reply_to: Optional[str] = None,
+        correlation_id: str | None = None,
+        reply_to: str | None = None,
     ) -> str:
         """
         Send a message from one agent to another.
@@ -198,7 +198,7 @@ class AgentMessenger:
             self.logger.error(f"Failed to send message to {to_agent_id}")
             return ""
 
-    async def receive_message(self, agent_id: str) -> Optional[AgentMessage]:
+    async def receive_message(self, agent_id: str) -> AgentMessage | None:
         """
         Receive next message for an agent.
 
@@ -217,7 +217,7 @@ class AgentMessenger:
 
         return message
 
-    async def peek_message(self, agent_id: str) -> Optional[AgentMessage]:
+    async def peek_message(self, agent_id: str) -> AgentMessage | None:
         """
         Peek at next message without removing it.
 
@@ -290,7 +290,7 @@ class AgentMessenger:
         message_type: MessageType,
         payload: dict,
         timeout_seconds: int = 30,
-    ) -> Optional[AgentMessage]:
+    ) -> AgentMessage | None:
         """
         Send a message and wait for response.
 

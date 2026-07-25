@@ -1,6 +1,15 @@
-"""Unit tests for LLM providers."""
+"""Unit tests for LLM providers.
+
+P1-10: llm_providers 模块已归档收敛至 backend.app.core.llm.backends。
+本测试文件保留供参考，跳过收集。
+"""
 
 import pytest
+
+pytest.skip(
+    "llm_providers 已归档 (P1-10 重复实现收敛), 测试跳过",
+    allow_module_level=True,
+)
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from backend.app.core.llm_providers.base import (

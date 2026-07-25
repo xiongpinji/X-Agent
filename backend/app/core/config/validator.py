@@ -1,16 +1,13 @@
 """Configuration validator module for comprehensive validation and health checks."""
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
 
-from pydantic import ValidationError
-
-from .base import BaseConfig, Environment
-from .database import DatabaseConfig
+from .base import BaseConfig
 from .cache import CacheConfig
-from .security import SecurityConfig
+from .database import DatabaseConfig
 from .observability import ObservabilityConfig
-
+from .security import SecurityConfig
 
 logger = logging.getLogger(__name__)
 
@@ -26,8 +23,8 @@ class ConfigValidator:
 
     def __init__(self):
         """Initialize validator."""
-        self.errors: List[str] = []
-        self.warnings: List[str] = []
+        self.errors: list[str] = []
+        self.warnings: list[str] = []
 
     def validate_all(
         self,
@@ -119,9 +116,8 @@ class ConfigValidator:
             self.errors.append("database_max_overflow cannot be negative")
 
         # Validate PostgreSQL specific settings
-        if config.is_postgresql():
-            if config.postgres_vector_dimensions < 1:
-                self.errors.append("postgres_vector_dimensions must be at least 1")
+        if config.is_postgresql() and config.postgres_vector_dimensions < 1:
+            self.errors.append("postgres_vector_dimensions must be at least 1")
 
         # Validate audit configuration for production
         if base_config.is_production() and not config.audit_hmac_secret:
@@ -186,22 +182,20 @@ class ConfigValidator:
         if not origins:
             self.errors.append("At least one CORS origin must be configured")
 
-        if base_config.is_production():
-            if "*" in origins:
-                self.errors.append(
-                    "CORS wildcard origin (*) is not allowed in production"
-                )
+        if base_config.is_production() and "*" in origins:
+            self.errors.append(
+                "CORS wildcard origin (*) is not allowed in production"
+            )
 
         # Validate HTTPS requirement in production
         if base_config.is_production() and not config.require_https:
             self.errors.append("HTTPS is required in production mode")
 
         # Validate SSL certificate paths if HTTPS is required
-        if config.require_https:
-            if not config.ssl_cert_path or not config.ssl_key_path:
-                self.errors.append(
-                    "ssl_cert_path and ssl_key_path must be set when require_https is True"
-                )
+        if config.require_https and (not config.ssl_cert_path or not config.ssl_key_path):
+            self.errors.append(
+                "ssl_cert_path and ssl_key_path must be set when require_https is True"
+            )
 
     def _validate_observability(
         self, config: ObservabilityConfig, base_config: BaseConfig
@@ -216,9 +210,8 @@ class ConfigValidator:
                 )
 
         # Validate Sentry configuration
-        if config.sentry_enabled:
-            if not config.sentry_dsn:
-                self.errors.append("sentry_dsn must be set when sentry_enabled is True")
+        if config.sentry_enabled and not config.sentry_dsn:
+            self.errors.append("sentry_dsn must be set when sentry_enabled is True")
 
         # Validate log file path
         if config.is_file_logging():
@@ -249,7 +242,7 @@ class ConfigValidator:
             if not database_config.audit_hmac_secret:
                 self.errors.append("Production environment requires audit_hmac_secret")
 
-    def get_summary(self) -> Dict[str, Any]:
+    def get_summary(self) -> dict[str, Any]:
         """Get validation summary.
 
         Returns:

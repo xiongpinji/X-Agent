@@ -17,11 +17,11 @@ Design notes:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from typing import Any, Protocol, runtime_checkable
 
 
-class HookEvent(str, Enum):
+class HookEvent(StrEnum):
     """Lifecycle and tool events at which hooks may fire.
 
     Values mirror the agent execution path:
@@ -38,7 +38,7 @@ class HookEvent(str, Enum):
     USER_PROMPT_SUBMIT = "user_prompt_submit"
 
 
-class HookAction(str, Enum):
+class HookAction(StrEnum):
     """The verdict a hook returns for an event.
 
     Semantics:

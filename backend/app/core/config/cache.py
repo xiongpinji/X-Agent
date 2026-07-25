@@ -1,6 +1,5 @@
 """Cache configuration module."""
 
-from typing import Optional
 
 from pydantic import Field, field_validator
 
@@ -11,11 +10,11 @@ class CacheConfig(BaseConfig):
     """Cache configuration with support for multiple backends."""
 
     # Redis configuration
-    redis_url: Optional[str] = Field(
+    redis_url: str | None = Field(
         default=None,
         description="Redis connection URL (redis://host:port/db)",
     )
-    redis_password: Optional[str] = Field(
+    redis_password: str | None = Field(
         default=None,
         description="Redis password (if not in URL)",
     )
@@ -76,7 +75,7 @@ class CacheConfig(BaseConfig):
 
     @field_validator("redis_url")
     @classmethod
-    def validate_redis_url(cls, v: Optional[str]) -> Optional[str]:
+    def validate_redis_url(cls, v: str | None) -> str | None:
         """Validate Redis URL format."""
         if v is None:
             return v
@@ -88,7 +87,7 @@ class CacheConfig(BaseConfig):
         """Check if Redis is configured."""
         return self.redis_url is not None
 
-    def get_redis_url(self) -> Optional[str]:
+    def get_redis_url(self) -> str | None:
         """Get the Redis URL with password if provided."""
         if not self.redis_url:
             return None

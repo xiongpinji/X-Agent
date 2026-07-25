@@ -12,10 +12,12 @@ Implements:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +65,7 @@ class ResourceMonitor:
         self._alerts: list[ResourceAlert] = []
         self._alert_callbacks: list[Callable[[ResourceAlert], None]] = []
         self._lock = asyncio.Lock()
-        self._monitor_task: Optional[asyncio.Task] = None
+        self._monitor_task: asyncio.Task | None = None
         self._running = False
 
     async def start(self) -> None:
@@ -80,10 +82,8 @@ class ResourceMonitor:
         self._running = False
         if self._monitor_task:
             self._monitor_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._monitor_task
-            except asyncio.CancelledError:
-                pass
         logger.info("Resource monitor stopped")
 
     async def register_pool(self, name: str, pool: Any) -> None:

@@ -1,9 +1,8 @@
 """
 Alembic迁移脚本 - 创建初始表结构
 """
-from alembic import op
 import sqlalchemy as sa
-from sqlalchemy.dialects import postgresql
+from alembic import op
 
 
 def upgrade() -> None:

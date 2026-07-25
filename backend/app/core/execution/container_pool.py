@@ -3,12 +3,13 @@
 """
 
 import asyncio
+import contextlib
 import logging
 import time
-from typing import Any, Dict, Optional, List
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +62,7 @@ class Container:
     language: str  # "python" 或 "nodejs"
     state: ContainerState = ContainerState.IDLE
     metrics: ContainerMetrics = field(default_factory=ContainerMetrics)
-    last_error: Optional[str] = None
+    last_error: str | None = None
 
     def is_available(self) -> bool:
         """检查容器是否可用"""
@@ -72,9 +73,7 @@ class Container:
         if self.state == ContainerState.UNHEALTHY:
             return False
         # 如果错误率超过20%，标记为不健康
-        if self.metrics.get_error_rate() > 0.2:
-            return False
-        return True
+        return not self.metrics.get_error_rate() > 0.2
 
 
 class ContainerPool:
@@ -101,10 +100,10 @@ class ContainerPool:
         self.warmup_enabled = warmup_enabled
         self.health_check_interval = health_check_interval
 
-        self.containers: List[Container] = []
+        self.containers: list[Container] = []
         self.lock = asyncio.Lock()
-        self._health_check_task: Optional[asyncio.Task] = None
-        self._warmup_task: Optional[asyncio.Task] = None
+        self._health_check_task: asyncio.Task | None = None
+        self._warmup_task: asyncio.Task | None = None
         self._stats = {
             "total_acquisitions": 0,
             "total_releases": 0,
@@ -136,7 +135,7 @@ class ContainerPool:
 
         logger.info(f"{self.language} container pool initialized with {len(self.containers)} containers")
 
-    async def acquire(self, timeout: float = 5.0) -> Optional[Container]:
+    async def acquire(self, timeout: float = 5.0) -> Container | None:
         """
         获取一个可用的容器
 
@@ -216,9 +215,9 @@ class ContainerPool:
 
             # 执行简单的预热代码
             if self.language == "python":
-                warmup_code = "x = 1 + 1"
+                pass
             else:  # nodejs
-                warmup_code = "const x = 1 + 1;"
+                pass
 
             # 这里会由执行管理器调用实际的执行逻辑
             # 现在只是标记为已预热
@@ -302,17 +301,13 @@ class ContainerPool:
         # 取消后台任务
         if self._health_check_task:
             self._health_check_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._health_check_task
-            except asyncio.CancelledError:
-                pass
 
         if self._warmup_task:
             self._warmup_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._warmup_task
-            except asyncio.CancelledError:
-                pass
 
         async with self.lock:
             # 标记所有容器为已终止
@@ -321,7 +316,7 @@ class ContainerPool:
 
         logger.info(f"{self.language} container pool shut down")
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """获取池统计信息"""
         async_stats = {
             "pool_size": self.pool_size,
@@ -351,7 +346,7 @@ class ContainerPool:
 
         return async_stats
 
-    def get_container_stats(self) -> List[Dict[str, Any]]:
+    def get_container_stats(self) -> list[dict[str, Any]]:
         """获取所有容器的详细统计信息"""
         stats = []
         for container in self.containers:

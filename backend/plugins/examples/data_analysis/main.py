@@ -5,21 +5,20 @@ Author: X-Agent Team
 Version: 1.0.0
 """
 
-from typing import Any, Dict, List, Optional
-from datetime import datetime, UTC
-import json
+from datetime import UTC, datetime
+from typing import Any
 
 
 class DataAnalysis:
     """Data analysis plugin"""
 
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: dict[str, Any]):
         """Initialize plugin with configuration"""
         self.config = config
         self.name = "Data Analysis"
         self.version = "1.0.0"
 
-    def execute(self, action: str, params: Dict[str, Any]) -> Dict[str, Any]:
+    def execute(self, action: str, params: dict[str, Any]) -> dict[str, Any]:
         """Execute plugin action"""
         if action == "analyze_data":
             return self._analyze_data(params)
@@ -36,7 +35,7 @@ class DataAnalysis:
         else:
             raise ValueError(f"Unknown action: {action}")
 
-    def _analyze_data(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _analyze_data(self, params: dict[str, Any]) -> dict[str, Any]:
         """Analyze dataset"""
         data = params.get("data", [])
         analysis_type = params.get("type", "basic")
@@ -54,10 +53,10 @@ class DataAnalysis:
             },
         }
 
-    def _generate_report(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _generate_report(self, params: dict[str, Any]) -> dict[str, Any]:
         """Generate analysis report"""
         title = params.get("title", "Data Analysis Report")
-        data = params.get("data", [])
+        params.get("data", [])
 
         return {
             "status": "success",
@@ -72,11 +71,11 @@ class DataAnalysis:
             },
         }
 
-    def _create_visualization(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _create_visualization(self, params: dict[str, Any]) -> dict[str, Any]:
         """Create data visualization"""
         chart_type = params.get("chart_type", "bar")
         title = params.get("title", "Chart")
-        data = params.get("data", [])
+        params.get("data", [])
 
         return {
             "status": "success",
@@ -88,7 +87,7 @@ class DataAnalysis:
             },
         }
 
-    def _statistical_summary(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _statistical_summary(self, params: dict[str, Any]) -> dict[str, Any]:
         """Generate statistical summary"""
         data = params.get("data", [])
 
@@ -111,7 +110,7 @@ class DataAnalysis:
             },
         }
 
-    def _detect_anomalies(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _detect_anomalies(self, params: dict[str, Any]) -> dict[str, Any]:
         """Detect anomalies in data"""
         data = params.get("data", [])
         threshold = params.get("threshold", 2.0)
@@ -129,7 +128,7 @@ class DataAnalysis:
             },
         }
 
-    def _forecast(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _forecast(self, params: dict[str, Any]) -> dict[str, Any]:
         """Forecast future values"""
         data = params.get("data", [])
         periods = params.get("periods", 10)
@@ -169,13 +168,13 @@ class DataAnalysis:
 plugin = None
 
 
-def initialize(config: Dict[str, Any]) -> None:
+def initialize(config: dict[str, Any]) -> None:
     """Initialize plugin"""
     global plugin
     plugin = DataAnalysis(config)
 
 
-def execute(action: str, params: Dict[str, Any]) -> Dict[str, Any]:
+def execute(action: str, params: dict[str, Any]) -> dict[str, Any]:
     """Execute plugin action"""
     if plugin is None:
         raise RuntimeError("Plugin not initialized")

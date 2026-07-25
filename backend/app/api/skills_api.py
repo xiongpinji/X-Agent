@@ -17,15 +17,15 @@ from __future__ import annotations
 import logging
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Body
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from backend.app.api.errors import api_error
 from backend.app.core.contracts import ErrorCode
 from backend.app.core.security import Principal
-from backend.app.dependencies import get_current_principal, enforce_scope
-from backend.app.core.skills_manager import get_skill_system_manager
 from backend.app.core.skills_core import SkillCapability
+from backend.app.core.skills_manager import get_skill_system_manager
+from backend.app.dependencies import enforce_scope, get_current_principal
 
 logger = logging.getLogger(__name__)
 
@@ -107,7 +107,7 @@ async def discover_skills(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error discovering skills: {str(e)}", exc_info=True)
+        logger.error(f"Error discovering skills: {e!s}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -139,7 +139,7 @@ async def search_skills(
             "count": len(results),
         }
     except Exception as e:
-        logger.error(f"Error searching skills: {str(e)}", exc_info=True)
+        logger.error(f"Error searching skills: {e!s}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -152,7 +152,7 @@ async def get_marketplace_stats(principal: PrincipalDependency) -> dict[str, Any
         stats = manager.get_marketplace_stats()
         return {"success": True, "stats": stats}
     except Exception as e:
-        logger.error(f"Error getting marketplace stats: {str(e)}", exc_info=True)
+        logger.error(f"Error getting marketplace stats: {e!s}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -168,7 +168,7 @@ async def get_top_skills(
         skills = manager.get_top_skills(limit)
         return {"success": True, "skills": skills, "count": len(skills)}
     except Exception as e:
-        logger.error(f"Error getting top skills: {str(e)}", exc_info=True)
+        logger.error(f"Error getting top skills: {e!s}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -181,7 +181,7 @@ async def get_system_health(principal: PrincipalDependency) -> dict[str, Any]:
         health = await manager.get_system_health()
         return {"success": True, "health": health}
     except Exception as e:
-        logger.error(f"Error getting system health: {str(e)}", exc_info=True)
+        logger.error(f"Error getting system health: {e!s}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -204,7 +204,7 @@ async def list_skills(
             "count": len(skills),
         }
     except Exception as e:
-        logger.error(f"Error listing skills: {str(e)}", exc_info=True)
+        logger.error(f"Error listing skills: {e!s}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -234,7 +234,7 @@ async def execute_skill(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error executing skill: {str(e)}", exc_info=True)
+        logger.error(f"Error executing skill: {e!s}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -254,7 +254,7 @@ async def get_skill_info(skill_id: str, principal: PrincipalDependency) -> dict[
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error getting skill info: {str(e)}", exc_info=True)
+        logger.error(f"Error getting skill info: {e!s}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -275,7 +275,7 @@ async def install_skill(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error installing skill: {str(e)}", exc_info=True)
+        logger.error(f"Error installing skill: {e!s}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -292,7 +292,7 @@ async def uninstall_skill(skill_id: str, principal: PrincipalDependency) -> dict
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error uninstalling skill: {str(e)}", exc_info=True)
+        logger.error(f"Error uninstalling skill: {e!s}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -313,7 +313,7 @@ async def rate_skill(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error rating skill: {str(e)}", exc_info=True)
+        logger.error(f"Error rating skill: {e!s}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 

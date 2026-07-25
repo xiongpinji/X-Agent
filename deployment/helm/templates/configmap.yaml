@@ -20,3 +20,28 @@ data:
   QDRANT_PORT: {{ .Values.qdrant.port | quote }}
   NEO4J_PORT: {{ .Values.neo4j.port | quote }}
   NEO4J_USER: {{ .Values.neo4j.user | quote }}
+  # P1: Python UTF-8 模式 (PEP 540)
+  PYTHONUTF8: {{ .Values.appEnv.pythonUtf8 | default "1" | quote }}
+  # P1: 工作流存储后端
+  XAGENT_WORKFLOW_STORE_BACKEND: {{ .Values.appEnv.workflowStoreBackend | default "postgres" | quote }}
+  # P1: Neo4j 功能开关
+  XAGENT_NEO4J_ENABLED: {{ .Values.appEnv.neo4jEnabled | default false | quote }}
+  # P1: SSO - SAML
+  XAGENT_SAML_ENABLED: {{ .Values.sso.saml.enabled | default false | quote }}
+  XAGENT_SAML_ENTITY_ID: {{ .Values.sso.saml.entityId | default "" | quote }}
+  XAGENT_SAML_ACS_URL: {{ .Values.sso.saml.acsUrl | default "" | quote }}
+  XAGENT_SAML_IDP_METADATA_URL: {{ .Values.sso.saml.idpMetadataUrl | default "" | quote }}
+  XAGENT_SAML_IDP_ENTITY_ID: {{ .Values.sso.saml.idpEntityId | default "" | quote }}
+  XAGENT_SAML_NAME_ID_FORMAT: {{ .Values.sso.saml.nameIdFormat | default "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress" | quote }}
+  # P1: SSO - LDAP
+  XAGENT_LDAP_ENABLED: {{ .Values.sso.ldap.enabled | default false | quote }}
+  XAGENT_LDAP_SERVER_URL: {{ .Values.sso.ldap.serverUrl | default "" | quote }}
+  XAGENT_LDAP_BASE_DN: {{ .Values.sso.ldap.baseDn | default "" | quote }}
+  XAGENT_LDAP_BIND_DN: {{ .Values.sso.ldap.bindDn | default "" | quote }}
+  XAGENT_LDAP_USER_SEARCH_FILTER: {{ .Values.sso.ldap.userSearchFilter | default "(uid={username})" | quote }}
+  XAGENT_LDAP_USE_TLS: {{ .Values.sso.ldap.useTls | default true | quote }}
+  # P1: SSO - WebAuthn
+  XAGENT_WEBAUTHN_ENABLED: {{ .Values.sso.webauthn.enabled | default false | quote }}
+  XAGENT_WEBAUTHN_RP_ID: {{ .Values.sso.webauthn.rpId | default "" | quote }}
+  XAGENT_WEBAUTHN_RP_NAME: {{ .Values.sso.webauthn.rpName | default "X-Agent" | quote }}
+  XAGENT_WEBAUTHN_ORIGIN: {{ .Values.sso.webauthn.origin | default "" | quote }}

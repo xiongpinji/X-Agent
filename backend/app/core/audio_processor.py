@@ -10,18 +10,18 @@ Comprehensive audio processing capabilities including:
 
 from __future__ import annotations
 
-import asyncio
+import contextlib
 import io
 import logging
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
-class AudioFormat(str, Enum):
+class AudioFormat(StrEnum):
     """Audio file formats."""
     WAV = "wav"
     MP3 = "mp3"
@@ -162,7 +162,6 @@ class AudioProcessor:
         """
         try:
             import wave
-            import struct
 
             if isinstance(audio_file, bytes):
                 audio_data = io.BytesIO(audio_file)
@@ -194,10 +193,8 @@ class AudioProcessor:
                     )
             finally:
                 if isinstance(audio_file, (str, Path)):
-                    try:
+                    with contextlib.suppress(Exception):
                         audio_data.close()
-                    except Exception:
-                        pass
 
         except Exception as exc:
             logger.error(f"Metadata extraction failed: {exc}")
@@ -226,9 +223,9 @@ class AudioProcessor:
             raise AudioProcessingError("FFmpeg is required for format conversion")
 
         try:
+            import os
             import subprocess
             import tempfile
-            import os
 
             tmp_in_fd, tmp_in_path = tempfile.mkstemp(suffix=".wav")
             tmp_out_fd, tmp_out_path = tempfile.mkstemp(suffix=f".{target_format.value}")
@@ -274,14 +271,10 @@ class AudioProcessor:
 
             finally:
                 # Clean up temporary files
-                try:
+                with contextlib.suppress(Exception):
                     os.unlink(tmp_in_path)
-                except Exception:
-                    pass
-                try:
+                with contextlib.suppress(Exception):
                     os.unlink(tmp_out_path)
-                except Exception:
-                    pass
 
         except Exception as exc:
             logger.error(f"Format conversion failed: {exc}")
@@ -301,7 +294,7 @@ class AudioProcessor:
         """
         try:
             import wave
-            import struct
+
             import numpy as np
 
             if isinstance(audio_file, bytes):
@@ -351,10 +344,8 @@ class AudioProcessor:
 
             finally:
                 if isinstance(audio_file, (str, Path)):
-                    try:
+                    with contextlib.suppress(Exception):
                         audio_data.close()
-                    except Exception:
-                        pass
 
         except Exception as exc:
             logger.error(f"Audio analysis failed: {exc}")
@@ -381,9 +372,9 @@ class AudioProcessor:
             raise AudioProcessingError("FFmpeg is required for noise reduction")
 
         try:
+            import os
             import subprocess
             import tempfile
-            import os
 
             tmp_in_fd, tmp_in_path = tempfile.mkstemp(suffix=".wav")
             tmp_out_fd, tmp_out_path = tempfile.mkstemp(suffix=".wav")
@@ -426,14 +417,10 @@ class AudioProcessor:
 
             finally:
                 # Clean up temporary files
-                try:
+                with contextlib.suppress(Exception):
                     os.unlink(tmp_in_path)
-                except Exception:
-                    pass
-                try:
+                with contextlib.suppress(Exception):
                     os.unlink(tmp_out_path)
-                except Exception:
-                    pass
 
         except Exception as exc:
             logger.error(f"Noise reduction failed: {exc}")
@@ -460,9 +447,9 @@ class AudioProcessor:
             raise AudioProcessingError("FFmpeg is required for normalization")
 
         try:
+            import os
             import subprocess
             import tempfile
-            import os
 
             tmp_in_fd, tmp_in_path = tempfile.mkstemp(suffix=".wav")
             tmp_out_fd, tmp_out_path = tempfile.mkstemp(suffix=".wav")
@@ -505,14 +492,10 @@ class AudioProcessor:
 
             finally:
                 # Clean up temporary files
-                try:
+                with contextlib.suppress(Exception):
                     os.unlink(tmp_in_path)
-                except Exception:
-                    pass
-                try:
+                with contextlib.suppress(Exception):
                     os.unlink(tmp_out_path)
-                except Exception:
-                    pass
 
         except Exception as exc:
             logger.error(f"Normalization failed: {exc}")
@@ -539,7 +522,7 @@ class AudioProcessor:
         """
         try:
             import wave
-            import struct
+
             import numpy as np
 
             if isinstance(audio_file, bytes):
@@ -563,7 +546,7 @@ class AudioProcessor:
 
                     # Detect silent frames
                     silent_frames = np.abs(audio_array) < silence_threshold
-                    min_frames = int(min_duration * sample_rate)
+                    int(min_duration * sample_rate)
 
                     # Find segments
                     segments = []
@@ -585,10 +568,8 @@ class AudioProcessor:
 
             finally:
                 if isinstance(audio_file, (str, Path)):
-                    try:
+                    with contextlib.suppress(Exception):
                         audio_data.close()
-                    except Exception:
-                        pass
 
         except Exception as exc:
             logger.error(f"Silence detection failed: {exc}")

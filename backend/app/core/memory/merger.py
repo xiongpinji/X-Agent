@@ -11,15 +11,12 @@
 
 from __future__ import annotations
 
-import asyncio
+import hashlib
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, UTC
-from typing import Optional, Any
-import hashlib
+from datetime import UTC, datetime
 
 import numpy as np
-from sklearn.metrics.pairwise import cosine_similarity
 
 logger = logging.getLogger(__name__)
 
@@ -103,7 +100,7 @@ class MemoryMerger:
     async def merge_memories(
         self,
         memories: list[dict],
-        embeddings: Optional[np.ndarray] = None,
+        embeddings: np.ndarray | None = None,
     ) -> tuple[list[MergedMemory], MergeStats]:
         """
         合并相似的记忆。
@@ -302,7 +299,7 @@ class MemoryMerger:
         embeddings = []
 
         for mem in memories:
-            if "embedding" in mem and mem["embedding"]:
+            if mem.get("embedding"):
                 embeddings.append(mem["embedding"])
             else:
                 # 使用内容哈希作为简单嵌入

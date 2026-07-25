@@ -1,0 +1,1489 @@
+============================= test session starts =============================
+platform win32 -- Python 3.13.13, pytest-8.4.2, pluggy-1.6.0
+rootdir: D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent
+configfile: pytest.ini
+plugins: anyio-4.13.0, asyncio-0.25.3, cov-7.1.0, timeout-2.3.1, xdist-3.8.0
+asyncio: mode=Mode.AUTO, asyncio_default_fixture_loop_scope=function
+timeout: 60.0s
+timeout method: thread
+timeout func_only: False
+collected 105 items
+
+tests\integration\test_agent_v2_integration.py ......................... [ 23%]
+..                                                                       [ 25%]
+tests\integration\test_auth_api.py .F.FFFF.FFFFF                         [ 38%]
+tests\integration\test_mcp_e2e.py ..........................             [ 62%]
+tests\integration\test_memory_api.py FFFFFF.                             [ 69%]
+tests\integration\test_p1_features.py .......................            [ 91%]
+tests\integration\test_workflow_api.py FEEFEEFEE                         [100%]
+
+=================================== ERRORS ====================================
+___________ ERROR at setup of TestWorkflowCRUD.test_list_workflows ____________
+E   psycopg.OperationalError: connection failed: connection to server at "127.0.0.1", port 5432 failed: FATAL:  password authentication failed for user "xagent"
+    Multiple connection attempts failed. All failures were:
+    - host: 'localhost', port: 5432, hostaddr: '::1': connection failed: connection to server at "::1", port 5432 failed: Permission denied (0x0000271D/10013)
+    	Is the server running on that host and accepting TCP/IP connections?
+    - host: 'localhost', port: 5432, hostaddr: '127.0.0.1': connection failed: connection to server at "127.0.0.1", port 5432 failed: FATAL:  password authentication failed for user "xagent"
+
+The above exception was the direct cause of the following exception:
+E   sqlalchemy.exc.OperationalError: (psycopg.OperationalError) connection failed: connection to server at "127.0.0.1", port 5432 failed: FATAL:  password authentication failed for user "xagent"
+    Multiple connection attempts failed. All failures were:
+    - host: 'localhost', port: 5432, hostaddr: '::1': connection failed: connection to server at "::1", port 5432 failed: Permission denied (0x0000271D/10013)
+    	Is the server running on that host and accepting TCP/IP connections?
+    - host: 'localhost', port: 5432, hostaddr: '127.0.0.1': connection failed: connection to server at "127.0.0.1", port 5432 failed: FATAL:  password authentication failed for user "xagent"
+    (Background on this error at: https://sqlalche.me/e/20/e3q8)
+----------------------------- Captured log setup ------------------------------
+ERROR    backend.app.monitoring.middleware:middleware.py:33 Request failed: (psycopg.OperationalError) connection failed: connection to server at "127.0.0.1", port 5432 failed: FATAL:  password authentication failed for user "xagent"
+Multiple connection attempts failed. All failures were:
+- host: 'localhost', port: 5432, hostaddr: '::1': connection failed: connection to server at "::1", port 5432 failed: Permission denied (0x0000271D/10013)
+	Is the server running on that host and accepting TCP/IP connections?
+- host: 'localhost', port: 5432, hostaddr: '127.0.0.1': connection failed: connection to server at "127.0.0.1", port 5432 failed: FATAL:  password authentication failed for user "xagent"
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+Traceback (most recent call last):
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 144, in __init__
+    self._dbapi_connection = engine.raw_connection()
+                             ~~~~~~~~~~~~~~~~~~~~~^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 3319, in raw_connection
+    return self.pool.connect()
+           ~~~~~~~~~~~~~~~~~^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\base.py", line 448, in connect
+    return _ConnectionFairy._checkout(self)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\base.py", line 1272, in _checkout
+    fairy = _ConnectionRecord.checkout(pool)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\base.py", line 712, in checkout
+    rec = pool._do_get()
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\impl.py", line 178, in _do_get
+    with util.safe_reraise():
+         ~~~~~~~~~~~~~~~~~^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\util\langhelpers.py", line 122, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\impl.py", line 176, in _do_get
+    return self._create_connection()
+           ~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\base.py", line 389, in _create_connection
+    return _ConnectionRecord(self)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\base.py", line 674, in __init__
+    self.__connect()
+    ~~~~~~~~~~~~~~^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\base.py", line 900, in __connect
+    with util.safe_reraise():
+         ~~~~~~~~~~~~~~~~~^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\util\langhelpers.py", line 122, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\base.py", line 896, in __connect
+    self.dbapi_connection = connection = pool._invoke_creator(self)
+                                         ~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\engine\create.py", line 667, in connect
+    return dialect.connect(*cargs_tup, **cparams)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\engine\default.py", line 630, in connect
+    return self.loaded_dbapi.connect(*cargs, **cparams)  # type: ignore[no-any-return]  # NOQA: E501
+           ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\psycopg\connection.py", line 130, in connect
+    raise new_ex.with_traceback(None)
+psycopg.OperationalError: connection failed: connection to server at "127.0.0.1", port 5432 failed: FATAL:  password authentication failed for user "xagent"
+Multiple connection attempts failed. All failures were:
+- host: 'localhost', port: 5432, hostaddr: '::1': connection failed: connection to server at "::1", port 5432 failed: Permission denied (0x0000271D/10013)
+	Is the server running on that host and accepting TCP/IP connections?
+- host: 'localhost', port: 5432, hostaddr: '127.0.0.1': connection failed: connection to server at "127.0.0.1", port 5432 failed: FATAL:  password authentication failed for user "xagent"
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\backend\app\monitoring\middleware.py", line 29, in dispatch
+    response = await call_next(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\middleware\base.py", line 168, in call_next
+    raise app_exc from app_exc.__cause__ or app_exc.__context__
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\middleware\base.py", line 144, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\middleware\base.py", line 191, in __call__
+    with recv_stream, send_stream, collapse_excgroups():
+                                   ~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\canqu\AppData\Roaming\uv\python\cpython-3.13-windows-x86_64-none\Lib\contextlib.py", line 162, in __exit__
+    self.gen.throw(value)
+    ~~~~~~~~~~~~~~^^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\_utils.py", line 87, in collapse_excgroups
+    raise exc
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\middleware\base.py", line 193, in __call__
+    response = await self.dispatch_func(request, call_next)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\backend\app\main.py", line 318, in dispatch
+    return await call_next(request)
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\middleware\base.py", line 168, in call_next
+    raise app_exc from app_exc.__cause__ or app_exc.__context__
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\middleware\base.py", line 144, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\middleware\cors.py", line 88, in __call__
+    await self.app(scope, receive, send)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\routing.py", line 660, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\routing.py", line 680, in app
+    await route.handle(scope, receive, send)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\routing.py", line 276, in handle
+    await self.app(scope, receive, send)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\fastapi\routing.py", line 134, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\fastapi\routing.py", line 120, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\fastapi\routing.py", line 457, in app
+    solved_result = await solve_dependencies(
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\fastapi\dependencies\utils.py", line 680, in solve_dependencies
+    solved = await run_in_threadpool(call, **solved_result.values)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\concurrency.py", line 32, in run_in_threadpool
+    return await anyio.to_thread.run_sync(func)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\anyio\to_thread.py", line 63, in run_sync
+    return await get_async_backend().run_sync_in_worker_thread(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        func, args, abandon_on_cancel=abandon_on_cancel, limiter=limiter
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\anyio\_backends\_asyncio.py", line 2518, in run_sync_in_worker_thread
+    return await future
+           ^^^^^^^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\anyio\_backends\_asyncio.py", line 1002, in run
+    result = context.run(func, *args)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\backend\app\dependencies.py", line 412, in get_workflow_repository
+    return build_workflow_repository(
+        backend=settings.workflow_store_backend,
+    ...<2 lines>...
+        run_path=settings.workflow_run_store_path,
+    )
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\backend\app\core\workflow_store.py", line 680, in build_workflow_repository
+    return SQLWorkflowRepository(create_workflow_engine(database_url))
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\backend\app\core\workflow_store.py", line 197, in __init__
+    init_workflow_store_schema(engine)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\backend\app\core\workflow_store.py", line 180, in init_workflow_store_schema
+    WorkflowStoreBase.metadata.create_all(engine)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\sql\schema.py", line 5930, in create_all
+    bind._run_ddl_visitor(
+    ~~~~~~~~~~~~~~~~~~~~~^
+        ddl.SchemaGenerator, self, checkfirst=checkfirst, tables=tables
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 3269, in _run_ddl_visitor
+    with self.begin() as conn:
+         ~~~~~~~~~~^^
+  File "C:\Users\canqu\AppData\Roaming\uv\python\cpython-3.13-windows-x86_64-none\Lib\contextlib.py", line 141, in __enter__
+    return next(self.gen)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 3259, in begin
+    with self.connect() as conn:
+         ~~~~~~~~~~~~^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 3295, in connect
+    return self._connection_cls(self)
+           ~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 146, in __init__
+    Connection._handle_dbapi_exception_noconnection(
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        err, dialect, engine
+        ^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 2450, in _handle_dbapi_exception_noconnection
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 144, in __init__
+    self._dbapi_connection = engine.raw_connection()
+                             ~~~~~~~~~~~~~~~~~~~~~^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 3319, in raw_connection
+    return self.pool.connect()
+           ~~~~~~~~~~~~~~~~~^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\base.py", line 448, in connect
+    return _ConnectionFairy._checkout(self)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\base.py", line 1272, in _checkout
+    fairy = _ConnectionRecord.checkout(pool)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\base.py", line 712, in checkout
+    rec = pool._do_get()
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\impl.py", line 178, in _do_get
+    with util.safe_reraise():
+         ~~~~~~~~~~~~~~~~~^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\util\langhelpers.py", line 122, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\impl.py", line 176, in _do_get
+    return self._create_connection()
+           ~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\base.py", line 389, in _create_connection
+    return _ConnectionRecord(self)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\base.py", line 674, in __init__
+    self.__connect()
+    ~~~~~~~~~~~~~~^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\base.py", line 900, in __connect
+    with util.safe_reraise():
+         ~~~~~~~~~~~~~~~~~^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\util\langhelpers.py", line 122, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\base.py", line 896, in __connect
+    self.dbapi_connection = connection = pool._invoke_creator(self)
+                                         ~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\engine\create.py", line 667, in connect
+    return dialect.connect(*cargs_tup, **cparams)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\engine\default.py", line 630, in connect
+    return self.loaded_dbapi.connect(*cargs, **cparams)  # type: ignore[no-any-return]  # NOQA: E501
+           ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\psycopg\connection.py", line 130, in connect
+    raise new_ex.with_traceback(None)
+sqlalchemy.exc.OperationalError: (psycopg.OperationalError) connection failed: connection to server at "127.0.0.1", port 5432 failed: FATAL:  password authentication failed for user "xagent"
+Multiple connection attempts failed. All failures were:
+- host: 'localhost', port: 5432, hostaddr: '::1': connection failed: connection to server at "::1", port 5432 failed: Permission denied (0x0000271D/10013)
+	Is the server running on that host and accepting TCP/IP connections?
+- host: 'localhost', port: 5432, hostaddr: '127.0.0.1': connection failed: connection to server at "127.0.0.1", port 5432 failed: FATAL:  password authentication failed for user "xagent"
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+____________ ERROR at setup of TestWorkflowCRUD.test_get_workflow _____________
+E   psycopg.OperationalError: connection failed: connection to server at "127.0.0.1", port 5432 failed: FATAL:  password authentication failed for user "xagent"
+    Multiple connection attempts failed. All failures were:
+    - host: 'localhost', port: 5432, hostaddr: '::1': connection failed: connection to server at "::1", port 5432 failed: Permission denied (0x0000271D/10013)
+    	Is the server running on that host and accepting TCP/IP connections?
+    - host: 'localhost', port: 5432, hostaddr: '127.0.0.1': connection failed: connection to server at "127.0.0.1", port 5432 failed: FATAL:  password authentication failed for user "xagent"
+
+The above exception was the direct cause of the following exception:
+E   sqlalchemy.exc.OperationalError: (psycopg.OperationalError) connection failed: connection to server at "127.0.0.1", port 5432 failed: FATAL:  password authentication failed for user "xagent"
+    Multiple connection attempts failed. All failures were:
+    - host: 'localhost', port: 5432, hostaddr: '::1': connection failed: connection to server at "::1", port 5432 failed: Permission denied (0x0000271D/10013)
+    	Is the server running on that host and accepting TCP/IP connections?
+    - host: 'localhost', port: 5432, hostaddr: '127.0.0.1': connection failed: connection to server at "127.0.0.1", port 5432 failed: FATAL:  password authentication failed for user "xagent"
+    (Background on this error at: https://sqlalche.me/e/20/e3q8)
+----------------------------- Captured log setup ------------------------------
+ERROR    backend.app.monitoring.middleware:middleware.py:33 Request failed: (psycopg.OperationalError) connection failed: connection to server at "127.0.0.1", port 5432 failed: FATAL:  password authentication failed for user "xagent"
+Multiple connection attempts failed. All failures were:
+- host: 'localhost', port: 5432, hostaddr: '::1': connection failed: connection to server at "::1", port 5432 failed: Permission denied (0x0000271D/10013)
+	Is the server running on that host and accepting TCP/IP connections?
+- host: 'localhost', port: 5432, hostaddr: '127.0.0.1': connection failed: connection to server at "127.0.0.1", port 5432 failed: FATAL:  password authentication failed for user "xagent"
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+Traceback (most recent call last):
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 144, in __init__
+    self._dbapi_connection = engine.raw_connection()
+                             ~~~~~~~~~~~~~~~~~~~~~^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 3319, in raw_connection
+    return self.pool.connect()
+           ~~~~~~~~~~~~~~~~~^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\base.py", line 448, in connect
+    return _ConnectionFairy._checkout(self)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\base.py", line 1272, in _checkout
+    fairy = _ConnectionRecord.checkout(pool)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\base.py", line 712, in checkout
+    rec = pool._do_get()
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\impl.py", line 178, in _do_get
+    with util.safe_reraise():
+         ~~~~~~~~~~~~~~~~~^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\util\langhelpers.py", line 122, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\impl.py", line 176, in _do_get
+    return self._create_connection()
+           ~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\base.py", line 389, in _create_connection
+    return _ConnectionRecord(self)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\base.py", line 674, in __init__
+    self.__connect()
+    ~~~~~~~~~~~~~~^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\base.py", line 900, in __connect
+    with util.safe_reraise():
+         ~~~~~~~~~~~~~~~~~^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\util\langhelpers.py", line 122, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\base.py", line 896, in __connect
+    self.dbapi_connection = connection = pool._invoke_creator(self)
+                                         ~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\engine\create.py", line 667, in connect
+    return dialect.connect(*cargs_tup, **cparams)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\engine\default.py", line 630, in connect
+    return self.loaded_dbapi.connect(*cargs, **cparams)  # type: ignore[no-any-return]  # NOQA: E501
+           ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\psycopg\connection.py", line 130, in connect
+    raise new_ex.with_traceback(None)
+psycopg.OperationalError: connection failed: connection to server at "127.0.0.1", port 5432 failed: FATAL:  password authentication failed for user "xagent"
+Multiple connection attempts failed. All failures were:
+- host: 'localhost', port: 5432, hostaddr: '::1': connection failed: connection to server at "::1", port 5432 failed: Permission denied (0x0000271D/10013)
+	Is the server running on that host and accepting TCP/IP connections?
+- host: 'localhost', port: 5432, hostaddr: '127.0.0.1': connection failed: connection to server at "127.0.0.1", port 5432 failed: FATAL:  password authentication failed for user "xagent"
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\backend\app\monitoring\middleware.py", line 29, in dispatch
+    response = await call_next(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\middleware\base.py", line 168, in call_next
+    raise app_exc from app_exc.__cause__ or app_exc.__context__
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\middleware\base.py", line 144, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\middleware\base.py", line 191, in __call__
+    with recv_stream, send_stream, collapse_excgroups():
+                                   ~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\canqu\AppData\Roaming\uv\python\cpython-3.13-windows-x86_64-none\Lib\contextlib.py", line 162, in __exit__
+    self.gen.throw(value)
+    ~~~~~~~~~~~~~~^^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\_utils.py", line 87, in collapse_excgroups
+    raise exc
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\middleware\base.py", line 193, in __call__
+    response = await self.dispatch_func(request, call_next)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\backend\app\main.py", line 318, in dispatch
+    return await call_next(request)
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\middleware\base.py", line 168, in call_next
+    raise app_exc from app_exc.__cause__ or app_exc.__context__
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\middleware\base.py", line 144, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\middleware\cors.py", line 88, in __call__
+    await self.app(scope, receive, send)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\routing.py", line 660, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\routing.py", line 680, in app
+    await route.handle(scope, receive, send)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\routing.py", line 276, in handle
+    await self.app(scope, receive, send)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\fastapi\routing.py", line 134, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\fastapi\routing.py", line 120, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\fastapi\routing.py", line 457, in app
+    solved_result = await solve_dependencies(
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\fastapi\dependencies\utils.py", line 680, in solve_dependencies
+    solved = await run_in_threadpool(call, **solved_result.values)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\concurrency.py", line 32, in run_in_threadpool
+    return await anyio.to_thread.run_sync(func)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\anyio\to_thread.py", line 63, in run_sync
+    return await get_async_backend().run_sync_in_worker_thread(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        func, args, abandon_on_cancel=abandon_on_cancel, limiter=limiter
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\anyio\_backends\_asyncio.py", line 2518, in run_sync_in_worker_thread
+    return await future
+           ^^^^^^^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\anyio\_backends\_asyncio.py", line 1002, in run
+    result = context.run(func, *args)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\backend\app\dependencies.py", line 412, in get_workflow_repository
+    return build_workflow_repository(
+        backend=settings.workflow_store_backend,
+    ...<2 lines>...
+        run_path=settings.workflow_run_store_path,
+    )
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\backend\app\core\workflow_store.py", line 680, in build_workflow_repository
+    return SQLWorkflowRepository(create_workflow_engine(database_url))
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\backend\app\core\workflow_store.py", line 197, in __init__
+    init_workflow_store_schema(engine)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\backend\app\core\workflow_store.py", line 180, in init_workflow_store_schema
+    WorkflowStoreBase.metadata.create_all(engine)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\sql\schema.py", line 5930, in create_all
+    bind._run_ddl_visitor(
+    ~~~~~~~~~~~~~~~~~~~~~^
+        ddl.SchemaGenerator, self, checkfirst=checkfirst, tables=tables
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 3269, in _run_ddl_visitor
+    with self.begin() as conn:
+         ~~~~~~~~~~^^
+  File "C:\Users\canqu\AppData\Roaming\uv\python\cpython-3.13-windows-x86_64-none\Lib\contextlib.py", line 141, in __enter__
+    return next(self.gen)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 3259, in begin
+    with self.connect() as conn:
+         ~~~~~~~~~~~~^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 3295, in connect
+    return self._connection_cls(self)
+           ~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 146, in __init__
+    Connection._handle_dbapi_exception_noconnection(
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        err, dialect, engine
+        ^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 2450, in _handle_dbapi_exception_noconnection
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 144, in __init__
+    self._dbapi_connection = engine.raw_connection()
+                             ~~~~~~~~~~~~~~~~~~~~~^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 3319, in raw_connection
+    return self.pool.connect()
+           ~~~~~~~~~~~~~~~~~^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\base.py", line 448, in connect
+    return _ConnectionFairy._checkout(self)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\base.py", line 1272, in _checkout
+    fairy = _ConnectionRecord.checkout(pool)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\base.py", line 712, in checkout
+    rec = pool._do_get()
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\impl.py", line 178, in _do_get
+    with util.safe_reraise():
+         ~~~~~~~~~~~~~~~~~^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\util\langhelpers.py", line 122, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\impl.py", line 176, in _do_get
+    return self._create_connection()
+           ~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\base.py", line 389, in _create_connection
+    return _ConnectionRecord(self)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\base.py", line 674, in __init__
+    self.__connect()
+    ~~~~~~~~~~~~~~^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\base.py", line 900, in __connect
+    with util.safe_reraise():
+         ~~~~~~~~~~~~~~~~~^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\util\langhelpers.py", line 122, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\base.py", line 896, in __connect
+    self.dbapi_connection = connection = pool._invoke_creator(self)
+                                         ~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\engine\create.py", line 667, in connect
+    return dialect.connect(*cargs_tup, **cparams)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\engine\default.py", line 630, in connect
+    return self.loaded_dbapi.connect(*cargs, **cparams)  # type: ignore[no-any-return]  # NOQA: E501
+           ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\psycopg\connection.py", line 130, in connect
+    raise new_ex.with_traceback(None)
+sqlalchemy.exc.OperationalError: (psycopg.OperationalError) connection failed: connection to server at "127.0.0.1", port 5432 failed: FATAL:  password authentication failed for user "xagent"
+Multiple connection attempts failed. All failures were:
+- host: 'localhost', port: 5432, hostaddr: '::1': connection failed: connection to server at "::1", port 5432 failed: Permission denied (0x0000271D/10013)
+	Is the server running on that host and accepting TCP/IP connections?
+- host: 'localhost', port: 5432, hostaddr: '127.0.0.1': connection failed: connection to server at "127.0.0.1", port 5432 failed: FATAL:  password authentication failed for user "xagent"
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+___________ ERROR at setup of TestWorkflowCRUD.test_update_workflow ___________
+E   psycopg.OperationalError: connection failed: connection to server at "127.0.0.1", port 5432 failed: FATAL:  password authentication failed for user "xagent"
+    Multiple connection attempts failed. All failures were:
+    - host: 'localhost', port: 5432, hostaddr: '::1': connection failed: connection to server at "::1", port 5432 failed: Permission denied (0x0000271D/10013)
+    	Is the server running on that host and accepting TCP/IP connections?
+    - host: 'localhost', port: 5432, hostaddr: '127.0.0.1': connection failed: connection to server at "127.0.0.1", port 5432 failed: FATAL:  password authentication failed for user "xagent"
+
+The above exception was the direct cause of the following exception:
+E   sqlalchemy.exc.OperationalError: (psycopg.OperationalError) connection failed: connection to server at "127.0.0.1", port 5432 failed: FATAL:  password authentication failed for user "xagent"
+    Multiple connection attempts failed. All failures were:
+    - host: 'localhost', port: 5432, hostaddr: '::1': connection failed: connection to server at "::1", port 5432 failed: Permission denied (0x0000271D/10013)
+    	Is the server running on that host and accepting TCP/IP connections?
+    - host: 'localhost', port: 5432, hostaddr: '127.0.0.1': connection failed: connection to server at "127.0.0.1", port 5432 failed: FATAL:  password authentication failed for user "xagent"
+    (Background on this error at: https://sqlalche.me/e/20/e3q8)
+----------------------------- Captured log setup ------------------------------
+ERROR    backend.app.monitoring.middleware:middleware.py:33 Request failed: (psycopg.OperationalError) connection failed: connection to server at "127.0.0.1", port 5432 failed: FATAL:  password authentication failed for user "xagent"
+Multiple connection attempts failed. All failures were:
+- host: 'localhost', port: 5432, hostaddr: '::1': connection failed: connection to server at "::1", port 5432 failed: Permission denied (0x0000271D/10013)
+	Is the server running on that host and accepting TCP/IP connections?
+- host: 'localhost', port: 5432, hostaddr: '127.0.0.1': connection failed: connection to server at "127.0.0.1", port 5432 failed: FATAL:  password authentication failed for user "xagent"
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+Traceback (most recent call last):
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 144, in __init__
+    self._dbapi_connection = engine.raw_connection()
+                             ~~~~~~~~~~~~~~~~~~~~~^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 3319, in raw_connection
+    return self.pool.connect()
+           ~~~~~~~~~~~~~~~~~^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\base.py", line 448, in connect
+    return _ConnectionFairy._checkout(self)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\base.py", line 1272, in _checkout
+    fairy = _ConnectionRecord.checkout(pool)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\base.py", line 712, in checkout
+    rec = pool._do_get()
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\impl.py", line 178, in _do_get
+    with util.safe_reraise():
+         ~~~~~~~~~~~~~~~~~^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\util\langhelpers.py", line 122, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\impl.py", line 176, in _do_get
+    return self._create_connection()
+           ~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\base.py", line 389, in _create_connection
+    return _ConnectionRecord(self)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\base.py", line 674, in __init__
+    self.__connect()
+    ~~~~~~~~~~~~~~^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\base.py", line 900, in __connect
+    with util.safe_reraise():
+         ~~~~~~~~~~~~~~~~~^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\util\langhelpers.py", line 122, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\base.py", line 896, in __connect
+    self.dbapi_connection = connection = pool._invoke_creator(self)
+                                         ~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\engine\create.py", line 667, in connect
+    return dialect.connect(*cargs_tup, **cparams)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\engine\default.py", line 630, in connect
+    return self.loaded_dbapi.connect(*cargs, **cparams)  # type: ignore[no-any-return]  # NOQA: E501
+           ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\psycopg\connection.py", line 130, in connect
+    raise new_ex.with_traceback(None)
+psycopg.OperationalError: connection failed: connection to server at "127.0.0.1", port 5432 failed: FATAL:  password authentication failed for user "xagent"
+Multiple connection attempts failed. All failures were:
+- host: 'localhost', port: 5432, hostaddr: '::1': connection failed: connection to server at "::1", port 5432 failed: Permission denied (0x0000271D/10013)
+	Is the server running on that host and accepting TCP/IP connections?
+- host: 'localhost', port: 5432, hostaddr: '127.0.0.1': connection failed: connection to server at "127.0.0.1", port 5432 failed: FATAL:  password authentication failed for user "xagent"
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\backend\app\monitoring\middleware.py", line 29, in dispatch
+    response = await call_next(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\middleware\base.py", line 168, in call_next
+    raise app_exc from app_exc.__cause__ or app_exc.__context__
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\middleware\base.py", line 144, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\middleware\base.py", line 191, in __call__
+    with recv_stream, send_stream, collapse_excgroups():
+                                   ~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\canqu\AppData\Roaming\uv\python\cpython-3.13-windows-x86_64-none\Lib\contextlib.py", line 162, in __exit__
+    self.gen.throw(value)
+    ~~~~~~~~~~~~~~^^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\_utils.py", line 87, in collapse_excgroups
+    raise exc
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\middleware\base.py", line 193, in __call__
+    response = await self.dispatch_func(request, call_next)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\backend\app\main.py", line 318, in dispatch
+    return await call_next(request)
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\middleware\base.py", line 168, in call_next
+    raise app_exc from app_exc.__cause__ or app_exc.__context__
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\middleware\base.py", line 144, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\middleware\cors.py", line 88, in __call__
+    await self.app(scope, receive, send)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\routing.py", line 660, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\routing.py", line 680, in app
+    await route.handle(scope, receive, send)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\routing.py", line 276, in handle
+    await self.app(scope, receive, send)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\fastapi\routing.py", line 134, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\fastapi\routing.py", line 120, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\fastapi\routing.py", line 457, in app
+    solved_result = await solve_dependencies(
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\fastapi\dependencies\utils.py", line 680, in solve_dependencies
+    solved = await run_in_threadpool(call, **solved_result.values)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\concurrency.py", line 32, in run_in_threadpool
+    return await anyio.to_thread.run_sync(func)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\anyio\to_thread.py", line 63, in run_sync
+    return await get_async_backend().run_sync_in_worker_thread(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        func, args, abandon_on_cancel=abandon_on_cancel, limiter=limiter
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\anyio\_backends\_asyncio.py", line 2518, in run_sync_in_worker_thread
+    return await future
+           ^^^^^^^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\anyio\_backends\_asyncio.py", line 1002, in run
+    result = context.run(func, *args)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\backend\app\dependencies.py", line 412, in get_workflow_repository
+    return build_workflow_repository(
+        backend=settings.workflow_store_backend,
+    ...<2 lines>...
+        run_path=settings.workflow_run_store_path,
+    )
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\backend\app\core\workflow_store.py", line 680, in build_workflow_repository
+    return SQLWorkflowRepository(create_workflow_engine(database_url))
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\backend\app\core\workflow_store.py", line 197, in __init__
+    init_workflow_store_schema(engine)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\backend\app\core\workflow_store.py", line 180, in init_workflow_store_schema
+    WorkflowStoreBase.metadata.create_all(engine)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\sql\schema.py", line 5930, in create_all
+    bind._run_ddl_visitor(
+    ~~~~~~~~~~~~~~~~~~~~~^
+        ddl.SchemaGenerator, self, checkfirst=checkfirst, tables=tables
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 3269, in _run_ddl_visitor
+    with self.begin() as conn:
+         ~~~~~~~~~~^^
+  File "C:\Users\canqu\AppData\Roaming\uv\python\cpython-3.13-windows-x86_64-none\Lib\contextlib.py", line 141, in __enter__
+    return next(self.gen)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 3259, in begin
+    with self.connect() as conn:
+         ~~~~~~~~~~~~^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 3295, in connect
+    return self._connection_cls(self)
+           ~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 146, in __init__
+    Connection._handle_dbapi_exception_noconnection(
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        err, dialect, engine
+        ^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 2450, in _handle_dbapi_exception_noconnection
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 144, in __init__
+    self._dbapi_connection = engine.raw_connection()
+                             ~~~~~~~~~~~~~~~~~~~~~^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 3319, in raw_connection
+    return self.pool.connect()
+           ~~~~~~~~~~~~~~~~~^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\base.py", line 448, in connect
+    return _ConnectionFairy._checkout(self)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\base.py", line 1272, in _checkout
+    fairy = _ConnectionRecord.checkout(pool)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\base.py", line 712, in checkout
+    rec = pool._do_get()
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\impl.py", line 178, in _do_get
+    with util.safe_reraise():
+         ~~~~~~~~~~~~~~~~~^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\util\langhelpers.py", line 122, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\impl.py", line 176, in _do_get
+    return self._create_connection()
+           ~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\base.py", line 389, in _create_connection
+    return _ConnectionRecord(self)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\base.py", line 674, in __init__
+    self.__connect()
+    ~~~~~~~~~~~~~~^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\base.py", line 900, in __connect
+    with util.safe_reraise():
+         ~~~~~~~~~~~~~~~~~^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\util\langhelpers.py", line 122, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\base.py", line 896, in __connect
+    self.dbapi_connection = connection = pool._invoke_creator(self)
+                                         ~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\engine\create.py", line 667, in connect
+    return dialect.connect(*cargs_tup, **cparams)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\engine\default.py", line 630, in connect
+    return self.loaded_dbapi.connect(*cargs, **cparams)  # type: ignore[no-any-return]  # NOQA: E501
+           ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\psycopg\connection.py", line 130, in connect
+    raise new_ex.with_traceback(None)
+sqlalchemy.exc.OperationalError: (psycopg.OperationalError) connection failed: connection to server at "127.0.0.1", port 5432 failed: FATAL:  password authentication failed for user "xagent"
+Multiple connection attempts failed. All failures were:
+- host: 'localhost', port: 5432, hostaddr: '::1': connection failed: connection to server at "::1", port 5432 failed: Permission denied (0x0000271D/10013)
+	Is the server running on that host and accepting TCP/IP connections?
+- host: 'localhost', port: 5432, hostaddr: '127.0.0.1': connection failed: connection to server at "127.0.0.1", port 5432 failed: FATAL:  password authentication failed for user "xagent"
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+___________ ERROR at setup of TestWorkflowCRUD.test_delete_workflow ___________
+E   psycopg.OperationalError: connection failed: connection to server at "127.0.0.1", port 5432 failed: FATAL:  password authentication failed for user "xagent"
+    Multiple connection attempts failed. All failures were:
+    - host: 'localhost', port: 5432, hostaddr: '::1': connection failed: connection to server at "::1", port 5432 failed: Permission denied (0x0000271D/10013)
+    	Is the server running on that host and accepting TCP/IP connections?
+    - host: 'localhost', port: 5432, hostaddr: '127.0.0.1': connection failed: connection to server at "127.0.0.1", port 5432 failed: FATAL:  password authentication failed for user "xagent"
+
+The above exception was the direct cause of the following exception:
+E   sqlalchemy.exc.OperationalError: (psycopg.OperationalError) connection failed: connection to server at "127.0.0.1", port 5432 failed: FATAL:  password authentication failed for user "xagent"
+    Multiple connection attempts failed. All failures were:
+    - host: 'localhost', port: 5432, hostaddr: '::1': connection failed: connection to server at "::1", port 5432 failed: Permission denied (0x0000271D/10013)
+    	Is the server running on that host and accepting TCP/IP connections?
+    - host: 'localhost', port: 5432, hostaddr: '127.0.0.1': connection failed: connection to server at "127.0.0.1", port 5432 failed: FATAL:  password authentication failed for user "xagent"
+    (Background on this error at: https://sqlalche.me/e/20/e3q8)
+----------------------------- Captured log setup ------------------------------
+ERROR    backend.app.monitoring.middleware:middleware.py:33 Request failed: (psycopg.OperationalError) connection failed: connection to server at "127.0.0.1", port 5432 failed: FATAL:  password authentication failed for user "xagent"
+Multiple connection attempts failed. All failures were:
+- host: 'localhost', port: 5432, hostaddr: '::1': connection failed: connection to server at "::1", port 5432 failed: Permission denied (0x0000271D/10013)
+	Is the server running on that host and accepting TCP/IP connections?
+- host: 'localhost', port: 5432, hostaddr: '127.0.0.1': connection failed: connection to server at "127.0.0.1", port 5432 failed: FATAL:  password authentication failed for user "xagent"
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+Traceback (most recent call last):
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 144, in __init__
+    self._dbapi_connection = engine.raw_connection()
+                             ~~~~~~~~~~~~~~~~~~~~~^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 3319, in raw_connection
+    return self.pool.connect()
+           ~~~~~~~~~~~~~~~~~^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\base.py", line 448, in connect
+    return _ConnectionFairy._checkout(self)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\base.py", line 1272, in _checkout
+    fairy = _ConnectionRecord.checkout(pool)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\base.py", line 712, in checkout
+    rec = pool._do_get()
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\impl.py", line 178, in _do_get
+    with util.safe_reraise():
+         ~~~~~~~~~~~~~~~~~^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\util\langhelpers.py", line 122, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\impl.py", line 176, in _do_get
+    return self._create_connection()
+           ~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\base.py", line 389, in _create_connection
+    return _ConnectionRecord(self)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\base.py", line 674, in __init__
+    self.__connect()
+    ~~~~~~~~~~~~~~^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\base.py", line 900, in __connect
+    with util.safe_reraise():
+         ~~~~~~~~~~~~~~~~~^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\util\langhelpers.py", line 122, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\base.py", line 896, in __connect
+    self.dbapi_connection = connection = pool._invoke_creator(self)
+                                         ~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\engine\create.py", line 667, in connect
+    return dialect.connect(*cargs_tup, **cparams)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\engine\default.py", line 630, in connect
+    return self.loaded_dbapi.connect(*cargs, **cparams)  # type: ignore[no-any-return]  # NOQA: E501
+           ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\psycopg\connection.py", line 130, in connect
+    raise new_ex.with_traceback(None)
+psycopg.OperationalError: connection failed: connection to server at "127.0.0.1", port 5432 failed: FATAL:  password authentication failed for user "xagent"
+Multiple connection attempts failed. All failures were:
+- host: 'localhost', port: 5432, hostaddr: '::1': connection failed: connection to server at "::1", port 5432 failed: Permission denied (0x0000271D/10013)
+	Is the server running on that host and accepting TCP/IP connections?
+- host: 'localhost', port: 5432, hostaddr: '127.0.0.1': connection failed: connection to server at "127.0.0.1", port 5432 failed: FATAL:  password authentication failed for user "xagent"
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\backend\app\monitoring\middleware.py", line 29, in dispatch
+    response = await call_next(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\middleware\base.py", line 168, in call_next
+    raise app_exc from app_exc.__cause__ or app_exc.__context__
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\middleware\base.py", line 144, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\middleware\base.py", line 191, in __call__
+    with recv_stream, send_stream, collapse_excgroups():
+                                   ~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\canqu\AppData\Roaming\uv\python\cpython-3.13-windows-x86_64-none\Lib\contextlib.py", line 162, in __exit__
+    self.gen.throw(value)
+    ~~~~~~~~~~~~~~^^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\_utils.py", line 87, in collapse_excgroups
+    raise exc
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\middleware\base.py", line 193, in __call__
+    response = await self.dispatch_func(request, call_next)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\backend\app\main.py", line 318, in dispatch
+    return await call_next(request)
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\middleware\base.py", line 168, in call_next
+    raise app_exc from app_exc.__cause__ or app_exc.__context__
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\middleware\base.py", line 144, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\middleware\cors.py", line 88, in __call__
+    await self.app(scope, receive, send)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\routing.py", line 660, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\routing.py", line 680, in app
+    await route.handle(scope, receive, send)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\routing.py", line 276, in handle
+    await self.app(scope, receive, send)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\fastapi\routing.py", line 134, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\fastapi\routing.py", line 120, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\fastapi\routing.py", line 457, in app
+    solved_result = await solve_dependencies(
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\fastapi\dependencies\utils.py", line 680, in solve_dependencies
+    solved = await run_in_threadpool(call, **solved_result.values)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\concurrency.py", line 32, in run_in_threadpool
+    return await anyio.to_thread.run_sync(func)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\anyio\to_thread.py", line 63, in run_sync
+    return await get_async_backend().run_sync_in_worker_thread(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        func, args, abandon_on_cancel=abandon_on_cancel, limiter=limiter
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\anyio\_backends\_asyncio.py", line 2518, in run_sync_in_worker_thread
+    return await future
+           ^^^^^^^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\anyio\_backends\_asyncio.py", line 1002, in run
+    result = context.run(func, *args)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\backend\app\dependencies.py", line 412, in get_workflow_repository
+    return build_workflow_repository(
+        backend=settings.workflow_store_backend,
+    ...<2 lines>...
+        run_path=settings.workflow_run_store_path,
+    )
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\backend\app\core\workflow_store.py", line 680, in build_workflow_repository
+    return SQLWorkflowRepository(create_workflow_engine(database_url))
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\backend\app\core\workflow_store.py", line 197, in __init__
+    init_workflow_store_schema(engine)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\backend\app\core\workflow_store.py", line 180, in init_workflow_store_schema
+    WorkflowStoreBase.metadata.create_all(engine)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\sql\schema.py", line 5930, in create_all
+    bind._run_ddl_visitor(
+    ~~~~~~~~~~~~~~~~~~~~~^
+        ddl.SchemaGenerator, self, checkfirst=checkfirst, tables=tables
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 3269, in _run_ddl_visitor
+    with self.begin() as conn:
+         ~~~~~~~~~~^^
+  File "C:\Users\canqu\AppData\Roaming\uv\python\cpython-3.13-windows-x86_64-none\Lib\contextlib.py", line 141, in __enter__
+    return next(self.gen)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 3259, in begin
+    with self.connect() as conn:
+         ~~~~~~~~~~~~^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 3295, in connect
+    return self._connection_cls(self)
+           ~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 146, in __init__
+    Connection._handle_dbapi_exception_noconnection(
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        err, dialect, engine
+        ^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 2450, in _handle_dbapi_exception_noconnection
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 144, in __init__
+    self._dbapi_connection = engine.raw_connection()
+                             ~~~~~~~~~~~~~~~~~~~~~^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 3319, in raw_connection
+    return self.pool.connect()
+           ~~~~~~~~~~~~~~~~~^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\base.py", line 448, in connect
+    return _ConnectionFairy._checkout(self)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\base.py", line 1272, in _checkout
+    fairy = _ConnectionRecord.checkout(pool)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\base.py", line 712, in checkout
+    rec = pool._do_get()
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\impl.py", line 178, in _do_get
+    with util.safe_reraise():
+         ~~~~~~~~~~~~~~~~~^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\util\langhelpers.py", line 122, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\impl.py", line 176, in _do_get
+    return self._create_connection()
+           ~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\base.py", line 389, in _create_connection
+    return _ConnectionRecord(self)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\base.py", line 674, in __init__
+    self.__connect()
+    ~~~~~~~~~~~~~~^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\base.py", line 900, in __connect
+    with util.safe_reraise():
+         ~~~~~~~~~~~~~~~~~^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\util\langhelpers.py", line 122, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\base.py", line 896, in __connect
+    self.dbapi_connection = connection = pool._invoke_creator(self)
+                                         ~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\engine\create.py", line 667, in connect
+    return dialect.connect(*cargs_tup, **cparams)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\engine\default.py", line 630, in connect
+    return self.loaded_dbapi.connect(*cargs, **cparams)  # type: ignore[no-any-return]  # NOQA: E501
+           ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\psycopg\connection.py", line 130, in connect
+    raise new_ex.with_traceback(None)
+sqlalchemy.exc.OperationalError: (psycopg.OperationalError) connection failed: connection to server at "127.0.0.1", port 5432 failed: FATAL:  password authentication failed for user "xagent"
+Multiple connection attempts failed. All failures were:
+- host: 'localhost', port: 5432, hostaddr: '::1': connection failed: connection to server at "::1", port 5432 failed: Permission denied (0x0000271D/10013)
+	Is the server running on that host and accepting TCP/IP connections?
+- host: 'localhost', port: 5432, hostaddr: '127.0.0.1': connection failed: connection to server at "127.0.0.1", port 5432 failed: FATAL:  password authentication failed for user "xagent"
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+_____________ ERROR at setup of TestWorkflowRun.test_run_workflow _____________
+E   psycopg.OperationalError: connection failed: connection to server at "127.0.0.1", port 5432 failed: FATAL:  password authentication failed for user "xagent"
+    Multiple connection attempts failed. All failures were:
+    - host: 'localhost', port: 5432, hostaddr: '::1': connection failed: connection to server at "::1", port 5432 failed: Permission denied (0x0000271D/10013)
+    	Is the server running on that host and accepting TCP/IP connections?
+    - host: 'localhost', port: 5432, hostaddr: '127.0.0.1': connection failed: connection to server at "127.0.0.1", port 5432 failed: FATAL:  password authentication failed for user "xagent"
+
+The above exception was the direct cause of the following exception:
+E   sqlalchemy.exc.OperationalError: (psycopg.OperationalError) connection failed: connection to server at "127.0.0.1", port 5432 failed: FATAL:  password authentication failed for user "xagent"
+    Multiple connection attempts failed. All failures were:
+    - host: 'localhost', port: 5432, hostaddr: '::1': connection failed: connection to server at "::1", port 5432 failed: Permission denied (0x0000271D/10013)
+    	Is the server running on that host and accepting TCP/IP connections?
+    - host: 'localhost', port: 5432, hostaddr: '127.0.0.1': connection failed: connection to server at "127.0.0.1", port 5432 failed: FATAL:  password authentication failed for user "xagent"
+    (Background on this error at: https://sqlalche.me/e/20/e3q8)
+----------------------------- Captured log setup ------------------------------
+ERROR    backend.app.monitoring.middleware:middleware.py:33 Request failed: (psycopg.OperationalError) connection failed: connection to server at "127.0.0.1", port 5432 failed: FATAL:  password authentication failed for user "xagent"
+Multiple connection attempts failed. All failures were:
+- host: 'localhost', port: 5432, hostaddr: '::1': connection failed: connection to server at "::1", port 5432 failed: Permission denied (0x0000271D/10013)
+	Is the server running on that host and accepting TCP/IP connections?
+- host: 'localhost', port: 5432, hostaddr: '127.0.0.1': connection failed: connection to server at "127.0.0.1", port 5432 failed: FATAL:  password authentication failed for user "xagent"
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+Traceback (most recent call last):
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 144, in __init__
+    self._dbapi_connection = engine.raw_connection()
+                             ~~~~~~~~~~~~~~~~~~~~~^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 3319, in raw_connection
+    return self.pool.connect()
+           ~~~~~~~~~~~~~~~~~^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\base.py", line 448, in connect
+    return _ConnectionFairy._checkout(self)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\base.py", line 1272, in _checkout
+    fairy = _ConnectionRecord.checkout(pool)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\base.py", line 712, in checkout
+    rec = pool._do_get()
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\impl.py", line 178, in _do_get
+    with util.safe_reraise():
+         ~~~~~~~~~~~~~~~~~^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\util\langhelpers.py", line 122, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\impl.py", line 176, in _do_get
+    return self._create_connection()
+           ~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\base.py", line 389, in _create_connection
+    return _ConnectionRecord(self)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\base.py", line 674, in __init__
+    self.__connect()
+    ~~~~~~~~~~~~~~^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\base.py", line 900, in __connect
+    with util.safe_reraise():
+         ~~~~~~~~~~~~~~~~~^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\util\langhelpers.py", line 122, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\base.py", line 896, in __connect
+    self.dbapi_connection = connection = pool._invoke_creator(self)
+                                         ~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\engine\create.py", line 667, in connect
+    return dialect.connect(*cargs_tup, **cparams)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\engine\default.py", line 630, in connect
+    return self.loaded_dbapi.connect(*cargs, **cparams)  # type: ignore[no-any-return]  # NOQA: E501
+           ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\psycopg\connection.py", line 130, in connect
+    raise new_ex.with_traceback(None)
+psycopg.OperationalError: connection failed: connection to server at "127.0.0.1", port 5432 failed: FATAL:  password authentication failed for user "xagent"
+Multiple connection attempts failed. All failures were:
+- host: 'localhost', port: 5432, hostaddr: '::1': connection failed: connection to server at "::1", port 5432 failed: Permission denied (0x0000271D/10013)
+	Is the server running on that host and accepting TCP/IP connections?
+- host: 'localhost', port: 5432, hostaddr: '127.0.0.1': connection failed: connection to server at "127.0.0.1", port 5432 failed: FATAL:  password authentication failed for user "xagent"
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\backend\app\monitoring\middleware.py", line 29, in dispatch
+    response = await call_next(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\middleware\base.py", line 168, in call_next
+    raise app_exc from app_exc.__cause__ or app_exc.__context__
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\middleware\base.py", line 144, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\middleware\base.py", line 191, in __call__
+    with recv_stream, send_stream, collapse_excgroups():
+                                   ~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\canqu\AppData\Roaming\uv\python\cpython-3.13-windows-x86_64-none\Lib\contextlib.py", line 162, in __exit__
+    self.gen.throw(value)
+    ~~~~~~~~~~~~~~^^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\_utils.py", line 87, in collapse_excgroups
+    raise exc
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\middleware\base.py", line 193, in __call__
+    response = await self.dispatch_func(request, call_next)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\backend\app\main.py", line 318, in dispatch
+    return await call_next(request)
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\middleware\base.py", line 168, in call_next
+    raise app_exc from app_exc.__cause__ or app_exc.__context__
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\middleware\base.py", line 144, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\middleware\cors.py", line 88, in __call__
+    await self.app(scope, receive, send)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\routing.py", line 660, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\routing.py", line 680, in app
+    await route.handle(scope, receive, send)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\routing.py", line 276, in handle
+    await self.app(scope, receive, send)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\fastapi\routing.py", line 134, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\fastapi\routing.py", line 120, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\fastapi\routing.py", line 457, in app
+    solved_result = await solve_dependencies(
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\fastapi\dependencies\utils.py", line 680, in solve_dependencies
+    solved = await run_in_threadpool(call, **solved_result.values)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\concurrency.py", line 32, in run_in_threadpool
+    return await anyio.to_thread.run_sync(func)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\anyio\to_thread.py", line 63, in run_sync
+    return await get_async_backend().run_sync_in_worker_thread(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        func, args, abandon_on_cancel=abandon_on_cancel, limiter=limiter
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\anyio\_backends\_asyncio.py", line 2518, in run_sync_in_worker_thread
+    return await future
+           ^^^^^^^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\anyio\_backends\_asyncio.py", line 1002, in run
+    result = context.run(func, *args)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\backend\app\dependencies.py", line 412, in get_workflow_repository
+    return build_workflow_repository(
+        backend=settings.workflow_store_backend,
+    ...<2 lines>...
+        run_path=settings.workflow_run_store_path,
+    )
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\backend\app\core\workflow_store.py", line 680, in build_workflow_repository
+    return SQLWorkflowRepository(create_workflow_engine(database_url))
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\backend\app\core\workflow_store.py", line 197, in __init__
+    init_workflow_store_schema(engine)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\backend\app\core\workflow_store.py", line 180, in init_workflow_store_schema
+    WorkflowStoreBase.metadata.create_all(engine)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\sql\schema.py", line 5930, in create_all
+    bind._run_ddl_visitor(
+    ~~~~~~~~~~~~~~~~~~~~~^
+        ddl.SchemaGenerator, self, checkfirst=checkfirst, tables=tables
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 3269, in _run_ddl_visitor
+    with self.begin() as conn:
+         ~~~~~~~~~~^^
+  File "C:\Users\canqu\AppData\Roaming\uv\python\cpython-3.13-windows-x86_64-none\Lib\contextlib.py", line 141, in __enter__
+    return next(self.gen)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 3259, in begin
+    with self.connect() as conn:
+         ~~~~~~~~~~~~^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 3295, in connect
+    return self._connection_cls(self)
+           ~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 146, in __init__
+    Connection._handle_dbapi_exception_noconnection(
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        err, dialect, engine
+        ^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 2450, in _handle_dbapi_exception_noconnection
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 144, in __init__
+    self._dbapi_connection = engine.raw_connection()
+                             ~~~~~~~~~~~~~~~~~~~~~^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 3319, in raw_connection
+    return self.pool.connect()
+           ~~~~~~~~~~~~~~~~~^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\base.py", line 448, in connect
+    return _ConnectionFairy._checkout(self)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\base.py", line 1272, in _checkout
+    fairy = _ConnectionRecord.checkout(pool)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\base.py", line 712, in checkout
+    rec = pool._do_get()
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\impl.py", line 178, in _do_get
+    with util.safe_reraise():
+         ~~~~~~~~~~~~~~~~~^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\util\langhelpers.py", line 122, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\impl.py", line 176, in _do_get
+    return self._create_connection()
+           ~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\base.py", line 389, in _create_connection
+    return _ConnectionRecord(self)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\base.py", line 674, in __init__
+    self.__connect()
+    ~~~~~~~~~~~~~~^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\base.py", line 900, in __connect
+    with util.safe_reraise():
+         ~~~~~~~~~~~~~~~~~^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\util\langhelpers.py", line 122, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\base.py", line 896, in __connect
+    self.dbapi_connection = connection = pool._invoke_creator(self)
+                                         ~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\engine\create.py", line 667, in connect
+    return dialect.connect(*cargs_tup, **cparams)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\engine\default.py", line 630, in connect
+    return self.loaded_dbapi.connect(*cargs, **cparams)  # type: ignore[no-any-return]  # NOQA: E501
+           ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\psycopg\connection.py", line 130, in connect
+    raise new_ex.with_traceback(None)
+sqlalchemy.exc.OperationalError: (psycopg.OperationalError) connection failed: connection to server at "127.0.0.1", port 5432 failed: FATAL:  password authentication failed for user "xagent"
+Multiple connection attempts failed. All failures were:
+- host: 'localhost', port: 5432, hostaddr: '::1': connection failed: connection to server at "::1", port 5432 failed: Permission denied (0x0000271D/10013)
+	Is the server running on that host and accepting TCP/IP connections?
+- host: 'localhost', port: 5432, hostaddr: '127.0.0.1': connection failed: connection to server at "127.0.0.1", port 5432 failed: FATAL:  password authentication failed for user "xagent"
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+______________ ERROR at setup of TestWorkflowRun.test_list_runs _______________
+E   psycopg.OperationalError: connection failed: connection to server at "127.0.0.1", port 5432 failed: FATAL:  password authentication failed for user "xagent"
+    Multiple connection attempts failed. All failures were:
+    - host: 'localhost', port: 5432, hostaddr: '::1': connection failed: connection to server at "::1", port 5432 failed: Permission denied (0x0000271D/10013)
+    	Is the server running on that host and accepting TCP/IP connections?
+    - host: 'localhost', port: 5432, hostaddr: '127.0.0.1': connection failed: connection to server at "127.0.0.1", port 5432 failed: FATAL:  password authentication failed for user "xagent"
+
+The above exception was the direct cause of the following exception:
+E   sqlalchemy.exc.OperationalError: (psycopg.OperationalError) connection failed: connection to server at "127.0.0.1", port 5432 failed: FATAL:  password authentication failed for user "xagent"
+    Multiple connection attempts failed. All failures were:
+    - host: 'localhost', port: 5432, hostaddr: '::1': connection failed: connection to server at "::1", port 5432 failed: Permission denied (0x0000271D/10013)
+    	Is the server running on that host and accepting TCP/IP connections?
+    - host: 'localhost', port: 5432, hostaddr: '127.0.0.1': connection failed: connection to server at "127.0.0.1", port 5432 failed: FATAL:  password authentication failed for user "xagent"
+    (Background on this error at: https://sqlalche.me/e/20/e3q8)
+----------------------------- Captured log setup ------------------------------
+ERROR    backend.app.monitoring.middleware:middleware.py:33 Request failed: (psycopg.OperationalError) connection failed: connection to server at "127.0.0.1", port 5432 failed: FATAL:  password authentication failed for user "xagent"
+Multiple connection attempts failed. All failures were:
+- host: 'localhost', port: 5432, hostaddr: '::1': connection failed: connection to server at "::1", port 5432 failed: Permission denied (0x0000271D/10013)
+	Is the server running on that host and accepting TCP/IP connections?
+- host: 'localhost', port: 5432, hostaddr: '127.0.0.1': connection failed: connection to server at "127.0.0.1", port 5432 failed: FATAL:  password authentication failed for user "xagent"
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+Traceback (most recent call last):
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 144, in __init__
+    self._dbapi_connection = engine.raw_connection()
+                             ~~~~~~~~~~~~~~~~~~~~~^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 3319, in raw_connection
+    return self.pool.connect()
+           ~~~~~~~~~~~~~~~~~^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\base.py", line 448, in connect
+    return _ConnectionFairy._checkout(self)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\base.py", line 1272, in _checkout
+    fairy = _ConnectionRecord.checkout(pool)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\base.py", line 712, in checkout
+    rec = pool._do_get()
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\impl.py", line 178, in _do_get
+    with util.safe_reraise():
+         ~~~~~~~~~~~~~~~~~^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\util\langhelpers.py", line 122, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\impl.py", line 176, in _do_get
+    return self._create_connection()
+           ~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\base.py", line 389, in _create_connection
+    return _ConnectionRecord(self)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\base.py", line 674, in __init__
+    self.__connect()
+    ~~~~~~~~~~~~~~^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\base.py", line 900, in __connect
+    with util.safe_reraise():
+         ~~~~~~~~~~~~~~~~~^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\util\langhelpers.py", line 122, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\base.py", line 896, in __connect
+    self.dbapi_connection = connection = pool._invoke_creator(self)
+                                         ~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\engine\create.py", line 667, in connect
+    return dialect.connect(*cargs_tup, **cparams)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\engine\default.py", line 630, in connect
+    return self.loaded_dbapi.connect(*cargs, **cparams)  # type: ignore[no-any-return]  # NOQA: E501
+           ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\psycopg\connection.py", line 130, in connect
+    raise new_ex.with_traceback(None)
+psycopg.OperationalError: connection failed: connection to server at "127.0.0.1", port 5432 failed: FATAL:  password authentication failed for user "xagent"
+Multiple connection attempts failed. All failures were:
+- host: 'localhost', port: 5432, hostaddr: '::1': connection failed: connection to server at "::1", port 5432 failed: Permission denied (0x0000271D/10013)
+	Is the server running on that host and accepting TCP/IP connections?
+- host: 'localhost', port: 5432, hostaddr: '127.0.0.1': connection failed: connection to server at "127.0.0.1", port 5432 failed: FATAL:  password authentication failed for user "xagent"
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\backend\app\monitoring\middleware.py", line 29, in dispatch
+    response = await call_next(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\middleware\base.py", line 168, in call_next
+    raise app_exc from app_exc.__cause__ or app_exc.__context__
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\middleware\base.py", line 144, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\middleware\base.py", line 191, in __call__
+    with recv_stream, send_stream, collapse_excgroups():
+                                   ~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\canqu\AppData\Roaming\uv\python\cpython-3.13-windows-x86_64-none\Lib\contextlib.py", line 162, in __exit__
+    self.gen.throw(value)
+    ~~~~~~~~~~~~~~^^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\_utils.py", line 87, in collapse_excgroups
+    raise exc
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\middleware\base.py", line 193, in __call__
+    response = await self.dispatch_func(request, call_next)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\backend\app\main.py", line 318, in dispatch
+    return await call_next(request)
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\middleware\base.py", line 168, in call_next
+    raise app_exc from app_exc.__cause__ or app_exc.__context__
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\middleware\base.py", line 144, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\middleware\cors.py", line 88, in __call__
+    await self.app(scope, receive, send)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\routing.py", line 660, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\routing.py", line 680, in app
+    await route.handle(scope, receive, send)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\routing.py", line 276, in handle
+    await self.app(scope, receive, send)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\fastapi\routing.py", line 134, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\fastapi\routing.py", line 120, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\fastapi\routing.py", line 457, in app
+    solved_result = await solve_dependencies(
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\fastapi\dependencies\utils.py", line 680, in solve_dependencies
+    solved = await run_in_threadpool(call, **solved_result.values)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\starlette\concurrency.py", line 32, in run_in_threadpool
+    return await anyio.to_thread.run_sync(func)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\anyio\to_thread.py", line 63, in run_sync
+    return await get_async_backend().run_sync_in_worker_thread(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        func, args, abandon_on_cancel=abandon_on_cancel, limiter=limiter
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\anyio\_backends\_asyncio.py", line 2518, in run_sync_in_worker_thread
+    return await future
+           ^^^^^^^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\anyio\_backends\_asyncio.py", line 1002, in run
+    result = context.run(func, *args)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\backend\app\dependencies.py", line 412, in get_workflow_repository
+    return build_workflow_repository(
+        backend=settings.workflow_store_backend,
+    ...<2 lines>...
+        run_path=settings.workflow_run_store_path,
+    )
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\backend\app\core\workflow_store.py", line 680, in build_workflow_repository
+    return SQLWorkflowRepository(create_workflow_engine(database_url))
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\backend\app\core\workflow_store.py", line 197, in __init__
+    init_workflow_store_schema(engine)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\backend\app\core\workflow_store.py", line 180, in init_workflow_store_schema
+    WorkflowStoreBase.metadata.create_all(engine)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\sql\schema.py", line 5930, in create_all
+    bind._run_ddl_visitor(
+    ~~~~~~~~~~~~~~~~~~~~~^
+        ddl.SchemaGenerator, self, checkfirst=checkfirst, tables=tables
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 3269, in _run_ddl_visitor
+    with self.begin() as conn:
+         ~~~~~~~~~~^^
+  File "C:\Users\canqu\AppData\Roaming\uv\python\cpython-3.13-windows-x86_64-none\Lib\contextlib.py", line 141, in __enter__
+    return next(self.gen)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 3259, in begin
+    with self.connect() as conn:
+         ~~~~~~~~~~~~^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 3295, in connect
+    return self._connection_cls(self)
+           ~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 146, in __init__
+    Connection._handle_dbapi_exception_noconnection(
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        err, dialect, engine
+        ^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 2450, in _handle_dbapi_exception_noconnection
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 144, in __init__
+    self._dbapi_connection = engine.raw_connection()
+                             ~~~~~~~~~~~~~~~~~~~~~^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 3319, in raw_connection
+    return self.pool.connect()
+           ~~~~~~~~~~~~~~~~~^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\base.py", line 448, in connect
+    return _ConnectionFairy._checkout(self)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\base.py", line 1272, in _checkout
+    fairy = _ConnectionRecord.checkout(pool)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\base.py", line 712, in checkout
+    rec = pool._do_get()
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\impl.py", line 178, in _do_get
+    with util.safe_reraise():
+         ~~~~~~~~~~~~~~~~~^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\util\langhelpers.py", line 122, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\impl.py", line 176, in _do_get
+    return self._create_connection()
+           ~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\base.py", line 389, in _create_connection
+    return _ConnectionRecord(self)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\base.py", line 674, in __init__
+    self.__connect()
+    ~~~~~~~~~~~~~~^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\base.py", line 900, in __connect
+    with util.safe_reraise():
+         ~~~~~~~~~~~~~~~~~^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\util\langhelpers.py", line 122, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\pool\base.py", line 896, in __connect
+    self.dbapi_connection = connection = pool._invoke_creator(self)
+                                         ~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\engine\create.py", line 667, in connect
+    return dialect.connect(*cargs_tup, **cparams)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\sqlalchemy\engine\default.py", line 630, in connect
+    return self.loaded_dbapi.connect(*cargs, **cparams)  # type: ignore[no-any-return]  # NOQA: E501
+           ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\psycopg\connection.py", line 130, in connect
+    raise new_ex.with_traceback(None)
+sqlalchemy.exc.OperationalError: (psycopg.OperationalError) connection failed: connection to server at "127.0.0.1", port 5432 failed: FATAL:  password authentication failed for user "xagent"
+Multiple connection attempts failed. All failures were:
+- host: 'localhost', port: 5432, hostaddr: '::1': connection failed: connection to server at "::1", port 5432 failed: Permission denied (0x0000271D/10013)
+	Is the server running on that host and accepting TCP/IP connections?
+- host: 'localhost', port: 5432, hostaddr: '127.0.0.1': connection failed: connection to server at "127.0.0.1", port 5432 failed: FATAL:  password authentication failed for user "xagent"
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+================================== FAILURES ===================================
+D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\tests\integration\test_auth_api.py:68: assert 200 in (400, 409)
+D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\tests\integration\test_auth_api.py:90: assert 422 == 200
+D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\tests\integration\test_auth_api.py:104: assert 422 in (400, 401)
+D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\tests\integration\test_auth_api.py:111: assert 422 in (400, 401, 404)
+D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\tests\integration\test_auth_api.py:121: assert 401 == 200
+D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\tests\integration\test_auth_api.py:135: assert 401 == 200
+D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\tests\integration\test_auth_api.py:139: assert 200 in (401, 403)
+D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\tests\integration\test_auth_api.py:149: assert 401 == 200
+D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\tests\integration\test_auth_api.py:155: assert 200 in (401, 403)
+D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\tests\integration\test_auth_api.py:161: assert 401 == 200
+D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\tests\integration\test_memory_api.py:49: assert 404 == 200
+D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\tests\integration\test_memory_api.py:58: assert 401 in (200, 201)
+D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\tests\integration\test_memory_api.py:69: assert 404 == 200
+D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\tests\integration\test_memory_api.py:73: assert 404 in (401, 403)
+D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\tests\integration\test_memory_api.py:83: assert 401 == 200
+D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\tests\integration\test_memory_api.py:93: assert 401 in (200, 201)
+D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\psycopg\connection.py:130: sqlalchemy.exc.OperationalError: (psycopg.OperationalError) connection failed: connection to server at "127.0.0.1", port 5432 failed: FATAL:  password authentication failed for user "xagent"
+D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\psycopg\connection.py:130: sqlalchemy.exc.OperationalError: (psycopg.OperationalError) connection failed: connection to server at "127.0.0.1", port 5432 failed: FATAL:  password authentication failed for user "xagent"
+D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\psycopg\connection.py:130: sqlalchemy.exc.OperationalError: (psycopg.OperationalError) connection failed: connection to server at "127.0.0.1", port 5432 failed: FATAL:  password authentication failed for user "xagent"
+============================== warnings summary ===============================
+venv\Lib\site-packages\fastapi\testclient.py:1
+  D:\AI缂栫▼搴揬椤圭洰搴揬杩涜涓殑椤圭洰\X-Agent\venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED tests/integration/test_auth_api.py::TestRegister::test_register_duplicate_username
+FAILED tests/integration/test_auth_api.py::TestLogin::test_login_success - as...
+FAILED tests/integration/test_auth_api.py::TestLogin::test_login_wrong_password
+FAILED tests/integration/test_auth_api.py::TestLogin::test_login_nonexistent_user
+FAILED tests/integration/test_auth_api.py::TestRefresh::test_refresh_with_valid_token
+FAILED tests/integration/test_auth_api.py::TestLogout::test_logout_success - ...
+FAILED tests/integration/test_auth_api.py::TestLogout::test_logout_without_token
+FAILED tests/integration/test_auth_api.py::TestProfile::test_get_me - assert ...
+FAILED tests/integration/test_auth_api.py::TestProfile::test_get_me_unauthenticated
+FAILED tests/integration/test_auth_api.py::TestProfile::test_update_me - asse...
+FAILED tests/integration/test_memory_api.py::TestMemoryAPI::test_list_memories
+FAILED tests/integration/test_memory_api.py::TestMemoryAPI::test_create_memory
+FAILED tests/integration/test_memory_api.py::TestMemoryAPI::test_search_memories
+FAILED tests/integration/test_memory_api.py::TestMemoryAPI::test_unauthenticated_access
+FAILED tests/integration/test_memory_api.py::TestChatHistoryAPI::test_list_history
+FAILED tests/integration/test_memory_api.py::TestChatHistoryAPI::test_create_conversation
+FAILED tests/integration/test_workflow_api.py::TestWorkflowCRUD::test_create_workflow
+FAILED tests/integration/test_workflow_api.py::TestWorkflowCRUD::test_get_nonexistent_workflow
+FAILED tests/integration/test_workflow_api.py::TestWorkflowCRUD::test_unauthenticated_access
+ERROR tests/integration/test_workflow_api.py::TestWorkflowCRUD::test_list_workflows
+ERROR tests/integration/test_workflow_api.py::TestWorkflowCRUD::test_get_workflow
+ERROR tests/integration/test_workflow_api.py::TestWorkflowCRUD::test_update_workflow
+ERROR tests/integration/test_workflow_api.py::TestWorkflowCRUD::test_delete_workflow
+ERROR tests/integration/test_workflow_api.py::TestWorkflowRun::test_run_workflow
+ERROR tests/integration/test_workflow_api.py::TestWorkflowRun::test_list_runs
+============= 19 failed, 80 passed, 1 warning, 6 errors in 52.54s =============

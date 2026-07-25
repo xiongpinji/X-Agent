@@ -1,0 +1,10 @@
+schema_version: 1
+module_path: desktop_app
+title: X-Agent 桌面客户端（Tauri + Vue）
+scope:
+    - desktop/
+source_files: []
+depends_on: []
+related_to:
+    - path: backend
+    - path: chrome_extension

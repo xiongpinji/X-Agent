@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState } from 'react'
 import { Feedback } from '@/services/feedback'
-import { Search, Filter, ChevronDown, Eye, Edit2, Trash2, CheckCircle, Clock, AlertCircle } from 'lucide-react'
+import { Search, Eye, Trash2, CheckCircle, Clock, AlertCircle } from 'lucide-react'
 import clsx from 'clsx'
 
 interface FeedbackListProps {
@@ -17,7 +17,7 @@ export const FeedbackList: React.FC<FeedbackListProps> = ({
   isLoading,
   onSelectFeedback,
   onDeleteFeedback,
-  onStatusChange,
+  onStatusChange: _onStatusChange,
   theme,
 }) => {
   const [searchQuery, setSearchQuery] = useState('')
@@ -204,6 +204,8 @@ export const FeedbackList: React.FC<FeedbackListProps> = ({
           sortedFeedbacks.map((feedback) => (
             <div
               key={feedback.id}
+              role="button"
+              tabIndex={0}
               className={clsx(
                 'p-4 rounded-lg border transition-all hover:shadow-md cursor-pointer',
                 theme === 'dark'
@@ -211,6 +213,7 @@ export const FeedbackList: React.FC<FeedbackListProps> = ({
                   : 'bg-white border-slate-200 hover:border-slate-300'
               )}
               onClick={() => onSelectFeedback(feedback)}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onSelectFeedback(feedback); }}
             >
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1 min-w-0">

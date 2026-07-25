@@ -1,16 +1,15 @@
 from __future__ import annotations
 
-from typing import Annotated
 from datetime import UTC, datetime, timedelta
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
 
 from backend.app.api.errors import api_error
-from backend.app.api.pagination import PaginationParams, apply_pagination
 from backend.app.core.admin import TenantCreateRequest, TenantUpdateRequest, tenant_store
 from backend.app.core.contracts import ErrorCode
 from backend.app.core.security import Principal
-from backend.app.dependencies import enforce_scope, get_current_principal, get_audit_store
+from backend.app.dependencies import enforce_scope, get_current_principal
 
 router = APIRouter(prefix="/api/v1/tenants", tags=["tenants"])
 PrincipalDependency = Annotated[Principal, Depends(get_current_principal)]
@@ -82,7 +81,7 @@ async def get_tenant_usage(
     else:  # month
         start_date = now - timedelta(days=30)
 
-    # TODO: Query actual usage metrics from database
+    # NOTE: Requires database aggregation queries for real usage metrics
     # This would involve:
     # 1. Counting workflow runs for tenant in period
     # 2. Counting agents created in period
@@ -146,7 +145,7 @@ async def get_tenant_billing(
         now = datetime.now(UTC)
         billing_month = now.strftime("%Y-%m")
 
-    # TODO: Query actual billing data from database
+    # NOTE: Requires billing database integration for real billing data
     # This would involve:
     # 1. Fetching plan details
     # 2. Calculating usage-based charges

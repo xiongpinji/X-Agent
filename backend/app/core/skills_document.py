@@ -2,16 +2,16 @@
 
 from __future__ import annotations
 
-import logging
-from typing import Any
-from pathlib import Path
 import json
+import logging
+from pathlib import Path
+from typing import Any
 
 from .skills_core import (
-    SkillMetadata,
     SkillCapability,
-    SkillRiskLevel,
     SkillExecutionContext,
+    SkillMetadata,
+    SkillRiskLevel,
 )
 
 logger = logging.getLogger(__name__)
@@ -343,7 +343,7 @@ class JSONProcessorSkill:
             raise ValueError(f"Expected .json file, got {path.suffix}")
 
         # Load JSON
-        with open(file_path, "r", encoding="utf-8") as f:
+        with open(file_path, encoding="utf-8") as f:
             data = json.load(f)
 
         return {
@@ -364,9 +364,9 @@ class JSONProcessorSkill:
 
 
 __all__ = [
-    "WordDocumentSkill",
     "ExcelSpreadsheetSkill",
+    "JSONProcessorSkill",
     "PDFDocumentSkill",
     "PowerPointSkill",
-    "JSONProcessorSkill",
+    "WordDocumentSkill",
 ]

@@ -6,14 +6,14 @@ Provides multi-language support for UI, documentation, and prompts.
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
-from enum import Enum
-from pathlib import Path
-from typing import Any, Optional, Dict
 import locale
+from dataclasses import dataclass
+from datetime import datetime
+from enum import StrEnum
+from pathlib import Path
 
 
-class Language(str, Enum):
+class Language(StrEnum):
     """Supported languages."""
     ENGLISH = "en"
     CHINESE = "zh"
@@ -28,7 +28,7 @@ class Language(str, Enum):
 class TranslationKey:
     """Translation key with context."""
     key: str
-    context: Optional[str] = None
+    context: str | None = None
     plural: bool = False
 
     def __str__(self) -> str:
@@ -56,7 +56,7 @@ class LanguageDetector:
         return Language.ENGLISH
 
     @staticmethod
-    def get_language_from_code(code: str) -> Optional[Language]:
+    def get_language_from_code(code: str) -> Language | None:
         """Get language from code."""
         for lang in Language:
             if lang.value == code:
@@ -68,7 +68,7 @@ class TranslationStore:
     """Stores and manages translations."""
 
     def __init__(self):
-        self.translations: Dict[Language, Dict[str, str]] = {}
+        self.translations: dict[Language, dict[str, str]] = {}
         self._load_default_translations()
 
     def _load_default_translations(self) -> None:
@@ -175,7 +175,7 @@ class TranslationStore:
             self.translations[language] = {}
         self.translations[language][key] = value
 
-    def get_translation(self, language: Language, key: str) -> Optional[str]:
+    def get_translation(self, language: Language, key: str) -> str | None:
         """Get translation."""
         if language not in self.translations:
             return None
@@ -310,7 +310,7 @@ class LocalizationManager:
         self.translator = Translator()
         self.prompt_translator = PromptTranslator(self.translator)
 
-    def initialize(self, language: Optional[Language] = None) -> None:
+    def initialize(self, language: Language | None = None) -> None:
         """Initialize localization."""
         if language:
             self.translator.set_language(language)
@@ -343,7 +343,7 @@ class LocalizationManager:
 
 
 # Global localization manager instance
-_localization_manager: Optional[LocalizationManager] = None
+_localization_manager: LocalizationManager | None = None
 
 
 def get_localization_manager() -> LocalizationManager:
@@ -370,7 +370,7 @@ def set_language(language: Language) -> None:
 # ============================================================================
 
 
-class Region(str, Enum):
+class Region(StrEnum):
     """Supported regions (ISO 3166-1 alpha-2)."""
     US = "US"  # United States
     CN = "CN"  # China
@@ -399,7 +399,7 @@ class Locale:
 class LocalizationConfig:
     """Per-region localization defaults (timezone, currency, formats)."""
 
-    _TIMEZONES: Dict[Region, str] = {
+    _TIMEZONES: dict[Region, str] = {
         Region.US: "America/New_York",
         Region.CN: "Asia/Shanghai",
         Region.JP: "Asia/Tokyo",
@@ -410,7 +410,7 @@ class LocalizationConfig:
         Region.GB: "Europe/London",
     }
 
-    _CURRENCIES: Dict[Region, str] = {
+    _CURRENCIES: dict[Region, str] = {
         Region.US: "USD",
         Region.CN: "CNY",
         Region.JP: "JPY",
@@ -421,7 +421,7 @@ class LocalizationConfig:
         Region.GB: "GBP",
     }
 
-    _DATE_FORMATS: Dict[Region, str] = {
+    _DATE_FORMATS: dict[Region, str] = {
         Region.US: "MM/DD/YYYY",
         Region.CN: "YYYY-MM-DD",
         Region.JP: "YYYY年MM月DD日",
@@ -432,7 +432,7 @@ class LocalizationConfig:
         Region.GB: "DD/MM/YYYY",
     }
 
-    _TIME_FORMATS: Dict[Region, str] = {
+    _TIME_FORMATS: dict[Region, str] = {
         Region.US: "hh:mm:ss A",
         Region.CN: "HH:mm:ss",
         Region.JP: "HH:mm:ss",
@@ -446,7 +446,7 @@ class LocalizationConfig:
     # Regions that use comma as decimal separator and dot as thousands separator
     _COMMA_DECIMAL_REGIONS = {Region.ES, Region.FR, Region.DE}
 
-    _CURRENCY_FORMATS: Dict[Region, Dict[str, str]] = {
+    _CURRENCY_FORMATS: dict[Region, dict[str, str]] = {
         Region.US: {"symbol": "$", "position": "prefix"},
         Region.CN: {"symbol": "¥", "position": "prefix"},
         Region.JP: {"symbol": "¥", "position": "prefix"},
@@ -474,13 +474,13 @@ class LocalizationConfig:
         return cls._TIME_FORMATS.get(region, "HH:mm:ss")
 
     @classmethod
-    def get_number_format(cls, region: Region) -> Dict[str, str]:
+    def get_number_format(cls, region: Region) -> dict[str, str]:
         if region in cls._COMMA_DECIMAL_REGIONS:
             return {"decimal": ",", "thousands": "."}
         return {"decimal": ".", "thousands": ","}
 
     @classmethod
-    def get_currency_format(cls, region: Region) -> Dict[str, str]:
+    def get_currency_format(cls, region: Region) -> dict[str, str]:
         return cls._CURRENCY_FORMATS.get(
             region, {"symbol": "$", "position": "prefix"}
         )
@@ -502,7 +502,7 @@ class TranslationManager:
         # Fallback to the key itself when no translation exists
         return value if value is not None else key
 
-    def get_translations(self, language: Language) -> Dict[str, str]:
+    def get_translations(self, language: Language) -> dict[str, str]:
         return dict(self._store.translations.get(language, {}))
 
 
@@ -596,7 +596,7 @@ class I18nContext:
 class I18nManager:
     """Singleton i18n manager: holds current locale + supported metadata."""
 
-    _instance: Optional["I18nManager"] = None
+    _instance: I18nManager | None = None
 
     _SUPPORTED_LANGUAGES = [
         ("en", "English"),
@@ -617,7 +617,7 @@ class I18nManager:
         ("GB", "United Kingdom"),
     ]
 
-    def __new__(cls) -> "I18nManager":
+    def __new__(cls) -> I18nManager:
         if cls._instance is None:
             cls._instance = super().__new__(cls)
             cls._instance._initialized = False

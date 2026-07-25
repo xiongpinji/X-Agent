@@ -11,7 +11,7 @@
 from __future__ import annotations
 
 import logging
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 from fastapi import HTTPException, status
@@ -20,7 +20,7 @@ from pydantic import BaseModel, Field
 logger = logging.getLogger(__name__)
 
 
-class ErrorCode(str, Enum):
+class ErrorCode(StrEnum):
     """标准错误代码定义。"""
     # 认证和授权错误
     UNAUTHORIZED = "UNAUTHORIZED"

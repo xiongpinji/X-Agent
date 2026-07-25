@@ -9,8 +9,7 @@ import os
 import tempfile
 import uuid
 from dataclasses import dataclass, field
-from typing import Any, Optional
-from datetime import datetime
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +24,7 @@ class NodeSandboxConfig:
     max_output_bytes: int = 10 * 1024 * 1024  # 10MB
     enable_network: bool = False
     enable_file_system: bool = False
-    temp_dir: Optional[str] = None
+    temp_dir: str | None = None
     node_version: str = "18"
     container_name_prefix: str = "xagent-node"
 
@@ -40,8 +39,8 @@ class NodeExecutionResult:
     return_value: Any = None
     execution_time_ms: float = 0.0
     memory_used_mb: float = 0.0
-    error_code: Optional[str] = None
-    error_message: Optional[str] = None
+    error_code: str | None = None
+    error_message: str | None = None
     execution_id: str = field(default_factory=lambda: uuid.uuid4().hex[:8])
 
 
@@ -168,16 +167,16 @@ class NodeSandbox:
         "exports.",
     }
 
-    def __init__(self, config: Optional[NodeSandboxConfig] = None):
+    def __init__(self, config: NodeSandboxConfig | None = None):
         """Initialize Node.js sandbox.
 
         Args:
             config: Sandbox configuration
         """
         self.config = config or NodeSandboxConfig()
-        self._temp_dir: Optional[str] = None
+        self._temp_dir: str | None = None
 
-    async def execute(self, code: str, variables: Optional[dict[str, Any]] = None) -> NodeExecutionResult:
+    async def execute(self, code: str, variables: dict[str, Any] | None = None) -> NodeExecutionResult:
         """Execute Node.js code in sandbox.
 
         Args:
@@ -215,7 +214,7 @@ class NodeSandbox:
             result.execution_time_ms = (time.perf_counter() - start_time) * 1000
             return result
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return NodeExecutionResult(
                 success=False,
                 error_code="TIMEOUT",
@@ -234,7 +233,7 @@ class NodeSandbox:
             # Cleanup
             await self._cleanup()
 
-    def _validate_code(self, code: str) -> Optional[str]:
+    def _validate_code(self, code: str) -> str | None:
         """Validate code for dangerous patterns.
 
         Args:
@@ -360,7 +359,7 @@ console.error = function(...args) {{
                 stdout, stderr = await asyncio.wait_for(
                     process.communicate(), timeout=self.config.timeout_seconds
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 process.kill()
                 await process.wait()
                 raise
@@ -407,7 +406,7 @@ console.error = function(...args) {{
                     execution_time_ms=(time.perf_counter() - start_time) * 1000,
                 )
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             raise
         except Exception as e:
             logger.exception(f"Node execution error: {e}")
@@ -442,7 +441,7 @@ console.error = function(...args) {{
 class NodeSandboxPool:
     """Pool of reusable Node.js sandbox processes for performance."""
 
-    def __init__(self, config: Optional[NodeSandboxConfig] = None, pool_size: int = 5):
+    def __init__(self, config: NodeSandboxConfig | None = None, pool_size: int = 5):
         """Initialize sandbox pool.
 
         Args:
@@ -468,7 +467,7 @@ class NodeSandboxPool:
         self._initialized = True
         logger.info(f"Initialized Node.js sandbox pool with {self.pool_size} processes")
 
-    async def execute(self, code: str, variables: Optional[dict[str, Any]] = None) -> NodeExecutionResult:
+    async def execute(self, code: str, variables: dict[str, Any] | None = None) -> NodeExecutionResult:
         """Execute code using a sandbox from the pool.
 
         Args:

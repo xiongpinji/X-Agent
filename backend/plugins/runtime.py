@@ -29,7 +29,7 @@ import sys
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from backend.app.core.mcp_plugin_adapter import (
     MCPManifest,
@@ -60,13 +60,13 @@ class PluginInfo:
     path: str
     format: str                     # "mcp" | "legacy" | "unknown"
     status: str                     # loadable/loaded/invalid/legacy_unsupported/no_manifest
-    manifest_name: Optional[str] = None     # MCP manifest 中的 name
-    manifest_version: Optional[str] = None
-    display_name: Optional[str] = None
-    description: Optional[str] = None
+    manifest_name: str | None = None     # MCP manifest 中的 name
+    manifest_version: str | None = None
+    display_name: str | None = None
+    description: str | None = None
     tools: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
-    detail: Optional[str] = None
+    detail: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -242,7 +242,7 @@ class PluginRuntime:
                 results.append(info)
         return results
 
-    def get_loaded(self, name: str) -> Optional[MCPPlugin]:
+    def get_loaded(self, name: str) -> MCPPlugin | None:
         return self._loaded.get(name)
 
     def list_loaded(self) -> list[str]:
@@ -361,8 +361,8 @@ def get_plugin_runtime() -> PluginRuntime:
 
 
 __all__ = [
-    "PluginRuntime",
     "PluginInfo",
-    "get_plugin_runtime",
+    "PluginRuntime",
     "get_default_plugins_dir",
+    "get_plugin_runtime",
 ]

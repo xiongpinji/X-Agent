@@ -13,15 +13,14 @@ Features:
 
 from __future__ import annotations
 
-import hashlib
 import json
 import logging
 from datetime import UTC, datetime, timedelta
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
 from secrets import token_urlsafe
 from threading import RLock
-from typing import Any, Optional
+from typing import Any
 from uuid import uuid4
 
 import bcrypt
@@ -34,7 +33,7 @@ logger = logging.getLogger(__name__)
 # ENUMS & CONSTANTS
 # ============================================================================
 
-class PermissionLevel(str, Enum):
+class PermissionLevel(StrEnum):
     """Fine-grained permission levels."""
     # Agent permissions
     AGENT_READ = "agent:read"
@@ -65,7 +64,7 @@ class PermissionLevel(str, Enum):
     ADMIN = "admin:*"
 
 
-class KeyStatus(str, Enum):
+class KeyStatus(StrEnum):
     """API key status."""
     ACTIVE = "active"
     ROTATED = "rotated"
@@ -74,7 +73,7 @@ class KeyStatus(str, Enum):
     SUSPENDED = "suspended"
 
 
-class AnomalyType(str, Enum):
+class AnomalyType(StrEnum):
     """Types of detected anomalies."""
     UNUSUAL_LOCATION = "unusual_location"
     RATE_LIMIT_EXCEEDED = "rate_limit_exceeded"
@@ -89,7 +88,7 @@ class AnomalyType(str, Enum):
 
 class APIKeyMetadata(BaseModel):
     """Metadata for API keys."""
-    description: Optional[str] = None
+    description: str | None = None
     tags: list[str] = Field(default_factory=list)
     custom_fields: dict[str, Any] = Field(default_factory=dict)
 
@@ -128,10 +127,10 @@ class APIKeyConfig(BaseModel):
     # Lifecycle
     status: KeyStatus = KeyStatus.ACTIVE
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    expires_at: Optional[datetime] = None
-    revoked_at: Optional[datetime] = None
-    last_used_at: Optional[datetime] = None
-    last_rotated_at: Optional[datetime] = None
+    expires_at: datetime | None = None
+    revoked_at: datetime | None = None
+    last_used_at: datetime | None = None
+    last_rotated_at: datetime | None = None
 
     # Rate limiting
     rate_limit: RateLimitConfig = Field(default_factory=RateLimitConfig)
@@ -145,10 +144,10 @@ class APIKeyConfig(BaseModel):
     # Usage tracking
     total_requests: int = 0
     failed_requests: int = 0
-    last_ip: Optional[str] = None
+    last_ip: str | None = None
 
     @validator("expires_at", pre=True, always=True)
-    def set_default_expiry(cls, v: Optional[datetime]) -> Optional[datetime]:
+    def set_default_expiry(cls, v: datetime | None) -> datetime | None:
         """Set default expiry to 90 days if not specified."""
         if v is None:
             return datetime.now(UTC) + timedelta(days=90)
@@ -170,13 +169,13 @@ class AuditEntry(BaseModel):
     actor_type: str  # "user", "system", "api_key"
 
     # Context
-    ip_address: Optional[str] = None
-    user_agent: Optional[str] = None
-    request_id: Optional[str] = None
+    ip_address: str | None = None
+    user_agent: str | None = None
+    request_id: str | None = None
 
     # Result
     success: bool = True
-    error_message: Optional[str] = None
+    error_message: str | None = None
 
     # Details
     details: dict[str, Any] = Field(default_factory=dict)
@@ -193,7 +192,7 @@ class AnomalyAlert(BaseModel):
     description: str
 
     # Recommended action
-    recommended_action: Optional[str] = None
+    recommended_action: str | None = None
     auto_revoked: bool = False
 
 
@@ -292,7 +291,7 @@ class AnomalyDetector:
     def detect_anomalies(
         self,
         key_id: str,
-        ip_address: Optional[str],
+        ip_address: str | None,
         timestamp: datetime,
     ) -> list[AnomalyAlert]:
         """Detect anomalies for a key usage."""
@@ -328,7 +327,7 @@ class AnomalyDetector:
 
         return alerts
 
-    def record_failed_attempt(self, key_id: str, timestamp: datetime) -> Optional[AnomalyAlert]:
+    def record_failed_attempt(self, key_id: str, timestamp: datetime) -> AnomalyAlert | None:
         """Record failed authentication attempt."""
         with self._lock:
             attempts = self._failed_attempts.setdefault(key_id, [])
@@ -358,7 +357,7 @@ class AnomalyDetector:
 class APIKeyManager:
     """Advanced API key management system."""
 
-    def __init__(self, storage_path: Optional[str | Path] = None) -> None:
+    def __init__(self, storage_path: str | Path | None = None) -> None:
         self._keys: dict[str, APIKeyConfig] = {}
         self._prefix_index: dict[str, str] = {}  # prefix -> key_id
         self._audit_log: list[AuditEntry] = []
@@ -381,10 +380,10 @@ class APIKeyManager:
         name: str,
         user_id: str,
         tenant_id: str = "default",
-        permissions: Optional[list[PermissionLevel]] = None,
+        permissions: list[PermissionLevel] | None = None,
         expires_in_days: int = 90,
-        metadata: Optional[APIKeyMetadata] = None,
-        created_by: Optional[str] = None,
+        metadata: APIKeyMetadata | None = None,
+        created_by: str | None = None,
     ) -> tuple[str, APIKeyConfig]:
         """Create a new API key.
 
@@ -484,7 +483,7 @@ class APIKeyManager:
         self,
         key_id: str,
         actor_id: str,
-        reason: Optional[str] = None,
+        reason: str | None = None,
     ) -> APIKeyConfig:
         """Revoke an API key."""
         with self._lock:
@@ -517,8 +516,8 @@ class APIKeyManager:
     def authenticate(
         self,
         raw_key: str,
-        ip_address: Optional[str] = None,
-    ) -> Optional[APIKeyConfig]:
+        ip_address: str | None = None,
+    ) -> APIKeyConfig | None:
         """Authenticate with an API key.
 
         Returns:
@@ -666,7 +665,7 @@ class APIKeyManager:
         self,
         config: APIKeyConfig,
         required_permission: PermissionLevel,
-        resource_id: Optional[str] = None,
+        resource_id: str | None = None,
     ) -> bool:
         """Check if key has required permission."""
         # Admin has all permissions
@@ -688,25 +687,22 @@ class APIKeyManager:
             wildcard_level = PermissionLevel(wildcard)
         except ValueError:
             wildcard_level = None
-        if wildcard_level is not None and wildcard_level in config.permissions:
-            return True
-
-        return False
+        return bool(wildcard_level is not None and wildcard_level in config.permissions)
 
     # ========================================================================
     # KEY MANAGEMENT
     # ========================================================================
 
-    def get_key(self, key_id: str) -> Optional[APIKeyConfig]:
+    def get_key(self, key_id: str) -> APIKeyConfig | None:
         """Get key configuration by ID."""
         with self._lock:
             return self._keys.get(key_id)
 
     def list_keys(
         self,
-        tenant_id: Optional[str] = None,
-        user_id: Optional[str] = None,
-        status: Optional[KeyStatus] = None,
+        tenant_id: str | None = None,
+        user_id: str | None = None,
+        status: KeyStatus | None = None,
     ) -> list[APIKeyConfig]:
         """List keys with optional filtering."""
         with self._lock:
@@ -726,7 +722,7 @@ class APIKeyManager:
         key_id: str,
         updates: dict[str, Any],
         actor_id: str,
-    ) -> Optional[APIKeyConfig]:
+    ) -> APIKeyConfig | None:
         """Update key configuration."""
         with self._lock:
             config = self._keys.get(key_id)
@@ -764,8 +760,8 @@ class APIKeyManager:
 
     def get_audit_log(
         self,
-        key_id: Optional[str] = None,
-        event_type: Optional[str] = None,
+        key_id: str | None = None,
+        event_type: str | None = None,
         limit: int = 100,
     ) -> list[AuditEntry]:
         """Get audit log entries."""
@@ -781,8 +777,8 @@ class APIKeyManager:
 
     def get_anomaly_alerts(
         self,
-        key_id: Optional[str] = None,
-        severity: Optional[str] = None,
+        key_id: str | None = None,
+        severity: str | None = None,
         limit: int = 100,
     ) -> list[AnomalyAlert]:
         """Get anomaly alerts."""
@@ -796,7 +792,7 @@ class APIKeyManager:
 
             return sorted(alerts, key=lambda a: a.timestamp, reverse=True)[:limit]
 
-    def get_key_usage_stats(self, key_id: str) -> Optional[dict[str, Any]]:
+    def get_key_usage_stats(self, key_id: str) -> dict[str, Any] | None:
         """Get usage statistics for a key."""
         config = self.get_key(key_id)
         if not config:
@@ -828,10 +824,10 @@ class APIKeyManager:
         key_prefix: str,
         actor_id: str,
         actor_type: str,
-        ip_address: Optional[str] = None,
+        ip_address: str | None = None,
         success: bool = True,
-        error_message: Optional[str] = None,
-        details: Optional[dict[str, Any]] = None,
+        error_message: str | None = None,
+        details: dict[str, Any] | None = None,
     ) -> None:
         """Record audit entry."""
         entry = AuditEntry(
@@ -857,7 +853,7 @@ class APIKeyManager:
         return bcrypt.hashpw(raw_key.encode("utf-8"), bcrypt.gensalt(rounds=12)).decode("utf-8")
 
     @staticmethod
-    def _check_ip_whitelist(ip: Optional[str], whitelist: IPWhitelist) -> bool:
+    def _check_ip_whitelist(ip: str | None, whitelist: IPWhitelist) -> bool:
         """Check if IP is in whitelist."""
         if not ip:
             return False
@@ -866,11 +862,7 @@ class APIKeyManager:
             return True
 
         # Simple CIDR check (production should use ipaddress module)
-        for cidr in whitelist.cidrs:
-            if ip.startswith(cidr.split("/")[0]):
-                return True
-
-        return False
+        return any(ip.startswith(cidr.split("/")[0]) for cidr in whitelist.cidrs)
 
     def _load_from_disk(self) -> None:
         """Load keys from disk."""

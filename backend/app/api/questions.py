@@ -12,7 +12,6 @@ from pydantic import BaseModel, Field
 
 from backend.app.core.interactive_questions import (
     InteractiveQuestion,
-    QuestionAnswer,
     QuestionHistory,
     QuestionStatus,
     QuestionType,

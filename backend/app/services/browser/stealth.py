@@ -11,7 +11,7 @@ from __future__ import annotations
 import logging
 import random
 from dataclasses import dataclass
-from typing import Optional, Any, List
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -79,9 +79,9 @@ class StealthBrowser:
         """
         self.session_id = session_id
         self.logger = logger
-        self.current_user_agent: Optional[UserAgent] = None
-        self.current_resolution: Optional[tuple] = None
-        self.current_language: Optional[str] = None
+        self.current_user_agent: UserAgent | None = None
+        self.current_resolution: tuple | None = None
+        self.current_language: str | None = None
 
     async def apply_stealth_measures(self, page: Any) -> bool:
         """
@@ -223,10 +223,7 @@ class StealthBrowser:
         else:
             os = "Unknown"
 
-        if "Mobile" in ua_string:
-            device = "Mobile"
-        else:
-            device = "Desktop"
+        device = "Mobile" if "Mobile" in ua_string else "Desktop"
 
         user_agent = UserAgent(
             user_agent=ua_string,

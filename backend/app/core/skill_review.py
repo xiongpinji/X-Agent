@@ -6,16 +6,15 @@ from __future__ import annotations
 
 import logging
 import uuid
-from typing import Any, Dict, List, Optional, Tuple
 from dataclasses import dataclass, field
-from datetime import datetime, UTC, timedelta
-from enum import Enum
-import json
+from datetime import UTC, datetime
+from enum import StrEnum
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
-class ReviewStatus(str, Enum):
+class ReviewStatus(StrEnum):
     """审核状态"""
     PENDING = "pending"
     IN_REVIEW = "in_review"
@@ -25,7 +24,7 @@ class ReviewStatus(str, Enum):
     APPROVED_WITH_CONDITIONS = "approved_with_conditions"
 
 
-class ReviewCategory(str, Enum):
+class ReviewCategory(StrEnum):
     """审核类别"""
     SECURITY = "security"
     PERFORMANCE = "performance"
@@ -35,7 +34,7 @@ class ReviewCategory(str, Enum):
     LICENSING = "licensing"
 
 
-class SeverityLevel(str, Enum):
+class SeverityLevel(StrEnum):
     """严重程度"""
     INFO = "info"
     WARNING = "warning"
@@ -52,10 +51,10 @@ class ReviewIssue:
     title: str = ""
     description: str = ""
     recommendation: str = ""
-    code_reference: Optional[str] = None
+    code_reference: str | None = None
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """转换为字典"""
         return {
             "issue_id": self.issue_id,
@@ -75,11 +74,11 @@ class SecurityCheckResult:
     check_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     check_name: str = ""
     passed: bool = True
-    issues: List[ReviewIssue] = field(default_factory=list)
-    details: Dict[str, Any] = field(default_factory=dict)
+    issues: list[ReviewIssue] = field(default_factory=list)
+    details: dict[str, Any] = field(default_factory=dict)
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """转换为字典"""
         return {
             "check_id": self.check_id,
@@ -107,15 +106,15 @@ class SkillReview:
     functionality_score: float = 0.0
     documentation_score: float = 0.0
     compatibility_score: float = 0.0
-    issues: List[ReviewIssue] = field(default_factory=list)
-    security_checks: List[SecurityCheckResult] = field(default_factory=list)
+    issues: list[ReviewIssue] = field(default_factory=list)
+    security_checks: list[SecurityCheckResult] = field(default_factory=list)
     comments: str = ""
-    approved_at: Optional[datetime] = None
-    rejected_at: Optional[datetime] = None
+    approved_at: datetime | None = None
+    rejected_at: datetime | None = None
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """转换为字典"""
         return {
             "review_id": self.review_id,
@@ -144,7 +143,7 @@ class SkillReview:
 class SkillSecurityChecker:
     """技能安全检查器"""
 
-    async def check_security(self, skill_metadata: Dict[str, Any]) -> SecurityCheckResult:
+    async def check_security(self, skill_metadata: dict[str, Any]) -> SecurityCheckResult:
         """
         检查技能安全性
 
@@ -232,7 +231,7 @@ class SkillSecurityChecker:
 
         return result
 
-    async def check_performance(self, skill_metadata: Dict[str, Any]) -> SecurityCheckResult:
+    async def check_performance(self, skill_metadata: dict[str, Any]) -> SecurityCheckResult:
         """检查性能"""
         result = SecurityCheckResult(check_name="Performance Check")
         issues = []
@@ -283,22 +282,22 @@ class SkillSecurityChecker:
 
         return result
 
-    async def check_functionality(self, skill_metadata: Dict[str, Any]) -> SecurityCheckResult:
+    async def check_functionality(self, skill_metadata: dict[str, Any]) -> SecurityCheckResult:
         """检查功能"""
         result = SecurityCheckResult(check_name="Functionality Check")
         issues = []
 
         # 检查必需字段
         required_fields = ["name", "version", "description", "author"]
-        for field in required_fields:
-            if not skill_metadata.get(field):
+        for field_name in required_fields:
+            if not skill_metadata.get(field_name):
                 issues.append(
                     ReviewIssue(
                         category=ReviewCategory.FUNCTIONALITY,
                         severity=SeverityLevel.ERROR,
-                        title=f"Missing {field}",
-                        description=f"Required field '{field}' is missing",
-                        recommendation=f"Provide a valid {field}",
+                        title=f"Missing {field_name}",
+                        description=f"Required field '{field_name}' is missing",
+                        recommendation=f"Provide a valid {field_name}",
                     )
                 )
 
@@ -337,7 +336,7 @@ class SkillSecurityChecker:
 
         return result
 
-    async def check_documentation(self, skill_metadata: Dict[str, Any]) -> SecurityCheckResult:
+    async def check_documentation(self, skill_metadata: dict[str, Any]) -> SecurityCheckResult:
         """检查文档"""
         result = SecurityCheckResult(check_name="Documentation Check")
         issues = []
@@ -389,7 +388,7 @@ class SkillSecurityChecker:
 
         return result
 
-    async def check_compatibility(self, skill_metadata: Dict[str, Any]) -> SecurityCheckResult:
+    async def check_compatibility(self, skill_metadata: dict[str, Any]) -> SecurityCheckResult:
         """检查兼容性"""
         result = SecurityCheckResult(check_name="Compatibility Check")
         issues = []
@@ -440,14 +439,14 @@ class SkillReviewManager:
 
     def __init__(self):
         self.security_checker = SkillSecurityChecker()
-        self._reviews: Dict[str, SkillReview] = {}
+        self._reviews: dict[str, SkillReview] = {}
 
     async def create_review(
         self,
         skill_id: str,
         skill_name: str,
         skill_version: str,
-        skill_metadata: Dict[str, Any],
+        skill_metadata: dict[str, Any],
     ) -> SkillReview:
         """
         创建审核记录
@@ -568,15 +567,15 @@ class SkillReviewManager:
         logger.info(f"Review rejected: {review_id}")
         return review
 
-    async def get_review(self, review_id: str) -> Optional[SkillReview]:
+    async def get_review(self, review_id: str) -> SkillReview | None:
         """获取审核记录"""
         return self._reviews.get(review_id)
 
     async def list_reviews(
         self,
-        status: Optional[ReviewStatus] = None,
+        status: ReviewStatus | None = None,
         limit: int = 100,
-    ) -> List[SkillReview]:
+    ) -> list[SkillReview]:
         """列出审核记录"""
         reviews = list(self._reviews.values())
         if status:
@@ -602,7 +601,7 @@ class SkillReviewManager:
 
 
 # Global instance
-_review_manager: Optional[SkillReviewManager] = None
+_review_manager: SkillReviewManager | None = None
 
 
 def get_skill_review_manager() -> SkillReviewManager:
@@ -614,13 +613,13 @@ def get_skill_review_manager() -> SkillReviewManager:
 
 
 __all__ = [
-    "ReviewStatus",
     "ReviewCategory",
-    "SeverityLevel",
     "ReviewIssue",
+    "ReviewStatus",
     "SecurityCheckResult",
+    "SeverityLevel",
     "SkillReview",
-    "SkillSecurityChecker",
     "SkillReviewManager",
+    "SkillSecurityChecker",
     "get_skill_review_manager",
 ]

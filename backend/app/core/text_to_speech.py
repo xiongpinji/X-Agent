@@ -9,18 +9,17 @@ This module provides text-to-speech capabilities with support for multiple provi
 
 from __future__ import annotations
 
-import asyncio
 import io
 import logging
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
-class TTSProvider(str, Enum):
+class TTSProvider(StrEnum):
     """Supported TTS providers."""
     OPENAI = "openai"
     GOOGLE = "google"
@@ -28,7 +27,7 @@ class TTSProvider(str, Enum):
     LOCAL = "local"
 
 
-class AudioFormat(str, Enum):
+class AudioFormat(StrEnum):
     """Supported audio output formats."""
     MP3 = "mp3"
     OPUS = "opus"
@@ -38,7 +37,7 @@ class AudioFormat(str, Enum):
     PCM = "pcm"
 
 
-class VoiceGender(str, Enum):
+class VoiceGender(StrEnum):
     """Voice gender options."""
     MALE = "male"
     FEMALE = "female"

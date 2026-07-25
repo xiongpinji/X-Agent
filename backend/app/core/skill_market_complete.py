@@ -4,17 +4,16 @@ from __future__ import annotations
 
 import logging
 import uuid
-from typing import Optional, List, Dict, Any, Tuple
-from datetime import datetime, UTC, timedelta
-from enum import Enum
+from enum import StrEnum
+from typing import Any
 
-from pydantic import BaseModel, Field
 import asyncpg
+from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 
 
-class SkillStatus(str, Enum):
+class SkillStatus(StrEnum):
     """技能状态"""
     DRAFT = "draft"
     PUBLISHED = "published"
@@ -25,7 +24,7 @@ class SkillStatus(str, Enum):
     ERROR = "error"
 
 
-class ReviewStatus(str, Enum):
+class ReviewStatus(StrEnum):
     """评论状态"""
     PENDING = "pending"
     APPROVED = "approved"
@@ -43,15 +42,15 @@ class SkillPublishRequest(BaseModel):
     description_zh: str
     author: str
     icon_emoji: str = ""
-    keywords: List[str] = Field(default_factory=list)
-    tags: List[str] = Field(default_factory=list)
+    keywords: list[str] = Field(default_factory=list)
+    tags: list[str] = Field(default_factory=list)
 
 
 class SkillReviewRequest(BaseModel):
     """技能审核请求"""
     skill_id: str
     action: str  # approved, rejected
-    reason: Optional[str] = None
+    reason: str | None = None
 
 
 class SkillRatingRequest(BaseModel):
@@ -59,7 +58,7 @@ class SkillRatingRequest(BaseModel):
     skill_id: str
     rating: int  # 1-5
     title: str
-    comment: Optional[str] = None
+    comment: str | None = None
 
 
 class SkillMarketDB:
@@ -75,7 +74,7 @@ class SkillMarketDB:
         tenant_id: str,
         user_id: str,
         request: SkillPublishRequest,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """发布技能"""
         skill_id = str(uuid.uuid4())
         slug = request.name.lower().replace(" ", "-")
@@ -105,7 +104,7 @@ class SkillMarketDB:
         self,
         skill_id: str,
         user_id: str,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """提交审核"""
         async with self.pool.acquire() as conn:
             # 更新技能状态
@@ -127,8 +126,8 @@ class SkillMarketDB:
         self,
         skill_id: str,
         reviewer_id: str,
-        reason: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        reason: str | None = None,
+    ) -> dict[str, Any]:
         """批准技能"""
         async with self.pool.acquire() as conn:
             await conn.execute("""
@@ -149,7 +148,7 @@ class SkillMarketDB:
         skill_id: str,
         reviewer_id: str,
         reason: str,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """拒绝技能"""
         async with self.pool.acquire() as conn:
             await conn.execute("""
@@ -170,10 +169,10 @@ class SkillMarketDB:
     async def search_skills(
         self,
         query: str,
-        category: Optional[str] = None,
+        category: str | None = None,
         limit: int = 20,
         offset: int = 0,
-    ) -> Tuple[List[Dict[str, Any]], int]:
+    ) -> tuple[list[dict[str, Any]], int]:
         """搜索技能"""
         async with self.pool.acquire() as conn:
             # 构建查询
@@ -208,7 +207,7 @@ class SkillMarketDB:
 
             return [dict(row) for row in rows], total
 
-    async def get_skill_by_id(self, skill_id: str) -> Optional[Dict[str, Any]]:
+    async def get_skill_by_id(self, skill_id: str) -> dict[str, Any] | None:
         """获取技能详情"""
         async with self.pool.acquire() as conn:
             row = await conn.fetchrow("""
@@ -226,7 +225,7 @@ class SkillMarketDB:
         category: str,
         limit: int = 20,
         offset: int = 0,
-    ) -> Tuple[List[Dict[str, Any]], int]:
+    ) -> tuple[list[dict[str, Any]], int]:
         """按分类列出技能"""
         async with self.pool.acquire() as conn:
             total = await conn.fetchval(
@@ -251,7 +250,7 @@ class SkillMarketDB:
         user_id: str,
         user_name: str,
         request: SkillRatingRequest,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """添加评论"""
         review_id = str(uuid.uuid4())
 
@@ -287,7 +286,7 @@ class SkillMarketDB:
         skill_id: str,
         limit: int = 20,
         offset: int = 0,
-    ) -> Tuple[List[Dict[str, Any]], int]:
+    ) -> tuple[list[dict[str, Any]], int]:
         """获取技能评论"""
         async with self.pool.acquire() as conn:
             total = await conn.fetchval(
@@ -311,7 +310,7 @@ class SkillMarketDB:
         skill_id: str,
         version: str,
         changelog: str,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """创建新版本"""
         version_id = str(uuid.uuid4())
 
@@ -330,7 +329,7 @@ class SkillMarketDB:
         logger.info(f"版本已创建: {version}, 技能: {skill_id}")
         return {"version_id": version_id, "version": version}
 
-    async def get_skill_versions(self, skill_id: str) -> List[Dict[str, Any]]:
+    async def get_skill_versions(self, skill_id: str) -> list[dict[str, Any]]:
         """获取技能版本列表"""
         async with self.pool.acquire() as conn:
             rows = await conn.fetch("""
@@ -347,9 +346,9 @@ class SkillMarketDB:
         self,
         skill_id: str,
         dep_skill_id: str,
-        version_spec: Optional[str] = None,
+        version_spec: str | None = None,
         dep_type: str = "required",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """添加依赖"""
         dep_id = str(uuid.uuid4())
 
@@ -363,7 +362,7 @@ class SkillMarketDB:
         logger.info(f"依赖已添加: {skill_id} -> {dep_skill_id}")
         return {"dependency_id": dep_id}
 
-    async def get_skill_dependencies(self, skill_id: str) -> List[Dict[str, Any]]:
+    async def get_skill_dependencies(self, skill_id: str) -> list[dict[str, Any]]:
         """获取技能依赖"""
         async with self.pool.acquire() as conn:
             rows = await conn.fetch("""
@@ -383,8 +382,8 @@ class SkillMarketDB:
         user_id: str,
         skill_id: str,
         version: str,
-        config: Dict[str, Any] = None,
-    ) -> Dict[str, Any]:
+        config: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         """安装技能"""
         install_id = str(uuid.uuid4())
 
@@ -411,7 +410,7 @@ class SkillMarketDB:
         tenant_id: str,
         user_id: str,
         skill_id: str,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """卸载技能"""
         async with self.pool.acquire() as conn:
             await conn.execute("""
@@ -432,7 +431,7 @@ class SkillMarketDB:
         self,
         tenant_id: str,
         user_id: str,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """获取用户已安装的技能"""
         async with self.pool.acquire() as conn:
             rows = await conn.fetch("""
@@ -452,12 +451,12 @@ class SkillMarketDB:
         tenant_id: str,
         user_id: str,
         skill_id: str,
-        input_data: Dict[str, Any],
-        output_data: Dict[str, Any],
+        input_data: dict[str, Any],
+        output_data: dict[str, Any],
         status: str = "success",
-        error: Optional[str] = None,
+        error: str | None = None,
         duration_ms: int = 0,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """记录技能使用"""
         record_id = str(uuid.uuid4())
 
@@ -482,7 +481,7 @@ class SkillMarketDB:
         self,
         skill_id: str,
         days: int = 30,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """获取技能使用统计"""
         async with self.pool.acquire() as conn:
             stats = await conn.fetchrow("""
@@ -506,7 +505,7 @@ class SkillMarketDB:
         tenant_id: str,
         user_id: str,
         limit: int = 10,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """获取技能推荐"""
         async with self.pool.acquire() as conn:
             rows = await conn.fetch("""
@@ -522,7 +521,7 @@ class SkillMarketDB:
 
     # ==================== 统计信息 ====================
 
-    async def get_market_stats(self, tenant_id: str) -> Dict[str, Any]:
+    async def get_market_stats(self, tenant_id: str) -> dict[str, Any]:
         """获取市场统计"""
         async with self.pool.acquire() as conn:
             stats = await conn.fetchrow("""
@@ -556,7 +555,7 @@ class SkillMarketDB:
 
 
 # 全局实例
-_skill_market_db: Optional[SkillMarketDB] = None
+_skill_market_db: SkillMarketDB | None = None
 
 
 def get_skill_market_db(pool: asyncpg.Pool) -> SkillMarketDB:

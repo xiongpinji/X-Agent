@@ -14,8 +14,8 @@ import asyncio
 import hashlib
 import json
 import logging
-from datetime import datetime, timedelta, UTC
-from typing import Any, Callable, TypeVar, Generic
+from datetime import UTC, datetime, timedelta
+from typing import Any, Generic, TypeVar
 
 import asyncpg
 
@@ -122,8 +122,9 @@ class QueryOptimizer:
                 }
         except Exception as e:
             logger.error(f"Failed to analyze query: {e}")
+            return {"success": False, "error": str(e)}
 
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": "No result returned"}
 
     @staticmethod
     def optimize_query_with_prefetch(
@@ -286,7 +287,7 @@ class QueryCache(Generic[T]):
         if pattern is None:
             self._cache.clear()
         else:
-            keys_to_delete = [k for k in self._cache.keys() if pattern in k]
+            keys_to_delete = [k for k in self._cache if pattern in k]
             for key in keys_to_delete:
                 del self._cache[key]
 

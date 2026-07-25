@@ -6,28 +6,22 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
-from datetime import datetime, UTC
-from typing import Optional, Any
+from datetime import UTC, datetime
+from typing import Any
 
-from backend.app.core.memory.merger import MemoryMerger, MergedMemory, MergeStats
+from backend.app.core.memory.analytics import AnalyticsReport, MemoryAnalytics
+from backend.app.core.memory.graph_enhancer import GraphEnhancer
 from backend.app.core.memory.importance import (
     MemoryImportanceScorer,
-    ImportanceScores,
-    ImportanceWeights,
 )
-from backend.app.core.memory.retrieval_optimizer import (
-    RetrieverOptimizer,
-    RetrievalResult,
-)
-from backend.app.core.memory.graph_enhancer import GraphEnhancer, GraphStats
 from backend.app.core.memory.lifecycle import (
     MemoryLifecycleManager,
-    LifecyclePolicy,
-    LifecycleStats,
 )
-from backend.app.core.memory.analytics import MemoryAnalytics, AnalyticsReport
+from backend.app.core.memory.merger import MemoryMerger
+from backend.app.core.memory.retrieval_optimizer import (
+    RetrieverOptimizer,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -90,7 +84,7 @@ class AdvancedMemoryFusionSystem:
     async def process_memories(
         self,
         memories: list[dict],
-        embeddings: Optional[Any] = None,
+        embeddings: Any | None = None,
     ) -> dict[str, Any]:
         """
         处理记忆的完整流程。
@@ -188,7 +182,7 @@ class AdvancedMemoryFusionSystem:
         self,
         query: str,
         memories: list[dict],
-        embeddings: Optional[Any] = None,
+        embeddings: Any | None = None,
         top_k: int = 10,
     ) -> list[dict]:
         """
@@ -327,7 +321,7 @@ class AdvancedMemoryFusionSystem:
         self,
         memories: list[dict],
         period_days: int = 30,
-    ) -> Optional[AnalyticsReport]:
+    ) -> AnalyticsReport | None:
         """
         生成分析报告。
 

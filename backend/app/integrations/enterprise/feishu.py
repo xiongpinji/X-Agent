@@ -1,8 +1,9 @@
 """Feishu (飞书) Integration Module"""
 
 import json
-from typing import List, Dict, Any, Optional
 from datetime import datetime
+from typing import Any
+
 import aiohttp
 
 from .base import EnterpriseIMPlatform, MessageType
@@ -15,10 +16,10 @@ class FeishuIntegration(EnterpriseIMPlatform):
         super().__init__("feishu")
         self.app_id = app_id
         self.app_secret = app_secret
-        self.tenant_access_token: Optional[str] = None
-        self.token_expire_time: Optional[datetime] = None
+        self.tenant_access_token: str | None = None
+        self.token_expire_time: datetime | None = None
         self.base_url = "https://open.feishu.cn/open-apis"
-        self.session: Optional[aiohttp.ClientSession] = None
+        self.session: aiohttp.ClientSession | None = None
 
     async def _get_session(self) -> aiohttp.ClientSession:
         """Get or create aiohttp session"""
@@ -58,7 +59,7 @@ class FeishuIntegration(EnterpriseIMPlatform):
             return await self.authenticate()
         return True
 
-    def _get_headers(self) -> Dict[str, str]:
+    def _get_headers(self) -> dict[str, str]:
         """Get request headers with authorization"""
         return {
             "Authorization": f"Bearer {self.tenant_access_token}",
@@ -96,7 +97,7 @@ class FeishuIntegration(EnterpriseIMPlatform):
             print(f"Feishu send_message failed: {e}")
             return False
 
-    async def send_card(self, user_id: str, card: Dict[str, Any]) -> bool:
+    async def send_card(self, user_id: str, card: dict[str, Any]) -> bool:
         """Send a card message to a user"""
         if not await self._ensure_token():
             return False
@@ -159,7 +160,7 @@ class FeishuIntegration(EnterpriseIMPlatform):
             print(f"Feishu send_markdown failed: {e}")
             return False
 
-    async def get_user_info(self, user_id: str) -> Dict[str, Any]:
+    async def get_user_info(self, user_id: str) -> dict[str, Any]:
         """Get user information"""
         if not await self._ensure_token():
             return {}
@@ -178,7 +179,7 @@ class FeishuIntegration(EnterpriseIMPlatform):
             print(f"Feishu get_user_info failed: {e}")
             return {}
 
-    async def sync_contacts(self) -> List[Dict[str, Any]]:
+    async def sync_contacts(self) -> list[dict[str, Any]]:
         """Sync contacts from Feishu"""
         if not await self._ensure_token():
             return []
@@ -213,7 +214,7 @@ class FeishuIntegration(EnterpriseIMPlatform):
             print(f"Feishu sync_contacts failed: {e}")
             return []
 
-    async def sync_departments(self) -> List[Dict[str, Any]]:
+    async def sync_departments(self) -> list[dict[str, Any]]:
         """Sync departments from Feishu"""
         if not await self._ensure_token():
             return []
@@ -248,7 +249,7 @@ class FeishuIntegration(EnterpriseIMPlatform):
             print(f"Feishu sync_departments failed: {e}")
             return []
 
-    async def create_approval(self, template_id: str, data: Dict[str, Any]) -> str:
+    async def create_approval(self, template_id: str, data: dict[str, Any]) -> str:
         """Create an approval workflow instance"""
         if not await self._ensure_token():
             return ""
@@ -273,7 +274,7 @@ class FeishuIntegration(EnterpriseIMPlatform):
             print(f"Feishu create_approval failed: {e}")
             return ""
 
-    async def get_approval_status(self, approval_id: str) -> Dict[str, Any]:
+    async def get_approval_status(self, approval_id: str) -> dict[str, Any]:
         """Get approval workflow status"""
         if not await self._ensure_token():
             return {}
@@ -333,7 +334,7 @@ class FeishuIntegration(EnterpriseIMPlatform):
             print(f"Feishu download_file failed: {e}")
             return b""
 
-    async def send_bot_message(self, webhook_url: str, message: Dict[str, Any]) -> bool:
+    async def send_bot_message(self, webhook_url: str, message: dict[str, Any]) -> bool:
         """Send a message via Feishu bot webhook"""
         try:
             session = await self._get_session()

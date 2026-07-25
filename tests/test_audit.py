@@ -1,9 +1,30 @@
 import json
+from unittest.mock import AsyncMock, patch
 
+import pytest
 from fastapi.testclient import TestClient
 
 from backend.app.core.audit import AuditLogRecord, AuditStore
+from backend.app.core.contracts import AgentRunResponse, RunStatus
 from backend.app.main import app
+
+
+@pytest.fixture(autouse=True)
+def _mock_agent_run():
+    """Patch AgentLoop.run so tests never invoke the real agent loop / LLM."""
+    fake_result = AgentRunResponse(
+        trace_id="test-trace-audit",
+        agent_id="agent-default",
+        status=RunStatus.COMPLETED,
+        answer="Done.",
+        iterations=1,
+        memory_hits=0,
+    )
+    with patch(
+        "backend.app.core.agent.loop.AgentLoop.run",
+        new=AsyncMock(return_value=fake_result),
+    ):
+        yield
 
 
 def test_audit_store_persists_records(tmp_path) -> None:

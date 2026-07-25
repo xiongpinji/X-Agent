@@ -165,14 +165,14 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
             Sync & Storage
           </Text>
           <ToggleItem
-            icon="sync-outline"
+            icon="sync"
             label="Auto Sync"
             value={autoSync}
             onValueChange={setAutoSync}
             theme={theme}
           />
           <ToggleItem
-            icon="wifi-outline"
+            icon="wifi"
             label="WiFi Only"
             value={wifiOnly}
             onValueChange={setWifiOnly}
@@ -266,8 +266,10 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
 };
 
 // Setting Item Component
+type IconName = React.ComponentProps<typeof MaterialCommunityIcons>['name'];
+
 interface SettingItemProps {
-  icon: string;
+  icon: IconName;
   label: string;
   value?: string;
   onPress?: () => void;
@@ -319,7 +321,7 @@ const SettingItem: React.FC<SettingItemProps> = ({
 
 // Toggle Item Component
 interface ToggleItemProps {
-  icon: string;
+  icon: IconName;
   label: string;
   value: boolean;
   onValueChange: (value: boolean) => void;

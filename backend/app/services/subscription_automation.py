@@ -5,11 +5,10 @@ from __future__ import annotations
 
 import logging
 from datetime import UTC, datetime, timedelta
-from typing import Optional
 
 from sqlalchemy import and_, select
-from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.app.core.notifications import send_notification
 from backend.app.core.session import SessionManager
 from backend.app.models.subscription import (
     SubscriptionModel,
@@ -37,7 +36,7 @@ class SubscriptionAutomationService:
             # 查找需要续费的订阅
             stmt = select(SubscriptionModel).where(
                 and_(
-                    SubscriptionModel.auto_renew == True,
+                    SubscriptionModel.auto_renew,
                     SubscriptionModel.status == SubscriptionStatus.ACTIVE,
                     SubscriptionModel.current_period_end <= now,
                 )
@@ -59,7 +58,7 @@ class SubscriptionAutomationService:
                 except Exception as e:
                     failed_count += 1
                     await service.mark_renewal_failed(subscription.subscription_id)
-                    logger.error(f"自动续费失败: {subscription.subscription_id}, 错误: {str(e)}")
+                    logger.error(f"自动续费失败: {subscription.subscription_id}, 错误: {e!s}")
 
             return {
                 "total": len(subscriptions),
@@ -100,7 +99,7 @@ class SubscriptionAutomationService:
                     sent_count += 1
                     logger.info(f"过期提醒已发送: {subscription.subscription_id}")
                 except Exception as e:
-                    logger.error(f"发送过期提醒失败: {subscription.subscription_id}, 错误: {str(e)}")
+                    logger.error(f"发送过期提醒失败: {subscription.subscription_id}, 错误: {e!s}")
 
             return {
                 "total": len(subscriptions),
@@ -139,7 +138,7 @@ class SubscriptionAutomationService:
                     sent_count += 1
                     logger.info(f"配额告警已发送: {quota.quota_id}")
                 except Exception as e:
-                    logger.error(f"发送配额告警失败: {quota.quota_id}, 错误: {str(e)}")
+                    logger.error(f"发送配额告警失败: {quota.quota_id}, 错误: {e!s}")
 
             return {
                 "total": len(quotas),
@@ -163,7 +162,7 @@ class SubscriptionAutomationService:
                     SubscriptionModel.status != SubscriptionStatus.EXPIRED,
                     SubscriptionModel.status != SubscriptionStatus.CANCELLED,
                     SubscriptionModel.current_period_end <= now,
-                    SubscriptionModel.auto_renew == False,
+                    not SubscriptionModel.auto_renew,
                 )
             )
 
@@ -180,7 +179,7 @@ class SubscriptionAutomationService:
                     expired_count += 1
                     logger.info(f"订阅标记为过期: {subscription.subscription_id}")
                 except Exception as e:
-                    logger.error(f"标记订阅过期失败: {subscription.subscription_id}, 错误: {str(e)}")
+                    logger.error(f"标记订阅过期失败: {subscription.subscription_id}, 错误: {e!s}")
 
             return {
                 "total": len(subscriptions),
@@ -216,7 +215,7 @@ class SubscriptionAutomationService:
                     reset_count += 1
                     logger.info(f"配额重置成功: {quota.quota_id}")
                 except Exception as e:
-                    logger.error(f"配额重置失败: {quota.quota_id}, 错误: {str(e)}")
+                    logger.error(f"配额重置失败: {quota.quota_id}, 错误: {e!s}")
 
             return {
                 "total": len(quotas),
@@ -255,7 +254,7 @@ class SubscriptionAutomationService:
                     await session.delete(history)
                     deleted_count += 1
                 except Exception as e:
-                    logger.error(f"删除历史记录失败: {history.history_id}, 错误: {str(e)}")
+                    logger.error(f"删除历史记录失败: {history.history_id}, 错误: {e!s}")
 
             await session.flush()
 
@@ -268,13 +267,27 @@ class SubscriptionAutomationService:
 
     async def _send_expiration_email(self, subscription: SubscriptionModel) -> None:
         """发送过期提醒邮件"""
-        # TODO: 集成邮件服务
-        logger.info(f"发送过期提醒邮件: {subscription.user_id}")
+        result = await send_notification(
+            to=str(subscription.user_id),
+            subject="订阅即将到期提醒",
+            body=f"您的订阅将在近期到期，请及时续费。订阅ID: {subscription.id}",
+            channel="email",
+            subscription_id=str(subscription.id),
+        )
+        if not result.success:
+            logger.error(f"过期提醒邮件发送失败: user={subscription.user_id}, error={result.error}")
 
     async def _send_quota_warning_email(self, quota) -> None:
         """发送配额告警邮件"""
-        # TODO: 集成邮件服务
-        logger.info(f"发送配额告警邮件: {quota.user_id}")
+        result = await send_notification(
+            to=str(quota.user_id),
+            subject="配额使用告警",
+            body=f"您的配额使用率已接近上限，请关注用量。用户: {quota.user_id}",
+            channel="email",
+            user_id=str(quota.user_id),
+        )
+        if not result.success:
+            logger.error(f"配额告警邮件发送失败: user={quota.user_id}, error={result.error}")
 
 
 # 全局实例

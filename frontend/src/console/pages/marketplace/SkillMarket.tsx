@@ -230,8 +230,11 @@ export const SkillMarket: React.FC = () => {
                 {skills.map((skill) => (
                   <div
                     key={skill.id}
+                    role="button"
+                    tabIndex={0}
                     className="bg-white rounded-lg shadow-sm hover:shadow-md transition cursor-pointer overflow-hidden"
                     onClick={() => setSelectedSkill(skill)}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setSelectedSkill(skill); }}
                   >
                     {/* 技能卡片头部 */}
                     <div className="bg-gradient-to-r from-blue-500 to-indigo-600 p-4 text-white">
@@ -331,10 +334,17 @@ export const SkillMarket: React.FC = () => {
       {/* 技能详情模态框 */}
       {selectedSkill && (
         <div
+          role="button"
+          tabIndex={0}
+          aria-label="Close skill details"
           className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
           onClick={() => setSelectedSkill(null)}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setSelectedSkill(null); }}
         >
+          {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions, jsx-a11y/click-events-have-key-events */}
           <div
+            role="dialog"
+            aria-label="Skill details"
             className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >

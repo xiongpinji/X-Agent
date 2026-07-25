@@ -14,10 +14,14 @@ from backend.app.core.memory import (
     MemoryItem,
     MemoryScope,
     MemorySearchHit,
-    MemorySystem,
 )
 from backend.app.core.security import Principal
-from backend.app.dependencies import enforce_scope, get_audit_store, get_current_principal, get_memory
+from backend.app.dependencies import (
+    enforce_scope,
+    get_audit_store,
+    get_current_principal,
+    get_memory,
+)
 from backend.app.services.observability.langfuse_client import langfuse_client
 
 router = APIRouter(prefix="/api/v1/memory", tags=["memory"])
@@ -220,3 +224,93 @@ async def get_memory_correlation(memory_id: str, memory: MemoryDependency, princ
 
 def _context_from_principal(principal: Principal) -> RunContext:
     return RunContext(tenant_id=principal.tenant_id, user_id=principal.user_id, agent_id=principal.agent_id, request_id=principal.request_id, trace_id=principal.trace_id, permission_scope=principal.permission_scope)
+
+
+class MemoryUpdateRequest(BaseModel):
+    content: str | None = Field(default=None, min_length=1, max_length=20_000)
+    layer: int | None = Field(default=None, ge=1, le=10)
+    importance: float | None = Field(default=None, ge=0.0, le=1.0)
+    tags: list[str] | None = None
+    metadata: dict | None = None
+
+
+@router.put("/{memory_id}", response_model=MemoryItem)
+async def update_memory_item(
+    memory_id: str,
+    request: MemoryUpdateRequest,
+    memory: MemoryDependency,
+    audit_store: AuditStoreDependency,
+    principal: PrincipalDependency,
+) -> MemoryItem:
+    """Update an existing memory item."""
+    enforce_scope(principal, "memory:write")
+    if not hasattr(memory, "get_item"):
+        raise api_error(404, ErrorCode.RUN_NOT_FOUND, "Memory item not found.", trace_id=memory_id)
+    item = memory.get_item(memory_id)
+    if item is None:
+        raise api_error(404, ErrorCode.RUN_NOT_FOUND, "Memory item not found.", trace_id=memory_id)
+    if item.tenant_id != principal.tenant_id:
+        raise api_error(403, ErrorCode.RUN_NOT_FOUND, "Access denied.", trace_id=memory_id)
+
+    # Apply updates
+    if request.content is not None:
+        item.content = request.content
+    if request.layer is not None:
+        item.layer = request.layer
+    if request.importance is not None:
+        item.importance = request.importance
+    if request.tags is not None:
+        item.tags = request.tags
+    if request.metadata is not None:
+        item.metadata.update(request.metadata)
+
+    # Persist update
+    if hasattr(memory, "update_item"):
+        await memory.update_item(item)
+    elif hasattr(memory, "_save"):
+        memory._save()
+
+    context = _context_from_principal(principal)
+    audit_store.record(
+        action="memory.update", resource_type="memory", resource_id=memory_id,
+        outcome="success", tenant_id=context.tenant_id, actor_id=context.user_id,
+        details={"fields_updated": [k for k, v in request.model_dump(exclude_none=True).items()]},
+        trace_id=context.trace_id,
+    )
+    return item
+
+
+@router.delete("/{memory_id}")
+async def delete_memory_item(
+    memory_id: str,
+    memory: MemoryDependency,
+    audit_store: AuditStoreDependency,
+    principal: PrincipalDependency,
+) -> dict[str, str]:
+    """Delete a memory item."""
+    enforce_scope(principal, "memory:write")
+    if not hasattr(memory, "get_item"):
+        raise api_error(404, ErrorCode.RUN_NOT_FOUND, "Memory item not found.", trace_id=memory_id)
+    item = memory.get_item(memory_id)
+    if item is None:
+        raise api_error(404, ErrorCode.RUN_NOT_FOUND, "Memory item not found.", trace_id=memory_id)
+    if item.tenant_id != principal.tenant_id:
+        raise api_error(403, ErrorCode.RUN_NOT_FOUND, "Access denied.", trace_id=memory_id)
+
+    # Delete
+    if hasattr(memory, "delete_item"):
+        await memory.delete_item(memory_id)
+    elif hasattr(memory, "remove"):
+        memory.remove(memory_id)
+    elif hasattr(memory, "_items"):
+        memory._items = [i for i in memory._items if i.id != memory_id]
+        if hasattr(memory, "_save"):
+            memory._save()
+
+    context = _context_from_principal(principal)
+    audit_store.record(
+        action="memory.delete", resource_type="memory", resource_id=memory_id,
+        outcome="success", tenant_id=context.tenant_id, actor_id=context.user_id,
+        trace_id=context.trace_id,
+    )
+    return {"status": "deleted", "id": memory_id}

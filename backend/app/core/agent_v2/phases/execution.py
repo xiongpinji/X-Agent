@@ -222,7 +222,7 @@ class ExecutionPhase:
 
         result_payload = record.model_dump(mode="json")
         trajectory.tool_results.append(result_payload)
-        last_tool_result = json.dumps(result_payload, ensure_ascii=False, default=str)
+        json.dumps(result_payload, ensure_ascii=False, default=str)
 
         loop._mark_subtask_progress(
             trajectory, step.tool_name or "tool", succeeded=record.success

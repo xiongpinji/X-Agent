@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import time
-from typing import Callable
+from collections.abc import Callable
 
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -47,8 +47,8 @@ class AnalyticsMiddleware(BaseHTTPMiddleware):
             response_time_ms = (time.time() - start_time) * 1000
 
             # Record metric
-            tenant_id = request.headers.get("X-Tenant-ID", "default")
-            user_id = request.headers.get("X-User-ID", "anonymous")
+            tenant_id = getattr(request.state, "tenant_id", None) or "default"
+            user_id = getattr(request.state, "user_id", None) or "anonymous"
 
             await self.collector.record_api_call(
                 tenant_id=tenant_id,
@@ -69,8 +69,8 @@ class AnalyticsMiddleware(BaseHTTPMiddleware):
             return response
         except Exception as e:
             response_time_ms = (time.time() - start_time) * 1000
-            tenant_id = request.headers.get("X-Tenant-ID", "default")
-            user_id = request.headers.get("X-User-ID", "anonymous")
+            tenant_id = getattr(request.state, "tenant_id", None) or "default"
+            user_id = getattr(request.state, "user_id", None) or "anonymous"
 
             # Record error
             await self.collector.record_error(

@@ -9,14 +9,13 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from enum import Enum
-from typing import Optional, Any
 from datetime import datetime
+from enum import Enum, StrEnum
 
 logger = logging.getLogger(__name__)
 
 
-class FailureCategory(str, Enum):
+class FailureCategory(StrEnum):
     """Categories of failures."""
 
     NETWORK_ERROR = "network_error"
@@ -60,15 +59,15 @@ class FailureRecord:
     category: FailureCategory
     severity: FailureSeverity
     message: str
-    error_code: Optional[str] = None
-    stack_trace: Optional[str] = None
-    context: Optional[ExecutionContext] = None
-    root_cause: Optional[str] = None
+    error_code: str | None = None
+    stack_trace: str | None = None
+    context: ExecutionContext | None = None
+    root_cause: str | None = None
     suggestions: list[str] = field(default_factory=list)
     metadata: dict = field(default_factory=dict)
     detected_at: datetime = field(default_factory=datetime.now)
     resolved: bool = False
-    resolution_time: Optional[float] = None
+    resolution_time: float | None = None
 
 
 class FailureDetector:
@@ -95,8 +94,8 @@ class FailureDetector:
     def detect_failure(
         self,
         execution_result: dict,
-        context: Optional[ExecutionContext] = None,
-    ) -> Optional[FailureRecord]:
+        context: ExecutionContext | None = None,
+    ) -> FailureRecord | None:
         """
         Detect if execution resulted in failure.
 
@@ -159,10 +158,7 @@ class FailureDetector:
         if execution_result.get("error"):
             return True
 
-        if execution_result.get("status") == "failed":
-            return True
-
-        return False
+        return execution_result.get("status") == "failed"
 
     def classify_failure_by_message(self, message: str) -> FailureCategory:
         """Classify failure based on error message."""

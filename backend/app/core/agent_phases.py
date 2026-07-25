@@ -14,7 +14,6 @@ from backend.app.core.contracts import (
     AgentRunResponse,
     ExecutionFrame,
     PlanFrame,
-    RecoveryFrame,
     RunContext,
     RunStatus,
     TaskFrame,
@@ -55,8 +54,6 @@ class InitializationPhase:
         loop = phase_ctx.loop
         context = phase_ctx.context
         task = phase_ctx.task
-        extra_context = phase_ctx.extra_context
-        trajectory = phase_ctx.trajectory
 
         # Build task frame
         phase_ctx.task_frame = TaskFrame(
@@ -399,7 +396,7 @@ class ExecutionPhase:
                         )
                         if retry_count < retry_budget:
                             retry_tool = repair_suggestion.tool_name
-                            retry_args = dict(repair_suggestion.arguments)
+                            dict(repair_suggestion.arguments)
                             phase_ctx.execution_frame.execution_summary[
                                 "retry_count"
                             ] = retry_count + 1
@@ -559,7 +556,7 @@ class CompletionPhase:
         )
         execution_summary["run_view"] = run_view.model_dump()
 
-        completed = loop._emit_trace(
+        loop._emit_trace(
             context,
             "agent.completed",
             task=phase_ctx.task,

@@ -8,6 +8,7 @@ from typing import Any
 from backend.app.core.contracts import RunContext
 from backend.app.core.embeddings import EmbeddingModel
 from backend.app.core.memory import MemoryConsolidationResult, MemoryItem, MemorySystem
+from backend.app.core.memory.store import MemoryScope
 
 MEMORY_SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS memories (
@@ -74,6 +75,8 @@ class PostgresMemorySystem:
         importance: float = 0.5,
         tags: list[str] | None = None,
         metadata: dict | None = None,
+        session_id: str | None = None,
+        scope: MemoryScope | None = None,
     ) -> str:
         pool = await self._get_pool()
         if self._enable_dedup:
@@ -95,6 +98,8 @@ class PostgresMemorySystem:
             importance=importance,
             tags=tags or [],
             metadata=metadata or {},
+            session_id=session_id,
+            scope=scope or MemoryScope(),
         )
         if self._enable_vector_search and self._embedding_model is not None:
             item.embedding = await self._embed(content)

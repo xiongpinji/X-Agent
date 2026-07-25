@@ -581,16 +581,17 @@ class LocalClient(BaseClient):
             raise ConnectionError("Agent not initialized")
 
         try:
-            result = await self._agent.run(
-                task=task,
-                permission_scope=permission_scope or [],
-                extra_context=extra_context or {},
-            )
-            return {
-                "task": task,
-                "result": result,
-                "mode": "local",
-            }
+            # Wave A changed AgentLoop.run to require a RunContext as the
+            # first argument; permission_scope now lives on the context.
+            from backend.app.core.agent.loop import RunContext
+
+            context = RunContext(permission_scope=permission_scope or [])
+            result = await self._agent.run(context, task, extra_context or {})
+            # Match the HTTP mode response shape (AgentRunResponse dump).
+            body = result.model_dump(mode="json")
+            body["task"] = task
+            body["mode"] = "local"
+            return body
         except Exception as e:
             raise APIError(f"Agent execution failed: {e}") from e
 

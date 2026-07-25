@@ -1,9 +1,9 @@
 """Health check endpoints for production readiness."""
 
-from datetime import datetime
-from typing import Dict, Any, Optional
 import asyncio
 import logging
+from datetime import datetime
+from typing import Any
 
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
@@ -17,7 +17,7 @@ class HealthStatus(BaseModel):
     status: str  # "healthy", "degraded", "unhealthy"
     timestamp: datetime
     version: str
-    checks: Dict[str, Any]
+    checks: dict[str, Any]
     uptime_seconds: float
 
 
@@ -25,7 +25,7 @@ class ReadinessStatus(BaseModel):
     """Readiness status response model."""
     ready: bool
     timestamp: datetime
-    checks: Dict[str, Any]
+    checks: dict[str, Any]
 
 
 class LivenessStatus(BaseModel):
@@ -39,13 +39,13 @@ class HealthChecker:
 
     def __init__(self):
         self.start_time = datetime.utcnow()
-        self.checks: Dict[str, callable] = {}
+        self.checks: dict[str, callable] = {}
 
     def register_check(self, name: str, check_func: callable) -> None:
         """Register a health check function."""
         self.checks[name] = check_func
 
-    async def run_checks(self) -> Dict[str, Any]:
+    async def run_checks(self) -> dict[str, Any]:
         """Run all registered health checks."""
         results = {}
         for name, check_func in self.checks.items():
@@ -56,7 +56,7 @@ class HealthChecker:
                     "details": result
                 }
             except Exception as e:
-                logger.error(f"Health check '{name}' failed: {str(e)}")
+                logger.error(f"Health check '{name}' failed: {e!s}")
                 results[name] = {
                     "status": "unhealthy",
                     "error": str(e)
@@ -73,7 +73,7 @@ health_checker = HealthChecker()
 
 
 # Health check functions
-async def check_database() -> Dict[str, Any]:
+async def check_database() -> dict[str, Any]:
     """Check database connectivity."""
     try:
         from backend.app.dependencies import get_db
@@ -82,14 +82,15 @@ async def check_database() -> Dict[str, Any]:
         await db.execute("SELECT 1")
         return {"connected": True, "type": "postgresql"}
     except Exception as e:
-        logger.error(f"Database check failed: {str(e)}")
+        logger.error(f"Database check failed: {e!s}")
         return {"connected": False, "error": str(e)}
 
 
-async def check_redis() -> Dict[str, Any]:
+async def check_redis() -> dict[str, Any]:
     """Check Redis connectivity."""
     try:
         import redis.asyncio as redis
+
         from backend.app.settings import get_settings
         settings = get_settings()
         r = redis.from_url(settings.redis_url)
@@ -97,22 +98,22 @@ async def check_redis() -> Dict[str, Any]:
         await r.close()
         return {"connected": True, "type": "redis"}
     except Exception as e:
-        logger.error(f"Redis check failed: {str(e)}")
+        logger.error(f"Redis check failed: {e!s}")
         return {"connected": False, "error": str(e)}
 
 
-async def check_qdrant() -> Dict[str, Any]:
+async def check_qdrant() -> dict[str, Any]:
     """Check Qdrant vector database connectivity."""
     try:
         from backend.app.services.memory.qdrant_client import vector_client
         health = await vector_client.get_health()
         return {"connected": True, "status": health}
     except Exception as e:
-        logger.error(f"Qdrant check failed: {str(e)}")
+        logger.error(f"Qdrant check failed: {e!s}")
         return {"connected": False, "error": str(e)}
 
 
-async def check_disk_space() -> Dict[str, Any]:
+async def check_disk_space() -> dict[str, Any]:
     """Check available disk space."""
     try:
         import shutil
@@ -133,11 +134,11 @@ async def check_disk_space() -> Dict[str, Any]:
             "status": "healthy" if free_gb > 5 else "warning"
         }
     except Exception as e:
-        logger.error(f"Disk space check failed: {str(e)}")
+        logger.error(f"Disk space check failed: {e!s}")
         return {"error": str(e)}
 
 
-async def check_memory() -> Dict[str, Any]:
+async def check_memory() -> dict[str, Any]:
     """Check system memory usage."""
     try:
         import psutil
@@ -150,11 +151,11 @@ async def check_memory() -> Dict[str, Any]:
             "status": "healthy" if memory.percent < 80 else "warning"
         }
     except Exception as e:
-        logger.error(f"Memory check failed: {str(e)}")
+        logger.error(f"Memory check failed: {e!s}")
         return {"error": str(e)}
 
 
-async def check_cpu() -> Dict[str, Any]:
+async def check_cpu() -> dict[str, Any]:
     """Check CPU usage."""
     try:
         import psutil
@@ -166,11 +167,11 @@ async def check_cpu() -> Dict[str, Any]:
             "status": "healthy" if cpu_percent < 80 else "warning"
         }
     except Exception as e:
-        logger.error(f"CPU check failed: {str(e)}")
+        logger.error(f"CPU check failed: {e!s}")
         return {"error": str(e)}
 
 
-async def check_llm_api() -> Dict[str, Any]:
+async def check_llm_api() -> dict[str, Any]:
     """Check LLM API connectivity."""
     try:
         from backend.app.core.llm import get_llm_client
@@ -179,7 +180,7 @@ async def check_llm_api() -> Dict[str, Any]:
         response = await client.models.list()
         return {"connected": True, "models_available": len(response.data) if hasattr(response, 'data') else 0}
     except Exception as e:
-        logger.error(f"LLM API check failed: {str(e)}")
+        logger.error(f"LLM API check failed: {e!s}")
         return {"connected": False, "error": str(e)}
 
 
@@ -251,7 +252,7 @@ async def health_check() -> HealthStatus:
 
 
 @router.get("/detailed")
-async def detailed_health_check() -> Dict[str, Any]:
+async def detailed_health_check() -> dict[str, Any]:
     """Detailed health check with all metrics."""
     checks = await health_checker.run_checks()
 

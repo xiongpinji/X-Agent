@@ -85,7 +85,7 @@ def normalized_content_hash(content: str) -> str:
 # ---------------------------------------------------------------------------
 
 
-def canonical_from_store_item(item: "MemoryItem") -> CanonicalMemory:
+def canonical_from_store_item(item: MemoryItem) -> CanonicalMemory:
     """Adapt ``memory.store.MemoryItem`` (L1-L10 pydantic model)."""
     scope = getattr(item, "scope", None)
     return CanonicalMemory(
@@ -109,7 +109,7 @@ def canonical_from_store_item(item: "MemoryItem") -> CanonicalMemory:
     )
 
 
-def canonical_from_dedup_memory(memory: "DedupMemory") -> CanonicalMemory:
+def canonical_from_dedup_memory(memory: DedupMemory) -> CanonicalMemory:
     """Adapt ``memory_deduplication_enhanced.Memory`` (dataclass)."""
     embedding = memory.embedding
     return CanonicalMemory(
@@ -128,7 +128,7 @@ def canonical_from_dedup_memory(memory: "DedupMemory") -> CanonicalMemory:
     )
 
 
-def canonical_from_hybrid_memory(memory: "HybridMemory") -> CanonicalMemory:
+def canonical_from_hybrid_memory(memory: HybridMemory) -> CanonicalMemory:
     """Adapt ``hybrid_memory_system.Memory`` (hot/cold/graph tier model)."""
     return CanonicalMemory(
         id=memory.id,
@@ -156,7 +156,7 @@ def canonical_from_hybrid_memory(memory: "HybridMemory") -> CanonicalMemory:
 # ---------------------------------------------------------------------------
 
 
-def dedup_memory_from_canonical(canonical: CanonicalMemory) -> "DedupMemory":
+def dedup_memory_from_canonical(canonical: CanonicalMemory) -> DedupMemory:
     """Build a ``memory_deduplication_enhanced.Memory`` for the dedup engine."""
     import numpy as np
 
@@ -178,7 +178,7 @@ def dedup_memory_from_canonical(canonical: CanonicalMemory) -> "DedupMemory":
     )
 
 
-def hybrid_memory_from_canonical(canonical: CanonicalMemory) -> "HybridMemory":
+def hybrid_memory_from_canonical(canonical: CanonicalMemory) -> HybridMemory:
     """Build a ``hybrid_memory_system.Memory`` (lazy import: avoids store cycle)."""
     from backend.app.core.hybrid_memory_system import Memory as HybridMemory
 

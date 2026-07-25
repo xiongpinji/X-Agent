@@ -6,17 +6,17 @@ Provides REST API endpoints for local-cloud synchronization.
 
 from __future__ import annotations
 
-from typing import Annotated, Optional
-from datetime import datetime, UTC
+from datetime import UTC, datetime
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from backend.app.dependencies import get_current_principal, enforce_scope
 from backend.app.core.security import Principal
-from backend.local.database import LocalDatabase, DatabaseConfig
+from backend.app.dependencies import enforce_scope, get_current_principal
 from backend.local.config import ConfigManager
-from backend.local.sync_client import SyncClient, ConflictResolutionStrategy
+from backend.local.database import DatabaseConfig, LocalDatabase
+from backend.local.sync_client import SyncClient
 
 router = APIRouter(prefix="/api/v1/sync", tags=["sync"])
 PrincipalDependency = Annotated[Principal, Depends(get_current_principal)]
@@ -45,7 +45,7 @@ class SyncStatusResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     retry_count: int
-    error_message: Optional[str] = None
+    error_message: str | None = None
 
 
 class ConflictResolveRequest(BaseModel):
@@ -64,8 +64,8 @@ class ConflictResponse(BaseModel):
     cloud_version: int
     local_data: dict
     cloud_data: dict
-    resolved_at: Optional[datetime] = None
-    resolution_strategy: Optional[str] = None
+    resolved_at: datetime | None = None
+    resolution_strategy: str | None = None
 
 
 class SyncStatsResponse(BaseModel):
@@ -74,7 +74,7 @@ class SyncStatsResponse(BaseModel):
     failed_syncs: int
     unresolved_conflicts: int
     offline_operations: int
-    last_sync_time: Optional[datetime] = None
+    last_sync_time: datetime | None = None
     database_size_mb: float
 
 
@@ -95,7 +95,7 @@ class OfflineModeResponse(BaseModel):
     """Offline mode status."""
     enabled: bool
     pending_operations: int
-    last_sync_time: Optional[datetime] = None
+    last_sync_time: datetime | None = None
 
 
 # ============================================================================
@@ -119,7 +119,7 @@ def get_local_database() -> LocalDatabase:
 
 def get_sync_client(db: LocalDatabase = Depends(get_local_database)) -> SyncClient:
     """Get sync client instance."""
-    # TODO: Inject cloud API client
+    # NOTE: Requires cloud API client injection for production sync
     # For now, return a basic instance
     return SyncClient(db, None)
 
@@ -165,7 +165,7 @@ async def enqueue_sync(
             "created_at": datetime.now(UTC).isoformat(),
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to enqueue sync: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to enqueue sync: {e!s}")
 
 
 @router.get("/status/{queue_id}")
@@ -214,7 +214,7 @@ async def get_sync_status(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get sync status: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get sync status: {e!s}")
 
 
 @router.post("/trigger")
@@ -236,7 +236,7 @@ async def trigger_sync(
     enforce_scope(principal, "sync:admin")
 
     try:
-        # TODO: Implement actual sync trigger
+        # NOTE: Requires cloud sync service connection for real sync
         # batch = await sync_client.sync()
 
         return {
@@ -245,7 +245,7 @@ async def trigger_sync(
             "started_at": datetime.now(UTC).isoformat(),
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to trigger sync: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to trigger sync: {e!s}")
 
 
 # ============================================================================
@@ -255,7 +255,7 @@ async def trigger_sync(
 
 @router.get("/conflicts")
 async def list_conflicts(
-    entity_type: Optional[str] = Query(None),
+    entity_type: str | None = Query(None),
     limit: int = Query(100, ge=1, le=1000),
     *,
     db: LocalDatabaseDependency,
@@ -293,7 +293,7 @@ async def list_conflicts(
             for c in conflicts[:limit]
         ]
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to list conflicts: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to list conflicts: {e!s}")
 
 
 @router.get("/conflicts/{conflict_id}")
@@ -344,7 +344,7 @@ async def get_conflict(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get conflict: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get conflict: {e!s}")
 
 
 @router.post("/conflicts/{conflict_id}/resolve")
@@ -381,7 +381,7 @@ async def resolve_conflict(
             "resolved_at": datetime.now(UTC).isoformat(),
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to resolve conflict: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to resolve conflict: {e!s}")
 
 
 # ============================================================================
@@ -413,7 +413,7 @@ async def enable_offline_mode(
             pending_operations=0,
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to enable offline mode: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to enable offline mode: {e!s}")
 
 
 @router.post("/offline/disable")
@@ -440,7 +440,7 @@ async def disable_offline_mode(
             pending_operations=0,
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to disable offline mode: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to disable offline mode: {e!s}")
 
 
 @router.get("/offline/status")
@@ -467,7 +467,7 @@ async def get_offline_status(
             pending_operations=len(offline_ops),
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get offline status: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get offline status: {e!s}")
 
 
 # ============================================================================
@@ -503,12 +503,12 @@ async def get_sync_stats(
             database_size_mb=size_info["database_size_mb"],
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get sync stats: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get sync stats: {e!s}")
 
 
 @router.get("/history")
 async def get_sync_history(
-    entity_type: Optional[str] = Query(None),
+    entity_type: str | None = Query(None),
     limit: int = Query(100, ge=1, le=1000),
     *,
     db: LocalDatabaseDependency,
@@ -545,7 +545,7 @@ async def get_sync_history(
             for h in history
         ]
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get sync history: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get sync history: {e!s}")
 
 
 @router.get("/health")
@@ -590,4 +590,4 @@ async def get_sync_health(
             "stats": stats,
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get sync health: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get sync health: {e!s}")

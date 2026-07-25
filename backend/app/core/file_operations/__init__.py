@@ -3,11 +3,11 @@
 """
 
 from .document_processor import DocumentProcessor
-from .image_processor import ImageProcessor
 from .file_converter import FileConverter
+from .image_processor import ImageProcessor
 
 __all__ = [
     "DocumentProcessor",
-    "ImageProcessor",
     "FileConverter",
+    "ImageProcessor",
 ]

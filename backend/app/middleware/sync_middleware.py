@@ -8,13 +8,13 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Callable
+from collections.abc import Callable
 
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from backend.local.database import LocalDatabase, DatabaseConfig
 from backend.local.config import ConfigManager
+from backend.local.database import DatabaseConfig, LocalDatabase
 
 logger = logging.getLogger(__name__)
 

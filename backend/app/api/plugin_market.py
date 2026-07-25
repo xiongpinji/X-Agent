@@ -2,16 +2,16 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Optional
-from datetime import datetime, UTC
-from enum import Enum
+from datetime import UTC, datetime
+from enum import StrEnum
+from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, HTTPException
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 
+from backend.app.api.errors import api_error
 from backend.app.core.security import Principal
 from backend.app.dependencies import enforce_scope, get_current_principal
-from backend.app.api.errors import api_error
 
 router = APIRouter(prefix="/api/v1/plugin-market", tags=["plugin-market"])
 PrincipalDependency = Annotated[Principal, Depends(get_current_principal)]
@@ -19,7 +19,7 @@ PrincipalDependency = Annotated[Principal, Depends(get_current_principal)]
 
 # ==================== 数据模型 ====================
 
-class PluginCategory(str, Enum):
+class PluginCategory(StrEnum):
     """插件分类"""
     OFFICE = "office"  # 办公助手
     DESIGN = "design"  # 设计工具
@@ -31,7 +31,7 @@ class PluginCategory(str, Enum):
     LEARNING = "learning"  # 学习助手
 
 
-class PluginStatus(str, Enum):
+class PluginStatus(StrEnum):
     """插件状态"""
     DRAFT = "draft"  # 草稿
     PUBLISHED = "published"  # 已发布
@@ -42,7 +42,7 @@ class PluginStatus(str, Enum):
     ERROR = "error"  # 错误
 
 
-class PluginRiskLevel(str, Enum):
+class PluginRiskLevel(StrEnum):
     """风险等级"""
     LOW = "low"  # 低
     MEDIUM = "medium"  # 中
@@ -95,12 +95,12 @@ class PluginRecord(BaseModel):
     # 时间戳
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC), description="创建时间")
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC), description="更新时间")
-    published_at: Optional[datetime] = Field(default=None, description="发布时间")
+    published_at: datetime | None = Field(default=None, description="发布时间")
 
     # 用户相关
     is_installed: bool = Field(default=False, description="是否已安装")
     is_enabled: bool = Field(default=False, description="是否已启用")
-    install_path: Optional[str] = Field(default=None, description="安装路径")
+    install_path: str | None = Field(default=None, description="安装路径")
 
 
 class PluginCategoryInfo(BaseModel):
@@ -117,7 +117,7 @@ class PluginCategoryInfo(BaseModel):
 class PluginInstallRequest(BaseModel):
     """安装请求"""
     plugin_id: str = Field(..., description="插件ID")
-    version: Optional[str] = Field(default=None, description="版本")
+    version: str | None = Field(default=None, description="版本")
     config: dict = Field(default_factory=dict, description="配置")
     auto_enable: bool = Field(default=True, description="自动启用")
 
@@ -131,7 +131,7 @@ class PluginUninstallRequest(BaseModel):
 class PluginSearchRequest(BaseModel):
     """搜索请求"""
     query: str = Field(..., description="搜索词")
-    category: Optional[PluginCategory] = Field(default=None, description="分类")
+    category: PluginCategory | None = Field(default=None, description="分类")
     sort_by: str = Field(default="rating", description="排序方式")
     limit: int = Field(default=20, description="限制数量")
     offset: int = Field(default=0, description="偏移量")
@@ -143,7 +143,7 @@ class PluginInstallationProgress(BaseModel):
     status: str = Field(..., description="状态")
     progress: int = Field(default=0, description="进度百分比")
     message: str = Field(default="", description="消息")
-    error: Optional[str] = Field(default=None, description="错误信息")
+    error: str | None = Field(default=None, description="错误信息")
 
 
 # ==================== 模拟数据存储 ====================
@@ -238,7 +238,7 @@ async def get_categories(principal: PrincipalDependency) -> list[PluginCategoryI
 @router.get("/plugins", response_model=list[PluginRecord])
 async def list_plugins(
     principal: PrincipalDependency,
-    category: Optional[str] = Query(None, description="分类"),
+    category: str | None = Query(None, description="分类"),
     installed_only: bool = Query(False, description="仅已安装"),
     sort_by: str = Query("rating", description="排序方式"),
     limit: int = Query(20, ge=1, le=100, description="限制数量"),

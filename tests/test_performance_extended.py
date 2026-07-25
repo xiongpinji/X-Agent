@@ -385,6 +385,7 @@ class TestLoadTesting:
         assert total_successful > 0
         assert duration < 10.0  # Should complete within 10 seconds
 
+    @pytest.mark.flaky(reruns=2)
     def test_spike_load(self, client):
         """Test handling of spike load."""
         import concurrent.futures

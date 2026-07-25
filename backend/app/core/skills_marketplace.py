@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
-import logging
 import asyncio
-from dataclasses import dataclass, field
-from datetime import datetime, UTC
-from typing import Any
-from pathlib import Path
 import json
+import logging
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any
 
-from .skills_core import SkillMetadata, SkillCapability
+from .skills_core import SkillMetadata
 from .skills_registry import get_skill_registry
 
 logger = logging.getLogger(__name__)
@@ -108,7 +108,7 @@ class SkillMarketplace:
                 return True, None
 
             except Exception as e:
-                error = f"Error publishing skill: {str(e)}"
+                error = f"Error publishing skill: {e!s}"
                 logger.error(error, exc_info=True)
                 return False, error
 
@@ -134,7 +134,7 @@ class SkillMarketplace:
                 return True, None
 
             except Exception as e:
-                error = f"Error unpublishing skill: {str(e)}"
+                error = f"Error unpublishing skill: {e!s}"
                 logger.error(error, exc_info=True)
                 return False, error
 
@@ -172,7 +172,7 @@ class SkillMarketplace:
                 return True, None
 
             except Exception as e:
-                error = f"Error installing skill: {str(e)}"
+                error = f"Error installing skill: {e!s}"
                 logger.error(error, exc_info=True)
                 return False, error
 
@@ -198,7 +198,7 @@ class SkillMarketplace:
                 return True, None
 
             except Exception as e:
-                error = f"Error uninstalling skill: {str(e)}"
+                error = f"Error uninstalling skill: {e!s}"
                 logger.error(error, exc_info=True)
                 return False, error
 
@@ -254,7 +254,7 @@ class SkillMarketplace:
             parts1 = [int(x) for x in v1.split(".")]
             parts2 = [int(x) for x in v2.split(".")]
 
-            for p1, p2 in zip(parts1, parts2):
+            for p1, p2 in zip(parts1, parts2, strict=False):
                 if p1 < p2:
                     return -1
                 if p1 > p2:
@@ -285,8 +285,8 @@ def get_skill_marketplace(marketplace_path: str | None = None) -> SkillMarketpla
 
 
 __all__ = [
+    "SkillInstallation",
     "SkillMarketplace",
     "SkillPackage",
-    "SkillInstallation",
     "get_skill_marketplace",
 ]

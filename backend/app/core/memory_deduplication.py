@@ -10,7 +10,6 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Optional
 
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
@@ -24,7 +23,7 @@ class Memory:
 
     id: str
     content: str
-    embedding: Optional[np.ndarray] = None
+    embedding: np.ndarray | None = None
     created_at: datetime = field(default_factory=datetime.now)
     updated_at: datetime = field(default_factory=datetime.now)
     relevance_score: float = 1.0
@@ -108,7 +107,7 @@ class MemoryDeduplicator:
 
         return result
 
-    def _extract_embeddings(self, memories: list[Memory]) -> Optional[np.ndarray]:
+    def _extract_embeddings(self, memories: list[Memory]) -> np.ndarray | None:
         """Extract embeddings from memories."""
         embeddings = []
         for memory in memories:
@@ -134,7 +133,7 @@ class MemoryDeduplicator:
 
         # Create a fixed-size embedding (simplified)
         embedding = np.zeros(100)
-        for i, (word, freq) in enumerate(sorted(word_freq.items())[:100]):
+        for i, (_word, freq) in enumerate(sorted(word_freq.items())[:100]):
             embedding[i] = freq / len(words) if words else 0
 
         return embedding

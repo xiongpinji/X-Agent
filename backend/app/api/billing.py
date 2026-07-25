@@ -6,29 +6,23 @@ from __future__ import annotations
 import logging
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
-from typing import Optional
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
+from sqlalchemy import select
 
 from backend.app.core.billing_engine import get_billing_engine
 from backend.app.core.payment_providers import PaymentProviderFactory
 from backend.app.core.security import Principal
+from backend.app.core.session import SessionManager
 from backend.app.dependencies import get_current_principal
 from backend.app.models.billing import (
-    BillingModel,
     Invoice,
-    InvoiceStatus,
-    Payment,
-    PaymentMethod,
-    PaymentStatus,
     PricingTier,
     Subscription,
     SubscriptionStatus,
 )
-from backend.app.core.session import SessionManager
-from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -42,16 +36,16 @@ class PricingTierResponse(BaseModel):
     id: str
     tier_name: str
     billing_model: str
-    monthly_price: Optional[str] = None
-    annual_price: Optional[str] = None
-    api_call_price: Optional[str] = None
-    token_price: Optional[str] = None
-    storage_price: Optional[str] = None
-    monthly_api_calls: Optional[int] = None
-    monthly_tokens: Optional[int] = None
-    storage_gb: Optional[int] = None
-    features: Optional[dict] = None
-    description: Optional[str] = None
+    monthly_price: str | None = None
+    annual_price: str | None = None
+    api_call_price: str | None = None
+    token_price: str | None = None
+    storage_price: str | None = None
+    monthly_api_calls: int | None = None
+    monthly_tokens: int | None = None
+    storage_gb: int | None = None
+    features: dict | None = None
+    description: str | None = None
 
 
 class SubscriptionRequest(BaseModel):
@@ -60,7 +54,7 @@ class SubscriptionRequest(BaseModel):
     payment_method: str = Field(..., description="stripe, alipay, wechat, bank_transfer")
     payment_method_id: str
     auto_renew: bool = True
-    promotion_code: Optional[str] = None
+    promotion_code: str | None = None
 
 
 class SubscriptionResponse(BaseModel):
@@ -69,8 +63,8 @@ class SubscriptionResponse(BaseModel):
     status: str
     billing_model: str
     start_date: str
-    end_date: Optional[str] = None
-    renewal_date: Optional[str] = None
+    end_date: str | None = None
+    renewal_date: str | None = None
     auto_renew: bool
     discount_percent: str
 
@@ -105,7 +99,7 @@ class InvoiceResponse(BaseModel):
     discount: str
     total: str
     status: str
-    line_items: Optional[list] = None
+    line_items: list | None = None
 
 
 class PaymentRequest(BaseModel):
@@ -113,7 +107,7 @@ class PaymentRequest(BaseModel):
     amount: str
     payment_method: str
     payment_method_id: str
-    invoice_id: Optional[str] = None
+    invoice_id: str | None = None
 
 
 class PaymentResponse(BaseModel):
@@ -121,8 +115,8 @@ class PaymentResponse(BaseModel):
     id: str
     amount: str
     status: str
-    payment_date: Optional[str] = None
-    transaction_id: Optional[str] = None
+    payment_date: str | None = None
+    transaction_id: str | None = None
 
 
 # API端点
@@ -135,7 +129,7 @@ async def get_billing_plans(
     async with SessionManager.get_session() as session:
         stmt = select(PricingTier).where(
             (PricingTier.tenant_id == principal.tenant_id)
-            & (PricingTier.is_active == True)
+            & (PricingTier.is_active)
         )
         result = await session.execute(stmt)
         tiers = result.scalars().all()

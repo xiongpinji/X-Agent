@@ -3,15 +3,15 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Optional
+from typing import Any
 
 from backend.app.core.sandbox import (
     ExecutionLanguage,
+    RiskLevel,
     SecurityPolicy,
     get_sandbox_manager,
-    validate_python_code,
     validate_javascript_code,
-    RiskLevel,
+    validate_python_code,
 )
 
 logger = logging.getLogger(__name__)
@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 class CodeExecutionTool:
     """Tool for executing Python and JavaScript code in sandboxes."""
 
-    def __init__(self, security_policy: Optional[SecurityPolicy] = None):
+    def __init__(self, security_policy: SecurityPolicy | None = None):
         """Initialize code execution tool.
 
         Args:
@@ -40,7 +40,7 @@ class CodeExecutionTool:
     async def execute_python(
         self,
         code: str,
-        variables: Optional[dict[str, Any]] = None,
+        variables: dict[str, Any] | None = None,
         require_approval: bool = False,
     ) -> dict[str, Any]:
         """Execute Python code.
@@ -54,7 +54,7 @@ class CodeExecutionTool:
             Dictionary with execution result
         """
         # Validate code
-        is_safe, violations = validate_python_code(code)
+        _is_safe, violations = validate_python_code(code)
 
         # Check for critical violations
         critical_violations = [v for v in violations if v.risk_level == RiskLevel.CRITICAL]
@@ -118,7 +118,7 @@ class CodeExecutionTool:
     async def execute_javascript(
         self,
         code: str,
-        variables: Optional[dict[str, Any]] = None,
+        variables: dict[str, Any] | None = None,
         require_approval: bool = False,
     ) -> dict[str, Any]:
         """Execute JavaScript code.
@@ -132,7 +132,7 @@ class CodeExecutionTool:
             Dictionary with execution result
         """
         # Validate code
-        is_safe, violations = validate_javascript_code(code)
+        _is_safe, violations = validate_javascript_code(code)
 
         # Check for critical violations
         critical_violations = [v for v in violations if v.risk_level == RiskLevel.CRITICAL]
@@ -259,11 +259,11 @@ class CodeExecutionTool:
 
 
 # Global tool instance
-_code_execution_tool: Optional[CodeExecutionTool] = None
+_code_execution_tool: CodeExecutionTool | None = None
 
 
 async def get_code_execution_tool(
-    security_policy: Optional[SecurityPolicy] = None,
+    security_policy: SecurityPolicy | None = None,
 ) -> CodeExecutionTool:
     """Get or create global code execution tool.
 

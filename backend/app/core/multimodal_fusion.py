@@ -14,13 +14,13 @@ from __future__ import annotations
 import asyncio
 import math
 from dataclasses import dataclass, field
-from enum import Enum
-from typing import Any, Awaitable
+from enum import StrEnum
+from typing import Any
 
 import numpy as np
 
 
-class FusionStrategy(str, Enum):
+class FusionStrategy(StrEnum):
     """融合策略枚举"""
     EARLY = "early"  # 特征级融合
     LATE = "late"  # 决策级融合
@@ -29,7 +29,7 @@ class FusionStrategy(str, Enum):
     CROSS_MODAL = "cross_modal"  # 跨模态对齐
 
 
-class Modality(str, Enum):
+class Modality(StrEnum):
     """模态类型枚举"""
     TEXT = "text"
     IMAGE = "image"
@@ -163,7 +163,7 @@ class AttentionFusion:
         if len(vec1) != len(vec2):
             return 0.0
 
-        dot_product = sum(a * b for a, b in zip(vec1, vec2))
+        dot_product = sum(a * b for a, b in zip(vec1, vec2, strict=False))
         norm1 = math.sqrt(sum(a * a for a in vec1))
         norm2 = math.sqrt(sum(b * b for b in vec2))
 
@@ -218,7 +218,7 @@ class CrossModalAlignment:
         v2 = vec2 + [0.0] * (max_len - len(vec2))
 
         # 余弦相似度
-        dot_product = sum(a * b for a, b in zip(v1, v2))
+        dot_product = sum(a * b for a, b in zip(v1, v2, strict=False))
         norm1 = math.sqrt(sum(a * a for a in v1))
         norm2 = math.sqrt(sum(b * b for b in v2))
 
@@ -300,7 +300,7 @@ class MultimodalFusion:
         fused = np.zeros(self.feature_dim)
         total_weight = 0.0
 
-        for features, (modality, weight) in zip(encoded_features, weights.items()):
+        for features, (_modality, weight) in zip(encoded_features, weights.items(), strict=False):
             fused += np.array(features) * weight
             total_weight += weight
 
@@ -344,7 +344,7 @@ class MultimodalFusion:
         # 使用注意力权重进行加权融合
         fused = np.zeros(self.feature_dim)
 
-        for features, weight in zip(encoded_features, weights.values()):
+        for features, weight in zip(encoded_features, weights.values(), strict=False):
             fused += np.array(features) * weight
 
         return fused.tolist()
@@ -375,7 +375,7 @@ class MultimodalFusion:
 
         # 加权融合
         fused = np.zeros(self.feature_dim)
-        for features, weight in zip(encoded_features, adjusted_weights.values()):
+        for features, weight in zip(encoded_features, adjusted_weights.values(), strict=False):
             fused += np.array(features) * weight
 
         return fused.tolist()
@@ -475,7 +475,7 @@ class MultimodalFusionManager:
 
         fused_results = await asyncio.gather(*tasks)
 
-        for strategy, result in zip(FusionStrategy, fused_results):
+        for strategy, result in zip(FusionStrategy, fused_results, strict=False):
             results[strategy] = result
 
         return results

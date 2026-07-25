@@ -2,6 +2,12 @@
 Agent coordinator module for X-Agent.
 
 Coordinates multiple agents and aggregates their results.
+
+P1-09 convergence: This module is the lightweight coordinator used by
+``api/agents_v2.py``. For structured orchestration with task decomposition
+and dependency management, see ``core/collaboration/orchestrator.py``
+(MultiAgentOrchestrator, used by ``api/multi_agent.py``).
+For independent parallel fan-out, see ``core/parallel_agent_executor.py``.
 """
 
 from __future__ import annotations
@@ -9,14 +15,14 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, UTC
-from enum import Enum
-from typing import Optional, Any, Dict, List
+from datetime import UTC, datetime
+from enum import StrEnum
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
-class CoordinationStrategy(str, Enum):
+class CoordinationStrategy(StrEnum):
     """Strategy for coordinating agents."""
 
     SEQUENTIAL = "sequential"
@@ -25,7 +31,7 @@ class CoordinationStrategy(str, Enum):
     CONSENSUS = "consensus"
 
 
-class AggregationStrategy(str, Enum):
+class AggregationStrategy(StrEnum):
     """Strategy for aggregating results."""
 
     FIRST = "first"
@@ -42,8 +48,8 @@ class AgentResult:
     agent_id: str
     status: str
     output: Any = None
-    error: Optional[str] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    error: str | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
     timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
@@ -53,11 +59,11 @@ class AggregatedResult:
 
     coordination_id: str
     strategy: CoordinationStrategy
-    agent_results: List[AgentResult] = field(default_factory=list)
+    agent_results: list[AgentResult] = field(default_factory=list)
     aggregated_output: Any = None
     aggregation_strategy: AggregationStrategy = AggregationStrategy.ALL
     completed_at: datetime = field(default_factory=lambda: datetime.now(UTC))
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 class AgentCoordinator:
@@ -70,14 +76,14 @@ class AgentCoordinator:
     def __init__(self):
         """Initialize the agent coordinator."""
         self.logger = logger
-        self.coordination_history: Dict[str, AggregatedResult] = {}
+        self.coordination_history: dict[str, AggregatedResult] = {}
 
     async def coordinate_agents(
         self,
-        agents: List[Any],
+        agents: list[Any],
         strategy: CoordinationStrategy = CoordinationStrategy.PARALLEL,
-        task: Optional[str] = None,
-        context: Optional[Dict[str, Any]] = None,
+        task: str | None = None,
+        context: dict[str, Any] | None = None,
     ) -> AggregatedResult:
         """
         Coordinate execution of multiple agents.
@@ -127,10 +133,10 @@ class AgentCoordinator:
 
     async def _coordinate_sequential(
         self,
-        agents: List[Any],
-        task: Optional[str],
-        context: Dict[str, Any],
-    ) -> List[AgentResult]:
+        agents: list[Any],
+        task: str | None,
+        context: dict[str, Any],
+    ) -> list[AgentResult]:
         """
         Execute agents sequentially.
 
@@ -171,10 +177,10 @@ class AgentCoordinator:
 
     async def _coordinate_parallel(
         self,
-        agents: List[Any],
-        task: Optional[str],
-        context: Dict[str, Any],
-    ) -> List[AgentResult]:
+        agents: list[Any],
+        task: str | None,
+        context: dict[str, Any],
+    ) -> list[AgentResult]:
         """
         Execute agents in parallel.
 
@@ -196,10 +202,10 @@ class AgentCoordinator:
 
     async def _coordinate_hierarchical(
         self,
-        agents: List[Any],
-        task: Optional[str],
-        context: Dict[str, Any],
-    ) -> List[AgentResult]:
+        agents: list[Any],
+        task: str | None,
+        context: dict[str, Any],
+    ) -> list[AgentResult]:
         """
         Execute agents in hierarchical manner.
 
@@ -249,10 +255,10 @@ class AgentCoordinator:
 
     async def _coordinate_consensus(
         self,
-        agents: List[Any],
-        task: Optional[str],
-        context: Dict[str, Any],
-    ) -> List[AgentResult]:
+        agents: list[Any],
+        task: str | None,
+        context: dict[str, Any],
+    ) -> list[AgentResult]:
         """
         Execute agents and reach consensus.
 
@@ -285,8 +291,8 @@ class AgentCoordinator:
     async def _execute_agent(
         self,
         agent: Any,
-        task: Optional[str],
-        context: Dict[str, Any],
+        task: str | None,
+        context: dict[str, Any],
     ) -> Any:
         """
         Execute a single agent.
@@ -300,8 +306,8 @@ class AgentCoordinator:
             Agent output
         """
         # Execute via the real AgentLoop engine (惰性导入避免循环依赖)。
-        from backend.app.dependencies import get_agent
         from backend.app.core.contracts import RunContext
+        from backend.app.dependencies import get_agent
 
         agent_id = ""
         if isinstance(agent, dict):
@@ -337,8 +343,8 @@ class AgentCoordinator:
     async def _execute_agent_safe(
         self,
         agent: Any,
-        task: Optional[str],
-        context: Dict[str, Any],
+        task: str | None,
+        context: dict[str, Any],
     ) -> AgentResult:
         """
         Execute a single agent safely.
@@ -367,7 +373,7 @@ class AgentCoordinator:
 
     async def aggregate_results(
         self,
-        results: List[AgentResult],
+        results: list[AgentResult],
         strategy: AggregationStrategy = AggregationStrategy.ALL,
     ) -> Any:
         """
@@ -402,7 +408,7 @@ class AgentCoordinator:
     def get_coordination_history(
         self,
         limit: int = 10,
-    ) -> List[AggregatedResult]:
+    ) -> list[AggregatedResult]:
         """
         Get coordination history.
 
@@ -416,7 +422,7 @@ class AgentCoordinator:
         items.sort(key=lambda x: x.completed_at, reverse=True)
         return items[:limit]
 
-    def get_coordination_stats(self) -> Dict[str, Any]:
+    def get_coordination_stats(self) -> dict[str, Any]:
         """
         Get coordination statistics.
 

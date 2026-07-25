@@ -3,16 +3,16 @@
 from __future__ import annotations
 
 import logging
-from typing import Optional, List, Dict, Any
-from datetime import datetime, UTC
-from dataclasses import dataclass, field
-from enum import Enum
 import re
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
+from enum import StrEnum
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
-class VersionCompatibility(str, Enum):
+class VersionCompatibility(StrEnum):
     """版本兼容性"""
     COMPATIBLE = "compatible"  # 完全兼容
     PARTIALLY_COMPATIBLE = "partially_compatible"  # 部分兼容
@@ -34,12 +34,12 @@ class SkillVersion:
     checksum: str = ""
     min_system_version: str = ""  # 最低系统版本要求
     max_system_version: str = ""  # 最高系统版本要求
-    breaking_changes: List[str] = field(default_factory=list)  # 破坏性变更列表
+    breaking_changes: list[str] = field(default_factory=list)  # 破坏性变更列表
     migration_guide: str = ""  # 迁移指南
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """转换为字典"""
         return {
             "skill_id": self.skill_id,
@@ -65,8 +65,8 @@ class SkillVersionManager:
     """技能版本管理器"""
 
     def __init__(self):
-        self.versions: Dict[str, List[SkillVersion]] = {}  # skill_id -> [versions]
-        self.current_versions: Dict[str, str] = {}  # skill_id -> current_version
+        self.versions: dict[str, list[SkillVersion]] = {}  # skill_id -> [versions]
+        self.current_versions: dict[str, str] = {}  # skill_id -> current_version
         self._lock = {}  # 用于并发控制
 
     def create_version(
@@ -80,9 +80,9 @@ class SkillVersionManager:
         checksum: str = "",
         min_system_version: str = "",
         max_system_version: str = "",
-        breaking_changes: Optional[List[str]] = None,
+        breaking_changes: list[str] | None = None,
         migration_guide: str = "",
-    ) -> tuple[bool, Optional[str], Optional[SkillVersion]]:
+    ) -> tuple[bool, str | None, SkillVersion | None]:
         """创建新版本"""
         try:
             # 验证版本号格式
@@ -129,15 +129,15 @@ class SkillVersionManager:
             return True, None, skill_version
 
         except Exception as e:
-            error = f"创建版本失败: {str(e)}"
+            error = f"创建版本失败: {e!s}"
             logger.error(error, exc_info=True)
             return False, error, None
 
-    def get_versions(self, skill_id: str) -> List[SkillVersion]:
+    def get_versions(self, skill_id: str) -> list[SkillVersion]:
         """获取所有版本"""
         return self.versions.get(skill_id, [])
 
-    def get_version(self, skill_id: str, version: str) -> Optional[SkillVersion]:
+    def get_version(self, skill_id: str, version: str) -> SkillVersion | None:
         """获取指定版本"""
         versions = self.versions.get(skill_id, [])
         for v in versions:
@@ -145,14 +145,14 @@ class SkillVersionManager:
                 return v
         return None
 
-    def get_current_version(self, skill_id: str) -> Optional[SkillVersion]:
+    def get_current_version(self, skill_id: str) -> SkillVersion | None:
         """获取当前版本"""
         current = self.current_versions.get(skill_id)
         if current:
             return self.get_version(skill_id, current)
         return None
 
-    def rollback_version(self, skill_id: str, version: str) -> tuple[bool, Optional[str]]:
+    def rollback_version(self, skill_id: str, version: str) -> tuple[bool, str | None]:
         """回滚到指定版本"""
         try:
             # 检查版本是否存在
@@ -167,7 +167,7 @@ class SkillVersionManager:
             return True, None
 
         except Exception as e:
-            error = f"版本回滚失败: {str(e)}"
+            error = f"版本回滚失败: {e!s}"
             logger.error(error, exc_info=True)
             return False, error
 
@@ -176,7 +176,7 @@ class SkillVersionManager:
         skill_id: str,
         v1: str,
         v2: str,
-    ) -> tuple[bool, Optional[str], Optional[Dict[str, Any]]]:
+    ) -> tuple[bool, str | None, dict[str, Any] | None]:
         """比较两个版本"""
         try:
             version1 = self.get_version(skill_id, v1)
@@ -202,11 +202,11 @@ class SkillVersionManager:
             return True, None, comparison
 
         except Exception as e:
-            error = f"版本比较失败: {str(e)}"
+            error = f"版本比较失败: {e!s}"
             logger.error(error, exc_info=True)
             return False, error, None
 
-    def deprecate_version(self, skill_id: str, version: str) -> tuple[bool, Optional[str]]:
+    def deprecate_version(self, skill_id: str, version: str) -> tuple[bool, str | None]:
         """标记版本为废弃"""
         try:
             skill_version = self.get_version(skill_id, version)
@@ -220,7 +220,7 @@ class SkillVersionManager:
             return True, None
 
         except Exception as e:
-            error = f"标记版本失败: {str(e)}"
+            error = f"标记版本失败: {e!s}"
             logger.error(error, exc_info=True)
             return False, error
 
@@ -229,7 +229,7 @@ class SkillVersionManager:
         skill_id: str,
         limit: int = 10,
         include_deprecated: bool = False,
-    ) -> List[SkillVersion]:
+    ) -> list[SkillVersion]:
         """获取版本历史"""
         versions = self.versions.get(skill_id, [])
 
@@ -243,7 +243,7 @@ class SkillVersionManager:
         skill_id: str,
         from_version: str,
         to_version: str,
-    ) -> tuple[bool, Optional[str], Optional[Dict[str, Any]]]:
+    ) -> tuple[bool, str | None, dict[str, Any] | None]:
         """检查版本兼容性"""
         try:
             from_v = self.get_version(skill_id, from_version)
@@ -269,7 +269,7 @@ class SkillVersionManager:
             return True, None, result
 
         except Exception as e:
-            error = f"兼容性检查失败: {str(e)}"
+            error = f"兼容性检查失败: {e!s}"
             logger.error(error, exc_info=True)
             return False, error, None
 
@@ -282,7 +282,7 @@ class SkillVersionManager:
                 return True
             return False
         except Exception as e:
-            logger.error(f"增加下载计数失败: {str(e)}")
+            logger.error(f"增加下载计数失败: {e!s}")
             return False
 
     def _is_valid_semver(self, version: str) -> bool:
@@ -314,7 +314,7 @@ class SkillVersionManager:
 
 
 # 全局实例
-_skill_version_manager: Optional[SkillVersionManager] = None
+_skill_version_manager: SkillVersionManager | None = None
 
 
 def get_skill_version_manager() -> SkillVersionManager:
@@ -326,8 +326,8 @@ def get_skill_version_manager() -> SkillVersionManager:
 
 
 __all__ = [
-    "SkillVersionManager",
     "SkillVersion",
+    "SkillVersionManager",
     "VersionCompatibility",
     "get_skill_version_manager",
 ]

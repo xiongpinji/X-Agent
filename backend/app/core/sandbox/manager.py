@@ -2,29 +2,26 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from dataclasses import dataclass
-from enum import Enum
-from typing import Any, Optional, Union
+from enum import StrEnum
+from typing import Any
 
+from backend.app.core.sandbox.node_sandbox import (
+    NodeExecutionResult,
+    NodeSandboxConfig,
+    NodeSandboxPool,
+)
 from backend.app.core.sandbox.python_sandbox import (
-    PythonSandbox,
+    ExecutionResult,
     PythonSandboxPool,
     SandboxConfig,
-    ExecutionResult,
-)
-from backend.app.core.sandbox.node_sandbox import (
-    NodeSandbox,
-    NodeSandboxPool,
-    NodeSandboxConfig,
-    NodeExecutionResult,
 )
 
 logger = logging.getLogger(__name__)
 
 
-class ExecutionLanguage(str, Enum):
+class ExecutionLanguage(StrEnum):
     """Supported execution languages."""
 
     PYTHON = "python"
@@ -52,9 +49,9 @@ class SandboxManager:
 
     def __init__(
         self,
-        python_config: Optional[SandboxConfig] = None,
-        node_config: Optional[NodeSandboxConfig] = None,
-        security_policy: Optional[SecurityPolicy] = None,
+        python_config: SandboxConfig | None = None,
+        node_config: NodeSandboxConfig | None = None,
+        security_policy: SecurityPolicy | None = None,
         python_pool_size: int = 5,
         node_pool_size: int = 5,
     ):
@@ -107,9 +104,9 @@ class SandboxManager:
         self,
         code: str,
         language: ExecutionLanguage = ExecutionLanguage.PYTHON,
-        variables: Optional[dict[str, Any]] = None,
-        execution_id: Optional[str] = None,
-    ) -> Union[ExecutionResult, NodeExecutionResult]:
+        variables: dict[str, Any] | None = None,
+        execution_id: str | None = None,
+    ) -> ExecutionResult | NodeExecutionResult:
         """Execute code in appropriate sandbox.
 
         Args:
@@ -160,10 +157,10 @@ class SandboxManager:
 
     def _record_execution(
         self,
-        execution_id: Optional[str],
+        execution_id: str | None,
         language: ExecutionLanguage,
         code: str,
-        result: Union[ExecutionResult, NodeExecutionResult],
+        result: ExecutionResult | NodeExecutionResult,
     ) -> None:
         """Record execution in audit trail.
 
@@ -239,13 +236,13 @@ class SandboxManager:
 
 
 # Global sandbox manager instance
-_sandbox_manager: Optional[SandboxManager] = None
+_sandbox_manager: SandboxManager | None = None
 
 
 async def get_sandbox_manager(
-    python_config: Optional[SandboxConfig] = None,
-    node_config: Optional[NodeSandboxConfig] = None,
-    security_policy: Optional[SecurityPolicy] = None,
+    python_config: SandboxConfig | None = None,
+    node_config: NodeSandboxConfig | None = None,
+    security_policy: SecurityPolicy | None = None,
 ) -> SandboxManager:
     """Get or create global sandbox manager.
 
@@ -273,9 +270,9 @@ async def get_sandbox_manager(
 async def execute_code(
     code: str,
     language: ExecutionLanguage = ExecutionLanguage.PYTHON,
-    variables: Optional[dict[str, Any]] = None,
-    execution_id: Optional[str] = None,
-) -> Union[ExecutionResult, NodeExecutionResult]:
+    variables: dict[str, Any] | None = None,
+    execution_id: str | None = None,
+) -> ExecutionResult | NodeExecutionResult:
     """Execute code using global sandbox manager.
 
     Args:

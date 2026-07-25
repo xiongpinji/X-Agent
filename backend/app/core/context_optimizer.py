@@ -9,10 +9,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple
-
-from pydantic import BaseModel, Field
-
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +22,7 @@ class ContextItem:
     relevance: float = 0.5  # 0-1, higher = more relevant
     token_count: int = 0
     category: str = "general"
-    metadata: Dict[str, Any] = None
+    metadata: dict[str, Any] = None
 
     def __post_init__(self):
         """Post-initialization processing."""
@@ -42,7 +39,7 @@ class CompressionResult:
     compressed_tokens: int
     compression_ratio: float
     compressed_content: str
-    removed_items: List[str]
+    removed_items: list[str]
 
 
 class ContextOptimizer:
@@ -55,7 +52,7 @@ class ContextOptimizer:
             max_context_tokens: Maximum context tokens allowed.
         """
         self.max_context_tokens = max_context_tokens
-        self.compression_history: List[CompressionResult] = []
+        self.compression_history: list[CompressionResult] = []
 
     def compress_context(
         self,
@@ -114,9 +111,9 @@ class ContextOptimizer:
 
     def prioritize_context(
         self,
-        contexts: List[ContextItem],
+        contexts: list[ContextItem],
         max_tokens: int,
-    ) -> List[ContextItem]:
+    ) -> list[ContextItem]:
         """Prioritize context items by importance and relevance.
 
         Args:
@@ -142,7 +139,7 @@ class ContextOptimizer:
         selected = []
         total_tokens = 0
 
-        for ctx, score in scored_contexts:
+        for ctx, _score in scored_contexts:
             if total_tokens + ctx.token_count <= max_tokens:
                 selected.append(ctx)
                 total_tokens += ctx.token_count
@@ -156,9 +153,9 @@ class ContextOptimizer:
     def retrieve_relevant(
         self,
         query: str,
-        contexts: List[ContextItem],
+        contexts: list[ContextItem],
         top_k: int = 5,
-    ) -> List[ContextItem]:
+    ) -> list[ContextItem]:
         """Retrieve most relevant context items for a query.
 
         Args:
@@ -190,7 +187,7 @@ class ContextOptimizer:
     def build_optimized_context(
         self,
         primary_context: str,
-        supporting_contexts: List[ContextItem],
+        supporting_contexts: list[ContextItem],
         max_tokens: int,
         include_metadata: bool = False,
     ) -> str:
@@ -235,7 +232,7 @@ class ContextOptimizer:
         self,
         context: str,
         num_key_points: int = 5,
-    ) -> List[str]:
+    ) -> list[str]:
         """Extract key information from context.
 
         Args:
@@ -303,7 +300,7 @@ class ContextOptimizer:
 
         return summary
 
-    def analyze_context_quality(self, context: str) -> Dict[str, Any]:
+    def analyze_context_quality(self, context: str) -> dict[str, Any]:
         """Analyze quality of context.
 
         Args:

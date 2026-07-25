@@ -12,16 +12,14 @@ Performance optimizations:
 
 from __future__ import annotations
 
-import json
 import logging
 import re
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from io import StringIO
-from typing import Any
 
 # Python 3.10 compatibility
-UTC = timezone.utc
+UTC = UTC
 
 try:
     import tiktoken

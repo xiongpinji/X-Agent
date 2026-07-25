@@ -1,0 +1,68 @@
+# Version control
+.git
+.github
+
+# Python
+venv
+.venv
+__pycache__
+*.pyc
+*.pyo
+*.egg-info
+.pytest_cache
+.ruff_cache
+.mypy_cache
+htmlcov
+.coverage
+coverage.xml
+
+# Node (frontend deps are installed in Docker build)
+node_modules
+frontend/node_modules
+
+# Tests & benchmarks
+tests/
+benchmarks/
+performance_tests.py
+locustfile.py
+
+# Documentation & reports
+docs/
+commercial_audit/
+security_reports/
+*.md
+
+# Environment & secrets
+.env*
+!.env.example
+
+# Data & logs (mounted as volumes at runtime)
+data/
+logs/
+
+# Archive & misc
+archive/
+.regression_batches
+.xagent_runtime
+.pytest_cache
+.qoder
+.claude
+
+# Desktop/mobile/extension (not needed in API image)
+desktop/
+mobile/
+extension/
+sdks/
+
+# CI/CD & deployment configs
+deployment/
+disaster-recovery/
+monitoring/
+compliance/
+cloud/
+
+# IDE & OS
+.vscode
+.idea
+*.swp
+Thumbs.db

@@ -9,7 +9,7 @@ import json
 import logging
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 from uuid import uuid4
 
 from pydantic import BaseModel, Field
@@ -365,7 +365,7 @@ class SkillMemoryLayer:
             return
 
         try:
-            with open(self.storage_path, "r", encoding="utf-8") as f:
+            with open(self.storage_path, encoding="utf-8") as f:
                 for line in f:
                     if not line.strip():
                         continue

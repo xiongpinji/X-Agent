@@ -7,26 +7,26 @@ from __future__ import annotations
 import logging
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
-from enum import Enum
-from typing import Optional
+from enum import StrEnum
 from uuid import uuid4
 
-from sqlalchemy import and_, select, update
+from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.app.core.notifications import notification_service
+from backend.app.core.session import SessionManager
 from backend.app.models.billing import (
+    BillingHistory,
+    PricingTier,
     QuotaUsage,
     Subscription,
     SubscriptionStatus,
-    PricingTier,
-    BillingHistory,
 )
-from backend.app.core.session import SessionManager
 
 logger = logging.getLogger(__name__)
 
 
-class QuotaType(str, Enum):
+class QuotaType(StrEnum):
     """配额类型"""
     API_CALLS = "api_calls"
     TOKENS_INPUT = "tokens_input"
@@ -35,7 +35,7 @@ class QuotaType(str, Enum):
     CONCURRENT_CONNECTIONS = "concurrent_connections"
 
 
-class QuotaAlertLevel(str, Enum):
+class QuotaAlertLevel(StrEnum):
     """配额告警级别"""
     WARNING_80 = "80"  # 80%使用率
     WARNING_90 = "90"  # 90%使用率
@@ -182,9 +182,7 @@ class QuotaManager:
 
             if quota_type == QuotaType.API_CALLS:
                 quota.api_calls_used += int(amount)
-            elif quota_type == QuotaType.TOKENS_INPUT:
-                quota.tokens_used += int(amount)
-            elif quota_type == QuotaType.TOKENS_OUTPUT:
+            elif quota_type == QuotaType.TOKENS_INPUT or quota_type == QuotaType.TOKENS_OUTPUT:
                 quota.tokens_used += int(amount)
             elif quota_type == QuotaType.STORAGE:
                 quota.storage_used_gb += Decimal(str(amount))
@@ -214,7 +212,7 @@ class QuotaManager:
 
     async def get_quota_info(
         self, tenant_id: str, user_id: str
-    ) -> Optional[dict]:
+    ) -> dict | None:
         """获取配额信息"""
         async with SessionManager.get_session() as session:
             quota = await self._get_current_quota(session, tenant_id, user_id)
@@ -289,7 +287,7 @@ class QuotaManager:
 
     async def reset_quota(
         self, tenant_id: str, user_id: str
-    ) -> Optional[QuotaUsage]:
+    ) -> QuotaUsage | None:
         """重置配额（用于新的计费周期）"""
         async with SessionManager.get_session() as session:
             subscription = await self._get_active_subscription(
@@ -332,7 +330,7 @@ class QuotaManager:
 
     async def _get_current_quota(
         self, session: AsyncSession, tenant_id: str, user_id: str
-    ) -> Optional[QuotaUsage]:
+    ) -> QuotaUsage | None:
         """获取当前配额"""
         now = datetime.now(UTC)
         stmt = select(QuotaUsage).where(
@@ -348,7 +346,7 @@ class QuotaManager:
 
     async def _get_active_subscription(
         self, session: AsyncSession, tenant_id: str, user_id: str
-    ) -> Optional[Subscription]:
+    ) -> Subscription | None:
         """获取活跃订阅"""
         stmt = select(Subscription).where(
             and_(
@@ -360,7 +358,7 @@ class QuotaManager:
         result = await session.execute(stmt)
         return result.scalar_one_or_none()
 
-    def _get_alert_level(self, usage_percent: float) -> Optional[str]:
+    def _get_alert_level(self, usage_percent: float) -> str | None:
         """获取告警级别"""
         if usage_percent >= 100:
             return QuotaAlertLevel.CRITICAL_100.value
@@ -400,11 +398,15 @@ class QuotaManager:
             f"usage={quota_info.get('usage_percent')}%"
         )
 
-        # TODO: 发送邮件/站内信通知
+        await notification_service.send_email(
+            to=user_id or tenant_id,
+            subject=f"配额告警: {quota_type.value} 使用率达 {quota_info.get('usage_percent')}%",
+            body=f"租户 {tenant_id} 的 {quota_type.value} 配额已达 {quota_info.get('usage_percent')}%，告警级别: {alert_level}",
+        )
 
 
 # 全局实例
-_quota_manager: Optional[QuotaManager] = None
+_quota_manager: QuotaManager | None = None
 
 
 def get_quota_manager() -> QuotaManager:

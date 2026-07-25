@@ -50,7 +50,16 @@
     "try_again": "Try Again",
     "yes": "Yes",
     "no": "No",
-    "ok": "OK"
+    "ok": "OK",
+    "comingSoon": "Coming soon",
+    "connected": "Connected",
+    "disconnected": "Disconnected",
+    "toggleTheme": "Toggle theme",
+    "openMenu": "Open menu",
+    "closeMenu": "Close menu",
+    "actions": "Actions",
+    "new": "New",
+    "dismiss": "Dismiss"
   },
   "navigation": {
     "dashboard": "Dashboard",
@@ -61,10 +70,14 @@
     "agents": "Agents",
     "workflows": "Workflows",
     "settings": "Settings",
+    "goals": "Goals",
+    "evolution": "Evolution",
+    "review": "Code Review",
     "documentation": "Documentation",
     "community": "Community",
     "marketplace": "Marketplace",
-    "console": "Console"
+    "console": "Console",
+    "main": "Main navigation"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -78,7 +91,21 @@
     "systemHealth": "System Health",
     "performance": "Performance",
     "uptime": "Uptime",
-    "avgResponseTime": "Avg Response Time"
+    "avgResponseTime": "Avg Response Time",
+    "subtitle": "Welcome to X-Agent Control Center",
+    "quickActions": "Quick Actions",
+    "startNewChat": "Start New Chat",
+    "createTask": "Create Task",
+    "manageTools": "Manage Tools",
+    "manageWorkflows": "Workflows",
+    "noRecentActivity": "No recent activity",
+    "totalAgents": "Total Agents",
+    "activeTasks": "Active Tasks",
+    "totalTools": "Total Tools",
+    "systemMetrics": "System Metrics",
+    "requests": "Total Requests",
+    "errorRate": "Error Rate",
+    "avgLatency": "Avg Latency"
   },
   "chat": {
     "title": "Chat",
@@ -93,7 +120,13 @@
     "conversationSettings": "Conversation Settings",
     "model": "Model",
     "temperature": "Temperature",
-    "maxTokens": "Max Tokens"
+    "maxTokens": "Max Tokens",
+    "selectAgent": "Select Agent",
+    "historyComingSoon": "Chat history persistence is coming soon",
+    "noMessages": "No messages yet",
+    "startConversation": "Start a conversation with X-Agent",
+    "ultraMode": "Ultra Mode: 4 parallel agents",
+    "streaming": "Agent is thinking..."
   },
   "tasks": {
     "title": "Tasks",
@@ -120,7 +153,9 @@
     "markIncomplete": "Mark Incomplete",
     "addSubtask": "Add Subtask",
     "addComment": "Add Comment",
-    "taskHistory": "Task History"
+    "taskHistory": "Task History",
+    "noTasks": "No tasks yet",
+    "createToStart": "Create a new task to get started"
   },
   "tools": {
     "title": "Tools",
@@ -141,7 +176,12 @@
     "parameters": "Parameters",
     "output": "Output",
     "logs": "Logs",
-    "errorLog": "Error Log"
+    "errorLog": "Error Log",
+    "subtitle": "Manage and configure available tools",
+    "noTools": "No tools available",
+    "toolsAppear": "Tools will appear here once configured",
+    "riskLevel": "Risk level",
+    "testParameters": "Test Parameters"
   },
   "memory": {
     "title": "Memory",
@@ -161,7 +201,16 @@
     "filterByCategory": "Filter by Category",
     "memoryStats": "Memory Statistics",
     "totalMemories": "Total Memories",
-    "recentMemories": "Recent Memories"
+    "recentMemories": "Recent Memories",
+    "subtitle": "Browse and manage your agent memories",
+    "searchPlaceholder": "Search memories...",
+    "noFound": "No memories found",
+    "noYet": "No memories yet",
+    "tryDifferent": "Try a different search query",
+    "createToStart": "Create a new memory to get started",
+    "layer": "Layer",
+    "importance": "Importance",
+    "contentPlaceholder": "Enter memory content..."
   },
   "agents": {
     "title": "Agents",
@@ -181,7 +230,21 @@
     "stopAgent": "Stop Agent",
     "agentLogs": "Agent Logs",
     "agentMetrics": "Agent Metrics",
-    "agentConfiguration": "Agent Configuration"
+    "agentConfiguration": "Agent Configuration",
+    "subtitle": "Manage your AI agents and their capabilities",
+    "create": "Create Agent",
+    "confirmDelete": "Are you sure you want to delete this agent?",
+    "empty": "No agents yet. Create your first agent to get started.",
+    "active": "Active",
+    "inactive": "Inactive",
+    "noCapabilities": "No capabilities defined",
+    "deactivate": "Deactivate",
+    "activate": "Activate",
+    "editTitle": "Edit Agent",
+    "createTitle": "Create Agent",
+    "name": "Name",
+    "namePlaceholder": "e.g. Research Assistant",
+    "capabilityPlaceholder": "e.g. web_search, code_gen"
   },
   "workflows": {
     "title": "Workflows",
@@ -203,7 +266,14 @@
     "resumeWorkflow": "Resume Workflow",
     "cancelWorkflow": "Cancel Workflow",
     "workflowLogs": "Workflow Logs",
-    "workflowMetrics": "Workflow Metrics"
+    "workflowMetrics": "Workflow Metrics",
+    "subtitle": "DAG-based workflow orchestration",
+    "create": "New Workflow",
+    "definitions": "Definitions",
+    "empty": "No workflows defined yet",
+    "recentRuns": "Recent Runs",
+    "noRuns": "No workflow runs yet",
+    "editor": "Workflow Editor"
   },
   "settings": {
     "title": "Settings",
@@ -320,5 +390,41 @@
     "years": "years",
     "ago": "ago",
     "in": "in"
+  },
+  "codeReview": {
+    "title": "Code Review",
+    "subtitle": "Submit code or a diff for multi-dimensional AI review (logic, security, style, tests)",
+    "language": "Language",
+    "placeholder": "Paste your code or git diff here...",
+    "submit": "Submit Review",
+    "reviewing": "Reviewing...",
+    "approved": "Approved",
+    "changesRequested": "Changes Requested",
+    "score": "Score",
+    "comments": "Comments",
+    "noIssues": "No issues found. Code looks good!"
+  },
+  "evolution": {
+    "title": "Self-Evolution Engine",
+    "subtitle": "GEPA closed-loop: Generate, Evaluate, Promote, Apply",
+    "skills": "Skills",
+    "reflections": "Reflections",
+    "learnings": "Learnings",
+    "noSkills": "No skills sedimented yet. Complete tasks to generate reusable skills.",
+    "totalTasks": "Total Tasks",
+    "patternsExtracted": "Patterns Extracted",
+    "skillsPromoted": "Skills Promoted",
+    "promotedSkills": "Promoted Skills"
+  },
+  "goals": {
+    "subtitle": "Set long-term objectives and let agents work autonomously toward them",
+    "placeholder": "Describe your goal",
+    "create": "Create Goal",
+    "empty": "No goals yet. Create one to start autonomous execution."
+  },
+  "workspace": {
+    "startChat": "Start a conversation with this agent",
+    "typeMessage": "Message this agent...",
+    "memoryInfo": "Memory items associated with this agent will appear here."
   }
 }

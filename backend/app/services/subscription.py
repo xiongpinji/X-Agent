@@ -7,7 +7,6 @@ import json
 import logging
 import uuid
 from datetime import UTC, datetime, timedelta
-from typing import Optional
 
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -113,7 +112,7 @@ class SubscriptionService:
             logger.info(f"订阅创建成功: {subscription_id}, 用户: {user_id}, 计划: {plan}")
             return subscription
 
-    async def get_subscription(self, subscription_id: str) -> Optional[SubscriptionModel]:
+    async def get_subscription(self, subscription_id: str) -> SubscriptionModel | None:
         """获取订阅"""
         async with SessionManager.get_session() as session:
             stmt = select(SubscriptionModel).where(
@@ -124,7 +123,7 @@ class SubscriptionService:
 
     async def get_user_subscription(
         self, user_id: str, tenant_id: str
-    ) -> Optional[SubscriptionModel]:
+    ) -> SubscriptionModel | None:
         """获取用户订阅"""
         async with SessionManager.get_session() as session:
             stmt = select(SubscriptionModel).where(
@@ -390,7 +389,7 @@ class SubscriptionService:
             )
             return subscription
 
-    async def get_quota(self, subscription_id: str) -> Optional[QuotaModel]:
+    async def get_quota(self, subscription_id: str) -> QuotaModel | None:
         """获取配额"""
         async with SessionManager.get_session() as session:
             stmt = select(QuotaModel).where(QuotaModel.subscription_id == subscription_id)
@@ -567,11 +566,11 @@ class SubscriptionService:
         user_id: str,
         tenant_id: str,
         event_type: str,
-        old_plan: Optional[str] = None,
-        new_plan: Optional[str] = None,
-        old_status: Optional[str] = None,
-        new_status: Optional[str] = None,
-        details: Optional[str] = None,
+        old_plan: str | None = None,
+        new_plan: str | None = None,
+        old_status: str | None = None,
+        new_status: str | None = None,
+        details: str | None = None,
     ) -> SubscriptionHistoryModel:
         """记录订阅历史"""
         history_id = str(uuid.uuid4())

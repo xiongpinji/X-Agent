@@ -346,8 +346,9 @@ export const ForumCreatePost: React.FC = () => {
 
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium mb-2">Title</label>
+            <label htmlFor="post-title" className="block text-sm font-medium mb-2">Title</label>
             <Input
+              id="post-title"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="Post title (min 5 characters)"
@@ -356,8 +357,9 @@ export const ForumCreatePost: React.FC = () => {
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-2">Category</label>
+            <label htmlFor="post-category" className="block text-sm font-medium mb-2">Category</label>
             <select
+              id="post-category"
               value={category}
               onChange={(e) => setCategory(e.target.value)}
               className="w-full px-4 py-2 border rounded-lg"
@@ -370,8 +372,9 @@ export const ForumCreatePost: React.FC = () => {
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-2">Content</label>
+            <label htmlFor="post-content" className="block text-sm font-medium mb-2">Content</label>
             <Textarea
+              id="post-content"
               value={content}
               onChange={(e) => setContent(e.target.value)}
               placeholder="Post content (min 20 characters)"
@@ -381,8 +384,9 @@ export const ForumCreatePost: React.FC = () => {
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-2">Tags (comma-separated)</label>
+            <label htmlFor="post-tags" className="block text-sm font-medium mb-2">Tags (comma-separated)</label>
             <Input
+              id="post-tags"
               value={tags}
               onChange={(e) => setTags(e.target.value)}
               placeholder="e.g., bug, feature, help"
@@ -526,8 +530,11 @@ export const UserProfile: React.FC<{ userId: string }> = ({ userId }) => {
           {userPosts.map((post) => (
             <div
               key={post.id}
+              role="button"
+              tabIndex={0}
               className="p-4 border rounded-lg hover:shadow-lg transition-shadow cursor-pointer"
               onClick={() => window.location.href = `/forum/posts/${post.id}`}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') window.location.href = `/forum/posts/${post.id}`; }}
             >
               <h3 className="font-semibold">{post.title}</h3>
               <p className="text-gray-600 text-sm mt-1">{post.comment_count} comments</p>

@@ -3,8 +3,9 @@
  *
  * A comprehensive SDK for integrating with X-Agent Partner API.
  *
- * Installation:
- *   npm install xagent-partner-sdk
+ * Installation (local build, not published to npm):
+ *   npm run build --prefix sdks/javascript && npm install ./sdks/javascript
+ *   (or: npm pack ./sdks/javascript)
  *
  * Usage:
  *   import { PartnerClient } from 'xagent-partner-sdk';
@@ -15,7 +16,7 @@
 
 import crypto from 'crypto';
 
-export const VERSION = '0.2.0-alpha'; // 单一事实源: pyproject.toml
+export const VERSION = '0.2.0-alpha'; // 与 sdks/python/xagent_partner.py 的 __version__ 保持一致
 
 // ============================================================================
 // TYPES
@@ -250,7 +251,7 @@ export class PartnerClient {
             await this.sleep(retryAfter * 1000);
             continue;
           }
-          const data = await response.json();
+          const data: any = await response.json();
           throw new PartnerRateLimitError('Rate limit exceeded', data);
         }
 
@@ -265,25 +266,32 @@ export class PartnerClient {
 
         // Handle client errors
         if (response.status === 401) {
-          const data = await response.json();
-          throw new PartnerAuthError('Unauthorized', data);
+          const data: any = await response.json();
+          throw new PartnerAuthError(data?.detail || 'Unauthorized', data);
         }
 
         if (response.status === 404) {
-          const data = await response.json();
-          throw new PartnerNotFoundError('Resource not found', data);
+          const data: any = await response.json();
+          throw new PartnerNotFoundError(data?.detail || 'Resource not found', data);
         }
 
         if (response.status >= 400) {
-          const data = await response.json();
+          const data: any = await response.json();
           throw new PartnerAPIError(
-            data.error?.message || 'API error',
+            data?.error?.message ||
+              (typeof data?.detail === 'string' ? data.detail : undefined) ||
+              'API error',
             response.status,
             data,
           );
         }
 
-        return await response.json();
+        // No-content responses (e.g., 204 from DELETE endpoints)
+        if (response.status === 204) {
+          return {} as T;
+        }
+        const text = await response.text();
+        return JSON.parse(text || '{}') as T;
       } catch (error) {
         if (error instanceof PartnerAPIError) {
           throw error;
@@ -551,7 +559,13 @@ export class PartnerClient {
       .createHmac('sha256', secret)
       .update(body)
       .digest('hex');
-    return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSignature));
+    const signatureBuffer = Buffer.from(signature);
+    const expectedBuffer = Buffer.from(expectedSignature);
+    // timingSafeEqual 要求等长, 长度不等直接判失败而非抛异常
+    return (
+      signatureBuffer.length === expectedBuffer.length &&
+      crypto.timingSafeEqual(signatureBuffer, expectedBuffer)
+    );
   }
 }
 

@@ -7,14 +7,10 @@ planning, adaptive planning, and multi-agent coordination.
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional, Set
-
-from pydantic import BaseModel, Field
-
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -47,11 +43,11 @@ class PlanTask:
     description: str
     priority: int = 0
     estimated_duration: float = 0.0
-    dependencies: List[str] = field(default_factory=list)
+    dependencies: list[str] = field(default_factory=list)
     status: TaskStatus = TaskStatus.PENDING
-    result: Optional[str] = None
-    error: Optional[str] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    result: str | None = None
+    error: str | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -59,13 +55,13 @@ class Plan:
     """A plan for achieving a goal."""
     plan_id: str
     goal: str
-    tasks: List[PlanTask] = field(default_factory=list)
+    tasks: list[PlanTask] = field(default_factory=list)
     status: PlanStatus = PlanStatus.CREATED
     priority: int = 0
     estimated_total_duration: float = 0.0
     actual_duration: float = 0.0
     success_rate: float = 0.0
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -73,10 +69,10 @@ class HierarchicalPlan:
     """A hierarchical plan with multiple levels."""
     plan_id: str
     goal: str
-    levels: List[List[PlanTask]] = field(default_factory=list)
+    levels: list[list[PlanTask]] = field(default_factory=list)
     current_level: int = 0
     status: PlanStatus = PlanStatus.CREATED
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -84,10 +80,10 @@ class Agent:
     """An agent that can execute tasks."""
     agent_id: str
     name: str
-    capabilities: List[str]
-    current_task: Optional[str] = None
+    capabilities: list[str]
+    current_task: str | None = None
     available: bool = True
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -95,11 +91,11 @@ class MultiAgentPlan:
     """A plan for multi-agent coordination."""
     plan_id: str
     goal: str
-    agents: List[Agent] = field(default_factory=list)
-    tasks: List[PlanTask] = field(default_factory=list)
-    task_assignments: Dict[str, str] = field(default_factory=dict)  # task_id -> agent_id
+    agents: list[Agent] = field(default_factory=list)
+    tasks: list[PlanTask] = field(default_factory=list)
+    task_assignments: dict[str, str] = field(default_factory=dict)  # task_id -> agent_id
     status: PlanStatus = PlanStatus.CREATED
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 class AdvancedPlanner:
@@ -112,10 +108,10 @@ class AdvancedPlanner:
             llm_client: LLM client for planning assistance.
         """
         self.llm_client = llm_client
-        self.plans: Dict[str, Plan] = {}
-        self.hierarchical_plans: Dict[str, HierarchicalPlan] = {}
-        self.multi_agent_plans: Dict[str, MultiAgentPlan] = {}
-        self.planning_history: List[Dict[str, Any]] = []
+        self.plans: dict[str, Plan] = {}
+        self.hierarchical_plans: dict[str, HierarchicalPlan] = {}
+        self.multi_agent_plans: dict[str, MultiAgentPlan] = {}
+        self.planning_history: list[dict[str, Any]] = []
 
     async def hierarchical_planning(
         self,
@@ -151,7 +147,7 @@ class AdvancedPlanner:
     async def adaptive_planning(
         self,
         plan: Plan,
-        feedback: Dict[str, Any],
+        feedback: dict[str, Any],
     ) -> Plan:
         """Adapt a plan based on feedback.
 
@@ -193,7 +189,7 @@ class AdvancedPlanner:
     async def multi_agent_planning(
         self,
         goal: str,
-        agents: List[Agent],
+        agents: list[Agent],
     ) -> MultiAgentPlan:
         """Create a plan for multi-agent coordination.
 
@@ -227,7 +223,7 @@ class AdvancedPlanner:
     async def create_plan(
         self,
         goal: str,
-        constraints: Optional[Dict[str, Any]] = None,
+        constraints: dict[str, Any] | None = None,
     ) -> Plan:
         """Create a plan for a goal.
 
@@ -289,7 +285,7 @@ class AdvancedPlanner:
                 task.result = result
                 task.status = TaskStatus.COMPLETED
             except Exception as e:
-                logger.error(f"Task {task.task_id} failed: {str(e)}")
+                logger.error(f"Task {task.task_id} failed: {e!s}")
                 task.error = str(e)
                 task.status = TaskStatus.FAILED
 
@@ -351,7 +347,7 @@ class AdvancedPlanner:
         goal: str,
         level: int,
         num_levels: int,
-    ) -> List[PlanTask]:
+    ) -> list[PlanTask]:
         """Generate tasks for a specific hierarchical level.
 
         Args:
@@ -368,7 +364,7 @@ class AdvancedPlanner:
         if level == 0:
             # Most abstract level
             tasks.append(PlanTask(
-                task_id=f"task_0_0",
+                task_id="task_0_0",
                 name="Analyze Goal",
                 description=f"Analyze the goal: {goal}",
                 priority=10,
@@ -394,7 +390,7 @@ class AdvancedPlanner:
 
         return tasks
 
-    async def _generate_tasks(self, goal: str) -> List[PlanTask]:
+    async def _generate_tasks(self, goal: str) -> list[PlanTask]:
         """Generate tasks for a goal.
 
         Args:
@@ -442,9 +438,9 @@ class AdvancedPlanner:
 
     async def _assign_tasks_to_agents(
         self,
-        tasks: List[PlanTask],
-        agents: List[Agent],
-    ) -> Dict[str, str]:
+        tasks: list[PlanTask],
+        agents: list[Agent],
+    ) -> dict[str, str]:
         """Assign tasks to agents.
 
         Args:
@@ -499,7 +495,7 @@ class AdvancedPlanner:
 
         return min(score, 1.0)
 
-    def _analyze_feedback(self, feedback: Dict[str, Any]) -> List[str]:
+    def _analyze_feedback(self, feedback: dict[str, Any]) -> list[str]:
         """Analyze feedback to identify issues.
 
         Args:
@@ -524,8 +520,8 @@ class AdvancedPlanner:
     def _identify_affected_tasks(
         self,
         plan: Plan,
-        issues: List[str],
-    ) -> Set[str]:
+        issues: list[str],
+    ) -> set[str]:
         """Identify tasks affected by issues.
 
         Args:
@@ -545,7 +541,7 @@ class AdvancedPlanner:
 
         return affected
 
-    async def _generate_alternatives(self, task: PlanTask) -> List[Dict[str, Any]]:
+    async def _generate_alternatives(self, task: PlanTask) -> list[dict[str, Any]]:
         """Generate alternative approaches for a task.
 
         Args:
@@ -572,9 +568,9 @@ class AdvancedPlanner:
 
     def _select_best_alternative(
         self,
-        alternatives: List[Dict[str, Any]],
-        feedback: Dict[str, Any],
-    ) -> Dict[str, Any]:
+        alternatives: list[dict[str, Any]],
+        feedback: dict[str, Any],
+    ) -> dict[str, Any]:
         """Select the best alternative.
 
         Args:
@@ -590,7 +586,7 @@ class AdvancedPlanner:
     def _apply_constraints(
         self,
         plan: Plan,
-        constraints: Dict[str, Any],
+        constraints: dict[str, Any],
     ) -> Plan:
         """Apply constraints to a plan.
 
@@ -622,7 +618,7 @@ class AdvancedPlanner:
     def _dependencies_satisfied(
         self,
         task: PlanTask,
-        all_tasks: List[PlanTask],
+        all_tasks: list[PlanTask],
     ) -> bool:
         """Check if task dependencies are satisfied.
 
@@ -656,7 +652,7 @@ class AdvancedPlanner:
 
         return result
 
-    def get_plan(self, plan_id: str) -> Optional[Plan]:
+    def get_plan(self, plan_id: str) -> Plan | None:
         """Get a plan by ID.
 
         Args:
@@ -667,7 +663,7 @@ class AdvancedPlanner:
         """
         return self.plans.get(plan_id)
 
-    def get_all_plans(self) -> List[Plan]:
+    def get_all_plans(self) -> list[Plan]:
         """Get all plans.
 
         Returns:
@@ -675,7 +671,7 @@ class AdvancedPlanner:
         """
         return list(self.plans.values())
 
-    def get_planning_stats(self) -> Dict[str, Any]:
+    def get_planning_stats(self) -> dict[str, Any]:
         """Get planning statistics.
 
         Returns:

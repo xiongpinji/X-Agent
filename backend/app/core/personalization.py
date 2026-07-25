@@ -11,9 +11,8 @@ This module provides:
 
 from __future__ import annotations
 
-import json
 from datetime import UTC, datetime, timedelta
-from enum import Enum
+from enum import StrEnum
 from threading import RLock
 from typing import Any
 from uuid import uuid4
@@ -22,7 +21,7 @@ import numpy as np
 from pydantic import BaseModel, Field
 
 
-class PreferenceType(str, Enum):
+class PreferenceType(StrEnum):
     """Types of user preferences."""
     THEME = "theme"
     LAYOUT = "layout"
@@ -34,14 +33,14 @@ class PreferenceType(str, Enum):
     ACCESSIBILITY = "accessibility"
 
 
-class FeedbackType(str, Enum):
+class FeedbackType(StrEnum):
     """Types of user feedback."""
     IMPLICIT = "implicit"  # Click, view, dwell time
     EXPLICIT = "explicit"  # Like, dislike, rating
     CONVERSION = "conversion"  # Completed action
 
 
-class RecommendationType(str, Enum):
+class RecommendationType(StrEnum):
     """Types of recommendations."""
     WORKFLOW = "workflow"
     TOOL = "tool"

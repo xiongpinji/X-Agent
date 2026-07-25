@@ -46,7 +46,7 @@ export const useStreamingEvents = (
 ) => {
   const {
     maxMessages = 1000,
-    autoScroll = true,
+    autoScroll: _autoScroll = true,
     heartbeatTimeout = 60000,
     reconnectAttempts = 5,
     reconnectDelay = 1000,
@@ -96,7 +96,7 @@ export const useStreamingEvents = (
 
       // Handle specific event types
       switch (event.event_type) {
-        case 'progress':
+        case 'progress': {
           const progressData: ProgressData = {
             overall_progress: event.overall_progress,
             current_step: event.current_step,
@@ -107,6 +107,7 @@ export const useStreamingEvents = (
           setProgress(progressData);
           if (onProgress) onProgress(progressData);
           break;
+        }
 
         case 'metric':
           setMetrics((prev) => ({

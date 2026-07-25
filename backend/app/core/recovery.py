@@ -13,11 +13,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Any, Callable, Generic, TypeVar
+from typing import Any, TypeVar
 
-from backend.app.core.exceptions import XAgentException
 from backend.app.core.retry import ExponentialBackoffRetry, RetryConfig
 
 logger = logging.getLogger(__name__)
@@ -214,7 +214,7 @@ class CompensatingTransaction:
 
             return results
 
-        except Exception as e:
+        except Exception:
             logger.error(f"Operation failed at step {executed}, compensating...")
             await self._compensate()
             raise

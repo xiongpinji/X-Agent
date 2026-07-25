@@ -2,8 +2,42 @@
 
 All notable changes to X-Agent are documented in this file.
 
-> **版本单一事实源**: 全仓版本号以 `pyproject.toml` 的 `project.version` 为准, 当前为 **0.2.0-alpha** (商用修复中)。
+> **版本单一事实源**: 全仓版本号以 `pyproject.toml` 的 `project.version` 为准, 当前为 **0.3.0-alpha** (商用升级完成)。
 > 本文件历史中出现过的一切高于 0.2.0-alpha 的版本标签 (含 1.x 系列与 0.7.x-0.9.x 标记) 均为 2026-07-19 商用审计 (`commercial_audit/00_商用交付差距审计报告.md`) 之前遗留的过程性标记, 从未对应任何实际对外发布的版本; 仓库 git 历史于 2026-07-19 fresh init, 不存在已发布 tag。
+
+## [0.3.0-alpha] — 2026-07-21
+
+### 商用交付升级 (38/100 → 75+/100)
+
+#### Phase 1: P0 止血
+- 修复 20 个 F821 运行时必崩错误 (ruff check 全通过)
+- LLM 默认后端改为 `auto` (有 Key 用真实后端，无 Key 明确报错)
+- 记忆系统默认切换 PostgreSQL
+- 嵌入模型默认改为 sentence-transformers 真实语义
+- RBAC 持久化到 PostgreSQL (PostgresRBACRepository)
+- 租户隔离改为服务端 JWT 验证
+- 修复中文路径问题 (sitecustomize.py)
+
+#### Phase 2: 商用就绪
+- 代码质量大扫除: ruff 错误从 9436 降至 <800
+- Workflow PostgreSQL 存储 (ACID 保证)
+- Workflow 并行分支执行 (DAG 拓扑排序 + asyncio.gather)
+- Qdrant 真实向量检索接入
+- Prometheus 监控指标真实埋点
+- SSO 完善: LDAP 认证提供者 + SAML Beta
+
+#### Phase 3: 竞品对齐
+- 自进化闭环引擎 (GEPA: Execute→Reflect→Extract→Curate→Promote→Reuse)
+- Codex 风格代码审查 (多维度并行审查)
+- 并行 Agent 执行 (Semaphore 限流 + asyncio.gather)
+- Goal Mode 长任务 (自动分解 + checkpoint/resume)
+- 三层记忆系统 (Tier1:内存/Redis + Tier2:PostgreSQL + Tier3:Qdrant)
+- 渠道网关 (Telegram/飞书/Webhook 适配器)
+
+#### Phase 4: 发布打磨
+- 部署一键化 (docker-compose production profile + init_secrets.sh)
+- CLI 新增: chat, review, memory, skill 命令
+- 核心模块导入验证全通过
 
 ## [Unreleased] — 0.2.0-alpha 开发线
 

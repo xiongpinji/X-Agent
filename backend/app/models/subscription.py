@@ -3,17 +3,17 @@
 """
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
-from enum import Enum
-from typing import Optional
+from datetime import UTC, datetime
+from enum import StrEnum
 
-from sqlalchemy import Boolean, DateTime, Enum as SQLEnum, Float, Index, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, Float, Index, Integer, String, Text
+from sqlalchemy import Enum as SQLEnum
 from sqlalchemy.orm import Mapped, mapped_column
 
 from backend.app.models import Base
 
 
-class SubscriptionStatus(str, Enum):
+class SubscriptionStatus(StrEnum):
     """订阅状态"""
     TRIAL = "trial"  # 试用期
     ACTIVE = "active"  # 活跃
@@ -22,7 +22,7 @@ class SubscriptionStatus(str, Enum):
     EXPIRED = "expired"  # 已过期
 
 
-class SubscriptionPlan(str, Enum):
+class SubscriptionPlan(StrEnum):
     """订阅计划"""
     FREE = "free"
     STARTER = "starter"
@@ -68,7 +68,7 @@ class SubscriptionModel(Base):
         nullable=False,
         index=True,
     )
-    started_at: Mapped[Optional[datetime]] = mapped_column(
+    started_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
@@ -81,15 +81,15 @@ class SubscriptionModel(Base):
         DateTime(timezone=True),
         nullable=False,
     )
-    trial_end: Mapped[Optional[datetime]] = mapped_column(
+    trial_end: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
-    cancelled_at: Mapped[Optional[datetime]] = mapped_column(
+    cancelled_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
-    paused_at: Mapped[Optional[datetime]] = mapped_column(
+    paused_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
@@ -99,7 +99,7 @@ class SubscriptionModel(Base):
     renewal_failed_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
     # 元数据
-    metadata_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    metadata_json: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # 索引
     __table_args__ = (
@@ -191,13 +191,13 @@ class SubscriptionHistoryModel(Base):
     # created, activated, upgraded, downgraded, paused, resumed, cancelled, renewed, failed_renewal
 
     # 旧值和新值
-    old_plan: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
-    new_plan: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
-    old_status: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
-    new_status: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    old_plan: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    new_plan: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    old_status: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    new_status: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
     # 详情
-    details: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON格式
+    details: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON格式
 
     # 时间戳
     created_at: Mapped[datetime] = mapped_column(

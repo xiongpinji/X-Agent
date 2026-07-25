@@ -19,7 +19,6 @@ import importlib.util
 import logging
 import sys
 from pathlib import Path
-from typing import Dict, List, Optional
 
 from .skill_base import Skill
 from .skill_registry import SkillRegistry
@@ -32,7 +31,7 @@ SKILL_ENTRYPOINT_CANDIDATES = ("main.py", "skill.py")
 SKILL_IMPLEMENTATION_CLASS = "SkillImplementation"
 
 
-def get_default_skills_dirs() -> List[Path]:
+def get_default_skills_dirs() -> list[Path]:
     """返回默认技能目录列表（项目根目录的 skills/ 与 custom-skills/）。
 
     仅返回实际存在的目录。路径相对本文件解析，
@@ -48,8 +47,8 @@ class SkillLoader:
 
     def __init__(
         self,
-        skills_dir: Optional[str | Path | List[str | Path]] = None,
-        registry: Optional[SkillRegistry] = None,
+        skills_dir: str | Path | list[str | Path] | None = None,
+        registry: SkillRegistry | None = None,
     ):
         """
         初始化技能加载器
@@ -60,21 +59,21 @@ class SkillLoader:
             registry: 技能注册表实例
         """
         if skills_dir is None:
-            dirs: List[Path] = get_default_skills_dirs()
+            dirs: list[Path] = get_default_skills_dirs()
         elif isinstance(skills_dir, (str, Path)):
             dirs = [Path(skills_dir)]
         else:
             dirs = [Path(d) for d in skills_dir]
 
-        self.skills_dirs: List[Path] = dirs
+        self.skills_dirs: list[Path] = dirs
         # 兼容旧代码读取 loader.skills_dir 的场景（取第一个目录）
-        self.skills_dir: Optional[Path] = dirs[0] if dirs else None
+        self.skills_dir: Path | None = dirs[0] if dirs else None
         self.registry = registry or SkillRegistry()
-        self._loaded_skills: Dict[str, Skill] = {}
+        self._loaded_skills: dict[str, Skill] = {}
         # 加载报告：{skill_name: {"status": "loaded"|"failed", "error": str|None, "path": str|None}}
-        self._load_report: Dict[str, Dict[str, object]] = {}
+        self._load_report: dict[str, dict[str, object]] = {}
 
-    async def load_skill(self, skill_name: str) -> Optional[Skill]:
+    async def load_skill(self, skill_name: str) -> Skill | None:
         """
         加载单个技能
 
@@ -128,7 +127,7 @@ class SkillLoader:
             self._record_load(skill_name, "failed", error=str(e))
             return None
 
-    async def load_all_skills(self) -> List[Skill]:
+    async def load_all_skills(self) -> list[Skill]:
         """
         加载所有技能目录下的技能
 
@@ -136,7 +135,7 @@ class SkillLoader:
             List[Skill]: 加载的技能列表。
             每个技能的成败可在 ``load_report`` 中追溯（不静默跳过）。
         """
-        skills: List[Skill] = []
+        skills: list[Skill] = []
 
         if not self.skills_dirs:
             logger.warning("No skills directories configured or none exist")
@@ -158,11 +157,11 @@ class SkillLoader:
         return skills
 
     @property
-    def load_report(self) -> Dict[str, Dict[str, object]]:
+    def load_report(self) -> dict[str, dict[str, object]]:
         """每个技能的加载结果（status/error/path），供审计与排障。"""
         return dict(self._load_report)
 
-    def _find_skill_dir(self, skill_name: str) -> Optional[Path]:
+    def _find_skill_dir(self, skill_name: str) -> Path | None:
         """在所有技能目录中查找技能子目录"""
         for base in self.skills_dirs:
             skill_path = base / skill_name
@@ -170,7 +169,7 @@ class SkillLoader:
                 return skill_path
         return None
 
-    def _find_entrypoint(self, skill_path: Path) -> Optional[Path]:
+    def _find_entrypoint(self, skill_path: Path) -> Path | None:
         """按约定查找技能实现文件（main.py 优先，其次 skill.py）"""
         for candidate in SKILL_ENTRYPOINT_CANDIDATES:
             entry = skill_path / candidate
@@ -178,7 +177,7 @@ class SkillLoader:
                 return entry
         return None
 
-    async def _load_from_directory(self, skill_name: str, skill_path: Path) -> Optional[Skill]:
+    async def _load_from_directory(self, skill_name: str, skill_path: Path) -> Skill | None:
         """
         从目录加载技能
 
@@ -246,7 +245,7 @@ class SkillLoader:
             self._record_load(skill_name, "failed", error=str(e), path=str(skill_path))
             return None
 
-    def get_skill(self, skill_name: str) -> Optional[Skill]:
+    def get_skill(self, skill_name: str) -> Skill | None:
         """
         获取已加载的技能
 
@@ -258,7 +257,7 @@ class SkillLoader:
         """
         return self._loaded_skills.get(skill_name) or self.registry.get(skill_name)
 
-    def list_loaded_skills(self) -> List[str]:
+    def list_loaded_skills(self) -> list[str]:
         """
         列出所有已加载的技能
 
@@ -291,7 +290,7 @@ class SkillLoader:
             logger.error(f"Error unloading skill '{skill_name}': {e}")
             return False
 
-    async def reload_skill(self, skill_name: str) -> Optional[Skill]:
+    async def reload_skill(self, skill_name: str) -> Skill | None:
         """
         重新加载技能
 
@@ -308,12 +307,12 @@ class SkillLoader:
         self,
         skill_name: str,
         status: str,
-        error: Optional[str] = None,
-        path: Optional[str] = None,
-        note: Optional[str] = None,
+        error: str | None = None,
+        path: str | None = None,
+        note: str | None = None,
     ) -> None:
         """记录加载结果（显式可追溯，禁止静默跳过）"""
-        entry: Dict[str, object] = {"status": status, "error": error, "path": path}
+        entry: dict[str, object] = {"status": status, "error": error, "path": path}
         if note:
             entry["note"] = note
         self._load_report[skill_name] = entry

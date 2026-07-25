@@ -4,19 +4,17 @@ from __future__ import annotations
 
 import json
 from datetime import datetime, timedelta
-from typing import Any, Optional
+from typing import Any
 
 import asyncpg
 
 from .models import (
+    AggregatedMetric,
     APICallMetric,
-    TokenUsageMetric,
-    ToolUsageMetric,
     ErrorMetric,
     PerformanceMetric,
-    AggregatedMetric,
-    AggregationLevel,
-    MetricType,
+    TokenUsageMetric,
+    ToolUsageMetric,
 )
 
 
@@ -30,7 +28,7 @@ class AnalyticsStorage:
             database_url: PostgreSQL connection URL
         """
         self.database_url = database_url
-        self.pool: Optional[asyncpg.Pool] = None
+        self.pool: asyncpg.Pool | None = None
 
     async def initialize(self) -> None:
         """Initialize database connection pool and create tables."""

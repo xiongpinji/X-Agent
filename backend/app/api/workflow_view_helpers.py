@@ -1,9 +1,12 @@
 from __future__ import annotations
 
-from backend.app.api.workflow_view_components import build_workflow_components as _build_workflow_components
+from typing import Any
+
+from backend.app.api.workflow_view_components import (
+    build_workflow_components as _build_workflow_components,
+)
 from backend.app.api.workflow_view_header import build_workflow_header
 from backend.app.api.workflow_view_panels import build_workflow_panels
-from backend.app.api.workflow_view_summary import build_workflow_summary
 from backend.app.core.workflows import WorkflowRunRecord
 
 

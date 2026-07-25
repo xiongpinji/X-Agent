@@ -14,11 +14,11 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 
-class MediaKind(str, Enum):
+class MediaKind(StrEnum):
     """媒体能力类别，对应多模型路由的 model_class。"""
 
     IMAGE = "image_generation"

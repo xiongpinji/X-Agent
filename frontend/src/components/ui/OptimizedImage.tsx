@@ -96,7 +96,7 @@ export const OptimizedImage = memo(
       }
 
       // Generate WebP srcset
-      const generateWebPSrcSet = (originalSrc: string): string => {
+      const generateWebPSrcSet = (_originalSrc: string): string => {
         if (!srcSet) return ''
         return srcSet
           .split(',')

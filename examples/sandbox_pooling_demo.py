@@ -236,7 +236,9 @@ async def demo_monitoring():
         print(f"  Running containers: {py_pool['running_containers']}")
         print(f"  Hit rate: {py_pool['hit_rate']:.1%}")
         print(f"  Avg execution time: {py_pool['avg_execution_time']*1000:.2f}ms")
-        print(f"  Throughput: {py_pool['throughput']:.2f} exec/s")
+        # 池统计真实键: total_acquisitions / pool_hits / pool_misses (无 throughput 键)
+        print(f"  Acquisitions: {py_pool.get('total_acquisitions', 0)} "
+              f"(hits={py_pool.get('pool_hits', 0)}, misses={py_pool.get('pool_misses', 0)})")
 
         print("\nRecent Executions:")
         for exec_log in stats["recent_executions"][-5:]:

@@ -4,14 +4,15 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import psutil
-import signal
+from collections.abc import Coroutine
 from dataclasses import dataclass, field
-from datetime import datetime, UTC
-from typing import Any, Callable, Coroutine
+from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
-from .skills_core import SkillMetadata, SkillExecutionContext
+import psutil
+
+from .skills_core import SkillExecutionContext, SkillMetadata
 
 logger = logging.getLogger(__name__)
 
@@ -99,7 +100,7 @@ class SkillSandbox:
                     peak_cpu_percent=peak_cpu,
                 )
 
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 error = f"Skill execution timeout: {limits.timeout_seconds}s exceeded"
                 logger.warning(f"{execution_id}: {error}")
                 return SandboxExecutionResult(
@@ -110,7 +111,7 @@ class SkillSandbox:
                 )
 
             except Exception as e:
-                error = f"Skill execution error: {str(e)}"
+                error = f"Skill execution error: {e!s}"
                 logger.error(f"{execution_id}: {error}", exc_info=True)
                 return SandboxExecutionResult(
                     success=False,
@@ -272,8 +273,8 @@ def get_sandbox_manager() -> SandboxManager:
 
 __all__ = [
     "ResourceLimits",
-    "SkillSandbox",
-    "SandboxManager",
     "SandboxExecutionResult",
+    "SandboxManager",
+    "SkillSandbox",
     "get_sandbox_manager",
 ]

@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import abc
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Any
 
 
 @dataclass
@@ -68,7 +68,7 @@ class ChannelAdapter(abc.ABC):
     #: short stable identifier, e.g. "discord"
     name: str = "base"
 
-    def __init__(self, config: Optional[ChannelConfig] = None):
+    def __init__(self, config: ChannelConfig | None = None):
         self.config = config or ChannelConfig()
 
     @abc.abstractmethod
@@ -82,7 +82,7 @@ class ChannelAdapter(abc.ABC):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def parse_inbound(self, payload: dict[str, Any]) -> Optional[ChannelMessage]:
+    def parse_inbound(self, payload: dict[str, Any]) -> ChannelMessage | None:
         """Parse a verified webhook payload into a ChannelMessage, or None if
         it is not an actionable message event."""
         raise NotImplementedError
@@ -97,7 +97,7 @@ class ChannelRegistry:
     def register(self, adapter: ChannelAdapter) -> None:
         self._adapters[adapter.name] = adapter
 
-    def get(self, name: str) -> Optional[ChannelAdapter]:
+    def get(self, name: str) -> ChannelAdapter | None:
         return self._adapters.get(name)
 
     def names(self) -> list[str]:

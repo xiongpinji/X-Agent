@@ -14,8 +14,9 @@ import json
 import logging
 import time
 from collections import deque
+from collections.abc import Callable
 from threading import Lock
-from typing import Any, Callable
+from typing import Any
 
 from starlette.requests import Request
 from starlette.responses import Response

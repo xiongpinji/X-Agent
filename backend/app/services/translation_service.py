@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-from typing import Optional
 from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
@@ -173,7 +172,7 @@ class ContentGenerator:
         groups = user_groups.get(category, ["所有用户"])
 
         result = "适合以下人群使用：\n"
-        for i, group in enumerate(groups, 1):
+        for _i, group in enumerate(groups, 1):
             result += f"✓ {group}\n"
 
         return result.strip()

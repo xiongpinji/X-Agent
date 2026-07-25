@@ -6,7 +6,7 @@
  */
 
 import React, { useMemo } from 'react';
-import { useStreamingEvents, StreamEvent } from '../hooks/useStreamingEvents';
+import { useStreamingEvents } from '../hooks/useStreamingEvents';
 
 interface TimelineStep {
   id: string;
@@ -34,7 +34,6 @@ export const TaskTimeline: React.FC<TaskTimelineProps> = ({
   const timelineSteps = useMemo(() => {
     const steps: TimelineStep[] = [];
     const toolCallMap: Map<string, { startTime: string; toolName: string }> = new Map();
-    let lastTimestamp: string | null = null;
 
     for (const event of events) {
       const timestamp = event.timestamp;
@@ -66,7 +65,7 @@ export const TaskTimeline: React.FC<TaskTimelineProps> = ({
           });
           break;
 
-        case 'tool_result':
+        case 'tool_result': {
           const toolCall = toolCallMap.get(event.tool_id);
           const duration = toolCall
             ? Math.round(
@@ -84,6 +83,7 @@ export const TaskTimeline: React.FC<TaskTimelineProps> = ({
             details: event.success ? 'Success' : 'Failed',
           });
           break;
+        }
 
         case 'message':
           steps.push({
@@ -106,8 +106,6 @@ export const TaskTimeline: React.FC<TaskTimelineProps> = ({
           });
           break;
       }
-
-      lastTimestamp = timestamp;
     }
 
     return steps.slice(-maxSteps);

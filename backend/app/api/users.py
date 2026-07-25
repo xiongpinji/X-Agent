@@ -5,11 +5,11 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query
 
 from backend.app.api.errors import api_error
-from backend.app.api.pagination import PaginationParams, apply_pagination
+from backend.app.api.pagination import apply_pagination
 from backend.app.core.admin import UserCreateRequest, UserUpdateRequest, user_store
 from backend.app.core.contracts import ErrorCode
 from backend.app.core.security import Principal
-from backend.app.dependencies import enforce_scope, get_current_principal, get_audit_store
+from backend.app.dependencies import enforce_scope, get_audit_store, get_current_principal
 
 router = APIRouter(prefix="/api/v1/users", tags=["users"])
 PrincipalDependency = Annotated[Principal, Depends(get_current_principal)]

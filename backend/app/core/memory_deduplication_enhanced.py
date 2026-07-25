@@ -21,8 +21,8 @@ import hashlib
 import logging
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, UTC
-from typing import Optional, Any
+from datetime import UTC, datetime
+from typing import Any
 
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
@@ -36,7 +36,7 @@ class Memory:
 
     id: str
     content: str
-    embedding: Optional[np.ndarray] = None
+    embedding: np.ndarray | None = None
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     importance: float = 1.0
@@ -78,7 +78,7 @@ class DeduplicationResult:
     merged_groups: list[list[str]] = field(default_factory=list)
     removed_ids: list[str] = field(default_factory=list)
     merge_summary: dict = field(default_factory=dict)
-    stats: Optional[DeduplicationStats] = None
+    stats: DeduplicationStats | None = None
 
 
 class MemoryDeduplicatorEnhanced:
@@ -283,7 +283,7 @@ class MemoryDeduplicatorEnhanced:
         self,
         new: Memory,
         existing: list[Memory],
-    ) -> Optional[Memory]:
+    ) -> Memory | None:
         """Single-write duplicate check used by the store write path.
 
         Returns the EXISTING memory that ``new`` duplicates (the one to keep),
@@ -302,7 +302,7 @@ class MemoryDeduplicatorEnhanced:
                 return candidate
         if new.embedding is None:
             return None
-        best: Optional[Memory] = None
+        best: Memory | None = None
         best_similarity = self.vector_similarity_threshold
         for candidate in existing:
             if candidate.id == new.id or candidate.embedding is None:
@@ -555,7 +555,7 @@ class MemoryDeduplicatorEnhanced:
 
         return score
 
-    def _extract_embeddings(self, memories: list[Memory]) -> Optional[np.ndarray]:
+    def _extract_embeddings(self, memories: list[Memory]) -> np.ndarray | None:
         """Extract embeddings from memories."""
         embeddings = []
         for memory in memories:

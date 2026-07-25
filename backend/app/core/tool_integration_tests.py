@@ -4,13 +4,10 @@
 from __future__ import annotations
 
 import asyncio
-import json
-from pathlib import Path
 
 from backend.app.core.tool_definitions import STANDARD_TOOLS
 from backend.app.core.tool_documentation import ToolDocumentationBuilder
 from backend.app.core.tool_manager import ToolManager
-from backend.app.core.tool_schema import ToolCallInput
 
 
 async def test_tool_registration() -> dict[str, bool]:
@@ -95,7 +92,7 @@ async def test_tool_statistics() -> dict[str, bool]:
     stats = manager.get_statistics()
     print(f"✓ Total tools: {stats['total_tools']}")
     print(f"✓ Active tools: {stats['active_tools']}")
-    print(f"✓ By category:")
+    print("✓ By category:")
     for cat, count in stats["by_category"].items():
         print(f"  - {cat}: {count}")
 

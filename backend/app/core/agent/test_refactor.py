@@ -4,14 +4,16 @@ Tests for refactored AgentLoop components.
 Validates that each component works correctly in isolation and integration.
 """
 
+from unittest.mock import AsyncMock, Mock
+
 import pytest
-from unittest.mock import Mock, AsyncMock, MagicMock
-from backend.app.core.contracts import RunContext, TaskFrame
-from backend.app.core.agent.executor import ToolExecutor, ToolExecutionConfig
-from backend.app.core.agent.planner import TaskPlanner
-from backend.app.core.agent.memory_manager import MemoryManager
-from backend.app.core.agent.state_manager import StateManager, ExecutionState
+
 from backend.app.core.agent.coordinator import AgentCoordinator
+from backend.app.core.agent.executor import ToolExecutor
+from backend.app.core.agent.memory_manager import MemoryManager
+from backend.app.core.agent.planner import TaskPlanner
+from backend.app.core.agent.state_manager import StateManager
+from backend.app.core.contracts import RunContext, TaskFrame
 
 
 @pytest.fixture
@@ -226,7 +228,7 @@ class TestStateManager:
         manager = StateManager()
         state1 = manager.create_initial_state(mock_context, mock_task_frame)
         state2 = manager.update_state(state1, iterations=1)
-        state3 = manager.update_state(state2, iterations=2)
+        manager.update_state(state2, iterations=2)
 
         history = manager.get_state_history()
         assert len(history) == 3
@@ -322,7 +324,7 @@ class TestComponentIntegration:
         mock_memory = Mock()
         mock_state = StateManager()
 
-        coordinator = AgentCoordinator(
+        AgentCoordinator(
             mock_executor,
             mock_planner,
             mock_memory,

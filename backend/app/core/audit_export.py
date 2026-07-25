@@ -2,18 +2,18 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Any
 from uuid import uuid4
 
 from pydantic import BaseModel, Field
 
 
-class ExportFrequency(str, Enum):
+class ExportFrequency(StrEnum):
     """Export frequency options."""
     DAILY = "daily"
     WEEKLY = "weekly"
@@ -21,7 +21,7 @@ class ExportFrequency(str, Enum):
     HOURLY = "hourly"
 
 
-class ExportFormat(str, Enum):
+class ExportFormat(StrEnum):
     """Export format options."""
     CSV = "csv"
     JSON = "json"
@@ -29,7 +29,7 @@ class ExportFormat(str, Enum):
     SYSLOG = "syslog"
 
 
-class ExternalSystemType(str, Enum):
+class ExternalSystemType(StrEnum):
     """External system types for integration."""
     SPLUNK = "splunk"
     ELASTICSEARCH = "elasticsearch"
@@ -442,7 +442,7 @@ class ExternalSystemIntegrationManager:
 
             integration.last_sync_at = datetime.now(UTC)
             integration.sync_count += 1
-        except Exception as e:
+        except Exception:
             integration.error_count += 1
 
     async def _send_to_splunk(

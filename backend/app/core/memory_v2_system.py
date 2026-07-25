@@ -6,14 +6,13 @@ active memory consolidation, and mixed retrieval strategies.
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 from uuid import uuid4
 
 from pydantic import BaseModel, Field
@@ -21,14 +20,14 @@ from pydantic import BaseModel, Field
 logger = logging.getLogger(__name__)
 
 
-class MemoryTier(str, Enum):
+class MemoryTier(StrEnum):
     """Memory tier classification."""
     SKILL = "skill"          # Layer 1: Program memory (SKILL.md)
     NUDGE = "nudge"          # Layer 2: Active consolidation
     ARCHIVE = "archive"      # Layer 3: Long-term storage
 
 
-class MemoryCategory(str, Enum):
+class MemoryCategory(StrEnum):
     """Memory content category."""
     SKILL = "skill"
     PATTERN = "pattern"
@@ -437,7 +436,7 @@ class MemoryV2System:
         """Merge duplicate memories."""
 
         # Keep the one with highest importance
-        all_memories = [memory] + duplicates
+        all_memories = [memory, *duplicates]
         all_memories.sort(key=lambda m: m.importance, reverse=True)
         primary = all_memories[0]
 
@@ -624,7 +623,7 @@ class MemoryV2System:
             return
 
         try:
-            with open(self.storage_path, "r", encoding="utf-8") as f:
+            with open(self.storage_path, encoding="utf-8") as f:
                 for line in f:
                     if not line.strip():
                         continue

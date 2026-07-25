@@ -2,19 +2,20 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Optional, List
-from datetime import datetime, UTC
+from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, HTTPException, Body, BackgroundTasks
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, Body, Depends, Query
+from pydantic import BaseModel
 
-from backend.app.core.security import Principal
-from backend.app.dependencies import enforce_scope, get_current_principal
 from backend.app.api.errors import api_error
+from backend.app.core.security import Principal
 from backend.app.core.skill_market_complete import (
-    SkillMarketDB, SkillPublishRequest, SkillReviewRequest, SkillRatingRequest,
-    get_skill_market_db
+    SkillMarketDB,
+    SkillPublishRequest,
+    SkillRatingRequest,
+    get_skill_market_db,
 )
+from backend.app.dependencies import enforce_scope, get_current_principal
 
 router = APIRouter(prefix="/api/v1/skill-market", tags=["skill-market"])
 PrincipalDependency = Annotated[Principal, Depends(get_current_principal)]
@@ -37,13 +38,13 @@ class SkillDetailResponse(BaseModel):
     usage_count: int
     description_zh: str
     icon_emoji: str
-    keywords: List[str]
-    tags: List[str]
+    keywords: list[str]
+    tags: list[str]
 
 
 class SkillListResponse(BaseModel):
     """技能列表响应"""
-    skills: List[SkillDetailResponse]
+    skills: list[SkillDetailResponse]
     total: int
     limit: int
     offset: int
@@ -55,7 +56,7 @@ class ReviewResponse(BaseModel):
     user_name: str
     rating: int
     title: str
-    comment: Optional[str]
+    comment: str | None
     created_at: str
 
 
@@ -63,7 +64,7 @@ class VersionResponse(BaseModel):
     """版本响应"""
     version: str
     release_date: str
-    changelog: Optional[str]
+    changelog: str | None
     download_count: int
 
 
@@ -73,7 +74,7 @@ class DependencyResponse(BaseModel):
     name: str
     name_zh: str
     version: str
-    version_spec: Optional[str]
+    version_spec: str | None
     dep_type: str
 
 
@@ -106,7 +107,7 @@ async def publish_skill(
         )
         return result
     except Exception as e:
-        raise api_error(400, f"发布失败: {str(e)}")
+        raise api_error(400, f"发布失败: {e!s}")
 
 
 @router.post("/skills/{skill_id}/submit-review", response_model=dict)
@@ -122,13 +123,13 @@ async def submit_for_review(
         result = await db.submit_for_review(skill_id, principal.user_id)
         return result
     except Exception as e:
-        raise api_error(400, f"提交失败: {str(e)}")
+        raise api_error(400, f"提交失败: {e!s}")
 
 
 @router.post("/skills/{skill_id}/approve", response_model=dict)
 async def approve_skill(
     skill_id: str,
-    reason: Optional[str] = Body(None),
+    reason: str | None = Body(None),
     principal: PrincipalDependency = PrincipalDependency,
     db: Annotated[SkillMarketDB, Depends(get_skill_market_db)] = None,
 ) -> dict:
@@ -139,7 +140,7 @@ async def approve_skill(
         result = await db.approve_skill(skill_id, principal.user_id, reason)
         return result
     except Exception as e:
-        raise api_error(400, f"批准失败: {str(e)}")
+        raise api_error(400, f"批准失败: {e!s}")
 
 
 @router.post("/skills/{skill_id}/reject", response_model=dict)
@@ -156,7 +157,7 @@ async def reject_skill(
         result = await db.reject_skill(skill_id, principal.user_id, reason)
         return result
     except Exception as e:
-        raise api_error(400, f"拒绝失败: {str(e)}")
+        raise api_error(400, f"拒绝失败: {e!s}")
 
 
 # ==================== 技能搜索API ====================
@@ -164,7 +165,7 @@ async def reject_skill(
 @router.get("/skills/search", response_model=SkillListResponse)
 async def search_skills(
     query: str = Query(..., min_length=1),
-    category: Optional[str] = Query(None),
+    category: str | None = Query(None),
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
     principal: PrincipalDependency = PrincipalDependency,
@@ -182,7 +183,7 @@ async def search_skills(
             offset=offset,
         )
     except Exception as e:
-        raise api_error(400, f"搜索失败: {str(e)}")
+        raise api_error(400, f"搜索失败: {e!s}")
 
 
 @router.get("/skills/{skill_id}", response_model=SkillDetailResponse)
@@ -200,7 +201,7 @@ async def get_skill_detail(
             raise api_error(404, "技能不存在")
         return SkillDetailResponse(**skill)
     except Exception as e:
-        raise api_error(400, f"获取失败: {str(e)}")
+        raise api_error(400, f"获取失败: {e!s}")
 
 
 @router.get("/categories/{category}/skills", response_model=SkillListResponse)
@@ -223,7 +224,7 @@ async def list_skills_by_category(
             offset=offset,
         )
     except Exception as e:
-        raise api_error(400, f"列出失败: {str(e)}")
+        raise api_error(400, f"列出失败: {e!s}")
 
 
 # ==================== 技能评分API ====================
@@ -248,7 +249,7 @@ async def add_review(
         )
         return result
     except Exception as e:
-        raise api_error(400, f"添加评论失败: {str(e)}")
+        raise api_error(400, f"添加评论失败: {e!s}")
 
 
 @router.get("/skills/{skill_id}/reviews", response_model=dict)
@@ -271,7 +272,7 @@ async def get_reviews(
             "offset": offset,
         }
     except Exception as e:
-        raise api_error(400, f"获取评论失败: {str(e)}")
+        raise api_error(400, f"获取评论失败: {e!s}")
 
 
 # ==================== 技能版本API ====================
@@ -291,7 +292,7 @@ async def create_version(
         result = await db.create_version(skill_id, version, changelog)
         return result
     except Exception as e:
-        raise api_error(400, f"创建版本失败: {str(e)}")
+        raise api_error(400, f"创建版本失败: {e!s}")
 
 
 @router.get("/skills/{skill_id}/versions", response_model=dict)
@@ -310,7 +311,7 @@ async def get_versions(
             "total": len(versions),
         }
     except Exception as e:
-        raise api_error(400, f"获取版本失败: {str(e)}")
+        raise api_error(400, f"获取版本失败: {e!s}")
 
 
 # ==================== 技能依赖API ====================
@@ -319,7 +320,7 @@ async def get_versions(
 async def add_dependency(
     skill_id: str,
     dep_skill_id: str = Body(...),
-    version_spec: Optional[str] = Body(None),
+    version_spec: str | None = Body(None),
     dep_type: str = Body(default="required"),
     principal: PrincipalDependency = PrincipalDependency,
     db: Annotated[SkillMarketDB, Depends(get_skill_market_db)] = None,
@@ -331,7 +332,7 @@ async def add_dependency(
         result = await db.add_dependency(skill_id, dep_skill_id, version_spec, dep_type)
         return result
     except Exception as e:
-        raise api_error(400, f"添加依赖失败: {str(e)}")
+        raise api_error(400, f"添加依赖失败: {e!s}")
 
 
 @router.get("/skills/{skill_id}/dependencies", response_model=dict)
@@ -350,7 +351,7 @@ async def get_dependencies(
             "total": len(dependencies),
         }
     except Exception as e:
-        raise api_error(400, f"获取依赖失败: {str(e)}")
+        raise api_error(400, f"获取依赖失败: {e!s}")
 
 
 # ==================== 技能安装API ====================
@@ -358,7 +359,7 @@ async def get_dependencies(
 @router.post("/skills/{skill_id}/install", response_model=dict)
 async def install_skill(
     skill_id: str,
-    version: Optional[str] = Body(None),
+    version: str | None = Body(None),
     config: dict = Body(default_factory=dict),
     principal: PrincipalDependency = PrincipalDependency,
     db: Annotated[SkillMarketDB, Depends(get_skill_market_db)] = None,
@@ -379,7 +380,7 @@ async def install_skill(
         )
         return result
     except Exception as e:
-        raise api_error(400, f"安装失败: {str(e)}")
+        raise api_error(400, f"安装失败: {e!s}")
 
 
 @router.post("/skills/{skill_id}/uninstall", response_model=dict)
@@ -395,7 +396,7 @@ async def uninstall_skill(
         result = await db.uninstall_skill(principal.tenant_id, principal.user_id, skill_id)
         return result
     except Exception as e:
-        raise api_error(400, f"卸载失败: {str(e)}")
+        raise api_error(400, f"卸载失败: {e!s}")
 
 
 @router.get("/my-skills", response_model=dict)
@@ -413,7 +414,7 @@ async def get_my_skills(
             "total": len(skills),
         }
     except Exception as e:
-        raise api_error(400, f"获取失败: {str(e)}")
+        raise api_error(400, f"获取失败: {e!s}")
 
 
 # ==================== 技能使用记录API ====================
@@ -424,7 +425,7 @@ async def record_usage(
     input_data: dict = Body(default_factory=dict),
     output_data: dict = Body(default_factory=dict),
     status: str = Body(default="success"),
-    error: Optional[str] = Body(None),
+    error: str | None = Body(None),
     duration_ms: int = Body(default=0),
     principal: PrincipalDependency = PrincipalDependency,
     db: Annotated[SkillMarketDB, Depends(get_skill_market_db)] = None,
@@ -439,7 +440,7 @@ async def record_usage(
         )
         return result
     except Exception as e:
-        raise api_error(400, f"记录失败: {str(e)}")
+        raise api_error(400, f"记录失败: {e!s}")
 
 
 @router.get("/skills/{skill_id}/usage-stats", response_model=dict)
@@ -456,7 +457,7 @@ async def get_usage_stats(
         stats = await db.get_skill_usage_stats(skill_id, days)
         return stats
     except Exception as e:
-        raise api_error(400, f"获取统计失败: {str(e)}")
+        raise api_error(400, f"获取统计失败: {e!s}")
 
 
 # ==================== 技能推荐API ====================
@@ -479,7 +480,7 @@ async def get_recommendations(
             "total": len(recommendations),
         }
     except Exception as e:
-        raise api_error(400, f"获取推荐失败: {str(e)}")
+        raise api_error(400, f"获取推荐失败: {e!s}")
 
 
 # ==================== 市场统计API ====================
@@ -496,4 +497,4 @@ async def get_market_stats(
         stats = await db.get_market_stats(principal.tenant_id)
         return MarketStatsResponse(**stats)
     except Exception as e:
-        raise api_error(400, f"获取统计失败: {str(e)}")
+        raise api_error(400, f"获取统计失败: {e!s}")

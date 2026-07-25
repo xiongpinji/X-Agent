@@ -3,14 +3,15 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
+from datetime import UTC
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import yaml
 
-from backend.app.core.mcp.discovery import MCPToolDiscovery, MCPServerConfig
-from backend.app.core.mcp.client import MCPClient
+from backend.app.core.mcp.discovery import MCPServerConfig, MCPToolDiscovery
 from backend.app.core.tool_registry import ToolCatalog
 
 logger = logging.getLogger(__name__)
@@ -22,8 +23,8 @@ class MCPManager:
     def __init__(
         self,
         tool_registry: ToolCatalog,
-        config_path: Optional[str] = None,
-        runtime_registry: Optional[Any] = None,
+        config_path: str | None = None,
+        runtime_registry: Any | None = None,
     ):
         """初始化MCP管理器
 
@@ -36,14 +37,14 @@ class MCPManager:
         """
         self.tool_registry = tool_registry
         self.config_path = Path(config_path) if config_path else None
-        self.config: Dict[str, Any] = {}
+        self.config: dict[str, Any] = {}
 
         # 初始化组件
         self.discovery = MCPToolDiscovery(tool_registry, runtime_registry=runtime_registry)
 
         # 状态
         self.initialized = False
-        self.health_check_task: Optional[asyncio.Task] = None
+        self.health_check_task: asyncio.Task | None = None
 
     async def initialize(self) -> bool:
         """初始化MCP管理器
@@ -137,7 +138,7 @@ class MCPManager:
             return False
 
         try:
-            with open(self.config_path, "r", encoding="utf-8") as f:
+            with open(self.config_path, encoding="utf-8") as f:
                 self.config = yaml.safe_load(f) or {}
 
             logger.info(f"Loaded MCP configuration from {self.config_path}")
@@ -149,8 +150,8 @@ class MCPManager:
 
     async def refresh_tools(
         self,
-        server_name: Optional[str] = None,
-    ) -> Dict[str, int]:
+        server_name: str | None = None,
+    ) -> dict[str, int]:
         """刷新工具列表
 
         Args:
@@ -168,7 +169,7 @@ class MCPManager:
     async def execute_tool(
         self,
         tool_name: str,
-        args: Dict[str, Any],
+        args: dict[str, Any],
     ) -> Any:
         """执行MCP工具
 
@@ -189,7 +190,7 @@ class MCPManager:
 
         # 执行路由：首选 discovery 的路由表（注册时写入，唯一事实来源）；
         # 回退到工具 schema 的 metadata（旧调用方/测试使用的契约）。
-        server_name: Optional[str] = None
+        server_name: str | None = None
         mcp_tool_name: str = tool_name
         route = self.discovery.resolve_route(tool_name)
         if route is not None:
@@ -212,7 +213,7 @@ class MCPManager:
 
         return await client.call_tool(mcp_tool_name, args)
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """获取统计信息
 
         Returns:
@@ -233,7 +234,7 @@ class MCPManager:
 
         return stats
 
-    async def health_check(self) -> Dict[str, Any]:
+    async def health_check(self) -> dict[str, Any]:
         """健康检查
 
         Returns:
@@ -285,7 +286,7 @@ class MCPManager:
         """
         return self.initialized
 
-    def pong(self) -> Dict[str, Any]:
+    def pong(self) -> dict[str, Any]:
         """对 ping 的响应——返回管理器的存活信息
 
         与 ping() 配对使用：ping() 仅返回布尔值用于快速检查；
@@ -299,12 +300,12 @@ class MCPManager:
                 - timestamp: ISO 8601 格式的当前时间戳
                 - server_count: 已注册服务器数量
         """
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         return {
             "message": "pong",
             "initialized": self.initialized,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "server_count": len(self.discovery.servers) if self.initialized else 0,
         }
 
@@ -343,10 +344,8 @@ class MCPManager:
         # 停止健康检查
         if self.health_check_task:
             self.health_check_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self.health_check_task
-            except asyncio.CancelledError:
-                pass
 
         # 关闭所有服务器连接
         await self.discovery.close_all()
@@ -356,10 +355,10 @@ class MCPManager:
 
 
 # 全局MCP管理器实例
-_mcp_manager: Optional[MCPManager] = None
+_mcp_manager: MCPManager | None = None
 
 
-def get_mcp_manager() -> Optional[MCPManager]:
+def get_mcp_manager() -> MCPManager | None:
     """获取全局MCP管理器实例
 
     Returns:
@@ -370,9 +369,9 @@ def get_mcp_manager() -> Optional[MCPManager]:
 
 async def initialize_mcp_manager(
     tool_registry: ToolCatalog,
-    config_path: Optional[str] = None,
-    runtime_registry: Optional[Any] = None,
-) -> Optional[MCPManager]:
+    config_path: str | None = None,
+    runtime_registry: Any | None = None,
+) -> MCPManager | None:
     """初始化全局MCP管理器
 
     Args:

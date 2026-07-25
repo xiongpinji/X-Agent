@@ -50,7 +50,16 @@
     "try_again": "重试",
     "yes": "是",
     "no": "否",
-    "ok": "确定"
+    "ok": "确定",
+    "comingSoon": "即将推出",
+    "connected": "已连接",
+    "disconnected": "未连接",
+    "toggleTheme": "切换主题",
+    "openMenu": "打开菜单",
+    "closeMenu": "关闭菜单",
+    "actions": "操作",
+    "new": "新建",
+    "dismiss": "关闭"
   },
   "navigation": {
     "dashboard": "仪表板",
@@ -61,10 +70,14 @@
     "agents": "代理",
     "workflows": "工作流",
     "settings": "设置",
+    "goals": "目标",
+    "evolution": "进化",
+    "review": "代码审查",
     "documentation": "文档",
     "community": "社区",
     "marketplace": "市场",
-    "console": "控制台"
+    "console": "控制台",
+    "main": "主导航"
   },
   "dashboard": {
     "title": "仪表板",
@@ -78,7 +91,21 @@
     "systemHealth": "系统健康状态",
     "performance": "性能",
     "uptime": "运行时间",
-    "avgResponseTime": "平均响应时间"
+    "avgResponseTime": "平均响应时间",
+    "subtitle": "欢迎使用 X-Agent 控制中心",
+    "quickActions": "快捷操作",
+    "startNewChat": "发起新对话",
+    "createTask": "创建任务",
+    "manageTools": "管理工具",
+    "manageWorkflows": "工作流",
+    "noRecentActivity": "暂无最近活动",
+    "totalAgents": "代理总数",
+    "activeTasks": "活跃任务",
+    "totalTools": "工具总数",
+    "systemMetrics": "系统指标",
+    "requests": "总请求数",
+    "errorRate": "错误率",
+    "avgLatency": "平均延迟"
   },
   "chat": {
     "title": "聊天",
@@ -93,7 +120,13 @@
     "conversationSettings": "对话设置",
     "model": "模型",
     "temperature": "温度",
-    "maxTokens": "最大令牌数"
+    "maxTokens": "最大令牌数",
+    "selectAgent": "选择代理",
+    "historyComingSoon": "聊天记录持久化即将推出",
+    "noMessages": "暂无消息",
+    "startConversation": "开始与 X-Agent 对话",
+    "ultraMode": "超级模式：4 个并行代理",
+    "streaming": "代理正在思考..."
   },
   "tasks": {
     "title": "任务",
@@ -120,7 +153,9 @@
     "markIncomplete": "标记为未完成",
     "addSubtask": "添加子任务",
     "addComment": "添加评论",
-    "taskHistory": "任务历史"
+    "taskHistory": "任务历史",
+    "noTasks": "暂无任务",
+    "createToStart": "创建新任务开始使用"
   },
   "tools": {
     "title": "工具",
@@ -141,7 +176,12 @@
     "parameters": "参数",
     "output": "输出",
     "logs": "日志",
-    "errorLog": "错误日志"
+    "errorLog": "错误日志",
+    "subtitle": "管理和配置可用工具",
+    "noTools": "暂无可用工具",
+    "toolsAppear": "配置后工具将显示在这里",
+    "riskLevel": "风险等级",
+    "testParameters": "测试参数"
   },
   "memory": {
     "title": "记忆",
@@ -161,7 +201,16 @@
     "filterByCategory": "按分类筛选",
     "memoryStats": "记忆统计",
     "totalMemories": "总记忆数",
-    "recentMemories": "最近记忆"
+    "recentMemories": "最近记忆",
+    "subtitle": "浏览和管理代理记忆",
+    "searchPlaceholder": "搜索记忆...",
+    "noFound": "未找到记忆",
+    "noYet": "暂无记忆",
+    "tryDifferent": "尝试不同的搜索词",
+    "createToStart": "创建新记忆开始使用",
+    "layer": "层级",
+    "importance": "重要度",
+    "contentPlaceholder": "输入记忆内容..."
   },
   "agents": {
     "title": "代理",
@@ -181,7 +230,21 @@
     "stopAgent": "停止代理",
     "agentLogs": "代理日志",
     "agentMetrics": "代理指标",
-    "agentConfiguration": "代理配置"
+    "agentConfiguration": "代理配置",
+    "subtitle": "管理您的 AI 代理及其能力",
+    "create": "创建代理",
+    "confirmDelete": "确定要删除此代理吗？",
+    "empty": "暂无代理。创建您的第一个代理开始使用。",
+    "active": "活跃",
+    "inactive": "非活跃",
+    "noCapabilities": "未定义能力",
+    "deactivate": "停用",
+    "activate": "启用",
+    "editTitle": "编辑代理",
+    "createTitle": "创建代理",
+    "name": "名称",
+    "namePlaceholder": "例如：研究助手",
+    "capabilityPlaceholder": "例如：web_search, code_gen"
   },
   "workflows": {
     "title": "工作流",
@@ -203,7 +266,14 @@
     "resumeWorkflow": "恢复工作流",
     "cancelWorkflow": "取消工作流",
     "workflowLogs": "工作流日志",
-    "workflowMetrics": "工作流指标"
+    "workflowMetrics": "工作流指标",
+    "subtitle": "基于 DAG 的工作流编排",
+    "create": "新建工作流",
+    "definitions": "定义",
+    "empty": "暂无工作流定义",
+    "recentRuns": "最近运行",
+    "noRuns": "暂无工作流运行记录",
+    "editor": "工作流编辑器"
   },
   "settings": {
     "title": "设置",
@@ -320,5 +390,41 @@
     "years": "年",
     "ago": "前",
     "in": "后"
+  },
+  "codeReview": {
+    "title": "代码审查",
+    "subtitle": "提交代码或 diff 进行多维度 AI 审查（逻辑、安全、风格、测试）",
+    "language": "语言",
+    "placeholder": "在此粘贴您的代码或 git diff...",
+    "submit": "提交审查",
+    "reviewing": "审查中...",
+    "approved": "已通过",
+    "changesRequested": "需要修改",
+    "score": "评分",
+    "comments": "评论",
+    "noIssues": "未发现问题。代码看起来不错！"
+  },
+  "evolution": {
+    "title": "自进化引擎",
+    "subtitle": "GEPA 闭环：生成 → 评估 → 提升 → 应用",
+    "skills": "技能",
+    "reflections": "反思",
+    "learnings": "学习",
+    "noSkills": "暂无沉淀技能。完成任务后会自动生成可复用技能。",
+    "totalTasks": "总任务数",
+    "patternsExtracted": "提取的模式",
+    "skillsPromoted": "提升的技能",
+    "promotedSkills": "已提升技能"
+  },
+  "goals": {
+    "subtitle": "设定长期目标，让代理自主朝目标工作",
+    "placeholder": "描述你的目标",
+    "create": "创建目标",
+    "empty": "暂无目标。创建一个开始自主执行。"
+  },
+  "workspace": {
+    "startChat": "开始与此代理对话",
+    "typeMessage": "向此代理发送消息...",
+    "memoryInfo": "与此代理关联的记忆项将显示在这里。"
   }
 }

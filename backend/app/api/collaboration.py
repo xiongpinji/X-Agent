@@ -12,6 +12,27 @@ JSON file path to enable durable snapshot persistence.
 Runtime delegation: ``POST /delegate`` runs a real sub-AgentLoop via the
 collaboration delegator (capability match + round-robin load balancing,
 core.dispatch ranking when org hints are present).
+
+P1-09 Collaboration Module Convergence
+---------------------------------------
+This is ONE of three distinct multi-agent API surfaces (NOT duplicates):
+
+- collaboration (THIS) /api/v1/collaboration
+    Shared-context rooms, messaging, delegation.
+    Use when agents need shared context / chat / hand-off.
+
+- multi_agent  /api/v1/multi-agent
+    Structured orchestration (decompose -> execute with dependencies).
+    Use for task decomposition + dependency-ordered execution.
+
+- parallel_agents  /api/v1/agents/parallel
+    Independent fan-out execution + communication bus.
+    Use for N independent tasks run concurrently.
+
+Cross-references:
+    - backend.app.api.multi_agent (orchestration API, P2-01)
+    - backend.app.api.parallel_agents (parallel execution API)
+    - backend.app.core.collaboration (core collaboration package)
 """
 
 from __future__ import annotations
@@ -23,23 +44,23 @@ from pydantic import BaseModel, Field
 
 from backend.app.api.errors import api_error
 from backend.app.api.messages import UnifiedMessageEvent, build_channel_key, message_event_bus
-from backend.app.core.collaboration import collaboration_store
-from backend.app.core.collaboration.delegation import (
+from backend.app.core.collaboration import (
     CandidateSpec,
+    CollaborationRoom,
     DelegationRequest,
     NoCapableAgentError,
+    collaboration_store,
     get_delegator,
 )
-from backend.app.core.collaboration.store import CollaborationRoom
 from backend.app.core.contracts import ErrorCode
-from backend.app.core.memory import MemoryScope, MemorySystem
+from backend.app.core.memory import MemorySystem
+from backend.app.core.memory.store import MemoryScope
 from backend.app.core.security import Principal
-from backend.app.core.workflows import WorkflowChatCreateRequest
 from backend.app.dependencies import enforce_scope, get_current_principal, get_memory
 
 router = APIRouter(prefix="/api/v1/collaboration", tags=["collaboration"])
 PrincipalDependency = Annotated[Principal, Depends(get_current_principal)]
-MemoryDependency = Annotated[object, Depends(get_memory)]
+MemoryDependency = Annotated[MemorySystem, Depends(get_memory)]
 
 
 def _resolve_tenant(principal: Principal, requested: str | None) -> str:

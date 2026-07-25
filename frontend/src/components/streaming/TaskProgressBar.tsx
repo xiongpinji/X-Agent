@@ -6,7 +6,7 @@
  */
 
 import React, { useMemo } from 'react';
-import { useStreamingEvents, ProgressData } from '../hooks/useStreamingEvents';
+import { useStreamingEvents } from '../hooks/useStreamingEvents';
 
 interface TaskProgressBarProps {
   runId: string;

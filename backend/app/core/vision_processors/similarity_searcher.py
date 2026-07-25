@@ -3,8 +3,9 @@
 """
 
 import logging
-from typing import Any, Dict, List, Optional
 import time
+from typing import Any
+
 import numpy as np
 
 logger = logging.getLogger(__name__)
@@ -21,7 +22,7 @@ class SimilaritySearcher:
     def _initialize_models(self) -> None:
         """初始化模型"""
         try:
-            import clip
+            import clip  # noqa: F401
             self._clip_available = True
         except ImportError:
             logger.warning("clip not installed, similarity search disabled")
@@ -30,7 +31,7 @@ class SimilaritySearcher:
         self,
         image_path: str,
         **kwargs
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """计算图像嵌入"""
         start_time = time.time()
 
@@ -77,11 +78,11 @@ class SimilaritySearcher:
     async def find_similar_images(
         self,
         query_image_path: str,
-        candidate_image_paths: List[str],
+        candidate_image_paths: list[str],
         top_k: int = 5,
         threshold: float = 0.5,
         **kwargs
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """查找相似图像"""
         start_time = time.time()
 
@@ -134,9 +135,9 @@ class SimilaritySearcher:
 
     async def compute_similarity_matrix(
         self,
-        image_paths: List[str],
+        image_paths: list[str],
         **kwargs
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """计算相似度矩阵"""
         start_time = time.time()
 
@@ -182,10 +183,10 @@ class SimilaritySearcher:
 
     async def cluster_similar_images(
         self,
-        image_paths: List[str],
+        image_paths: list[str],
         threshold: float = 0.7,
         **kwargs
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """聚类相似图像"""
         start_time = time.time()
 
@@ -238,10 +239,10 @@ class SimilaritySearcher:
     async def search_by_text(
         self,
         text_query: str,
-        image_paths: List[str],
+        image_paths: list[str],
         top_k: int = 5,
         **kwargs
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """通过文本查询搜索图像"""
         start_time = time.time()
 

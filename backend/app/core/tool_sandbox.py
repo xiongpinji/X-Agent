@@ -5,7 +5,6 @@ and prevent unauthorized file operations.
 """
 
 from pathlib import Path
-from typing import Optional
 
 from backend.app.api.errors import api_error
 from backend.app.core.contracts import ErrorCode
@@ -15,7 +14,7 @@ from backend.app.core.path_security import PathSecurityValidator
 class ToolSandbox:
     """Sandbox for restricting tool file operations."""
 
-    def __init__(self, sandbox_root: Optional[Path] = None, max_file_size: int = 100 * 1024 * 1024):
+    def __init__(self, sandbox_root: Path | None = None, max_file_size: int = 100 * 1024 * 1024):
         """Initialize tool sandbox.
 
         Args:
@@ -145,7 +144,7 @@ class ToolSandbox:
             raise api_error(
                 500,
                 ErrorCode.VALIDATION_ERROR,
-                f"Failed to list directory: {str(e)}",
+                f"Failed to list directory: {e!s}",
                 details={"path": str(path)},
             )
 
@@ -170,10 +169,10 @@ class ToolSandbox:
 
 
 # Global sandbox instance
-_tool_sandbox: Optional[ToolSandbox] = None
+_tool_sandbox: ToolSandbox | None = None
 
 
-def get_tool_sandbox(sandbox_root: Optional[Path] = None) -> ToolSandbox:
+def get_tool_sandbox(sandbox_root: Path | None = None) -> ToolSandbox:
     """Get or create global tool sandbox instance.
 
     Args:

@@ -1,14 +1,15 @@
 """Message Router for Enterprise IM Platforms"""
 
-from typing import Dict, List, Any, Optional, Callable
+from collections.abc import Callable
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
+from typing import Any
 
-from .base import EnterpriseIMPlatform, MessageType
+from .base import MessageType
 from .manager import EnterpriseIMManager
 
 
-class EventType(str, Enum):
+class EventType(StrEnum):
     """Event types for notifications"""
     MESSAGE_RECEIVED = "message_received"
     APPROVAL_CREATED = "approval_created"
@@ -24,9 +25,9 @@ class MessageRouter:
 
     def __init__(self, manager: EnterpriseIMManager):
         self.manager = manager
-        self.event_handlers: Dict[EventType, List[Callable]] = {}
-        self.message_queue: List[Dict[str, Any]] = []
-        self.delivery_log: List[Dict[str, Any]] = []
+        self.event_handlers: dict[EventType, list[Callable]] = {}
+        self.message_queue: list[dict[str, Any]] = []
+        self.delivery_log: list[dict[str, Any]] = []
 
     def register_event_handler(self, event_type: EventType, handler: Callable):
         """Register an event handler"""
@@ -43,9 +44,9 @@ class MessageRouter:
         self,
         user_id: str,
         message: str,
-        platforms: List[str] = None,
+        platforms: list[str] | None = None,
         msg_type: MessageType = MessageType.TEXT,
-    ) -> Dict[str, bool]:
+    ) -> dict[str, bool]:
         """Route a message to user on specified platforms"""
         if platforms is None:
             platforms = self.manager.list_platforms()
@@ -68,9 +69,9 @@ class MessageRouter:
     async def route_card(
         self,
         user_id: str,
-        card: Dict[str, Any],
-        platforms: List[str] = None,
-    ) -> Dict[str, bool]:
+        card: dict[str, Any],
+        platforms: list[str] | None = None,
+    ) -> dict[str, bool]:
         """Route a card message to user on specified platforms"""
         if platforms is None:
             platforms = self.manager.list_platforms()
@@ -93,10 +94,10 @@ class MessageRouter:
     async def broadcast_message(
         self,
         message: str,
-        platforms: List[str] = None,
-        filter_func: Optional[Callable] = None,
+        platforms: list[str] | None = None,
+        filter_func: Callable | None = None,
         msg_type: MessageType = MessageType.TEXT,
-    ) -> Dict[str, Dict[str, bool]]:
+    ) -> dict[str, dict[str, bool]]:
         """Broadcast a message to all users on specified platforms"""
         if platforms is None:
             platforms = self.manager.list_platforms()
@@ -137,9 +138,9 @@ class MessageRouter:
     async def send_notification(
         self,
         event_type: EventType,
-        data: Dict[str, Any],
-        platforms: List[str] = None,
-    ) -> Dict[str, bool]:
+        data: dict[str, Any],
+        platforms: list[str] | None = None,
+    ) -> dict[str, bool]:
         """Send a notification based on event type"""
         if platforms is None:
             platforms = self.manager.list_platforms()
@@ -160,7 +161,7 @@ class MessageRouter:
             )
             return {k: all(v.values()) if v else False for k, v in results.items()}
 
-    def _build_notification_message(self, event_type: EventType, data: Dict[str, Any]) -> str:
+    def _build_notification_message(self, event_type: EventType, data: dict[str, Any]) -> str:
         """Build notification message based on event type"""
         if event_type == EventType.MESSAGE_RECEIVED:
             return f"# 新消息\n\n{data.get('content', '')}"
@@ -181,7 +182,7 @@ class MessageRouter:
     async def trigger_event(
         self,
         event_type: EventType,
-        data: Dict[str, Any],
+        data: dict[str, Any],
     ):
         """Trigger an event and call registered handlers"""
         if event_type in self.event_handlers:
@@ -200,7 +201,7 @@ class MessageRouter:
         user_id: str,
         message: str,
         success: bool,
-        error: str = None,
+        error: str | None = None,
     ):
         """Log message delivery"""
         log_entry = {
@@ -217,11 +218,11 @@ class MessageRouter:
         if len(self.delivery_log) > 1000:
             self.delivery_log = self.delivery_log[-1000:]
 
-    def get_delivery_log(self, limit: int = 100) -> List[Dict[str, Any]]:
+    def get_delivery_log(self, limit: int = 100) -> list[dict[str, Any]]:
         """Get delivery log"""
         return self.delivery_log[-limit:]
 
-    def get_delivery_stats(self) -> Dict[str, Any]:
+    def get_delivery_stats(self) -> dict[str, Any]:
         """Get delivery statistics"""
         if not self.delivery_log:
             return {
@@ -242,7 +243,7 @@ class MessageRouter:
             "success_rate": success / total if total > 0 else 0.0,
         }
 
-    def get_platform_stats(self) -> Dict[str, Dict[str, Any]]:
+    def get_platform_stats(self) -> dict[str, dict[str, Any]]:
         """Get statistics per platform"""
         stats = {}
         for platform_name in self.manager.list_platforms():

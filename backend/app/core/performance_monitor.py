@@ -128,7 +128,7 @@ class PerformanceMonitor:
     def get_all_reports(self) -> dict[str, PerformanceReport]:
         """Get reports for all endpoints."""
         reports = {}
-        for key in self.metrics.keys():
+        for key in self.metrics:
             method, endpoint = key.split(" ", 1)
             reports[key] = self.get_report(endpoint, method)
         return reports
@@ -137,7 +137,8 @@ class PerformanceMonitor:
         """Generate HTML performance report."""
         reports = self.get_all_reports()
 
-        html = """
+        html = (
+            """
         <!DOCTYPE html>
         <html>
         <head>
@@ -155,8 +156,9 @@ class PerformanceMonitor:
         </head>
         <body>
             <h1>API Performance Report</h1>
-            <p>Generated: {}</p>
-            <table>
+"""
+            + f"            <p>Generated: {datetime.utcnow().isoformat()}</p>\n"
+            + """            <table>
                 <tr>
                     <th>Endpoint</th>
                     <th>Total Requests</th>
@@ -167,9 +169,10 @@ class PerformanceMonitor:
                     <th>Cache Hit Rate</th>
                     <th>Throughput (req/s)</th>
                 </tr>
-        """.format(datetime.utcnow().isoformat())
+        """
+        )
 
-        for key, report in reports.items():
+        for _key, report in reports.items():
             success_rate = 100 - report.error_rate
             success_class = "good" if success_rate >= 99 else "warning" if success_rate >= 95 else "bad"
 

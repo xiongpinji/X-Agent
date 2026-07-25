@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import logging
 import math
 import os
@@ -184,7 +185,7 @@ class OpenAIEmbeddingModel:
 
 def build_embedding_model(
     *,
-    embedding_backend: str = "local",
+    embedding_backend: str = "auto",
     openai_api_key: str | None = None,
     openai_embedding_model: str = "text-embedding-3-small",
     openai_embedding_dimensions: int | None = None,
@@ -196,6 +197,9 @@ def build_embedding_model(
     """Build an embedding model for the given backend.
 
     Backends:
+    - ``"auto"``: try OpenAI (if API key set) → sentence-transformers (if
+      installed) → deterministic hash fallback. Never raises for missing
+      optional deps; degradation is logged.
     - ``"local"`` / ``"hash"``: deterministic hash pseudo-embedding (OFFLINE
       FALLBACK, non-semantic). Kept for tests and offline development.
     - ``"sentence-transformers"`` (aliases ``"sentence_transformers"``,
@@ -207,7 +211,16 @@ def build_embedding_model(
 
     Unknown backends raise ``ValueError`` (never silently fall through).
     """
-    backend = (embedding_backend or "local").strip().lower()
+    backend = (embedding_backend or "auto").strip().lower()
+    if backend == "auto":
+        return _build_auto_embedding_model(
+            openai_api_key=openai_api_key,
+            openai_embedding_model=openai_embedding_model,
+            openai_embedding_dimensions=openai_embedding_dimensions,
+            openai_base_url=openai_base_url,
+            st_model=st_model,
+            st_device=st_device,
+        )
     if backend in {"local", "hash", "deterministic"}:
         if backend == "local":
             logger.info(
@@ -232,5 +245,237 @@ def build_embedding_model(
         )
     raise ValueError(
         f"Unknown embedding_backend: {embedding_backend!r}. "
-        "Valid backends: 'local' (hash fallback), 'sentence-transformers', 'openai'."
+        "Valid backends: 'auto', 'local' (hash fallback), 'sentence-transformers', 'openai'."
     )
+
+
+def _build_auto_embedding_model(
+    *,
+    openai_api_key: str | None = None,
+    openai_embedding_model: str = "text-embedding-3-small",
+    openai_embedding_dimensions: int | None = None,
+    openai_base_url: str | None = None,
+    st_model: str | None = None,
+    st_device: str | None = None,
+) -> EmbeddingModel:
+    """Auto-detect the best available embedding backend.
+
+    Priority: OpenAI (if key set) → sentence-transformers (if installed) →
+    deterministic hash fallback. Degradation is always logged, never silent.
+    """
+    # 1. Try OpenAI if API key is available
+    api_key = openai_api_key or os.getenv("XAGENT_OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY")
+    if api_key:
+        logger.info(
+            "embedding_backend='auto' -> OpenAI embeddings (model=%s).",
+            openai_embedding_model,
+        )
+        return OpenAIEmbeddingModel(
+            api_key=api_key,
+            model=openai_embedding_model,
+            dimensions=openai_embedding_dimensions,
+            base_url=openai_base_url,
+        )
+
+    # 2. Try sentence-transformers if installed
+    try:
+        import sentence_transformers  # noqa: F401
+
+        logger.info(
+            "embedding_backend='auto' -> sentence-transformers (local semantic)."
+        )
+        return SentenceTransformerEmbeddingModel(
+            model_name=st_model,
+            device=st_device,
+            strict=False,
+        )
+    except ImportError:
+        pass
+
+    # 3. Fallback to deterministic hash
+    logger.info(
+        "embedding_backend='auto' -> DeterministicEmbeddingModel "
+        "(hash-based fallback; no OpenAI key, sentence-transformers not installed)."
+    )
+    return DeterministicEmbeddingModel()
+
+
+# ---------------------------------------------------------------------------
+# EmbeddingProvider — unified async interface with batch support (P1-13)
+# ---------------------------------------------------------------------------
+
+
+class EmbeddingProvider:
+    """Unified embedding provider with auto-detection and batch support.
+
+    Wraps the backend-specific models behind a single async interface.
+    Supports:
+    - ``"openai"`` → OpenAI embeddings API
+    - ``"local"`` / ``"sentence-transformers"`` → local sentence-transformers
+    - ``"hash"`` → deterministic hash-based pseudo-embedding (offline fallback)
+    - ``"auto"`` → try openai if key set, else local, else hash
+
+    Usage::
+
+        provider = EmbeddingProvider(backend="auto")
+        vec = await provider.embed("hello world")
+        vecs = await provider.embed_batch(["hello", "world"])
+    """
+
+    def __init__(
+        self,
+        backend: str = "auto",
+        *,
+        model: str | None = None,
+        dimensions: int | None = None,
+        openai_api_key: str | None = None,
+        openai_base_url: str | None = None,
+        batch_size: int = 32,
+    ) -> None:
+        self.backend = backend
+        self.model_name = model or os.getenv(
+            "XAGENT_EMBEDDING_MODEL", "text-embedding-3-small"
+        )
+        self.dimensions = dimensions or int(
+            os.getenv("XAGENT_EMBEDDING_DIM", "384")
+        )
+        self.batch_size = batch_size
+        self._openai_api_key = openai_api_key
+        self._openai_base_url = openai_base_url
+        self._model: EmbeddingModel | None = None
+        self._resolved_backend: str = "unknown"
+
+    @property
+    def resolved_backend(self) -> str:
+        """The actual backend in use after auto-resolution."""
+        if self._model is None:
+            self._resolve()
+        return self._resolved_backend
+
+    def _resolve(self) -> None:
+        """Lazily resolve the backend model."""
+        if self._model is not None:
+            return
+        openai_dims = self.dimensions if self.model_name.startswith("text-embedding-3") else None
+        self._model = build_embedding_model(
+            embedding_backend=self.backend,
+            openai_api_key=self._openai_api_key,
+            openai_embedding_model=self.model_name,
+            openai_embedding_dimensions=openai_dims,
+            openai_base_url=self._openai_base_url,
+        )
+        # Track what was actually resolved
+        if isinstance(self._model, OpenAIEmbeddingModel):
+            self._resolved_backend = "openai"
+        elif isinstance(self._model, SentenceTransformerEmbeddingModel):
+            self._resolved_backend = "sentence-transformers"
+        else:
+            self._resolved_backend = "hash"
+
+    async def embed(self, text: str) -> list[float]:
+        """Embed a single text string into a vector."""
+        self._resolve()
+        assert self._model is not None
+        result = self._model.embed(text)
+        if isinstance(result, list):
+            return result
+        return await result  # type: ignore[misc]
+
+    async def embed_batch(self, texts: list[str]) -> list[list[float]]:
+        """Embed multiple texts, respecting batch_size for API backends."""
+        if not texts:
+            return []
+        self._resolve()
+        assert self._model is not None
+
+        # For OpenAI backend, use native batch API
+        if isinstance(self._model, OpenAIEmbeddingModel):
+            return await self._openai_batch_embed(texts)
+
+        # For local/hash backends, process sequentially (or in parallel for ST)
+        results: list[list[float]] = []
+        for text in texts:
+            result = self._model.embed(text)
+            if isinstance(result, list):
+                results.append(result)
+            else:
+                results.append(await result)  # type: ignore[misc]
+        return results
+
+    async def _openai_batch_embed(self, texts: list[str]) -> list[list[float]]:
+        """Batch embed via OpenAI API with chunking."""
+        model = self._model
+        assert isinstance(model, OpenAIEmbeddingModel)
+
+        try:
+            from openai import AsyncOpenAI
+        except ImportError as exc:
+            raise RuntimeError("openai package is not installed") from exc
+
+        kwargs: dict[str, Any] = {"api_key": model.api_key}
+        if model.base_url:
+            kwargs["base_url"] = model.base_url
+        client = AsyncOpenAI(**kwargs)
+
+        all_embeddings: list[list[float]] = []
+        for i in range(0, len(texts), self.batch_size):
+            chunk = texts[i : i + self.batch_size]
+            request: dict[str, Any] = {"model": model.model, "input": chunk}
+            if model.dimensions is not None:
+                request["dimensions"] = model.dimensions
+            response = await client.embeddings.create(**request)
+            # Sort by index to preserve order
+            sorted_data = sorted(response.data, key=lambda d: d.index)
+            all_embeddings.extend([list(d.embedding) for d in sorted_data])
+        return all_embeddings
+
+    def _hash_embedding(self, text: str, dim: int | None = None) -> list[float]:
+        """Deterministic pseudo-embedding from text hash (fallback only).
+
+        Same text ALWAYS produces the same vector. This is critical for
+        consistency when no real embedding service is available.
+        """
+        dim = dim or self.dimensions
+        h = hashlib.sha256(text.encode("utf-8")).digest()
+        # Expand hash to fill dim dimensions deterministically
+        vector: list[float] = []
+        block_idx = 0
+        while len(vector) < dim:
+            block = hashlib.sha256(h + block_idx.to_bytes(4, "big")).digest()
+            for byte in block:
+                if len(vector) >= dim:
+                    break
+                # Map byte [0,255] to [-1.0, 1.0]
+                vector.append((byte / 127.5) - 1.0)
+            block_idx += 1
+        # L2 normalize
+        magnitude = math.sqrt(sum(v * v for v in vector))
+        if magnitude > 0:
+            vector = [v / magnitude for v in vector]
+        return vector
+
+
+# Module-level singleton (lazily initialized)
+_default_provider: EmbeddingProvider | None = None
+
+
+def get_embedding_provider(
+    backend: str | None = None,
+    model: str | None = None,
+    dimensions: int | None = None,
+) -> EmbeddingProvider:
+    """Get or create the module-level EmbeddingProvider singleton.
+
+    Reads defaults from environment:
+    - XAGENT_EMBEDDING_BACKEND (default: "auto")
+    - XAGENT_EMBEDDING_MODEL (default: "text-embedding-3-small")
+    - XAGENT_EMBEDDING_DIM (default: 384)
+    """
+    global _default_provider
+    if _default_provider is None or backend is not None:
+        _default_provider = EmbeddingProvider(
+            backend=backend or os.getenv("XAGENT_EMBEDDING_BACKEND", "auto"),
+            model=model,
+            dimensions=dimensions,
+        )
+    return _default_provider

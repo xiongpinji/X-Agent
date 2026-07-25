@@ -7,32 +7,25 @@ from __future__ import annotations
 import logging
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
-from enum import Enum
-from typing import Optional
+from enum import StrEnum
 from uuid import uuid4
 
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.app.core.session import SessionManager
 from backend.app.models.billing import (
-    BillingModel,
-    Invoice,
-    InvoiceStatus,
-    Payment,
-    PaymentStatus,
+    BillingHistory,
     PricingTier,
+    QuotaUsage,
     Subscription,
     SubscriptionStatus,
-    UsageMetrics,
-    QuotaUsage,
-    BillingHistory,
 )
-from backend.app.core.session import SessionManager
 
 logger = logging.getLogger(__name__)
 
 
-class SubscriptionEvent(str, Enum):
+class SubscriptionEvent(StrEnum):
     """订阅事件类型"""
     CREATED = "subscription_created"
     ACTIVATED = "subscription_activated"
@@ -47,7 +40,7 @@ class SubscriptionEvent(str, Enum):
     TRIAL_ENDED = "trial_ended"
 
 
-class TrialPeriod(str, Enum):
+class TrialPeriod(StrEnum):
     """试用期类型"""
     SEVEN_DAYS = "7_days"
     FOURTEEN_DAYS = "14_days"
@@ -65,8 +58,8 @@ class SubscriptionManager:
         payment_method: str,
         payment_method_id: str,
         auto_renew: bool = True,
-        trial_period: Optional[TrialPeriod] = None,
-        promotion_code: Optional[str] = None,
+        trial_period: TrialPeriod | None = None,
+        promotion_code: str | None = None,
     ) -> Subscription:
         """创建新订阅"""
         async with SessionManager.get_session() as session:
@@ -164,7 +157,7 @@ class SubscriptionManager:
             return subscription
 
     async def pause_subscription(
-        self, tenant_id: str, user_id: str, reason: Optional[str] = None
+        self, tenant_id: str, user_id: str, reason: str | None = None
     ) -> Subscription:
         """暂停订阅"""
         async with SessionManager.get_session() as session:
@@ -232,7 +225,7 @@ class SubscriptionManager:
             return subscription
 
     async def cancel_subscription(
-        self, tenant_id: str, user_id: str, reason: Optional[str] = None
+        self, tenant_id: str, user_id: str, reason: str | None = None
     ) -> Subscription:
         """取消订阅"""
         async with SessionManager.get_session() as session:
@@ -503,14 +496,14 @@ class SubscriptionManager:
 
     async def get_subscription(
         self, tenant_id: str, user_id: str
-    ) -> Optional[Subscription]:
+    ) -> Subscription | None:
         """获取活跃订阅"""
         async with SessionManager.get_session() as session:
             return await self._get_active_subscription(session, tenant_id, user_id)
 
     async def get_subscription_by_id(
         self, subscription_id: str
-    ) -> Optional[Subscription]:
+    ) -> Subscription | None:
         """根据ID获取订阅"""
         async with SessionManager.get_session() as session:
             return await session.get(Subscription, subscription_id)
@@ -519,7 +512,7 @@ class SubscriptionManager:
 
     async def _get_active_subscription(
         self, session: AsyncSession, tenant_id: str, user_id: str
-    ) -> Optional[Subscription]:
+    ) -> Subscription | None:
         """获取活跃订阅"""
         stmt = select(Subscription).where(
             and_(
@@ -614,7 +607,7 @@ class SubscriptionManager:
         user_id: str,
         event_type: SubscriptionEvent,
         subscription_id: str,
-        details: Optional[dict] = None,
+        details: dict | None = None,
     ) -> BillingHistory:
         """记录订阅事件"""
         event = BillingHistory(
@@ -630,7 +623,7 @@ class SubscriptionManager:
 
 
 # 全局实例
-_subscription_manager: Optional[SubscriptionManager] = None
+_subscription_manager: SubscriptionManager | None = None
 
 
 def get_subscription_manager() -> SubscriptionManager:

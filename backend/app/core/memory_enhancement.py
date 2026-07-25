@@ -3,13 +3,11 @@
 """
 from __future__ import annotations
 
-import asyncio
 import logging
 import time
-from dataclasses import dataclass, field
-from typing import Any, Optional, List, Dict, Set, Tuple
 from collections import defaultdict
-import hashlib
+from dataclasses import dataclass, field
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -19,15 +17,15 @@ class MemoryItem:
     """记忆项"""
     memory_id: str
     content: str
-    embedding: List[float]
+    embedding: list[float]
     importance_score: float = 0.0
     access_count: int = 0
     created_at: float = field(default_factory=time.time)
     last_accessed_at: float = field(default_factory=time.time)
-    metadata: Dict[str, Any] = field(default_factory=dict)
-    tags: Set[str] = field(default_factory=set)
+    metadata: dict[str, Any] = field(default_factory=dict)
+    tags: set[str] = field(default_factory=set)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """转换为字典"""
         return {
             "memory_id": self.memory_id,
@@ -47,8 +45,8 @@ class DeduplicationResult:
     original_count: int
     deduplicated_count: int
     removed_count: int
-    removed_items: List[str]
-    merge_groups: List[List[str]]
+    removed_items: list[str]
+    merge_groups: list[list[str]]
     deduplication_ratio: float = 0.0
 
     def __post_init__(self):
@@ -61,12 +59,12 @@ class SimilarityCalculator:
     """相似度计算器"""
 
     @staticmethod
-    def cosine_similarity(vec1: List[float], vec2: List[float]) -> float:
+    def cosine_similarity(vec1: list[float], vec2: list[float]) -> float:
         """计算余弦相似度"""
         if not vec1 or not vec2 or len(vec1) != len(vec2):
             return 0.0
 
-        dot_product = sum(a * b for a, b in zip(vec1, vec2))
+        dot_product = sum(a * b for a, b in zip(vec1, vec2, strict=False))
         magnitude1 = sum(a * a for a in vec1) ** 0.5
         magnitude2 = sum(b * b for b in vec2) ** 0.5
 
@@ -76,7 +74,7 @@ class SimilarityCalculator:
         return dot_product / (magnitude1 * magnitude2)
 
     @staticmethod
-    def jaccard_similarity(set1: Set[str], set2: Set[str]) -> float:
+    def jaccard_similarity(set1: set[str], set2: set[str]) -> float:
         """计算Jaccard相似度"""
         if not set1 and not set2:
             return 1.0
@@ -139,7 +137,7 @@ class MemoryDeduplicator:
 
     async def deduplicate(
         self,
-        memories: List[MemoryItem],
+        memories: list[MemoryItem],
         use_embedding: bool = True,
         use_text: bool = True
     ) -> DeduplicationResult:
@@ -183,10 +181,10 @@ class MemoryDeduplicator:
 
     async def _find_similar_groups(
         self,
-        memories: List[MemoryItem],
+        memories: list[MemoryItem],
         use_embedding: bool,
         use_text: bool
-    ) -> List[List[MemoryItem]]:
+    ) -> list[list[MemoryItem]]:
         """找到相似的记忆组"""
         groups = []
         visited = set()
@@ -198,7 +196,7 @@ class MemoryDeduplicator:
             group = [memory1]
             visited.add(memory1.memory_id)
 
-            for j, memory2 in enumerate(memories[i + 1:], i + 1):
+            for _j, memory2 in enumerate(memories[i + 1:], i + 1):
                 if memory2.memory_id in visited:
                     continue
 
@@ -248,9 +246,9 @@ class MemoryGraphBuilder:
 
     def __init__(self):
         """初始化图谱构建器"""
-        self.graph: Dict[str, Set[str]] = defaultdict(set)
-        self.edge_weights: Dict[Tuple[str, str], float] = {}
-        self.node_importance: Dict[str, float] = {}
+        self.graph: dict[str, set[str]] = defaultdict(set)
+        self.edge_weights: dict[tuple[str, str], float] = {}
+        self.node_importance: dict[str, float] = {}
 
     def add_memory(self, memory_id: str, importance: float = 0.0) -> None:
         """添加记忆节点"""
@@ -274,7 +272,7 @@ class MemoryGraphBuilder:
         memory_id: str,
         depth: int = 2,
         limit: int = 10
-    ) -> List[Tuple[str, float]]:
+    ) -> list[tuple[str, float]]:
         """获取相关记忆"""
         visited = set()
         queue = [(memory_id, 0, 1.0)]
@@ -304,7 +302,7 @@ class MemoryGraphBuilder:
         results.sort(key=lambda x: x[1], reverse=True)
         return results[:limit]
 
-    def get_graph_stats(self) -> Dict[str, Any]:
+    def get_graph_stats(self) -> dict[str, Any]:
         """获取图谱统计信息"""
         return {
             "total_nodes": len(self.node_importance),
@@ -362,15 +360,15 @@ class MemoryImportanceScorer:
         # 计算加权平均
         importance = sum(
             scores[key] * self.weights[key]
-            for key in self.weights.keys()
+            for key in self.weights
         )
 
         return importance
 
     def update_importance_scores(
         self,
-        memories: List[MemoryItem],
-        current_time: Optional[float] = None
+        memories: list[MemoryItem],
+        current_time: float | None = None
     ) -> None:
         """更新所有记忆的重要性评分"""
         if current_time is None:
@@ -386,12 +384,12 @@ class MemoryArchiver:
     def __init__(self, archive_threshold: float = 0.3):
         """初始化归档器"""
         self.archive_threshold = archive_threshold
-        self.archived_memories: Dict[str, MemoryItem] = {}
+        self.archived_memories: dict[str, MemoryItem] = {}
 
     def archive_low_importance_memories(
         self,
-        memories: List[MemoryItem]
-    ) -> Tuple[List[MemoryItem], List[MemoryItem]]:
+        memories: list[MemoryItem]
+    ) -> tuple[list[MemoryItem], list[MemoryItem]]:
         """归档低重要性记忆"""
         active = []
         archived = []
@@ -406,14 +404,14 @@ class MemoryArchiver:
         logger.info(f"Archived {len(archived)} memories")
         return active, archived
 
-    def restore_memory(self, memory_id: str) -> Optional[MemoryItem]:
+    def restore_memory(self, memory_id: str) -> MemoryItem | None:
         """恢复归档的记忆"""
         memory = self.archived_memories.pop(memory_id, None)
         if memory:
             logger.info(f"Restored memory: {memory_id}")
         return memory
 
-    def get_archived_memories(self) -> List[MemoryItem]:
+    def get_archived_memories(self) -> list[MemoryItem]:
         """获取所有归档的记忆"""
         return list(self.archived_memories.values())
 
@@ -427,14 +425,14 @@ class EnhancedMemorySystem:
         self.graph_builder = MemoryGraphBuilder()
         self.importance_scorer = MemoryImportanceScorer()
         self.archiver = MemoryArchiver()
-        self.memories: Dict[str, MemoryItem] = {}
+        self.memories: dict[str, MemoryItem] = {}
 
     async def add_memory(self, memory: MemoryItem) -> None:
         """添加记忆"""
         self.memories[memory.memory_id] = memory
         self.graph_builder.add_memory(memory.memory_id, memory.importance_score)
 
-    async def process_memories(self) -> Dict[str, Any]:
+    async def process_memories(self) -> dict[str, Any]:
         """处理记忆（去重、评分、归档）"""
         memories = list(self.memories.values())
 
@@ -467,7 +465,7 @@ class EnhancedMemorySystem:
         self,
         memory_id: str,
         limit: int = 10
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """获取相关记忆"""
         related = self.graph_builder.get_related_memories(memory_id, limit=limit)
         return [
@@ -479,7 +477,7 @@ class EnhancedMemorySystem:
             for mem_id, weight in related
         ]
 
-    def get_memory_stats(self) -> Dict[str, Any]:
+    def get_memory_stats(self) -> dict[str, Any]:
         """获取记忆统计信息"""
         memories = list(self.memories.values())
         return {
@@ -494,7 +492,7 @@ class EnhancedMemorySystem:
 
 
 # 全局记忆系统实例
-_memory_system: Optional[EnhancedMemorySystem] = None
+_memory_system: EnhancedMemorySystem | None = None
 
 
 def get_memory_system() -> EnhancedMemorySystem:

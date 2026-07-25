@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import typer
 
-from cli.main import get_current_config
+from cli.state import get_current_config
 from cli.repl import start_repl
 
 repl_app = typer.Typer(

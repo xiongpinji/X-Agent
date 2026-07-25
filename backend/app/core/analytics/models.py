@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from enum import Enum
-from typing import Any, Optional
+from enum import StrEnum
+from typing import Any
 
 
-class MetricType(str, Enum):
+class MetricType(StrEnum):
     """Types of metrics."""
 
     API_CALL = "api_call"
@@ -19,7 +19,7 @@ class MetricType(str, Enum):
     COST = "cost"
 
 
-class AggregationLevel(str, Enum):
+class AggregationLevel(StrEnum):
     """Aggregation levels for metrics."""
 
     MINUTE = "minute"
@@ -42,7 +42,7 @@ class APICallMetric:
     response_time_ms: float
     request_size_bytes: int
     response_size_bytes: int
-    error_message: Optional[str] = None
+    error_message: str | None = None
     tags: dict[str, str] = field(default_factory=dict)
 
 
@@ -72,7 +72,7 @@ class ToolUsageMetric:
     tool_type: str
     execution_time_ms: float
     success: bool
-    error_message: Optional[str] = None
+    error_message: str | None = None
     tags: dict[str, str] = field(default_factory=dict)
 
 
@@ -85,8 +85,8 @@ class ErrorMetric:
     user_id: str
     error_type: str
     error_message: str
-    endpoint: Optional[str] = None
-    stack_trace: Optional[str] = None
+    endpoint: str | None = None
+    stack_trace: str | None = None
     tags: dict[str, str] = field(default_factory=dict)
 
 

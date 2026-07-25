@@ -5,16 +5,16 @@ from __future__ import annotations
 import re
 import time
 from dataclasses import dataclass, field
-from typing import Any, Optional
-from enum import Enum
+from enum import StrEnum
+from typing import Any
 
 try:
-    from playwright.async_api import Page, ConsoleMessage
+    from playwright.async_api import ConsoleMessage, Page
 except ImportError:
     Page = ConsoleMessage = object  # type: ignore[assignment]
 
 
-class ConsoleMessageType(str, Enum):
+class ConsoleMessageType(StrEnum):
     """Types of console messages."""
     LOG = "log"
     DEBUG = "debug"
@@ -29,9 +29,9 @@ class ConsoleMessageRecord:
     type: ConsoleMessageType
     text: str
     timestamp: float = field(default_factory=time.time)
-    location: Optional[str] = None
+    location: str | None = None
     args: list[str] = field(default_factory=list)
-    stack_trace: Optional[str] = None
+    stack_trace: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -122,9 +122,9 @@ class ConsoleMonitor:
 
     def get_messages(
         self,
-        pattern: Optional[str] = None,
+        pattern: str | None = None,
         only_errors: bool = False,
-        message_type: Optional[ConsoleMessageType] = None,
+        message_type: ConsoleMessageType | None = None,
     ) -> list[ConsoleMessageRecord]:
         """Get console messages with optional filtering."""
         messages = self._messages

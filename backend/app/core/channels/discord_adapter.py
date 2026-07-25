@@ -9,7 +9,7 @@ configured (config.signing_secret holds the hex public key).
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 from backend.app.core.channels.base import (
     ChannelAdapter,
@@ -23,7 +23,7 @@ class DiscordAdapter(ChannelAdapter):
 
     _API = "https://discord.com/api/v10"
 
-    def __init__(self, config: Optional[ChannelConfig] = None):
+    def __init__(self, config: ChannelConfig | None = None):
         super().__init__(config)
         self._base = (self.config.base_url or self._API).rstrip("/")
 
@@ -55,7 +55,7 @@ class DiscordAdapter(ChannelAdapter):
         except Exception:
             return False
 
-    def parse_inbound(self, payload: dict[str, Any]) -> Optional[ChannelMessage]:
+    def parse_inbound(self, payload: dict[str, Any]) -> ChannelMessage | None:
         # Discord message-create gateway/webhook shape.
         if payload.get("type") == 1:  # PING
             return None

@@ -16,15 +16,16 @@ import hashlib
 import json
 import logging
 import time
-from dataclasses import dataclass
-from enum import Enum
-from typing import Any, Dict, List, Optional, Callable
 from collections import deque
+from collections.abc import Callable
+from dataclasses import dataclass
+from enum import StrEnum
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
-class CompressionType(str, Enum):
+class CompressionType(StrEnum):
     """压缩类型"""
     NONE = "none"
     GZIP = "gzip"
@@ -93,8 +94,8 @@ class HTTPCacheManager:
     """HTTP缓存管理"""
 
     def __init__(self):
-        self.etag_cache: Dict[str, str] = {}
-        self.last_modified_cache: Dict[str, float] = {}
+        self.etag_cache: dict[str, str] = {}
+        self.last_modified_cache: dict[str, float] = {}
         self.lock = asyncio.Lock()
 
     async def generate_etag(self, data: bytes) -> str:
@@ -105,7 +106,7 @@ class HTTPCacheManager:
         self,
         resource_id: str,
         max_age: int = 3600,
-    ) -> Dict[str, str]:
+    ) -> dict[str, str]:
         """获取缓存头"""
         async with self.lock:
             etag = self.etag_cache.get(resource_id, "")
@@ -131,8 +132,8 @@ class HTTPCacheManager:
     async def is_modified(
         self,
         resource_id: str,
-        etag: Optional[str] = None,
-        last_modified: Optional[float] = None,
+        etag: str | None = None,
+        last_modified: float | None = None,
     ) -> bool:
         """检查资源是否被修改"""
         async with self.lock:
@@ -155,14 +156,14 @@ class BatchRequestProcessor:
     ):
         self.batch_size = batch_size
         self.batch_timeout_ms = batch_timeout_ms
-        self.queue: deque[tuple[str, Dict[str, Any], asyncio.Future]] = deque()
+        self.queue: deque[tuple[str, dict[str, Any], asyncio.Future]] = deque()
         self.lock = asyncio.Lock()
         self.processing = False
 
     async def add_request(
         self,
         request_id: str,
-        request_data: Dict[str, Any],
+        request_data: dict[str, Any],
     ) -> Any:
         """添加请求到批处理队列"""
         future: asyncio.Future = asyncio.Future()
@@ -200,19 +201,19 @@ class BatchRequestProcessor:
             results = await self._batch_process(batch)
 
             # 返回结果
-            for i, (request_id, request_data, future) in enumerate(batch):
+            for i, (_request_id, _request_data, future) in enumerate(batch):
                 if not future.done():
                     future.set_result(results[i])
 
         except Exception as e:
             logger.error(f"Batch processing error: {e}")
-            for request_id, request_data, future in batch:
+            for _request_id, _request_data, future in batch:
                 if not future.done():
                     future.set_exception(e)
         finally:
             self.processing = False
 
-    async def _batch_process(self, batch: List[tuple]) -> List[Any]:
+    async def _batch_process(self, batch: list[tuple]) -> list[Any]:
         """批量处理"""
         # 模拟处理
         await asyncio.sleep(0.01)
@@ -238,9 +239,9 @@ class APIResponseOptimizer:
     async def optimize_response(
         self,
         data: Any,
-        resource_id: Optional[str] = None,
+        resource_id: str | None = None,
         max_age: int = 3600,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """优化响应"""
         start_time = time.time()
 
@@ -300,7 +301,7 @@ class APIResponseOptimizer:
     async def batch_request(
         self,
         request_id: str,
-        request_data: Dict[str, Any],
+        request_data: dict[str, Any],
     ) -> Any:
         """批处理请求"""
         return await self.batch_processor.add_request(request_id, request_data)
@@ -308,8 +309,8 @@ class APIResponseOptimizer:
     async def check_cache_validity(
         self,
         resource_id: str,
-        etag: Optional[str] = None,
-        last_modified: Optional[float] = None,
+        etag: str | None = None,
+        last_modified: float | None = None,
     ) -> bool:
         """检查缓存有效性"""
         is_modified = await self.cache_manager.is_modified(
@@ -325,7 +326,7 @@ class APIResponseOptimizer:
 
         return is_modified
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """获取统计信息"""
         return {
             "total_requests": self.stats.total_requests,
@@ -345,7 +346,7 @@ class APIResponseOptimizer:
 
 
 # 全局优化器实例
-_optimizer: Optional[APIResponseOptimizer] = None
+_optimizer: APIResponseOptimizer | None = None
 
 
 def get_response_optimizer() -> APIResponseOptimizer:

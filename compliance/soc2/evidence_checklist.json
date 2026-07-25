@@ -1,0 +1,157 @@
+{
+  "generated_at": "2026-07-21T07:11:02.434663+00:00",
+  "audit_type": "SOC 2 Type I",
+  "evidence_categories": {
+    "CC6_access_control": [
+      {
+        "item": "SSO/SAML 配置截图",
+        "source": "auth 配置页面",
+        "status": "automated"
+      },
+      {
+        "item": "RBAC 角色定义",
+        "source": "backend/app/core/auth/",
+        "status": "automated"
+      },
+      {
+        "item": "MFA 配置证据",
+        "source": "OIDC provider 管理台",
+        "status": "manual"
+      },
+      {
+        "item": "访问权限复核记录",
+        "source": "季度复核会议纪要",
+        "status": "manual"
+      },
+      {
+        "item": "特权访问日志样本",
+        "source": "audit.jsonl",
+        "status": "automated"
+      },
+      {
+        "item": "租户隔离测试报告",
+        "source": "tests/test_tenant_isolation.py",
+        "status": "automated"
+      }
+    ],
+    "CC7_availability": [
+      {
+        "item": "监控仪表盘截图",
+        "source": "Grafana",
+        "status": "manual"
+      },
+      {
+        "item": "告警规则配置",
+        "source": "deployment/alertmanager/",
+        "status": "automated"
+      },
+      {
+        "item": "备份策略配置",
+        "source": "deployment/backup/backup.sh",
+        "status": "automated"
+      },
+      {
+        "item": "灾备演练报告",
+        "source": "disaster-recovery/",
+        "status": "manual"
+      },
+      {
+        "item": "SLA 监控数据",
+        "source": "Prometheus uptime 指标",
+        "status": "automated"
+      },
+      {
+        "item": "事件响应记录",
+        "source": "事件登记册",
+        "status": "manual"
+      }
+    ],
+    "CC8_change_management": [
+      {
+        "item": "CI/CD 流水线配置",
+        "source": ".github/workflows/",
+        "status": "automated"
+      },
+      {
+        "item": "分支保护规则截图",
+        "source": "GitHub Settings",
+        "status": "manual"
+      },
+      {
+        "item": "代码审查记录样本",
+        "source": "PR 历史",
+        "status": "automated"
+      },
+      {
+        "item": "部署审批记录",
+        "source": "Argo Rollouts 日志",
+        "status": "automated"
+      },
+      {
+        "item": "安全扫描报告",
+        "source": "security_reports/",
+        "status": "automated"
+      },
+      {
+        "item": "依赖审计报告",
+        "source": "dependency-pip-audit-report.json",
+        "status": "automated"
+      }
+    ],
+    "CC9_risk_mitigation": [
+      {
+        "item": "风险评估报告",
+        "source": "commercial_audit/",
+        "status": "automated"
+      },
+      {
+        "item": "渗透测试报告",
+        "source": "security_reports/pentest_report.json",
+        "status": "automated"
+      },
+      {
+        "item": "漏洞修复记录",
+        "source": "Git commit 历史",
+        "status": "automated"
+      },
+      {
+        "item": "供应商评估记录",
+        "source": "供应商管理登记",
+        "status": "manual"
+      },
+      {
+        "item": "加密配置证据",
+        "source": "backend/app/core/kms/",
+        "status": "automated"
+      }
+    ],
+    "P_privacy": [
+      {
+        "item": "隐私策略文档",
+        "source": "policies/12_privacy_policy.md",
+        "status": "automated"
+      },
+      {
+        "item": "PII 扫描配置",
+        "source": "backend/app/core/gdpr/pii.py",
+        "status": "automated"
+      },
+      {
+        "item": "删除权实现证据",
+        "source": "backend/app/api/gdpr.py",
+        "status": "automated"
+      },
+      {
+        "item": "数据驻留配置",
+        "source": "backend/app/core/gdpr/residency.py",
+        "status": "automated"
+      },
+      {
+        "item": "DPA 模板",
+        "source": "法务提供",
+        "status": "manual"
+      }
+    ]
+  },
+  "automation_coverage": "70% (21/30 项可自动采集)"
+}

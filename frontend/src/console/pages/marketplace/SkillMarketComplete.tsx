@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Search, Download, Star, Users, Zap, ChevronRight, Filter, Grid, List, Heart, Share2, AlertCircle } from 'lucide-react';
+import { Search, Star, Grid, List, Heart, Share2, AlertCircle } from 'lucide-react';
 
 interface Skill {
   id: string;
@@ -205,10 +205,18 @@ export const SkillMarketComplete: React.FC = () => {
   // 技能卡片组件
   const SkillCard: React.FC<{ skill: Skill }> = ({ skill }) => (
     <div
+      role="button"
+      tabIndex={0}
       className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow p-4 cursor-pointer"
       onClick={() => {
         setSelectedSkill(skill);
         setShowDetailModal(true);
+      }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          setSelectedSkill(skill);
+          setShowDetailModal(true);
+        }
       }}
     >
       <div className="flex items-start justify-between mb-3">

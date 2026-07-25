@@ -4,14 +4,13 @@
 from __future__ import annotations
 
 from backend.app.core.tool_schema import (
-    ToolSchema,
     ToolCategory,
-    ToolRiskLevel,
+    ToolExample,
     ToolParameter,
     ToolReturn,
-    ToolExample,
+    ToolRiskLevel,
+    ToolSchema,
 )
-
 
 # ============================================================================
 # Browser 工具

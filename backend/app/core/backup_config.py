@@ -2,7 +2,6 @@
 
 import os
 from dataclasses import dataclass
-from typing import Optional
 
 
 @dataclass
@@ -16,13 +15,13 @@ class BackupConfig:
     # S3 configuration
     s3_bucket: str = os.getenv("BACKUP_S3_BUCKET", "")
     s3_region: str = os.getenv("BACKUP_S3_REGION", "us-east-1")
-    s3_access_key: Optional[str] = os.getenv("BACKUP_S3_ACCESS_KEY")
-    s3_secret_key: Optional[str] = os.getenv("BACKUP_S3_SECRET_KEY")
+    s3_access_key: str | None = os.getenv("BACKUP_S3_ACCESS_KEY")
+    s3_secret_key: str | None = os.getenv("BACKUP_S3_SECRET_KEY")
 
     # Encryption configuration
     encryption_enabled: bool = os.getenv("BACKUP_ENCRYPTION_ENABLED", "true").lower() == "true"
     encryption_algorithm: str = os.getenv("BACKUP_ENCRYPTION_ALGORITHM", "AES-256-GCM")
-    encryption_key: Optional[str] = os.getenv("BACKUP_ENCRYPTION_KEY")
+    encryption_key: str | None = os.getenv("BACKUP_ENCRYPTION_KEY")
 
     # Compression configuration
     compression_enabled: bool = os.getenv("BACKUP_COMPRESSION_ENABLED", "true").lower() == "true"

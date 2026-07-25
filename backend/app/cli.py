@@ -8,17 +8,13 @@ from __future__ import annotations
 import asyncio
 import json
 import sys
-from enum import Enum
-from pathlib import Path
-from typing import Any, Optional
+from enum import StrEnum
 
 import typer
 from rich.console import Console
+from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.table import Table
-from rich.syntax import Syntax
-from rich.panel import Panel
-
 
 # Initialize CLI app and console
 app = typer.Typer(
@@ -29,7 +25,7 @@ app = typer.Typer(
 console = Console()
 
 
-class CommandStatus(str, Enum):
+class CommandStatus(StrEnum):
     """Command execution status."""
     SUCCESS = "success"
     RUNNING = "running"
@@ -44,7 +40,7 @@ class CommandStatus(str, Enum):
 @app.command()
 def run(
     task: str = typer.Argument(..., help="Task description or ID"),
-    agent: Optional[str] = typer.Option(None, "--agent", "-a", help="Agent name"),
+    agent: str | None = typer.Option(None, "--agent", "-a", help="Agent name"),
     timeout: int = typer.Option(300, "--timeout", "-t", help="Timeout in seconds"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Verbose output"),
 ) -> None:
@@ -65,18 +61,18 @@ def run(
 
             # In real implementation, this would call the actual agent
             progress.update(task_id, completed=True)
-            console.print(f"[green]✓[/green] Task completed successfully")
+            console.print("[green]✓[/green] Task completed successfully")
 
         except Exception as e:
-            console.print(f"[red]✗[/red] Task failed: {str(e)}")
+            console.print(f"[red]✗[/red] Task failed: {e!s}")
             sys.exit(1)
 
 
 @app.command()
 def chat(
     interactive: bool = typer.Option(True, "--interactive", "-i", help="Interactive mode"),
-    agent: Optional[str] = typer.Option(None, "--agent", "-a", help="Agent name"),
-    context: Optional[str] = typer.Option(None, "--context", "-c", help="Context file"),
+    agent: str | None = typer.Option(None, "--agent", "-a", help="Agent name"),
+    context: str | None = typer.Option(None, "--context", "-c", help="Context file"),
 ) -> None:
     """Start interactive chat with X-Agent."""
     console.print(Panel.fit(
@@ -108,14 +104,14 @@ def chat(
                 console.print("\n[yellow]Chat interrupted[/yellow]")
                 break
             except Exception as e:
-                console.print(f"[red]Error:[/red] {str(e)}")
+                console.print(f"[red]Error:[/red] {e!s}")
 
 
 @app.command()
 def tools(
     action: str = typer.Argument("list", help="Action: list, info, install, uninstall"),
-    tool_name: Optional[str] = typer.Option(None, "--name", "-n", help="Tool name"),
-    search: Optional[str] = typer.Option(None, "--search", "-s", help="Search query"),
+    tool_name: str | None = typer.Option(None, "--name", "-n", help="Tool name"),
+    search: str | None = typer.Option(None, "--search", "-s", help="Search query"),
 ) -> None:
     """Manage X-Agent tools."""
     if action == "list":
@@ -143,8 +139,8 @@ def tools(
 @app.command()
 def config(
     action: str = typer.Argument("show", help="Action: show, set, get, validate"),
-    key: Optional[str] = typer.Option(None, "--key", "-k", help="Config key"),
-    value: Optional[str] = typer.Option(None, "--value", "-v", help="Config value"),
+    key: str | None = typer.Option(None, "--key", "-k", help="Config key"),
+    value: str | None = typer.Option(None, "--value", "-v", help="Config value"),
 ) -> None:
     """Manage X-Agent configuration."""
     if action == "show":
@@ -260,7 +256,7 @@ def _show_chat_help() -> None:
     console.print(help_text)
 
 
-def _list_tools(search: Optional[str] = None) -> None:
+def _list_tools(search: str | None = None) -> None:
     """List available tools."""
     table = Table(title="Available Tools")
     table.add_column("Name", style="cyan")

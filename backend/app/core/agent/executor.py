@@ -9,13 +9,12 @@ Responsibilities:
   - Track execution metrics
 """
 
-from typing import Any
-import json
 from dataclasses import dataclass
+from typing import Any
 
-from backend.app.core.contracts import RunContext, ToolCallRecord
-from backend.app.core.repair_loop import RepairLoop
 from backend.app.core.agent.protocols import ExecutionResult
+from backend.app.core.contracts import RunContext
+from backend.app.core.repair_loop import RepairLoop
 
 
 @dataclass
@@ -176,7 +175,7 @@ class ToolExecutor:
                 'output': None,
             })()
 
-            verification_result, repair_suggestion = self.repair_loop.analyze(mock_record)
+            _verification_result, repair_suggestion = self.repair_loop.analyze(mock_record)
 
             if repair_suggestion and repair_suggestion.should_retry:
                 return {

@@ -13,8 +13,9 @@ from __future__ import annotations
 import json
 import logging
 import traceback
-from enum import Enum
-from typing import Any, Callable
+from collections.abc import Callable
+from enum import StrEnum
+from typing import Any
 
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
@@ -24,7 +25,7 @@ from .base import BaseMiddleware
 logger = logging.getLogger(__name__)
 
 
-class ErrorCategory(str, Enum):
+class ErrorCategory(StrEnum):
     """Error classification."""
 
     BUSINESS = "business"  # Expected business logic errors
@@ -52,7 +53,7 @@ class ErrorHandlingMiddleware(BaseMiddleware):
         self.include_traceback = config.get("include_traceback", False)
         self.include_details = config.get("include_details", False)
         self.report_errors = config.get("report_errors", False)
-        self.error_reporter = config.get("error_reporter", None)
+        self.error_reporter = config.get("error_reporter")
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
         """Handle errors."""

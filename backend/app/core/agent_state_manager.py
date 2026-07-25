@@ -3,7 +3,13 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from backend.app.core.contracts import ExecutionFrame, PlanFrame, RecoveryFrame, RunContext, TaskFrame
+from backend.app.core.contracts import (
+    ExecutionFrame,
+    PlanFrame,
+    RecoveryFrame,
+    RunContext,
+    TaskFrame,
+)
 
 
 @dataclass

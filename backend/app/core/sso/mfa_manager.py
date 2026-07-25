@@ -11,7 +11,7 @@ import struct
 import time
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -19,7 +19,7 @@ from pydantic import BaseModel, Field
 logger = logging.getLogger(__name__)
 
 
-class MFAMethod(str, Enum):
+class MFAMethod(StrEnum):
     """Supported MFA methods."""
 
     TOTP = "totp"  # Time-based One-Time Password (Google Authenticator, Authy)
@@ -186,7 +186,7 @@ class SMSManager:
         Returns:
             True if SMS sent successfully
         """
-        # TODO: Implement SMS sending via Twilio or other provider
+        # NOTE: Requires real SMS provider integration (Twilio/MessageBird)
         logger.info(f"SMS code sent to {phone_number}: {code}")
         return True
 
@@ -241,7 +241,7 @@ class EmailManager:
         Returns:
             True if email sent successfully
         """
-        # TODO: Implement email sending
+        # NOTE: Requires real email transport integration (SMTP/SES)
         logger.info(f"Email code sent to {email}: {code}")
         return True
 

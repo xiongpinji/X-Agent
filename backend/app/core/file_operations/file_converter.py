@@ -3,8 +3,8 @@
 """
 
 import logging
-from typing import Any, Dict
 from pathlib import Path
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +30,7 @@ class FileConverter:
         input_path: str,
         output_format: str,
         **kwargs
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         转换文件格式
 
@@ -63,12 +63,12 @@ class FileConverter:
             logger.error(f"Error converting file: {e}")
             return {"success": False, "error": str(e)}
 
-    async def _markdown_to_html(self, input_path: str, **kwargs) -> Dict[str, Any]:
+    async def _markdown_to_html(self, input_path: str, **kwargs) -> dict[str, Any]:
         """Markdown转HTML"""
         try:
             import markdown
 
-            with open(input_path, "r", encoding="utf-8") as f:
+            with open(input_path, encoding="utf-8") as f:
                 content = f.read()
 
             html = markdown.markdown(content)
@@ -89,14 +89,14 @@ class FileConverter:
             logger.error(f"Error converting markdown to html: {e}")
             return {"success": False, "error": str(e)}
 
-    async def _csv_to_json(self, input_path: str, **kwargs) -> Dict[str, Any]:
+    async def _csv_to_json(self, input_path: str, **kwargs) -> dict[str, Any]:
         """CSV转JSON"""
         try:
             import csv
             import json
 
             data = []
-            with open(input_path, "r", encoding="utf-8") as f:
+            with open(input_path, encoding="utf-8") as f:
                 reader = csv.DictReader(f)
                 for row in reader:
                     data.append(row)
@@ -115,13 +115,13 @@ class FileConverter:
             logger.error(f"Error converting csv to json: {e}")
             return {"success": False, "error": str(e)}
 
-    async def _json_to_csv(self, input_path: str, **kwargs) -> Dict[str, Any]:
+    async def _json_to_csv(self, input_path: str, **kwargs) -> dict[str, Any]:
         """JSON转CSV"""
         try:
             import csv
             import json
 
-            with open(input_path, "r", encoding="utf-8") as f:
+            with open(input_path, encoding="utf-8") as f:
                 data = json.load(f)
 
             if not isinstance(data, list):
@@ -147,13 +147,14 @@ class FileConverter:
             logger.error(f"Error converting json to csv: {e}")
             return {"success": False, "error": str(e)}
 
-    async def _yaml_to_json(self, input_path: str, **kwargs) -> Dict[str, Any]:
+    async def _yaml_to_json(self, input_path: str, **kwargs) -> dict[str, Any]:
         """YAML转JSON"""
         try:
             import json
+
             import yaml
 
-            with open(input_path, "r", encoding="utf-8") as f:
+            with open(input_path, encoding="utf-8") as f:
                 data = yaml.safe_load(f)
 
             output_path = kwargs.get("output_path")
@@ -172,13 +173,14 @@ class FileConverter:
             logger.error(f"Error converting yaml to json: {e}")
             return {"success": False, "error": str(e)}
 
-    async def _json_to_yaml(self, input_path: str, **kwargs) -> Dict[str, Any]:
+    async def _json_to_yaml(self, input_path: str, **kwargs) -> dict[str, Any]:
         """JSON转YAML"""
         try:
             import json
+
             import yaml
 
-            with open(input_path, "r", encoding="utf-8") as f:
+            with open(input_path, encoding="utf-8") as f:
                 data = json.load(f)
 
             output_path = kwargs.get("output_path")

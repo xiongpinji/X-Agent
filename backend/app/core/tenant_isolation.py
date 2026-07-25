@@ -10,11 +10,11 @@ SECURITY: 实现OWASP多租户隔离最佳实践
 from __future__ import annotations
 
 import logging
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.responses import JSONResponse
 
 from backend.app.core.security import Principal
 

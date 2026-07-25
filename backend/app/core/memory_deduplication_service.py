@@ -7,18 +7,17 @@ automatic deduplication, monitoring, and optimization.
 
 from __future__ import annotations
 
-import asyncio
 import logging
-from datetime import datetime, timedelta, UTC
-from typing import Any, Optional
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from backend.app.core.memory_deduplication_enhanced import (
+    DeduplicationResult,
     Memory,
     MemoryDeduplicatorEnhanced,
-    DeduplicationResult,
 )
 from backend.app.core.memory_graph import MemoryGraph
-from backend.app.core.memory_graph_enhanced import EnhancedMemoryGraph, MemoryNode, MemoryRelation
+from backend.app.core.memory_graph_enhanced import EnhancedMemoryGraph, MemoryRelation
 
 logger = logging.getLogger(__name__)
 
@@ -140,7 +139,7 @@ class MemoryDeduplicationService:
     async def auto_deduplicate_if_needed(
         self,
         memories: list[Memory],
-    ) -> Optional[DeduplicationResult]:
+    ) -> DeduplicationResult | None:
         """
         Automatically deduplicate if interval has passed.
 
@@ -348,8 +347,8 @@ class MemoryDeduplicationMonitor:
 
 
 # Global instances
-deduplication_service: Optional[MemoryDeduplicationService] = None
-deduplication_monitor: Optional[MemoryDeduplicationMonitor] = None
+deduplication_service: MemoryDeduplicationService | None = None
+deduplication_monitor: MemoryDeduplicationMonitor | None = None
 
 
 def initialize_deduplication_service(
@@ -377,11 +376,11 @@ def initialize_deduplication_service(
     return deduplication_service
 
 
-def get_deduplication_service() -> Optional[MemoryDeduplicationService]:
+def get_deduplication_service() -> MemoryDeduplicationService | None:
     """Get the global deduplication service."""
     return deduplication_service
 
 
-def get_deduplication_monitor() -> Optional[MemoryDeduplicationMonitor]:
+def get_deduplication_monitor() -> MemoryDeduplicationMonitor | None:
     """Get the global deduplication monitor."""
     return deduplication_monitor

@@ -3,7 +3,6 @@
 import base64
 import logging
 import os
-from typing import Optional
 
 from cryptography.fernet import Fernet, InvalidToken
 from cryptography.hazmat.primitives import hashes
@@ -107,7 +106,7 @@ class ConfigEncryption:
         """
         encrypted_data = data.copy()
         for key in keys_to_encrypt:
-            if key in encrypted_data and encrypted_data[key]:
+            if encrypted_data.get(key):
                 try:
                     encrypted_data[key] = self.encrypt(str(encrypted_data[key]))
                 except Exception as e:
@@ -129,7 +128,7 @@ class ConfigEncryption:
         """
         decrypted_data = data.copy()
         for key in keys_to_decrypt:
-            if key in decrypted_data and decrypted_data[key]:
+            if decrypted_data.get(key):
                 try:
                     decrypted_data[key] = self.decrypt(str(decrypted_data[key]))
                 except Exception as e:
@@ -149,7 +148,7 @@ class EncryptedConfigValue:
         """
         self.encrypted_value = encrypted_value
         self.encryption = encryption
-        self._decrypted: Optional[str] = None
+        self._decrypted: str | None = None
 
     @property
     def value(self) -> str:
@@ -168,7 +167,7 @@ class EncryptedConfigValue:
 
     def __repr__(self) -> str:
         """Return representation (masked for security)."""
-        return f"EncryptedConfigValue(***)"
+        return "EncryptedConfigValue(***)"
 
 
 def generate_encryption_key() -> str:
@@ -181,7 +180,7 @@ def generate_encryption_key() -> str:
     return base64.b64encode(key_bytes).decode()
 
 
-def load_encryption_key_from_env(env_var: str = "XAGENT_ENCRYPTION_KEY") -> Optional[str]:
+def load_encryption_key_from_env(env_var: str = "XAGENT_ENCRYPTION_KEY") -> str | None:
     """Load encryption key from environment variable.
 
     Args:
@@ -193,7 +192,7 @@ def load_encryption_key_from_env(env_var: str = "XAGENT_ENCRYPTION_KEY") -> Opti
     return os.getenv(env_var)
 
 
-def load_encryption_key_from_file(file_path: str) -> Optional[str]:
+def load_encryption_key_from_file(file_path: str) -> str | None:
     """Load encryption key from file.
 
     Args:
@@ -208,7 +207,7 @@ def load_encryption_key_from_file(file_path: str) -> Optional[str]:
     try:
         if not os.path.exists(file_path):
             return None
-        with open(file_path, "r") as f:
+        with open(file_path) as f:
             return f.read().strip()
     except Exception as e:
         raise EncryptionError(f"Failed to load encryption key from file: {e}")

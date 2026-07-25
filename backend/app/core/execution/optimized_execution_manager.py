@@ -2,15 +2,17 @@
 优化的执行管理器 - 集成容器池和预热机制
 """
 
-import logging
 import asyncio
-from typing import Any, Dict, Optional
-from uuid import uuid4
+import logging
 from datetime import datetime
+from typing import Any
+from uuid import uuid4
 
-from .python_sandbox import PythonSandbox  # ⚠ P0-18 降级: AST 黑名单, 仅限可信代码, 禁止用于不可信输入
-from .nodejs_executor import NodeJSExecutor
 from .container_pool import ContainerPool
+from .nodejs_executor import NodeJSExecutor
+from .python_sandbox import (
+    PythonSandbox,  # ⚠ P0-18 降级: AST 黑名单, 仅限可信代码, 禁止用于不可信输入
+)
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +55,7 @@ class OptimizedExecutionManager:
         self.nodejs_executor = NodeJSExecutor(timeout=timeout)
 
         # 执行历史
-        self._execution_history: Dict[str, Dict[str, Any]] = {}
+        self._execution_history: dict[str, dict[str, Any]] = {}
         self._initialized = False
 
     async def initialize(self):
@@ -76,9 +78,9 @@ class OptimizedExecutionManager:
         self,
         code: str,
         language: str = "python",
-        context: Optional[Dict[str, Any]] = None,
+        context: dict[str, Any] | None = None,
         **kwargs,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         执行代码（使用容器池）
 
@@ -190,9 +192,9 @@ class OptimizedExecutionManager:
     async def execute_python(
         self,
         code: str,
-        context: Optional[Dict[str, Any]] = None,
-        allowed_imports: Optional[list] = None,
-    ) -> Dict[str, Any]:
+        context: dict[str, Any] | None = None,
+        allowed_imports: list | None = None,
+    ) -> dict[str, Any]:
         """
         执行Python代码
 
@@ -214,8 +216,8 @@ class OptimizedExecutionManager:
     async def execute_nodejs(
         self,
         code: str,
-        modules: Optional[list] = None,
-    ) -> Dict[str, Any]:
+        modules: list | None = None,
+    ) -> dict[str, Any]:
         """
         执行Node.js代码
 
@@ -232,7 +234,7 @@ class OptimizedExecutionManager:
             modules=modules,
         )
 
-    def get_execution_history(self, execution_id: str) -> Optional[Dict[str, Any]]:
+    def get_execution_history(self, execution_id: str) -> dict[str, Any] | None:
         """
         获取执行历史
 
@@ -261,14 +263,14 @@ class OptimizedExecutionManager:
         """清空执行历史"""
         self._execution_history.clear()
 
-    def get_pool_stats(self) -> Dict[str, Any]:
+    def get_pool_stats(self) -> dict[str, Any]:
         """获取容器池统计信息"""
         return {
             "python_pool": self.python_pool.get_stats(),
             "nodejs_pool": self.nodejs_pool.get_stats(),
         }
 
-    def get_detailed_stats(self) -> Dict[str, Any]:
+    def get_detailed_stats(self) -> dict[str, Any]:
         """获取详细的统计信息"""
         return {
             "python_pool": {

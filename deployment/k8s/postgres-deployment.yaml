@@ -19,9 +19,10 @@ spec:
       terminationGracePeriodSeconds: 60
       containers:
       - name: postgres
-        image: postgres:16-alpine
+        # P1: 使用 pgvector 镜像以支持向量扩展
+        image: pgvector/pgvector:pg16
         lifecycle:
-          # P1-16: postgres:16-alpine 基于 busybox, 内置 /bin/sh 与 sleep
+          # P1-16: pgvector/pgvector:pg16 基于 debian, 内置 /bin/sh 与 sleep
           preStop:
             exec:
               command:

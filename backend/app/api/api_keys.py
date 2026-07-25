@@ -11,27 +11,26 @@ Provides REST API for:
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
-from typing import Any, Optional
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
 
+from backend.app.core.access_control import PermissionChecker
 from backend.app.core.api_key_manager import (
+    AnomalyAlert,
     APIKeyConfig,
     APIKeyManager,
-    AnomalyAlert,
-    AnomalyType,
     AuditEntry,
     IPWhitelist,
     PermissionLevel,
     RateLimitConfig,
 )
-from backend.app.core.access_control import PermissionChecker
 
 router = APIRouter(prefix="/api/v1/api-keys", tags=["api-keys"])
 
 # Global API key manager instance
-_api_key_manager: Optional[APIKeyManager] = None
+_api_key_manager: APIKeyManager | None = None
 
 
 def get_api_key_manager() -> APIKeyManager:
@@ -58,7 +57,7 @@ class CreateAPIKeyRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     permissions: list[str] = Field(default_factory=list)
     expires_in_days: int = Field(default=90, ge=1, le=365)
-    description: Optional[str] = None
+    description: str | None = None
     tags: list[str] = Field(default_factory=list)
 
 
@@ -78,28 +77,28 @@ class APIKeyConfigResponse(BaseModel):
     permissions: list[str]
     status: str
     created_at: datetime
-    expires_at: Optional[datetime]
-    last_used_at: Optional[datetime]
+    expires_at: datetime | None
+    last_used_at: datetime | None
     total_requests: int
     failed_requests: int
 
 
 class UpdateAPIKeyRequest(BaseModel):
     """Request to update API key."""
-    name: Optional[str] = None
-    permissions: Optional[list[str]] = None
-    rate_limit: Optional[dict[str, int]] = None
-    ip_whitelist: Optional[dict[str, Any]] = None
+    name: str | None = None
+    permissions: list[str] | None = None
+    rate_limit: dict[str, int] | None = None
+    ip_whitelist: dict[str, Any] | None = None
 
 
 class RotateAPIKeyRequest(BaseModel):
     """Request to rotate API key."""
-    reason: Optional[str] = None
+    reason: str | None = None
 
 
 class RevokeAPIKeyRequest(BaseModel):
     """Request to revoke API key."""
-    reason: Optional[str] = None
+    reason: str | None = None
 
 
 class AuditLogResponse(BaseModel):
@@ -110,9 +109,9 @@ class AuditLogResponse(BaseModel):
     key_prefix: str
     actor_id: str
     actor_type: str
-    ip_address: Optional[str]
+    ip_address: str | None
     success: bool
-    error_message: Optional[str]
+    error_message: str | None
 
 
 class AnomalyAlertResponse(BaseModel):
@@ -122,7 +121,7 @@ class AnomalyAlertResponse(BaseModel):
     anomaly_type: str
     severity: str
     description: str
-    recommended_action: Optional[str]
+    recommended_action: str | None
 
 
 class KeyUsageStatsResponse(BaseModel):
@@ -131,11 +130,11 @@ class KeyUsageStatsResponse(BaseModel):
     name: str
     total_requests: int
     failed_requests: int
-    last_used_at: Optional[datetime]
-    last_ip: Optional[str]
+    last_used_at: datetime | None
+    last_ip: str | None
     created_at: datetime
-    expires_at: Optional[datetime]
-    days_until_expiry: Optional[int]
+    expires_at: datetime | None
+    days_until_expiry: int | None
 
 
 # ============================================================================
@@ -205,7 +204,7 @@ async def create_api_key(
     checker.require_permission(request, PermissionLevel.SECURITY_MANAGE)
 
     principal = request.state.principal
-    config = getattr(request.state, "api_key_config")
+    config = request.state.api_key_config
 
     # Convert permission strings to PermissionLevel enums
     permissions = []
@@ -237,7 +236,7 @@ async def create_api_key(
 @router.get("", response_model=list[APIKeyConfigResponse])
 async def list_api_keys(
     request: Request,
-    status_filter: Optional[str] = Query(None, alias="status"),
+    status_filter: str | None = Query(None, alias="status"),
     manager: APIKeyManager = Depends(get_api_key_manager),
     checker: PermissionChecker = Depends(get_permission_checker),
 ) -> list[APIKeyConfigResponse]:
@@ -311,7 +310,7 @@ async def update_api_key(
         )
 
     principal = request.state.principal
-    actor_config = getattr(request.state, "api_key_config")
+    actor_config = request.state.api_key_config
 
     # Check ownership
     if config.tenant_id != principal.tenant_id:
@@ -380,7 +379,7 @@ async def rotate_api_key(
         )
 
     principal = request.state.principal
-    actor_config = getattr(request.state, "api_key_config")
+    actor_config = request.state.api_key_config
 
     # Check ownership
     if config.tenant_id != principal.tenant_id:
@@ -425,7 +424,7 @@ async def revoke_api_key(
         )
 
     principal = request.state.principal
-    actor_config = getattr(request.state, "api_key_config")
+    actor_config = request.state.api_key_config
 
     # Check ownership
     if config.tenant_id != principal.tenant_id:
@@ -466,7 +465,7 @@ async def delete_api_key(
         )
 
     principal = request.state.principal
-    actor_config = getattr(request.state, "api_key_config")
+    actor_config = request.state.api_key_config
 
     # Check ownership
     if config.tenant_id != principal.tenant_id:
@@ -550,7 +549,7 @@ async def get_key_audit_log(
 async def get_key_anomalies(
     request: Request,
     key_id: str,
-    severity: Optional[str] = Query(None),
+    severity: str | None = Query(None),
     limit: int = Query(100, ge=1, le=1000),
     manager: APIKeyManager = Depends(get_api_key_manager),
     checker: PermissionChecker = Depends(get_permission_checker),

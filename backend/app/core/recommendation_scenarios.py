@@ -12,8 +12,8 @@ Provides:
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
-from enum import Enum
+from datetime import UTC, datetime
+from enum import StrEnum
 from threading import RLock
 from typing import Any
 from uuid import uuid4
@@ -22,14 +22,13 @@ from pydantic import BaseModel, Field
 
 from backend.app.core.personalization import (
     FeedbackStore,
-    ItemCatalog,
     PreferenceStore,
     RecommendationEngine,
     RecommendationType,
 )
 
 
-class TaskType(str, Enum):
+class TaskType(StrEnum):
     """Types of tasks."""
     DATA_PROCESSING = "data_processing"
     WEB_SCRAPING = "web_scraping"
@@ -39,7 +38,7 @@ class TaskType(str, Enum):
     REPORTING = "reporting"
 
 
-class ProjectType(str, Enum):
+class ProjectType(StrEnum):
     """Types of projects."""
     DATA_SCIENCE = "data_science"
     WEB_DEVELOPMENT = "web_development"
@@ -289,7 +288,7 @@ class PluginRecommender:
                     "plugin_id": plugin.id,
                     "name": plugin.name,
                     "score": score,
-                    "reason": f"Provides required features",
+                    "reason": "Provides required features",
                     "features": [tag for tag in plugin.tags if tag in required_features],
                 }
                 for plugin, score in sorted_plugins

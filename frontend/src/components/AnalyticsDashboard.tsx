@@ -2,8 +2,6 @@
 
 import React, { useState, useEffect } from 'react';
 import {
-  LineChart,
-  Line,
   BarChart,
   Bar,
   PieChart,
@@ -13,7 +11,6 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  Legend,
   ResponsiveContainer,
 } from 'recharts';
 

@@ -9,7 +9,7 @@ import asyncio
 import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import Any, Callable
+from typing import Any
 
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
@@ -89,7 +89,7 @@ class QueryBatcher:
         )
 
         # Resolve futures
-        for future, result in zip(futures, results):
+        for future, result in zip(futures, results, strict=False):
             if isinstance(result, Exception):
                 future.set_exception(result)
             else:
@@ -252,7 +252,7 @@ class QueryResultCache:
 
     def invalidate(self, pattern: str) -> None:
         """Invalidate cache entries matching pattern."""
-        keys_to_delete = [k for k in self._cache.keys() if pattern in k]
+        keys_to_delete = [k for k in self._cache if pattern in k]
         for key in keys_to_delete:
             del self._cache[key]
 

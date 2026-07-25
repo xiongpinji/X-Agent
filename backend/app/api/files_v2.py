@@ -6,19 +6,20 @@ SECURITY: 所有错误信息都通过 SafeErrorResponse 进行处理，防止敏
 """
 
 import logging
-from typing import Annotated
 from pathlib import Path
+from typing import Annotated
+
 from fastapi import APIRouter, Depends, HTTPException
 
+from backend.app.core.error_handling import ErrorCategory, SafeErrorResponse
 from backend.app.core.file_operations import (
     DocumentProcessor,
-    ImageProcessor,
     FileConverter,
+    ImageProcessor,
 )
 from backend.app.core.path_mapper import PathMapper
-from backend.app.core.error_handling import SafeErrorResponse, ErrorCategory
-from backend.app.dependencies import get_current_principal, enforce_scope
 from backend.app.core.security import Principal
+from backend.app.dependencies import enforce_scope, get_current_principal
 from backend.app.settings import get_settings
 
 router = APIRouter(prefix="/api/v1/files", tags=["files"])

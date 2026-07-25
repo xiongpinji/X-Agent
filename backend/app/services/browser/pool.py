@@ -8,18 +8,17 @@ and automatic cleanup.
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import time
 from dataclasses import dataclass, field
-from enum import Enum
-from typing import Optional, Any, List
+from enum import StrEnum
+from typing import Any
 from uuid import uuid4
 
 logger = logging.getLogger(__name__)
 
 
-class PoolStatus(str, Enum):
+class PoolStatus(StrEnum):
     """Status of browser pool."""
     IDLE = "idle"
     ACTIVE = "active"
@@ -81,13 +80,13 @@ class BrowserPool:
         self.idle_timeout = idle_timeout
         self.logger = logger
 
-        self.browsers: List[PooledBrowser] = []
+        self.browsers: list[PooledBrowser] = []
         self.sessions: dict[str, Any] = {}
         self.status = PoolStatus.IDLE
         self.created_at = time.time()
         self.total_errors = 0
 
-    async def acquire_browser(self) -> Optional[PooledBrowser]:
+    async def acquire_browser(self) -> PooledBrowser | None:
         """
         Acquire a browser from the pool.
 
@@ -227,7 +226,7 @@ class BrowserPool:
             self.logger.error(f"Failed to close all browsers: {e}")
             return False
 
-    async def _create_browser(self) -> Optional[PooledBrowser]:
+    async def _create_browser(self) -> PooledBrowser | None:
         """Create a new browser instance."""
         try:
             from playwright.async_api import async_playwright
@@ -278,7 +277,7 @@ class BrowserPool:
             uptime=uptime,
         )
 
-    def get_browser_info(self, browser_id: str) -> Optional[dict]:
+    def get_browser_info(self, browser_id: str) -> dict | None:
         """Get information about a specific browser."""
         for browser in self.browsers:
             if browser.browser_id == browser_id:
@@ -341,7 +340,7 @@ class BrowserPoolManager:
         self.logger.info(f"Created pool {pool_id}")
         return pool
 
-    def get_pool(self, pool_id: str) -> Optional[BrowserPool]:
+    def get_pool(self, pool_id: str) -> BrowserPool | None:
         """Get a browser pool."""
         return self.pools.get(pool_id)
 
@@ -381,6 +380,6 @@ def create_browser_pool(
     return pool_manager.create_pool(pool_id, max_browsers, **kwargs)
 
 
-def get_browser_pool(pool_id: str) -> Optional[BrowserPool]:
+def get_browser_pool(pool_id: str) -> BrowserPool | None:
     """Get a browser pool."""
     return pool_manager.get_pool(pool_id)

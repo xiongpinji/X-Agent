@@ -28,8 +28,8 @@ Usage:
 """
 
 from backend.app.core.agent_v2.agent_executor import AgentExecutor
-from backend.app.core.agent_v2.phase_context import PhaseContext
 from backend.app.core.agent_v2.execution_phase import ExecutionPhase as ExecutionPhaseBase
+from backend.app.core.agent_v2.phase_context import PhaseContext
 from backend.app.core.agent_v2.phases import (
     CompletionPhase,
     ExecutionPhase,

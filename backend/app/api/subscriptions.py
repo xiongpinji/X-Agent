@@ -3,17 +3,16 @@
 """
 from __future__ import annotations
 
-from typing import Annotated, Optional
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from backend.app.api.errors import api_error
-from backend.app.api.pagination import PaginationParams, apply_pagination
 from backend.app.core.contracts import ErrorCode
 from backend.app.core.security import Principal
-from backend.app.dependencies import enforce_scope, get_current_principal
-from backend.app.models.subscription import SubscriptionPlan, SubscriptionStatus
+from backend.app.dependencies import get_current_principal
+from backend.app.models.subscription import SubscriptionPlan
 from backend.app.services.subscription import get_subscription_service
 
 router = APIRouter(prefix="/api/v1/subscriptions", tags=["subscriptions"])
@@ -48,12 +47,12 @@ class SubscriptionResponse(BaseModel):
     price_per_month: float
     currency: str
     created_at: str
-    started_at: Optional[str]
+    started_at: str | None
     current_period_start: str
     current_period_end: str
-    trial_end: Optional[str]
-    cancelled_at: Optional[str]
-    paused_at: Optional[str]
+    trial_end: str | None
+    cancelled_at: str | None
+    paused_at: str | None
     auto_renew: bool
     renewal_failed_count: int
 
@@ -78,11 +77,11 @@ class SubscriptionHistoryResponse(BaseModel):
     history_id: str
     subscription_id: str
     event_type: str
-    old_plan: Optional[str]
-    new_plan: Optional[str]
-    old_status: Optional[str]
-    new_status: Optional[str]
-    details: Optional[str]
+    old_plan: str | None
+    new_plan: str | None
+    old_status: str | None
+    new_status: str | None
+    details: str | None
     created_at: str
 
 
@@ -129,7 +128,7 @@ async def create_subscription(
             "auto_renew": subscription.auto_renew,
         }
     except Exception as e:
-        logger.error(f"创建订阅失败: {str(e)}")
+        logger.error(f"创建订阅失败: {e!s}")
         raise api_error(
             500,
             ErrorCode.INTERNAL_ERROR,
@@ -195,7 +194,7 @@ async def get_subscription(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"获取订阅失败: {str(e)}")
+        logger.error(f"获取订阅失败: {e!s}")
         raise api_error(
             500,
             ErrorCode.INTERNAL_ERROR,
@@ -250,7 +249,7 @@ async def list_subscriptions(
             "total": len(subscriptions),
         }
     except Exception as e:
-        logger.error(f"列出订阅失败: {str(e)}")
+        logger.error(f"列出订阅失败: {e!s}")
         raise api_error(
             500,
             ErrorCode.INTERNAL_ERROR,
@@ -318,7 +317,7 @@ async def upgrade_subscription(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"升级订阅失败: {str(e)}")
+        logger.error(f"升级订阅失败: {e!s}")
         raise api_error(
             500,
             ErrorCode.INTERNAL_ERROR,
@@ -386,7 +385,7 @@ async def downgrade_subscription(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"降级订阅失败: {str(e)}")
+        logger.error(f"降级订阅失败: {e!s}")
         raise api_error(
             500,
             ErrorCode.INTERNAL_ERROR,
@@ -441,7 +440,7 @@ async def pause_subscription(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"暂停订阅失败: {str(e)}")
+        logger.error(f"暂停订阅失败: {e!s}")
         raise api_error(
             500,
             ErrorCode.INTERNAL_ERROR,
@@ -495,7 +494,7 @@ async def resume_subscription(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"恢复订阅失败: {str(e)}")
+        logger.error(f"恢复订阅失败: {e!s}")
         raise api_error(
             500,
             ErrorCode.INTERNAL_ERROR,
@@ -550,7 +549,7 @@ async def cancel_subscription(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"取消订阅失败: {str(e)}")
+        logger.error(f"取消订阅失败: {e!s}")
         raise api_error(
             500,
             ErrorCode.INTERNAL_ERROR,
@@ -636,7 +635,7 @@ async def get_quota(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"获取配额失败: {str(e)}")
+        logger.error(f"获取配额失败: {e!s}")
         raise api_error(
             500,
             ErrorCode.INTERNAL_ERROR,
@@ -706,7 +705,7 @@ async def get_subscription_history(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"获取订阅历史失败: {str(e)}")
+        logger.error(f"获取订阅历史失败: {e!s}")
         raise api_error(
             500,
             ErrorCode.INTERNAL_ERROR,

@@ -2,13 +2,11 @@
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
-from typing import Any, Optional
 from difflib import SequenceMatcher
 
 try:
-    from playwright.async_api import Page, Locator
+    from playwright.async_api import Locator, Page
 except ImportError:
     Page = Locator = object  # type: ignore[assignment]
 
@@ -20,8 +18,8 @@ class LocatedElement:
     selector: str
     confidence: float
     reason: str
-    text: Optional[str] = None
-    tag_name: Optional[str] = None
+    text: str | None = None
+    tag_name: str | None = None
 
 
 class NaturalLocator:
@@ -30,7 +28,7 @@ class NaturalLocator:
     def __init__(self, page: Page | None = None):
         self.page = page
 
-    async def find_element(self, page: Page, description: str) -> Optional[LocatedElement]:
+    async def find_element(self, page: Page, description: str) -> LocatedElement | None:
         """Find a single element matching the description."""
         self.page = page
         elements = await self.find_elements(page, description, limit=1)

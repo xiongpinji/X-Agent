@@ -1,9 +1,14 @@
-// mobile/eas.json
-// EAS Build配置
-
 {
+  "cli": {
+    "version": ">= 5.9.0"
+  },
   "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal"
+    },
     "preview": {
+      "distribution": "internal",
       "android": {
         "buildType": "apk"
       },
@@ -11,35 +16,16 @@
         "simulator": true
       }
     },
-    "preview2": {
-      "android": {
-        "gradleCommand": ":app:assembleRelease"
-      }
-    },
-    "preview3": {
-      "developmentClient": true
-    },
     "production": {
       "android": {
-        "buildType": "apk",
-        "gradleCommand": ":app:bundleRelease"
+        "buildType": "app-bundle"
       },
       "ios": {
-        "buildType": "archive"
+        "buildType": "release"
       }
     }
   },
   "submit": {
-    "production": {
-      "ios": {
-        "appleId": "your-apple-id@example.com",
-        "ascAppId": "your-app-id",
-        "appleTeamId": "your-team-id"
-      },
-      "android": {
-        "serviceAccount": "path/to/service-account.json",
-        "track": "production"
-      }
-    }
+    "production": {}
   }
 }

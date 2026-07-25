@@ -3,9 +3,9 @@ OCR处理器 - 文字识别和提取
 """
 
 import logging
-from typing import Any, Dict, List, Optional
-from dataclasses import dataclass
 import time
+from dataclasses import dataclass
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +16,7 @@ class TextRegion:
     text: str
     confidence: float
     bbox: tuple  # (x1, y1, x2, y2)
-    language: Optional[str] = None
+    language: str | None = None
 
 
 class OCRProcessor:
@@ -31,13 +31,13 @@ class OCRProcessor:
     def _initialize_engines(self) -> None:
         """初始化OCR引擎"""
         try:
-            import pytesseract
+            import pytesseract  # noqa: F401
             self._tesseract_available = True
         except ImportError:
             logger.warning("pytesseract not installed, Tesseract OCR disabled")
 
         try:
-            from paddleocr import PaddleOCR
+            from paddleocr import PaddleOCR  # noqa: F401
             self._paddleocr_available = True
         except ImportError:
             logger.warning("paddleocr not installed, PaddleOCR disabled")
@@ -47,7 +47,7 @@ class OCRProcessor:
         image_path: str,
         language: str = "eng",
         **kwargs
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """提取文本"""
         start_time = time.time()
 
@@ -75,7 +75,7 @@ class OCRProcessor:
         image_path: str,
         language: str,
         **kwargs
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """使用Tesseract提取文本"""
         if not self._tesseract_available:
             return {"success": False, "error": "Tesseract not installed"}
@@ -130,7 +130,7 @@ class OCRProcessor:
         self,
         image_path: str,
         **kwargs
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """使用PaddleOCR提取文本"""
         if not self._paddleocr_available:
             return {"success": False, "error": "PaddleOCR not installed"}
@@ -175,7 +175,7 @@ class OCRProcessor:
         self,
         image_path: str,
         **kwargs
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """提取保留布局的文本"""
         try:
             import pytesseract
@@ -201,11 +201,11 @@ class OCRProcessor:
         self,
         image_path: str,
         **kwargs
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """提取手写文本"""
         try:
-            from PIL import Image
             import pytesseract
+            from PIL import Image
 
             image = Image.open(image_path)
             # 使用特殊配置处理手写文本

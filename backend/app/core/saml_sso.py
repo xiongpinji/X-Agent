@@ -27,8 +27,8 @@ import uuid
 import zlib
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
-from enum import Enum
-from typing import Any, Dict, List, Optional, Protocol, Tuple
+from enum import StrEnum
+from typing import Any, Protocol
 from urllib.parse import urlencode
 
 from pydantic import BaseModel, Field
@@ -105,18 +105,19 @@ class SAMLSupportError(SSOError):
 # 枚举与配置模型
 # ============================================================================
 
-class SSOProvider(str, Enum):
+class SSOProvider(StrEnum):
     """支持的 SSO 提供方类型。"""
 
     SAML = "saml"
     OAUTH2 = "oauth2"
     OIDC = "oidc"
+    LDAP = "ldap"
     AZURE_AD = "azure_ad"
     OKTA = "okta"
     GOOGLE = "google"
 
 
-class SAMLNameIDFormat(str, Enum):
+class SAMLNameIDFormat(StrEnum):
     """SAML NameID 格式。"""
 
     PERSISTENT = "urn:oasis:names:tc:SAML:1.1:nameid-format:persistent"
@@ -125,7 +126,7 @@ class SAMLNameIDFormat(str, Enum):
     UNSPECIFIED = "urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified"
 
 
-class SAMLBindingType(str, Enum):
+class SAMLBindingType(StrEnum):
     """SAML 绑定类型。"""
 
     HTTP_POST = "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST"
@@ -133,7 +134,7 @@ class SAMLBindingType(str, Enum):
     HTTP_ARTIFACT = "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Artifact"
 
 
-class OIDCScope(str, Enum):
+class OIDCScope(StrEnum):
     """OpenID Connect scopes。"""
 
     OPENID = "openid"
@@ -148,19 +149,19 @@ class SAMLConfig(BaseModel):
 
     idp_entity_id: str = Field(..., description="IdP Entity ID")
     idp_sso_url: str = Field(..., description="IdP Single Sign-On URL")
-    idp_slo_url: Optional[str] = Field(None, description="IdP Single Logout URL")
+    idp_slo_url: str | None = Field(None, description="IdP Single Logout URL")
     idp_certificate: str = Field(..., description="IdP X.509 certificate (PEM)")
 
     sp_entity_id: str = Field(..., description="SP Entity ID")
     sp_acs_url: str = Field(..., description="SP Assertion Consumer Service URL")
-    sp_slo_url: Optional[str] = Field(None, description="SP Single Logout URL")
-    sp_certificate: Optional[str] = Field(None, description="SP X.509 certificate (PEM)")
-    sp_private_key: Optional[str] = Field(None, description="SP private key (PEM)")
+    sp_slo_url: str | None = Field(None, description="SP Single Logout URL")
+    sp_certificate: str | None = Field(None, description="SP X.509 certificate (PEM)")
+    sp_private_key: str | None = Field(None, description="SP private key (PEM)")
 
     name_id_format: SAMLNameIDFormat = SAMLNameIDFormat.PERSISTENT
     binding_type: SAMLBindingType = SAMLBindingType.HTTP_POST
 
-    attribute_mappings: Dict[str, str] = Field(
+    attribute_mappings: dict[str, str] = Field(
         default_factory=lambda: {
             "uid": "urn:oid:0.9.2342.19200300.100.1.3",
             "email": "urn:oid:0.9.2342.19200300.100.1.3",
@@ -186,12 +187,12 @@ class OIDCConfig(BaseModel):
     client_secret: str = Field(..., description="OAuth 2.0 Client Secret")
     redirect_uri: str = Field(..., description="授权回调 URI")
 
-    scopes: List[str] = Field(
+    scopes: list[str] = Field(
         default_factory=lambda: ["openid", "profile", "email"],
         description="请求的 scope 列表",
     )
 
-    claim_mappings: Dict[str, str] = Field(
+    claim_mappings: dict[str, str] = Field(
         default_factory=lambda: {
             "sub": "uid",
             "email": "email",
@@ -227,7 +228,7 @@ class SAMLAssertion(BaseModel):
     not_before: datetime
     not_on_or_after: datetime
     session_index: str
-    attributes: Dict[str, List[str]]
+    attributes: dict[str, list[str]]
     signature_valid: bool
     encrypted: bool
 
@@ -238,8 +239,8 @@ class OIDCToken(BaseModel):
     access_token: str
     token_type: str = "Bearer"
     expires_in: int
-    refresh_token: Optional[str] = None
-    id_token: Optional[str] = None
+    refresh_token: str | None = None
+    id_token: str | None = None
     scope: str = ""
 
 
@@ -249,8 +250,8 @@ class SSOUser(BaseModel):
     uid: str = Field(..., description="IdP 侧唯一用户标识 (sub)")
     email: str = Field(..., description="用户邮箱")
     name: str = Field(default="", description="显示名")
-    groups: List[str] = Field(default_factory=list)
-    attributes: Dict[str, Any] = Field(default_factory=dict)
+    groups: list[str] = Field(default_factory=list)
+    attributes: dict[str, Any] = Field(default_factory=dict)
     provider: SSOProvider = SSOProvider.OIDC
     provider_user_id: str = ""
     email_verified: bool = False
@@ -289,7 +290,7 @@ def _b64url_decode(data: str) -> bytes:
     return base64.urlsafe_b64decode(data + padding)
 
 
-def _decode_jwt_parts(token: str) -> Tuple[Dict[str, Any], Dict[str, Any], bytes, bytes]:
+def _decode_jwt_parts(token: str) -> tuple[dict[str, Any], dict[str, Any], bytes, bytes]:
     """拆分 JWT, 返回 (header, payload, signature, signing_input)。"""
     try:
         header_b64, payload_b64, signature_b64 = token.split(".")
@@ -304,9 +305,9 @@ def _decode_jwt_parts(token: str) -> Tuple[Dict[str, Any], Dict[str, Any], bytes
 
 def _fallback_verify_signature(
     token: str,
-    jwks: Optional[Dict[str, Any]],
-    client_secret: Optional[str],
-) -> Dict[str, Any]:
+    jwks: dict[str, Any] | None,
+    client_secret: str | None,
+) -> dict[str, Any]:
     """无 authlib 时的内置验签 (仅 RS256/HS256), 其余算法显式报错。
 
     Returns:
@@ -340,10 +341,9 @@ def _fallback_verify_signature(
     keys = (jwks or {}).get("keys") or []
     jwk = None
     for candidate in keys:
-        if kid is None or candidate.get("kid") == kid:
-            if candidate.get("kty") == "RSA":
-                jwk = candidate
-                break
+        if (kid is None or candidate.get("kid") == kid) and candidate.get("kty") == "RSA":
+            jwk = candidate
+            break
     if jwk is None:
         raise SSOAuthenticationError(
             f"JWKS 中找不到匹配的 RSA 签名密钥 (kid={kid!r})。拒绝认证 (fail-closed)。"
@@ -366,9 +366,9 @@ def _fallback_verify_signature(
 def verify_jwt_signature(
     token: str,
     *,
-    jwks: Optional[Dict[str, Any]] = None,
-    client_secret: Optional[str] = None,
-) -> Dict[str, Any]:
+    jwks: dict[str, Any] | None = None,
+    client_secret: str | None = None,
+) -> dict[str, Any]:
     """验证 JWT 签名并返回 payload (不校验 iss/aud/exp — 由调用方校验)。
 
     验签后端优先级: joserfc → authlib.jose → 内置 RS256/HS256 实现。
@@ -427,15 +427,15 @@ def verify_jwt_signature(
 
 
 def validate_claims(
-    claims: Dict[str, Any],
+    claims: dict[str, Any],
     *,
-    issuer: Optional[str],
-    audience: Optional[str],
-    expected_nonce: Optional[str] = None,
+    issuer: str | None,
+    audience: str | None,
+    expected_nonce: str | None = None,
     validate_issuer: bool = True,
     validate_audience: bool = True,
     clock_skew: int = 60,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """校验 iss/aud/exp/nbf/nonce, 全部 fail-closed。"""
     now = int(time.time())
 
@@ -498,7 +498,7 @@ class OIDCStateEntry:
     provider_name: str
     redirect_uri: str
     created_at: float = field(default_factory=time.time)
-    extras: Dict[str, Any] = field(default_factory=dict)
+    extras: dict[str, Any] = field(default_factory=dict)
 
 
 class OIDCStateStore:
@@ -511,7 +511,7 @@ class OIDCStateStore:
     def __init__(self, ttl_seconds: int = 600, max_entries: int = 100_000):
         self._ttl = ttl_seconds
         self._max = max_entries
-        self._entries: Dict[str, OIDCStateEntry] = {}
+        self._entries: dict[str, OIDCStateEntry] = {}
         self._lock = threading.Lock()
 
     def create(
@@ -520,7 +520,7 @@ class OIDCStateStore:
         tenant_id: str,
         provider_name: str,
         redirect_uri: str,
-        extras: Optional[Dict[str, Any]] = None,
+        extras: dict[str, Any] | None = None,
     ) -> OIDCStateEntry:
         entry = OIDCStateEntry(
             state=secrets.token_urlsafe(32),
@@ -539,7 +539,7 @@ class OIDCStateStore:
             self._entries[entry.state] = entry
         return entry
 
-    def consume(self, state: str) -> Optional[OIDCStateEntry]:
+    def consume(self, state: str) -> OIDCStateEntry | None:
         """取出并销毁 state (一次性)。不存在/过期返回 None。"""
         with self._lock:
             entry = self._entries.pop(state, None)
@@ -549,7 +549,7 @@ class OIDCStateStore:
             return None
         return entry
 
-    def peek(self, state: str) -> Optional[OIDCStateEntry]:
+    def peek(self, state: str) -> OIDCStateEntry | None:
         with self._lock:
             return self._entries.get(state)
 
@@ -581,14 +581,14 @@ class OIDCManager:
         self.config = config
         self.logger = logging.getLogger(f"{__name__}.OIDCManager")
         self._http_client = http_client  # 可注入 httpx.AsyncClient (测试用 MockTransport)
-        self._discovery_cache: Optional[Dict[str, Any]] = None
+        self._discovery_cache: dict[str, Any] | None = None
         self._discovery_fetched_at: float = 0.0
-        self._jwks_cache: Optional[Dict[str, Any]] = None
+        self._jwks_cache: dict[str, Any] | None = None
         self._jwks_fetched_at: float = 0.0
 
     # ------------------------------------------------------------------ HTTP
 
-    async def _request(self, method: str, url: str, **kwargs: Any) -> Dict[str, Any]:
+    async def _request(self, method: str, url: str, **kwargs: Any) -> dict[str, Any]:
         import httpx
 
         timeout = kwargs.pop("timeout", self.config.http_timeout_seconds)
@@ -608,7 +608,7 @@ class OIDCManager:
 
     # ------------------------------------------------------------- discovery
 
-    async def get_discovery_document(self, *, force_refresh: bool = False) -> Dict[str, Any]:
+    async def get_discovery_document(self, *, force_refresh: bool = False) -> dict[str, Any]:
         """拉取 OIDC discovery 文档 (带 TTL 缓存)。"""
         now = time.time()
         if (
@@ -635,7 +635,7 @@ class OIDCManager:
 
     # ------------------------------------------------------------------ JWKS
 
-    async def get_jwks(self, *, force_refresh: bool = False) -> Dict[str, Any]:
+    async def get_jwks(self, *, force_refresh: bool = False) -> dict[str, Any]:
         """拉取 JWKS (带 TTL 缓存)。"""
         now = time.time()
         if (
@@ -661,7 +661,7 @@ class OIDCManager:
         state: str,
         nonce: str,
         *,
-        extra_params: Optional[Dict[str, str]] = None,
+        extra_params: dict[str, str] | None = None,
     ) -> str:
         """生成 OIDC 授权 URL (authorization_endpoint 取自 discovery)。"""
         discovery = await self.get_discovery_document()
@@ -669,7 +669,7 @@ class OIDCManager:
         if not auth_endpoint:
             raise SSOConfigurationError("discovery 文档缺少 authorization_endpoint。")
 
-        params: Dict[str, str] = {
+        params: dict[str, str] = {
             "client_id": self.config.client_id,
             "response_type": "code",
             "scope": " ".join(self.config.scopes),
@@ -690,12 +690,12 @@ class OIDCManager:
         if not token_endpoint:
             raise SSOConfigurationError("discovery 文档缺少 token_endpoint。")
 
-        data: Dict[str, str] = {
+        data: dict[str, str] = {
             "grant_type": "authorization_code",
             "code": code,
             "redirect_uri": self.config.redirect_uri,
         }
-        kwargs: Dict[str, Any] = {}
+        kwargs: dict[str, Any] = {}
         if self.config.token_endpoint_auth_method == "client_secret_post":
             data["client_id"] = self.config.client_id
             data["client_secret"] = self.config.client_secret
@@ -741,8 +741,8 @@ class OIDCManager:
         self,
         id_token: str,
         *,
-        expected_nonce: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        expected_nonce: str | None = None,
+    ) -> dict[str, Any]:
         """验签 + 校验 id_token, 返回 claims。全程 fail-closed。"""
         discovery = await self.get_discovery_document()
         issuer = discovery.get("issuer")
@@ -751,8 +751,8 @@ class OIDCManager:
         header, _, _, _ = _decode_jwt_parts(id_token)
         alg = str(header.get("alg") or "")
 
-        jwks: Optional[Dict[str, Any]] = None
-        secret: Optional[str] = None
+        jwks: dict[str, Any] | None = None
+        secret: str | None = None
         if alg.startswith("HS"):
             secret = self.config.client_secret
         else:
@@ -780,7 +780,7 @@ class OIDCManager:
 
     # --------------------------------------------------------------- userinfo
 
-    async def get_userinfo(self, access_token: str) -> Dict[str, Any]:
+    async def get_userinfo(self, access_token: str) -> dict[str, Any]:
         """调用 userinfo 端点 (真实 HTTP)。"""
         discovery = await self.get_discovery_document()
         userinfo_endpoint = discovery.get("userinfo_endpoint")
@@ -812,12 +812,12 @@ class OIDCManager:
         self,
         code: str,
         *,
-        expected_nonce: Optional[str] = None,
-    ) -> Tuple[SSOUser, OIDCToken]:
+        expected_nonce: str | None = None,
+    ) -> tuple[SSOUser, OIDCToken]:
         """完整认证: code → token → id_token 校验 → (userinfo 兜底) → SSOUser。"""
         token = await self.exchange_code_for_token(code)
 
-        claims: Dict[str, Any] = {}
+        claims: dict[str, Any] = {}
         if token.id_token:
             claims = await self.validate_id_token(token.id_token, expected_nonce=expected_nonce)
 
@@ -834,7 +834,7 @@ class OIDCManager:
 
         return self._to_sso_user(claims), token
 
-    def _to_sso_user(self, claims: Dict[str, Any]) -> SSOUser:
+    def _to_sso_user(self, claims: dict[str, Any]) -> SSOUser:
         mapping = self.config.claim_mappings
 
         def _get(field: str, default: Any = "") -> Any:
@@ -869,26 +869,26 @@ class UserRecord:
     user_id: str
     email: str
     tenant_id: str
-    full_name: Optional[str] = None
+    full_name: str | None = None
     role: str = "user"
     is_active: bool = True
     is_verified: bool = False
-    metadata: Dict[str, Any] = field(default_factory=dict)
-    created_at: Optional[str] = None
-    updated_at: Optional[str] = None
-    last_login_at: Optional[str] = None
+    metadata: dict[str, Any] = field(default_factory=dict)
+    created_at: str | None = None
+    updated_at: str | None = None
+    last_login_at: str | None = None
 
 
 class UserBackend(Protocol):
     """用户存储后端协议 (Postgres 桥 / 内存实现均满足)。"""
 
-    async def get_user_by_email(self, email: str, tenant_id: str) -> Optional[UserRecord]: ...
-    async def get_user_by_id(self, user_id: str) -> Optional[UserRecord]: ...
-    async def create_user(self, *, email: str, tenant_id: str, full_name: Optional[str],
-                          role: str, metadata: Dict[str, Any], password_hash: str) -> UserRecord: ...
-    async def update_user(self, user_id: str, **fields: Any) -> Optional[UserRecord]: ...
+    async def get_user_by_email(self, email: str, tenant_id: str) -> UserRecord | None: ...
+    async def get_user_by_id(self, user_id: str) -> UserRecord | None: ...
+    async def create_user(self, *, email: str, tenant_id: str, full_name: str | None,
+                          role: str, metadata: dict[str, Any], password_hash: str) -> UserRecord: ...
+    async def update_user(self, user_id: str, **fields: Any) -> UserRecord | None: ...
     async def deactivate_user(self, user_id: str) -> bool: ...
-    async def list_users(self, tenant_id: str, skip: int, limit: int) -> List[UserRecord]: ...
+    async def list_users(self, tenant_id: str, skip: int, limit: int) -> list[UserRecord]: ...
     async def count_users(self, tenant_id: str) -> int: ...
 
 
@@ -905,10 +905,10 @@ class InMemoryUserBackend:
     """
 
     def __init__(self) -> None:
-        self._users: Dict[str, UserRecord] = {}
+        self._users: dict[str, UserRecord] = {}
         self._lock = threading.Lock()
 
-    async def get_user_by_email(self, email: str, tenant_id: str) -> Optional[UserRecord]:
+    async def get_user_by_email(self, email: str, tenant_id: str) -> UserRecord | None:
         with self._lock:
             for user in self._users.values():
                 # email 全局唯一 (对齐 UserStoreModel.email unique 约束)
@@ -916,12 +916,12 @@ class InMemoryUserBackend:
                     return user
         return None
 
-    async def get_user_by_id(self, user_id: str) -> Optional[UserRecord]:
+    async def get_user_by_id(self, user_id: str) -> UserRecord | None:
         with self._lock:
             return self._users.get(user_id)
 
-    async def create_user(self, *, email: str, tenant_id: str, full_name: Optional[str],
-                          role: str, metadata: Dict[str, Any], password_hash: str) -> UserRecord:
+    async def create_user(self, *, email: str, tenant_id: str, full_name: str | None,
+                          role: str, metadata: dict[str, Any], password_hash: str) -> UserRecord:
         with self._lock:
             for user in self._users.values():
                 if user.email == email:
@@ -942,7 +942,7 @@ class InMemoryUserBackend:
             self._users[record.user_id] = record
             return record
 
-    async def update_user(self, user_id: str, **fields: Any) -> Optional[UserRecord]:
+    async def update_user(self, user_id: str, **fields: Any) -> UserRecord | None:
         allowed = {"full_name", "role", "is_active", "is_verified", "last_login_at", "metadata"}
         with self._lock:
             user = self._users.get(user_id)
@@ -958,7 +958,7 @@ class InMemoryUserBackend:
         user = await self.update_user(user_id, is_active=False)
         return user is not None
 
-    async def list_users(self, tenant_id: str, skip: int, limit: int) -> List[UserRecord]:
+    async def list_users(self, tenant_id: str, skip: int, limit: int) -> list[UserRecord]:
         with self._lock:
             users = [u for u in self._users.values() if u.tenant_id == tenant_id]
         return users[skip: skip + limit]
@@ -980,7 +980,7 @@ class _PostgresUserBackend:
 
     @staticmethod
     def _to_record(model: Any) -> UserRecord:
-        metadata: Dict[str, Any] = {}
+        metadata: dict[str, Any] = {}
         raw = getattr(model, "metadata_json", None)
         if raw:
             try:
@@ -1004,7 +1004,7 @@ class _PostgresUserBackend:
             last_login_at=last_login.isoformat() if hasattr(last_login, "isoformat") else None,
         )
 
-    async def get_user_by_email(self, email: str, tenant_id: str) -> Optional[UserRecord]:
+    async def get_user_by_email(self, email: str, tenant_id: str) -> UserRecord | None:
         try:
             model = await self._store.get_user_by_email(email, tenant_id)
         except SSOError:
@@ -1013,15 +1013,15 @@ class _PostgresUserBackend:
             raise SSOStorageError(f"查询用户失败 (email={email}): {exc}") from exc
         return self._to_record(model) if model is not None else None
 
-    async def get_user_by_id(self, user_id: str) -> Optional[UserRecord]:
+    async def get_user_by_id(self, user_id: str) -> UserRecord | None:
         try:
             model = await self._store.get_user_by_id(user_id)
         except Exception as exc:
             raise SSOStorageError(f"查询用户失败 (id={user_id}): {exc}") from exc
         return self._to_record(model) if model is not None else None
 
-    async def create_user(self, *, email: str, tenant_id: str, full_name: Optional[str],
-                          role: str, metadata: Dict[str, Any], password_hash: str) -> UserRecord:
+    async def create_user(self, *, email: str, tenant_id: str, full_name: str | None,
+                          role: str, metadata: dict[str, Any], password_hash: str) -> UserRecord:
         try:
             model = await self._store.create_user(
                 user_id=str(uuid.uuid4()),
@@ -1036,8 +1036,8 @@ class _PostgresUserBackend:
             raise SSOStorageError(f"创建用户失败 (email={email}): {exc}") from exc
         return self._to_record(model)
 
-    async def update_user(self, user_id: str, **fields: Any) -> Optional[UserRecord]:
-        kwargs: Dict[str, Any] = {}
+    async def update_user(self, user_id: str, **fields: Any) -> UserRecord | None:
+        kwargs: dict[str, Any] = {}
         for key, value in fields.items():
             if key == "metadata":
                 kwargs["metadata_json"] = value
@@ -1056,7 +1056,7 @@ class _PostgresUserBackend:
             raise SSOStorageError(f"停用用户失败 (id={user_id}): {exc}") from exc
         return model is not None
 
-    async def list_users(self, tenant_id: str, skip: int, limit: int) -> List[UserRecord]:
+    async def list_users(self, tenant_id: str, skip: int, limit: int) -> list[UserRecord]:
         try:
             models = await self._store.list_users(tenant_id=tenant_id, skip=skip, limit=limit)
         except Exception as exc:
@@ -1080,9 +1080,9 @@ class UserStoreAdapter:
     - Postgres 后端运行期错误一律抛 SSOStorageError (显式失败)。
     """
 
-    def __init__(self, backend: Optional[UserBackend] = None):
-        self._backend: Optional[UserBackend] = backend
-        self._mode: Optional[str] = None
+    def __init__(self, backend: UserBackend | None = None):
+        self._backend: UserBackend | None = backend
+        self._mode: str | None = None
         self._resolve_lock = threading.Lock()
 
     # ------------------------------------------------------------------ 解析
@@ -1124,15 +1124,15 @@ class UserStoreAdapter:
 
     # ------------------------------------------------------------------ 委托
 
-    async def get_user_by_email(self, email: str, tenant_id: str = "default") -> Optional[UserRecord]:
+    async def get_user_by_email(self, email: str, tenant_id: str = "default") -> UserRecord | None:
         return await self._resolve_backend().get_user_by_email(email, tenant_id)
 
-    async def get_user_by_id(self, user_id: str) -> Optional[UserRecord]:
+    async def get_user_by_id(self, user_id: str) -> UserRecord | None:
         return await self._resolve_backend().get_user_by_id(user_id)
 
-    async def create_user(self, *, email: str, tenant_id: str, full_name: Optional[str] = None,
-                          role: str = "user", metadata: Optional[Dict[str, Any]] = None,
-                          password_hash: Optional[str] = None) -> UserRecord:
+    async def create_user(self, *, email: str, tenant_id: str, full_name: str | None = None,
+                          role: str = "user", metadata: dict[str, Any] | None = None,
+                          password_hash: str | None = None) -> UserRecord:
         return await self._resolve_backend().create_user(
             email=email,
             tenant_id=tenant_id,
@@ -1142,7 +1142,7 @@ class UserStoreAdapter:
             password_hash=password_hash or f"{UNUSABLE_PASSWORD_HASH_PREFIX}{uuid.uuid4().hex}",
         )
 
-    async def update_user(self, user_id: str, **fields: Any) -> Optional[UserRecord]:
+    async def update_user(self, user_id: str, **fields: Any) -> UserRecord | None:
         return await self._resolve_backend().update_user(user_id, **fields)
 
     async def deactivate_user(self, user_id: str) -> bool:
@@ -1153,7 +1153,7 @@ class UserStoreAdapter:
         return user is not None
 
     async def list_users(self, tenant_id: str = "default", skip: int = 0,
-                         limit: int = 100) -> List[UserRecord]:
+                         limit: int = 100) -> list[UserRecord]:
         return await self._resolve_backend().list_users(tenant_id, skip, limit)
 
     async def count_users(self, tenant_id: str = "default") -> int:
@@ -1177,7 +1177,7 @@ class JITProvisionResult:
 class JITProvisioner:
     """JIT 用户 provisioning: 按 (email, tenant) 查找, 不存在则创建。"""
 
-    def __init__(self, adapter: Optional[UserStoreAdapter] = None):
+    def __init__(self, adapter: UserStoreAdapter | None = None):
         self.adapter = adapter or UserStoreAdapter()
 
     async def provision(
@@ -1201,7 +1201,7 @@ class JITProvisioner:
                 "provider_user_id": sso_user.uid,
                 "last_login": datetime.now(UTC).isoformat(),
             }
-            updates: Dict[str, Any] = {
+            updates: dict[str, Any] = {
                 "last_login_at": datetime.now(UTC),
                 "metadata": metadata,
             }
@@ -1348,7 +1348,7 @@ class SSOSessionManager:
     def __init__(self, session_timeout_minutes: int = 480, idle_timeout_minutes: int = 30):
         self.session_timeout_minutes = session_timeout_minutes
         self.idle_timeout_minutes = idle_timeout_minutes
-        self.sessions: Dict[str, SSOSession] = {}
+        self.sessions: dict[str, SSOSession] = {}
         self.logger = logging.getLogger(f"{__name__}.SSOSessionManager")
 
     def create_session(
@@ -1371,7 +1371,7 @@ class SSOSessionManager:
         self.logger.info("Created SSO session %s for user %s", session.session_id, user_id)
         return session
 
-    def get_session(self, session_id: str) -> Optional[SSOSession]:
+    def get_session(self, session_id: str) -> SSOSession | None:
         session = self.sessions.get(session_id)
         if session is None:
             return None
@@ -1406,10 +1406,10 @@ class MultiTenantSSOManager:
     """多租户 SSO 管理器。"""
 
     def __init__(self):
-        self.saml_configs: Dict[str, SAMLConfig] = {}
-        self.oidc_configs: Dict[str, OIDCConfig] = {}
-        self.saml_managers: Dict[str, SAMLManager] = {}
-        self.oidc_managers: Dict[str, OIDCManager] = {}
+        self.saml_configs: dict[str, SAMLConfig] = {}
+        self.oidc_configs: dict[str, OIDCConfig] = {}
+        self.saml_managers: dict[str, SAMLManager] = {}
+        self.oidc_managers: dict[str, OIDCManager] = {}
         self.session_manager = SSOSessionManager()
         self.state_store = OIDCStateStore()
         self.logger = logging.getLogger(f"{__name__}.MultiTenantSSOManager")
@@ -1446,13 +1446,13 @@ class MultiTenantSSOManager:
         )
         return manager
 
-    def get_saml_manager(self, tenant_id: str) -> Optional[SAMLManager]:
+    def get_saml_manager(self, tenant_id: str) -> SAMLManager | None:
         return self.saml_managers.get(tenant_id)
 
-    def get_oidc_manager(self, tenant_id: str) -> Optional[OIDCManager]:
+    def get_oidc_manager(self, tenant_id: str) -> OIDCManager | None:
         return self.oidc_managers.get(tenant_id)
 
-    def find_oidc_manager(self, provider_name: str, tenant_id: str) -> Optional[OIDCManager]:
+    def find_oidc_manager(self, provider_name: str, tenant_id: str) -> OIDCManager | None:
         """按 provider 名 + 租户查找 OIDC 管理器。"""
         manager = self.oidc_managers.get(tenant_id)
         if manager is not None and manager.config.provider_name == provider_name:
@@ -1464,15 +1464,15 @@ class MultiTenantSSOManager:
                 return candidate
         return None
 
-    def get_enabled_providers(self, tenant_id: str) -> List[SSOProvider]:
-        providers: List[SSOProvider] = []
+    def get_enabled_providers(self, tenant_id: str) -> list[SSOProvider]:
+        providers: list[SSOProvider] = []
         if tenant_id in self.saml_configs:
             providers.append(SSOProvider.SAML)
         if tenant_id in self.oidc_configs:
             providers.append(SSOProvider.OIDC)
         return providers
 
-    def list_oidc_providers(self) -> List[Dict[str, str]]:
+    def list_oidc_providers(self) -> list[dict[str, str]]:
         """列出已注册 OIDC 提供方 (脱敏: 不含 secret)。"""
         return [
             {

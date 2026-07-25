@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 from typing import Any
 from uuid import uuid4
 
@@ -148,10 +149,8 @@ class BrowserAutomationService:
         try:
             await automation.initialize(headless=headless)
         except Exception as exc:
-            try:
+            with contextlib.suppress(Exception):
                 await automation.close()
-            except Exception:
-                pass
             raise BrowserUnavailableError(f"Failed to launch browser backend: {exc}") from exc
         session = BrowserSession(
             session_id=str(uuid4()),
@@ -253,10 +252,8 @@ class BrowserAutomationService:
             return False
         automation = self._automation.pop(session_id, None)
         if automation is not None:
-            try:
+            with contextlib.suppress(Exception):
                 await automation.close()
-            except Exception:
-                pass
         session.active = False
         langfuse_client.log("browser.session_closed", session_id=session_id)
         return True

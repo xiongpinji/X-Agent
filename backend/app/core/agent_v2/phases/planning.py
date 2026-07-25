@@ -142,7 +142,6 @@ class PlanningPhase:
             Filtered plan with completed steps removed
         """
         trajectory = phase_ctx.trajectory
-        extra_context = phase_ctx.extra_context
         execution_frame = phase_ctx.execution_frame
 
         # Emit resume event
@@ -225,9 +224,9 @@ class PlanningPhase:
         Returns:
             Filtered plan
         """
-        completed_kinds = set(
+        completed_kinds = {
             str(kind) for kind in resume_payload.get("completed_kinds", [])
-        )
+        }
         return [
             step
             for step in plan

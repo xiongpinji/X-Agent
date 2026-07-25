@@ -32,6 +32,7 @@ def _production_kwargs(**overrides):
         "jwt_secret": _VALID_JWT,
         "encryption_key": _VALID_ENC,
         "audit_hmac_secret": "hmac-secret",
+        "redis_url": "redis://localhost:6379/0",
     }
     payload.update(overrides)
     return payload
@@ -58,7 +59,12 @@ class TestProductionStorageFailFast:
     def test_all_violations_listed_together(self):
         """多项违规一次性全部列出(清晰错误信息, 避免逐条修复反复重启)。"""
         with pytest.raises(ValidationError) as exc_info:
-            Settings(**_production_kwargs())  # 其余全部取默认(sqlite + memory 系)
+            Settings(**_production_kwargs(
+                database_url="sqlite:///./data/xagent.db",
+                memory_backend="memory",
+                trace_backend="memory",
+                admin_store_backend="memory",
+            ))
         message = str(exc_info.value)
         assert "database_url 指向 sqlite" in message
         assert "memory_backend" in message
@@ -73,8 +79,8 @@ class TestProductionStorageFailFast:
 
     def test_development_mode_unaffected(self):
         settings = Settings(app_mode="development")
-        assert settings.database_url.startswith("sqlite")
-        assert settings.admin_store_backend == "memory"
+        assert settings.app_mode == "development"
+        assert settings.admin_store_backend == "file"
 
     def test_invalid_admin_store_backend_value_rejected(self):
         with pytest.raises(ValidationError, match="Invalid admin_store_backend"):
@@ -101,6 +107,7 @@ class TestFailFastThroughEnvVars:
         monkeypatch.setenv("XAGENT_JWT_SECRET", _VALID_JWT)
         monkeypatch.setenv("XAGENT_ENCRYPTION_KEY", _VALID_ENC)
         monkeypatch.setenv("XAGENT_AUDIT_HMAC_SECRET", "hmac-secret")
+        monkeypatch.setenv("XAGENT_REDIS_URL", "redis://localhost:6379/0")
         monkeypatch.setenv("XAGENT_DATABASE_URL", "postgresql+asyncpg://u:p@db:5432/xagent")
         monkeypatch.setenv("XAGENT_MEMORY_BACKEND", "postgres")
         monkeypatch.setenv("XAGENT_TRACE_BACKEND", "postgres")

@@ -10,8 +10,7 @@ import logging
 from typing import Any
 
 from backend.app.core.cache import get_cache_manager
-from backend.app.core.contracts import RunContext
-from backend.app.core.memory import MemoryItem, MemoryScope, MemorySearchHit
+from backend.app.core.memory import MemoryItem, MemorySearchHit
 
 logger = logging.getLogger(__name__)
 

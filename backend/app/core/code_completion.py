@@ -12,13 +12,11 @@ This module provides advanced code completion capabilities including:
 
 from __future__ import annotations
 
-import json
 import logging
 import re
 from dataclasses import dataclass, field
 from enum import StrEnum
-from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 from uuid import uuid4
 
 logger = logging.getLogger(__name__)
@@ -53,13 +51,13 @@ class CompletionItem:
     """A single completion suggestion."""
     label: str
     kind: CompletionKind
-    detail: Optional[str] = None
-    documentation: Optional[str] = None
-    insert_text: Optional[str] = None
-    sort_text: Optional[str] = None
-    filter_text: Optional[str] = None
+    detail: str | None = None
+    documentation: str | None = None
+    insert_text: str | None = None
+    sort_text: str | None = None
+    filter_text: str | None = None
     score: float = 0.5  # 0.0 to 1.0
-    range: Optional[dict[str, int]] = None  # start, end positions
+    range: dict[str, int] | None = None  # start, end positions
     additional_edits: list[dict[str, Any]] = field(default_factory=list)
     is_snippet: bool = False
     snippet_params: list[str] = field(default_factory=list)
@@ -95,8 +93,8 @@ class CompletionContext:
     prefix: str = ""
     available_symbols: list[str] = field(default_factory=list)
     imported_modules: list[str] = field(default_factory=list)
-    current_scope: Optional[str] = None
-    parent_scope: Optional[str] = None
+    current_scope: str | None = None
+    parent_scope: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
@@ -120,7 +118,7 @@ class CompletionResult:
     """Result of code completion."""
     items: list[CompletionItem] = field(default_factory=list)
     is_incomplete: bool = False
-    context: Optional[CompletionContext] = None
+    context: CompletionContext | None = None
     completion_id: str = field(default_factory=lambda: str(uuid4()))
 
     def to_dict(self) -> dict[str, Any]:
@@ -507,7 +505,7 @@ class CodeCompletionEngine:
         members = members_map.get(language, {}).get(obj_name, [])
         return members
 
-    def _get_function_signature(self, func_name: str, language: str) -> Optional[str]:
+    def _get_function_signature(self, func_name: str, language: str) -> str | None:
         """Get function signature."""
         # Common function signatures
         signatures = {

@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-import json
 import hashlib
-from datetime import datetime, timedelta
-from typing import Optional
+import json
+from datetime import datetime
 
 from pydantic import BaseModel
 
@@ -38,7 +37,7 @@ class SearchCache:
         query_hash = hashlib.md5(query.lower().encode()).hexdigest()
         return f"{self.prefix}{provider}:{query_hash}"
 
-    async def get(self, query: str, provider: str) -> Optional[SearchResponse]:
+    async def get(self, query: str, provider: str) -> SearchResponse | None:
         """Get cached search result.
 
         Args:
@@ -84,7 +83,7 @@ class SearchCache:
         except Exception:
             return False
 
-    async def invalidate(self, query: str, provider: Optional[str] = None) -> int:
+    async def invalidate(self, query: str, provider: str | None = None) -> int:
         """Invalidate cache entries.
 
         Args:

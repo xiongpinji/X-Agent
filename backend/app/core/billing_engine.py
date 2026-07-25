@@ -7,14 +7,14 @@ from __future__ import annotations
 import logging
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
-from typing import Optional
 from uuid import uuid4
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.app.core.session import SessionManager
 from backend.app.models.billing import (
-    BillingModel,
+    BillingHistory,
     Invoice,
     InvoiceStatus,
     Payment,
@@ -25,9 +25,7 @@ from backend.app.models.billing import (
     Subscription,
     SubscriptionStatus,
     UsageMetrics,
-    BillingHistory,
 )
-from backend.app.core.session import SessionManager
 
 logger = logging.getLogger(__name__)
 
@@ -134,7 +132,7 @@ class BillingEngine:
         user_id: str,
         period_start: datetime,
         period_end: datetime,
-    ) -> Optional[Invoice]:
+    ) -> Invoice | None:
         """生成发票"""
         async with SessionManager.get_session() as session:
             # 获取订阅
@@ -237,8 +235,8 @@ class BillingEngine:
         amount: Decimal,
         payment_method: str,
         payment_method_id: str,
-        invoice_id: Optional[str] = None,
-    ) -> Optional[Payment]:
+        invoice_id: str | None = None,
+    ) -> Payment | None:
         """处理支付"""
         async with SessionManager.get_session() as session:
             # 创建支付记录
@@ -416,7 +414,7 @@ class BillingEngine:
 
     async def _get_active_subscription(
         self, tenant_id: str, user_id: str
-    ) -> Optional[Subscription]:
+    ) -> Subscription | None:
         """获取活跃订阅"""
         async with SessionManager.get_session() as session:
             stmt = select(Subscription).where(
@@ -427,7 +425,7 @@ class BillingEngine:
             result = await session.execute(stmt)
             return result.scalar_one_or_none()
 
-    async def _get_pricing_tier(self, tier_id: str) -> Optional[PricingTier]:
+    async def _get_pricing_tier(self, tier_id: str) -> PricingTier | None:
         """获取价格层级"""
         async with SessionManager.get_session() as session:
             return await session.get(PricingTier, tier_id)
@@ -476,7 +474,7 @@ class BillingEngine:
 
     async def _get_current_quota_usage(
         self, session: AsyncSession, subscription_id: str
-    ) -> Optional[QuotaUsage]:
+    ) -> QuotaUsage | None:
         """获取当前配额使用"""
         now = datetime.now(UTC)
         stmt = select(QuotaUsage).where(

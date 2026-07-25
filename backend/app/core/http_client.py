@@ -12,8 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import time
-from typing import Any, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -163,7 +162,7 @@ class HTTPClientManager:
                 self._stats["successful_requests"] += 1
                 return response
 
-            except asyncio.TimeoutError as e:
+            except TimeoutError as e:
                 last_error = e
                 if retry_count < self._max_retries:
                     retry_count += 1

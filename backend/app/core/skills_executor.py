@@ -2,21 +2,19 @@
 
 from __future__ import annotations
 
-import logging
 import asyncio
-from dataclasses import dataclass, field
-from datetime import datetime, UTC
+import logging
+from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Any
 
 from .skills_core import (
-    SkillMetadata,
     SkillExecutionContext,
     SkillExecutionResult,
-    SkillStatus,
 )
 from .skills_loader import get_skill_loader
 from .skills_registry import get_skill_registry
-from .skills_sandbox import get_sandbox_manager, ResourceLimits
+from .skills_sandbox import get_sandbox_manager
 
 logger = logging.getLogger(__name__)
 
@@ -96,10 +94,10 @@ class SkillExecutor:
             try:
                 await skill.initialize()
             except Exception as e:
-                logger.error(f"Skill initialization failed: {str(e)}", exc_info=True)
+                logger.error(f"Skill initialization failed: {e!s}", exc_info=True)
                 return SkillExecutionResult(
                     success=False,
-                    error=f"Skill initialization failed: {str(e)}",
+                    error=f"Skill initialization failed: {e!s}",
                 )
 
             # Execute skill
@@ -142,7 +140,7 @@ class SkillExecutor:
                             timeout=metadata.timeout_seconds,
                         )
                         context.output_data = output or {}
-                    except asyncio.TimeoutError:
+                    except TimeoutError:
                         return SkillExecutionResult(
                             success=False,
                             error=f"Skill execution timeout: {metadata.timeout_seconds}s",
@@ -155,7 +153,7 @@ class SkillExecutor:
                 try:
                     await skill.cleanup()
                 except Exception as e:
-                    logger.warning(f"Skill cleanup failed: {str(e)}")
+                    logger.warning(f"Skill cleanup failed: {e!s}")
 
                 # Record audit log
                 await self._record_audit_log(
@@ -186,7 +184,7 @@ class SkillExecutor:
                 context.status = "error"
                 context.error = str(e)
 
-                logger.error(f"Skill execution error: {str(e)}", exc_info=True)
+                logger.error(f"Skill execution error: {e!s}", exc_info=True)
 
                 # Record audit log
                 await self._record_audit_log(
@@ -211,10 +209,10 @@ class SkillExecutor:
                 )
 
         except Exception as e:
-            logger.error(f"Unexpected error in skill execution: {str(e)}", exc_info=True)
+            logger.error(f"Unexpected error in skill execution: {e!s}", exc_info=True)
             return SkillExecutionResult(
                 success=False,
-                error=f"Unexpected error: {str(e)}",
+                error=f"Unexpected error: {e!s}",
             )
 
     async def execute_skill_batch(
@@ -309,7 +307,7 @@ def get_skill_executor() -> SkillExecutor:
 
 
 __all__ = [
-    "SkillExecutor",
     "ExecutionAuditLog",
+    "SkillExecutor",
     "get_skill_executor",
 ]

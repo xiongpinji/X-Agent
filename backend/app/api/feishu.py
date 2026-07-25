@@ -7,8 +7,8 @@ from pydantic import BaseModel, Field
 
 from backend.app.api.errors import api_error
 from backend.app.core.contracts import ErrorCode
-from backend.app.core.security import Principal
 from backend.app.core.feishu_bridge import feishu_bridge
+from backend.app.core.security import Principal
 from backend.app.dependencies import enforce_scope, get_current_principal
 
 router = APIRouter(prefix="/api/v1/integrations/feishu", tags=["feishu"])

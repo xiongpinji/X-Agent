@@ -8,12 +8,11 @@ with existing tools.py.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional
 
-from backend.app.core.workspace_manager import WorkspaceManager, WorkspaceConfig
-from backend.app.core.path_mapper import PathMapper
-from backend.app.core.mount_manager import MountManager
 from backend.app.core.file_access_control import FileAccessControl
+from backend.app.core.mount_manager import MountManager
+from backend.app.core.path_mapper import PathMapper
+from backend.app.core.workspace_manager import WorkspaceConfig, WorkspaceManager
 
 
 class FileSystemManager:
@@ -27,9 +26,9 @@ class FileSystemManager:
         self,
         workspace_base: Path,
         user_id: str,
-        workspace_storage_path: Optional[Path] = None,
-        mount_storage_path: Optional[Path] = None,
-        audit_path: Optional[Path] = None,
+        workspace_storage_path: Path | None = None,
+        mount_storage_path: Path | None = None,
+        audit_path: Path | None = None,
     ) -> None:
         """Initialize file system manager.
 
@@ -80,7 +79,7 @@ class FileSystemManager:
         # Fall back to workspace path
         return self.path_mapper.map_virtual_to_real(path, self.user_id)
 
-    def validate_read_access(self, path: str) -> tuple[bool, Optional[str]]:
+    def validate_read_access(self, path: str) -> tuple[bool, str | None]:
         """Validate read access to path.
 
         Args:
@@ -95,7 +94,7 @@ class FileSystemManager:
         except (ValueError, PermissionError) as e:
             return False, str(e)
 
-    def validate_write_access(self, path: str, size_bytes: int = 0) -> tuple[bool, Optional[str]]:
+    def validate_write_access(self, path: str, size_bytes: int = 0) -> tuple[bool, str | None]:
         """Validate write access to path.
 
         Args:
@@ -111,7 +110,7 @@ class FileSystemManager:
         except (ValueError, PermissionError) as e:
             return False, str(e)
 
-    def validate_delete_access(self, path: str) -> tuple[bool, Optional[str]]:
+    def validate_delete_access(self, path: str) -> tuple[bool, str | None]:
         """Validate delete access to path.
 
         Args:
@@ -131,7 +130,7 @@ class FileSystemManager:
         operation: str,
         path: str,
         success: bool,
-        reason: Optional[str] = None,
+        reason: str | None = None,
     ) -> None:
         """Record file operation for audit.
 
@@ -180,7 +179,7 @@ class FileSystemManager:
     def mount_directory(
         self,
         host_path: str,
-        mount_path: Optional[str] = None,
+        mount_path: str | None = None,
         read_only: bool = False,
     ) -> str:
         """Mount external directory.
@@ -263,7 +262,7 @@ class FileSystemManager:
 def create_file_system_manager(
     workspace_base: Path,
     user_id: str,
-    data_dir: Optional[Path] = None,
+    data_dir: Path | None = None,
 ) -> FileSystemManager:
     """Factory function to create file system manager.
 

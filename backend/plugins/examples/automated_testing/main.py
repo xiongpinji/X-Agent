@@ -5,20 +5,20 @@ Author: X-Agent Team
 Version: 1.0.0
 """
 
-from typing import Any, Dict, List, Optional
-from datetime import datetime, UTC
+from datetime import UTC, datetime
+from typing import Any
 
 
 class AutomatedTesting:
     """Automated testing plugin"""
 
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: dict[str, Any]):
         """Initialize plugin with configuration"""
         self.config = config
         self.name = "Automated Testing"
         self.version = "1.0.0"
 
-    def execute(self, action: str, params: Dict[str, Any]) -> Dict[str, Any]:
+    def execute(self, action: str, params: dict[str, Any]) -> dict[str, Any]:
         """Execute plugin action"""
         if action == "run_tests":
             return self._run_tests(params)
@@ -35,7 +35,7 @@ class AutomatedTesting:
         else:
             raise ValueError(f"Unknown action: {action}")
 
-    def _run_tests(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _run_tests(self, params: dict[str, Any]) -> dict[str, Any]:
         """Run all tests"""
         test_dir = params.get("test_dir", "./tests")
         framework = params.get("framework", "pytest")
@@ -54,9 +54,9 @@ class AutomatedTesting:
             },
         }
 
-    def _run_unit_tests(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _run_unit_tests(self, params: dict[str, Any]) -> dict[str, Any]:
         """Run unit tests"""
-        test_dir = params.get("test_dir", "./tests/unit")
+        params.get("test_dir", "./tests/unit")
 
         return {
             "status": "success",
@@ -70,9 +70,9 @@ class AutomatedTesting:
             },
         }
 
-    def _run_integration_tests(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _run_integration_tests(self, params: dict[str, Any]) -> dict[str, Any]:
         """Run integration tests"""
-        test_dir = params.get("test_dir", "./tests/integration")
+        params.get("test_dir", "./tests/integration")
 
         return {
             "status": "success",
@@ -96,9 +96,9 @@ class AutomatedTesting:
             },
         }
 
-    def _generate_coverage_report(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _generate_coverage_report(self, params: dict[str, Any]) -> dict[str, Any]:
         """Generate code coverage report"""
-        source_dir = params.get("source_dir", "./src")
+        params.get("source_dir", "./src")
 
         return {
             "status": "success",
@@ -115,9 +115,9 @@ class AutomatedTesting:
             },
         }
 
-    def _run_performance_tests(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _run_performance_tests(self, params: dict[str, Any]) -> dict[str, Any]:
         """Run performance tests"""
-        test_dir = params.get("test_dir", "./tests/performance")
+        params.get("test_dir", "./tests/performance")
 
         return {
             "status": "success",
@@ -144,7 +144,7 @@ class AutomatedTesting:
             },
         }
 
-    def _schedule_tests(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _schedule_tests(self, params: dict[str, Any]) -> dict[str, Any]:
         """Schedule tests to run"""
         schedule = params.get("schedule", "daily")
         test_type = params.get("test_type", "all")
@@ -180,13 +180,13 @@ class AutomatedTesting:
 plugin = None
 
 
-def initialize(config: Dict[str, Any]) -> None:
+def initialize(config: dict[str, Any]) -> None:
     """Initialize plugin"""
     global plugin
     plugin = AutomatedTesting(config)
 
 
-def execute(action: str, params: Dict[str, Any]) -> Dict[str, Any]:
+def execute(action: str, params: dict[str, Any]) -> dict[str, Any]:
     """Execute plugin action"""
     if plugin is None:
         raise RuntimeError("Plugin not initialized")

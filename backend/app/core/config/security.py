@@ -1,6 +1,5 @@
 """Security configuration module."""
 
-from typing import Optional
 
 from pydantic import Field, field_validator
 
@@ -57,11 +56,11 @@ class SecurityConfig(BaseConfig):
         default=False,
         description="Require API key for all requests",
     )
-    bootstrap_api_key: Optional[str] = Field(
+    bootstrap_api_key: str | None = Field(
         default=None,
         description="Bootstrap API key for initial setup (must be changed after first use)",
     )
-    bootstrap_api_key_sha256: Optional[str] = Field(
+    bootstrap_api_key_sha256: str | None = Field(
         default=None,
         description="SHA256 hash of bootstrap API key",
     )
@@ -137,11 +136,11 @@ class SecurityConfig(BaseConfig):
         default=False,
         description="Require HTTPS for all requests",
     )
-    ssl_cert_path: Optional[str] = Field(
+    ssl_cert_path: str | None = Field(
         default=None,
         description="Path to SSL certificate file",
     )
-    ssl_key_path: Optional[str] = Field(
+    ssl_key_path: str | None = Field(
         default=None,
         description="Path to SSL key file",
     )
@@ -154,14 +153,14 @@ class SecurityConfig(BaseConfig):
         if environment == Environment.PRODUCTION:
             default_jwt = "change-this-to-a-random-64-char-string"
             default_encryption = "change-this-to-32-char-hex-string"
-            if v == default_jwt or v == default_encryption:
+            if v in (default_jwt, default_encryption):
                 raise ValueError(
-                    f"CRITICAL SECURITY: Production secrets must be changed from defaults. "
-                    f"Set JWT_SECRET and ENCRYPTION_KEY environment variables to strong random values. "
-                    f"Generate using: python scripts/generate_secrets.py"
+                    "CRITICAL SECURITY: Production secrets must be changed from defaults. "
+                    "Set JWT_SECRET and ENCRYPTION_KEY environment variables to strong random values. "
+                    "Generate using: python scripts/generate_secrets.py"
                 )
             if len(v) < 32:
-                raise ValueError(f"Production secrets must be at least 32 characters long")
+                raise ValueError("Production secrets must be at least 32 characters long")
         return v
 
     @field_validator("cors_origins")

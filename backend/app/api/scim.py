@@ -32,7 +32,7 @@ import logging
 import os
 import re
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
@@ -56,8 +56,8 @@ SCIM_PATCH_SCHEMA = "urn:ietf:params:scim:api:messages:2.0:PatchOp"
 # SCIM 错误响应 (RFC 7644 §3.12)
 # ============================================================================
 
-def scim_error(status: int, detail: str, scim_type: Optional[str] = None) -> JSONResponse:
-    body: Dict[str, Any] = {
+def scim_error(status: int, detail: str, scim_type: str | None = None) -> JSONResponse:
+    body: dict[str, Any] = {
         "schemas": [SCIM_ERROR_SCHEMA],
         "status": str(status),
         "detail": detail,
@@ -70,7 +70,7 @@ def scim_error(status: int, detail: str, scim_type: Optional[str] = None) -> JSO
     return JSONResponse(status_code=status, content=body, media_type=SCIM_CONTENT_TYPE, headers=headers)
 
 
-def scim_json(body: Any, status: int = 200, headers: Optional[Dict[str, str]] = None) -> JSONResponse:
+def scim_json(body: Any, status: int = 200, headers: dict[str, str] | None = None) -> JSONResponse:
     return JSONResponse(status_code=status, content=body, media_type=SCIM_CONTENT_TYPE, headers=headers)
 
 
@@ -93,7 +93,7 @@ class SCIMTokenRegistry:
     """
 
     def __init__(self) -> None:
-        self._tokens: Dict[str, SCIMTokenInfo] = {}
+        self._tokens: dict[str, SCIMTokenInfo] = {}
 
     def register(self, token: str, tenant_id: str, description: str = "") -> None:
         if not token or not tenant_id:
@@ -106,7 +106,7 @@ class SCIMTokenRegistry:
     def configured(self) -> bool:
         return bool(self._tokens)
 
-    def authenticate(self, token: str) -> Optional[SCIMTokenInfo]:
+    def authenticate(self, token: str) -> SCIMTokenInfo | None:
         for registered, info in self._tokens.items():
             if hmac.compare_digest(registered, token):
                 return info
@@ -153,7 +153,7 @@ class SCIMTokenRegistry:
 # SCIM User 资源 ↔ 存储层映射
 # ============================================================================
 
-def record_to_scim_user(record: UserRecord, request: Request) -> Dict[str, Any]:
+def record_to_scim_user(record: UserRecord, request: Request) -> dict[str, Any]:
     scim_meta = (record.metadata or {}).get("scim", {})
     base = str(request.base_url).rstrip("/")
     return {
@@ -177,7 +177,7 @@ def record_to_scim_user(record: UserRecord, request: Request) -> Dict[str, Any]:
     }
 
 
-def _extract_scim_payload(payload: Dict[str, Any]) -> Tuple[str, Dict[str, Any], Optional[str], bool]:
+def _extract_scim_payload(payload: dict[str, Any]) -> tuple[str, dict[str, Any], str | None, bool]:
     """从 SCIM User payload 提取 (userName, scim_meta, full_name, active)。"""
     user_name = str(payload.get("userName") or "").strip()
     if not user_name:
@@ -217,7 +217,7 @@ _FILTER_RE = re.compile(
 )
 
 
-def _parse_filter(filter_str: Optional[str]) -> Optional[Tuple[str, str]]:
+def _parse_filter(filter_str: str | None) -> tuple[str, str] | None:
     """解析 SCIM filter (支持 userName/externalId 的 eq; 其余显式报错)。"""
     if not filter_str:
         return None
@@ -229,7 +229,7 @@ def _parse_filter(filter_str: Optional[str]) -> Optional[Tuple[str, str]]:
     return match.group(1).lower(), match.group(2)
 
 
-def _matches_filter(record: UserRecord, parsed: Optional[Tuple[str, str]]) -> bool:
+def _matches_filter(record: UserRecord, parsed: tuple[str, str] | None) -> bool:
     if parsed is None:
         return True
     attr, value = parsed
@@ -245,8 +245,8 @@ def _matches_filter(record: UserRecord, parsed: Optional[Tuple[str, str]]) -> bo
 # ============================================================================
 
 def build_scim_router(
-    adapter: Optional[UserStoreAdapter] = None,
-    registry: Optional[SCIMTokenRegistry] = None,
+    adapter: UserStoreAdapter | None = None,
+    registry: SCIMTokenRegistry | None = None,
 ) -> APIRouter:
     """构建 SCIM router。
 
@@ -263,7 +263,7 @@ def build_scim_router(
 
     # ------------------------------------------------------------- 鉴权
 
-    async def _auth(request: Request) -> "SCIMTokenInfo | JSONResponse":
+    async def _auth(request: Request) -> SCIMTokenInfo | JSONResponse:
         if not token_registry.configured:
             logger.error("SCIM 请求被拒绝: 未配置任何 SCIM 令牌 (fail-closed)。")
             return scim_error(
@@ -279,7 +279,7 @@ def build_scim_router(
             return scim_error(401, "Bearer 令牌无效。")
         return info
 
-    async def _get_tenant_user(user_id: str, tenant_id: str) -> Optional[UserRecord]:
+    async def _get_tenant_user(user_id: str, tenant_id: str) -> UserRecord | None:
         """按 id 取用户并强制租户匹配 (跨租户 → None → 404, 不泄露存在性)。"""
         record = await user_adapter.get_user_by_id(user_id)
         if record is None or record.tenant_id != tenant_id:
@@ -291,7 +291,7 @@ def build_scim_router(
     @router.get("/Users", include_in_schema=True)
     async def list_users(
         request: Request,
-        filter: Optional[str] = None,
+        filter: str | None = None,
         startIndex: int = 1,
         count: int = 100,
     ) -> JSONResponse:
@@ -478,7 +478,7 @@ def build_scim_router(
             return scim_error(400, "Operations 必须是非空数组。", scim_type="invalidSyntax")
 
         # 规范化: 展开无 path 的 add/replace (value 为属性字典) 为逐属性 op
-        normalized: List[Dict[str, Any]] = []
+        normalized: list[dict[str, Any]] = []
         for op in operations:
             if not isinstance(op, dict):
                 return scim_error(400, "每个 Operation 必须是对象。", scim_type="invalidSyntax")
@@ -503,8 +503,8 @@ def build_scim_router(
         metadata = dict(record.metadata or {})
         scim_meta = dict(metadata.get("scim") or {})
         name = dict(scim_meta.get("name") or {})
-        updates: Dict[str, Any] = {}
-        new_active: Optional[bool] = None
+        updates: dict[str, Any] = {}
+        new_active: bool | None = None
 
         for op in normalized:
             op_name = str(op.get("op") or "").lower()
@@ -677,7 +677,7 @@ def build_scim_router(
             }
         )
 
-    _USER_SCHEMA_DOC: Dict[str, Any] = {
+    _USER_SCHEMA_DOC: dict[str, Any] = {
         "id": SCIM_USER_SCHEMA,
         "name": "User",
         "description": "用户账号",

@@ -2,32 +2,32 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Optional, List
-from datetime import datetime, UTC
+from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, HTTPException, Body
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, Body, Depends, Query
+from pydantic import BaseModel
 
-from backend.app.core.security import Principal
-from backend.app.dependencies import enforce_scope, get_current_principal
 from backend.app.api.errors import api_error
+from backend.app.core.security import Principal
+from backend.app.core.skill_dependency_manager import (
+    DependencyType,
+    get_skill_dependency_manager,
+)
+from backend.app.core.skill_review_system import (
+    ReviewStatus,
+    get_skill_review_system,
+)
+from backend.app.core.skill_search_engine import get_skill_search_engine
+from backend.app.core.skill_update_manager import (
+    get_skill_update_manager,
+)
 
 # 导入各个管理器
 from backend.app.core.skill_version_manager import (
-    get_skill_version_manager, SkillVersion, VersionCompatibility
+    VersionCompatibility,
+    get_skill_version_manager,
 )
-from backend.app.core.skill_review_system import (
-    get_skill_review_system, SkillReview, ReviewStatus, ReportReason
-)
-from backend.app.core.skill_search_engine import (
-    get_skill_search_engine, SearchResult
-)
-from backend.app.core.skill_dependency_manager import (
-    get_skill_dependency_manager, SkillDependency, DependencyType
-)
-from backend.app.core.skill_update_manager import (
-    get_skill_update_manager, SkillUpdate, UpdatePriority
-)
+from backend.app.dependencies import enforce_scope, get_current_principal
 
 router = APIRouter(prefix="/api/v1/skill-market/advanced", tags=["skill-market-advanced"])
 PrincipalDependency = Annotated[Principal, Depends(get_current_principal)]
@@ -136,7 +136,7 @@ async def create_version(
 async def get_versions(
     skill_id: str,
     principal: PrincipalDependency,
-) -> List[VersionResponse]:
+) -> list[VersionResponse]:
     """获取所有版本"""
     enforce_scope(principal, "skill-market:read")
 
@@ -224,7 +224,7 @@ async def get_reviews(
     sort_by: str = Query("helpful"),
     *,
     principal: PrincipalDependency,
-) -> List[ReviewResponse]:
+) -> list[ReviewResponse]:
     """获取评论列表"""
     enforce_scope(principal, "skill-market:read")
 
@@ -294,11 +294,11 @@ async def mark_helpful(
 @router.get("/search")
 async def advanced_search(
     query: str = Query(...),
-    category: Optional[str] = Query(None),
+    category: str | None = Query(None),
     limit: int = Query(20, ge=1, le=100),
     *,
     principal: PrincipalDependency,
-) -> List[SearchResponse]:
+) -> list[SearchResponse]:
     """高级搜索"""
     enforce_scope(principal, "skill-market:read")
 
@@ -386,7 +386,7 @@ async def add_dependency(
 async def get_dependencies(
     skill_id: str,
     principal: PrincipalDependency,
-) -> List[DependencyResponse]:
+) -> list[DependencyResponse]:
     """获取依赖列表"""
     enforce_scope(principal, "skill-market:read")
 
@@ -425,7 +425,7 @@ async def get_dependency_tree(
 async def check_update(
     skill_id: str,
     principal: PrincipalDependency,
-) -> Optional[UpdateResponse]:
+) -> UpdateResponse | None:
     """检查更新"""
     enforce_scope(principal, "skill-market:read")
 
@@ -513,7 +513,7 @@ async def get_update_history(
     limit: int = Query(20, ge=1, le=100),
     *,
     principal: PrincipalDependency,
-) -> List[UpdateResponse]:
+) -> list[UpdateResponse]:
     """获取更新历史"""
     enforce_scope(principal, "skill-market:read")
 

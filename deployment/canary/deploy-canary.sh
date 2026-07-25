@@ -1,7 +1,16 @@
 #!/bin/bash
 
 # X-Agent Canary Deployment Script
-# Implements gradual rollout with monitoring and automatic rollback
+# P2-05: 支持两种模式:
+#   1. Argo Rollouts 模式 (默认): 声明式金丝雀, 权重路由 + 自动指标门控
+#   2. Legacy 模式 (--legacy): 手动副本扩缩, 兼容未安装 Argo Rollouts 的环境
+#
+# 用法:
+#   ./deploy-canary.sh <version>              # Argo Rollouts 模式
+#   ./deploy-canary.sh <version> --legacy     # 手动模式 (fallback)
+#   ./deploy-canary.sh <version> --abort      # 中止金丝雀
+#   ./deploy-canary.sh <version> --promote    # 手动推进到下一步
+#   ./deploy-canary.sh <version> --status     # 查看金丝雀状态
 
 set -euo pipefail
 
@@ -9,6 +18,8 @@ set -euo pipefail
 # P1-15: 命名空间与容器名对齐权威清单 deployment/k8s/ 与 deployment/canary/
 NAMESPACE=${NAMESPACE:-xagent}
 NEW_VERSION=${1:-}
+MODE=${2:-"--argo"}
+ROLLOUT_NAME=xagent-api-rollout
 CANARY_REPLICAS_STAGES=(1 2 3 5 10)
 MONITORING_INTERVAL=${MONITORING_INTERVAL:-300}
 ERROR_RATE_THRESHOLD=${ERROR_RATE_THRESHOLD:-0.01}
@@ -45,7 +56,7 @@ log_step() {
 
 # Validation
 if [ -z "$NEW_VERSION" ]; then
-    log_error "Usage: $0 <new_version>"
+    log_error "Usage: $0 <new_version> [--legacy|--abort|--promote|--status]"
     exit 1
 fi
 
@@ -59,7 +70,96 @@ if ! kubectl get namespace "$NAMESPACE" &> /dev/null; then
     exit 1
 fi
 
-log_info "Starting canary deployment for version: $NEW_VERSION"
+# ============================================================
+# P2-05: Argo Rollouts 模式 (默认)
+# ============================================================
+argo_rollouts_available() {
+    kubectl get crd rollouts.argoproj.io &> /dev/null 2>&1
+}
+
+argo_deploy() {
+    log_info "[Argo Rollouts] Starting canary deployment for version: $NEW_VERSION"
+    log_info "Namespace: $NAMESPACE | Rollout: $ROLLOUT_NAME"
+
+    # 设置新镜像触发金丝雀
+    kubectl argo rollouts set image "$ROLLOUT_NAME" \
+        "$CONTAINER_API=xagent:$NEW_VERSION" \
+        -n "$NAMESPACE" || {
+        log_error "Failed to set image on rollout"
+        exit 1
+    }
+
+    log_info "Canary rollout triggered. Steps: 5% → 20% → 50% → 80% → 100%"
+    log_info "Analysis gates: success-rate >= 99%, P95 latency <= 1s"
+    log_info ""
+    log_info "Monitor with: kubectl argo rollouts status $ROLLOUT_NAME -n $NAMESPACE"
+    log_info "Abort with:   kubectl argo rollouts abort $ROLLOUT_NAME -n $NAMESPACE"
+    log_info "Promote with: kubectl argo rollouts promote $ROLLOUT_NAME -n $NAMESPACE"
+
+    # 等待初始 Pod 就绪
+    log_step "Waiting for canary pods to be ready..."
+    kubectl argo rollouts status "$ROLLOUT_NAME" -n "$NAMESPACE" --timeout 120 || true
+
+    log_info "Canary deployment initiated successfully."
+    log_info "Argo Rollouts will automatically advance through steps based on analysis."
+}
+
+argo_abort() {
+    log_warn "[Argo Rollouts] Aborting canary rollout..."
+    kubectl argo rollouts abort "$ROLLOUT_NAME" -n "$NAMESPACE"
+    log_info "Rollout aborted. Traffic reverted to stable."
+}
+
+argo_promote() {
+    log_info "[Argo Rollouts] Manually promoting to next step..."
+    kubectl argo rollouts promote "$ROLLOUT_NAME" -n "$NAMESPACE"
+    log_info "Promoted. Check status for current weight."
+}
+
+argo_status() {
+    kubectl argo rollouts status "$ROLLOUT_NAME" -n "$NAMESPACE"
+    echo ""
+    log_info "AnalysisRuns:"
+    kubectl get analysisrun -n "$NAMESPACE" -l rollouts.argoproj.io/rollout-name="$ROLLOUT_NAME" 2>/dev/null || true
+}
+
+# 路由: 根据 MODE 参数选择执行路径
+case "$MODE" in
+    --abort)
+        argo_abort
+        exit 0
+        ;;
+    --promote)
+        argo_promote
+        exit 0
+        ;;
+    --status)
+        argo_status
+        exit 0
+        ;;
+    --legacy)
+        log_warn "Using legacy mode (manual replica scaling)"
+        ;;
+    --argo|"")
+        if argo_rollouts_available; then
+            argo_deploy
+            exit 0
+        else
+            log_warn "Argo Rollouts CRD not found. Falling back to legacy mode."
+            log_warn "Install: kubectl apply -n argo-rollouts -f https://github.com/argoproj/argo-rollouts/releases/latest/download/install.yaml"
+        fi
+        ;;
+    *)
+        log_error "Unknown mode: $MODE"
+        log_error "Usage: $0 <version> [--legacy|--abort|--promote|--status]"
+        exit 1
+        ;;
+esac
+
+# ============================================================
+# Legacy 模式: 手动副本扩缩 (原逻辑, 兼容无 Argo Rollouts 环境)
+# ============================================================
+log_info "Starting canary deployment for version: $NEW_VERSION (legacy mode)"
 log_info "Namespace: $NAMESPACE"
 
 # Step 1: Deploy canary version

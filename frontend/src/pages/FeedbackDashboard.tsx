@@ -116,11 +116,7 @@ export const FeedbackDashboard: React.FC = () => {
   }
 
   const handleTestNotification = async (id: string) => {
-    try {
-      await feedbackService.testNotification(id)
-    } catch (error) {
-      throw error
-    }
+    await feedbackService.testNotification(id)
   }
 
   const handleExport = async (format: 'csv' | 'pdf') => {

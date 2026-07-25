@@ -15,8 +15,9 @@ from __future__ import annotations
 import hashlib
 import logging
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable, Optional
+from typing import Any
 
 from backend.app.core.cache import get_cache_manager
 from backend.app.core.llm import LLMResponse
@@ -161,10 +162,7 @@ class LLMCacheManager:
 
         if cached:
             self._stats.cache_hits += 1
-            if isinstance(cached, dict):
-                response = LLMResponse(**cached)
-            else:
-                response = cached
+            response = LLMResponse(**cached) if isinstance(cached, dict) else cached
 
             logger.debug(f"Cache hit (exact): {key[:8]}")
             return response
@@ -234,7 +232,7 @@ class LLMCacheManager:
         vec1 = vec1[:min_len]
         vec2 = vec2[:min_len]
 
-        dot_product = sum(a * b for a, b in zip(vec1, vec2))
+        dot_product = sum(a * b for a, b in zip(vec1, vec2, strict=False))
         norm1 = sum(a * a for a in vec1) ** 0.5
         norm2 = sum(b * b for b in vec2) ** 0.5
 
@@ -247,7 +245,7 @@ class LLMCacheManager:
         self,
         messages: list[dict[str, str]],
         model: str,
-        embedding_func: Optional[Callable[[str], Any]] = None,
+        embedding_func: Callable[[str], Any] | None = None,
     ) -> LLMResponse | None:
         """Get semantically similar cached response."""
         # Extract main content
@@ -263,12 +261,12 @@ class LLMCacheManager:
         # Get embedding for current request
         if embedding_func:
             try:
-                current_embedding = await embedding_func(main_content)
+                await embedding_func(main_content)
             except Exception as e:
                 logger.warning(f"Failed to get embedding: {e}")
-                current_embedding = self._simple_embedding(main_content)
+                self._simple_embedding(main_content)
         else:
-            current_embedding = self._simple_embedding(main_content)
+            self._simple_embedding(main_content)
 
         # For now, return None (semantic matching requires vector DB)
         # In production, query vector DB for similar embeddings
@@ -292,7 +290,7 @@ class LLMCacheManager:
 
 
 # Global cache manager instance
-_llm_cache_manager: Optional[LLMCacheManager] = None
+_llm_cache_manager: LLMCacheManager | None = None
 
 
 def get_llm_cache_manager() -> LLMCacheManager:

@@ -12,12 +12,13 @@ from __future__ import annotations
 import asyncio
 import gc
 import logging
-import psutil
-import sys
-from typing import Any, Callable, TypeVar, Generator, AsyncGenerator, Generic
-from dataclasses import dataclass
-from datetime import datetime, UTC
+from collections.abc import AsyncGenerator, Callable, Generator
 from contextlib import asynccontextmanager
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from typing import Any, Generic, TypeVar
+
+import psutil
 
 logger = logging.getLogger(__name__)
 
@@ -190,10 +191,7 @@ class ObjectPool(Generic[T]):
         Returns:
             Object from pool or newly created
         """
-        if self._pool:
-            obj = self._pool.pop()
-        else:
-            obj = self.factory()
+        obj = self._pool.pop() if self._pool else self.factory()
 
         obj_id = id(obj)
         self._in_use.add(obj_id)
@@ -270,7 +268,7 @@ class StreamingFileReader:
                     if not chunk:
                         break
                     yield chunk
-        except IOError as e:
+        except OSError as e:
             logger.error(f"Error reading file {file_path}: {e}")
             raise
 
@@ -290,13 +288,13 @@ class StreamingFileReader:
                 return f.read(self.chunk_size)
 
         try:
-            with open(file_path, "rb") as f:
+            with open(file_path, "rb"):
                 while True:
                     chunk = await loop.run_in_executor(None, read_chunk)
                     if not chunk:
                         break
                     yield chunk
-        except IOError as e:
+        except OSError as e:
             logger.error(f"Error reading file {file_path}: {e}")
             raise
 
@@ -311,7 +309,7 @@ class StreamingFileReader:
         """
         try:
             return len(open(file_path, "rb").read())
-        except IOError as e:
+        except OSError as e:
             logger.error(f"Error getting file size: {e}")
             return 0
 

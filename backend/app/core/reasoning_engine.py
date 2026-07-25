@@ -7,13 +7,9 @@ tree-of-thought, graph-of-thought, and self-reflection mechanisms.
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Tuple
-
-from pydantic import BaseModel, Field
-
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -23,32 +19,32 @@ class ReasoningStep:
     """A single step in the reasoning process."""
     step_number: int
     thought: str
-    action: Optional[str] = None
-    observation: Optional[str] = None
+    action: str | None = None
+    observation: str | None = None
     reasoning: str = ""
     confidence: float = 1.0
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
 class ReasoningPath:
     """A complete reasoning path from problem to solution."""
     path_id: str
-    steps: List[ReasoningStep] = field(default_factory=list)
+    steps: list[ReasoningStep] = field(default_factory=list)
     final_answer: str = ""
     total_confidence: float = 1.0
     reasoning_quality: float = 0.0
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
 class ReasoningTree:
     """A tree of reasoning paths."""
     root_problem: str
-    paths: List[ReasoningPath] = field(default_factory=list)
-    best_path: Optional[ReasoningPath] = None
-    pruned_paths: List[ReasoningPath] = field(default_factory=list)
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    paths: list[ReasoningPath] = field(default_factory=list)
+    best_path: ReasoningPath | None = None
+    pruned_paths: list[ReasoningPath] = field(default_factory=list)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -56,10 +52,10 @@ class Critique:
     """Critique of a solution."""
     is_correct: bool
     confidence: float
-    strengths: List[str] = field(default_factory=list)
-    weaknesses: List[str] = field(default_factory=list)
-    suggestions: List[str] = field(default_factory=list)
-    alternative_approaches: List[str] = field(default_factory=list)
+    strengths: list[str] = field(default_factory=list)
+    weaknesses: list[str] = field(default_factory=list)
+    suggestions: list[str] = field(default_factory=list)
+    alternative_approaches: list[str] = field(default_factory=list)
 
 
 class ReasoningEngine:
@@ -72,7 +68,7 @@ class ReasoningEngine:
             llm_client: LLM client for generating reasoning steps.
         """
         self.llm_client = llm_client
-        self.reasoning_history: List[ReasoningPath] = []
+        self.reasoning_history: list[ReasoningPath] = []
 
     async def chain_of_thought(
         self,
@@ -180,7 +176,7 @@ Provide the final answer to the problem: {problem}
         )
 
         # Expand each branch
-        for branch_idx, branch in enumerate(initial_branches):
+        for _branch_idx, branch in enumerate(initial_branches):
             path = await self._expand_branch(
                 problem, branch, depth, branching_factor, temperature
             )
@@ -202,7 +198,7 @@ Provide the final answer to the problem: {problem}
         problem: str,
         num_nodes: int = 10,
         temperature: float = 0.7,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Perform graph-of-thought reasoning.
 
         Args:
@@ -285,7 +281,7 @@ Synthesize these insights to answer: {problem}
         Returns:
             Critique of the solution.
         """
-        logger.info(f"Starting self-reflection for solution")
+        logger.info("Starting self-reflection for solution")
 
         critique_prompt = f"""
 Problem: {problem}
@@ -380,16 +376,16 @@ and incorporates the suggestions.
             current_solution = await self._call_llm(refinement_prompt, temperature)
             logger.info(f"Iteration {iteration + 1} completed")
 
-        logger.info(f"Iterative refinement completed")
+        logger.info("Iterative refinement completed")
 
         return current_solution
 
     async def multi_perspective_reasoning(
         self,
         problem: str,
-        perspectives: List[str],
+        perspectives: list[str],
         temperature: float = 0.7,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Reason about a problem from multiple perspectives.
 
         Args:
@@ -460,7 +456,7 @@ incorporates the best insights from each perspective.
         problem: str,
         branching_factor: int,
         temperature: float,
-    ) -> List[str]:
+    ) -> list[str]:
         """Generate initial branches for tree-of-thought.
 
         Args:
@@ -572,7 +568,7 @@ What is the final answer to: {problem}
         quality = sum(s.confidence for s in path.steps) / len(path.steps) if path.steps else 0.5
         return quality
 
-    def _parse_reasoning_response(self, response: str) -> Tuple[str, str, str]:
+    def _parse_reasoning_response(self, response: str) -> tuple[str, str, str]:
         """Parse reasoning response into components.
 
         Args:
@@ -614,7 +610,7 @@ What is the final answer to: {problem}
             alternative_approaches=alternatives,
         )
 
-    def _format_steps(self, steps: List[ReasoningStep]) -> str:
+    def _format_steps(self, steps: list[ReasoningStep]) -> str:
         """Format reasoning steps for display.
 
         Args:
@@ -628,7 +624,7 @@ What is the final answer to: {problem}
             for s in steps
         ])
 
-    def _format_nodes(self, nodes: List[Dict]) -> str:
+    def _format_nodes(self, nodes: list[dict]) -> str:
         """Format nodes for display.
 
         Args:
@@ -642,7 +638,7 @@ What is the final answer to: {problem}
             for n in nodes
         ])
 
-    def _format_graph(self, nodes: List[Dict]) -> str:
+    def _format_graph(self, nodes: list[dict]) -> str:
         """Format graph for display.
 
         Args:
@@ -657,7 +653,7 @@ What is the final answer to: {problem}
             result.append(f"Node {node['id']}: {node['content'][:100]} -> [{connections}]")
         return "\n".join(result)
 
-    def _format_perspectives(self, perspectives: Dict[str, str]) -> str:
+    def _format_perspectives(self, perspectives: dict[str, str]) -> str:
         """Format perspectives for display.
 
         Args:
@@ -671,7 +667,7 @@ What is the final answer to: {problem}
             for perspective, response in perspectives.items()
         ])
 
-    def _parse_branches(self, response: str, num_branches: int) -> List[str]:
+    def _parse_branches(self, response: str, num_branches: int) -> list[str]:
         """Parse branches from response.
 
         Args:
@@ -686,7 +682,7 @@ What is the final answer to: {problem}
         branches = [line.strip() for line in lines if line.strip()][:num_branches]
         return branches
 
-    def _parse_connections(self, response: str, num_nodes: int) -> List[int]:
+    def _parse_connections(self, response: str, num_nodes: int) -> list[int]:
         """Parse connections from response.
 
         Args:

@@ -6,21 +6,20 @@ Implements intelligent caching, LLM call optimization, and performance monitorin
 from __future__ import annotations
 
 import asyncio
+import functools
 import hashlib
 import json
 import time
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
-from enum import Enum
-from typing import Any, Callable, Optional, TypeVar, Generic
-import functools
-
+from enum import StrEnum
+from typing import Any, Generic, TypeVar
 
 T = TypeVar('T')
 
 
-class CacheStrategy(str, Enum):
+class CacheStrategy(StrEnum):
     """Cache eviction strategies."""
     LRU = "lru"  # Least Recently Used
     LFU = "lfu"  # Least Frequently Used
@@ -36,7 +35,7 @@ class CacheEntry(Generic[T]):
     created_at: float = field(default_factory=time.time)
     accessed_at: float = field(default_factory=time.time)
     access_count: int = 0
-    ttl: Optional[float] = None
+    ttl: float | None = None
 
     def is_expired(self) -> bool:
         """Check if entry has expired."""
@@ -54,12 +53,12 @@ class Cache(ABC, Generic[T]):
     """Abstract cache interface."""
 
     @abstractmethod
-    async def get(self, key: str) -> Optional[T]:
+    async def get(self, key: str) -> T | None:
         """Get value from cache."""
         pass
 
     @abstractmethod
-    async def set(self, key: str, value: T, ttl: Optional[float] = None) -> None:
+    async def set(self, key: str, value: T, ttl: float | None = None) -> None:
         """Set value in cache."""
         pass
 
@@ -91,7 +90,7 @@ class MemoryCache(Cache[T]):
         self.strategy = strategy
         self.entries: dict[str, CacheEntry[T]] = {}
 
-    async def get(self, key: str) -> Optional[T]:
+    async def get(self, key: str) -> T | None:
         """Get value from cache."""
         entry = self.entries.get(key)
         if entry is None:
@@ -104,7 +103,7 @@ class MemoryCache(Cache[T]):
         entry.touch()
         return entry.value
 
-    async def set(self, key: str, value: T, ttl: Optional[float] = None) -> None:
+    async def set(self, key: str, value: T, ttl: float | None = None) -> None:
         """Set value in cache."""
         if len(self.entries) >= self.max_size:
             await self._evict()
@@ -162,10 +161,10 @@ class QueryCache(Cache[Any]):
     def __init__(self, max_size: int = 500):
         self.cache = MemoryCache[Any](max_size=max_size, strategy=CacheStrategy.LRU)
 
-    async def get(self, key: str) -> Optional[Any]:
+    async def get(self, key: str) -> Any | None:
         return await self.cache.get(key)
 
-    async def set(self, key: str, value: Any, ttl: Optional[float] = None) -> None:
+    async def set(self, key: str, value: Any, ttl: float | None = None) -> None:
         # Default TTL for queries: 5 minutes
         ttl = ttl or 300
         await self.cache.set(key, value, ttl)
@@ -283,7 +282,7 @@ class PerformanceMonitor:
         """Start a timer."""
         self.timers[name] = time.time()
 
-    def end_timer(self, name: str, unit: str = "ms") -> Optional[float]:
+    def end_timer(self, name: str, unit: str = "ms") -> float | None:
         """End a timer and record metric."""
         if name not in self.timers:
             return None
@@ -305,7 +304,7 @@ class PerformanceMonitor:
         name: str,
         value: float,
         unit: str = "",
-        tags: Optional[dict[str, str]] = None,
+        tags: dict[str, str] | None = None,
     ) -> None:
         """Record a performance metric."""
         metric = PerformanceMetric(
@@ -316,14 +315,14 @@ class PerformanceMonitor:
         )
         self.metrics.append(metric)
 
-    def get_metrics(self, name: Optional[str] = None) -> list[PerformanceMetric]:
+    def get_metrics(self, name: str | None = None) -> list[PerformanceMetric]:
         """Get recorded metrics."""
         if name is None:
             return self.metrics
 
         return [m for m in self.metrics if m.name == name]
 
-    def get_average(self, name: str) -> Optional[float]:
+    def get_average(self, name: str) -> float | None:
         """Get average value for metric."""
         metrics = self.get_metrics(name)
         if not metrics:
@@ -450,7 +449,7 @@ class LRUCache(Generic[K, V]):
         self._cache: dict[K, V] = {}
         self._order: list[K] = []
 
-    async def get(self, key: K) -> Optional[V]:
+    async def get(self, key: K) -> V | None:
         if key not in self._cache:
             return None
         # Move to end (most recently used)
@@ -483,7 +482,7 @@ class ResponseCache:
         key_str = f"{name}:{args}:{json.dumps(kwargs, sort_keys=True)}"
         return hashlib.md5(key_str.encode()).hexdigest()
 
-    async def get(self, name: str, args: tuple, kwargs: dict) -> Optional[Any]:
+    async def get(self, name: str, args: tuple, kwargs: dict) -> Any | None:
         key = self._make_key(name, args, kwargs)
         entry = self._cache.get(key)
         if entry is None:
@@ -531,7 +530,7 @@ class BatchProcessor(Generic[T]):
                             self._queue.get(), timeout=remaining
                         )
                         batch.append(item)
-                    except asyncio.TimeoutError:
+                    except TimeoutError:
                         break
                 if batch:
                     await handler(batch)

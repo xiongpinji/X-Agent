@@ -22,7 +22,6 @@ from backend.app.core.recommendation_scenarios import (
     Device,
     ProjectType,
     TaskType,
-    initialize_recommenders,
     plugin_recommender,
     skill_recommender,
     sync_manager,

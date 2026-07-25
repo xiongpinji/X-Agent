@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
-from typing import Annotated, Optional
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
@@ -13,6 +13,7 @@ from backend.app.dependencies import (
     enforce_scope,
     get_current_principal,
 )
+
 from .aggregator import AnalyticsAggregator
 from .collector import AnalyticsCollector
 from .models import AggregationLevel
@@ -78,10 +79,10 @@ class ReportResponse(BaseModel):
 
 
 # Global instances (would be injected in production)
-_collector: Optional[AnalyticsCollector] = None
-_storage: Optional[AnalyticsStorage] = None
-_aggregator: Optional[AnalyticsAggregator] = None
-_reporter: Optional[AnalyticsReporter] = None
+_collector: AnalyticsCollector | None = None
+_storage: AnalyticsStorage | None = None
+_aggregator: AnalyticsAggregator | None = None
+_reporter: AnalyticsReporter | None = None
 
 
 def get_collector() -> AnalyticsCollector:
@@ -235,7 +236,7 @@ async def get_performance(
 async def generate_daily_report(
     principal: PrincipalDependency,
     reporter: ReporterDependency,
-    date: Optional[datetime] = Query(None),
+    date: datetime | None = Query(None),
 ) -> ReportResponse:
     """Generate daily report.
 
@@ -260,7 +261,7 @@ async def generate_daily_report(
 async def generate_weekly_report(
     principal: PrincipalDependency,
     reporter: ReporterDependency,
-    start_date: Optional[datetime] = Query(None),
+    start_date: datetime | None = Query(None),
 ) -> ReportResponse:
     """Generate weekly report.
 

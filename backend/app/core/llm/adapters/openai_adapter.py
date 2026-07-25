@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Any, Optional, AsyncIterator
 import time
-from .base import LLMAdapter, AdapterResponse
+from collections.abc import AsyncIterator
+from typing import Any
+
+from .base import AdapterResponse, LLMAdapter
 
 
 class OpenAIAdapter(LLMAdapter):
@@ -14,7 +16,7 @@ class OpenAIAdapter(LLMAdapter):
         self,
         model: str,
         api_key: str,
-        base_url: Optional[str] = None,
+        base_url: str | None = None,
         **kwargs,
     ):
         """Initialize OpenAI adapter."""
@@ -41,7 +43,7 @@ class OpenAIAdapter(LLMAdapter):
     async def chat(
         self,
         messages: list[dict[str, str]],
-        tools: Optional[list[dict[str, Any]]] = None,
+        tools: list[dict[str, Any]] | None = None,
         **kwargs,
     ) -> AdapterResponse:
         """Send a chat request to OpenAI."""
@@ -104,7 +106,7 @@ class OpenAIAdapter(LLMAdapter):
     async def stream_chat(
         self,
         messages: list[dict[str, str]],
-        tools: Optional[list[dict[str, Any]]] = None,
+        tools: list[dict[str, Any]] | None = None,
         **kwargs,
     ) -> AsyncIterator[str]:
         """Stream a chat response from OpenAI."""

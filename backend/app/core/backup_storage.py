@@ -1,20 +1,14 @@
 """Backup storage abstraction layer."""
 
-import asyncio
-import gzip
 import hashlib
-import io
 import json
 import logging
-import os
 from abc import ABC, abstractmethod
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, AsyncIterator, Optional
 
 from backend.app.models.backup import (
     BackupMetadata,
-    BackupManifest,
     BackupStorageType,
 )
 
@@ -38,7 +32,7 @@ class BackupStorageProvider(ABC):
     async def download_backup(
         self,
         backup_id: str,
-    ) -> Optional[bytes]:
+    ) -> bytes | None:
         """Download backup data from storage."""
         pass
 
@@ -64,7 +58,7 @@ class BackupStorageProvider(ABC):
     async def get_backup_metadata(
         self,
         backup_id: str,
-    ) -> Optional[BackupMetadata]:
+    ) -> BackupMetadata | None:
         """Get backup metadata."""
         pass
 
@@ -148,7 +142,7 @@ class LocalBackupStorage(BackupStorageProvider):
     async def download_backup(
         self,
         backup_id: str,
-    ) -> Optional[bytes]:
+    ) -> bytes | None:
         """Download backup data from local storage."""
         try:
             backup_path = self._get_backup_path(backup_id)
@@ -211,7 +205,7 @@ class LocalBackupStorage(BackupStorageProvider):
     async def get_backup_metadata(
         self,
         backup_id: str,
-    ) -> Optional[BackupMetadata]:
+    ) -> BackupMetadata | None:
         """Get backup metadata."""
         try:
             metadata_path = self._get_metadata_path(backup_id)
@@ -302,8 +296,8 @@ class S3BackupStorage(BackupStorageProvider):
         self,
         bucket_name: str,
         region: str = "us-east-1",
-        access_key: Optional[str] = None,
-        secret_key: Optional[str] = None,
+        access_key: str | None = None,
+        secret_key: str | None = None,
     ):
         self.bucket_name = bucket_name
         self.region = region
@@ -330,7 +324,7 @@ class S3BackupStorage(BackupStorageProvider):
     async def download_backup(
         self,
         backup_id: str,
-    ) -> Optional[bytes]:
+    ) -> bytes | None:
         """Download backup from S3."""
         try:
             # Implementation would use boto3
@@ -369,7 +363,7 @@ class S3BackupStorage(BackupStorageProvider):
     async def get_backup_metadata(
         self,
         backup_id: str,
-    ) -> Optional[BackupMetadata]:
+    ) -> BackupMetadata | None:
         """Get backup metadata from S3."""
         try:
             # Implementation would use boto3

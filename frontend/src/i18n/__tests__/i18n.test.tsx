@@ -319,7 +319,7 @@ describe('Currency Formatting', () => {
 
 describe('RTL Support', () => {
   it('should apply RTL styles for Arabic', () => {
-    const { container } = render(
+    render(
       <I18nProvider defaultLanguage="ar">
         <div>Test</div>
       </I18nProvider>
@@ -329,7 +329,7 @@ describe('RTL Support', () => {
   })
 
   it('should apply LTR styles for English', () => {
-    const { container } = render(
+    render(
       <I18nProvider defaultLanguage="en">
         <div>Test</div>
       </I18nProvider>

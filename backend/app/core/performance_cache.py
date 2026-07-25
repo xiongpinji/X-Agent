@@ -10,10 +10,10 @@ import asyncio
 import hashlib
 import json
 import logging
-import time
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
-from typing import Any, Callable, Generic, TypeVar
+from typing import Any, Generic, TypeVar
 
 import redis.asyncio as redis
 from pydantic import BaseModel

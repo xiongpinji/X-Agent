@@ -5,10 +5,10 @@ This module implements the complete code generation pipeline including requireme
 analysis, code generation, quality checking, formatting, testing, and documentation.
 """
 
-from typing import Optional, Dict, Any, List
+import logging
 from dataclasses import dataclass
 from enum import Enum
-import logging
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -33,19 +33,19 @@ class CodeGenerationRequest:
     include_type_hints: bool = True
     include_error_handling: bool = True
     style: str = "pep8"
-    context: Optional[Dict[str, Any]] = None
+    context: dict[str, Any] | None = None
 
 
 @dataclass
 class CodeGenerationResult:
     """Result of code generation."""
     code: str
-    tests: Optional[str] = None
-    documentation: Optional[str] = None
+    tests: str | None = None
+    documentation: str | None = None
     quality_score: float = 0.0
-    issues: List[str] = None
-    suggestions: List[str] = None
-    metadata: Dict[str, Any] = None
+    issues: list[str] = None
+    suggestions: list[str] = None
+    metadata: dict[str, Any] = None
 
     def __post_init__(self):
         if self.issues is None:
@@ -61,12 +61,12 @@ class CodeGenerationWorkflow:
 
     def __init__(self):
         """Initialize the workflow."""
-        from backend.app.core.code_quality_checker import CodeQualityChecker
         from backend.app.core.code_formatter import CodeFormatter
+        from backend.app.core.code_quality_checker import CodeQualityChecker
         from backend.app.prompts.code_generation import (
-            get_system_prompt,
+            get_language_patterns,
             get_review_prompt,
-            get_language_patterns
+            get_system_prompt,
         )
 
         self.quality_checker = CodeQualityChecker()
@@ -181,7 +181,7 @@ class CodeGenerationWorkflow:
             logger.error(f"Code generation failed: {e}", exc_info=True)
             raise
 
-    async def _analyze_requirements(self, description: str) -> Dict[str, Any]:
+    async def _analyze_requirements(self, description: str) -> dict[str, Any]:
         """
         Analyze code generation requirements.
 
@@ -202,9 +202,9 @@ class CodeGenerationWorkflow:
 
     async def _generate_initial_code(
         self,
-        requirements: Dict[str, Any],
+        requirements: dict[str, Any],
         language: CodeLanguage,
-        context: Optional[Dict[str, Any]] = None
+        context: dict[str, Any] | None = None
     ) -> str:
         """
         Generate initial code based on requirements.
@@ -222,7 +222,7 @@ class CodeGenerationWorkflow:
         system_prompt = self.get_system_prompt(language.value)
 
         # Build the prompt
-        prompt = f"""
+        f"""
 {system_prompt}
 
 Requirements:
@@ -243,7 +243,7 @@ Generate high-quality, production-ready code that follows all the principles abo
         else:
             return "# Generated code placeholder"
 
-    def _generate_python_template(self, requirements: Dict[str, Any]) -> str:
+    def _generate_python_template(self, requirements: dict[str, Any]) -> str:
         """Generate Python code template."""
         return '''"""
 Generated module.
@@ -308,7 +308,7 @@ if __name__ == "__main__":
     main()
 '''
 
-    def _generate_typescript_template(self, requirements: Dict[str, Any]) -> str:
+    def _generate_typescript_template(self, requirements: dict[str, Any]) -> str:
         """Generate TypeScript code template."""
         return '''/**
  * Generated module
@@ -372,7 +372,7 @@ async function main(): Promise<void> {
 main().catch(console.error);
 '''
 
-    async def _auto_fix_issues(self, code: str, issues: List[Any]) -> str:
+    async def _auto_fix_issues(self, code: str, issues: list[Any]) -> str:
         """
         Attempt to automatically fix code issues.
 

@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, UTC
-from typing import Any, Callable
-import asyncio
+from datetime import UTC, datetime
+from typing import Any
 
-from .skills_core import SkillMetadata, SkillCapability, SkillStatus
+from .skills_core import SkillCapability, SkillMetadata, SkillStatus
 
 logger = logging.getLogger(__name__)
 
@@ -71,7 +71,7 @@ class SkillRegistry:
                 return True, None
 
             except Exception as e:
-                error = f"Error registering skill: {str(e)}"
+                error = f"Error registering skill: {e!s}"
                 logger.error(error, exc_info=True)
                 return False, error
 
@@ -98,7 +98,7 @@ class SkillRegistry:
                 return True, None
 
             except Exception as e:
-                error = f"Error unregistering skill: {str(e)}"
+                error = f"Error unregistering skill: {e!s}"
                 logger.error(error, exc_info=True)
                 return False, error
 
@@ -313,8 +313,8 @@ def get_skill_registry() -> SkillRegistry:
 
 
 __all__ = [
-    "SkillRegistry",
     "SkillRating",
+    "SkillRegistry",
     "SkillSearchResult",
     "get_skill_registry",
 ]

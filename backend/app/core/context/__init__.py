@@ -8,6 +8,12 @@ Provides unified context management including:
 - Code repository indexing
 """
 
+import contextlib
+
+from backend.app.core.context.agent_integration import (
+    AgentLoopContextBridge,
+    fit_messages_to_token_budget,
+)
 from backend.app.core.context.code_index import (
     CodebaseIndex,
     CodeMatch,
@@ -27,48 +33,47 @@ from backend.app.core.context.session_recovery import (
     SessionState,
     SessionStats,
 )
-from backend.app.core.context.agent_integration import (
-    AgentLoopContextBridge,
-    fit_messages_to_token_budget,
-)
 
 # Conditional imports for optional modules
-try:
+with contextlib.suppress(ImportError):
     from backend.app.core.context.compression import (
         CompressedChunk,
         CompressedContext,
         ContextCompressor,
         KeyInfo,
     )
-except ImportError:
-    pass
 
-try:
+with contextlib.suppress(ImportError):
     from backend.app.core.context.retrieval import (
         ContextItem,
         ContextRetriever,
         RetrievalWeights,
     )
-except ImportError:
-    pass
 
 __all__ = [
     "AgentLoopContextBridge",
-    "fit_messages_to_token_budget",
-    "CodebaseIndex",
     "CodeMatch",
+    "CodebaseIndex",
+    "CompressedChunk",
+    "CompressedContext",
+    "ContextCompressor",
+    "ContextItem",
+    "ContextManager",
+    "ContextMetrics",
+    "ContextRetriever",
     "DependencyEdge",
     "DependencyGraph",
     "FileNode",
     "IndexStats",
-    "get_codebase_index",
-    "set_codebase_index",
-    "ContextManager",
-    "ContextMetrics",
+    "KeyInfo",
     "Message",
+    "RetrievalWeights",
     "SessionMetadata",
     "SessionRecovery",
     "SessionSnapshot",
     "SessionState",
     "SessionStats",
+    "fit_messages_to_token_budget",
+    "get_codebase_index",
+    "set_codebase_index",
 ]

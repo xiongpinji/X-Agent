@@ -2,19 +2,19 @@
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from enum import Enum
-from typing import Any, Optional
+from enum import StrEnum
+from typing import Any
 from uuid import uuid4
 
 
-class BackupType(str, Enum):
+class BackupType(StrEnum):
     """Backup type enumeration."""
     FULL = "full"
     INCREMENTAL = "incremental"
     DIFFERENTIAL = "differential"
 
 
-class BackupStatus(str, Enum):
+class BackupStatus(StrEnum):
     """Backup status enumeration."""
     PENDING = "pending"
     IN_PROGRESS = "in_progress"
@@ -24,7 +24,7 @@ class BackupStatus(str, Enum):
     ARCHIVED = "archived"
 
 
-class BackupStorageType(str, Enum):
+class BackupStorageType(StrEnum):
     """Backup storage type enumeration."""
     LOCAL = "local"
     S3 = "s3"
@@ -33,7 +33,7 @@ class BackupStorageType(str, Enum):
     GCS = "gcs"
 
 
-class RestoreStatus(str, Enum):
+class RestoreStatus(StrEnum):
     """Restore status enumeration."""
     PENDING = "pending"
     IN_PROGRESS = "in_progress"
@@ -50,8 +50,8 @@ class BackupMetadata:
     backup_type: BackupType = BackupType.FULL
     status: BackupStatus = BackupStatus.PENDING
     created_at: datetime = field(default_factory=datetime.utcnow)
-    completed_at: Optional[datetime] = None
-    started_at: Optional[datetime] = None
+    completed_at: datetime | None = None
+    started_at: datetime | None = None
 
     # Data information
     total_size: int = 0  # bytes
@@ -74,12 +74,12 @@ class BackupMetadata:
 
     # Retention policy
     retention_days: int = 30
-    expiration_date: Optional[datetime] = None
+    expiration_date: datetime | None = None
     is_locked: bool = False  # Immutable backup
 
     # Backup chain
-    parent_backup_id: Optional[str] = None  # For incremental backups
-    base_backup_id: Optional[str] = None  # For differential backups
+    parent_backup_id: str | None = None  # For incremental backups
+    base_backup_id: str | None = None  # For differential backups
 
     # Performance metrics
     duration_seconds: float = 0.0
@@ -113,14 +113,14 @@ class RestorePoint:
     status: RestoreStatus = RestoreStatus.PENDING
 
     # Restore configuration
-    target_time: Optional[datetime] = None  # For PITR
+    target_time: datetime | None = None  # For PITR
     target_tables: list[str] = field(default_factory=list)  # For selective restore
-    target_tenant_id: Optional[str] = None  # For cross-tenant restore
+    target_tenant_id: str | None = None  # For cross-tenant restore
 
     # Restore progress
     created_at: datetime = field(default_factory=datetime.utcnow)
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
 
     # Performance metrics
     duration_seconds: float = 0.0
@@ -177,8 +177,8 @@ class BackupSchedule:
     # Metadata
     created_at: datetime = field(default_factory=datetime.utcnow)
     updated_at: datetime = field(default_factory=datetime.utcnow)
-    last_run_at: Optional[datetime] = None
-    next_run_at: Optional[datetime] = None
+    last_run_at: datetime | None = None
+    next_run_at: datetime | None = None
 
 
 @dataclass
@@ -186,7 +186,7 @@ class BackupAlert:
     """Backup alert/event."""
     alert_id: str = field(default_factory=lambda: str(uuid4()))
     tenant_id: str = ""
-    backup_id: Optional[str] = None
+    backup_id: str | None = None
 
     # Alert information
     alert_type: str = ""  # success, failure, warning, info
@@ -196,8 +196,8 @@ class BackupAlert:
 
     # Timing
     created_at: datetime = field(default_factory=datetime.utcnow)
-    acknowledged_at: Optional[datetime] = None
-    resolved_at: Optional[datetime] = None
+    acknowledged_at: datetime | None = None
+    resolved_at: datetime | None = None
 
     # Additional context
     context: dict[str, Any] = field(default_factory=dict)

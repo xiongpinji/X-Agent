@@ -1,0 +1,10 @@
+schema_version: 1
+module_path: docs
+title: 项目文档与CI/CD配置中心
+scope:
+    - docs/
+    - .github/
+source_files: []
+depends_on: []
+related_to:
+    - path: deployment

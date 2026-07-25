@@ -12,13 +12,14 @@ This module provides intelligent code generation capabilities including:
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import re
 from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 from uuid import uuid4
 
 logger = logging.getLogger(__name__)
@@ -49,7 +50,7 @@ class CodeTemplate:
     language: str
     category: str  # "class", "function", "test", "api", etc.
     template: str
-    description: Optional[str] = None
+    description: str | None = None
     parameters: list[str] = field(default_factory=list)
     examples: list[str] = field(default_factory=list)
     tags: list[str] = field(default_factory=list)
@@ -69,13 +70,13 @@ class GenerationContext:
     file_path: str
     language: str
     style: CodeStyle = CodeStyle.PEP8
-    existing_code: Optional[str] = None
+    existing_code: str | None = None
     related_files: list[str] = field(default_factory=list)
     imports: list[str] = field(default_factory=list)
     dependencies: list[str] = field(default_factory=list)
     conventions: dict[str, Any] = field(default_factory=dict)
-    test_framework: Optional[str] = None
-    documentation_style: Optional[str] = None
+    test_framework: str | None = None
+    documentation_style: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
@@ -127,7 +128,7 @@ class GeneratedCode:
     language: str
     mode: GenerationMode
     confidence: float = 0.8
-    explanation: Optional[str] = None
+    explanation: str | None = None
     imports_needed: list[str] = field(default_factory=list)
     dependencies_needed: list[str] = field(default_factory=list)
     tests_suggested: list[str] = field(default_factory=list)
@@ -344,7 +345,7 @@ export function {{functionName}}({{params}}) {
         self.templates["python"] = python_templates
         self.templates["javascript"] = js_templates
 
-    def get_template(self, language: str, category: str) -> Optional[CodeTemplate]:
+    def get_template(self, language: str, category: str) -> CodeTemplate | None:
         """Get template by language and category."""
         templates = self.templates.get(language, [])
         for template in templates:
@@ -352,7 +353,7 @@ export function {{functionName}}({{params}}) {
                 return template
         return None
 
-    def list_templates(self, language: Optional[str] = None) -> list[CodeTemplate]:
+    def list_templates(self, language: str | None = None) -> list[CodeTemplate]:
         """List available templates."""
         if language:
             return self.templates.get(language, [])
@@ -504,7 +505,7 @@ class CodeGenerationEngine:
         code_samples = self._collect_code_samples(project_root, language, sample_size)
         return self.style_analyzer.analyze_style(code_samples, language)
 
-    def _find_matching_template(self, request: GenerationRequest) -> Optional[CodeTemplate]:
+    def _find_matching_template(self, request: GenerationRequest) -> CodeTemplate | None:
         """Find matching template for request."""
         # Extract category from description
         description_lower = request.description.lower()
@@ -578,7 +579,7 @@ class CodeGenerationEngine:
         params = {}
         for param in template_params:
             # Simple extraction - in real implementation would be more sophisticated
-            params[param] = f"{{{{param}}}}"
+            params[param] = "{{param}}"
         return params
 
     def _collect_code_samples(self, project_root: str, language: str, sample_size: int) -> list[str]:
@@ -595,9 +596,7 @@ class CodeGenerationEngine:
         for file_path in root.rglob(f"*{ext}"):
             if len(samples) >= sample_size:
                 break
-            try:
+            with contextlib.suppress(Exception):
                 samples.append(file_path.read_text(encoding="utf-8", errors="ignore"))
-            except Exception:
-                pass
 
         return samples

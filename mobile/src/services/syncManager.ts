@@ -163,7 +163,10 @@ class SyncManager {
       const lastSyncTime = await database.getCache('lastSyncTime');
       const since = lastSyncTime || new Date(0).toISOString();
 
-      const response = await apiClient.get('/sync', {
+      const response = await apiClient.get<{
+        tasks?: Task[];
+        workflows?: WorkflowRun[];
+      }>('/sync', {
         params: { since },
       });
 

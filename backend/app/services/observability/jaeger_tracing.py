@@ -3,18 +3,17 @@
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
 from opentelemetry import trace
 from opentelemetry.exporter.jaeger.thrift import JaegerExporter
+from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
+from opentelemetry.instrumentation.redis import RedisInstrumentor
+from opentelemetry.instrumentation.requests import RequestsInstrumentor
+from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
 from opentelemetry.sdk.resources import SERVICE_NAME, Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
-from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
-from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
-from opentelemetry.instrumentation.redis import RedisInstrumentor
-from opentelemetry.instrumentation.requests import RequestsInstrumentor
-from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
 
 from backend.app.settings import get_settings
 
@@ -37,7 +36,7 @@ class JaegerTracingConfig:
         self.jaeger_port = jaeger_port
         self.sampler_type = sampler_type
         self.sampler_param = sampler_param
-        self.tracer_provider: Optional[TracerProvider] = None
+        self.tracer_provider: TracerProvider | None = None
 
     def initialize(self) -> TracerProvider:
         """Initialize Jaeger tracing."""
@@ -121,8 +120,8 @@ class JaegerTracingConfig:
 
 def setup_jaeger_tracing(
     service_name: str = "x-agent",
-    jaeger_host: Optional[str] = None,
-    jaeger_port: Optional[int] = None,
+    jaeger_host: str | None = None,
+    jaeger_port: int | None = None,
 ) -> JaegerTracingConfig:
     """Setup Jaeger tracing with settings from environment."""
     settings = get_settings()

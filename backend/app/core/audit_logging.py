@@ -10,21 +10,19 @@ Provides:
 """
 
 import logging
-import json
-from datetime import datetime, UTC, timedelta
-from typing import Optional, Dict, Any, List, Tuple
-from dataclasses import dataclass, asdict, field
-from enum import Enum
 import uuid
 from collections import defaultdict
+from dataclasses import asdict
+from datetime import UTC, datetime, timedelta
+from enum import Enum, StrEnum
+from typing import Any
 
-from pydantic import BaseModel, Field, validator
-
+from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 
 
-class AuditEventType(str, Enum):
+class AuditEventType(StrEnum):
     """Audit event types."""
     # Authentication
     AUTH_LOGIN = "auth.login"
@@ -65,7 +63,7 @@ class AuditEventType(str, Enum):
     SYSTEM_ERROR = "system.error"
 
 
-class AuditSeverity(str, Enum):
+class AuditSeverity(StrEnum):
     """Audit event severity levels."""
     INFO = "info"
     WARNING = "warning"
@@ -73,7 +71,7 @@ class AuditSeverity(str, Enum):
     CRITICAL = "critical"
 
 
-class AuditEventStatus(str, Enum):
+class AuditEventStatus(StrEnum):
     """Audit event status."""
     SUCCESS = "success"
     FAILURE = "failure"
@@ -95,32 +93,32 @@ class AuditEvent(BaseModel):
     tenant_id: str = Field(..., description="Tenant ID")
 
     # Resource information
-    resource_type: Optional[str] = None
-    resource_id: Optional[str] = None
-    resource_name: Optional[str] = None
+    resource_type: str | None = None
+    resource_id: str | None = None
+    resource_name: str | None = None
 
     # Action details
     action: str = Field(..., description="Action performed")
-    description: Optional[str] = None
-    changes: Dict[str, Any] = Field(default_factory=dict, description="Changed fields")
+    description: str | None = None
+    changes: dict[str, Any] = Field(default_factory=dict, description="Changed fields")
 
     # Request information
-    request_id: Optional[str] = None
-    ip_address: Optional[str] = None
-    user_agent: Optional[str] = None
+    request_id: str | None = None
+    ip_address: str | None = None
+    user_agent: str | None = None
 
     # Result information
-    result: Dict[str, Any] = Field(default_factory=dict)
-    error_message: Optional[str] = None
+    result: dict[str, Any] = Field(default_factory=dict)
+    error_message: str | None = None
 
     # Compliance
     compliance_relevant: bool = False
-    compliance_tags: List[str] = Field(default_factory=list)
+    compliance_tags: list[str] = Field(default_factory=list)
 
     # Metadata
-    metadata: Dict[str, Any] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         data = asdict(self) if hasattr(self, '__dataclass_fields__') else self.dict()
         # Convert enums to strings
@@ -140,20 +138,20 @@ class AuditLogQuery(BaseModel):
     """Query parameters for audit logs."""
 
     # Time range
-    start_time: Optional[datetime] = None
-    end_time: Optional[datetime] = None
+    start_time: datetime | None = None
+    end_time: datetime | None = None
 
     # Filtering
-    event_types: List[AuditEventType] = Field(default_factory=list)
-    severity_levels: List[AuditSeverity] = Field(default_factory=list)
-    actor_ids: List[str] = Field(default_factory=list)
-    resource_types: List[str] = Field(default_factory=list)
-    resource_ids: List[str] = Field(default_factory=list)
-    tenant_ids: List[str] = Field(default_factory=list)
-    statuses: List[AuditEventStatus] = Field(default_factory=list)
+    event_types: list[AuditEventType] = Field(default_factory=list)
+    severity_levels: list[AuditSeverity] = Field(default_factory=list)
+    actor_ids: list[str] = Field(default_factory=list)
+    resource_types: list[str] = Field(default_factory=list)
+    resource_ids: list[str] = Field(default_factory=list)
+    tenant_ids: list[str] = Field(default_factory=list)
+    statuses: list[AuditEventStatus] = Field(default_factory=list)
 
     # Search
-    search_text: Optional[str] = None
+    search_text: str | None = None
     compliance_relevant_only: bool = False
 
     # Pagination
@@ -169,9 +167,9 @@ class AuditLogStore:
     """In-memory audit log store (production should use database)."""
 
     def __init__(self, max_events: int = 100000):
-        self.events: List[AuditEvent] = []
+        self.events: list[AuditEvent] = []
         self.max_events = max_events
-        self.event_index: Dict[str, List[int]] = defaultdict(list)
+        self.event_index: dict[str, list[int]] = defaultdict(list)
         self.logger = logging.getLogger(f"{__name__}.AuditLogStore")
 
     def add_event(self, event: AuditEvent) -> None:
@@ -195,7 +193,7 @@ class AuditLogStore:
 
         self.logger.debug(f"Added audit event: {event.event_id} ({event.event_type.value})")
 
-    def query(self, query: AuditLogQuery) -> Tuple[List[AuditEvent], int]:
+    def query(self, query: AuditLogQuery) -> tuple[list[AuditEvent], int]:
         """Query audit logs.
 
         Args:
@@ -272,7 +270,7 @@ class AuditLogStore:
 
         return results, total_count
 
-    def get_event(self, event_id: str) -> Optional[AuditEvent]:
+    def get_event(self, event_id: str) -> AuditEvent | None:
         """Get audit event by ID.
 
         Args:
@@ -296,9 +294,9 @@ class AuditAnalytics:
 
     def get_event_statistics(
         self,
-        start_time: Optional[datetime] = None,
-        end_time: Optional[datetime] = None,
-    ) -> Dict[str, Any]:
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
+    ) -> dict[str, Any]:
         """Get event statistics.
 
         Args:
@@ -346,9 +344,9 @@ class AuditAnalytics:
     def get_user_activity(
         self,
         actor_id: str,
-        start_time: Optional[datetime] = None,
-        end_time: Optional[datetime] = None,
-    ) -> Dict[str, Any]:
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
+    ) -> dict[str, Any]:
         """Get user activity summary.
 
         Args:
@@ -374,16 +372,16 @@ class AuditAnalytics:
             'total_actions': len(events),
             'first_action': min((e.timestamp for e in events), default=None),
             'last_action': max((e.timestamp for e in events), default=None),
-            'action_types': list(set(e.event_type.value for e in events)),
+            'action_types': list({e.event_type.value for e in events}),
             'failed_actions': sum(1 for e in events if e.status == AuditEventStatus.FAILURE),
-            'resources_accessed': list(set(e.resource_id for e in events if e.resource_id)),
+            'resources_accessed': list({e.resource_id for e in events if e.resource_id}),
         }
 
     def get_compliance_report(
         self,
-        start_time: Optional[datetime] = None,
-        end_time: Optional[datetime] = None,
-    ) -> Dict[str, Any]:
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
+    ) -> dict[str, Any]:
         """Generate compliance report.
 
         Args:
@@ -441,9 +439,9 @@ class AuditAnalytics:
 
     def detect_anomalies(
         self,
-        start_time: Optional[datetime] = None,
-        end_time: Optional[datetime] = None,
-    ) -> List[Dict[str, Any]]:
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
+    ) -> list[dict[str, Any]]:
         """Detect anomalies in audit logs.
 
         Args:

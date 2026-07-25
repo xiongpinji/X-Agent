@@ -1,10 +1,11 @@
 """Remote configuration center integration module."""
 
 import asyncio
+import contextlib
 import json
 import logging
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional
+from typing import Any
 
 import httpx
 
@@ -21,7 +22,7 @@ class RemoteConfigProvider(ABC):
     """Abstract base class for remote configuration providers."""
 
     @abstractmethod
-    async def get_config(self, key: str) -> Optional[Any]:
+    async def get_config(self, key: str) -> Any | None:
         """Get configuration value from remote source.
 
         Args:
@@ -70,7 +71,7 @@ class ConsulConfigProvider(RemoteConfigProvider):
         self.base_url = f"http://{host}:{port}/v1"
         self.client = httpx.AsyncClient(timeout=10.0)
 
-    async def get_config(self, key: str) -> Optional[Any]:
+    async def get_config(self, key: str) -> Any | None:
         """Get configuration from Consul KV store.
 
         Args:
@@ -133,10 +134,8 @@ class ConsulConfigProvider(RemoteConfigProvider):
                         import base64
                         value = base64.b64decode(data[0]["Value"]).decode()
                         index = data[0]["ModifyIndex"]
-                        try:
+                        with contextlib.suppress(json.JSONDecodeError):
                             value = json.loads(value)
-                        except json.JSONDecodeError:
-                            pass
                         await callback(value)
         except asyncio.CancelledError:
             logger.info("Config watch cancelled")
@@ -163,7 +162,7 @@ class EtcdConfigProvider(RemoteConfigProvider):
         self.base_url = f"http://{host}:{port}/v3"
         self.client = httpx.AsyncClient(timeout=10.0)
 
-    async def get_config(self, key: str) -> Optional[Any]:
+    async def get_config(self, key: str) -> Any | None:
         """Get configuration from Etcd.
 
         Args:
@@ -232,10 +231,8 @@ class EtcdConfigProvider(RemoteConfigProvider):
                             for evt in event["result"]["events"]:
                                 if evt.get("kv"):
                                     value = base64.b64decode(evt["kv"]["value"]).decode()
-                                    try:
+                                    with contextlib.suppress(json.JSONDecodeError):
                                         value = json.loads(value)
-                                    except json.JSONDecodeError:
-                                        pass
                                     await callback(value)
         except asyncio.CancelledError:
             logger.info("Config watch cancelled")
@@ -257,10 +254,10 @@ class RemoteConfigManager:
             provider: Remote configuration provider
         """
         self.provider = provider
-        self.cache: Dict[str, Any] = {}
-        self.watch_tasks: Dict[str, asyncio.Task] = {}
+        self.cache: dict[str, Any] = {}
+        self.watch_tasks: dict[str, asyncio.Task] = {}
 
-    async def get(self, key: str, use_cache: bool = True) -> Optional[Any]:
+    async def get(self, key: str, use_cache: bool = True) -> Any | None:
         """Get configuration value.
 
         Args:

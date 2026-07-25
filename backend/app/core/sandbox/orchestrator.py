@@ -14,17 +14,18 @@ the key Codex capability X-Agent was missing.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
-import uuid
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable, Optional
+from typing import Any
 
 from backend.app.core.sandbox.docker_sandbox import (
     DockerSandbox,
-    SandboxSpec,
     SandboxResult,
+    SandboxSpec,
 )
-from backend.app.core.task_queue import TaskQueue, QueuedTask, TaskPriority
+from backend.app.core.task_queue import QueuedTask, TaskPriority, TaskQueue
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +37,7 @@ class SandboxRunResult:
     task_id: str
     success: bool
     steps: list[dict[str, Any]] = field(default_factory=list)
-    error: Optional[str] = None
+    error: str | None = None
     backend: str = "subprocess"
 
     def add_step(self, name: str, result: SandboxResult) -> None:
@@ -63,7 +64,7 @@ class SandboxWorker:
     def __init__(
         self,
         handler: TaskHandler,
-        spec_factory: Optional[Callable[[QueuedTask], SandboxSpec]] = None,
+        spec_factory: Callable[[QueuedTask], SandboxSpec] | None = None,
     ):
         self._handler = handler
         self._spec_factory = spec_factory or (lambda task: SandboxSpec())
@@ -101,7 +102,7 @@ class SandboxOrchestrator:
         queue: TaskQueue,
         handler: TaskHandler,
         max_concurrent: int = 4,
-        spec_factory: Optional[Callable[[QueuedTask], SandboxSpec]] = None,
+        spec_factory: Callable[[QueuedTask], SandboxSpec] | None = None,
     ):
         self._queue = queue
         self._worker = SandboxWorker(handler, spec_factory)
@@ -167,9 +168,7 @@ class SandboxOrchestrator:
         loop_task = getattr(self, "_loop_task", None)
         if loop_task:
             loop_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError, Exception):
                 await loop_task
-            except (asyncio.CancelledError, Exception):
-                pass
         if self._tasks:
             await asyncio.gather(*self._tasks, return_exceptions=True)

@@ -1,29 +1,26 @@
 """Backup and recovery API endpoints."""
 
-from typing import Annotated, Optional
 from datetime import datetime
+from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel
 
-from backend.app.core.security import Principal
 from backend.app.core.backup_manager import BackupManager, BackupScheduler
 from backend.app.core.backup_storage import create_backup_storage
-from backend.app.models.backup import (
-    BackupMetadata,
-    BackupType,
-    BackupStorageType,
-    RestorePoint,
-    BackupSchedule,
-)
+from backend.app.core.security import Principal
 from backend.app.dependencies import enforce_scope, get_current_principal
+from backend.app.models.backup import (
+    BackupStorageType,
+    BackupType,
+)
 
 router = APIRouter(prefix="/api/v1/backup", tags=["backup"])
 PrincipalDependency = Annotated[Principal, Depends(get_current_principal)]
 
 # Global backup manager instance
-_backup_manager: Optional[BackupManager] = None
-_backup_scheduler: Optional[BackupScheduler] = None
+_backup_manager: BackupManager | None = None
+_backup_scheduler: BackupScheduler | None = None
 
 
 def get_backup_manager() -> BackupManager:
@@ -48,8 +45,8 @@ def get_backup_scheduler() -> BackupScheduler:
 class CreateBackupRequest(BaseModel):
     """Request to create a backup."""
     backup_type: BackupType = BackupType.FULL
-    description: Optional[str] = None
-    tags: Optional[dict[str, str]] = None
+    description: str | None = None
+    tags: dict[str, str] | None = None
 
 
 class CreateBackupResponse(BaseModel):
@@ -72,7 +69,7 @@ class BackupListResponse(BaseModel):
 class RestoreBackupRequest(BaseModel):
     """Request to restore from a backup."""
     backup_id: str
-    target_tables: Optional[list[str]] = None
+    target_tables: list[str] | None = None
 
 
 class RestoreBackupResponse(BaseModel):
@@ -122,7 +119,7 @@ class BackupStatusResponse(BaseModel):
     backup_id: str
     status: str
     created_at: datetime
-    completed_at: Optional[datetime]
+    completed_at: datetime | None
     total_size: int
     compressed_size: int
     compression_ratio: float
@@ -145,7 +142,7 @@ async def create_backup(
     try:
         backup_manager = get_backup_manager()
 
-        # TODO: Get actual data from database
+        # NOTE: Requires database persistence layer for real backup data
         # For now, using placeholder data
         data = b"placeholder backup data"
 
@@ -173,7 +170,7 @@ async def create_backup(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error creating backup: {str(e)}",
+            detail=f"Error creating backup: {e!s}",
         )
 
 
@@ -207,7 +204,7 @@ async def list_backups(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error listing backups: {str(e)}",
+            detail=f"Error listing backups: {e!s}",
         )
 
 
@@ -245,7 +242,7 @@ async def restore_backup(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error restoring backup: {str(e)}",
+            detail=f"Error restoring backup: {e!s}",
         )
 
 
@@ -272,7 +269,7 @@ async def verify_backup(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error verifying backup: {str(e)}",
+            detail=f"Error verifying backup: {e!s}",
         )
 
 
@@ -304,7 +301,7 @@ async def delete_backup(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error deleting backup: {str(e)}",
+            detail=f"Error deleting backup: {e!s}",
         )
 
 
@@ -355,7 +352,7 @@ async def get_backup_status(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error getting backup status: {str(e)}",
+            detail=f"Error getting backup status: {e!s}",
         )
 
 
@@ -394,7 +391,7 @@ async def create_backup_schedule(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error creating backup schedule: {str(e)}",
+            detail=f"Error creating backup schedule: {e!s}",
         )
 
 
@@ -428,7 +425,7 @@ async def list_backup_schedules(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error listing backup schedules: {str(e)}",
+            detail=f"Error listing backup schedules: {e!s}",
         )
 
 
@@ -457,5 +454,5 @@ async def delete_backup_schedule(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error deleting backup schedule: {str(e)}",
+            detail=f"Error deleting backup schedule: {e!s}",
         )

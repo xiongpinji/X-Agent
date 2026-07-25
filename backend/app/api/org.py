@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Annotated, Any
+from typing import Annotated
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
@@ -227,7 +227,7 @@ async def create_agent(request: AgentCreateRequest, principal: PrincipalDependen
             memory_scope=inherited_memory_scope,
         )
         if hasattr(agent, "meeting_room_id") and request.meeting_room_id is not None:
-            setattr(agent, "meeting_room_id", request.meeting_room_id)
+            agent.meeting_room_id = request.meeting_room_id
         if template is not None:
             agent.memory_scope["workflow_name"] = template.role_name
         return agent

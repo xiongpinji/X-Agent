@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 import logging
-from typing import Optional
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 
 logger = logging.getLogger(__name__)
 
 
-class SkillDomain(str, Enum):
+class SkillDomain(StrEnum):
     """技能领域"""
     OFFICE = "office"  # 办公
     DESIGN = "design"  # 设计
@@ -87,7 +86,7 @@ class SkillClassifier:
     }
 
     @classmethod
-    def classify(cls, name: str, description: str, keywords: list[str] = None) -> ClassificationResult:
+    def classify(cls, name: str, description: str, keywords: list[str] | None = None) -> ClassificationResult:
         """分类技能"""
         text = f"{name} {description} {' '.join(keywords or [])}".lower()
 
@@ -100,7 +99,7 @@ class SkillClassifier:
         # 找到最高分的领域
         best_domain = max(domain_scores, key=domain_scores.get)
         max_score = domain_scores[best_domain]
-        total_keywords = sum(len(kws) for kws in cls.DOMAIN_KEYWORDS.values())
+        sum(len(kws) for kws in cls.DOMAIN_KEYWORDS.values())
 
         # 计算置信度
         confidence = min(1.0, max_score / max(1, len(cls.DOMAIN_KEYWORDS[best_domain])))

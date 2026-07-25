@@ -39,7 +39,6 @@ if TYPE_CHECKING:
     from backend.app.core.orchestrator import Orchestrator
     from backend.app.core.runs import RunStore
     from backend.app.core.security import APIKeyStore, RBACPolicy
-    from backend.app.core.tools import ToolRegistry
     from backend.app.core.tracing import TraceStore
     from backend.app.core.tracing_postgres import PostgresTraceStore
     from backend.app.core.workflows import (
@@ -77,8 +76,6 @@ def _get_container():
 @lru_cache
 def get_memory() -> MemorySystem | PostgresMemorySystem:
     """Get the memory system instance (singleton)."""
-    from backend.app.core.memory import MemorySystem
-    from backend.app.core.memory_postgres import PostgresMemorySystem
 
     # Fallback to original implementation for compatibility
     from backend.app.dependencies import build_memory_system
@@ -102,7 +99,7 @@ def build_memory_system(
     memory_backend: str,
     database_url: str,
     memory_store_path,
-    embedding_backend: str = "local",
+    embedding_backend: str = "auto",
     openai_api_key: str | None = None,
     openai_embedding_model: str = "text-embedding-3-small",
     openai_embedding_dimensions: int | None = None,

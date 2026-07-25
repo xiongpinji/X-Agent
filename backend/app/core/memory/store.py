@@ -487,19 +487,6 @@ class MemorySystem:
         self._append_to_disk(item)
         return item
 
-    def add_revision(self, memory_id: str, actor_agent_id: str | None, summary: str) -> MemoryRevision | None:
-        item = self.get_item(memory_id)
-        if item is None:
-            return None
-        revision = MemoryRevision(memory_id=memory_id, actor_agent_id=actor_agent_id, summary=summary)
-        item.revisions.append(revision)
-        item.metadata["revision_count"] = len(item.revisions)
-        item.metadata["last_revision_id"] = revision.revision_id
-        if summary:
-            item.content = self._merge_session_summary(item.content, summary)
-        self._append_to_disk(item)
-        return revision
-
     async def search(
         self,
         context: RunContext,
@@ -598,7 +585,6 @@ class MemorySystem:
                     existing.tags = item.tags
                     existing.embedding = item.embedding
                     existing.revisions = item.revisions
-                    existing.updated_at = item.created_at
                 imported_memories += 1
         return {"memories": imported_memories, "sessions": imported_sessions}
 
@@ -674,7 +660,7 @@ class MemorySystem:
         return dict(self._LAYER_PROFILES[self._normalize_layer(layer)])
 
     def layer_counts(self) -> dict[int, int]:
-        counts: dict[int, int] = {layer: 0 for layer in range(1, 11)}
+        counts: dict[int, int] = dict.fromkeys(range(1, 11), 0)
         with self._lock:
             items_snapshot = list(self._items)
         for item in items_snapshot:

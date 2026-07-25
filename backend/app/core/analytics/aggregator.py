@@ -5,17 +5,16 @@ from __future__ import annotations
 import math
 import statistics
 from datetime import datetime, timedelta
-from typing import Any, Optional
+from typing import Any
 
 from .models import (
     AggregatedMetric,
     AggregationLevel,
-    MetricType,
-    TrendData,
     CostAnalysis,
+    MetricType,
     PerformanceAnalysis,
-    UserBehaviorAnalysis,
     RealtimeStats,
+    TrendData,
 )
 from .storage import AnalyticsStorage
 
@@ -62,7 +61,7 @@ class AnalyticsAggregator:
 
         for period_key, calls in grouped.items():
             response_times = [c["response_time_ms"] for c in calls]
-            status_codes = [c["status_code"] for c in calls]
+            [c["status_code"] for c in calls]
             errors = sum(1 for c in calls if c["status_code"] >= 400)
 
             metric = AggregatedMetric(
@@ -181,7 +180,7 @@ class AnalyticsAggregator:
 
         return RealtimeStats(
             timestamp=now,
-            active_users=len(set(c["user_id"] for c in api_calls_5m)),
+            active_users=len({c["user_id"] for c in api_calls_5m}),
             active_sessions=len(api_calls_5m),
             api_calls_per_minute=float(api_calls_per_minute),
             tokens_per_minute=0,  # Would need token data

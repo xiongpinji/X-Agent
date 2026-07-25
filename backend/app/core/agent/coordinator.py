@@ -9,21 +9,26 @@ Responsibilities:
   - Emit events and traces
 """
 
-from typing import Any, Awaitable, Callable
 import json
+from collections.abc import Awaitable, Callable
+from typing import Any
 
-from backend.app.core.contracts import (
-    RunContext, TraceEvent, AgentRunResponse, RunStatus,
-    ToolCallRecord, AgentPlanStepRecord, ExecutionFrame,
-)
-from backend.app.core.tracing import TraceStore, tracer as default_tracer
-from backend.app.core.audit import AuditStore
-from backend.app.core.runs import RunStore
 from backend.app.core.agent.executor import ToolExecutor
-from backend.app.core.agent.planner import TaskPlanner
 from backend.app.core.agent.memory_manager import MemoryManager
-from backend.app.core.agent.state_manager import StateManager, ExecutionState
-from backend.app.core.agent.protocols import PlanStep
+from backend.app.core.agent.planner import TaskPlanner
+from backend.app.core.agent.state_manager import StateManager
+from backend.app.core.audit import AuditStore
+from backend.app.core.contracts import (
+    AgentPlanStepRecord,
+    AgentRunResponse,
+    RunContext,
+    RunStatus,
+    ToolCallRecord,
+    TraceEvent,
+)
+from backend.app.core.runs import RunStore
+from backend.app.core.tracing import TraceStore
+from backend.app.core.tracing import tracer as default_tracer
 
 
 class AgentCoordinator:
@@ -72,7 +77,7 @@ class AgentCoordinator:
         started = self.tracer.record(context, "agent.started", task=task)
 
         # Analyze task
-        task_profile = self.planner.analyze_task(task, extra_context)
+        self.planner.analyze_task(task, extra_context)
         goal = extra_context.get("goal") or task[:240]
 
         # Create initial state

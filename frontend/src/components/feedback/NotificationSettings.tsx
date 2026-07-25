@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { NotificationConfig } from '@/services/feedback'
-import { Plus, Trash2, Edit2, Save, X, Mail, Slack, CheckCircle, AlertCircle } from 'lucide-react'
+import { Plus, Trash2, Edit2, Save, Mail, Slack, CheckCircle, AlertCircle } from 'lucide-react'
 import clsx from 'clsx'
 
 interface NotificationSettingsProps {
@@ -113,12 +113,12 @@ export const NotificationSettings: React.FC<NotificationSettingsProps> = ({
           <div className="space-y-4">
             {/* Type Selection */}
             <div>
-              <label className={clsx(
+              <span className={clsx(
                 'block text-sm font-semibold mb-2',
                 theme === 'dark' ? 'text-slate-300' : 'text-slate-700'
               )}>
                 Channel Type
-              </label>
+              </span>
               <div className="flex gap-4">
                 {(['email', 'slack'] as const).map((type) => (
                   <label key={type} className="flex items-center gap-2 cursor-pointer">
@@ -166,12 +166,12 @@ export const NotificationSettings: React.FC<NotificationSettingsProps> = ({
 
             {/* Triggers */}
             <div>
-              <label className={clsx(
+              <span className={clsx(
                 'block text-sm font-semibold mb-2',
                 theme === 'dark' ? 'text-slate-300' : 'text-slate-700'
               )}>
                 Triggers
-              </label>
+              </span>
               <div className="space-y-2">
                 {triggerOptions.map((trigger) => (
                   <label key={trigger} className="flex items-center gap-2 cursor-pointer">

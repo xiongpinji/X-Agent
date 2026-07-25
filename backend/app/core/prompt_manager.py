@@ -11,7 +11,7 @@ from backend.app.core.prompt_schema import PromptSchema
 class PromptContext:
     """Context for prompt execution with variable substitution."""
 
-    def __init__(self, prompt: PromptSchema, variables: dict[str, Any] = None):
+    def __init__(self, prompt: PromptSchema, variables: dict[str, Any] | None = None):
         """Initialize prompt context."""
         self.prompt = prompt
         self.variables = variables or {}
@@ -45,7 +45,7 @@ class PromptManager:
         self.registry = prompt_registry
         self._loaded = False
 
-    def initialize(self, base_path: str = None) -> int:
+    def initialize(self, base_path: str | None = None) -> int:
         """Initialize and load all prompts."""
         if self._loaded:
             return 0
@@ -54,14 +54,14 @@ class PromptManager:
         self._loaded = True
         return loaded
 
-    def get_system_prompt(self, variables: dict[str, Any] = None) -> PromptContext:
+    def get_system_prompt(self, variables: dict[str, Any] | None = None) -> PromptContext:
         """Get the system prompt for agent initialization."""
         prompt = self.registry.get_prompt("agent_system")
         if not prompt:
             raise ValueError("System prompt 'agent_system' not found")
         return PromptContext(prompt, variables or {})
 
-    def get_role_prompt(self, role: str, variables: dict[str, Any] = None) -> PromptContext:
+    def get_role_prompt(self, role: str, variables: dict[str, Any] | None = None) -> PromptContext:
         """Get a role-specific prompt."""
         prompt_id = f"{role}_role"
         prompt = self.registry.get_prompt(prompt_id)
@@ -72,7 +72,7 @@ class PromptManager:
             raise ValueError(f"Role prompt '{role}' not found")
         return PromptContext(prompt, variables or {})
 
-    def get_tool_prompt(self, tool_name: str, variables: dict[str, Any] = None) -> PromptContext:
+    def get_tool_prompt(self, tool_name: str, variables: dict[str, Any] | None = None) -> PromptContext:
         """Get a tool-specific prompt."""
         prompt_id = f"{tool_name}_tool"
         prompt = self.registry.get_prompt(prompt_id)
@@ -83,7 +83,7 @@ class PromptManager:
             raise ValueError(f"Tool prompt '{tool_name}' not found")
         return PromptContext(prompt, variables or {})
 
-    def get_recovery_prompt(self, recovery_type: str, variables: dict[str, Any] = None) -> PromptContext:
+    def get_recovery_prompt(self, recovery_type: str, variables: dict[str, Any] | None = None) -> PromptContext:
         """Get a recovery-specific prompt."""
         prompt_id = f"{recovery_type}_recovery"
         prompt = self.registry.get_prompt(prompt_id)

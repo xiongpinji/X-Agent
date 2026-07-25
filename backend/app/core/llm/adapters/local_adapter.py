@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Any, Optional, AsyncIterator
 import time
-from .base import LLMAdapter, AdapterResponse
+from collections.abc import AsyncIterator
+from typing import Any
+
+from .base import AdapterResponse, LLMAdapter
 
 
 class LocalAdapter(LLMAdapter):
@@ -13,7 +15,7 @@ class LocalAdapter(LLMAdapter):
     def __init__(
         self,
         model: str,
-        model_path: Optional[str] = None,
+        model_path: str | None = None,
         **kwargs,
     ):
         """Initialize local adapter."""
@@ -40,7 +42,7 @@ class LocalAdapter(LLMAdapter):
     async def chat(
         self,
         messages: list[dict[str, str]],
-        tools: Optional[list[dict[str, Any]]] = None,
+        tools: list[dict[str, Any]] | None = None,
         **kwargs,
     ) -> AdapterResponse:
         """Send a chat request to local model."""
@@ -84,7 +86,7 @@ class LocalAdapter(LLMAdapter):
     async def stream_chat(
         self,
         messages: list[dict[str, str]],
-        tools: Optional[list[dict[str, Any]]] = None,
+        tools: list[dict[str, Any]] | None = None,
         **kwargs,
     ) -> AsyncIterator[str]:
         """Stream a chat response from local model."""

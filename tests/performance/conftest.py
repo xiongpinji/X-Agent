@@ -56,6 +56,9 @@ def pytest_collection_modifyitems(config, items):
             item_path = Path(str(item.fspath)).resolve()
         except Exception:
             continue
+        # Exempt tests marked with local_perf (in-process TestClient, no live server needed)
+        if item.get_closest_marker("local_perf"):
+            continue
         if conftest_dir in item_path.parents:
             item.add_marker(skip_marker)
 

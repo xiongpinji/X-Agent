@@ -6,13 +6,12 @@ import ast
 import logging
 import re
 from dataclasses import dataclass
-from enum import Enum
-from typing import Optional, Set
+from enum import StrEnum
 
 logger = logging.getLogger(__name__)
 
 
-class RiskLevel(str, Enum):
+class RiskLevel(StrEnum):
     """Risk level for code execution."""
 
     LOW = "low"
@@ -28,8 +27,8 @@ class SecurityViolation:
     risk_level: RiskLevel
     pattern: str
     message: str
-    line_number: Optional[int] = None
-    suggestion: Optional[str] = None
+    line_number: int | None = None
+    suggestion: str | None = None
 
 
 class PythonSecurityValidator:
@@ -317,7 +316,7 @@ class ASTSecurityValidator:
         "importlib",
     }
 
-    def __init__(self, allowed_imports: Optional[Set[str]] = None):
+    def __init__(self, allowed_imports: set[str] | None = None):
         """Initialize AST validator.
 
         Args:
@@ -435,21 +434,20 @@ class ASTSecurityValidator:
                 )
 
         # Check Attribute nodes for dangerous attributes
-        elif isinstance(node, ast.Attribute):
-            if node.attr in self.DANGEROUS_ATTRIBUTES:
-                violations.append(
-                    SecurityViolation(
-                        risk_level=RiskLevel.CRITICAL,
-                        pattern=f".{node.attr}",
-                        message=f"Dangerous attribute access: {node.attr}",
-                        line_number=node.lineno,
-                        suggestion=f"Attribute '{node.attr}' is not allowed in sandboxed code",
-                    )
+        elif isinstance(node, ast.Attribute) and node.attr in self.DANGEROUS_ATTRIBUTES:
+            violations.append(
+                SecurityViolation(
+                    risk_level=RiskLevel.CRITICAL,
+                    pattern=f".{node.attr}",
+                    message=f"Dangerous attribute access: {node.attr}",
+                    line_number=node.lineno,
+                    suggestion=f"Attribute '{node.attr}' is not allowed in sandboxed code",
                 )
+            )
 
         return violations
 
-    def _get_call_name(self, func: ast.expr) -> Optional[str]:
+    def _get_call_name(self, func: ast.expr) -> str | None:
         """Extract the function name from a Call node's func attribute.
 
         Args:
@@ -564,7 +562,7 @@ class JavaScriptSecurityValidator:
         return violations
 
 
-def validate_python_code(code: str, allowed_imports: Optional[Set[str]] = None) -> tuple[bool, list[SecurityViolation]]:
+def validate_python_code(code: str, allowed_imports: set[str] | None = None) -> tuple[bool, list[SecurityViolation]]:
     """Validate Python code and return violations.
 
     Uses a two-layer defense: regex-based patterns (first pass) and AST analysis (second pass).

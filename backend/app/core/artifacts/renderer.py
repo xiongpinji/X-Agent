@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
 import json
+from typing import Any
 
 from backend.app.core.artifacts.storage import Artifact
 
@@ -11,7 +11,7 @@ from backend.app.core.artifacts.storage import Artifact
 class ArtifactRenderer:
     """Artifact rendering engine."""
 
-    async def render_html(self, artifact: Artifact, data: Optional[Dict[str, Any]] = None) -> str:
+    async def render_html(self, artifact: Artifact, data: dict[str, Any] | None = None) -> str:
         """Render HTML artifact.
 
         Args:
@@ -28,7 +28,7 @@ class ArtifactRenderer:
         # In production, use Jinja2 or similar for template rendering
         return artifact.content
 
-    async def render_chart(self, artifact: Artifact, data: Optional[List[Dict[str, Any]]] = None) -> str:
+    async def render_chart(self, artifact: Artifact, data: list[dict[str, Any]] | None = None) -> str:
         """Render chart artifact.
 
         Args:
@@ -84,7 +84,7 @@ class ArtifactRenderer:
         """
         return html
 
-    async def render_table(self, artifact: Artifact, data: Optional[List[Dict[str, Any]]] = None) -> str:
+    async def render_table(self, artifact: Artifact, data: list[dict[str, Any]] | None = None) -> str:
         """Render table artifact.
 
         Args:
@@ -148,7 +148,7 @@ class ArtifactRenderer:
         """
         return html
 
-    async def render_dashboard(self, artifact: Artifact, data: Optional[Dict[str, Any]] = None) -> str:
+    async def render_dashboard(self, artifact: Artifact, data: dict[str, Any] | None = None) -> str:
         """Render dashboard artifact.
 
         Args:
@@ -205,7 +205,7 @@ class ArtifactRenderer:
         """
         return html
 
-    async def render(self, artifact: Artifact, data: Optional[Dict[str, Any]] = None) -> str:
+    async def render(self, artifact: Artifact, data: dict[str, Any] | None = None) -> str:
         """Render artifact based on type.
 
         Args:

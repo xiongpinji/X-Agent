@@ -7,7 +7,11 @@ from pydantic import BaseModel, Field
 
 from backend.app.api.errors import api_error
 from backend.app.core.agent import AgentLoop
-from backend.app.core.contracts import AgentRunResponse, ErrorCode, RunContext, AgentPlanStepRecord, AgentRunRecord
+from backend.app.core.contracts import (
+    AgentRunResponse,
+    ErrorCode,
+    RunContext,
+)
 from backend.app.core.security import Principal
 from backend.app.dependencies import enforce_scope, get_agent, get_current_principal, get_run_store
 
@@ -184,7 +188,7 @@ async def get_agent_detail(agent_id: str, agent: AgentDependency, principal: Pri
 
 
 @router.get("/{agent_id}/runs", response_model=AgentRunHistoryResponse)
-async def list_agent_runs(agent_id: str, run_store: RunStoreDependency, principal: PrincipalDependency, limit: int = 20) -> AgentRunHistoryResponse:
+async def list_agent_runs_for_agent(agent_id: str, run_store: RunStoreDependency, principal: PrincipalDependency, limit: int = 20) -> AgentRunHistoryResponse:
     enforce_scope(principal, "agent:read")
     items = []
     for record in run_store.list(limit=limit):

@@ -9,31 +9,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from backend.app.core.container import Container, Scope
+from backend.app.core.container import Container
 
 if TYPE_CHECKING:
-    from backend.app.core.agent import AgentLoop
-    from backend.app.core.approvals import ApprovalStore
-    from backend.app.core.audit import AuditStore
-    from backend.app.core.browser import BrowserAutomationStore
-    from backend.app.core.desktop import DesktopAutomationStore
-    from backend.app.core.llm import LLMRouter
-    from backend.app.core.memory import MemorySystem
-    from backend.app.core.memory_postgres import PostgresMemorySystem
-    from backend.app.core.orchestrator import Orchestrator
-    from backend.app.core.policy import ToolPolicyEngine
-    from backend.app.core.runs import RunStore
-    from backend.app.core.security import APIKeyStore, RBACPolicy
-    from backend.app.core.tools import ToolRegistry
-    from backend.app.core.tracing import TraceStore
-    from backend.app.core.tracing_postgres import PostgresTraceStore
-    from backend.app.core.workflows import (
-        WorkflowExecutor,
-        WorkflowRepository,
-        WorkflowRuntimeManager,
-        WorkflowScheduler,
-        WorkflowScheduleStore,
-    )
+    pass
 
 
 def configure_container(container: Container) -> Container:
@@ -111,17 +90,17 @@ def configure_container(container: Container) -> Container:
         return get_approval_store()
 
     # Register storage stores
-    from backend.app.core.memory import MemorySystem
-    from backend.app.core.memory_postgres import PostgresMemorySystem
-    from backend.app.core.tracing import TraceStore
-    from backend.app.core.tracing_postgres import PostgresTraceStore
-    from backend.app.core.runs import RunStore
+    from backend.app.core.approvals import ApprovalStore
+    from backend.app.core.audit import AuditStore
     from backend.app.core.browser import BrowserAutomationStore
     from backend.app.core.desktop import DesktopAutomationStore
-    from backend.app.core.tools import ToolExecutionStore
-    from backend.app.core.audit import AuditStore
+    from backend.app.core.memory import MemorySystem
+    from backend.app.core.memory_postgres import PostgresMemorySystem
+    from backend.app.core.runs import RunStore
     from backend.app.core.security import APIKeyStore
-    from backend.app.core.approvals import ApprovalStore
+    from backend.app.core.tools import ToolExecutionStore
+    from backend.app.core.tracing import TraceStore
+    from backend.app.core.tracing_postgres import PostgresTraceStore
 
     container.singleton(MemorySystem | PostgresMemorySystem, _get_memory)
     container.singleton(TraceStore | PostgresTraceStore, _get_trace_store)
@@ -214,11 +193,11 @@ def configure_container(container: Container) -> Container:
         return get_workflow_scheduler()
 
     from backend.app.core.workflows import (
-        WorkflowRepository,
         WorkflowExecutor,
+        WorkflowRepository,
         WorkflowRuntimeManager,
-        WorkflowScheduleStore,
         WorkflowScheduler,
+        WorkflowScheduleStore,
     )
 
     container.singleton(WorkflowRepository, _get_workflow_repository)

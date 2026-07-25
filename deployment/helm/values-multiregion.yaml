@@ -1,0 +1,156 @@
+# Multi-region deployment configuration
+# Primary region: handles all writes
+# Secondary region: read replica + hot standby
+#
+# Usage:
+#   helm install xagent ./deployment/helm -f values.yaml -f values-multiregion.yaml
+#
+# Architecture:
+#   ┌─────────────────────────────────────────────────────────┐
+#   │  Primary Region (east-us)                               │
+#   │  - All writes (PostgreSQL primary, Redis master)        │
+#   │  - API servers (full read/write)                        │
+#   │  - Qdrant shard leader                                  │
+#   └────────────────────────┬────────────────────────────────┘
+#                            │ streaming replication
+#   ┌────────────────────────▼────────────────────────────────┐
+#   │  Secondary Region (west-eu)                             │
+#   │  - Read replicas (PostgreSQL replica, Redis replica)    │
+#   │  - API servers (read-only until failover)               │
+#   │  - Qdrant shard replica                                 │
+#   │  - Hot standby: promotes automatically on failure       │
+#   └─────────────────────────────────────────────────────────┘
+
+global:
+  multiRegion:
+    enabled: true
+    primaryRegion: "east-us"
+    secondaryRegion: "west-eu"
+    failoverMode: "automatic"  # automatic | manual
+    healthCheckInterval: 10s
+    failoverThreshold: 3  # consecutive failures before failover
+    # DNS-based routing: clients resolve to nearest healthy region
+    dnsProvider: "route53"  # route53 | cloudflare | gcp-dns
+    healthCheckPath: "/api/v1/dr/status"
+
+# --- PostgreSQL: streaming replication with synchronous commit ---
+postgresql:
+  replication:
+    enabled: true
+    mode: "streaming"  # streaming | logical
+    replicaCount: 1
+    synchronousCommit: "on"  # for zero data loss (RPO=0)
+    # Connection settings for replica
+    primaryHost: "xagent-postgres-primary.east-us.svc.cluster.local"
+    replicaHost: "xagent-postgres-replica.west-eu.svc.cluster.local"
+    replicationUser: "replicator"
+    replicationPasswordSecret: "xagent-pg-replication-secret"
+    # WAL archiving for point-in-time recovery
+    walArchive:
+      enabled: true
+      bucket: "xagent-wal-archive"
+      region: "east-us"
+  primary:
+    resources:
+      requests:
+        memory: "2Gi"
+        cpu: "1000m"
+      limits:
+        memory: "4Gi"
+        cpu: "2000m"
+  replica:
+    resources:
+      requests:
+        memory: "2Gi"
+        cpu: "1000m"
+      limits:
+        memory: "4Gi"
+        cpu: "2000m"
+
+# --- Redis: Sentinel-based HA with cross-region replica ---
+redis:
+  replication:
+    enabled: true
+    mode: "sentinel"
+    sentinelCount: 3
+    # Sentinel quorum: majority must agree master is down
+    sentinelQuorum: 2
+    sentinelDownAfterMilliseconds: 5000
+    sentinelFailoverTimeout: 60000
+    # Cross-region replica configuration
+    primaryRegion: "east-us"
+    replicaRegion: "west-eu"
+    replicaPriority: 100  # lower = preferred for promotion
+
+# --- Qdrant: distributed mode with replication factor ---
+qdrant:
+  replication:
+    enabled: true
+    factor: 2  # replicate each shard to 2 nodes
+    # Distributed mode settings
+    clusterMode: true
+    nodeCount: 4  # 2 per region
+    shardCount: 4
+    # Write consistency: wait for all replicas to confirm
+    writeConsistencyFactor: 2
+    # Cross-region replication latency tolerance
+    replicationTimeout: 30s
+
+# --- Neo4j: Community edition (no native clustering) ---
+neo4j:
+  clustering:
+    enabled: false  # Community edition doesn't support clustering
+    # Use application-level dual-write for graph data
+    # Strategy: write to primary, async replicate via change log
+  dualWrite:
+    enabled: true
+    asyncReplication: true
+    conflictResolution: "last-write-wins"
+    replicationLagAlertThreshold: 5s
+
+# --- API Server: region-aware configuration ---
+api:
+  replicas: 3
+  multiRegion:
+    # Primary region: full read/write
+    primaryRegionReplicas: 3
+    # Secondary region: read-only until failover
+    secondaryRegionReplicas: 2
+    # Read-only mode prevents writes to secondary
+    readOnlyModeInSecondary: true
+    # Automatically switch to read-write on failover
+    autoPromoteOnFailover: true
+
+# --- Failover controller (custom deployment) ---
+failoverController:
+  enabled: true
+  image: "xagent/failover-controller:latest"
+  replicas: 1  # single leader with lease-based election
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "100m"
+    limits:
+      memory: "512Mi"
+      cpu: "250m"
+  config:
+    checkInterval: 10s
+    failoverThreshold: 3
+    # Cooldown after failover to prevent flapping
+    failoverCooldown: 300s
+    # Notification webhook for failover events
+    notificationWebhook: ""
+    # Require manual confirmation for demotion (safety)
+    requireManualDemoteConfirm: true
+
+# --- Network policies for cross-region traffic ---
+networkPolicy:
+  crossRegion:
+    enabled: true
+    # Only allow replication traffic between regions
+    allowedPorts:
+      - 5432  # PostgreSQL replication
+      - 6379  # Redis replication
+      - 6334  # Qdrant inter-node
+    # Encrypt cross-region traffic
+    tlsRequired: true

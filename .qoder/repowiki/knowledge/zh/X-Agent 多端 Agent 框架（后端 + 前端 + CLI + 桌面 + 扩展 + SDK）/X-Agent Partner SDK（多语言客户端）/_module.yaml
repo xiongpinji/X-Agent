@@ -1,0 +1,9 @@
+schema_version: 1
+module_path: sdks
+title: X-Agent Partner SDK（多语言客户端）
+scope:
+    - sdks/
+source_files: []
+depends_on: []
+related_to:
+    - path: backend

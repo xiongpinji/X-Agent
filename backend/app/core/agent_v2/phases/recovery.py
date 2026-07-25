@@ -11,7 +11,6 @@ from typing import TYPE_CHECKING
 from backend.app.core.contracts import RecoveryFrame
 
 if TYPE_CHECKING:
-    from backend.app.core.agent import AgentPlanStep
     from backend.app.core.agent_phases import PhaseContext
 
 

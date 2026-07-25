@@ -11,12 +11,12 @@ Implements:
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 import time
 import uuid
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
@@ -108,7 +108,6 @@ class StructuredLoggingMiddleware(BaseHTTPMiddleware):
         # Extract request info
         method = request.method
         path = request.url.path
-        query_string = request.url.query
         client_ip = request.client.host if request.client else "unknown"
 
         # Get context info
@@ -329,11 +328,7 @@ class CachingMiddleware(BaseHTTPMiddleware):
         if request.method not in self.CACHEABLE_METHODS:
             return False
 
-        for path in self.CACHEABLE_PATHS:
-            if request.url.path.startswith(path):
-                return True
-
-        return False
+        return any(request.url.path.startswith(path) for path in self.CACHEABLE_PATHS)
 
 
 class RateLimitingMiddleware(BaseHTTPMiddleware):

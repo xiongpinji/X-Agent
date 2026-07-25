@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from enum import Enum
-from typing import Any, Optional, Callable, Awaitable
-from datetime import datetime, timedelta
 import asyncio
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta
+from enum import Enum
+from typing import Any
 
 
 class FallbackStrategy(Enum):
@@ -56,7 +57,7 @@ class CircuitBreaker:
         self.threshold = threshold
         self.timeout_s = timeout_s
         self.failure_count = 0
-        self.last_failure_time: Optional[datetime] = None
+        self.last_failure_time: datetime | None = None
         self.state = "closed"  # closed, open, half_open
 
     def record_success(self) -> None:
@@ -123,10 +124,7 @@ class FallbackManager:
 
         # Check circuit breaker
         cb = self.get_circuit_breaker(error.model)
-        if not cb.is_available():
-            return False
-
-        return True
+        return cb.is_available()
 
     def get_retry_delay_ms(self, retry_count: int) -> int:
         """Calculate retry delay with exponential backoff."""
@@ -138,7 +136,7 @@ class FallbackManager:
         )
         return min(int(delay), self.config.max_retry_delay_ms)
 
-    def get_fallback_model(self, failed_model: str) -> Optional[str]:
+    def get_fallback_model(self, failed_model: str) -> str | None:
         """Get a fallback model to try."""
         if not self.config.degradation_models:
             return None
@@ -201,8 +199,8 @@ class FallbackManager:
         model_name: str = "unknown",
     ) -> Any:
         """Execute a function with fallback options."""
-        all_fns = [primary_fn] + fallback_fns
-        last_error: Optional[Exception] = None
+        all_fns = [primary_fn, *fallback_fns]
+        last_error: Exception | None = None
 
         for attempt, fn in enumerate(all_fns):
             try:
@@ -213,7 +211,7 @@ class FallbackManager:
                 self.record_success(model_name)
                 return result
 
-            except asyncio.TimeoutError as e:
+            except TimeoutError as e:
                 last_error = e
                 error = self.classify_error(e)
                 error.model = model_name

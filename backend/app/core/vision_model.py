@@ -2,20 +2,20 @@
 视觉模型集成 - 支持GPT-4V、Claude Vision和本地视觉模型
 """
 
+import asyncio
 import base64
 import logging
-from abc import ABC, abstractmethod
-from enum import Enum
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Protocol, Union
-from dataclasses import dataclass
-import asyncio
 import time
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from enum import StrEnum
+from pathlib import Path
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
-class VisionModelType(str, Enum):
+class VisionModelType(StrEnum):
     """视觉模型类型"""
     GPT4V = "gpt4v"
     CLAUDE_VISION = "claude_vision"
@@ -23,7 +23,7 @@ class VisionModelType(str, Enum):
     BLIP = "blip"
 
 
-class VisionTask(str, Enum):
+class VisionTask(StrEnum):
     """视觉任务类型"""
     IMAGE_CLASSIFICATION = "image_classification"
     OBJECT_DETECTION = "object_detection"
@@ -39,10 +39,10 @@ class VisionResult:
     task: VisionTask
     model: VisionModelType
     success: bool
-    data: Optional[Dict[str, Any]] = None
-    error: Optional[str] = None
+    data: dict[str, Any] | None = None
+    error: str | None = None
     latency_ms: float = 0.0
-    confidence: Optional[float] = None
+    confidence: float | None = None
 
 
 class VisionModel(ABC):
@@ -61,10 +61,10 @@ class VisionModel(ABC):
     @abstractmethod
     async def batch_process(
         self,
-        image_paths: List[str],
+        image_paths: list[str],
         task: VisionTask,
         **kwargs
-    ) -> List[VisionResult]:
+    ) -> list[VisionResult]:
         """批量处理图像"""
         pass
 
@@ -171,10 +171,10 @@ class GPT4VisionModel(VisionModel):
 
     async def batch_process(
         self,
-        image_paths: List[str],
+        image_paths: list[str],
         task: VisionTask,
         **kwargs
-    ) -> List[VisionResult]:
+    ) -> list[VisionResult]:
         """批量处理图像"""
         tasks = [self.process(path, task, **kwargs) for path in image_paths]
         return await asyncio.gather(*tasks)
@@ -273,10 +273,10 @@ class ClaudeVisionModel(VisionModel):
 
     async def batch_process(
         self,
-        image_paths: List[str],
+        image_paths: list[str],
         task: VisionTask,
         **kwargs
-    ) -> List[VisionResult]:
+    ) -> list[VisionResult]:
         """批量处理图像"""
         tasks = [self.process(path, task, **kwargs) for path in image_paths]
         return await asyncio.gather(*tasks)
@@ -326,9 +326,9 @@ class CLIPVisionModel(VisionModel):
         try:
             await self._initialize()
 
-            from PIL import Image
             import clip
             import torch
+            from PIL import Image
 
             image = Image.open(image_path).convert("RGB")
             image_input = self._processor(image).unsqueeze(0).to(self._device)
@@ -345,7 +345,7 @@ class CLIPVisionModel(VisionModel):
 
                 results = {
                     label: float(prob)
-                    for label, prob in zip(labels, probs[0])
+                    for label, prob in zip(labels, probs[0], strict=False)
                 }
                 latency_ms = (time.time() - start_time) * 1000
 
@@ -394,10 +394,10 @@ class CLIPVisionModel(VisionModel):
 
     async def batch_process(
         self,
-        image_paths: List[str],
+        image_paths: list[str],
         task: VisionTask,
         **kwargs
-    ) -> List[VisionResult]:
+    ) -> list[VisionResult]:
         """批量处理图像"""
         tasks = [self.process(path, task, **kwargs) for path in image_paths]
         return await asyncio.gather(*tasks)
@@ -416,8 +416,8 @@ class BLIPVisionModel(VisionModel):
         """初始化模型"""
         if self._model is None:
             try:
-                from transformers import BlipProcessor, BlipForConditionalGeneration
                 import torch
+                from transformers import BlipForConditionalGeneration, BlipProcessor
             except ImportError as exc:
                 raise RuntimeError("transformers and torch packages are not installed") from exc
 
@@ -438,8 +438,8 @@ class BLIPVisionModel(VisionModel):
         try:
             await self._initialize()
 
-            from PIL import Image
             import torch
+            from PIL import Image
 
             image = Image.open(image_path).convert("RGB")
 
@@ -498,10 +498,10 @@ class BLIPVisionModel(VisionModel):
 
     async def batch_process(
         self,
-        image_paths: List[str],
+        image_paths: list[str],
         task: VisionTask,
         **kwargs
-    ) -> List[VisionResult]:
+    ) -> list[VisionResult]:
         """批量处理图像"""
         tasks = [self.process(path, task, **kwargs) for path in image_paths]
         return await asyncio.gather(*tasks)
@@ -510,7 +510,7 @@ class BLIPVisionModel(VisionModel):
 class VisionModelFactory:
     """视觉模型工厂"""
 
-    _models: Dict[VisionModelType, VisionModel] = {}
+    _models: dict[VisionModelType, VisionModel] = {}
 
     @classmethod
     def create(
@@ -556,7 +556,7 @@ class VisionModelManager:
     """视觉模型管理器"""
 
     def __init__(self):
-        self.models: Dict[VisionModelType, VisionModel] = {}
+        self.models: dict[VisionModelType, VisionModel] = {}
         self.default_model = VisionModelType.CLAUDE_VISION
 
     def register_model(
@@ -568,7 +568,7 @@ class VisionModelManager:
         self.models[model_type] = model
         logger.info(f"Registered vision model: {model_type}")
 
-    def get_model(self, model_type: Optional[VisionModelType] = None) -> VisionModel:
+    def get_model(self, model_type: VisionModelType | None = None) -> VisionModel:
         """获取模型"""
         model_type = model_type or self.default_model
         if model_type not in self.models:
@@ -579,7 +579,7 @@ class VisionModelManager:
         self,
         image_path: str,
         task: VisionTask,
-        model_type: Optional[VisionModelType] = None,
+        model_type: VisionModelType | None = None,
         **kwargs
     ) -> VisionResult:
         """处理图像"""
@@ -588,11 +588,11 @@ class VisionModelManager:
 
     async def batch_process(
         self,
-        image_paths: List[str],
+        image_paths: list[str],
         task: VisionTask,
-        model_type: Optional[VisionModelType] = None,
+        model_type: VisionModelType | None = None,
         **kwargs
-    ) -> List[VisionResult]:
+    ) -> list[VisionResult]:
         """批量处理图像"""
         model = self.get_model(model_type)
         return await model.batch_process(image_paths, task, **kwargs)
@@ -601,9 +601,9 @@ class VisionModelManager:
         self,
         image_path: str,
         task: VisionTask,
-        model_types: Optional[List[VisionModelType]] = None,
+        model_types: list[VisionModelType] | None = None,
         **kwargs
-    ) -> Dict[VisionModelType, VisionResult]:
+    ) -> dict[VisionModelType, VisionResult]:
         """比较多个模型的结果"""
         model_types = model_types or list(self.models.keys())
         results = {}

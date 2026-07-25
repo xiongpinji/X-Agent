@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from typing import Any
 
+from backend.app.core.capability_strategies import CapabilityRegistry
 from backend.app.core.contracts import (
     CapabilityDecision,
     ExecutionFrame,
@@ -12,7 +12,6 @@ from backend.app.core.contracts import (
     TaskFrame,
     ToolDecision,
 )
-from backend.app.core.capability_strategies import CapabilityRegistry
 
 
 class CapabilityRouter:

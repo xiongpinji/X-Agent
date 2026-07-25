@@ -2,18 +2,18 @@
 
 from __future__ import annotations
 
-from typing import Optional, Any
 from dataclasses import dataclass
+from typing import Any
 
 try:
     from playwright.async_api import Page
 except ImportError:
     Page = object  # type: ignore[assignment]
 
-from backend.app.services.browser.network_monitor import NetworkMonitor
-from backend.app.services.browser.element_reference import ElementReferenceSystem
 from backend.app.services.browser.console_monitor import ConsoleMonitor
+from backend.app.services.browser.element_reference import ElementReferenceSystem
 from backend.app.services.browser.natural_locator import NaturalLocator
+from backend.app.services.browser.network_monitor import NetworkMonitor
 from backend.app.services.browser.page_snapshot import PageSnapshotManager
 
 
@@ -74,7 +74,7 @@ class AdvancedBrowserMonitoring:
         except Exception:
             return False
 
-    def get_session(self, session_id: str) -> Optional[AdvancedBrowserSession]:
+    def get_session(self, session_id: str) -> AdvancedBrowserSession | None:
         """Get a session."""
         return self._sessions.get(session_id)
 
@@ -82,7 +82,7 @@ class AdvancedBrowserMonitoring:
     async def get_network_requests(
         self,
         session_id: str,
-        url_pattern: Optional[str] = None,
+        url_pattern: str | None = None,
     ) -> list[dict[str, Any]]:
         """Get network requests."""
         session = self._require_session(session_id)
@@ -92,7 +92,7 @@ class AdvancedBrowserMonitoring:
     async def get_network_responses(
         self,
         session_id: str,
-        url_pattern: Optional[str] = None,
+        url_pattern: str | None = None,
     ) -> list[dict[str, Any]]:
         """Get network responses."""
         session = self._require_session(session_id)
@@ -117,7 +117,7 @@ class AdvancedBrowserMonitoring:
         tree = await session.element_reference.build_element_tree(session.page)
         return tree.to_dict()
 
-    async def get_element_by_ref(self, session_id: str, ref: str) -> Optional[dict[str, Any]]:
+    async def get_element_by_ref(self, session_id: str, ref: str) -> dict[str, Any] | None:
         """Get element by reference."""
         session = self._require_session(session_id)
         elem = await session.element_reference.get_element_by_ref(ref)
@@ -137,7 +137,7 @@ class AdvancedBrowserMonitoring:
     async def get_console_messages(
         self,
         session_id: str,
-        pattern: Optional[str] = None,
+        pattern: str | None = None,
         only_errors: bool = False,
     ) -> list[dict[str, Any]]:
         """Get console messages."""
@@ -167,7 +167,7 @@ class AdvancedBrowserMonitoring:
         self,
         session_id: str,
         description: str,
-    ) -> Optional[dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """Find element by description."""
         session = self._require_session(session_id)
         element = await session.natural_locator.find_element(session.page, description)
@@ -230,7 +230,7 @@ class AdvancedBrowserMonitoring:
         session_id: str,
         before_label: str,
         after_label: str,
-    ) -> Optional[dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """Compare snapshots."""
         session = self._require_session(session_id)
         before = session.snapshot_manager.get_snapshot(before_label)
@@ -247,7 +247,7 @@ class AdvancedBrowserMonitoring:
         session_id: str,
         before_label: str,
         after_label: str,
-    ) -> Optional[list[str]]:
+    ) -> list[str] | None:
         """Get DOM diff."""
         session = self._require_session(session_id)
         return session.snapshot_manager.get_dom_diff(before_label, after_label)

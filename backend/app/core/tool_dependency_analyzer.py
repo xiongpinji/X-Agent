@@ -78,7 +78,7 @@ class ToolDependencyAnalyzer:
         plan = ExecutionPlan(total_calls=len(graph.nodes))
 
         # Calculate in-degree for each node
-        in_degree = {call_id: len(deps) for call_id, deps in graph.reverse_edges.items()}
+        {call_id: len(deps) for call_id, deps in graph.reverse_edges.items()}
 
         # Track which layer each call belongs to
         call_to_layer: dict[str, int] = {}
@@ -152,7 +152,7 @@ class ToolDependencyAnalyzer:
                 elif neighbor in rec_stack:
                     # Found a cycle
                     cycle_start = path.index(neighbor)
-                    cycle = path[cycle_start:] + [neighbor]
+                    cycle = [*path[cycle_start:], neighbor]
                     cycles.append(cycle)
 
             rec_stack.discard(node)

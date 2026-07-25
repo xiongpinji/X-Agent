@@ -13,8 +13,8 @@ from __future__ import annotations
 import json
 import logging
 from datetime import UTC, datetime
-from enum import Enum
-from typing import Any, Optional
+from enum import StrEnum
+from typing import Any
 from uuid import uuid4
 
 from pydantic import BaseModel, Field
@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 # 迁移模型
 # ============================================================================
 
-class MigrationType(str, Enum):
+class MigrationType(StrEnum):
     """迁移类型"""
     FULL = "full"  # 完整迁移
     INCREMENTAL = "incremental"  # 增量迁移
@@ -34,7 +34,7 @@ class MigrationType(str, Enum):
     DATA_ONLY = "data_only"  # 仅迁移数据
 
 
-class MigrationStatus(str, Enum):
+class MigrationStatus(StrEnum):
     """迁移状态"""
     PENDING = "pending"
     VALIDATING = "validating"
@@ -46,7 +46,7 @@ class MigrationStatus(str, Enum):
     ROLLED_BACK = "rolled_back"
 
 
-class MigrationPhase(str, Enum):
+class MigrationPhase(StrEnum):
     """迁移阶段"""
     PRE_VALIDATION = "pre_validation"
     SCHEMA_MIGRATION = "schema_migration"
@@ -63,14 +63,14 @@ class SourceSystem(BaseModel):
     system_type: str  # "xagent_v1", "openclaw", "hermes", "custom"
     system_name: str
     connection_string: str
-    username: Optional[str] = None
-    password: Optional[str] = None
+    username: str | None = None
+    password: str | None = None
     database_type: str = "postgresql"  # "postgresql", "mysql", "mongodb", "sqlite"
     host: str
     port: int
     database: str
     ssl_enabled: bool = False
-    ssl_cert_path: Optional[str] = None
+    ssl_cert_path: str | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
@@ -80,14 +80,14 @@ class TargetSystem(BaseModel):
     system_type: str = "xagent_v2"
     system_name: str
     connection_string: str
-    username: Optional[str] = None
-    password: Optional[str] = None
+    username: str | None = None
+    password: str | None = None
     database_type: str = "postgresql"
     host: str
     port: int
     database: str
     ssl_enabled: bool = False
-    ssl_cert_path: Optional[str] = None
+    ssl_cert_path: str | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
@@ -97,7 +97,7 @@ class MigrationMapping(BaseModel):
     target_table: str
     field_mappings: dict[str, str]  # {source_field: target_field}
     transformations: dict[str, str] = Field(default_factory=dict)  # {target_field: transformation_function}
-    filters: Optional[str] = None  # SQL WHERE条件
+    filters: str | None = None  # SQL WHERE条件
 
 
 class MigrationPlan(BaseModel):
@@ -130,9 +130,9 @@ class MigrationJob(BaseModel):
     skipped_records: int = 0
     errors: list[dict[str, Any]] = Field(default_factory=list)
     warnings: list[dict[str, Any]] = Field(default_factory=list)
-    start_time: Optional[datetime] = None
-    end_time: Optional[datetime] = None
-    duration_seconds: Optional[float] = None
+    start_time: datetime | None = None
+    end_time: datetime | None = None
+    duration_seconds: float | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
@@ -234,7 +234,7 @@ class OpenClawMigrator:
         logger.info(f"Started migration job: {job.job_id}")
         return job
 
-    def get_migration_status(self, job_id: str) -> Optional[MigrationJob]:
+    def get_migration_status(self, job_id: str) -> MigrationJob | None:
         """获取迁移状态"""
         return self._migrations.get(job_id)
 
@@ -409,7 +409,7 @@ class DataExporter:
     def __init__(self):
         self._exports: dict[str, dict[str, Any]] = {}
 
-    def export_to_json(self, data: list[dict[str, Any]], export_id: Optional[str] = None) -> str:
+    def export_to_json(self, data: list[dict[str, Any]], export_id: str | None = None) -> str:
         """导出为JSON"""
         export_id = export_id or f"export_{uuid4().hex}"
         export_data = {
@@ -423,7 +423,7 @@ class DataExporter:
         logger.info(f"Exported {len(data)} records to JSON: {export_id}")
         return export_id
 
-    def export_to_csv(self, data: list[dict[str, Any]], export_id: Optional[str] = None) -> str:
+    def export_to_csv(self, data: list[dict[str, Any]], export_id: str | None = None) -> str:
         """导出为CSV"""
         export_id = export_id or f"export_{uuid4().hex}"
         export_data = {
@@ -437,7 +437,7 @@ class DataExporter:
         logger.info(f"Exported {len(data)} records to CSV: {export_id}")
         return export_id
 
-    def export_to_parquet(self, data: list[dict[str, Any]], export_id: Optional[str] = None) -> str:
+    def export_to_parquet(self, data: list[dict[str, Any]], export_id: str | None = None) -> str:
         """导出为Parquet"""
         export_id = export_id or f"export_{uuid4().hex}"
         export_data = {
@@ -451,7 +451,7 @@ class DataExporter:
         logger.info(f"Exported {len(data)} records to Parquet: {export_id}")
         return export_id
 
-    def get_export(self, export_id: str) -> Optional[dict[str, Any]]:
+    def get_export(self, export_id: str) -> dict[str, Any] | None:
         """获取导出数据"""
         return self._exports.get(export_id)
 
@@ -462,7 +462,7 @@ class DataImporter:
     def __init__(self):
         self._imports: dict[str, dict[str, Any]] = {}
 
-    def import_from_json(self, json_data: str, import_id: Optional[str] = None) -> str:
+    def import_from_json(self, json_data: str, import_id: str | None = None) -> str:
         """从JSON导入"""
         import_id = import_id or f"import_{uuid4().hex}"
         try:
@@ -482,7 +482,7 @@ class DataImporter:
             logger.error(f"Failed to import JSON: {e}")
             raise
 
-    def import_from_csv(self, csv_data: str, import_id: Optional[str] = None) -> str:
+    def import_from_csv(self, csv_data: str, import_id: str | None = None) -> str:
         """从CSV导入"""
         import_id = import_id or f"import_{uuid4().hex}"
         # 简化实现：实际应解析CSV
@@ -498,7 +498,7 @@ class DataImporter:
         logger.info(f"Imported data from CSV: {import_id}")
         return import_id
 
-    def get_import(self, import_id: str) -> Optional[dict[str, Any]]:
+    def get_import(self, import_id: str) -> dict[str, Any] | None:
         """获取导入数据"""
         return self._imports.get(import_id)
 

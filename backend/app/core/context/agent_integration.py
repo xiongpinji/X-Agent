@@ -19,9 +19,9 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from backend.app.core.context_compactor import ContextCompactor
 from backend.app.core.context.context_manager import ContextManager
 from backend.app.core.context.session_recovery import SessionRecovery, SessionState
+from backend.app.core.context_compactor import ContextCompactor
 
 logger = logging.getLogger(__name__)
 
@@ -195,7 +195,7 @@ class AgentLoopContextBridge:
         token_budget: int = DEFAULT_CONTEXT_TOKEN_BUDGET,
         compression_threshold: float = 0.85,
         min_messages_to_keep: int = 3,
-    ) -> "AgentLoopContextBridge":
+    ) -> AgentLoopContextBridge:
         """按默认配置创建桥接器（文件系统会话存储 + 阈值压缩）。
 
         Args:
@@ -333,6 +333,180 @@ class AgentLoopContextBridge:
         if meta:
             self.compression_events.append(meta)
         return fitted, meta
+
+    async def prepare_context(
+        self,
+        messages: list[dict[str, str]],
+        *,
+        max_tokens: int | None = None,
+        strategy: str = "sliding_window",
+        priority: list[str] | None = None,
+        reserve_output: int = 4096,
+    ) -> list[dict[str, str]]:
+        """P1-14: 在 LLM 调用前准备上下文——按策略压缩/裁剪消息列表。
+
+        支持的策略：
+        - sliding_window: 保留 system + 最近消息，压缩中段历史（默认）
+        - summarize: 对历史消息做摘要压缩，保留语义核心
+        - hybrid: 先摘要再滑动窗口截断
+
+        优先级顺序（priority）决定保留顺序：
+        - system: system 消息始终保留
+        - recent: 最近的消息优先保留
+        - memory: 从记忆系统检索的相关上下文
+        - history: 早期历史消息（最先被压缩）
+
+        Args:
+            messages: 待处理的消息列表（role/content 字典）。
+            max_tokens: 上下文窗口总 token 数；None 时使用桥接器 token_budget。
+            strategy: 压缩策略 (sliding_window | summarize | hybrid)。
+            priority: 保留优先级列表；默认 ["system", "recent", "memory", "history"]。
+            reserve_output: 为 LLM 输出预留的 token 数。
+
+        Returns:
+            压缩后的消息列表。失败时显式降级返回原消息（绝不抛异常）。
+        """
+        if not messages:
+            return messages
+
+        if priority is None:
+            priority = ["system", "recent", "memory", "history"]
+
+        effective_budget = (max_tokens or self.token_budget) - reserve_output
+        if effective_budget <= 0:
+            effective_budget = self.token_budget
+
+        try:
+            compactor = self.context_manager.context_compactor
+            original_tokens = compactor.count_messages_tokens(messages)
+
+            # 未超阈值，原样返回
+            if original_tokens <= effective_budget:
+                return messages
+
+            if strategy == "summarize":
+                result = self._apply_summarize_strategy(messages, effective_budget, priority)
+            elif strategy == "hybrid":
+                result = self._apply_hybrid_strategy(messages, effective_budget, priority)
+            else:  # sliding_window (default)
+                result = self._apply_sliding_window_strategy(messages, effective_budget, priority)
+
+            compressed_tokens = compactor.count_messages_tokens(result)
+            meta: dict[str, Any] = {
+                "triggered": True,
+                "scope": "prepare_context",
+                "strategy": strategy,
+                "original_tokens": original_tokens,
+                "compressed_tokens": compressed_tokens,
+                "compression_ratio": round(compressed_tokens / original_tokens, 4) if original_tokens else 1.0,
+                "messages_before": len(messages),
+                "messages_after": len(result),
+                "priority": priority,
+            }
+            self.compression_events.append(meta)
+            logger.info(
+                "prepare_context (%s): %s → %s tokens, %s → %s messages",
+                strategy, original_tokens, compressed_tokens, len(messages), len(result),
+            )
+            return result
+
+        except Exception as exc:
+            # 显式降级：上下文管理失败不阻断主循环
+            logger.warning("prepare_context failed, falling back to original messages: %s", exc)
+            return messages
+
+    def _apply_sliding_window_strategy(
+        self,
+        messages: list[dict[str, str]],
+        budget: int,
+        priority: list[str],
+    ) -> list[dict[str, str]]:
+        """滑动窗口策略：保留 system + 最近消息，压缩/丢弃中段历史。"""
+        compactor = self.context_manager.context_compactor
+
+        # 按优先级分离消息
+        system_msgs = [m for m in messages if m.get("role") == "system"]
+        non_system = [m for m in messages if m.get("role") != "system"]
+
+        # 保留最近消息（至少保留 4 条或 50% 的非 system 消息）
+        keep_recent_count = max(4, len(non_system) // 2)
+        recent = non_system[-keep_recent_count:] if len(non_system) > keep_recent_count else list(non_system)
+        middle = non_system[:-keep_recent_count] if len(non_system) > keep_recent_count else []
+
+        # 对中段做重要性压缩
+        if middle:
+            result = compactor.compress(middle)
+            if result.success:
+                candidate = system_msgs + list(result.messages) + recent
+            else:
+                # 压缩失败：保留最近的几条中段消息
+                candidate = system_msgs + middle[-3:] + recent
+        else:
+            candidate = system_msgs + recent
+
+        # 如果仍超预算，硬截断
+        if compactor.count_messages_tokens(candidate) > budget:
+            candidate = _hard_truncate_to_budget(compactor, candidate, keep_last=len(recent))
+
+        return candidate
+
+    def _apply_summarize_strategy(
+        self,
+        messages: list[dict[str, str]],
+        budget: int,
+        priority: list[str],
+    ) -> list[dict[str, str]]:
+        """摘要策略：将历史消息压缩为摘要，保留语义核心。"""
+        compactor = self.context_manager.context_compactor
+
+        system_msgs = [m for m in messages if m.get("role") == "system"]
+        non_system = [m for m in messages if m.get("role") != "system"]
+
+        # 保留最近 2 条消息原样
+        keep_last = 2
+        recent = non_system[-keep_last:] if len(non_system) > keep_last else list(non_system)
+        history = non_system[:-keep_last] if len(non_system) > keep_last else []
+
+        if history:
+            # 将历史消息合并为摘要
+            history_text = "\n".join(
+                f"[{m.get('role', 'unknown')}] {str(m.get('content', ''))[:500]}"
+                for m in history
+            )
+            # 简单摘要：取前 1500 字符作为摘要
+            summary_content = history_text[:1500]
+            if len(history_text) > 1500:
+                summary_content += f"\n…({len(history_text) - 1500} chars omitted)"
+            summary_msg = {
+                "role": "system",
+                "content": f"[Conversation summary of {len(history)} earlier messages]\n{summary_content}",
+            }
+            candidate = [*system_msgs, summary_msg, *recent]
+        else:
+            candidate = system_msgs + recent
+
+        # 如果仍超预算，硬截断
+        if compactor.count_messages_tokens(candidate) > budget:
+            candidate = _hard_truncate_to_budget(compactor, candidate, keep_last=keep_last)
+
+        return candidate
+
+    def _apply_hybrid_strategy(
+        self,
+        messages: list[dict[str, str]],
+        budget: int,
+        priority: list[str],
+    ) -> list[dict[str, str]]:
+        """混合策略：先摘要压缩历史，再滑动窗口截断。"""
+        # 第一步：摘要压缩
+        summarized = self._apply_summarize_strategy(messages, budget, priority)
+
+        # 第二步：如果仍超预算，用滑动窗口进一步截断
+        compactor = self.context_manager.context_compactor
+        if compactor.count_messages_tokens(summarized) > budget:
+            return self._apply_sliding_window_strategy(summarized, budget, priority)
+
+        return summarized
 
     async def close(self, *, save: bool = True) -> bool:
         """关闭桥接会话；save=True 时保存快照。

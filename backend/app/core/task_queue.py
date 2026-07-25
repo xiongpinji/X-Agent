@@ -1,401 +1,503 @@
-"""
-Task queue module for X-Agent.
+"""Redis-based async task queue for X-Agent.
 
-Implements priority-based task queue for task management.
+Provides a distributed task queue backed by Redis, replacing in-memory
+task tracking. Supports priority queues, retries, dead-letter queue,
+and task status tracking.
+
+Usage:
+    from backend.app.core.task_queue import task_queue, TaskPriority
+
+    # Enqueue a task
+    task_id = await task_queue.enqueue(
+        "workflow.run",
+        payload={"workflow_id": "wf-123", "input": {...}},
+        priority=TaskPriority.HIGH,
+    )
+
+    # Check task status
+    status = await task_queue.get_status(task_id)
+
+    # Worker loop (in background)
+    await task_queue.start_worker(concurrency=4)
 """
 
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
-from dataclasses import dataclass, field
-from datetime import datetime, UTC
-from enum import Enum
-from typing import Optional, Any, Dict, List
-import heapq
+import time
 import uuid
+from collections.abc import Callable, Coroutine
+from dataclasses import dataclass, field
+from enum import IntEnum
+from typing import Any
 
-logger = logging.getLogger(__name__)
-
-
-class TaskPriority(int, Enum):
-    """Task priority levels."""
-
-    LOWEST = 5
-    LOW = 4
-    NORMAL = 3
-    HIGH = 2
-    CRITICAL = 1
+logger = logging.getLogger("xagent.task_queue")
 
 
-class TaskQueueStatus(str, Enum):
-    """Status of task queue."""
+class TaskPriority(IntEnum):
+    """Task priority levels. Lower number = higher priority."""
+    CRITICAL = 0
+    HIGH = 1
+    NORMAL = 2
+    LOW = 3
 
+
+class TaskStatus:
+    """Task status constants."""
+    PENDING = "pending"
     RUNNING = "running"
-    PAUSED = "paused"
-    STOPPED = "stopped"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    RETRYING = "retrying"
+    DEAD = "dead"  # In dead-letter queue
 
 
 @dataclass
-class QueuedTask:
-    """Represents a task in the queue."""
-
-    task_id: str
+class Task:
+    """Represents a queued task."""
+    id: str
     name: str
-    payload: Dict[str, Any]
-    priority: TaskPriority = TaskPriority.NORMAL
-    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
-    enqueued_at: Optional[datetime] = None
-    dequeued_at: Optional[datetime] = None
-    retry_count: int = 0
+    payload: dict[str, Any]
+    priority: int = TaskPriority.NORMAL
+    status: str = TaskStatus.PENDING
+    retries: int = 0
     max_retries: int = 3
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    created_at: float = field(default_factory=time.time)
+    started_at: float | None = None
+    completed_at: float | None = None
+    error: str | None = None
+    result: Any = None
 
-    def __lt__(self, other: QueuedTask) -> bool:
-        """Compare tasks by priority (for heap)."""
-        if self.priority.value != other.priority.value:
-            return self.priority.value < other.priority.value
-        return self.created_at < other.created_at
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "name": self.name,
+            "payload": self.payload,
+            "priority": self.priority,
+            "status": self.status,
+            "retries": self.retries,
+            "max_retries": self.max_retries,
+            "created_at": self.created_at,
+            "started_at": self.started_at,
+            "completed_at": self.completed_at,
+            "error": self.error,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Task:
+        return cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
 
 
-class TaskQueue:
+# Type for task handler functions
+TaskHandler = Callable[[dict[str, Any]], Coroutine[Any, Any, Any]]
+
+
+class RedisTaskQueue:
+    """Distributed task queue backed by Redis.
+
+    Features:
+    - Priority-based scheduling (sorted sets)
+    - Automatic retries with exponential backoff
+    - Dead-letter queue for permanently failed tasks
+    - Task status tracking with TTL
+    - Graceful shutdown
+
+    Falls back to in-memory queue when Redis is unavailable.
     """
-    Priority-based task queue.
 
-    Manages task queuing with priority support and metrics.
-    """
+    # Redis key prefixes
+    QUEUE_KEY = "xagent:task_queue"
+    STATUS_PREFIX = "xagent:task_status:"
+    DEAD_LETTER_KEY = "xagent:task_dlq"
+    RESULT_PREFIX = "xagent:task_result:"
 
-    def __init__(self, max_size: int = 10000):
-        """
-        Initialize the task queue.
+    def __init__(
+        self,
+        max_retries: int = 3,
+        retry_backoff: float = 2.0,
+        result_ttl: int = 3600,
+        status_ttl: int = 86400,
+    ) -> None:
+        self.max_retries = max_retries
+        self.retry_backoff = retry_backoff
+        self.result_ttl = result_ttl
+        self.status_ttl = status_ttl
+
+        self._handlers: dict[str, TaskHandler] = {}
+        self._running = False
+        self._workers: list[asyncio.Task] = []
+        self._shutdown_event = asyncio.Event()
+
+        # In-memory fallback
+        self._memory_queue: list[tuple[float, Task]] = []
+        self._memory_status: dict[str, Task] = {}
+
+    def register_handler(self, task_name: str, handler: TaskHandler) -> None:
+        """Register a handler for a task type.
 
         Args:
-            max_size: Maximum queue size
+            task_name: Task type identifier (e.g., "workflow.run").
+            handler: Async function that processes the task payload.
         """
-        self.max_size = max_size
-        self.queue: List[QueuedTask] = []
-        self.task_map: Dict[str, QueuedTask] = {}
-        self.status = TaskQueueStatus.RUNNING
-        self.lock = asyncio.Lock()
-        self.not_empty = asyncio.Condition(self.lock)
-        self.logger = logger
-        self.stats = {
-            "total_enqueued": 0,
-            "total_dequeued": 0,
-            "total_retried": 0,
-        }
+        self._handlers[task_name] = handler
+        logger.info(f"Registered task handler: {task_name}")
 
     async def enqueue(
         self,
-        name: str,
-        payload: Dict[str, Any],
+        task_name: str,
+        payload: dict[str, Any] | None = None,
         priority: TaskPriority = TaskPriority.NORMAL,
-        **kwargs,
+        max_retries: int | None = None,
+        task_id: str | None = None,
     ) -> str:
-        """
-        Add a task to the queue.
+        """Add a task to the queue.
 
         Args:
-            name: Name of the task
-            payload: Task payload
-            priority: Task priority
-            **kwargs: Additional options
+            task_name: Registered task type.
+            payload: Task input data.
+            priority: Task priority level.
+            max_retries: Override default max retries.
+            task_id: Custom task ID (auto-generated if None).
 
         Returns:
-            Task ID
-
-        Raises:
-            RuntimeError: If queue is full or stopped
+            Task ID for tracking.
         """
-        async with self.not_empty:
-            if self.status == TaskQueueStatus.STOPPED:
-                raise RuntimeError("Queue is stopped")
+        task = Task(
+            id=task_id or f"task-{uuid.uuid4().hex[:12]}",
+            name=task_name,
+            payload=payload or {},
+            priority=int(priority),
+            max_retries=max_retries if max_retries is not None else self.max_retries,
+        )
 
-            if len(self.queue) >= self.max_size:
-                raise RuntimeError(f"Queue is full (max: {self.max_size})")
+        redis = await self._get_redis()
+        if redis and redis.is_available:
+            # Use Redis sorted set (score = priority * 1000000 + timestamp for FIFO within priority)
+            score = task.priority * 1_000_000 + time.time()
+            await redis.zadd(self.QUEUE_KEY, {json.dumps(task.to_dict()): score})
+            await self._set_status(redis, task)
+        else:
+            # In-memory fallback
+            score = task.priority * 1_000_000 + time.time()
+            self._memory_queue.append((score, task))
+            self._memory_queue.sort(key=lambda x: x[0])
+            self._memory_status[task.id] = task
 
-            task_id = f"task_{uuid.uuid4().hex[:12]}"
-            task = QueuedTask(
-                task_id=task_id,
-                name=name,
-                payload=payload,
-                priority=priority,
-                enqueued_at=datetime.now(UTC),
-                max_retries=kwargs.get("max_retries", 3),
-                metadata=kwargs.get("metadata", {}),
-            )
+        logger.debug(f"Task enqueued: {task.id} ({task_name}, priority={priority.name})")
+        return task.id
 
-            heapq.heappush(self.queue, task)
-            self.task_map[task_id] = task
-            self.stats["total_enqueued"] += 1
-
-            self.logger.debug(
-                f"Task {task_id} ({name}) enqueued with priority {priority.name}"
-            )
-
-            self.not_empty.notify()
-            return task_id
-
-    async def dequeue(self, timeout_seconds: Optional[int] = None) -> Optional[QueuedTask]:
-        """
-        Remove and return highest priority task.
+    async def get_status(self, task_id: str) -> dict[str, Any] | None:
+        """Get task status.
 
         Args:
-            timeout_seconds: Timeout in seconds
+            task_id: Task identifier.
 
         Returns:
-            Task or None if timeout
-
-        Raises:
-            RuntimeError: If queue is stopped
+            Task status dict or None if not found.
         """
-        async with self.not_empty:
-            if self.status == TaskQueueStatus.STOPPED:
-                raise RuntimeError("Queue is stopped")
+        redis = await self._get_redis()
+        if redis and redis.is_available:
+            raw = await redis.get(f"{self.STATUS_PREFIX}{task_id}")
+            if raw:
+                return json.loads(raw)
+            return None
+        else:
+            task = self._memory_status.get(task_id)
+            return task.to_dict() if task else None
 
-            # Wait for task if queue is empty
-            start_time = datetime.now(UTC)
+    async def get_result(self, task_id: str) -> Any | None:
+        """Get task result (available after completion)."""
+        redis = await self._get_redis()
+        if redis and redis.is_available:
+            raw = await redis.get(f"{self.RESULT_PREFIX}{task_id}")
+            if raw:
+                return json.loads(raw)
+            return None
+        else:
+            task = self._memory_status.get(task_id)
+            return task.result if task and task.status == TaskStatus.COMPLETED else None
 
-            while not self.queue:
-                if self.status == TaskQueueStatus.PAUSED:
-                    await asyncio.sleep(1)
+    async def cancel(self, task_id: str) -> bool:
+        """Cancel a pending task.
+
+        Returns:
+            True if task was cancelled, False if already running/completed.
+        """
+        status = await self.get_status(task_id)
+        if not status or status["status"] not in (TaskStatus.PENDING, TaskStatus.RETRYING):
+            return False
+
+        status["status"] = "cancelled"
+        redis = await self._get_redis()
+        if redis and redis.is_available:
+            await redis.set(
+                f"{self.STATUS_PREFIX}{task_id}",
+                json.dumps(status),
+                ex=self.status_ttl,
+            )
+        else:
+            if task_id in self._memory_status:
+                self._memory_status[task_id].status = "cancelled"
+        return True
+
+    async def start_worker(self, concurrency: int = 4) -> None:
+        """Start background worker tasks.
+
+        Args:
+            concurrency: Number of concurrent task processors.
+        """
+        if self._running:
+            logger.warning("Task queue worker already running")
+            return
+
+        self._running = True
+        self._shutdown_event.clear()
+
+        for i in range(concurrency):
+            worker = asyncio.create_task(self._worker_loop(i))
+            self._workers.append(worker)
+
+        logger.info(f"Task queue started with {concurrency} workers")
+
+    async def stop_worker(self, timeout: float = 30.0) -> None:
+        """Gracefully stop workers.
+
+        Args:
+            timeout: Seconds to wait for workers to finish current tasks.
+        """
+        self._running = False
+        self._shutdown_event.set()
+
+        if self._workers:
+            await asyncio.wait(self._workers, timeout=timeout)
+            for worker in self._workers:
+                if not worker.done():
+                    worker.cancel()
+            self._workers.clear()
+
+        logger.info("Task queue workers stopped")
+
+    async def get_queue_depth(self) -> int:
+        """Get number of pending tasks in queue."""
+        redis = await self._get_redis()
+        if redis and redis.is_available:
+            return await redis.zcard(self.QUEUE_KEY)
+        return len(self._memory_queue)
+
+    async def get_dead_letter_count(self) -> int:
+        """Get number of tasks in dead-letter queue."""
+        redis = await self._get_redis()
+        if redis and redis.is_available:
+            return await redis.zcard(self.DEAD_LETTER_KEY)
+        return 0
+
+    async def get_metrics(self) -> dict[str, Any]:
+        """Get queue metrics for monitoring."""
+        return {
+            "queue_depth": await self.get_queue_depth(),
+            "dead_letter_count": await self.get_dead_letter_count(),
+            "registered_handlers": list(self._handlers.keys()),
+            "workers_active": len([w for w in self._workers if not w.done()]),
+            "running": self._running,
+        }
+
+    # ─── Internal ────────────────────────────────────────────────────────────────
+
+    async def _worker_loop(self, worker_id: int) -> None:
+        """Main worker loop: dequeue and process tasks."""
+        logger.debug(f"Worker-{worker_id} started")
+
+        while self._running:
+            try:
+                task = await self._dequeue()
+                if task is None:
+                    # No tasks available, wait before polling again
+                    await asyncio.sleep(0.5)
                     continue
 
-                if timeout_seconds:
-                    elapsed = (datetime.now(UTC) - start_time).total_seconds()
-                    if elapsed > timeout_seconds:
-                        return None
+                await self._process_task(task, worker_id)
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"Worker-{worker_id} error: {e}", exc_info=True)
+                await asyncio.sleep(1.0)
 
-                    remaining = timeout_seconds - elapsed
-                    try:
-                        await asyncio.wait_for(
-                            self.not_empty.wait(),
-                            timeout=remaining,
-                        )
-                    except asyncio.TimeoutError:
-                        return None
-                else:
-                    await self.not_empty.wait()
+        logger.debug(f"Worker-{worker_id} stopped")
 
-            task = heapq.heappop(self.queue)
-            task.dequeued_at = datetime.now(UTC)
-            self.stats["total_dequeued"] += 1
+    async def _dequeue(self) -> Task | None:
+        """Get next task from queue (highest priority, FIFO)."""
+        redis = await self._get_redis()
 
-            self.logger.debug(f"Task {task.task_id} ({task.name}) dequeued")
-
+        if redis and redis.is_available:
+            # Pop lowest score (highest priority) from sorted set
+            results = await redis.zrange(self.QUEUE_KEY, 0, 0)
+            if not results:
+                return None
+            raw = results[0]
+            await redis.zrem(self.QUEUE_KEY, raw)
+            try:
+                data = json.loads(raw)
+                return Task.from_dict(data)
+            except (json.JSONDecodeError, TypeError) as e:
+                logger.error(f"Failed to parse task from queue: {e}")
+                return None
+        else:
+            if not self._memory_queue:
+                return None
+            _, task = self._memory_queue.pop(0)
             return task
 
-    async def peek(self) -> Optional[QueuedTask]:
-        """
-        View highest priority task without removing.
+    async def _process_task(self, task: Task, worker_id: int) -> None:
+        """Process a single task with retry logic."""
+        handler = self._handlers.get(task.name)
+        if not handler:
+            logger.error(f"No handler registered for task type: {task.name}")
+            task.status = TaskStatus.FAILED
+            task.error = f"No handler for task type: {task.name}"
+            await self._update_status(task)
+            return
 
-        Returns:
-            Task or None if queue is empty
-        """
-        async with self.lock:
-            if self.queue:
-                return self.queue[0]
-            return None
+        task.status = TaskStatus.RUNNING
+        task.started_at = time.time()
+        await self._update_status(task)
 
-    async def size(self) -> int:
-        """
-        Get queue size.
+        try:
+            result = await handler(task.payload)
+            task.status = TaskStatus.COMPLETED
+            task.completed_at = time.time()
+            task.result = result
+            await self._update_status(task)
+            await self._store_result(task)
+            logger.debug(
+                f"Task completed: {task.id} ({task.name}) "
+                f"in {task.completed_at - task.started_at:.2f}s"
+            )
+        except Exception as e:
+            task.retries += 1
+            task.error = str(e)
 
-        Returns:
-            Number of tasks in queue
-        """
-        async with self.lock:
-            return len(self.queue)
-
-    async def clear(self) -> int:
-        """
-        Clear all tasks from queue.
-
-        Returns:
-            Number of tasks cleared
-        """
-        async with self.lock:
-            count = len(self.queue)
-            self.queue.clear()
-            self.task_map.clear()
-            self.logger.info(f"Cleared {count} tasks from queue")
-            return count
-
-    async def remove_task(self, task_id: str) -> bool:
-        """
-        Remove a specific task from queue.
-
-        Args:
-            task_id: ID of task to remove
-
-        Returns:
-            True if removed
-        """
-        async with self.lock:
-            if task_id not in self.task_map:
-                return False
-
-            task = self.task_map[task_id]
-            self.queue.remove(task)
-            heapq.heapify(self.queue)
-            del self.task_map[task_id]
-
-            self.logger.debug(f"Task {task_id} removed from queue")
-            return True
-
-    async def requeue_task(
-        self,
-        task_id: str,
-        priority: Optional[TaskPriority] = None,
-    ) -> bool:
-        """
-        Re-queue a task (for retries).
-
-        Args:
-            task_id: ID of task to re-queue
-            priority: New priority (optional)
-
-        Returns:
-            True if re-queued
-        """
-        async with self.not_empty:
-            if task_id not in self.task_map:
-                return False
-
-            task = self.task_map[task_id]
-
-            if task.retry_count >= task.max_retries:
-                self.logger.warning(
-                    f"Task {task_id} exceeded max retries ({task.max_retries})"
+            if task.retries < task.max_retries:
+                # Retry with exponential backoff
+                task.status = TaskStatus.RETRYING
+                backoff = self.retry_backoff ** task.retries
+                logger.warning(
+                    f"Task {task.id} failed (attempt {task.retries}/{task.max_retries}), "
+                    f"retrying in {backoff:.1f}s: {e}"
                 )
-                return False
+                await self._update_status(task)
+                await asyncio.sleep(backoff)
+                # Re-enqueue
+                await self.enqueue(
+                    task.name,
+                    task.payload,
+                    priority=TaskPriority(task.priority),
+                    max_retries=task.max_retries,
+                    task_id=task.id,
+                )
+            else:
+                # Move to dead-letter queue
+                task.status = TaskStatus.DEAD
+                task.completed_at = time.time()
+                await self._update_status(task)
+                await self._move_to_dlq(task)
+                logger.error(
+                    f"Task {task.id} permanently failed after {task.retries} attempts: {e}"
+                )
 
-            # Remove from queue if still present. A task being re-queued for
-            # retry has typically already been dequeued for execution, so it
-            # won't be in self.queue (only in task_map). Guard the remove to
-            # avoid ValueError: list.remove(x): x not in list.
-            if task in self.queue:
-                self.queue.remove(task)
-                heapq.heapify(self.queue)
+    async def _move_to_dlq(self, task: Task) -> None:
+        """Move failed task to dead-letter queue."""
+        redis = await self._get_redis()
+        if redis and redis.is_available:
+            await redis.zadd(self.DEAD_LETTER_KEY, {json.dumps(task.to_dict()): time.time()})
+        # In-memory DLQ not implemented (tasks just stay in status)
 
-            # Update task
-            task.retry_count += 1
-            if priority:
-                task.priority = priority
+    async def _update_status(self, task: Task) -> None:
+        """Persist task status."""
+        redis = await self._get_redis()
+        if redis and redis.is_available:
+            await redis.set(
+                f"{self.STATUS_PREFIX}{task.id}",
+                json.dumps(task.to_dict()),
+                ex=self.status_ttl,
+            )
+        else:
+            self._memory_status[task.id] = task
 
-            # Re-add to queue
-            heapq.heappush(self.queue, task)
-            self.stats["total_retried"] += 1
-
-            self.logger.info(
-                f"Task {task_id} re-queued (retry {task.retry_count}/{task.max_retries})"
+    async def _store_result(self, task: Task) -> None:
+        """Store task result with TTL."""
+        redis = await self._get_redis()
+        if redis and redis.is_available:
+            result_data = json.dumps(task.result) if task.result is not None else "null"
+            await redis.set(
+                f"{self.RESULT_PREFIX}{task.id}",
+                result_data,
+                ex=self.result_ttl,
             )
 
-            self.not_empty.notify()
-            return True
+    async def _set_status(self, redis: Any, task: Task) -> None:
+        """Set initial task status in Redis."""
+        await redis.set(
+            f"{self.STATUS_PREFIX}{task.id}",
+            json.dumps(task.to_dict()),
+            ex=self.status_ttl,
+        )
 
-    async def pause(self) -> None:
-        """Pause the queue."""
-        async with self.lock:
-            self.status = TaskQueueStatus.PAUSED
-            self.logger.info("Queue paused")
-
-    async def resume(self) -> None:
-        """Resume the queue."""
-        async with self.not_empty:
-            self.status = TaskQueueStatus.RUNNING
-            self.logger.info("Queue resumed")
-            self.not_empty.notify_all()
-
-    async def stop(self) -> None:
-        """Stop the queue."""
-        async with self.not_empty:
-            self.status = TaskQueueStatus.STOPPED
-            self.logger.info("Queue stopped")
-            self.not_empty.notify_all()
-
-    async def get_task_status(self, task_id: str) -> Optional[Dict[str, Any]]:
-        """
-        Get status of a task.
-
-        Args:
-            task_id: ID of task
-
-        Returns:
-            Task status dict or None
-        """
-        async with self.lock:
-            if task_id not in self.task_map:
-                return None
-
-            task = self.task_map[task_id]
-
-            return {
-                "task_id": task_id,
-                "name": task.name,
-                "priority": task.priority.name,
-                "created_at": task.created_at.isoformat(),
-                "enqueued_at": task.enqueued_at.isoformat() if task.enqueued_at else None,
-                "dequeued_at": task.dequeued_at.isoformat() if task.dequeued_at else None,
-                "retry_count": task.retry_count,
-                "max_retries": task.max_retries,
-            }
-
-    async def list_tasks(
-        self,
-        priority: Optional[TaskPriority] = None,
-        limit: int = 100,
-    ) -> List[Dict[str, Any]]:
-        """
-        List tasks in queue.
-
-        Args:
-            priority: Filter by priority
-            limit: Maximum number of tasks
-
-        Returns:
-            List of task dicts
-        """
-        async with self.lock:
-            tasks = []
-
-            for task in self.queue[:limit]:
-                if priority and task.priority != priority:
-                    continue
-
-                tasks.append({
-                    "task_id": task.task_id,
-                    "name": task.name,
-                    "priority": task.priority.name,
-                    "created_at": task.created_at.isoformat(),
-                    "retry_count": task.retry_count,
-                })
-
-            return tasks
-
-    async def get_stats(self) -> Dict[str, Any]:
-        """
-        Get queue statistics.
-
-        Returns:
-            Statistics dict
-        """
-        async with self.lock:
-            priority_breakdown = {}
-            for task in self.queue:
-                priority = task.priority.name
-                priority_breakdown[priority] = priority_breakdown.get(priority, 0) + 1
-
-            return {
-                "queue_size": len(self.queue),
-                "max_size": self.max_size,
-                "status": self.status.value,
-                "priority_breakdown": priority_breakdown,
-                "total_enqueued": self.stats["total_enqueued"],
-                "total_dequeued": self.stats["total_dequeued"],
-                "total_retried": self.stats["total_retried"],
-            }
+    async def _get_redis(self) -> Any:
+        """Get Redis client (may be InMemoryFallback)."""
+        try:
+            from backend.app.core.redis_client import get_redis
+            return get_redis()
+        except Exception:
+            return None
 
 
-# Global instance
-task_queue = TaskQueue()
+# Global task queue instance
+task_queue = RedisTaskQueue()
+
+
+# ─── Backward compatibility aliases ────────────────────────────────────────────
+# The sandbox orchestrator and older tests import QueuedTask / TaskQueue from
+# this module. Provide thin aliases so those imports keep working.
+
+QueuedTask = Task
+
+
+class TaskQueue:
+    """Legacy in-memory task queue (backward compat wrapper around RedisTaskQueue)."""
+
+    def __init__(self, max_size: int = 10000):
+        self.max_size = max_size
+        self._queue = RedisTaskQueue()
+
+    async def enqueue(self, name: str, payload: dict[str, Any], priority: TaskPriority = TaskPriority.NORMAL, **kwargs) -> str:
+        return await self._queue.enqueue(name, payload, priority=priority)
+
+    async def dequeue(self, timeout_seconds: int | None = None) -> Task | None:
+        return await self._queue._dequeue()
+
+    async def size(self) -> int:
+        return await self._queue.get_queue_depth()
+
+    async def clear(self) -> int:
+        count = await self._queue.get_queue_depth()
+        self._queue._memory_queue.clear()
+        return count
+
+
+async def init_task_queue(concurrency: int = 4) -> RedisTaskQueue:
+    """Initialize and start the global task queue.
+
+    Call during application startup.
+    """
+    await task_queue.start_worker(concurrency=concurrency)
+    return task_queue
+
+
+async def shutdown_task_queue() -> None:
+    """Gracefully shutdown the global task queue.
+
+    Call during application shutdown.
+    """
+    await task_queue.stop_worker()

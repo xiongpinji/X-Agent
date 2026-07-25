@@ -6,10 +6,8 @@ path normalization, symlink resolution, and path validation.
 
 from __future__ import annotations
 
-import os
 import platform
-from pathlib import Path, PureWindowsPath, PurePosixPath
-from typing import Optional
+from pathlib import Path
 from urllib.parse import quote, unquote
 
 

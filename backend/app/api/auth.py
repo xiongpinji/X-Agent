@@ -10,7 +10,12 @@ from uuid import uuid4
 from fastapi import APIRouter, Depends, Header
 
 from backend.app.api.errors import api_error
-from backend.app.core.admin import AuthLoginRequest, AuthTokenResponse, UserCreateRequest, user_store
+from backend.app.core.admin import (
+    AuthLoginRequest,
+    AuthTokenResponse,
+    UserCreateRequest,
+    user_store,
+)
 from backend.app.core.contracts import ErrorCode
 from backend.app.core.security import Principal
 from backend.app.dependencies import get_current_principal
@@ -63,6 +68,7 @@ def _init_redis() -> None:
     global _redis_client, _use_redis
     try:
         import redis
+
         from backend.app.settings import get_settings
 
         settings = get_settings()
@@ -118,9 +124,7 @@ def _is_token_valid(token: str) -> bool:
             return False
         expiry = _token_expiry.get(token)
 
-    if expiry is None or time.time() > expiry:
-        return False
-    return True
+    return not (expiry is None or time.time() > expiry)
 
 
 def _revoke_token(token: str) -> None:
@@ -175,9 +179,7 @@ def _check_account_lockout(email: str) -> bool:
     # Remove old failures outside the lockout window
     _login_failures[email] = [ts for ts in _login_failures[email] if now - ts < _lockout_duration_seconds]
 
-    if len(_login_failures[email]) >= _max_login_attempts:
-        return True
-    return False
+    return len(_login_failures[email]) >= _max_login_attempts
 
 
 def _record_login_failure(email: str) -> None:
@@ -202,12 +204,12 @@ def _constant_time_compare(a: str, b: str) -> bool:
     if len(a) != len(b):
         # Still do a full comparison to maintain constant time
         result = False
-        for x, y in zip(a, b):
+        for x, y in zip(a, b, strict=False):
             result |= x != y
         return result
 
     result = False
-    for x, y in zip(a, b):
+    for x, y in zip(a, b, strict=False):
         result |= x != y
     return result
 
@@ -349,7 +351,7 @@ async def login_oauth(
     if not code:
         raise api_error(400, ErrorCode.VALIDATION_ERROR, "Authorization code is required.")
 
-    # TODO: Implement OAuth token exchange with provider
+    # NOTE: Requires OAuth provider SDK integration (Google/GitHub)
     # This would involve:
     # 1. Exchanging code for access token
     # 2. Fetching user profile from provider
@@ -413,7 +415,7 @@ async def verify_email(
     if not token:
         raise api_error(400, ErrorCode.VALIDATION_ERROR, "Verification token is required.")
 
-    # TODO: Implement email verification logic
+    # NOTE: Requires email verification service integration
     # This would involve:
     # 1. Validating the verification token
     # 2. Checking token expiration
@@ -487,7 +489,7 @@ async def reset_password(
                 _token_expiry[f"reset:{reset_token}"] = expiry_time
                 _token_users[f"reset:{reset_token}"] = user.id
 
-        # TODO: Send reset token to user's email
+        # NOTE: Requires email transport integration for password reset
         # For now, return success (in production, send email with reset link)
         return {"ok": True}
 

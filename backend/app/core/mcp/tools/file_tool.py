@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, Optional, Callable
-from pathlib import Path
 from datetime import datetime
-import json
+from pathlib import Path
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +20,7 @@ class AuditLog:
             max_entries: Maximum number of log entries to keep
         """
         self.max_entries = max_entries
-        self.entries: list[Dict[str, Any]] = []
+        self.entries: list[dict[str, Any]] = []
 
     def log(
         self,
@@ -29,8 +28,8 @@ class AuditLog:
         tool_name: str,
         path: str,
         success: bool,
-        details: Optional[Dict[str, Any]] = None,
-        error: Optional[str] = None,
+        details: dict[str, Any] | None = None,
+        error: str | None = None,
     ) -> None:
         """Log an operation.
 
@@ -60,7 +59,7 @@ class AuditLog:
         log_level = logging.INFO if success else logging.WARNING
         logger.log(log_level, f"Audit: {operation} {path} - {success}")
 
-    def get_entries(self, limit: int = 100) -> list[Dict[str, Any]]:
+    def get_entries(self, limit: int = 100) -> list[dict[str, Any]]:
         """Get recent audit log entries.
 
         Args:
@@ -79,7 +78,7 @@ class AuditLog:
 class PermissionChecker:
     """Permission checker for file operations."""
 
-    def __init__(self, allowed_operations: Optional[Dict[str, bool]] = None):
+    def __init__(self, allowed_operations: dict[str, bool] | None = None):
         """Initialize permission checker.
 
         Args:
@@ -118,9 +117,9 @@ class FileOperationTool:
 
     def __init__(
         self,
-        base_path: Optional[str] = None,
-        permission_checker: Optional[PermissionChecker] = None,
-        audit_log: Optional[AuditLog] = None,
+        base_path: str | None = None,
+        permission_checker: PermissionChecker | None = None,
+        audit_log: AuditLog | None = None,
     ):
         """Initialize file operation tool.
 
@@ -169,7 +168,7 @@ class FileOperationTool:
 
     async def write_file(
         self, path: str, content: str, encoding: str = "utf-8"
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Write content to file.
 
         Args:
@@ -205,7 +204,7 @@ class FileOperationTool:
             self.audit_log.log("write", "file_tool", path, False, error=str(e))
             raise
 
-    async def list_files(self, path: str = ".") -> Dict[str, Any]:
+    async def list_files(self, path: str = ".") -> dict[str, Any]:
         """List files in directory.
 
         Args:
@@ -247,7 +246,7 @@ class FileOperationTool:
             self.audit_log.log("list", "file_tool", path, False, error=str(e))
             raise
 
-    async def delete_file(self, path: str) -> Dict[str, Any]:
+    async def delete_file(self, path: str) -> dict[str, Any]:
         """Delete file.
 
         Args:
@@ -278,7 +277,7 @@ class FileOperationTool:
             self.audit_log.log("delete", "file_tool", path, False, error=str(e))
             raise
 
-    async def file_exists(self, path: str) -> Dict[str, Any]:
+    async def file_exists(self, path: str) -> dict[str, Any]:
         """Check if file exists.
 
         Args:
@@ -315,7 +314,7 @@ class FileOperationTool:
             raise ValueError(f"Path outside base directory: {path}")
         return resolved
 
-    def get_audit_logs(self, limit: int = 100) -> list[Dict[str, Any]]:
+    def get_audit_logs(self, limit: int = 100) -> list[dict[str, Any]]:
         """Get audit logs.
 
         Args:
@@ -326,7 +325,7 @@ class FileOperationTool:
         """
         return self.audit_log.get_entries(limit)
 
-    def set_permissions(self, permissions: Dict[str, bool]) -> None:
+    def set_permissions(self, permissions: dict[str, bool]) -> None:
         """Set permissions for operations.
 
         Args:

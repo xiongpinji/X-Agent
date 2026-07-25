@@ -12,12 +12,10 @@
 
 from __future__ import annotations
 
-import asyncio
+import hashlib
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, UTC
-from typing import Optional, Any
-import hashlib
+from datetime import UTC, datetime
 
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
@@ -93,7 +91,7 @@ class RetrieverOptimizer:
         self,
         query: str,
         memories: list[dict],
-        embeddings: Optional[np.ndarray] = None,
+        embeddings: np.ndarray | None = None,
         top_k: int = 10,
         use_cache: bool = True,
     ) -> list[RetrievalResult]:
@@ -178,7 +176,7 @@ class RetrieverOptimizer:
         self,
         queries: list[str],
         memories: list[dict],
-        embeddings: Optional[np.ndarray],
+        embeddings: np.ndarray | None,
         top_k: int,
     ) -> list[RetrievalResult]:
         """
@@ -255,7 +253,7 @@ class RetrieverOptimizer:
         for query in queries:
             query_terms = set(query.lower().split())
 
-            for i, mem in enumerate(memories):
+            for _i, mem in enumerate(memories):
                 mem_id = mem.get("id", "")
                 content = mem.get("content", "").lower()
                 content_terms = set(content.split())
@@ -422,7 +420,7 @@ class RetrieverOptimizer:
 
         return expanded
 
-    def _get_query_embedding(self, query: str, dim: Optional[int] = None) -> np.ndarray:
+    def _get_query_embedding(self, query: str, dim: int | None = None) -> np.ndarray:
         """
         获取查询的嵌入向量。
 

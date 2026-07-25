@@ -7,13 +7,14 @@ multiple file types including code, images, PDFs, and text files.
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import mimetypes
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from backend.app.core.security import Principal
@@ -178,9 +179,7 @@ def _get_preview_type(mime_type: str) -> str:
         return "pdf"
     elif mime_type in PREVIEW_CODE_TYPES:
         return "code"
-    elif mime_type in PREVIEW_TEXT_TYPES:
-        return "text"
-    elif mime_type.startswith("text/"):
+    elif mime_type in PREVIEW_TEXT_TYPES or mime_type.startswith("text/"):
         return "text"
     else:
         return "binary"
@@ -210,7 +209,7 @@ def _get_file_metadata(file_path: Path) -> FileMetadata:
 def _read_file_content(file_path: Path, max_lines: int = 1000) -> tuple[str, int, bool]:
     """Read file content with line limit."""
     try:
-        with open(file_path, "r", encoding="utf-8", errors="replace") as f:
+        with open(file_path, encoding="utf-8", errors="replace") as f:
             lines = f.readlines()
 
         truncated = len(lines) > max_lines
@@ -434,10 +433,8 @@ async def preview_code(
     # Parse highlight lines
     highlight = []
     if highlight_lines:
-        try:
+        with contextlib.suppress(ValueError):
             highlight = [int(x.strip()) for x in highlight_lines.split(",") if x.strip()]
-        except ValueError:
-            pass
 
     return CodePreview(
         path=str(file_path_obj),

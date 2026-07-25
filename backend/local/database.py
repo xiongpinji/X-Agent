@@ -10,20 +10,15 @@ import json
 import logging
 import sqlite3
 import threading
+from collections.abc import Generator
 from contextlib import contextmanager
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Generator, Optional
+from typing import Any
 from uuid import uuid4
 
 from backend.local.schema import (
     ALL_TABLES,
-    SCHEMA_VERSION,
-    ENTITY_TYPES,
-    SYNC_OPERATIONS,
-    SYNC_STATES,
-    CONFLICT_TYPES,
-    RESOLUTION_STRATEGIES,
 )
 
 logger = logging.getLogger(__name__)
@@ -193,8 +188,8 @@ class LocalDatabase:
         local_version: int = 1,
         cloud_version: int = 0,
         is_encrypted: bool = False,
-        checksum: Optional[str] = None,
-        metadata: Optional[dict] = None,
+        checksum: str | None = None,
+        metadata: dict | None = None,
     ) -> str:
         """Set entity metadata.
 
@@ -233,7 +228,7 @@ class LocalDatabase:
 
         return metadata_id
 
-    def get_metadata(self, entity_type: str, entity_id: str) -> Optional[dict]:
+    def get_metadata(self, entity_type: str, entity_id: str) -> dict | None:
         """Get entity metadata.
 
         Args:
@@ -264,7 +259,7 @@ class LocalDatabase:
         entity_type: str,
         entity_id: str,
         state: str,
-        error_message: Optional[str] = None,
+        error_message: str | None = None,
         retry_count: int = 0,
     ) -> None:
         """Update sync state for entity.
@@ -294,7 +289,7 @@ class LocalDatabase:
                 datetime.now(UTC),
             ))
 
-    def get_sync_state(self, entity_type: str, entity_id: str) -> Optional[dict]:
+    def get_sync_state(self, entity_type: str, entity_id: str) -> dict | None:
         """Get sync state for entity.
 
         Args:
@@ -327,8 +322,8 @@ class LocalDatabase:
         conflict_type: str,
         local_data: dict,
         cloud_data: dict,
-        local_version: Optional[int] = None,
-        cloud_version: Optional[int] = None,
+        local_version: int | None = None,
+        cloud_version: int | None = None,
     ) -> str:
         """Log a conflict.
 
@@ -372,7 +367,7 @@ class LocalDatabase:
         conflict_id: str,
         resolution_strategy: str,
         resolved_data: dict,
-        resolved_by: Optional[str] = None,
+        resolved_by: str | None = None,
     ) -> None:
         """Resolve a conflict.
 
@@ -399,7 +394,7 @@ class LocalDatabase:
             ))
 
     def get_unresolved_conflicts(
-        self, entity_type: Optional[str] = None
+        self, entity_type: str | None = None
     ) -> list[dict]:
         """Get unresolved conflicts.
 
@@ -602,9 +597,9 @@ class LocalDatabase:
         direction: str,
         status: str,
         duration_ms: int = 0,
-        error_message: Optional[str] = None,
-        local_version: Optional[int] = None,
-        cloud_version: Optional[int] = None,
+        error_message: str | None = None,
+        local_version: int | None = None,
+        cloud_version: int | None = None,
     ) -> None:
         """Record sync operation in history.
 
@@ -644,7 +639,7 @@ class LocalDatabase:
 
     def get_sync_history(
         self,
-        entity_type: Optional[str] = None,
+        entity_type: str | None = None,
         limit: int = 100,
     ) -> list[dict]:
         """Get sync history.
@@ -715,7 +710,7 @@ class LocalDatabase:
                 expires_at,
             ))
 
-    def get_cache(self, cache_key: str) -> Optional[Any]:
+    def get_cache(self, cache_key: str) -> Any | None:
         """Get cache entry.
 
         Args:

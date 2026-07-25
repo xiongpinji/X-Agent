@@ -4,17 +4,15 @@ from __future__ import annotations
 
 import asyncio
 import time
-from dataclasses import dataclass, field
-from datetime import datetime
-from enum import Enum
-from typing import Any, Optional
 from abc import ABC, abstractmethod
+from datetime import datetime
+from enum import StrEnum
 
 import httpx
 from pydantic import BaseModel, Field
 
 
-class SearchProvider(str, Enum):
+class SearchProvider(StrEnum):
     """Supported search providers."""
     SERPER = "serper"
     SERPAPI = "serpapi"
@@ -30,7 +28,7 @@ class SearchResult(BaseModel):
     snippet: str = Field(..., description="Result snippet/description")
     position: int = Field(..., description="Position in results")
     source: str = Field(default="", description="Source domain")
-    date: Optional[str] = Field(default=None, description="Publication date")
+    date: str | None = Field(default=None, description="Publication date")
     metadata: dict = Field(default_factory=dict, description="Additional metadata")
 
 
@@ -111,7 +109,7 @@ class SerperProvider(BaseSearchProvider):
                 provider="serper",
             )
         except Exception as e:
-            raise RuntimeError(f"Serper search failed: {str(e)}")
+            raise RuntimeError(f"Serper search failed: {e!s}")
 
 
 class SerpAPIProvider(BaseSearchProvider):
@@ -157,7 +155,7 @@ class SerpAPIProvider(BaseSearchProvider):
                 provider="serpapi",
             )
         except Exception as e:
-            raise RuntimeError(f"SerpAPI search failed: {str(e)}")
+            raise RuntimeError(f"SerpAPI search failed: {e!s}")
 
 
 class FirecrawlProvider(BaseSearchProvider):
@@ -210,7 +208,7 @@ class FirecrawlProvider(BaseSearchProvider):
                 provider="firecrawl",
             )
         except Exception as e:
-            raise RuntimeError(f"Firecrawl scrape failed: {str(e)}")
+            raise RuntimeError(f"Firecrawl scrape failed: {e!s}")
 
 
 class SearchEngine:
@@ -237,7 +235,7 @@ class SearchEngine:
         self,
         query: str,
         num_results: int = 10,
-        provider: Optional[SearchProvider] = None,
+        provider: SearchProvider | None = None,
         **kwargs
     ) -> SearchResponse:
         """Execute search with specified provider.
@@ -262,7 +260,7 @@ class SearchEngine:
         self,
         query: str,
         num_results: int = 10,
-        providers: Optional[list[SearchProvider]] = None,
+        providers: list[SearchProvider] | None = None,
     ) -> list[SearchResponse]:
         """Execute search across multiple providers in parallel.
 

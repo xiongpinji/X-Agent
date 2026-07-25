@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
-from typing import Any, Optional
 from difflib import unified_diff
+from typing import Any
 
 try:
     from playwright.async_api import Page
@@ -84,9 +84,9 @@ class ConsoleSnapshot:
 class PageSnapshot:
     """Complete snapshot of page state."""
     dom: DOMSnapshot
-    accessibility: Optional[AccessibilitySnapshot] = None
-    network: Optional[NetworkSnapshot] = None
-    console: Optional[ConsoleSnapshot] = None
+    accessibility: AccessibilitySnapshot | None = None
+    network: NetworkSnapshot | None = None
+    console: ConsoleSnapshot | None = None
     timestamp: float = field(default_factory=time.time)
     label: str = ""
 
@@ -249,7 +249,7 @@ class PageSnapshotManager:
 
         return diff
 
-    def get_snapshot(self, label: str) -> Optional[PageSnapshot]:
+    def get_snapshot(self, label: str) -> PageSnapshot | None:
         """Get a previously captured snapshot by label."""
         return self._snapshots.get(label)
 
@@ -261,7 +261,7 @@ class PageSnapshotManager:
         """Clear all snapshots."""
         self._snapshots.clear()
 
-    def get_dom_diff(self, before_label: str, after_label: str) -> Optional[list[str]]:
+    def get_dom_diff(self, before_label: str, after_label: str) -> list[str] | None:
         """Get DOM diff between two labeled snapshots."""
         before = self._snapshots.get(before_label)
         after = self._snapshots.get(after_label)

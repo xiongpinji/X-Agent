@@ -15,12 +15,17 @@ import logging
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
-from backend.app.core.llm import LLMResponse, LLMRouter, BaseLLMBackend
-from backend.app.core.llm_cache import get_llm_cache_manager, LLMCacheManager
-from backend.app.core.llm_deduplicator import get_deduplicator, LLMDeduplicator
-from backend.app.core.llm_ab_testing import ABTestingSystem, ExperimentStatus, TrafficAllocationStrategy, VariantType
+from backend.app.core.llm import LLMResponse, LLMRouter
+from backend.app.core.llm_ab_testing import (
+    ABTestingSystem,
+    ExperimentStatus,
+    TrafficAllocationStrategy,
+    VariantType,
+)
+from backend.app.core.llm_cache import LLMCacheManager, get_llm_cache_manager
+from backend.app.core.llm_deduplicator import LLMDeduplicator, get_deduplicator
 from backend.app.core.llm_evaluation import EvaluationMethod, LLMEvaluation
 from backend.app.core.llm_monitoring import AlertSeverity, LLMMonitoring, MetricType
 from backend.app.core.prompt_engineering import PromptEngineering, PromptType
@@ -38,7 +43,7 @@ class LLMCallMetrics:
     cost: float
     cache_hit: bool
     deduplicated: bool
-    dedup_type: Optional[str] = None
+    dedup_type: str | None = None
 
 
 class LLMManager:
@@ -46,9 +51,9 @@ class LLMManager:
 
     def __init__(
         self,
-        router: Optional[LLMRouter] = None,
-        cache_manager: Optional[LLMCacheManager] = None,
-        deduplicator: Optional[LLMDeduplicator] = None,
+        router: LLMRouter | None = None,
+        cache_manager: LLMCacheManager | None = None,
+        deduplicator: LLMDeduplicator | None = None,
         storage_path: str | Path | None = None,
         enable_cache: bool = True,
         enable_dedup: bool = True,
@@ -81,11 +86,11 @@ class LLMManager:
     async def chat(
         self,
         messages: list[dict[str, str]],
-        tools: list[dict[str, Any]] = None,
-        model: Optional[str] = None,
+        tools: list[dict[str, Any]] | None = None,
+        model: str | None = None,
         temperature: float = 0.7,
-        use_cache: Optional[bool] = None,
-        use_dedup: Optional[bool] = None,
+        use_cache: bool | None = None,
+        use_dedup: bool | None = None,
     ) -> LLMResponse:
         """Send a chat request with caching and deduplication.
 
@@ -222,8 +227,8 @@ class LLMManager:
     async def stream_chat(
         self,
         messages: list[dict[str, str]],
-        tools: list[dict[str, Any]] = None,
-        model: Optional[str] = None,
+        tools: list[dict[str, Any]] | None = None,
+        model: str | None = None,
         temperature: float = 0.7,
     ):
         """Stream chat response.
@@ -620,10 +625,10 @@ class LLMManager:
 
 
 # Global LLM manager instance
-_llm_manager: Optional[LLMManager] = None
+_llm_manager: LLMManager | None = None
 
 
-def get_llm_manager(router: Optional[LLMRouter] = None) -> LLMManager:
+def get_llm_manager(router: LLMRouter | None = None) -> LLMManager:
     """Get or create the global LLM manager."""
     global _llm_manager
     if _llm_manager is None:

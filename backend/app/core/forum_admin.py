@@ -4,13 +4,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Optional
+
 from backend.app.models.forum import (
-    forum_store,
-    PostStatus,
-    ModerationStatus,
     ForumPost,
-    ModerationRule,
+    ModerationStatus,
+    PostStatus,
+    forum_store,
 )
 
 

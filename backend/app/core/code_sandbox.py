@@ -4,21 +4,19 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import os
-import subprocess
 import tempfile
 import time
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
-class ProgrammingLanguage(str, Enum):
+class ProgrammingLanguage(StrEnum):
     """支持的编程语言"""
     PYTHON = "python"
     JAVASCRIPT = "javascript"
@@ -39,7 +37,7 @@ class SandboxConfig:
     max_output_bytes: int = 1024 * 1024  # 1MB
     allow_network: bool = False
     allow_file_write: bool = False
-    temp_dir: Optional[str] = None
+    temp_dir: str | None = None
     env_vars: dict[str, str] = field(default_factory=dict)
 
     def validate(self) -> tuple[bool, str]:
@@ -235,7 +233,7 @@ class CodeSandbox:
                     process.communicate(),
                     timeout=self.config.timeout_seconds
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 process.kill()
                 await process.wait()
                 return ExecutionResult(
@@ -289,7 +287,7 @@ class SandboxPool:
         code: str,
         language: ProgrammingLanguage = ProgrammingLanguage.PYTHON,
         timeout_seconds: int = 30,
-        task_id: Optional[str] = None,
+        task_id: str | None = None,
     ) -> ExecutionResult:
         """执行代码"""
         config = SandboxConfig(
@@ -317,7 +315,7 @@ class SandboxPool:
         code: str,
         language: ProgrammingLanguage = ProgrammingLanguage.PYTHON,
         timeout_seconds: int = 30,
-        task_id: Optional[str] = None,
+        task_id: str | None = None,
     ) -> str:
         """异步执行代码并返回任务ID"""
         if task_id is None:
@@ -334,7 +332,7 @@ class SandboxPool:
 
         return task_id
 
-    async def get_result(self, task_id: str) -> Optional[ExecutionResult]:
+    async def get_result(self, task_id: str) -> ExecutionResult | None:
         """获取执行结果"""
         task = self._active_tasks.get(task_id)
         if task is None:
@@ -367,7 +365,7 @@ class SandboxPool:
 
 
 # 全局沙箱池实例
-_sandbox_pool: Optional[SandboxPool] = None
+_sandbox_pool: SandboxPool | None = None
 
 
 def get_sandbox_pool() -> SandboxPool:

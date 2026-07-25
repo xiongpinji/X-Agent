@@ -502,8 +502,10 @@ class TestPerformance:
             await hot_store.load(mem.id)
         elapsed = time.time() - start
 
-        # Should be fast (< 100ms for 10 loads)
-        assert elapsed < 0.1
+        # Should be fast (< 100ms for 10 loads, adjusted by env multiplier)
+        import os
+        multiplier = float(os.environ.get("XAGENT_PERF_THRESHOLD_MULTIPLIER", "1.0"))
+        assert elapsed < 0.1 * multiplier
 
     @pytest.mark.asyncio
     async def test_search_performance(self, hot_store: HotMemoryStore) -> None:

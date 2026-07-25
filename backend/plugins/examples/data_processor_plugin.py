@@ -9,9 +9,9 @@ This plugin demonstrates:
 - Configuration support
 """
 
-from typing import Any, Dict, Optional
 import json
 import logging
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 class DataProcessorPlugin:
     """Data processing plugin"""
 
-    def __init__(self, config: Optional[Dict[str, Any]] = None):
+    def __init__(self, config: dict[str, Any] | None = None):
         """Initialize plugin"""
         self.config = config or {}
         self.name = "Data Processor"
@@ -31,9 +31,7 @@ class DataProcessorPlugin:
         try:
             self.logger.info(f"Initializing {self.name} v{self.version}")
             # Validate configuration
-            if not self._validate_config():
-                return False
-            return True
+            return self._validate_config()
         except Exception as e:
             self.logger.error(f"Initialization failed: {e}")
             return False
@@ -46,7 +44,7 @@ class DataProcessorPlugin:
                 self.logger.warning(f"Missing config key: {key}")
         return True
 
-    def execute(self, action: str, **kwargs) -> Dict[str, Any]:
+    def execute(self, action: str, **kwargs) -> dict[str, Any]:
         """Execute plugin action"""
         try:
             if action == "process_array":
@@ -65,7 +63,7 @@ class DataProcessorPlugin:
             self.logger.error(f"Execution failed: {e}")
             return {"success": False, "error": str(e)}
 
-    def _process_array(self, **kwargs) -> Dict[str, Any]:
+    def _process_array(self, **kwargs) -> dict[str, Any]:
         """Process array data"""
         try:
             data = kwargs.get("data", [])
@@ -91,7 +89,7 @@ class DataProcessorPlugin:
         except Exception as e:
             return {"success": False, "error": str(e)}
 
-    def _aggregate(self, **kwargs) -> Dict[str, Any]:
+    def _aggregate(self, **kwargs) -> dict[str, Any]:
         """Aggregate data"""
         try:
             data = kwargs.get("data", [])
@@ -122,7 +120,7 @@ class DataProcessorPlugin:
         except Exception as e:
             return {"success": False, "error": str(e)}
 
-    def _transform(self, **kwargs) -> Dict[str, Any]:
+    def _transform(self, **kwargs) -> dict[str, Any]:
         """Transform data"""
         try:
             data = kwargs.get("data", {})
@@ -144,7 +142,7 @@ class DataProcessorPlugin:
         except Exception as e:
             return {"success": False, "error": str(e)}
 
-    def _filter(self, **kwargs) -> Dict[str, Any]:
+    def _filter(self, **kwargs) -> dict[str, Any]:
         """Filter data"""
         try:
             data = kwargs.get("data", [])
@@ -175,7 +173,7 @@ class DataProcessorPlugin:
         except Exception as e:
             return {"success": False, "error": str(e)}
 
-    def _sort(self, **kwargs) -> Dict[str, Any]:
+    def _sort(self, **kwargs) -> dict[str, Any]:
         """Sort data"""
         try:
             data = kwargs.get("data", [])
@@ -212,14 +210,14 @@ class DataProcessorPlugin:
 plugin = DataProcessorPlugin()
 
 
-def initialize(config: Optional[Dict[str, Any]] = None) -> bool:
+def initialize(config: dict[str, Any] | None = None) -> bool:
     """Initialize plugin"""
     global plugin
     plugin = DataProcessorPlugin(config)
     return plugin.initialize()
 
 
-def execute(action: str, **kwargs) -> Dict[str, Any]:
+def execute(action: str, **kwargs) -> dict[str, Any]:
     """Execute plugin action"""
     return plugin.execute(action, **kwargs)
 

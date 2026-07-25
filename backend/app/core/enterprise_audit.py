@@ -14,8 +14,8 @@ import hashlib
 import json
 import logging
 from datetime import UTC, datetime, timedelta
-from enum import Enum
-from typing import Any, Optional
+from enum import StrEnum
+from typing import Any
 from uuid import uuid4
 
 from pydantic import BaseModel, Field
@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 # 审计日志模型
 # ============================================================================
 
-class AuditEventType(str, Enum):
+class AuditEventType(StrEnum):
     """审计事件类型"""
     # 认证事件
     LOGIN = "login"
@@ -77,7 +77,7 @@ class AuditEventType(str, Enum):
     RATE_LIMIT_EXCEEDED = "rate_limit_exceeded"
 
 
-class AuditSeverity(str, Enum):
+class AuditSeverity(StrEnum):
     """审计事件严重级别"""
     INFO = "info"
     WARNING = "warning"
@@ -92,25 +92,25 @@ class AuditLogEntry(BaseModel):
     event_type: AuditEventType
     severity: AuditSeverity = AuditSeverity.INFO
     tenant_id: str
-    user_id: Optional[str] = None
+    user_id: str | None = None
     actor_type: str = "user"  # "user", "system", "service"
-    actor_id: Optional[str] = None
-    resource_type: Optional[str] = None
-    resource_id: Optional[str] = None
+    actor_id: str | None = None
+    resource_type: str | None = None
+    resource_id: str | None = None
     action: str
     status: str = "success"  # "success", "failure"
-    status_code: Optional[int] = None
-    error_message: Optional[str] = None
+    status_code: int | None = None
+    error_message: str | None = None
     details: dict[str, Any] = Field(default_factory=dict)
-    ip_address: Optional[str] = None
-    user_agent: Optional[str] = None
-    request_id: Optional[str] = None
-    session_id: Optional[str] = None
+    ip_address: str | None = None
+    user_agent: str | None = None
+    request_id: str | None = None
+    session_id: str | None = None
     changes: dict[str, tuple[Any, Any]] = Field(default_factory=dict)  # {field: (old_value, new_value)}
     tags: list[str] = Field(default_factory=list)
-    hash: Optional[str] = None  # 用于链式验证
+    hash: str | None = None  # 用于链式验证
 
-    def compute_hash(self, previous_hash: Optional[str] = None) -> str:
+    def compute_hash(self, previous_hash: str | None = None) -> str:
         """计算日志条目的哈希值（用于链式验证）"""
         data = {
             "log_id": self.log_id,
@@ -128,17 +128,17 @@ class AuditLogEntry(BaseModel):
 
 class AuditLogFilter(BaseModel):
     """审计日志过滤条件"""
-    tenant_id: Optional[str] = None
-    user_id: Optional[str] = None
-    event_type: Optional[AuditEventType] = None
-    severity: Optional[AuditSeverity] = None
-    resource_type: Optional[str] = None
-    resource_id: Optional[str] = None
-    status: Optional[str] = None
-    start_time: Optional[datetime] = None
-    end_time: Optional[datetime] = None
-    tags: Optional[list[str]] = None
-    search_text: Optional[str] = None
+    tenant_id: str | None = None
+    user_id: str | None = None
+    event_type: AuditEventType | None = None
+    severity: AuditSeverity | None = None
+    resource_type: str | None = None
+    resource_id: str | None = None
+    status: str | None = None
+    start_time: datetime | None = None
+    end_time: datetime | None = None
+    tags: list[str] | None = None
+    search_text: str | None = None
     limit: int = 100
     offset: int = 0
 
@@ -155,7 +155,7 @@ class AuditLogStore:
         self._tenant_logs: dict[str, list[str]] = {}  # tenant_id -> [log_id, ...]
         self._user_logs: dict[str, list[str]] = {}  # user_id -> [log_id, ...]
         self._resource_logs: dict[str, list[str]] = {}  # resource_id -> [log_id, ...]
-        self._previous_hash: Optional[str] = None
+        self._previous_hash: str | None = None
 
     def append_log(self, entry: AuditLogEntry) -> AuditLogEntry:
         """追加审计日志"""
@@ -225,11 +225,11 @@ class AuditLogStore:
 
         return results, total
 
-    def get_log(self, log_id: str) -> Optional[AuditLogEntry]:
+    def get_log(self, log_id: str) -> AuditLogEntry | None:
         """获取单条日志"""
         return self._logs.get(log_id)
 
-    def verify_log_chain(self, start_log_id: Optional[str] = None) -> bool:
+    def verify_log_chain(self, start_log_id: str | None = None) -> bool:
         """验证日志链的完整性"""
         log_ids = sorted(
             self._logs.keys(),
@@ -467,13 +467,13 @@ class DashboardDataProvider:
             tenant_id=tenant_id,
             start_time=now.replace(hour=0, minute=0, second=0, microsecond=0),
         )
-        logs_today, total_today = self.store.query_logs(filter_today)
+        _logs_today, total_today = self.store.query_logs(filter_today)
 
         filter_week = AuditLogFilter(
             tenant_id=tenant_id,
             start_time=now - timedelta(days=7),
         )
-        logs_week, total_week = self.store.query_logs(filter_week)
+        _logs_week, total_week = self.store.query_logs(filter_week)
 
         # 统计事件类型
         event_counts = {}

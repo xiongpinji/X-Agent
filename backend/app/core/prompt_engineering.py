@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import json
-from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
@@ -401,6 +399,6 @@ class PromptEngineering:
             with examples_file.open("r", encoding="utf-8") as f:
                 for line in f:
                     if line.strip():
-                        example = FewShotExample.model_validate_json(line)
+                        FewShotExample.model_validate_json(line)
                         # Note: We lose the template_id mapping here, would need to store it
                         # For now, we'll rebuild it from versions

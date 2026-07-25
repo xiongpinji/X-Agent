@@ -12,13 +12,11 @@ This module provides advanced refactoring capabilities including:
 
 from __future__ import annotations
 
-import json
 import logging
 import re
 from dataclasses import dataclass, field
 from enum import StrEnum
-from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 from uuid import uuid4
 
 logger = logging.getLogger(__name__)
@@ -61,8 +59,8 @@ class RefactoringOpportunity:
     severity: str  # "low", "medium", "high"
     confidence: float  # 0.0 to 1.0
     affected_symbols: list[str] = field(default_factory=list)
-    suggested_changes: Optional[str] = None
-    estimated_impact: Optional[str] = None
+    suggested_changes: str | None = None
+    estimated_impact: str | None = None
     complexity: int = 1  # 1-10 scale
 
     def to_dict(self) -> dict[str, Any]:
@@ -114,7 +112,7 @@ class RefactoringPlan:
     estimated_time: int = 0  # in seconds
     risk_level: str = "low"  # "low", "medium", "high"
     validation_tests: list[str] = field(default_factory=list)
-    rollback_plan: Optional[str] = None
+    rollback_plan: str | None = None
     plan_id: str = field(default_factory=lambda: str(uuid4()))
 
     def to_dict(self) -> dict[str, Any]:
@@ -289,7 +287,7 @@ class RefactoringDetector:
                     description=f"Magic number '{num}' appears {count} times",
                     severity="low",
                     confidence=0.6,
-                    suggested_changes=f"Replace with named constant",
+                    suggested_changes="Replace with named constant",
                 ))
 
         return opportunities
@@ -477,7 +475,7 @@ class RefactoringValidator:
                     if change.new_code.count("{") != change.new_code.count("}"):
                         errors.append(f"Unmatched braces in {change.file_path}")
             except Exception as e:
-                errors.append(f"Validation error: {str(e)}")
+                errors.append(f"Validation error: {e!s}")
 
         # Check for symbol conflicts
         for change in plan.changes:
@@ -499,7 +497,7 @@ class RefactoringValidator:
         # Generate basic tests
         for change in plan.changes:
             if change.change_type == RefactoringType.EXTRACT_METHOD:
-                test = f"""def test_extracted_method():
+                test = """def test_extracted_method():
     # Test extracted method
     result = extracted_method()
     assert result is not None
@@ -548,7 +546,7 @@ class CodeRefactoringEngine:
 
         # Apply changes
         try:
-            for change in plan.changes:
+            for _change in plan.changes:
                 # In real implementation, would apply changes to file
                 result.changes_applied += 1
 

@@ -276,7 +276,7 @@ class ColdMemoryStore:
 
         try:
             points = []
-            for memory, embedding in zip(memories, embeddings):
+            for memory, embedding in zip(memories, embeddings, strict=False):
                 payload = {
                     "id": memory.id,
                     "content": memory.content,

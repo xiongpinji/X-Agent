@@ -46,37 +46,6 @@ const formatFileSize = (bytes: number): string => {
   return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
 };
 
-const getLanguageFromExtension = (path: string): string => {
-  const ext = path.split('.').pop()?.toLowerCase() || '';
-  const languageMap: Record<string, string> = {
-    py: 'python',
-    js: 'javascript',
-    ts: 'typescript',
-    tsx: 'typescript',
-    jsx: 'javascript',
-    java: 'java',
-    c: 'c',
-    cpp: 'cpp',
-    cs: 'csharp',
-    go: 'go',
-    rs: 'rust',
-    rb: 'ruby',
-    php: 'php',
-    swift: 'swift',
-    kt: 'kotlin',
-    sh: 'bash',
-    html: 'html',
-    css: 'css',
-    json: 'json',
-    xml: 'xml',
-    yaml: 'yaml',
-    yml: 'yaml',
-    md: 'markdown',
-    sql: 'sql',
-  };
-  return languageMap[ext] || ext;
-};
-
 export const FilePreview: React.FC<FilePreviewProps> = ({
   filePath,
   maxLines = 1000,
@@ -86,7 +55,7 @@ export const FilePreview: React.FC<FilePreviewProps> = ({
   const [metadata, setMetadata] = useState<FileMetadata | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [highlightLines, setHighlightLines] = useState<Set<number>>(new Set());
+  const [highlightLines] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     const fetchPreview = async () => {
@@ -117,7 +86,7 @@ export const FilePreview: React.FC<FilePreviewProps> = ({
     fetchPreview();
   }, [filePath, maxLines]);
 
-  const renderCodePreview = (content: string, language?: string) => {
+  const renderCodePreview = (content: string, _language?: string) => {
     const lines = content.split('\n');
     const displayLines = lines.slice(0, maxLines);
 
@@ -337,7 +306,10 @@ export const FileList: React.FC<FileListProps> = ({
       {directories.map((dir) => (
         <div
           key={dir.path}
+          role="button"
+          tabIndex={0}
           onClick={() => onFileSelect?.(dir.path)}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onFileSelect?.(dir.path); }}
           className="p-2 bg-blue-50 rounded cursor-pointer hover:bg-blue-100 flex items-center gap-2"
         >
           <span>📁</span>
@@ -349,7 +321,10 @@ export const FileList: React.FC<FileListProps> = ({
       {files.map((file) => (
         <div
           key={file.path}
+          role="button"
+          tabIndex={0}
           onClick={() => onFileSelect?.(file.path)}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onFileSelect?.(file.path); }}
           className="p-2 bg-gray-50 rounded cursor-pointer hover:bg-gray-100 flex items-center justify-between"
         >
           <div className="flex items-center gap-2 flex-1">

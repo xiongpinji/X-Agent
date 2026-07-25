@@ -12,10 +12,9 @@ Provides:
 from __future__ import annotations
 
 import logging
-from datetime import UTC, datetime
-from typing import Annotated, Optional
+from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
@@ -27,9 +26,9 @@ router = APIRouter(prefix="/api/v1/plugins", tags=["plugins"])
 
 class PluginSearchRequest(BaseModel):
     """Plugin search request"""
-    query: Optional[str] = Field(None, description="Search query")
-    category: Optional[str] = Field(None, description="Plugin category")
-    risk_level: Optional[str] = Field(None, description="Risk level filter")
+    query: str | None = Field(None, description="Search query")
+    category: str | None = Field(None, description="Plugin category")
+    risk_level: str | None = Field(None, description="Risk level filter")
     sort_by: str = Field("rating", description="Sort by: rating, downloads, updated")
     limit: int = Field(20, ge=1, le=100, description="Result limit")
     offset: int = Field(0, ge=0, description="Result offset")
@@ -38,7 +37,7 @@ class PluginSearchRequest(BaseModel):
 class PluginInstallRequest(BaseModel):
     """Plugin installation request"""
     plugin_id: str = Field(..., description="Plugin ID")
-    version: Optional[str] = Field(None, description="Specific version")
+    version: str | None = Field(None, description="Specific version")
     config: dict = Field(default_factory=dict, description="Configuration")
     auto_enable: bool = Field(True, description="Auto-enable after install")
 
@@ -60,7 +59,7 @@ class PluginRatingRequest(BaseModel):
     """Plugin rating request"""
     plugin_id: str = Field(..., description="Plugin ID")
     rating: int = Field(..., ge=1, le=5, description="Rating 1-5")
-    review: Optional[str] = Field(None, description="Review text")
+    review: str | None = Field(None, description="Review text")
 
 
 class PluginMetadataResponse(BaseModel):
@@ -70,12 +69,12 @@ class PluginMetadataResponse(BaseModel):
     version: str
     author: str
     description: str
-    long_description: Optional[str] = None
-    homepage: Optional[str] = None
-    repository: Optional[str] = None
+    long_description: str | None = None
+    homepage: str | None = None
+    repository: str | None = None
     license: str
     keywords: list[str]
-    icon_url: Optional[str] = None
+    icon_url: str | None = None
     screenshots: list[str]
 
 
@@ -112,7 +111,7 @@ class PluginDetailResponse(BaseModel):
     installed_count: int
     created_at: datetime
     updated_at: datetime
-    published_at: Optional[datetime] = None
+    published_at: datetime | None = None
 
 
 class PluginListResponse(BaseModel):
@@ -157,17 +156,17 @@ class PluginRatingResponse(BaseModel):
     plugin_id: str
     rating: float
     rating_count: int
-    user_rating: Optional[int] = None
-    user_review: Optional[str] = None
+    user_rating: int | None = None
+    user_review: str | None = None
 
 
 class PluginUpdateCheckResponse(BaseModel):
     """Plugin update check response"""
     plugin_id: str
     current_version: str
-    latest_version: Optional[str] = None
+    latest_version: str | None = None
     has_update: bool
-    changelog: Optional[str] = None
+    changelog: str | None = None
 
 
 class PluginCategoryResponse(BaseModel):
@@ -226,9 +225,9 @@ async def list_categories():
 
 @router.get("/search", response_model=PluginListResponse)
 async def search_plugins(
-    query: Optional[str] = Query(None, description="Search query"),
-    category: Optional[str] = Query(None, description="Category filter"),
-    risk_level: Optional[str] = Query(None, description="Risk level filter"),
+    query: str | None = Query(None, description="Search query"),
+    category: str | None = Query(None, description="Category filter"),
+    risk_level: str | None = Query(None, description="Risk level filter"),
     sort_by: str = Query("rating", description="Sort by"),
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),

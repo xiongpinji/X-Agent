@@ -1,14 +1,14 @@
 """Search API endpoints."""
 
-from typing import Annotated, Optional
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
 
 from backend.app.api.errors import api_error
 from backend.app.core.contracts import ErrorCode
-from backend.app.core.search import SearchCache, ContentExtractor
-from backend.app.dependencies import get_current_principal, enforce_scope
+from backend.app.core.search import ContentExtractor, SearchCache
 from backend.app.core.security import Principal
+from backend.app.dependencies import enforce_scope, get_current_principal
 
 router = APIRouter(prefix="/api/v1/search", tags=["search"])
 PrincipalDependency = Annotated[Principal, Depends(get_current_principal)]
@@ -90,7 +90,7 @@ async def extract_content(
         result = await content_extractor.extract(url)
         return result
     except Exception as e:
-        raise api_error(400, ErrorCode.INVALID_REQUEST, f"Extraction failed: {str(e)}")
+        raise api_error(400, ErrorCode.INVALID_REQUEST, f"Extraction failed: {e!s}")
 
 
 @router.get("/history")

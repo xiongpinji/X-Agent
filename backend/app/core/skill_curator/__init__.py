@@ -18,6 +18,6 @@ __all__ = [
     "SkillImprovementProposal",
     "SkillScore",
     "analyze_skill_evidence",
-    "score_skills",
     "draft_skill",
+    "score_skills",
 ]

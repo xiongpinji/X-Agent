@@ -8,14 +8,14 @@ Implements multi-level caching strategy:
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import time
-from datetime import datetime, timedelta, UTC
-from functools import wraps
-from typing import Any, Callable, TypeVar, Optional
-import asyncio
 from collections import OrderedDict
+from collections.abc import Callable
+from functools import wraps
+from typing import Any, TypeVar
 
 T = TypeVar("T")
 
@@ -299,9 +299,9 @@ class CacheInvalidator:
 
     async def invalidate(self, pattern: str) -> None:
         """Invalidate cache by pattern."""
-        cache = get_query_cache()
+        get_query_cache()
         related = self.patterns.get(pattern, [])
-        for p in [pattern] + related:
+        for _p in [pattern, *related]:
             # In a real implementation, would iterate through cache keys
             # For now, just clear the pattern prefix
             pass

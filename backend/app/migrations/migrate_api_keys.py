@@ -8,7 +8,6 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -64,7 +63,7 @@ class APIKeyMigration:
             return []
 
         try:
-            with open(self.json_path, "r") as f:
+            with open(self.json_path) as f:
                 keys = json.load(f)
             logger.info(f"Loaded {len(keys)} keys from JSON")
             return keys

@@ -11,14 +11,15 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
-from enum import Enum
-from typing import Callable, Optional, Any
+from enum import StrEnum
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
-class WaitStrategy(str, Enum):
+class WaitStrategy(StrEnum):
     """Strategies for waiting in browser automation."""
     NETWORK_IDLE = "network_idle"
     DOM_CONTENT = "domcontentloaded"
@@ -34,7 +35,7 @@ class WaitResult:
     success: bool
     strategy_used: WaitStrategy
     time_taken_ms: float
-    reason: Optional[str] = None
+    reason: str | None = None
     metadata: dict = None
 
     def __post_init__(self):
@@ -75,7 +76,7 @@ class SmartWaiter:
         self,
         page: Any,
         selector: str,
-        timeout: Optional[float] = None,
+        timeout: float | None = None,
         strategy: WaitStrategy = WaitStrategy.ADAPTIVE,
     ) -> WaitResult:
         """
@@ -125,7 +126,7 @@ class SmartWaiter:
     async def wait_for_navigation(
         self,
         page: Any,
-        timeout: Optional[float] = None,
+        timeout: float | None = None,
         strategy: WaitStrategy = WaitStrategy.LOAD,
     ) -> WaitResult:
         """
@@ -181,7 +182,7 @@ class SmartWaiter:
         self,
         page: Any,
         condition: Callable,
-        timeout: Optional[float] = None,
+        timeout: float | None = None,
         check_interval: float = 0.5,
     ) -> WaitResult:
         """
@@ -245,7 +246,7 @@ class SmartWaiter:
     async def wait_for_page_stable(
         self,
         page: Any,
-        timeout: Optional[float] = None,
+        timeout: float | None = None,
         stability_threshold: float = 1.0,
     ) -> WaitResult:
         """
@@ -317,7 +318,7 @@ class SmartWaiter:
     async def wait_for_network_idle(
         self,
         page: Any,
-        timeout: Optional[float] = None,
+        timeout: float | None = None,
     ) -> WaitResult:
         """
         Wait for network to become idle.

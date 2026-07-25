@@ -29,8 +29,8 @@ import importlib
 import json
 import logging
 import re
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Callable, Awaitable
 
 from backend.app.core.hooks.config import HookDefinition, HooksConfig
 from backend.app.core.hooks.manager import HookManager
@@ -100,7 +100,7 @@ class CommandHook:
             stdout, stderr = await asyncio.wait_for(
                 proc.communicate(stdin_bytes), timeout=self.timeout
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.warning(
                 "CommandHook %s timed out after %.1fs", self.name, self.timeout
             )
@@ -352,7 +352,7 @@ def load_hooks_from_config(config: HooksConfig) -> list[Hook]:
             hook = build_hook(defn)
             hooks.append(hook)
             logger.info("Loaded hook %s (%s)", defn.name, defn.type)
-        except Exception as exc:  # noqa: BLE001 - fail-open at load time
+        except Exception as exc:
             logger.warning("Failed to build hook %s: %s", defn.name, exc)
     return hooks
 

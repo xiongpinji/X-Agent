@@ -13,10 +13,11 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from dataclasses import dataclass, field
-from enum import Enum
-from typing import Any, Dict, List, Optional, Callable
 from collections import deque
+from collections.abc import Callable
+from dataclasses import dataclass
+from enum import Enum
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -61,9 +62,9 @@ class ModelCache:
 
     def __init__(self, max_memory_mb: int = 200):
         self.max_memory_mb = max_memory_mb
-        self.cached_models: Dict[str, Any] = {}
-        self.model_memory: Dict[str, float] = {}
-        self.access_times: Dict[str, float] = {}
+        self.cached_models: dict[str, Any] = {}
+        self.model_memory: dict[str, float] = {}
+        self.access_times: dict[str, float] = {}
         self.lock = asyncio.Lock()
 
     async def load_model(
@@ -127,7 +128,7 @@ class ModelCache:
                 del self.access_times[model_id]
                 logger.info(f"Model unloaded: {model_id}")
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """获取统计信息"""
         return {
             "cached_models": len(self.cached_models),
@@ -188,19 +189,19 @@ class BatchProcessor:
             results = await self._batch_inference(batch)
 
             # 返回结果
-            for i, (request_id, data, future) in enumerate(batch):
+            for i, (_request_id, _data, future) in enumerate(batch):
                 if not future.done():
                     future.set_result(results[i])
 
         except Exception as e:
             logger.error(f"Batch processing error: {e}")
-            for request_id, data, future in batch:
+            for _request_id, _data, future in batch:
                 if not future.done():
                     future.set_exception(e)
         finally:
             self.processing = False
 
-    async def _batch_inference(self, batch: List[tuple]) -> List[Any]:
+    async def _batch_inference(self, batch: list[tuple]) -> list[Any]:
         """批量推理"""
         # 模拟推理
         await asyncio.sleep(0.05)
@@ -241,7 +242,7 @@ class MultimodalProcessorOptimized:
         self,
         image_data: bytes,
         model_id: str = "vision-model-v1",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """处理图像"""
         start_time = time.time()
 
@@ -276,7 +277,7 @@ class MultimodalProcessorOptimized:
         self,
         audio_data: bytes,
         model_id: str = "audio-model-v1",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """处理音频"""
         start_time = time.time()
 
@@ -310,7 +311,7 @@ class MultimodalProcessorOptimized:
         self,
         video_data: bytes,
         model_id: str = "video-model-v1",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """处理视频"""
         start_time = time.time()
 
@@ -340,7 +341,7 @@ class MultimodalProcessorOptimized:
                 "error": str(e),
             }
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """获取处理统计信息"""
         return {
             "total_requests": self.stats.total_requests,
@@ -358,7 +359,7 @@ class MultimodalProcessorOptimized:
 
 
 # 全局处理器实例
-_processor: Optional[MultimodalProcessorOptimized] = None
+_processor: MultimodalProcessorOptimized | None = None
 
 
 def get_processor(

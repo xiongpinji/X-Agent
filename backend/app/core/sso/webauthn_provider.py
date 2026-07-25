@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import base64
 import hashlib
-import json
 import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -12,6 +11,15 @@ from typing import Any
 from uuid import uuid4
 
 from pydantic import BaseModel, Field
+
+try:
+    from cryptography.hazmat.primitives.asymmetric import ec
+    from cryptography.hazmat.primitives.hashes import SHA256
+    from cryptography.hazmat.primitives.serialization import load_der_public_key
+
+    CRYPTO_AVAILABLE = True
+except ImportError:
+    CRYPTO_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 
@@ -268,9 +276,25 @@ class WebAuthnProvider:
             logger.warning(f"Credential does not belong to user: {challenge_obj.user_id}")
             return False
 
-        # TODO: Verify signature using public key
-        # This requires cryptographic verification of the signature
-        # For now, we'll accept it as verified
+        # Verify signature using stored public key (P1-05 补全)
+        if CRYPTO_AVAILABLE and credential.public_key:
+            try:
+                verified = self._verify_signature(
+                    public_key_b64=credential.public_key,
+                    signature_b64=signature,
+                    client_data_b64=client_data,
+                    challenge=challenge_obj.challenge,
+                )
+                if not verified:
+                    logger.warning(f"Signature verification failed: {credential_id}")
+                    return False
+            except Exception as exc:
+                logger.warning(f"Signature verification error: {exc}")
+                return False
+        elif not CRYPTO_AVAILABLE:
+            # Fail-closed: 无 cryptography 库时拒绝认证
+            logger.error("cryptography library not installed; cannot verify WebAuthn signature")
+            return False
 
         # Update credential
         credential.last_used_at = datetime.now(UTC)
@@ -281,6 +305,52 @@ class WebAuthnProvider:
 
         logger.info(f"WebAuthn authentication verified: {credential_id} for user: {challenge_obj.user_id}")
         return True
+
+    def _verify_signature(
+        self,
+        public_key_b64: str,
+        signature_b64: str,
+        client_data_b64: str,
+        challenge: str,
+    ) -> bool:
+        """Verify WebAuthn assertion signature (EC P-256 / RSA).
+
+        Authenticator signs: authenticator_data || SHA-256(client_data_json)
+        We reconstruct the signed payload and verify with stored public key.
+        """
+        try:
+            public_key_bytes = base64.urlsafe_b64decode(public_key_b64 + "==")
+            signature_bytes = base64.urlsafe_b64decode(signature_b64 + "==")
+            client_data_bytes = base64.urlsafe_b64decode(client_data_b64 + "==")
+
+            # Load public key (DER SubjectPublicKeyInfo)
+            public_key = load_der_public_key(public_key_bytes)
+
+            # Construct verification data: client_data_hash
+            client_data_hash = hashlib.sha256(client_data_bytes).digest()
+
+            # For EC keys (most common in WebAuthn)
+            if isinstance(public_key, ec.EllipticCurvePublicKey):
+                public_key.verify(
+                    signature_bytes,
+                    client_data_hash,
+                    ec.ECDSA(SHA256()),
+                )
+                return True
+            else:
+                # RSA fallback
+                from cryptography.hazmat.primitives.asymmetric import padding as rsa_padding
+
+                public_key.verify(
+                    signature_bytes,
+                    client_data_hash,
+                    rsa_padding.PKCS1v15(),
+                    SHA256(),
+                )
+                return True
+        except Exception as exc:
+            logger.debug(f"Signature verification crypto error: {exc}")
+            return False
 
     def get_user_credentials(self, user_id: str) -> list[WebAuthnCredential]:
         """Get all credentials for user.

@@ -1,0 +1,271 @@
+# P2-05: Argo Rollouts 声明式金丝雀发布
+# 替代原 canary-deployment.yaml 手动副本扩缩方式
+# 特性: 权重路由 + Prometheus 指标自动门控 + 自动回滚
+#
+# 前置条件:
+#   kubectl apply -n argo-rollouts -f https://github.com/argoproj/argo-rollouts/releases/latest/download/install.yaml
+#
+# 使用:
+#   kubectl argo rollouts set image xagent-api-rollout xagent-api=xagent:<version> -n xagent
+#   kubectl argo rollouts status xagent-api-rollout -n xagent
+#   kubectl argo rollouts abort xagent-api-rollout -n xagent   # 手动中止
+#   kubectl argo rollouts undo xagent-api-rollout -n xagent    # 回滚
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: xagent-api-rollout
+  namespace: xagent
+  labels:
+    app: xagent-api
+    app.kubernetes.io/managed-by: argo-rollouts
+spec:
+  replicas: 3
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      app: xagent-api
+  # Nginx Ingress 权重路由: stable/canary 两个 Service 按权重分流
+  strategy:
+    canary:
+      canaryService: xagent-api-canary
+      stableService: xagent-api
+      trafficRouting:
+        nginx:
+          stableIngress: xagent-ingress
+          additionalIngressAnnotations:
+            canary-by-header: "X-Canary"
+            canary-by-header-value: "always"
+      # 金丝雀步骤: 5% → 20% → 50% → 80% → 100%
+      steps:
+      - setWeight: 5
+      - pause: { duration: 5m }
+      - analysis:
+          templates:
+          - templateName: xagent-canary-success-rate
+          args:
+          - name: canary-hash
+            valueFrom:
+              podTemplateHashValue: Latest
+      - setWeight: 20
+      - pause: { duration: 10m }
+      - analysis:
+          templates:
+          - templateName: xagent-canary-success-rate
+          - templateName: xagent-canary-latency
+          args:
+          - name: canary-hash
+            valueFrom:
+              podTemplateHashValue: Latest
+      - setWeight: 50
+      - pause: { duration: 10m }
+      - analysis:
+          templates:
+          - templateName: xagent-canary-success-rate
+          - templateName: xagent-canary-latency
+          args:
+          - name: canary-hash
+            valueFrom:
+              podTemplateHashValue: Latest
+      - setWeight: 80
+      - pause: { duration: 5m }
+      - analysis:
+          templates:
+          - templateName: xagent-canary-success-rate
+          args:
+          - name: canary-hash
+            valueFrom:
+              podTemplateHashValue: Latest
+      # 最终 100% 由 Argo Rollouts 自动完成 (promote)
+  template:
+    metadata:
+      labels:
+        app: xagent-api
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: "/api/v1/metrics/prometheus"
+    spec:
+      serviceAccountName: xagent
+      terminationGracePeriodSeconds: 90
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - xagent-api
+              topologyKey: kubernetes.io/hostname
+      containers:
+      - name: xagent-api
+        image: xagent:latest
+        imagePullPolicy: Always
+        lifecycle:
+          preStop:
+            exec:
+              command:
+              - /bin/sh
+              - -c
+              - sleep 10
+        ports:
+        - name: http
+          containerPort: 8000
+          protocol: TCP
+        env:
+        - name: XAGENT_APP_MODE
+          valueFrom:
+            configMapKeyRef:
+              name: xagent-config
+              key: XAGENT_APP_MODE
+        - name: LOG_LEVEL
+          valueFrom:
+            configMapKeyRef:
+              name: xagent-config
+              key: LOG_LEVEL
+        - name: XAGENT_DEBUG
+          valueFrom:
+            configMapKeyRef:
+              name: xagent-config
+              key: XAGENT_DEBUG
+        - name: XAGENT_API_WORKERS
+          valueFrom:
+            configMapKeyRef:
+              name: xagent-config
+              key: XAGENT_API_WORKERS
+        - name: XAGENT_JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: xagent-secrets
+              key: XAGENT_JWT_SECRET
+        - name: XAGENT_ENCRYPTION_KEY
+          valueFrom:
+            secretKeyRef:
+              name: xagent-secrets
+              key: XAGENT_ENCRYPTION_KEY
+        - name: DB_USER
+          valueFrom:
+            configMapKeyRef:
+              name: xagent-config
+              key: DB_USER
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: xagent-secrets
+              key: DB_PASSWORD
+        - name: DB_NAME
+          valueFrom:
+            configMapKeyRef:
+              name: xagent-config
+              key: DB_NAME
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: xagent-secrets
+              key: REDIS_PASSWORD
+        - name: XAGENT_DATABASE_URL
+          value: "postgresql+asyncpg://$(DB_USER):$(DB_PASSWORD)@postgres:5432/$(DB_NAME)"
+        - name: XAGENT_REDIS_URL
+          value: "redis://:$(REDIS_PASSWORD)@redis:6379/0"
+        - name: XAGENT_QDRANT_URL
+          value: "http://qdrant:6333"
+        - name: XAGENT_QDRANT_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: xagent-secrets
+              key: QDRANT_API_KEY
+        - name: XAGENT_NEO4J_URI
+          value: "bolt://neo4j:7687"
+        - name: XAGENT_NEO4J_USER
+          valueFrom:
+            configMapKeyRef:
+              name: xagent-config
+              key: NEO4J_USER
+        - name: XAGENT_NEO4J_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: xagent-secrets
+              key: NEO4J_PASSWORD
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+        - name: logs
+          mountPath: /app/logs
+      volumes:
+      - name: tmp
+        emptyDir: {}
+      - name: logs
+        emptyDir: {}
+---
+# Canary Service (Argo Rollouts 自动管理 selector 指向 canary Pod)
+apiVersion: v1
+kind: Service
+metadata:
+  name: xagent-api-canary
+  namespace: xagent
+  labels:
+    app: xagent-api
+    app.kubernetes.io/managed-by: argo-rollouts
+spec:
+  selector:
+    app: xagent-api
+  ports:
+  - port: 8000
+    targetPort: 8000
+    protocol: TCP
+    name: http
+  type: ClusterIP
+---
+# Stable Service (Argo Rollouts 自动管理 selector 指向 stable Pod)
+apiVersion: v1
+kind: Service
+metadata:
+  name: xagent-api
+  namespace: xagent
+  labels:
+    app: xagent-api
+    app.kubernetes.io/managed-by: argo-rollouts
+spec:
+  selector:
+    app: xagent-api
+  ports:
+  - port: 8000
+    targetPort: 8000
+    protocol: TCP
+    name: http
+  type: ClusterIP

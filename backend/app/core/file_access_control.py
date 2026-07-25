@@ -8,13 +8,10 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from pathlib import Path
 from threading import RLock
-from typing import Optional, Literal
-
-from pydantic import BaseModel, Field
-
+from typing import Literal
 
 OperationType = Literal["read", "write", "delete", "execute", "list"]
 
@@ -27,7 +24,7 @@ class AuditRecord:
     operation: OperationType
     path: str
     success: bool
-    reason: Optional[str] = None
+    reason: str | None = None
 
     def to_dict(self) -> dict:
         """Convert to dictionary."""
@@ -59,7 +56,7 @@ class FileAccessControl:
 
     def __init__(
         self,
-        audit_path: Optional[Path] = None,
+        audit_path: Path | None = None,
         max_file_size_mb: int = 100,
         max_total_size_mb: int = 1000,
     ) -> None:
@@ -79,7 +76,7 @@ class FileAccessControl:
         if self.audit_path:
             self._load_audit_logs()
 
-    def check_read_permission(self, user_id: str, path: Path) -> tuple[bool, Optional[str]]:
+    def check_read_permission(self, user_id: str, path: Path) -> tuple[bool, str | None]:
         """Check if user can read file.
 
         Args:
@@ -103,7 +100,7 @@ class FileAccessControl:
 
         return True, None
 
-    def check_write_permission(self, user_id: str, path: Path, size_bytes: int = 0) -> tuple[bool, Optional[str]]:
+    def check_write_permission(self, user_id: str, path: Path, size_bytes: int = 0) -> tuple[bool, str | None]:
         """Check if user can write file.
 
         Args:
@@ -128,7 +125,7 @@ class FileAccessControl:
 
         return True, None
 
-    def check_delete_permission(self, user_id: str, path: Path) -> tuple[bool, Optional[str]]:
+    def check_delete_permission(self, user_id: str, path: Path) -> tuple[bool, str | None]:
         """Check if user can delete file.
 
         Args:
@@ -148,7 +145,7 @@ class FileAccessControl:
 
         return True, None
 
-    def check_list_permission(self, user_id: str, path: Path) -> tuple[bool, Optional[str]]:
+    def check_list_permission(self, user_id: str, path: Path) -> tuple[bool, str | None]:
         """Check if user can list directory.
 
         Args:
@@ -172,7 +169,7 @@ class FileAccessControl:
         operation: OperationType,
         path: str,
         success: bool,
-        reason: Optional[str] = None,
+        reason: str | None = None,
     ) -> None:
         """Record file operation for audit.
 
@@ -199,8 +196,8 @@ class FileAccessControl:
 
     def get_audit_logs(
         self,
-        user_id: Optional[str] = None,
-        operation: Optional[OperationType] = None,
+        user_id: str | None = None,
+        operation: OperationType | None = None,
         limit: int = 100,
     ) -> list[AuditRecord]:
         """Get audit logs.
@@ -300,11 +297,7 @@ class FileAccessControl:
             return True
 
         # Check patterns
-        for pattern in self._FORBIDDEN_PATTERNS:
-            if self._matches_pattern(name, pattern):
-                return True
-
-        return False
+        return any(self._matches_pattern(name, pattern) for pattern in self._FORBIDDEN_PATTERNS)
 
     def _matches_pattern(self, name: str, pattern: str) -> bool:
         """Check if name matches pattern.

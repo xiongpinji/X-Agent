@@ -7,11 +7,12 @@ from __future__ import annotations
 
 import asyncio
 import heapq
-from dataclasses import dataclass, field
-from datetime import datetime, timedelta
-from enum import Enum
-from typing import Any, Callable, Optional, List, Dict, Set
 import uuid
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from datetime import datetime
+from enum import Enum, StrEnum
+from typing import Any
 
 
 class TaskPriority(int, Enum):
@@ -23,7 +24,7 @@ class TaskPriority(int, Enum):
     DEFERRED = 4
 
 
-class TaskState(str, Enum):
+class TaskState(StrEnum):
     """Task execution state."""
     PENDING = "pending"
     QUEUED = "queued"
@@ -42,15 +43,15 @@ class Task:
     priority: TaskPriority = TaskPriority.NORMAL
     state: TaskState = TaskState.PENDING
     created_at: datetime = field(default_factory=datetime.utcnow)
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
     timeout: float = 300.0
     max_retries: int = 3
     retry_count: int = 0
-    dependencies: List[str] = field(default_factory=list)
-    result: Optional[Any] = None
-    error: Optional[str] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    dependencies: list[str] = field(default_factory=list)
+    result: Any | None = None
+    error: str | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     def __lt__(self, other: Task) -> bool:
         """Compare tasks for priority queue."""
@@ -58,7 +59,7 @@ class Task:
             return self.priority < other.priority
         return self.created_at < other.created_at
 
-    def get_duration(self) -> Optional[float]:
+    def get_duration(self) -> float | None:
         """Get task execution duration."""
         if self.started_at and self.completed_at:
             return (self.completed_at - self.started_at).total_seconds()
@@ -70,10 +71,10 @@ class TaskScheduler:
 
     def __init__(self, max_concurrent: int = 10):
         self.max_concurrent = max_concurrent
-        self.queue: List[Task] = []
-        self.running: Set[str] = set()
-        self.completed: Dict[str, Task] = {}
-        self.failed: Dict[str, Task] = {}
+        self.queue: list[Task] = []
+        self.running: set[str] = set()
+        self.completed: dict[str, Task] = {}
+        self.failed: dict[str, Task] = {}
         self.lock = asyncio.Lock()
 
     async def submit(self, task: Task) -> str:
@@ -83,7 +84,7 @@ class TaskScheduler:
             heapq.heappush(self.queue, task)
         return task.id
 
-    async def get_next_task(self) -> Optional[Task]:
+    async def get_next_task(self) -> Task | None:
         """Get next task to execute."""
         async with self.lock:
             # Check dependencies
@@ -189,7 +190,7 @@ class ResourceQuota:
         self.memory_used = max(0, self.memory_used - memory)
         self.network_used = max(0, self.network_used - network)
 
-    def get_usage(self) -> Dict[str, float]:
+    def get_usage(self) -> dict[str, float]:
         """Get resource usage."""
         return {
             "cpu": self.cpu_used / self.cpu_limit,
@@ -202,10 +203,10 @@ class TaskRouter:
     """Routes tasks to appropriate agents."""
 
     def __init__(self):
-        self.agents: Dict[str, Dict[str, Any]] = {}
-        self.routing_rules: List[Callable] = []
+        self.agents: dict[str, dict[str, Any]] = {}
+        self.routing_rules: list[Callable] = []
 
-    def register_agent(self, agent_id: str, capabilities: List[str],
+    def register_agent(self, agent_id: str, capabilities: list[str],
                       load: float = 0.0) -> None:
         """Register an agent."""
         self.agents[agent_id] = {
@@ -218,7 +219,7 @@ class TaskRouter:
         """Add routing rule."""
         self.routing_rules.append(rule)
 
-    async def route_task(self, task: Task) -> Optional[str]:
+    async def route_task(self, task: Task) -> str | None:
         """Route task to agent."""
         # Apply custom routing rules
         for rule in self.routing_rules:
@@ -249,11 +250,11 @@ class AdaptivePlanner:
     """Adaptive planning based on execution history."""
 
     def __init__(self):
-        self.execution_history: List[Dict[str, Any]] = []
-        self.patterns: Dict[str, Dict[str, Any]] = {}
+        self.execution_history: list[dict[str, Any]] = []
+        self.patterns: dict[str, dict[str, Any]] = {}
 
     def record_execution(self, task_name: str, duration: float, success: bool,
-                        resource_usage: Dict[str, float]) -> None:
+                        resource_usage: dict[str, float]) -> None:
         """Record task execution."""
         self.execution_history.append({
             "task": task_name,
@@ -275,19 +276,19 @@ class AdaptivePlanner:
         pattern["avg_duration"] = (pattern["avg_duration"] + duration) / 2
         pattern["success_rate"] = (pattern["success_rate"] + (1 if success else 0)) / 2
 
-    def predict_duration(self, task_name: str) -> Optional[float]:
+    def predict_duration(self, task_name: str) -> float | None:
         """Predict task duration."""
         if task_name in self.patterns:
             return self.patterns[task_name]["avg_duration"]
         return None
 
-    def predict_success_rate(self, task_name: str) -> Optional[float]:
+    def predict_success_rate(self, task_name: str) -> float | None:
         """Predict task success rate."""
         if task_name in self.patterns:
             return self.patterns[task_name]["success_rate"]
         return None
 
-    def get_recommendations(self, task_name: str) -> Dict[str, Any]:
+    def get_recommendations(self, task_name: str) -> dict[str, Any]:
         """Get execution recommendations."""
         if task_name not in self.patterns:
             return {}
@@ -304,16 +305,26 @@ class AdaptivePlanner:
 
 
 class MultiAgentCoordinator:
-    """Coordinates multi-agent collaboration."""
+    """Coordinates multi-agent collaboration.
+
+    .. deprecated::
+        DEPRECATED (P1-09 convergence): This class has zero production callers
+        and is superseded by:
+        - ``backend.app.core.collaboration.orchestrator.MultiAgentOrchestrator``
+          for structured orchestration (parallel/sequential/hierarchical).
+        - ``backend.app.core.parallel_agent_executor.ParallelAgentExecutor``
+          for independent parallel fan-out.
+        Retained for backward compatibility only. Do NOT add new code here.
+    """
 
     def __init__(self):
-        self.agents: Dict[str, Dict[str, Any]] = {}
+        self.agents: dict[str, dict[str, Any]] = {}
         self.task_scheduler = TaskScheduler()
         self.resource_quota = ResourceQuota()
         self.task_router = TaskRouter()
         self.adaptive_planner = AdaptivePlanner()
 
-    def register_agent(self, agent_id: str, capabilities: List[str]) -> None:
+    def register_agent(self, agent_id: str, capabilities: list[str]) -> None:
         """Register an agent."""
         self.agents[agent_id] = {
             "id": agent_id,
@@ -366,7 +377,7 @@ class MultiAgentCoordinator:
             )
 
             return result
-        except Exception as e:
+        except Exception:
             # Record failure
             self.adaptive_planner.record_execution(
                 task.name,
@@ -389,7 +400,7 @@ class MultiAgentCoordinator:
         await asyncio.sleep(0.1)
         return {"status": "completed", "agent": agent_id, "task": task.id}
 
-    def get_system_status(self) -> Dict[str, Any]:
+    def get_system_status(self) -> dict[str, Any]:
         """Get system status."""
         return {
             "agents": len(self.agents),
@@ -403,10 +414,10 @@ class LearningEngine:
     """Learns from execution history to improve performance."""
 
     def __init__(self):
-        self.execution_history: List[Dict[str, Any]] = []
-        self.learned_patterns: Dict[str, Dict[str, Any]] = {}
+        self.execution_history: list[dict[str, Any]] = []
+        self.learned_patterns: dict[str, dict[str, Any]] = {}
 
-    def record_execution(self, execution_data: Dict[str, Any]) -> None:
+    def record_execution(self, execution_data: dict[str, Any]) -> None:
         """Record execution for learning."""
         self.execution_history.append(execution_data)
         self._update_patterns()
@@ -435,7 +446,7 @@ class LearningEngine:
                 (pattern["avg_duration"] + execution.get("duration", 0)) / 2
             )
 
-    def get_recommendations(self, task_type: str) -> Dict[str, Any]:
+    def get_recommendations(self, task_type: str) -> dict[str, Any]:
         """Get recommendations based on learned patterns."""
         if task_type not in self.learned_patterns:
             return {}

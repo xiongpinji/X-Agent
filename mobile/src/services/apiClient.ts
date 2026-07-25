@@ -58,7 +58,7 @@ class ApiClient {
           this.isRefreshing = true;
 
           try {
-            await useAuthStore.getState().refreshToken();
+            await useAuthStore.getState().refreshAccessToken();
             const token = await SecureStore.getItemAsync('token');
 
             this.failedQueue.forEach((prom) => prom.resolve(token));
@@ -82,23 +82,24 @@ class ApiClient {
   }
 
   async get<T>(url: string, config?: any): Promise<T> {
-    return this.client.get<T>(url, config);
+    // 响应拦截器已将 AxiosResponse 解包为 data，这里按解包后的类型返回
+    return this.client.get<T>(url, config) as unknown as Promise<T>;
   }
 
   async post<T>(url: string, data?: any, config?: any): Promise<T> {
-    return this.client.post<T>(url, data, config);
+    return this.client.post<T>(url, data, config) as unknown as Promise<T>;
   }
 
   async put<T>(url: string, data?: any, config?: any): Promise<T> {
-    return this.client.put<T>(url, data, config);
+    return this.client.put<T>(url, data, config) as unknown as Promise<T>;
   }
 
   async patch<T>(url: string, data?: any, config?: any): Promise<T> {
-    return this.client.patch<T>(url, data, config);
+    return this.client.patch<T>(url, data, config) as unknown as Promise<T>;
   }
 
   async delete<T>(url: string, config?: any): Promise<T> {
-    return this.client.delete<T>(url, config);
+    return this.client.delete<T>(url, config) as unknown as Promise<T>;
   }
 
   // WebSocket连接

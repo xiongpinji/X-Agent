@@ -8,7 +8,7 @@ X-Agent Core combines cutting-edge LLM capabilities with enterprise-grade infras
 
 - **Version**: `0.2.0-alpha` — `pyproject.toml` 为全仓版本号单一事实源
 - **Status**: 商用修复中 — Phase 1「止血与架构收敛」(2026-07-19 启动), 修复 18 项 P0
-- **Audit baseline**: 2026-07-19 商用交付差距审计综合评分约 31/100, 暂不具备对外商用交付条件。详见 `commercial_audit/00_商用交付差距审计报告.md` 与 [Release Readiness](./RELEASE_READINESS.md)
+- **Audit baseline**: 2026-07-19 商用交付差距审计综合评分约 31/100, 暂不具备对外商用交付条件。详见 `commercial_audit/00_商用交付差距审计报告.md` 与 [Release Readiness](./docs/operations/deployment/RELEASE_READINESS.md)
 - 下方功能清单描述框架的目标能力与仓内资产; 各项能力的实际实现深度 ("宣称-存在-接通") 以上述审计复核为准
 
 ## Core Features
@@ -41,9 +41,10 @@ X-Agent Core combines cutting-edge LLM capabilities with enterprise-grade infras
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/x-agent/x-agent-core.git
-   cd x-agent-core
+   git clone <本仓库地址>.git
+   cd X-Agent
    ```
+   （本仓库暂未发布到公共托管平台；请使用内部仓库地址，或直接在本仓库目录中继续后续步骤。）
 
 2. **Create a virtual environment**
    ```bash
@@ -95,17 +96,18 @@ X-Agent Core follows a modular, layered architecture:
 
 ## Documentation
 
-- [Installation Guide](./INSTALL.md) - Detailed setup instructions
-- [Deployment Quickstart](./DEPLOYMENT.md) - Supported local, DeepSeek, and Docker Compose startup paths
-- [Release Readiness](./RELEASE_READINESS.md) - Current commercial delivery status, validation commands, and production checklist
+- [Installation Guide](./docs/operations/setup/INSTALL.md) - Detailed setup instructions
+- [Deployment Quickstart](./docs/operations/deployment/DEPLOYMENT.md) - Supported local, DeepSeek, and Docker Compose startup paths
+- [Release Readiness](./docs/operations/deployment/RELEASE_READINESS.md) - Current commercial delivery status, validation commands, and production checklist
 - [Contributing Guide](./CONTRIBUTING.md) - Development workflow and guidelines
-- [API Documentation](./docs/API.md) - REST API reference
-- [API Error Codes](./docs/API_ERROR_CODES.md) - Complete error code reference
-- [Advanced Features](./docs/ADVANCED_FEATURES.md) - Workflow orchestration, multi-agent collaboration, memory system
-- [Architecture Guide](./docs/ARCHITECTURE.md) - System design and components
-- [Cloud Sandbox Engine](./docs/PHASE_55_DEPLOYMENT.md) - Docker-based code execution, GitHub automation, API reference
-- [Examples](./docs/EXAMPLES.md) - Code examples and use cases
-- [Documentation Index](./docs/INDEX.md) - Complete documentation navigation
+- [API Documentation](./docs/developer/api/API.md) - REST API reference
+- [API Error Codes](./docs/developer/api/API_ERROR_CODES.md) - Complete error code reference
+- [Advanced Features](./docs/concepts/features/ADVANCED_FEATURES.md) - Workflow orchestration, multi-agent collaboration, memory system
+- [Architecture Guide](./docs/concepts/architecture/ARCHITECTURE.md) - System design and components
+- [Cloud Sandbox Engine](./docs/operations/deployment/PHASE_55_DEPLOYMENT.md) - Docker-based code execution, GitHub automation, API reference
+- [Examples](./docs/developer/sdk/EXAMPLES.md) - Code examples and use cases
+- [Runnable Examples](./examples/README.md) - Runnable example scripts
+- [Documentation Index](./docs/README.md) - Complete documentation navigation (四分册总索引)
 
 ## Development
 
@@ -156,4 +158,6 @@ This project is licensed under the MIT License - see [LICENSE](./LICENSE) file f
 
 ## Support
 
-- GitHub Issues: [Report bugs or request features](https://github.com
+- 问题反馈: 请通过本仓库的 Issue 渠道提交 bug 或功能请求
+- 故障排除: 参见 [Troubleshooting](./docs/operations/support/TROUBLESHOOTING.md) 与 [FAQ](./docs/operations/support/FAQ.md)
+- 商业支持: 参见 [SUPPORT.md](./SUPPORT.md)

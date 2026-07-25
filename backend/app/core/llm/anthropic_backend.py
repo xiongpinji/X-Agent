@@ -9,9 +9,12 @@ degrade). Tests can inject an ``httpx.AsyncClient`` built on
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import logging
 import time
-from typing import Any, AsyncGenerator
+from collections.abc import AsyncGenerator
+from typing import Any
 
 from backend.app.core.llm.backends import (
     BaseLLMBackend,
@@ -70,7 +73,10 @@ def _split_system_messages(
 
 
 class AnthropicBackend(BaseLLMBackend):
-    """Anthropic Messages API backend with tool-use and usage accounting."""
+    """Anthropic Messages API backend with tool-use and usage accounting.
+    
+    Uses a persistent AsyncAnthropic client with connection pooling for efficiency.
+    """
 
     def __init__(
         self,
@@ -83,6 +89,7 @@ class AnthropicBackend(BaseLLMBackend):
         timeout: float = 60.0,
         max_retries: int = 2,
         http_client: Any | None = None,
+        max_connections: int = 100,
     ) -> None:
         self.name = name
         self.api_key = api_key
@@ -92,8 +99,59 @@ class AnthropicBackend(BaseLLMBackend):
         self.timeout = timeout
         self.max_retries = max_retries
         self._http_client = http_client
+        self.max_connections = max_connections
+        self._client: Any = None
+        self._client_lock = asyncio.Lock()
+
+    async def _get_client(self) -> Any:
+        """Get or create the persistent AsyncAnthropic client with connection pooling."""
+        if self._client is None:
+            async with self._client_lock:
+                if self._client is None:
+                    try:
+                        import httpx
+                        from anthropic import AsyncAnthropic
+                        
+                        # Create HTTP client with connection pooling if not provided
+                        http_client = self._http_client
+                        if http_client is None:
+                            http_client = httpx.AsyncClient(
+                                limits=httpx.Limits(
+                                    max_connections=self.max_connections,
+                                    max_keepalive_connections=20,
+                                    keepalive_expiry=30,
+                                ),
+                                timeout=httpx.Timeout(self.timeout, connect=10.0),
+                            )
+                        
+                        kwargs: dict[str, Any] = {
+                            "api_key": self.api_key,
+                            "timeout": self.timeout,
+                            "max_retries": self.max_retries,
+                            "http_client": http_client,
+                        }
+                        if self.base_url:
+                            kwargs["base_url"] = self.base_url
+                        
+                        self._client = AsyncAnthropic(**kwargs)
+                        logger.info(f"Anthropic client initialized with connection pool (max_connections={self.max_connections})")
+                    except ImportError as exc:
+                        raise LLMBackendError(
+                            "anthropic package is not installed; run "
+                            "`pip install anthropic` or remove 'anthropic' from the LLM "
+                            "fallback order"
+                        ) from exc
+        return self._client
+
+    async def close(self) -> None:
+        """Close the persistent client and release connections."""
+        if self._client:
+            with contextlib.suppress(Exception):
+                await self._client.close()
+            self._client = None
 
     def _make_client(self) -> Any:
+        """Legacy sync method - creates a new client (deprecated, use _get_client)."""
         try:
             from anthropic import AsyncAnthropic
         except ImportError as exc:
@@ -119,8 +177,8 @@ class AnthropicBackend(BaseLLMBackend):
         messages: list[dict[str, str]],
         tools: list[dict[str, Any]],
     ) -> LLMResponse:
-        """Send a chat request to the Anthropic Messages API."""
-        client = self._make_client()
+        """Send a chat request to the Anthropic Messages API using persistent connection pool."""
+        client = await self._get_client()
         system, conversation = _split_system_messages(messages)
 
         request_kwargs: dict[str, Any] = {

@@ -2,21 +2,26 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Optional
-from datetime import datetime, UTC
+from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, HTTPException, Body
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, Depends, Query
+from pydantic import BaseModel
 
-from backend.app.core.security import Principal
-from backend.app.dependencies import enforce_scope, get_current_principal
 from backend.app.api.errors import api_error
-from backend.app.core.skill_market_models import (
-    SkillRecord, SkillCategory, SkillCategoryInfo, SkillInstallRequest,
-    SkillUninstallRequest, SkillExecuteRequest, SkillSearchRequest,
-    SkillInstallationProgress, SkillUsageRecord, SkillRecommendation,
-)
+from backend.app.core.security import Principal
 from backend.app.core.skill_market_manager import get_skill_market_manager
+from backend.app.core.skill_market_models import (
+    SkillCategory,
+    SkillCategoryInfo,
+    SkillExecuteRequest,
+    SkillInstallationProgress,
+    SkillInstallRequest,
+    SkillRecommendation,
+    SkillRecord,
+    SkillUninstallRequest,
+    SkillUsageRecord,
+)
+from backend.app.dependencies import enforce_scope, get_current_principal
 
 router = APIRouter(prefix="/api/v1/skill-market", tags=["skill-market"])
 PrincipalDependency = Annotated[Principal, Depends(get_current_principal)]
@@ -138,7 +143,7 @@ async def get_categories(principal: PrincipalDependency) -> list[SkillCategoryIn
 @router.get("/skills", response_model=SkillListResponse)
 async def list_skills(
     principal: PrincipalDependency,
-    category: Optional[str] = Query(None, description="分类"),
+    category: str | None = Query(None, description="分类"),
     installed_only: bool = Query(False, description="仅已安装"),
     sort_by: str = Query("rating", description="排序方式"),
     limit: int = Query(20, ge=1, le=100, description="限制数量"),

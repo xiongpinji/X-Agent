@@ -7,7 +7,6 @@ import logging
 import logging.handlers
 import sys
 from pathlib import Path
-from typing import Any
 
 from backend.app.settings import get_settings
 

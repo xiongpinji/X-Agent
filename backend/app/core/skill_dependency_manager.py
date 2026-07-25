@@ -3,22 +3,22 @@
 from __future__ import annotations
 
 import logging
-from typing import Optional, List, Dict, Set, Any, Tuple
 from dataclasses import dataclass, field
-from enum import Enum
-from datetime import datetime, UTC
+from datetime import UTC, datetime
+from enum import StrEnum
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
-class DependencyType(str, Enum):
+class DependencyType(StrEnum):
     """依赖类型"""
     REQUIRED = "required"  # 必需依赖
     OPTIONAL = "optional"  # 可选依赖
     DEV = "dev"  # 开发依赖
 
 
-class ConflictType(str, Enum):
+class ConflictType(StrEnum):
     """冲突类型"""
     VERSION_CONFLICT = "version_conflict"  # 版本冲突
     INCOMPATIBLE = "incompatible"  # 不兼容
@@ -35,7 +35,7 @@ class SkillDependency:
     optional: bool = False
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """转换为字典"""
         return {
             "skill_id": self.skill_id,
@@ -51,11 +51,11 @@ class SkillDependency:
 class DependencyConflict:
     """依赖冲突"""
     conflict_type: ConflictType
-    skill_ids: List[str]
+    skill_ids: list[str]
     description: str
-    resolution_suggestions: List[str] = field(default_factory=list)
+    resolution_suggestions: list[str] = field(default_factory=list)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """转换为字典"""
         return {
             "conflict_type": self.conflict_type.value,
@@ -69,10 +69,10 @@ class SkillDependencyManager:
     """技能依赖管理器"""
 
     def __init__(self):
-        self.dependencies: Dict[str, List[SkillDependency]] = {}  # skill_id -> [deps]
-        self.reverse_dependencies: Dict[str, List[str]] = {}  # skill_id -> [dependent_skill_ids]
-        self.installed_skills: Dict[str, str] = {}  # skill_id -> version
-        self.conflicts: List[DependencyConflict] = []
+        self.dependencies: dict[str, list[SkillDependency]] = {}  # skill_id -> [deps]
+        self.reverse_dependencies: dict[str, list[str]] = {}  # skill_id -> [dependent_skill_ids]
+        self.installed_skills: dict[str, str] = {}  # skill_id -> version
+        self.conflicts: list[DependencyConflict] = []
 
     def add_dependency(
         self,
@@ -81,7 +81,7 @@ class SkillDependencyManager:
         version_spec: str = "*",
         dep_type: DependencyType = DependencyType.REQUIRED,
         optional: bool = False,
-    ) -> Tuple[bool, Optional[str]]:
+    ) -> tuple[bool, str | None]:
         """添加依赖"""
         try:
             # 检查循环依赖
@@ -120,29 +120,29 @@ class SkillDependencyManager:
             return True, None
 
         except Exception as e:
-            error = f"添加依赖失败: {str(e)}"
+            error = f"添加依赖失败: {e!s}"
             logger.error(error, exc_info=True)
             return False, error
 
-    def get_dependencies(self, skill_id: str) -> List[SkillDependency]:
+    def get_dependencies(self, skill_id: str) -> list[SkillDependency]:
         """获取依赖列表"""
         return self.dependencies.get(skill_id, [])
 
-    def get_required_dependencies(self, skill_id: str) -> List[SkillDependency]:
+    def get_required_dependencies(self, skill_id: str) -> list[SkillDependency]:
         """获取必需依赖"""
         deps = self.dependencies.get(skill_id, [])
         return [d for d in deps if d.dep_type == DependencyType.REQUIRED]
 
-    def get_optional_dependencies(self, skill_id: str) -> List[SkillDependency]:
+    def get_optional_dependencies(self, skill_id: str) -> list[SkillDependency]:
         """获取可选依赖"""
         deps = self.dependencies.get(skill_id, [])
         return [d for d in deps if d.dep_type == DependencyType.OPTIONAL]
 
-    def get_dependents(self, skill_id: str) -> List[str]:
+    def get_dependents(self, skill_id: str) -> list[str]:
         """获取依赖此技能的技能列表"""
         return self.reverse_dependencies.get(skill_id, [])
 
-    def check_dependencies(self, skill_id: str) -> Tuple[bool, Optional[str], Optional[List[str]]]:
+    def check_dependencies(self, skill_id: str) -> tuple[bool, str | None, list[str] | None]:
         """检查依赖是否满足"""
         try:
             deps = self.get_required_dependencies(skill_id)
@@ -163,7 +163,7 @@ class SkillDependencyManager:
             return True, None, None
 
         except Exception as e:
-            error = f"检查依赖失败: {str(e)}"
+            error = f"检查依赖失败: {e!s}"
             logger.error(error, exc_info=True)
             return False, error, None
 
@@ -171,7 +171,7 @@ class SkillDependencyManager:
         self,
         skill_id: str,
         installer_func=None,
-    ) -> Tuple[bool, Optional[str], List[str]]:
+    ) -> tuple[bool, str | None, list[str]]:
         """安装依赖"""
         try:
             deps = self.get_required_dependencies(skill_id)
@@ -195,11 +195,11 @@ class SkillDependencyManager:
             return True, None, installed
 
         except Exception as e:
-            error = f"安装依赖失败: {str(e)}"
+            error = f"安装依赖失败: {e!s}"
             logger.error(error, exc_info=True)
             return False, error, []
 
-    def resolve_conflicts(self, skill_ids: List[str]) -> Tuple[bool, Optional[str], List[DependencyConflict]]:
+    def resolve_conflicts(self, skill_ids: list[str]) -> tuple[bool, str | None, list[DependencyConflict]]:
         """解决依赖冲突"""
         try:
             conflicts = []
@@ -234,11 +234,11 @@ class SkillDependencyManager:
             return True, None, []
 
         except Exception as e:
-            error = f"解决冲突失败: {str(e)}"
+            error = f"解决冲突失败: {e!s}"
             logger.error(error, exc_info=True)
             return False, error, []
 
-    def get_dependency_tree(self, skill_id: str, depth: int = 0, max_depth: int = 5) -> Dict[str, Any]:
+    def get_dependency_tree(self, skill_id: str, depth: int = 0, max_depth: int = 5) -> dict[str, Any]:
         """获取依赖树"""
         if depth > max_depth:
             return {"skill_id": skill_id, "truncated": True}
@@ -271,7 +271,7 @@ class SkillDependencyManager:
         tree = self.get_dependency_tree(skill_id)
         return self._tree_to_string(tree)
 
-    def _tree_to_string(self, tree: Dict[str, Any], prefix: str = "") -> str:
+    def _tree_to_string(self, tree: dict[str, Any], prefix: str = "") -> str:
         """将依赖树转换为字符串"""
         lines = []
         skill_id = tree["skill_id"]
@@ -293,7 +293,7 @@ class SkillDependencyManager:
 
         return "\n".join(lines)
 
-    def remove_dependency(self, skill_id: str, dep_skill_id: str) -> Tuple[bool, Optional[str]]:
+    def remove_dependency(self, skill_id: str, dep_skill_id: str) -> tuple[bool, str | None]:
         """移除依赖"""
         try:
             if skill_id not in self.dependencies:
@@ -320,11 +320,11 @@ class SkillDependencyManager:
             return True, None
 
         except Exception as e:
-            error = f"移除依赖失败: {str(e)}"
+            error = f"移除依赖失败: {e!s}"
             logger.error(error, exc_info=True)
             return False, error
 
-    def _has_circular_dependency(self, skill_id: str, dep_skill_id: str, visited: Optional[Set[str]] = None) -> bool:
+    def _has_circular_dependency(self, skill_id: str, dep_skill_id: str, visited: set[str] | None = None) -> bool:
         """检查是否存在循环依赖"""
         if visited is None:
             visited = set()
@@ -377,7 +377,7 @@ class SkillDependencyManager:
             parts1 = [int(x) for x in v1.split(".")]
             parts2 = [int(x) for x in v2.split(".")]
 
-            for p1, p2 in zip(parts1, parts2):
+            for p1, p2 in zip(parts1, parts2, strict=False):
                 if p1 > p2:
                     return 1
                 elif p1 < p2:
@@ -386,7 +386,7 @@ class SkillDependencyManager:
         except Exception:
             return 0
 
-    def _check_version_conflict(self, skill_id1: str, skill_id2: str) -> Optional[DependencyConflict]:
+    def _check_version_conflict(self, skill_id1: str, skill_id2: str) -> DependencyConflict | None:
         """检查两个技能之间的版本冲突"""
         # 简化实现：检查是否有相同的依赖但版本不兼容
         deps1 = self.get_dependencies(skill_id1)
@@ -417,7 +417,7 @@ class SkillDependencyManager:
 
 
 # 全局实例
-_skill_dependency_manager: Optional[SkillDependencyManager] = None
+_skill_dependency_manager: SkillDependencyManager | None = None
 
 
 def get_skill_dependency_manager() -> SkillDependencyManager:
@@ -429,10 +429,10 @@ def get_skill_dependency_manager() -> SkillDependencyManager:
 
 
 __all__ = [
-    "SkillDependencyManager",
-    "SkillDependency",
+    "ConflictType",
     "DependencyConflict",
     "DependencyType",
-    "ConflictType",
+    "SkillDependency",
+    "SkillDependencyManager",
     "get_skill_dependency_manager",
 ]

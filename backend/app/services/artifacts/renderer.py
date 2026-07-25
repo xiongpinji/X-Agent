@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-import json
-from typing import Optional
-
 from backend.app.services.artifacts.artifact_engine import Artifact, ArtifactType
 
 
@@ -31,12 +28,6 @@ class ArtifactRenderer:
             Wrapped HTML with security measures
         """
         # Wrap content in sandbox iframe
-        sandbox_attrs = [
-            "allow-scripts",
-            "allow-same-origin",
-            "allow-popups",
-            "allow-forms",
-        ]
 
         html = f"""<!DOCTYPE html>
 <html>

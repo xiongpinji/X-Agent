@@ -12,17 +12,15 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, UTC, timedelta
-from typing import Optional, Any
-from enum import Enum
+from datetime import UTC, datetime
+from enum import StrEnum
 
 logger = logging.getLogger(__name__)
 
 
-class MemoryState(str, Enum):
+class MemoryState(StrEnum):
     """记忆状态。"""
     ACTIVE = "active"
     WARM = "warm"
@@ -78,7 +76,7 @@ class LifecycleStats:
     hot_storage_mb: float = 0.0
     warm_storage_mb: float = 0.0
     cold_storage_mb: float = 0.0
-    last_cleanup_time: Optional[datetime] = None
+    last_cleanup_time: datetime | None = None
     cleanup_frequency_hours: int = 24
 
 
@@ -91,7 +89,7 @@ class MemoryLifecycleManager:
 
     def __init__(
         self,
-        policy: Optional[LifecyclePolicy] = None,
+        policy: LifecyclePolicy | None = None,
         enable_auto_cleanup: bool = True,
         cleanup_interval_hours: int = 24,
     ):
@@ -123,7 +121,7 @@ class MemoryLifecycleManager:
     async def process_memory_access(
         self,
         memory_id: str,
-        current_time: Optional[datetime] = None,
+        current_time: datetime | None = None,
     ) -> None:
         """
         处理记忆访问。
@@ -332,7 +330,7 @@ class MemoryLifecycleManager:
 
     async def cleanup_expired_memories(
         self,
-        current_time: Optional[datetime] = None,
+        current_time: datetime | None = None,
     ) -> dict[str, int]:
         """
         清理过期的记忆。
@@ -389,8 +387,8 @@ class MemoryLifecycleManager:
         self,
         memory_id: str,
         importance: float,
-        tags: Optional[list[str]] = None,
-        custom_metadata: Optional[dict] = None,
+        tags: list[str] | None = None,
+        custom_metadata: dict | None = None,
     ) -> None:
         """
         更新记忆元数据。
@@ -460,7 +458,7 @@ class MemoryLifecycleManager:
 
     def get_events(
         self,
-        memory_id: Optional[str] = None,
+        memory_id: str | None = None,
         limit: int = 100,
     ) -> list[LifecycleEvent]:
         """

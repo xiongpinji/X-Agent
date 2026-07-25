@@ -14,7 +14,7 @@ import typer
 
 from cli.client import APIError, AuthError, ConnectionError, XAgentCLIError, create_client
 from cli.console import print_error, print_json, print_success, print_table
-from cli.main import get_current_config
+from cli.state import get_current_config
 
 agent_app = typer.Typer(
     name="agent",

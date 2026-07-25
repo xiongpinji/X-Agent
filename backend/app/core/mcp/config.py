@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import logging
-from typing import Any, Dict, Optional
-from pathlib import Path
 import json
-from dataclasses import dataclass, asdict
+import logging
+from dataclasses import asdict, dataclass
 from datetime import datetime
+from pathlib import Path
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +32,7 @@ class FileToolConfig:
     base_path: str
     enable_audit: bool = True
     max_audit_entries: int = 1000
-    permissions: Dict[str, bool] = None
+    permissions: dict[str, bool] = None
 
     def __post_init__(self):
         if self.permissions is None:
@@ -48,11 +48,11 @@ class FileToolConfig:
 class SearchToolConfig:
     """Search tool configuration."""
 
-    api_key: Optional[str] = None
-    search_engine_id: Optional[str] = None
+    api_key: str | None = None
+    search_engine_id: str | None = None
     enable_audit: bool = True
     max_audit_entries: int = 1000
-    permissions: Dict[str, bool] = None
+    permissions: dict[str, bool] = None
 
     def __post_init__(self):
         if self.permissions is None:
@@ -68,7 +68,7 @@ class BrowserToolConfig:
 
     enable_audit: bool = True
     max_audit_entries: int = 1000
-    permissions: Dict[str, bool] = None
+    permissions: dict[str, bool] = None
 
     def __post_init__(self):
         if self.permissions is None:
@@ -87,17 +87,17 @@ class BrowserToolConfig:
 class MCPConfig:
     """MCP configuration manager."""
 
-    def __init__(self, config_path: Optional[str] = None):
+    def __init__(self, config_path: str | None = None):
         """Initialize MCP configuration.
 
         Args:
             config_path: Path to configuration file
         """
         self.config_path = Path(config_path) if config_path else None
-        self.mcp_client_config: Optional[MCPClientConfig] = None
-        self.file_tool_config: Optional[FileToolConfig] = None
-        self.search_tool_config: Optional[SearchToolConfig] = None
-        self.browser_tool_config: Optional[BrowserToolConfig] = None
+        self.mcp_client_config: MCPClientConfig | None = None
+        self.file_tool_config: FileToolConfig | None = None
+        self.search_tool_config: SearchToolConfig | None = None
+        self.browser_tool_config: BrowserToolConfig | None = None
         self.created_at = datetime.now().isoformat()
 
         if self.config_path and self.config_path.exists():
@@ -110,7 +110,7 @@ class MCPConfig:
             return
 
         try:
-            with open(self.config_path, "r") as f:
+            with open(self.config_path) as f:
                 data = json.load(f)
 
             if "mcp_client" in data:
@@ -129,7 +129,7 @@ class MCPConfig:
         except Exception as e:
             logger.error(f"Failed to load configuration: {e}")
 
-    def save_to_file(self, path: Optional[str] = None) -> None:
+    def save_to_file(self, path: str | None = None) -> None:
         """Save configuration to file.
 
         Args:
@@ -195,7 +195,7 @@ class MCPConfig:
         """
         self.browser_tool_config = BrowserToolConfig(**kwargs)
 
-    def get_config_dict(self) -> Dict[str, Any]:
+    def get_config_dict(self) -> dict[str, Any]:
         """Get configuration as dictionary.
 
         Returns:

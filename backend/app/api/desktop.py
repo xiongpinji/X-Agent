@@ -114,7 +114,7 @@ async def close_desktop_session(session_id: str, principal: PrincipalDependency)
 
 def _session_to_dict(session) -> dict[str, object]:
     data = session.model_dump(mode="json")
-    recovery = build_recovery_context(
+    build_recovery_context(
         status="active" if session.active else "closed",
         resource_type="desktop_session",
         resource_id=session.session_id,

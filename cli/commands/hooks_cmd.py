@@ -21,7 +21,7 @@ from cli.console import (
     print_table,
     print_warning,
 )
-from cli.main import get_current_config
+from cli.state import get_current_config
 
 hooks_app = typer.Typer(
     name="hooks",

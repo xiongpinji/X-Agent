@@ -2,21 +2,19 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Optional
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
 
 from backend.app.api.errors import api_error
-from backend.app.api.pagination import PaginationParams, apply_pagination
 from backend.app.core.contracts import ErrorCode
 from backend.app.core.security import Principal
 from backend.app.dependencies import enforce_scope, get_current_principal
 from backend.app.models.forum import (
-    ForumPost,
     ForumComment,
     ForumNotification,
+    ForumPost,
     ModerationRule,
-    PostStatus,
     ModerationStatus,
     forum_store,
 )
@@ -76,8 +74,8 @@ async def create_post(
 
 @router.get("/posts")
 async def list_posts(
-    category: Optional[str] = Query(None),
-    tag: Optional[str] = Query(None),
+    category: str | None = Query(None),
+    tag: str | None = Query(None),
     sort_by: str = Query("created_at", pattern="^(created_at|views|likes|comments)$"),
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),

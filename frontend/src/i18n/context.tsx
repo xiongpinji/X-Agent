@@ -6,6 +6,35 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react'
 import { LanguageCode, SUPPORTED_LANGUAGES, DEFAULT_LANGUAGE, getLanguageConfig, isRTL } from './config'
+import enTranslations from './translations/en.json'
+import zhTranslations from './translations/zh.json'
+import jaTranslations from './translations/ja.json'
+import koTranslations from './translations/ko.json'
+import esTranslations from './translations/es.json'
+import arTranslations from './translations/ar.json'
+
+type TranslationDict = Record<string, unknown>
+
+// Statically bundled so Vite can code-split safely; languages without a
+// translation file fall back to English, then to the provided default value.
+const TRANSLATIONS: Partial<Record<LanguageCode, TranslationDict>> = {
+  en: enTranslations,
+  zh: zhTranslations,
+  ja: jaTranslations,
+  ko: koTranslations,
+  es: esTranslations,
+  ar: arTranslations,
+}
+
+const lookup = (dict: TranslationDict | undefined, key: string): string | undefined => {
+  if (!dict) return undefined
+  const keys = key.split('.')
+  let value: unknown = dict
+  for (const k of keys) {
+    value = (value as Record<string, unknown> | undefined)?.[k]
+  }
+  return typeof value === 'string' ? value : undefined
+}
 
 interface I18nContextType {
   language: LanguageCode
@@ -62,26 +91,17 @@ export const I18nProvider: React.FC<I18nProviderProps> = ({
   }, [language])
 
   const t = (key: string, defaultValue: string = key): string => {
-    // Load translations dynamically based on current language
-    try {
-      const translations = require(`./translations/${language}.json`)
-      const keys = key.split('.')
-      let value: any = translations
-
-      for (const k of keys) {
-        value = value?.[k]
-      }
-
-      return value || defaultValue
-    } catch (error) {
-      console.warn(`Translation not found for key: ${key}`)
-      return defaultValue
-    }
+    // Look up the current language first, then English, then the default.
+    return (
+      lookup(TRANSLATIONS[language], key) ??
+      lookup(TRANSLATIONS.en, key) ??
+      defaultValue
+    )
   }
 
   const formatDate = (date: Date | string): string => {
     const dateObj = typeof date === 'string' ? new Date(date) : date
-    const config = getLanguageConfig(language)
+    const _config = getLanguageConfig(language)
 
     return new Intl.DateTimeFormat(language, {
       year: 'numeric',

@@ -9,12 +9,12 @@ Get help with X-Agent Core. This document outlines all available support channel
 Start with our comprehensive documentation:
 
 - **[README.md](./README.md)** - Project overview and quick start
-- **[INSTALL.md](./INSTALL.md)** - Installation and setup guide
-- **[QUICKSTART.md](./docs/QUICKSTART.md)** - 5-minute quick start
-- **[API Documentation](./docs/API.md)** - Complete API reference
-- **[Architecture Guide](./docs/ARCHITECTURE.md)** - System design and components
-- **[FAQ](./docs/FAQ.md)** - Frequently asked questions
-- **[Troubleshooting](./docs/TROUBLESHOOTING.md)** - Common issues and solutions
+- **[INSTALL.md](./docs/operations/setup/INSTALL.md)** - Installation and setup guide
+- **[QUICKSTART.md](./docs/operations/setup/QUICKSTART_DOCS.md)** - 5-minute quick start
+- **[API Documentation](./docs/developer/api/API.md)** - Complete API reference
+- **[Architecture Guide](./docs/concepts/architecture/ARCHITECTURE.md)** - System design and components
+- **[FAQ](./docs/operations/support/FAQ.md)** - Frequently asked questions
+- **[Troubleshooting](./docs/operations/support/TROUBLESHOOTING.md)** - Common issues and solutions
 
 ### Community Support
 
@@ -266,17 +266,17 @@ python -m memory_profiler script.py
 
 ### Tutorials
 
-- **[Getting Started](./docs/tutorials/GETTING_STARTED.md)** - Basic setup and first workflow
-- **[Agent Basics](./docs/tutorials/01-agent-basics.md)** - Creating your first agent
-- **[Workflow Orchestration](./docs/tutorials/02-workflow-orchestration.md)** - Building workflows
-- **[Memory System](./docs/tutorials/03-memory-system.md)** - Using the memory system
-- **[Browser Automation](./docs/tutorials/04-browser-automation.md)** - Web automation
+- **[Getting Started](./docs/developer/tutorials/tutorials/GETTING_STARTED.md)** - Basic setup and first workflow
+- **[Agent Basics](./docs/developer/tutorials/tutorials/01-agent-basics.md)** - Creating your first agent
+- **[Workflow Orchestration](./docs/developer/tutorials/tutorials/02-workflow-orchestration.md)** - Building workflows
+- **[Memory System](./docs/developer/tutorials/tutorials/03-memory-system.md)** - Using the memory system
+- **[Browser Automation](./docs/developer/tutorials/tutorials/04-browser-automation.md)** - Web automation
 
 ### Examples
 
-- **[Code Examples](./docs/EXAMPLES.md)** - Complete working examples
-- **[API Examples](./docs/API_EXAMPLES.md)** - API usage examples
-- **[Integration Examples](./docs/INTEGRATION_GUIDE.md)** - Third-party integrations
+- **[Code Examples](./docs/developer/sdk/EXAMPLES.md)** - Complete working examples
+- **[API Examples](./docs/developer/api/API_EXAMPLES.md)** - API usage examples
+- **[Integration Examples](./docs/developer/api/INTEGRATION_GUIDE.md)** - Third-party integrations
 
 ### Video Tutorials
 
@@ -289,7 +289,7 @@ python -m memory_profiler script.py
 Want to help improve X-Agent Core?
 
 - **[Contributing Guide](./CONTRIBUTING.md)** - How to contribute
-- **[Development Setup](./INSTALL.md#development-setup)** - Set up development environment
+- **[Development Setup](./docs/operations/setup/INSTALL.md#development-setup)** - Set up development environment
 - **[Code of Conduct](./CODE_OF_CONDUCT.md)** - Community guidelines
 
 ## Feedback
@@ -324,26 +324,26 @@ We value your feedback! Share your thoughts:
 A: Yes, X-Agent Core is open-source and free to use under the MIT License.
 
 **Q: Can I use X-Agent Core in production?**
-A: Yes, X-Agent Core is production-ready. See [Deployment Guide](./docs/DEPLOYMENT.md) for production setup.
+A: Yes, X-Agent Core is production-ready. See [Deployment Guide](./docs/operations/deployment/DEPLOYMENT_DETAILED.md) for production setup.
 
 **Q: What are the system requirements?**
-A: See [Installation Guide](./INSTALL.md#system-requirements) for detailed requirements.
+A: See [Installation Guide](./docs/operations/setup/INSTALL.md#system-requirements) for detailed requirements.
 
 **Q: How do I report a security vulnerability?**
-A: Email security@x-agent.dev with details. See [Security Policy](./SECURITY.md) for more information.
+A: Email security@x-agent.dev with details. See [Security Policy](./docs/admin/security/SECURITY_GUIDE.md) for more information.
 
 ### Technical Questions
 
 **Q: How do I configure multiple LLM providers?**
-A: See [Configuration Guide](./CONFIGURATION.md#llm-configuration) for LLM setup.
+A: See [Configuration Guide](./docs/operations/setup/CONFIG_MANAGEMENT.md) for LLM setup.
 
 **Q: How do I optimize database performance?**
-A: See [Performance Guide](./docs/PERFORMANCE.md) for optimization tips.
+A: See [Performance Guide](./docs/operations/monitoring/PERFORMANCE.md) for optimization tips.
 
 **Q: How do I integrate with third-party services?**
-A: See [Integration Guide](./docs/INTEGRATION_GUIDE.md) for integration examples.
+A: See [Integration Guide](./docs/developer/api/INTEGRATION_GUIDE.md) for integration examples.
 
-For more FAQs, see [FAQ.md](./docs/FAQ.md).
+For more FAQs, see [FAQ.md](./docs/operations/support/FAQ.md).
 
 ## Contact Information
 

@@ -12,8 +12,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable, Optional
+from typing import Any
 
 logger = logging.getLogger("xagent.graphql_perf")
 
@@ -187,7 +188,7 @@ class DataLoader:
 
         try:
             results = await self.batch_fn(keys)
-            for future, result in zip(futures, results):
+            for future, result in zip(futures, results, strict=False):
                 if not future.done():
                     future.set_result(result)
         except Exception as e:
@@ -268,7 +269,7 @@ class QueryResultCache:
         key_str = f"{query}:{json.dumps(variables, sort_keys=True)}"
         return hashlib.md5(key_str.encode()).hexdigest()
 
-    async def get(self, query: str, variables: dict[str, Any]) -> Optional[Any]:
+    async def get(self, query: str, variables: dict[str, Any]) -> Any | None:
         """Get cached query result."""
         key = self._make_cache_key(query, variables)
 
@@ -298,13 +299,13 @@ class QueryResultCache:
                 oldest_key = next(iter(self.cache))
                 del self.cache[oldest_key]
 
-    async def invalidate(self, query_pattern: Optional[str] = None) -> None:
+    async def invalidate(self, query_pattern: str | None = None) -> None:
         """Invalidate cache entries."""
         async with self._lock:
             if query_pattern is None:
                 self.cache.clear()
             else:
-                keys_to_delete = [k for k in self.cache.keys() if query_pattern in k]
+                keys_to_delete = [k for k in self.cache if query_pattern in k]
                 for k in keys_to_delete:
                     del self.cache[k]
 

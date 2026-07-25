@@ -129,8 +129,11 @@ export const TaskList: React.FC<TaskListProps> = ({
   const renderTaskItem = (task: TaskModel) => (
     <div
       key={task.task_id}
+      role="button"
+      tabIndex={0}
       className="p-4 border border-gray-200 rounded-lg hover:shadow-md transition-shadow cursor-pointer"
       onClick={() => onTaskClick?.(task)}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onTaskClick?.(task); }}
     >
       {/* Header */}
       <div className="flex items-start justify-between mb-3">

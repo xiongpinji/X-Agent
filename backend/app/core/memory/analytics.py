@@ -14,10 +14,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, UTC, timedelta
-from typing import Optional, Any
-from collections import defaultdict, Counter
-import statistics
+from datetime import UTC, datetime, timedelta
 
 import numpy as np
 
@@ -95,8 +92,8 @@ class MemoryAnalytics:
         self,
         memory_id: str,
         event_type: str,  # "created", "accessed", "updated", "deleted"
-        timestamp: Optional[datetime] = None,
-        metadata: Optional[dict] = None,
+        timestamp: datetime | None = None,
+        metadata: dict | None = None,
     ) -> None:
         """
         记录记忆事件。
@@ -123,8 +120,8 @@ class MemoryAnalytics:
         content: str,
         access_count: int = 0,
         importance: float = 0.5,
-        created_at: Optional[datetime] = None,
-        last_accessed_at: Optional[datetime] = None,
+        created_at: datetime | None = None,
+        last_accessed_at: datetime | None = None,
     ) -> MemoryQualityMetrics:
         """
         评估记忆质量。
@@ -275,7 +272,7 @@ class MemoryAnalytics:
     def analyze_coverage(
         self,
         memories: list[dict],
-        expected_topics: Optional[list[str]] = None,
+        expected_topics: list[str] | None = None,
     ) -> CoverageAnalysis:
         """
         分析记忆覆盖度。
@@ -332,7 +329,7 @@ class MemoryAnalytics:
         self,
         memories: list[dict],
         period_days: int = 30,
-        report_id: Optional[str] = None,
+        report_id: str | None = None,
     ) -> AnalyticsReport:
         """
         生成分析报告。

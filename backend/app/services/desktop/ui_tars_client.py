@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
+import contextlib
 import os
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
@@ -38,12 +39,10 @@ class DesktopSession:
     def record(self, action: str, ok: bool, detail: str = "", **data: Any) -> DesktopActionResult:
         enriched = dict(data)
         enriched.setdefault("provider", self.provider)
-        enriched.setdefault("timestamp", datetime.now(timezone.utc).isoformat())
+        enriched.setdefault("timestamp", datetime.now(UTC).isoformat())
         if self.browser_page is not None:
-            try:
+            with contextlib.suppress(Exception):
                 enriched.setdefault("page_url", self.browser_page.url)
-            except Exception:
-                pass
         result = DesktopActionResult(action=action, ok=ok, detail=detail, data=enriched)
         self.actions.append(result)
         return result
@@ -135,11 +134,7 @@ class UiTarsDesktopClient:
             payload = payload.strip()
             step: dict[str, str] = {"kind": kind}
             if payload:
-                if kind in {"shortcut", "shortcut_sequence", "shortcut_macro"}:
-                    step["value"] = payload
-                elif kind in {"clipboard", "clipboard_sequence"}:
-                    step["value"] = payload
-                elif kind in {"ime", "ime_candidate_sequence"}:
+                if kind in {"shortcut", "shortcut_sequence", "shortcut_macro"} or kind in {"clipboard", "clipboard_sequence"} or kind in {"ime", "ime_candidate_sequence"}:
                     step["value"] = payload
                 else:
                     step["value"] = payload

@@ -3,8 +3,8 @@
 """
 
 import logging
-from typing import Any, Dict, List, Optional
 import time
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -20,13 +20,13 @@ class SceneAnalyzer:
     def _initialize_models(self) -> None:
         """初始化模型"""
         try:
-            import clip
+            import clip  # noqa: F401
             self._clip_available = True
         except ImportError:
             logger.warning("clip not installed, CLIP scene analysis disabled")
 
         try:
-            from transformers import BlipProcessor, BlipForConditionalGeneration
+            from transformers import BlipForConditionalGeneration, BlipProcessor  # noqa: F401
             self._blip_available = True
         except ImportError:
             logger.warning("transformers not installed, BLIP scene analysis disabled")
@@ -35,7 +35,7 @@ class SceneAnalyzer:
         self,
         image_path: str,
         **kwargs
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """分析场景"""
         start_time = time.time()
 
@@ -63,15 +63,15 @@ class SceneAnalyzer:
         self,
         image_path: str,
         **kwargs
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """使用BLIP分析场景"""
         if not self._blip_available:
             return {"success": False, "error": "BLIP not installed"}
 
         try:
-            from transformers import BlipProcessor, BlipForConditionalGeneration
-            from PIL import Image
             import torch
+            from PIL import Image
+            from transformers import BlipForConditionalGeneration, BlipProcessor
 
             processor = BlipProcessor.from_pretrained("Salesforce/blip-image-captioning-base")
             model = BlipForConditionalGeneration.from_pretrained(
@@ -115,7 +115,7 @@ class SceneAnalyzer:
         self,
         image_path: str,
         **kwargs
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """使用CLIP分析场景"""
         if not self._clip_available:
             return {"success": False, "error": "CLIP not installed"}
@@ -153,7 +153,7 @@ class SceneAnalyzer:
 
             scene_scores = {
                 label: float(prob)
-                for label, prob in zip(scene_labels, probs[0])
+                for label, prob in zip(scene_labels, probs[0], strict=False)
             }
 
             top_scene = max(scene_scores, key=scene_scores.get)
@@ -175,12 +175,12 @@ class SceneAnalyzer:
         self,
         image_path: str,
         **kwargs
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """提取场景元素"""
         try:
-            from PIL import Image
             import clip
             import torch
+            from PIL import Image
 
             device = "cuda" if torch.cuda.is_available() else "cpu"
             model, preprocess = clip.load("ViT-B/32", device=device)
@@ -212,7 +212,7 @@ class SceneAnalyzer:
 
             element_scores = {
                 element: float(prob)
-                for element, prob in zip(elements, probs[0])
+                for element, prob in zip(elements, probs[0], strict=False)
             }
 
             # 过滤高置信度元素
@@ -236,11 +236,11 @@ class SceneAnalyzer:
         self,
         image_path: str,
         **kwargs
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """分析图像构图"""
         try:
-            from PIL import Image
             import numpy as np
+            from PIL import Image
 
             image = Image.open(image_path).convert("RGB")
             img_array = np.array(image)
@@ -283,7 +283,7 @@ class SceneAnalyzer:
             return "general"
 
     @staticmethod
-    def _check_rule_of_thirds(img_array) -> Dict[str, Any]:
+    def _check_rule_of_thirds(img_array) -> dict[str, Any]:
         """检查三分法则"""
         height, width = img_array.shape[:2]
         h_third = height // 3
@@ -295,7 +295,7 @@ class SceneAnalyzer:
         }
 
     @staticmethod
-    def _analyze_color_distribution(img_array) -> Dict[str, Any]:
+    def _analyze_color_distribution(img_array) -> dict[str, Any]:
         """分析颜色分布"""
         import numpy as np
 

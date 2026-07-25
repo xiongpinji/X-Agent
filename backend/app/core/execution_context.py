@@ -7,10 +7,9 @@
 from __future__ import annotations
 
 import json
-from typing import Any
 
-from backend.app.core.contracts import ExecutionFrame, RunContext, TaskFrame
 from backend.app.core.code_index import code_index
+from backend.app.core.contracts import ExecutionFrame, RunContext, TaskFrame
 from backend.app.core.test_mapper import test_mapper
 
 

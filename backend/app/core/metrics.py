@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import time
+from collections.abc import Generator
 from contextlib import contextmanager
-from typing import Generator
 
 try:
     from prometheus_client import Counter, Gauge, Histogram, Summary
@@ -448,7 +448,7 @@ class MetricsCollector:
         try:
             yield
         finally:
-            duration = time.perf_counter() - start
+            time.perf_counter() - start
             # This is a helper for custom timing; specific metrics use their own methods
 
 

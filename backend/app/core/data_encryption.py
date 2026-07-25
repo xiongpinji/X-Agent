@@ -5,10 +5,9 @@ SECURITY: Implements AES-256-GCM encryption for sensitive data fields.
 
 import base64
 import os
-from typing import Optional
 
-from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
 from backend.app.api.errors import api_error
@@ -86,7 +85,7 @@ class DataEncryptor:
             raise api_error(
                 500,
                 ErrorCode.VALIDATION_ERROR,
-                f"Encryption failed: {str(e)}",
+                f"Encryption failed: {e!s}",
             )
 
     def decrypt(self, ciphertext_b64: str) -> str:
@@ -137,7 +136,7 @@ class DataEncryptor:
             raise api_error(
                 400,
                 ErrorCode.VALIDATION_ERROR,
-                f"Decryption failed: {str(e)}",
+                f"Decryption failed: {e!s}",
             )
 
 
@@ -166,7 +165,7 @@ class SensitiveFieldEncryptor:
         result = data.copy()
 
         for field in self.fields_to_encrypt:
-            if field in result and result[field]:
+            if result.get(field):
                 result[field] = self.encryptor.encrypt(str(result[field]))
 
         return result
@@ -183,7 +182,7 @@ class SensitiveFieldEncryptor:
         result = data.copy()
 
         for field in self.fields_to_encrypt:
-            if field in result and result[field]:
+            if result.get(field):
                 try:
                     result[field] = self.encryptor.decrypt(result[field])
                 except Exception:
@@ -194,10 +193,10 @@ class SensitiveFieldEncryptor:
 
 
 # Global encryptor instance
-_encryptor: Optional[DataEncryptor] = None
+_encryptor: DataEncryptor | None = None
 
 
-def get_encryptor(master_key: Optional[str] = None) -> DataEncryptor:
+def get_encryptor(master_key: str | None = None) -> DataEncryptor:
     """Get or create global encryptor instance.
 
     Args:

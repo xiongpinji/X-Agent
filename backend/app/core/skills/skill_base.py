@@ -3,9 +3,10 @@
 """
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional
-from pydantic import BaseModel
 from datetime import datetime
+from typing import Any
+
+from pydantic import BaseModel
 
 
 class SkillMetadata(BaseModel):
@@ -14,30 +15,30 @@ class SkillMetadata(BaseModel):
     version: str
     description: str
     author: str
-    dependencies: List[str] = []
-    capabilities: List[str] = []
-    tags: List[str] = []
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
+    dependencies: list[str] = []
+    capabilities: list[str] = []
+    tags: list[str] = []
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
 
 
 class SkillContext(BaseModel):
     """技能执行上下文"""
     skill_name: str
     execution_id: str
-    user_id: Optional[str] = None
-    tenant_id: Optional[str] = None
+    user_id: str | None = None
+    tenant_id: str | None = None
     timeout: int = 300
-    metadata: Dict[str, Any] = {}
+    metadata: dict[str, Any] = {}
 
 
 class SkillResult(BaseModel):
     """技能执行结果"""
     success: bool
-    data: Optional[Any] = None
-    error: Optional[str] = None
+    data: Any | None = None
+    error: str | None = None
     execution_time: float = 0.0
-    metadata: Dict[str, Any] = {}
+    metadata: dict[str, Any] = {}
 
 
 class Skill(ABC):
@@ -88,10 +89,10 @@ class Skill(ABC):
         """检查技能健康状态"""
         return True
 
-    def get_capabilities(self) -> List[str]:
+    def get_capabilities(self) -> list[str]:
         """获取技能的所有能力"""
         return self.metadata.capabilities
 
-    def get_dependencies(self) -> List[str]:
+    def get_dependencies(self) -> list[str]:
         """获取技能的依赖"""
         return self.metadata.dependencies

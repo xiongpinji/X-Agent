@@ -40,12 +40,7 @@ cd x-agent-core/extension
 npm install
 ```
 
-3. **构建扩展**
-```bash
-npm run build:dev
-```
-
-4. **加载到Chrome**
+3. **加载到Chrome**(本扩展为纯 ES Module / 经典脚本, 无需打包构建)
 - 打开 `chrome://extensions/`
 - 启用"开发者模式"（右上角）
 - 点击"加载未打包的扩展程序"
@@ -156,10 +151,11 @@ extension/
 
 ### 开发流程
 
-1. **启动开发服务器**
-```bash
-npm run watch
-```
+1. **加载与热更新**
+
+本扩展无构建步骤：直接在 `chrome://extensions/` 加载未打包的 `extension` 目录即可。
+修改代码后点击扩展卡片上的"重新加载"按钮生效（background 为 ES Module service worker，
+`content.js` / `popup.js` 为经典脚本，均由 Chrome 原生加载）。
 
 2. **运行测试**
 ```bash
@@ -252,20 +248,14 @@ npm run test:e2e
 
 ## 构建与部署
 
-### 开发构建
-```bash
-npm run build:dev
-```
-
-### 生产构建
-```bash
-npm run build:prod
-```
+本扩展无 webpack 等打包步骤（纯 ES Module + 经典脚本，Chrome 原生支持直接加载）。
+`manifest.json` 中 `background.type = "module"`，service worker 的 `import` 语句由 Chrome 原生解析。
 
 ### 打包扩展
 ```bash
 npm run package
 ```
+直接将源码目录打成 zip（排除 `node_modules/`、`tests/`、文档与脚本），用于上传 Chrome Web Store。
 
 生成的 `x-agent-extension.zip` 可以上传到Chrome Web Store。
 

@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from typing import Protocol, Any
-from dataclasses import dataclass, field
-from datetime import datetime, UTC
-from enum import Enum
 import uuid
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
+from enum import StrEnum
+from typing import Any, Protocol
 
 
-class SkillStatus(str, Enum):
+class SkillStatus(StrEnum):
     """Skill lifecycle status"""
     UNREGISTERED = "unregistered"
     REGISTERED = "registered"
@@ -20,7 +20,7 @@ class SkillStatus(str, Enum):
     DEPRECATED = "deprecated"
 
 
-class SkillCapability(str, Enum):
+class SkillCapability(StrEnum):
     """Built-in skill capabilities"""
     DOCUMENT_READ = "document:read"
     DOCUMENT_WRITE = "document:write"
@@ -41,7 +41,7 @@ class SkillCapability(str, Enum):
     CUSTOM = "custom"
 
 
-class SkillRiskLevel(str, Enum):
+class SkillRiskLevel(StrEnum):
     """Risk assessment for skills"""
     LOW = "low"
     MEDIUM = "medium"
@@ -148,11 +148,11 @@ class SkillExecutionResult:
 
 
 __all__ = [
-    "SkillStatus",
     "SkillCapability",
-    "SkillRiskLevel",
-    "SkillMetadata",
     "SkillExecutionContext",
-    "SkillProtocol",
     "SkillExecutionResult",
+    "SkillMetadata",
+    "SkillProtocol",
+    "SkillRiskLevel",
+    "SkillStatus",
 ]

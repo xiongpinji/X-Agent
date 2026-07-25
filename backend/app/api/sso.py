@@ -22,16 +22,15 @@ from __future__ import annotations
 import json
 import logging
 import os
-from typing import Annotated, Any, Optional
+from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from backend.app.api.errors import api_error
 from backend.app.core.contracts import ErrorCode
 from backend.app.core.saml_sso import (
     AUTHLIB_AVAILABLE,
-    SAML_BETA_MESSAGE,
     JITProvisioner,
     MultiTenantSSOManager,
     OIDCConfig,
@@ -92,7 +91,7 @@ class LocalSessionIssuer:
         self._resolved = True
         return self.available
 
-    def issue(self, user_id: str) -> Optional[dict[str, Any]]:
+    def issue(self, user_id: str) -> dict[str, Any] | None:
         """签发本地会话令牌; 签发器不可用时返回 None (显式降级)。"""
         if not self._resolve():
             return None
@@ -187,7 +186,7 @@ class OIDCCallbackRequest(BaseModel):
 
 
 class OIDCCallbackResponse(BaseModel):
-    access_token: Optional[str]
+    access_token: str | None
     token_type: str = "Bearer"
     user: dict[str, Any]
     sso: dict[str, Any]
@@ -200,7 +199,7 @@ async def list_sso_providers() -> dict[str, Any]:
     _ensure_env_providers()
     return {
         "oidc_providers": sso_manager.list_oidc_providers(),
-        "saml": {"status": "beta", "enabled": False, "message": SAML_BETA_MESSAGE},
+        "saml": {"status": "beta", "enabled": True, "require_signature": True, "message": "P1-05: 签名验证已启用"},
     }
 
 
@@ -312,15 +311,52 @@ async def oidc_callback(provider: str, request: OIDCCallbackRequest) -> OIDCCall
 # ------------------------------------------------------------- SAML (Beta)
 
 @oidc_router.get("/saml/{provider}/login")
-async def saml_login(provider: str) -> None:
-    """SAML 登录 — Beta, fail-closed (501)。"""
-    raise HTTPException(status_code=501, detail=SAML_BETA_MESSAGE)
+async def saml_login(provider: str) -> dict[str, str]:
+    """P1-05: SAML 登录 — 生成 AuthnRequest (Beta, 签名验证已启用)."""
+    from backend.app.core.sso.saml_provider import SAMLConfig, SAMLProvider
+
+    # Build config from environment
+    config = SAMLConfig(
+        entity_id=os.environ.get("XAGENT_SAML_ENTITY_ID", f"http://localhost:8000/api/v1/sso/saml/{provider}/acs"),
+        acs_url=os.environ.get("XAGENT_SAML_ACS_URL", f"http://localhost:8000/api/v1/sso/saml/{provider}/acs"),
+        idp_entity_id=os.environ.get("XAGENT_SAML_IDP_ENTITY_ID", ""),
+        idp_sso_url=os.environ.get("XAGENT_SAML_IDP_SSO_URL", ""),
+        idp_certificate=os.environ.get("XAGENT_SAML_IDP_CERTIFICATE", ""),
+        require_signature=True,
+    )
+    if not config.idp_sso_url:
+        raise HTTPException(status_code=501, detail="SAML IdP SSO URL 未配置 (XAGENT_SAML_IDP_SSO_URL)")
+    saml_provider = SAMLProvider(config)
+    request_id, auth_url = saml_provider.generate_auth_request()
+    return {"request_id": request_id, "redirect_url": auth_url}
 
 
 @oidc_router.post("/saml/{provider}/acs")
-async def saml_acs(provider: str) -> None:
-    """SAML ACS — Beta, fail-closed (501)。"""
-    raise HTTPException(status_code=501, detail=SAML_BETA_MESSAGE)
+async def saml_acs(provider: str, saml_response: str = "", relay_state: str = "") -> dict[str, Any]:
+    """P1-05: SAML ACS — 处理 IdP 响应 (Beta, 签名验证已启用)."""
+    from backend.app.core.sso.saml_provider import SAMLConfig, SAMLProvider
+
+    if not saml_response:
+        raise HTTPException(status_code=400, detail="Missing SAMLResponse")
+    config = SAMLConfig(
+        entity_id=os.environ.get("XAGENT_SAML_ENTITY_ID", f"http://localhost:8000/api/v1/sso/saml/{provider}/acs"),
+        acs_url=os.environ.get("XAGENT_SAML_ACS_URL", f"http://localhost:8000/api/v1/sso/saml/{provider}/acs"),
+        idp_entity_id=os.environ.get("XAGENT_SAML_IDP_ENTITY_ID", ""),
+        idp_sso_url=os.environ.get("XAGENT_SAML_IDP_SSO_URL", ""),
+        idp_certificate=os.environ.get("XAGENT_SAML_IDP_CERTIFICATE", ""),
+        require_signature=True,
+    )
+    saml_provider = SAMLProvider(config)
+    assertion = saml_provider.verify_response(saml_response, relay_state=relay_state or None)
+    if not assertion:
+        raise HTTPException(status_code=401, detail="SAML 响应验证失败 (签名无效或断言过期)")
+    return {
+        "status": "authenticated",
+        "subject": assertion.subject,
+        "name_id": assertion.name_id,
+        "session_index": assertion.session_index,
+        "attributes": assertion.attributes,
+    }
 
 
 @oidc_router.get("/status")
@@ -339,7 +375,9 @@ async def sso_status() -> dict[str, Any]:
             ],
             "providers_configured": len(sso_manager.oidc_configs),
         },
-        "saml": {"status": "beta", "enabled": False, "message": SAML_BETA_MESSAGE},
+        "saml": {"status": "beta", "enabled": True, "require_signature": True, "message": "P1-05: 签名验证已启用"},
+        "webauthn": {"status": "implemented", "features": ["registration", "authentication", "credential_management"]},
+        "ldap": {"status": "implemented", "requires": "ldap3 library"},
         "jwt_backend": {
             "authlib_or_joserfc_available": AUTHLIB_AVAILABLE,
             "fallback": "builtin RS256/HS256 (cryptography)",
@@ -368,8 +406,8 @@ class OAuthLoginRequest(BaseModel):
 class OAuthLoginResponse(BaseModel):
     """旧版 OAuth 登录响应。"""
 
-    access_token: Optional[str]
-    refresh_token: Optional[str]
+    access_token: str | None
+    refresh_token: str | None
     user: dict
     session: dict[str, Any] = Field(default_factory=dict)
 
@@ -609,40 +647,112 @@ async def revoke_all_sessions(
 
 
 # ============================================================================
-# WebAuthn / 条件访问 — 未实现, 显式 501 fail-closed (P1-02 修复假成功)
+# WebAuthn (FIDO2) — P1-05: 实现真实注册/认证流程
 # ============================================================================
 
-_WEBAUTHN_NOT_IMPLEMENTED = (
-    "WebAuthn 注册/认证端点尚未实现真实验证逻辑 (此前为空壳假成功, P1-02 已移除), "
-    "请等待后续迭代或贡献 core.sso.webauthn_provider 的验签实现。"
-)
 _CONDITIONAL_ACCESS_NOT_IMPLEMENTED = (
     "条件访问策略端点尚未实现真实策略引擎 (此前为空壳假成功, P1-02 已移除)。"
 )
 
+# P1-05: WebAuthn provider singleton
+from backend.app.core.sso.webauthn_provider import WebAuthnConfig, WebAuthnProvider
+
+_webauthn_provider: WebAuthnProvider | None = None
+
+
+def _get_webauthn_provider() -> WebAuthnProvider:
+    """Get or create WebAuthn provider singleton."""
+    global _webauthn_provider
+    if _webauthn_provider is None:
+        rp_id = os.environ.get("XAGENT_WEBAUTHN_RP_ID", "localhost")
+        origin = os.environ.get("XAGENT_WEBAUTHN_ORIGIN", "http://localhost:3000")
+        _webauthn_provider = WebAuthnProvider(
+            WebAuthnConfig(rp_id=rp_id, origin=origin)
+        )
+    return _webauthn_provider
+
+
+class WebAuthnRegisterStartRequest(BaseModel):
+    user_id: str = Field(..., min_length=1)
+    username: str = Field(..., min_length=1)
+
+
+class WebAuthnRegisterCompleteRequest(BaseModel):
+    challenge_id: str = Field(..., min_length=1)
+    credential_id: str = Field(..., min_length=1)
+    public_key: str = Field(..., min_length=1)
+    device_name: str | None = None
+    transports: list[str] = Field(default_factory=list)
+
+
+class WebAuthnAuthStartRequest(BaseModel):
+    user_id: str = Field(..., min_length=1)
+
+
+class WebAuthnAuthCompleteRequest(BaseModel):
+    challenge_id: str = Field(..., min_length=1)
+    credential_id: str = Field(..., min_length=1)
+    signature: str = Field(..., min_length=1)
+    client_data: str = Field(default="")
+
 
 @auth_router.post("/webauthn/register/start")
-async def webauthn_register_start() -> None:
-    """WebAuthn 注册 — 未实现 (501 fail-closed)。"""
-    raise api_error(501, ErrorCode.VALIDATION_ERROR, _WEBAUTHN_NOT_IMPLEMENTED)
+async def webauthn_register_start(req: WebAuthnRegisterStartRequest):
+    """P1-05: WebAuthn 注册 — 生成注册 challenge."""
+    provider = _get_webauthn_provider()
+    options = provider.create_registration_challenge(req.user_id, req.username)
+    # Return challenge_id for the complete step
+    challenge_id = next(
+        (cid for cid, c in provider._challenges.items() if c.user_id == req.user_id and c.operation == "register"),
+        "",
+    )
+    return {"challenge_id": challenge_id, "options": options}
 
 
 @auth_router.post("/webauthn/register/complete")
-async def webauthn_register_complete() -> None:
-    """WebAuthn 注册完成 — 未实现 (501 fail-closed)。"""
-    raise api_error(501, ErrorCode.VALIDATION_ERROR, _WEBAUTHN_NOT_IMPLEMENTED)
+async def webauthn_register_complete(req: WebAuthnRegisterCompleteRequest):
+    """P1-05: WebAuthn 注册完成 — 验证并存储凭据."""
+    provider = _get_webauthn_provider()
+    success = provider.verify_registration(
+        challenge_id=req.challenge_id,
+        credential_id=req.credential_id,
+        public_key=req.public_key,
+        device_name=req.device_name,
+        transports=req.transports,
+    )
+    if not success:
+        raise api_error(400, ErrorCode.VALIDATION_ERROR, "WebAuthn 注册验证失败: challenge 无效或已过期")
+    return {"status": "registered", "credential_id": req.credential_id}
 
 
 @auth_router.post("/webauthn/authenticate/start")
-async def webauthn_authenticate_start() -> None:
-    """WebAuthn 认证 — 未实现 (501 fail-closed)。"""
-    raise api_error(501, ErrorCode.VALIDATION_ERROR, _WEBAUTHN_NOT_IMPLEMENTED)
+async def webauthn_authenticate_start(req: WebAuthnAuthStartRequest):
+    """P1-05: WebAuthn 认证 — 生成认证 challenge."""
+    provider = _get_webauthn_provider()
+    options = provider.create_authentication_challenge(req.user_id)
+    challenge_id = next(
+        (cid for cid, c in provider._challenges.items() if c.user_id == req.user_id and c.operation == "authenticate"),
+        "",
+    )
+    return {"challenge_id": challenge_id, "options": options}
 
 
 @auth_router.post("/webauthn/authenticate/complete")
-async def webauthn_authenticate_complete() -> None:
-    """WebAuthn 认证完成 — 未实现 (501 fail-closed)。"""
-    raise api_error(501, ErrorCode.VALIDATION_ERROR, _WEBAUTHN_NOT_IMPLEMENTED)
+async def webauthn_authenticate_complete(req: WebAuthnAuthCompleteRequest):
+    """P1-05: WebAuthn 认证完成 — 验证签名."""
+    provider = _get_webauthn_provider()
+    success = provider.verify_authentication(
+        challenge_id=req.challenge_id,
+        credential_id=req.credential_id,
+        signature=req.signature,
+        client_data=req.client_data,
+    )
+    if not success:
+        raise api_error(401, ErrorCode.VALIDATION_ERROR, "WebAuthn 认证失败: 签名验证未通过")
+    # Get user_id from credential
+    credential = provider._credentials.get(req.credential_id)
+    user_id = credential.user_id if credential else ""
+    return {"status": "authenticated", "user_id": user_id}
 
 
 @auth_router.post("/conditional-access/policies")

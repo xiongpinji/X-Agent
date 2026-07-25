@@ -3,16 +3,16 @@
 from __future__ import annotations
 
 import asyncio
-import time
+import contextlib
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 from .models import (
     APICallMetric,
-    TokenUsageMetric,
-    ToolUsageMetric,
     ErrorMetric,
     PerformanceMetric,
+    TokenUsageMetric,
+    ToolUsageMetric,
 )
 
 
@@ -30,7 +30,7 @@ class AnalyticsCollector:
         self.flush_interval_seconds = flush_interval_seconds
         self.metrics_buffer: list[Any] = []
         self.lock = asyncio.Lock()
-        self._flush_task: Optional[asyncio.Task] = None
+        self._flush_task: asyncio.Task | None = None
 
     async def start(self) -> None:
         """Start the collector."""
@@ -40,10 +40,8 @@ class AnalyticsCollector:
         """Stop the collector."""
         if self._flush_task:
             self._flush_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._flush_task
-            except asyncio.CancelledError:
-                pass
 
     async def record_api_call(
         self,
@@ -55,8 +53,8 @@ class AnalyticsCollector:
         response_time_ms: float,
         request_size_bytes: int = 0,
         response_size_bytes: int = 0,
-        error_message: Optional[str] = None,
-        tags: Optional[dict[str, str]] = None,
+        error_message: str | None = None,
+        tags: dict[str, str] | None = None,
     ) -> None:
         """Record an API call metric.
 
@@ -95,7 +93,7 @@ class AnalyticsCollector:
         input_tokens: int,
         output_tokens: int,
         cost_usd: float,
-        tags: Optional[dict[str, str]] = None,
+        tags: dict[str, str] | None = None,
     ) -> None:
         """Record token usage metric.
 
@@ -129,8 +127,8 @@ class AnalyticsCollector:
         tool_type: str,
         execution_time_ms: float,
         success: bool,
-        error_message: Optional[str] = None,
-        tags: Optional[dict[str, str]] = None,
+        error_message: str | None = None,
+        tags: dict[str, str] | None = None,
     ) -> None:
         """Record tool usage metric.
 
@@ -163,9 +161,9 @@ class AnalyticsCollector:
         user_id: str,
         error_type: str,
         error_message: str,
-        endpoint: Optional[str] = None,
-        stack_trace: Optional[str] = None,
-        tags: Optional[dict[str, str]] = None,
+        endpoint: str | None = None,
+        stack_trace: str | None = None,
+        tags: dict[str, str] | None = None,
     ) -> None:
         """Record error metric.
 
@@ -196,7 +194,7 @@ class AnalyticsCollector:
         metric_name: str,
         value: float,
         unit: str,
-        tags: Optional[dict[str, str]] = None,
+        tags: dict[str, str] | None = None,
     ) -> None:
         """Record performance metric.
 

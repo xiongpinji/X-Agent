@@ -1,0 +1,201 @@
+{
+  "generated_at": "2026-07-21T07:11:02.432470+00:00",
+  "framework": "AICPA SOC 2 Type I",
+  "categories": {
+    "CC6": [
+      {
+        "id": "CC6.1",
+        "name": "Logical Access Security",
+        "description": "Implement logical access security software, infrastructure, and architectures",
+        "implementation": "backend/app/core/sso/ (OIDC+SAML), backend/app/api/enterprise_sso.py",
+        "evidence_source": "SSO configuration, authentication logs",
+        "status": "implemented",
+        "notes": ""
+      },
+      {
+        "id": "CC6.2",
+        "name": "User Authentication",
+        "description": "Authenticate users through defined mechanisms",
+        "implementation": "backend/app/core/sso/oidc_provider.py, saml_provider.py",
+        "evidence_source": "Authentication flow tests, token validation",
+        "status": "implemented",
+        "notes": ""
+      },
+      {
+        "id": "CC6.3",
+        "name": "Access Authorization",
+        "description": "Authorize access based on defined roles and permissions",
+        "implementation": "backend/app/core/tools.py (ToolRegistry risk levels + approval gates)",
+        "evidence_source": "RBAC configuration, approval records",
+        "status": "implemented",
+        "notes": ""
+      },
+      {
+        "id": "CC6.4",
+        "name": "Tenant Isolation",
+        "description": "Isolate tenant data and prevent cross-tenant access",
+        "implementation": "backend/app/core/tenant_isolation.py, middleware enforcement",
+        "evidence_source": "Isolation tests, cross-tenant query rejection logs",
+        "status": "implemented",
+        "notes": ""
+      },
+      {
+        "id": "CC6.5",
+        "name": "User Provisioning (SCIM)",
+        "description": "Manage user lifecycle through automated provisioning",
+        "implementation": "backend/app/api/scim.py (SCIM 2.0 endpoints)",
+        "evidence_source": "SCIM operation logs, provisioning records",
+        "status": "implemented",
+        "notes": ""
+      },
+      {
+        "id": "CC6.6",
+        "name": "Encryption at Rest",
+        "description": "Protect data at rest using encryption",
+        "implementation": "backend/app/core/kms/ (AES-256 via Fernet, key rotation)",
+        "evidence_source": "KMS configuration, key rotation logs",
+        "status": "implemented",
+        "notes": ""
+      },
+      {
+        "id": "CC6.7",
+        "name": "Encryption in Transit",
+        "description": "Protect data in transit using TLS",
+        "implementation": "deployment/ TLS termination config, docker-compose TLS settings",
+        "evidence_source": "TLS configuration, certificate management",
+        "status": "implemented",
+        "notes": ""
+      }
+    ],
+    "CC7": [
+      {
+        "id": "CC7.1",
+        "name": "System Monitoring",
+        "description": "Monitor system components and operations",
+        "implementation": "monitoring/ (Prometheus + Grafana), /ready health endpoint",
+        "evidence_source": "Monitoring dashboards, alert rules",
+        "status": "implemented",
+        "notes": ""
+      },
+      {
+        "id": "CC7.2",
+        "name": "Incident Detection",
+        "description": "Detect and respond to security incidents",
+        "implementation": "backend/app/core/compliance/incident_response.py",
+        "evidence_source": "Incident response procedures, drill records",
+        "status": "implemented",
+        "notes": ""
+      },
+      {
+        "id": "CC7.3",
+        "name": "Backup and Recovery",
+        "description": "Maintain data backup and recovery procedures",
+        "implementation": "deployment/backup/, disaster-recovery/",
+        "evidence_source": "Backup schedules, recovery test records",
+        "status": "implemented",
+        "notes": ""
+      },
+      {
+        "id": "CC7.4",
+        "name": "Audit Logging",
+        "description": "Maintain tamper-evident audit trails",
+        "implementation": "backend/app/core/audit.py (HMAC chain), audit_enhanced/ (SIEM export)",
+        "evidence_source": "Audit log integrity verification, export records",
+        "status": "implemented",
+        "notes": ""
+      }
+    ],
+    "CC8": [
+      {
+        "id": "CC8.1",
+        "name": "Change Management Process",
+        "description": "Manage changes through defined approval and testing processes",
+        "implementation": "backend/app/core/compliance/change_management.py, .github/workflows/",
+        "evidence_source": "Change records, CI pipeline logs",
+        "status": "implemented",
+        "notes": ""
+      },
+      {
+        "id": "CC8.2",
+        "name": "Code Review",
+        "description": "Require peer review before code deployment",
+        "implementation": ".github/workflows/branch-protection.yml",
+        "evidence_source": "PR review records, branch protection config",
+        "status": "implemented",
+        "notes": ""
+      },
+      {
+        "id": "CC8.3",
+        "name": "Automated Testing",
+        "description": "Execute automated tests as part of change management",
+        "implementation": ".github/workflows/ci.yml, tests/",
+        "evidence_source": "Test execution reports, coverage metrics",
+        "status": "implemented",
+        "notes": ""
+      },
+      {
+        "id": "CC8.4",
+        "name": "Dependency Management",
+        "description": "Monitor and manage third-party dependencies",
+        "implementation": ".github/workflows/security.yml (pip-audit + npm audit + SBOM)",
+        "evidence_source": "Dependency scan reports, SBOM",
+        "status": "implemented",
+        "notes": ""
+      }
+    ],
+    "CC9": [
+      {
+        "id": "CC9.1",
+        "name": "Risk Assessment",
+        "description": "Identify and assess risks to the system",
+        "implementation": "commercial_audit/ (gap analysis), SECURITY.md",
+        "evidence_source": "Risk assessment documents, audit reports",
+        "status": "implemented",
+        "notes": ""
+      },
+      {
+        "id": "CC9.2",
+        "name": "Vulnerability Management",
+        "description": "Identify and remediate vulnerabilities",
+        "implementation": ".github/workflows/security.yml (Bandit + Semgrep + TruffleHog)",
+        "evidence_source": "Vulnerability scan reports, remediation records",
+        "status": "implemented",
+        "notes": ""
+      },
+      {
+        "id": "CC9.3",
+        "name": "Data Retention",
+        "description": "Manage data retention and disposal",
+        "implementation": "backend/app/core/audit_enhanced/retention.py (WORM semantics)",
+        "evidence_source": "Retention policy configuration, disposal records",
+        "status": "implemented",
+        "notes": ""
+      }
+    ],
+    "P": [
+      {
+        "id": "P1.1",
+        "name": "Privacy Notice",
+        "description": "Provide notice about privacy practices",
+        "implementation": "SECURITY.md, data governance documentation",
+        "evidence_source": "Privacy notice, consent records",
+        "status": "partial",
+        "notes": "GDPR DPA template needed for enterprise customers"
+      },
+      {
+        "id": "P1.2",
+        "name": "Data Minimization",
+        "description": "Collect only necessary personal data",
+        "implementation": "backend/app/core/data_governance/ (PII classification)",
+        "evidence_source": "Data inventory, minimization controls",
+        "status": "partial",
+        "notes": "PII cascade deletion implemented, data inventory pending"
+      }
+    ]
+  },
+  "summary": {
+    "implemented": 18,
+    "partial": 2
+  },
+  "compliance_score": 95.0
+}

@@ -9,23 +9,23 @@
 仅保留兼容，不再作为运行时入口。见 SKILLS_SYSTEM_README.md。
 """
 
-from .skill_base import Skill, SkillMetadata, SkillContext, SkillResult
+from .skill_base import Skill, SkillContext, SkillMetadata, SkillResult
 from .skill_loader import (
-    SkillLoader,
-    get_default_skills_dirs,
     SKILL_ENTRYPOINT_CANDIDATES,
     SKILL_IMPLEMENTATION_CLASS,
+    SkillLoader,
+    get_default_skills_dirs,
 )
 from .skill_registry import SkillRegistry
 
 __all__ = [
-    "Skill",
-    "SkillMetadata",
-    "SkillContext",
-    "SkillResult",
-    "SkillLoader",
-    "SkillRegistry",
-    "get_default_skills_dirs",
     "SKILL_ENTRYPOINT_CANDIDATES",
     "SKILL_IMPLEMENTATION_CLASS",
+    "Skill",
+    "SkillContext",
+    "SkillLoader",
+    "SkillMetadata",
+    "SkillRegistry",
+    "SkillResult",
+    "get_default_skills_dirs",
 ]

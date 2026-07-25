@@ -170,6 +170,25 @@
 
 ---
 
+### 8.5 nativeMessaging 权限
+
+**用途**: 与本地 X-Agent 桌面端通信
+
+**具体应用**:
+- 通过 `chrome.runtime.connectNative('com.xagent.extension')` 连接原生消息主机
+- 将浏览器操作请求转发给桌面端 MCP 服务
+- 接收桌面端返回的执行结果
+
+**隐私影响**: 中
+- 仅与本机注册的 `com.xagent.extension` 主机通信
+- 主机安装与注册见 `NATIVE_MESSAGING_SETUP.md`
+
+**必要性**: 核心
+- MCP 桥接是扩展的核心功能
+- 未安装原生主机时按重连/降级逻辑失败并记录日志
+
+---
+
 ### 9. <all_urls> 主机权限
 
 **用途**: 在所有网站上运行扩展

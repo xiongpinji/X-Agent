@@ -1,0 +1,283 @@
+{
+ "backend/app/middleware.py": [
+  "DEPLOYMENT.md",
+  "SECURITY_DECISIONS.md"
+ ],
+ "backend/app/api/skills_api.py": [
+  "SKILLS_SYSTEM_README.md"
+ ],
+ "backend/app/core/skills_manager.py": [
+  "SKILLS_SYSTEM_README.md"
+ ],
+ "backend/app/core/skill_system_v2.py": [
+  "SKILLS_SYSTEM_README.md"
+ ],
+ "backend/app/core/agent_v2/COMPLETION_SUMMARY.md": [
+  "QUICK_REFERENCE.md",
+  "VERIFICATION_REPORT.md"
+ ],
+ "backend/app/core/agent_v2/DOCUMENTATION_REVIEW_REPORT.md": [
+  "QUICK_REFERENCE.md",
+  "VERIFICATION_REPORT.md"
+ ],
+ "backend/app/core/agent_v2/IMPLEMENTATION_COMPLETE.md": [
+  "QUICK_REFERENCE.md"
+ ],
+ "backend/app/core/agent_v2/phases/DELIVERABLES_MANIFEST.md": [
+  "QUICK_REFERENCE.md",
+  "VERIFICATION_REPORT.md"
+ ],
+ "backend/app/core/agent_v2/phases/FINAL_REPORT.md": [
+  "QUICK_REFERENCE.md",
+  "VERIFICATION_REPORT.md"
+ ],
+ "backend/app/core/agent_v2/phases/VERIFICATION_REPORT.md": [
+  "QUICK_REFERENCE.md"
+ ],
+ "backend/app/core/llm_providers/README.md": [
+  "docs/LLM_INTEGRATION.md"
+ ],
+ "backend/app/core/skills/skill_loader.py": [
+  "SKILLS_SYSTEM_README.md"
+ ],
+ "backend/app/core/skills/__init__.py": [
+  "SKILLS_SYSTEM_README.md"
+ ],
+ "commercial_audit/00_商用交付差距审计报告.md": [
+  "DISASTER_RECOVERY.md",
+  "SECURITY_DECISIONS.md",
+  "test-coverage-report.md"
+ ],
+ "commercial_audit/10_core_architecture_audit.md": [
+  "COMPETITIVE_GAP_ANALYSIS_2026.md",
+  "DEPLOYMENT.md",
+  "MULTI_AGENT_COMPLETION_REPORT.md",
+  "PROJECT_COMPLETION_REPORT.md",
+  "WORKFLOW_IMPLEMENTATION.md",
+  "test-coverage-report.md"
+ ],
+ "commercial_audit/11_memory_capability_audit.md": [
+  "BROWSER_AUTOMATION_README.md",
+  "CONTEXT_MANAGEMENT_IMPLEMENTATION_REPORT.md",
+  "HYBRID_MEMORY_IMPLEMENTATION.md",
+  "IMPLEMENTATION_REPORT.md",
+  "MEMORY_DEDUPLICATION_IMPLEMENTATION.md",
+  "MEMORY_FUSION_README.md",
+  "PARALLEL_AGENTS_README.md",
+  "PARALLEL_TOOLS_README.md",
+  "PLUGIN_SYSTEM_IMPLEMENTATION_REPORT.md",
+  "SKILLS_SYSTEM_README.md"
+ ],
+ "commercial_audit/12_security_compliance_audit.md": [
+  "SECURITY_DECISIONS.md"
+ ],
+ "commercial_audit/13_deployment_ops_audit.md": [
+  "CONCURRENCY_ARCHITECTURE.md",
+  "CONCURRENCY_IMPLEMENTATION_REPORT.md",
+  "DEPLOYMENT.md",
+  "DISASTER_RECOVERY.md",
+  "IMPLEMENTATION_REPORT.md",
+  "PERFORMANCE_BENCHMARK_REPORT.md",
+  "QUICKSTART.md",
+  "ROLLBACK_PROCEDURE.md"
+ ],
+ "commercial_audit/14_quality_dx_audit.md": [
+  "COVERAGE_ANALYSIS.md",
+  "COVERAGE_IMPROVEMENT_REPORT.md",
+  "DEPLOYMENT.md",
+  "INSTALL.md",
+  "QUICKSTART.md",
+  "QUICK_START.md",
+  "RELEASE_READINESS.md",
+  "TEST_COVERAGE_IMPROVEMENT_REPORT.md",
+  "docs/ADVANCED_FEATURES.md",
+  "docs/API.md",
+  "docs/API_ERROR_CODES.md",
+  "docs/ARCHITECTURE.md",
+  "docs/EXAMPLES.md",
+  "docs/INDEX.md",
+  "docs/PHASE_55_DEPLOYMENT.md",
+  "test-coverage-report.md"
+ ],
+ "commercial_audit/security_decisions_closure_2026-07-19.md": [
+  "DEPLOYMENT.md",
+  "SECURITY_DECISIONS.md",
+  "backend/docs/",
+  "backend/docs/SSO_CONFIGURATION.md",
+  "docs/API_INTEGRATION_GUIDE_NEW.md",
+  "docs/CONFIG_BEST_PRACTICES.md",
+  "docs/CONFIG_MIGRATION.md",
+  "docs/ENVIRONMENT.md",
+  "docs/MCP_PLUGIN_EXAMPLES.md",
+  "docs/MCP_PLUGIN_USER_GUIDE.md",
+  "docs/THIRD_PARTY_INTEGRATION.md",
+  "docs/faq/",
+  "docs/faq/README.md",
+  "docs/partner_integration_guide.md",
+  "docs/tutorials/",
+  "docs/tutorials/03-memory-system.md",
+  "docs/tutorials/GETTING_STARTED.md",
+  "docs/video-scripts/",
+  "docs/video-scripts/README.md"
+ ],
+ "deployment/MONITORING_QUICKSTART.md": [
+  "docs/MONITORING.md"
+ ],
+ "disaster-recovery/DISASTER_RECOVERY_MANUAL.md": [
+  "DISASTER_RECOVERY.md"
+ ],
+ "disaster-recovery/DISASTER_RECOVERY_PLAN.md": [
+  "DISASTER_RECOVERY.md"
+ ],
+ "disaster-recovery/INDEX.md": [
+  "PROJECT_COMPLETION_REPORT.md"
+ ],
+ "benchmarks/config.py": [
+  "PERFORMANCE_BENCHMARK_REPORT.md"
+ ],
+ "benchmarks/EXECUTION_SUMMARY.md": [
+  "PERFORMANCE_BENCHMARK_REPORT.md"
+ ],
+ "benchmarks/FILE_MANIFEST.md": [
+  "PERFORMANCE_BENCHMARK_REPORT.md"
+ ],
+ "benchmarks/IMPLEMENTATION_SUMMARY.md": [
+  "PERFORMANCE_BENCHMARK_REPORT.md"
+ ],
+ "benchmarks/PERFORMANCE_BENCHMARK_REPORT.md": [
+  "PERFORMANCE_BENCHMARK_REPORT.md"
+ ],
+ "benchmarks/README.md": [
+  "PERFORMANCE_BENCHMARK_REPORT.md"
+ ],
+ "benchmarks/report_generator.py": [
+  "PERFORMANCE_BENCHMARK_REPORT.md"
+ ],
+ "benchmarks/run_benchmarks.py": [
+  "PERFORMANCE_BENCHMARK_REPORT.md"
+ ],
+ "archive/process_docs_2026-07-19/GIT_SETUP_REPORT.md": [
+  "docs/git-workflow.md"
+ ],
+ "archive/process_docs_2026-07-19/PROJECT_STATUS_2026-05-27.md": [
+  "INSTALL.md",
+  "PHASE3_ALIGNMENT_COMPLETION_REPORT.md"
+ ],
+ "archive/process_docs_2026-07-19/RELEASE_NOTES.md": [
+  "docs/COMMERCIAL_DEPLOYMENT_RUNBOOK.md",
+  "docs/RC_RELEASE_DIFF_REVIEW.md",
+  "docs/RC_STAGING_MANIFEST.md"
+ ],
+ "tests/ENTERPRISE_TEST_COMPLETION_SUMMARY.md": [
+  "QUICK_REFERENCE.md"
+ ],
+ "tests/test_rc_deployment_docs_gate.py": [
+  "QUICKSTART.md",
+  "ROLLBACK_PROCEDURE.md",
+  "docs/COMMERCIAL_DEPLOYMENT_RUNBOOK.md",
+  "docs/RC_STAGING_MANIFEST.md"
+ ],
+ "tests/test_rc_final_gate.py": [
+  "docs/COMMERCIAL_DEPLOYMENT_RUNBOOK.md"
+ ],
+ "tests/test_rc_release_diff_review_gate.py": [
+  "docs/RC_STAGING_MANIFEST.md"
+ ],
+ "tests/test_rc_release_receipt.py": [
+  "docs/RC_STAGING_MANIFEST.md"
+ ],
+ "tests/test_rc_supply_chain_gate.py": [
+  "docs/RC_STAGING_MANIFEST.md"
+ ],
+ "tests/agent_v2/IMPLEMENTATION_SUMMARY.md": [
+  "COVERAGE_ANALYSIS.md"
+ ],
+ "tests/integration/IMPLEMENTATION_SUMMARY.md": [
+  "QUICKSTART.md"
+ ],
+ "scripts/cleanup_all_temp.py": [
+  "INSTALL.md",
+  "QUICKSTART.md"
+ ],
+ "scripts/cleanup_docs.py": [
+  "VERIFICATION_REPORT.md"
+ ],
+ "scripts/cleanup_root_docs.py": [
+  "VERIFICATION_REPORT.md"
+ ],
+ "scripts/codex_hermes_gap_matrix.py": [
+  "docs/CODEX_HERMES_GAP_CLOSURE_REPORT.md",
+  "docs/IDE_EXTENSION_ROADMAP.md",
+  "docs/specs/",
+  "docs/specs/vscode-extension-mvp.md"
+ ],
+ "scripts/coverage_analysis.py": [
+  "COVERAGE_IMPROVEMENT_REPORT.md",
+  "TEST_COVERAGE_IMPROVEMENT_REPORT.md"
+ ],
+ "scripts/final_cleanup.py": [
+  "QUICK_REFERENCE.md"
+ ],
+ "scripts/generate_api_docs.py": [
+  "docs/API.md",
+  "docs/openapi.json"
+ ],
+ "scripts/quick_cleanup.py": [
+  "DEPLOYMENT.md"
+ ],
+ "scripts/rc_deployment_docs_gate.py": [
+  "QUICKSTART.md",
+  "ROLLBACK_PROCEDURE.md",
+  "docs/COMMERCIAL_DEPLOYMENT_RUNBOOK.md",
+  "docs/RC_STAGING_MANIFEST.md"
+ ],
+ "scripts/rc_release_audit.py": [
+  "docs/01-项目规划/"
+ ],
+ "scripts/rc_release_diff_review_gate.py": [
+  "docs/RC_RELEASE_DIFF_REVIEW.md",
+  "docs/RC_STAGING_MANIFEST.md"
+ ],
+ "scripts/rc_release_receipt.py": [
+  "docs/RC_STAGING_MANIFEST.md"
+ ],
+ "scripts/rc_source_bundle.py": [
+  "docs/RC_STAGING_MANIFEST.md"
+ ],
+ "scripts/rc_staging_plan.py": [
+  "docs/RC_STAGING_MANIFEST.md"
+ ],
+ "scripts/rc_supply_chain_gate.py": [
+  "docs/RC_STAGING_MANIFEST.md"
+ ],
+ "scripts/restructure_project.py": [
+  "VERIFICATION_REPORT.md"
+ ],
+ "scripts/validate_project.py": [
+  "INSTALL.md"
+ ],
+ "desktop/PROJECT_SUMMARY.md": [
+  "QUICKSTART.md"
+ ],
+ "extension/DEVELOPMENT.md": [
+  "DEPLOYMENT.md"
+ ],
+ "extension/INDEX.md": [
+  "DELIVERABLES.md"
+ ],
+ "extension/PROJECT_SUMMARY.md": [
+  "DEPLOYMENT.md"
+ ],
+ "extension/README.md": [
+  "DEPLOYMENT.md"
+ ],
+ "mobile/FILE_MANIFEST.md": [
+  "FILE_MANIFEST.md"
+ ],
+ "sdks/README.md": [
+  "docs/partner_api_reference.md",
+  "docs/partner_integration_guide.md",
+  "docs/partner_portal_overview.md",
+  "docs/sdk_examples.md"
+ ]
+}

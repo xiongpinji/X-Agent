@@ -6,10 +6,10 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime
-from typing import Any, Optional
+from typing import Any
 
+import requests
 from pydantic import BaseModel
-
 
 # ============================================================================
 # IMPLEMENTATION GUIDE
@@ -369,7 +369,7 @@ class SlackIntegration:
     def __init__(self, webhook_url: str) -> None:
         self.webhook_url = webhook_url
 
-    def send_message(self, message: str, channel: Optional[str] = None) -> bool:
+    def send_message(self, message: str, channel: str | None = None) -> bool:
         """Send message to Slack."""
         import requests
 
@@ -391,7 +391,7 @@ class SlackIntegration:
         title: str,
         message: str,
         severity: str = "warning",
-        channel: Optional[str] = None,
+        channel: str | None = None,
     ) -> bool:
         """Send alert to Slack."""
         color_map = {
@@ -436,10 +436,11 @@ class JiraIntegration:
         summary: str,
         description: str,
         priority: str = "Medium",
-    ) -> Optional[str]:
+    ) -> str | None:
         """Create a Jira issue."""
-        import requests
         from base64 import b64encode
+
+        import requests
 
         url = f"{self.base_url}/rest/api/3/issues"
         auth = b64encode(f"{self.username}:{self.api_token}".encode()).decode()
