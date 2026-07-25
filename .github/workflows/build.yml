@@ -14,6 +14,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     name: Build & Quality Checks
+    timeout-minutes: 20
 
     steps:
     - uses: actions/checkout@v4
@@ -53,7 +54,7 @@ jobs:
           --cov=backend \
           --cov-report=xml \
           --cov-report=html \
-          -v --tb=short
+          -v --tb=short --timeout=300
 
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v3
