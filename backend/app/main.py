@@ -393,6 +393,14 @@ try:
 except ImportError:
     logger.warning("monitoring middleware not available")
 
+# PERFORMANCE: Wire the performance monitoring middleware (P1-18)
+# Tracks per-endpoint latency, throughput, and error rates.
+try:
+    from backend.app.core.performance_middleware import PerformanceMonitoringMiddleware
+    app.add_middleware(PerformanceMonitoringMiddleware)
+except ImportError:
+    logger.debug("performance monitoring middleware not available")
+
 # SECURITY: Mount the real tenant isolation middleware (core/tenant_isolation.py)
 # so request.state.tenant_id is actually populated for downstream handlers.
 app.add_middleware(TenantIsolationMiddleware)
