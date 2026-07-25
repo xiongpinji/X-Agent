@@ -5,9 +5,52 @@ All notable changes to X-Agent are documented in this file.
 > **版本单一事实源**: 全仓版本号以 `pyproject.toml` 的 `project.version` 为准, 当前为 **0.3.0-alpha** (商用升级完成)。
 > 本文件历史中出现过的一切高于 0.2.0-alpha 的版本标签 (含 1.x 系列与 0.7.x-0.9.x 标记) 均为 2026-07-19 商用审计 (`commercial_audit/00_商用交付差距审计报告.md`) 之前遗留的过程性标记, 从未对应任何实际对外发布的版本; 仓库 git 历史于 2026-07-19 fresh init, 不存在已发布 tag。
 
-## [0.3.0-alpha] — 2026-07-21
+## [0.3.0-alpha] - 2026-07-21
 
-### 商用交付升级 (38/100 → 75+/100)
+### Added
+- MCP 官方 SDK 集成 (stdio + Streamable HTTP)
+- WebAuthn FIDO2 签名验证 (EC P-256 + RSA)
+- 审计日志轮转 (50MB/30天) + Webhook/Syslog 外送
+- Agent 上下文管理 (sliding_window/summarize/hybrid)
+- 插件系统工具注册 (plugin__<name>__<tool>)
+- Goals CRUD API
+- 支付 Provider 模式 (Mock/Stripe/Alipay)
+- 通知 Provider 模式 (Console/SMTP/Webhook/Noop)
+- 租户配额管理 (6项资源限制 + 429执行)
+- Qdrant 快照/恢复 API
+- Alembic 版本化数据库迁移
+- Grafana 预置仪表盘 (6个)
+- 多区域灾备配置 + 自动故障转移
+- Locust 负载测试 (4 profile)
+- Demo 种子数据脚本
+- 发布自动化 (scripts/release.py)
+- 自动备份调度 (PG/文件/Qdrant/审计)
+- 优雅停机 (7步反依赖关闭)
+- SOC2 合规自动验证 (18控制点, 93.3%)
+
+### Changed
+- 启动时间 9.2s → 1.4s (延迟路由注册)
+- Docker 镜像改为 3 阶段构建 + 非 root
+- admin_store 默认 file 持久化
+- 前端 i18n 对齐 (EN/ZH 各 390 键)
+- CI 全 blocking 门禁 (6 jobs)
+- pytest 默认并行 (-n auto)
+
+### Fixed
+- 测试隔离 (CSRF session 唯一化 + conftest 单例重置)
+- docker-compose neo4j profiles 冲突
+- requirements-lock.txt 移除 pywin32 (Linux 不兼容)
+- collaboration.py SyntaxError
+- ESLint .eslintrc.cjs 语法错误
+
+### Security
+- 生产守卫 12 项验证 (CORS/HSTS/CSRF/CSP/限流)
+- 滑动窗口限流中间件
+- 租户隔离中间件
+- Bandit 安全扫描 0 告警
+
+<details>
+<summary>商用交付升级详情 (38/100 → 75+/100)</summary>
 
 #### Phase 1: P0 止血
 - 修复 20 个 F821 运行时必崩错误 (ruff check 全通过)
@@ -38,6 +81,8 @@ All notable changes to X-Agent are documented in this file.
 - 部署一键化 (docker-compose production profile + init_secrets.sh)
 - CLI 新增: chat, review, memory, skill 命令
 - 核心模块导入验证全通过
+
+</details>
 
 ## [Unreleased] — 0.2.0-alpha 开发线
 
@@ -164,6 +209,51 @@ All notable changes to X-Agent are documented in this file.
 
 #### Production Infrastructure
 - Fixed Dockerfile git installation (IssueToPR dependency)
+- Fixed requirements.txt optional docker package declaration
+- Fixed FastAPI route regex deprecation (pattern parameter)
+
+#### Memory & Context
+- Fixed memory store/retrieve interface contracts
+- Fixed session recovery deadlock in non-reentrant locks
+- Fixed compression regex unicode support
+- Fixed code index enumeration state management
+
+---
+
+## 早期开发里程碑 (过程性标记, 均未对外发布)
+
+### [0.9.x 标记] - 2026-05-30
+- Test suite consolidation (backend/tests → root tests/enterprise)
+- Pytest collection error fixes (75 errors resolved)
+- QueuePool async engine compatibility fixes
+- Prometheus duplicate registry fixes
+- Observability contract fixes (error envelope structure)
+
+### [0.8.x 标记] - 2026-05-28
+- PBKDF2HMAC security implementation
+- AST-based execution sandbox
+- Concurrent lock refactoring
+- Random salt generation for encryption
+- Authentication TTL enforcement
+
+### [0.7.x 标记] - 2026-05-25
+- Multi-cluster version drift fixes (57 failures)
+- Starlette route API updates
+- HTTPx transport parameter alignment
+- SQLite executescript for multi-statement support
+
+---
+
+## Development Milestones
+
+- **2026 Q2**: Phase 5.5 Cloud Sandbox 开发完成 (实现深度以审计复核为准)
+- **2026 Q3 (当前)**: 商用修复 Phase 1「止血与架构收敛」—— 18 项 P0 清零 + 死代码收敛 + 版本叙事统一 (见 ROADMAP.md 与 commercial_audit/00)
+- **2026 Q4 - 2027 Q1**: 商用修复 Phase 2「商用就绪」—— MCP 官方 SDK 返工、真 SSO/SCIM、部署资产收敛等 P1 项
+- **2027+**: Phase 3「差异化竞争」—— 完全自托管 / air-gapped、证据驱动完成、移动端触发、商业化管道
+
+---
+
+**Format**: Following [Keep a Changelog](https://keepachangelog.com/) and [Semantic Versioning](https://semver.org/). 版本号以 `pyproject.toml` 为单一事实源。
 - Fixed requirements.txt optional docker package declaration
 - Fixed FastAPI route regex deprecation (pattern parameter)
 
