@@ -117,7 +117,7 @@ function ChatThreadPanel({ messages, avatars, currentUserId, onOpenAudit, onOpen
             <div className="mt-3 flex flex-wrap gap-2">
               <button className="rounded-lg border px-2 py-1 text-xs hover:bg-gray-50" onClick={() => onOpenAudit?.(message.message_id)}>查看审计</button>
               <button className="rounded-lg border px-2 py-1 text-xs hover:bg-gray-50" onClick={() => onOpenMessageThread?.(message.message_id)}>查看线程</button>
-              {message.room_id ? <button className="rounded-lg border px-2 py-1 text-xs hover:bg-gray-50" onClick={() => onOpenRoom?.(message.room_id)}>打开房间</button> : null}
+              {message.room_id ? <button className="rounded-lg border px-2 py-1 text-xs hover:bg-gray-50" onClick={() => onOpenRoom?.(message.room_id ?? "")}>打开房间</button> : null}
             </div>
           </div>
         );

@@ -1,13 +1,13 @@
-import React, { useState, useEffect } from "react";
-import { Card, Button, Input, Select, Textarea, Tabs, Alert } from "@/components/ui";
+import React, { useState } from "react";
+import { TEMPLATE_MARKET_OFFLINE, TemplateMarketOfflineNotice } from "./TemplateMarketOfflineNotice";
 
 interface TemplateParameter {
   name: string;
   type: string;
   description: string;
-  default?: any;
+  default?: unknown;
   required: boolean;
-  enum_values?: any[];
+  enum_values?: unknown[];
   placeholder?: string;
   help_text?: string;
 }
@@ -17,7 +17,7 @@ interface TemplateNode {
   type: string;
   name: string;
   description: string;
-  config: Record<string, any>;
+  config: Record<string, unknown>;
   position: { x: number; y: number };
 }
 
@@ -52,7 +52,14 @@ interface TemplateEditorProps {
   onCancel?: () => void;
 }
 
-export function TemplateEditor({ templateId, onSave, onCancel }: TemplateEditorProps) {
+/**
+ * 模板编辑器（B10）。
+ *
+ * 后端无 /api/v1/templates 路由，模板加载与保存不可用：
+ * 页面显式标注"后端模板市场未上线"，表单与保存操作全部禁用。
+ * 页面保留不删除；后端的模板市场上线后恢复 loadTemplate / handleSave。
+ */
+export function TemplateEditor({ templateId: _templateId, onSave: _onSave, onCancel }: TemplateEditorProps) {
   const [template, setTemplate] = useState<Partial<WorkflowTemplate>>({
     name: "",
     description: "",
@@ -65,329 +72,86 @@ export function TemplateEditor({ templateId, onSave, onCancel }: TemplateEditorP
     tags: [],
   });
 
-  const [activeTab, setActiveTab] = useState("basic");
-  const [errors, setErrors] = useState<string[]>([]);
-  const [loading, setLoading] = useState(false);
-
-  // Load template if editing
-  useEffect(() => {
-    if (templateId) {
-      loadTemplate();
-    }
-  }, [templateId]);
-
-  const loadTemplate = async () => {
-    try {
-      setLoading(true);
-      const response = await fetch(`/api/v1/templates/${templateId}`);
-      if (response.ok) {
-        const data = await response.json();
-        setTemplate(data);
-      }
-    } catch (error) {
-      console.error("Failed to load template:", error);
-      setErrors(["Failed to load template"]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSave = async () => {
-    try {
-      setLoading(true);
-      setErrors([]);
-
-      const method = templateId ? "PUT" : "POST";
-      const url = templateId ? `/api/v1/templates/${templateId}` : "/api/v1/templates";
-
-      const response = await fetch(url, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(template),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        setErrors([error.detail || "Failed to save template"]);
-        return;
-      }
-
-      const result = await response.json();
-      onSave?.(result);
-    } catch (error) {
-      console.error("Failed to save template:", error);
-      setErrors(["Failed to save template"]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const addParameter = () => {
-    setTemplate({
-      ...template,
-      parameters: [
-        ...(template.parameters || []),
-        {
-          name: "",
-          type: "string",
-          description: "",
-          required: false,
-          enum_values: [],
-        },
-      ],
-    });
-  };
-
-  const updateParameter = (index: number, field: string, value: any) => {
-    const params = [...(template.parameters || [])];
-    params[index] = { ...params[index], [field]: value };
-    setTemplate({ ...template, parameters: params });
-  };
-
-  const removeParameter = (index: number) => {
-    const params = template.parameters?.filter((_, i) => i !== index) || [];
-    setTemplate({ ...template, parameters: params });
-  };
-
-  const addNode = () => {
-    setTemplate({
-      ...template,
-      nodes: [
-        ...(template.nodes || []),
-        {
-          id: `node_${Date.now()}`,
-          type: "transform",
-          name: "",
-          description: "",
-          config: {},
-          position: { x: 0, y: 0 },
-        },
-      ],
-    });
-  };
-
-  const updateNode = (index: number, field: string, value: any) => {
-    const nodes = [...(template.nodes || [])];
-    nodes[index] = { ...nodes[index], [field]: value };
-    setTemplate({ ...template, nodes });
-  };
-
-  const removeNode = (index: number) => {
-    const nodes = template.nodes?.filter((_, i) => i !== index) || [];
-    setTemplate({ ...template, nodes });
-  };
-
   return (
     <div className="space-y-6">
-      {errors.length > 0 && (
-        <Alert variant="destructive">
-          <div className="space-y-1">
-            {errors.map((error, i) => (
-              <div key={i}>{error}</div>
-            ))}
-          </div>
-        </Alert>
-      )}
+      <TemplateMarketOfflineNotice />
 
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <div className="flex gap-2">
-          <button
-            onClick={() => setActiveTab("basic")}
-            className={`px-4 py-2 rounded ${activeTab === "basic" ? "bg-blue-500 text-white" : "bg-gray-200"}`}
-          >
-            Basic Info
-          </button>
-          <button
-            onClick={() => setActiveTab("parameters")}
-            className={`px-4 py-2 rounded ${activeTab === "parameters" ? "bg-blue-500 text-white" : "bg-gray-200"}`}
-          >
-            Parameters
-          </button>
-          <button
-            onClick={() => setActiveTab("nodes")}
-            className={`px-4 py-2 rounded ${activeTab === "nodes" ? "bg-blue-500 text-white" : "bg-gray-200"}`}
-          >
-            Nodes
-          </button>
+      <section className="rounded-2xl border bg-white p-6 shadow-sm">
+        <h2 className="text-lg font-semibold">模板编辑器</h2>
+        <p className="mt-1 text-sm text-gray-500">后端模板市场未上线，编辑功能暂不可用。</p>
+
+        <div className="mt-6 space-y-4 opacity-60">
+          <div>
+            <label htmlFor="template-name" className="mb-1 block text-sm font-medium">模板名称</label>
+            <input
+              id="template-name"
+              value={template.name || ""}
+              onChange={(e) => setTemplate({ ...template, name: e.target.value })}
+              placeholder="输入模板名称"
+              disabled={TEMPLATE_MARKET_OFFLINE}
+              className="w-full rounded-lg border border-gray-300 px-4 py-2 disabled:cursor-not-allowed disabled:bg-gray-100"
+            />
+          </div>
+
+          <div>
+            <label htmlFor="template-description" className="mb-1 block text-sm font-medium">描述</label>
+            <textarea
+              id="template-description"
+              value={template.description || ""}
+              onChange={(e) => setTemplate({ ...template, description: e.target.value })}
+              placeholder="输入模板描述"
+              rows={4}
+              disabled={TEMPLATE_MARKET_OFFLINE}
+              className="w-full rounded-lg border border-gray-300 px-4 py-2 disabled:cursor-not-allowed disabled:bg-gray-100"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label htmlFor="template-category" className="mb-1 block text-sm font-medium">分类</label>
+              <select
+                id="template-category"
+                value={template.category || "custom"}
+                onChange={(e) => setTemplate({ ...template, category: e.target.value })}
+                disabled={TEMPLATE_MARKET_OFFLINE}
+                className="w-full rounded-lg border border-gray-300 px-4 py-2 disabled:cursor-not-allowed disabled:bg-gray-100"
+              >
+                <option value="data_processing">数据处理</option>
+                <option value="web_scraping">网页采集</option>
+                <option value="code_review">代码审查</option>
+                <option value="documentation">文档生成</option>
+                <option value="custom">自定义</option>
+              </select>
+            </div>
+
+            <div>
+              <label htmlFor="template-version" className="mb-1 block text-sm font-medium">版本</label>
+              <input
+                id="template-version"
+                value={template.version || "1.0.0"}
+                onChange={(e) => setTemplate({ ...template, version: e.target.value })}
+                placeholder="1.0.0"
+                disabled={TEMPLATE_MARKET_OFFLINE}
+                className="w-full rounded-lg border border-gray-300 px-4 py-2 disabled:cursor-not-allowed disabled:bg-gray-100"
+              />
+            </div>
+          </div>
         </div>
+      </section>
 
-        {/* Basic Info Tab */}
-        {activeTab === "basic" && (
-          <div className="space-y-4 mt-4">
-            <div>
-              <label htmlFor="template-name" className="block text-sm font-medium mb-1">Template Name</label>
-              <Input
-                id="template-name"
-                value={template.name || ""}
-                onChange={(e) => setTemplate({ ...template, name: e.target.value })}
-                placeholder="Enter template name"
-              />
-            </div>
-
-            <div>
-              <label htmlFor="template-description" className="block text-sm font-medium mb-1">Description</label>
-              <Textarea
-                id="template-description"
-                value={template.description || ""}
-                onChange={(e) => setTemplate({ ...template, description: e.target.value })}
-                placeholder="Enter template description"
-                rows={4}
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label htmlFor="template-category" className="block text-sm font-medium mb-1">Category</label>
-                <Select
-                  id="template-category"
-                  value={template.category || "custom"}
-                  onChange={(e) => setTemplate({ ...template, category: e.target.value })}
-                >
-                  <option value="data_processing">Data Processing</option>
-                  <option value="web_scraping">Web Scraping</option>
-                  <option value="code_review">Code Review</option>
-                  <option value="documentation">Documentation</option>
-                  <option value="custom">Custom</option>
-                </Select>
-              </div>
-
-              <div>
-                <label htmlFor="template-version" className="block text-sm font-medium mb-1">Version</label>
-                <Input
-                  id="template-version"
-                  value={template.version || "1.0.0"}
-                  onChange={(e) => setTemplate({ ...template, version: e.target.value })}
-                  placeholder="1.0.0"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label htmlFor="template-tags" className="block text-sm font-medium mb-1">Tags</label>
-              <Input
-                id="template-tags"
-                value={(template.tags || []).join(", ")}
-                onChange={(e) => setTemplate({ ...template, tags: e.target.value.split(",").map((t) => t.trim()) })}
-                placeholder="tag1, tag2, tag3"
-              />
-            </div>
-          </div>
-        )}
-
-        {/* Parameters Tab */}
-        {activeTab === "parameters" && (
-          <div className="space-y-4 mt-4">
-            <Button onClick={addParameter} variant="outline">
-              Add Parameter
-            </Button>
-
-            {(template.parameters || []).map((param, index) => (
-              <Card key={index} className="p-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <Input
-                    value={param.name}
-                    onChange={(e) => updateParameter(index, "name", e.target.value)}
-                    placeholder="Parameter name"
-                  />
-                  <Select
-                    value={param.type}
-                    onChange={(e) => updateParameter(index, "type", e.target.value)}
-                  >
-                    <option value="string">String</option>
-                    <option value="number">Number</option>
-                    <option value="boolean">Boolean</option>
-                    <option value="array">Array</option>
-                    <option value="object">Object</option>
-                    <option value="select">Select</option>
-                  </Select>
-                </div>
-
-                <Textarea
-                  value={param.description}
-                  onChange={(e) => updateParameter(index, "description", e.target.value)}
-                  placeholder="Description"
-                  rows={2}
-                  className="mt-2"
-                />
-
-                <div className="flex gap-2 mt-2">
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={param.required}
-                      onChange={(e) => updateParameter(index, "required", e.target.checked)}
-                    />
-                    Required
-                  </label>
-                  <Button
-                    onClick={() => removeParameter(index)}
-                    variant="destructive"
-                    size="sm"
-                  >
-                    Remove
-                  </Button>
-                </div>
-              </Card>
-            ))}
-          </div>
-        )}
-
-        {/* Nodes Tab */}
-        {activeTab === "nodes" && (
-          <div className="space-y-4 mt-4">
-            <Button onClick={addNode} variant="outline">
-              Add Node
-            </Button>
-
-            {(template.nodes || []).map((node, index) => (
-              <Card key={index} className="p-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <Input
-                    value={node.id}
-                    onChange={(e) => updateNode(index, "id", e.target.value)}
-                    placeholder="Node ID"
-                  />
-                  <Select
-                    value={node.type}
-                    onChange={(e) => updateNode(index, "type", e.target.value)}
-                  >
-                    <option value="input">Input</option>
-                    <option value="output">Output</option>
-                    <option value="transform">Transform</option>
-                    <option value="tool">Tool</option>
-                    <option value="agent">Agent</option>
-                    <option value="condition">Condition</option>
-                  </Select>
-                </div>
-
-                <Input
-                  value={node.name}
-                  onChange={(e) => updateNode(index, "name", e.target.value)}
-                  placeholder="Node name"
-                  className="mt-2"
-                />
-
-                <Button
-                  onClick={() => removeNode(index)}
-                  variant="destructive"
-                  size="sm"
-                  className="mt-2"
-                >
-                  Remove
-                </Button>
-              </Card>
-            ))}
-          </div>
-        )}
-      </Tabs>
-
-      <div className="flex gap-2 justify-end">
-        <Button onClick={onCancel} variant="outline">
-          Cancel
-        </Button>
-        <Button onClick={handleSave} disabled={loading}>
-          {loading ? "Saving..." : "Save Template"}
-        </Button>
+      <div className="flex justify-end gap-2">
+        <button
+          onClick={onCancel}
+          className="rounded-lg border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50"
+        >
+          返回
+        </button>
+        <button
+          disabled={TEMPLATE_MARKET_OFFLINE}
+          className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          保存模板（未上线）
+        </button>
       </div>
     </div>
   );

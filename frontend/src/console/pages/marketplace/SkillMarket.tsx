@@ -1,117 +1,201 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Search, Download, Star, Users, Zap, ChevronRight } from 'lucide-react';
 
-interface Skill {
-  id: string;
-  manifest: {
-    name: string;
-    name_zh: string;
-    description_zh: string;
-    icon_emoji: string;
-    keywords: string[];
-  };
-  category: string;
-  rating: number;
-  downloads: number;
-  installed_count: number;
-  is_installed: boolean;
-  what_is_it: string;
-  who_is_it_for: string;
-  how_to_use: string;
+/**
+ * B9 修复：技能市场数据层对齐后端真实路由。
+ * 原来的 /api/v1/skill-market/*（skill_market.py 等）未在 main.py 注册，不可达。
+ *
+ * 真实端点：
+ * - /api/skills                      （skills_api.py，已注册）列表/搜索/安装/卸载/执行
+ * - /api/v1/skill-sediment/*         （skill_sediment.py，已注册）技能自沉淀
+ *
+ * 注意：/api/skills 需要 RBAC scope（tools:read / tools:* / agent:run），
+ * 本地开发匿名主体可用；生产环境需携带凭证，否则 401（页面按失败兜底处理）。
+ */
+
+/** 列表端点返回的技能记录（SkillMetadata.to_dict 的页面使用子集） */
+interface SkillRecord {
+  skill_id: string;
+  name: string;
+  version?: string;
+  description?: string;
+  author?: string;
+  capabilities?: string[];
+  tags?: string[];
+  risk_level?: string;
+  rating?: number;
+  downloads?: number;
 }
 
-interface Category {
+/** 页面统一视图模型 */
+interface SkillView {
   id: string;
-  name_zh: string;
-  icon: string;
-  skill_count: number;
+  name: string;
+  version: string;
+  description: string;
+  author: string;
+  capabilities: string[];
+  tags: string[];
+  rating: number;
+  downloads: number;
+  is_installed: boolean;
+}
+
+interface SedimentStats {
+  total_events: number;
+  sedimented_count: number;
+  trajectory_buffer_size: number;
+  total_skills: number;
+  promoted: number;
+  rejected: number;
+  pruned: number;
+}
+
+interface SedimentSkill {
+  name?: string;
+  skill_name?: string;
+  status?: string;
+  usage_count?: number;
+  description?: string;
+  [key: string]: unknown;
+}
+
+const SKILLS_API = '/api/skills';
+const SEDIMENT_API = '/api/v1/skill-sediment';
+
+function toSkillView(record: SkillRecord, installedIds: Set<string>): SkillView {
+  return {
+    id: record.skill_id,
+    name: record.name,
+    version: record.version ?? '1.0.0',
+    description: record.description ?? '',
+    author: record.author ?? '',
+    capabilities: record.capabilities ?? [],
+    tags: record.tags ?? [],
+    rating: record.rating ?? 0,
+    downloads: record.downloads ?? 0,
+    is_installed: installedIds.has(record.skill_id) || installedIds.has(record.name),
+  };
 }
 
 export const SkillMarket: React.FC = () => {
-  const [skills, setSkills] = useState<Skill[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
+  const [skills, setSkills] = useState<SkillView[]>([]);
+  const [installedIds, setInstalledIds] = useState<Set<string>>(new Set());
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedSkill, setSelectedSkill] = useState<Skill | null>(null);
+  const [selectedSkill, setSelectedSkill] = useState<SkillView | null>(null);
   const [loading, setLoading] = useState(false);
   const [sortBy, setSortBy] = useState('rating');
+  const [sedimentStats, setSedimentStats] = useState<SedimentStats | null>(null);
+  const [sedimentDrafts, setSedimentDrafts] = useState<SedimentSkill[]>([]);
 
-  // 获取分类
+  // 获取已安装技能（B9：GET /api/skills?installed_only=true）
   useEffect(() => {
-    const fetchCategories = async () => {
+    const fetchInstalled = async () => {
       try {
-        const response = await fetch('/api/v1/skill-market/categories');
+        const response = await fetch(`${SKILLS_API}?installed_only=true`);
+        if (!response.ok) return;
         const data = await response.json();
-        setCategories(data);
+        const items = Array.isArray(data.skills) ? data.skills : [];
+        setInstalledIds(new Set(items.map((item: unknown) => {
+          if (typeof item === 'string') return item;
+          const record = item as { skill_id?: string; name?: string };
+          return record.skill_id ?? record.name ?? '';
+        }).filter(Boolean)));
       } catch (error) {
-        console.error('获取分类失败:', error);
+        console.error('获取已安装技能失败:', error);
       }
     };
-    fetchCategories();
+    fetchInstalled();
   }, []);
 
-  // 获取技能列表
+  // 获取技能列表（B9：GET /api/skills；搜索走 GET /api/skills/search）
   useEffect(() => {
     const fetchSkills = async () => {
       setLoading(true);
       try {
-        const params = new URLSearchParams({
-          limit: '20',
-          sort_by: sortBy,
-        });
-
-        if (selectedCategory) {
-          params.append('category', selectedCategory);
+        if (searchQuery.trim()) {
+          const response = await fetch(`${SKILLS_API}/search?query=${encodeURIComponent(searchQuery.trim())}&limit=20`);
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          const data = await response.json();
+          const results = Array.isArray(data.results) ? data.results : [];
+          setSkills(results.map((record: SkillRecord) => toSkillView(record, installedIds)));
+          return;
         }
-
-        const response = await fetch(`/api/v1/skill-market/skills?${params}`);
+        const response = await fetch(SKILLS_API);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const data = await response.json();
-        setSkills(data.skills);
+        const records = Array.isArray(data.skills) ? data.skills : [];
+        setSkills(records.map((record: SkillRecord) => toSkillView(record, installedIds)));
       } catch (error) {
         console.error('获取技能列表失败:', error);
       } finally {
         setLoading(false);
       }
     };
+    const timer = setTimeout(fetchSkills, searchQuery ? 300 : 0);
+    return () => clearTimeout(timer);
+  }, [searchQuery, installedIds]);
 
-    fetchSkills();
-  }, [selectedCategory, sortBy]);
-
-  // 搜索技能
-  const handleSearch = async (query: string) => {
-    setSearchQuery(query);
-    if (!query.trim()) {
-      return;
-    }
-
-    setLoading(true);
+  // 技能沉淀统计与草稿（B9：/api/v1/skill-sediment/*）
+  const loadSediment = async () => {
     try {
-      const response = await fetch(
-        `/api/v1/skill-market/search?query=${encodeURIComponent(query)}`
-      );
-      const data = await response.json();
-      setSkills(data.results);
+      const [statsRes, draftsRes] = await Promise.all([
+        fetch(`${SEDIMENT_API}/stats`),
+        fetch(`${SEDIMENT_API}/skills?status=draft`),
+      ]);
+      if (statsRes.ok) setSedimentStats((await statsRes.json()) as SedimentStats);
+      if (draftsRes.ok) {
+        const drafts = await draftsRes.json();
+        setSedimentDrafts(Array.isArray(drafts) ? drafts : []);
+      }
     } catch (error) {
-      console.error('搜索失败:', error);
-    } finally {
-      setLoading(false);
+      console.error('获取技能沉淀数据失败:', error);
     }
   };
 
-  // 安装技能
+  useEffect(() => {
+    loadSediment();
+  }, []);
+
+  // 分类：由技能 capabilities 前端聚合（后端无分类端点）
+  const categories = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const skill of skills) {
+      for (const capability of skill.capabilities.length ? skill.capabilities : ['general']) {
+        counts.set(capability, (counts.get(capability) ?? 0) + 1);
+      }
+    }
+    return [...counts.entries()].map(([id, count]) => ({ id, count }));
+  }, [skills]);
+
+  // 过滤 + 排序（后端列表端点不支持 sort_by/category，前端处理）
+  const visibleSkills = useMemo(() => {
+    let result = skills;
+    if (selectedCategory) {
+      result = result.filter((skill) =>
+        skill.capabilities.includes(selectedCategory) || (selectedCategory === 'general' && skill.capabilities.length === 0),
+      );
+    }
+    const sorted = [...result];
+    if (sortBy === 'rating') sorted.sort((a, b) => b.rating - a.rating);
+    if (sortBy === 'downloads') sorted.sort((a, b) => b.downloads - a.downloads);
+    if (sortBy === 'newest') sorted.sort((a, b) => a.name.localeCompare(b.name));
+    return sorted;
+  }, [skills, selectedCategory, sortBy]);
+
+  // 安装技能（B9：POST /api/skills/{id}/install）
   const handleInstall = async (skillId: string) => {
     try {
-      const response = await fetch(`/api/v1/skill-market/skills/${skillId}/install`, {
+      const response = await fetch(`${SKILLS_API}/${encodeURIComponent(skillId)}/install`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ skill_id: skillId }),
       });
 
       if (response.ok) {
-        // 更新技能状态
-        setSkills(skills.map(s =>
-          s.id === skillId ? { ...s, is_installed: true } : s
-        ));
+        setInstalledIds(new Set([...installedIds, skillId]));
+        setSkills(skills.map((s) => (s.id === skillId ? { ...s, is_installed: true } : s)));
         if (selectedSkill?.id === skillId) {
           setSelectedSkill({ ...selectedSkill, is_installed: true });
         }
@@ -121,13 +205,13 @@ export const SkillMarket: React.FC = () => {
     }
   };
 
-  // 执行技能
-  const handleExecute = async (skillId: string) => {
+  // 执行技能（B9：POST /api/skills/execute，按 skill_name 调用）
+  const handleExecute = async (skill: SkillView) => {
     try {
-      const response = await fetch(`/api/v1/skill-market/skills/${skillId}/execute`, {
+      const response = await fetch(`${SKILLS_API}/execute`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ skill_id: skillId, input_data: {} }),
+        body: JSON.stringify({ skill_name: skill.name, input_data: {} }),
       });
 
       if (response.ok) {
@@ -135,6 +219,16 @@ export const SkillMarket: React.FC = () => {
       }
     } catch (error) {
       console.error('执行失败:', error);
+    }
+  };
+
+  // 沉淀技能审核（B9：promote / reject）
+  const handleSedimentReview = async (name: string, action: 'promote' | 'reject') => {
+    try {
+      const response = await fetch(`${SEDIMENT_API}/skills/${encodeURIComponent(name)}/${action}`, { method: 'POST' });
+      if (response.ok) await loadSediment();
+    } catch (error) {
+      console.error('沉淀技能审核失败:', error);
     }
   };
 
@@ -157,17 +251,17 @@ export const SkillMarket: React.FC = () => {
               type="text"
               placeholder="搜索技能... 例如：代码审查、数据分析"
               value={searchQuery}
-              onChange={(e) => handleSearch(e.target.value)}
+              onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-          {/* 左侧：分类导航 */}
+          {/* 左侧：分类导航（按能力聚合） */}
           <div className="lg:col-span-1">
             <div className="bg-white rounded-lg shadow-sm p-6 sticky top-4">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">分类</h2>
+              <h2 className="text-lg font-semibold text-gray-900 mb-4">能力分类</h2>
               <div className="space-y-2">
                 <button
                   onClick={() => setSelectedCategory(null)}
@@ -189,10 +283,8 @@ export const SkillMarket: React.FC = () => {
                         : 'text-gray-700 hover:bg-gray-100'
                     }`}
                   >
-                    <span>
-                      {cat.icon} {cat.name_zh}
-                    </span>
-                    <span className="text-sm text-gray-500">({cat.skill_count})</span>
+                    <span>{cat.id}</span>
+                    <span className="text-sm text-gray-500">({cat.count})</span>
                   </button>
                 ))}
               </div>
@@ -207,10 +299,21 @@ export const SkillMarket: React.FC = () => {
                 >
                   <option value="rating">评分最高</option>
                   <option value="downloads">下载最多</option>
-                  <option value="newest">最新发布</option>
-                  <option value="usage">使用最多</option>
+                  <option value="newest">按名称</option>
                 </select>
               </div>
+
+              {/* 技能沉淀统计（B9：/api/v1/skill-sediment/stats） */}
+              {sedimentStats && (
+                <div className="mt-6 pt-6 border-t border-gray-200">
+                  <h3 className="text-sm font-semibold text-gray-900 mb-3">技能沉淀</h3>
+                  <div className="space-y-1 text-xs text-gray-600">
+                    <div>沉淀事件：{sedimentStats.total_events}</div>
+                    <div>沉淀技能：{sedimentStats.sedimented_count}</div>
+                    <div>已入库：{sedimentStats.promoted} · 已拒绝：{sedimentStats.rejected}</div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -221,13 +324,13 @@ export const SkillMarket: React.FC = () => {
                 <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
                 <p className="mt-4 text-gray-600">加载中...</p>
               </div>
-            ) : skills.length === 0 ? (
+            ) : visibleSkills.length === 0 ? (
               <div className="text-center py-12 bg-white rounded-lg">
                 <p className="text-gray-600">暂无技能</p>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {skills.map((skill) => (
+                {visibleSkills.map((skill) => (
                   <div
                     key={skill.id}
                     role="button"
@@ -240,10 +343,10 @@ export const SkillMarket: React.FC = () => {
                     <div className="bg-gradient-to-r from-blue-500 to-indigo-600 p-4 text-white">
                       <div className="flex items-start justify-between">
                         <div className="flex items-center gap-3">
-                          <span className="text-3xl">{skill.manifest.icon_emoji}</span>
+                          <span className="text-3xl">🧩</span>
                           <div>
-                            <h3 className="font-semibold text-lg">{skill.manifest.name_zh}</h3>
-                            <p className="text-sm text-blue-100">{skill.manifest.name}</p>
+                            <h3 className="font-semibold text-lg">{skill.name}</h3>
+                            <p className="text-sm text-blue-100">v{skill.version}{skill.author ? ` · ${skill.author}` : ''}</p>
                           </div>
                         </div>
                         {skill.is_installed && (
@@ -257,7 +360,7 @@ export const SkillMarket: React.FC = () => {
                     {/* 技能卡片内容 */}
                     <div className="p-4">
                       <p className="text-gray-700 text-sm mb-3 line-clamp-2">
-                        {skill.manifest.description_zh}
+                        {skill.description || '暂无描述'}
                       </p>
 
                       {/* 统计信息 */}
@@ -272,18 +375,18 @@ export const SkillMarket: React.FC = () => {
                         </div>
                         <div className="flex items-center gap-1">
                           <Users size={16} className="text-green-500" />
-                          <span>{skill.installed_count}</span>
+                          <span>{skill.capabilities.length} 项能力</span>
                         </div>
                       </div>
 
                       {/* 标签 */}
                       <div className="flex flex-wrap gap-2 mb-4">
-                        {skill.manifest.keywords.slice(0, 3).map((keyword) => (
+                        {skill.tags.slice(0, 3).map((tag) => (
                           <span
-                            key={keyword}
+                            key={tag}
                             className="bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs"
                           >
-                            {keyword}
+                            {tag}
                           </span>
                         ))}
                       </div>
@@ -304,7 +407,7 @@ export const SkillMarket: React.FC = () => {
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              handleExecute(skill.id);
+                              handleExecute(skill);
                             }}
                             className="flex-1 bg-green-500 hover:bg-green-600 text-white py-2 rounded-lg font-semibold transition flex items-center justify-center gap-2"
                           >
@@ -325,6 +428,44 @@ export const SkillMarket: React.FC = () => {
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+
+            {/* 技能沉淀草稿审核（B9：/api/v1/skill-sediment/skills） */}
+            {sedimentDrafts.length > 0 && (
+              <div className="mt-8 bg-white rounded-lg shadow-sm p-6">
+                <h2 className="text-lg font-semibold text-gray-900 mb-4">待审核的沉淀技能</h2>
+                <div className="space-y-3">
+                  {sedimentDrafts.map((draft) => {
+                    const name = String(draft.name ?? draft.skill_name ?? '');
+                    if (!name) return null;
+                    return (
+                      <div key={name} className="flex items-center justify-between rounded-xl border px-4 py-3">
+                        <div>
+                          <div className="font-medium text-gray-900">{name}</div>
+                          <div className="text-xs text-gray-500">
+                            {draft.description ? String(draft.description) : '由执行轨迹自动沉淀'}
+                            {typeof draft.usage_count === 'number' ? ` · 使用 ${draft.usage_count} 次` : ''}
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleSedimentReview(name, 'promote')}
+                            className="px-3 py-1 bg-green-500 hover:bg-green-600 text-white rounded text-sm"
+                          >
+                            确认入库
+                          </button>
+                          <button
+                            onClick={() => handleSedimentReview(name, 'reject')}
+                            className="px-3 py-1 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded text-sm"
+                          >
+                            拒绝
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             )}
           </div>
@@ -352,10 +493,10 @@ export const SkillMarket: React.FC = () => {
             <div className="bg-gradient-to-r from-blue-500 to-indigo-600 p-6 text-white">
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-4">
-                  <span className="text-5xl">{selectedSkill.manifest.icon_emoji}</span>
+                  <span className="text-5xl">🧩</span>
                   <div>
-                    <h2 className="text-2xl font-bold">{selectedSkill.manifest.name_zh}</h2>
-                    <p className="text-blue-100">{selectedSkill.manifest.name}</p>
+                    <h2 className="text-2xl font-bold">{selectedSkill.name}</h2>
+                    <p className="text-blue-100">v{selectedSkill.version}</p>
                   </div>
                 </div>
                 <button
@@ -369,26 +510,22 @@ export const SkillMarket: React.FC = () => {
 
             {/* 详情内容 */}
             <div className="p-6 space-y-6">
-              {/* 这个技能是干什么的 */}
               <div>
                 <h3 className="text-lg font-semibold text-gray-900 mb-2">这个技能是干什么的？</h3>
-                <p className="text-gray-700 whitespace-pre-wrap">{selectedSkill.what_is_it}</p>
+                <p className="text-gray-700 whitespace-pre-wrap">{selectedSkill.description || '暂无描述'}</p>
               </div>
 
-              {/* 适合谁用 */}
               <div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">适合谁用？</h3>
-                <p className="text-gray-700 whitespace-pre-wrap">{selectedSkill.who_is_it_for}</p>
-              </div>
-
-              {/* 怎么用 */}
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">怎么用？</h3>
-                <p className="text-gray-700 whitespace-pre-wrap">{selectedSkill.how_to_use}</p>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">能力</h3>
+                <div className="flex flex-wrap gap-2">
+                  {selectedSkill.capabilities.length ? selectedSkill.capabilities.map((capability) => (
+                    <span key={capability} className="bg-blue-50 text-blue-700 px-3 py-1 rounded-full text-sm">{capability}</span>
+                  )) : <span className="text-gray-500 text-sm">未标注能力</span>}
+                </div>
               </div>
 
               {/* 统计信息 */}
-              <div className="grid grid-cols-4 gap-4 bg-gray-50 p-4 rounded-lg">
+              <div className="grid grid-cols-3 gap-4 bg-gray-50 p-4 rounded-lg">
                 <div className="text-center">
                   <div className="text-2xl font-bold text-blue-600">{selectedSkill.rating.toFixed(1)}</div>
                   <div className="text-sm text-gray-600">评分</div>
@@ -398,11 +535,7 @@ export const SkillMarket: React.FC = () => {
                   <div className="text-sm text-gray-600">下载</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-2xl font-bold text-purple-600">{selectedSkill.installed_count}</div>
-                  <div className="text-sm text-gray-600">安装</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-orange-600">{selectedSkill.manifest.keywords.length}</div>
+                  <div className="text-2xl font-bold text-orange-600">{selectedSkill.tags.length}</div>
                   <div className="text-sm text-gray-600">标签</div>
                 </div>
               </div>
@@ -418,7 +551,7 @@ export const SkillMarket: React.FC = () => {
                   </button>
                 ) : (
                   <button
-                    onClick={() => handleExecute(selectedSkill.id)}
+                    onClick={() => handleExecute(selectedSkill)}
                     className="flex-1 bg-green-500 hover:bg-green-600 text-white py-3 rounded-lg font-semibold transition flex items-center justify-center gap-2"
                   >
                     <Zap size={18} />

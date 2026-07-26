@@ -39,13 +39,13 @@
     "src/services/api.ts",
     "src/store/appStore.ts",
     "src/utils/pwaManager.ts",
-    "src/vite-env.d.ts"
+    "src/vite-env.d.ts",
+    "src/console"
   ],
   "exclude": [
     "src/**/__tests__/**",
     "src/**/*.test.ts",
-    "src/**/*.test.tsx",
-    "src/console/**"
+    "src/**/*.test.tsx"
   ],
   "references": [{ "path": "./tsconfig.node.json" }]
 }

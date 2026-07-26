@@ -29,7 +29,9 @@ class Settings(BaseSettings):
     deepseek_model: str = "deepseek-chat"
     deepseek_base_url: str | None = None
 
-    memory_backend: str = "postgres"  # 默认使用 PostgreSQL
+    # 默认 jsonl: 本地文件存储(全功能 MemorySystem+去重), 无外部依赖, 开发开箱即用;
+    # 生产必须显式设置(生产守卫会拒绝 memory/jsonl, 见 _production_storage_fail_fast)。
+    memory_backend: str = "jsonl"
     database_url: str = "postgresql+asyncpg://xagent:xagent@localhost:5432/xagent_db"
     # 用户/租户管理存储后端 (P1-03): memory=进程内存(仅测试); file=JSON文件(dev/单实例);
     # postgres=SQL 后端, 使用 database_url 指向的数据库(生产须为 Postgres), 支持多实例共享

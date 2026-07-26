@@ -338,7 +338,14 @@ class PostgresMemorySystem:
         if self._pool is None:
             import asyncpg
 
-            self._pool = await asyncpg.create_pool(self.database_url)
+            # asyncpg only accepts the "postgresql://"/"postgres://" scheme;
+            # normalize SQLAlchemy-style DSNs (postgresql+asyncpg://).
+            dsn = self.database_url
+            if "+asyncpg" in dsn:
+                dsn = dsn.replace("+asyncpg", "")
+            if dsn.startswith("postgres://"):
+                dsn = "postgresql://" + dsn[len("postgres://"):]
+            self._pool = await asyncpg.create_pool(dsn)
         if self._ensure_schema and not self._initialized:
             await self._pool.execute("CREATE EXTENSION IF NOT EXISTS pg_trgm;")
             await self._pool.execute(MEMORY_SCHEMA_SQL)

@@ -1163,13 +1163,10 @@ async def chat_page() -> FileResponse:
     return FileResponse(frontend_dir / "chat.html")
 
 
-@app.get("/console")
-async def console_page() -> FileResponse:
-    """伺服 console 页: 优先 dist 构建产物, 回退源码目录。"""
-    dist_console = frontend_dist_dir / "console.html"
-    if dist_console.exists():
-        return FileResponse(dist_console)
-    return FileResponse(frontend_dir / "console.html")
+# Legacy static console: superseded by the React ConsoleApp (SPA route
+# /console/*). The static page remains available at /assets/console.html.
+# The /console path is intentionally left to the SPA catch-all so React
+# Router owns the whole /console/* space.
 
 
 @app.get("/manifest.json", include_in_schema=False)
@@ -1343,4 +1340,10 @@ async def get_csrf_token(request: Request) -> JSONResponse:
 # SPA 前端路由 fallback。仅在 dist 构建产物存在时, 将 React Router 已知前缀
 # (frontend/src/App.tsx 中定义的所有路由前缀) 回退到 dist/index.html;
 # 其余未知路径(含 /api/...)仍返回标准 404。必须注册在所有路由之后。
-_SPA_ROUTE_PREFIXES = frozenset({"memory", "tasks", "tools", "chat", "agents", "settings", "workflows", "goals", "review", "evolution", "login"})
+_SPA_ROUTE_PREFIXES = frozenset({
+    "memory", "tasks", "tools", "chat", "agents", "settings", "workflows",
+    "goals", "review", "evolution", "login",
+    # P1 管理面与 console 子应用 (2026-07-26)
+    "checkpoints", "mcp", "sandbox-tasks", "approvals", "audit-logs",
+    "backup", "observability", "admin", "security", "console",
+})

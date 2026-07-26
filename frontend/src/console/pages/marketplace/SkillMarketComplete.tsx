@@ -1,6 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Search, Star, Grid, List, Heart, Share2, AlertCircle } from 'lucide-react';
 
+/**
+ * B9 修复：原 /api/v1/skill-market/* 端点（skill_market_complete.py 等）未在
+ * backend/app/main.py 注册，不可达。本页数据层已对齐真实路由 /api/skills
+ * （skills_api.py，已注册）；分类由技能 capabilities/tags 前端聚合。
+ */
 interface Skill {
   id: string;
   name: string;
@@ -21,6 +26,44 @@ interface Skill {
   what_is_it: string;
   who_is_it_for: string;
   how_to_use: string;
+}
+
+/** 后端技能记录 → 页面视图模型（真实模型字段见 skills_api.py / skills_core.py） */
+function mapSkillRecord(record: {
+  skill_id: string;
+  name: string;
+  version?: string;
+  description?: string;
+  author?: string;
+  capabilities?: string[];
+  tags?: string[];
+  rating?: number;
+  downloads?: number;
+  relevance_score?: number;
+}): Skill {
+  const capabilities = record.capabilities ?? [];
+  const tags = record.tags ?? [];
+  return {
+    id: record.skill_id,
+    name: record.name,
+    name_zh: record.name,
+    version: record.version ?? '1.0.0',
+    category: capabilities[0] ?? tags[0] ?? 'general',
+    rating: record.rating ?? 0,
+    rating_count: 0,
+    downloads: record.downloads ?? 0,
+    installed_count: 0,
+    usage_count: 0,
+    is_installed: false,
+    is_favorite: false,
+    description_zh: record.description ?? '',
+    icon_emoji: '🧩',
+    keywords: tags,
+    tags,
+    what_is_it: record.description ?? '',
+    who_is_it_for: '',
+    how_to_use: '',
+  };
 }
 
 interface Category {
@@ -53,27 +96,36 @@ export const SkillMarketComplete: React.FC = () => {
   const [installedSkills, setInstalledSkills] = useState<Set<string>>(new Set());
   const [favoriteSkills, setFavoriteSkills] = useState<Set<string>>(new Set());
 
-  // 获取分类
-  useEffect(() => {
-    const fetchCategories = async () => {
-      try {
-        const response = await fetch('/api/v1/skill-market/categories');
-        const data = await response.json();
-        setCategories(data);
-      } catch (error) {
-        console.error('获取分类失败:', error);
-      }
-    };
-    fetchCategories();
-  }, []);
+  // 分类：由技能列表的 capabilities/tags 前端聚合（后端无分类端点）
+  const deriveCategories = (records: Skill[]) => {
+    const counts = new Map<string, number>();
+    for (const skill of records) {
+      counts.set(skill.category, (counts.get(skill.category) ?? 0) + 1);
+    }
+    setCategories([...counts.entries()].map(([id, count]) => ({
+      id,
+      name_zh: id,
+      icon: '🏷️',
+      skill_count: count,
+    })));
+  };
 
-  // 获取市场统计
+  // 获取市场统计（B9：GET /api/skills/stats/marketplace）
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const response = await fetch('/api/v1/skill-market/stats');
+        const response = await fetch('/api/skills/stats/marketplace');
+        if (!response.ok) return;
         const data = await response.json();
-        setStats(data);
+        const raw = (data.stats ?? {}) as Record<string, unknown>;
+        setStats({
+          total_skills: Number(raw.total_skills ?? raw.total ?? 0),
+          installed_skills: Number(raw.installed_skills ?? raw.installed ?? 0),
+          total_downloads: Number(raw.total_downloads ?? raw.downloads ?? 0),
+          total_usage: Number(raw.total_usage ?? 0),
+          average_rating: Number(raw.average_rating ?? raw.avg_rating ?? 0),
+          categories: (raw.categories as Record<string, number>) ?? {},
+        });
       } catch (error) {
         console.error('获取统计失败:', error);
       }
@@ -81,13 +133,19 @@ export const SkillMarketComplete: React.FC = () => {
     fetchStats();
   }, []);
 
-  // 获取已安装的技能
+  // 获取已安装的技能（B9：GET /api/skills?installed_only=true）
   useEffect(() => {
     const fetchInstalledSkills = async () => {
       try {
-        const response = await fetch('/api/v1/skill-market/my-skills');
+        const response = await fetch('/api/skills?installed_only=true');
+        if (!response.ok) return;
         const data = await response.json();
-        setInstalledSkills(new Set(data.skills.map((s: any) => s.skill_id)));
+        const items = Array.isArray(data.skills) ? data.skills : [];
+        setInstalledSkills(new Set(items.map((item: unknown) => {
+          if (typeof item === 'string') return item;
+          const record = item as { skill_id?: string; name?: string };
+          return record.skill_id ?? record.name ?? '';
+        }).filter(Boolean)));
       } catch (error) {
         console.error('获取已安装技能失败:', error);
       }
@@ -95,26 +153,26 @@ export const SkillMarketComplete: React.FC = () => {
     fetchInstalledSkills();
   }, []);
 
-  // 获取技能列表
+  // 获取技能列表（B9：GET /api/skills；分类过滤与排序前端处理）
   useEffect(() => {
     const fetchSkills = async () => {
       setLoading(true);
       try {
-        const params = new URLSearchParams({
-          limit: '20',
-          sort_by: sortBy,
-        });
+        const response = await fetch('/api/skills');
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const data = await response.json();
+        const records = Array.isArray(data.skills) ? data.skills : [];
+        let mapped: Skill[] = records.map(mapSkillRecord);
 
         if (selectedCategory) {
-          const url = `/api/v1/skill-market/categories/${selectedCategory}/skills?${params}`;
-          const response = await fetch(url);
-          const data = await response.json();
-          setSkills(data.skills);
-        } else {
-          const response = await fetch(`/api/v1/skill-market/skills?${params}`);
-          const data = await response.json();
-          setSkills(data.skills);
+          mapped = mapped.filter((skill) => skill.category === selectedCategory);
         }
+        if (sortBy === 'rating') mapped = [...mapped].sort((a, b) => b.rating - a.rating);
+        if (sortBy === 'downloads') mapped = [...mapped].sort((a, b) => b.downloads - a.downloads);
+        if (sortBy === 'newest') mapped = [...mapped].sort((a, b) => a.name.localeCompare(b.name));
+
+        deriveCategories(records.map(mapSkillRecord));
+        setSkills(mapped);
       } catch (error) {
         console.error('获取技能列表失败:', error);
       } finally {
@@ -125,7 +183,7 @@ export const SkillMarketComplete: React.FC = () => {
     fetchSkills();
   }, [selectedCategory, sortBy]);
 
-  // 搜索技能
+  // 搜索技能（B9：GET /api/skills/search）
   const handleSearch = useCallback(async (query: string) => {
     setSearchQuery(query);
     if (!query.trim()) {
@@ -135,10 +193,12 @@ export const SkillMarketComplete: React.FC = () => {
     setLoading(true);
     try {
       const response = await fetch(
-        `/api/v1/skill-market/skills/search?query=${encodeURIComponent(query)}`
+        `/api/skills/search?query=${encodeURIComponent(query)}`
       );
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = await response.json();
-      setSkills(data.skills);
+      const results = Array.isArray(data.results) ? data.results : [];
+      setSkills(results.map(mapSkillRecord));
     } catch (error) {
       console.error('搜索失败:', error);
     } finally {
@@ -146,10 +206,10 @@ export const SkillMarketComplete: React.FC = () => {
     }
   }, []);
 
-  // 安装技能
+  // 安装技能（B9：POST /api/skills/{id}/install）
   const handleInstall = async (skillId: string) => {
     try {
-      const response = await fetch(`/api/v1/skill-market/skills/${skillId}/install`, {
+      const response = await fetch(`/api/skills/${encodeURIComponent(skillId)}/install`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ skill_id: skillId }),
@@ -169,10 +229,10 @@ export const SkillMarketComplete: React.FC = () => {
     }
   };
 
-  // 卸载技能
+  // 卸载技能（B9：POST /api/skills/{id}/uninstall）
   const handleUninstall = async (skillId: string) => {
     try {
-      const response = await fetch(`/api/v1/skill-market/skills/${skillId}/uninstall`, {
+      const response = await fetch(`/api/skills/${encodeURIComponent(skillId)}/uninstall`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       });

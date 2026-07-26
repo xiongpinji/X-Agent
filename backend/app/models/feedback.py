@@ -264,3 +264,54 @@ class FeedbackStorePostgres:
 
             result = await session.execute(stmt)
             return len(result.scalars().all())
+
+    async def delete_feedback(self, feedback_id: str) -> bool:
+        """删除反馈及其分析记录, 返回是否删除成功"""
+        async with SessionManager.get_session() as session:
+            stmt = select(FeedbackModel).where(FeedbackModel.id == feedback_id)
+            result = await session.execute(stmt)
+            feedback = result.scalar_one_or_none()
+
+            if not feedback:
+                return False
+
+            # 级联删除关联的分析记录
+            analysis_stmt = select(FeedbackAnalysisModel).where(
+                FeedbackAnalysisModel.feedback_id == feedback_id
+            )
+            analysis_result = await session.execute(analysis_stmt)
+            for analysis in analysis_result.scalars().all():
+                await session.delete(analysis)
+
+            await session.delete(feedback)
+            await session.flush()
+            logger.info(f"反馈删除成功: {feedback_id}")
+            return True
+
+    async def search_feedback(
+        self,
+        tenant_id: str,
+        keyword: str,
+        user_id: str | None = None,
+        skip: int = 0,
+        limit: int = 100,
+    ) -> list[FeedbackModel]:
+        """按关键词搜索反馈(标题/描述), 强制租户收敛"""
+        from sqlalchemy import or_
+
+        async with SessionManager.get_session() as session:
+            like_pattern = f"%{keyword}%"
+            stmt = select(FeedbackModel).where(
+                FeedbackModel.tenant_id == tenant_id,
+                or_(
+                    FeedbackModel.title.like(like_pattern),
+                    FeedbackModel.description.like(like_pattern),
+                ),
+            )
+
+            if user_id:
+                stmt = stmt.where(FeedbackModel.user_id == user_id)
+
+            stmt = stmt.order_by(FeedbackModel.created_at.desc()).offset(skip).limit(limit)
+            result = await session.execute(stmt)
+            return result.scalars().all()

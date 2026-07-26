@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { ConsoleAction, ConsoleBootstrapResponse, ConsoleState, RealtimeSnapshot } from "../state/consoleReducer";
 import { validateConsoleBootstrapResponse, warnConsoleBootstrapIssues } from "../state/consoleValidation";
 
 export type RealtimeSyncStatus = "idle" | "bootstrapping" | "sse" | "polling" | "error";

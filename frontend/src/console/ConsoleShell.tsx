@@ -2,6 +2,14 @@ import React from "react";
 import { ConsoleLayout } from "./components/layout/ConsoleLayout";
 import { ConsoleSyncStatusBadge } from "./components/layout/ConsoleSyncStatusBadge";
 import { useConsoleDispatch, useConsoleState } from "./state/consoleContext";
+import type {
+  ExecutionControlOverview,
+  MarketplaceCenterOverview,
+  MemoryCenterOverview,
+  NavigationCenterOverview,
+  OrganizationCenterOverview,
+  ToolsCenterOverview,
+} from "./state/consoleReducer";
 import {
   selectAuditData,
   selectChatData,
@@ -55,6 +63,8 @@ import { MemoryOverviewPage } from "./pages/memory/MemoryOverviewPage";
 import { MemoryDetailPage } from "./pages/memory/MemoryDetailPage";
 import { MemoryManagementPage } from "./pages/memory/MemoryManagementPage";
 import { MemoryHistoryPage } from "./pages/memory/MemoryHistoryPage";
+import type { AgentCreatePayload } from "./pages/agents/CreateAgentPage";
+import type { AuditSummarySection, TraceSummarySection } from "./pages/audit/AuditReplayPage";
 
 export function ConsoleShell() {
   const state = useConsoleState();
@@ -94,10 +104,15 @@ export function ConsoleShell() {
   const roleCatalogData = selectRoleCatalogData(state);
   const shellUiData = selectShellUiData(state);
   const contextData = selectContextData(state);
+  // trace 数据：从信封 linked_summaries.trace 派生（后端信封可选，缺省时为 null）
+  const traceData = React.useMemo(
+    () => ({ traceSummary: state.envelope?.linked_summaries?.trace ?? null }),
+    [state.envelope],
+  );
 
   const selectorValidation = React.useMemo(
-    () => validateConsoleSelectors(overviewPageData, workflowData, auditData, contextData),
-    [overviewPageData, workflowData, auditData, contextData],
+    () => validateConsoleSelectors(overviewPageData, workflowData, traceData, auditData, contextData),
+    [overviewPageData, workflowData, traceData, auditData, contextData],
   );
 
   React.useEffect(() => {
@@ -461,8 +476,8 @@ export function ConsoleShell() {
         return (
           <AuditReplayPage
             envelope={auditData.envelope ?? null}
-            traceSummary={traceData.traceSummary}
-            auditSummary={auditData.auditSummary}
+            traceSummary={traceData.traceSummary as TraceSummarySection | null}
+            auditSummary={auditData.auditSummary as AuditSummarySection | null}
             dispatch={auditData.dispatch}
             realtime={auditData.realtime}
             memory={auditData.memory}

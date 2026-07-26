@@ -53,6 +53,16 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             <NavLink href="/memory" icon="🧠" label={t('navigation.memory', 'Memory')} />
             <NavLink href="/agents" icon="🤖" label={t('navigation.agents', 'Agents')} />
             <NavLink href="/goals" icon="🎯" label={t('navigation.goals', 'Goals')} />
+            <NavLink href="/mcp" icon="🔌" label={t('navigation.mcp', 'MCP')} />
+            <NavLink href="/sandbox-tasks" icon="📦" label={t('navigation.sandboxTasks', 'Sandbox')} />
+            <NavLink href="/approvals" icon="✅" label={t('navigation.approvals', 'Approvals')} />
+            <NavLink href="/audit-logs" icon="📜" label={t('navigation.auditLogs', 'Audit Logs')} />
+            <NavLink href="/backup" icon="💾" label={t('navigation.backup', 'Backup')} />
+            <NavLink href="/observability" icon="📈" label={t('navigation.observability', 'Observability')} />
+            <NavLink href="/console" icon="🖥️" label={t('navigation.console', 'Console')} />
+            <NavLink href="/admin/tenants" icon="🏢" label={t('navigation.tenants', 'Tenants')} />
+            <NavLink href="/admin/users" icon="👥" label={t('navigation.usersAdmin', 'Users')} />
+            <NavLink href="/security" icon="🔐" label={t('navigation.security', 'Security')} />
             <NavLink href="/evolution" icon="🧬" label={t('navigation.evolution', 'Evolution')} />
             <NavLink href="/review" icon="🔍" label={t('navigation.review', 'Code Review')} />
             <NavLink href="/settings" icon="⚙️" label={t('navigation.settings', 'Settings')} />

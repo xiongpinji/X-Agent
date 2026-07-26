@@ -18,13 +18,26 @@ import contextlib
 import json
 import logging
 import time
-from typing import Any
+from typing import Annotated, Any
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
+from pydantic import BaseModel, Field
+
+from backend.app.core.notification_subscriptions import (
+    PushSubscriptionKeys,
+    PushSubscriptionRecord,
+    get_subscription_store,
+)
+from backend.app.core.security import Principal
+from backend.app.dependencies import enforce_scope, get_current_principal
 
 logger = logging.getLogger("xagent.notifications")
 
 router = APIRouter(prefix="/api/v1/notifications", tags=["notifications"])
+
+# WS 心跳间隔(秒)。无真实推送源时, 服务端按此周期向已连接客户端发送
+# {"type": "heartbeat"} 保活帧; 测试可下调该值以快速验证。
+HEARTBEAT_INTERVAL_SECONDS = 30.0
 
 
 class ConnectionManager:
@@ -93,6 +106,7 @@ async def notifications_websocket(websocket: WebSocket):
 
     Client connects and receives push notifications.
     Optionally send { "type": "subscribe", "channels": [...] } to filter.
+    服务端每 HEARTBEAT_INTERVAL_SECONDS 秒发送一帧 {"type": "heartbeat"} 保活。
     """
     # Extract user_id from query params or token
     user_id = websocket.query_params.get("user_id", "anonymous")
@@ -108,6 +122,17 @@ async def notifications_websocket(websocket: WebSocket):
             pass  # Fall back to anonymous
 
     await notification_manager.connect(websocket, user_id)
+
+    async def _heartbeat_loop() -> None:
+        """周期性发送心跳帧, 无真实推送源时保持连接存活。"""
+        while True:
+            await asyncio.sleep(HEARTBEAT_INTERVAL_SECONDS)
+            await websocket.send_json({
+                "type": "heartbeat",
+                "timestamp": time.time(),
+            })
+
+    heartbeat_task = asyncio.create_task(_heartbeat_loop())
 
     try:
         # Send welcome message
@@ -129,6 +154,9 @@ async def notifications_websocket(websocket: WebSocket):
     except WebSocketDisconnect:
         pass
     finally:
+        heartbeat_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await heartbeat_task
         await notification_manager.disconnect(websocket, user_id)
 
 
@@ -138,6 +166,87 @@ async def notification_status() -> dict[str, Any]:
     return {
         "active_connections": notification_manager.active_connections,
         "status": "active",
+    }
+
+
+# ─── Push subscription (Web Push) ──────────────────────────────────────────────
+
+
+class PushSubscriptionBody(BaseModel):
+    """前端 pushNotificationManager 上报的 subscription 结构"""
+
+    endpoint: str = Field(..., min_length=1)
+    keys: PushSubscriptionKeys
+
+
+class SubscribeRequest(BaseModel):
+    """POST /subscribe 请求体, 与前端 sendSubscriptionToServer 契约一致"""
+
+    subscription: PushSubscriptionBody
+    user_agent: str | None = None
+
+
+@router.post("/subscribe", status_code=201)
+async def subscribe_push(
+    request: SubscribeRequest,
+    principal: Annotated[Principal, Depends(get_current_principal)],
+) -> dict[str, Any]:
+    """保存 Web Push subscription 到 JSON 文件存储。
+
+    已认证主体强制 ``notifications:subscribe`` scope; 开发模式的匿名回落
+    主体(生产环境已被 get_current_principal 拒绝)按 anonymous 记录。
+    """
+    if principal.authenticated:
+        enforce_scope(principal, "notifications:subscribe")
+
+    store = get_subscription_store()
+    record = PushSubscriptionRecord(
+        endpoint=request.subscription.endpoint,
+        keys=request.subscription.keys,
+        user_id=principal.user_id,
+        tenant_id=principal.tenant_id,
+        user_agent=request.user_agent,
+    )
+    saved = store.add(record)
+    logger.info(f"Push subscription saved: {saved.id} (user={principal.user_id})")
+    return {
+        "status": "subscribed",
+        "subscription_id": saved.id,
+        "user_id": saved.user_id,
+        "tenant_id": saved.tenant_id,
+    }
+
+
+class TestBroadcastRequest(BaseModel):
+    """POST /broadcast/test 请求体"""
+
+    title: str = Field(..., min_length=1, max_length=200)
+    body: str = Field(..., min_length=1, max_length=2000)
+    metadata: dict[str, Any] | None = None
+
+
+@router.post("/broadcast/test")
+async def broadcast_test(
+    request: TestBroadcastRequest,
+    principal: Annotated[Principal, Depends(get_current_principal)],
+) -> dict[str, Any]:
+    """向所有已连接 WS 客户端真实广播一条测试通知(管理员)。
+
+    无真实推送源时的联调入口: 消息经由 ConnectionManager 实际投递到
+    每个活跃 WebSocket 连接, 不伪造投递结果。
+    """
+    enforce_scope(principal, "notifications:manage")
+
+    await notify_all(
+        notification_type="test_broadcast",
+        title=request.title,
+        body=request.body,
+        metadata=request.metadata or {},
+    )
+    return {
+        "status": "broadcast",
+        "connections": notification_manager.active_connections,
+        "timestamp": time.time(),
     }
 
 

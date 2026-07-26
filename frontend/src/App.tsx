@@ -25,6 +25,16 @@ const AgentWorkspacePage = lazy(() => import('@/pages/AgentWorkspacePage'))
 const WorkflowSchedulesPage = lazy(() => import('@/pages/WorkflowSchedulesPage'))
 const WorkflowRunsPage = lazy(() => import('@/pages/WorkflowRunsPage'))
 const CheckpointsPage = lazy(() => import('@/pages/CheckpointsPage'))
+const McpManagementPage = lazy(() => import('@/pages/McpManagementPage'))
+const SandboxTasksPage = lazy(() => import('@/pages/SandboxTasksPage'))
+const ApprovalsPage = lazy(() => import('@/pages/ApprovalsPage'))
+const AuditLogsPage = lazy(() => import('@/pages/AuditLogsPage'))
+const BackupPage = lazy(() => import('@/pages/BackupPage'))
+const TenantsBillingPage = lazy(() => import('@/pages/TenantsBillingPage'))
+const UsersAdminPage = lazy(() => import('@/pages/UsersAdminPage'))
+const SecurityAuthPage = lazy(() => import('@/pages/SecurityAuthPage'))
+const ObservabilityPage = lazy(() => import('@/pages/ObservabilityPage'))
+const ConsoleApp = lazy(() => import('@/console/ConsoleApp'))
 
 // Loading fallback component
 const PageLoader = () => (
@@ -77,6 +87,16 @@ export const App: React.FC = () => {
                         <Route path="/workflows/schedules" element={<WorkflowSchedulesPage />} />
                         <Route path="/workflows/runs" element={<WorkflowRunsPage />} />
                         <Route path="/checkpoints" element={<CheckpointsPage />} />
+                        <Route path="/mcp" element={<McpManagementPage />} />
+                        <Route path="/sandbox-tasks" element={<SandboxTasksPage />} />
+                        <Route path="/approvals" element={<ApprovalsPage />} />
+                        <Route path="/audit-logs" element={<AuditLogsPage />} />
+                        <Route path="/backup" element={<BackupPage />} />
+                        <Route path="/admin/tenants" element={<TenantsBillingPage />} />
+                        <Route path="/admin/users" element={<UsersAdminPage />} />
+                        <Route path="/security" element={<SecurityAuthPage />} />
+                        <Route path="/observability" element={<ObservabilityPage />} />
+                        <Route path="/console/*" element={<ConsoleApp />} />
                         <Route path="/agents" element={<AgentsPage />} />
                         <Route path="/settings" element={<SettingsPage />} />
                         <Route path="/goals" element={<GoalModePage />} />

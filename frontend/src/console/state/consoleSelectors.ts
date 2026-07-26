@@ -1,4 +1,4 @@
-import type { ConsoleState } from "./consoleReducer";
+import type { ConsoleState, RealtimeSnapshot } from "./consoleReducer";
 
 export function selectEnvelopePrimary(state: ConsoleState) {
   return state.envelope?.primary ?? {};
@@ -17,7 +17,7 @@ export function selectSelectedAgent(state: ConsoleState) {
 }
 
 export function selectSelectedRoleTemplate(state: ConsoleState) {
-  return state.roleCatalog.find((role) => role.role_id === state.selectedRoleTemplateId) ?? null;
+  return state.roleCatalog.templates.find((role) => role.role_id === state.selectedRoleTemplateId) ?? null;
 }
 
 export function selectSelectedWorkflow(state: ConsoleState) {
@@ -55,7 +55,7 @@ export function selectOverviewData(state: ConsoleState) {
     meetingRooms: ((primary.meeting_rooms as { rooms?: MeetingRoomSummary[] } | undefined)?.rooms) ?? state.meetingRooms,
     realtime: (primary.realtime as RealtimeSnapshot | undefined) ?? state.realtime,
     memory: (primary.memory as MemorySnapshot | undefined) ?? state.memory,
-    avatars: (primary.avatars as Record<string, string> | undefined) ?? state.avatars,
+    avatars: (primary.avatars as RoleAvatar[] | undefined) ?? state.avatars,
   };
 }
 
@@ -107,7 +107,7 @@ export function selectMeetingRoomData(state: ConsoleState) {
     rooms: ((primary.meeting_rooms as { rooms?: MeetingRoomSummary[] } | undefined)?.rooms) ?? state.meetingRooms,
     activeRoomId: state.activeRoomId,
     messages: selectActiveRoomMessages(state),
-    avatars: (primary.avatars as Record<string, string> | undefined) ?? state.avatars,
+    avatars: (primary.avatars as RoleAvatar[] | undefined) ?? state.avatars,
     currentSenderId: state.console.agent_id ?? state.console.user_id,
   };
 }
@@ -119,7 +119,7 @@ export function selectChatData(state: ConsoleState) {
     conversations: (primary.conversations as ConversationSummary[] | undefined) ?? state.conversations,
     activeConversationId: state.activeConversationId,
     messages: selectActiveConversationMessages(state),
-    avatars: (primary.avatars as Record<string, string> | undefined) ?? state.avatars,
+    avatars: (primary.avatars as RoleAvatar[] | undefined) ?? state.avatars,
     presence: (primary.realtime as RealtimeSnapshot | undefined)?.presence ?? state.realtime.presence,
     currentSenderId: state.console.agent_id ?? state.console.user_id,
   };
@@ -129,9 +129,9 @@ export function selectRoleCatalogData(state: ConsoleState) {
   const primary = selectEnvelopePrimary(state);
   return {
     envelope: state.envelope,
-    roleCatalog: (primary.role_catalog as RoleCatalogItem[] | undefined) ?? state.roleCatalog,
+    roleCatalog: (primary.role_catalog as RoleCatalog | undefined) ?? state.roleCatalog,
     selectedRoleTemplateId: state.selectedRoleTemplateId,
-    avatars: (primary.avatars as Record<string, string> | undefined) ?? state.avatars,
+    avatars: (primary.avatars as RoleAvatar[] | undefined) ?? state.avatars,
   };
 }
 
@@ -143,7 +143,7 @@ export function selectWorkflowData(state: ConsoleState) {
     envelope: state.envelope,
     selectedWorkflowId: state.selectedWorkflowId,
     selectedRoleTemplateId: state.selectedRoleTemplateId,
-    roleCatalog: (primary.role_catalog as RoleCatalogItem[] | undefined) ?? state.roleCatalog,
+    roleCatalog: (primary.role_catalog as RoleCatalog | undefined) ?? state.roleCatalog,
     workflowSummary,
     traceSummary: linked?.trace ?? null,
     activeWorkflowId: workflowSummary?.data?.workflow_id ?? workflowSummary?.summary?.workflow_id ?? state.selectedWorkflowId ?? null,

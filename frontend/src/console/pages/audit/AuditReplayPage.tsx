@@ -1,4 +1,5 @@
 import React from "react";
+import type { RealtimeSnapshot } from "../../state/consoleReducer";
 
 export type TraceSummarySection = {
   data?: {
