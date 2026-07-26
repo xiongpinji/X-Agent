@@ -7,6 +7,7 @@ import csv
 import io
 import json
 import logging
+import os
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
 from uuid import uuid4
@@ -15,6 +16,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pydantic import BaseModel, Field
 
 from backend.app.core.feedback_analyzer import feedback_analyzer
+from backend.app.core.feedback_store_file import FeedbackStoreFile
 from backend.app.core.security import Principal
 from backend.app.dependencies import enforce_scope, get_current_principal
 from backend.app.models.feedback import (
@@ -30,15 +32,71 @@ logger = logging.getLogger("xagent.feedback")
 router = APIRouter(prefix="/api/v1/feedback", tags=["feedback"])
 
 # 全局反馈存储实例
-_feedback_store: FeedbackStorePostgres | None = None
+_feedback_store: FeedbackStorePostgres | FeedbackStoreFile | None = None
+_feedback_store_backend: str | None = None
+_feedback_fallback_warned = False
+
+FEEDBACK_STORE_BACKEND_ENV = "XAGENT_FEEDBACK_STORE_BACKEND"
 
 
-def get_feedback_store() -> FeedbackStorePostgres:
-    """获取反馈存储实例"""
-    global _feedback_store
+def _postgres_available() -> bool:
+    """全局 DatabaseManager 已初始化且持有 session factory 时, Postgres 路径可用。"""
+    try:
+        from backend.app.core.database import get_db_manager
+
+        manager = get_db_manager()
+    except Exception:
+        return False
+    return getattr(manager, "_session_factory", None) is not None
+
+
+def get_feedback_store_backend() -> str | None:
+    """当前反馈存储后端(postgres/file), 未初始化时为 None。状态可查。"""
     if _feedback_store is None:
-        _feedback_store = FeedbackStorePostgres()
-    return _feedback_store
+        get_feedback_store()
+    return _feedback_store_backend
+
+
+def get_feedback_store() -> FeedbackStorePostgres | FeedbackStoreFile:
+    """反馈存储工厂。
+
+    后端选择(与 workflow_store 的 auto 模式同哲学):
+        XAGENT_FEEDBACK_STORE_BACKEND = postgres | file | auto   (默认 auto)
+    - postgres: 强制 Postgres 存储(生产; 数据库不可用时在调用处显式报错, 不静默降级)。
+    - file    : JSON 文件存储(dev)。
+    - auto    : SessionManager 可用时走 Postgres; 不可用时 WARNING 一次并显式
+                降级到文件存储(不静默、不报错), 状态可经 get_feedback_store_backend() 查询。
+    """
+    global _feedback_store, _feedback_store_backend, _feedback_fallback_warned
+    if _feedback_store is not None:
+        return _feedback_store
+
+    backend = (os.getenv(FEEDBACK_STORE_BACKEND_ENV) or "auto").strip().lower()
+    if backend not in {"postgres", "file", "auto"}:
+        raise ValueError(
+            f"Unknown feedback store backend {backend!r}; expected one of: postgres, file, auto."
+        )
+
+    if backend == "file":
+        store: FeedbackStorePostgres | FeedbackStoreFile = FeedbackStoreFile()
+        name = "file"
+    elif backend == "postgres" or _postgres_available():
+        store = FeedbackStorePostgres()
+        name = "postgres"
+    else:  # auto + Postgres 不可用 -> 显式降级
+        if not _feedback_fallback_warned:
+            logger.warning(
+                "反馈存储: 数据库管理器未初始化, 显式降级为 JSON 文件存储(dev)。"
+                "生产环境请设置 %s=postgres 并确保 init_db_manager 已调用。",
+                FEEDBACK_STORE_BACKEND_ENV,
+            )
+            _feedback_fallback_warned = True
+        store = FeedbackStoreFile()
+        name = "file"
+
+    _feedback_store = store
+    _feedback_store_backend = name
+    return store
 
 
 # Pydantic模型
