@@ -3,11 +3,17 @@ from __future__ import annotations
 import json
 import logging
 import os
+from bisect import insort
 from datetime import UTC, datetime
 from inspect import isawaitable
 from pathlib import Path
 from threading import RLock
 from uuid import uuid4
+
+try:  # numpy ships transitively with scikit-learn; degrade gracefully if absent.
+    import numpy as np
+except ImportError:  # pragma: no cover - exercised only on minimal installs
+    np = None
 
 from pydantic import BaseModel, Field
 
@@ -115,6 +121,29 @@ class MemoryExportBundle(BaseModel):
     sessions: list[SessionRecord] = Field(default_factory=list)
 
 
+class _TenantDedupIndex:
+    """Per-tenant incremental index for write-path dedup (P1-13 perf).
+
+    Mirrors the legacy candidate semantics exactly: insertion-ordered ids,
+    exact normalized-content hash buckets (hash -> ascending positions), and
+    per-embedding-dimension vector matrices (rows L2-normalized, capacity
+    doubled amortized append). Candidates missing embeddings are tracked in
+    ``pending`` and embedded lazily once, like the legacy path did per write.
+    """
+
+    __slots__ = ("order", "items", "item_hash", "hashes", "pos_of", "vecs", "pending")
+
+    def __init__(self) -> None:
+        self.order: list[str] = []  # memory ids in insertion order
+        self.items: dict[str, MemoryItem] = {}
+        self.item_hash: list[str] = []  # parallel to order
+        self.hashes: dict[str, list[int]] = {}  # content hash -> ascending positions
+        self.pos_of: dict[str, int] = {}
+        # dim -> {"ids": [...], "pos": [...], "matrix": np.ndarray (cap, dim), "n": int}
+        self.vecs: dict[int, dict] = {}
+        self.pending: list[int] = []  # positions whose item has no embedding yet
+
+
 class MemorySystem:
     """L1-L10 memory implementation for desktop-first X-Agent.
 
@@ -162,6 +191,7 @@ class MemorySystem:
                 embedding=[],
             )
             self._items.append(item)
+            self._dedup_index_add(item)
             self._graph.add_text(content)
             self._append_to_disk(item)
             return item.id
@@ -200,6 +230,10 @@ class MemorySystem:
             WritePathDeduper(vector_threshold=dedup_vector_threshold) if enable_dedup else None
         )
         self._dedup_candidate_limit = max(int(dedup_candidate_limit), 1)
+        # Incremental per-tenant dedup index (numpy path); populated by writes,
+        # loads, imports, and rebuilt after batch removals. Legacy O(n)-per-write
+        # scan remains as fallback when numpy is unavailable.
+        self._dedup_index: dict[str, _TenantDedupIndex] = {}
         if self._storage_path:
             self._load_from_disk()
 
@@ -282,6 +316,7 @@ class MemorySystem:
                     self._append_to_disk(existing)
                     return existing.id
             self._items.append(item)
+            self._dedup_index_add(item)
             self._graph.add_text(item.content)
             if session_id:
                 self._attach_to_session(context, session_id, item)
@@ -364,6 +399,7 @@ class MemorySystem:
         item.revisions.append(revision)
         if summary:
             item.content = self._merge_session_summary(item.content, summary)
+            self._dedup_index_refresh(item)
         item.metadata["revision_count"] = len(item.revisions)
         item.metadata["last_revision_id"] = revision.revision_id
         self._append_to_disk(item)
@@ -398,6 +434,7 @@ class MemorySystem:
         if target_revision is None:
             return None
         item.content = self._merge_session_summary(item.content, target_revision.summary)
+        self._dedup_index_refresh(item)
         item.metadata["rolled_back_to"] = target_revision.revision_id
         item.metadata["rollback_at"] = datetime.now(UTC).isoformat()
         self._append_to_disk(item)
@@ -586,6 +623,7 @@ class MemorySystem:
                     existing.embedding = item.embedding
                     existing.revisions = item.revisions
                 imported_memories += 1
+        self._dedup_index_rebuild_all()
         return {"memories": imported_memories, "sessions": imported_sessions}
 
     def session_count(self) -> int:
@@ -903,6 +941,7 @@ class MemorySystem:
                     index_by_id[item.id] = len(self._items)
                     self._items.append(item)
                 self._graph.add_text(item.content)
+        self._dedup_index_rebuild_all()
 
     def _append_to_disk(self, record: MemoryItem | SessionRecord) -> None:
         if self._storage_path is None:
@@ -925,6 +964,155 @@ class MemorySystem:
         """Return the id of an existing tenant-scoped duplicate, or None."""
         if self._dedup is None:
             return None
+        if np is not None:
+            return await self._find_write_duplicate_indexed(item)
+        return await self._find_write_duplicate_legacy(item)
+
+    # ------------------------------------------------------------------
+    # Dedup index maintenance (numpy path)
+    # ------------------------------------------------------------------
+
+    def _dedup_index_add(self, item: MemoryItem) -> None:
+        """Incrementally index one stored item (hash bucket + vector row)."""
+        if self._dedup is None or np is None:
+            return
+        idx = self._dedup_index.get(item.tenant_id)
+        if idx is None:
+            idx = _TenantDedupIndex()
+            self._dedup_index[item.tenant_id] = idx
+        pos = len(idx.order)
+        idx.order.append(item.id)
+        idx.items[item.id] = item
+        idx.pos_of[item.id] = pos
+        content_hash = self._dedup.content_hash(item.content)
+        idx.item_hash.append(content_hash)
+        insort(idx.hashes.setdefault(content_hash, []), pos)
+        if item.embedding:
+            self._dedup_index_append_vector(idx, pos, item)
+        else:
+            idx.pending.append(pos)
+
+    def _dedup_index_append_vector(self, idx: _TenantDedupIndex, pos: int, item: MemoryItem) -> None:
+        """Append the item's L2-normalized embedding to its dimension's matrix."""
+        dim = len(item.embedding)
+        vec = idx.vecs.get(dim)
+        if vec is None:
+            vec = {"ids": [], "pos": [], "matrix": np.zeros((16, dim), dtype=float), "n": 0}
+            idx.vecs[dim] = vec
+        if vec["n"] == vec["matrix"].shape[0]:
+            grown = np.zeros((vec["n"] * 2, dim), dtype=float)
+            grown[: vec["n"]] = vec["matrix"]
+            vec["matrix"] = grown
+        row = np.asarray(item.embedding, dtype=float)
+        norm = float(np.linalg.norm(row))
+        # sklearn cosine_similarity maps zero vectors to similarity 0; keep zero rows zero.
+        vec["matrix"][vec["n"]] = row / norm if norm > 0 else np.zeros(dim, dtype=float)
+        vec["n"] += 1
+        vec["ids"].append(item.id)
+        vec["pos"].append(pos)
+
+    def _dedup_index_refresh(self, item: MemoryItem) -> None:
+        """Re-key an item's hash bucket after in-place content mutation."""
+        if self._dedup is None or np is None:
+            return
+        idx = self._dedup_index.get(item.tenant_id)
+        if idx is None:
+            return
+        pos = idx.pos_of.get(item.id)
+        if pos is None:
+            return
+        new_hash = self._dedup.content_hash(item.content)
+        old_hash = idx.item_hash[pos]
+        if new_hash == old_hash:
+            return
+        bucket = idx.hashes.get(old_hash)
+        if bucket and pos in bucket:
+            bucket.remove(pos)
+            if not bucket:
+                idx.hashes.pop(old_hash, None)
+        insort(idx.hashes.setdefault(new_hash, []), pos)
+        idx.item_hash[pos] = new_hash
+
+    def _dedup_index_rebuild(self, tenant_id: str) -> None:
+        """Rebuild one tenant's index from _items (after removals)."""
+        if self._dedup is None or np is None:
+            return
+        self._dedup_index.pop(tenant_id, None)
+        with self._lock:
+            items = [c for c in self._items if c.tenant_id == tenant_id]
+        for item in items:
+            self._dedup_index_add(item)
+
+    def _dedup_index_rebuild_all(self) -> None:
+        """Rebuild every tenant index in a single pass (load/import)."""
+        if self._dedup is None or np is None:
+            return
+        self._dedup_index = {}
+        with self._lock:
+            items = list(self._items)
+        for item in items:
+            self._dedup_index_add(item)
+
+    async def _dedup_flush_pending(self, idx: _TenantDedupIndex) -> None:
+        """Embed index entries that still lack vectors (once, then cached)."""
+        pending, idx.pending = idx.pending, []
+        for pos in pending:
+            if pos >= len(idx.order):
+                continue
+            item = idx.items.get(idx.order[pos])
+            if item is None:
+                continue
+            if not item.embedding:
+                item.embedding = await self._embed(item.content)
+            self._dedup_index_append_vector(idx, pos, item)
+
+    async def _find_write_duplicate_indexed(self, item: MemoryItem) -> str | None:
+        """Indexed duplicate check; semantics identical to the legacy path.
+
+        Legacy order: (1) first candidate in insertion order whose normalized
+        content hash matches wins; (2) otherwise the same-dimension candidate
+        with cosine >= threshold wins, ties resolved toward the later write.
+        """
+        idx = self._dedup_index.get(item.tenant_id)
+        if idx is None or not idx.order:
+            return None
+        cutoff = max(0, len(idx.order) - self._dedup_candidate_limit)
+        new_hash = self._dedup.content_hash(item.content)
+        for pos in idx.hashes.get(new_hash, []):
+            if pos < cutoff:
+                continue
+            candidate = idx.items.get(idx.order[pos])
+            if candidate is None:
+                continue
+            if self._dedup.content_hash(candidate.content) == new_hash:
+                return candidate.id
+            self._dedup_index_refresh(candidate)  # stale bucket entry; repair
+        if not item.embedding:
+            return None
+        await self._dedup_flush_pending(idx)
+        dim = len(item.embedding)
+        vec = idx.vecs.get(dim)
+        if vec is None or vec["n"] == 0:
+            return None
+        query = np.asarray(item.embedding, dtype=float)
+        norm = float(np.linalg.norm(query))
+        if norm == 0:
+            return None
+        query = query / norm
+        positions = np.asarray(vec["pos"], dtype=int)
+        eligible = positions >= cutoff
+        if not bool(eligible.any()):
+            return None
+        sims = vec["matrix"][: vec["n"]] @ query
+        sims = np.where(eligible, sims, -np.inf)
+        # Engine semantics: similarity >= running best keeps the LATER candidate.
+        best_row = int(np.flatnonzero(sims >= sims.max())[-1])
+        if not float(sims[best_row]) >= self._dedup.vector_threshold:  # NaN-safe
+            return None
+        return vec["ids"][best_row]
+
+    async def _find_write_duplicate_legacy(self, item: MemoryItem) -> str | None:
+        """Original O(n)-per-write scan; fallback when numpy is unavailable."""
         with self._lock:
             candidates = [c for c in self._items if c.tenant_id == item.tenant_id]
         if not candidates:
@@ -983,6 +1171,7 @@ class MemorySystem:
             "vector_threshold": self._dedup.vector_threshold if self._dedup else None,
             "merged_writes": self._dedup.merged_writes if self._dedup else 0,
             "candidate_limit": self._dedup_candidate_limit,
+            "indexed": self._dedup is not None and np is not None,
         }
 
     async def deduplicate(self, context: RunContext, strategy: str = "combined") -> dict[str, object]:
@@ -1041,6 +1230,7 @@ class MemorySystem:
                     kept = self.get_item(kept_id)
                     if kept is not None:
                         kept.metadata["dedup_merged_ids"] = list(info.get("merged_ids", []))
+                self._dedup_index_rebuild(context.tenant_id)
                 self._rewrite_disk()
         logger.info(
             "batch dedup tenant=%s: %d -> %d (removed %d, groups %d)",
