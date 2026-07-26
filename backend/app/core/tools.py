@@ -1057,7 +1057,7 @@ async def list_files(root: str = ".", pattern: str = "**/*", limit: int = 200) -
     if not base.exists():
         return []
     items: list[str] = []
-    for path in sorted(base.glob(pattern)):
+    for path in _glob_pruned(base, pattern):
         if len(items) >= max(1, limit):
             break
         if path.is_file():
@@ -1088,6 +1088,30 @@ def _walk_pruned(base: Path) -> Iterator[Path]:
             yield current / dirname
         for filename in filenames:
             yield current / filename
+
+
+def _glob_pruned(base: Path, pattern: str) -> list[Path]:
+    """Sorted glob over the pruned walk (list_files/search_text).
+
+    ``Path.glob('**/*')`` descends into venv/ and node_modules/ and the
+    ``sorted()`` materialises every stat up front — the F1 agent-run hang
+    (mock LLM calls search_text, which then stated the whole dependency
+    tree). Matching here honours ``**/``-prefixed patterns against both the
+    relative path and the bare name.
+    """
+    import fnmatch
+
+    stripped = pattern[3:] if pattern.startswith("**/") else pattern
+    matched: list[Path] = []
+    for path in _walk_pruned(base):
+        rel = str(path.relative_to(base)).replace(os.sep, "/")
+        if (
+            fnmatch.fnmatch(rel, pattern)
+            or fnmatch.fnmatch(rel, stripped)
+            or fnmatch.fnmatch(path.name, stripped)
+        ):
+            matched.append(path)
+    return sorted(matched)
 
 
 async def inspect_tree(root: str = ".", limit: int = 200) -> dict[str, Any]:
@@ -1297,7 +1321,7 @@ async def search_text(root: str, query: str, pattern: str = "**/*", limit: int =
         return []
     results: list[dict[str, str]] = []
     lowered = query.lower()
-    for path in sorted(base.glob(pattern)):
+    for path in _glob_pruned(base, pattern):
         if len(results) >= max(1, limit):
             break
         if not path.is_file():
