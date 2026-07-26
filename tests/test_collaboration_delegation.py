@@ -90,6 +90,35 @@ class _PrincipalBoundClient:
         return self._client.delete(*args, **kwargs)
 
 
+@pytest.fixture(autouse=True)
+def _mock_llm_backend(monkeypatch):
+    """委派链路（spawner -> get_agent()）离线化注入。
+
+    spawner 执行时通过 ``backend.app.dependencies.get_agent()``（lru_cache）
+    现建 AgentLoop；测试环境无 ollama/真实 API key，委派子代理会真实调用
+    LLM 失败。此处通过环境变量选择 mock LLM 后端，并用进程内存 memory
+    后端替代默认 postgres（默认 DSN 为 postgresql+asyncpg，本机无
+    Postgres 时首次访问即抛 ClientConfigurationError）。进程隔离用例的
+    spawn 子进程重新从环境构建设置，环境变量可跨进程边界继承——monkeypatch
+    不能跨进程，环境变量可以，这正是该用例依赖的机制。生产行为不变：
+    仅测试进程环境变量 + 清缓存，backend 代码零改动。
+    """
+    monkeypatch.setenv("XAGENT_LLM_BACKEND", "mock")
+    monkeypatch.setenv("XAGENT_MEMORY_BACKEND", "memory")
+
+    from backend.app import dependencies
+    from backend.app.settings import get_settings
+
+    get_settings.cache_clear()
+    dependencies.get_agent.cache_clear()
+    dependencies.get_memory.cache_clear()
+    yield
+    # 清理，避免本文件的 mock 配置泄漏给同 worker 的后续测试。
+    get_settings.cache_clear()
+    dependencies.get_agent.cache_clear()
+    dependencies.get_memory.cache_clear()
+
+
 @pytest.fixture
 def client_factory():
     holder: dict = {}

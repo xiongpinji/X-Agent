@@ -383,8 +383,54 @@ class TestBillingEngine:
 class TestPaymentProviders:
     """支付提供商测试"""
 
+    @pytest.fixture
+    def fake_stripe_sdk(self, monkeypatch):
+        """注入最小 stripe SDK 桩模块（测试环境未安装 stripe 包）。
+
+        ``StripePaymentProvider.__init__`` 做 ``import stripe``，环境缺包时
+        ``_stripe=None``，charge/refund 直接失败。本 fixture 向 sys.modules
+        预置一个满足 provider 调用契约的桩模块（PaymentIntent.create /
+        Refund.create 返回带 id/status/amount 的对象），让 legacy
+        ``StripeProvider`` 的 charge/refund 包装路径可被确定性验证，
+        无需联网或安装真实 SDK。
+        """
+        import sys
+        import types
+        from types import SimpleNamespace
+
+        fake = types.ModuleType("stripe")
+        fake.api_key = None
+
+        class _PaymentIntent:
+            @staticmethod
+            def create(**kwargs):
+                return SimpleNamespace(
+                    id="pi_test_fake",
+                    status="succeeded",
+                    amount=kwargs.get("amount", 0),
+                    currency=kwargs.get("currency", "usd"),
+                )
+
+            @staticmethod
+            def retrieve(payment_id):
+                return SimpleNamespace(
+                    id=payment_id, status="succeeded", amount=0, currency="usd"
+                )
+
+        class _Refund:
+            @staticmethod
+            def create(**kwargs):
+                return SimpleNamespace(
+                    id="re_test_fake", amount=kwargs.get("amount", 0)
+                )
+
+        fake.PaymentIntent = _PaymentIntent
+        fake.Refund = _Refund
+        monkeypatch.setitem(sys.modules, "stripe", fake)
+        return fake
+
     @pytest.mark.asyncio
-    async def test_stripe_provider_charge(self):
+    async def test_stripe_provider_charge(self, fake_stripe_sdk):
         """测试Stripe扣款"""
         provider = StripeProvider("sk_test_123")
         result = await provider.charge(
@@ -400,7 +446,7 @@ class TestPaymentProviders:
         assert result["currency"] == "USD"
 
     @pytest.mark.asyncio
-    async def test_stripe_provider_refund(self):
+    async def test_stripe_provider_refund(self, fake_stripe_sdk):
         """测试Stripe退款"""
         provider = StripeProvider("sk_test_123")
         result = await provider.refund("ch_test_123", Decimal("99.99"))
