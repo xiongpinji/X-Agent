@@ -3,8 +3,9 @@ from __future__ import annotations
 import inspect
 import json
 import logging
+import os
 import time
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
 from threading import RLock
@@ -1064,13 +1065,38 @@ async def list_files(root: str = ".", pattern: str = "**/*", limit: int = 200) -
     return items
 
 
+_PRUNE_DIRS = {
+    ".git", ".hg", ".svn", "venv", ".venv", "env", "node_modules", "__pycache__",
+    "dist", "build", ".pytest_cache", ".mypy_cache", ".ruff_cache", "archive",
+    "data", "logs", ".xagent_runtime", "htmlcov", "site-packages",
+}
+
+
+def _walk_pruned(base: Path) -> Iterator[Path]:
+    """Yield files/dirs under ``base`` with dependency/build/runtime dirs pruned.
+
+    The repo-analysis tools (inspect_tree / find_entrypoints /
+    analyze_dependencies) previously walked with ``rglob('*')``, descending
+    into venv/, node_modules/ and archive/ — hundreds of thousands of files
+    that made a single call take minutes on Windows and crash pytest-xdist
+    workers. Pruning keeps results relevant and bounded.
+    """
+    for dirpath, dirnames, filenames in os.walk(base):
+        dirnames[:] = [d for d in dirnames if d not in _PRUNE_DIRS and not d.startswith(".")]
+        current = Path(dirpath)
+        for dirname in dirnames:
+            yield current / dirname
+        for filename in filenames:
+            yield current / filename
+
+
 async def inspect_tree(root: str = ".", limit: int = 200) -> dict[str, Any]:
     base = _resolve_tool_root(root)
     if not base.exists():
         return {"root": str(base), "files": [], "directories": []}
     files: list[str] = []
     directories: list[str] = []
-    for path in sorted(base.rglob("*")):
+    for path in sorted(_walk_pruned(base)):
         if path.is_dir():
             directories.append(str(path.relative_to(base)))
         elif path.is_file():
@@ -1095,7 +1121,7 @@ async def analyze_entrypoints(root: str = ".", limit: int = 50) -> dict[str, Any
     if not base.exists():
         return {"root": str(base), "entrypoints": []}
     candidates = []
-    for path in sorted(base.rglob("*")):
+    for path in sorted(_walk_pruned(base)):
         if not path.is_file():
             continue
         if path.suffix.lower() not in {".py", ".ts", ".tsx", ".js", ".jsx", ".html"}:
@@ -1119,7 +1145,7 @@ async def analyze_dependencies(root: str = ".", limit: int = 100) -> dict[str, A
     base = _resolve_tool_root(root)
     if not base.exists():
         return {"root": str(base), "dependencies": []}
-    files = [path for path in base.rglob("*") if path.is_file() and path.suffix.lower() in {".py", ".ts", ".tsx", ".js", ".jsx"}]
+    files = [path for path in _walk_pruned(base) if path.is_file() and path.suffix.lower() in {".py", ".ts", ".tsx", ".js", ".jsx"}]
     index: dict[str, list[str]] = {}
     for path in files:
         text = path.read_text(encoding="utf-8", errors="ignore")
