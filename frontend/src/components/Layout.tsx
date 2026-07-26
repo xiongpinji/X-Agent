@@ -46,6 +46,9 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             <NavLink href="/chat" icon="💬" label={t('navigation.chat', 'Chat')} />
             <NavLink href="/tasks" icon="✓" label={t('navigation.tasks', 'Tasks')} />
             <NavLink href="/workflows" icon="🔀" label={t('navigation.workflows', 'Workflows')} />
+            <NavLink href="/workflows/schedules" icon="⏰" label={t('navigation.workflowSchedules', 'Schedules')} />
+            <NavLink href="/workflows/runs" icon="▶️" label={t('navigation.workflowRuns', 'Runs')} />
+            <NavLink href="/checkpoints" icon="🧷" label={t('navigation.checkpoints', 'Checkpoints')} />
             <NavLink href="/tools" icon="🔧" label={t('navigation.tools', 'Tools')} />
             <NavLink href="/memory" icon="🧠" label={t('navigation.memory', 'Memory')} />
             <NavLink href="/agents" icon="🤖" label={t('navigation.agents', 'Agents')} />

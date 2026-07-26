@@ -10,6 +10,7 @@ export const MemoryPage: React.FC = () => {
   const { t } = useI18n()
   const [searchQuery, setSearchQuery] = useState('')
   const [showModal, setShowModal] = useState(false)
+  const [editingMemory, setEditingMemory] = useState<Memory | null>(null)
   const [filteredMemories, setFilteredMemories] = useState<Memory[]>([])
 
   useEffect(() => {
@@ -45,6 +46,31 @@ export const MemoryPage: React.FC = () => {
       console.error('Search failed:', error)
       setFilteredMemories(memories)
     }
+  }
+
+  // PUT /api/v1/memory/{id} and DELETE /api/v1/memory/{id} exist in the
+  // backend — edit and delete are fully wired.
+  const handleEdit = (memory: Memory) => {
+    setEditingMemory(memory)
+    setShowModal(true)
+  }
+
+  const handleDelete = async (memory: Memory) => {
+    if (!window.confirm(t('memory.confirmDelete', 'Delete this memory?'))) return
+    try {
+      setLoading(true)
+      await apiClient.deleteMemory(memory.id)
+      await loadMemories()
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Failed to delete memory')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const closeModal = () => {
+    setShowModal(false)
+    setEditingMemory(null)
   }
 
   return (
@@ -123,19 +149,20 @@ export const MemoryPage: React.FC = () => {
             </div>
           ) : (
             filteredMemories.map((memory) => (
-              <MemoryCard key={memory.id} memory={memory} />
+              <MemoryCard key={memory.id} memory={memory} onEdit={handleEdit} onDelete={handleDelete} />
             ))
           )}
         </div>
       </div>
 
-      {/* Memory Modal (create only — the backend has no update endpoint) */}
+      {/* Memory Modal (create / edit) */}
       {showModal && (
         <MemoryModal
-          onClose={() => setShowModal(false)}
+          memory={editingMemory ?? undefined}
+          onClose={closeModal}
           onSave={() => {
             loadMemories()
-            setShowModal(false)
+            closeModal()
           }}
         />
       )}
@@ -145,15 +172,13 @@ export const MemoryPage: React.FC = () => {
 
 interface MemoryCardProps {
   memory: Memory
+  onEdit: (memory: Memory) => void
+  onDelete: (memory: Memory) => void
 }
 
-const MemoryCard: React.FC<MemoryCardProps> = ({ memory }) => {
+const MemoryCard: React.FC<MemoryCardProps> = ({ memory, onEdit, onDelete }) => {
   const { theme } = useAppStore()
   const { t } = useI18n()
-
-  // The backend exposes no PUT/DELETE /memory/{id} endpoints, so edit and
-  // delete are disabled and explicitly marked "coming soon".
-  const comingSoon = t('common.comingSoon', 'Coming soon')
 
   return (
     <div className={clsx(
@@ -179,28 +204,28 @@ const MemoryCard: React.FC<MemoryCardProps> = ({ memory }) => {
         </div>
         <div className="flex items-center gap-2 ml-4">
           <button
-            disabled
+            onClick={() => onEdit(memory)}
             className={clsx(
-              'p-2 rounded-lg transition-colors opacity-50 cursor-not-allowed',
+              'p-2 rounded-lg transition-colors',
               theme === 'dark'
-                ? 'text-slate-400'
-                : 'text-slate-600'
+                ? 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+                : 'text-slate-600 hover:bg-slate-100'
             )}
-            title={`${t('memory.editMemory', 'Edit')} (${comingSoon})`}
-            aria-label={`${t('memory.editMemory', 'Edit')} (${comingSoon})`}
+            title={t('memory.editMemory', 'Edit')}
+            aria-label={t('memory.editMemory', 'Edit')}
           >
             <Edit2 size={16} />
           </button>
           <button
-            disabled
+            onClick={() => onDelete(memory)}
             className={clsx(
-              'p-2 rounded-lg transition-colors opacity-50 cursor-not-allowed',
+              'p-2 rounded-lg transition-colors',
               theme === 'dark'
-                ? 'text-red-400'
-                : 'text-red-600'
+                ? 'text-red-400 hover:bg-slate-800'
+                : 'text-red-600 hover:bg-red-50'
             )}
-            title={`${t('memory.deleteMemory', 'Delete')} (${comingSoon})`}
-            aria-label={`${t('memory.deleteMemory', 'Delete')} (${comingSoon})`}
+            title={t('memory.deleteMemory', 'Delete')}
+            aria-label={t('memory.deleteMemory', 'Delete')}
           >
             <Trash2 size={16} />
           </button>
@@ -242,25 +267,32 @@ const MemoryCard: React.FC<MemoryCardProps> = ({ memory }) => {
 }
 
 interface MemoryModalProps {
+  memory?: Memory
   onClose: () => void
   onSave: () => void
 }
 
-const MemoryModal: React.FC<MemoryModalProps> = ({ onClose, onSave }) => {
+const MemoryModal: React.FC<MemoryModalProps> = ({ memory, onClose, onSave }) => {
   const { theme, isLoading, setLoading, setError } = useAppStore()
   const { t } = useI18n()
-  const [content, setContent] = useState('')
-  const [importance, setImportance] = useState(0.5)
-  const [tags, setTags] = useState('')
+  const isEdit = !!memory
+  const [content, setContent] = useState(memory?.content ?? '')
+  const [importance, setImportance] = useState(memory?.importance ?? 0.5)
+  const [tags, setTags] = useState(memory?.tags?.join(', ') ?? '')
 
   const handleSave = async () => {
     try {
       setLoading(true)
-      await apiClient.createMemory({
+      const payload = {
         content,
         importance,
         tags: tags.split(',').map((tag) => tag.trim()).filter(Boolean),
-      })
+      }
+      if (isEdit && memory) {
+        await apiClient.updateMemory(memory.id, payload)
+      } else {
+        await apiClient.createMemory(payload)
+      }
 
       onSave()
     } catch (error) {
@@ -285,7 +317,7 @@ const MemoryModal: React.FC<MemoryModalProps> = ({ onClose, onSave }) => {
           'text-2xl font-bold mb-4',
           theme === 'dark' ? 'text-white' : 'text-slate-900'
         )}>
-          {t('memory.newMemory', 'New Memory')}
+          {isEdit ? t('memory.editMemory', 'Edit Memory') : t('memory.newMemory', 'New Memory')}
         </h2>
 
         <div className="space-y-4 mb-6">

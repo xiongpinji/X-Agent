@@ -1,0 +1,35 @@
+# X-Agent sandbox backend configuration (serverless adapters + container cache)
+# Copy the variables you need into your environment / .env — all are optional.
+# Code: backend/app/core/sandbox/serverless.py + container_cache.py
+
+sandbox:
+  # Backend selection: auto | daytona | modal | docker | subprocess
+  # auto = daytona (if creds) -> modal (if creds) -> docker -> subprocess.
+  # Any serverless API failure logs a WARNING and degrades to docker/subprocess.
+  backend: ${XAGENT_SANDBOX_BACKEND:-auto}
+
+  # --- Daytona (https://daytona.io) -------------------------------------
+  # Lifecycle: POST {api_url}/workspace -> POST /workspace/{id}/execute
+  #            -> DELETE /workspace/{id}. Auth: Bearer token.
+  daytona:
+    api_key: ${XAGENT_DAYTONA_API_KEY:-}          # required; missing = backend unavailable
+    api_url: ${XAGENT_DAYTONA_API_URL:-https://app.daytona.io/api}
+    # NOT covered: host workspace_path file sync into the remote workspace.
+
+  # --- Modal -------------------------------------------------------------
+  # Targets a REST gateway (api_url) exposing POST /sandbox,
+  # POST /sandbox/{id}/exec, DELETE /sandbox/{id}; auth via Modal-Key /
+  # Modal-Secret headers. Modal's official control plane is SDK-driven —
+  # NOT covered: token refresh, image builds, volume mounts.
+  modal:
+    token_id: ${XAGENT_MODAL_TOKEN_ID:-}          # required pair
+    token_secret: ${XAGENT_MODAL_TOKEN_SECRET:-}  # required pair
+    api_url: ${XAGENT_MODAL_API_URL:-https://api.modal.com}
+
+  # --- Docker container cache / reuse pool -------------------------------
+  # Codex-style container caching for the local Docker backend:
+  # pre-pull images once, reuse warm `sleep infinity` containers per image.
+  docker_pool:
+    pool_size: ${XAGENT_SANDBOX_POOL_SIZE:-0}     # 0 = pooling off (default)
+    pool_max: ${XAGENT_SANDBOX_POOL_MAX:-}        # default = 2 x pool_size
+    pre_pull: ${XAGENT_SANDBOX_PRE_PULL:-1}       # 1 = pull image before first use

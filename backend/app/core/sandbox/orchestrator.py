@@ -21,10 +21,10 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from backend.app.core.sandbox.docker_sandbox import (
-    DockerSandbox,
     SandboxResult,
     SandboxSpec,
 )
+from backend.app.core.sandbox.serverless import UnifiedSandbox, create_sandbox
 from backend.app.core.task_queue import QueuedTask, TaskPriority, TaskQueue
 
 logger = logging.getLogger(__name__)
@@ -55,7 +55,7 @@ class SandboxRunResult:
 
 # A task handler receives the live sandbox + the queued task and drives the work.
 # Returning falsy / raising marks the task failed.
-TaskHandler = Callable[[DockerSandbox, QueuedTask, "SandboxRunResult"], Any]
+TaskHandler = Callable[[UnifiedSandbox, QueuedTask, "SandboxRunResult"], Any]
 
 
 class SandboxWorker:
@@ -72,7 +72,9 @@ class SandboxWorker:
     async def process(self, task: QueuedTask) -> SandboxRunResult:
         result = SandboxRunResult(task_id=(getattr(task, "task_id", None) or task.id), success=False)
         spec = self._spec_factory(task)
-        sandbox = DockerSandbox(spec)
+        # create_sandbox selects the backend (daytona/modal/docker/subprocess)
+        # via XAGENT_SANDBOX_BACKEND and degrades gracefully on failure.
+        sandbox = create_sandbox(spec)
         result.backend = sandbox.backend
         try:
             await sandbox.start()

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { useAppStore } from '@/store/appStore'
 import { apiClient, Tool } from '@/services/api'
 import { useI18n } from '@/i18n/context'
-import { Settings, Play, ToggleLeft } from 'lucide-react'
+import { Settings, Play, ToggleLeft, ToggleRight } from 'lucide-react'
 import clsx from 'clsx'
 
 export const ToolsPage: React.FC = () => {
@@ -94,10 +94,44 @@ const ToolCard: React.FC<ToolCardProps> = ({ tool }) => {
   const { theme } = useAppStore()
   const { t } = useI18n()
 
-  // The backend exposes only GET /api/v1/tools (read-only manifest); there is
-  // no toggle, test, or configure endpoint, so those actions are disabled and
-  // explicitly marked "coming soon".
+  // PUT /api/v1/tools/{name} and POST /api/v1/tools/{name}/test exist in the
+  // backend — toggle and test are wired. Free-form config editing stays
+  // disabled because the manifest exposes no config schema.
+  const [enabled, setEnabled] = useState(true)
+  const [busy, setBusy] = useState(false)
+  const [testResult, setTestResult] = useState<{ status: string; detail: string } | null>(null)
   const comingSoon = t('common.comingSoon', 'Coming soon')
+
+  const handleToggle = async () => {
+    const next = !enabled
+    setBusy(true)
+    try {
+      const resp = await apiClient.updateTool(tool.name, { enabled: next })
+      setEnabled(typeof resp?.enabled === 'boolean' ? resp.enabled : next)
+    } catch (error) {
+      console.error('Failed to toggle tool:', error)
+      setTestResult({ status: 'error', detail: error instanceof Error ? error.message : 'Toggle failed' })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const handleTest = async () => {
+    setBusy(true)
+    setTestResult(null)
+    try {
+      const resp = await apiClient.testTool(tool.name, {})
+      if (resp?.status === 'success') {
+        setTestResult({ status: 'success', detail: JSON.stringify(resp?.result ?? {}).slice(0, 300) })
+      } else {
+        setTestResult({ status: 'error', detail: String(resp?.error ?? 'Unknown error') })
+      }
+    } catch (error) {
+      setTestResult({ status: 'error', detail: error instanceof Error ? error.message : 'Test failed' })
+    } finally {
+      setBusy(false)
+    }
+  }
 
   return (
     <div className={clsx(
@@ -123,12 +157,19 @@ const ToolCard: React.FC<ToolCardProps> = ({ tool }) => {
           </p>
         </div>
         <button
-          disabled
-          className="p-2 rounded-lg transition-colors opacity-50 cursor-not-allowed bg-slate-500/10 text-slate-600"
-          title={`${t('tools.configure', 'Configure')} (${comingSoon})`}
-          aria-label={`${t('tools.configure', 'Configure')} (${comingSoon})`}
+          onClick={handleToggle}
+          disabled={busy}
+          className={clsx(
+            'p-2 rounded-lg transition-colors disabled:opacity-50',
+            enabled
+              ? 'bg-green-500/10 text-green-600 hover:bg-green-500/20'
+              : 'bg-slate-500/10 text-slate-600 hover:bg-slate-500/20'
+          )}
+          title={enabled ? t('tools.disable', 'Disable') : t('tools.enable', 'Enable')}
+          aria-label={enabled ? t('tools.disable', 'Disable') : t('tools.enable', 'Enable')}
+          aria-pressed={enabled}
         >
-          <ToggleLeft size={20} />
+          {enabled ? <ToggleRight size={20} /> : <ToggleLeft size={20} />}
         </button>
       </div>
 
@@ -140,21 +181,34 @@ const ToolCard: React.FC<ToolCardProps> = ({ tool }) => {
         {tool.description}
       </p>
 
+      {/* Test result */}
+      {testResult && (
+        <div className={clsx(
+          'mb-4 rounded-md border px-3 py-2 text-xs break-words',
+          testResult.status === 'success'
+            ? theme === 'dark' ? 'border-green-900 bg-green-950/40 text-green-300' : 'border-green-200 bg-green-50 text-green-700'
+            : theme === 'dark' ? 'border-red-900 bg-red-950/40 text-red-300' : 'border-red-200 bg-red-50 text-red-700'
+        )} role="status">
+          {testResult.detail || testResult.status}
+        </div>
+      )}
+
       {/* Actions */}
       <div className="flex gap-2">
         <button
-          disabled
+          onClick={handleTest}
+          disabled={busy}
           className={clsx(
-            'flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors opacity-50 cursor-not-allowed',
+            'flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50',
             theme === 'dark'
-              ? 'bg-blue-600/20 text-blue-400'
-              : 'bg-blue-100 text-blue-700'
+              ? 'bg-blue-600/20 text-blue-400 hover:bg-blue-600/30'
+              : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
           )}
-          title={`${t('tools.test', 'Test')} (${comingSoon})`}
-          aria-label={`${t('tools.test', 'Test')} (${comingSoon})`}
+          title={t('tools.test', 'Test')}
+          aria-label={t('tools.test', 'Test')}
         >
           <Play size={16} />
-          {t('tools.test', 'Test')}
+          {busy ? t('common.loading', 'Loading...') : t('tools.test', 'Test')}
         </button>
         <button
           disabled

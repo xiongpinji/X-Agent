@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { useI18n } from '@/i18n/context'
 import { useAppStore } from '@/store/appStore'
 import { apiClient } from '@/services/api'
@@ -20,6 +20,22 @@ const SettingsPage: React.FC = () => {
   // API Keys
   const [apiKeys, setApiKeys] = useState<Array<{ id: string; name: string; prefix: string; createdAt: string }>>([])
   const [newKeyName, setNewKeyName] = useState('')
+  // The raw secret is returned exactly once by POST /security/api-keys.
+  const [lastCreatedKey, setLastCreatedKey] = useState<string | null>(null)
+
+  // Load existing API keys from the backend on mount.
+  useEffect(() => {
+    apiClient.listApiKeys()
+      .then(records => setApiKeys(records
+        .filter(r => !r.revoked)
+        .map(r => ({
+          id: r.id,
+          name: r.name,
+          prefix: r.key_prefix,
+          createdAt: r.created_at || new Date().toISOString(),
+        }))))
+      .catch(() => { /* list may be forbidden for non-privileged users */ })
+  }, [])
 
   // Notification prefs
   const [notifPrefs, setNotifPrefs] = useState({
@@ -37,7 +53,7 @@ const SettingsPage: React.FC = () => {
       await apiClient.updateProfile({ display_name: displayName, email })
       setMessage({ type: 'success', text: t('settings.profileSaved', 'Profile updated successfully') })
     } catch {
-      setMessage({ type: 'success', text: t('settings.profileSaved', 'Profile updated successfully') })
+      setMessage({ type: 'error', text: t('settings.profileFailed', 'Failed to update profile') })
     } finally {
       setSaving(false)
       setTimeout(() => setMessage(null), 3000)
@@ -48,13 +64,15 @@ const SettingsPage: React.FC = () => {
     if (!newKeyName.trim()) return
     setSaving(true)
     try {
-      const key = await apiClient.createApiKey(newKeyName)
+      const created = await apiClient.createApiKey(newKeyName)
+      const record = created?.record
       setApiKeys(prev => [...prev, {
-        id: key?.id || `key-${Date.now()}`,
-        name: newKeyName,
-        prefix: key?.prefix || 'xag_...',
-        createdAt: new Date().toISOString(),
+        id: record?.id || `key-${Date.now()}`,
+        name: record?.name || newKeyName,
+        prefix: record?.key_prefix || 'xag_...',
+        createdAt: record?.created_at || new Date().toISOString(),
       }])
+      setLastCreatedKey(created?.key || null)
       setNewKeyName('')
       setMessage({ type: 'success', text: t('settings.keyCreated', 'API key created') })
     } catch {
@@ -70,7 +88,8 @@ const SettingsPage: React.FC = () => {
       await apiClient.deleteApiKey(id)
       setApiKeys(prev => prev.filter(k => k.id !== id))
     } catch {
-      setApiKeys(prev => prev.filter(k => k.id !== id))
+      setMessage({ type: 'error', text: t('settings.keyDeleteFailed', 'Failed to revoke API key') })
+      setTimeout(() => setMessage(null), 3000)
     }
   }
 
@@ -158,6 +177,12 @@ const SettingsPage: React.FC = () => {
       {/* API Keys Tab */}
       {activeTab === 'apikeys' && (
         <div className="space-y-4">
+          {lastCreatedKey && (
+            <div className="p-3 rounded-lg text-sm bg-amber-50 text-amber-800 dark:bg-amber-900/20 dark:text-amber-300" role="alert">
+              <p className="font-medium mb-1">{t('settings.keyCreatedOnce', 'Copy your API key now — it is shown only once:')}</p>
+              <code className="block break-all text-xs select-all">{lastCreatedKey}</code>
+            </div>
+          )}
           <div className="flex gap-2 max-w-md">
             <input
               type="text"

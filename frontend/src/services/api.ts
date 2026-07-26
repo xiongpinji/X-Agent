@@ -1,13 +1,13 @@
 import axios, { AxiosInstance, AxiosError } from 'axios'
 
 /**
- * API client aligned with the real backend routes (verified against
- * backend FastAPI route table, 332 routes, Wave B).
+ * API client aligned with the real backend routes (re-verified against the
+ * backend FastAPI route table on 2026-07-26).
  *
- * Endpoints that do NOT exist in the backend (e.g. PUT/DELETE /memory/{id},
- * PUT /tools/{id}, POST /tools/{id}/test, GET /chat/history, GET /chat/stream,
- * /ws) were removed on purpose: callers must surface "coming soon" in the UI
- * instead of issuing requests that can only fail.
+ * Notes:
+ * - PUT/DELETE /memory/{id}, PUT /tools/{name}, POST /tools/{name}/test and
+ *   the /chat/history endpoint group all exist in the backend and are wired.
+ * - GET /chat/stream and /ws still do not exist; callers must not use them.
  */
 
 export interface ApiResponse<T = any> {
@@ -108,6 +108,35 @@ export interface ChatRunEvent {
   metadata?: Record<string, any>
 }
 
+/** Session summary returned by GET /api/v1/chat/history (snake_case, seconds). */
+export interface ChatSessionSummary {
+  id: string
+  title: string
+  agent_id: string
+  created_at: number
+  updated_at: number
+  message_count: number
+}
+
+/** Message record returned by the /chat/history endpoints (timestamp in seconds). */
+export interface ChatHistoryMessage {
+  id: string
+  role: string
+  content: string
+  timestamp: number
+  metadata?: Record<string, any>
+}
+
+/** Full session payload returned by GET /api/v1/chat/history/{session_id}. */
+export interface ChatSessionDetail {
+  id: string
+  title: string
+  agent_id: string
+  messages: ChatHistoryMessage[]
+  created_at: number
+  updated_at: number
+}
+
 export interface ChatNextAction {
   id: string
   label: string
@@ -162,22 +191,43 @@ export interface AgentRunResult {
 
 /** A single agent's outcome inside a parallel ("ultra mode") run. */
 export interface ParallelAgentResult {
+  task_id?: string
   agent_id?: string
   status?: string
   output?: string
+  tokens_used?: number
+  duration_seconds?: number
   error?: string
   [key: string]: any
 }
 
-/** Payload returned by POST /agents/parallel. */
+/**
+ * Payload returned by POST /agents/parallel/ultra (UltraResult.to_dict()):
+ * { execution_id, task, subtasks, results, merged_answer, merge_strategy,
+ *   total_tokens, total_duration_seconds, agents_used, status }.
+ */
 export interface ParallelRunResponse {
+  execution_id?: string
   results?: ParallelAgentResult[]
   agent_results?: ParallelAgentResult[]
+  merged_answer?: string
+  agents_used?: number
+  status?: string
   [key: string]: any
 }
 
-/** Operational metrics returned by GET /metrics (dashboard widgets). */
+/**
+ * Operational metrics returned by GET /metrics/summary (dashboard widgets).
+ * The backend summary exposes count fields (runs, traces, memories,
+ * workflows, workflow_runs, audit_logs, api_keys, approvals, ...); uptime /
+ * latency / error-rate fields are not provided and render as "—" in the UI.
+ */
 export interface DashboardMetrics {
+  runs?: number
+  traces?: number
+  memories?: number
+  workflows?: number
+  pending_approvals?: number
   uptime?: string | number
   uptime_percent?: string | number
   total_requests?: number
@@ -187,13 +237,22 @@ export interface DashboardMetrics {
   [key: string]: any
 }
 
-/** API key record returned by POST /api-keys. */
+/** API key record as returned by the /security/api-keys endpoints. */
 export interface ApiKeyRecord {
-  id?: string
-  name?: string
-  prefix?: string
+  id: string
+  name: string
+  key_prefix: string
+  revoked?: boolean
   created_at?: string
+  expires_at?: string | null
+  last_used_at?: string | null
   [key: string]: any
+}
+
+/** Response of POST /security/api-keys: the raw key plus its record. */
+export interface ApiKeyCreateResponse {
+  key: string
+  record: ApiKeyRecord
 }
 
 // ---------------------------------------------------------------------------
@@ -435,10 +494,7 @@ class ApiClient {
     return response.data
   }
 
-  // NOTE: the backend has no PUT/DELETE /memory/{id} endpoints. Editing and
-  // deleting memories is marked "coming soon" in the UI until it lands.
-
-  // PUT /api/v1/memory/{id} — update a memory item
+  // PUT /api/v1/memory/{id} — update a memory item (backend: api/memory.py)
   async updateMemory(id: string, data: { content?: string; layer?: number; importance?: number; tags?: string[]; metadata?: Record<string, any> }): Promise<Memory> {
     const response = await this.client.put(`/memory/${id}`, data)
     return adaptMemory(response.data)
@@ -457,10 +513,7 @@ class ApiClient {
     return items.map(adaptTool)
   }
 
-  // NOTE: the backend has no PUT /tools/{id} or POST /tools/{id}/test endpoints.
-  // Toggling and ad-hoc testing of tools is marked "coming soon" in the UI.
-
-  // PUT /api/v1/tools/{name} — update tool config
+  // PUT /api/v1/tools/{name} — update tool config (backend: api/tools.py)
   async updateTool(name: string, data: { enabled?: boolean; config?: Record<string, any> }): Promise<any> {
     const response = await this.client.put(`/tools/${name}`, data)
     return response.data
@@ -504,8 +557,45 @@ class ApiClient {
     return response.data
   }
 
-  // NOTE: the backend has no GET /chat/history or GET /chat/stream endpoints.
-  // History persistence is marked "coming soon" in the UI.
+  // Chat history API — backend: api/chat_history.py, prefix /api/v1/chat.
+  // All five endpoints exist and are wired to ChatPage persistence.
+
+  /** GET /api/v1/chat/history — list sessions for the current user. */
+  async listChatSessions(limit: number = 50): Promise<ChatSessionSummary[]> {
+    const response = await this.client.get('/chat/history', { params: { limit } })
+    return response.data?.sessions ?? []
+  }
+
+  /** GET /api/v1/chat/history/{session_id} — full message history of a session. */
+  async getChatSession(sessionId: string): Promise<ChatSessionDetail> {
+    const response = await this.client.get(`/chat/history/${sessionId}`)
+    return response.data
+  }
+
+  /** POST /api/v1/chat/history — create a new session. */
+  async createChatSession(data: { title?: string; agent_id?: string } = {}): Promise<{ id: string; title: string; created_at: number }> {
+    const response = await this.client.post('/chat/history', data)
+    return response.data
+  }
+
+  /** POST /api/v1/chat/history/{session_id}/messages — append a message. */
+  async addChatMessage(
+    sessionId: string,
+    message: { role: string; content: string; metadata?: Record<string, any> }
+  ): Promise<{ id: string; session_id: string; message_count: number }> {
+    const response = await this.client.post(`/chat/history/${sessionId}/messages`, message)
+    return response.data
+  }
+
+  /** DELETE /api/v1/chat/history/{session_id} — delete one session. */
+  async deleteChatSession(sessionId: string): Promise<void> {
+    await this.client.delete(`/chat/history/${sessionId}`)
+  }
+
+  /** DELETE /api/v1/chat/history — clear all history for the current user. */
+  async clearChatHistory(): Promise<void> {
+    await this.client.delete('/chat/history')
+  }
 
   // Auth API — POST /api/v1/auth/login, POST /api/v1/auth/register
   async login(email: string, password: string): Promise<AuthTokenResponse> {
@@ -578,47 +668,67 @@ class ApiClient {
     return response.data
   }
 
-  // POST /api/v1/agent/run — run an ad-hoc task on a specific agent
+  // POST /api/v1/agents/run — run an ad-hoc task on a specific agent
+  // (backend: api/agents.py; body {task, extra_context} is accepted as-is).
   async runAgentTask(task: string, agentId?: string): Promise<AgentRunResult> {
-    const response = await this.client.post<AgentRunResult>('/agent/run', {
+    const response = await this.client.post<AgentRunResult>('/agents/run', {
       task,
       extra_context: { agent_id: agentId },
     })
     return response.data
   }
 
-  // POST /api/v1/agents/parallel — "ultra mode" parallel agent execution
+  // POST /api/v1/agents/parallel/ultra — "ultra mode" parallel agent execution.
+  // Backend UltraRequest: {task, max_agents, budget_tokens_per_agent,
+  // timeout_seconds, merge_strategy}. The frontend task list is joined into a
+  // single coordinator task; maxParallel maps to max_agents (C5).
   async runParallelAgents(
     tasks: Array<{ goal: string; description: string }>,
     maxParallel: number = 4
   ): Promise<ParallelRunResponse> {
-    const response = await this.client.post<ParallelRunResponse>('/agents/parallel', {
-      tasks,
-      max_parallel: maxParallel,
+    const task = tasks
+      .map((t, i) => `Subtask ${i + 1}: ${t.goal}${t.description && t.description !== t.goal ? `\n${t.description}` : ''}`)
+      .join('\n\n')
+    const response = await this.client.post<ParallelRunResponse>('/agents/parallel/ultra', {
+      task,
+      max_agents: maxParallel,
     })
     return response.data
   }
 
-  // GET /api/v1/metrics — operational metrics for the dashboard
+  // GET /api/v1/metrics/summary — operational metrics for the dashboard
+  // (backend: api/metrics.py; returns count fields such as runs, traces,
+  // memories, workflows, api_keys, approvals...).
   async getMetrics(): Promise<DashboardMetrics> {
-    const response = await this.client.get<DashboardMetrics>('/metrics')
+    const response = await this.client.get<DashboardMetrics>('/metrics/summary')
     return response.data
   }
 
-  // PUT /api/v1/users/me — update the current user's profile
+  // PUT /api/v1/auth/me — update the current user's profile.
+  // NOTE (C6): backend update_me (api/auth.py:570) currently accepts no body
+  // fields and returns the principal; the call succeeds but display_name/email
+  // are not yet persisted server-side.
   async updateProfile(data: { display_name?: string; email?: string }): Promise<void> {
-    await this.client.put('/users/me', data)
+    await this.client.put('/auth/me', data)
   }
 
-  // POST /api/v1/api-keys — create a new API key
-  async createApiKey(name: string): Promise<ApiKeyRecord> {
-    const response = await this.client.post<ApiKeyRecord>('/api-keys', { name })
+  // Security API — backend: api/security.py, prefix /api/v1/security.
+  // GET /api/v1/security/api-keys — list API keys
+  async listApiKeys(): Promise<ApiKeyRecord[]> {
+    const response = await this.client.get<ApiKeyRecord[]>('/security/api-keys')
     return response.data
   }
 
-  // DELETE /api/v1/api-keys/{id} — revoke an API key
+  // POST /api/v1/security/api-keys — create a new API key.
+  // Backend returns APIKeyCreateResponse {key, record}.
+  async createApiKey(name: string): Promise<ApiKeyCreateResponse> {
+    const response = await this.client.post<ApiKeyCreateResponse>('/security/api-keys', { name })
+    return response.data
+  }
+
+  // DELETE /api/v1/security/api-keys/{id} — revoke an API key
   async deleteApiKey(id: string): Promise<void> {
-    await this.client.delete(`/api-keys/${id}`)
+    await this.client.delete(`/security/api-keys/${id}`)
   }
 }
 

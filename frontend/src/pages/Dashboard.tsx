@@ -118,7 +118,7 @@ export const Dashboard: React.FC = React.memo(() => {
         activeTasks,
         totalTools: tools.length,
         uptime: String(metrics.uptime || metrics.uptime_percent || '—'),
-        requestCount: metrics.total_requests || metrics.request_count || 0,
+        requestCount: metrics.total_requests || metrics.request_count || metrics.runs || 0,
         errorRate: metrics.error_rate != null ? `${(metrics.error_rate * 100).toFixed(1)}%` : '—',
         avgLatency: metrics.avg_latency_ms != null ? `${Math.round(metrics.avg_latency_ms)}ms` : '—',
       })

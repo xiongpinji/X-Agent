@@ -147,13 +147,18 @@ class DockerSandbox:
             await sbx.run("python main.py")
     """
 
-    def __init__(self, spec: SandboxSpec | None = None):
+    def __init__(self, spec: SandboxSpec | None = None, *, pool: Any = None):
         self.spec = spec or SandboxSpec()
         self._container_id: str | None = None
         self._client: Any = None
         self._use_docker: bool = is_docker_available()
         self._owns_workspace: bool = False
         self._workspace: Path | None = None
+        # Optional DockerContainerPool (container_cache). When set and docker
+        # is available, start() acquires a warm container and stop() releases
+        # it back instead of create/remove — Codex-style container caching.
+        self._pool: Any = pool
+        self._pooled: bool = False
 
     @property
     def backend(self) -> str:
@@ -276,7 +281,21 @@ class DockerSandbox:
     # ----- docker backend -----
 
     async def _docker_start(self) -> None:
-        """Start a long-lived container that sleeps; we exec commands into it."""
+        """Start a long-lived container that sleeps; we exec commands into it.
+
+        With a pool attached, acquire a warm pooled container instead of
+        creating one (falls back to create when the pool is exhausted).
+        """
+        if self._pool is not None:
+            pooled_id = await self._pool.acquire()
+            if pooled_id:
+                self._container_id = pooled_id
+                self._pooled = True
+                self._client = self._pool._get_client()
+                logger.info("Reusing pooled sandbox container %s", pooled_id[:12])
+                return
+            logger.info("Container pool exhausted; creating dedicated container")
+
         def _start_sync() -> str:
             import docker  # type: ignore
 
@@ -327,7 +346,15 @@ class DockerSandbox:
         )
 
     async def _docker_stop(self) -> None:
-        """Stop and remove the container."""
+        """Stop and remove the container — or release it back to the pool."""
+        if self._pooled and self._pool is not None:
+            cid = self._container_id
+            self._container_id = None
+            self._pooled = False
+            if cid:
+                await self._pool.release(cid)
+            return
+
         def _stop_sync() -> None:
             try:
                 container = self._client.containers.get(self._container_id)

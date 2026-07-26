@@ -46,7 +46,7 @@ from backend.app.settings import get_settings
 def require_api_key_header(request: Request) -> None:
     if not settings.require_api_key:
         return
-    if request.url.path in {"/", "/health", "/ready", "/metrics", "/api/v1/channels/telegram/webhook"}:
+    if request.url.path in {"/", "/health", "/ready", "/metrics", "/api/v1/channels/telegram/webhook", "/api/v1/channels/slack/events"}:
         return
     if request.headers.get("x-api-key"):
         return
@@ -168,6 +168,10 @@ class CSRFProtectionMiddleware(BaseHTTPMiddleware):
         # browser CSRF tokens, and forged browser pages cannot set Telegram's
         # secret-token header across origins.
         "/api/v1/channels/telegram/webhook",
+        # HMAC-SHA256 signed Slack Events API webhook (v0:timestamp:body). Slack
+        # cannot carry cookie CSRF tokens; signature verification happens inside
+        # the adapter before any processing.
+        "/api/v1/channels/slack/events",
     }
 
     # SECURITY/ARCHITECTURE: token store is class-level (shared across instances).
@@ -599,7 +603,7 @@ async def request_logging_middleware(request: Request, call_next):
         clear_request_context = None
 
     try:
-        if settings.require_api_key and request.url.path not in {"/", "/health", "/ready", "/metrics", "/api/v1/channels/telegram/webhook"}:
+        if settings.require_api_key and request.url.path not in {"/", "/health", "/ready", "/metrics", "/api/v1/channels/telegram/webhook", "/api/v1/channels/slack/events"}:
             if not request.headers.get("x-api-key"):
                 response = JSONResponse({"detail": "Missing API key"}, status_code=401)
                 response.headers["x-request-id"] = request_id

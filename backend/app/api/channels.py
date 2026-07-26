@@ -13,6 +13,7 @@ from backend.app.core.channels import (
     ChannelRouter,
     ChannelRouterError,
     ChannelSignatureError,
+    SlackAdapter,
     TelegramAdapter,
 )
 from backend.app.core.contracts import ErrorCode
@@ -29,6 +30,15 @@ def get_channel_router() -> ChannelRouter:
                 signing_secret=os.getenv("XAGENT_TELEGRAM_WEBHOOK_SECRET", "")
                 or os.getenv("XAGENT_TELEGRAM_SIGNING_SECRET", ""),
                 base_url=os.getenv("XAGENT_TELEGRAM_BASE_URL", ""),
+            )
+        )
+    )
+    registry.register(
+        SlackAdapter(
+            ChannelConfig(
+                token=os.getenv("XAGENT_SLACK_BOT_TOKEN", ""),
+                signing_secret=os.getenv("XAGENT_SLACK_SIGNING_SECRET", ""),
+                base_url=os.getenv("XAGENT_SLACK_BASE_URL", ""),
             )
         )
     )
@@ -51,6 +61,66 @@ async def telegram_webhook(request: Request, channel_router: ChannelRouterDepend
             channel="telegram",
             body=body,
             headers=dict(request.headers),
+            payload=payload,
+        )
+    except ChannelSignatureError as exc:
+        raise api_error(401, ErrorCode.AUTHENTICATION_FAILED, str(exc))
+    except ChannelRouterError as exc:
+        raise api_error(400, ErrorCode.VALIDATION_ERROR, str(exc))
+
+    return {
+        "channel": result.channel,
+        "conversation_id": result.conversation_id,
+        "message_id": result.message_id,
+        "run_id": result.run_id,
+        "status": result.status,
+        "reply_sent": result.reply_sent,
+        "reply_text": result.reply_text,
+        "sender_id": result.sender_id,
+        "dispatch": result.dispatch,
+        "outbound": result.outbound,
+    }
+
+
+def _slack_adapter(channel_router: ChannelRouter) -> SlackAdapter:
+    adapter = channel_router._registry.get("slack")  # noqa: SLF001 - registry lookup
+    if adapter is None or not isinstance(adapter, SlackAdapter) or not adapter.configured:
+        raise api_error(
+            503,
+            ErrorCode.INTERNAL_ERROR,
+            "Slack channel not configured: set XAGENT_SLACK_BOT_TOKEN and "
+            "XAGENT_SLACK_SIGNING_SECRET.",
+        )
+    return adapter
+
+
+@router.post("/slack/events")
+async def slack_events(request: Request, channel_router: ChannelRouterDependency) -> dict[str, object]:
+    """Slack Events API endpoint.
+
+    Handles url_verification challenges (after signature verification) and
+    event_callback messages. Unconfigured credentials fail loudly with 503.
+    """
+    body = await request.body()
+    try:
+        payload = json.loads(body.decode("utf-8") or "{}")
+    except json.JSONDecodeError:
+        raise api_error(400, ErrorCode.VALIDATION_ERROR, "Invalid Slack webhook JSON.")
+
+    adapter = _slack_adapter(channel_router)
+    headers = dict(request.headers)
+    if not adapter.verify_signature(body, headers):
+        raise api_error(401, ErrorCode.AUTHENTICATION_FAILED, "Invalid slack webhook signature")
+
+    # URL verification handshake: echo the challenge back to Slack.
+    if payload.get("type") == "url_verification":
+        return {"challenge": payload.get("challenge", "")}
+
+    try:
+        result = await channel_router.process_inbound(
+            channel="slack",
+            body=body,
+            headers=headers,
             payload=payload,
         )
     except ChannelSignatureError as exc:

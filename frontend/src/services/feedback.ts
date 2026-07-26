@@ -53,6 +53,61 @@ export interface PaginatedFeedback {
   hasMore: boolean
 }
 
+// ---------------------------------------------------------------------------
+// Adapters: backend FeedbackResponse (snake_case) -> frontend Feedback model.
+// Backend reference: api/feedback.py (FeedbackResponse/FeedbackListResponse/
+// FeedbackStatsResponse). Backend statuses: new|acknowledged|in_progress|
+// resolved|closed; severity doubles as the frontend priority field (C4).
+// ---------------------------------------------------------------------------
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+function adaptFeedback(raw: any): Feedback {
+  const statusMap: Record<string, Feedback['status']> = {
+    new: 'open',
+    acknowledged: 'open',
+    in_progress: 'in_progress',
+    resolved: 'resolved',
+    closed: 'closed',
+  }
+  return {
+    id: String(raw.id ?? ''),
+    userId: String(raw.user_id ?? raw.userId ?? ''),
+    type: (raw.feedback_type ?? raw.type ?? 'other') as Feedback['type'],
+    category: raw.category ?? '',
+    title: String(raw.title ?? ''),
+    description: String(raw.description ?? ''),
+    sentiment: (raw.sentiment ?? 'neutral') as Feedback['sentiment'],
+    priority: (raw.severity ?? raw.priority ?? 'medium') as Feedback['priority'],
+    status: statusMap[String(raw.status ?? 'new')] ?? 'open',
+    tags: Array.isArray(raw.tags) ? raw.tags : [],
+    createdAt: String(raw.created_at ?? raw.createdAt ?? ''),
+    updatedAt: String(raw.updated_at ?? raw.updatedAt ?? ''),
+    resolvedAt: raw.resolved_at ?? raw.resolvedAt ?? undefined,
+    response: raw.response ?? undefined,
+  }
+}
+
+function adaptStats(raw: any): FeedbackStats {
+  const byStatus: Record<string, number> = raw.by_status ?? {}
+  const resolved = (byStatus.resolved ?? 0) + (byStatus.closed ?? 0)
+  const total = typeof raw.total === 'number' ? raw.total : 0
+  return {
+    total,
+    byType: raw.by_type ?? {},
+    byStatus,
+    bySentiment: raw.by_sentiment ?? {},
+    byPriority: raw.by_severity ?? {},
+    // The backend stats endpoint does not provide resolution-time metrics.
+    avgResolutionTime: 0,
+    resolutionRate: total > 0 ? resolved / total : 0,
+  }
+}
+
+/** Error thrown for endpoints that have no backend counterpart (B7). */
+function unsupported(feature: string): Error {
+  return new Error(`Feedback ${feature} is not supported by the backend (no such endpoint).`)
+}
+
 class FeedbackService {
   private client: AxiosInstance
   private baseURL: string
@@ -94,7 +149,9 @@ class FeedbackService {
     )
   }
 
-  // Feedback CRUD operations
+  // Feedback CRUD operations — backend: api/feedback.py, prefix /api/v1/feedback.
+  // Real endpoints: POST /, GET /, GET /{id}, PATCH /{id}?status=...,
+  // GET /{id}/analysis, GET /stats/summary.
   async listFeedback(
     page: number = 1,
     pageSize: number = 20,
@@ -106,127 +163,126 @@ class FeedbackService {
       search?: string
     }
   ): Promise<PaginatedFeedback> {
-    const response = await this.client.get<PaginatedFeedback>('/feedback', {
-      params: { page, pageSize, ...filters },
+    const response = await this.client.get('/feedback/', {
+      params: {
+        skip: (page - 1) * pageSize,
+        limit: pageSize,
+        feedback_type: filters?.type || undefined,
+        status: filters?.status || undefined,
+        severity: filters?.priority || undefined,
+      },
     })
-    return response.data
+    const payload = response.data
+    const rawItems: any[] = payload?.items ?? []
+    const total: number = typeof payload?.total === 'number' ? payload.total : rawItems.length
+    return {
+      items: rawItems.map(adaptFeedback),
+      total,
+      page,
+      pageSize,
+      hasMore: page * pageSize < total,
+    }
   }
 
   async getFeedback(id: string): Promise<Feedback> {
-    const response = await this.client.get<Feedback>(`/feedback/${id}`)
-    return response.data
+    const response = await this.client.get(`/feedback/${id}`)
+    return adaptFeedback(response.data)
   }
 
   async createFeedback(data: Partial<Feedback>): Promise<Feedback> {
-    const response = await this.client.post<Feedback>('/feedback', data)
-    return response.data
+    const response = await this.client.post('/feedback/', {
+      feedback_type: data.type ?? 'other',
+      title: data.title ?? '',
+      description: data.description ?? '',
+      severity: data.priority ?? 'medium',
+      metadata: data.tags?.length ? { tags: data.tags } : undefined,
+    })
+    return adaptFeedback(response.data)
   }
 
+  // The backend only supports status updates via PATCH /{id}?status=...
   async updateFeedback(id: string, data: Partial<Feedback>): Promise<Feedback> {
-    const response = await this.client.put<Feedback>(`/feedback/${id}`, data)
-    return response.data
+    const response = await this.client.patch(`/feedback/${id}`, null, {
+      params: { status: data.status === 'open' ? 'new' : data.status },
+    })
+    return adaptFeedback(response.data)
   }
 
-  async deleteFeedback(id: string): Promise<void> {
-    await this.client.delete(`/feedback/${id}`)
+  // No DELETE /feedback/{id} exists in the backend (B7).
+  async deleteFeedback(_id: string): Promise<void> {
+    throw unsupported('deletion')
   }
 
+  // No POST /{id}/resolve exists; PATCH ?status=resolved sets resolved_at.
   async resolveFeedback(id: string, response: string): Promise<Feedback> {
-    const result = await this.client.post<Feedback>(`/feedback/${id}/resolve`, {
-      response,
+    const result = await this.client.patch(`/feedback/${id}`, null, {
+      params: { status: 'resolved', response },
     })
-    return result.data
+    return adaptFeedback(result.data)
   }
 
-  // Statistics and analytics
-  async getStats(dateRange?: { startDate: string; endDate: string }): Promise<FeedbackStats> {
-    const response = await this.client.get<FeedbackStats>('/feedback/stats', {
-      params: dateRange,
-    })
-    return response.data
+  // Statistics — GET /api/v1/feedback/stats/summary (B6/C4 adapter above).
+  async getStats(_dateRange?: { startDate: string; endDate: string }): Promise<FeedbackStats> {
+    const response = await this.client.get('/feedback/stats/summary')
+    return adaptStats(response.data)
   }
 
+  // The following endpoints have no backend counterpart (B7): trends,
+  // sentiment-analysis, category-distribution, notifications CRUD, export,
+  // and search. They fail fast with a clear error instead of calling
+  // endpoints that can only 404.
   async getTrends(
-    days: number = 30,
-    groupBy: 'day' | 'week' | 'month' = 'day'
+    _days: number = 30,
+    _groupBy: 'day' | 'week' | 'month' = 'day'
   ): Promise<FeedbackTrend[]> {
-    const response = await this.client.get<FeedbackTrend[]>('/feedback/trends', {
-      params: { days, groupBy },
-    })
-    return response.data
+    throw unsupported('trends')
   }
 
   async getSentimentAnalysis(
-    dateRange?: { startDate: string; endDate: string }
+    _dateRange?: { startDate: string; endDate: string }
   ): Promise<Record<string, number>> {
-    const response = await this.client.get<Record<string, number>>(
-      '/feedback/sentiment-analysis',
-      { params: dateRange }
-    )
-    return response.data
+    throw unsupported('sentiment analysis')
   }
 
   async getCategoryDistribution(): Promise<Record<string, number>> {
-    const response = await this.client.get<Record<string, number>>(
-      '/feedback/category-distribution'
-    )
-    return response.data
+    throw unsupported('category distribution')
   }
 
-  // Notifications
+  // Notifications — no backend endpoints exist.
   async listNotifications(): Promise<NotificationConfig[]> {
-    const response = await this.client.get<NotificationConfig[]>('/feedback/notifications')
-    return response.data
+    throw unsupported('notifications')
   }
 
-  async createNotification(data: Partial<NotificationConfig>): Promise<NotificationConfig> {
-    const response = await this.client.post<NotificationConfig>(
-      '/feedback/notifications',
-      data
-    )
-    return response.data
+  async createNotification(_data: Partial<NotificationConfig>): Promise<NotificationConfig> {
+    throw unsupported('notifications')
   }
 
   async updateNotification(
-    id: string,
-    data: Partial<NotificationConfig>
+    _id: string,
+    _data: Partial<NotificationConfig>
   ): Promise<NotificationConfig> {
-    const response = await this.client.put<NotificationConfig>(
-      `/feedback/notifications/${id}`,
-      data
-    )
-    return response.data
+    throw unsupported('notifications')
   }
 
-  async deleteNotification(id: string): Promise<void> {
-    await this.client.delete(`/feedback/notifications/${id}`)
+  async deleteNotification(_id: string): Promise<void> {
+    throw unsupported('notifications')
   }
 
-  async testNotification(id: string): Promise<{ success: boolean; message: string }> {
-    const response = await this.client.post<{ success: boolean; message: string }>(
-      `/feedback/notifications/${id}/test`
-    )
-    return response.data
+  async testNotification(_id: string): Promise<{ success: boolean; message: string }> {
+    throw unsupported('notifications')
   }
 
-  // Export
+  // Export — no backend endpoint exists.
   async exportFeedback(
-    format: 'csv' | 'pdf',
-    filters?: Record<string, any>
+    _format: 'csv' | 'pdf',
+    _filters?: Record<string, any>
   ): Promise<Blob> {
-    const response = await this.client.get(`/feedback/export`, {
-      params: { format, ...filters },
-      responseType: 'blob',
-    })
-    return response.data
+    throw unsupported('export')
   }
 
-  // Search
-  async searchFeedback(query: string): Promise<Feedback[]> {
-    const response = await this.client.get<Feedback[]>('/feedback/search', {
-      params: { q: query },
-    })
-    return response.data
+  // Search — no backend endpoint exists.
+  async searchFeedback(_query: string): Promise<Feedback[]> {
+    throw unsupported('search')
   }
 }
 

@@ -1502,6 +1502,77 @@ def build_default_tool_registry(
         code_review,
         risk_level=RiskLevel.LOW,
     )
+
+    # 代码执行工具(对标 Hermes execute_code): 让 LLM 经 ReAct 循环直接执行代码。
+    # 默认走 Docker 沙箱隔离; 无 Docker 时 PythonSandboxPool 自动降级 subprocess,
+    # 并在结果中显式标注 sandbox_backend。危险模式由既有 sandbox 代码校验器
+    # (validate_python_code / validate_javascript_code) 拦截, 风险等级 HIGH,
+    # 审批策略复用 ToolPolicyEngine / ApprovalStore, 与 write_file 等 HIGH 工具一致。
+    async def execute_code(
+        code: str,
+        language: str = "python",
+        variables: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Execute code in an isolated sandbox and return stdout/stderr/result.
+
+        Args:
+            code: Source code to execute.
+            language: "python" (default) or "javascript".
+            variables: Optional variables injected into the execution context.
+
+        Returns:
+            Dict with success/stdout/stderr/result plus sandbox_backend
+            ("docker" or "subprocess" fallback, explicitly annotated).
+        """
+        from backend.app.core.sandbox.code_execution_tool import get_code_execution_tool
+        from backend.app.core.sandbox.docker_sandbox import is_docker_available
+
+        lang = (language or "python").lower()
+        tool = await get_code_execution_tool()
+        if lang in ("python", "py"):
+            result = await tool.execute_python(code, variables=variables)
+            backend = "docker" if is_docker_available() else "subprocess"
+        elif lang in ("javascript", "js", "nodejs", "node"):
+            result = await tool.execute_javascript(code, variables=variables)
+            backend = "subprocess"  # Node sandbox pool is subprocess-based
+        else:
+            return {
+                "success": False,
+                "error": f"Unsupported language: {language}. Supported: python, javascript.",
+            }
+        result["sandbox_backend"] = backend
+        if backend == "subprocess":
+            result["isolation_warning"] = (
+                "Docker unavailable: executed via subprocess fallback "
+                "(no container isolation; network/FS restrictions enforced by code validation only)."
+            )
+        return result
+
+    registry.register(
+        "execute_code",
+        "Execute Python or JavaScript code in an isolated sandbox (Docker when available, "
+        "subprocess fallback otherwise, explicitly annotated). Returns stdout/stderr/result.",
+        execute_code,
+        risk_level=RiskLevel.HIGH,
+        parameters_schema={
+            "type": "object",
+            "properties": {
+                "code": {"type": "string", "description": "Source code to execute."},
+                "language": {
+                    "type": "string",
+                    "enum": ["python", "javascript"],
+                    "default": "python",
+                    "description": "Execution language.",
+                },
+                "variables": {
+                    "type": "object",
+                    "description": "Optional variables to inject into the execution context.",
+                },
+            },
+            "required": ["code"],
+            "additionalProperties": False,
+        },
+    )
     return registry
 
 

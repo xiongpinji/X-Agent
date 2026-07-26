@@ -15,7 +15,7 @@ interface ParallelTaskCard {
 }
 
 export const ChatPage: React.FC = () => {
-  const { theme, messages, addMessage, isLoading, setLoading, setError } = useAppStore()
+  const { theme, messages, addMessage, clearMessages, isLoading, setLoading, setError } = useAppStore()
   const { t } = useI18n()
   const [input, setInput] = useState('')
   const [agents, setAgents] = useState<Agent[]>([])
@@ -26,11 +26,13 @@ export const ChatPage: React.FC = () => {
   const [ultraMode, setUltraMode] = useState(false)
   const [parallelTasks, setParallelTasks] = useState<ParallelTaskCard[]>([])
   const [parallelRunning, setParallelRunning] = useState(false)
+  const sessionIdRef = useRef<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const sseClientRef = useRef<SSEClient | null>(null)
 
   useEffect(() => {
     loadAgents()
+    loadHistory()
     return () => {
       sseClientRef.current?.disconnect()
     }
@@ -42,6 +44,43 @@ export const ChatPage: React.FC = () => {
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }
+
+  // ── Chat history persistence (backend /api/v1/chat/history) ──────────────
+
+  /** Load the most recent persisted session into the message list. */
+  const loadHistory = async () => {
+    try {
+      const sessions = await apiClient.listChatSessions(1)
+      if (!sessions.length) return
+      const detail = await apiClient.getChatSession(sessions[0].id)
+      sessionIdRef.current = detail.id
+      clearMessages()
+      detail.messages.forEach((m) => {
+        addMessage({
+          id: m.id,
+          role: m.role === 'user' ? 'user' : 'assistant',
+          content: m.content,
+          timestamp: new Date(m.timestamp * 1000).toISOString(),
+          metadata: m.metadata,
+        })
+      })
+    } catch (error) {
+      console.error('Failed to load chat history:', error)
+    }
+  }
+
+  /** Best-effort persistence of one message; never blocks or breaks the chat. */
+  const persistChatMessage = async (role: string, content: string, metadata?: Record<string, any>) => {
+    try {
+      if (!sessionIdRef.current) {
+        const session = await apiClient.createChatSession({ agent_id: selectedAgent || 'default' })
+        sessionIdRef.current = session.id
+      }
+      await apiClient.addChatMessage(sessionIdRef.current, { role, content, metadata })
+    } catch (error) {
+      console.error('Failed to persist chat message:', error)
+    }
   }
 
   const loadAgents = async () => {
@@ -85,12 +124,14 @@ export const ChatPage: React.FC = () => {
       })))
       // Add summary message
       const summary = results.map((r: any, i: number) => `Agent ${i + 1}: ${r.status}${r.output ? ' - ' + String(r.output).slice(0, 100) : ''}`).join('\n')
+      const summaryContent = `⚡ Ultra Mode (${results.length} agents):\n${summary}`
       addMessage({
         id: `parallel-${Date.now()}`,
         role: 'assistant',
-        content: `⚡ Ultra Mode (${results.length} agents):\n${summary}`,
+        content: summaryContent,
         timestamp: new Date().toISOString(),
       })
+      void persistChatMessage('assistant', summaryContent, { execution_id: resp?.execution_id })
     } catch {
       setParallelTasks([{
         agent_id: 'agent-1', task: messageText, status: 'completed',
@@ -119,6 +160,7 @@ export const ChatPage: React.FC = () => {
         timestamp: new Date().toISOString(),
       }
       addMessage(userMessage)
+      void persistChatMessage('user', userMessage.content)
       const messageText = input
       setInput('')
       await handleUltraSend(messageText)
@@ -137,6 +179,7 @@ export const ChatPage: React.FC = () => {
         timestamp: new Date().toISOString(),
       }
       addMessage(userMessage)
+      void persistChatMessage('user', userMessage.content)
       const messageText = input
       setInput('')
 
@@ -171,16 +214,18 @@ export const ChatPage: React.FC = () => {
           () => {
             // On complete, add the final assistant message
             setIsStreaming(false)
+            const finalContent = accumulated || response.message
             addMessage({
               id: response.run_id,
               role: 'assistant',
-              content: accumulated || response.message,
+              content: finalContent,
               timestamp: new Date().toISOString(),
               metadata: {
                 run_id: response.run_id,
                 status: 'completed',
               },
             })
+            void persistChatMessage('assistant', finalContent, { run_id: response.run_id })
             setStreamContent('')
           }
         )
@@ -200,6 +245,7 @@ export const ChatPage: React.FC = () => {
                 events: response.events,
               },
             })
+            void persistChatMessage('assistant', response.message, { run_id: response.run_id, status: response.status })
           }
         }, 5000)
       } else {
@@ -210,6 +256,7 @@ export const ChatPage: React.FC = () => {
           content: response.message,
           timestamp: new Date().toISOString(),
         })
+        void persistChatMessage('assistant', response.message)
       }
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Failed to send message')

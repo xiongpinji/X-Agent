@@ -21,6 +21,7 @@ from backend.app.core.channels.router import (
     ChannelSignatureError,
     default_channel_dispatch,
 )
+from backend.app.core.channels.slack_adapter import SlackAdapter
 from backend.app.core.channels.telegram_adapter import TelegramAdapter
 
 __all__ = [
@@ -34,6 +35,7 @@ __all__ = [
     "ChannelSignatureError",
     "DingTalkAdapter",
     "DiscordAdapter",
+    "SlackAdapter",
     "TelegramAdapter",
     "default_channel_dispatch",
     "get_channel_registry",

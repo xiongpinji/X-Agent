@@ -1,5 +1,11 @@
 """Code execution sandbox module for X-Agent."""
 
+from backend.app.core.sandbox.container_cache import (
+    DockerContainerPool,
+    get_container_pool,
+    reset_container_pools,
+    shutdown_container_pools,
+)
 from backend.app.core.sandbox.manager import (
     ExecutionLanguage,
     SandboxManager,
@@ -27,11 +33,21 @@ from backend.app.core.sandbox.security import (
     validate_javascript_code,
     validate_python_code,
 )
+from backend.app.core.sandbox.serverless import (
+    DaytonaSandbox,
+    ModalSandbox,
+    ServerlessSandboxError,
+    UnifiedSandbox,
+    create_sandbox,
+)
 
 __all__ = [
+    "DaytonaSandbox",
+    "DockerContainerPool",
     "ExecutionLanguage",
     "ExecutionResult",
     "JavaScriptSecurityValidator",
+    "ModalSandbox",
     "NodeExecutionResult",
     # Node.js sandbox
     "NodeSandbox",
@@ -48,8 +64,15 @@ __all__ = [
     "SandboxManager",
     "SecurityPolicy",
     "SecurityViolation",
+    # Serverless backends & container caching
+    "ServerlessSandboxError",
+    "UnifiedSandbox",
+    "create_sandbox",
     "execute_code",
+    "get_container_pool",
     "get_sandbox_manager",
+    "reset_container_pools",
+    "shutdown_container_pools",
     "validate_javascript_code",
     "validate_python_code",
 ]

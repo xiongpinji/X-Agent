@@ -26,6 +26,7 @@ if TYPE_CHECKING:
     from backend.app.core.unified_memory import UnifiedMemorySystem
 import contextlib
 
+from backend.app.core import agents_md
 from backend.app.core.agent_context import AgentContextManager
 from backend.app.core.agent_runtime_adapter import AgentRuntimeAdapter
 from backend.app.core.agent_state_manager import AgentStateManager
@@ -2200,6 +2201,12 @@ class AgentLoop:
                     "(use as background, most recent last):\n" + session_recap
                 ),
             })
+        # AGENTS.md 指令链注入：工作目录向上查找 AGENTS.md（子目录优先），
+        # 视为不可信来源——经 prompt_guard 扫描并带来源包裹标记。
+        # 开关 XAGENT_AGENTS_MD_ENABLED（默认开）；失败显式降级为不注入。
+        agents_md_message = agents_md.maybe_build_injection(extra_context)
+        if agents_md_message is not None:
+            messages.append(agents_md_message)
         # P1-14: 上下文管理——按配置策略压缩/裁剪发给 LLM 的消息
         messages = await self._prepare_llm_context(context, messages)
         response = await self.llm.chat(messages, self.tools.definitions_for_llm())

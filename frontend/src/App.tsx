@@ -22,6 +22,9 @@ const GoalModePage = lazy(() => import('@/pages/GoalModePage'))
 const CodeReviewPage = lazy(() => import('@/pages/CodeReviewPage'))
 const EvolutionPage = lazy(() => import('@/pages/EvolutionPage'))
 const AgentWorkspacePage = lazy(() => import('@/pages/AgentWorkspacePage'))
+const WorkflowSchedulesPage = lazy(() => import('@/pages/WorkflowSchedulesPage'))
+const WorkflowRunsPage = lazy(() => import('@/pages/WorkflowRunsPage'))
+const CheckpointsPage = lazy(() => import('@/pages/CheckpointsPage'))
 
 // Loading fallback component
 const PageLoader = () => (
@@ -71,6 +74,9 @@ export const App: React.FC = () => {
                         <Route path="/memory" element={<MemoryPage />} />
                         <Route path="/workflows" element={<WorkflowsPage />} />
                         <Route path="/workflows/:id/edit" element={<WorkflowEditorPage />} />
+                        <Route path="/workflows/schedules" element={<WorkflowSchedulesPage />} />
+                        <Route path="/workflows/runs" element={<WorkflowRunsPage />} />
+                        <Route path="/checkpoints" element={<CheckpointsPage />} />
                         <Route path="/agents" element={<AgentsPage />} />
                         <Route path="/settings" element={<SettingsPage />} />
                         <Route path="/goals" element={<GoalModePage />} />

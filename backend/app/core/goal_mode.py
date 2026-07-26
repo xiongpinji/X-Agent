@@ -1,6 +1,7 @@
 """Goal Mode: Long-running goal execution with checkpoint/resume (对标 Codex /goal)."""
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import time
@@ -9,6 +10,29 @@ from typing import Any
 from uuid import uuid4
 
 logger = logging.getLogger(__name__)
+
+
+class GoalControl:
+    """协作式执行控制: 暂停/恢复/取消一个正在运行的目标。
+
+    - ``pause_event`` set 表示允许继续推进; clear 表示在下一个子目标边界暂停。
+    - ``cancel()`` 置位取消标志并唤醒暂停等待, 使执行循环尽快退出。
+    """
+
+    def __init__(self) -> None:
+        self.pause_event = asyncio.Event()
+        self.pause_event.set()
+        self.cancel_requested = False
+
+    def pause(self) -> None:
+        self.pause_event.clear()
+
+    def resume(self) -> None:
+        self.pause_event.set()
+
+    def cancel(self) -> None:
+        self.cancel_requested = True
+        self.pause_event.set()  # 唤醒暂停中的执行循环, 让取消生效
 
 
 @dataclass
@@ -37,7 +61,7 @@ class GoalCheckpoint:
 class GoalResult:
     """Final result of goal execution."""
     goal_id: str = ""
-    status: str = "pending"  # pending, running, completed, timeout, failed
+    status: str = "pending"  # pending, running, completed, timeout, failed, cancelled
     progress: list[SubGoal] = field(default_factory=list)
     output: str = ""
     total_duration: float = 0.0
@@ -75,9 +99,16 @@ class GoalModeOrchestrator:
         goal: str,
         context: dict[str, Any] | None = None,
         max_hours: float | None = None,
+        goal_id: str | None = None,
+        control: GoalControl | None = None,
     ) -> GoalResult:
-        """Execute a long-running goal with automatic decomposition."""
-        goal_id = str(uuid4())
+        """Execute a long-running goal with automatic decomposition.
+
+        ``goal_id`` 允许调用方(如 Goals API)透传自己的目标 ID, 便于状态关联。
+        ``control`` 提供协作式暂停/取消: 每个子目标边界检查取消标志并等待
+        暂停事件, 已开始的子目标会执行完毕后生效。
+        """
+        goal_id = goal_id or str(uuid4())
         deadline = time.time() + (max_hours or self.max_hours) * 3600
         result = GoalResult(goal_id=goal_id, status="running")
         start_time = time.time()
@@ -92,6 +123,17 @@ class GoalModeOrchestrator:
 
             # 2. Execute sub-goals sequentially
             for i, subgoal in enumerate(subgoals):
+                # 协作式取消: 子目标边界生效
+                if control and control.cancel_requested:
+                    result.status = "cancelled"
+                    break
+                # 协作式暂停: 等待 resume, 期间取消仍可生效
+                if control:
+                    await control.pause_event.wait()
+                    if control.cancel_requested:
+                        result.status = "cancelled"
+                        break
+
                 if time.time() >= deadline:
                     result.status = "timeout"
                     break
