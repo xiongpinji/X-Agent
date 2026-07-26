@@ -59,6 +59,12 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             <NavLink href="/audit-logs" icon="📜" label={t('navigation.auditLogs', 'Audit Logs')} />
             <NavLink href="/backup" icon="💾" label={t('navigation.backup', 'Backup')} />
             <NavLink href="/observability" icon="📈" label={t('navigation.observability', 'Observability')} />
+            <NavLink href="/analytics" icon="📊" label={t('navigation.analytics', 'Analytics')} />
+            <NavLink href="/automation" icon="🌐" label={t('navigation.automation', 'Automation')} />
+            <NavLink href="/compliance" icon="🛡️" label={t('navigation.compliance', 'Compliance')} />
+            <NavLink href="/sync" icon="🔄" label={t('navigation.sync', 'Sync')} />
+            <NavLink href="/work-sessions" icon="🗂️" label={t('navigation.workSessions', 'Work Sessions')} />
+            <NavLink href="/forum" icon="💡" label={t('navigation.forum', 'Forum')} />
             <NavLink href="/console" icon="🖥️" label={t('navigation.console', 'Console')} />
             <NavLink href="/admin/tenants" icon="🏢" label={t('navigation.tenants', 'Tenants')} />
             <NavLink href="/admin/users" icon="👥" label={t('navigation.usersAdmin', 'Users')} />

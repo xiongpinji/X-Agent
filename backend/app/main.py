@@ -818,6 +818,9 @@ def _register_all_routers() -> None:
     from backend.app.api.sso import oidc_router
     from backend.app.api.streaming import router as streaming_router
     from backend.app.api.sync import router as sync_router
+    from backend.app.api.analytics import router as analytics_router
+    from backend.app.api.forum import router as forum_router
+    from backend.app.api.forum_search import router as forum_search_router
     from backend.app.api.tasks_ui import router as tasks_router
     from backend.app.api.tenant_quota import router as tenant_quota_router
     from backend.app.api.tenants import router as tenants_router
@@ -907,6 +910,9 @@ def _register_all_routers() -> None:
     app.include_router(memory_enhanced_router)
     app.include_router(feedback_router)
     app.include_router(sync_router)
+    app.include_router(analytics_router)
+    app.include_router(forum_router)
+    app.include_router(forum_search_router)
     app.include_router(sandbox_tasks_router)
     app.include_router(backup_qdrant_router)
     app.include_router(backup_scheduler_router)
@@ -1346,4 +1352,6 @@ _SPA_ROUTE_PREFIXES = frozenset({
     # P1 管理面与 console 子应用 (2026-07-26)
     "checkpoints", "mcp", "sandbox-tasks", "approvals", "audit-logs",
     "backup", "observability", "admin", "security", "console",
+    # P2 页面 (2026-07-26)
+    "compliance", "automation", "sync", "work-sessions", "analytics", "forum",
 })

@@ -14,11 +14,11 @@ from backend.app.dependencies import (
     get_current_principal,
 )
 
-from .aggregator import AnalyticsAggregator
-from .collector import AnalyticsCollector
-from .models import AggregationLevel
-from .reporter import AnalyticsReporter
-from .storage import AnalyticsStorage
+from backend.app.core.analytics.aggregator import AnalyticsAggregator
+from backend.app.core.analytics.collector import AnalyticsCollector
+from backend.app.core.analytics.models import AggregationLevel
+from backend.app.core.analytics.reporter import AnalyticsReporter
+from backend.app.core.analytics.storage import AnalyticsStorage
 
 
 # Pydantic models for API

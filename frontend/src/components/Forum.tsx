@@ -56,9 +56,8 @@ export const ForumHome: React.FC = () => {
       {/* Header */}
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold">Community Forum</h1>
-        <Button variant="primary" onClick={() => window.location.href = '/forum/create'}>
-          New Post
-        </Button>
+        {/* New Post action lives in ForumPage wrapper (internal state nav);
+            hardcoded /forum/create route does not exist. */}
       </div>
 
       {/* Filters */}
@@ -104,7 +103,7 @@ export const ForumHome: React.FC = () => {
                   <p className="text-gray-600 mt-2 line-clamp-2">{post.content}</p>
                   <div className="flex gap-2 mt-3">
                     {post.tags.map((tag) => (
-                      <Badge key={tag} variant="secondary">{tag}</Badge>
+                      <Badge key={tag} variant="default">{tag}</Badge>
                     ))}
                   </div>
                 </div>
@@ -226,7 +225,7 @@ export const ForumPostDetail: React.FC<{ postId: string }> = ({ postId }) => {
         {/* Tags */}
         <div className="flex gap-2 mb-4">
           {post.tags.map((tag) => (
-            <Badge key={tag} variant="secondary">{tag}</Badge>
+            <Badge key={tag} variant="default">{tag}</Badge>
           ))}
         </div>
 
@@ -474,7 +473,7 @@ export const UserProfile: React.FC<{ userId: string }> = ({ userId }) => {
             {reputation && (
               <div className="mt-2 space-y-1">
                 <div className="text-lg">
-                  <Badge variant="primary">{reputation.level.toUpperCase()}</Badge>
+                  <Badge variant="info">{reputation.level.toUpperCase()}</Badge>
                 </div>
                 <div className="text-gray-600">
                   {reputation.reputation_points} reputation points

@@ -35,6 +35,13 @@ const UsersAdminPage = lazy(() => import('@/pages/UsersAdminPage'))
 const SecurityAuthPage = lazy(() => import('@/pages/SecurityAuthPage'))
 const ObservabilityPage = lazy(() => import('@/pages/ObservabilityPage'))
 const ConsoleApp = lazy(() => import('@/console/ConsoleApp'))
+const GdprCompliancePage = lazy(() => import('@/pages/GdprCompliancePage'))
+const BrowserAutomationPage = lazy(() => import('@/pages/BrowserAutomationPage'))
+const SyncPage = lazy(() => import('@/pages/SyncPage'))
+const WorkSessionsPage = lazy(() => import('@/pages/WorkSessionsPage'))
+const AnalyticsDashboard = lazy(() => import('@/components/AnalyticsDashboard'))
+const ForumPage = lazy(() => import('@/pages/ForumPage'))
+const ForumPostDetailPage = lazy(() => import('@/pages/ForumPostDetailPage'))
 
 // Loading fallback component
 const PageLoader = () => (
@@ -97,6 +104,13 @@ export const App: React.FC = () => {
                         <Route path="/security" element={<SecurityAuthPage />} />
                         <Route path="/observability" element={<ObservabilityPage />} />
                         <Route path="/console/*" element={<ConsoleApp />} />
+                        <Route path="/compliance" element={<GdprCompliancePage />} />
+                        <Route path="/automation" element={<BrowserAutomationPage />} />
+                        <Route path="/sync" element={<SyncPage />} />
+                        <Route path="/work-sessions" element={<WorkSessionsPage />} />
+                        <Route path="/analytics" element={<AnalyticsDashboard />} />
+                        <Route path="/forum" element={<ForumPage />} />
+                        <Route path="/forum/posts/:id" element={<ForumPostDetailPage />} />
                         <Route path="/agents" element={<AgentsPage />} />
                         <Route path="/settings" element={<SettingsPage />} />
                         <Route path="/goals" element={<GoalModePage />} />
