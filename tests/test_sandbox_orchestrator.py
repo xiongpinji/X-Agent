@@ -35,7 +35,7 @@ class TestSandboxWorker:
     @pytest.mark.asyncio
     async def test_single_task_success(self):
         worker = SandboxWorker(_echo_handler)
-        task = QueuedTask(task_id="t1", name="demo", payload={"msg": "hi"})
+        task = QueuedTask(id="t1", name="demo", payload={"msg": "hi"})
         result = await worker.process(task)
         assert result.success is True
         assert result.task_id == "t1"
@@ -45,7 +45,7 @@ class TestSandboxWorker:
     @pytest.mark.asyncio
     async def test_failing_command_marks_failure(self):
         worker = SandboxWorker(_failing_handler)
-        task = QueuedTask(task_id="t2", name="demo", payload={})
+        task = QueuedTask(id="t2", name="demo", payload={})
         result = await worker.process(task)
         assert result.success is False
         assert result.steps[0]["exit_code"] == 7
@@ -53,7 +53,7 @@ class TestSandboxWorker:
     @pytest.mark.asyncio
     async def test_raising_handler_captured(self):
         worker = SandboxWorker(_raising_handler)
-        task = QueuedTask(task_id="t3", name="demo", payload={})
+        task = QueuedTask(id="t3", name="demo", payload={})
         result = await worker.process(task)
         assert result.success is False
         assert "boom" in (result.error or "")

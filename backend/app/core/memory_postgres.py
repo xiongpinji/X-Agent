@@ -148,9 +148,16 @@ class PostgresMemorySystem:
         query: str,
         layers: list[int] | None = None,
         top_k: int = 5,
+        scope: MemoryScope | None = None,
     ) -> list[MemoryItem]:
         pool = await self._get_pool()
         normalized_query = self._escape_ilike(query.strip())
+        # scope.owner_agent_id 限定检索归属；缺省不过滤，保持既有行为。
+        owner_filter = ""
+        params_extra: list = []
+        if scope is not None and scope.owner_agent_id:
+            owner_filter = " AND agent_id = $%d::uuid"
+            params_extra = [scope.owner_agent_id]
         if self._enable_vector_search and self._embedding_model is not None:
             query_embedding = await self._embed(query)
             rows = await pool.fetch(
@@ -160,7 +167,7 @@ class PostgresMemorySystem:
                     layer, importance, tags, metadata, created_at
                 FROM memories
                 WHERE tenant_id = $1
-                  AND layer = ANY($2::int[])
+                  AND layer = ANY($2::int[])""" + owner_filter % 5 + """
                 ORDER BY embedding <=> $3::vector, importance DESC, created_at DESC
                 LIMIT $4
                 """,
@@ -168,6 +175,7 @@ class PostgresMemorySystem:
                 layers or [1, 2, 3, 4],
                 self._vector_literal(query_embedding),
                 top_k,
+                *params_extra,
             )
             return [self._row_to_item(row) for row in rows]
 
@@ -186,7 +194,7 @@ class PostgresMemorySystem:
                     SELECT 1 FROM unnest(tags) AS tag
                     WHERE tag ILIKE ('%' || $3 || '%') ESCAPE '\'
                 )
-              )
+              )""" + owner_filter % 5 + """
             ORDER BY importance DESC, created_at DESC
             LIMIT $4
             """,
@@ -194,6 +202,7 @@ class PostgresMemorySystem:
             layers or [1, 2, 3, 4],
             normalized_query,
             top_k,
+            *params_extra,
         )
         return [self._row_to_item(row) for row in rows]
 

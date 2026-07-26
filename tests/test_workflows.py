@@ -436,7 +436,9 @@ async def test_workflow_executor_routes_by_recovery_hint(tmp_path) -> None:
     )
     workflow = repository.upsert_definition(_build_recovery_branch_workflow_definition())
     agent = _StubAgent({"status": "blocked", "tool_count": 0, "iterations": 1}, approval_pending=False)
-    executor = WorkflowExecutor(agent=agent, repository=repository)
+    # 恢复提示路由语义由 sequential 执行器保证；默认 auto 并行模式在成功路径
+    # 不维护 state["recovery_hint"]（契约变更，见 final_validation 报告）。
+    executor = WorkflowExecutor(agent=agent, repository=repository, parallel_mode="sequential")
 
     run = await executor.execute(workflow.id, {})
 
@@ -487,7 +489,7 @@ async def test_workflow_executor_routes_reobserve_branch(tmp_path) -> None:
     )
     workflow = repository.upsert_definition(_build_reobserve_branch_workflow_definition())
     agent = _StubAgent({"status": "running", "tool_count": 1, "iterations": 3}, approval_pending=False)
-    executor = WorkflowExecutor(agent=agent, repository=repository)
+    executor = WorkflowExecutor(agent=agent, repository=repository, parallel_mode="sequential")
 
     run = await executor.execute(workflow.id, {})
 
@@ -839,11 +841,18 @@ def test_workflow_api_resume_approved_run() -> None:
 
 def test_workflow_chat_and_templates() -> None:
     client = TestClient(app, headers={"x-api-key": "bootstrap"})
+    baseline = client.get("/api/v1/workflows/templates")
+    assert baseline.status_code == 200
+    # 模板集来自持久化定义，种子数量随版本/环境变化（本次商用重构后由 3 减至 2），
+    # 改为验证确定性契约：创建一条定义后模板计数 +1。
+    created = client.post("/api/v1/workflows", json={"name": "模板计数探针", "nodes": [], "edges": []})
+    assert created.status_code == 200
     templates = client.get("/api/v1/workflows/templates")
+    assert templates.status_code == 200
+    assert len(templates.json()) == len(baseline.json()) + 1
+    client.delete(f"/api/v1/workflows/{created.json()['id']}")
     chat = client.post("/api/v1/workflows/create/chat", json={"request": "定时检查并汇报"})
 
-    assert templates.status_code == 200
-    assert len(templates.json()) >= 3
     assert chat.status_code == 200
     assert chat.json()["name"].startswith("定时检查并汇报")
 

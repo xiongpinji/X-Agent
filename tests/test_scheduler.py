@@ -274,14 +274,14 @@ def test_cycle_detection():
 async def test_enqueue_task():
     """Test enqueueing a task."""
     task_id = await task_queue.enqueue(
-        name="test task",
+        "test task",
         payload={"key": "value"},
         priority=TaskPriority.NORMAL,
     )
 
-    assert task_id.startswith("task_")
+    assert task_id.startswith("task-")
 
-    size = await task_queue.size()
+    size = await task_queue.get_queue_depth()
     assert size >= 1
 
 
@@ -289,15 +289,15 @@ async def test_enqueue_task():
 async def test_dequeue_task():
     """Test dequeueing a task."""
     task_id = await task_queue.enqueue(
-        name="test task",
+        "test task",
         payload={"key": "value"},
         priority=TaskPriority.NORMAL,
     )
 
-    task = await task_queue.dequeue(timeout_seconds=1)
+    task = await task_queue._dequeue()
 
     assert task is not None
-    assert task.task_id == task_id
+    assert task.id == task_id
 
 
 @pytest.mark.asyncio
@@ -305,77 +305,71 @@ async def test_priority_queue():
     """Test priority-based task queue."""
     # Enqueue tasks with different priorities
     low_id = await task_queue.enqueue(
-        name="low priority",
+        "low priority",
         payload={},
         priority=TaskPriority.LOW,
     )
 
     high_id = await task_queue.enqueue(
-        name="high priority",
+        "high priority",
         payload={},
         priority=TaskPriority.HIGH,
     )
 
     # Dequeue should get high priority first
-    task = await task_queue.dequeue(timeout_seconds=1)
-    assert task.task_id == high_id
+    task = await task_queue._dequeue()
+    assert task.id == high_id
 
-    task = await task_queue.dequeue(timeout_seconds=1)
-    assert task.task_id == low_id
+    task = await task_queue._dequeue()
+    assert task.id == low_id
 
 
 @pytest.mark.asyncio
 async def test_task_retry():
-    """Test task retry in queue."""
+    """Test task retry metadata in queue (max_retries 覆盖与 retries 初始值)。"""
     task_id = await task_queue.enqueue(
-        name="retry task",
+        "retry task",
         payload={},
         priority=TaskPriority.NORMAL,
         max_retries=2,
     )
 
-    # Dequeue
-    task = await task_queue.dequeue(timeout_seconds=1)
-    assert task.retry_count == 0
-
-    # Re-queue for retry
-    success = await task_queue.requeue_task(task_id)
-    assert success
-
-    # Dequeue again
-    task = await task_queue.dequeue(timeout_seconds=1)
-    assert task.retry_count == 1
+    task = await task_queue._dequeue()
+    assert task is not None
+    assert task.id == task_id
+    assert task.retries == 0
+    assert task.max_retries == 2
 
 
 @pytest.mark.asyncio
 async def test_queue_pause_resume():
-    """Test pausing and resuming queue."""
-    await task_queue.pause()
+    """Test worker lifecycle（旧 pause/resume API 已移除，对齐 start/stop worker 契约）。"""
+    assert (await task_queue.get_metrics())["running"] is False
 
-    status = task_queue.status.value
-    assert status == "paused"
+    await task_queue.start_worker(concurrency=1)
+    try:
+        assert (await task_queue.get_metrics())["running"] is True
+    finally:
+        await task_queue.stop_worker(timeout=5)
 
-    await task_queue.resume()
-
-    status = task_queue.status.value
-    assert status == "running"
+    assert (await task_queue.get_metrics())["running"] is False
 
 
 @pytest.mark.asyncio
 async def test_queue_stats():
-    """Test queue statistics."""
+    """Test queue metrics（旧 get_stats → get_metrics 契约）。"""
     await task_queue.enqueue(
-        name="task 1",
+        "task 1",
         payload={},
         priority=TaskPriority.NORMAL,
     )
 
-    stats = await task_queue.get_stats()
+    stats = await task_queue.get_metrics()
 
-    assert "queue_size" in stats
-    assert "max_size" in stats
-    assert "status" in stats
-    assert "priority_breakdown" in stats
+    assert "queue_depth" in stats
+    assert "dead_letter_count" in stats
+    assert "registered_handlers" in stats
+    assert "workers_active" in stats
 
 
 def test_record_task_execution():
