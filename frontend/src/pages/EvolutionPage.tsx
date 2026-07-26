@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
+import { toErrorMessage } from '@/services/errorMessage'
 import { useAppStore } from '@/store/appStore'
 import { useI18n } from '@/i18n/context'
 import {
@@ -138,7 +139,7 @@ const EvolutionPage: React.FC = () => {
       setGepaOutcome(await evolutionOps.triggerGepa(trajectory, result))
       await loadData()
     } catch (e: any) {
-      setGepaError(e?.response?.data?.detail || t('evolution.triggerFailed', 'Trigger failed'))
+      setGepaError(toErrorMessage(e, t('evolution.triggerFailed', 'Trigger failed')))
     } finally {
       setGepaBusy(false)
     }
@@ -156,7 +157,7 @@ const EvolutionPage: React.FC = () => {
       setCycleOutcome(await evolutionOps.triggerCycle(cycleTaskId.trim()))
       await loadData()
     } catch (e: any) {
-      setCycleError(e?.response?.data?.detail || t('evolution.cycleFailed', 'Cycle trigger failed'))
+      setCycleError(toErrorMessage(e, t('evolution.cycleFailed', 'Cycle trigger failed')))
     } finally {
       setCycleBusy(false)
     }
@@ -178,7 +179,7 @@ const EvolutionPage: React.FC = () => {
       setOptExecId(out.execution_id)
       await loadData()
     } catch (e: any) {
-      setRecError(e?.response?.data?.detail || 'record failed')
+      setRecError(toErrorMessage(e, 'record failed'))
     } finally { setRecBusy(false) }
   }
 
@@ -194,7 +195,7 @@ const EvolutionPage: React.FC = () => {
       setEvalOutcome(await evolutionOps.evaluateExecution(evalExecId.trim(), evalFeedback.trim() ? feedback : undefined))
       await loadData()
     } catch (e: any) {
-      setEvalError(e?.response?.data?.detail || 'evaluate failed')
+      setEvalError(toErrorMessage(e, 'evaluate failed'))
     } finally { setEvalBusy(false) }
   }
 
@@ -209,7 +210,7 @@ const EvolutionPage: React.FC = () => {
       setOptOutcome(await evolutionOps.optimizeStrategy(optExecId.trim(), score))
       await loadData()
     } catch (e: any) {
-      setOptError(e?.response?.data?.detail || 'optimize failed')
+      setOptError(toErrorMessage(e, 'optimize failed'))
     } finally { setOptBusy(false) }
   }
 
@@ -221,7 +222,7 @@ const EvolutionPage: React.FC = () => {
       setDistillOutcome(await evolutionOps.distillSkill(ids))
       await loadData()
     } catch (e: any) {
-      setDistillError(e?.response?.data?.detail || 'distill failed')
+      setDistillError(toErrorMessage(e, 'distill failed'))
     } finally { setDistillBusy(false) }
   }
 

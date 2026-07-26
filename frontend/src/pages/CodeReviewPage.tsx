@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { toErrorMessage } from '@/services/errorMessage'
 import { apiClient } from '@/services/api'
 import { useAppStore } from '@/store/appStore'
 import { useI18n } from '@/i18n/context'
@@ -49,7 +50,7 @@ const CodeReviewPage: React.FC = () => {
         comments: resp?.comments ?? resp?.findings ?? resp?.results ?? [],
       })
     } catch (err: any) {
-      setError(err?.response?.data?.detail || err?.message || 'Review request failed')
+      setError(toErrorMessage(err, 'Review request failed'))
     } finally {
       setLoading(false)
     }

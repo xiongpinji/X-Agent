@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { toErrorMessage } from '@/services/errorMessage'
 import { useNavigate } from 'react-router-dom'
 import { useAppStore } from '@/store/appStore'
 import { apiClient } from '@/services/api'
@@ -66,11 +67,7 @@ export const LoginPage: React.FC = () => {
 
       navigate('/')
     } catch (err: any) {
-      const message = err?.response?.data?.detail
-        || err?.response?.data?.message
-        || err?.message
-        || 'Authentication failed'
-      setError(message)
+      setError(toErrorMessage(err, 'Authentication failed'))
     } finally {
       setLoading(false)
     }
