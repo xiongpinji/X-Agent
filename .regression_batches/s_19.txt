@@ -1,0 +1,16 @@
+tests/e2e/test_offline_e2e.py
+tests/e2e/test_performance_security_e2e.py
+tests/integration/test_agent_v2_integration.py
+tests/test_agent_run_timeline.py
+tests/test_creative_studio.py
+tests/test_error_classification.py
+tests/test_first_release_entrypoints.py
+tests/test_llm_embeddings_comprehensive.py
+tests/test_mcp_discovery.py
+tests/test_messages_stream.py
+tests/test_plugin_market.py
+tests/test_real_client_flags.py
+tests/unit/test_llm_backends.py
+tests/unit/test_notifications.py
+tests/unit/test_performance_full.py
+tests/unit/test_subscription_deep.py

@@ -1,0 +1,5 @@
+#!/bin/bash
+out=""
+for a in "$@"; do case "$a" in --file=*) out="${a#--file=}";; esac; done
+[ -n "$out" ] && echo "PGDUMP-STUB" > "$out"
+exit 0

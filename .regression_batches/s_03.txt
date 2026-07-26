@@ -1,0 +1,15 @@
+tests/agent_v2/test_planning_phase.py
+tests/agent_v2/test_state_manager.py
+tests/enterprise/test_forum.py
+tests/test_cli_config.py
+tests/test_gateway_mode.py
+tests/test_langfuse_real_path.py
+tests/test_local_sync_integration.py
+tests/test_open_source_public_imports.py
+tests/test_performance_optimization.py
+tests/test_qdrant_snapshot.py
+tests/test_rc_owner_handoff_gate.py
+tests/test_rc_runtime_smoke.py
+tests/test_trace_correlation.py
+tests/unit/test_enterprise_batch5.py
+tests/unit/test_migration_export_shipper_deep.py

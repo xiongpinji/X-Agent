@@ -41,8 +41,8 @@ def _reset_scheduler_singletons():
     cron_scheduler.scheduled_tasks.clear()
     cron_scheduler.execution_history.clear()
     cron_scheduler.running_tasks.clear()
-    task_queue.queue.clear()
-    task_queue.task_map.clear()
+    task_queue._memory_queue.clear()
+    task_queue._memory_status.clear()
     task_queue.stats = {
         "total_enqueued": 0,
         "total_dequeued": 0,
@@ -56,8 +56,8 @@ def _reset_scheduler_singletons():
     cron_scheduler.scheduled_tasks.clear()
     cron_scheduler.execution_history.clear()
     cron_scheduler.running_tasks.clear()
-    task_queue.queue.clear()
-    task_queue.task_map.clear()
+    task_queue._memory_queue.clear()
+    task_queue._memory_status.clear()
     task_queue.stats = {
         "total_enqueued": 0,
         "total_dequeued": 0,

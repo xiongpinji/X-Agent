@@ -1,0 +1,16 @@
+tests/performance/test_stress.py
+tests/runtime/test_open_source_package_only.py
+tests/test_approval_store_comprehensive.py
+tests/test_cli_github.py
+tests/test_code_generation_quality.py
+tests/test_config.py
+tests/test_end_to_end_contracts.py
+tests/test_llm_framework.py
+tests/test_mobile.py
+tests/test_parallel_tools.py
+tests/test_playwright_real_path.py
+tests/test_rc_owner_gate_checklist.py
+tests/test_workflow_store_sql.py
+tests/unit/test_goals_api.py
+tests/unit/test_services_batch7.py
+tests/unit/test_tail_batch8_part1.py

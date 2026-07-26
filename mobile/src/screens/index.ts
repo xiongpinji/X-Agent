@@ -4,5 +4,6 @@
 export { LoginScreen } from './LoginScreen';
 export { HomeScreen } from './HomeScreen';
 export { TaskListScreen } from './TaskListScreen';
+export { TaskTriggerScreen } from './TaskTriggerScreen';
 export { WorkflowMonitorScreen } from './WorkflowMonitorScreen';
 export { SettingsScreen } from './SettingsScreen';

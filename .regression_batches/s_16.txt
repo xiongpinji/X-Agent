@@ -1,0 +1,16 @@
+tests/enterprise/test_sso.py
+tests/performance/test_benchmarks.py
+tests/runtime/test_desktop_runtime_complex.py
+tests/test_admin_sql_store_p103.py
+tests/test_browser_service.py
+tests/test_checkpoint_resume.py
+tests/test_desktop_macros.py
+tests/test_feedback.py
+tests/test_kms.py
+tests/test_mcp_components.py
+tests/test_mcp_config.py
+tests/test_planning_pipeline.py
+tests/test_rc_owner_env_template.py
+tests/test_skills_system.py
+tests/test_tenant_isolation_security.py
+tests/unit/test_tail_batch8_part3.py

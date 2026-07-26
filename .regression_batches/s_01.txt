@@ -1,0 +1,14 @@
+tests/e2e/test_open_source_catalog_e2e.py
+tests/enterprise/test_agent_v2.py
+tests/performance/test_api_throughput.py
+tests/test_cache_benchmarks.py
+tests/test_chat_entrypoint_contract.py
+tests/test_performance_extended.py
+tests/test_rc_owner_gate_runner.py
+tests/test_service_layer_exceptions.py
+tests/test_streaming_enhanced.py
+tests/test_sync_api_integration.py
+tests/test_test_taxonomy.py
+tests/test_workflow_worker.py
+tests/unit/core/context/test_retrieval.py
+tests/unit/test_api_batch3_part2.py

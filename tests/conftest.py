@@ -30,6 +30,29 @@ def _set_worker_data_dir() -> None:
 
 _set_worker_data_dir()
 
+# ---------------------------------------------------------------------------
+# A 类契约对齐（2026-07-26 回归）：商用修复将路由注册移入 FastAPI startup
+# 钩子（backend.app.main.startup_event -> _register_all_routers()）。
+# 大量测试直接 TestClient(app) 而不进入 lifespan，startup 不触发，
+# 导致全部 API 路由 404。此处幂等地在测试会话导入期完成注册，
+# 并用守卫包装避免 startup 二次注册重复路由。
+# ---------------------------------------------------------------------------
+try:  # pragma: no cover - 测试环境引导代码
+    import backend.app.main as _main_mod
+
+    _orig_register_routers = _main_mod._register_all_routers
+
+    def _guarded_register_routers() -> None:
+        if getattr(_main_mod.app, "_xagent_routers_registered", False):
+            return
+        _orig_register_routers()
+        _main_mod.app._xagent_routers_registered = True
+
+    _main_mod._register_all_routers = _guarded_register_routers
+    _guarded_register_routers()
+except Exception:
+    pass
+
 import pytest
 import pytest_asyncio
 

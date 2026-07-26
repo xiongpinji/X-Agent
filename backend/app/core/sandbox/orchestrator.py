@@ -70,7 +70,7 @@ class SandboxWorker:
         self._spec_factory = spec_factory or (lambda task: SandboxSpec())
 
     async def process(self, task: QueuedTask) -> SandboxRunResult:
-        result = SandboxRunResult(task_id=task.task_id, success=False)
+        result = SandboxRunResult(task_id=(getattr(task, "task_id", None) or task.id), success=False)
         spec = self._spec_factory(task)
         sandbox = DockerSandbox(spec)
         result.backend = sandbox.backend
@@ -82,7 +82,7 @@ class SandboxWorker:
             # handler may explicitly return False to signal failure
             result.success = outcome is not False and result.error is None
         except Exception as e:
-            logger.exception("Sandbox worker failed for task %s", task.task_id)
+            logger.exception("Sandbox worker failed for task %s", (getattr(task, "task_id", None) or task.id))
             result.error = str(e)
             result.success = False
         finally:
@@ -128,7 +128,7 @@ class SandboxOrchestrator:
     async def _run_one(self, task: QueuedTask) -> None:
         async with self._sem:
             result = await self._worker.process(task)
-            self._results[task.task_id] = result
+            self._results[(getattr(task, "task_id", None) or task.id)] = result
 
     async def run_until_empty(self, idle_timeout: float = 1.0) -> dict[str, SandboxRunResult]:
         """Drain the queue: dequeue and process every pending task, then return.
@@ -160,7 +160,7 @@ class SandboxOrchestrator:
                 continue
             async with self._sem:
                 result = await self._worker.process(task)
-                self._results[task.task_id] = result
+                self._results[(getattr(task, "task_id", None) or task.id)] = result
 
     async def stop(self) -> None:
         """Stop the background loop and wait for in-flight tasks."""

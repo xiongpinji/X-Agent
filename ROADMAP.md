@@ -2,7 +2,7 @@
 
 Strategic roadmap for X-Agent Core development, outlining planned features, improvements, and milestones.
 
-> **版本口径**: 版本号以 `pyproject.toml` 为单一事实源 (当前 `0.2.0-alpha`)。本文件已于 2026-07-19 按 `commercial_audit/00_商用交付差距审计报告.md` 的结论重写时间线; 此前版本中的"生产就绪"状态宣称与 2025 年时间线均为过时叙事, 已更正。
+> **版本口径**: 版本号以 `pyproject.toml` 为单一事实源 (当前 `0.3.0-alpha`)。本文件已于 2026-07-19 按 `commercial_audit/00_商用交付差距审计报告.md` 的结论重写时间线; 此前版本中的"生产就绪"状态宣称与 2025 年时间线均为过时叙事, 已更正。
 
 ## Vision
 
@@ -10,7 +10,7 @@ Build the most capable, secure, and user-friendly autonomous agent framework for
 
 ## Current Status
 
-**Version**: 0.2.0-alpha (以 `pyproject.toml` 为单一事实源)
+**Version**: 0.3.0-alpha (以 `pyproject.toml` 为单一事实源)
 **Status**: 商用修复中 — Phase 1「止血与架构收敛」(2026-07-19 启动)
 **Audit Baseline**: 2026-07-19 商用交付差距审计综合评分约 31/100, **暂不具备任何形态的对外商用交付条件** (SaaS / 自托管 / 框架 SDK 均不可); 问题集中在"接线、收敛、验证"而非"从零建设", 修复路径是"收敛"而非"重写"。详见 `commercial_audit/00_商用交付差距审计报告.md`。
 **Release**: 尚无对外发布版本; git 仓库于 2026-07-19 fresh init (基线提交 f3aab93)。
@@ -51,7 +51,7 @@ Build the most capable, secure, and user-friendly autonomous agent framework for
 
 - [ ] 18 项 P0 修复清零 (compose init.sql / Celery 启动命令 / 环境变量前缀 / 监控接线 / OIDC 签名校验 / 租户隔离 / 审批可信化 / git 历史决策关闭 / 测试路径修复 / 浏览器与并行 Agent 假成功 / React 接线 / 控制台路由与登录 UI / 沙箱宿主直写 / templates.py / 记忆路由冲突与 Cypher 注入 / AST 黑名单沙箱)
 - [ ] 死代码与重复实现收敛 (LLM 路由 ×5→1、沙箱 ×6→1、ToolRegistry ×3+1→1+1、协作 ×3→1、workflow ×2→1、缓存 ×6、插件 ×6 套归档)
-- [x] 版本叙事统一 (P1-20 提前: pyproject 单一事实源 0.2.0-alpha; 砍 CHANGELOG_NEW; ROADMAP/前端/SDK 口径对齐)
+- [x] 版本叙事统一 (P1-20 提前: pyproject 单一事实源 0.3.0-alpha; 砍 CHANGELOG_NEW; ROADMAP/前端/SDK 口径对齐)
 - [x] git init + 基线提交 (2026-07-19, f3aab93); 唯一 CI 打通进行中 (P0-09)
 
 ### 2026 Q4 — Phase 2「商用就绪」(功能本体收敛)
@@ -140,7 +140,7 @@ Build the most capable, secure, and user-friendly autonomous agent framework for
 
 ### Policy
 
-- **0.2.0-alpha 开发线**: 商用修复期间 API 可能发生不兼容调整, 不做兼容性承诺
+- **0.3.0-alpha 开发线**: 商用修复期间 API 可能发生不兼容调整, 不做兼容性承诺
 - **首个稳定 major 版本 (1.x)**: 发布后 12 个月内无破坏性变更
 
 ### Migration Guides
@@ -181,7 +181,7 @@ We value your feedback! Share your ideas:
 
 ## Release Schedule
 
-- **Alpha (0.2.0-alpha)**: 2026 Q3 (当前, Phase 1 止血与架构收敛)
+- **Alpha (0.3.0-alpha)**: 2026 Q3 (当前, Phase 1 止血与架构收敛)
 - **Beta**: 2026 Q4 (Phase 2 完成, checklist P1 达标率 ≥80%)
 - **Release Candidate**: 2027 Q1 (企业演示动线跑通: SSO 登录 → 异步任务 → 沙箱执行 → 审计外送 → Helm 部署)
 - **首个稳定 major 版本 (1.x)**: 2027 年内, SOC 2 Type I 取得后评估
@@ -190,8 +190,8 @@ We value your feedback! Share your ideas:
 
 | Version | Release | Support Until | Status |
 |---------|---------|---------------|--------|
-| 0.1.x   | 未发布 (仅为 pyproject 历史标记) | — | 已被 0.2.0-alpha 取代 |
-| 0.2.0-alpha | 2026-07 (开发线, 未对外发布) | 首个 Beta 发布 | 商用修复中 (当前) |
+| 0.1.x   | 未发布 (仅为 pyproject 历史标记) | — | 已被 0.3.0-alpha 取代 |
+| 0.3.0-alpha | 2026-07 (开发线, 未对外发布) | 首个 Beta 发布 | 商用修复中 (当前) |
 | 稳定版 1.x | 未发布 | 发布后 12 个月 | 规划中 (2027) |
 
 ## Metrics & Goals
@@ -245,7 +245,7 @@ We value your feedback! Share your ideas:
 ## Questions?
 
 For questions about the roadmap:
-- **GitHub Discussions**: https://github.com/x-agent/x-agent-core/discussions
+- **GitHub Discussions**: https://github.com/xiongpinji/X-Agent/discussions
 - **Email**: roadmap@x-agent.dev
 - **Community Forum**: https://community.x-agent.dev
 

@@ -1,0 +1,16 @@
+tests/test_agent_extended.py
+tests/test_contracts_regression.py
+tests/test_coverage_branch_coverage.py
+tests/test_hooks_config.py
+tests/test_migration_framework.py
+tests/test_observability_shapes.py
+tests/test_parallel_execution_engine.py
+tests/test_performance_benchmark.py
+tests/test_repair_loop.py
+tests/test_security.py
+tests/test_settings_production_guard_p119.py
+tests/test_skill_market_complete.py
+tests/test_structure_split.py
+tests/test_workflow_run_timeline.py
+tests/unit/test_main_deep.py
+tests/unit/test_workflows_deep.py

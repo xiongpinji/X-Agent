@@ -4,7 +4,7 @@
 Checks:
   1. manifest.json is valid JSON.
   2. MV3 required fields present (manifest_version=3, name, version).
-  3. Expected version pinning (version 0.2.0, version_name 0.2.0-alpha).
+  3. Expected version pinning (version 0.3.0, version_name 0.3.0-alpha).
   4. Every file path referenced by the manifest exists on disk
      (icons, action popup/icons, background service worker,
      content scripts, web_accessible_resources).
@@ -25,8 +25,8 @@ from pathlib import Path
 EXTENSION_ROOT = Path(__file__).resolve().parent.parent
 MANIFEST_PATH = EXTENSION_ROOT / "manifest.json"
 
-EXPECTED_VERSION = "0.2.0"
-EXPECTED_VERSION_NAME = "0.2.0-alpha"
+EXPECTED_VERSION = "0.3.0"
+EXPECTED_VERSION_NAME = "0.3.0-alpha"
 
 # MV3 API permissions (non-host) recognized by Chrome 90+.
 KNOWN_PERMISSIONS = {

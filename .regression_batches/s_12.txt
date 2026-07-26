@@ -1,0 +1,17 @@
+tests/e2e/test_agent_fix_real_llm.py
+tests/e2e/test_browser_e2e.py
+tests/e2e/test_open_source_e2e.py
+tests/e2e/test_smoke_api.py
+tests/enterprise/test_audit_enhanced.py
+tests/integration/test_auth_api.py
+tests/test_browser_comprehensive.py
+tests/test_codex_hermes_gap_matrix.py
+tests/test_distributed_performance.py
+tests/test_media_processing.py
+tests/test_memory_embeddings_backends.py
+tests/test_multi_agent_plugin_audit.py
+tests/test_open_source_registry_contracts.py
+tests/test_rc_external_smoke.py
+tests/test_scheduler.py
+tests/test_workflow_runtime_complex.py
+tests/unit/test_skill_code_batch6.py

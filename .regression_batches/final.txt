@@ -1,0 +1,138 @@
+rerun files: 65 covered: 65 missing: []
+FINAL passed=7076 failed=79 skipped=303 error=21 total=7479
+pass_rate_all=94.61%
+pass_rate_excl_skip=98.61%
+
+--- files with remaining failures/errors ---
+tests/enterprise/test_billing.py: failed=2 error=1
+tests/test_agent_extended.py: failed=0 error=3
+tests/test_agent_loop.py: failed=0 error=1
+tests/test_agent_run_detail.py: failed=1 error=0
+tests/test_agent_run_timeline.py: failed=1 error=0
+tests/test_api.py: failed=2 error=0
+tests/test_api_browser_desktop_memory.py: failed=1 error=0
+tests/test_api_contracts.py: failed=1 error=0
+tests/test_api_extended.py: failed=4 error=0
+tests/test_collaboration_delegation.py: failed=4 error=0
+tests/test_coverage_branch_coverage.py: failed=0 error=10
+tests/test_coverage_error_handling.py: failed=0 error=3
+tests/test_coverage_exception_cases.py: failed=0 error=2
+tests/test_hybrid_memory.py: failed=1 error=0
+tests/test_integration_extended.py: failed=2 error=0
+tests/test_llm_edge_cases.py: failed=2 error=0
+tests/test_memory_api.py: failed=2 error=0
+tests/test_memory_detail.py: failed=1 error=0
+tests/test_observability_shapes.py: failed=1 error=0
+tests/test_performance.py: failed=3 error=0
+tests/test_performance_extended.py: failed=6 error=0
+tests/test_performance_stress.py: failed=0 error=1
+tests/test_rc_supply_chain_gate.py: failed=1 error=0
+tests/test_sandbox_api.py: failed=2 error=0
+tests/test_sandbox_orchestrator.py: failed=6 error=0
+tests/test_scheduler.py: failed=6 error=0
+tests/test_security.py: failed=2 error=0
+tests/test_security_authz.py: failed=2 error=0
+tests/test_streaming_api.py: failed=1 error=0
+tests/test_streaming_comprehensive.py: failed=6 error=0
+tests/test_telegram_channel_api.py: failed=2 error=0
+tests/test_test_taxonomy.py: failed=1 error=0
+tests/test_tool_detail.py: failed=1 error=0
+tests/test_trace_audit_integration.py: failed=2 error=0
+tests/test_trace_correlation.py: failed=1 error=0
+tests/test_trace_replay.py: failed=1 error=0
+tests/test_workflow_run_correlation.py: failed=1 error=0
+tests/test_workflow_run_detail.py: failed=1 error=0
+tests/test_workflow_run_observability.py: failed=1 error=0
+tests/test_workflow_run_timeline.py: failed=1 error=0
+tests/test_workflow_run_trace_link.py: failed=1 error=0
+tests/test_workflow_schedule_detail.py: failed=1 error=0
+tests/test_workflows.py: failed=5 error=0
+
+--- remaining failure details ---
+tests.test_api::test_prometheus_metrics_endpoint | asyncpg.exceptions._base.ClientConfigurationError: invalid DSN: scheme is expected to be either "postgresql" or "postgre
+tests.enterprise.test_billing.TestBillingPerformance::test_bulk_usage_recording | failed on setup with "worker 'gw1' crashed while running 'tests/enterprise/test_billing.py::TestBillingPerformance::test
+tests.enterprise.test_billing.TestPaymentProviders::test_stripe_provider_charge | assert False is True
+tests.enterprise.test_billing.TestPaymentProviders::test_stripe_provider_refund | assert False is True
+tests.test_api::test_metrics_summary_endpoint | asyncpg.exceptions._base.ClientConfigurationError: invalid DSN: scheme is expected to be either "postgresql" or "postgre
+tests.test_api_browser_desktop_memory::test_memory_api_store_search_and_count | asyncpg.exceptions._base.ClientConfigurationError: invalid DSN: scheme is expected to be either "postgresql" or "postgre
+tests.test_api_contracts::test_core_api_routes_are_available | asyncpg.exceptions._base.ClientConfigurationError: invalid DSN: scheme is expected to be either "postgresql" or "postgre
+tests.test_api_extended.TestAPIMemoryOperations::test_memory_search_with_special_characters | TypeError: PostgresMemorySystem.search() got an unexpected keyword argument 'scope'
+tests.test_api_extended.TestAPIMemoryOperations::test_memory_consolidate_with_invalid_layers | asyncpg.exceptions._base.ClientConfigurationError: invalid DSN: scheme is expected to be either "postgresql" or "postgre
+tests.test_api_extended.TestAPIMemoryOperations::test_memory_consolidate_same_source_and_target | asyncpg.exceptions._base.ClientConfigurationError: invalid DSN: scheme is expected to be either "postgresql" or "postgre
+tests.test_api_extended.TestAPIMemoryOperations::test_memory_search_with_empty_query | TypeError: PostgresMemorySystem.search() got an unexpected keyword argument 'scope'
+tests.test_agent_loop::test_agent_returns_mock_answer | failed on setup with "worker 'gw2' crashed while running 'tests/test_agent_loop.py::test_agent_returns_mock_answer'"
+tests.test_agent_run_detail::test_agent_run_detail_and_correlation_views | backend.app.core.llm.backends.LLMBackendError: No LLM backend completed successfully: ollama backend failed (base_url=ht
+tests.test_agent_run_timeline::test_agent_run_timeline_and_stream_observability | backend.app.core.llm.backends.LLMBackendError: No LLM backend completed successfully: ollama backend failed (base_url=ht
+tests.test_collaboration_delegation.TestDelegatorCore::test_end_to_end_delegation_mock_llm | AssertionError: assert 'failed' == 'completed'      - completed   + failed
+tests.test_collaboration_delegation.TestProcessIsolation::test_process_isolated_spawn_completes_in_child | AssertionError: {'agent_id': 'agent_0d638e09bfed', 'agent_type': 'subagent', 'completed_at': '2026-07-26T09:02:30.554854
+tests.test_coverage_error_handling.TestAgentLoopErrorHandling::test_memory_system_failure | failed on setup with "worker 'gw3' crashed while running 'tests/test_coverage_error_handling.py::TestAgentLoopErrorHandl
+tests.test_coverage_exception_cases.TestInvalidInputHandling::test_invalid_callback_type | failed on setup with "worker 'gw2' crashed while running 'tests/test_coverage_exception_cases.py::TestInvalidInputHandli
+tests.test_collaboration_delegation.TestDelegatorCore::test_room_callback_posts_result_message | AssertionError: assert 'failed' == 'completed'      - completed   + failed
+tests.test_collaboration_delegation.TestDelegationAPI::test_delegate_end_to_end_via_api | AssertionError: assert 'failed' == 'completed'      - completed   + failed
+tests.test_hybrid_memory.TestPerformance::test_hot_tier_performance | assert 0.17133092880249023 < (0.1 * 1.0)
+tests.test_llm_edge_cases.TestBuildLLMRouter::test_build_router_with_empty_fallback_order | RuntimeError: No LLM API key configured. Set XAGENT_OPENAI_API_KEY or XAGENT_DEEPSEEK_API_KEY or XAGENT_ANTHROPIC_API_KE
+tests.test_llm_edge_cases.TestBuildLLMRouter::test_build_router_with_unknown_backend | RuntimeError: No LLM API key configured. Set XAGENT_OPENAI_API_KEY or XAGENT_DEEPSEEK_API_KEY or XAGENT_ANTHROPIC_API_KE
+tests.test_memory_api::test_memory_api_store_search_and_consolidate | asyncpg.exceptions._base.ClientConfigurationError: invalid DSN: scheme is expected to be either "postgresql" or "postgre
+tests.test_memory_api::test_authenticated_viewer_can_search_memory_but_not_write | TypeError: PostgresMemorySystem.search() got an unexpected keyword argument 'scope'
+tests.test_memory_detail::test_memory_item_detail_and_correlation_views | asyncpg.exceptions._base.ClientConfigurationError: invalid DSN: scheme is expected to be either "postgresql" or "postgre
+tests.test_integration_extended.TestEndToEndWorkflows::test_memory_workflow_integration | asyncpg.exceptions._base.ClientConfigurationError: invalid DSN: scheme is expected to be either "postgresql" or "postgre
+tests.test_coverage_error_handling.TestAgentLoopErrorHandling::test_invalid_context | failed on setup with "worker 'gw1' crashed while running 'tests/test_coverage_error_handling.py::TestAgentLoopErrorHandl
+tests.test_integration_extended.TestDataConsistency::test_memory_consistency_after_consolidation | asyncpg.exceptions._base.ClientConfigurationError: invalid DSN: scheme is expected to be either "postgresql" or "postgre
+tests.test_coverage_error_handling.TestMemorySystemErrorHandling::test_memory_capacity_exceeded | failed on setup with "worker 'gw0' crashed while running 'tests/test_coverage_error_handling.py::TestMemorySystemErrorHa
+tests.test_coverage_exception_cases.TestInvalidInputHandling::test_malformed_json_in_context | failed on setup with "worker 'gw6' crashed while running 'tests/test_coverage_exception_cases.py::TestInvalidInputHandli
+tests.test_performance_extended.TestDatabaseQueryPerformance::test_memory_search_query_performance | asyncpg.exceptions._base.ClientConfigurationError: invalid DSN: scheme is expected to be either "postgresql" or "postgre
+tests.test_rc_supply_chain_gate::test_frontend_lockfile_matches_package_manifest | AssertionError: assert 'failed' == 'passed'      - passed   + failed
+tests.test_observability_shapes::test_observability_shapes_across_core_domains | backend.app.core.llm.backends.LLMBackendError: No LLM backend completed successfully: ollama backend failed (base_url=ht
+tests.test_performance_extended.TestCachePerformance::test_repeated_requests_performance | assert 5.315917253494263 < 1.0
+tests.test_performance_extended.TestAPIResponseTime::test_memory_search_response_time | asyncpg.exceptions._base.ClientConfigurationError: invalid DSN: scheme is expected to be either "postgresql" or "postgre
+tests.test_performance_extended.TestAPIResponseTime::test_memory_consolidation_response_time | asyncpg.exceptions._base.ClientConfigurationError: invalid DSN: scheme is expected to be either "postgresql" or "postgre
+tests.test_scheduler::test_enqueue_task | TypeError: RedisTaskQueue.enqueue() got an unexpected keyword argument 'name'
+tests.test_scheduler::test_dequeue_task | TypeError: RedisTaskQueue.enqueue() got an unexpected keyword argument 'name'
+tests.test_scheduler::test_priority_queue | TypeError: RedisTaskQueue.enqueue() got an unexpected keyword argument 'name'
+tests.test_scheduler::test_task_retry | TypeError: RedisTaskQueue.enqueue() got an unexpected keyword argument 'name'
+tests.test_scheduler::test_queue_pause_resume | AttributeError: 'RedisTaskQueue' object has no attribute 'pause'
+tests.test_scheduler::test_queue_stats | TypeError: RedisTaskQueue.enqueue() got an unexpected keyword argument 'name'
+tests.test_performance_extended.TestThroughput::test_memory_operations_throughput | asyncpg.exceptions._base.ClientConfigurationError: invalid DSN: scheme is expected to be either "postgresql" or "postgre
+tests.test_performance_extended.TestMemoryUsage::test_memory_usage_during_memory_operations | asyncpg.exceptions._base.ClientConfigurationError: invalid DSN: scheme is expected to be either "postgresql" or "postgre
+tests.test_sandbox_api.TestSandboxTaskAPI::test_submit_poll_completes | AssertionError: assert 'queued' == 'completed'      - completed   + queued
+tests.test_performance.TestAPIPerformance::test_health_endpoint_performance | AssertionError: Health endpoint too slow: 13.44ms assert 13.440248966217041 < 10
+tests.test_performance.TestAPIPerformance::test_agent_run_performance | backend.app.core.llm.backends.LLMBackendError: No LLM backend completed successfully: ollama backend failed (base_url=ht
+tests.test_performance_stress::test_memory_scale | failed on setup with "worker 'gw2' crashed while running 'tests/test_performance_stress.py::test_memory_scale'"
+tests.test_security::test_login_rate_limit | assert 401 == 429  +  where 401 = <Response [401 Unauthorized]>.status_code
+tests.test_sandbox_orchestrator.TestSandboxWorker::test_single_task_success | TypeError: Task.__init__() got an unexpected keyword argument 'task_id'
+tests.test_sandbox_orchestrator.TestSandboxWorker::test_failing_command_marks_failure | TypeError: Task.__init__() got an unexpected keyword argument 'task_id'
+tests.test_performance.TestAPIPerformance::test_concurrent_requests | AssertionError: Concurrent P99 too high: 836.72ms assert 836.723804473877 < 100
+tests.test_sandbox_orchestrator.TestSandboxWorker::test_raising_handler_captured | TypeError: Task.__init__() got an unexpected keyword argument 'task_id'
+tests.test_sandbox_orchestrator.TestSandboxOrchestrator::test_batch_drain_all_tasks | assert 0 == 5  +  where 0 = len({})
+tests.test_sandbox_orchestrator.TestSandboxOrchestrator::test_parallel_faster_than_serial | assert 0 == 4  +  where 0 = len({})
+tests.test_sandbox_orchestrator.TestSandboxOrchestrator::test_mixed_success_failure | assert 0 == 2
+tests.test_security::test_register_rate_limit | assert 400 == 429  +  where 400 = <Response [400 Bad Request]>.status_code
+tests.test_sandbox_api.TestSandboxTaskAPI::test_failing_command_marks_failed | AssertionError: assert 'queued' == 'failed'      - failed   + queued
+tests.test_security_authz.TestAuthorizationEnforcement::test_unauthenticated_access_denied | assert 503 == 401  +  where 503 = <Response [503 Service Unavailable]>.status_code
+tests.test_security_authz.TestAuthorizationEnforcement::test_insufficient_scope_denied | assert 503 == 401  +  where 503 = <Response [503 Service Unavailable]>.status_code
+tests.test_streaming_api::test_run_agent_streaming_returns_sse | backend.app.core.llm.backends.LLMBackendError: No LLM backend completed successfully: ollama backend failed (base_url=ht
+tests.test_streaming_comprehensive.TestStreamingEndpoints::test_emit_metric_event | assert 503 == 200  +  where 503 = <Response [503 Service Unavailable]>.status_code
+tests.test_streaming_comprehensive.TestStreamingEndpoints::test_emit_task_status_event | assert 503 == 200  +  where 503 = <Response [503 Service Unavailable]>.status_code
+tests.test_streaming_comprehensive.TestStreamingEndpoints::test_get_stream_events | assert 503 == 200  +  where 503 = <Response [503 Service Unavailable]>.status_code
+tests.test_streaming_comprehensive.TestStreamingEndpoints::test_get_stream_events_with_since_sequence | assert 503 == 200  +  where 503 = <Response [503 Service Unavailable]>.status_code
+tests.test_streaming_comprehensive.TestStreamingEndpoints::test_get_stream_stats | assert 503 == 200  +  where 503 = <Response [503 Service Unavailable]>.status_code
+tests.test_streaming_comprehensive.TestStreamingEndpoints::test_stream_health | assert 503 == 200  +  where 503 = <Response [503 Service Unavailable]>.status_code
+tests.test_telegram_channel_api::test_telegram_webhook_rejects_when_secret_not_configured | assert 503 == 401  +  where 503 = <Response [503 Service Unavailable]>.status_code
+tests.test_telegram_channel_api::test_telegram_webhook_ignores_non_message_payload | assert 503 == 200  +  where 503 = <Response [503 Service Unavailable]>.status_code
+tests.test_test_taxonomy::test_test_file_naming_matches_taxonomy | AssertionError: assert (False or 'test_smoke_api.py' in {'test_agent_fix_real_llm.py', 'test_desktop_e2e.py', 'test_desk
+tests.test_tool_detail::test_tool_list_and_detail_correlation_views | assert 503 == 200  +  where 503 = <Response [503 Service Unavailable]>.status_code
+tests.test_trace_audit_integration::test_trace_and_audit_cross_reference_for_agent_run | backend.app.core.llm.backends.LLMBackendError: No LLM backend completed successfully: ollama backend failed (base_url=ht
+tests.test_trace_audit_integration::test_trace_and_audit_cross_reference_for_workflow_run | KeyError: 'id'
+tests.test_trace_replay::test_trace_replay_and_debug_views | KeyError: 'trace_id'
+tests.test_workflow_run_correlation::test_workflow_run_correlation_links_run_trace_and_audit_anchors | KeyError: 'id'
+tests.test_workflow_run_detail::test_workflow_run_detail_returns_timeline | KeyError: 'id'
+tests.test_workflow_run_observability::test_workflow_run_observability_cross_links_detail_trace_and_audit | KeyError: 'id'
+tests.test_workflow_run_timeline::test_workflow_run_timeline_includes_node_compensation_and_types | KeyError: 'id'
+tests.test_workflow_run_trace_link::test_workflow_run_detail_and_trace_are_linked | KeyError: 'id'
+tests.test_workflow_schedule_detail::test_workflow_schedule_detail_and_correlation_views | KeyError: 'id'
+tests.test_workflows::test_workflow_executor_routes_by_recovery_hint | KeyError: 'recovery_hint'
+tests.test_workflows::test_workflow_executor_routes_reobserve_branch | assert False  +  where False = any(<generator object test_workflow_executor_routes_reobserve_branch.<locals>.<genexpr> a
+tests.test_workflows::test_workflow_api_async_run_returns_running_record | KeyError: 'id'
+tests.test_workflows::test_workflow_api_resume_approved_run | KeyError: 'id'
+tests.test_trace_correlation::test_trace_correlation_view | backend.app.core.llm.backends.LLMBackendError: No LLM backend completed successfully: ollama backend failed (base_url=ht
+tests.test_workflows::test_workflow_chat_and_templates | AssertionError: assert 1 >= 3  +  where 1 = len([{'description': 'Simple input -> transform -> output chain.', 'edges': 

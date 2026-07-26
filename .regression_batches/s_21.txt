@@ -1,0 +1,16 @@
+tests/e2e/test_execution_reporting.py
+tests/enterprise/test_api_key_manager.py
+tests/enterprise/test_personalization.py
+tests/performance/test_bottleneck_analysis.py
+tests/test_agent_context_integration.py
+tests/test_api_replay.py
+tests/test_core_modules_extended.py
+tests/test_distributed_state_management.py
+tests/test_feedback_integration.py
+tests/test_real_integration_clients.py
+tests/test_resume_recovery.py
+tests/test_security_hardening.py
+tests/test_skill_curator_models.py
+tests/test_vision_model.py
+tests/unit/test_main_full.py
+tests/unit/test_redis_client_full.py

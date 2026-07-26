@@ -1,0 +1,14 @@
+tests/agent_v2/test_agent_executor.py
+tests/enterprise/test_oidc_sso_flow.py
+tests/performance/test_api_latency.py
+tests/test_browser_advanced.py
+tests/test_enterprise_features.py
+tests/test_memory_system_comprehensive.py
+tests/test_multimodal_system.py
+tests/test_rc_ci_contract.py
+tests/test_resume_observability.py
+tests/test_search.py
+tests/test_tool_detail.py
+tests/test_workflow_recovery.py
+tests/test_xagent_doctor.py
+tests/unit/test_workflows_full.py

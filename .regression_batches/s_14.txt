@@ -1,0 +1,17 @@
+tests/e2e/test_desktop_macro_e2e.py
+tests/integration/test_mcp_e2e.py
+tests/test_api_browser_desktop_memory.py
+tests/test_api_planning_verification.py
+tests/test_artifacts.py
+tests/test_cli_commands.py
+tests/test_exceptions_boundaries_performance.py
+tests/test_hooks_types.py
+tests/test_mcp_main_integration.py
+tests/test_memory_edge_cases.py
+tests/test_memory_vector.py
+tests/test_ops_summary.py
+tests/test_p104_audit_shipper.py
+tests/test_skill_runtime_p1_11.py
+tests/test_workflow_schedule_detail.py
+tests/test_workflows.py
+tests/unit/test_workflows.py

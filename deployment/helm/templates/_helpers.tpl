@@ -29,7 +29,9 @@ qdrant
 {{- define "xagent.neo4jHost" -}}
 {{- if .Values.neo4j.enabled -}}
 neo4j
+{{- else if .Values.appEnv.neo4jEnabled -}}
+{{- required "external.neo4jHost must be set when neo4j.enabled=false and appEnv.neo4jEnabled=true" .Values.external.neo4jHost -}}
 {{- else -}}
-{{- required "external.neo4jHost must be set when neo4j.enabled=false" .Values.external.neo4jHost -}}
+{{- /* P1-15: neo4j 功能关闭(appEnv.neo4jEnabled=false)时不强制外部端点, 渲染空占位 */ -}}
 {{- end -}}
 {{- end -}}

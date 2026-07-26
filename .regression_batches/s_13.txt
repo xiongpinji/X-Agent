@@ -1,0 +1,17 @@
+tests/e2e/test_desktop_e2e.py
+tests/e2e/test_user_journey.py
+tests/test_api.py
+tests/test_api_contracts.py
+tests/test_code_capabilities.py
+tests/test_code_execution.py
+tests/test_error_handling.py
+tests/test_llm_enhanced.py
+tests/test_mcp.py
+tests/test_mcp_manager.py
+tests/test_mcp_stdio_e2e.py
+tests/test_memory_qdrant_backend.py
+tests/test_open_source_wiring.py
+tests/test_rc_refresh_release_chain.py
+tests/test_rc_release_receipt.py
+tests/test_workflow_runtime_helpers.py
+tests/unit/test_tools_deep.py

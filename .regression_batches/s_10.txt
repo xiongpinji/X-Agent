@@ -1,0 +1,16 @@
+tests/e2e/test_sync_e2e.py
+tests/integration/test_workflow_api.py
+tests/test_hooks_manager.py
+tests/test_open_source_api_exports.py
+tests/test_performance_stress.py
+tests/test_rc_evidence_pack.py
+tests/test_rc_release_diff_review_gate.py
+tests/test_rc_supply_chain_gate.py
+tests/test_repair_paths.py
+tests/test_trace_audit_integration.py
+tests/test_workflow_run_trace_link.py
+tests/test_workspace_management.py
+tests/unit/core/context/test_compression.py
+tests/unit/test_agent_loop_full.py
+tests/unit/test_memory_system.py
+tests/unit/test_payment_providers.py

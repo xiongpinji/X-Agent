@@ -119,14 +119,15 @@ async def _drain_loop() -> None:
         if task is None:
             await asyncio.sleep(0.05)
             continue
-        _status[task.task_id] = "running"
+        task_id = getattr(task, "task_id", None) or task.id
+        _status[task_id] = "running"
         try:
             result = await orch._worker.process(task)
-            _results[task.task_id] = result
-            _status[task.task_id] = "completed" if result.success else "failed"
+            _results[task_id] = result
+            _status[task_id] = "completed" if result.success else "failed"
         except Exception:
-            _status[task.task_id] = "error"
-            logger.exception("sandbox task %s failed", task.task_id)
+            _status[task_id] = "error"
+            logger.exception("sandbox task %s failed", task_id)
 
 
 async def start_sandbox_worker() -> None:

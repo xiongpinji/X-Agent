@@ -118,22 +118,54 @@ jobs:
         aws-region: us-east-1
       continue-on-error: true
 
-    # TODO(P0-09): 占位 deploy——当前无真实 staging 集群, 仅打印镜像信息, 不执行任何部署动作。
-    # 接入真实基础设施后, 替换为下方被注释的 kubectl 命令(或 Helm)并移除本注释。
-    - name: Deploy to staging (placeholder, TODO)
-      run: |
-        echo "::notice title=TODO::Staging deploy is a placeholder - no real cluster configured. Image: ${{ needs.build.outputs.image-tag }}"
-        # kubectl set image deployment/xagent-api xagent-api=${{ needs.build.outputs.image-tag }} -n staging
-        # kubectl rollout status deployment/xagent-api -n staging
-      env:
-        DEPLOY_KEY: ${{ secrets.STAGING_DEPLOY_KEY }}
+    # P1-15: staging 部署分两级——(1) 无集群也可真实执行的 chart 验证(helm lint/template,
+    # 每次必跑, 失败即阻断); (2) 配置 STAGING_KUBECONFIG secret 后真实执行
+    # helm upgrade --dry-run --debug(服务端 dry-run, 需要集群可达)。CD 跑通证据定义见
+    # deployment/CD_VERIFICATION.md。
+    - name: Set up Helm
+      uses: azure/setup-helm@v4
+      with:
+        version: v3.14.4
 
-    # TODO(P0-09): 占位 smoke test——无真实 staging 环境可探测; 接入后替换为真实健康检查。
-    - name: Run smoke tests (placeholder, TODO)
+    - name: Validate Helm chart (real, always runs)
       run: |
-        echo "::notice title=TODO::Smoke tests are a placeholder - no staging environment to probe."
-        # curl -f https://staging.xagent.example.com/health || exit 1
-      continue-on-error: true
+        set -euo pipefail
+        helm lint deployment/helm
+        helm lint deployment/helm -f deployment/helm/values-production.yaml
+        helm template xagent deployment/helm > /tmp/xagent-render.yaml
+        helm template xagent deployment/helm -f deployment/helm/values-production.yaml > /tmp/xagent-render-prod.yaml
+        echo "rendered manifests: $(grep -c '^kind:' /tmp/xagent-render.yaml) (default), $(grep -c '^kind:' /tmp/xagent-render-prod.yaml) (production)"
+
+    - name: Deploy to staging (helm upgrade --dry-run --debug)
+      run: |
+        set -euo pipefail
+        if [ -z "${STAGING_KUBECONFIG:-}" ]; then
+          # TODO(P1-15): 接入真实 staging 集群的前置条件清单(全部满足后本步骤自动转为真实 dry-run):
+          #   1. 预置 staging 命名空间的 k8s 集群(EKS/GKE/自建均可), 已安装 ingress-nginx;
+          #   2. 将 kubeconfig 内容写入 GitHub secret STAGING_KUBECONFIG;
+          #   3. 配置 secrets.AWS_ROLE_TO_ASSUME_STAGING 用于镜像仓库/基础设施访问;
+          #   4. 在 GitHub Environment "staging" 中配置保护规则与所需 secrets;
+          #   5. 镜像仓库 ghcr.io 对该集群可达(imagePullSecret 如需)。
+          echo "::notice title=TODO(P1-15)::未配置 STAGING_KUBECONFIG, 跳过真实 dry-run; 前置条件清单见日志与 deployment/CD_VERIFICATION.md"
+          exit 0
+        fi
+        echo "$STAGING_KUBECONFIG" > /tmp/kubeconfig-staging
+        export KUBECONFIG=/tmp/kubeconfig-staging
+        helm upgrade --install xagent deployment/helm \
+          --namespace staging --create-namespace \
+          --set image.tag="${{ needs.build.outputs.image-tag }}" \
+          --dry-run --debug
+      env:
+        STAGING_KUBECONFIG: ${{ secrets.STAGING_KUBECONFIG }}
+
+    # TODO(P1-15): smoke test 依赖真实 staging 端点; 配置 STAGING_SMOKE_URL secret 后自动启用真实探测。
+    - name: Run smoke tests (real when STAGING_SMOKE_URL is set)
+      run: |
+        if [ -z "${STAGING_SMOKE_URL:-}" ]; then
+          echo "::notice title=TODO(P1-15)::Smoke tests skipped - set STAGING_SMOKE_URL secret to enable real probing."
+          exit 0
+        fi
+        curl -fsS "$STAGING_SMOKE_URL/health" || exit 1
 
     - name: Notify deployment
       if: always()
@@ -144,7 +176,7 @@ jobs:
             issue_number: context.issue.number,
             owner: context.repo.owner,
             repo: context.repo.repo,
-            body: '⚠️ Staging deploy 为占位步骤(TODO: 未接入真实集群), 镜像: ${{ needs.build.outputs.image-tag }}'
+            body: 'ℹ️ Staging: chart 验证(lint/template)已真实执行; helm upgrade --dry-run 需配置 STAGING_KUBECONFIG 后生效(见 deployment/CD_VERIFICATION.md), 镜像: ${{ needs.build.outputs.image-tag }}'
           });
       continue-on-error: true
 

@@ -1,0 +1,27 @@
+{
+  "timestamp": "2026-07-26T08:47:55Z",
+  "version": "1.1",
+  "components": {
+    "database": {
+      "type": "postgresql",
+      "host": "localhost",
+      "port": 5432,
+      "database": "xagent_prod",
+      "file": "database.dump"
+    },
+    "redis": {
+      "type": "redis",
+      "host": "localhost",
+      "port": 6379,
+      "file": "redis.rdb"
+    },
+    "qdrant": {
+      "type": "qdrant",
+      "host": "localhost",
+      "port": 16333,
+      "method": "snapshot-api",
+      "files": ["qdrant_xagent_memory.snapshot"]
+    }
+  },
+  "files": ["database.dump","qdrant_xagent_memory.snapshot","redis.rdb"]
+}

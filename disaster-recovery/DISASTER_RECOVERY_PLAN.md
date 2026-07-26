@@ -6,12 +6,15 @@
 **状态**: 生产就绪
 
 > **勘误 (2026-07-20, P1-17)**: 本文中 `./scripts/dr/*` 路径下的多数脚本
-> (restore-qdrant.sh、inject-failure.sh、monitor-recovery.sh 等)在仓库中**尚未实现**,
-> 属于目标流程设计, 执行前需先落地。当前真实可用的脚本仅有
+> (inject-failure.sh、monitor-recovery.sh 等)在仓库中**尚未实现**,
+> 属于目标流程设计, 执行前需先落地。当前真实可用的脚本有
 > `./scripts/health-check.sh`、`./scripts/failover.sh`、`./scripts/verify-recovery.sh`
-> (位于 `disaster-recovery/scripts/`); 引用这三者的路径已修正。
-> Qdrant 恢复请以官方快照 API 为准(见根目录 `DISASTER_RECOVERY.md` 与
-> `deployment/backup/backup.sh`)。
+> (位于 `disaster-recovery/scripts/`)。
+> Qdrant 恢复请以官方快照 API 为准: 备份见 `deployment/backup/backup.sh`,
+> 恢复脚本 `disaster-recovery/scripts/restore-qdrant.sh` 已于 2026-07-26 落地,
+> 首次(mock 环境)备份→删除→恢复→校验演练记录见
+> `disaster-recovery/QDRANT_RESTORE_DRILL.md`(含演练记录模板与 RTO/RPO 实测值字段)。
+> 上文"关键指标"表中的 RTO/RPO 为**目标值**; 演练实测值在 QDRANT_RESTORE_DRILL.md 中维护。
 
 ---
 

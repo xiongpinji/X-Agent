@@ -18,6 +18,7 @@ import {
   LoginScreen,
   HomeScreen,
   TaskListScreen,
+  TaskTriggerScreen,
   WorkflowMonitorScreen,
   SettingsScreen,
 } from '../screens';
@@ -81,6 +82,8 @@ const MainTabs = () => {
             iconName = 'home-outline';
           } else if (route.name === 'Tasks') {
             iconName = 'format-list-bulleted';
+          } else if (route.name === 'Trigger') {
+            iconName = 'rocket-launch-outline';
           } else if (route.name === 'Workflows') {
             iconName = 'play-circle-outline';
           } else if (route.name === 'Settings') {
@@ -105,6 +108,13 @@ const MainTabs = () => {
         component={TaskListScreen}
         options={{
           title: 'Tasks',
+        }}
+      />
+      <Tab.Screen
+        name="Trigger"
+        component={TaskTriggerScreen}
+        options={{
+          title: 'Trigger',
         }}
       />
       <Tab.Screen

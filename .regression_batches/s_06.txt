@@ -1,0 +1,16 @@
+tests/enterprise/test_backup.py
+tests/enterprise/test_memory_v2_performance.py
+tests/test_api_error_scenarios.py
+tests/test_cli_repl.py
+tests/test_collaboration_comprehensive.py
+tests/test_completion_contracts.py
+tests/test_memory_detail.py
+tests/test_middleware.py
+tests/test_performance.py
+tests/test_persistence.py
+tests/test_repair_loop_extended.py
+tests/test_sandbox_api.py
+tests/test_security_auth.py
+tests/test_telegram_channel_api.py
+tests/test_workflow_run_correlation.py
+tests/unit/test_ui_tars_deep.py

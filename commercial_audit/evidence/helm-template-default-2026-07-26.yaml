@@ -1,0 +1,900 @@
+---
+# Source: xagent/templates/namespace.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: default
+  labels:
+    name: default
+    environment: production
+---
+# Source: xagent/templates/serviceaccount.yaml
+# P1-15: api/worker/beat/canary 引用的 ServiceAccount; 应用当前不调用 K8s API,
+# 不绑定任何 Role(最小权限), 未来需要时再补 RBAC
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: xagent
+  namespace: default
+  labels:
+    app: xagent
+automountServiceAccountToken: false
+---
+# Source: xagent/templates/secret.yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: xagent-secrets
+  namespace: default
+type: Opaque
+stringData:
+  DB_USER: "xagent"
+  DB_PASSWORD: "change-me-in-production"
+  REDIS_PASSWORD: "change-me-in-production"
+  QDRANT_API_KEY: "change-me-in-production"
+  NEO4J_PASSWORD: "change-me-in-production"
+  # P0-03: 应用密钥统一 XAGENT_ 前缀(对照 backend/app/settings.py);
+  # 生产模式下两者必须为非默认强随机值(>=32字符且含大写+数字), 否则 Settings 校验失败
+  XAGENT_JWT_SECRET: "change-me-in-production-use-strong-random-key"
+  XAGENT_ENCRYPTION_KEY: "change-me-in-production-use-strong-random-key"
+---
+# Source: xagent/templates/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: xagent-config
+  namespace: default
+data:
+  # P0-03: 应用配置统一 XAGENT_ 前缀(对照 backend/app/settings.py, env_prefix="XAGENT_", extra="ignore")
+  XAGENT_APP_MODE: "production"
+  # LOG_LEVEL 由 backend/app/monitoring 与 core/config.py LogSettings(LOG_ 前缀)直接读取, 保持原名
+  LOG_LEVEL: "INFO"
+  XAGENT_DEBUG: "false"
+  XAGENT_API_WORKERS: "4"
+  XAGENT_JWT_ALGORITHM: "HS256"
+  XAGENT_JWT_EXPIRATION_HOURS: "24"
+  # 以下为组合 URL 用的辅助变量(由 api-deployment 中 $(VAR) 引用), 非应用直读配置
+  DB_NAME: "xagent_db"
+  DB_PORT: "5432"
+  DB_USER: "xagent"
+  REDIS_PORT: "6379"
+  QDRANT_PORT: "6333"
+  NEO4J_PORT: "7687"
+  NEO4J_USER: "neo4j"
+  # P1: Python UTF-8 模式 (PEP 540)
+  PYTHONUTF8: "1"
+  # P1: 工作流存储后端
+  XAGENT_WORKFLOW_STORE_BACKEND: "postgres"
+  # P1: Neo4j 功能开关
+  XAGENT_NEO4J_ENABLED: "false"
+  # P1: SSO - SAML
+  XAGENT_SAML_ENABLED: "false"
+  XAGENT_SAML_ENTITY_ID: ""
+  XAGENT_SAML_ACS_URL: ""
+  XAGENT_SAML_IDP_METADATA_URL: ""
+  XAGENT_SAML_IDP_ENTITY_ID: ""
+  XAGENT_SAML_NAME_ID_FORMAT: "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress"
+  # P1: SSO - LDAP
+  XAGENT_LDAP_ENABLED: "false"
+  XAGENT_LDAP_SERVER_URL: ""
+  XAGENT_LDAP_BASE_DN: ""
+  XAGENT_LDAP_BIND_DN: ""
+  XAGENT_LDAP_USER_SEARCH_FILTER: "(uid={username})"
+  XAGENT_LDAP_USE_TLS: "true"
+  # P1: SSO - WebAuthn
+  XAGENT_WEBAUTHN_ENABLED: "false"
+  XAGENT_WEBAUTHN_RP_ID: ""
+  XAGENT_WEBAUTHN_RP_NAME: "X-Agent"
+  XAGENT_WEBAUTHN_ORIGIN: ""
+---
+# Source: xagent/templates/backup-cronjob.yaml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: xagent-backup-pvc
+  namespace: default
+  labels:
+    app: xagent-backup
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+---
+# Source: xagent/templates/postgres.yaml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pvc
+  namespace: default
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+---
+# Source: xagent/templates/qdrant.yaml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: qdrant-pvc
+  namespace: default
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+---
+# Source: xagent/templates/redis.yaml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: redis-pvc
+  namespace: default
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+---
+# Source: xagent/templates/api-deployment.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: xagent-api
+  namespace: default
+  labels:
+    app: xagent-api
+spec:
+  selector:
+    app: xagent-api
+  ports:
+  - port: 8000
+    targetPort: 8000
+    protocol: TCP
+    name: http
+  type: ClusterIP
+---
+# Source: xagent/templates/postgres.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: default
+spec:
+  selector:
+    app: postgres
+  ports:
+  - port: 5432
+    targetPort: 5432
+  type: ClusterIP
+---
+# Source: xagent/templates/qdrant.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: qdrant
+  namespace: default
+spec:
+  selector:
+    app: qdrant
+  ports:
+  - port: 6333
+    targetPort: 6333
+    name: http
+  - port: 6334
+    targetPort: 6334
+    name: grpc
+  type: ClusterIP
+---
+# Source: xagent/templates/redis.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: default
+spec:
+  selector:
+    app: redis
+  ports:
+  - port: 6379
+    targetPort: 6379
+  type: ClusterIP
+---
+# Source: xagent/templates/api-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: xagent-api
+  namespace: default
+  labels:
+    app: xagent-api
+    version: v1
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: xagent-api
+  template:
+    metadata:
+      labels:
+        app: xagent-api
+        version: v1
+    spec:
+      serviceAccountName: xagent
+      # P1-16: 优雅停机 —— 宽限期默认 90s; preStop sleep 等待 Endpoints 摘除传播
+      terminationGracePeriodSeconds: 90
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - xagent-api
+              topologyKey: kubernetes.io/hostname
+      containers:
+      - name: xagent-api
+        image: "xagent:latest"
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8000
+          name: http
+        lifecycle:
+          # P1-16: 镜像为 python:3.11-slim, 内置 /bin/sh 与 sleep
+          preStop:
+            exec:
+              command:
+              - /bin/sh
+              - -c
+              - sleep 10
+        envFrom:
+        - configMapRef:
+            name: xagent-config
+        - secretRef:
+            name: xagent-secrets
+        # P0-03: envFrom 仅注入零散 key, 应用实际读取的连接串在此由辅助变量组合
+        # (envFrom 变量先于 env 处理, 可被 $(VAR) 引用)
+        env:
+        - name: XAGENT_DATABASE_URL
+          value: "postgresql+asyncpg://$(DB_USER):$(DB_PASSWORD)@postgres:5432/$(DB_NAME)"
+        - name: XAGENT_REDIS_URL
+          value: "redis://:$(REDIS_PASSWORD)@redis:6379/0"
+        - name: XAGENT_QDRANT_URL
+          value: "http://qdrant:6333"
+        - name: XAGENT_NEO4J_URI
+          value: "bolt://:7687"
+        resources:
+          limits:
+            cpu: 500m
+            memory: 1Gi
+          requests:
+            cpu: 250m
+            memory: 512Mi
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            # P0: readiness 用 /ready 深探针(检查下游依赖), liveness 保持 /health 浅探针
+            path: /ready
+            port: 8000
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+        - name: logs
+          mountPath: /app/logs
+      volumes:
+      - name: tmp
+        emptyDir: {}
+      - name: logs
+        emptyDir: {}
+---
+# Source: xagent/templates/beat-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: xagent-beat
+  namespace: default
+  labels:
+    app: xagent-beat
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: xagent-beat
+  template:
+    metadata:
+      labels:
+        app: xagent-beat
+    spec:
+      serviceAccountName: xagent
+      # P1-16: 优雅停机 —— 宽限期默认 60s; preStop sleep 后再 SIGTERM
+      terminationGracePeriodSeconds: 60
+      containers:
+      - name: xagent-beat
+        image: "xagent:latest"
+        imagePullPolicy: Always
+        # P0-02: 后端无 Celery 应用; beat 角色当前与 worker 同为 asyncio 轮询进程,
+        # 直接以 python -m 启动, 待真 Celery 返工后再拆分调度器
+        command:
+        - python
+        - -m
+        - backend.app.workflow_worker
+        lifecycle:
+          # P1-16: 镜像为 python:3.11-slim, 内置 /bin/sh 与 sleep
+          preStop:
+            exec:
+              command:
+              - /bin/sh
+              - -c
+              - sleep 5
+        envFrom:
+        - configMapRef:
+            name: xagent-config
+        - secretRef:
+            name: xagent-secrets
+        env:
+        - name: XAGENT_DATABASE_URL
+          value: "postgresql+asyncpg://$(DB_USER):$(DB_PASSWORD)@postgres:5432/$(DB_NAME)"
+        - name: XAGENT_REDIS_URL
+          value: "redis://:$(REDIS_PASSWORD)@redis:6379/0"
+        resources:
+          limits:
+            cpu: 200m
+            memory: 512Mi
+          requests:
+            cpu: 100m
+            memory: 256Mi
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+        - name: logs
+          mountPath: /app/logs
+      volumes:
+      - name: tmp
+        emptyDir: {}
+      - name: logs
+        emptyDir: {}
+---
+# Source: xagent/templates/postgres.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  namespace: default
+  labels:
+    app: postgres
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      # P1-16: 优雅停机 —— 宽限期默认 60s, 留给 checkpoint/连接排空
+      terminationGracePeriodSeconds: 60
+      containers:
+      - name: postgres
+        image: pgvector/pgvector:pg16
+        lifecycle:
+          # P1-16: postgres:*-alpine 基于 busybox, 内置 /bin/sh 与 sleep
+          preStop:
+            exec:
+              command:
+              - /bin/sh
+              - -c
+              - sleep 5
+        ports:
+        - containerPort: 5432
+          name: postgres
+        env:
+        - name: POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              name: xagent-secrets
+              key: DB_USER
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: xagent-secrets
+              key: DB_PASSWORD
+        - name: POSTGRES_DB
+          valueFrom:
+            configMapKeyRef:
+              name: xagent-config
+              key: DB_NAME
+        - name: POSTGRES_INITDB_ARGS
+          value: "--encoding=UTF8 --locale=en_US.UTF-8"
+        resources:
+          limits:
+            cpu: 500m
+            memory: 512Mi
+          requests:
+            cpu: 250m
+            memory: 256Mi
+        livenessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - pg_isready -U $POSTGRES_USER
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - pg_isready -U $POSTGRES_USER
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        volumeMounts:
+        - name: postgres-storage
+          mountPath: /var/lib/postgresql/data
+      volumes:
+      - name: postgres-storage
+        persistentVolumeClaim:
+          claimName: postgres-pvc
+---
+# Source: xagent/templates/qdrant.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: qdrant
+  namespace: default
+  labels:
+    app: qdrant
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: qdrant
+  template:
+    metadata:
+      labels:
+        app: qdrant
+    spec:
+      # P1-16: 优雅停机 —— 宽限期默认 60s, 留给存储 flush
+      terminationGracePeriodSeconds: 60
+      containers:
+      - name: qdrant
+        image: qdrant/qdrant:latest
+        lifecycle:
+          # P1-16: qdrant/qdrant 官方镜像基于 debian slim, 含 /bin/sh 与 sleep;
+          # 若切换到无 shell 的精简镜像, 删除本 preStop 并依赖 terminationGracePeriodSeconds
+          preStop:
+            exec:
+              command:
+              - /bin/sh
+              - -c
+              - sleep 5
+        ports:
+        - containerPort: 6333
+          name: http
+        - containerPort: 6334
+          name: grpc
+        env:
+        - name: QDRANT_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: xagent-secrets
+              key: QDRANT_API_KEY
+        resources:
+          limits:
+            cpu: 500m
+            memory: 1Gi
+          requests:
+            cpu: 250m
+            memory: 512Mi
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 6333
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 6333
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        volumeMounts:
+        - name: qdrant-storage
+          mountPath: /qdrant/storage
+      volumes:
+      - name: qdrant-storage
+        persistentVolumeClaim:
+          claimName: qdrant-pvc
+---
+# Source: xagent/templates/redis.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: default
+  labels:
+    app: redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      # P1-16: 优雅停机 —— 宽限期默认 60s, 留给 AOF 落盘
+      terminationGracePeriodSeconds: 60
+      containers:
+      - name: redis
+        image: redis:7-alpine
+        lifecycle:
+          # P1-16: redis:*-alpine 基于 busybox, 内置 /bin/sh 与 sleep
+          preStop:
+            exec:
+              command:
+              - /bin/sh
+              - -c
+              - sleep 5
+        command:
+        - redis-server
+        - "--appendonly"
+        - "yes"
+        - "--requirepass"
+        - "$(REDIS_PASSWORD)"
+        ports:
+        - containerPort: 6379
+          name: redis
+        env:
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: xagent-secrets
+              key: REDIS_PASSWORD
+        resources:
+          limits:
+            cpu: 200m
+            memory: 256Mi
+          requests:
+            cpu: 100m
+            memory: 128Mi
+        livenessProbe:
+          exec:
+            command:
+            - redis-cli
+            - ping
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          exec:
+            command:
+            - redis-cli
+            - ping
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        volumeMounts:
+        - name: redis-storage
+          mountPath: /data
+      volumes:
+      - name: redis-storage
+        persistentVolumeClaim:
+          claimName: redis-pvc
+---
+# Source: xagent/templates/worker-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: xagent-worker
+  namespace: default
+  labels:
+    app: xagent-worker
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: xagent-worker
+  template:
+    metadata:
+      labels:
+        app: xagent-worker
+    spec:
+      serviceAccountName: xagent
+      # P1-16: 优雅停机 —— worker 执行长任务, 宽限期默认 120s; preStop sleep 等待摘除传播
+      terminationGracePeriodSeconds: 120
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - xagent-worker
+              topologyKey: kubernetes.io/hostname
+      containers:
+      - name: xagent-worker
+        image: "xagent:latest"
+        imagePullPolicy: Always
+        # P0-02: 后端无 Celery 应用, workflow_worker 是 asyncio 轮询 worker,
+        # 直接以 python -m 启动; celery 依赖保留但未使用, 待真 Celery 返工
+        command:
+        - python
+        - -m
+        - backend.app.workflow_worker
+        lifecycle:
+          # P1-16: 镜像为 python:3.11-slim, 内置 /bin/sh 与 sleep
+          preStop:
+            exec:
+              command:
+              - /bin/sh
+              - -c
+              - sleep 10
+        envFrom:
+        - configMapRef:
+            name: xagent-config
+        - secretRef:
+            name: xagent-secrets
+        # P0-03: envFrom 仅注入零散 key, 应用实际读取的连接串在此由辅助变量组合
+        env:
+        - name: XAGENT_DATABASE_URL
+          value: "postgresql+asyncpg://$(DB_USER):$(DB_PASSWORD)@postgres:5432/$(DB_NAME)"
+        - name: XAGENT_REDIS_URL
+          value: "redis://:$(REDIS_PASSWORD)@redis:6379/0"
+        - name: XAGENT_QDRANT_URL
+          value: "http://qdrant:6333"
+        - name: XAGENT_NEO4J_URI
+          value: "bolt://:7687"
+        resources:
+          limits:
+            cpu: 500m
+            memory: 1Gi
+          requests:
+            cpu: 250m
+            memory: 512Mi
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+        - name: logs
+          mountPath: /app/logs
+      volumes:
+      - name: tmp
+        emptyDir: {}
+      - name: logs
+        emptyDir: {}
+---
+# Source: xagent/templates/api-deployment.yaml
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: xagent-api-hpa
+  namespace: default
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: xagent-api
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+---
+# Source: xagent/templates/worker-deployment.yaml
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: xagent-worker-hpa
+  namespace: default
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: xagent-worker
+  minReplicas: 2
+  maxReplicas: 8
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 75
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+---
+# Source: xagent/templates/backup-cronjob.yaml
+# P1-17: K8s 定时备份 CronJob —— 执行 deployment/backup/backup.sh
+# (PG pg_dump / Redis RDB / Qdrant 官方快照 API POST /collections/{name}/snapshots)
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: xagent-backup
+  namespace: default
+  labels:
+    app: xagent-backup
+spec:
+  schedule: "0 2 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      activeDeadlineSeconds: 3600
+      backoffLimit: 1
+      template:
+        metadata:
+          labels:
+            app: xagent-backup
+        spec:
+          restartPolicy: OnFailure
+          # P1-16: 优雅停机(批任务正常结束时 preStop 不触发, 节点驱逐时生效)
+          terminationGracePeriodSeconds: 60
+          containers:
+          - name: backup
+            # 备份镜像由 deployment/backup/Dockerfile 构建, 含 pg_dump/redis-cli/curl/jq
+            image: "xagent-backup:latest"
+            imagePullPolicy: IfNotPresent
+            command:
+            - /bin/bash
+            - /usr/local/bin/backup.sh
+            lifecycle:
+              # P1-16: 备份镜像基于 debian slim, 含 /bin/sh 与 sleep
+              preStop:
+                exec:
+                  command:
+                  - /bin/sh
+                  - -c
+                  - sleep 5
+            env:
+            - name: BACKUP_DIR
+              value: /backups
+            - name: RETENTION_DAYS
+              value: "30"
+            - name: DB_HOST
+              value: "postgres"
+            - name: DB_PORT
+              value: "5432"
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: xagent-secrets
+                  key: DB_USER
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: xagent-secrets
+                  key: DB_PASSWORD
+            - name: DB_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: xagent-config
+                  key: DB_NAME
+            - name: REDIS_HOST
+              value: "redis"
+            - name: REDIS_PORT
+              value: "6379"
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: xagent-secrets
+                  key: REDIS_PASSWORD
+            - name: QDRANT_HOST
+              value: "qdrant"
+            - name: QDRANT_PORT
+              value: "6333"
+            - name: QDRANT_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: xagent-secrets
+                  key: QDRANT_API_KEY
+            - name: S3_ENABLED
+              value: "false"
+            - name: S3_BUCKET
+              value: ""
+            - name: S3_REGION
+              value: "us-east-1"
+            volumeMounts:
+            - name: backup-storage
+              mountPath: /backups
+          volumes:
+          - name: backup-storage
+            persistentVolumeClaim:
+              claimName: xagent-backup-pvc
+---
+# Source: xagent/templates/ingress.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: xagent-ingress
+  namespace: default
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - "api.xagent.example.com"
+      secretName: xagent-tls
+  rules:
+    - host: "api.xagent.example.com"
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: xagent-api
+                port:
+                  number: 8000

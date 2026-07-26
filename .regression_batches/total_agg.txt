@@ -1,0 +1,541 @@
+passed=6861 failed=274 skipped=303 error=41 total=7479
+FAILED: tests.test_audit::test_agent_run_writes_audit_log | assert 404 == 200
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_audit::test_audit_chain_verify_endpoint | assert 404 == 200
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_audit::test_workflow_run_writes_audit_log | KeyError: 'id'
+FAILED: tests.test_streaming_api::test_run_agent_streaming_returns_sse | assert 404 == 200
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_performance_extended.TestAPIResponseTime::test_get_workflows_response_time | assert 404 == 200
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_performance_extended.TestAPIResponseTime::test_create_workflow_response_time | assert 404 in [200, 201]
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_chat_entrypoint_contract::test_workflow_chat_create_returns_first_run_contract | assert 404 == 200
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_performance_extended.TestAPIResponseTime::test_memory_search_response_time | assert 404 == 200
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_chat_entrypoint_contract::test_workflow_chat_bootstrap_rejects_anonymous_when_api_key_required | assert 404 == 401
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_performance_extended.TestAPIResponseTime::test_memory_consolidation_response_time | assert 404 in [200, 400]
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_chat_entrypoint_contract::test_workbench_bootstrap_includes_first_run_identity_fields | assert 404 == 200
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_performance_extended.TestCachePerformance::test_repeated_requests_performance | assert 404 == 200
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_performance_extended.TestThroughput::test_sequential_requests_throughput | assert 0 == 100
+FAILED: tests.test_performance_extended.TestLoadTesting::test_sustained_load | assert 0 > 0
+FAILED: tests.test_performance_extended.TestThroughput::test_concurrent_requests_throughput | assert 0 > 0
+FAILED: tests.test_performance_extended.TestLoadTesting::test_spike_load | assert 0.0 > 0.5
+FAILED: tests.test_performance_extended.TestThroughput::test_memory_operations_throughput | assert 0 > 0
+FAILED: tests.test_performance_extended.TestDatabaseQueryPerformance::test_workflow_list_query_performance | assert 404 == 200
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_performance_extended.TestDatabaseQueryPerformance::test_memory_search_query_performance | assert 404 == 200
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_test_taxonomy::test_test_file_naming_matches_taxonomy | AssertionError: assert (False or 'test_smoke_api.py' in {'test_agent_fix_real_llm.py', 'test_desktop_e2e.py', 'test_desktop_macro_e2e.py', 'test_execu
+FAILED: tests.test_tool_detail::test_tool_list_and_detail_correlation_views | assert 404 == 200
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_trace_correlation::test_trace_correlation_view | AssertionError: Agent run failed: {"detail":"Not Found"}
+assert 404 == 200
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api_endpoint_fixes.TestTenantEndpoints::test_tenant_usage_invalid_period | KeyError: 'id'
+FAILED: tests.test_api_endpoint_fixes.TestTenantEndpoints::test_tenant_billing_information | KeyError: 'id'
+FAILED: tests.test_api_endpoint_fixes.TestPaginationEndpoints::test_user_activity_pagination | assert 404 == 200
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api_endpoint_fixes.TestTenantEndpoints::test_tenant_billing_specific_month | KeyError: 'id'
+FAILED: tests.test_api_endpoint_fixes.TestPaginationEndpoints::test_audit_logs_pagination | assert 404 == 200
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api_endpoint_fixes.TestTenantEndpoints::test_tenant_billing_invalid_month | KeyError: 'id'
+FAILED: tests.test_api_endpoint_fixes.TestPaginationEndpoints::test_pagination_limit_validation | assert 404 in [200, 422]
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api_endpoint_fixes.TestAuditLogExport::test_export_audit_logs_csv | assert 404 == 200
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api_endpoint_fixes.TestErrorHandling::test_not_found_error_format | AssertionError: assert 'code' in {'detail': 'Not Found'}
+FAILED: tests.test_api_endpoint_fixes.TestAuditLogExport::test_export_audit_logs_json | assert 404 == 200
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api_endpoint_fixes.TestErrorHandling::test_validation_error_format | assert 404 == 422
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api_endpoint_fixes.TestAuditLogExport::test_export_audit_logs_with_filters | assert 404 == 200
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api_endpoint_fixes.TestErrorHandling::test_authentication_error_format | assert 404 == 401
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api_endpoint_fixes.TestAuditLogFiltering::test_filter_by_action | assert 404 == 200
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api_endpoint_fixes.TestAuthEndpoints::test_oauth_login_unsupported_provider | assert 404 == 400
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api_endpoint_fixes.TestAuditLogFiltering::test_filter_by_resource_type | assert 404 == 200
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api_endpoint_fixes.TestAuthEndpoints::test_oauth_login_missing_code | assert 404 == 400
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api_endpoint_fixes.TestAuditLogFiltering::test_filter_by_outcome | assert 404 == 200
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api_endpoint_fixes.TestAuthEndpoints::test_verify_email_missing_token | assert 404 == 400
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api_endpoint_fixes.TestAuditLogFiltering::test_multiple_filters | assert 404 == 200
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api_endpoint_fixes.TestAuthEndpoints::test_reset_password_invalid_request | assert 404 == 400
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api_endpoint_fixes.TestAuditChainVerification::test_verify_audit_chain | assert 404 == 200
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api_endpoint_fixes.TestAuthEndpoints::test_reset_password_weak_password | assert 404 == 400
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api_endpoint_fixes.TestTenantEndpoints::test_tenant_usage_statistics | assert 404 == 200
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_integration_extended.TestEndToEndWorkflows::test_complete_workflow_lifecycle | assert 404 in [200, 201]
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_integration_extended.TestEndToEndWorkflows::test_workflow_with_multiple_nodes | assert 404 in [200, 201]
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_integration_extended.TestEndToEndWorkflows::test_workflow_with_conditional_branches | assert 404 in [200, 201]
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_integration_extended.TestEndToEndWorkflows::test_memory_workflow_integration | assert 404 in [200, 201]
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_integration_extended.TestConcurrentWorkflowExecution::test_concurrent_workflow_creation | assert False
+ +  where False = all(<generator object TestConcurrentWorkflowExecution.test_concurrent_workflow_creation.<locals>.<genexpr> at 0x0000020
+FAILED: tests.test_skill_curator_api::test_skill_curator_draft_endpoint_writes_only_to_staging | assert 404 == 200
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_skill_curator_api::test_skill_curator_draft_rejects_custom_root_when_api_key_required | assert 404 == 403
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_security_fixes.TestBackwardCompatibility::test_auth_endpoints_still_work | AssertionError: assert 404 in [200, 401]
+ +  where 404 = <Response [404 Not Found]>.status_code
+ +    where <Response [404 Not Found]> = get('/api/v1/
+FAILED: tests.test_trace_replay::test_trace_replay_and_debug_views | KeyError: 'trace_id'
+FAILED: tests.test_skill_curator_api::test_skill_curator_analyze_endpoint_returns_scores_and_proposals | assert 404 == 200
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_collaboration_delegation.TestTenantConvergence::test_cross_tenant_room_access_returns_404 | KeyError: 'room_id'
+FAILED: tests.test_collaboration_delegation.TestDelegatorCore::test_end_to_end_delegation_mock_llm | AssertionError: assert 'failed' == 'completed'
+  
+  - completed
+  + failed
+FAILED: tests.test_collaboration_delegation.TestTenantConvergence::test_admin_can_address_other_tenants | KeyError: 'room_id'
+FAILED: tests.test_collaboration_delegation.TestProcessIsolation::test_process_isolated_spawn_completes_in_child | AssertionError: {'agent_id': 'agent_2c62a3e0c675', 'agent_type': 'subagent', 'completed_at': '2026-07-26T08:00:50.089783+00:00', 'created_at': '2026-0
+FAILED: tests.test_security_rate_limit.TestRateLimiting::test_rate_limit_on_login_endpoint | assert False
+ +  where False = any(<generator object TestRateLimiting.test_rate_limit_on_login_endpoint.<locals>.<genexpr> at 0x00000135B3237850>)
+FAILED: tests.test_collaboration_delegation.TestDelegatorCore::test_room_callback_posts_result_message | AssertionError: assert 'failed' == 'completed'
+  
+  - completed
+  + failed
+FAILED: tests.test_collaboration_delegation.TestDelegationAPI::test_delegate_end_to_end_via_api | assert 404 == 200
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_collaboration_delegation.TestDelegationAPI::test_delegate_no_capable_agent_returns_422 | assert 404 == 422
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_collaboration_delegation.TestDelegationAPI::test_delegate_container_isolation_returns_400 | assert 404 == 400
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_collaboration_delegation.TestDelegationAPI::test_delegate_cross_tenant_rejected | assert 404 == 403
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_collaboration_delegation.TestTenantConvergence::test_create_room_with_foreign_tenant_forbidden | assert 404 == 403
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_collaboration_delegation.TestTenantConvergence::test_create_room_defaults_to_principal_tenant | assert 404 == 200
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_collaboration_delegation.TestTenantConvergence::test_create_room_own_tenant_explicitly_allowed | assert 404 == 200
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_collaboration_delegation.TestTenantConvergence::test_list_rooms_pinned_to_own_tenant | TypeError: string indices must be integers, not 'str'
+FAILED: tests.test_api_error_scenarios.TestAPIErrorHandling::test_api_content_type_mismatch | assert 404 in [400, 415, 422]
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api_error_scenarios.TestAPIErrorHandling::test_api_special_characters | assert 404 in [200, 201, 400, 422]
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api_error_scenarios.TestAPIErrorHandling::test_api_invalid_json_payload | assert 404 in [400, 422]
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api_error_scenarios.TestAPIErrorHandling::test_api_missing_required_fields | assert 404 in [400, 422]
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api_error_scenarios.TestAPIErrorHandling::test_api_multiple_content_types | assert 404 in [200, 201, 400, 422]
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api_error_scenarios.TestAPIErrorHandling::test_api_unicode_characters | assert 404 in [200, 201, 400, 422]
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api_error_scenarios.TestAPIErrorHandling::test_api_invalid_field_types | assert 404 in [400, 422]
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api_error_scenarios.TestAPIErrorHandling::test_api_missing_authorization_header | assert 404 in [200, 401, 403]
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api_error_scenarios.TestAPIErrorHandling::test_api_empty_request_body | assert 404 in [400, 422]
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api_error_scenarios.TestAPIErrorHandling::test_api_invalid_authorization_header | assert 404 in [200, 401, 403]
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api_error_scenarios.TestAPIErrorHandling::test_api_malformed_authorization_header | assert 404 in [200, 401, 403]
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api_error_scenarios.TestAPIErrorHandling::test_api_null_values | assert 404 in [400, 422]
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api_error_scenarios.TestAPIErrorHandling::test_api_extra_fields | assert 404 in [200, 201, 400, 422]
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api_error_scenarios.TestAPIErrorHandling::test_api_expired_token | assert 404 in [200, 401, 403]
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api_error_scenarios.TestAPIRateLimiting::test_api_rate_limit_headers | assert 404 in [200, 401, 403, 429]
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api_error_scenarios.TestAPIErrorHandling::test_api_very_long_string | assert 404 in [200, 201, 400, 422, 413]
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api_error_scenarios.TestAPIErrorHandling::test_api_concurrent_requests | assert False
+ +  where False = all(<generator object TestAPIErrorHandling.test_api_concurrent_requests.<locals>.<genexpr> at 0x0000021A7DBB65A0>)
+FAILED: tests.test_api_error_scenarios.TestAPIRateLimiting::test_api_rate_limit_exceeded | assert False
+ +  where False = any(<generator object TestAPIRateLimiting.test_api_rate_limit_exceeded.<locals>.<genexpr> at 0x000001DE0406BD30>)
+FAILED: tests.test_api_error_scenarios.TestAPIErrorHandling::test_api_large_response | assert 404 in [200, 401, 403]
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api_error_scenarios.TestAPIErrorHandling::test_api_method_not_allowed | assert 404 in [200, 204, 405, 401, 403]
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api_error_scenarios.TestAPICaching::test_api_cache_headers | assert 404 in [200, 401, 403]
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api_error_scenarios.TestAPISecurity::test_api_cors_headers | assert 404 in [200, 204, 405]
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api_error_scenarios.TestAPISecurity::test_api_security_headers | assert 404 in [200, 401, 403]
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_memory_detail::test_memory_item_detail_and_correlation_views | KeyError: 'id'
+FAILED: tests.test_performance.TestAPIPerformance::test_health_endpoint_performance | AssertionError: Health endpoint too slow: 15.14ms
+assert 15.139923095703125 < 10
+FAILED: tests.test_performance.TestAPIPerformance::test_agent_run_performance | assert 404 == 200
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_security_auth.TestAuthenticationSecurity::test_duplicate_registration_prevented | assert 404 == 200
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_performance.TestAPIPerformance::test_concurrent_requests | AssertionError: Concurrent P99 too high: 809.29ms
+assert 809.2892169952393 < 100
+FAILED: tests.test_security_auth.TestAuthenticationSecurity::test_login_with_valid_credentials | assert 404 == 200
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_security_auth.TestAuthenticationSecurity::test_login_with_invalid_password | assert 404 == 401
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_security_auth.TestAuthenticationSecurity::test_account_lockout_after_failed_attempts | assert 404 == 401
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_security_auth.TestAuthenticationSecurity::test_login_failures_cleared_on_success | assert 404 == 200
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_security_auth.TestAuthenticationSecurity::test_logout_revokes_token | KeyError: 'access_token'
+FAILED: tests.test_security_auth.TestAuthenticationSecurity::test_missing_email_or_password | assert 404 in [400, 422]
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_telegram_channel_api::test_telegram_webhook_dispatches_and_replies_with_mocked_sender | assert 404 == 200
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_telegram_channel_api::test_telegram_webhook_rejects_invalid_signature | assert 404 == 401
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_telegram_channel_api::test_telegram_webhook_rejects_when_secret_not_configured | assert 404 == 401
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_telegram_channel_api::test_telegram_webhook_ignores_non_message_payload | assert 404 == 200
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_workflow_run_correlation::test_workflow_run_correlation_links_run_trace_and_audit_anchors | KeyError: 'id'
+FAILED: tests.test_sandbox_api.TestSandboxTaskAPI::test_submit_poll_completes | AssertionError: assert 'queued' == 'completed'
+  
+  - completed
+  + queued
+FAILED: tests.test_security_auth.TestAuthenticationSecurity::test_password_validation_minimum_length | assert 503 == 400
+ +  where 503 = <Response [503 Service Unavailable]>.status_code
+FAILED: tests.test_security_auth.TestAuthenticationSecurity::test_password_validation_uppercase | assert 503 == 400
+ +  where 503 = <Response [503 Service Unavailable]>.status_code
+FAILED: tests.test_security_auth.TestAuthenticationSecurity::test_password_validation_lowercase | assert 503 == 400
+ +  where 503 = <Response [503 Service Unavailable]>.status_code
+FAILED: tests.test_security_auth.TestAuthenticationSecurity::test_password_validation_digit | assert 503 == 400
+ +  where 503 = <Response [503 Service Unavailable]>.status_code
+FAILED: tests.test_security_auth.TestAuthenticationSecurity::test_valid_registration | assert 503 == 200
+ +  where 503 = <Response [503 Service Unavailable]>.status_code
+FAILED: tests.test_sandbox_api.TestSandboxTaskAPI::test_failing_command_marks_failed | AssertionError: assert 'queued' == 'failed'
+  
+  - failed
+  + queued
+FAILED: tests.enterprise.test_billing.TestPaymentProviders::test_stripe_provider_charge | assert False is True
+FAILED: tests.enterprise.test_billing.TestPaymentProviders::test_stripe_provider_refund | assert False is True
+FAILED: tests.test_messages_end_to_end::test_messages_end_to_end_publish_stream_snapshot_and_clear | assert 404 == 200
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_workflow_run_detail::test_workflow_run_detail_returns_timeline | KeyError: 'id'
+FAILED: tests.test_llm_edge_cases.TestBuildLLMRouter::test_build_router_with_empty_fallback_order | RuntimeError: No LLM API key configured. Set XAGENT_OPENAI_API_KEY or XAGENT_DEEPSEEK_API_KEY or XAGENT_ANTHROPIC_API_KEY. Use XAGENT_LLM_BACKEND=mock
+FAILED: tests.test_llm_edge_cases.TestBuildLLMRouter::test_build_router_with_unknown_backend | RuntimeError: No LLM API key configured. Set XAGENT_OPENAI_API_KEY or XAGENT_DEEPSEEK_API_KEY or XAGENT_ANTHROPIC_API_KEY. Use XAGENT_LLM_BACKEND=mock
+FAILED: tests.test_messages_debug_api::test_messages_debug_channel_snapshot_returns_channel_state | assert 404 == 200
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_hybrid_memory.TestPerformance::test_hot_tier_performance | assert 0.17125463485717773 < (0.1 * 1.0)
+FAILED: tests.test_messages_debug_api::test_messages_debug_channel_index_returns_all_channels | assert 404 == 200
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_messages_debug_api::test_messages_debug_trace_index_returns_events_for_trace | assert 404 == 200
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_messages_debug_api::test_messages_debug_domain_events_returns_events_for_domain | assert 404 == 200
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_messages_debug_api::test_messages_debug_clear_channel_removes_channel_state | assert 404 == 200
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_messages_debug_api::test_messages_debug_clear_trace_removes_trace_state | assert 404 == 200
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_messages_debug_api::test_messages_debug_clear_domain_removes_domain_state | assert 404 == 200
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_workflow_run_observability::test_workflow_run_observability_cross_links_detail_trace_and_audit | KeyError: 'id'
+FAILED: tests.test_observability_shapes::test_observability_shapes_across_core_domains | KeyError: 'trace_id'
+FAILED: tests.test_security::test_browser_screenshot_blocks_path_traversal | KeyError: 'session_id'
+FAILED: tests.test_security::test_anonymous_user_cannot_list_tenants | assert 404 == 401
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_security::test_execution_draft_blocks_traversal_root | assert 404 == 400
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_security::test_login_rate_limit | assert 404 == 429
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_security::test_anonymous_user_cannot_list_agents | assert 404 == 401
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_security::test_register_rate_limit | assert 404 == 429
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_security::test_feishu_event_requires_signature_headers | assert 404 == 401
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_security::test_anonymous_user_cannot_list_workflows | assert 404 == 401
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_security::test_feishu_event_rejects_bad_signature | assert 404 == 401
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_security::test_anonymous_user_cannot_access_api_key_status | assert 404 == 401
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_security::test_feishu_event_accepts_official_lark_signature | assert 404 == 200
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_security::test_login_wrong_password_returns_401 | assert 404 == 401
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_security::test_browser_session_isolation | KeyError: 'session_id'
+FAILED: tests.test_security::test_login_nonexistent_user_returns_401 | assert 404 == 401
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_security::test_workflow_run_ignores_client_tenant_id | KeyError: 'id'
+FAILED: tests.test_security::test_login_constant_time_no_user_enumeration | AssertionError: Timing side-channel detected: [17.160499999590684, 14.47849999749451, 13.10409999859985]
+assert False
+ +  where False = all(<generator
+FAILED: tests.test_security::test_register_duplicate_email_fails | assert 404 == 200
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_security::test_bearer_token_round_trip | assert 404 == 200
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_security::test_browser_goto_blocks_private_ip | KeyError: 'session_id'
+FAILED: tests.test_contracts_regression::test_workflow_view_model_has_mantine_shapes | assert 404 in {200, 401}
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_workflow_run_timeline::test_workflow_run_timeline_includes_node_compensation_and_types | KeyError: 'id'
+FAILED: tests.test_security::test_anonymous_user_cannot_list_users | assert 404 == 401
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_performance_stress.TestResourceUsage::test_llm_response_time_consistency | assert 0.0017604827880859375 < (2.575397491455078e-05 * 10)
+FAILED: tests.test_rc_supply_chain_gate::test_frontend_lockfile_matches_package_manifest | AssertionError: assert 'failed' == 'passed'
+  
+  - passed
+  + failed
+FAILED: tests.test_workflow_run_trace_link::test_workflow_run_detail_and_trace_are_linked | KeyError: 'id'
+FAILED: tests.test_performance_stress::test_memory_scale | failed on setup with "worker 'gw2' crashed while running 'tests/test_performance_stress.py::test_memory_scale'"
+FAILED: tests.test_trace_audit_integration::test_trace_and_audit_cross_reference_for_agent_run | AssertionError: Agent run failed: {"detail":"Not Found"}
+assert 404 == 200
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_trace_audit_integration::test_trace_and_audit_cross_reference_for_workflow_run | KeyError: 'id'
+FAILED: tests.test_api_comprehensive.TestUserEndpoints::test_list_users_unauthorized | assert 404 in (401, 403)
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api_comprehensive.TestErrorHandling::test_invalid_json | assert 404 in [400, 422]
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api_comprehensive.TestUserEndpoints::test_list_users_authorized | assert 404 in [200, 401]
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api_comprehensive.TestTenantEndpoints::test_get_tenant_unauthorized | assert 404 in (401, 403)
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api_comprehensive.TestErrorHandling::test_missing_required_field | assert 404 in [400, 422]
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api_comprehensive.TestErrorHandling::test_invalid_method | assert 404 in [405, 401]
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api_comprehensive.TestUserEndpoints::test_create_user_invalid_email | assert 404 in [400, 422]
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api_comprehensive.TestCollaborationEndpoints::test_list_rooms_unauthorized | assert 404 in (401, 403)
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api_comprehensive.TestUserEndpoints::test_get_user_unauthorized | assert 404 in (401, 403)
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api_comprehensive.TestCollaborationEndpoints::test_get_room_unauthorized | assert 404 in (401, 403)
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api_comprehensive.TestMemoryEndpoints::test_search_memory_unauthorized | assert 404 in (401, 403)
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api_comprehensive.TestMemoryEndpoints::test_get_memory_unauthorized | assert 404 in (401, 403)
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api_comprehensive.TestTenantEndpoints::test_list_tenants_unauthorized | assert 404 in (401, 403)
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api_comprehensive.TestTenantEndpoints::test_list_tenants_authorized | assert 404 in [200, 401]
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api_comprehensive.TestWorkflowEndpoints::test_list_workflows_unauthorized | assert 404 in (401, 403)
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api_comprehensive.TestWorkflowEndpoints::test_get_workflow_unauthorized | assert 404 in (401, 403)
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_scheduler::test_pause_resume_task | failed on setup with "AttributeError: 'RedisTaskQueue' object has no attribute 'queue'. Did you mean: 'enqueue'?"
+FAILED: tests.test_scheduler::test_cancel_task | failed on setup with "AttributeError: 'RedisTaskQueue' object has no attribute 'queue'. Did you mean: 'enqueue'?"
+FAILED: tests.test_scheduler::test_list_tasks | failed on setup with "AttributeError: 'RedisTaskQueue' object has no attribute 'queue'. Did you mean: 'enqueue'?"
+FAILED: tests.test_scheduler::test_add_task_dependency | failed on setup with "AttributeError: 'RedisTaskQueue' object has no attribute 'queue'. Did you mean: 'enqueue'?"
+FAILED: tests.test_scheduler::test_schedule_interval | failed on setup with "AttributeError: 'RedisTaskQueue' object has no attribute 'queue'. Did you mean: 'enqueue'?"
+FAILED: tests.test_scheduler::test_enqueue_task | failed on setup with "AttributeError: 'RedisTaskQueue' object has no attribute 'queue'. Did you mean: 'enqueue'?"
+FAILED: tests.test_scheduler::test_resolve_dependencies | failed on setup with "AttributeError: 'RedisTaskQueue' object has no attribute 'queue'. Did you mean: 'enqueue'?"
+FAILED: tests.test_scheduler::test_schedule_cron | failed on setup with "AttributeError: 'RedisTaskQueue' object has no attribute 'queue'. Did you mean: 'enqueue'?"
+FAILED: tests.test_scheduler::test_dequeue_task | failed on setup with "AttributeError: 'RedisTaskQueue' object has no attribute 'queue'. Did you mean: 'enqueue'?"
+FAILED: tests.test_scheduler::test_execution_order | failed on setup with "AttributeError: 'RedisTaskQueue' object has no attribute 'queue'. Did you mean: 'enqueue'?"
+FAILED: tests.test_scheduler::test_schedule_once | failed on setup with "AttributeError: 'RedisTaskQueue' object has no attribute 'queue'. Did you mean: 'enqueue'?"
+FAILED: tests.test_scheduler::test_priority_queue | failed on setup with "AttributeError: 'RedisTaskQueue' object has no attribute 'queue'. Did you mean: 'enqueue'?"
+FAILED: tests.test_scheduler::test_cycle_detection | failed on setup with "AttributeError: 'RedisTaskQueue' object has no attribute 'queue'. Did you mean: 'enqueue'?"
+FAILED: tests.test_scheduler::test_record_task_execution | failed on setup with "AttributeError: 'RedisTaskQueue' object has no attribute 'queue'. Did you mean: 'enqueue'?"
+FAILED: tests.test_scheduler::test_task_retry | failed on setup with "AttributeError: 'RedisTaskQueue' object has no attribute 'queue'. Did you mean: 'enqueue'?"
+FAILED: tests.test_scheduler::test_task_failure_metrics | failed on setup with "AttributeError: 'RedisTaskQueue' object has no attribute 'queue'. Did you mean: 'enqueue'?"
+FAILED: tests.test_scheduler::test_queue_pause_resume | failed on setup with "AttributeError: 'RedisTaskQueue' object has no attribute 'queue'. Did you mean: 'enqueue'?"
+FAILED: tests.test_scheduler::test_health_status | failed on setup with "AttributeError: 'RedisTaskQueue' object has no attribute 'queue'. Did you mean: 'enqueue'?"
+FAILED: tests.test_scheduler::test_queue_stats | failed on setup with "AttributeError: 'RedisTaskQueue' object has no attribute 'queue'. Did you mean: 'enqueue'?"
+FAILED: tests.test_scheduler::test_performance_summary | failed on setup with "AttributeError: 'RedisTaskQueue' object has no attribute 'queue'. Did you mean: 'enqueue'?"
+FAILED: tests.test_scheduler::test_top_tasks_by_duration | failed on setup with "AttributeError: 'RedisTaskQueue' object has no attribute 'queue'. Did you mean: 'enqueue'?"
+FAILED: tests.test_scheduler::test_scheduler_stats | failed on setup with "AttributeError: 'RedisTaskQueue' object has no attribute 'queue'. Did you mean: 'enqueue'?"
+FAILED: tests.test_api::test_validation_error_contract | assert 404 == 422
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api::test_tool_manifest_endpoint | assert 404 == 200
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api::test_metrics_summary_endpoint | assert 404 == 200
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api::test_prometheus_metrics_endpoint | assert 404 == 200
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api_contracts::test_observability_contract_fields_are_present | assert 404 == 200
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api::test_run_agent | assert 404 == 200
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api::test_trace_history_endpoint | KeyError: 'trace_id'
+FAILED: tests.test_api::test_trace_detail_404 | KeyError: 'code'
+FAILED: tests.test_api::test_run_history_endpoint | KeyError: 'trace_id'
+FAILED: tests.test_api::test_run_replay_endpoint | KeyError: 'trace_id'
+FAILED: tests.test_api::test_run_detail_404 | KeyError: 'code'
+FAILED: tests.test_api_browser_desktop_memory::test_browser_api_session_lifecycle | assert 404 == 200
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api_browser_desktop_memory::test_desktop_api_session_lifecycle | assert 404 == 200
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api_browser_desktop_memory::test_memory_api_store_search_and_count | assert 404 == 200
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api_planning_verification::test_planning_api_returns_execution_plan | assert 404 == 200
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api_planning_verification::test_verification_api_returns_summary | assert 404 == 200
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_ops_summary::test_ops_summary_reports_health_and_backlog | assert 404 == 200
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_workflow_schedule_detail::test_workflow_schedule_detail_and_correlation_views | KeyError: 'id'
+FAILED: tests.test_workflows::test_workflow_executor_routes_by_recovery_hint | KeyError: 'recovery_hint'
+FAILED: tests.test_workflows::test_workflow_executor_routes_reobserve_branch | assert False
+ +  where False = any(<generator object test_workflow_executor_routes_reobserve_branch.<locals>.<genexpr> at 0x000001A91B74E740>)
+FAILED: tests.test_workflows::test_workflow_api_smoke | KeyError: 'id'
+FAILED: tests.test_workflows::test_workflow_api_approval_node_returns_needs_approval | KeyError: 'id'
+FAILED: tests.test_workflows::test_workflow_chat_and_templates | assert 404 == 200
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_workflows::test_workflow_api_async_run_returns_running_record | KeyError: 'id'
+FAILED: tests.test_workflows::test_workflow_api_resume_approved_run | KeyError: 'id'
+FAILED: tests.test_workflows::test_workflow_api_schedule_and_run_due | KeyError: 'id'
+FAILED: tests.test_coverage_error_handling.TestAgentLoopErrorHandling::test_invalid_context | failed on setup with "worker 'gw4' crashed while running 'tests/test_coverage_error_handling.py::TestAgentLoopErrorHandling::test_invalid_context'"
+FAILED: tests.test_coverage_exception_cases.TestInvalidInputHandling::test_invalid_callback_type | failed on setup with "worker 'gw0' crashed while running 'tests/test_coverage_exception_cases.py::TestInvalidInputHandling::test_invalid_callback_type
+FAILED: tests.test_overview::test_overview_includes_recent_activity_and_summary_metrics | assert 404 == 200
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_sandbox_orchestrator.TestSandboxOrchestrator::test_batch_drain_all_tasks | assert 0 == 5
+ +  where 0 = len({})
+FAILED: tests.test_sandbox_orchestrator.TestSandboxOrchestrator::test_parallel_faster_than_serial | assert 0 == 4
+ +  where 0 = len({})
+FAILED: tests.test_sandbox_orchestrator.TestSandboxOrchestrator::test_mixed_success_failure | assert 0 == 2
+FAILED: tests.test_sandbox_orchestrator.TestSandboxWorker::test_single_task_success | TypeError: Task.__init__() got an unexpected keyword argument 'task_id'
+FAILED: tests.test_sandbox_orchestrator.TestSandboxWorker::test_failing_command_marks_failure | TypeError: Task.__init__() got an unexpected keyword argument 'task_id'
+FAILED: tests.test_sandbox_orchestrator.TestSandboxWorker::test_raising_handler_captured | TypeError: Task.__init__() got an unexpected keyword argument 'task_id'
+FAILED: tests.test_coverage_error_handling.TestAgentLoopErrorHandling::test_memory_system_failure | failed on setup with "worker 'gw3' crashed while running 'tests/test_coverage_error_handling.py::TestAgentLoopErrorHandling::test_memory_system_failur
+FAILED: tests.test_coverage_exception_cases.TestInvalidInputHandling::test_malformed_json_in_context | failed on setup with "worker 'gw7' crashed while running 'tests/test_coverage_exception_cases.py::TestInvalidInputHandling::test_malformed_json_in_con
+FAILED: tests.test_api_extended.TestAPIEdgeCases::test_api_with_invalid_query_parameters | assert 404 in [200, 400, 422]
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_agent_run_detail::test_agent_run_detail_and_correlation_views | KeyError: 'trace_id'
+FAILED: tests.test_api_extended.TestAPIEdgeCases::test_api_with_negative_pagination | assert 404 in [200, 400, 422]
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api_extended.TestAPIValidationAndErrorHandling::test_api_invalid_json_payload | assert 404 in [400, 422]
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api_extended.TestAPIEdgeCases::test_api_with_zero_limit | assert 404 in [200, 400, 422]
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api_extended.TestAPIValidationAndErrorHandling::test_api_missing_required_fields | assert 404 in [422, 500]
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api_extended.TestAPIEdgeCases::test_api_with_very_large_limit | assert 404 in [200, 400, 422]
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api_extended.TestAPIValidationAndErrorHandling::test_api_invalid_field_types | assert 404 in [422, 500]
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api_extended.TestAPIMemoryOperations::test_memory_store_with_empty_content | assert 404 in [200, 201, 400, 422]
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api_extended.TestAPIValidationAndErrorHandling::test_api_empty_request_body | assert 404 in [422, 500]
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api_extended.TestAPIMemoryOperations::test_memory_store_with_very_long_content | assert 404 in [200, 201, 400, 413, 422]
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api_extended.TestAPIValidationAndErrorHandling::test_api_null_values_in_required_fields | assert 404 in [422, 500]
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api_extended.TestAPIMemoryOperations::test_memory_search_with_empty_query | assert 404 in [200, 400]
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api_extended.TestAPIMemoryOperations::test_memory_search_with_special_characters | assert 404 in [200, 400]
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api_extended.TestAPIValidationAndErrorHandling::test_api_special_characters_in_fields | assert 404 in [200, 201, 422]
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api_extended.TestAPIMemoryOperations::test_memory_consolidate_with_invalid_layers | assert 404 in [200, 400, 422]
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api_extended.TestAPIValidationAndErrorHandling::test_api_unicode_characters | assert 404 in [200, 201, 422]
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api_extended.TestAPIMemoryOperations::test_memory_consolidate_same_source_and_target | assert 404 in [200, 400, 422]
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api_extended.TestAPIValidationAndErrorHandling::test_api_deeply_nested_objects | assert 404 in [200, 201, 422]
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api_extended.TestAPIValidationAndErrorHandling::test_api_circular_references | assert 404 in [200, 201, 422]
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api_extended.TestAPIAuthenticationAndAuthorization::test_api_missing_api_key | assert 404 == 401
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api_extended.TestAPIAuthenticationAndAuthorization::test_api_invalid_api_key | assert 404 == 401
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_approvals::test_approvals_api_flow | assert 404 == 200
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api_extended.TestAPIAuthenticationAndAuthorization::test_api_empty_api_key | assert 404 == 401
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_approvals::test_approvals_api_executes_approved_tool | assert 404 == 200
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api_extended.TestAPIAuthenticationAndAuthorization::test_api_malformed_api_key | assert 404 == 401
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_issue_to_pr_api::test_issue_to_pr_dry_run_from_url_returns_plan | assert 404 == 200
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api_extended.TestAPIRateLimitingAndThrottling::test_api_rapid_requests | assert (200 in [404, 404, 404, 404, 404, 404, ...] or 429 in [404, 404, 404, 404, 404, 404, ...])
+FAILED: tests.test_issue_to_pr_api::test_issue_to_pr_execute_requires_explicit_token | assert 404 == 403
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_issue_to_pr_api::test_issue_to_pr_execute_uses_fake_executor | assert 404 == 200
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api_extended.TestAPIRateLimitingAndThrottling::test_api_concurrent_requests | assert False
+ +  where False = all(<generator object TestAPIRateLimitingAndThrottling.test_api_concurrent_requests.<locals>.<genexpr> at 0x00000165955
+FAILED: tests.test_api_extended.TestAPIResponseFormats::test_api_response_has_required_fields | assert 404 == 200
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api_extended.TestAPIEdgeCases::test_api_with_query_parameters | assert 404 in [200, 400]
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_streaming_comprehensive.TestStreamingEndpoints::test_create_streaming_run | assert 404 == 200
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_streaming_comprehensive.TestStreamingEndpoints::test_get_stream_stats | assert 404 == 200
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_streaming_comprehensive.TestStreamingEndpoints::test_emit_log_event | assert 404 == 200
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_streaming_comprehensive.TestStreamingEndpoints::test_stream_health | assert 404 == 200
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_streaming_comprehensive.TestStreamingEndpoints::test_emit_metric_event | assert 404 == 200
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_streaming_comprehensive.TestStreamingEndpoints::test_emit_task_status_event | assert 404 == 200
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_streaming_comprehensive.TestStreamingEndpoints::test_get_stream_events | assert 404 == 200
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_streaming_comprehensive.TestStreamingEndpoints::test_get_stream_events_with_since_sequence | assert 404 == 200
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_first_release_entrypoints::test_workbench_contract_contains_core_sections | assert 404 in {200, 401, 403}
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_agent_run_timeline::test_agent_run_timeline_and_stream_observability | KeyError: 'trace_id'
+FAILED: tests.test_messages_stream::test_messages_stream_uses_last_event_id_as_continuation_anchor | assert 404 == 200
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_messages_stream::test_messages_stream_replays_history_and_sets_sse_ids | assert 404 == 200
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_messages_stream::test_messages_stream_honors_domain_filters | assert 404 == 200
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_api_overview::test_overview_api_returns_full_payload | assert 404 == 200
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_memory_api::test_memory_api_store_search_and_consolidate | assert 404 == 200
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_memory_api::test_authenticated_viewer_can_search_memory_but_not_write | KeyError: 'key'
+FAILED: tests.test_api_replay::test_replay_api_returns_payload | assert 404 == 200
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_feedback_integration.TestFeedbackAPIIntegration::test_create_feedback_success | assert 404 == 201
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_feedback_integration.TestFeedbackAPIIntegration::test_create_feedback_invalid_type | assert 404 == 400
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_feedback_integration.TestFeedbackAPIIntegration::test_create_feedback_invalid_severity | assert 404 == 400
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_feedback_integration.TestFeedbackAPIIntegration::test_get_feedback_success | KeyError: 'id'
+FAILED: tests.test_feedback_integration.TestFeedbackAPIIntegration::test_list_feedback_success | assert 404 == 200
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_feedback_integration.TestFeedbackAPIIntegration::test_list_feedback_with_filters | assert 404 == 200
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_feedback_integration.TestFeedbackAPIIntegration::test_get_feedback_analysis | KeyError: 'id'
+FAILED: tests.test_feedback_integration.TestFeedbackAPIIntegration::test_update_feedback_status | KeyError: 'id'
+FAILED: tests.test_feedback_integration.TestFeedbackAPIIntegration::test_update_feedback_invalid_status | KeyError: 'id'
+FAILED: tests.test_feedback_integration.TestFeedbackAPIIntegration::test_get_feedback_stats | assert 404 == 200
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_feedback_integration.TestFeedbackAPIIntegration::test_permission_check_non_admin | KeyError: 'id'
+FAILED: tests.test_feedback_integration.TestFeedbackAPIIntegration::test_permission_check_admin | KeyError: 'id'
+FAILED: tests.test_approval_detail::test_approval_detail_and_correlation_views | KeyError: 'id'
+FAILED: tests.test_agent_loop::test_agent_returns_mock_answer | failed on setup with "worker 'gw1' crashed while running 'tests/test_agent_loop.py::test_agent_returns_mock_answer'"
+FAILED: tests.test_collaboration_api::test_collaboration_room_events_are_published_to_event_bus | assert 404 == 200
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_security_authz.TestAuthorizationEnforcement::test_unauthenticated_access_denied | assert 404 == 401
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_security_authz.TestAuthorizationEnforcement::test_insufficient_scope_denied | assert 404 == 401
+ +  where 404 = <Response [404 Not Found]>.status_code
+FAILED: tests.test_agent_extended.TestAgentLoopIntegration::test_agent_run_basic | failed on setup with "worker 'gw2' crashed while running 'tests/test_agent_extended.py::TestAgentLoopIntegration::test_agent_run_basic'"
+FAILED: tests.test_agent_extended.TestAgentLoopIntegration::test_agent_run_snapshot | failed on setup with "worker 'gw0' crashed while running 'tests/test_agent_extended.py::TestAgentLoopIntegration::test_agent_run_snapshot'"
+FAILED: tests.test_agent_extended.TestAgentLoopIntegration::test_agent_run_execution_summary | failed on setup with "worker 'gw3' crashed while running 'tests/test_agent_extended.py::TestAgentLoopIntegration::test_agent_run_execution_summary'"
+FAILED: tests.test_coverage_branch_coverage.TestIfElseBranches::test_agent_without_extra_context | failed on setup with "worker 'gw1' crashed while running 'tests/test_coverage_branch_coverage.py::TestIfElseBranches::test_agent_without_extra_context
+FAILED: tests.test_coverage_branch_coverage.TestIfElseBranches::test_agent_with_tracer | failed on setup with "worker 'gw2' crashed while running 'tests/test_coverage_branch_coverage.py::TestIfElseBranches::test_agent_with_tracer'"
+FAILED: tests.test_coverage_branch_coverage.TestIfElseBranches::test_agent_with_session_id | failed on setup with "worker 'gw0' crashed while running 'tests/test_coverage_branch_coverage.py::TestIfElseBranches::test_agent_with_session_id'"
+FAILED: tests.test_coverage_branch_coverage.TestIfElseBranches::test_agent_with_event_callback | failed on setup with "worker 'gw5' crashed while running 'tests/test_coverage_branch_coverage.py::TestIfElseBranches::test_agent_with_event_callback'"
+FAILED: tests.test_coverage_branch_coverage.TestIfElseBranches::test_agent_without_event_callback | failed on setup with "worker 'gw3' crashed while running 'tests/test_coverage_branch_coverage.py::TestIfElseBranches::test_agent_without_event_callbac
+FAILED: tests.test_coverage_branch_coverage.TestIfElseBranches::test_agent_without_tracer | failed on setup with "worker 'gw4' crashed while running 'tests/test_coverage_branch_coverage.py::TestIfElseBranches::test_agent_without_tracer'"
+FAILED: tests.test_coverage_branch_coverage.TestIfElseBranches::test_agent_without_run_store | failed on setup with "worker 'gw6' crashed while running 'tests/test_coverage_branch_coverage.py::TestIfElseBranches::test_agent_without_run_store'"
+FAILED: tests.test_coverage_branch_coverage.TestIfElseBranches::test_agent_with_run_store | failed on setup with "worker 'gw8' crashed while running 'tests/test_coverage_branch_coverage.py::TestIfElseBranches::test_agent_with_run_store'"
+FAILED: tests.test_coverage_branch_coverage.TestIfElseBranches::test_agent_without_session_id | failed on setup with "worker 'gw7' crashed while running 'tests/test_coverage_branch_coverage.py::TestIfElseBranches::test_agent_without_session_id'"
+FAILED: tests.test_coverage_branch_coverage.TestIfElseBranches::test_agent_with_extra_context | failed on setup with "worker 'gw9' crashed while running 'tests/test_coverage_branch_coverage.py::TestIfElseBranches::test_agent_with_extra_context'"
