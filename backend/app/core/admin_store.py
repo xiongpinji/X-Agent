@@ -177,12 +177,14 @@ class _EngineFactory:
             if ":memory:" in self.sync_url:
                 engine_kwargs["poolclass"] = StaticPool
         else:
-            # Postgres 等外部库: 连接池 + 探活, 支持多实例共享
+            # Postgres 等外部库: 连接池 + 探活, 支持多实例共享;
+            # connect_timeout 防止无本地 Postgres 的 dev 环境挂起在 OS TCP 超时上
             engine_kwargs.update(
                 pool_size=5,
                 max_overflow=10,
                 pool_recycle=1800,
                 pool_pre_ping=True,
+                connect_args={"connect_timeout": 5},
             )
         self.engine: Engine = create_engine(self.sync_url, **engine_kwargs)
         self.session_factory = sessionmaker(bind=self.engine, expire_on_commit=False)

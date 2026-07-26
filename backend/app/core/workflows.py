@@ -678,6 +678,16 @@ class WorkflowRepository:
                 self._definition_path,
             )
             return
+        # Tolerate both on-disk shapes: a plain list of definition dicts
+        # (current snapshot format) and legacy envelopes such as
+        # {"definitions": {...}} or a bare {id: definition} mapping.
+        if isinstance(raw, dict):
+            if "definitions" in raw:
+                raw = raw["definitions"]
+            else:
+                raw = list(raw.values())
+        if isinstance(raw, dict):
+            raw = list(raw.values())
         for item in raw:
             definition = WorkflowDefinition.model_validate(item)
             self._definitions[definition.id] = definition

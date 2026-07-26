@@ -74,7 +74,9 @@ class Settings(BaseSettings):
     workflow_run_store_path: Path = PROJECT_ROOT / "data" / "workflow_runs.jsonl"
     workflow_schedule_store_path: Path = PROJECT_ROOT / "data" / "workflow_schedules.json"
     # Workflow 存储后端: db=PostgreSQL(生产), file=JSON文件(dev), auto=尝试db降级file
-    workflow_store_backend: str = "db"
+    # 默认 auto: 本地开发无 Postgres 时显式降级为文件存储(WARNING), 避免启动/测试挂起;
+    # 生产部署必须显式设 XAGENT_WORKFLOW_STORE_BACKEND=db(生产守卫会校验).
+    workflow_store_backend: str = "auto"
     # Workflow 并行 DAG 执行配置
     workflow_max_parallel: int = 5  # 最大并行节点数 (semaphore limit)
     workflow_parallel_mode: str = "auto"  # auto | parallel | sequential

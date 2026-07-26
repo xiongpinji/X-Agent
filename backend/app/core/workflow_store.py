@@ -172,6 +172,9 @@ def create_workflow_engine(database_url: str, *, echo: bool = False) -> Engine:
         engine_kwargs["connect_args"] = {"timeout": 30}
     else:
         engine_kwargs["pool_pre_ping"] = True
+        # Dev boxes without a local Postgres must fail fast (seconds), not hang
+        # on the OS TCP timeout (~2min) during auto-backend probing/readiness.
+        engine_kwargs["connect_args"] = {"connect_timeout": 5}
     return create_engine(url, **engine_kwargs)
 
 
