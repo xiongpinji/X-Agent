@@ -290,6 +290,30 @@ class BaseClient(ABC):
         """
         pass
 
+    @abstractmethod
+    async def chat(
+        self,
+        message: str,
+        session_id: str | None = None,
+        stream: bool = False,
+    ) -> dict[str, Any]:
+        """Send a chat message to the agent.
+
+        Args:
+            message: User message
+            session_id: Optional session ID for multi-turn context
+            stream: Whether to stream the response
+
+        Returns:
+            Response dictionary with 'content' key
+
+        Raises:
+            ConnectionError: If unable to connect
+            AuthError: If authentication fails
+            APIError: If API returns error
+        """
+        pass
+
 
 class HTTPClient(BaseClient):
     """HTTP-based client for remote API calls.
@@ -526,6 +550,31 @@ class HTTPClient(BaseClient):
             "POST", f"/api/v1/approvals/{approval_id}/execute"
         )
 
+    async def chat(
+        self,
+        message: str,
+        session_id: str | None = None,
+        stream: bool = False,
+    ) -> dict[str, Any]:
+        """Send chat message via HTTP API.
+
+        POST /api/v1/agents/run with chat-oriented payload.
+        For streaming, use cli.streaming.SSEStreamClient instead.
+        """
+        payload: dict[str, Any] = {
+            "task": message,
+            "stream": stream,
+            "permission_scope": [],
+            "extra_context": {},
+        }
+        if session_id:
+            payload["session_id"] = session_id
+        result = await self._request("POST", "/api/v1/agents/run", json=payload)
+        # Normalize response shape
+        if isinstance(result, dict) and "content" not in result:
+            result["content"] = result.get("output", result.get("result", ""))
+        return result
+
 
 class LocalClient(BaseClient):
     """Local client for direct backend module imports.
@@ -742,6 +791,18 @@ class LocalClient(BaseClient):
             "Approved execution not supported in local mode. "
             "Use HTTP mode to execute approved tools."
         )
+
+    async def chat(
+        self,
+        message: str,
+        session_id: str | None = None,
+        stream: bool = False,
+    ) -> dict[str, Any]:
+        """Chat with agent locally.
+
+        Delegates to run_agent for local execution.
+        """
+        return await self.run_agent(task=message, stream=stream)
 
 
 def create_client(config: CLIConfig) -> BaseClient:

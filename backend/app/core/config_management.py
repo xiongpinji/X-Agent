@@ -116,7 +116,7 @@ class ObservabilityConfig(BaseModel):
 class PerformanceConfig(BaseModel):
     """Performance configuration."""
 
-    max_iterations: int = Field(default=4, ge=1, le=100, description="Maximum agent iterations")
+    max_iterations: int = Field(default=20, ge=1, le=100, description="Maximum agent iterations")
     default_token_budget: int = Field(default=16000, ge=1000, le=1000000, description="Default token budget")
     default_cost_budget_usd: float = Field(default=1.0, ge=0.01, le=1000.0, description="Default cost budget in USD")
     max_concurrent_tasks: int = Field(default=10, ge=1, le=1000, description="Maximum concurrent tasks")

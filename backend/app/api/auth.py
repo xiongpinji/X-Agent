@@ -254,9 +254,13 @@ async def register(request: AuthLoginRequest) -> AuthTokenResponse:
         UserCreateRequest(email=request.email, display_name=request.email.split("@")[0]),
         password=request.password,
     )
+    access_token = _issue_token()
+    refresh_token = _issue_token(ttl_seconds=86400)  # 24 hours
+    _store_token_user(access_token, user.id)
+    _store_token_user(refresh_token, user.id)
     return AuthTokenResponse(
-        access_token=_issue_token(),
-        refresh_token=_issue_token(),
+        access_token=access_token,
+        refresh_token=refresh_token,
         user=user.model_dump(mode="json"),
     )
 

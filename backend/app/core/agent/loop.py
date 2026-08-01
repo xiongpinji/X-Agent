@@ -87,7 +87,7 @@ class AgentLoop:
         llm_router: LLMRouter,
         memory: MemorySystem,
         tools: ToolRegistry,
-        max_iterations: int = 4,
+        max_iterations: int = 20,
         tracer: TraceStore | None = None,
         run_store: RunStore | None = None,
         browser_store: BrowserAutomationStore | None = None,
@@ -585,6 +585,9 @@ class AgentLoop:
     ) -> AgentRunResponse:
         started = self.tracer.record(context, "agent.started", task=task, extra_context=extra_context or {})
 
+        # 保存 event_callback 供 _emit_trace 实时推送 SSE 事件
+        self._event_callback = event_callback
+
         # 上下文管理（P1-14）：重置每次运行的压缩/会话状态
         self._compression_events = []
         self._run_context_mgmt = {"enabled": False}
@@ -985,16 +988,18 @@ class AgentLoop:
                     except Exception:
                         _intent = "general"
                     _replanned = int(execution_frame.execution_summary.get("_reflect_replans", 0) or 0)
-                    if _intent == "code_change" and _replanned < 1:
+                    if _intent == "code_change" and _replanned < 3:
                         execution_frame.execution_summary["_reflect_replans"] = _replanned + 1
                         try:
                             replan_context = dict(extra_context)
                             replan_context["_after_reflect_replan"] = True
                             replan_context["_replan_reason"] = "code_change_read_without_mutation"
                             replan_context["_replan_guidance"] = (
-                                "A code-change task has already gathered context but no write tool has succeeded. "
-                                "Do not repeat read_file/search_text for the same evidence; choose write_file, "
-                                "apply_text_patch, or apply_batch_patch next to apply the requested change."
+                                "CRITICAL: This is a file-creation task but NO write_file has been called yet. "
+                                "Stop reading/inspecting. You MUST call write_file NOW with the complete file content. "
+                                "For multi-file tasks, call write_file once per file. "
+                                "Generate production-quality code with type annotations and docstrings. "
+                                "Do NOT call inspect_tree, list_files, or read_file again."
                             )
                             new_steps = await self._plan(context, trajectory, replan_context)
                             mutating_steps = [
@@ -1010,6 +1015,11 @@ class AgentLoop:
                                     iteration=iteration,
                                     injected=len(mutating_steps),
                                 )
+                            else:
+                                # LLM didn't return write_file — inject all non-final steps as plan
+                                actionable = [s for s in new_steps if s.kind not in {"final", "observe"}]
+                                if actionable:
+                                    plan[:0] = actionable
                         except Exception:
                             pass
             elif step.kind == "final":
@@ -1072,6 +1082,177 @@ class AgentLoop:
                             logger.debug("ACM context compressed for snapshot %s", snapshot.id)
                 except Exception as exc:
                     logger.debug("ACM snapshot save failed (non-blocking): %s", exc)
+
+        # === Continuation loop: re-plan when plan exhausted but task not done ===
+        _continuation_count = 0
+        _max_continuations = 5  # max re-plan cycles for complex multi-file tasks
+        while (
+            not plan
+            and iteration < self.max_iterations
+            and _continuation_count < _max_continuations
+        ):
+            # Check if task goal appears achieved
+            _open_subtasks = [
+                st for st, status in trajectory.subtask_status.items()
+                if status != "done"
+            ]
+            _did_mutate = any(
+                (r.tool_name in {"write_file", "apply_text_patch", "apply_batch_patch"})
+                and r.success
+                for r in tool_calls
+            )
+            _profile = self._build_task_profile(trajectory, extra_context, {})
+            _intent = str(_profile.get("intent") or "general")
+
+            # Multi-file detection: extract file paths from task text
+            import re as _re
+            _task_files = _re.findall(r'[\w\-./\\]+\.\w{1,6}', trajectory.task)
+            _written_paths = {
+                str(r.arguments_preview.get("path", "")) if isinstance(r.arguments_preview, dict) else ""
+                for r in tool_calls
+                if r.tool_name in {"write_file", "apply_text_patch", "apply_batch_patch"} and r.success
+            }
+            # Check if all mentioned files have been written
+            _all_files_written = True
+            if _task_files and _intent == "code_change":
+                for _tf in _task_files:
+                    _tf_norm = _tf.replace("\\", "/")
+                    if not any(_tf_norm in wp.replace("\\", "/") or wp.replace("\\", "/") in _tf_norm for wp in _written_paths if wp):
+                        _all_files_written = False
+                        break
+
+            # Determine if we should continue
+            _should_continue = False
+            if _intent == "code_change" and not _did_mutate:
+                # Code change intent but nothing was written — ALWAYS continue
+                _should_continue = True
+            elif _intent == "code_change" and _did_mutate and not _all_files_written:
+                # Multi-file task: some files written but not all
+                _should_continue = True
+            elif _open_subtasks and not _did_mutate:
+                _should_continue = True
+            elif _open_subtasks and len(tool_calls) > 0 and not any(
+                r.success and r.tool_name in {"write_file", "apply_text_patch", "apply_batch_patch"}
+                for r in tool_calls
+            ):
+                # Has open subtasks and no successful mutation yet
+                _should_continue = True
+
+            if not _should_continue:
+                break
+
+            _continuation_count += 1
+            self._emit_trace(
+                context, "agent.continuation.replan",
+                iteration=iteration,
+                continuation=_continuation_count,
+                open_subtasks=_open_subtasks[:3],
+                reason="plan_exhausted_but_task_incomplete",
+            )
+
+            # Re-plan with current trajectory context — aggressive guidance for code_change
+            try:
+                _replan_ctx = dict(extra_context)
+                _replan_ctx["_after_reflect_replan"] = True
+                _replan_ctx["_continuation"] = _continuation_count
+                _called_tools = [r.tool_name for r in tool_calls[-10:]]
+                # Build list of remaining files
+                _remaining_files = []
+                if _task_files:
+                    for _tf in _task_files:
+                        _tf_norm = _tf.replace("\\", "/")
+                        if not any(_tf_norm in wp.replace("\\", "/") or wp.replace("\\", "/") in _tf_norm for wp in _written_paths if wp):
+                            _remaining_files.append(_tf)
+                _remaining_note = f" Files ALREADY written: {list(_written_paths)}. Files STILL NEEDED: {_remaining_files}." if _remaining_files else ""
+                _replan_ctx["_replan_guidance"] = (
+                    f"CRITICAL: Continuation #{_continuation_count}. The task requires multiple files but not all have been created yet."
+                    f"{_remaining_note} "
+                    f"Tools already called: {_called_tools}. "
+                    "You MUST call write_file NOW for each REMAINING file. "
+                    "Do NOT call inspect_tree, list_files, or read_file again — you already have enough context. "
+                    "Call write_file with the correct path and COMPLETE file content for EVERY remaining file. "
+                    "For multi-file tasks, call write_file multiple times (once per file)."
+                )
+                new_plan = await self._plan(context, trajectory, _replan_ctx)
+                new_plan = self._apply_execution_plan(new_plan, _replan_ctx)
+                # Filter out pure-final plans (no actionable steps)
+                _MUTATING_TOOLS = {"write_file", "apply_text_patch", "apply_batch_patch"}
+                mutating_in_plan = [s for s in new_plan if s.kind == "tool" and s.tool_name in _MUTATING_TOOLS]
+                actionable = [s for s in new_plan if s.kind != "final"]
+                if mutating_in_plan:
+                    # Prioritize mutating steps
+                    plan = mutating_in_plan + [s for s in actionable if s not in mutating_in_plan] + [AgentPlanStep(kind="final", instruction="Finalize")]
+                    self._emit_trace(
+                        context, "agent.continuation.plan_ready",
+                        continuation=_continuation_count,
+                        new_steps=len(plan),
+                        mutating_steps=len(mutating_in_plan),
+                    )
+                elif actionable:
+                    plan = new_plan
+                    self._emit_trace(
+                        context, "agent.continuation.plan_ready",
+                        continuation=_continuation_count,
+                        new_steps=len(plan),
+                    )
+                else:
+                    # LLM returned nothing actionable — force a direct write_file call
+                    import re as _re
+                    _paths = _re.findall(r'[\w\-./\\]+\.\w{1,6}', trajectory.task)
+                    if _paths:
+                        plan = [
+                            AgentPlanStep(kind="tool", instruction=f"Write file {p}", tool_name="write_file", arguments={"path": p, "content": trajectory.task})
+                            for p in _paths[:5]
+                        ] + [AgentPlanStep(kind="final", instruction="Finalize")]
+                    else:
+                        break
+            except Exception as cont_exc:
+                logger.debug("Continuation re-plan failed: %s", cont_exc)
+                break
+
+            # Continue the main loop with new plan
+            while iteration < self.max_iterations and plan:
+                step = plan.pop(0)
+                iteration += 1
+
+                if self._should_defer_step(step, trajectory, extra_context):
+                    plan.append(step)
+                    if len(plan) == 1:
+                        break
+                    continue
+
+                self._emit_trace(context, "agent.iteration.started", iteration=iteration, step_kind=step.kind, instruction=step.instruction)
+                trajectory.stage = f"step_{iteration}_{step.kind}"
+
+                observations_before = len(observations)
+                if step.kind == "observe":
+                    answer, memory_hits, last_tool_result, observations, plan_records = await self._execute_observe_step(
+                        context, task, trajectory, step, observations, plan_records, memory_hits, last_tool_result, execution_frame, iteration
+                    )
+                elif step.kind == "tool" and step.tool_name:
+                    answer, last_tool_result, observations, plan_records, plan = await self._execute_tool_step(
+                        context, trajectory, step, observations, plan_records, last_tool_result, execution_frame, tool_calls, extra_context, iteration, plan
+                    )
+                elif step.kind == "reflect":
+                    answer, last_tool_result, plan_records = self._execute_reflect_step(
+                        context, trajectory, step, last_tool_result, plan_records, execution_frame, iteration
+                    )
+                elif step.kind == "final":
+                    answer, plan_records = self._execute_final_step(
+                        context, task, trajectory, step, last_tool_result, extra_context, plan_records, execution_frame, iteration
+                    )
+
+                if self._active_bridge is not None and self._active_bridge.session_active:
+                    for new_observation in observations[observations_before:]:
+                        try:
+                            await self._active_bridge.record(
+                                "assistant",
+                                f"[step {iteration} {step.kind}] {new_observation}"[:2_000],
+                                metadata={"trace_id": context.trace_id, "iteration": iteration, "step_kind": step.kind},
+                                importance=0.6,
+                            )
+                        except Exception:
+                            pass
 
         if not answer:
             answer = self._finalize_answer(task, trajectory, last_tool_result, extra_context)
@@ -1173,6 +1354,62 @@ class AgentLoop:
         answer = await self._handle_tool_result(
             context, trajectory, step, record, observations, last_tool_result, execution_frame, extra_context, iteration, plan
         )
+
+        # ─── Codex 闭环: write_file 成功后自动注入测试步骤 ───
+        if (
+            record.success
+            and step.tool_name in {"write_file", "apply_text_patch", "apply_batch_patch"}
+        ):
+            _remaining_writes = [
+                s for s in plan
+                if s.kind == "tool" and s.tool_name in {"write_file", "apply_text_patch", "apply_batch_patch"}
+            ]
+            _test_already_scheduled = any(
+                s.kind == "tool" and s.tool_name == "run_command" for s in plan
+            )
+            _test_already_run = any(
+                isinstance(r, dict) and r.get("tool_name") == "run_command"
+                for r in (execution_frame.tool_history or [])
+            )
+            if not _remaining_writes and not _test_already_scheduled and not _test_already_run:
+                _test_cmd = self._infer_test_command(trajectory, extra_context)
+                if _test_cmd:
+                    plan.insert(0, AgentPlanStep(
+                        kind="tool",
+                        instruction="Auto-verify: run tests after writing files",
+                        tool_name="run_command",
+                        arguments={"command": _test_cmd},
+                    ))
+                    self._emit_trace(
+                        context, "agent.auto_verify.injected",
+                        iteration=iteration, command=_test_cmd,
+                    )
+
+        # ─── Codex 闭环: run_command 测试失败 → 注入修复 re-plan ───
+        _cmd_output = record.output if isinstance(record.output, dict) else {}
+        _cmd_failed = (
+            step.tool_name == "run_command"
+            and (not record.success or _cmd_output.get("success") is False)
+        )
+        if _cmd_failed:
+            _repair_round = int(execution_frame.execution_summary.get("_test_repair_round", 0))
+            if _repair_round < 3:
+                execution_frame.execution_summary["_test_repair_round"] = _repair_round + 1
+                _stderr = str(_cmd_output.get("stderr", ""))[-3000:]
+                _stdout = str(_cmd_output.get("stdout", ""))[-3000:]
+                _error_snippet = _stderr or _stdout
+                plan.insert(0, AgentPlanStep(
+                    kind="reflect",
+                    instruction=(
+                        f"TEST FAILURE (repair round {_repair_round + 1}/3). "
+                        f"Analyze the error and fix the code:\n{_error_snippet[-2000:]}"
+                    ),
+                ))
+                self._emit_trace(
+                    context, "agent.test_failure.repair_injected",
+                    iteration=iteration, round=_repair_round + 1,
+                    error_preview=_error_snippet[:200],
+                )
 
         return answer, last_tool_result, observations, plan_records, plan
 
@@ -1666,6 +1903,34 @@ class AgentLoop:
             await evolution_engine.on_task_complete(trajectory_data, result_data)
         except Exception:
             pass  # Evolution must never break agent execution
+
+        # ─── Codex 对齐: 任务完成后自动 git commit ───
+        _auto_commit = (extra_context or {}).get("auto_commit", True)
+        if _auto_commit and result.status == RunStatus.COMPLETED:
+            _did_write = any(
+                tc.tool_name in {"write_file", "apply_text_patch", "apply_batch_patch"} and tc.success
+                for tc in tool_calls
+            )
+            if _did_write:
+                try:
+                    from backend.app.core.git_ops import GitOperations
+                    import os as _os
+                    _workspace = _os.environ.get("XAGENT_WORKSPACE", ".")
+                    _git = GitOperations(cwd=_workspace)
+                    if await _git.has_changes():
+                        # 从任务描述生成 commit message
+                        _msg = f"feat(x-agent): {task[:72]}" if len(task) <= 72 else f"feat(x-agent): {task[:69]}..."
+                        await _git.add_all()
+                        _commit_result = await _git.commit(_msg)
+                        if _commit_result.success:
+                            self._emit_trace(context, "agent.auto_commit.success", message=_msg)
+                        else:
+                            self._emit_trace(context, "agent.auto_commit.failed", stderr=_commit_result.stderr[:200])
+                except Exception:
+                    pass  # Auto-commit must never break agent execution
+
+        # 清理 event_callback 引用
+        self._event_callback = None
 
         return result
 
@@ -2234,6 +2499,27 @@ class AgentLoop:
                     kind="reflect",
                     instruction="Reflect on what was read and apply the change with write_file/apply_text_patch",
                 ))
+            # ─── Multi-file enforcement: detect files mentioned in task but not yet covered ───
+            if _intent == "code_change" and (_picked & _MUTATING):
+                import re as _re_mf
+                _mentioned_files = _re_mf.findall(r'[\w\-./\\]+\.\w{1,6}', trajectory.task)
+                _planned_paths = {
+                    str(s.arguments.get("path", "")) for s in steps
+                    if s.kind == "tool" and s.tool_name in _MUTATING and isinstance(s.arguments, dict)
+                }
+                _missing = [
+                    f for f in _mentioned_files
+                    if not any(f.replace("\\", "/") in p.replace("\\", "/") or p.replace("\\", "/") in f.replace("\\", "/") for p in _planned_paths if p)
+                ]
+                if _missing:
+                    steps.append(AgentPlanStep(
+                        kind="reflect",
+                        instruction=(
+                            f"MULTI-FILE CHECK: The task mentions files {_missing} but they are not yet written. "
+                            "You MUST call write_file for EACH remaining file before finalizing. "
+                            "Do NOT stop until ALL requested files are created."
+                        ),
+                    ))
             steps.append(AgentPlanStep(kind="final", instruction="Finalize answer"))
             return steps
         steps = self._parse_plan(plan_text, tool_manifest, trajectory)
@@ -2490,6 +2776,16 @@ class AgentLoop:
         payload = {k: self._stringify(v) for k, v in data.items()}
         trace_event = self.tracer.record(context, event, **payload)
         langfuse_client.log(event, trace_id=context.trace_id, agent_id=context.agent_id, tenant_id=context.tenant_id, user_id=context.user_id, **payload)
+        # SSE 流式推送: 如果设置了 event_callback，实时发送事件
+        cb = getattr(self, "_event_callback", None)
+        if cb is not None:
+            import asyncio as _aio
+            try:
+                result = cb(trace_event)
+                if _aio.iscoroutine(result):
+                    _aio.ensure_future(result)
+            except Exception:
+                pass
         return trace_event
 
     async def _verify_write_result(self, context: RunContext, step: AgentPlanStep, record: ToolCallRecord) -> str | None:
@@ -2562,13 +2858,13 @@ class AgentLoop:
             任务模式字符串 (edit/analyze/summarize/search/general)
         """
         text = f"{task} {json.dumps(extra_context, ensure_ascii=False, default=str)}".lower()
-        if any(token in text for token in ["write", "modify", "edit", "patch", "fix", "implement", "refactor", "update", "create"]):
+        if any(token in text for token in ["write", "modify", "edit", "patch", "fix", "implement", "refactor", "update", "create", "写", "修改", "编辑", "修复", "实现", "重构", "更新", "创建", "新建", "添加", "生成"]):
             return "edit"
-        if any(token in text for token in ["search", "inspect", "analyze", "impact", "dependency", "entrypoint", "trace"]):
+        if any(token in text for token in ["search", "inspect", "analyze", "impact", "dependency", "entrypoint", "trace", "搜索", "检查", "分析", "依赖", "追踪"]):
             return "analyze"
-        if any(token in text for token in ["summarize", "summary", "explain", "overview", "report"]):
+        if any(token in text for token in ["summarize", "summary", "explain", "overview", "report", "总结", "概述", "解释", "报告"]):
             return "summarize"
-        if any(token in text for token in ["file", "code", "repo", "tree", "directory", "folder"]):
+        if any(token in text for token in ["file", "code", "repo", "tree", "directory", "folder", "文件", "代码", "目录", "文件夹"]):
             return "search"
         return "general"
 
@@ -2840,9 +3136,10 @@ class AgentLoop:
                 f"Reflect re-plan guidance: {json.dumps(replan_guidance, ensure_ascii=False, default=str)}",
                 "When Reflect re-plan guidance is non-empty, follow it before generic planning rules.",
                 "Keep the plan minimal, choose only high-value steps, and avoid redundancy.",
-                "Use observe first when context is uncertain, then choose one high-value tool or finalize.",
-                "Output a short plan using steps with kind observe/tool/reflect/final.",
-                "For tool steps, include tool_name and arguments.",
+                "IMPORTANT: Use function calling (tool_calls) to invoke tools directly. Do not just describe actions in text.",
+                "For file creation tasks, call write_file with the correct path and full file content.",
+                "If you output a text plan instead, use lines starting with observe/tool:/reflect/final.",
+                "For tool steps in text format, include tool_name and arguments.",
             ]
         )
 
@@ -2850,15 +3147,15 @@ class AgentLoop:
         text = f"{trajectory.task} {trajectory.goal} {json.dumps(extra_context, ensure_ascii=False, default=str)} {json.dumps(platform_context, ensure_ascii=False, default=str)}".lower()
         mode = self._infer_task_mode(trajectory.task, extra_context)
         intent = "general"
-        if any(token in text for token in ["fix", "patch", "edit", "write", "implement", "refactor", "update"]):
+        if any(token in text for token in ["fix", "patch", "edit", "write", "implement", "refactor", "update", "create", "build", "add", "generate", "修复", "修改", "编辑", "写", "实现", "重构", "更新", "创建", "新建", "添加", "生成"]):
             intent = "code_change"
-        elif any(token in text for token in ["analyze", "inspect", "review", "understand", "explain"]):
+        elif any(token in text for token in ["analyze", "inspect", "review", "understand", "explain", "分析", "检查", "审查", "理解", "解释"]):
             intent = "analysis"
-        elif any(token in text for token in ["summarize", "report", "overview", "wrap up"]):
+        elif any(token in text for token in ["summarize", "report", "overview", "wrap up", "总结", "报告", "概述"]):
             intent = "summary"
-        elif any(token in text for token in ["search", "locate", "find", "discover"]):
+        elif any(token in text for token in ["search", "locate", "find", "discover", "搜索", "定位", "查找", "发现"]):
             intent = "discovery"
-        elif any(token in text for token in ["browser", "desktop", "ui", "page", "click", "fill", "screenshot"]):
+        elif any(token in text for token in ["browser", "desktop", "ui", "page", "click", "fill", "screenshot", "浏览器", "桌面", "页面", "点击"]):
             intent = "automation"
         constraints = []
         for key in ["root", "path", "target_path", "file", "pattern", "limit", "read_limit", "replace_all"]:
@@ -3035,10 +3332,20 @@ class AgentLoop:
             系统提示词字符串
         """
         return (
-            "You are X-Agent, a coding and operations agent. "
-            "First classify the task mode, then produce a compact execution plan with observe/tool/reflect/final steps. "
-            "Preserve the main objective, avoid redundant steps, and adapt when failures occur. "
-            "Prefer tools when needed, and finish with a concise final step."
+            "You are X-Agent, an autonomous coding agent that completes tasks by calling tools. "
+            "CRITICAL RULES:\n"
+            "1. For ANY task that asks to create/write/generate files, you MUST call write_file via function calling (tool_calls) with the full file content. Do this IMMEDIATELY — do NOT just inspect or list files first.\n"
+            "2. For multi-file tasks, call write_file ONCE PER FILE. Create ALL files the task requests.\n"
+            "3. NEVER respond with only text descriptions. ALWAYS use tool_calls to take action.\n"
+            "4. If you need context, call inspect_tree FIRST, then IMMEDIATELY call write_file for each target file.\n"
+            "5. Generate complete, production-quality code with type annotations, docstrings, and error handling.\n"
+            "6. VERIFY YOUR CODE: After writing files, you MUST call run_command to execute tests. "
+            "If the task includes test files, run 'pytest <test_path> -v'. If no test path is obvious, run 'pytest -v'. "
+            "For JavaScript projects, run 'npm test'.\n"
+            "7. FIX FAILURES: If tests fail, read the error output carefully, call write_file or apply_text_patch to fix the code, "
+            "then call run_command again to re-run tests. Repeat until ALL tests pass (max 3 fix cycles).\n"
+            "8. After all tests pass, provide a brief summary of what was created and the test results.\n"
+            "Remember: Your job is to PRODUCE WORKING CODE. Write → Test → Fix → Confirm. Call write_file NOW."
         )
 
     def _apply_execution_plan(self, steps: list[AgentPlanStep], extra_context: dict[str, object]) -> list[AgentPlanStep]:
@@ -3172,6 +3479,46 @@ class AgentLoop:
             aligned.append(AgentPlanStep(kind="final", instruction="Finalize answer"))
         return aligned
 
+    def _infer_test_command(self, trajectory: AgentTrajectory, extra_context: dict) -> str | None:
+        """Infer the appropriate test command based on written files and task context.
+
+        Returns a shell command string or None if no tests are applicable.
+        Only auto-runs when test files were actually written (avoids running
+        the entire project test suite on large repos).
+        """
+        # 1. extra_context 显式指定
+        if extra_context.get("test_command"):
+            return str(extra_context["test_command"])
+
+        # 2. 从已写入文件路径推断
+        written_paths: list[str] = []
+        for result in (trajectory.tool_results or []):
+            if isinstance(result, dict):
+                tool = result.get("tool_name", "")
+                if tool in {"write_file", "apply_text_patch", "apply_batch_patch"}:
+                    path = ""
+                    output = result.get("output")
+                    if isinstance(output, dict):
+                        path = str(output.get("path", ""))
+                    if not path:
+                        path = str(result.get("arguments", {}).get("path", ""))
+                    if path:
+                        written_paths.append(path)
+
+        # 找测试文件 — 只有测试文件被写入时才自动跑
+        test_files = [p for p in written_paths if "test" in p.lower() and p.endswith(".py")]
+        if test_files:
+            # 用最后一个测试文件的路径
+            return f"pytest {test_files[-1]} -v --tb=short"
+
+        # JS/TS 测试文件
+        js_test_files = [p for p in written_paths if "test" in p.lower() and p.endswith((".js", ".ts", ".jsx", ".tsx"))]
+        if js_test_files:
+            return "npm test"
+
+        # 没有写入测试文件 → 不自动跑（避免跑整个项目测试套件）
+        return None
+
     def _next_subtask_steps(self, trajectory: AgentTrajectory, kind: str, tool_name: str | None = None) -> list[str]:
         remaining = [subtask for idx, subtask in enumerate(trajectory.subtasks) if trajectory.subtask_status.get(subtask, "pending") != "done" and idx >= trajectory.current_subtask_index]
         if kind == "final":
@@ -3293,6 +3640,12 @@ class AgentLoop:
             if task_profile.get("mode") in {"edit", "patch", "write"}:
                 preferred_tool = next((tool["name"] for tool in tool_manifest if tool.get("name") == "preview_text_patch"), None)
                 target_path = str(extra_context.get("path") or extra_context.get("target_path") or extra_context.get("file") or "")
+                # Extract file path from task text if not provided in extra_context
+                if not target_path:
+                    import re as _re
+                    _path_match = _re.search(r'[\w\-./\\]+\.\w{1,6}', trajectory.task)
+                    if _path_match:
+                        target_path = _path_match.group(0)
                 preferred_arguments = {
                     "path": target_path,
                     "old_text": str(extra_context.get("old_text") or extra_context.get("needle") or ""),
@@ -3328,8 +3681,11 @@ class AgentLoop:
         if float(task_profile.get("urgency", 0.0) or 0.0) > 0.6 and not any(step.kind == "tool" for step in steps):
             steps.append(AgentPlanStep(kind="reflect", instruction="Urgent task requires immediate follow-up"))
         steps.append(AgentPlanStep(kind="final", instruction=f"Finalize answer for {trajectory.goal}"))
-        if len(steps) > 4:
-            steps = steps[:4]
+        # For code_change tasks, allow more steps (multi-file writes need room)
+        _is_code_change = task_profile.get("intent") in {"code_change"} or task_profile.get("mode") in {"edit", "patch", "write"}
+        _max_plan_steps = 12 if _is_code_change else 4
+        if len(steps) > _max_plan_steps:
+            steps = steps[:_max_plan_steps]
             if steps and steps[-1].kind != "final":
                 steps[-1] = AgentPlanStep(kind="final", instruction=f"Finalize answer for {trajectory.goal}")
         return steps
@@ -3348,41 +3704,20 @@ class AgentLoop:
         write_tool = next((tool["name"] for tool in tool_manifest if tool.get("name") == "write_file"), None)
         insertion_index = 1
         inspect_tool = next((tool["name"] for tool in tool_manifest if tool.get("name") == "inspect_tree"), None)
-        coordinate_tool = next((tool["name"] for tool in tool_manifest if tool.get("name") == "coordinate_files"), None)
-        entrypoint_tool = next((tool["name"] for tool in tool_manifest if tool.get("name") == "analyze_entrypoints"), None)
-        dependency_tool = next((tool["name"] for tool in tool_manifest if tool.get("name") == "analyze_dependencies"), None)
-        impact_tool = next((tool["name"] for tool in tool_manifest if tool.get("name") == "assess_change_impact"), None)
         batch_patch_tool = next((tool["name"] for tool in tool_manifest if tool.get("name") == "apply_batch_patch"), None)
         batch_preview_tool = next((tool["name"] for tool in tool_manifest if tool.get("name") == "preview_batch_patches"), None)
-        if inspect_tool:
+        # Only add inspect_tree for context — skip heavy analysis tools for file-creation tasks
+        if inspect_tool and not new_text:
             steps.insert(insertion_index, AgentPlanStep(kind="tool", instruction="Inspect repository tree", tool_name=str(inspect_tool), arguments={"root": root, "limit": int(extra_context.get("tree_limit", 200))}))
             insertion_index += 1
-        task_profile = extra_context.get("task_profile", {}) if isinstance(extra_context.get("task_profile", {}), dict) else {}
-        if task_profile.get("confidence", 0.0) and float(task_profile.get("confidence", 0.0)) < 0.6:
-            steps.insert(insertion_index, AgentPlanStep(kind="reflect", instruction="Reflect on uncertainty before proceeding"))
-            insertion_index += 1
-        if entrypoint_tool:
-            steps.insert(insertion_index, AgentPlanStep(kind="tool", instruction="Analyze likely entrypoints", tool_name=str(entrypoint_tool), arguments={"root": root, "limit": int(extra_context.get("entrypoint_limit", 20))}))
-            insertion_index += 1
-        if dependency_tool:
-            steps.insert(insertion_index, AgentPlanStep(kind="tool", instruction="Analyze dependency hotspots", tool_name=str(dependency_tool), arguments={"root": root, "limit": int(extra_context.get("dependency_limit", 30))}))
-            insertion_index += 1
-        if impact_tool:
-            steps.insert(insertion_index, AgentPlanStep(kind="tool", instruction="Assess likely change impact", tool_name=str(impact_tool), arguments={"root": root, "target": target or root, "query": trajectory.task, "limit": int(extra_context.get("impact_limit", 20))}))
-            insertion_index += 1
+        # For patch/edit tasks with existing content, add targeted read+patch
         if batch_preview_tool and extra_context.get("patches"):
             steps.insert(insertion_index, AgentPlanStep(kind="tool", instruction="Preview batch patches", tool_name=str(batch_preview_tool), arguments={"patches": extra_context.get("patches", []), "root": root}))
             insertion_index += 1
         if batch_patch_tool and extra_context.get("patches"):
             steps.insert(insertion_index, AgentPlanStep(kind="tool", instruction="Apply batch patches", tool_name=str(batch_patch_tool), arguments={"patches": extra_context.get("patches", []), "backup": True}))
             insertion_index += 1
-        if coordinate_tool and target:
-            steps.insert(insertion_index, AgentPlanStep(kind="tool", instruction="Coordinate related files", tool_name=str(coordinate_tool), arguments={"root": root, "targets": [target], "query": trajectory.task, "limit": int(extra_context.get("coord_limit", 5))}))
-            insertion_index += 1
-        if search_tool:
-            steps.insert(insertion_index, AgentPlanStep(kind="tool", instruction="Search repository for target", tool_name=str(search_tool), arguments={"root": root, "query": target or trajectory.goal, "pattern": str(extra_context.get("pattern", "**/*")), "limit": int(extra_context.get("limit", 20))}))
-            insertion_index += 1
-        if read_tool and target:
+        if read_tool and target and old_text:
             steps.insert(insertion_index, AgentPlanStep(kind="tool", instruction="Read target file", tool_name=str(read_tool), arguments={"path": target, "limit": int(extra_context.get("read_limit", 8000))}))
             insertion_index += 1
         if preview_tool and target and old_text and new_text:

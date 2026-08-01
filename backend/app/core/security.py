@@ -16,6 +16,7 @@ ROLE_SCOPES: dict[str, list[str]] = {
         "agent:run",
         "agent:read",
         "tools:*",
+        "tool:*",  # singular form used by agent loop permission checks
         "memory:read",
         "memory:write",
         "workflow:create",
@@ -35,6 +36,7 @@ ROLE_SCOPES: dict[str, list[str]] = {
         "agent:run",
         "agent:read",
         "tools:read",
+        "tool:*",  # singular form used by agent loop permission checks
         "memory:read",
         "memory:write",
         "workflow:create",
@@ -49,6 +51,7 @@ ROLE_SCOPES: dict[str, list[str]] = {
         "agent:run",
         "agent:read",
         "tools:read",
+        "tool:*",  # singular form used by agent loop permission checks
         "memory:read",
         "memory:write",
         "workflow:run",

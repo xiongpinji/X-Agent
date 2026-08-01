@@ -1597,6 +1597,226 @@ def build_default_tool_registry(
             "additionalProperties": False,
         },
     )
+
+    # ─── run_command: 在工作目录执行 shell 命令（pytest / npm test 等）───
+    # 支持 Docker 沙箱隔离: XAGENT_SANDBOX_MODE=docker 时在容器内执行
+    _SANDBOX_IMAGE = os.environ.get("XAGENT_SANDBOX_IMAGE", "python:3.11-slim")
+
+    async def _run_in_docker(
+        command: str, work_dir: str, timeout: int
+    ) -> dict[str, Any]:
+        """Execute command inside a Docker container with workspace mounted."""
+        import asyncio as _aio
+
+        # Resolve absolute path for volume mount
+        abs_work = _os.path.abspath(work_dir)
+        docker_cmd = (
+            f'docker run --rm '
+            f'--network none '
+            f'--memory 512m --cpus 1 '
+            f'--read-only '
+            f'-v "{abs_work}:/workspace" '
+            f'-w /workspace '
+            f'{_SANDBOX_IMAGE} '
+            f'sh -c "{command}"'
+        )
+        try:
+            proc = await _aio.create_subprocess_shell(
+                docker_cmd,
+                stdout=_aio.subprocess.PIPE,
+                stderr=_aio.subprocess.PIPE,
+            )
+            out_b, err_b = await _aio.wait_for(
+                proc.communicate(), timeout=min(timeout, 300)
+            )
+            stdout = out_b.decode("utf-8", errors="replace")[-50_000:]
+            stderr = err_b.decode("utf-8", errors="replace")[-20_000:]
+            exit_code = proc.returncode or 0
+            return {
+                "success": exit_code == 0,
+                "exit_code": exit_code,
+                "stdout": stdout,
+                "stderr": stderr,
+                "command": command,
+                "cwd": work_dir,
+                "sandbox": "docker",
+            }
+        except _aio.TimeoutError:
+            return {
+                "success": False, "exit_code": 124,
+                "stdout": "", "stderr": f"Docker command timed out after {timeout}s",
+                "command": command, "cwd": work_dir, "sandbox": "docker",
+            }
+        except Exception as exc:
+            # Docker not available → fallback to local
+            return await _run_local(command, work_dir, timeout)
+
+    async def _run_local(
+        command: str, work_dir: str, timeout: int
+    ) -> dict[str, Any]:
+        """Execute command directly on the host (original behavior)."""
+        import asyncio as _aio
+
+        try:
+            proc = await _aio.create_subprocess_shell(
+                command,
+                stdout=_aio.subprocess.PIPE,
+                stderr=_aio.subprocess.PIPE,
+                cwd=work_dir,
+            )
+            out_b, err_b = await _aio.wait_for(
+                proc.communicate(), timeout=min(timeout, 300)
+            )
+            stdout = out_b.decode("utf-8", errors="replace")[-50_000:]
+            stderr = err_b.decode("utf-8", errors="replace")[-20_000:]
+            exit_code = proc.returncode or 0
+            return {
+                "success": exit_code == 0,
+                "exit_code": exit_code,
+                "stdout": stdout,
+                "stderr": stderr,
+                "command": command,
+                "cwd": work_dir,
+                "sandbox": "local",
+            }
+        except _aio.TimeoutError:
+            return {
+                "success": False, "exit_code": 124,
+                "stdout": "", "stderr": f"Command timed out after {timeout}s",
+                "command": command, "cwd": work_dir, "sandbox": "local",
+            }
+        except Exception as exc:
+            return {
+                "success": False, "exit_code": 1,
+                "stdout": "", "stderr": str(exc),
+                "command": command, "cwd": work_dir, "sandbox": "local",
+            }
+
+    async def run_command(
+        command: str,
+        cwd: str | None = None,
+        timeout: int = 120,
+        sandbox: str | None = None,
+    ) -> dict[str, Any]:
+        """Run a shell command in the working directory and return output.
+
+        Use this to run tests (pytest, npm test), linters, build commands, etc.
+        Supports Docker sandbox isolation for security.
+
+        Args:
+            command: Shell command to execute (e.g. "pytest tests/ -v").
+            cwd: Working directory. Defaults to the project root.
+            timeout: Max seconds before the command is killed (default 120).
+            sandbox: Execution mode - "docker" (isolated container), "local" (host),
+                     or None (uses XAGENT_SANDBOX_MODE env var, default "local").
+
+        Returns:
+            Dict with success, exit_code, stdout, stderr, sandbox.
+        """
+        import os as _os_inner
+
+        work_dir = cwd or _os_inner.environ.get("XAGENT_WORKSPACE", ".")
+        mode = sandbox or _os_inner.environ.get("XAGENT_SANDBOX_MODE", "local")
+
+        if mode == "docker":
+            return await _run_in_docker(command, work_dir, timeout)
+        return await _run_local(command, work_dir, timeout)
+
+    registry.register(
+        "run_command",
+        "Run a shell command (pytest, npm test, build, lint, etc.) in the project working directory. "
+        "Returns stdout/stderr/exit_code. Use after writing code to verify it works.",
+        run_command,
+        risk_level=RiskLevel.MEDIUM,
+        parameters_schema={
+            "type": "object",
+            "properties": {
+                "command": {"type": "string", "description": "Shell command to execute."},
+                "cwd": {"type": "string", "description": "Working directory (optional)."},
+                "timeout": {"type": "integer", "description": "Timeout in seconds (default 120)."},
+                "sandbox": {"type": "string", "enum": ["docker", "local"], "description": "Execution mode: docker (isolated) or local (host). Defaults to XAGENT_SANDBOX_MODE env."},
+            },
+            "required": ["command"],
+            "additionalProperties": False,
+        },
+    )
+
+    # ─── Git 工具: git_status / git_commit / git_create_branch ───
+    async def git_status(cwd: str | None = None) -> dict[str, Any]:
+        """Show git working tree status (modified/added/deleted files)."""
+        from backend.app.core.git_ops import GitOperations
+        ops = GitOperations(cwd=cwd or ".")
+        result = await ops._run("status", "--porcelain")
+        branch = await ops.current_branch()
+        return {
+            "success": result.success,
+            "branch": branch,
+            "changes": result.stdout.strip(),
+            "has_changes": bool(result.stdout.strip()),
+        }
+
+    async def git_commit(
+        message: str,
+        cwd: str | None = None,
+        add_all: bool = True,
+    ) -> dict[str, Any]:
+        """Stage all changes and create a git commit.
+
+        Args:
+            message: Commit message.
+            cwd: Working directory (optional).
+            add_all: Whether to git add -A before commit (default True).
+        """
+        from backend.app.core.git_ops import GitOperations
+        ops = GitOperations(cwd=cwd or ".")
+        if add_all:
+            await ops.add_all()
+        result = await ops.commit(message)
+        return {
+            "success": result.success,
+            "stdout": result.stdout.strip(),
+            "stderr": result.stderr.strip(),
+            "message": message,
+        }
+
+    async def git_create_branch(
+        branch: str,
+        cwd: str | None = None,
+    ) -> dict[str, Any]:
+        """Create and switch to a new git branch.
+
+        Args:
+            branch: Branch name to create.
+            cwd: Working directory (optional).
+        """
+        from backend.app.core.git_ops import GitOperations
+        ops = GitOperations(cwd=cwd or ".")
+        result = await ops.create_branch(branch)
+        return {
+            "success": result.success,
+            "branch": branch,
+            "stderr": result.stderr.strip(),
+        }
+
+    registry.register(
+        "git_status",
+        "Show git working tree status: current branch and modified/added/deleted files.",
+        git_status,
+        risk_level=RiskLevel.LOW,
+    )
+    registry.register(
+        "git_commit",
+        "Stage all changes (git add -A) and create a commit with the given message.",
+        git_commit,
+        risk_level=RiskLevel.HIGH,
+    )
+    registry.register(
+        "git_create_branch",
+        "Create and switch to a new git branch.",
+        git_create_branch,
+        risk_level=RiskLevel.LOW,
+    )
+
     return registry
 
 

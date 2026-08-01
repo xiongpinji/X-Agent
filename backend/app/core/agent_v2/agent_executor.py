@@ -38,7 +38,7 @@ class AgentExecutor:
 
     def __init__(
         self,
-        max_iterations: int = 4,
+        max_iterations: int = 20,
     ) -> None:
         """Initialize agent executor.
 

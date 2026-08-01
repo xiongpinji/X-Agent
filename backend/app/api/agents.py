@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+import json
 from datetime import UTC, datetime
 from typing import Annotated, Any
 from uuid import uuid4
@@ -150,11 +152,20 @@ async def run_agent(payload: dict[str, Any] | None = None, principal: PrincipalD
         for scope in requested_scope
         if scope in principal_scopes or f"{str(scope).split(':', 1)[0]}:*" in principal_scopes
     ]
+    # Include principal wildcard scopes (e.g. "tool:*") so the agent loop
+    # can use any tool without the client enumerating each one explicitly.
+    for scope in principal_scopes:
+        if scope.endswith(":*") and scope not in allowed_scope:
+            allowed_scope.append(scope)
     context = RunContext(
         tenant_id=principal.tenant_id,
         user_id=principal.user_id,
         permission_scope=allowed_scope,
     )
+    # Allow per-request override of max_iterations for long-running tasks
+    req_max_iter = request.get("max_iterations")
+    if req_max_iter and isinstance(req_max_iter, int) and 1 <= req_max_iter <= 100:
+        agent.max_iterations = req_max_iter
     result = await agent.run(context, task, request.get("extra_context", {}))
     get_audit_store().record(
         action="agent.run",
@@ -213,5 +224,89 @@ async def get_agent_run_timeline(trace_id: str, principal: PrincipalDependency =
 
 
 @router.post("/run/stream")
-async def run_agent_stream(payload: dict[str, Any] | None = None, principal: PrincipalDependency = None) -> dict[str, object]:
-    return await run_agent(payload, principal)
+async def run_agent_stream(payload: dict[str, Any] | None = None, principal: PrincipalDependency = None):
+    """True SSE streaming endpoint: emits real-time trace events as the agent works."""
+    agent = get_agent()
+    request = payload or {}
+    enforce_scope(principal, "agent:run")
+    task = str(request.get("task", ""))
+    if not task:
+        raise api_error(422, ErrorCode.VALIDATION_ERROR, "task is required.", details={"errors": [{"field": "task", "message": "task is required."}]})
+
+    requested_scope = request.get("permission_scope", ["tools:read", "memory:read", "memory:write"])
+    if not isinstance(requested_scope, list):
+        requested_scope = []
+    principal_scopes = set(principal.scopes or [])
+    allowed_scope = [
+        scope
+        for scope in requested_scope
+        if scope in principal_scopes or f"{str(scope).split(':', 1)[0]}:*" in principal_scopes
+    ]
+    for scope in principal_scopes:
+        if scope.endswith(":*") and scope not in allowed_scope:
+            allowed_scope.append(scope)
+    context = RunContext(
+        tenant_id=principal.tenant_id,
+        user_id=principal.user_id,
+        permission_scope=allowed_scope,
+    )
+    req_max_iter = request.get("max_iterations")
+    if req_max_iter and isinstance(req_max_iter, int) and 1 <= req_max_iter <= 100:
+        agent.max_iterations = req_max_iter
+
+    # asyncio.Queue 桥接 event_callback → SSE generator
+    queue: asyncio.Queue[dict | None] = asyncio.Queue()
+
+    def _on_event(trace_event) -> None:
+        """Synchronous callback that pushes trace events into the queue."""
+        try:
+            data = trace_event.model_dump(mode="json") if hasattr(trace_event, "model_dump") else {"event": str(trace_event)}
+            queue.put_nowait(data)
+        except Exception:
+            pass
+
+    async def _run_agent_task():
+        """Background task: run agent and signal completion."""
+        try:
+            result = await agent.run(context, task, request.get("extra_context", {}), event_callback=_on_event)
+            get_audit_store().record(
+                action="agent.run.stream",
+                resource_type="agent",
+                resource_id=context.agent_id,
+                tenant_id=context.tenant_id,
+                actor_id=context.user_id,
+                trace_id=result.trace_id,
+                run_id=result.trace_id,
+                details={"task_preview": task[:120], "status": result.status.value, "tool_call_count": len(result.tool_calls)},
+            )
+            # Push final result as completion signal
+            queue.put_nowait({"_final": True, "result": result.model_dump(mode="json")})
+        except Exception as exc:
+            queue.put_nowait({"_final": True, "error": str(exc)})
+        finally:
+            queue.put_nowait(None)  # Sentinel to stop generator
+
+    async def _sse_generator():
+        """Yield SSE events from the queue until sentinel."""
+        # Start agent in background
+        bg_task = asyncio.create_task(_run_agent_task())
+        try:
+            while True:
+                item = await queue.get()
+                if item is None:
+                    break
+                if item.get("_final"):
+                    final_data = json.dumps(item, ensure_ascii=False, default=str)
+                    yield f"event: completed\ndata: {final_data}\n\n"
+                else:
+                    event_data = json.dumps(item, ensure_ascii=False, default=str)
+                    yield f"event: trace\ndata: {event_data}\n\n"
+        finally:
+            if not bg_task.done():
+                bg_task.cancel()
+
+    return StreamingResponse(
+        _sse_generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )

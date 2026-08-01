@@ -43,7 +43,7 @@ class AgentCoordinator:
         tracer: TraceStore | None = None,
         audit_store: AuditStore | None = None,
         run_store: RunStore | None = None,
-        max_iterations: int = 4,
+        max_iterations: int = 20,
     ):
         self.executor = executor
         self.planner = planner

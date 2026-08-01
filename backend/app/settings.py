@@ -11,12 +11,12 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore", env_prefix="XAGENT_")
+    model_config = SettingsConfigDict(env_file=(".env", ".env.development"), env_file_encoding="utf-8", extra="ignore", env_prefix="XAGENT_")
 
     app_name: str = "X-Agent"
     app_mode: str = "development"
     static_dir: Path = PROJECT_ROOT / "frontend"
-    cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
+    cors_origins: str = "http://localhost:3001,http://127.0.0.1:3001"
     require_api_key: bool = False
     bootstrap_api_key: str | None = None
     bootstrap_api_key_sha256: str | None = None
@@ -101,7 +101,7 @@ class Settings(BaseSettings):
     langfuse_secret_key: str | None = None
     langfuse_host: str | None = None
 
-    max_iterations: int = 4
+    max_iterations: int = 20
     default_token_budget: int = 16_000
     default_cost_budget_usd: float = 1.0
     enable_high_risk_tools: bool = False

@@ -49,8 +49,27 @@ class PromotedSkill:
     code: str = ""
     tool_sequence: list[str] = field(default_factory=list)
     usage_count: int = 0
+    success_count: int = 0
+    failure_count: int = 0
     success_rate: float = 0.0
     promoted_at: float = field(default_factory=time.time)
+    last_used_at: float = 0.0
+    version: int = 1
+    improvement_history: list[dict[str, Any]] = field(default_factory=list)
+
+    def record_usage(self, success: bool) -> None:
+        """Record skill usage outcome for self-improvement tracking."""
+        self.usage_count += 1
+        self.last_used_at = time.time()
+        if success:
+            self.success_count += 1
+        else:
+            self.failure_count += 1
+        self.success_rate = self.success_count / self.usage_count if self.usage_count > 0 else 0.0
+
+    def needs_improvement(self) -> bool:
+        """Check if skill needs improvement based on success rate."""
+        return self.usage_count >= 3 and self.success_rate < 0.7
 
 
 class EvolutionEngine:
@@ -216,11 +235,133 @@ class EvolutionEngine:
         for skill in self.promoted_skills:
             keywords = skill.trigger_pattern.split(",")
             score = sum(1 for kw in keywords if kw.strip().lower() in task_lower)
+            # Boost score for high-success-rate skills
+            score *= (1.0 + skill.success_rate * 0.5)
             if score > best_score:
                 best_score = score
                 best_match = skill
 
         return best_match if best_score > 0 else None
+
+    async def record_skill_usage(
+        self,
+        skill_id: str,
+        success: bool,
+        execution_context: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Record skill usage and trigger self-improvement if needed.
+
+        This implements Hermes-like skill self-improvement during use:
+        skills that underperform are automatically flagged for refinement.
+        """
+        skill = next((s for s in self.promoted_skills if s.id == skill_id), None)
+        if not skill:
+            return {"status": "error", "reason": "skill not found"}
+
+        skill.record_usage(success)
+
+        result = {
+            "status": "recorded",
+            "skill_name": skill.name,
+            "usage_count": skill.usage_count,
+            "success_rate": skill.success_rate,
+        }
+
+        # Check if skill needs improvement
+        if skill.needs_improvement():
+            improvement = await self._improve_skill(skill, execution_context)
+            result["improvement_triggered"] = True
+            result["improvement"] = improvement
+        else:
+            result["improvement_triggered"] = False
+
+        return result
+
+    async def _improve_skill(
+        self,
+        skill: PromotedSkill,
+        context: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Attempt to improve an underperforming skill.
+
+        Uses LLM to analyze failures and generate improved code.
+        """
+        improvement_record = {
+            "version": skill.version,
+            "timestamp": time.time(),
+            "success_rate_before": skill.success_rate,
+            "trigger": "auto_improvement",
+        }
+
+        if self.llm_router:
+            try:
+                prompt = (
+                    f"The skill '{skill.name}' has a low success rate ({skill.success_rate:.0%}).\n"
+                    f"Current code:\n```python\n{skill.code}\n```\n\n"
+                    f"Tool sequence: {skill.tool_sequence}\n"
+                    f"Recent context: {context or 'N/A'}\n\n"
+                    "Generate an improved version with better error handling and edge case coverage."
+                )
+                messages = [{"role": "user", "content": prompt}]
+                response = await self.llm_router.chat(messages, tools=[])
+                new_code = response.content if hasattr(response, "content") else str(response)
+
+                # Extract code block if present
+                if "```python" in new_code:
+                    start = new_code.find("```python") + 9
+                    end = new_code.find("```", start)
+                    if end > start:
+                        new_code = new_code[start:end].strip()
+
+                skill.code = new_code
+                skill.version += 1
+                improvement_record["success"] = True
+                improvement_record["new_version"] = skill.version
+            except Exception as e:
+                logger.warning(f"Skill improvement failed: {e}")
+                improvement_record["success"] = False
+                improvement_record["error"] = str(e)
+        else:
+            improvement_record["success"] = False
+            improvement_record["error"] = "LLM not available for improvement"
+
+        skill.improvement_history.append(improvement_record)
+        return improvement_record
+
+    async def nudge_memory_persistence(self) -> dict[str, Any]:
+        """Periodic nudge to persist learned knowledge to memory.
+
+        Implements Hermes-like memory nudge system: periodically
+        consolidates learnings into long-term memory.
+        """
+        if not self.memory:
+            return {"status": "skipped", "reason": "no memory backend"}
+
+        persisted = 0
+        # Persist high-value skills
+        for skill in self.promoted_skills:
+            if skill.success_rate >= 0.8 and skill.usage_count >= 5:
+                try:
+                    await self.memory.store(
+                        content=(
+                            f"Proven skill: {skill.name}\n"
+                            f"Success rate: {skill.success_rate:.0%} over {skill.usage_count} uses\n"
+                            f"Tools: {skill.tool_sequence}\n"
+                            f"Trigger: {skill.trigger_pattern}"
+                        ),
+                        layer=8,  # Long-term skill memory
+                        importance=0.9,
+                        tags=["evolution", "proven_skill", skill.name],
+                    )
+                    persisted += 1
+                except Exception as e:
+                    logger.warning(f"Failed to persist skill {skill.name}: {e}")
+
+        return {
+            "status": "completed",
+            "persisted_skills": persisted,
+            "total_promoted": len(self.promoted_skills),
+        }
 
     def get_stats(self) -> dict[str, Any]:
         """Get evolution engine statistics."""

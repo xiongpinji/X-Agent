@@ -77,8 +77,8 @@ class CacheConfig(BaseConfig):
     @classmethod
     def validate_redis_url(cls, v: str | None) -> str | None:
         """Validate Redis URL format."""
-        if v is None:
-            return v
+        if v is None or v.strip() == "":
+            return None
         if not v.startswith("redis://"):
             raise ValueError("redis_url must start with 'redis://'")
         return v
