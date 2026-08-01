@@ -1106,18 +1106,27 @@ class AgentLoop:
 
             # Multi-file detection: extract file paths from task text
             import re as _re
+            import os.path as _osp
             _task_files = _re.findall(r'[\w\-./\\]+\.\w{1,6}', trajectory.task)
             _written_paths = {
                 str(r.arguments_preview.get("path", "")) if isinstance(r.arguments_preview, dict) else ""
                 for r in tool_calls
                 if r.tool_name in {"write_file", "apply_text_patch", "apply_batch_patch"} and r.success
             }
-            # Check if all mentioned files have been written
+            # Check if all mentioned files have been written (basename match to avoid substring false positives)
             _all_files_written = True
             if _task_files and _intent == "code_change":
+                _written_basenames = {_osp.basename(wp.replace("\\", "/")) for wp in _written_paths if wp}
+                _written_norms = {wp.replace("\\", "/") for wp in _written_paths if wp}
                 for _tf in _task_files:
                     _tf_norm = _tf.replace("\\", "/")
-                    if not any(_tf_norm in wp.replace("\\", "/") or wp.replace("\\", "/") in _tf_norm for wp in _written_paths if wp):
+                    _tf_base = _osp.basename(_tf_norm)
+                    # Match by exact path suffix OR exact basename
+                    _matched = (
+                        any(_tf_norm == wn or wn.endswith("/" + _tf_norm) for wn in _written_norms)
+                        or _tf_base in _written_basenames
+                    )
+                    if not _matched:
                         _all_files_written = False
                         break
 
@@ -2502,14 +2511,20 @@ class AgentLoop:
             # ─── Multi-file enforcement: detect files mentioned in task but not yet covered ───
             if _intent == "code_change" and (_picked & _MUTATING):
                 import re as _re_mf
+                import os.path as _osp_mf
                 _mentioned_files = _re_mf.findall(r'[\w\-./\\]+\.\w{1,6}', trajectory.task)
                 _planned_paths = {
                     str(s.arguments.get("path", "")) for s in steps
                     if s.kind == "tool" and s.tool_name in _MUTATING and isinstance(s.arguments, dict)
                 }
+                _planned_basenames = {_osp_mf.basename(p.replace("\\", "/")) for p in _planned_paths if p}
+                _planned_norms = {p.replace("\\", "/") for p in _planned_paths if p}
                 _missing = [
                     f for f in _mentioned_files
-                    if not any(f.replace("\\", "/") in p.replace("\\", "/") or p.replace("\\", "/") in f.replace("\\", "/") for p in _planned_paths if p)
+                    if not (
+                        any(f.replace("\\", "/") == pn or pn.endswith("/" + f.replace("\\", "/")) for pn in _planned_norms)
+                        or _osp_mf.basename(f.replace("\\", "/")) in _planned_basenames
+                    )
                 ]
                 if _missing:
                     steps.append(AgentPlanStep(
