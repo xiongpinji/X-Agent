@@ -630,7 +630,7 @@ class AgentLoop:
                 memory_hits=0,
                 tool_calls=[],
                 events=[],
-                execution_summary={"fast_path": True, "model": resp.model, "tokens": resp.tokens_used},
+                execution_summary={"fast_path": True, "branch": "done", "model": resp.model, "tokens": resp.tokens_used},
                 snapshot={"fast_path": True},
             )
         except Exception as exc:
@@ -652,7 +652,8 @@ class AgentLoop:
         # ─── Fast-path: 简单问题直接回答 ─────────────────────────────────────
         fast = await self._fast_path_answer(context, task)
         if fast is not None:
-            fast.events = [started]
+            completed_evt = self._emit_trace(context, "agent.completed", task=task, answer=(fast.answer or "")[:200])
+            fast.events = [started, completed_evt]
             return fast
 
         # 上下文管理（P1-14）：重置每次运行的压缩/会话状态
@@ -2004,6 +2005,34 @@ class AgentLoop:
                             self._emit_trace(context, "agent.auto_commit.failed", stderr=_commit_result.stderr[:200])
                 except Exception:
                     pass  # Auto-commit must never break agent execution
+
+        # ─── Codex 对齐: 写入文件后自动代码审查（高信号 Review）───────────
+        _auto_review = (extra_context or {}).get("auto_review", True)
+        if _auto_review and result.status == RunStatus.COMPLETED:
+            _written_files = [
+                tc.args.get("path") or tc.args.get("file_path", "")
+                for tc in tool_calls
+                if tc.tool_name in {"write_file", "apply_text_patch", "apply_batch_patch"} and tc.success
+            ]
+            if _written_files:
+                try:
+                    from backend.app.core.code_review import quick_review_files
+                    review_result = await quick_review_files(_written_files)
+                    if review_result and review_result.get("issues"):
+                        result.execution_summary["code_review"] = {
+                            "files_reviewed": len(_written_files),
+                            "issues_found": len(review_result["issues"]),
+                            "critical": review_result.get("critical_count", 0),
+                            "score": review_result.get("quality_score", 0),
+                        }
+                        self._emit_trace(
+                            context, "agent.auto_review.completed",
+                            files=len(_written_files),
+                            issues=len(review_result["issues"]),
+                            score=review_result.get("quality_score", 0),
+                        )
+                except Exception:
+                    pass  # Auto-review must never break agent execution
 
         # 清理 event_callback 引用
         self._event_callback = None

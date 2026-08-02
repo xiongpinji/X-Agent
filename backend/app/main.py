@@ -46,7 +46,7 @@ from backend.app.settings import get_settings
 def require_api_key_header(request: Request) -> None:
     if not settings.require_api_key:
         return
-    if request.url.path in {"/", "/health", "/ready", "/metrics", "/api/v1/channels/telegram/webhook", "/api/v1/channels/slack/events"}:
+    if request.url.path in {"/", "/health", "/ready", "/metrics", "/api/v1/channels/telegram/webhook", "/api/v1/channels/slack/events", "/api/v1/channels/discord/interactions", "/api/v1/channels/dingtalk/webhook"}:
         return
     if request.headers.get("x-api-key"):
         return
@@ -172,6 +172,10 @@ class CSRFProtectionMiddleware(BaseHTTPMiddleware):
         # cannot carry cookie CSRF tokens; signature verification happens inside
         # the adapter before any processing.
         "/api/v1/channels/slack/events",
+        # Ed25519-signed Discord Interactions webhook.
+        "/api/v1/channels/discord/interactions",
+        # DingTalk robot callback (HMAC-SHA256 signed).
+        "/api/v1/channels/dingtalk/webhook",
     }
 
     # SECURITY/ARCHITECTURE: token store is class-level (shared across instances).
@@ -603,7 +607,7 @@ async def request_logging_middleware(request: Request, call_next):
         clear_request_context = None
 
     try:
-        if settings.require_api_key and request.url.path not in {"/", "/health", "/ready", "/metrics", "/api/v1/channels/telegram/webhook", "/api/v1/channels/slack/events"}:
+        if settings.require_api_key and request.url.path not in {"/", "/health", "/ready", "/metrics", "/api/v1/channels/telegram/webhook", "/api/v1/channels/slack/events", "/api/v1/channels/discord/interactions", "/api/v1/channels/dingtalk/webhook"}:
             if not request.headers.get("x-api-key"):
                 response = JSONResponse({"detail": "Missing API key"}, status_code=401)
                 response.headers["x-request-id"] = request_id
@@ -1479,6 +1483,28 @@ async def startup_event():
             logger.info("Redis not available, using in-memory fallback")
     except Exception as e:
         logger.warning(f"Redis initialization failed: {e}. Using in-memory fallback.")
+
+    # Initialize database connection pool (PostgreSQL / SQLite)
+    try:
+        from backend.app.core.database import init_db_manager
+        from backend.app.settings import get_settings as _get_db_settings
+        _db_settings = _get_db_settings()
+        _db_url = _db_settings.database_url if hasattr(_db_settings, 'database_url') else None
+        if _db_url:
+            _redis_url = getattr(_db_settings, 'redis_url', None)
+            db_mgr = await init_db_manager(
+                database_url=_db_url,
+                redis_url=_redis_url,
+                pool_size=getattr(_db_settings, 'db_pool_size', 20),
+                max_overflow=getattr(_db_settings, 'db_max_overflow', 10),
+            )
+            app.state.db_manager = db_mgr
+            logger.info("Database connection pool initialized (pool_size=%d)", db_mgr.pool_size)
+        else:
+            logger.info("No DATABASE_URL configured, using in-memory stores")
+    except Exception as e:
+        logger.warning(f"Database initialization failed: {e}. Using in-memory fallback.")
+        app.state.db_manager = None
 
     # Security check: warn if production API auth is disabled
     from backend.app.settings import get_settings as _get_settings
