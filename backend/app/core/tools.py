@@ -1393,7 +1393,36 @@ def build_default_tool_registry(
     registry.register("preview_text_patch", "Preview a focused text replacement patch without writing.", preview_text_patch)
     registry.register("write_file", "Write a text file to disk with optional backup.", write_file, risk_level=RiskLevel.HIGH)
     registry.register("apply_text_patch", "Apply a focused text replacement patch to a file.", apply_text_patch, risk_level=RiskLevel.HIGH)
-    registry.register("apply_batch_patch", "Apply a batch of focused text replacement patches.", apply_batch_patch, risk_level=RiskLevel.HIGH)
+    registry.register(
+        "apply_batch_patch",
+        "Apply multiple text replacement patches across DIFFERENT files in one call. "
+        "PREFER THIS over multiple apply_text_patch calls when editing 2+ files. "
+        "Each patch: {path, old_text, new_text, replace_all?}. Returns per-file results.",
+        apply_batch_patch,
+        risk_level=RiskLevel.HIGH,
+        parameters_schema={
+            "type": "object",
+            "properties": {
+                "patches": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "path": {"type": "string", "description": "File path to patch."},
+                            "old_text": {"type": "string", "description": "Exact text to find."},
+                            "new_text": {"type": "string", "description": "Replacement text."},
+                            "replace_all": {"type": "boolean", "default": False, "description": "Replace all occurrences."},
+                        },
+                        "required": ["path", "old_text", "new_text"],
+                    },
+                    "description": "List of patches to apply across multiple files.",
+                },
+                "backup": {"type": "boolean", "default": True, "description": "Create .bak backup before patching."},
+            },
+            "required": ["patches"],
+            "additionalProperties": False,
+        },
+    )
     registry.register("search_text", "Search for text across files under a root directory.", search_text)
     registry.register("summarize_text", "Summarize a short text locally.", summarize_text)
     registry.register("normalize_text", "Normalize whitespace in text.", normalize_text)
@@ -1648,8 +1677,18 @@ def build_default_tool_registry(
                 "command": command, "cwd": work_dir, "sandbox": "docker",
             }
         except Exception:
-            # Docker not available → fallback to local
-            return await _run_local(command, work_dir, timeout)
+            # Docker not available → fallback to local with annotation
+            import logging as _log
+            _log.getLogger("xagent.sandbox").warning(
+                "Docker unavailable for run_command, falling back to local execution "
+                "(no container isolation). Set XAGENT_SANDBOX_MODE=local to suppress."
+            )
+            result = await _run_local(command, work_dir, timeout)
+            result["sandbox"] = "local (docker fallback)"
+            result["isolation_warning"] = (
+                "Docker unavailable: executed on host without container isolation."
+            )
+            return result
 
     async def _run_local(
         command: str, work_dir: str, timeout: int
@@ -1708,7 +1747,8 @@ def build_default_tool_registry(
             cwd: Working directory. Defaults to the project root.
             timeout: Max seconds before the command is killed (default 120).
             sandbox: Execution mode - "docker" (isolated container), "local" (host),
-                     or None (uses XAGENT_SANDBOX_MODE env var, default "local").
+                     "auto" (Docker when available, else local), or None (uses
+                     XAGENT_SANDBOX_MODE env var, default "auto").
 
         Returns:
             Dict with success, exit_code, stdout, stderr, sandbox.
@@ -1716,7 +1756,15 @@ def build_default_tool_registry(
         import os as _os_inner
 
         work_dir = cwd or _os_inner.environ.get("XAGENT_WORKSPACE", ".")
-        mode = sandbox or _os_inner.environ.get("XAGENT_SANDBOX_MODE", "local")
+        mode = sandbox or _os_inner.environ.get("XAGENT_SANDBOX_MODE", "auto")
+
+        if mode == "auto":
+            # Auto-detect: prefer Docker when available, fallback to local
+            try:
+                from backend.app.core.sandbox.docker_sandbox import is_docker_available
+                mode = "docker" if is_docker_available() else "local"
+            except Exception:
+                mode = "local"
 
         if mode == "docker":
             return await _run_in_docker(command, work_dir, timeout)
@@ -1734,7 +1782,7 @@ def build_default_tool_registry(
                 "command": {"type": "string", "description": "Shell command to execute."},
                 "cwd": {"type": "string", "description": "Working directory (optional)."},
                 "timeout": {"type": "integer", "description": "Timeout in seconds (default 120)."},
-                "sandbox": {"type": "string", "enum": ["docker", "local"], "description": "Execution mode: docker (isolated) or local (host). Defaults to XAGENT_SANDBOX_MODE env."},
+                "sandbox": {"type": "string", "enum": ["docker", "local", "auto"], "description": "Execution mode: docker (isolated), local (host), or auto (Docker when available). Defaults to XAGENT_SANDBOX_MODE env."},
             },
             "required": ["command"],
             "additionalProperties": False,

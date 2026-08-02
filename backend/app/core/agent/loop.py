@@ -1784,7 +1784,7 @@ class AgentLoop:
             execution_summary["resumed_from"] = {"trace_id": resume_trace_id}
 
         # 合并在执行过程中累积的字段（resume_policy, repair_*, previous_status 等）
-        for key in ("resume_policy", "repair_failures", "repair_retries", "repair_suggestions", "previous_status", "retry_count", "retry_budget"):
+        for key in ("resume_policy", "repair_failures", "repair_retries", "repair_suggestions", "previous_status", "retry_count", "retry_budget", "_test_repair_round", "_reflect_replans"):
             if key in accumulated_summary and key not in execution_summary:
                 execution_summary[key] = accumulated_summary[key]
         # repair_retries / repair_failures 始终以列表形式存在，便于消费方无需判空。
@@ -3426,7 +3426,9 @@ class AgentLoop:
             "For JavaScript projects, run 'npm test'.\n"
             "7. FIX FAILURES: If tests fail, read the error output carefully, call write_file or apply_text_patch to fix the code, "
             "then call run_command again to re-run tests. Repeat until ALL tests pass (max 3 fix cycles).\n"
-            "8. After all tests pass, provide a brief summary of what was created and the test results.\n"
+            "8. MULTI-FILE EDITS: When modifying 2+ existing files, use apply_batch_patch with all patches in ONE call "
+            "instead of multiple apply_text_patch calls. This is faster and atomic.\n"
+            "9. After all tests pass, provide a brief summary of what was created and the test results.\n"
             "Remember: Your job is to PRODUCE WORKING CODE. Write → Test → Fix → Confirm. Call write_file NOW."
         )
 

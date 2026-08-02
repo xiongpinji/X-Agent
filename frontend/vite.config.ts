@@ -11,10 +11,7 @@ import path from 'path';
 
 export default defineConfig({
   plugins: [
-    react({
-      // Enable Fast Refresh for faster HMR
-      fastRefresh: true,
-    }),
+    react(),
   ],
 
   resolve: {
@@ -36,12 +33,12 @@ export default defineConfig({
     strictPort: false,
     proxy: {
       '/api': {
-        target: process.env.VITE_API_URL || 'http://localhost:8099',
+        target: process.env.VITE_API_URL || 'http://localhost:8000',
         changeOrigin: true,
         rewrite: (path) => path,
       },
       '/ws': {
-        target: process.env.VITE_WS_URL || 'ws://localhost:8099',
+        target: process.env.VITE_WS_URL || 'ws://localhost:8000',
         ws: true,
         changeOrigin: true,
       },

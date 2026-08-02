@@ -26,6 +26,7 @@ export const ChatPage: React.FC = () => {
   const [ultraMode, setUltraMode] = useState(false)
   const [parallelTasks, setParallelTasks] = useState<ParallelTaskCard[]>([])
   const [parallelRunning, setParallelRunning] = useState(false)
+  const [tokenUsage, setTokenUsage] = useState<{ tokens?: number; iterations?: number; model?: string } | null>(null)
   const sessionIdRef = useRef<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const sseClientRef = useRef<SSEClient | null>(null)
@@ -204,6 +205,15 @@ export const ChatPage: React.FC = () => {
               const result = (event as any).result
               if (result && typeof result === 'string') {
                 accumulated = result
+              } else if (result && typeof result === 'object') {
+                // Extract token usage from execution_summary
+                const summary = result.execution_summary || {}
+                setTokenUsage({
+                  tokens: summary.tokens_used || summary.total_tokens || result.iterations,
+                  iterations: result.iterations,
+                  model: summary.model || undefined,
+                })
+                if (result.answer) accumulated = result.answer
               }
             }
           },
@@ -353,6 +363,17 @@ export const ChatPage: React.FC = () => {
               <span className="inline-flex items-center gap-1 rounded-md bg-amber-100 px-2 py-1 text-amber-700">
                 <AlertTriangle size={14} />
                 approval required
+              </span>
+            )}
+            {tokenUsage && (
+              <span className={clsx(
+                'inline-flex items-center gap-1 rounded-md border px-2 py-1',
+                theme === 'dark' ? 'border-emerald-800 bg-emerald-950 text-emerald-300' : 'border-emerald-200 bg-emerald-50 text-emerald-700'
+              )}>
+                <Zap size={12} />
+                {tokenUsage.tokens ? `${tokenUsage.tokens} tokens` : ''}
+                {tokenUsage.iterations ? ` · ${tokenUsage.iterations} iter` : ''}
+                {tokenUsage.model ? ` · ${tokenUsage.model}` : ''}
               </span>
             )}
           </div>
