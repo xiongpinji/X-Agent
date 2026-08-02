@@ -815,6 +815,7 @@ _KEPT_ROUTER_MODULES: tuple[str, ...] = (
     "browser_advanced",
     "artifacts",
     "skills_api",
+    "skill_curator",
     "skill_sediment",
     "plugin_ecosystem",
     "evolution",

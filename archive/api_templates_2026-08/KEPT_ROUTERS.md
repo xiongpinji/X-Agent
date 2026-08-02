@@ -1,7 +1,7 @@
 # Track C 路由大瘦身 — 保留/剔除清单（2026-08-02）
 
 基线：启动挂载 **2429** 条路由（OpenAPI 2119 路径，duplicate operation id 警告 130）。
-结果：启动挂载 **923** 条路由（OpenAPI 802 路径，duplicate operation id 警告 **0**）。
+结果：启动挂载 **941** 条路由（OpenAPI 819 路径，duplicate operation id 警告 **0**）。
 
 > **≤300 目标不可达的说明**：`backend/app/api/agents.py` 单文件定义 **361** 条路由
 > （12077 行，含 runs 详情/plan/reasoning/replay/estimate/compare/deadline/tags 等
@@ -9,7 +9,8 @@
 > 要达到 ≤300 必须拆分/裁剪 agents.py 内部端点，这超出本 Phase「只做挂载层收敛、
 > 不改路由业务逻辑」的范围，留待后续 Phase 决策。
 
-## 一、保留并挂载的模块（75 个，`backend/app/main.py::_KEPT_ROUTER_MODULES`）
+## 一、保留并挂载的模块（77 个，`backend/app/main.py::_KEPT_ROUTER_MODULES`，
+另加 sso.auth_router 与 backend.plugins.router）
 
 ### 编码 agent 核心（任务书明确保留域）
 - **agent 运行**：agents、runs、streaming、streaming_enhanced、dispatch、execution、
@@ -25,8 +26,11 @@
 - **集成**：mcp、channels（Slack/Telegram 等 webhook，CSRF 豁免路径引用）、feishu
 - **协作**：collaboration、multi_agent、parallel_agents
 - **agent 支撑面**：checkpoints、search、knowledge_graph、browser、browser_advanced、
-  artifacts、skills_api（skill 运行时挂载的那套 /api/skills）、skill_sediment、
+  artifacts、skills_api（skill 运行时挂载的那套 /api/skills）、skill_curator
+  （tests/test_skill_curator_api 经主 app 调用）、skill_sediment、
   plugin_ecosystem、evolution（自进化主线）、questions
+- **auth 补充**：sso.py 的 auth_router（/api/v1/auth 下 MFA/会话管理/WebAuthn，
+  前端登录与安全页面对齐；oidc_router /api/v1/sso 不挂载）
 - **main.py 直接路由**（不动）：/、/health、/ready、/metrics、/api-key/status、
   /api/v1/entry、/api/v1/csrf-token、/chat、SPA fallback；hooks 无独立 router
   （启动时从 .xagent/hooks.json 加载，见 startup_event）
@@ -43,10 +47,14 @@
 - backup、backup_qdrant（tests/unit/test_api_batch4、tests/test_qdrant_snapshot + 前端 /backup/*）
 - navigation_control、organization_control（前端 console 控制面）
 - migration、overview、workbench（console 页面，各 1-2 端点）
+- ops（/api/v1/ops/summary 仅 1 端点，tests/test_api_contracts 契约 + 前端对齐；
+  运维域中唯一保留）
 - compliance_center（/api/v1/compliance，前端调用；同前缀 compliance.py 归档）
 - gdpr（前端调用，商用合规基础）
 
 ## 二、保留文件但不挂载（测试直接 import，路由面零增加）
+- analytics、i18n、integrations、media、scheduler、skills、webhooks、compliance
+  （tests/unit/test_tail_batch8_part2/part3 的 test_module_imports 逐一 import）
 - agent.py — tests/unit/test_api_batch3_part1 import 其 helper（_context_from_principal 等）；
   其 /api/v1/agent 前缀由 streaming.py 服务
 - files_v2.py — tests/test_security_fixes、test_api_batch3_part2 import 其 helper；
@@ -58,7 +66,7 @@
 - plugin_market.py — tests/test_plugin_market、test_marketplace_comprehensive import
 - helper 文件：errors、pagination、recovery_helpers、linked_summary、workflow_*（15 个）
 
-## 三、归档（287 个对象：285 文件 + auth_api/ + v2/），按域一行理由
+## 三、归档（277 个对象：275 文件 + auth_api/ + v2/），按域一行理由
 - smart_*（agriculture/building/city/education/healthcare/manufacturing/retail）、
   quantum_computing、space_computing、bioinformatics、autonomous_driving_sim、
   fintech_risk、supply_chain_visibility、energy_management、green_computing：
@@ -75,9 +83,10 @@
   voice_interaction、multimodal、i18n、translation_management、white_label、
   creative_studio、ai_writing、smart_contracts、smart_contract_management：非编码模板域
 - enterprise_*（audit/cluster/features/im/migration/sso）、org：企业模板域（auth 基础保留）
-- ops、ops_*、aiops、analytics、intelligent_alerting、alert_*、anomaly_detection、
+- ops_*、aiops、intelligent_alerting、alert_*、anomaly_detection、
   incident_*、failure_prediction、event_*、chaos_*、resilience_engineering、
   disaster_recovery、dr_status、backup_scheduler、backup_monitoring：运维/AIOps 模板域
+  （ops.py 因契约测试保留；analytics.py 因 tail_batch8 import 测试保留文件不挂载）
 - intelligent_*（data_*/search/scheduler/release_pipeline/service_governance/
   document_processing）、feature_*、experiments、ab_testing、finetuning、
   federated_learning、nl_programming、prompt_engineering、test_generation、
