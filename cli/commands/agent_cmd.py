@@ -14,6 +14,7 @@ import typer
 
 from cli.client import APIError, AuthError, ConnectionError, XAgentCLIError, create_client
 from cli.console import print_error, print_json, print_success, print_table
+from cli.evidence import build_evidence, print_evidence
 from cli.state import get_current_config
 
 agent_app = typer.Typer(
@@ -82,6 +83,8 @@ def run(
             )
         )
 
+        evidence = build_evidence(result)
+
         # ─── Headless / CI-CD mode: machine-readable JSON only ───────────────
         if headless or config.output_format == "json":
             output = {
@@ -89,10 +92,8 @@ def run(
                 "status": result.get("status", ""),
                 "answer": result.get("answer", ""),
                 "iterations": result.get("iterations", 0),
-                "tool_calls": [
-                    {"tool": tc.get("tool_name", ""), "success": tc.get("success", False)}
-                    for tc in result.get("tool_calls", [])
-                ],
+                "tool_calls": evidence["tool_calls"],
+                "evidence": evidence,
                 "execution_summary": result.get("execution_summary", {}),
             }
             print(json.dumps(output, ensure_ascii=False, indent=2))
@@ -125,6 +126,9 @@ def run(
             ))
 
         print_success("Agent execution completed", config)
+
+        # ─── 完成证据 (codex-exec-style completion evidence) ─────────────────
+        print_evidence(evidence, config)
 
     except typer.Exit:
         raise

@@ -480,10 +480,26 @@ class HTTPClient(BaseClient):
         """Check backend health via HTTP API.
 
         GET /health
+
+        The backend returns ``{"status": "ok", ...}``; normalize that to
+        ``healthy`` so CLI output is consistent. On connection failure a
+        human-readable startup hint is included in the payload.
         """
         try:
-            return await self._request("GET", "/health")
-        except (ConnectionError, APIError) as e:
+            result = await self._request("GET", "/health")
+            if isinstance(result, dict) and result.get("status") in ("ok", "healthy"):
+                result["status"] = "healthy"
+            return result
+        except ConnectionError as e:
+            return {
+                "status": "unhealthy",
+                "error": str(e),
+                "hint": (
+                    f"无法连接 {self.base_url}，请先启动服务: "
+                    "uvicorn backend.app.main:app --port 8000"
+                ),
+            }
+        except APIError as e:
             return {"status": "unhealthy", "error": str(e)}
 
     async def list_approvals(
@@ -664,14 +680,19 @@ class LocalClient(BaseClient):
     async def list_tools(self) -> list[dict[str, Any]]:
         """List tools locally.
 
-        Note: Returns placeholder. Full implementation requires
-        backend tool registry access.
+        Reads the runtime ToolRegistry manifest from the in-process AgentLoop
+        (same data source as HTTP ``GET /api/v1/tools``), so the output shape
+        is identical across modes: name / description / risk_level /
+        required_scope / parameters.
         """
         await self._ensure_initialized()
-        raise NotImplementedError(
-            "Tool listing not yet supported in local mode. "
-            "Use HTTP mode to access tool manifest."
-        )
+        if self._agent is None:
+            raise ConnectionError("Agent not initialized")
+        try:
+            manifest = self._agent.tools.manifest()
+        except Exception as e:
+            raise APIError(f"Failed to read local tool manifest: {e}") from e
+        return list(manifest)
 
     async def list_workflows(self) -> list[dict[str, Any]]:
         """List workflows locally.

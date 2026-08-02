@@ -194,6 +194,30 @@ async def import_memory(request: MemoryExportBundle, memory: MemoryDependency, p
     return MemoryImportResponse(memories=result.get("memories", 0), sessions=result.get("sessions", 0))
 
 
+@router.get("/stats")
+async def memory_stats(memory: MemoryDependency, principal: PrincipalDependency) -> dict[str, object]:
+    """Aggregate memory statistics for the current tenant.
+
+    NOTE: must be declared BEFORE ``/{memory_id}`` so the literal path
+    ``/stats`` is not swallowed by the path-parameter route.
+    """
+    enforce_scope(principal, "memory:read")
+    snapshot = memory.snapshot() if hasattr(memory, "snapshot") else {}
+    count = snapshot.get("count", memory.count() if hasattr(memory, "count") else 0)
+    if hasattr(count, "__await__"):
+        count = await count
+    session_count = snapshot.get("session_count", memory.session_count() if hasattr(memory, "session_count") else 0)
+    layers = snapshot.get("layers", memory.layer_summary() if hasattr(memory, "layer_summary") else [])
+    layer_roles = memory.layer_roles() if hasattr(memory, "layer_roles") else {}
+    return {
+        "tenant_id": principal.tenant_id,
+        "count": int(count),
+        "session_count": int(session_count),
+        "layers": layers,
+        "layer_roles": layer_roles,
+    }
+
+
 @router.get("/{memory_id}", response_model=MemoryItem)
 async def get_memory_item(memory_id: str, memory: MemoryDependency, principal: PrincipalDependency) -> MemoryItem:
     enforce_scope(principal, "memory:read")

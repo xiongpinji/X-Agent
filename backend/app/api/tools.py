@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
 from backend.app.api.errors import api_error
-from backend.app.core.contracts import ErrorCode
+from backend.app.core.contracts import ErrorCode, RunContext
 from backend.app.core.security import Principal
 from backend.app.dependencies import enforce_scope, get_agent, get_current_principal
 
@@ -70,18 +70,33 @@ async def test_tool(
     if tool is None:
         raise api_error(404, ErrorCode.RUN_NOT_FOUND, f"Tool '{tool_name}' not found.", trace_id=tool_name)
 
-    # Attempt dry-run execution
+    # Attempt dry-run execution. The runtime ToolRegistry.execute has no
+    # ``dry_run`` kwarg; its canonical signature is
+    # ``execute(context, name, arguments) -> ToolCallRecord``.
     try:
         if hasattr(agent.tools, "dry_run"):
             result = await agent.tools.dry_run(tool_name, request.parameters)
-        elif hasattr(agent.tools, "execute"):
-            result = await agent.tools.execute(tool_name, request.parameters, dry_run=True)
-        else:
-            result = {"message": "Dry-run not supported for this tool", "parameters": request.parameters}
+            return {"name": tool_name, "status": "success", "result": result}
+        if hasattr(agent.tools, "execute"):
+            context = RunContext(
+                tenant_id=principal.tenant_id,
+                user_id=principal.user_id,
+                agent_id=principal.agent_id,
+                request_id=principal.request_id,
+                trace_id=principal.trace_id,
+                # Principal 的授权作用域在 ``scopes`` 字段；``permission_scope``
+                # 默认为空，直接用会被 ToolPolicyEngine 以 "Missing permission
+                # scope tool:<name>" 拒绝。
+                permission_scope=principal.permission_scope or principal.scopes,
+            )
+            record = await agent.tools.execute(context, tool_name, request.parameters)
+            if record.success:
+                return {"name": tool_name, "status": "success", "result": record.output}
+            return {"name": tool_name, "status": "error", "error": record.error or "Tool execution failed."}
         return {
             "name": tool_name,
             "status": "success",
-            "result": result,
+            "result": {"message": "Dry-run not supported for this tool", "parameters": request.parameters},
         }
     except Exception as e:
         return {

@@ -154,11 +154,24 @@ def health() -> None:
         result = asyncio.run(client.health_check())
 
         if result.get("status") == "healthy":
-            print_info(f"Backend is healthy (mode: {config.mode})")
-        else:
-            error = result.get("error", "Unknown error")
-            print_error(f"Backend is unhealthy: {error}")
-            raise typer.Exit(code=1)
+            print_info(f"Backend is healthy (mode: {config.mode}, url: {config.api_base_url})")
+            return
+
+        error = result.get("error") or "no status reported by backend"
+        hint = result.get("hint")
+        print_error(f"Backend is unhealthy: {error}")
+        if hint:
+            print_error(f"提示: {hint}")
+        elif config.mode == "http" and any(
+            token in str(error).lower() for token in ("connect", "timeout")
+        ):
+            print_error(
+                f"提示: 无法连接 {config.api_base_url}，请先启动服务: "
+                "uvicorn backend.app.main:app --port 8000"
+            )
+        raise typer.Exit(code=1)
+    except typer.Exit:
+        raise
     except Exception as e:
         print_error(f"Health check failed: {e}")
         raise typer.Exit(code=1)

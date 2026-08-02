@@ -44,13 +44,13 @@ def list_tools() -> None:
             {
                 "Name": tool.get("name", "N/A"),
                 "Description": str(tool.get("description", "N/A"))[:40],
-                "Category": tool.get("category", "N/A"),
-                "Status": tool.get("status", "active"),
+                "Risk": tool.get("risk_level", "N/A"),
+                "Scope": tool.get("required_scope", "N/A"),
             }
             for tool in tools
         ]
 
-        print_table(table_data, title="Available Tools", config=config)
+        print_table(table_data, title=f"Available Tools ({config.mode} mode)", config=config)
 
     except (ConnectionError, AuthError, APIError) as e:
         print_error(f"Failed to list tools: {e}", config)
