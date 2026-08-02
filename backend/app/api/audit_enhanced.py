@@ -88,7 +88,7 @@ PrincipalDependency = Annotated[Principal, Depends(get_current_principal)]
 
 
 @router.get("/logs", response_model=dict[str, object])
-async def list_audit_logs(
+async def list_audit_logs_enhanced(
     audit_store: AuditStoreDependency,
     principal: PrincipalDependency,
     limit: int = Query(default=50, ge=1, le=200),
