@@ -80,6 +80,22 @@ def run(
         }
 
         print_json(display_result, config)
+
+        # Display the actual answer prominently
+        answer = result.get("answer", "")
+        if answer:
+            from rich.console import Console
+            from rich.panel import Panel
+            from rich.text import Text
+            console = Console()
+            console.print()
+            console.print(Panel(
+                Text(answer[:2000], style="green"),
+                title="\u2713 Answer",
+                border_style="green",
+                padding=(0, 1),
+            ))
+
         print_success("Agent execution completed", config)
 
     except (ConnectionError, AuthError, APIError) as e:
