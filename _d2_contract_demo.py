@@ -1,0 +1,1 @@
+创建一个文件 _d2_contract_demo.py，内容为 print('d2 ok')

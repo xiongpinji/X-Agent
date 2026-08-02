@@ -14,7 +14,13 @@ import typer
 
 from cli.client import APIError, AuthError, ConnectionError, XAgentCLIError, create_client
 from cli.console import print_error, print_json, print_success, print_table
-from cli.evidence import build_evidence, print_evidence
+from cli.evidence import (
+    build_completion_contract,
+    build_evidence,
+    print_completion_verdict,
+    print_evidence,
+    save_completion_contract,
+)
 from cli.state import get_current_config
 
 agent_app = typer.Typer(
@@ -52,6 +58,11 @@ def run(
         None,
         "--mode",
         help="Override client mode for this command: 'http' or 'local'",
+    ),
+    contract: Optional[str] = typer.Option(
+        None,
+        "--contract",
+        help="Write the completion contract (证据化完成判定) as JSON to the given path",
     ),
 ) -> None:
     """Run an agent with the given task.
@@ -100,6 +111,10 @@ def run(
         )
 
         evidence = build_evidence(result)
+        contract_obj = build_completion_contract(result, task=task)
+        contract_path = None
+        if contract:
+            contract_path = save_completion_contract(contract_obj, contract)
 
         # ─── Headless / CI-CD mode: machine-readable JSON only ───────────────
         if headless or config.output_format == "json":
@@ -110,8 +125,11 @@ def run(
                 "iterations": result.get("iterations", 0),
                 "tool_calls": evidence["tool_calls"],
                 "evidence": evidence,
+                "completion_contract": contract_obj,
                 "execution_summary": result.get("execution_summary", {}),
             }
+            if contract_path is not None:
+                output["contract_path"] = str(contract_path)
             print(json.dumps(output, ensure_ascii=False, indent=2))
             # Exit code: 0 if completed, 1 otherwise
             raise typer.Exit(code=0 if result.get("status") == "completed" else 1)
@@ -145,6 +163,11 @@ def run(
 
         # ─── 完成证据 (codex-exec-style completion evidence) ─────────────────
         print_evidence(evidence, config)
+
+        # ─── 证据化完成判定 (Track D2 completion contract verdict) ───────────
+        print_completion_verdict(contract_obj, config)
+        if contract_path is not None:
+            print_success(f"Completion contract written to {contract_path}", config)
 
     except typer.Exit:
         raise

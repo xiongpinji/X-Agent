@@ -54,6 +54,12 @@ class AgentTask:
     goal: str = ""
     description: str = ""
     timeout_seconds: float = 300.0
+    # D1 wiring fields (consumed by api/parallel_agents.py TaskRequest)
+    constraints: list[str] = field(default_factory=list)
+    success_criteria: list[str] = field(default_factory=list)
+    max_retries: int = 3
+    metadata: dict[str, Any] = field(default_factory=dict)
+    dependencies: list[str] = field(default_factory=list)
     # Legacy API fields (kept for backward compat)
     instruction: str = ""
     context: dict[str, Any] = field(default_factory=dict)
@@ -77,21 +83,32 @@ class AgentTask:
 class AgentTaskResult:
     """Result from a parallel agent task."""
     task_id: str = ""
-    status: str = "pending"  # pending, running, completed, failed, timeout
+    status: AgentTaskStatus = AgentTaskStatus.PENDING
     output: str = ""
     error: str | None = None
     duration: float = 0.0
     tool_calls_count: int = 0
     result: dict[str, Any] = field(default_factory=dict)
+    # D1 wiring fields (consumed by api/parallel_agents.py TaskResultResponse)
+    agent_id: str = ""
+    retry_attempts: int = 0
+
+    @property
+    def duration_seconds(self) -> float:
+        """Alias for ``duration`` matching the API response contract."""
+        return self.duration
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary representation."""
         return {
             "task_id": self.task_id,
-            "status": self.status,
+            "agent_id": self.agent_id,
+            "status": str(self.status),
             "output": self.output,
             "error": self.error,
             "duration": self.duration,
+            "duration_seconds": self.duration,
+            "retry_attempts": self.retry_attempts,
             "tool_calls_count": self.tool_calls_count,
             "result": self.result,
         }
@@ -105,6 +122,39 @@ class SpawnResult:
     results: list[AgentTaskResult] = field(default_factory=list)
     total_duration_seconds: float = 0.0
     metadata: dict[str, Any] = field(default_factory=dict)
+
+    def _count(self, *statuses: AgentTaskStatus) -> int:
+        return sum(1 for r in self.results if r.status in statuses)
+
+    @property
+    def completed_tasks(self) -> int:
+        return self._count(AgentTaskStatus.COMPLETED)
+
+    @property
+    def failed_tasks(self) -> int:
+        return self._count(AgentTaskStatus.FAILED)
+
+    @property
+    def cancelled_tasks(self) -> int:
+        return self._count(AgentTaskStatus.CANCELLED)
+
+    @property
+    def timeout_tasks(self) -> int:
+        return self._count(AgentTaskStatus.TIMEOUT)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dictionary representation."""
+        return {
+            "batch_id": self.batch_id,
+            "total_tasks": self.total_tasks,
+            "completed_tasks": self.completed_tasks,
+            "failed_tasks": self.failed_tasks,
+            "cancelled_tasks": self.cancelled_tasks,
+            "timeout_tasks": self.timeout_tasks,
+            "results": [r.to_dict() for r in self.results],
+            "total_duration_seconds": self.total_duration_seconds,
+            "metadata": self.metadata,
+        }
 
 
 class ParallelAgentExecutor:
@@ -180,22 +230,38 @@ class ParallelAgentExecutor:
             async with semaphore:
                 agent_id = f"agent-{task.id[:8]}"
                 agent = agent_factory(agent_id, isolation)
-                result = AgentTaskResult(task_id=task.id, status="running")
+                result = AgentTaskResult(
+                    task_id=task.id,
+                    agent_id=agent_id,
+                    status=AgentTaskStatus.RUNNING,
+                )
                 task_start = time.time()
                 try:
-                    output = await asyncio.wait_for(
-                        agent.execute(task),
-                        timeout=task.timeout_seconds,
-                    )
-                    result.status = "completed"
-                    result.result = output if isinstance(output, dict) else {"output": output}
-                    result.output = str(output)
-                except TimeoutError:
-                    result.status = "timeout"
-                    result.error = f"Task timed out after {task.timeout_seconds}s"
-                except Exception as e:
-                    result.status = "failed"
-                    result.error = str(e)
+                    attempts = 1 + max(0, task.max_retries)
+                    for attempt in range(attempts):
+                        try:
+                            output = await asyncio.wait_for(
+                                agent.execute(task),
+                                timeout=task.timeout_seconds,
+                            )
+                            result.status = AgentTaskStatus.COMPLETED
+                            result.result = output if isinstance(output, dict) else {"output": output}
+                            result.output = str(output)
+                            break
+                        except TimeoutError:
+                            # Timeout is not retried: the agent already had its full budget.
+                            result.status = AgentTaskStatus.TIMEOUT
+                            result.error = f"Task timed out after {task.timeout_seconds}s"
+                            break
+                        except Exception as e:
+                            result.retry_attempts = attempt
+                            if attempt >= attempts - 1:
+                                result.status = AgentTaskStatus.FAILED
+                                result.error = str(e)
+                            else:
+                                logger.warning(
+                                    f"Task {task.id} attempt {attempt + 1} failed, retrying: {e}"
+                                )
                 finally:
                     result.duration = time.time() - task_start
                 return result
@@ -210,7 +276,7 @@ class ParallelAgentExecutor:
             if isinstance(r, Exception):
                 final_results.append(AgentTaskResult(
                     task_id=tasks[i].id,
-                    status="failed",
+                    status=AgentTaskStatus.FAILED,
                     error=str(r),
                 ))
             else:
@@ -230,24 +296,37 @@ class ParallelAgentExecutor:
         return spawn_result
 
     async def get_batch_status(self, batch_id: str) -> dict[str, Any]:
-        """Get status of a batch execution."""
+        """Get status of a batch execution.
+
+        Raises:
+            ValueError: If the batch ID is unknown (API maps this to HTTP 404).
+        """
         batch = self._batches.get(batch_id)
         if batch is None:
-            return {"batch_id": batch_id, "error": "Batch not found"}
-        completed = sum(1 for r in batch.results if r.status in ("completed", "failed", "timeout"))
+            raise ValueError(f"Batch not found: {batch_id}")
+        completed = sum(
+            1 for r in batch.results
+            if r.status in (AgentTaskStatus.COMPLETED, AgentTaskStatus.FAILED, AgentTaskStatus.TIMEOUT)
+        )
         return {
             "batch_id": batch_id,
             "total_tasks": batch.total_tasks,
             "completed_tasks": completed,
+            # Alias matching the API BatchStatusResponse contract.
+            "completed_results": completed,
             "is_active": completed < batch.total_tasks,
             "status": "completed" if completed >= batch.total_tasks else "running",
         }
 
     async def get_batch_results(self, batch_id: str) -> list[AgentTaskResult]:
-        """Get results of a batch execution."""
+        """Get results of a batch execution.
+
+        Raises:
+            ValueError: If the batch ID is unknown (API maps this to HTTP 404).
+        """
         batch = self._batches.get(batch_id)
         if batch is None:
-            return []
+            raise ValueError(f"Batch not found: {batch_id}")
         return batch.results
 
     async def cancel_batch(self, batch_id: str) -> bool:
@@ -261,8 +340,8 @@ class ParallelAgentExecutor:
             return False
         # Mark pending tasks as cancelled
         for result in batch.results:
-            if result.status == "pending":
-                result.status = "cancelled"
+            if result.status == AgentTaskStatus.PENDING:
+                result.status = AgentTaskStatus.CANCELLED
         return True
 
     async def execute_parallel(
@@ -288,7 +367,7 @@ class ParallelAgentExecutor:
             if isinstance(result, Exception):
                 final_results.append(AgentTaskResult(
                     task_id=tasks[i].id,
-                    status="failed",
+                    status=AgentTaskStatus.FAILED,
                     error=str(result),
                 ))
             else:
@@ -298,7 +377,7 @@ class ParallelAgentExecutor:
 
     async def _execute_single(self, task: AgentTask) -> AgentTaskResult:
         """Execute a single agent task with timeout."""
-        result = AgentTaskResult(task_id=task.id, status="running")
+        result = AgentTaskResult(task_id=task.id, status=AgentTaskStatus.RUNNING)
         self._active_tasks[task.id] = result
         start_time = time.time()
 
@@ -316,17 +395,17 @@ class ParallelAgentExecutor:
                 timeout=task.timeout,
             )
 
-            result.status = "completed"
+            result.status = AgentTaskStatus.COMPLETED
             result.output = run_result.output if hasattr(run_result, "output") else str(run_result)
             result.tool_calls_count = len(getattr(run_result, "tool_calls", []))
 
         except TimeoutError:
-            result.status = "timeout"
+            result.status = AgentTaskStatus.TIMEOUT
             result.error = f"Task timed out after {task.timeout}s"
             logger.warning(f"Task {task.id} timed out")
 
         except Exception as e:
-            result.status = "failed"
+            result.status = AgentTaskStatus.FAILED
             result.error = str(e)
             logger.error(f"Task {task.id} failed: {e}")
 
