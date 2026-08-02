@@ -27,8 +27,10 @@ def test_memory_api_store_search_and_consolidate() -> None:
     assert stored.status_code == 200
     assert stored.json()["id"]
     assert search.status_code == 200
-    assert search.json()["items"][0]["content"] == "memory api stores searchable workflow context"
-    assert search.json()["hits"][0]["score"] > 0
+    # 持久化记忆库可能已有历史数据，不断言 top-1 排序，断言刚写入的内容可被检索到
+    contents = [item["content"] for item in search.json()["items"]]
+    assert "memory api stores searchable workflow context" in contents
+    assert any(hit["score"] > 0 for hit in search.json()["hits"])
     assert consolidated.status_code == 200
     assert consolidated.json()["source_count"] >= 1
     assert consolidated.json()["target_memory_id"]

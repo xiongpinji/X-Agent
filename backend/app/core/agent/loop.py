@@ -600,9 +600,12 @@ class AgentLoop:
         if re.search(r'[\w/\\]+\.\w{1,5}$', t) or "/" in t or "\\" in t:
             return False
         # Contains complex keywords → needs tools
-        words = set(t.lower().split())
-        if words & self._COMPLEX_KEYWORDS:
-            return False
+        # 英文按空格分词匹配；中文无空格，按子串匹配（"创建一个" 应命中 "创建"）
+        lowered = t.lower()
+        words = set(lowered.split())
+        for kw in self._COMPLEX_KEYWORDS:
+            if kw in words or (any('一' <= ch <= '鿿' for ch in kw) and kw in t):
+                return False
         # Short conversational / knowledge questions → simple
         return True
 

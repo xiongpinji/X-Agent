@@ -490,18 +490,22 @@ class TestLocalClient:
             assert result["data"][0]["id"] == "local-agent"
 
     @pytest.mark.asyncio
-    async def test_local_client_list_tools_not_implemented(self):
-        """Test list_tools raises NotImplementedError."""
+    async def test_local_client_list_tools_returns_manifest(self):
+        """Test list_tools returns the agent's tool manifest (B2: local mode supported)."""
         config = CLIConfig(mode="local")
         client = LocalClient(config)
 
         mock_agent = MagicMock()
+        mock_agent.tools.manifest.return_value = [
+            {"name": "echo", "description": "Echo", "risk_level": "low"}
+        ]
         with patch(
             "backend.app.dependencies.get_agent",
             return_value=mock_agent,
         ):
-            with pytest.raises(NotImplementedError):
-                await client.list_tools()
+            tools = await client.list_tools()
+        assert tools == [{"name": "echo", "description": "Echo", "risk_level": "low"}]
+        mock_agent.tools.manifest.assert_called_once_with()
 
     @pytest.mark.asyncio
     async def test_local_client_list_workflows_not_implemented(self):
