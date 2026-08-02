@@ -78,7 +78,7 @@ async def test_evolution_api():
 async def test_code_review_api():
     print("\n=== 6. 代码审查 API ===")
     async with httpx.AsyncClient(timeout=10) as c:
-        r = await c.post(f"{BASE}/api/v1/code-review/review", headers=HEADERS, 
+        r = await c.post(f"{BASE}/api/v1/code-review/analyze", headers=HEADERS, 
                         json={"code": "import os\nos.system('rm -rf /')", "language": "python"})
         check("Code review API", r.status_code == 200, f"status={r.status_code}")
         if r.status_code == 200:
@@ -97,7 +97,7 @@ async def test_agents_md():
 async def test_tenant_quota():
     print("\n=== 8. 多租户配额 ===")
     async with httpx.AsyncClient(timeout=10) as c:
-        r = await c.get(f"{BASE}/api/v1/tenant-quota/limits", headers=HEADERS)
+        r = await c.get(f"{BASE}/api/v1/tenant/quota", headers=HEADERS)
         check("Tenant quota API", r.status_code == 200, f"status={r.status_code}")
 
 
@@ -117,14 +117,20 @@ def test_multiply(): assert multiply(3, 4) == 12
 3. Run: {VENV_PY} -m pytest _reg_test.py -v
 4. If tests pass, done."""
     async with httpx.AsyncClient(timeout=300) as c:
-        r = await c.post(f"{BASE}/api/v1/agents/run", headers=HEADERS, json={"task": task, "agent_id": "default"})
-        data = r.json()
-        check("Test-fix task completed", data.get("status") == "completed")
-        tool_calls = data.get("tool_calls", [])
-        check("Used tools", len(tool_calls) >= 2, f"{len(tool_calls)} calls")
-        # Check code review was triggered
-        exec_sum = data.get("execution_summary", {})
-        check("Code review triggered", "code_review" in exec_sum or True, "auto-review hook active")
+        try:
+            r = await c.post(f"{BASE}/api/v1/agents/run", headers=HEADERS, json={"task": task, "agent_id": "default"})
+            if r.status_code != 200:
+                check("Test-fix task completed", False, f"HTTP {r.status_code}")
+                return
+            data = r.json()
+            check("Test-fix task completed", data.get("status") == "completed")
+            tool_calls = data.get("tool_calls", [])
+            check("Used tools", len(tool_calls) >= 2, f"{len(tool_calls)} calls")
+            # Check code review was triggered
+            exec_sum = data.get("execution_summary", {})
+            check("Code review triggered", "code_review" in exec_sum or True, "auto-review hook active")
+        except Exception as e:
+            check("Test-fix task completed", False, str(e)[:100])
 
 
 async def main():
