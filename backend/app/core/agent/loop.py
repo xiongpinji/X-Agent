@@ -2010,7 +2010,7 @@ class AgentLoop:
         _auto_review = (extra_context or {}).get("auto_review", True)
         if _auto_review and result.status == RunStatus.COMPLETED:
             _written_files = [
-                tc.args.get("path") or tc.args.get("file_path", "")
+                tc.arguments_preview.get("path") or tc.arguments_preview.get("file_path", "")
                 for tc in tool_calls
                 if tc.tool_name in {"write_file", "apply_text_patch", "apply_batch_patch"} and tc.success
             ]
