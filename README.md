@@ -6,7 +6,7 @@ X-Agent Core combines cutting-edge LLM capabilities with enterprise-grade infras
 
 ## Project Status
 
-- **Version**: `0.3.0-alpha` — `pyproject.toml` 为全仓版本号单一事实源
+- **Version**: `0.4.0-alpha` — `pyproject.toml` 为全仓版本号单一事实源
 - **Status**: 商用修复中 — Phase 1「止血与架构收敛」(2026-07-19 启动), 修复 18 项 P0
 - **Audit baseline**: 2026-07-19 商用交付差距审计综合评分约 31/100, 暂不具备对外商用交付条件。详见 `commercial_audit/00_商用交付差距审计报告.md` 与 [Release Readiness](./docs/operations/deployment/RELEASE_READINESS.md)
 - 下方功能清单描述框架的目标能力与仓内资产; 各项能力的实际实现深度 ("宣称-存在-接通") 以上述审计复核为准

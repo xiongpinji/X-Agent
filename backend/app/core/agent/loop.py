@@ -2676,11 +2676,16 @@ class AgentLoop:
                 _intent = str(_profile.get("intent") or "general")
             except Exception:
                 _intent = "general"
+            # When an enforcement reflect is appended, it must stay TERMINAL:
+            # appending "final" after it would let the run finalize before the
+            # required write_file/apply_text_patch step is re-planned.
+            _reflect_terminal = False
             if _intent == "code_change" and not (_picked & _MUTATING):
                 steps.append(AgentPlanStep(
                     kind="reflect",
                     instruction="Reflect on what was read and apply the change with write_file/apply_text_patch",
                 ))
+                _reflect_terminal = True
             # ─── Multi-file enforcement: detect files mentioned in task but not yet covered ───
             if _intent == "code_change" and (_picked & _MUTATING):
                 import os.path as _osp_mf
@@ -2708,7 +2713,9 @@ class AgentLoop:
                             "Do NOT stop until ALL requested files are created."
                         ),
                     ))
-            steps.append(AgentPlanStep(kind="final", instruction="Finalize answer"))
+                    _reflect_terminal = True
+            if not _reflect_terminal:
+                steps.append(AgentPlanStep(kind="final", instruction="Finalize answer"))
             return steps
         steps = self._parse_plan(plan_text, tool_manifest, trajectory)
         if not steps:
@@ -2729,12 +2736,15 @@ class AgentLoop:
             and not any(step.kind == "tool" and step.tool_name in _MUTATING for step in steps)
             and not any(step.kind == "reflect" for step in steps)
         ):
-            final_steps = [step for step in steps if step.kind == "final"]
-            non_final_steps = [step for step in steps if step.kind != "final"]
-            steps = non_final_steps + [AgentPlanStep(
+            # A read-only plan for a code-change task must END with the reflect
+            # checkpoint, not with "final": executing final here would stop the
+            # run before write_file/apply_text_patch is ever selected. The
+            # terminal reflect triggers the after-reflect re-plan (which injects
+            # the mutating steps) and the continuation loop re-plans afterwards.
+            steps = [step for step in steps if step.kind != "final"] + [AgentPlanStep(
                 kind="reflect",
                 instruction="Reflect on read evidence and re-plan the concrete write_file/apply_text_patch step",
-            )] + (final_steps or [AgentPlanStep(kind="final", instruction="Finalize answer")])
+            )]
         if len(steps) > self.max_iterations:
             reflect_steps = [step for step in steps if step.kind == "reflect"]
             needs_reflect = (

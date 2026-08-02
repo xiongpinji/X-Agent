@@ -160,6 +160,27 @@ async def _init_global_db():
 
 
 @pytest.fixture(autouse=True)
+def _isolate_checkpoint_store(tmp_path, monkeypatch):
+    """把 CheckpointStore 隔离到 per-test 临时目录。
+
+    CheckpointStore 启动时 _load_from_disk() 会全量加载 data/checkpoints/
+    （本仓已堆积 300+ 文件/39MB），严重拖慢甚至拖垮涉及 agent loop 的测试。
+    这里通过 XAGENT_CHECKPOINT_STORE_PATH 指到 tmp_path，并重置全局单例，
+    保证每个测试拿到空 store；不触碰 data/ 下的存量文件。
+    """
+    import backend.app.core.checkpoint.store as cp_store
+
+    monkeypatch.setenv(
+        "XAGENT_CHECKPOINT_STORE_PATH", str(tmp_path / "checkpoints")
+    )
+    cp_store._checkpoint_store = None
+    try:
+        yield
+    finally:
+        cp_store._checkpoint_store = None
+
+
+@pytest.fixture(autouse=True)
 def _reset_global_state():
     """Reset global in-memory state before each test to avoid cross-test pollution."""
     from backend.app.main import _rate_limiter

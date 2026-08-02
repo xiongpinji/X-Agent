@@ -238,6 +238,23 @@ class Settings(BaseSettings):
     mcp_enabled: bool = False  # opt-in：显式启用 MCP 服务器连接
     mcp_config_path: str = "config/mcp_servers.example.yaml"  # MCP 服务器配置文件路径
 
+    @field_validator("database_url")
+    @classmethod
+    def _normalize_sqlite_driver(cls, value: str) -> str:
+        """Upgrade bare ``sqlite:///`` URLs to the async ``aiosqlite`` driver.
+
+        ``backend.app.core.database`` builds a ``create_async_engine`` from this
+        URL; a bare ``sqlite:///`` URL loads the synchronous ``pysqlite`` driver
+        and fails at startup with "The asyncio extension requires an async
+        driver", silently falling back to in-memory stores. Normalizing here
+        keeps dev/test environments working out of the box regardless of which
+        env file supplied the URL. Explicit ``sqlite+aiosqlite://`` URLs (and
+        any other dialect) are passed through unchanged.
+        """
+        if isinstance(value, str) and value.strip().lower().startswith("sqlite:///"):
+            return "sqlite+aiosqlite:///" + value.split("sqlite:///", 1)[1]
+        return value
+
     @field_validator("audit_hmac_secret")
     @classmethod
     def _validate_audit_hmac_secret(cls, value: str | None, info) -> str | None:

@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import threading
 from datetime import UTC, datetime
 from pathlib import Path
@@ -21,6 +22,8 @@ from pydantic import BaseModel, Field
 logger = logging.getLogger(__name__)
 
 _DEFAULT_CHECKPOINT_DIR = "data/checkpoints"
+# 环境变量可覆盖存储目录（主要用于测试隔离，避免全量加载生产 data/checkpoints/）
+_CHECKPOINT_PATH_ENV = "XAGENT_CHECKPOINT_STORE_PATH"
 
 
 # ─── 数据模型 ─────────────────────────────────────────────────────────────────
@@ -83,7 +86,9 @@ class CheckpointStore:
         self._checkpoints: dict[str, list[CheckpointData]] = {}  # trace_id -> [checkpoints]
         self._lock = threading.RLock()
         self._max_per_run = max_per_run
-        self._storage_path = Path(storage_path) if storage_path else Path(_DEFAULT_CHECKPOINT_DIR)
+        if storage_path is None:
+            storage_path = os.environ.get(_CHECKPOINT_PATH_ENV) or _DEFAULT_CHECKPOINT_DIR
+        self._storage_path = Path(storage_path)
         self._storage_path.mkdir(parents=True, exist_ok=True)
         self._load_from_disk()
 

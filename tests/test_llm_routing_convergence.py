@@ -350,7 +350,7 @@ class _StubBackend(BaseLLMBackend):
         self.fail = fail
         self.calls = 0
 
-    async def chat(self, messages, tools):
+    async def chat(self, messages, tools, *, response_format=None):
         self.calls += 1
         if self.fail:
             raise LLMBackendError(f"{self.name} down")
@@ -445,7 +445,7 @@ class _CountingBackend(BaseLLMBackend):
         self.calls = 0
         self._tokens = tokens
 
-    async def chat(self, messages, tools):
+    async def chat(self, messages, tools, *, response_format=None):
         self.calls += 1
         return LLMResponse(content="ok", model="counting", tokens_used=self._tokens, cost=0.001)
 

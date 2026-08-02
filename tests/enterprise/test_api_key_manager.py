@@ -525,12 +525,24 @@ class TestPerformance:
 
     def test_list_keys_performance(self, api_key_manager: APIKeyManager) -> None:
         """Test that listing keys is performant."""
-        # Create many keys
-        for i in range(100):
-            api_key_manager.create_key(
-                name=f"key-{i}",
-                user_id="user123",
-            )
+        # Create many keys. Patch bcrypt down to rounds=4 so bulk creation is
+        # fast; the intent of this test is list-after-bulk-create performance,
+        # not bcrypt cost (covered by test_authentication_performance).
+        import bcrypt as _bcrypt
+        from unittest.mock import patch
+
+        # 先抓住原始 gensalt：patch 的目标是模块属性，side_effect 里再调
+        # _bcrypt.gensalt 会拿到 mock 自身导致无限递归。
+        _real_gensalt = _bcrypt.gensalt
+        with patch(
+            "backend.app.core.api_key_manager.bcrypt.gensalt",
+            side_effect=lambda rounds=12: _real_gensalt(rounds=4),
+        ):
+            for i in range(100):
+                api_key_manager.create_key(
+                    name=f"key-{i}",
+                    user_id="user123",
+                )
 
         start = time.time()
         keys = api_key_manager.list_keys(user_id="user123")

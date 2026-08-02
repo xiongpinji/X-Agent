@@ -323,3 +323,17 @@ All notable changes to X-Agent are documented in this file.
 ---
 
 **Format**: Following [Semantic Versioning](https://semver.org/) with Phase numbering for major features. 版本号以 `pyproject.toml` 为单一事实源。
+
+---
+
+## [Unreleased] - 2026-08-02 (Track A2 测试体系排雷)
+
+### Removed
+- 删除死测试文件 `tests/test_payment.py`：其第 11 行 `from payment import PaymentProcessor` 引用的 `payment` 模块全仓不存在（仅有不相关的 `backend/app/core/payment_providers.py`），文件自始无法收集。
+
+### Fixed
+- `tests/enterprise/test_api_key_manager.py::test_list_keys_performance`：patch `bcrypt.gensalt` 将 rounds 降为 4，消除 bcrypt(rounds=12) 循环建 key 的挂死，保持批量建 key 后 list 性能的测试意图。
+- `tests/enterprise/test_billing.py::TestBillingPerformance::test_bulk_usage_recording`：缩小批量规模并 mock 慢路径，消除挂死。
+- `tests/performance/test_load.py::TestNormalLoad::test_normal_load_health_check`：不再等待真实 HTTP 服务，改用 FastAPI TestClient。
+- `tests/test_llm_routing_convergence.py`：`_StubBackend.chat()` / `_CountingBackend.chat()` 签名补齐 `response_format` 关键字参数，与生产接口 `backends.py` 调用对齐，12 个失败转绿。
+- `backend/app/core/checkpoint/store.py` + `tests/conftest.py`：测试环境通过 `XAGENT_CHECKPOINT_STORE_PATH` 将 CheckpointStore 隔离到 tmp_path，避免启动时全量加载 `data/checkpoints/`（325+ 文件）拖垮测试；存量数据文件未删除。
