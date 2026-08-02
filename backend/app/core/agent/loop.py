@@ -1173,8 +1173,8 @@ class AgentLoop:
             _intent = str(_profile.get("intent") or "general")
 
             # Multi-file detection: extract file paths from task text
-            import re as _re
             import os.path as _osp
+            import re as _re
             _task_files = _re.findall(r'[\w\-./\\]+\.\w{1,6}', trajectory.task)
             _written_paths = {
                 str(r.arguments_preview.get("path", "")) if isinstance(r.arguments_preview, dict) else ""
@@ -1313,8 +1313,10 @@ class AgentLoop:
                         extra_context["_escalation_done"] = True
                         try:
                             from backend.app.core.interactive_questions import (
-                                InteractiveQuestion, InteractiveQuestionManager,
-                                QuestionType, QuestionOption,
+                                InteractiveQuestion,
+                                InteractiveQuestionManager,
+                                QuestionOption,
+                                QuestionType,
                             )
                             _qm = getattr(self, "_question_manager", None) or InteractiveQuestionManager()
                             self._question_manager = _qm
@@ -2046,8 +2048,9 @@ class AgentLoop:
             )
             if _did_write:
                 try:
-                    from backend.app.core.git_ops import GitOperations
                     import os as _os
+
+                    from backend.app.core.git_ops import GitOperations
                     _workspace = _os.environ.get("XAGENT_WORKSPACE", ".")
                     _git = GitOperations(cwd=_workspace)
                     if await _git.has_changes():
@@ -2680,8 +2683,8 @@ class AgentLoop:
                 ))
             # ─── Multi-file enforcement: detect files mentioned in task but not yet covered ───
             if _intent == "code_change" and (_picked & _MUTATING):
-                import re as _re_mf
                 import os.path as _osp_mf
+                import re as _re_mf
                 _mentioned_files = _re_mf.findall(r'[\w\-./\\]+\.\w{1,6}', trajectory.task)
                 _planned_paths = {
                     str(s.arguments.get("path", "")) for s in steps

@@ -1700,7 +1700,7 @@ def build_default_tool_registry(
                 "cwd": work_dir,
                 "sandbox": "docker",
             }
-        except _aio.TimeoutError:
+        except TimeoutError:
             return {
                 "success": False, "exit_code": 124,
                 "stdout": "", "stderr": f"Docker command timed out after {timeout}s",
@@ -1748,7 +1748,7 @@ def build_default_tool_registry(
                 "cwd": work_dir,
                 "sandbox": "local",
             }
-        except _aio.TimeoutError:
+        except TimeoutError:
             return {
                 "success": False, "exit_code": 124,
                 "stdout": "", "stderr": f"Command timed out after {timeout}s",

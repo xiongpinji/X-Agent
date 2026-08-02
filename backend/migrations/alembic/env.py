@@ -13,24 +13,23 @@ from logging.config import fileConfig
 from alembic import context
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
-from sqlalchemy.ext.asyncio import async_engine_from_config, create_async_engine
+from sqlalchemy.ext.asyncio import create_async_engine
 
 # Add project root to path so backend.app is importable
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..")))
 
-from backend.app.models import Base  # noqa: E402
-
 # Import all models so they register with Base.metadata
-from backend.app.models import (  # noqa: E402, F401
+from backend.app.models import (  # noqa: F401
     APIKeyStoreModel,
     ApprovalStoreModel,
+    Base,
     CSRFTokenModel,
     RateLimitLogModel,
     UserStoreModel,
 )
 
 try:
-    from backend.app.models.subscription import (  # noqa: E402, F401
+    from backend.app.models.subscription import (  # noqa: F401
         QuotaModel,
         SubscriptionHistoryModel,
         SubscriptionModel,
@@ -39,7 +38,7 @@ except ImportError:
     pass
 
 try:
-    from backend.app.models.feedback import (  # noqa: E402, F401
+    from backend.app.models.feedback import (  # noqa: F401
         FeedbackAnalysisModel,
         FeedbackModel,
     )
@@ -122,7 +121,7 @@ import sys
 from logging.config import fileConfig
 
 from alembic import context
-from sqlalchemy import engine_from_config, pool
+from sqlalchemy import engine_from_config
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 

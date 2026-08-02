@@ -8,17 +8,16 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 
-from backend.app.core.security import Principal
-from backend.app.dependencies import (
-    enforce_scope,
-    get_current_principal,
-)
-
 from backend.app.core.analytics.aggregator import AnalyticsAggregator
 from backend.app.core.analytics.collector import AnalyticsCollector
 from backend.app.core.analytics.models import AggregationLevel
 from backend.app.core.analytics.reporter import AnalyticsReporter
 from backend.app.core.analytics.storage import AnalyticsStorage
+from backend.app.core.security import Principal
+from backend.app.dependencies import (
+    enforce_scope,
+    get_current_principal,
+)
 
 
 # Pydantic models for API

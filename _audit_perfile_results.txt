@@ -1,0 +1,327 @@
+DONE(0) tests/test_admin_sql_store_p103.py :: 31 passed in 23.99s
+DONE(0) tests/test_agent_context_integration.py :: 3 failed, 9 passed in 5.26s
+DONE(0) tests/test_agent_extended.py :: 1 failed, 14 passed in 45.81s
+DONE(0) tests/test_agent_fix_runner.py :: 7 passed in 3.23s
+DONE(0) tests/test_agent_loop.py :: 1 failed, 3 passed in 17.97s
+DONE(0) tests/test_agent_refactor.py :: 8 passed in 3.51s
+DONE(0) tests/test_agent_run_detail.py :: 1 passed, 1 warning in 14.81s
+DONE(0) tests/test_api_browser_desktop_memory.py :: 3 passed, 1 warning in 3.92s
+DONE(0) tests/test_agents_md.py :: 1 failed, 8 passed in 4.62s
+DONE(0) tests/test_api.py :: 13 passed, 1 warning in 11.92s
+DONE(0) tests/test_agent_run_timeline.py :: 1 passed, 1 warning in 18.89s
+DONE(0) tests/test_api_contracts.py :: 2 passed, 1 warning in 6.94s
+DONE(0) tests/test_api_endpoint_fixes.py :: 24 passed, 1 warning in 13.14s
+DONE(0) tests/test_api_comprehensive.py :: 40 passed, 1 warning in 24.17s
+DONE(0) tests/test_api_error_scenarios.py :: +++++++++++++++++++++++++++++++++++ Timeout +++++++++++++++++++++++++++++++++++
+DONE(0) tests/test_api_overview.py :: 1 passed, 1 warning in 2.36s
+DONE(0) tests/test_api_extended.py :: 36 passed, 1 warning in 27.17s
+DONE(0) tests/test_api_integration_mnr.py :: 10 failed in 25.68s
+DONE(0) tests/test_api_planning_verification.py :: 2 passed, 1 warning in 2.38s
+DONE(0) tests/test_api_replay.py :: 1 passed, 1 warning in 1.73s
+DONE(0) tests/test_approval_detail.py :: 1 passed, 1 warning in 6.05s
+DONE(0) tests/test_approval_store_comprehensive.py :: 35 passed in 16.13s
+DONE(0) tests/test_approvals.py :: 5 passed, 1 warning in 3.59s
+DONE(0) tests/test_artifacts.py :: 13 passed in 6.96s
+DONE(0) tests/test_audit.py :: 5 passed, 1 warning in 7.75s
+DONE(0) tests/test_benchmarks.py :: no tests ran in 0.38s
+DONE(0) tests/test_backup_scheduler.py :: 12 passed in 7.02s
+DONE(0) tests/test_browser.py :: 2 passed, 1 warning in 24.73s
+DONE(0) tests/test_browser_advanced.py :: 20 passed in 9.26s
+DONE(0) tests/test_browser_enhanced.py :: 33 passed in 16.31s
+DONE(0) tests/test_browser_service.py :: 1 passed, 1 skipped in 0.86s
+DONE(0) tests/test_cache.py :: 30 passed in 14.95s
+DONE(0) tests/test_cache_benchmarks.py :: 12 skipped in 0.43s
+DONE(0) tests/test_calculator.py :: 12 passed in 0.35s
+DONE(0) tests/test_capability_improvements.py :: 20 passed in 10.12s
+DONE(0) tests/test_channel_router.py :: 3 passed in 2.11s
+DONE(0) tests/test_browser_comprehensive.py :: ........................s..
+DONE(0) tests/test_capability_strategies.py :: 47 passed in 21.55s
+DONE(0) tests/test_channels.py :: 11 passed in 5.39s
+DONE(0) tests/test_chat_entrypoint_contract.py :: 4 passed, 1 warning in 2.87s
+DONE(0) tests/test_checkpoint.py :: 13 passed in 7.01s
+DONE(0) tests/test_checkpoint_resume.py :: 13 passed in 6.94s
+DONE(0) tests/test_cli_client.py :: 39 passed in 18.84s
+DONE(0) tests/test_cli_github.py :: 2 passed in 1.71s
+DONE(0) tests/test_cli_commands.py :: 34 passed in 16.82s
+DONE(0) tests/test_cli_config.py :: 35 passed in 16.09s
+DONE(0) tests/test_code_execution.py :: 16 passed in 9.31s
+DONE(0) tests/test_code_capabilities.py :: 22 passed in 11.97s
+DONE(0) tests/test_cli_repl.py :: 39 passed in 19.45s
+DONE(0) tests/test_code_executor.py :: 36 passed, 4 skipped in 39.80s
+DONE(0) tests/test_code_review_agent.py :: 13 passed in 11.22s
+DONE(0) tests/test_code_generation_quality.py :: 13 passed in 12.58s
+DONE(0) tests/test_code_quality_improvements.py :: 38 passed in 30.46s
+DONE(0) tests/test_collaboration_api.py :: 1 passed, 1 warning in 1.80s
+DONE(0) tests/test_codex_hermes_gap_matrix.py :: 6 passed in 6.22s
+DONE(0) tests/test_code_review_and_sediment.py :: 33 passed in 24.12s
+DONE(0) tests/test_collaboration_comprehensive.py :: 29 passed in 16.38s
+DONE(0) tests/test_completion_contracts.py :: 18 passed in 8.25s
+DONE(0) tests/test_config.py :: 1 failed, 30 passed in 16.22s
+DONE(0) tests/test_container.py :: 23 passed in 11.44s
+DONE(0) tests/test_collaboration_delegation.py :: 24 passed, 1 warning in 51.35s
+DONE(0) tests/test_container_cache.py :: 12 passed in 5.80s
+DONE(0) tests/test_context_management.py :: 28 passed in 13.26s
+DONE(0) tests/test_context_management_system.py :: 18 passed in 10.21s
+DONE(0) tests/test_contracts_regression.py :: 8 passed, 1 warning in 10.23s
+DONE(0) tests/test_core_contracts_comprehensive.py :: 29 passed in 13.35s
+DONE(0) tests/test_core_modules_comprehensive.py :: 28 passed, 20 skipped in 13.58s
+DONE(0) tests/test_core_modules_extended.py :: 37 passed in 16.60s
+DONE(0) tests/test_coverage_boundary_conditions.py :: 20 passed, 18 skipped in 9.45s
+DONE(0) tests/test_creative_studio.py :: 23 passed in 10.66s
+DONE(0) tests/test_desktop_macros.py :: 4 passed in 2.45s
+DONE(0) tests/test_coverage_exception_cases.py :: 43 passed, 1 skipped in 59.52s
+DONE(0) tests/test_coverage_branch_coverage.py :: ..................
+DONE(0) tests/test_distributed_integration.py :: 9 passed in 5.38s
+DONE(0) tests/test_coverage_error_handling.py :: ...F...........................                                          [100%]
+DONE(0) tests/test_docker_compose_env_contract.py :: 2 passed in 1.72s
+DONE(0) tests/test_distributed_state_management.py :: 20 passed in 10.19s
+DONE(0) tests/test_distributed_performance.py :: 8 passed in 50.50s
+DONE(0) tests/test_docker_sandbox.py :: 13 passed in 15.86s
+DONE(0) tests/test_end_to_end_contracts.py :: 4 passed, 1 warning in 8.21s
+DONE(0) tests/test_enterprise_features.py :: 33 passed in 15.57s
+DONE(0) tests/test_enterprise_im.py :: 17 passed in 7.93s
+DONE(0) tests/test_error_classification.py :: 7 passed in 3.28s
+DONE(0) tests/test_enterprise_integration.py :: 39 passed, 6 skipped, 1 warning in 23.64s
+DONE(0) tests/test_error_handling.py :: 34 passed in 15.37s
+DONE(0) tests/test_evidence_completion.py :: 18 passed in 8.82s
+DONE(0) tests/test_feature_integration.py :: 1 skipped in 0.37s
+DONE(0) tests/test_feature_enhancements.py :: 21 passed in 10.06s
+DONE(0) tests/test_exceptions_boundaries_performance.py :: 72 passed in 35.34s
+DONE(0) tests/test_feedback.py :: 23 passed in 14.30s
+DONE(0) tests/test_feedback_integration.py :: 17 passed in 10.76s
+DONE(0) tests/test_feedback_endpoints.py :: 22 passed in 13.26s
+DONE(0) tests/test_first_release_entrypoints.py :: 2 passed, 1 warning in 2.59s
+DONE(0) tests/test_file_operations.py :: 7 passed in 4.27s
+DONE(0) tests/test_hooks_config.py :: 18 passed in 8.94s
+DONE(0) tests/test_gateway_mode.py :: 5 passed in 5.64s
+DONE(0) tests/test_functionality_integration.py :: 20 passed in 10.56s
+DONE(0) tests/test_gdpr.py :: 34 passed in 16.16s
+DONE(0) tests/test_hooks_manager.py :: 15 passed in 9.45s
+DONE(0) tests/test_hooks_types.py :: 16 passed in 8.73s
+DONE(0) tests/test_hooks_executors.py :: 33 passed in 18.95s
+DONE(0) tests/test_hybrid_memory.py :: 2 failed, 19 passed in 13.95s
+DONE(0) tests/test_integration_comprehensive.py :: 7 passed, 32 skipped, 1 warning in 3.94s
+DONE(0) tests/test_i18n.py :: 30 passed in 13.49s
+DONE(0) tests/test_integration_e2e.py :: 9 passed in 6.21s
+DONE(0) tests/test_integration_extended.py :: 10 passed, 1 warning in 15.32s
+DONE(0) tests/test_integration_state_contracts.py :: 1 passed in 2.63s
+DONE(0) tests/test_integration_workflows.py :: 1 failed, 16 passed in 8.15s
+DONE(0) tests/test_issue_to_pr_api.py :: 4 passed, 1 warning in 2.43s
+DONE(0) tests/test_issue_to_pr_pipeline.py :: 4 passed in 14.93s
+DONE(0) tests/test_kms.py :: 27 passed in 12.01s
+DONE(0) tests/test_langfuse_real_path.py :: 1 passed in 0.90s
+DONE(0) tests/test_llm_edge_cases.py :: 5 failed, 24 passed in 12.75s
+DONE(0) tests/test_llm_embeddings_comprehensive.py :: 12 passed in 7.40s
+DONE(0) tests/test_llm_enhanced.py :: 25 passed in 11.11s
+DONE(0) tests/test_llm_framework.py :: 27 passed in 12.05s
+DONE(0) tests/test_llm_manager_integration.py :: 15 passed in 7.37s
+DONE(0) tests/test_llm_providers.py :: 1 skipped in 0.38s
+DONE(0) tests/test_llm_providers_integration.py :: 1 skipped in 0.40s
+DONE(0) tests/test_llm_router.py :: 2 failed, 2 passed in 2.47s
+DONE(0) tests/test_llm_routing_convergence.py :: 12 failed, 20 passed in 18.80s
+DONE(0) tests/test_local_sync_integration.py :: 31 passed in 15.62s
+DONE(0) tests/test_long_task_context.py :: 1 passed in 0.92s
+DONE(0) tests/test_mapping_execution_plan.py :: 1 passed in 0.96s
+DONE(0) tests/test_mathops.py :: 5 passed in 2.81s
+DONE(0) tests/test_marketplace_comprehensive.py :: 19 passed in 10.03s
+DONE(0) tests/test_mcp.py :: 8 passed in 4.05s
+DONE(0) tests/test_mcp_components.py :: 19 passed in 8.62s
+DONE(0) tests/test_mcp_integration.py :: 12 passed in 7.36s
+DONE(0) tests/test_mcp_config.py :: 44 passed in 21.24s
+DONE(0) tests/test_mcp_discovery.py :: 45 passed in 21.59s
+DONE(0) tests/test_mcp_main_integration.py :: 8 passed, 1 warning in 23.74s
+DONE(0) tests/test_media_processing.py :: 25 passed in 12.35s
+DONE(0) tests/test_mcp_stdio_e2e.py :: 6 passed in 17.56s
+DONE(0) tests/test_mcp_manager.py :: 42 passed in 19.76s
+DONE(0) tests/test_memory_api.py :: 1 failed, 1 passed, 1 warning in 5.27s
+DONE(0) tests/test_memory_dedup_index_perf.py :: 3 passed in 3.33s
+DONE(0) tests/test_memory_detail.py :: 1 passed, 1 warning in 1.97s
+DONE(0) tests/test_memory_dedup_wiring.py :: 14 passed in 6.50s
+DONE(0) tests/test_memory_dedup_index_perf.py :: 3 passed in 2.98s
+DONE(0) tests/test_memory_api.py :: 1 failed, 1 passed, 1 warning in 6.10s
+DONE(0) tests/test_mcp_stdio_e2e.py :: 6 passed in 16.98s
+DONE(0) tests/test_memory_edge_cases.py :: 31 passed in 15.02s
+DONE(0) tests/test_memory_embeddings_backends.py :: 12 passed in 6.44s
+DONE(0) tests/test_memory_qdrant_backend.py :: 12 passed in 10.34s
+DONE(0) tests/test_mcp_manager.py :: 42 passed in 20.78s
+DONE(0) tests/test_memory_fusion.py :: 25 passed, 3 warnings in 12.25s
+DONE(0) tests/test_memory_detail.py :: 1 passed, 1 warning in 1.52s
+DONE(0) tests/test_memory_dedup_wiring.py :: 14 passed in 5.96s
+DONE(0) tests/test_memory_edge_cases.py :: 31 passed in 13.01s
+DONE(0) tests/test_memory_retrieval.py :: 2 passed in 3.51s
+DONE(0) tests/test_memory_vector.py :: 6 passed in 3.34s
+DONE(0) tests/test_messages_debug_api.py :: 7 passed, 1 warning in 4.26s
+DONE(0) tests/test_memory_embeddings_backends.py :: 12 passed in 6.05s
+DONE(0) tests/test_memory_system_comprehensive.py :: 24 passed in 10.96s
+DONE(0) tests/test_memory_fusion.py :: 25 passed, 3 warnings in 11.14s
+DONE(0) tests/test_memory_qdrant_backend.py :: 12 passed in 9.23s
+DONE(0) tests/test_messages_end_to_end.py :: 1 passed, 1 warning in 1.68s
+DONE(0) tests/test_memory_retrieval.py :: 2 passed in 3.18s
+DONE(0) tests/test_messages_stream.py :: 3 passed, 1 warning in 2.29s
+DONE(0) tests/test_middleware.py :: 25 passed, 1 warning in 12.46s
+DONE(0) tests/test_messages_debug_api.py :: 7 passed, 1 warning in 5.36s
+DONE(0) tests/test_memory_system_comprehensive.py :: 24 passed in 12.48s
+DONE(0) tests/test_migration_framework.py :: 29 passed in 14.38s
+DONE(0) tests/test_memory_vector.py :: 6 passed in 3.17s
+DONE(0) tests/test_messages_end_to_end.py :: 1 passed, 1 warning in 1.06s
+DONE(0) tests/test_moa.py :: 1 failed, 8 passed in 4.30s
+DONE(0) tests/test_monitoring.py :: 36 passed in 16.87s
+DONE(0) tests/test_messages_stream.py :: 3 passed, 1 warning in 3.64s
+DONE(0) tests/test_mobile.py :: 23 passed in 13.09s
+DONE(0) tests/test_middleware.py :: 25 passed, 1 warning in 15.31s
+DONE(0) tests/test_moa.py :: 1 failed, 8 passed in 4.18s
+DONE(0) tests/test_migration_framework.py :: 29 passed in 13.95s
+DONE(0) tests/test_multi_agent_plugin_audit.py :: 34 passed in 15.65s
+DONE(0) tests/test_new_agent_tools.py :: 12 passed in 5.70s
+DONE(0) tests/test_multi_agent.py :: +++++++++++++++++++++++++++++++++++ Timeout +++++++++++++++++++++++++++++++++++
+DONE(0) tests/test_mobile.py :: 23 passed in 10.45s
+DONE(0) tests/test_multimodal_system.py :: 28 passed in 14.99s
+DONE(0) tests/test_monitoring.py :: 36 passed in 15.94s
+DONE(0) tests/test_notifications_api.py :: 8 passed, 1 warning in 4.59s
+DONE(0) tests/test_observability.py :: 1 passed in 0.91s
+DONE(0) tests/test_multi_agent_plugin_audit.py :: 34 passed in 14.01s
+DONE(0) tests/test_open_source_api_exports.py :: 1 passed in 1.12s
+DONE(0) tests/test_multi_agent.py :: +++++++++++++++++++++++++++++++++++ Timeout +++++++++++++++++++++++++++++++++++
+DONE(0) tests/test_multimodal_system.py :: 28 passed in 13.23s
+DONE(0) tests/test_new_agent_tools.py :: 12 passed in 5.53s
+DONE(0) tests/test_observability_shapes.py :: 1 passed, 1 warning in 17.22s
+DONE(0) tests/test_open_source_contracts.py :: 1 passed in 1.15s
+DONE(0) tests/test_open_source_provider_contracts.py :: 3 passed in 1.49s
+DONE(0) tests/test_open_source_public_imports.py :: 2 passed in 1.19s
+DONE(0) tests/test_notifications_api.py :: 8 passed, 1 warning in 3.75s
+DONE(0) tests/test_observability.py :: 1 passed in 0.77s
+DONE(0) tests/test_open_source_api_exports.py :: 1 passed in 0.82s
+DONE(0) tests/test_open_source_registry_contracts.py :: 1 passed in 0.79s
+DONE(0) tests/test_open_source_runtime.py :: 2 passed in 1.49s
+DONE(0) tests/test_observability_shapes.py :: 1 passed, 1 warning in 17.62s
+DONE(0) tests/test_open_source_wiring.py :: 1 passed in 1.17s
+DONE(0) tests/test_open_source_contracts.py :: 1 passed in 1.01s
+DONE(0) tests/test_open_source_provider_contracts.py :: 3 passed in 1.65s
+DONE(0) tests/test_ops_summary.py :: 1 passed, 1 warning in 3.68s
+DONE(0) tests/test_open_source_public_imports.py :: 2 passed in 1.26s
+DONE(0) tests/test_overview.py :: 1 passed, 1 warning in 3.70s
+DONE(0) tests/test_open_source_registry_contracts.py :: 1 passed in 4.84s
+DONE(0) tests/test_p104_audit_enhanced_api.py :: 22 passed, 1 warning in 10.83s
+DONE(0) tests/test_p104_audit_rotation.py :: 15 passed in 9.32s
+DONE(0) tests/test_open_source_runtime.py :: 2 passed in 1.09s
+DONE(0) tests/test_open_source_wiring.py :: 1 passed in 0.89s
+DONE(0) tests/test_p104_audit_shipper.py :: 12 passed in 8.53s
+DONE(0) tests/test_ops_summary.py :: 1 passed, 1 warning in 4.53s
+DONE(0) tests/test_parallel_agents.py :: 37 passed in 16.14s
+DONE(0) tests/test_parallel_execution.py :: 1 skipped in 0.34s
+DONE(0) tests/test_overview.py :: 1 passed, 1 warning in 4.76s
+DONE(0) tests/test_p104_audit_enhanced_api.py :: 22 passed, 1 warning in 9.53s
+DONE(0) tests/test_parallel_execution_engine.py :: 21 passed, 2 warnings in 11.77s
+DONE(0) tests/test_p104_audit_rotation.py :: 15 passed in 9.32s
+DONE(0) tests/test_parallel_tools.py :: 19 passed in 9.63s
+DONE(0) tests/test_p104_audit_shipper.py :: 12 passed in 9.17s
+DONE(0) tests/test_performance_baseline.py :: 10 passed in 4.50s
+DONE(0) tests/test_parallel_execution.py :: 1 skipped in 0.31s
+DONE(0) tests/test_performance.py :: +++++++++++++++++++++++++++++++++++ Timeout +++++++++++++++++++++++++++++++++++
+DONE(0) tests/test_performance_benchmark.py :: 7 passed in 6.01s
+DONE(0) tests/test_parallel_agents.py :: 37 passed in 15.81s
+DONE(0) tests/test_performance_benchmarks.py :: 1 skipped in 0.26s
+DONE(0) tests/test_parallel_execution_engine.py :: 21 passed, 2 warnings in 11.60s
+DONE(0) tests/test_parallel_tools.py :: 19 passed in 7.67s
+DONE(0) tests/test_persistence.py :: 2 passed in 1.29s
+DONE(0) tests/test_performance_optimization.py :: 14 passed in 5.86s
+DONE(0) tests/test_performance_baseline.py :: 10 passed in 4.84s
+DONE(0) tests/test_performance.py :: +++++++++++++++++++++++++++++++++++ Timeout +++++++++++++++++++++++++++++++++++
+DONE(0) tests/test_performance_benchmarks.py :: 1 skipped in 0.38s
+DONE(0) tests/test_performance_benchmark.py :: 7 passed in 6.65s
+DONE(0) tests/test_performance_stress.py :: +++++++++++++++++++++++++++++++++++ Timeout +++++++++++++++++++++++++++++++++++
+DONE(0) tests/test_planning_pipeline.py :: 1 passed in 0.83s
+DONE(0) tests/test_performance_extended.py :: 17 passed, 1 warning in 58.45s
+DONE(0) tests/test_phase3_integration.py :: 11 passed in 4.70s
+DONE(0) tests/test_performance_optimization.py :: 14 passed in 5.72s
+DONE(0) tests/test_playwright_real_path.py :: 1 skipped in 0.34s
+DONE(0) tests/test_persistence.py :: 2 passed in 1.33s
+DONE(0) tests/test_performance_stress.py :: +++++++++++++++++++++++++++++++++++ Timeout +++++++++++++++++++++++++++++++++++
+DONE(0) tests/test_plugin_market.py :: 17 passed in 7.43s
+DONE(0) tests/test_plugin_runtime_p1_12.py :: 14 passed, 1 warning in 7.05s
+DONE(0) tests/test_plugin_system.py :: 25 passed in 10.62s
+DONE(0) tests/test_planning_pipeline.py :: 1 passed in 1.00s
+DONE(0) tests/test_phase3_integration.py :: 11 passed in 5.77s
+DONE(0) tests/test_playwright_real_path.py :: 1 skipped in 0.33s
+DONE(0) tests/test_performance_extended.py :: 17 passed, 1 warning in 68.47s (0:01:08)
+DONE(0) tests/test_policy_engine_comprehensive.py :: 34 passed in 14.45s
+DONE(0) tests/test_postgres_trace.py :: 3 passed in 4.83s
+DONE(0) tests/test_prompt_guard.py :: 24 passed in 10.01s
+DONE(0) tests/test_plugin_market.py :: 17 passed in 6.81s
+DONE(0) tests/test_postgres_memory.py :: +++++++++++++++++++++++++++++++++++ Timeout +++++++++++++++++++++++++++++++++++
+DONE(0) tests/test_plugin_runtime_p1_12.py :: 14 passed, 1 warning in 7.22s
+DONE(0) tests/test_prompt_system.py :: 17 passed in 7.82s
+DONE(0) tests/test_plugin_system.py :: 25 passed in 11.21s
+DONE(0) tests/test_policy_engine_comprehensive.py :: 34 passed in 14.43s
+DONE(0) tests/test_qdrant_real_path.py :: 1 passed in 1.85s
+DONE(0) tests/test_qdrant_snapshot.py :: 9 passed in 5.02s
+DONE(0) tests/test_rc_artifact_integrity_gate.py :: 8 passed in 4.23s
+DONE(0) tests/test_postgres_trace.py :: 3 passed in 4.67s
+DONE(0) tests/test_postgres_memory.py :: +++++++++++++++++++++++++++++++++++ Timeout +++++++++++++++++++++++++++++++++++
+DONE(0) tests/test_rc_ci_contract.py :: 10 passed in 4.56s
+DONE(0) tests/test_prompt_system.py :: 17 passed in 9.33s
+DONE(0) tests/test_prompt_guard.py :: 24 passed in 11.79s
+DONE(0) tests/test_rc_deployment_docs_gate.py :: 19 passed in 12.05s
+DONE(0) tests/test_rc_evidence_pack.py :: 18 passed in 12.76s
+DONE(0) tests/test_qdrant_real_path.py :: 1 passed in 1.84s
+DONE(0) tests/test_qdrant_snapshot.py :: 9 passed in 4.35s
+DONE(0) tests/test_rc_external_smoke.py :: 42 passed in 16.82s
+DONE(0) tests/test_rc_artifact_integrity_gate.py :: 8 passed in 4.41s
+DONE(0) tests/test_rc_ci_contract.py :: 10 passed in 4.79s
+DONE(0) tests/test_rc_install_release_gate.py :: 12 passed in 5.31s
+DONE(0) tests/test_rc_owner_env_template.py :: 8 passed in 4.55s
+DONE(0) tests/test_rc_deployment_docs_gate.py :: 19 passed in 9.50s
+DONE(0) tests/test_rc_owner_gate_checklist.py :: 8 passed in 4.87s
+DONE(0) tests/test_rc_evidence_pack.py :: 18 passed in 13.46s
+DONE(0) tests/test_rc_final_gate.py :: 83 passed in 50.45s
+DONE(0) tests/test_rc_external_smoke.py :: 42 passed in 18.20s
+DONE(0) tests/test_rc_owner_gate_plan.py :: 25 passed in 11.44s
+DONE(0) tests/test_rc_owner_gate_runner.py :: 1 failed, 19 passed in 10.06s
+DONE(0) tests/test_rc_install_release_gate.py :: 12 passed in 5.41s
+DONE(0) tests/test_rc_owner_env_template.py :: 8 passed in 4.33s
+DONE(0) tests/test_rc_owner_handoff_gate.py :: 19 passed in 10.80s
+DONE(0) tests/test_rc_refresh_release_chain.py :: 19 passed in 9.01s
+DONE(0) tests/test_rc_final_gate.py :: 83 passed in 50.74s
+DONE(0) tests/test_rc_owner_gate_checklist.py :: 8 passed in 4.80s
+DONE(0) tests/test_rc_release_diff_review_gate.py :: 7 passed in 3.91s
+DONE(0) tests/test_rc_release_audit.py :: 21 passed in 11.17s
+DONE(0) tests/test_rc_owner_gate_plan.py :: 25 passed in 12.61s
+DONE(0) tests/test_rc_owner_gate_runner.py :: 1 failed, 19 passed in 9.60s
+DONE(0) tests/test_rc_runtime_smoke.py :: 4 passed in 1.97s
+DONE(0) tests/test_rc_release_receipt.py :: 31 passed in 15.65s
+DONE(0) tests/test_rc_owner_handoff_gate.py :: 19 passed in 9.14s
+DONE(0) tests/test_rc_secrets_gate.py :: 15 passed in 7.03s
+DONE(0) tests/test_rc_refresh_release_chain.py :: 19 passed in 8.66s
+DONE(0) tests/test_rc_source_bundle.py :: 5 passed in 2.65s
+DONE(0) tests/test_rc_release_audit.py :: 21 passed in 8.61s
+DONE(0) tests/test_rc_staging_plan.py :: 5 passed in 2.76s
+DONE(0) tests/test_rc_release_diff_review_gate.py :: 7 passed in 3.92s
+DONE(0) tests/test_rc_runtime_smoke.py :: 4 passed in 2.11s
+DONE(0) tests/test_rc_supply_chain_gate.py :: 29 passed in 12.80s
+DONE(0) tests/test_real_client_flags.py :: 1 passed in 2.55s
+DONE(0) tests/test_ready_checks.py :: 2 passed, 1 warning in 5.88s
+DONE(0) tests/test_rc_release_receipt.py :: 31 passed in 15.14s
+DONE(0) tests/test_real_integration_behaviors.py :: 1 passed in 2.72s
+DONE(0) tests/test_rc_secrets_gate.py :: 15 passed in 6.80s
+DONE(0) tests/test_rc_source_bundle.py :: 5 passed in 2.75s
+DONE(0) tests/test_rc_staging_plan.py :: 5 passed in 2.53s
+DONE(0) tests/test_real_integration_config.py :: 1 passed in 0.85s
+DONE(0) tests/test_real_integration_clients.py :: 1 passed in 2.27s
+DONE(0) tests/test_repair_loop.py :: 3 passed in 1.64s
+DONE(0) tests/test_real_client_flags.py :: 1 passed in 2.48s
+DONE(0) tests/test_rc_supply_chain_gate.py :: 29 passed in 11.95s
+DONE(0) tests/test_repair_loop_extended.py :: 16 passed in 6.80s
+DONE(0) tests/test_ready_checks.py :: 2 passed, 1 warning in 5.38s
+DONE(0) tests/test_report_generator.py :: 1 warning in 0.34s
+DONE(0) tests/test_real_integration_behaviors.py :: 1 passed in 2.50s
+DONE(0) tests/test_repair_paths.py :: 3 passed in 1.64s
+DONE(0) tests/test_resume_observability.py :: 3 passed in 1.62s
+DONE(0) tests/test_real_integration_config.py :: 1 passed in 1.00s
+DONE(0) tests/test_real_integration_clients.py :: 1 passed in 2.13s
+DONE(0) tests/test_repair_loop.py :: 3 passed in 1.54s
+DONE(0) tests/test_runs.py :: 1 passed in 1.08s
+DONE(0) tests/test_repair_loop_extended.py :: 16 passed in 6.58s
+DONE(0) tests/test_sandbox_orchestrator.py :: 6 passed in 9.16s
+DONE(0) tests/test_report_generator.py :: 1 warning in 0.29s
+DONE(0) tests/test_repair_paths.py :: 3 passed in 1.57s
+DONE(0) tests/test_resume_observability.py :: 3 passed in 1.62s

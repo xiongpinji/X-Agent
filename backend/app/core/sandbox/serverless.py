@@ -188,7 +188,7 @@ class _HTTPBackend:
                 pass
             self._client = None
 
-    async def __aenter__(self) -> "_HTTPBackend":
+    async def __aenter__(self) -> _HTTPBackend:
         await self.start()
         return self
 
@@ -427,7 +427,7 @@ class UnifiedSandbox:
             await self._fallback.stop()
         self._active = None
 
-    async def __aenter__(self) -> "UnifiedSandbox":
+    async def __aenter__(self) -> UnifiedSandbox:
         await self.start()
         return self
 

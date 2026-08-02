@@ -517,7 +517,7 @@ class PluginMarketService:
             cur_parts = [int(x) for x in current.split("-")[0].split(".")]
             tgt_parts = [int(x) for x in target_version.split("-")[0].split(".")]
         except ValueError:
-            return {"compatible": False, "reason": f"Invalid version format"}
+            return {"compatible": False, "reason": "Invalid version format"}
 
         cur_major, cur_minor, cur_patch = (cur_parts + [0, 0, 0])[:3]
         tgt_major, tgt_minor, tgt_patch = (tgt_parts + [0, 0, 0])[:3]

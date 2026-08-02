@@ -131,7 +131,7 @@ class _TenantDedupIndex:
     ``pending`` and embedded lazily once, like the legacy path did per write.
     """
 
-    __slots__ = ("order", "items", "item_hash", "hashes", "pos_of", "vecs", "pending")
+    __slots__ = ("hashes", "item_hash", "items", "order", "pending", "pos_of", "vecs")
 
     def __init__(self) -> None:
         self.order: list[str] = []  # memory ids in insertion order

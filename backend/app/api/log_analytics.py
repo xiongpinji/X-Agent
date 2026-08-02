@@ -10,7 +10,7 @@ from uuid import uuid4
 from fastapi import APIRouter, Depends, Request
 
 from backend.app.core.security import Principal
-from backend.app.dependencies import enforce_scope, get_current_principal
+from backend.app.dependencies import get_current_principal
 
 router = APIRouter(prefix="/api/v1/log-analytics", tags=["log-analytics"])
 PrincipalDependency = Annotated[Principal, Depends(get_current_principal)]

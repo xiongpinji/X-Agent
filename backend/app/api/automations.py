@@ -173,7 +173,6 @@ async def trigger_automation_run(automation_id: str, principal: PrincipalDepende
     # Execute agent in background
     async def _execute():
         try:
-            from backend.app.core.agent.loop import AgentLoop
             from backend.app.core.contracts import RunContext
             from backend.app.dependencies import get_agent
 
@@ -191,7 +190,7 @@ async def trigger_automation_run(automation_id: str, principal: PrincipalDepende
             entry.answer = (result.answer or "")[:2000]
             entry.trace_id = result.trace_id
             record.last_run_status = "completed"
-        except asyncio.TimeoutError:
+        except TimeoutError:
             entry.status = "timeout"
             entry.error = f"Timed out after {record.timeout_seconds}s"
             record.last_run_status = "timeout"

@@ -321,4 +321,5 @@ async def drain_status() -> dict:
 
 # Module-level startup timestamp
 import time as _time_mod
+
 _startup_time = _time_mod.time()

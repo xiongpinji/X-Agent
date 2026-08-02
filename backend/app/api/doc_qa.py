@@ -61,7 +61,7 @@ async def ask_question(
     return {
         "session_id": session_id,
         "question": question,
-        "answer": f"Based on the indexed documentation, the deployment process involves 4 stages: CI validation → staging canary → progressive rollout → full production. The average deployment takes 25 minutes with automated rollback triggers.",
+        "answer": "Based on the indexed documentation, the deployment process involves 4 stages: CI validation → staging canary → progressive rollout → full production. The average deployment takes 25 minutes with automated rollback triggers.",
         "confidence": round(random.uniform(0.82, 0.97), 2),
         "citations": [
             {"source": "confluence/deploy-guide.md", "chunk_id": "c-4521", "relevance": 0.95, "excerpt": "Stage 1: CI pipeline must pass all 342 tests..."},

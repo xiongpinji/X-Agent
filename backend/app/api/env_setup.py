@@ -138,7 +138,7 @@ async def _run_cmd(cmd: str, cwd: str, env: dict[str, str] | None = None, timeou
         stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=timeout)
         output = stdout.decode("utf-8", errors="replace")[:10000]
         return proc.returncode or 0, output
-    except asyncio.TimeoutError:
+    except TimeoutError:
         return -1, f"Command timed out after {timeout}s"
     except Exception as exc:
         return -1, str(exc)

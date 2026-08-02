@@ -103,7 +103,7 @@ async def telegram_webhook(request: Request, channel_router: ChannelRouterDepend
 
 
 def _slack_adapter(channel_router: ChannelRouter) -> SlackAdapter:
-    adapter = channel_router._registry.get("slack")  # noqa: SLF001 - registry lookup
+    adapter = channel_router._registry.get("slack")
     if adapter is None or not isinstance(adapter, SlackAdapter) or not adapter.configured:
         raise api_error(
             503,
@@ -166,7 +166,7 @@ async def slack_events(request: Request, channel_router: ChannelRouterDependency
 
 
 def _discord_adapter(channel_router: ChannelRouter) -> DiscordAdapter:
-    adapter = channel_router._registry.get("discord")  # noqa: SLF001
+    adapter = channel_router._registry.get("discord")
     if adapter is None or not isinstance(adapter, DiscordAdapter):
         raise api_error(
             503,

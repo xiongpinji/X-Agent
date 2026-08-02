@@ -24,7 +24,7 @@ from uuid import uuid4
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from backend.app.core.goal_mode import GoalControl, GoalResult, SubGoal, goal_orchestrator
+from backend.app.core.goal_mode import GoalControl, GoalResult, goal_orchestrator
 from backend.app.core.goal_store import GoalStore
 
 logger = logging.getLogger(__name__)

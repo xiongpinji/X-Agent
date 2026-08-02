@@ -858,7 +858,7 @@ async def validate_workflow_dag(
     # 3. Cycle detection (topological sort)
     from collections import defaultdict, deque
     adj: dict[str, list[str]] = defaultdict(list)
-    in_degree: dict[str, int] = {nid: 0 for nid in node_ids}
+    in_degree: dict[str, int] = dict.fromkeys(node_ids, 0)
     for e in edges:
         src, tgt = e.get("source"), e.get("target")
         if src in node_ids and tgt in node_ids:

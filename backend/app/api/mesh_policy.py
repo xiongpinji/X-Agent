@@ -3,14 +3,12 @@
 from __future__ import annotations
 
 import random
-from datetime import UTC, datetime
 from typing import Annotated, Any
-from uuid import uuid4
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends
 
 from backend.app.core.security import Principal
-from backend.app.dependencies import enforce_scope, get_current_principal
+from backend.app.dependencies import get_current_principal
 
 router = APIRouter(prefix="/api/v1/mesh-policy", tags=["mesh-policy"])
 PrincipalDependency = Annotated[Principal, Depends(get_current_principal)]
