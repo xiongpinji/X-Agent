@@ -12,6 +12,7 @@ from backend.app.core.security import Principal
 from backend.app.dependencies import enforce_scope, get_audit_store, get_current_principal
 
 router = APIRouter(prefix="/api/v1/users", tags=["users"])
+extended_router = APIRouter(prefix="/api/v1/users", tags=["users-extended"])  # C2: unmounted
 PrincipalDependency = Annotated[Principal, Depends(get_current_principal)]
 
 
@@ -36,14 +37,14 @@ async def get_user(user_id: str, principal: PrincipalDependency) -> dict[str, ob
     return record.model_dump(mode="json")
 
 
-@router.put("/{user_id}")
+@extended_router.put("/{user_id}")
 async def update_user(user_id: str, request: UserUpdateRequest, principal: PrincipalDependency) -> dict[str, object]:
     enforce_scope(principal, "security:manage")
     record = user_store.upsert(request, user_id)
     return record.model_dump(mode="json")
 
 
-@router.put("/{user_id}/role")
+@extended_router.put("/{user_id}/role")
 async def update_user_role(user_id: str, request: dict[str, str], principal: PrincipalDependency) -> dict[str, object]:
     enforce_scope(principal, "security:manage")
     record = user_store.get(user_id)
@@ -96,7 +97,7 @@ async def get_user_activity(
     }
 
 
-@router.delete("/{user_id}")
+@extended_router.delete("/{user_id}")
 async def delete_user(user_id: str, principal: PrincipalDependency) -> dict[str, bool]:
     enforce_scope(principal, "security:manage")
     if not user_store.delete(user_id):

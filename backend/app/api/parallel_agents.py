@@ -62,6 +62,7 @@ from backend.app.dependencies import enforce_scope, get_current_principal
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/agents/parallel", tags=["parallel_agents"])
+extended_router = APIRouter(prefix="/api/v1/agents/parallel", tags=["parallel-extended"])  # C2: unmounted; handler bodies unchanged
 PrincipalDependency = Annotated[Principal, Depends(get_current_principal)]
 
 # Global instances
@@ -505,7 +506,7 @@ async def cancel_batch(
 
 # Communication Bus Endpoints
 
-@router.post("/messages/send")
+@extended_router.post("/messages/send")
 async def send_message(
     request: MessageRequest,
     principal: PrincipalDependency,
@@ -538,7 +539,7 @@ async def send_message(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/messages/broadcast")
+@extended_router.post("/messages/broadcast")
 async def broadcast_message(
     request: BroadcastRequest,
     principal: PrincipalDependency,
@@ -570,7 +571,7 @@ async def broadcast_message(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/messages/publish")
+@extended_router.post("/messages/publish")
 async def publish_message(
     request: PublishRequest,
     principal: PrincipalDependency,
@@ -602,7 +603,7 @@ async def publish_message(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/messages/stats")
+@extended_router.get("/messages/stats")
 async def get_message_stats(
     principal: PrincipalDependency,
     bus: AgentCommunicationBus = Depends(get_bus),
@@ -729,7 +730,7 @@ async def orchestrator_fan_in(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/orchestrator/pipeline")
+@extended_router.post("/orchestrator/pipeline")
 async def orchestrator_pipeline(
     request: PipelineRequest,
     principal: PrincipalDependency,

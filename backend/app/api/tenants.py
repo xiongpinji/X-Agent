@@ -12,6 +12,7 @@ from backend.app.core.security import Principal
 from backend.app.dependencies import enforce_scope, get_current_principal
 
 router = APIRouter(prefix="/api/v1/tenants", tags=["tenants"])
+extended_router = APIRouter(prefix="/api/v1/tenants", tags=["tenants-extended"])  # C2: unmounted
 PrincipalDependency = Annotated[Principal, Depends(get_current_principal)]
 
 
@@ -36,7 +37,7 @@ async def get_tenant(tenant_id: str, principal: PrincipalDependency) -> dict[str
     return record.model_dump(mode="json")
 
 
-@router.put("/{tenant_id}")
+@extended_router.put("/{tenant_id}")
 async def update_tenant(tenant_id: str, request: TenantUpdateRequest, principal: PrincipalDependency) -> dict[str, object]:
     enforce_scope(principal, "security:manage")
     return tenant_store.upsert(request, tenant_id).model_dump(mode="json")
@@ -167,7 +168,7 @@ async def get_tenant_billing(
     }
 
 
-@router.delete("/{tenant_id}")
+@extended_router.delete("/{tenant_id}")
 async def delete_tenant(tenant_id: str, principal: PrincipalDependency) -> dict[str, bool]:
     enforce_scope(principal, "security:manage")
     if not tenant_store.delete(tenant_id):

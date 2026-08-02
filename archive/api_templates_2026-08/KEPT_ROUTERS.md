@@ -1,9 +1,59 @@
-# Track C 路由大瘦身 — 保留/剔除清单（2026-08-02）
+# Track C 路由大瘦身 — 保留/剔除清单
+
+## C2（2026-08-03）：硬门禁 ≤300 达成
+
+C1 结果 941 → **C2 结果 300**（OpenAPI 272 路径，dup operation id 0，探针全 200）。
+
+### C2 切割手法
+- **agents.py 361→22**：同文件拆 `router`（挂载）/ `extended_router`（不挂载），handler 本体
+  未动。保留：CRUD（POST/GET ""、GET/PUT/DELETE /{agent_id}、pause/resume/cancel）、
+  POST /run、/run/stream、/git/status、/model-routing、/performance、/stats、
+  /runs、/runs/{trace_id} 及 timeline/progress/reasoning/plan/replay/correlation。
+  其余 339 个装饰端点（alert-rules/anomaly/canary/chaos/costs/defects/marketplace/
+  whatif/reputation/...）全部移入 extended_router。
+- **同法拆分**：collaboration 17→13（裁 shared-context/agents-discover/dashboard，
+  correlation 与 memory-sync 因 tests/unit/test_api_batch3_part2 恢复）、
+  security 12→12（裁 posture/secret-scan/audit-chain 后因 test_api_integration_mnr 恢复，
+  净裁 0——保留 9 基础端点+3 契约端点）、evolution 15→4（/summary /stats /skills /trigger，
+  frontend evolutionOps.ts 实际调用面；self-evolution/* 8 端点摘除为前端死调用）、
+  memory 14→9（裁 export/import/sessions/layers×2）、parallel_agents 14→9
+  （裁 messages/* 与 orchestrator/pipeline）、sso.auth_router 15→5（保留 MFA/会话管理，
+  裁 LDAP/WebAuthn/conditional-access/oauth）、users 7→4、tenants 7→5、
+  tenant_isolation 6→3（/quotas /usage /rbac-matrix，test_api_integration_mnr 对齐）、
+  health 5→1（/live）、runs 8→3（/start 与 status/detail/timeline/correlation 摘除，
+  重复面裁决给 agents，POST /{trace_id}/replay 因 tests/test_api.py 保留）、
+  workbench 2→1（裁 /tasks）。
+- **整模块摘除挂载（文件保留）**：browser_advanced、plugin_ecosystem、backup、
+  backup_qdrant、memory_advanced、audit_enhanced、compliance_center、gdpr、tenant_quota、
+  checkpoints、skills_api、artifacts、search、knowledge_graph、questions、work_mode、
+  sessions、chat_history、tasks_ui、feedback、workspace、notifications、file_preview、
+  api_keys（/api/v1/api-keys 零引用，security.py 的 /security/api-keys 覆盖前端）、
+  streaming_enhanced、workflow_engine、tools_control、memory_control、execution_control、
+  navigation_control、organization_control、migration、multi_agent、env_setup、dispatch。
+- **恢复挂载（测试契约）**：feishu（test_security.py 签名测试）、execution
+  （test_execution_draft_blocks_traversal_root）、desktop（test_api_browser_desktop_memory）、
+  workbench（test_chat_entrypoint_contract）、tenants/users/tenant_isolation（拆分后）。
+- **归档测试（3 个文件 → archive/api_templates_2026-08/tests/）**：
+  test_feedback_endpoints.py、test_feedback_integration.py（feedback 域摘除）、
+  test_notifications_api.py（notifications 摘除）。
+
+### C2 前端死调用新增记录（不动前端代码）
+/api/v1/evolution/self-evolution/*（evolutionOps.ts 8 处调用）、/api/v1/checkpoints*、
+/api/skills*（SkillMarket 页面）、/api/v1/artifacts、/api/v1/search、/api/v1/knowledge-graph、
+/api/v1/questions*、/api/v1/work/*、/api/v1/chat/history、/api/v1/tasks、/api/v1/feedback*、
+/api/v1/workspace/*、/api/v1/notifications/*、/api/v1/files/*、/api/v1/backup*、
+/api/v1/browser/advanced、/api/v1/plugin-ecosystem、/api/v1/audit/*、/api/v1/compliance、
+/api/v1/gdpr、/api/v1/tenant/quota|usage、/api/v1/execution-control/*、/api/v1/memory-control/*、
+/api/v1/tools-control/*、/api/v1/navigation-control/*、/api/v1/organization-control/*。
+
+---
+
+## C1（2026-08-02）
 
 基线：启动挂载 **2429** 条路由（OpenAPI 2119 路径，duplicate operation id 警告 130）。
-结果：启动挂载 **941** 条路由（OpenAPI 819 路径，duplicate operation id 警告 **0**）。
+C1 结果：941 条路由（OpenAPI 819 路径，dup 0）。
 
-> **≤300 目标不可达的说明**：`backend/app/api/agents.py` 单文件定义 **361** 条路由
+> **C1 阶段 ≤300 目标曾不可达的说明**（C2 已通过 agents.py 拆分解决）：`backend/app/api/agents.py` 单文件定义 **361** 条路由
 > （12077 行，含 runs 详情/plan/reasoning/replay/estimate/compare/deadline/tags 等
 > 大量辅助端点）。agents 是编码 agent 的核心保留域，仅挂载它就已经超过 300。
 > 要达到 ≤300 必须拆分/裁剪 agents.py 内部端点，这超出本 Phase「只做挂载层收敛、

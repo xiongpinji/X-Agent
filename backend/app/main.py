@@ -748,95 +748,61 @@ _routers_registered = False
 # Only coding-agent core domains are mounted. Each entry is a module under
 # backend/app/api/ exposing a top-level `router`. Archived template domains
 # live in archive/api_templates_2026-08/ (see KEPT_ROUTERS.md there).
-# Order note: keep memory/memory_advanced/memory_enhanced in this order so
-# the B1-fixed /stats vs {memory_id} route ordering is preserved.
+# C2 (2026-08-03): hard gate <=300 mounted routes. Decorative endpoint groups
+# inside kept files were moved to per-file `extended_router` (unmounted);
+# console/support modules were unmounted (files kept; see KEPT_ROUTERS.md).
+# Order note: keep memory before memory_enhanced so the B1-fixed /stats vs
+# {memory_id} route ordering is preserved.
 _KEPT_ROUTER_MODULES: tuple[str, ...] = (
     # agent run core
     "agents",
     "runs",
     "streaming",
-    "streaming_enhanced",
-    "dispatch",
     "execution",
-    "execution_control",
     "verification",
     "replay",
     "planning",
     "goals",
-    "work_mode",
     # tools & execution environment
     "tools",
     "tools_batch",
-    "tools_control",
     "code_execution",
     "sandbox_tasks",
     "code_review",
     "issue_to_pr",
-    "env_setup",
     # workflows
     "workflows",
-    "workflow_engine",
     # memory
     "memory",
-    "memory_advanced",
     "memory_enhanced",
-    "memory_control",
     # governance & security basics
     "approvals",
     "audit",
-    "audit_enhanced",
     "auth",
-    "api_keys",
     "security",
     "tenants",
-    "tenant_quota",
     "tenant_isolation",
-    "compliance_center",
-    "gdpr",
-    "backup",
-    "backup_qdrant",
+    "users",
     # observability & health
     "health",
     "metrics",
     "traces",
+    "ops",
+    "overview",
     # integrations
     "mcp",
     "channels",
     "feishu",
     # collaboration
     "collaboration",
-    "multi_agent",
     "parallel_agents",
     # agent support surface
-    "checkpoints",
-    "search",
-    "knowledge_graph",
     "browser",
-    "browser_advanced",
-    "artifacts",
-    "skills_api",
-    "skill_curator",
-    "skill_sediment",
-    "plugin_ecosystem",
-    "evolution",
-    "questions",
-    "sessions",
-    "messages",
-    "chat_history",
-    "tasks_ui",
-    "feedback",
-    "sync",
-    "workspace",
-    "users",
     "desktop",
-    "notifications",
-    "file_preview",
-    "navigation_control",
-    "organization_control",
-    "migration",
-    # console 观测契约（tests/test_api_contracts + 前端 /api/v1/ops/summary 对齐）
-    "ops",
-    "overview",
+    "skill_curator",
+    "evolution",
+    "sync",
+    "messages",
     "workbench",
 )
 

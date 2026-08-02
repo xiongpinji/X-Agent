@@ -25,6 +25,7 @@ from backend.app.dependencies import (
 from backend.app.services.observability.langfuse_client import langfuse_client
 
 router = APIRouter(prefix="/api/v1/memory", tags=["memory"])
+extended_router = APIRouter(prefix="/api/v1/memory", tags=["memory-extended"])  # C2: unmounted; handler bodies unchanged
 AuditStoreDependency = Annotated[AuditStore, Depends(get_audit_store)]
 MemoryDependency = Annotated[object, Depends(get_memory)]
 PrincipalDependency = Annotated[Principal, Depends(get_current_principal)]
@@ -130,7 +131,7 @@ async def consolidate_memory(request: MemoryConsolidateRequest, memory: MemoryDe
     return result
 
 
-@router.get("/layers")
+@extended_router.get("/layers")
 async def memory_layers(memory: MemoryDependency, principal: PrincipalDependency) -> dict[str, object]:
     enforce_scope(principal, "memory:read")
     layer_summary = memory.layer_summary() if hasattr(memory, "layer_summary") else []
@@ -138,7 +139,7 @@ async def memory_layers(memory: MemoryDependency, principal: PrincipalDependency
     return {"layers": layer_summary, "layer_roles": layer_roles}
 
 
-@router.get("/layers/{layer}")
+@extended_router.get("/layers/{layer}")
 async def memory_layer_detail(layer: int, memory: MemoryDependency, principal: PrincipalDependency) -> dict[str, object]:
     enforce_scope(principal, "memory:read")
     if not hasattr(memory, "layer_profile") or not hasattr(memory, "layer_items"):
@@ -148,7 +149,7 @@ async def memory_layer_detail(layer: int, memory: MemoryDependency, principal: P
     return {"layer": layer, "profile": profile, "count": len(items), "items": [item.model_dump(mode="json") if hasattr(item, "model_dump") else item for item in items]}
 
 
-@router.get("/sessions/{session_id}")
+@extended_router.get("/sessions/{session_id}")
 async def memory_session_detail(session_id: str, memory: MemoryDependency, principal: PrincipalDependency) -> dict[str, object]:
     enforce_scope(principal, "memory:read")
     if not hasattr(memory, "session_summary"):
@@ -173,14 +174,14 @@ async def memory_count(memory: MemoryDependency, principal: PrincipalDependency)
     return {"count": int(count), "session_count": int(session_count), "layers": layers}
 
 
-@router.get("/export", response_model=MemoryExportResponse)
+@extended_router.get("/export", response_model=MemoryExportResponse)
 async def export_memory(memory: MemoryDependency, principal: PrincipalDependency) -> MemoryExportResponse:
     enforce_scope(principal, "memory:read")
     bundle = memory.export_bundle(tenant_id=principal.tenant_id) if hasattr(memory, "export_bundle") else MemoryExportBundle()
     return MemoryExportResponse(bundle=bundle)
 
 
-@router.post("/import", response_model=MemoryImportResponse)
+@extended_router.post("/import", response_model=MemoryImportResponse)
 async def import_memory(request: MemoryExportBundle, memory: MemoryDependency, principal: PrincipalDependency) -> MemoryImportResponse:
     enforce_scope(principal, "memory:write")
     if hasattr(memory, "import_bundle"):

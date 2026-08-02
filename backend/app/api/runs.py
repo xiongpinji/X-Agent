@@ -20,6 +20,7 @@ from backend.app.dependencies import (
 )
 
 router = APIRouter(prefix="/api/v1/runs", tags=["runs"])
+extended_router = APIRouter(prefix="/api/v1/runs", tags=["runs-extended"])  # C2: unmounted
 AgentDependency = Annotated[AgentLoop, Depends(get_agent)]
 PrincipalDependency = Annotated[Principal, Depends(get_current_principal)]
 RunStoreDependency = Annotated[object, Depends(get_run_store)]
@@ -73,7 +74,7 @@ async def list_runs(
     return items
 
 
-@router.post("/start")
+@extended_router.post("/start")
 async def start_run(
     request: AgentRunStartRequest,
     agent: AgentDependency,
@@ -133,7 +134,7 @@ async def get_run(trace_id: str, run_store: RunStoreDependency, principal: Princ
     return record
 
 
-@router.get("/{trace_id}/status", response_model=RunStatusEnvelope)
+@extended_router.get("/{trace_id}/status", response_model=RunStatusEnvelope)
 async def get_run_status(trace_id: str, run_store: RunStoreDependency, trace_store: TraceStoreDependency, principal: PrincipalDependency) -> RunStatusEnvelope:
     enforce_scope(principal, "agent:read")
     record = run_store.get(trace_id)
@@ -174,7 +175,7 @@ async def get_run_status(trace_id: str, run_store: RunStoreDependency, trace_sto
     )
 
 
-@router.get("/{trace_id}/detail", response_model=RunViewModelEnvelope)
+@extended_router.get("/{trace_id}/detail", response_model=RunViewModelEnvelope)
 async def get_run_detail(trace_id: str, run_store: RunStoreDependency, trace_store: TraceStoreDependency, principal: PrincipalDependency) -> RunViewModelEnvelope:
     enforce_scope(principal, "agent:read")
     record = run_store.get(trace_id)
@@ -215,7 +216,7 @@ async def get_run_detail(trace_id: str, run_store: RunStoreDependency, trace_sto
     )
 
 
-@router.get("/{trace_id}/correlation", response_model=dict[str, object])
+@extended_router.get("/{trace_id}/correlation", response_model=dict[str, object])
 async def get_run_correlation(trace_id: str, run_store: RunStoreDependency, trace_store: TraceStoreDependency, principal: PrincipalDependency) -> dict[str, object]:
     enforce_scope(principal, "agent:read")
     record = run_store.get(trace_id)
@@ -263,7 +264,7 @@ async def get_run_correlation(trace_id: str, run_store: RunStoreDependency, trac
     )
 
 
-@router.get("/{trace_id}/timeline")
+@extended_router.get("/{trace_id}/timeline")
 async def get_run_timeline(trace_id: str, run_store: RunStoreDependency, trace_store: TraceStoreDependency, principal: PrincipalDependency) -> dict[str, object]:
     enforce_scope(principal, "agent:read")
     record = run_store.get(trace_id)

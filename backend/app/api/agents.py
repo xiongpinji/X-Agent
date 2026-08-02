@@ -28,6 +28,7 @@ from backend.app.dependencies import (
 )
 
 router = APIRouter(prefix="/api/v1/agents", tags=["agents"])
+extended_router = APIRouter(prefix="/api/v1/agents", tags=["agents-extended"])  # C2: unmounted; handler bodies unchanged
 PrincipalDependency = Annotated[Principal, Depends(get_current_principal)]
 
 _AGENTS: dict[str, dict[str, Any]] = {
@@ -255,7 +256,7 @@ async def run_agent(payload: dict[str, Any] | None = None, principal: PrincipalD
     return body
 
 
-@router.post("/run/multi", response_model=None)
+@extended_router.post("/run/multi", response_model=None)
 async def run_agent_multi_solution(payload: dict[str, Any] | None = None, principal: PrincipalDependency = None):
     """Generate multiple candidate solutions for a task (Codex-style multi-solution).
 
@@ -328,7 +329,7 @@ async def run_agent_multi_solution(payload: dict[str, Any] | None = None, princi
     }
 
 
-@router.post("/structured", response_model=None)
+@extended_router.post("/structured", response_model=None)
 async def run_structured_output(payload: dict[str, Any] | None = None, principal: PrincipalDependency = None):
     """Codex-style structured output: force LLM to respond with a strict JSON schema.
 
@@ -417,7 +418,7 @@ async def get_git_status(principal: PrincipalDependency = None) -> dict[str, obj
     }
 
 
-@router.get("/sandbox/status")
+@extended_router.get("/sandbox/status")
 async def get_sandbox_status(principal: PrincipalDependency = None) -> dict[str, object]:
     """Sandbox environment status: Docker availability, pool, execution history."""
     enforce_scope(principal, "agent:run")
@@ -644,7 +645,7 @@ async def get_agent_run_timeline(trace_id: str, principal: PrincipalDependency =
     return {"trace_id": trace_id, "events": events, "snapshot": {"trace_id": trace_id, "timeline_events": len(events), "last_event": events[-1]["event"] if events else None}}
 
 
-@router.post("/runs/{trace_id}/retry", response_model=None)
+@extended_router.post("/runs/{trace_id}/retry", response_model=None)
 async def retry_agent_run(trace_id: str, payload: dict[str, Any] | None = None, principal: PrincipalDependency = None):
     """Codex-style one-click retry: re-run a failed/completed task from its last checkpoint.
 
@@ -877,7 +878,7 @@ async def get_reasoning_trace(trace_id: str, principal: PrincipalDependency = No
     }
 
 
-@router.get("/runs/{trace_id}/files-changed", response_model=None)
+@extended_router.get("/runs/{trace_id}/files-changed", response_model=None)
 async def get_files_changed(trace_id: str, principal: PrincipalDependency = None):
     """Codex-style file change tracking: list all files modified during a run.
 
@@ -962,7 +963,7 @@ async def get_files_changed(trace_id: str, principal: PrincipalDependency = None
     }
 
 
-@router.post("/runs/{trace_id}/refine", response_model=None)
+@extended_router.post("/runs/{trace_id}/refine", response_model=None)
 async def refine_agent_run(trace_id: str, payload: dict[str, Any] | None = None, principal: PrincipalDependency = None):
     """Multi-turn task refinement: continue improving a previous run's result.
 
@@ -1027,7 +1028,7 @@ async def refine_agent_run(trace_id: str, payload: dict[str, Any] | None = None,
     }
 
 
-@router.post("/estimate", response_model=None)
+@extended_router.post("/estimate", response_model=None)
 async def estimate_run_cost(payload: dict[str, Any] | None = None, principal: PrincipalDependency = None):
     """Pre-run cost estimation: predict tokens, time, and cost before executing.
 
@@ -1112,7 +1113,7 @@ async def estimate_run_cost(payload: dict[str, Any] | None = None, principal: Pr
     }
 
 
-@router.get("/runs/{trace_id}/dependencies", response_model=None)
+@extended_router.get("/runs/{trace_id}/dependencies", response_model=None)
 async def get_run_dependencies(trace_id: str, principal: PrincipalDependency = None):
     """Cross-run dependency graph: show how runs relate to each other.
 
@@ -1180,7 +1181,7 @@ async def get_run_dependencies(trace_id: str, principal: PrincipalDependency = N
     }
 
 
-@router.post("/context-inject", response_model=None)
+@extended_router.post("/context-inject", response_model=None)
 async def smart_context_inject(payload: dict[str, Any] | None = None, principal: PrincipalDependency = None):
     """Smart context injection: auto-detect relevant docs/config for a task.
 
@@ -1271,7 +1272,7 @@ async def smart_context_inject(payload: dict[str, Any] | None = None, principal:
     }
 
 
-@router.post("/compare", response_model=None)
+@extended_router.post("/compare", response_model=None)
 async def compare_runs(payload: dict[str, Any] | None = None, principal: PrincipalDependency = None):
     """Run comparison: side-by-side diff of two agent runs.
 
@@ -1356,7 +1357,7 @@ async def compare_runs(payload: dict[str, Any] | None = None, principal: Princip
     }
 
 
-@router.post("/deadline", response_model=None)
+@extended_router.post("/deadline", response_model=None)
 async def compute_adaptive_deadline(payload: dict[str, Any] | None = None, principal: PrincipalDependency = None):
     """Adaptive deadline: compute a smart timeout based on task complexity and history.
 
@@ -1533,7 +1534,7 @@ def _summarize_event(etype: str, payload: dict) -> str:
     return etype.replace("agent.", "").replace(".", " ")
 
 
-@router.get("/runs/{trace_id}/export", response_model=None)
+@extended_router.get("/runs/{trace_id}/export", response_model=None)
 async def export_run(trace_id: str, fmt: str = "json", principal: PrincipalDependency = None):
     """Export a run's full data as a structured report.
 
@@ -1620,7 +1621,7 @@ async def export_run(trace_id: str, fmt: str = "json", principal: PrincipalDepen
     return report
 
 
-@router.post("/runs/{trace_id}/clone", response_model=None)
+@extended_router.post("/runs/{trace_id}/clone", response_model=None)
 async def clone_run(trace_id: str, payload: dict[str, Any] | None = None, principal: PrincipalDependency = None):
     """Clone a previous run: start a new run with the same task and context.
 
@@ -1669,7 +1670,7 @@ async def clone_run(trace_id: str, payload: dict[str, Any] | None = None, princi
     }
 
 
-@router.post("/batch", response_model=None)
+@extended_router.post("/batch", response_model=None)
 async def batch_operations(payload: dict[str, Any] | None = None, principal: PrincipalDependency = None):
     """Batch operations on multiple runs: cancel, export, or summarize.
 
@@ -1761,7 +1762,7 @@ async def batch_operations(payload: dict[str, Any] | None = None, principal: Pri
 _run_tags: dict[str, list[str]] = {}
 
 
-@router.post("/runs/{trace_id}/tags", response_model=None)
+@extended_router.post("/runs/{trace_id}/tags", response_model=None)
 async def add_run_tags(trace_id: str, payload: dict[str, Any] | None = None, principal: PrincipalDependency = None):
     """Add tags to a run for organization and filtering.
 
@@ -1795,7 +1796,7 @@ async def add_run_tags(trace_id: str, payload: dict[str, Any] | None = None, pri
     }
 
 
-@router.delete("/runs/{trace_id}/tags", response_model=None)
+@extended_router.delete("/runs/{trace_id}/tags", response_model=None)
 async def remove_run_tags(trace_id: str, payload: dict[str, Any] | None = None, principal: PrincipalDependency = None):
     """Remove tags from a run."""
     enforce_scope(principal, "agent:run")
@@ -1818,14 +1819,14 @@ async def remove_run_tags(trace_id: str, payload: dict[str, Any] | None = None, 
     }
 
 
-@router.get("/runs/{trace_id}/tags", response_model=None)
+@extended_router.get("/runs/{trace_id}/tags", response_model=None)
 async def get_run_tags(trace_id: str, principal: PrincipalDependency = None):
     """Get all tags for a run."""
     enforce_scope(principal, "agent:run")
     return {"trace_id": trace_id, "tags": _run_tags.get(trace_id, [])}
 
 
-@router.post("/guardrails", response_model=None)
+@extended_router.post("/guardrails", response_model=None)
 async def validate_output_guardrails(payload: dict[str, Any] | None = None, principal: PrincipalDependency = None):
     """Validate agent output against user-defined constraints.
 
@@ -1938,7 +1939,7 @@ async def validate_output_guardrails(payload: dict[str, Any] | None = None, prin
     }
 
 
-@router.post("/search", response_model=None)
+@extended_router.post("/search", response_model=None)
 async def search_runs(payload: dict[str, Any] | None = None, principal: PrincipalDependency = None):
     """Advanced run search: filter by status, tools, time range, tags, and full-text.
 
@@ -2016,7 +2017,7 @@ async def search_runs(payload: dict[str, Any] | None = None, principal: Principa
 # ─── Round 11: Dry Run + Execution Budget + Error Diagnostics ────────────────
 
 
-@router.post("/dry-run", response_model=None)
+@extended_router.post("/dry-run", response_model=None)
 async def dry_run_simulation(payload: dict[str, Any] | None = None, principal: PrincipalDependency = None):
     """Dry run: preview what the agent would do without actually calling the LLM.
 
@@ -2101,7 +2102,7 @@ async def dry_run_simulation(payload: dict[str, Any] | None = None, principal: P
 _run_budgets: dict[str, dict[str, Any]] = {}
 
 
-@router.post("/runs/{trace_id}/budget", response_model=None)
+@extended_router.post("/runs/{trace_id}/budget", response_model=None)
 async def set_run_budget(trace_id: str, payload: dict[str, Any] | None = None, principal: PrincipalDependency = None):
     """Set or check execution budget for a run.
 
@@ -2185,7 +2186,7 @@ async def set_run_budget(trace_id: str, payload: dict[str, Any] | None = None, p
     }
 
 
-@router.get("/runs/{trace_id}/diagnostics", response_model=None)
+@extended_router.get("/runs/{trace_id}/diagnostics", response_model=None)
 async def get_run_diagnostics(trace_id: str, principal: PrincipalDependency = None):
     """Error diagnostics: classify failure and provide root cause analysis.
 
@@ -2303,7 +2304,7 @@ async def get_run_diagnostics(trace_id: str, principal: PrincipalDependency = No
 # ─── Round 12: Tool Recommendation + Approval Gates + Impact Analysis ────────
 
 
-@router.post("/recommend-tools", response_model=None)
+@extended_router.post("/recommend-tools", response_model=None)
 async def recommend_tools(payload: dict[str, Any] | None = None, principal: PrincipalDependency = None):
     """Recommend the best tools for a given task description.
 
@@ -2374,7 +2375,7 @@ async def recommend_tools(payload: dict[str, Any] | None = None, principal: Prin
 _approval_gates: dict[str, dict[str, Any]] = {}
 
 
-@router.post("/approval-gates", response_model=None)
+@extended_router.post("/approval-gates", response_model=None)
 async def create_approval_gate(payload: dict[str, Any] | None = None, principal: PrincipalDependency = None):
     """Create an approval gate for sensitive operations.
 
@@ -2424,7 +2425,7 @@ async def create_approval_gate(payload: dict[str, Any] | None = None, principal:
     }
 
 
-@router.post("/approval-gates/{gate_id}/resolve", response_model=None)
+@extended_router.post("/approval-gates/{gate_id}/resolve", response_model=None)
 async def resolve_approval_gate(gate_id: str, payload: dict[str, Any] | None = None, principal: PrincipalDependency = None):
     """Resolve (approve/reject) a pending approval gate."""
     enforce_scope(principal, "agent:run")
@@ -2452,7 +2453,7 @@ async def resolve_approval_gate(gate_id: str, payload: dict[str, Any] | None = N
     }
 
 
-@router.get("/approval-gates", response_model=None)
+@extended_router.get("/approval-gates", response_model=None)
 async def list_approval_gates(status: str = "", principal: PrincipalDependency = None):
     """List approval gates, optionally filtered by status."""
     enforce_scope(principal, "agent:run")
@@ -2462,7 +2463,7 @@ async def list_approval_gates(status: str = "", principal: PrincipalDependency =
     return {"total": len(gates), "gates": gates}
 
 
-@router.post("/impact-analysis", response_model=None)
+@extended_router.post("/impact-analysis", response_model=None)
 async def analyze_impact(payload: dict[str, Any] | None = None, principal: PrincipalDependency = None):
     """Pre-execution impact analysis: estimate blast radius of a task.
 
@@ -2631,7 +2632,7 @@ async def get_run_progress(trace_id: str, principal: PrincipalDependency = None)
     }
 
 
-@router.post("/runs/{trace_id}/assert", response_model=None)
+@extended_router.post("/runs/{trace_id}/assert", response_model=None)
 async def assert_run_output(trace_id: str, payload: dict[str, Any] | None = None, principal: PrincipalDependency = None):
     """Assert run output against expected patterns (unit-test style).
 
@@ -2712,7 +2713,7 @@ async def assert_run_output(trace_id: str, payload: dict[str, Any] | None = None
     }
 
 
-@router.post("/context-budget", response_model=None)
+@extended_router.post("/context-budget", response_model=None)
 async def plan_context_budget(payload: dict[str, Any] | None = None, principal: PrincipalDependency = None):
     """Context window budget planner: allocate tokens across task components.
 
@@ -2791,7 +2792,7 @@ async def plan_context_budget(payload: dict[str, Any] | None = None, principal: 
 # ─── Round 14: Smart Retry + Usage Analytics + Task Templates ────────────────
 
 
-@router.post("/runs/{trace_id}/smart-retry", response_model=None)
+@extended_router.post("/runs/{trace_id}/smart-retry", response_model=None)
 async def smart_retry(trace_id: str, payload: dict[str, Any] | None = None, principal: PrincipalDependency = None):
     """Smart retry: analyze failure cause and retry with adjusted strategy.
 
@@ -2887,7 +2888,7 @@ async def smart_retry(trace_id: str, payload: dict[str, Any] | None = None, prin
     }
 
 
-@router.get("/analytics", response_model=None)
+@extended_router.get("/analytics", response_model=None)
 async def get_usage_analytics(principal: PrincipalDependency = None):
     """Usage analytics: aggregate run statistics and patterns.
 
@@ -3006,7 +3007,7 @@ _task_templates: dict[str, dict[str, Any]] = {
 }
 
 
-@router.get("/templates", response_model=None)
+@extended_router.get("/templates", response_model=None)
 async def list_task_templates(category: str = "", principal: PrincipalDependency = None):
     """List available task templates."""
     enforce_scope(principal, "agent:run")
@@ -3016,7 +3017,7 @@ async def list_task_templates(category: str = "", principal: PrincipalDependency
     return {"total": len(templates), "templates": templates}
 
 
-@router.post("/templates/{template_id}/run", response_model=None)
+@extended_router.post("/templates/{template_id}/run", response_model=None)
 async def run_from_template(template_id: str, payload: dict[str, Any] | None = None, principal: PrincipalDependency = None):
     """Instantiate and run a task from a template.
 
@@ -3081,7 +3082,7 @@ _feature_flags: dict[str, dict[str, Any]] = {
 }
 
 
-@router.get("/feature-flags", response_model=None)
+@extended_router.get("/feature-flags", response_model=None)
 async def list_feature_flags(principal: PrincipalDependency = None):
     """List all feature flags and their current state."""
     enforce_scope(principal, "agent:run")
@@ -3095,7 +3096,7 @@ async def list_feature_flags(principal: PrincipalDependency = None):
     }
 
 
-@router.put("/feature-flags/{flag_name}", response_model=None)
+@extended_router.put("/feature-flags/{flag_name}", response_model=None)
 async def toggle_feature_flag(flag_name: str, payload: dict[str, Any] | None = None, principal: PrincipalDependency = None):
     """Enable or disable a feature flag."""
     enforce_scope(principal, "agent:run")
@@ -3121,7 +3122,7 @@ async def toggle_feature_flag(flag_name: str, payload: dict[str, Any] | None = N
 _priority_queue: list[dict[str, Any]] = []
 
 
-@router.post("/priority-queue", response_model=None)
+@extended_router.post("/priority-queue", response_model=None)
 async def enqueue_with_priority(payload: dict[str, Any] | None = None, principal: PrincipalDependency = None):
     """Submit a task with priority level and get queue position.
 
@@ -3171,7 +3172,7 @@ async def enqueue_with_priority(payload: dict[str, Any] | None = None, principal
     }
 
 
-@router.get("/priority-queue", response_model=None)
+@extended_router.get("/priority-queue", response_model=None)
 async def get_queue_status(principal: PrincipalDependency = None):
     """Get current priority queue status."""
     enforce_scope(principal, "agent:run")
@@ -3187,7 +3188,7 @@ async def get_queue_status(principal: PrincipalDependency = None):
     }
 
 
-@router.get("/capabilities", response_model=None)
+@extended_router.get("/capabilities", response_model=None)
 async def detect_capabilities(principal: PrincipalDependency = None):
     """Pre-flight capability detection: what can this system do right now?
 
@@ -3258,7 +3259,7 @@ _execution_snapshots: dict[str, dict[str, Any]] = {}
 _webhook_subscriptions: dict[str, dict[str, Any]] = {}
 
 
-@router.post("/runs/{trace_id}/snapshots", response_model=None)
+@extended_router.post("/runs/{trace_id}/snapshots", response_model=None)
 async def create_snapshot(trace_id: str, payload: dict[str, Any] | None = None, principal: PrincipalDependency = None):
     """Create an execution snapshot: capture current run state for later restore.
 
@@ -3308,7 +3309,7 @@ async def create_snapshot(trace_id: str, payload: dict[str, Any] | None = None, 
     }
 
 
-@router.get("/runs/{trace_id}/snapshots", response_model=None)
+@extended_router.get("/runs/{trace_id}/snapshots", response_model=None)
 async def list_snapshots(trace_id: str, principal: PrincipalDependency = None):
     """List all snapshots for a given trace."""
     enforce_scope(principal, "agent:run")
@@ -3320,7 +3321,7 @@ async def list_snapshots(trace_id: str, principal: PrincipalDependency = None):
     }
 
 
-@router.post("/snapshots/{snapshot_id}/restore", response_model=None)
+@extended_router.post("/snapshots/{snapshot_id}/restore", response_model=None)
 async def restore_snapshot(snapshot_id: str, principal: PrincipalDependency = None):
     """Restore an execution snapshot: re-emit saved events into a new trace context.
 
@@ -3345,7 +3346,7 @@ async def restore_snapshot(snapshot_id: str, principal: PrincipalDependency = No
     }
 
 
-@router.post("/webhooks", response_model=None)
+@extended_router.post("/webhooks", response_model=None)
 async def create_webhook(payload: dict[str, Any], principal: PrincipalDependency = None):
     """Register a webhook subscription for event notifications.
 
@@ -3385,7 +3386,7 @@ async def create_webhook(payload: dict[str, Any], principal: PrincipalDependency
     }
 
 
-@router.get("/webhooks", response_model=None)
+@extended_router.get("/webhooks", response_model=None)
 async def list_webhooks(principal: PrincipalDependency = None):
     """List all webhook subscriptions."""
     enforce_scope(principal, "agent:run")
@@ -3397,7 +3398,7 @@ async def list_webhooks(principal: PrincipalDependency = None):
     }
 
 
-@router.delete("/webhooks/{webhook_id}", response_model=None)
+@extended_router.delete("/webhooks/{webhook_id}", response_model=None)
 async def delete_webhook(webhook_id: str, principal: PrincipalDependency = None):
     """Deactivate and remove a webhook subscription."""
     enforce_scope(principal, "agent:run")
@@ -3407,7 +3408,7 @@ async def delete_webhook(webhook_id: str, principal: PrincipalDependency = None)
     return {"deleted": True, "webhook_id": webhook_id, "url": hook["url"]}
 
 
-@router.get("/health/deep", response_model=None)
+@extended_router.get("/health/deep", response_model=None)
 async def deep_health_check(principal: PrincipalDependency = None):
     """Deep health check: verify all dependency services and subsystems.
 
@@ -3490,7 +3491,7 @@ _run_annotations: dict[str, list[dict[str, Any]]] = {}  # trace_id -> [annotatio
 _scheduled_runs: dict[str, dict[str, Any]] = {}
 
 
-@router.post("/runs/{trace_id}/annotations", response_model=None)
+@extended_router.post("/runs/{trace_id}/annotations", response_model=None)
 async def add_annotation(trace_id: str, payload: dict[str, Any], principal: PrincipalDependency = None):
     """Add an annotation (comment/note/feedback) to a run.
 
@@ -3528,7 +3529,7 @@ async def add_annotation(trace_id: str, payload: dict[str, Any], principal: Prin
     }
 
 
-@router.get("/runs/{trace_id}/annotations", response_model=None)
+@extended_router.get("/runs/{trace_id}/annotations", response_model=None)
 async def list_annotations(trace_id: str, principal: PrincipalDependency = None):
     """List all annotations for a run, optionally filtered by type."""
     enforce_scope(principal, "agent:run")
@@ -3540,7 +3541,7 @@ async def list_annotations(trace_id: str, principal: PrincipalDependency = None)
     }
 
 
-@router.delete("/runs/{trace_id}/annotations/{annotation_id}", response_model=None)
+@extended_router.delete("/runs/{trace_id}/annotations/{annotation_id}", response_model=None)
 async def delete_annotation(trace_id: str, annotation_id: str, principal: PrincipalDependency = None):
     """Remove an annotation from a run."""
     enforce_scope(principal, "agent:run")
@@ -3552,7 +3553,7 @@ async def delete_annotation(trace_id: str, annotation_id: str, principal: Princi
     return {"deleted": True, "annotation_id": annotation_id, "type": removed["type"]}
 
 
-@router.post("/schedules", response_model=None)
+@extended_router.post("/schedules", response_model=None)
 async def create_schedule(payload: dict[str, Any], principal: PrincipalDependency = None):
     """Create a scheduled run: execute a task on a recurring schedule.
 
@@ -3600,7 +3601,7 @@ async def create_schedule(payload: dict[str, Any], principal: PrincipalDependenc
     }
 
 
-@router.get("/schedules", response_model=None)
+@extended_router.get("/schedules", response_model=None)
 async def list_schedules(principal: PrincipalDependency = None):
     """List all scheduled runs."""
     enforce_scope(principal, "agent:run")
@@ -3612,7 +3613,7 @@ async def list_schedules(principal: PrincipalDependency = None):
     }
 
 
-@router.post("/schedules/{schedule_id}/toggle", response_model=None)
+@extended_router.post("/schedules/{schedule_id}/toggle", response_model=None)
 async def toggle_schedule(schedule_id: str, payload: dict[str, Any] | None = None, principal: PrincipalDependency = None):
     """Enable or disable a scheduled run."""
     enforce_scope(principal, "agent:run")
@@ -3625,7 +3626,7 @@ async def toggle_schedule(schedule_id: str, payload: dict[str, Any] | None = Non
     return {"schedule_id": schedule_id, "enabled": sched["enabled"], "message": f"Schedule {'enabled' if sched['enabled'] else 'disabled'}."}
 
 
-@router.delete("/schedules/{schedule_id}", response_model=None)
+@extended_router.delete("/schedules/{schedule_id}", response_model=None)
 async def delete_schedule(schedule_id: str, principal: PrincipalDependency = None):
     """Delete a scheduled run."""
     enforce_scope(principal, "agent:run")
@@ -3635,7 +3636,7 @@ async def delete_schedule(schedule_id: str, principal: PrincipalDependency = Non
     return {"deleted": True, "schedule_id": schedule_id, "task": sched["task"][:100]}
 
 
-@router.get("/runs/{trace_id}/token-usage", response_model=None)
+@extended_router.get("/runs/{trace_id}/token-usage", response_model=None)
 async def get_token_usage(trace_id: str, principal: PrincipalDependency = None):
     """Detailed token usage report for a run.
 
@@ -3711,7 +3712,7 @@ _pipelines: dict[str, dict[str, Any]] = {}
 _execution_policies: dict[str, dict[str, Any]] = {}
 
 
-@router.post("/pipelines", response_model=None)
+@extended_router.post("/pipelines", response_model=None)
 async def create_pipeline(payload: dict[str, Any], principal: PrincipalDependency = None):
     """Create a multi-stage pipeline: chain tasks sequentially.
 
@@ -3752,7 +3753,7 @@ async def create_pipeline(payload: dict[str, Any], principal: PrincipalDependenc
     }
 
 
-@router.get("/pipelines", response_model=None)
+@extended_router.get("/pipelines", response_model=None)
 async def list_pipelines(principal: PrincipalDependency = None):
     """List all pipelines."""
     enforce_scope(principal, "agent:run")
@@ -3763,7 +3764,7 @@ async def list_pipelines(principal: PrincipalDependency = None):
     }
 
 
-@router.post("/pipelines/{pipeline_id}/execute", response_model=None)
+@extended_router.post("/pipelines/{pipeline_id}/execute", response_model=None)
 async def execute_pipeline(pipeline_id: str, principal: PrincipalDependency = None):
     """Execute a pipeline: run all stages sequentially.
 
@@ -3818,7 +3819,7 @@ async def execute_pipeline(pipeline_id: str, principal: PrincipalDependency = No
     }
 
 
-@router.get("/pipelines/{pipeline_id}", response_model=None)
+@extended_router.get("/pipelines/{pipeline_id}", response_model=None)
 async def get_pipeline(pipeline_id: str, principal: PrincipalDependency = None):
     """Get pipeline details including stage outputs."""
     enforce_scope(principal, "agent:run")
@@ -3837,7 +3838,7 @@ async def get_pipeline(pipeline_id: str, principal: PrincipalDependency = None):
     }
 
 
-@router.post("/runs/{trace_id}/diff", response_model=None)
+@extended_router.post("/runs/{trace_id}/diff", response_model=None)
 async def output_diff(trace_id: str, payload: dict[str, Any], principal: PrincipalDependency = None):
     """Compare run output against expected text using unified diff.
 
@@ -3888,7 +3889,7 @@ async def output_diff(trace_id: str, payload: dict[str, Any], principal: Princip
     }
 
 
-@router.post("/policies", response_model=None)
+@extended_router.post("/policies", response_model=None)
 async def create_policy(payload: dict[str, Any], principal: PrincipalDependency = None):
     """Create an execution policy: rules that runs must comply with.
 
@@ -3926,7 +3927,7 @@ async def create_policy(payload: dict[str, Any], principal: PrincipalDependency 
     }
 
 
-@router.get("/policies", response_model=None)
+@extended_router.get("/policies", response_model=None)
 async def list_policies(principal: PrincipalDependency = None):
     """List all execution policies."""
     enforce_scope(principal, "agent:run")
@@ -3938,7 +3939,7 @@ async def list_policies(principal: PrincipalDependency = None):
     }
 
 
-@router.post("/runs/{trace_id}/policy-check", response_model=None)
+@extended_router.post("/runs/{trace_id}/policy-check", response_model=None)
 async def policy_check(trace_id: str, payload: dict[str, Any] | None = None, principal: PrincipalDependency = None):
     """Check a run against all enabled policies (or a specific policy).
 
@@ -4021,7 +4022,7 @@ async def policy_check(trace_id: str, payload: dict[str, Any] | None = None, pri
     }
 
 
-@router.delete("/policies/{policy_id}", response_model=None)
+@extended_router.delete("/policies/{policy_id}", response_model=None)
 async def delete_policy(policy_id: str, principal: PrincipalDependency = None):
     """Delete an execution policy."""
     enforce_scope(principal, "agent:run")
@@ -4039,7 +4040,7 @@ _sla_targets: dict[str, dict[str, Any]] = {}
 _audit_log: list[dict[str, Any]] = []
 
 
-@router.post("/runs/{trace_id}/bookmark", response_model=None)
+@extended_router.post("/runs/{trace_id}/bookmark", response_model=None)
 async def add_bookmark(trace_id: str, payload: dict[str, Any] | None = None, principal: PrincipalDependency = None):
     """Bookmark/star a run for quick access later.
 
@@ -4067,7 +4068,7 @@ async def add_bookmark(trace_id: str, payload: dict[str, Any] | None = None, pri
     }
 
 
-@router.delete("/runs/{trace_id}/bookmark", response_model=None)
+@extended_router.delete("/runs/{trace_id}/bookmark", response_model=None)
 async def remove_bookmark(trace_id: str, principal: PrincipalDependency = None):
     """Remove a bookmark from a run."""
     enforce_scope(principal, "agent:run")
@@ -4077,7 +4078,7 @@ async def remove_bookmark(trace_id: str, principal: PrincipalDependency = None):
     return {"removed": True, "trace_id": trace_id}
 
 
-@router.get("/bookmarks", response_model=None)
+@extended_router.get("/bookmarks", response_model=None)
 async def list_bookmarks(principal: PrincipalDependency = None):
     """List all bookmarked runs, pinned first."""
     enforce_scope(principal, "agent:run")
@@ -4089,7 +4090,7 @@ async def list_bookmarks(principal: PrincipalDependency = None):
     }
 
 
-@router.post("/sla/targets", response_model=None)
+@extended_router.post("/sla/targets", response_model=None)
 async def create_sla_target(payload: dict[str, Any], principal: PrincipalDependency = None):
     """Define an SLA target: maximum acceptable response time for runs.
 
@@ -4130,7 +4131,7 @@ async def create_sla_target(payload: dict[str, Any], principal: PrincipalDepende
     }
 
 
-@router.get("/sla/targets", response_model=None)
+@extended_router.get("/sla/targets", response_model=None)
 async def list_sla_targets(principal: PrincipalDependency = None):
     """List all SLA targets."""
     enforce_scope(principal, "agent:run")
@@ -4142,7 +4143,7 @@ async def list_sla_targets(principal: PrincipalDependency = None):
     }
 
 
-@router.get("/runs/{trace_id}/sla-check", response_model=None)
+@extended_router.get("/runs/{trace_id}/sla-check", response_model=None)
 async def sla_check(trace_id: str, principal: PrincipalDependency = None):
     """Check a run against all enabled SLA targets.
 
@@ -4196,7 +4197,7 @@ async def sla_check(trace_id: str, principal: PrincipalDependency = None):
     }
 
 
-@router.delete("/sla/targets/{sla_id}", response_model=None)
+@extended_router.delete("/sla/targets/{sla_id}", response_model=None)
 async def delete_sla_target(sla_id: str, principal: PrincipalDependency = None):
     """Delete an SLA target."""
     enforce_scope(principal, "agent:run")
@@ -4206,7 +4207,7 @@ async def delete_sla_target(sla_id: str, principal: PrincipalDependency = None):
     return {"deleted": True, "sla_id": sla_id, "name": sla["name"]}
 
 
-@router.post("/audit/log", response_model=None)
+@extended_router.post("/audit/log", response_model=None)
 async def write_audit_entry(payload: dict[str, Any], principal: PrincipalDependency = None):
     """Record an audit log entry for compliance tracking.
 
@@ -4242,7 +4243,7 @@ async def write_audit_entry(payload: dict[str, Any], principal: PrincipalDepende
     }
 
 
-@router.get("/audit/log", response_model=None)
+@extended_router.get("/audit/log", response_model=None)
 async def get_audit_log(principal: PrincipalDependency = None, limit: int = 50, action: str = ""):
     """Query audit log entries with optional filtering."""
     enforce_scope(principal, "agent:run")
@@ -4259,7 +4260,7 @@ async def get_audit_log(principal: PrincipalDependency = None, limit: int = 50, 
     }
 
 
-@router.get("/audit/stats", response_model=None)
+@extended_router.get("/audit/stats", response_model=None)
 async def audit_stats(principal: PrincipalDependency = None):
     """Audit log statistics: action distribution, actor breakdown, timeline."""
     enforce_scope(principal, "agent:run")
@@ -4285,7 +4286,7 @@ _alert_rules: dict[str, dict[str, Any]] = {}
 _archived_runs: dict[str, dict[str, Any]] = {}
 
 
-@router.get("/runs/{trace_id}/scorecard", response_model=None)
+@extended_router.get("/runs/{trace_id}/scorecard", response_model=None)
 async def get_run_scorecard(trace_id: str, principal: PrincipalDependency = None):
     """Generate a quality scorecard for a run across multiple dimensions.
 
@@ -4342,7 +4343,7 @@ async def get_run_scorecard(trace_id: str, principal: PrincipalDependency = None
     }
 
 
-@router.post("/alert-rules", response_model=None)
+@extended_router.post("/alert-rules", response_model=None)
 async def create_alert_rule(payload: dict[str, Any], principal: PrincipalDependency = None):
     """Create an alert rule: condition-based notification trigger.
 
@@ -4390,7 +4391,7 @@ async def create_alert_rule(payload: dict[str, Any], principal: PrincipalDepende
     }
 
 
-@router.get("/alert-rules", response_model=None)
+@extended_router.get("/alert-rules", response_model=None)
 async def list_alert_rules(principal: PrincipalDependency = None):
     """List all alert rules."""
     enforce_scope(principal, "agent:run")
@@ -4402,7 +4403,7 @@ async def list_alert_rules(principal: PrincipalDependency = None):
     }
 
 
-@router.post("/alert-rules/{rule_id}/evaluate", response_model=None)
+@extended_router.post("/alert-rules/{rule_id}/evaluate", response_model=None)
 async def evaluate_alert_rule(rule_id: str, payload: dict[str, Any] | None = None, principal: PrincipalDependency = None):
     """Evaluate an alert rule against current metrics or a specific run."""
     enforce_scope(principal, "agent:run")
@@ -4438,7 +4439,7 @@ async def evaluate_alert_rule(rule_id: str, payload: dict[str, Any] | None = Non
     }
 
 
-@router.delete("/alert-rules/{rule_id}", response_model=None)
+@extended_router.delete("/alert-rules/{rule_id}", response_model=None)
 async def delete_alert_rule(rule_id: str, principal: PrincipalDependency = None):
     """Delete an alert rule."""
     enforce_scope(principal, "agent:run")
@@ -4448,7 +4449,7 @@ async def delete_alert_rule(rule_id: str, principal: PrincipalDependency = None)
     return {"deleted": True, "rule_id": rule_id, "name": rule["name"]}
 
 
-@router.post("/runs/{trace_id}/archive", response_model=None)
+@extended_router.post("/runs/{trace_id}/archive", response_model=None)
 async def archive_run(trace_id: str, payload: dict[str, Any] | None = None, principal: PrincipalDependency = None):
     """Archive a run: move to cold storage with retention metadata.
 
@@ -4487,7 +4488,7 @@ async def archive_run(trace_id: str, payload: dict[str, Any] | None = None, prin
     }
 
 
-@router.get("/archive", response_model=None)
+@extended_router.get("/archive", response_model=None)
 async def list_archived_runs(principal: PrincipalDependency = None):
     """List all archived runs."""
     enforce_scope(principal, "agent:run")
@@ -4498,7 +4499,7 @@ async def list_archived_runs(principal: PrincipalDependency = None):
     }
 
 
-@router.post("/runs/{trace_id}/unarchive", response_model=None)
+@extended_router.post("/runs/{trace_id}/unarchive", response_model=None)
 async def unarchive_run(trace_id: str, principal: PrincipalDependency = None):
     """Restore a run from archive back to active state."""
     enforce_scope(principal, "agent:run")
@@ -4515,7 +4516,7 @@ _run_links: list[dict[str, Any]] = []
 _runtime_configs: dict[str, dict[str, Any]] = {}  # trace_id -> config overrides
 
 
-@router.post("/runs/{trace_id}/links", response_model=None)
+@extended_router.post("/runs/{trace_id}/links", response_model=None)
 async def create_run_link(trace_id: str, payload: dict[str, Any], principal: PrincipalDependency = None):
     """Create a bidirectional link between two runs.
 
@@ -4561,7 +4562,7 @@ async def create_run_link(trace_id: str, payload: dict[str, Any], principal: Pri
     }
 
 
-@router.get("/runs/{trace_id}/links", response_model=None)
+@extended_router.get("/runs/{trace_id}/links", response_model=None)
 async def list_run_links(trace_id: str, principal: PrincipalDependency = None):
     """List all links for a run (both directions)."""
     enforce_scope(principal, "agent:run")
@@ -4575,7 +4576,7 @@ async def list_run_links(trace_id: str, principal: PrincipalDependency = None):
     }
 
 
-@router.delete("/links/{link_id}", response_model=None)
+@extended_router.delete("/links/{link_id}", response_model=None)
 async def delete_run_link(link_id: str, principal: PrincipalDependency = None):
     """Remove a link between runs."""
     enforce_scope(principal, "agent:run")
@@ -4586,7 +4587,7 @@ async def delete_run_link(link_id: str, principal: PrincipalDependency = None):
     return {"deleted": True, "link_id": link_id, "relation": removed["relation"]}
 
 
-@router.put("/runs/{trace_id}/config", response_model=None)
+@extended_router.put("/runs/{trace_id}/config", response_model=None)
 async def set_runtime_config(trace_id: str, payload: dict[str, Any], principal: PrincipalDependency = None):
     """Set runtime configuration overrides for a run.
 
@@ -4618,7 +4619,7 @@ async def set_runtime_config(trace_id: str, payload: dict[str, Any], principal: 
     }
 
 
-@router.get("/runs/{trace_id}/config", response_model=None)
+@extended_router.get("/runs/{trace_id}/config", response_model=None)
 async def get_runtime_config(trace_id: str, principal: PrincipalDependency = None):
     """Get runtime configuration overrides for a run."""
     enforce_scope(principal, "agent:run")
@@ -4628,7 +4629,7 @@ async def get_runtime_config(trace_id: str, principal: PrincipalDependency = Non
     return {"trace_id": trace_id, "overrides": config["overrides"], "total_overrides": len(config["overrides"]), "is_default": False, "created_at": config["created_at"], "updated_at": config["updated_at"]}
 
 
-@router.get("/runs/{trace_id}/digest", response_model=None)
+@extended_router.get("/runs/{trace_id}/digest", response_model=None)
 async def get_run_digest(trace_id: str, principal: PrincipalDependency = None):
     """Generate an executive digest/summary of a run.
 
@@ -4717,7 +4718,7 @@ _output_versions: dict[str, list[dict[str, Any]]] = {}  # trace_id -> [versions]
 _resource_quotas: dict[str, dict[str, Any]] = {}  # quota_id -> quota config
 
 
-@router.post("/runs/{trace_id}/vote", response_model=None)
+@extended_router.post("/runs/{trace_id}/vote", response_model=None)
 async def vote_run(trace_id: str, payload: dict[str, Any], principal: PrincipalDependency = None):
     """Vote on a run's output quality.
 
@@ -4770,7 +4771,7 @@ async def vote_run(trace_id: str, payload: dict[str, Any], principal: PrincipalD
     }
 
 
-@router.get("/runs/{trace_id}/vote", response_model=None)
+@extended_router.get("/runs/{trace_id}/vote", response_model=None)
 async def get_run_vote(trace_id: str, principal: PrincipalDependency = None):
     """Get vote info for a run."""
     enforce_scope(principal, "agent:run")
@@ -4780,7 +4781,7 @@ async def get_run_vote(trace_id: str, principal: PrincipalDependency = None):
     return {"trace_id": trace_id, "has_vote": True, **record}
 
 
-@router.get("/votes/stats", response_model=None)
+@extended_router.get("/votes/stats", response_model=None)
 async def get_vote_stats(principal: PrincipalDependency = None):
     """Aggregate voting statistics across all runs."""
     enforce_scope(principal, "agent:run")
@@ -4801,7 +4802,7 @@ async def get_vote_stats(principal: PrincipalDependency = None):
     }
 
 
-@router.post("/runs/{trace_id}/output-versions", response_model=None)
+@extended_router.post("/runs/{trace_id}/output-versions", response_model=None)
 async def create_output_version(trace_id: str, payload: dict[str, Any], principal: PrincipalDependency = None):
     """Snapshot the current output of a run as a new version.
 
@@ -4844,7 +4845,7 @@ async def create_output_version(trace_id: str, payload: dict[str, Any], principa
     }
 
 
-@router.get("/runs/{trace_id}/output-versions", response_model=None)
+@extended_router.get("/runs/{trace_id}/output-versions", response_model=None)
 async def list_output_versions(trace_id: str, principal: PrincipalDependency = None):
     """List all output versions for a run."""
     enforce_scope(principal, "agent:run")
@@ -4859,7 +4860,7 @@ async def list_output_versions(trace_id: str, principal: PrincipalDependency = N
     }
 
 
-@router.post("/runs/{trace_id}/output-versions/compare", response_model=None)
+@extended_router.post("/runs/{trace_id}/output-versions/compare", response_model=None)
 async def compare_output_versions(trace_id: str, payload: dict[str, Any], principal: PrincipalDependency = None):
     """Compare two output versions of a run (unified diff)."""
     enforce_scope(principal, "agent:run")
@@ -4888,7 +4889,7 @@ async def compare_output_versions(trace_id: str, payload: dict[str, Any], princi
     }
 
 
-@router.post("/quotas", response_model=None)
+@extended_router.post("/quotas", response_model=None)
 async def create_quota(payload: dict[str, Any], principal: PrincipalDependency = None):
     """Create a resource quota for a project/team.
 
@@ -4923,7 +4924,7 @@ async def create_quota(payload: dict[str, Any], principal: PrincipalDependency =
     return {"quota_id": quota_id, "name": name, "limits": record["limits"], "warning_threshold_pct": warn_pct, "created_at": record["created_at"]}
 
 
-@router.get("/quotas", response_model=None)
+@extended_router.get("/quotas", response_model=None)
 async def list_quotas(principal: PrincipalDependency = None):
     """List all resource quotas with current usage."""
     enforce_scope(principal, "agent:run")
@@ -4941,7 +4942,7 @@ async def list_quotas(principal: PrincipalDependency = None):
     return {"total": len(items), "quotas": items}
 
 
-@router.post("/quotas/{quota_id}/consume", response_model=None)
+@extended_router.post("/quotas/{quota_id}/consume", response_model=None)
 async def consume_quota(quota_id: str, payload: dict[str, Any], principal: PrincipalDependency = None):
     """Record resource consumption against a quota.
 
@@ -4984,7 +4985,7 @@ async def consume_quota(quota_id: str, payload: dict[str, Any], principal: Princ
     }
 
 
-@router.delete("/quotas/{quota_id}", response_model=None)
+@extended_router.delete("/quotas/{quota_id}", response_model=None)
 async def delete_quota(quota_id: str, principal: PrincipalDependency = None):
     """Delete a resource quota."""
     enforce_scope(principal, "agent:run")
@@ -5002,7 +5003,7 @@ _output_transformers: dict[str, list[dict[str, Any]]] = {}  # trace_id -> [trans
 _execution_windows: dict[str, dict[str, Any]] = {}  # window_id -> config
 
 
-@router.post("/constraints", response_model=None)
+@extended_router.post("/constraints", response_model=None)
 async def create_constraint(payload: dict[str, Any], principal: PrincipalDependency = None):
     """Create an execution constraint profile.
 
@@ -5034,7 +5035,7 @@ async def create_constraint(payload: dict[str, Any], principal: PrincipalDepende
     return {"constraint_id": constraint_id, "name": name, "limits": limits, "enforcement": record["enforcement"], "created_at": record["created_at"]}
 
 
-@router.get("/constraints", response_model=None)
+@extended_router.get("/constraints", response_model=None)
 async def list_constraints(principal: PrincipalDependency = None):
     """List all execution constraint profiles."""
     enforce_scope(principal, "agent:run")
@@ -5042,7 +5043,7 @@ async def list_constraints(principal: PrincipalDependency = None):
     return {"total": len(items), "constraints": items}
 
 
-@router.post("/runs/{trace_id}/constraint-check", response_model=None)
+@extended_router.post("/runs/{trace_id}/constraint-check", response_model=None)
 async def check_run_constraint(trace_id: str, payload: dict[str, Any], principal: PrincipalDependency = None):
     """Check a run's resource usage against a constraint profile.
 
@@ -5086,7 +5087,7 @@ async def check_run_constraint(trace_id: str, payload: dict[str, Any], principal
     }
 
 
-@router.delete("/constraints/{constraint_id}", response_model=None)
+@extended_router.delete("/constraints/{constraint_id}", response_model=None)
 async def delete_constraint(constraint_id: str, principal: PrincipalDependency = None):
     """Delete an execution constraint profile."""
     enforce_scope(principal, "agent:run")
@@ -5096,7 +5097,7 @@ async def delete_constraint(constraint_id: str, principal: PrincipalDependency =
     return {"deleted": True, "constraint_id": constraint_id}
 
 
-@router.post("/runs/{trace_id}/transformers", response_model=None)
+@extended_router.post("/runs/{trace_id}/transformers", response_model=None)
 async def add_output_transformer(trace_id: str, payload: dict[str, Any], principal: PrincipalDependency = None):
     """Add a post-processing transformer to a run's output pipeline.
 
@@ -5130,7 +5131,7 @@ async def add_output_transformer(trace_id: str, payload: dict[str, Any], princip
     return {"trace_id": trace_id, "order": order, "type": t_type, "config": config, "total_transformers": len(transformers)}
 
 
-@router.get("/runs/{trace_id}/transformers", response_model=None)
+@extended_router.get("/runs/{trace_id}/transformers", response_model=None)
 async def list_output_transformers(trace_id: str, principal: PrincipalDependency = None):
     """List the transformer pipeline for a run."""
     enforce_scope(principal, "agent:run")
@@ -5138,7 +5139,7 @@ async def list_output_transformers(trace_id: str, principal: PrincipalDependency
     return {"trace_id": trace_id, "total": len(transformers), "pipeline": transformers}
 
 
-@router.post("/runs/{trace_id}/transformers/execute", response_model=None)
+@extended_router.post("/runs/{trace_id}/transformers/execute", response_model=None)
 async def execute_transformers(trace_id: str, payload: dict[str, Any], principal: PrincipalDependency = None):
     """Execute the transformer pipeline on given input content.
 
@@ -5182,7 +5183,7 @@ async def execute_transformers(trace_id: str, payload: dict[str, Any], principal
     return {"trace_id": trace_id, "output": content[:5000], "steps_applied": len(steps), "steps": steps}
 
 
-@router.delete("/runs/{trace_id}/transformers", response_model=None)
+@extended_router.delete("/runs/{trace_id}/transformers", response_model=None)
 async def clear_transformers(trace_id: str, principal: PrincipalDependency = None):
     """Clear all transformers for a run."""
     enforce_scope(principal, "agent:run")
@@ -5190,7 +5191,7 @@ async def clear_transformers(trace_id: str, principal: PrincipalDependency = Non
     return {"trace_id": trace_id, "removed": removed}
 
 
-@router.post("/execution-windows", response_model=None)
+@extended_router.post("/execution-windows", response_model=None)
 async def create_execution_window(payload: dict[str, Any], principal: PrincipalDependency = None):
     """Create an execution window (maintenance/peak/blackout).
 
@@ -5228,7 +5229,7 @@ async def create_execution_window(payload: dict[str, Any], principal: PrincipalD
     return {"window_id": window_id, "name": name, "type": w_type, "schedule": {"start_hour": start_hour, "end_hour": end_hour, "days": days}, "action": action, "created_at": record["created_at"]}
 
 
-@router.get("/execution-windows", response_model=None)
+@extended_router.get("/execution-windows", response_model=None)
 async def list_execution_windows(principal: PrincipalDependency = None):
     """List all execution windows."""
     enforce_scope(principal, "agent:run")
@@ -5236,7 +5237,7 @@ async def list_execution_windows(principal: PrincipalDependency = None):
     return {"total": len(items), "windows": items}
 
 
-@router.post("/execution-windows/check", response_model=None)
+@extended_router.post("/execution-windows/check", response_model=None)
 async def check_execution_window(payload: dict[str, Any], principal: PrincipalDependency = None):
     """Check if current time (or provided time) falls within any execution window.
 
@@ -5272,7 +5273,7 @@ async def check_execution_window(payload: dict[str, Any], principal: PrincipalDe
     return {"hour": hour, "day": day, "in_window": len(matched) > 0, "matched_windows": matched, "decision": decision}
 
 
-@router.delete("/execution-windows/{window_id}", response_model=None)
+@extended_router.delete("/execution-windows/{window_id}", response_model=None)
 async def delete_execution_window(window_id: str, principal: PrincipalDependency = None):
     """Delete an execution window."""
     enforce_scope(principal, "agent:run")
@@ -5290,7 +5291,7 @@ _run_handoffs: dict[str, dict[str, Any]] = {}  # handoff_id -> record
 _review_requests: dict[str, dict[str, Any]] = {}  # review_id -> record
 
 
-@router.post("/metrics/snapshot", response_model=None)
+@extended_router.post("/metrics/snapshot", response_model=None)
 async def record_metric_snapshot(payload: dict[str, Any], principal: PrincipalDependency = None):
     """Record a metric data point for trend analysis.
 
@@ -5318,7 +5319,7 @@ async def record_metric_snapshot(payload: dict[str, Any], principal: PrincipalDe
     return {"recorded": True, "metric_name": name, "value": value, "total_points": len(_metric_snapshots)}
 
 
-@router.get("/metrics/trends", response_model=None)
+@extended_router.get("/metrics/trends", response_model=None)
 async def get_metric_trends(principal: PrincipalDependency = None, metric_name: str = "", window: int = 50):
     """Get trend analysis for a metric (or all metrics).
 
@@ -5373,7 +5374,7 @@ async def get_metric_trends(principal: PrincipalDependency = None, metric_name: 
     return {"metric_name": metric_name or "*", "total_points": len(points), "window": window, "trends": trends}
 
 
-@router.post("/runs/{trace_id}/handoff", response_model=None)
+@extended_router.post("/runs/{trace_id}/handoff", response_model=None)
 async def create_handoff(trace_id: str, payload: dict[str, Any], principal: PrincipalDependency = None):
     """Create a handoff package from a run for another agent/session to continue.
 
@@ -5429,7 +5430,7 @@ async def create_handoff(trace_id: str, payload: dict[str, Any], principal: Prin
     }
 
 
-@router.get("/handoffs", response_model=None)
+@extended_router.get("/handoffs", response_model=None)
 async def list_handoffs(principal: PrincipalDependency = None, status: str = ""):
     """List handoff packages, optionally filtered by status."""
     enforce_scope(principal, "agent:run")
@@ -5445,7 +5446,7 @@ async def list_handoffs(principal: PrincipalDependency = None, status: str = "")
     }
 
 
-@router.post("/handoffs/{handoff_id}/accept", response_model=None)
+@extended_router.post("/handoffs/{handoff_id}/accept", response_model=None)
 async def accept_handoff(handoff_id: str, principal: PrincipalDependency = None):
     """Accept a handoff package (target agent acknowledges)."""
     enforce_scope(principal, "agent:run")
@@ -5460,7 +5461,7 @@ async def accept_handoff(handoff_id: str, principal: PrincipalDependency = None)
     return {"handoff_id": handoff_id, "status": "accepted", "accepted_at": h["accepted_at"], "context_package": h["context_package"]}
 
 
-@router.post("/handoffs/{handoff_id}/complete", response_model=None)
+@extended_router.post("/handoffs/{handoff_id}/complete", response_model=None)
 async def complete_handoff(handoff_id: str, payload: dict[str, Any], principal: PrincipalDependency = None):
     """Mark a handoff as completed with outcome."""
     enforce_scope(principal, "agent:run")
@@ -5475,7 +5476,7 @@ async def complete_handoff(handoff_id: str, payload: dict[str, Any], principal: 
     return {"handoff_id": handoff_id, "status": "completed", "completed_at": h["completed_at"]}
 
 
-@router.post("/runs/{trace_id}/reviews", response_model=None)
+@extended_router.post("/runs/{trace_id}/reviews", response_model=None)
 async def create_review_request(trace_id: str, payload: dict[str, Any], principal: PrincipalDependency = None):
     """Create a review request for a run's output.
 
@@ -5523,7 +5524,7 @@ async def create_review_request(trace_id: str, payload: dict[str, Any], principa
     }
 
 
-@router.get("/reviews", response_model=None)
+@extended_router.get("/reviews", response_model=None)
 async def list_reviews(principal: PrincipalDependency = None, status: str = "", reviewer: str = ""):
     """List review requests with optional filters."""
     enforce_scope(principal, "agent:run")
@@ -5541,7 +5542,7 @@ async def list_reviews(principal: PrincipalDependency = None, status: str = "", 
     }
 
 
-@router.post("/reviews/{review_id}/decide", response_model=None)
+@extended_router.post("/reviews/{review_id}/decide", response_model=None)
 async def decide_review(review_id: str, payload: dict[str, Any], principal: PrincipalDependency = None):
     """Submit a review decision.
 
@@ -5572,7 +5573,7 @@ async def decide_review(review_id: str, payload: dict[str, Any], principal: Prin
     }
 
 
-@router.get("/reviews/{review_id}", response_model=None)
+@extended_router.get("/reviews/{review_id}", response_model=None)
 async def get_review_detail(review_id: str, principal: PrincipalDependency = None):
     """Get full detail of a review request including comments."""
     enforce_scope(principal, "agent:run")
@@ -5591,7 +5592,7 @@ _run_chains: dict[str, dict[str, Any]] = {}  # chain_id -> definition
 _compression_jobs: dict[str, dict[str, Any]] = {}  # job_id -> record
 
 
-@router.post("/chains", response_model=None)
+@extended_router.post("/chains", response_model=None)
 async def create_chain(payload: dict[str, Any], principal: PrincipalDependency = None):
     """Create a conditional execution chain.
 
@@ -5624,7 +5625,7 @@ async def create_chain(payload: dict[str, Any], principal: PrincipalDependency =
     return {"chain_id": chain_id, "name": name, "steps_count": len(steps), "created_at": record["created_at"]}
 
 
-@router.get("/chains", response_model=None)
+@extended_router.get("/chains", response_model=None)
 async def list_chains(principal: PrincipalDependency = None):
     """List all execution chains."""
     enforce_scope(principal, "agent:run")
@@ -5632,7 +5633,7 @@ async def list_chains(principal: PrincipalDependency = None):
     return {"total": len(items), "chains": items}
 
 
-@router.post("/chains/{chain_id}/evaluate", response_model=None)
+@extended_router.post("/chains/{chain_id}/evaluate", response_model=None)
 async def evaluate_chain(chain_id: str, payload: dict[str, Any], principal: PrincipalDependency = None):
     """Dry-evaluate a chain's conditional logic against provided context.
 
@@ -5677,7 +5678,7 @@ async def evaluate_chain(chain_id: str, payload: dict[str, Any], principal: Prin
     return {"chain_id": chain_id, "name": chain["name"], "total_steps": len(path), "executed_steps": executed, "skipped_steps": len(path) - executed, "path": path}
 
 
-@router.delete("/chains/{chain_id}", response_model=None)
+@extended_router.delete("/chains/{chain_id}", response_model=None)
 async def delete_chain(chain_id: str, principal: PrincipalDependency = None):
     """Delete an execution chain."""
     enforce_scope(principal, "agent:run")
@@ -5687,7 +5688,7 @@ async def delete_chain(chain_id: str, principal: PrincipalDependency = None):
     return {"deleted": True, "chain_id": chain_id}
 
 
-@router.post("/context/compress", response_model=None)
+@extended_router.post("/context/compress", response_model=None)
 async def compress_context(payload: dict[str, Any], principal: PrincipalDependency = None):
     """Compress a context payload using various strategies.
 
@@ -5789,7 +5790,7 @@ async def compress_context(payload: dict[str, Any], principal: PrincipalDependen
     }
 
 
-@router.get("/context/compress/history", response_model=None)
+@extended_router.get("/context/compress/history", response_model=None)
 async def get_compression_history(principal: PrincipalDependency = None):
     """Get history of compression jobs."""
     enforce_scope(principal, "agent:run")
@@ -5797,7 +5798,7 @@ async def get_compression_history(principal: PrincipalDependency = None):
     return {"total": len(items), "jobs": items[:50]}
 
 
-@router.post("/runs/{trace_id}/classify", response_model=None)
+@extended_router.post("/runs/{trace_id}/classify", response_model=None)
 async def classify_run(trace_id: str, principal: PrincipalDependency = None):
     """Auto-classify a run by complexity, domain, and intent.
 
@@ -5905,7 +5906,7 @@ _run_artifacts: dict[str, list[dict[str, Any]]] = {}  # trace_id -> [artifacts]
 _run_permissions: dict[str, dict[str, Any]] = {}  # trace_id -> permission record
 
 
-@router.post("/runs/{trace_id}/artifacts", response_model=None)
+@extended_router.post("/runs/{trace_id}/artifacts", response_model=None)
 async def register_artifact(trace_id: str, payload: dict[str, Any], principal: PrincipalDependency = None):
     """Register a build artifact produced by a run.
 
@@ -5954,7 +5955,7 @@ async def register_artifact(trace_id: str, payload: dict[str, Any], principal: P
     }
 
 
-@router.get("/runs/{trace_id}/artifacts", response_model=None)
+@extended_router.get("/runs/{trace_id}/artifacts", response_model=None)
 async def list_artifacts(trace_id: str, principal: PrincipalDependency = None, artifact_type: str = ""):
     """List artifacts for a run, optionally filtered by type."""
     enforce_scope(principal, "agent:run")
@@ -5971,7 +5972,7 @@ async def list_artifacts(trace_id: str, principal: PrincipalDependency = None, a
     }
 
 
-@router.get("/runs/{trace_id}/artifacts/{artifact_id}", response_model=None)
+@extended_router.get("/runs/{trace_id}/artifacts/{artifact_id}", response_model=None)
 async def get_artifact_content(trace_id: str, artifact_id: str, principal: PrincipalDependency = None):
     """Get full artifact content (download)."""
     enforce_scope(principal, "agent:run")
@@ -5982,7 +5983,7 @@ async def get_artifact_content(trace_id: str, artifact_id: str, principal: Princ
     raise api_error(404, ErrorCode.TRACE_NOT_FOUND, f"Artifact '{artifact_id}' not found.")
 
 
-@router.delete("/runs/{trace_id}/artifacts/{artifact_id}", response_model=None)
+@extended_router.delete("/runs/{trace_id}/artifacts/{artifact_id}", response_model=None)
 async def delete_artifact(trace_id: str, artifact_id: str, principal: PrincipalDependency = None):
     """Delete an artifact."""
     enforce_scope(principal, "agent:run")
@@ -5994,7 +5995,7 @@ async def delete_artifact(trace_id: str, artifact_id: str, principal: PrincipalD
     raise api_error(404, ErrorCode.TRACE_NOT_FOUND, f"Artifact '{artifact_id}' not found.")
 
 
-@router.post("/runs/{trace_id}/permissions", response_model=None)
+@extended_router.post("/runs/{trace_id}/permissions", response_model=None)
 async def set_run_permissions(trace_id: str, payload: dict[str, Any], principal: PrincipalDependency = None):
     """Set access control for a run.
 
@@ -6026,7 +6027,7 @@ async def set_run_permissions(trace_id: str, payload: dict[str, Any], principal:
     return {"trace_id": trace_id, **{k: v for k, v in record.items() if k != "trace_id"}}
 
 
-@router.get("/runs/{trace_id}/permissions", response_model=None)
+@extended_router.get("/runs/{trace_id}/permissions", response_model=None)
 async def get_run_permissions(trace_id: str, principal: PrincipalDependency = None):
     """Get permission settings for a run."""
     enforce_scope(principal, "agent:run")
@@ -6036,7 +6037,7 @@ async def get_run_permissions(trace_id: str, principal: PrincipalDependency = No
     return {**record, "is_default": False}
 
 
-@router.post("/runs/{trace_id}/permissions/check", response_model=None)
+@extended_router.post("/runs/{trace_id}/permissions/check", response_model=None)
 async def check_run_permission(trace_id: str, payload: dict[str, Any], principal: PrincipalDependency = None):
     """Check if a user can perform an action on a run.
 
@@ -6069,7 +6070,7 @@ async def check_run_permission(trace_id: str, payload: dict[str, Any], principal
     return {"trace_id": trace_id, "user_id": user_id, "action": action, "allowed": False, "reason": "denied"}
 
 
-@router.get("/runs/{trace_id}/insights", response_model=None)
+@extended_router.get("/runs/{trace_id}/insights", response_model=None)
 async def get_run_insights(trace_id: str, principal: PrincipalDependency = None):
     """Generate automated insights for a run.
 
@@ -6168,7 +6169,7 @@ _output_signatures: dict[str, dict[str, Any]] = {}  # trace_id -> signature reco
 _notification_subs: dict[str, dict[str, Any]] = {}  # sub_id -> subscription
 
 
-@router.post("/cache/put", response_model=None)
+@extended_router.post("/cache/put", response_model=None)
 async def cache_put(payload: dict[str, Any], principal: PrincipalDependency = None):
     """Store a run output in the cache.
 
@@ -6201,7 +6202,7 @@ async def cache_put(payload: dict[str, Any], principal: PrincipalDependency = No
     return {"cached": True, "cache_key": cache_key, "size_bytes": record["size_bytes"], "ttl_seconds": ttl, "expires_at": record["expires_at"]}
 
 
-@router.get("/cache/get", response_model=None)
+@extended_router.get("/cache/get", response_model=None)
 async def cache_get(principal: PrincipalDependency = None, task_key: str = ""):
     """Retrieve a cached output by task key. Returns cache hit/miss status."""
     enforce_scope(principal, "agent:run")
@@ -6219,7 +6220,7 @@ async def cache_get(principal: PrincipalDependency = None, task_key: str = ""):
     return {"hit": True, "cache_key": cache_key, "content": record["content"], "size_bytes": record["size_bytes"], "hits": record["hits"], "created_at": record["created_at"], "expires_at": record["expires_at"]}
 
 
-@router.get("/cache/stats", response_model=None)
+@extended_router.get("/cache/stats", response_model=None)
 async def cache_stats(principal: PrincipalDependency = None):
     """Get cache statistics."""
     enforce_scope(principal, "agent:run")
@@ -6231,7 +6232,7 @@ async def cache_stats(principal: PrincipalDependency = None):
     return {"active_entries": len(active), "expired_entries": expired, "total_hits": total_hits, "total_size_bytes": total_size, "hit_rate_pct": round(total_hits * 100 / max(len(active), 1), 1)}
 
 
-@router.delete("/cache/invalidate", response_model=None)
+@extended_router.delete("/cache/invalidate", response_model=None)
 async def cache_invalidate(principal: PrincipalDependency = None, task_key: str = "", all: bool = False):
     """Invalidate cache entries. Either a specific key or all."""
     enforce_scope(principal, "agent:run")
@@ -6248,7 +6249,7 @@ async def cache_invalidate(principal: PrincipalDependency = None, task_key: str 
     return {"invalidated": 0, "scope": "key", "cache_key": cache_key}
 
 
-@router.post("/runs/{trace_id}/sign", response_model=None)
+@extended_router.post("/runs/{trace_id}/sign", response_model=None)
 async def sign_run_output(trace_id: str, payload: dict[str, Any], principal: PrincipalDependency = None):
     """Sign a run's output for integrity verification.
 
@@ -6286,7 +6287,7 @@ async def sign_run_output(trace_id: str, payload: dict[str, Any], principal: Pri
     return {"trace_id": trace_id, "content_hash": content_hash, "signature": signature, "algorithm": "sha256", "signer": signer, "signed_at": record["signed_at"]}
 
 
-@router.post("/runs/{trace_id}/verify", response_model=None)
+@extended_router.post("/runs/{trace_id}/verify", response_model=None)
 async def verify_run_output(trace_id: str, payload: dict[str, Any], principal: PrincipalDependency = None):
     """Verify a run's output integrity against its signature.
 
@@ -6313,7 +6314,7 @@ async def verify_run_output(trace_id: str, payload: dict[str, Any], principal: P
     }
 
 
-@router.get("/runs/{trace_id}/signature", response_model=None)
+@extended_router.get("/runs/{trace_id}/signature", response_model=None)
 async def get_signature(trace_id: str, principal: PrincipalDependency = None):
     """Get the signature record for a run."""
     enforce_scope(principal, "agent:run")
@@ -6323,7 +6324,7 @@ async def get_signature(trace_id: str, principal: PrincipalDependency = None):
     return {"trace_id": trace_id, "signed": True, **record}
 
 
-@router.post("/notifications/subscribe", response_model=None)
+@extended_router.post("/notifications/subscribe", response_model=None)
 async def subscribe_notification(payload: dict[str, Any], principal: PrincipalDependency = None):
     """Subscribe to run notifications.
 
@@ -6361,7 +6362,7 @@ async def subscribe_notification(payload: dict[str, Any], principal: PrincipalDe
     return {"sub_id": sub_id, "name": name, "events": events, "channel": channel, "target": target, "enabled": True, "created_at": record["created_at"]}
 
 
-@router.get("/notifications/subscriptions", response_model=None)
+@extended_router.get("/notifications/subscriptions", response_model=None)
 async def list_notification_subs(principal: PrincipalDependency = None):
     """List all notification subscriptions."""
     enforce_scope(principal, "agent:run")
@@ -6369,7 +6370,7 @@ async def list_notification_subs(principal: PrincipalDependency = None):
     return {"total": len(items), "subscriptions": items}
 
 
-@router.post("/notifications/{sub_id}/toggle", response_model=None)
+@extended_router.post("/notifications/{sub_id}/toggle", response_model=None)
 async def toggle_notification_sub(sub_id: str, principal: PrincipalDependency = None):
     """Enable/disable a notification subscription."""
     enforce_scope(principal, "agent:run")
@@ -6380,7 +6381,7 @@ async def toggle_notification_sub(sub_id: str, principal: PrincipalDependency = 
     return {"sub_id": sub_id, "enabled": s["enabled"]}
 
 
-@router.delete("/notifications/{sub_id}", response_model=None)
+@extended_router.delete("/notifications/{sub_id}", response_model=None)
 async def delete_notification_sub(sub_id: str, principal: PrincipalDependency = None):
     """Delete a notification subscription."""
     enforce_scope(principal, "agent:run")
@@ -6398,7 +6399,7 @@ _env_profiles: dict[str, dict[str, Any]] = {}  # profile_id -> record
 _run_dependencies: dict[str, dict[str, Any]] = {}  # dep_id -> record
 
 
-@router.post("/experiments", response_model=None)
+@extended_router.post("/experiments", response_model=None)
 async def create_experiment(payload: dict[str, Any], principal: PrincipalDependency = None):
     """Create an A/B experiment for run variants.
 
@@ -6438,7 +6439,7 @@ async def create_experiment(payload: dict[str, Any], principal: PrincipalDepende
     return {"experiment_id": exp_id, "status": "running", "variants": len(variants)}
 
 
-@router.get("/experiments", response_model=None)
+@extended_router.get("/experiments", response_model=None)
 async def list_experiments(status: str = None, principal: PrincipalDependency = None):
     """List all experiments, optionally filtered by status."""
     enforce_scope(principal, "agent:run")
@@ -6448,7 +6449,7 @@ async def list_experiments(status: str = None, principal: PrincipalDependency = 
     return {"experiments": items, "total": len(items)}
 
 
-@router.post("/experiments/{experiment_id}/assign", response_model=None)
+@extended_router.post("/experiments/{experiment_id}/assign", response_model=None)
 async def assign_variant(experiment_id: str, payload: dict[str, Any], principal: PrincipalDependency = None):
     """Assign a run to a variant based on traffic split.
 
@@ -6476,7 +6477,7 @@ async def assign_variant(experiment_id: str, payload: dict[str, Any], principal:
     return {"experiment_id": experiment_id, "trace_id": trace_id, "assigned_variant": variant_name, "variant_index": assigned_idx}
 
 
-@router.post("/experiments/{experiment_id}/record", response_model=None)
+@extended_router.post("/experiments/{experiment_id}/record", response_model=None)
 async def record_experiment_result(experiment_id: str, payload: dict[str, Any], principal: PrincipalDependency = None):
     """Record a result for a variant.
 
@@ -6498,7 +6499,7 @@ async def record_experiment_result(experiment_id: str, payload: dict[str, Any], 
     return {"recorded": True, "variant": variant, "total_samples": exp["results"][variant]["samples"]}
 
 
-@router.get("/experiments/{experiment_id}/analysis", response_model=None)
+@extended_router.get("/experiments/{experiment_id}/analysis", response_model=None)
 async def analyze_experiment(experiment_id: str, principal: PrincipalDependency = None):
     """Statistical analysis of experiment results.
 
@@ -6544,7 +6545,7 @@ async def analyze_experiment(experiment_id: str, principal: PrincipalDependency 
     }
 
 
-@router.post("/experiments/{experiment_id}/stop", response_model=None)
+@extended_router.post("/experiments/{experiment_id}/stop", response_model=None)
 async def stop_experiment(experiment_id: str, payload: dict[str, Any], principal: PrincipalDependency = None):
     """Stop an experiment and declare winner.
 
@@ -6570,7 +6571,7 @@ async def stop_experiment(experiment_id: str, payload: dict[str, Any], principal
     return {"experiment_id": experiment_id, "status": "completed", "winner": winner}
 
 
-@router.delete("/experiments/{experiment_id}", response_model=None)
+@extended_router.delete("/experiments/{experiment_id}", response_model=None)
 async def delete_experiment(experiment_id: str, principal: PrincipalDependency = None):
     """Delete an experiment."""
     enforce_scope(principal, "agent:run")
@@ -6582,7 +6583,7 @@ async def delete_experiment(experiment_id: str, principal: PrincipalDependency =
 
 # ── Environment Profiles ──
 
-@router.post("/env-profiles", response_model=None)
+@extended_router.post("/env-profiles", response_model=None)
 async def create_env_profile(payload: dict[str, Any], principal: PrincipalDependency = None):
     """Create an environment profile template.
 
@@ -6624,7 +6625,7 @@ async def create_env_profile(payload: dict[str, Any], principal: PrincipalDepend
     return {"profile_id": profile_id, "name": name, "isolation_level": isolation}
 
 
-@router.get("/env-profiles", response_model=None)
+@extended_router.get("/env-profiles", response_model=None)
 async def list_env_profiles(isolation_level: str = None, principal: PrincipalDependency = None):
     """List environment profiles, optionally filtered by isolation level."""
     enforce_scope(principal, "agent:run")
@@ -6634,7 +6635,7 @@ async def list_env_profiles(isolation_level: str = None, principal: PrincipalDep
     return {"profiles": items, "total": len(items)}
 
 
-@router.get("/env-profiles/{profile_id}", response_model=None)
+@extended_router.get("/env-profiles/{profile_id}", response_model=None)
 async def get_env_profile(profile_id: str, principal: PrincipalDependency = None):
     """Get environment profile details."""
     enforce_scope(principal, "agent:run")
@@ -6644,7 +6645,7 @@ async def get_env_profile(profile_id: str, principal: PrincipalDependency = None
     return profile
 
 
-@router.post("/env-profiles/{profile_id}/validate", response_model=None)
+@extended_router.post("/env-profiles/{profile_id}/validate", response_model=None)
 async def validate_env_profile(profile_id: str, payload: dict[str, Any], principal: PrincipalDependency = None):
     """Validate a run request against an environment profile.
 
@@ -6674,7 +6675,7 @@ async def validate_env_profile(profile_id: str, payload: dict[str, Any], princip
     return {"profile_id": profile_id, "compliant": compliant, "violations": violations, "action": "allow" if compliant else "block"}
 
 
-@router.delete("/env-profiles/{profile_id}", response_model=None)
+@extended_router.delete("/env-profiles/{profile_id}", response_model=None)
 async def delete_env_profile(profile_id: str, principal: PrincipalDependency = None):
     """Delete an environment profile."""
     enforce_scope(principal, "agent:run")
@@ -6686,7 +6687,7 @@ async def delete_env_profile(profile_id: str, principal: PrincipalDependency = N
 
 # ── Run Dependency Resolution ──
 
-@router.post("/dependencies", response_model=None)
+@extended_router.post("/dependencies", response_model=None)
 async def register_dependency(payload: dict[str, Any], principal: PrincipalDependency = None):
     """Register a dependency between runs.
 
@@ -6722,7 +6723,7 @@ async def register_dependency(payload: dict[str, Any], principal: PrincipalDepen
     return {"dep_id": dep_id, "trace_id": trace_id, "depends_on": depends_on, "status": "waiting"}
 
 
-@router.get("/dependencies", response_model=None)
+@extended_router.get("/dependencies", response_model=None)
 async def list_dependencies(trace_id: str = None, status: str = None, principal: PrincipalDependency = None):
     """List dependencies, optionally filtered by trace_id or status."""
     enforce_scope(principal, "agent:run")
@@ -6734,7 +6735,7 @@ async def list_dependencies(trace_id: str = None, status: str = None, principal:
     return {"dependencies": items, "total": len(items)}
 
 
-@router.post("/dependencies/check", response_model=None)
+@extended_router.post("/dependencies/check", response_model=None)
 async def check_dependencies(payload: dict[str, Any], principal: PrincipalDependency = None):
     """Check if dependencies are satisfied for a run.
 
@@ -6770,7 +6771,7 @@ async def check_dependencies(payload: dict[str, Any], principal: PrincipalDepend
     return {"trace_id": trace_id, "ready": all_resolved, "reason": "all_satisfied" if all_resolved else "blocked", "blocking": blocking}
 
 
-@router.post("/dependencies/topo-sort", response_model=None)
+@extended_router.post("/dependencies/topo-sort", response_model=None)
 async def topo_sort_dependencies(payload: dict[str, Any], principal: PrincipalDependency = None):
     """Compute execution order via topological sort.
 
@@ -6811,7 +6812,7 @@ async def topo_sort_dependencies(payload: dict[str, Any], principal: PrincipalDe
     }
 
 
-@router.delete("/dependencies/{dep_id}", response_model=None)
+@extended_router.delete("/dependencies/{dep_id}", response_model=None)
 async def delete_dependency(dep_id: str, principal: PrincipalDependency = None):
     """Delete a dependency registration."""
     enforce_scope(principal, "agent:run")
@@ -6829,7 +6830,7 @@ _governance_policies: dict[str, dict[str, Any]] = {}  # policy_id -> record
 _render_jobs: dict[str, dict[str, Any]] = {}  # render_id -> record
 
 
-@router.post("/hooks", response_model=None)
+@extended_router.post("/hooks", response_model=None)
 async def register_hook(payload: dict[str, Any], principal: PrincipalDependency = None):
     """Register a lifecycle hook.
 
@@ -6878,7 +6879,7 @@ async def register_hook(payload: dict[str, Any], principal: PrincipalDependency 
     return {"hook_id": hook_id, "name": name, "event": event, "priority": record["priority"]}
 
 
-@router.get("/hooks", response_model=None)
+@extended_router.get("/hooks", response_model=None)
 async def list_hooks(event: str = None, enabled: bool = None, principal: PrincipalDependency = None):
     """List lifecycle hooks, optionally filtered by event or enabled status."""
     enforce_scope(principal, "agent:run")
@@ -6891,7 +6892,7 @@ async def list_hooks(event: str = None, enabled: bool = None, principal: Princip
     return {"hooks": items, "total": len(items)}
 
 
-@router.post("/hooks/{hook_id}/toggle", response_model=None)
+@extended_router.post("/hooks/{hook_id}/toggle", response_model=None)
 async def toggle_hook(hook_id: str, principal: PrincipalDependency = None):
     """Enable or disable a hook."""
     enforce_scope(principal, "agent:run")
@@ -6902,7 +6903,7 @@ async def toggle_hook(hook_id: str, principal: PrincipalDependency = None):
     return {"hook_id": hook_id, "enabled": hook["enabled"]}
 
 
-@router.post("/hooks/trigger", response_model=None)
+@extended_router.post("/hooks/trigger", response_model=None)
 async def trigger_hooks(payload: dict[str, Any], principal: PrincipalDependency = None):
     """Simulate triggering hooks for an event.
 
@@ -6940,7 +6941,7 @@ async def trigger_hooks(payload: dict[str, Any], principal: PrincipalDependency 
     return {"event": event, "trace_id": trace_id, "hooks_fired": len(fired), "aborted": aborted, "executions": fired}
 
 
-@router.delete("/hooks/{hook_id}", response_model=None)
+@extended_router.delete("/hooks/{hook_id}", response_model=None)
 async def delete_hook(hook_id: str, principal: PrincipalDependency = None):
     """Delete a lifecycle hook."""
     enforce_scope(principal, "agent:run")
@@ -6952,7 +6953,7 @@ async def delete_hook(hook_id: str, principal: PrincipalDependency = None):
 
 # ── Governance Engine ──
 
-@router.post("/governance/policies", response_model=None)
+@extended_router.post("/governance/policies", response_model=None)
 async def create_policy(payload: dict[str, Any], principal: PrincipalDependency = None):
     """Create a governance policy rule.
 
@@ -6993,7 +6994,7 @@ async def create_policy(payload: dict[str, Any], principal: PrincipalDependency 
     return {"policy_id": policy_id, "name": name, "rule_type": rule_type, "action": action}
 
 
-@router.get("/governance/policies", response_model=None)
+@extended_router.get("/governance/policies", response_model=None)
 async def list_policies(rule_type: str = None, scope: str = None, principal: PrincipalDependency = None):
     """List governance policies, optionally filtered."""
     enforce_scope(principal, "agent:run")
@@ -7006,7 +7007,7 @@ async def list_policies(rule_type: str = None, scope: str = None, principal: Pri
     return {"policies": items, "total": len(items)}
 
 
-@router.post("/governance/evaluate", response_model=None)
+@extended_router.post("/governance/evaluate", response_model=None)
 async def evaluate_governance(payload: dict[str, Any], principal: PrincipalDependency = None):
     """Evaluate a run request against all active governance policies.
 
@@ -7077,7 +7078,7 @@ async def evaluate_governance(payload: dict[str, Any], principal: PrincipalDepen
     }
 
 
-@router.post("/governance/policies/{policy_id}/toggle", response_model=None)
+@extended_router.post("/governance/policies/{policy_id}/toggle", response_model=None)
 async def toggle_policy(policy_id: str, principal: PrincipalDependency = None):
     """Enable or disable a governance policy."""
     enforce_scope(principal, "agent:run")
@@ -7088,7 +7089,7 @@ async def toggle_policy(policy_id: str, principal: PrincipalDependency = None):
     return {"policy_id": policy_id, "enabled": policy["enabled"]}
 
 
-@router.delete("/governance/policies/{policy_id}", response_model=None)
+@extended_router.delete("/governance/policies/{policy_id}", response_model=None)
 async def delete_policy(policy_id: str, principal: PrincipalDependency = None):
     """Delete a governance policy."""
     enforce_scope(principal, "agent:run")
@@ -7100,7 +7101,7 @@ async def delete_policy(policy_id: str, principal: PrincipalDependency = None):
 
 # ── Output Rendering ──
 
-@router.post("/render", response_model=None)
+@extended_router.post("/render", response_model=None)
 async def render_output(payload: dict[str, Any], principal: PrincipalDependency = None):
     """Render run output to a target format.
 
@@ -7165,7 +7166,7 @@ async def render_output(payload: dict[str, Any], principal: PrincipalDependency 
     return {"render_id": render_id, "target_format": target, "output_length": len(rendered), "rendered": rendered}
 
 
-@router.get("/render/history", response_model=None)
+@extended_router.get("/render/history", response_model=None)
 async def render_history(trace_id: str = None, target_format: str = None, principal: PrincipalDependency = None):
     """List render history, optionally filtered."""
     enforce_scope(principal, "agent:run")
@@ -7177,7 +7178,7 @@ async def render_history(trace_id: str = None, target_format: str = None, princi
     return {"renders": items, "total": len(items)}
 
 
-@router.post("/render/batch", response_model=None)
+@extended_router.post("/render/batch", response_model=None)
 async def render_batch(payload: dict[str, Any], principal: PrincipalDependency = None):
     """Render content to multiple formats at once.
 
@@ -7243,7 +7244,7 @@ _TOKEN_PRICING = {
 }
 
 
-@router.post("/costs/record", response_model=None)
+@extended_router.post("/costs/record", response_model=None)
 async def record_cost(payload: dict[str, Any], principal: PrincipalDependency = None):
     """Record cost breakdown for a run.
 
@@ -7290,7 +7291,7 @@ async def record_cost(payload: dict[str, Any], principal: PrincipalDependency = 
     return {"trace_id": trace_id, "total_cost": total_cost, "breakdown": {"token": record["token_cost"], "compute": record["compute_cost"], "storage": record["storage_cost"], "tools": record["tool_cost"]}}
 
 
-@router.get("/costs/{trace_id}", response_model=None)
+@extended_router.get("/costs/{trace_id}", response_model=None)
 async def get_cost(trace_id: str, principal: PrincipalDependency = None):
     """Get cost breakdown for a specific run."""
     enforce_scope(principal, "agent:run")
@@ -7300,7 +7301,7 @@ async def get_cost(trace_id: str, principal: PrincipalDependency = None):
     return record
 
 
-@router.get("/costs", response_model=None)
+@extended_router.get("/costs", response_model=None)
 async def cost_summary(department: str = None, project: str = None, principal: PrincipalDependency = None):
     """Aggregate cost summary with optional department/project filter."""
     enforce_scope(principal, "agent:run")
@@ -7327,7 +7328,7 @@ async def cost_summary(department: str = None, project: str = None, principal: P
     }
 
 
-@router.post("/costs/budget-check", response_model=None)
+@extended_router.post("/costs/budget-check", response_model=None)
 async def budget_check(payload: dict[str, Any], principal: PrincipalDependency = None):
     """Check if a projected cost fits within budget.
 
@@ -7363,7 +7364,7 @@ async def budget_check(payload: dict[str, Any], principal: PrincipalDependency =
 
 # ── Output Schema Enforcement ──
 
-@router.post("/schemas", response_model=None)
+@extended_router.post("/schemas", response_model=None)
 async def register_schema(payload: dict[str, Any], principal: PrincipalDependency = None):
     """Register an output schema contract.
 
@@ -7401,7 +7402,7 @@ async def register_schema(payload: dict[str, Any], principal: PrincipalDependenc
     return {"schema_id": schema_id, "name": name, "strictness": strictness}
 
 
-@router.get("/schemas", response_model=None)
+@extended_router.get("/schemas", response_model=None)
 async def list_schemas(strictness: str = None, principal: PrincipalDependency = None):
     """List registered schemas."""
     enforce_scope(principal, "agent:run")
@@ -7411,7 +7412,7 @@ async def list_schemas(strictness: str = None, principal: PrincipalDependency = 
     return {"schemas": items, "total": len(items)}
 
 
-@router.post("/schemas/validate", response_model=None)
+@extended_router.post("/schemas/validate", response_model=None)
 async def validate_output_schema(payload: dict[str, Any], principal: PrincipalDependency = None):
     """Validate a run output against a schema.
 
@@ -7460,7 +7461,7 @@ async def validate_output_schema(payload: dict[str, Any], principal: PrincipalDe
     return {"schema_id": schema_id, "valid": valid, "action": action, "violations": violations, "strictness": record["strictness"]}
 
 
-@router.delete("/schemas/{schema_id}", response_model=None)
+@extended_router.delete("/schemas/{schema_id}", response_model=None)
 async def delete_schema(schema_id: str, principal: PrincipalDependency = None):
     """Delete a schema."""
     enforce_scope(principal, "agent:run")
@@ -7472,7 +7473,7 @@ async def delete_schema(schema_id: str, principal: PrincipalDependency = None):
 
 # ── Semantic Run Search ──
 
-@router.post("/search/index", response_model=None)
+@extended_router.post("/search/index", response_model=None)
 async def index_run(payload: dict[str, Any], principal: PrincipalDependency = None):
     """Index a run for semantic search.
 
@@ -7504,7 +7505,7 @@ async def index_run(payload: dict[str, Any], principal: PrincipalDependency = No
     return {"indexed": True, "trace_id": trace_id, "keywords_extracted": len(words)}
 
 
-@router.post("/search/query", response_model=None)
+@extended_router.post("/search/query", response_model=None)
 async def semantic_search(payload: dict[str, Any], principal: PrincipalDependency = None):
     """Search indexed runs by semantic similarity.
 
@@ -7559,7 +7560,7 @@ async def semantic_search(payload: dict[str, Any], principal: PrincipalDependenc
     return {"results": results, "total": len(scored), "query": query, "candidates_evaluated": len(candidates)}
 
 
-@router.get("/search/stats", response_model=None)
+@extended_router.get("/search/stats", response_model=None)
 async def search_stats(principal: PrincipalDependency = None):
     """Get search index statistics."""
     enforce_scope(principal, "agent:run")
@@ -7579,7 +7580,7 @@ async def search_stats(principal: PrincipalDependency = None):
     }
 
 
-@router.delete("/search/index/{trace_id}", response_model=None)
+@extended_router.delete("/search/index/{trace_id}", response_model=None)
 async def remove_from_index(trace_id: str, principal: PrincipalDependency = None):
     """Remove a run from the search index."""
     enforce_scope(principal, "agent:run")
@@ -7638,7 +7639,7 @@ _COMPLIANCE_FRAMEWORKS = {
 }
 
 
-@router.post("/compliance/reports", response_model=None)
+@extended_router.post("/compliance/reports", response_model=None)
 async def generate_compliance_report(payload: dict[str, Any], principal: PrincipalDependency = None):
     """Generate a compliance assessment report.
 
@@ -7703,7 +7704,7 @@ async def generate_compliance_report(payload: dict[str, Any], principal: Princip
     return {"report_id": report_id, "framework": fw["name"], "compliance_score": compliance_score, "gap_count": len(gaps)}
 
 
-@router.get("/compliance/reports", response_model=None)
+@extended_router.get("/compliance/reports", response_model=None)
 async def list_compliance_reports(framework: str = None, principal: PrincipalDependency = None):
     """List compliance reports."""
     enforce_scope(principal, "agent:run")
@@ -7714,7 +7715,7 @@ async def list_compliance_reports(framework: str = None, principal: PrincipalDep
     return {"reports": summaries, "total": len(summaries)}
 
 
-@router.get("/compliance/reports/{report_id}", response_model=None)
+@extended_router.get("/compliance/reports/{report_id}", response_model=None)
 async def get_compliance_report(report_id: str, principal: PrincipalDependency = None):
     """Get full compliance report details."""
     enforce_scope(principal, "agent:run")
@@ -7724,7 +7725,7 @@ async def get_compliance_report(report_id: str, principal: PrincipalDependency =
     return report
 
 
-@router.delete("/compliance/reports/{report_id}", response_model=None)
+@extended_router.delete("/compliance/reports/{report_id}", response_model=None)
 async def delete_compliance_report(report_id: str, principal: PrincipalDependency = None):
     """Delete a compliance report."""
     enforce_scope(principal, "agent:run")
@@ -7736,7 +7737,7 @@ async def delete_compliance_report(report_id: str, principal: PrincipalDependenc
 
 # ── Task Decomposition ──
 
-@router.post("/decompose", response_model=None)
+@extended_router.post("/decompose", response_model=None)
 async def decompose_task(payload: dict[str, Any], principal: PrincipalDependency = None):
     """Decompose a complex task into subtasks with dependencies.
 
@@ -7816,7 +7817,7 @@ async def decompose_task(payload: dict[str, Any], principal: PrincipalDependency
     return {"decomp_id": decomp_id, "subtask_count": len(subtasks), "total_effort_hours": record["metrics"]["total_effort_hours"], "critical_path_hours": record["metrics"]["critical_path_hours"], "speedup_factor": record["metrics"]["speedup_factor"]}
 
 
-@router.get("/decompose/{decomp_id}", response_model=None)
+@extended_router.get("/decompose/{decomp_id}", response_model=None)
 async def get_decomposition(decomp_id: str, principal: PrincipalDependency = None):
     """Get task decomposition details."""
     enforce_scope(principal, "agent:run")
@@ -7826,7 +7827,7 @@ async def get_decomposition(decomp_id: str, principal: PrincipalDependency = Non
     return record
 
 
-@router.get("/decompose", response_model=None)
+@extended_router.get("/decompose", response_model=None)
 async def list_decompositions(principal: PrincipalDependency = None):
     """List all task decompositions."""
     enforce_scope(principal, "agent:run")
@@ -7834,7 +7835,7 @@ async def list_decompositions(principal: PrincipalDependency = None):
     return {"decompositions": items, "total": len(items)}
 
 
-@router.delete("/decompose/{decomp_id}", response_model=None)
+@extended_router.delete("/decompose/{decomp_id}", response_model=None)
 async def delete_decomposition(decomp_id: str, principal: PrincipalDependency = None):
     """Delete a decomposition."""
     enforce_scope(principal, "agent:run")
@@ -7846,7 +7847,7 @@ async def delete_decomposition(decomp_id: str, principal: PrincipalDependency = 
 
 # ── Auto-Scaling Policies ──
 
-@router.post("/scaling/policies", response_model=None)
+@extended_router.post("/scaling/policies", response_model=None)
 async def create_scaling_policy(payload: dict[str, Any], principal: PrincipalDependency = None):
     """Create an auto-scaling policy.
 
@@ -7894,7 +7895,7 @@ async def create_scaling_policy(payload: dict[str, Any], principal: PrincipalDep
     return {"policy_id": policy_id, "name": name, "metric": metric, "action": action}
 
 
-@router.get("/scaling/policies", response_model=None)
+@extended_router.get("/scaling/policies", response_model=None)
 async def list_scaling_policies(metric: str = None, principal: PrincipalDependency = None):
     """List scaling policies."""
     enforce_scope(principal, "agent:run")
@@ -7904,7 +7905,7 @@ async def list_scaling_policies(metric: str = None, principal: PrincipalDependen
     return {"policies": items, "total": len(items)}
 
 
-@router.post("/scaling/evaluate", response_model=None)
+@extended_router.post("/scaling/evaluate", response_model=None)
 async def evaluate_scaling(payload: dict[str, Any], principal: PrincipalDependency = None):
     """Evaluate current metrics against scaling policies.
 
@@ -7948,7 +7949,7 @@ async def evaluate_scaling(payload: dict[str, Any], principal: PrincipalDependen
     }
 
 
-@router.post("/scaling/policies/{policy_id}/toggle", response_model=None)
+@extended_router.post("/scaling/policies/{policy_id}/toggle", response_model=None)
 async def toggle_scaling_policy(policy_id: str, principal: PrincipalDependency = None):
     """Enable or disable a scaling policy."""
     enforce_scope(principal, "agent:run")
@@ -7959,7 +7960,7 @@ async def toggle_scaling_policy(policy_id: str, principal: PrincipalDependency =
     return {"policy_id": policy_id, "enabled": policy["enabled"]}
 
 
-@router.delete("/scaling/policies/{policy_id}", response_model=None)
+@extended_router.delete("/scaling/policies/{policy_id}", response_model=None)
 async def delete_scaling_policy(policy_id: str, principal: PrincipalDependency = None):
     """Delete a scaling policy."""
     enforce_scope(principal, "agent:run")
@@ -7977,7 +7978,7 @@ _run_checkpoints: dict[str, list[dict[str, Any]]] = {}  # trace_id -> [checkpoin
 _playbooks: dict[str, dict[str, Any]] = {}  # playbook_id -> record
 
 
-@router.post("/approvals", response_model=None)
+@extended_router.post("/approvals", response_model=None)
 async def create_approval_chain(payload: dict[str, Any], principal: PrincipalDependency = None):
     """Create a multi-level approval chain.
 
@@ -8020,7 +8021,7 @@ async def create_approval_chain(payload: dict[str, Any], principal: PrincipalDep
     return {"chain_id": chain_id, "title": title, "mode": mode, "approvers": len(approvers), "quorum": quorum}
 
 
-@router.get("/approvals", response_model=None)
+@extended_router.get("/approvals", response_model=None)
 async def list_approvals(status: str = None, principal: PrincipalDependency = None):
     """List approval chains."""
     enforce_scope(principal, "agent:run")
@@ -8031,7 +8032,7 @@ async def list_approvals(status: str = None, principal: PrincipalDependency = No
     return {"chains": summaries, "total": len(summaries)}
 
 
-@router.post("/approvals/{chain_id}/decide", response_model=None)
+@extended_router.post("/approvals/{chain_id}/decide", response_model=None)
 async def approve_or_reject(chain_id: str, payload: dict[str, Any], principal: PrincipalDependency = None):
     """Submit an approval decision.
 
@@ -8076,7 +8077,7 @@ async def approve_or_reject(chain_id: str, payload: dict[str, Any], principal: P
     return {"chain_id": chain_id, "decision": decision, "chain_status": chain["status"], "approved_count": chain["approved_count"], "rejected_count": chain["rejected_count"]}
 
 
-@router.post("/approvals/{chain_id}/delegate", response_model=None)
+@extended_router.post("/approvals/{chain_id}/delegate", response_model=None)
 async def delegate_approval(chain_id: str, payload: dict[str, Any], principal: PrincipalDependency = None):
     """Delegate approval to another user.
 
@@ -8101,7 +8102,7 @@ async def delegate_approval(chain_id: str, payload: dict[str, Any], principal: P
     return {"chain_id": chain_id, "delegated_from": from_user, "delegated_to": to_user}
 
 
-@router.get("/approvals/{chain_id}", response_model=None)
+@extended_router.get("/approvals/{chain_id}", response_model=None)
 async def get_approval_chain(chain_id: str, principal: PrincipalDependency = None):
     """Get approval chain details."""
     enforce_scope(principal, "agent:run")
@@ -8111,7 +8112,7 @@ async def get_approval_chain(chain_id: str, principal: PrincipalDependency = Non
     return chain
 
 
-@router.delete("/approvals/{chain_id}", response_model=None)
+@extended_router.delete("/approvals/{chain_id}", response_model=None)
 async def delete_approval_chain(chain_id: str, principal: PrincipalDependency = None):
     """Delete an approval chain."""
     enforce_scope(principal, "agent:run")
@@ -8123,7 +8124,7 @@ async def delete_approval_chain(chain_id: str, principal: PrincipalDependency = 
 
 # ── Run Rollback ──
 
-@router.post("/runs/{trace_id}/checkpoints", response_model=None)
+@extended_router.post("/runs/{trace_id}/checkpoints", response_model=None)
 async def create_checkpoint(trace_id: str, payload: dict[str, Any], principal: PrincipalDependency = None):
     """Create a state checkpoint for a run.
 
@@ -8151,7 +8152,7 @@ async def create_checkpoint(trace_id: str, payload: dict[str, Any], principal: P
     return {"checkpoint_id": cp_id, "trace_id": trace_id, "label": label, "sequence": checkpoint["sequence"]}
 
 
-@router.get("/runs/{trace_id}/checkpoints", response_model=None)
+@extended_router.get("/runs/{trace_id}/checkpoints", response_model=None)
 async def list_checkpoints(trace_id: str, principal: PrincipalDependency = None):
     """List checkpoints for a run."""
     enforce_scope(principal, "agent:run")
@@ -8159,7 +8160,7 @@ async def list_checkpoints(trace_id: str, principal: PrincipalDependency = None)
     return {"trace_id": trace_id, "checkpoints": cps, "total": len(cps)}
 
 
-@router.post("/runs/{trace_id}/rollback", response_model=None)
+@extended_router.post("/runs/{trace_id}/rollback", response_model=None)
 async def rollback_run(trace_id: str, payload: dict[str, Any], principal: PrincipalDependency = None):
     """Rollback a run to a specific checkpoint.
 
@@ -8188,7 +8189,7 @@ async def rollback_run(trace_id: str, payload: dict[str, Any], principal: Princi
     }
 
 
-@router.post("/runs/{trace_id}/checkpoints/compare", response_model=None)
+@extended_router.post("/runs/{trace_id}/checkpoints/compare", response_model=None)
 async def compare_checkpoints(trace_id: str, payload: dict[str, Any], principal: PrincipalDependency = None):
     """Compare two checkpoints.
 
@@ -8217,7 +8218,7 @@ async def compare_checkpoints(trace_id: str, payload: dict[str, Any], principal:
 
 # ── Run Playbooks ──
 
-@router.post("/playbooks", response_model=None)
+@extended_router.post("/playbooks", response_model=None)
 async def create_playbook(payload: dict[str, Any], principal: PrincipalDependency = None):
     """Create an operational playbook.
 
@@ -8252,7 +8253,7 @@ async def create_playbook(payload: dict[str, Any], principal: PrincipalDependenc
     return {"playbook_id": pb_id, "name": name, "steps": len(steps), "trigger": trigger}
 
 
-@router.get("/playbooks", response_model=None)
+@extended_router.get("/playbooks", response_model=None)
 async def list_playbooks(trigger: str = None, principal: PrincipalDependency = None):
     """List playbooks."""
     enforce_scope(principal, "agent:run")
@@ -8263,7 +8264,7 @@ async def list_playbooks(trigger: str = None, principal: PrincipalDependency = N
     return {"playbooks": summaries, "total": len(summaries)}
 
 
-@router.post("/playbooks/{playbook_id}/execute", response_model=None)
+@extended_router.post("/playbooks/{playbook_id}/execute", response_model=None)
 async def execute_playbook(playbook_id: str, payload: dict[str, Any], principal: PrincipalDependency = None):
     """Execute a playbook step by step.
 
@@ -8297,7 +8298,7 @@ async def execute_playbook(playbook_id: str, payload: dict[str, Any], principal:
     return {"playbook_id": playbook_id, "dry_run": dry_run, "steps_executed": executed, "total_steps": len(pb["steps"]), "status": pb["status"], "log": log}
 
 
-@router.post("/playbooks/{playbook_id}/rollback", response_model=None)
+@extended_router.post("/playbooks/{playbook_id}/rollback", response_model=None)
 async def rollback_playbook(playbook_id: str, payload: dict[str, Any], principal: PrincipalDependency = None):
     """Rollback executed steps of a playbook.
 
@@ -8319,7 +8320,7 @@ async def rollback_playbook(playbook_id: str, payload: dict[str, Any], principal
     return {"playbook_id": playbook_id, "rolled_back_steps": len(rolled_back), "details": rolled_back}
 
 
-@router.delete("/playbooks/{playbook_id}", response_model=None)
+@extended_router.delete("/playbooks/{playbook_id}", response_model=None)
 async def delete_playbook(playbook_id: str, principal: PrincipalDependency = None):
     """Delete a playbook."""
     enforce_scope(principal, "agent:run")
@@ -8337,7 +8338,7 @@ _learning_entries: dict[str, dict[str, Any]] = {}  # entry_id -> record
 _collab_sessions: dict[str, dict[str, Any]] = {}  # session_id -> record
 
 
-@router.post("/marketplace/publish", response_model=None)
+@extended_router.post("/marketplace/publish", response_model=None)
 async def publish_to_marketplace(payload: dict[str, Any], principal: PrincipalDependency = None):
     """Publish a reusable run configuration to the marketplace.
 
@@ -8376,7 +8377,7 @@ async def publish_to_marketplace(payload: dict[str, Any], principal: PrincipalDe
     return {"item_id": item_id, "name": name, "category": category, "version": record["version"]}
 
 
-@router.get("/marketplace", response_model=None)
+@extended_router.get("/marketplace", response_model=None)
 async def browse_marketplace(category: str = None, tag: str = None, sort: str = "newest", principal: PrincipalDependency = None):
     """Browse marketplace items with filters."""
     enforce_scope(principal, "agent:run")
@@ -8395,7 +8396,7 @@ async def browse_marketplace(category: str = None, tag: str = None, sort: str = 
     return {"items": summaries, "total": len(summaries)}
 
 
-@router.post("/marketplace/{item_id}/download", response_model=None)
+@extended_router.post("/marketplace/{item_id}/download", response_model=None)
 async def download_item(item_id: str, principal: PrincipalDependency = None):
     """Download a marketplace item (increments counter)."""
     enforce_scope(principal, "agent:run")
@@ -8406,7 +8407,7 @@ async def download_item(item_id: str, principal: PrincipalDependency = None):
     return {"item_id": item_id, "name": item["name"], "config": item["config"], "version": item["version"], "downloads": item["downloads"]}
 
 
-@router.post("/marketplace/{item_id}/rate", response_model=None)
+@extended_router.post("/marketplace/{item_id}/rate", response_model=None)
 async def rate_item(item_id: str, payload: dict[str, Any], principal: PrincipalDependency = None):
     """Rate a marketplace item.
 
@@ -8424,7 +8425,7 @@ async def rate_item(item_id: str, payload: dict[str, Any], principal: PrincipalD
     return {"item_id": item_id, "avg_rating": item["avg_rating"], "total_ratings": len(item["ratings"])}
 
 
-@router.post("/marketplace/{item_id}/favorite", response_model=None)
+@extended_router.post("/marketplace/{item_id}/favorite", response_model=None)
 async def toggle_favorite(item_id: str, principal: PrincipalDependency = None):
     """Toggle favorite on a marketplace item."""
     enforce_scope(principal, "agent:run")
@@ -8441,7 +8442,7 @@ async def toggle_favorite(item_id: str, principal: PrincipalDependency = None):
     return {"item_id": item_id, "favorited": fav, "favorite_count": len(item["favorites"])}
 
 
-@router.delete("/marketplace/{item_id}", response_model=None)
+@extended_router.delete("/marketplace/{item_id}", response_model=None)
 async def delete_marketplace_item(item_id: str, principal: PrincipalDependency = None):
     """Delete a marketplace item."""
     enforce_scope(principal, "agent:run")
@@ -8453,7 +8454,7 @@ async def delete_marketplace_item(item_id: str, principal: PrincipalDependency =
 
 # ── Adaptive Learning ──
 
-@router.post("/learning/record", response_model=None)
+@extended_router.post("/learning/record", response_model=None)
 async def record_lesson(payload: dict[str, Any], principal: PrincipalDependency = None):
     """Record a lesson learned from a run.
 
@@ -8492,7 +8493,7 @@ async def record_lesson(payload: dict[str, Any], principal: PrincipalDependency 
     return {"entry_id": entry_id, "title": title, "lesson_type": lesson_type, "confidence": confidence}
 
 
-@router.get("/learning", response_model=None)
+@extended_router.get("/learning", response_model=None)
 async def list_lessons(lesson_type: str = None, principal: PrincipalDependency = None):
     """List learning entries."""
     enforce_scope(principal, "agent:run")
@@ -8503,7 +8504,7 @@ async def list_lessons(lesson_type: str = None, principal: PrincipalDependency =
     return {"entries": items, "total": len(items)}
 
 
-@router.post("/learning/recommend", response_model=None)
+@extended_router.post("/learning/recommend", response_model=None)
 async def recommend_lessons(payload: dict[str, Any], principal: PrincipalDependency = None):
     """Get lesson recommendations for a task.
 
@@ -8529,7 +8530,7 @@ async def recommend_lessons(payload: dict[str, Any], principal: PrincipalDepende
     return {"task": task, "recommendations": scored[:top_k], "total_matches": len(scored)}
 
 
-@router.post("/learning/{entry_id}/apply", response_model=None)
+@extended_router.post("/learning/{entry_id}/apply", response_model=None)
 async def apply_lesson(entry_id: str, payload: dict[str, Any], principal: PrincipalDependency = None):
     """Record that a lesson was applied and its outcome.
 
@@ -8547,7 +8548,7 @@ async def apply_lesson(entry_id: str, payload: dict[str, Any], principal: Princi
     return {"entry_id": entry_id, "times_applied": entry["times_applied"], "effectiveness_score": entry["effectiveness_score"]}
 
 
-@router.delete("/learning/{entry_id}", response_model=None)
+@extended_router.delete("/learning/{entry_id}", response_model=None)
 async def delete_lesson(entry_id: str, principal: PrincipalDependency = None):
     """Delete a learning entry."""
     enforce_scope(principal, "agent:run")
@@ -8559,7 +8560,7 @@ async def delete_lesson(entry_id: str, principal: PrincipalDependency = None):
 
 # ── Collaborative Runs ──
 
-@router.post("/collaboration/sessions", response_model=None)
+@extended_router.post("/collaboration/sessions", response_model=None)
 async def create_collab_session(payload: dict[str, Any], principal: PrincipalDependency = None):
     """Create a collaborative run session.
 
@@ -8588,7 +8589,7 @@ async def create_collab_session(payload: dict[str, Any], principal: PrincipalDep
     return {"session_id": session_id, "name": name, "role": "owner"}
 
 
-@router.get("/collaboration/sessions", response_model=None)
+@extended_router.get("/collaboration/sessions", response_model=None)
 async def list_collab_sessions(status: str = None, principal: PrincipalDependency = None):
     """List collaborative sessions."""
     enforce_scope(principal, "agent:run")
@@ -8599,7 +8600,7 @@ async def list_collab_sessions(status: str = None, principal: PrincipalDependenc
     return {"sessions": summaries, "total": len(summaries)}
 
 
-@router.post("/collaboration/sessions/{session_id}/join", response_model=None)
+@extended_router.post("/collaboration/sessions/{session_id}/join", response_model=None)
 async def join_session(session_id: str, payload: dict[str, Any], principal: PrincipalDependency = None):
     """Join a collaborative session.
 
@@ -8627,7 +8628,7 @@ async def join_session(session_id: str, payload: dict[str, Any], principal: Prin
     return {"session_id": session_id, "user_id": user_id, "role": role, "participants": len(session["participants"])}
 
 
-@router.post("/collaboration/sessions/{session_id}/contribute", response_model=None)
+@extended_router.post("/collaboration/sessions/{session_id}/contribute", response_model=None)
 async def record_contribution(session_id: str, payload: dict[str, Any], principal: PrincipalDependency = None):
     """Record a contribution to the session.
 
@@ -8650,7 +8651,7 @@ async def record_contribution(session_id: str, payload: dict[str, Any], principa
     return {"session_id": session_id, "user_id": user_id, "total_contributions": participant["contributions"]}
 
 
-@router.post("/collaboration/sessions/{session_id}/end", response_model=None)
+@extended_router.post("/collaboration/sessions/{session_id}/end", response_model=None)
 async def end_session(session_id: str, principal: PrincipalDependency = None):
     """End a collaborative session and get summary."""
     enforce_scope(principal, "agent:run")
@@ -8666,7 +8667,7 @@ async def end_session(session_id: str, principal: PrincipalDependency = None):
     return {"session_id": session_id, "status": "completed", "participants": len(session["participants"]), "total_contributions": total_contribs, "duration_activities": len(session["activity_log"])}
 
 
-@router.delete("/collaboration/sessions/{session_id}", response_model=None)
+@extended_router.delete("/collaboration/sessions/{session_id}", response_model=None)
 async def delete_collab_session(session_id: str, principal: PrincipalDependency = None):
     """Delete a collaborative session."""
     enforce_scope(principal, "agent:run")
@@ -8684,7 +8685,7 @@ _health_scores: dict[str, list[dict[str, Any]]] = {}  # trace_id -> [scores]
 _quality_certs: dict[str, dict[str, Any]] = {}  # cert_id -> record
 
 
-@router.post("/provenance/stamp", response_model=None)
+@extended_router.post("/provenance/stamp", response_model=None)
 async def stamp_provenance(payload: dict[str, Any], principal: PrincipalDependency = None):
     """Embed a provenance watermark into output content.
 
@@ -8723,7 +8724,7 @@ async def stamp_provenance(payload: dict[str, Any], principal: PrincipalDependen
     return {"mark_id": mark_id, "prov_hash": prov_hash, "stamped": True, "stamped_length": len(stamped_content)}
 
 
-@router.post("/provenance/verify", response_model=None)
+@extended_router.post("/provenance/verify", response_model=None)
 async def verify_provenance(payload: dict[str, Any], principal: PrincipalDependency = None):
     """Verify provenance of stamped content.
 
@@ -8759,7 +8760,7 @@ async def verify_provenance(payload: dict[str, Any], principal: PrincipalDepende
     }
 
 
-@router.get("/provenance/{mark_id}", response_model=None)
+@extended_router.get("/provenance/{mark_id}", response_model=None)
 async def get_provenance(mark_id: str, principal: PrincipalDependency = None):
     """Get provenance mark details."""
     enforce_scope(principal, "agent:run")
@@ -8771,7 +8772,7 @@ async def get_provenance(mark_id: str, principal: PrincipalDependency = None):
 
 # ── Run Health Score ──
 
-@router.post("/health-score", response_model=None)
+@extended_router.post("/health-score", response_model=None)
 async def compute_health_score(payload: dict[str, Any], principal: PrincipalDependency = None):
     """Compute a composite health score for a run.
 
@@ -8839,7 +8840,7 @@ async def compute_health_score(payload: dict[str, Any], principal: PrincipalDepe
     }
 
 
-@router.get("/health-score/{trace_id}", response_model=None)
+@extended_router.get("/health-score/{trace_id}", response_model=None)
 async def get_health_history(trace_id: str, principal: PrincipalDependency = None):
     """Get health score history for a run."""
     enforce_scope(principal, "agent:run")
@@ -8855,7 +8856,7 @@ async def get_health_history(trace_id: str, principal: PrincipalDependency = Non
 
 # ── Output Quality Certification ──
 
-@router.post("/certification", response_model=None)
+@extended_router.post("/certification", response_model=None)
 async def certify_output(payload: dict[str, Any], principal: PrincipalDependency = None):
     """Certify output quality across multiple dimensions.
 
@@ -8900,7 +8901,7 @@ async def certify_output(payload: dict[str, Any], principal: PrincipalDependency
     return {"cert_id": cert_id, "grade": grade, "overall_score": overall, "seal": record["seal"], "expires_at": expires}
 
 
-@router.get("/certification/{cert_id}", response_model=None)
+@extended_router.get("/certification/{cert_id}", response_model=None)
 async def get_certification(cert_id: str, principal: PrincipalDependency = None):
     """Get certification details."""
     enforce_scope(principal, "agent:run")
@@ -8913,7 +8914,7 @@ async def get_certification(cert_id: str, principal: PrincipalDependency = None)
     return {**cert, "status": cert_status, "is_expired": expired}
 
 
-@router.post("/certification/{cert_id}/revoke", response_model=None)
+@extended_router.post("/certification/{cert_id}/revoke", response_model=None)
 async def revoke_certification(cert_id: str, payload: dict[str, Any], principal: PrincipalDependency = None):
     """Revoke a certification.
 
@@ -8931,7 +8932,7 @@ async def revoke_certification(cert_id: str, payload: dict[str, Any], principal:
     return {"cert_id": cert_id, "status": "revoked", "reason": cert["revoke_reason"]}
 
 
-@router.get("/certification", response_model=None)
+@extended_router.get("/certification", response_model=None)
 async def list_certifications(status: str = None, grade: str = None, principal: PrincipalDependency = None):
     """List certifications."""
     enforce_scope(principal, "agent:run")
@@ -8954,7 +8955,7 @@ _healing_rules: dict[str, dict[str, Any]] = {}  # rule_id -> record
 _circuit_breakers: dict[str, dict[str, Any]] = {}  # breaker_id -> record
 
 
-@router.post("/whatif/simulate", response_model=None)
+@extended_router.post("/whatif/simulate", response_model=None)
 async def whatif_simulate(payload: dict[str, Any], principal: PrincipalDependency = None):
     """Run a what-if scenario simulation.
 
@@ -9022,7 +9023,7 @@ async def whatif_simulate(payload: dict[str, Any], principal: PrincipalDependenc
     return record
 
 
-@router.get("/whatif", response_model=None)
+@extended_router.get("/whatif", response_model=None)
 async def list_whatif_scenarios(principal: PrincipalDependency = None):
     """List all what-if scenarios."""
     enforce_scope(principal, "agent:run")
@@ -9032,7 +9033,7 @@ async def list_whatif_scenarios(principal: PrincipalDependency = None):
             "total": len(items)}
 
 
-@router.get("/whatif/{scenario_id}", response_model=None)
+@extended_router.get("/whatif/{scenario_id}", response_model=None)
 async def get_whatif_scenario(scenario_id: str, principal: PrincipalDependency = None):
     """Get what-if scenario details."""
     enforce_scope(principal, "agent:run")
@@ -9042,7 +9043,7 @@ async def get_whatif_scenario(scenario_id: str, principal: PrincipalDependency =
     return rec
 
 
-@router.post("/whatif/compare", response_model=None)
+@extended_router.post("/whatif/compare", response_model=None)
 async def whatif_compare(payload: dict[str, Any], principal: PrincipalDependency = None):
     """Compare multiple what-if scenarios side by side.
 
@@ -9075,7 +9076,7 @@ async def whatif_compare(payload: dict[str, Any], principal: PrincipalDependency
                               "recommendation": best["recommendation"]}}
 
 
-@router.delete("/whatif/{scenario_id}", response_model=None)
+@extended_router.delete("/whatif/{scenario_id}", response_model=None)
 async def delete_whatif_scenario(scenario_id: str, principal: PrincipalDependency = None):
     """Delete a what-if scenario."""
     enforce_scope(principal, "agent:run")
@@ -9087,7 +9088,7 @@ async def delete_whatif_scenario(scenario_id: str, principal: PrincipalDependenc
 
 # ── Knowledge Graph ──
 
-@router.post("/knowledge/entities", response_model=None)
+@extended_router.post("/knowledge/entities", response_model=None)
 async def kg_add_entity(payload: dict[str, Any], principal: PrincipalDependency = None):
     """Add an entity to the knowledge graph.
 
@@ -9128,7 +9129,7 @@ async def kg_add_entity(payload: dict[str, Any], principal: PrincipalDependency 
     return {"entity_id": entity_id, "status": "created", "name": name, "entity_type": entity_type}
 
 
-@router.post("/knowledge/relations", response_model=None)
+@extended_router.post("/knowledge/relations", response_model=None)
 async def kg_add_relation(payload: dict[str, Any], principal: PrincipalDependency = None):
     """Add a relation between two entities.
 
@@ -9170,7 +9171,7 @@ async def kg_add_relation(payload: dict[str, Any], principal: PrincipalDependenc
     return {"status": "created", "relation": relation}
 
 
-@router.get("/knowledge/entities", response_model=None)
+@extended_router.get("/knowledge/entities", response_model=None)
 async def kg_list_entities(entity_type: str = None, principal: PrincipalDependency = None):
     """List entities, optionally filtered by type."""
     enforce_scope(principal, "agent:run")
@@ -9180,7 +9181,7 @@ async def kg_list_entities(entity_type: str = None, principal: PrincipalDependen
     return {"entities": items, "total": len(items)}
 
 
-@router.post("/knowledge/query", response_model=None)
+@extended_router.post("/knowledge/query", response_model=None)
 async def kg_query(payload: dict[str, Any], principal: PrincipalDependency = None):
     """Query the knowledge graph: neighbors, paths, subgraph.
 
@@ -9224,7 +9225,7 @@ async def kg_query(payload: dict[str, Any], principal: PrincipalDependency = Non
             "relation_count": len(subgraph_relations)}
 
 
-@router.post("/knowledge/impact", response_model=None)
+@extended_router.post("/knowledge/impact", response_model=None)
 async def kg_impact_analysis(payload: dict[str, Any], principal: PrincipalDependency = None):
     """Analyze impact propagation from an entity.
 
@@ -9265,7 +9266,7 @@ async def kg_impact_analysis(payload: dict[str, Any], principal: PrincipalDepend
             "total_impacted": len(impacted) - 1}
 
 
-@router.get("/knowledge/stats", response_model=None)
+@extended_router.get("/knowledge/stats", response_model=None)
 async def kg_stats(principal: PrincipalDependency = None):
     """Get knowledge graph statistics."""
     enforce_scope(principal, "agent:run")
@@ -9281,7 +9282,7 @@ async def kg_stats(principal: PrincipalDependency = None):
 
 # ── Self-Healing Engine ──
 
-@router.post("/healing/rules", response_model=None)
+@extended_router.post("/healing/rules", response_model=None)
 async def create_healing_rule(payload: dict[str, Any], principal: PrincipalDependency = None):
     """Create an auto-remediation rule.
 
@@ -9326,7 +9327,7 @@ async def create_healing_rule(payload: dict[str, Any], principal: PrincipalDepen
     return record
 
 
-@router.get("/healing/rules", response_model=None)
+@extended_router.get("/healing/rules", response_model=None)
 async def list_healing_rules(principal: PrincipalDependency = None):
     """List all healing rules."""
     enforce_scope(principal, "agent:run")
@@ -9334,7 +9335,7 @@ async def list_healing_rules(principal: PrincipalDependency = None):
     return {"rules": rules, "total": len(rules)}
 
 
-@router.post("/healing/evaluate", response_model=None)
+@extended_router.post("/healing/evaluate", response_model=None)
 async def healing_evaluate(payload: dict[str, Any], principal: PrincipalDependency = None):
     """Evaluate current metrics against healing rules and trigger actions.
 
@@ -9380,7 +9381,7 @@ async def healing_evaluate(payload: dict[str, Any], principal: PrincipalDependen
             "total_triggered": len(triggered), "status": "actions_executed" if triggered else "healthy"}
 
 
-@router.post("/healing/breakers", response_model=None)
+@extended_router.post("/healing/breakers", response_model=None)
 async def create_circuit_breaker(payload: dict[str, Any], principal: PrincipalDependency = None):
     """Create a circuit breaker for a service/endpoint.
 
@@ -9417,7 +9418,7 @@ async def create_circuit_breaker(payload: dict[str, Any], principal: PrincipalDe
     return record
 
 
-@router.post("/healing/breakers/{breaker_id}/record", response_model=None)
+@extended_router.post("/healing/breakers/{breaker_id}/record", response_model=None)
 async def breaker_record(breaker_id: str, payload: dict[str, Any], principal: PrincipalDependency = None):
     """Record a call result for a circuit breaker.
 
@@ -9456,7 +9457,7 @@ async def breaker_record(breaker_id: str, payload: dict[str, Any], principal: Pr
             "failure_count": breaker["failure_count"], "success_count": breaker["success_count"]}
 
 
-@router.post("/healing/breakers/{breaker_id}/reset", response_model=None)
+@extended_router.post("/healing/breakers/{breaker_id}/reset", response_model=None)
 async def breaker_reset(breaker_id: str, principal: PrincipalDependency = None):
     """Manually reset a circuit breaker to half_open for recovery testing."""
     enforce_scope(principal, "agent:run")
@@ -9470,7 +9471,7 @@ async def breaker_reset(breaker_id: str, principal: PrincipalDependency = None):
     return {"breaker_id": breaker_id, "state": "half_open", "message": "Ready for recovery testing"}
 
 
-@router.get("/healing/breakers", response_model=None)
+@extended_router.get("/healing/breakers", response_model=None)
 async def list_circuit_breakers(principal: PrincipalDependency = None):
     """List all circuit breakers."""
     enforce_scope(principal, "agent:run")
@@ -9478,7 +9479,7 @@ async def list_circuit_breakers(principal: PrincipalDependency = None):
     return {"breakers": breakers, "total": len(breakers)}
 
 
-@router.get("/healing/resilience-score", response_model=None)
+@extended_router.get("/healing/resilience-score", response_model=None)
 async def healing_resilience_score(principal: PrincipalDependency = None):
     """Compute overall system resilience score based on healing config.
 
@@ -9509,7 +9510,7 @@ async def healing_resilience_score(principal: PrincipalDependency = None):
             "total_rules": len(_healing_rules), "total_breakers": len(_circuit_breakers)}
 
 
-@router.delete("/healing/rules/{rule_id}", response_model=None)
+@extended_router.delete("/healing/rules/{rule_id}", response_model=None)
 async def delete_healing_rule(rule_id: str, principal: PrincipalDependency = None):
     """Delete a healing rule."""
     enforce_scope(principal, "agent:run")
@@ -9519,7 +9520,7 @@ async def delete_healing_rule(rule_id: str, principal: PrincipalDependency = Non
     return {"deleted": True, "rule_id": rule_id}
 
 
-@router.delete("/healing/breakers/{breaker_id}", response_model=None)
+@extended_router.delete("/healing/breakers/{breaker_id}", response_model=None)
 async def delete_circuit_breaker(breaker_id: str, principal: PrincipalDependency = None):
     """Delete a circuit breaker."""
     enforce_scope(principal, "agent:run")
@@ -9537,7 +9538,7 @@ _explanations: dict[str, dict[str, Any]] = {}  # explanation_id -> record
 _evolutions: dict[str, dict[str, Any]] = {}  # evolution_id -> record
 
 
-@router.post("/chaos/experiments", response_model=None)
+@extended_router.post("/chaos/experiments", response_model=None)
 async def create_chaos_experiment(payload: dict[str, Any], principal: PrincipalDependency = None):
     """Create a chaos engineering experiment.
 
@@ -9592,7 +9593,7 @@ async def create_chaos_experiment(payload: dict[str, Any], principal: PrincipalD
     return record
 
 
-@router.post("/chaos/experiments/{exp_id}/run", response_model=None)
+@extended_router.post("/chaos/experiments/{exp_id}/run", response_model=None)
 async def run_chaos_experiment(exp_id: str, payload: dict[str, Any], principal: PrincipalDependency = None):
     """Execute a chaos experiment: inject fault, check steady state, decide rollback.
 
@@ -9652,7 +9653,7 @@ async def run_chaos_experiment(exp_id: str, payload: dict[str, Any], principal: 
     return {"experiment_id": exp_id, "status": exp["status"], "results": exp["results"]}
 
 
-@router.get("/chaos/experiments", response_model=None)
+@extended_router.get("/chaos/experiments", response_model=None)
 async def list_chaos_experiments(status: str = None, principal: PrincipalDependency = None):
     """List chaos experiments, optionally filtered by status."""
     enforce_scope(principal, "agent:run")
@@ -9665,7 +9666,7 @@ async def list_chaos_experiments(status: str = None, principal: PrincipalDepende
     return {"experiments": summaries, "total": len(summaries)}
 
 
-@router.get("/chaos/experiments/{exp_id}", response_model=None)
+@extended_router.get("/chaos/experiments/{exp_id}", response_model=None)
 async def get_chaos_experiment(exp_id: str, principal: PrincipalDependency = None):
     """Get chaos experiment details."""
     enforce_scope(principal, "agent:run")
@@ -9675,7 +9676,7 @@ async def get_chaos_experiment(exp_id: str, principal: PrincipalDependency = Non
     return exp
 
 
-@router.delete("/chaos/experiments/{exp_id}", response_model=None)
+@extended_router.delete("/chaos/experiments/{exp_id}", response_model=None)
 async def delete_chaos_experiment(exp_id: str, principal: PrincipalDependency = None):
     """Delete a chaos experiment."""
     enforce_scope(principal, "agent:run")
@@ -9687,7 +9688,7 @@ async def delete_chaos_experiment(exp_id: str, principal: PrincipalDependency = 
 
 # ── Decision Explainability ──
 
-@router.post("/explain", response_model=None)
+@extended_router.post("/explain", response_model=None)
 async def create_explanation(payload: dict[str, Any], principal: PrincipalDependency = None):
     """Generate an explanation for a run output/decision.
 
@@ -9769,7 +9770,7 @@ async def create_explanation(payload: dict[str, Any], principal: PrincipalDepend
     return record
 
 
-@router.get("/explain", response_model=None)
+@extended_router.get("/explain", response_model=None)
 async def list_explanations(method: str = None, principal: PrincipalDependency = None):
     """List explanations, optionally filtered by method."""
     enforce_scope(principal, "agent:run")
@@ -9782,7 +9783,7 @@ async def list_explanations(method: str = None, principal: PrincipalDependency =
     return {"explanations": summaries, "total": len(summaries)}
 
 
-@router.get("/explain/{expl_id}", response_model=None)
+@extended_router.get("/explain/{expl_id}", response_model=None)
 async def get_explanation(expl_id: str, principal: PrincipalDependency = None):
     """Get explanation details."""
     enforce_scope(principal, "agent:run")
@@ -9792,7 +9793,7 @@ async def get_explanation(expl_id: str, principal: PrincipalDependency = None):
     return rec
 
 
-@router.delete("/explain/{expl_id}", response_model=None)
+@extended_router.delete("/explain/{expl_id}", response_model=None)
 async def delete_explanation(expl_id: str, principal: PrincipalDependency = None):
     """Delete an explanation."""
     enforce_scope(principal, "agent:run")
@@ -9804,7 +9805,7 @@ async def delete_explanation(expl_id: str, principal: PrincipalDependency = None
 
 # ── Output Evolution ──
 
-@router.post("/evolution/start", response_model=None)
+@extended_router.post("/evolution/start", response_model=None)
 async def start_evolution(payload: dict[str, Any], principal: PrincipalDependency = None):
     """Start an output evolution process.
 
@@ -9853,7 +9854,7 @@ async def start_evolution(payload: dict[str, Any], principal: PrincipalDependenc
     return record
 
 
-@router.post("/evolution/{evo_id}/evolve", response_model=None)
+@extended_router.post("/evolution/{evo_id}/evolve", response_model=None)
 async def evolve_generation(evo_id: str, payload: dict[str, Any], principal: PrincipalDependency = None):
     """Advance evolution by one generation.
 
@@ -9926,7 +9927,7 @@ async def evolve_generation(evo_id: str, payload: dict[str, Any], principal: Pri
             "best_ever": evo["best_ever"]}
 
 
-@router.get("/evolution/{evo_id}", response_model=None)
+@extended_router.get("/evolution/{evo_id}", response_model=None)
 async def get_evolution(evo_id: str, principal: PrincipalDependency = None):
     """Get evolution details."""
     enforce_scope(principal, "agent:run")
@@ -9936,7 +9937,7 @@ async def get_evolution(evo_id: str, principal: PrincipalDependency = None):
     return evo
 
 
-@router.get("/evolution", response_model=None)
+@extended_router.get("/evolution", response_model=None)
 async def list_evolutions(principal: PrincipalDependency = None):
     """List all evolution processes."""
     enforce_scope(principal, "agent:run")
@@ -9947,7 +9948,7 @@ async def list_evolutions(principal: PrincipalDependency = None):
     return {"evolutions": summaries, "total": len(summaries)}
 
 
-@router.delete("/evolution/{evo_id}", response_model=None)
+@extended_router.delete("/evolution/{evo_id}", response_model=None)
 async def delete_evolution(evo_id: str, principal: PrincipalDependency = None):
     """Delete an evolution process."""
     enforce_scope(principal, "agent:run")
@@ -9965,7 +9966,7 @@ _capacity_plans: dict[str, dict[str, Any]] = {}  # plan_id -> record
 _canary_releases: dict[str, dict[str, Any]] = {}  # release_id -> record
 
 
-@router.post("/reputation/record", response_model=None)
+@extended_router.post("/reputation/record", response_model=None)
 async def record_reputation_event(payload: dict[str, Any], principal: PrincipalDependency = None):
     """Record a reputation event for an entity (agent/user/service).
 
@@ -10026,7 +10027,7 @@ async def record_reputation_event(payload: dict[str, Any], principal: PrincipalD
             "delta": round(delta, 2), "streak": rec["streak"], "total_events": rec["total_events"]}
 
 
-@router.get("/reputation/{entity_id}", response_model=None)
+@extended_router.get("/reputation/{entity_id}", response_model=None)
 async def get_reputation(entity_id: str, principal: PrincipalDependency = None):
     """Get reputation details for an entity."""
     enforce_scope(principal, "agent:run")
@@ -10037,7 +10038,7 @@ async def get_reputation(entity_id: str, principal: PrincipalDependency = None):
     return {**rec, "reliability_pct": reliability}
 
 
-@router.get("/reputation", response_model=None)
+@extended_router.get("/reputation", response_model=None)
 async def list_reputations(sort_by: str = "score", principal: PrincipalDependency = None):
     """List all reputation records, sorted by score or events."""
     enforce_scope(principal, "agent:run")
@@ -10052,7 +10053,7 @@ async def list_reputations(sort_by: str = "score", principal: PrincipalDependenc
     return {"reputations": summaries, "total": len(summaries)}
 
 
-@router.post("/reputation/gate", response_model=None)
+@extended_router.post("/reputation/gate", response_model=None)
 async def reputation_gate(payload: dict[str, Any], principal: PrincipalDependency = None):
     """Check if an entity meets a reputation threshold for an action.
 
@@ -10085,7 +10086,7 @@ async def reputation_gate(payload: dict[str, Any], principal: PrincipalDependenc
             "action": payload.get("action", "generic")}
 
 
-@router.post("/reputation/{entity_id}/decay", response_model=None)
+@extended_router.post("/reputation/{entity_id}/decay", response_model=None)
 async def reputation_decay(entity_id: str, payload: dict[str, Any], principal: PrincipalDependency = None):
     """Apply time-based decay or recovery to reputation.
 
@@ -10120,7 +10121,7 @@ async def reputation_decay(entity_id: str, payload: dict[str, Any], principal: P
 
 # ── Capacity Planning ──
 
-@router.post("/capacity/forecast", response_model=None)
+@extended_router.post("/capacity/forecast", response_model=None)
 async def capacity_forecast(payload: dict[str, Any], principal: PrincipalDependency = None):
     """Generate a capacity forecast based on historical usage.
 
@@ -10201,7 +10202,7 @@ async def capacity_forecast(payload: dict[str, Any], principal: PrincipalDepende
     return record
 
 
-@router.get("/capacity", response_model=None)
+@extended_router.get("/capacity", response_model=None)
 async def list_capacity_plans(principal: PrincipalDependency = None):
     """List all capacity plans."""
     enforce_scope(principal, "agent:run")
@@ -10212,7 +10213,7 @@ async def list_capacity_plans(principal: PrincipalDependency = None):
     return {"plans": summaries, "total": len(summaries)}
 
 
-@router.get("/capacity/{plan_id}", response_model=None)
+@extended_router.get("/capacity/{plan_id}", response_model=None)
 async def get_capacity_plan(plan_id: str, principal: PrincipalDependency = None):
     """Get capacity plan details."""
     enforce_scope(principal, "agent:run")
@@ -10222,7 +10223,7 @@ async def get_capacity_plan(plan_id: str, principal: PrincipalDependency = None)
     return rec
 
 
-@router.delete("/capacity/{plan_id}", response_model=None)
+@extended_router.delete("/capacity/{plan_id}", response_model=None)
 async def delete_capacity_plan(plan_id: str, principal: PrincipalDependency = None):
     """Delete a capacity plan."""
     enforce_scope(principal, "agent:run")
@@ -10234,7 +10235,7 @@ async def delete_capacity_plan(plan_id: str, principal: PrincipalDependency = No
 
 # ── Canary Releases ──
 
-@router.post("/canary/releases", response_model=None)
+@extended_router.post("/canary/releases", response_model=None)
 async def create_canary_release(payload: dict[str, Any], principal: PrincipalDependency = None):
     """Create a canary release with progressive traffic shifting.
 
@@ -10281,7 +10282,7 @@ async def create_canary_release(payload: dict[str, Any], principal: PrincipalDep
     return record
 
 
-@router.post("/canary/releases/{release_id}/advance", response_model=None)
+@extended_router.post("/canary/releases/{release_id}/advance", response_model=None)
 async def advance_canary(release_id: str, payload: dict[str, Any], principal: PrincipalDependency = None):
     """Advance canary to next stage after checking gate metrics.
 
@@ -10363,7 +10364,7 @@ async def advance_canary(release_id: str, payload: dict[str, Any], principal: Pr
             "gate_passed": True, "stages_remaining": len(rel["stages"]) - rel["current_stage"]}
 
 
-@router.get("/canary/releases", response_model=None)
+@extended_router.get("/canary/releases", response_model=None)
 async def list_canary_releases(status: str = None, principal: PrincipalDependency = None):
     """List canary releases, optionally filtered by status."""
     enforce_scope(principal, "agent:run")
@@ -10376,7 +10377,7 @@ async def list_canary_releases(status: str = None, principal: PrincipalDependenc
     return {"releases": summaries, "total": len(summaries)}
 
 
-@router.get("/canary/releases/{release_id}", response_model=None)
+@extended_router.get("/canary/releases/{release_id}", response_model=None)
 async def get_canary_release(release_id: str, principal: PrincipalDependency = None):
     """Get canary release details."""
     enforce_scope(principal, "agent:run")
@@ -10386,7 +10387,7 @@ async def get_canary_release(release_id: str, principal: PrincipalDependency = N
     return rel
 
 
-@router.post("/canary/releases/{release_id}/abort", response_model=None)
+@extended_router.post("/canary/releases/{release_id}/abort", response_model=None)
 async def abort_canary(release_id: str, principal: PrincipalDependency = None):
     """Manually abort a canary release."""
     enforce_scope(principal, "agent:run")
@@ -10401,7 +10402,7 @@ async def abort_canary(release_id: str, principal: PrincipalDependency = None):
     return {"release_id": release_id, "status": "aborted"}
 
 
-@router.delete("/canary/releases/{release_id}", response_model=None)
+@extended_router.delete("/canary/releases/{release_id}", response_model=None)
 async def delete_canary_release(release_id: str, principal: PrincipalDependency = None):
     """Delete a canary release record."""
     enforce_scope(principal, "agent:run")
@@ -10420,7 +10421,7 @@ _routing_agents: dict[str, dict[str, Any]] = {}  # agent_id -> routing record
 _conflicts: dict[str, dict[str, Any]] = {}  # conflict_id -> record
 
 
-@router.post("/anomaly/baselines", response_model=None)
+@extended_router.post("/anomaly/baselines", response_model=None)
 async def create_anomaly_baseline(payload: dict[str, Any], principal: PrincipalDependency = None):
     """Create a baseline profile for anomaly detection.
 
@@ -10482,7 +10483,7 @@ async def create_anomaly_baseline(payload: dict[str, Any], principal: PrincipalD
     return record
 
 
-@router.post("/anomaly/detect", response_model=None)
+@extended_router.post("/anomaly/detect", response_model=None)
 async def detect_anomalies(payload: dict[str, Any], principal: PrincipalDependency = None):
     """Detect anomalies in new data against a baseline.
 
@@ -10557,7 +10558,7 @@ async def detect_anomalies(payload: dict[str, Any], principal: PrincipalDependen
             "alert": alert, "healthy": len(anomalies) == 0}
 
 
-@router.get("/anomaly/baselines", response_model=None)
+@extended_router.get("/anomaly/baselines", response_model=None)
 async def list_anomaly_baselines(principal: PrincipalDependency = None):
     """List all anomaly baselines."""
     enforce_scope(principal, "agent:run")
@@ -10567,7 +10568,7 @@ async def list_anomaly_baselines(principal: PrincipalDependency = None):
     return {"baselines": summaries, "total": len(summaries)}
 
 
-@router.get("/anomaly/alerts", response_model=None)
+@extended_router.get("/anomaly/alerts", response_model=None)
 async def list_anomaly_alerts(severity: str = None, principal: PrincipalDependency = None):
     """List anomaly alerts, optionally filtered by severity."""
     enforce_scope(principal, "agent:run")
@@ -10577,7 +10578,7 @@ async def list_anomaly_alerts(severity: str = None, principal: PrincipalDependen
     return {"alerts": items[-50:], "total": len(items)}
 
 
-@router.delete("/anomaly/baselines/{baseline_id}", response_model=None)
+@extended_router.delete("/anomaly/baselines/{baseline_id}", response_model=None)
 async def delete_anomaly_baseline(baseline_id: str, principal: PrincipalDependency = None):
     """Delete an anomaly baseline."""
     enforce_scope(principal, "agent:run")
@@ -10589,7 +10590,7 @@ async def delete_anomaly_baseline(baseline_id: str, principal: PrincipalDependen
 
 # ── Intelligent Routing ──
 
-@router.post("/routing/agents", response_model=None)
+@extended_router.post("/routing/agents", response_model=None)
 async def register_routing_agent(payload: dict[str, Any], principal: PrincipalDependency = None):
     """Register an agent for intelligent routing.
 
@@ -10622,7 +10623,7 @@ async def register_routing_agent(payload: dict[str, Any], principal: PrincipalDe
     return record
 
 
-@router.post("/routing/dispatch", response_model=None)
+@extended_router.post("/routing/dispatch", response_model=None)
 async def dispatch_task(payload: dict[str, Any], principal: PrincipalDependency = None):
     """Dispatch a task to the best matching agent.
 
@@ -10688,7 +10689,7 @@ async def dispatch_task(payload: dict[str, Any], principal: PrincipalDependency 
             "strategy": fallback, "all_candidates": candidates[:5]}
 
 
-@router.post("/routing/complete", response_model=None)
+@extended_router.post("/routing/complete", response_model=None)
 async def routing_complete(payload: dict[str, Any], principal: PrincipalDependency = None):
     """Mark a routed task as completed, freeing agent capacity.
 
@@ -10705,7 +10706,7 @@ async def routing_complete(payload: dict[str, Any], principal: PrincipalDependen
             "total_completed": ag["total_completed"]}
 
 
-@router.get("/routing/agents", response_model=None)
+@extended_router.get("/routing/agents", response_model=None)
 async def list_routing_agents(principal: PrincipalDependency = None):
     """List all registered routing agents."""
     enforce_scope(principal, "agent:run")
@@ -10713,7 +10714,7 @@ async def list_routing_agents(principal: PrincipalDependency = None):
     return {"agents": agents, "total": len(agents)}
 
 
-@router.delete("/routing/agents/{agent_id}", response_model=None)
+@extended_router.delete("/routing/agents/{agent_id}", response_model=None)
 async def deregister_routing_agent(agent_id: str, principal: PrincipalDependency = None):
     """Deregister a routing agent."""
     enforce_scope(principal, "agent:run")
@@ -10725,7 +10726,7 @@ async def deregister_routing_agent(agent_id: str, principal: PrincipalDependency
 
 # ── Conflict Resolution ──
 
-@router.post("/conflicts", response_model=None)
+@extended_router.post("/conflicts", response_model=None)
 async def create_conflict(payload: dict[str, Any], principal: PrincipalDependency = None):
     """Register a conflict between multiple outputs/proposals.
 
@@ -10810,7 +10811,7 @@ async def create_conflict(payload: dict[str, Any], principal: PrincipalDependenc
     return record
 
 
-@router.get("/conflicts", response_model=None)
+@extended_router.get("/conflicts", response_model=None)
 async def list_conflicts(strategy: str = None, principal: PrincipalDependency = None):
     """List conflicts, optionally filtered by strategy."""
     enforce_scope(principal, "agent:run")
@@ -10823,7 +10824,7 @@ async def list_conflicts(strategy: str = None, principal: PrincipalDependency = 
     return {"conflicts": summaries, "total": len(summaries)}
 
 
-@router.get("/conflicts/{conflict_id}", response_model=None)
+@extended_router.get("/conflicts/{conflict_id}", response_model=None)
 async def get_conflict(conflict_id: str, principal: PrincipalDependency = None):
     """Get conflict details."""
     enforce_scope(principal, "agent:run")
@@ -10833,7 +10834,7 @@ async def get_conflict(conflict_id: str, principal: PrincipalDependency = None):
     return rec
 
 
-@router.delete("/conflicts/{conflict_id}", response_model=None)
+@extended_router.delete("/conflicts/{conflict_id}", response_model=None)
 async def delete_conflict(conflict_id: str, principal: PrincipalDependency = None):
     """Delete a conflict record."""
     enforce_scope(principal, "agent:run")
@@ -10851,7 +10852,7 @@ _leaderboard_entries: dict[str, list[dict[str, Any]]] = {}  # category -> [entri
 _defects: dict[str, dict[str, Any]] = {}  # defect_id -> record
 
 
-@router.post("/escrow/create", response_model=None)
+@extended_router.post("/escrow/create", response_model=None)
 async def create_escrow(payload: dict[str, Any], principal: PrincipalDependency = None):
     """Create an output escrow account for conditional delivery.
 
@@ -10892,7 +10893,7 @@ async def create_escrow(payload: dict[str, Any], principal: PrincipalDependency 
     return record
 
 
-@router.post("/escrow/{escrow_id}/verify", response_model=None)
+@extended_router.post("/escrow/{escrow_id}/verify", response_model=None)
 async def verify_escrow_condition(escrow_id: str, payload: dict[str, Any], principal: PrincipalDependency = None):
     """Mark a release condition as met.
 
@@ -10924,7 +10925,7 @@ async def verify_escrow_condition(escrow_id: str, payload: dict[str, Any], princ
             "all_conditions_met": all_met, "status": esc["status"]}
 
 
-@router.post("/escrow/{escrow_id}/milestone", response_model=None)
+@extended_router.post("/escrow/{escrow_id}/milestone", response_model=None)
 async def complete_escrow_milestone(escrow_id: str, payload: dict[str, Any], principal: PrincipalDependency = None):
     """Mark a milestone as completed.
 
@@ -10949,7 +10950,7 @@ async def complete_escrow_milestone(escrow_id: str, payload: dict[str, Any], pri
             "milestones_completed": completed, "milestones_total": len(esc["milestones"])}
 
 
-@router.post("/escrow/{escrow_id}/dispute", response_model=None)
+@extended_router.post("/escrow/{escrow_id}/dispute", response_model=None)
 async def dispute_escrow(escrow_id: str, payload: dict[str, Any], principal: PrincipalDependency = None):
     """Raise a dispute on an escrow account.
 
@@ -10971,7 +10972,7 @@ async def dispute_escrow(escrow_id: str, payload: dict[str, Any], principal: Pri
             "escalated_to": esc["dispute_to"] or "platform_admin"}
 
 
-@router.get("/escrow/{escrow_id}", response_model=None)
+@extended_router.get("/escrow/{escrow_id}", response_model=None)
 async def get_escrow(escrow_id: str, principal: PrincipalDependency = None):
     """Get escrow account details."""
     enforce_scope(principal, "agent:run")
@@ -10981,7 +10982,7 @@ async def get_escrow(escrow_id: str, principal: PrincipalDependency = None):
     return esc
 
 
-@router.get("/escrow", response_model=None)
+@extended_router.get("/escrow", response_model=None)
 async def list_escrows(status: str = None, principal: PrincipalDependency = None):
     """List escrow accounts."""
     enforce_scope(principal, "agent:run")
@@ -10996,7 +10997,7 @@ async def list_escrows(status: str = None, principal: PrincipalDependency = None
 
 # ── Performance Leaderboard ──
 
-@router.post("/leaderboard/submit", response_model=None)
+@extended_router.post("/leaderboard/submit", response_model=None)
 async def submit_leaderboard_score(payload: dict[str, Any], principal: PrincipalDependency = None):
     """Submit a performance benchmark score.
 
@@ -11042,7 +11043,7 @@ async def submit_leaderboard_score(payload: dict[str, Any], principal: Principal
     return {**entry, "rank": rank, "total_in_category": len(_leaderboard_entries[category])}
 
 
-@router.get("/leaderboard/{category}", response_model=None)
+@extended_router.get("/leaderboard/{category}", response_model=None)
 async def get_leaderboard(category: str, limit: int = 10, principal: PrincipalDependency = None):
     """Get leaderboard for a category with rankings and percentiles."""
     enforce_scope(principal, "agent:run")
@@ -11069,7 +11070,7 @@ async def get_leaderboard(category: str, limit: int = 10, principal: PrincipalDe
     return {"category": category, "entries": ranked, "total": n, "percentiles": percentiles}
 
 
-@router.get("/leaderboard", response_model=None)
+@extended_router.get("/leaderboard", response_model=None)
 async def list_leaderboard_categories(principal: PrincipalDependency = None):
     """List all leaderboard categories with top scores."""
     enforce_scope(principal, "agent:run")
@@ -11084,7 +11085,7 @@ async def list_leaderboard_categories(principal: PrincipalDependency = None):
 
 # ── Defect Tracking ──
 
-@router.post("/defects", response_model=None)
+@extended_router.post("/defects", response_model=None)
 async def create_defect(payload: dict[str, Any], principal: PrincipalDependency = None):
     """Report a defect linked to a delivered output.
 
@@ -11124,7 +11125,7 @@ async def create_defect(payload: dict[str, Any], principal: PrincipalDependency 
     return record
 
 
-@router.post("/defects/{defect_id}/transition", response_model=None)
+@extended_router.post("/defects/{defect_id}/transition", response_model=None)
 async def transition_defect(defect_id: str, payload: dict[str, Any], principal: PrincipalDependency = None):
     """Transition a defect to a new status.
 
@@ -11163,7 +11164,7 @@ async def transition_defect(defect_id: str, payload: dict[str, Any], principal: 
             "history_length": len(defect["history"])}
 
 
-@router.get("/defects", response_model=None)
+@extended_router.get("/defects", response_model=None)
 async def list_defects(status: str = None, severity: str = None, principal: PrincipalDependency = None):
     """List defects with optional filters."""
     enforce_scope(principal, "agent:run")
@@ -11177,7 +11178,7 @@ async def list_defects(status: str = None, severity: str = None, principal: Prin
     return {"defects": summaries, "total": len(summaries)}
 
 
-@router.get("/defects/{defect_id}", response_model=None)
+@extended_router.get("/defects/{defect_id}", response_model=None)
 async def get_defect(defect_id: str, principal: PrincipalDependency = None):
     """Get defect details."""
     enforce_scope(principal, "agent:run")
@@ -11189,7 +11190,7 @@ async def get_defect(defect_id: str, principal: PrincipalDependency = None):
     return {**defect, "in_warranty": in_warranty}
 
 
-@router.get("/defects/stats/summary", response_model=None)
+@extended_router.get("/defects/stats/summary", response_model=None)
 async def defect_stats(principal: PrincipalDependency = None):
     """Get defect statistics summary."""
     enforce_scope(principal, "agent:run")
@@ -11205,7 +11206,7 @@ async def defect_stats(principal: PrincipalDependency = None):
             "by_severity": by_severity, "by_status": by_status}
 
 
-@router.delete("/defects/{defect_id}", response_model=None)
+@extended_router.delete("/defects/{defect_id}", response_model=None)
 async def delete_defect(defect_id: str, principal: PrincipalDependency = None):
     """Delete a defect record."""
     enforce_scope(principal, "agent:run")
@@ -11234,7 +11235,7 @@ _SKILL_LEVELS = [
 ]
 
 
-@router.post("/skills/profiles", response_model=None)
+@extended_router.post("/skills/profiles", response_model=None)
 async def create_skill_profile(payload: dict[str, Any], principal: PrincipalDependency = None):
     """Create or get a skill progression profile for an agent.
 
@@ -11272,7 +11273,7 @@ async def create_skill_profile(payload: dict[str, Any], principal: PrincipalDepe
     return {"status": "created", "profile": record}
 
 
-@router.post("/skills/earn", response_model=None)
+@extended_router.post("/skills/earn", response_model=None)
 async def earn_skill_xp(payload: dict[str, Any], principal: PrincipalDependency = None):
     """Award XP to a skill, potentially triggering level-up.
 
@@ -11331,7 +11332,7 @@ async def earn_skill_xp(payload: dict[str, Any], principal: PrincipalDependency 
             "leveled_up": leveled_up, "tasks_completed": skill["tasks_completed"]}
 
 
-@router.get("/skills/{agent_id}", response_model=None)
+@extended_router.get("/skills/{agent_id}", response_model=None)
 async def get_skill_profile(agent_id: str, principal: PrincipalDependency = None):
     """Get skill profile with radar chart data."""
     enforce_scope(principal, "agent:run")
@@ -11344,7 +11345,7 @@ async def get_skill_profile(agent_id: str, principal: PrincipalDependency = None
     return {**profile, "radar": radar, "skill_count": len(profile["skills"])}
 
 
-@router.get("/skills", response_model=None)
+@extended_router.get("/skills", response_model=None)
 async def list_skill_profiles(principal: PrincipalDependency = None):
     """List all skill profiles."""
     enforce_scope(principal, "agent:run")
@@ -11357,7 +11358,7 @@ async def list_skill_profiles(principal: PrincipalDependency = None):
 
 # ── Reproducibility Engine ──
 
-@router.post("/repro/snapshots", response_model=None)
+@extended_router.post("/repro/snapshots", response_model=None)
 async def create_repro_snapshot(payload: dict[str, Any], principal: PrincipalDependency = None):
     """Create a reproducibility snapshot capturing execution environment.
 
@@ -11389,7 +11390,7 @@ async def create_repro_snapshot(payload: dict[str, Any], principal: PrincipalDep
     return record
 
 
-@router.post("/repro/verify", response_model=None)
+@extended_router.post("/repro/verify", response_model=None)
 async def verify_reproducibility(payload: dict[str, Any], principal: PrincipalDependency = None):
     """Verify that a run can be reproduced from a snapshot.
 
@@ -11446,7 +11447,7 @@ async def verify_reproducibility(payload: dict[str, Any], principal: PrincipalDe
             "status": snap["status"], "total_verifications": len(snap["verifications"])}
 
 
-@router.get("/repro/snapshots", response_model=None)
+@extended_router.get("/repro/snapshots", response_model=None)
 async def list_repro_snapshots(principal: PrincipalDependency = None):
     """List all reproducibility snapshots."""
     enforce_scope(principal, "agent:run")
@@ -11457,7 +11458,7 @@ async def list_repro_snapshots(principal: PrincipalDependency = None):
     return {"snapshots": summaries, "total": len(summaries)}
 
 
-@router.get("/repro/snapshots/{snapshot_id}", response_model=None)
+@extended_router.get("/repro/snapshots/{snapshot_id}", response_model=None)
 async def get_repro_snapshot(snapshot_id: str, principal: PrincipalDependency = None):
     """Get snapshot details."""
     enforce_scope(principal, "agent:run")
@@ -11467,7 +11468,7 @@ async def get_repro_snapshot(snapshot_id: str, principal: PrincipalDependency = 
     return snap
 
 
-@router.delete("/repro/snapshots/{snapshot_id}", response_model=None)
+@extended_router.delete("/repro/snapshots/{snapshot_id}", response_model=None)
 async def delete_repro_snapshot(snapshot_id: str, principal: PrincipalDependency = None):
     """Delete a snapshot."""
     enforce_scope(principal, "agent:run")
@@ -11479,7 +11480,7 @@ async def delete_repro_snapshot(snapshot_id: str, principal: PrincipalDependency
 
 # ── Token Economy ──
 
-@router.post("/economy/accounts", response_model=None)
+@extended_router.post("/economy/accounts", response_model=None)
 async def create_economy_account(payload: dict[str, Any], principal: PrincipalDependency = None):
     """Create a token economy account.
 
@@ -11512,7 +11513,7 @@ async def create_economy_account(payload: dict[str, Any], principal: PrincipalDe
     return {"status": "created", "account": record}
 
 
-@router.post("/economy/charge", response_model=None)
+@extended_router.post("/economy/charge", response_model=None)
 async def economy_charge(payload: dict[str, Any], principal: PrincipalDependency = None):
     """Charge tokens for a service usage.
 
@@ -11553,7 +11554,7 @@ async def economy_charge(payload: dict[str, Any], principal: PrincipalDependency
             "total_spent": ledger["total_spent"], "status": ledger["status"]}
 
 
-@router.post("/economy/credit", response_model=None)
+@extended_router.post("/economy/credit", response_model=None)
 async def economy_credit(payload: dict[str, Any], principal: PrincipalDependency = None):
     """Credit tokens to an account (reward, refund, grant).
 
@@ -11582,7 +11583,7 @@ async def economy_credit(payload: dict[str, Any], principal: PrincipalDependency
             "total_earned": ledger["total_earned"], "status": ledger["status"]}
 
 
-@router.get("/economy/{account_id}", response_model=None)
+@extended_router.get("/economy/{account_id}", response_model=None)
 async def get_economy_account(account_id: str, principal: PrincipalDependency = None):
     """Get account details with transaction history."""
     enforce_scope(principal, "agent:run")
@@ -11592,7 +11593,7 @@ async def get_economy_account(account_id: str, principal: PrincipalDependency = 
     return ledger
 
 
-@router.get("/economy", response_model=None)
+@extended_router.get("/economy", response_model=None)
 async def list_economy_accounts(principal: PrincipalDependency = None):
     """List all economy accounts."""
     enforce_scope(principal, "agent:run")
@@ -11602,7 +11603,7 @@ async def list_economy_accounts(principal: PrincipalDependency = None):
     return {"accounts": accounts, "total": len(accounts)}
 
 
-@router.post("/economy/{account_id}/suspend", response_model=None)
+@extended_router.post("/economy/{account_id}/suspend", response_model=None)
 async def suspend_economy_account(account_id: str, principal: PrincipalDependency = None):
     """Suspend an account (block charges)."""
     enforce_scope(principal, "agent:run")
@@ -11613,7 +11614,7 @@ async def suspend_economy_account(account_id: str, principal: PrincipalDependenc
     return {"account_id": account_id, "status": "suspended"}
 
 
-@router.post("/economy/{account_id}/reactivate", response_model=None)
+@extended_router.post("/economy/{account_id}/reactivate", response_model=None)
 async def reactivate_economy_account(account_id: str, principal: PrincipalDependency = None):
     """Reactivate a suspended account."""
     enforce_scope(principal, "agent:run")
@@ -11827,7 +11828,7 @@ class _AgentEventBus:
 agent_event_bus = _AgentEventBus()
 
 
-@router.get("/dev-portal")
+@extended_router.get("/dev-portal")
 async def get_developer_portal(principal: PrincipalDependency = None) -> dict[str, object]:
     """T: Developer portal metadata — API catalog, plugin guide, ADR index."""
     enforce_scope(principal, "agent:run")
@@ -11880,7 +11881,7 @@ async def get_developer_portal(principal: PrincipalDependency = None) -> dict[st
     }
 
 
-@router.get("/evaluation")
+@extended_router.get("/evaluation")
 async def get_agent_evaluation(principal: PrincipalDependency = None) -> dict[str, object]:
     """V: Agent evaluation framework — completion rate, quality score, benchmark."""
     enforce_scope(principal, "agent:run")
@@ -11948,7 +11949,7 @@ async def get_agent_evaluation(principal: PrincipalDependency = None) -> dict[st
     }
 
 
-@router.get("/runs/{trace_id}/test-fix-loop", response_model=None)
+@extended_router.get("/runs/{trace_id}/test-fix-loop", response_model=None)
 async def get_test_fix_loop(
     trace_id: str,
     principal: PrincipalDependency,
@@ -12050,7 +12051,7 @@ async def get_test_fix_loop(
     }
 
 
-@router.websocket("/events/ws")
+@extended_router.websocket("/events/ws")
 async def agent_events_websocket(websocket: WebSocket):
     """WebSocket: real-time agent execution events.
 

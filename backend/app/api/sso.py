@@ -397,6 +397,7 @@ async def sso_status() -> dict[str, Any]:
 # ============================================================================
 
 auth_router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
+extended_auth_router = APIRouter(prefix="/api/v1/auth", tags=["auth-extended"])  # C2: unmounted; handler bodies unchanged
 PrincipalDependency = Annotated[Principal, Depends(get_current_principal)]
 
 
@@ -417,7 +418,7 @@ class OAuthLoginResponse(BaseModel):
     session: dict[str, Any] = Field(default_factory=dict)
 
 
-@auth_router.post("/sso/oauth/authorize")
+@extended_auth_router.post("/sso/oauth/authorize")
 async def oauth_authorize(provider: str = Query(...)) -> dict:
     """获取旧版 OAuth 授权 URL (google/github/microsoft)。"""
     try:
@@ -438,7 +439,7 @@ async def oauth_authorize(provider: str = Query(...)) -> dict:
     }
 
 
-@auth_router.post("/sso/oauth/callback")
+@extended_auth_router.post("/sso/oauth/callback")
 async def oauth_callback(request: OAuthLoginRequest) -> OAuthLoginResponse:
     """旧版 OAuth 回调 (P1-02 修复: 真实 userinfo + JIT + 本地会话签发)。
 
@@ -701,7 +702,7 @@ class WebAuthnAuthCompleteRequest(BaseModel):
     client_data: str = Field(default="")
 
 
-@auth_router.post("/webauthn/register/start")
+@extended_auth_router.post("/webauthn/register/start")
 async def webauthn_register_start(req: WebAuthnRegisterStartRequest):
     """P1-05: WebAuthn 注册 — 生成注册 challenge."""
     provider = _get_webauthn_provider()
@@ -714,7 +715,7 @@ async def webauthn_register_start(req: WebAuthnRegisterStartRequest):
     return {"challenge_id": challenge_id, "options": options}
 
 
-@auth_router.post("/webauthn/register/complete")
+@extended_auth_router.post("/webauthn/register/complete")
 async def webauthn_register_complete(req: WebAuthnRegisterCompleteRequest):
     """P1-05: WebAuthn 注册完成 — 验证并存储凭据."""
     provider = _get_webauthn_provider()
@@ -730,7 +731,7 @@ async def webauthn_register_complete(req: WebAuthnRegisterCompleteRequest):
     return {"status": "registered", "credential_id": req.credential_id}
 
 
-@auth_router.post("/webauthn/authenticate/start")
+@extended_auth_router.post("/webauthn/authenticate/start")
 async def webauthn_authenticate_start(req: WebAuthnAuthStartRequest):
     """P1-05: WebAuthn 认证 — 生成认证 challenge."""
     provider = _get_webauthn_provider()
@@ -742,7 +743,7 @@ async def webauthn_authenticate_start(req: WebAuthnAuthStartRequest):
     return {"challenge_id": challenge_id, "options": options}
 
 
-@auth_router.post("/webauthn/authenticate/complete")
+@extended_auth_router.post("/webauthn/authenticate/complete")
 async def webauthn_authenticate_complete(req: WebAuthnAuthCompleteRequest):
     """P1-05: WebAuthn 认证完成 — 验证签名."""
     provider = _get_webauthn_provider()
@@ -760,13 +761,13 @@ async def webauthn_authenticate_complete(req: WebAuthnAuthCompleteRequest):
     return {"status": "authenticated", "user_id": user_id}
 
 
-@auth_router.post("/conditional-access/policies")
+@extended_auth_router.post("/conditional-access/policies")
 async def create_conditional_access_policy() -> None:
     """条件访问策略 — 未实现 (501 fail-closed)。"""
     raise api_error(501, ErrorCode.VALIDATION_ERROR, _CONDITIONAL_ACCESS_NOT_IMPLEMENTED)
 
 
-@auth_router.get("/conditional-access/policies")
+@extended_auth_router.get("/conditional-access/policies")
 async def list_conditional_access_policies() -> None:
     """条件访问策略列表 — 未实现 (501 fail-closed)。"""
     raise api_error(501, ErrorCode.VALIDATION_ERROR, _CONDITIONAL_ACCESS_NOT_IMPLEMENTED)
@@ -822,7 +823,7 @@ class LDAPLoginResponse(BaseModel):
     session: dict[str, Any] = Field(default_factory=dict)
 
 
-@auth_router.post("/ldap/login", response_model=LDAPLoginResponse)
+@extended_auth_router.post("/ldap/login", response_model=LDAPLoginResponse)
 async def ldap_login(req: LDAPLoginRequest) -> LDAPLoginResponse:
     """P1-05: LDAP 认证 — 真实 ldap3 bind+search+属性映射.
 
@@ -887,7 +888,7 @@ async def ldap_login(req: LDAPLoginRequest) -> LDAPLoginResponse:
     )
 
 
-@auth_router.post("/ldap/search")
+@extended_auth_router.post("/ldap/search")
 async def ldap_search_user(
     username: str = Query(..., min_length=1),
     principal: PrincipalDependency = None,  # type: ignore[assignment]

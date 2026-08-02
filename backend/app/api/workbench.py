@@ -17,6 +17,7 @@ from backend.app.dependencies import enforce_scope, get_current_principal
 from backend.app.settings import get_settings
 
 router = APIRouter(prefix="/api/v1/workbench", tags=["workbench"])
+extended_router = APIRouter(prefix="/api/v1/workbench", tags=["workbench-extended"])  # C2: unmounted
 
 
 def get_workbench_principal(request: Request) -> Principal:
@@ -120,7 +121,7 @@ async def get_workbench(principal: PrincipalDependency) -> ConsoleBootstrapRespo
     )
 
 
-@router.post("/tasks")
+@extended_router.post("/tasks")
 async def create_workbench_task(request: WorkbenchTaskRequest, principal: PrincipalDependency) -> dict[str, object]:
     enforce_scope(principal, "agent:run")
     return {

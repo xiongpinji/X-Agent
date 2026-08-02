@@ -60,6 +60,7 @@ from backend.app.core.security import Principal
 from backend.app.dependencies import enforce_scope, get_current_principal, get_memory
 
 router = APIRouter(prefix="/api/v1/collaboration", tags=["collaboration"])
+extended_router = APIRouter(prefix="/api/v1/collaboration", tags=["collaboration-extended"])  # C2: unmounted; handler bodies unchanged
 PrincipalDependency = Annotated[Principal, Depends(get_current_principal)]
 MemoryDependency = Annotated[MemorySystem, Depends(get_memory)]
 
@@ -604,7 +605,7 @@ class SharedContextWriteRequest(BaseModel):
     ttl_seconds: int | None = Field(None, ge=1, le=86400)
 
 
-@router.put("/shared-context")
+@extended_router.put("/shared-context")
 async def write_shared_context(request: SharedContextWriteRequest, principal: PrincipalDependency) -> dict[str, object]:
     """Write a key-value pair to the room's shared context (visible to all member agents)."""
     enforce_scope(principal, "agent:run")
@@ -620,7 +621,7 @@ async def write_shared_context(request: SharedContextWriteRequest, principal: Pr
     return {"room_id": request.room_id, "key": request.key, "status": "written"}
 
 
-@router.get("/shared-context/{room_id}")
+@extended_router.get("/shared-context/{room_id}")
 async def read_shared_context(room_id: str, principal: PrincipalDependency, key: str | None = None) -> dict[str, object]:
     """Read shared context for a room. Optionally filter by key."""
     enforce_scope(principal, "agent:run")
@@ -635,7 +636,7 @@ async def read_shared_context(room_id: str, principal: PrincipalDependency, key:
 # ─── Agent Discovery & Dashboard (H2) ─────────────────────────────────────────
 
 
-@router.get("/agents/discover")
+@extended_router.get("/agents/discover")
 async def discover_agents(
     principal: PrincipalDependency,
     capability: str | None = None,
@@ -671,7 +672,7 @@ async def discover_agents(
     }
 
 
-@router.get("/dashboard")
+@extended_router.get("/dashboard")
 async def collaboration_dashboard(principal: PrincipalDependency) -> dict[str, object]:
     """Collaboration overview: active rooms, recent delegations, agent statuses."""
     enforce_scope(principal, "agent:run")

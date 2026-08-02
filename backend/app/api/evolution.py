@@ -12,6 +12,7 @@ from backend.app.core.self_evolution import self_evolution_engine
 from backend.app.dependencies import enforce_scope, get_current_principal
 
 router = APIRouter(prefix="/api/v1/evolution", tags=["evolution"])
+extended_router = APIRouter(prefix="/api/v1/evolution", tags=["evolution-extended"])  # C2: unmounted; handler bodies unchanged
 PrincipalDependency = Annotated[Principal, Depends(get_current_principal)]
 
 
@@ -85,19 +86,19 @@ async def trigger_evolution(principal: PrincipalDependency, req: TriggerRequest)
     }
 
 
-@router.get("/reflections")
+@extended_router.get("/reflections")
 async def list_reflections(principal: PrincipalDependency, agent_id: str | None = None) -> list[dict[str, object]]:
     enforce_scope(principal, "agent:read")
     return [item.model_dump(mode="json") for item in evolution_store.list_reflections(agent_id=agent_id)]
 
 
-@router.get("/learnings")
+@extended_router.get("/learnings")
 async def list_learnings(principal: PrincipalDependency, agent_id: str | None = None) -> list[dict[str, object]]:
     enforce_scope(principal, "agent:read")
     return [item.model_dump(mode="json") for item in evolution_store.list_learnings(agent_id=agent_id)]
 
 
-@router.get("/capabilities")
+@extended_router.get("/capabilities")
 async def list_capabilities(principal: PrincipalDependency, agent_id: str | None = None) -> list[dict[str, object]]:
     enforce_scope(principal, "agent:read")
     return [item.model_dump(mode="json") for item in evolution_store.list_capabilities(agent_id=agent_id)]
@@ -134,7 +135,7 @@ class TriggerCycleRequest(BaseModel):
     task_id: str = Field(..., min_length=1)
 
 
-@router.post("/self-evolution/record")
+@extended_router.post("/self-evolution/record")
 async def se_record_execution(
     principal: PrincipalDependency,
     req: RecordExecutionRequest,
@@ -145,7 +146,7 @@ async def se_record_execution(
     return {"execution_id": execution_id, "task_id": req.task_id, "stage": "execute"}
 
 
-@router.post("/self-evolution/evaluate")
+@extended_router.post("/self-evolution/evaluate")
 async def se_evaluate_execution(
     principal: PrincipalDependency,
     req: EvaluateRequest,
@@ -156,7 +157,7 @@ async def se_evaluate_execution(
     return {"execution_id": req.execution_id, "score": score, "stage": "evaluate"}
 
 
-@router.post("/self-evolution/optimize")
+@extended_router.post("/self-evolution/optimize")
 async def se_optimize_strategy(
     principal: PrincipalDependency,
     req: OptimizeRequest,
@@ -167,7 +168,7 @@ async def se_optimize_strategy(
     return {**result, "stage": "optimize"}
 
 
-@router.post("/self-evolution/distill")
+@extended_router.post("/self-evolution/distill")
 async def se_distill_skill(
     principal: PrincipalDependency,
     req: DistillSkillRequest,
@@ -178,7 +179,7 @@ async def se_distill_skill(
     return {**result, "stage": "learn"}
 
 
-@router.post("/self-evolution/cycle")
+@extended_router.post("/self-evolution/cycle")
 async def se_trigger_cycle(
     principal: PrincipalDependency,
     req: TriggerCycleRequest,
@@ -189,7 +190,7 @@ async def se_trigger_cycle(
     return result
 
 
-@router.get("/self-evolution/history")
+@extended_router.get("/self-evolution/history")
 async def se_get_history(
     principal: PrincipalDependency,
     limit: int = 50,
@@ -200,14 +201,14 @@ async def se_get_history(
     return [r.to_dict() for r in records]
 
 
-@router.get("/self-evolution/stats")
+@extended_router.get("/self-evolution/stats")
 async def se_get_stats(principal: PrincipalDependency) -> dict[str, Any]:
     """P1-06: Get self-evolution engine statistics."""
     enforce_scope(principal, "agent:read")
     return self_evolution_engine.get_stats()
 
 
-@router.get("/self-evolution/skills")
+@extended_router.get("/self-evolution/skills")
 async def se_list_skills(principal: PrincipalDependency) -> list[dict[str, Any]]:
     """P1-06: List distilled reusable skills."""
     enforce_scope(principal, "agent:read")

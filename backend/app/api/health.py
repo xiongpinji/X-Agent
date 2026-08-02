@@ -18,6 +18,8 @@ from backend.app.dependencies import (
 )
 
 router = APIRouter(prefix="/api/v1/health", tags=["health"])
+extended_router = APIRouter(prefix="/api/v1/health", tags=["health-extended"])  # C2: unmounted
+extended_router = APIRouter(prefix="/api/v1/health", tags=["health-extended"])  # C2: unmounted
 logger = logging.getLogger("xagent.health")
 
 
@@ -198,7 +200,7 @@ async def liveness_probe() -> dict:
     }
 
 
-@router.get("/ready", response_model=dict)
+@extended_router.get("/ready", response_model=dict)
 async def readiness_probe() -> dict:
     """Readiness probe - indicates if the service is ready to handle requests."""
     checks = await asyncio.gather(
@@ -231,7 +233,7 @@ async def readiness_probe() -> dict:
     return result
 
 
-@router.get("/detailed", response_model=dict)
+@extended_router.get("/detailed", response_model=dict)
 async def detailed_health_check() -> dict:
     """Detailed health check with all dependencies."""
     checks = await asyncio.gather(
@@ -280,7 +282,7 @@ async def detailed_health_check() -> dict:
 # ─── R: Production Deployment Probes ─────────────────────────────────────────
 
 
-@router.get("/deploy-readiness")
+@extended_router.get("/deploy-readiness")
 async def deploy_readiness() -> dict:
     """K8s-style deployment readiness: all subsystems + version + uptime."""
     import os
@@ -305,7 +307,7 @@ async def deploy_readiness() -> dict:
     }
 
 
-@router.get("/drain-status")
+@extended_router.get("/drain-status")
 async def drain_status() -> dict:
     """Graceful shutdown drain status: active requests, shutdown flag."""
     try:

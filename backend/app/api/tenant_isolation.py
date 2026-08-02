@@ -11,10 +11,11 @@ from backend.app.core.tenant_isolation import TenantIsolationValidator
 from backend.app.dependencies import enforce_scope, get_current_principal
 
 router = APIRouter(prefix="/api/v1/security/tenant-isolation", tags=["security"])
+extended_router = APIRouter(prefix="/api/v1/security/tenant-isolation", tags=["tenant-isolation-extended"])  # C2: unmounted
 PrincipalDependency = Annotated[Principal, Depends(get_current_principal)]
 
 
-@router.get("/status")
+@extended_router.get("/status")
 async def get_tenant_isolation_status(
     principal: PrincipalDependency,
 ) -> dict[str, object]:
@@ -29,7 +30,7 @@ async def get_tenant_isolation_status(
     }
 
 
-@router.post("/validate-access")
+@extended_router.post("/validate-access")
 async def validate_tenant_access(
     principal: PrincipalDependency,
     resource_tenant_id: str,
@@ -50,7 +51,7 @@ async def validate_tenant_access(
     }
 
 
-@router.get("/audit-violations")
+@extended_router.get("/audit-violations")
 async def get_tenant_isolation_violations(
     principal: PrincipalDependency,
     limit: int = 100,

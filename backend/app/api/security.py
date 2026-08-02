@@ -14,6 +14,7 @@ from backend.app.core.security import (
 from backend.app.dependencies import enforce_scope, get_api_key_store, get_current_principal
 
 router = APIRouter(prefix="/api/v1/security", tags=["security"])
+extended_router = APIRouter(prefix="/api/v1/security", tags=["security-extended"])  # C2: unmounted; handler bodies unchanged
 APIKeyStoreDependency = Annotated[APIKeyStore, Depends(get_api_key_store)]
 PrincipalDependency = Annotated[Principal, Depends(get_current_principal)]
 
