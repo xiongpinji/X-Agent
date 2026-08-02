@@ -7,8 +7,8 @@ from __future__ import annotations
 
 import typer
 
-from cli.state import get_current_config
 from cli.repl import start_repl
+from cli.state import get_current_config
 
 repl_app = typer.Typer(
     name="repl",

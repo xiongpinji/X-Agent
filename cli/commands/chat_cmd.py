@@ -9,12 +9,11 @@ Provides Codex-like streaming terminal experience with:
 from __future__ import annotations
 
 import asyncio
-from typing import Optional
 
 import typer
 from rich.console import Console
 
-from cli.console import print_error, print_info
+from cli.console import print_error
 
 chat_app = typer.Typer(no_args_is_help=True)
 
@@ -22,8 +21,8 @@ chat_app = typer.Typer(no_args_is_help=True)
 @chat_app.callback(invoke_without_command=True)
 def chat(
     ctx: typer.Context,
-    message: Optional[str] = typer.Argument(None, help="Message to send to the agent"),
-    session_id: Optional[str] = typer.Option(None, "--session", "-s", help="Session ID for multi-turn context"),
+    message: str | None = typer.Argument(None, help="Message to send to the agent"),
+    session_id: str | None = typer.Option(None, "--session", "-s", help="Session ID for multi-turn context"),
     stream: bool = typer.Option(True, "--stream/--no-stream", help="Enable streaming output"),
 ) -> None:
     """Interactive chat with X-Agent (streaming TUI).
@@ -98,8 +97,9 @@ def sessions() -> None:
         console.print("[dim]No saved sessions.[/dim]")
         return
 
-    from rich.table import Table
     import time
+
+    from rich.table import Table
     table = Table(title="Chat Sessions")
     table.add_column("ID", style="cyan")
     table.add_column("Turns", justify="right")

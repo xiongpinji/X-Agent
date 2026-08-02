@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Optional
 
 import typer
 
@@ -14,8 +13,8 @@ review_app = typer.Typer(no_args_is_help=True)
 @review_app.command("pr")
 def review_pr(
     pr_number: int = typer.Argument(..., help="Pull request number to review"),
-    repo: Optional[str] = typer.Option(None, "--repo", "-r", help="Repository (owner/name)"),
-    focus: Optional[str] = typer.Option(None, "--focus", "-f", help="Focus area: logic, security, style, tests"),
+    repo: str | None = typer.Option(None, "--repo", "-r", help="Repository (owner/name)"),
+    focus: str | None = typer.Option(None, "--focus", "-f", help="Focus area: logic, security, style, tests"),
 ) -> None:
     """Review a pull request.
 

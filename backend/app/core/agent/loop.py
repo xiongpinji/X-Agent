@@ -2655,7 +2655,7 @@ class AgentLoop:
                 if last_user_idx is not None:
                     existing_text = messages[last_user_idx]["content"]
                     if isinstance(existing_text, str):
-                        messages[last_user_idx]["content"] = [{"type": "text", "text": existing_text}] + image_parts
+                        messages[last_user_idx]["content"] = [{"type": "text", "text": existing_text}, *image_parts]
                 self._emit_trace(context, "agent.multimodal.images_attached", count=len(image_parts))
         # P1-14: 上下文管理——按配置策略压缩/裁剪发给 LLM 的消息
         messages = await self._prepare_llm_context(context, messages)
@@ -3916,7 +3916,6 @@ class AgentLoop:
         target = str(extra_context.get("path") or extra_context.get("target_path") or extra_context.get("file") or "")
         old_text = str(extra_context.get("old_text") or extra_context.get("needle") or "")
         new_text = str(extra_context.get("new_text") or extra_context.get("replacement") or extra_context.get("content") or "")
-        search_tool = next((tool["name"] for tool in tool_manifest if tool.get("name") == "search_text"), None)
         read_tool = next((tool["name"] for tool in tool_manifest if tool.get("name") == "read_file"), None)
         preview_tool = next((tool["name"] for tool in tool_manifest if tool.get("name") == "preview_text_patch"), None)
         patch_tool = next((tool["name"] for tool in tool_manifest if tool.get("name") == "apply_text_patch"), None)

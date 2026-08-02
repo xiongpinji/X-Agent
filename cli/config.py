@@ -206,12 +206,7 @@ def save_config(config: CLIConfig) -> None:
     config_file = _get_config_file_path()
     config_file.parent.mkdir(parents=True, exist_ok=True)
 
-    try:
-        import tomllib
-        import tomli_w as toml_writer  # type: ignore
-    except ImportError:
-        import tomli as tomllib  # type: ignore
-        import tomli_w as toml_writer  # type: ignore
+    import tomli_w as toml_writer  # type: ignore
 
     data = {
         "xagent": {

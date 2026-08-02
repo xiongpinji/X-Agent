@@ -10,7 +10,6 @@ import asyncio
 import logging
 import shlex
 from pathlib import Path
-from typing import Any
 
 from prompt_toolkit import PromptSession
 from prompt_toolkit.completion import WordCompleter

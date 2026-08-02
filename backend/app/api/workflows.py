@@ -330,7 +330,7 @@ async def get_editor_templates(principal: PrincipalDependency = None) -> dict[st
     return {
         "templates": templates,
         "total": len(templates),
-        "categories": sorted(set(t["category"] for t in templates)),
+        "categories": sorted({t["category"] for t in templates}),
         "node_types_available": ["agent", "condition", "transform", "trigger", "output", "parallel", "loop"],
     }
 

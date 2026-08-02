@@ -146,7 +146,7 @@ async def get_security_posture(principal: PrincipalDependency = None) -> dict[st
     prompt_guard: dict[str, object] = {}
     try:
         from backend.app.core.prompt_guard.engine import PromptGuardEngine
-        engine = PromptGuardEngine()
+        PromptGuardEngine()  # 探测可用性
         prompt_guard = {"enabled": True, "engine": "PromptGuardEngine"}
     except Exception:
         prompt_guard = {"enabled": False, "error": "unavailable"}

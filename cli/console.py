@@ -10,8 +10,8 @@ import json
 from typing import Any
 
 from rich.console import Console
-from rich.table import Table
 from rich.syntax import Syntax
+from rich.table import Table
 
 from cli.config import CLIConfig
 
@@ -161,7 +161,7 @@ def print_table(
     table = Table(title=title)
 
     # Add columns from first row
-    for key in data[0].keys():
+    for key in data[0]:
         table.add_column(key, style="cyan")
 
     # Add rows

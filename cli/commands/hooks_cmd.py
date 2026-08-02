@@ -101,10 +101,7 @@ def list_hooks(
 
         hooks_config = _load_hooks_config(config_path)
 
-        if all_hooks:
-            hooks = hooks_config.hooks
-        else:
-            hooks = hooks_config.enabled_hooks()
+        hooks = hooks_config.hooks if all_hooks else hooks_config.enabled_hooks()
 
         if not hooks:
             if all_hooks:
@@ -238,11 +235,6 @@ def show_hook(
             if available:
                 print_info(f"Available hooks: {', '.join(available)}", config)
             raise typer.Exit(code=1)
-
-        # Build detail dict for display
-        from dataclasses import asdict
-
-        hook_dict = asdict(hook)
 
         # Format for display
         print_info(f"Hook: {hook.name}", config)

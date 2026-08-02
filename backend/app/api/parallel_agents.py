@@ -901,7 +901,7 @@ async def get_queue_health(principal: PrincipalDependency = None) -> dict[str, A
         memory_available_mb = -1
 
     # Event loop lag measurement
-    loop = asyncio.get_event_loop()
+    asyncio.get_event_loop()
     t0 = time.perf_counter()
     await asyncio.sleep(0)
     loop_lag_ms = round((time.perf_counter() - t0) * 1000, 3)

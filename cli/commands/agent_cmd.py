@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-from typing import Any, Optional
+from typing import Any
 
 import typer
 
@@ -33,12 +33,12 @@ agent_app = typer.Typer(
 @agent_app.command()
 def run(
     task: str = typer.Argument(..., help="Task description for the agent to execute"),
-    scope: Optional[list[str]] = typer.Option(
+    scope: list[str] | None = typer.Option(
         None,
         "--scope",
         help="Permission scopes (can be used multiple times)",
     ),
-    context: Optional[str] = typer.Option(
+    context: str | None = typer.Option(
         None,
         "--context",
         help="Extra context as JSON string",
@@ -54,17 +54,17 @@ def run(
         help="CI/CD headless mode: JSON-only output, no interactive elements, exit code reflects success",
         envvar="XAGENT_HEADLESS",
     ),
-    mode: Optional[str] = typer.Option(
+    mode: str | None = typer.Option(
         None,
         "--mode",
         help="Override client mode for this command: 'http' or 'local'",
     ),
-    contract: Optional[str] = typer.Option(
+    contract: str | None = typer.Option(
         None,
         "--contract",
         help="Write the completion contract (证据化完成判定) as JSON to the given path",
     ),
-    parallel: Optional[int] = typer.Option(
+    parallel: int | None = typer.Option(
         None,
         "--parallel",
         min=1,

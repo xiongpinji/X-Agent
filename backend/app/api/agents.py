@@ -580,7 +580,7 @@ async def get_model_routing_status(principal: PrincipalDependency = None) -> dic
     cost_info: dict[str, object] = {}
     try:
         from backend.app.core.llm.cost_optimizer import CostTracker
-        tracker = CostTracker()
+        CostTracker()  # 探测可用性，实例无需保留
         cost_info = {"engine": "CostTracker", "features": ["per_model_breakdown", "budget_alerts", "task_type_analysis"]}
     except Exception:
         cost_info = {"error": "unavailable"}
@@ -717,7 +717,6 @@ async def get_execution_plan(trace_id: str, principal: PrincipalDependency = Non
     # Extract plan info from events
     plan_steps: list[dict[str, Any]] = []
     subtasks: list[str] = []
-    subtask_status: dict[str, str] = {}
     current_iteration = 0
     tool_calls_done: list[dict[str, Any]] = []
     status = "unknown"
@@ -6440,7 +6439,7 @@ async def create_experiment(payload: dict[str, Any], principal: PrincipalDepende
 
 
 @extended_router.get("/experiments", response_model=None)
-async def list_experiments(status: str = None, principal: PrincipalDependency = None):
+async def list_experiments(status: str | None = None, principal: PrincipalDependency = None):
     """List all experiments, optionally filtered by status."""
     enforce_scope(principal, "agent:run")
     items = list(_ab_experiments.values())
@@ -6626,7 +6625,7 @@ async def create_env_profile(payload: dict[str, Any], principal: PrincipalDepend
 
 
 @extended_router.get("/env-profiles", response_model=None)
-async def list_env_profiles(isolation_level: str = None, principal: PrincipalDependency = None):
+async def list_env_profiles(isolation_level: str | None = None, principal: PrincipalDependency = None):
     """List environment profiles, optionally filtered by isolation level."""
     enforce_scope(principal, "agent:run")
     items = list(_env_profiles.values())
@@ -6724,7 +6723,7 @@ async def register_dependency(payload: dict[str, Any], principal: PrincipalDepen
 
 
 @extended_router.get("/dependencies", response_model=None)
-async def list_dependencies(trace_id: str = None, status: str = None, principal: PrincipalDependency = None):
+async def list_dependencies(trace_id: str | None = None, status: str | None = None, principal: PrincipalDependency = None):
     """List dependencies, optionally filtered by trace_id or status."""
     enforce_scope(principal, "agent:run")
     items = list(_run_dependencies.values())
@@ -6880,7 +6879,7 @@ async def register_hook(payload: dict[str, Any], principal: PrincipalDependency 
 
 
 @extended_router.get("/hooks", response_model=None)
-async def list_hooks(event: str = None, enabled: bool = None, principal: PrincipalDependency = None):
+async def list_hooks(event: str | None = None, enabled: bool | None = None, principal: PrincipalDependency = None):
     """List lifecycle hooks, optionally filtered by event or enabled status."""
     enforce_scope(principal, "agent:run")
     items = list(_lifecycle_hooks.values())
@@ -6954,7 +6953,7 @@ async def delete_hook(hook_id: str, principal: PrincipalDependency = None):
 # ── Governance Engine ──
 
 @extended_router.post("/governance/policies", response_model=None)
-async def create_policy(payload: dict[str, Any], principal: PrincipalDependency = None):
+async def create_policy_extended(payload: dict[str, Any], principal: PrincipalDependency = None):
     """Create a governance policy rule.
 
     Fields: name (required), rule_type (max_cost/allowed_tools/data_classification/
@@ -6995,7 +6994,7 @@ async def create_policy(payload: dict[str, Any], principal: PrincipalDependency 
 
 
 @extended_router.get("/governance/policies", response_model=None)
-async def list_policies(rule_type: str = None, scope: str = None, principal: PrincipalDependency = None):
+async def list_policies_extended(rule_type: str | None = None, scope: str | None = None, principal: PrincipalDependency = None):
     """List governance policies, optionally filtered."""
     enforce_scope(principal, "agent:run")
     items = list(_governance_policies.values())
@@ -7090,7 +7089,7 @@ async def toggle_policy(policy_id: str, principal: PrincipalDependency = None):
 
 
 @extended_router.delete("/governance/policies/{policy_id}", response_model=None)
-async def delete_policy(policy_id: str, principal: PrincipalDependency = None):
+async def delete_policy_extended(policy_id: str, principal: PrincipalDependency = None):
     """Delete a governance policy."""
     enforce_scope(principal, "agent:run")
     if policy_id not in _governance_policies:
@@ -7167,7 +7166,7 @@ async def render_output(payload: dict[str, Any], principal: PrincipalDependency 
 
 
 @extended_router.get("/render/history", response_model=None)
-async def render_history(trace_id: str = None, target_format: str = None, principal: PrincipalDependency = None):
+async def render_history(trace_id: str | None = None, target_format: str | None = None, principal: PrincipalDependency = None):
     """List render history, optionally filtered."""
     enforce_scope(principal, "agent:run")
     items = list(_render_jobs.values())
@@ -7302,7 +7301,7 @@ async def get_cost(trace_id: str, principal: PrincipalDependency = None):
 
 
 @extended_router.get("/costs", response_model=None)
-async def cost_summary(department: str = None, project: str = None, principal: PrincipalDependency = None):
+async def cost_summary(department: str | None = None, project: str | None = None, principal: PrincipalDependency = None):
     """Aggregate cost summary with optional department/project filter."""
     enforce_scope(principal, "agent:run")
     items = list(_cost_records.values())
@@ -7403,7 +7402,7 @@ async def register_schema(payload: dict[str, Any], principal: PrincipalDependenc
 
 
 @extended_router.get("/schemas", response_model=None)
-async def list_schemas(strictness: str = None, principal: PrincipalDependency = None):
+async def list_schemas(strictness: str | None = None, principal: PrincipalDependency = None):
     """List registered schemas."""
     enforce_scope(principal, "agent:run")
     items = list(_output_schemas.values())
@@ -7552,7 +7551,7 @@ async def semantic_search(payload: dict[str, Any], principal: PrincipalDependenc
             idf = 1 + (n_docs / (1 + doc_freq.get(w, 0)))
             score += tf * idf
         # Boost for tag matches
-        tag_overlap = query_words & set(t.lower() for t in entry["tags"])
+        tag_overlap = query_words & {t.lower() for t in entry["tags"]}
         score += len(tag_overlap) * 0.5
         scored.append({"trace_id": entry["trace_id"], "task": entry["task"], "score": round(score, 4), "domain": entry["domain"], "tags": entry["tags"]})
     scored.sort(key=lambda x: x["score"], reverse=True)
@@ -7564,8 +7563,8 @@ async def semantic_search(payload: dict[str, Any], principal: PrincipalDependenc
 async def search_stats(principal: PrincipalDependency = None):
     """Get search index statistics."""
     enforce_scope(principal, "agent:run")
-    domains = set(e["domain"] for e in _run_index if e["domain"])
-    languages = set(e["language"] for e in _run_index if e["language"])
+    domains = {e["domain"] for e in _run_index if e["domain"]}
+    languages = {e["language"] for e in _run_index if e["language"]}
     all_keywords: dict[str, int] = {}
     for e in _run_index:
         for w in set(e["keywords"]):
@@ -7705,7 +7704,7 @@ async def generate_compliance_report(payload: dict[str, Any], principal: Princip
 
 
 @extended_router.get("/compliance/reports", response_model=None)
-async def list_compliance_reports(framework: str = None, principal: PrincipalDependency = None):
+async def list_compliance_reports(framework: str | None = None, principal: PrincipalDependency = None):
     """List compliance reports."""
     enforce_scope(principal, "agent:run")
     items = list(_compliance_reports.values())
@@ -7896,7 +7895,7 @@ async def create_scaling_policy(payload: dict[str, Any], principal: PrincipalDep
 
 
 @extended_router.get("/scaling/policies", response_model=None)
-async def list_scaling_policies(metric: str = None, principal: PrincipalDependency = None):
+async def list_scaling_policies(metric: str | None = None, principal: PrincipalDependency = None):
     """List scaling policies."""
     enforce_scope(principal, "agent:run")
     items = list(_scaling_policies.values())
@@ -8022,7 +8021,7 @@ async def create_approval_chain(payload: dict[str, Any], principal: PrincipalDep
 
 
 @extended_router.get("/approvals", response_model=None)
-async def list_approvals(status: str = None, principal: PrincipalDependency = None):
+async def list_approvals(status: str | None = None, principal: PrincipalDependency = None):
     """List approval chains."""
     enforce_scope(principal, "agent:run")
     items = list(_approval_chains.values())
@@ -8254,7 +8253,7 @@ async def create_playbook(payload: dict[str, Any], principal: PrincipalDependenc
 
 
 @extended_router.get("/playbooks", response_model=None)
-async def list_playbooks(trigger: str = None, principal: PrincipalDependency = None):
+async def list_playbooks(trigger: str | None = None, principal: PrincipalDependency = None):
     """List playbooks."""
     enforce_scope(principal, "agent:run")
     items = list(_playbooks.values())
@@ -8378,7 +8377,7 @@ async def publish_to_marketplace(payload: dict[str, Any], principal: PrincipalDe
 
 
 @extended_router.get("/marketplace", response_model=None)
-async def browse_marketplace(category: str = None, tag: str = None, sort: str = "newest", principal: PrincipalDependency = None):
+async def browse_marketplace(category: str | None = None, tag: str | None = None, sort: str = "newest", principal: PrincipalDependency = None):
     """Browse marketplace items with filters."""
     enforce_scope(principal, "agent:run")
     items = list(_marketplace_items.values())
@@ -8494,7 +8493,7 @@ async def record_lesson(payload: dict[str, Any], principal: PrincipalDependency 
 
 
 @extended_router.get("/learning", response_model=None)
-async def list_lessons(lesson_type: str = None, principal: PrincipalDependency = None):
+async def list_lessons(lesson_type: str | None = None, principal: PrincipalDependency = None):
     """List learning entries."""
     enforce_scope(principal, "agent:run")
     items = list(_learning_entries.values())
@@ -8519,7 +8518,7 @@ async def recommend_lessons(payload: dict[str, Any], principal: PrincipalDepende
     task_words = set(re.findall(r'[a-zA-Z\u4e00-\u9fff]+', task.lower()))
     scored = []
     for entry in _learning_entries.values():
-        app_words = set(w.lower() for w in entry["applicability"])
+        app_words = {w.lower() for w in entry["applicability"]}
         overlap = task_words & app_words
         if not overlap:
             continue
@@ -8590,7 +8589,7 @@ async def create_collab_session(payload: dict[str, Any], principal: PrincipalDep
 
 
 @extended_router.get("/collaboration/sessions", response_model=None)
-async def list_collab_sessions(status: str = None, principal: PrincipalDependency = None):
+async def list_collab_sessions(status: str | None = None, principal: PrincipalDependency = None):
     """List collaborative sessions."""
     enforce_scope(principal, "agent:run")
     items = list(_collab_sessions.values())
@@ -8788,7 +8787,7 @@ async def compute_health_score(payload: dict[str, Any], principal: PrincipalDepe
     # Weights
     weights = {"success_rate": 0.30, "avg_latency_ms": 0.15, "error_rate": 0.25, "resource_utilization_pct": 0.10, "output_quality_score": 0.20}
     scores = {}
-    for key, weight in weights.items():
+    for key, _weight in weights.items():
         raw = float(metrics.get(key, 50))
         # For error_rate and latency, lower is better -> invert
         if key == "error_rate":
@@ -8800,11 +8799,16 @@ async def compute_health_score(payload: dict[str, Any], principal: PrincipalDepe
     composite = sum(scores[k] * weights[k] for k in weights)
     composite = round(composite, 1)
     # Grade
-    if composite >= 90: grade = "A"
-    elif composite >= 80: grade = "B"
-    elif composite >= 70: grade = "C"
-    elif composite >= 60: grade = "D"
-    else: grade = "F"
+    if composite >= 90:
+        grade = "A"
+    elif composite >= 80:
+        grade = "B"
+    elif composite >= 70:
+        grade = "C"
+    elif composite >= 60:
+        grade = "D"
+    else:
+        grade = "F"
     # Degradation detection
     prev_scores = _health_scores.get(trace_id, [])
     degraded = False
@@ -8873,11 +8877,16 @@ async def certify_output(payload: dict[str, Any], principal: PrincipalDependency
     dim_scores = {d: min(100, max(0, float(scores.get(d, 50)))) for d in dims}
     overall = round(sum(dim_scores.values()) / len(dims), 1)
     # Grade
-    if overall >= 90: grade = "A"
-    elif overall >= 80: grade = "B"
-    elif overall >= 70: grade = "C"
-    elif overall >= 60: grade = "D"
-    else: grade = "F"
+    if overall >= 90:
+        grade = "A"
+    elif overall >= 80:
+        grade = "B"
+    elif overall >= 70:
+        grade = "C"
+    elif overall >= 60:
+        grade = "D"
+    else:
+        grade = "F"
     cert_id = f"cert_{uuid4().hex[:12]}"
     now = datetime.now(UTC).isoformat()
     validity_days = int(payload.get("validity_days", 90))
@@ -8933,7 +8942,7 @@ async def revoke_certification(cert_id: str, payload: dict[str, Any], principal:
 
 
 @extended_router.get("/certification", response_model=None)
-async def list_certifications(status: str = None, grade: str = None, principal: PrincipalDependency = None):
+async def list_certifications(status: str | None = None, grade: str | None = None, principal: PrincipalDependency = None):
     """List certifications."""
     enforce_scope(principal, "agent:run")
     items = list(_quality_certs.values())
@@ -9061,7 +9070,7 @@ async def whatif_compare(payload: dict[str, Any], principal: PrincipalDependency
         scenarios.append(rec)
 
     # Build comparison matrix
-    all_metrics = list(set(m for s in scenarios for m in s["metrics"]))
+    all_metrics = list({m for s in scenarios for m in s["metrics"]})
     matrix = []
     for m in all_metrics:
         row = {"metric": m}
@@ -9172,7 +9181,7 @@ async def kg_add_relation(payload: dict[str, Any], principal: PrincipalDependenc
 
 
 @extended_router.get("/knowledge/entities", response_model=None)
-async def kg_list_entities(entity_type: str = None, principal: PrincipalDependency = None):
+async def kg_list_entities(entity_type: str | None = None, principal: PrincipalDependency = None):
     """List entities, optionally filtered by type."""
     enforce_scope(principal, "agent:run")
     items = list(_kg_entities.values())
@@ -9654,7 +9663,7 @@ async def run_chaos_experiment(exp_id: str, payload: dict[str, Any], principal: 
 
 
 @extended_router.get("/chaos/experiments", response_model=None)
-async def list_chaos_experiments(status: str = None, principal: PrincipalDependency = None):
+async def list_chaos_experiments(status: str | None = None, principal: PrincipalDependency = None):
     """List chaos experiments, optionally filtered by status."""
     enforce_scope(principal, "agent:run")
     items = list(_chaos_experiments.values())
@@ -9771,7 +9780,7 @@ async def create_explanation(payload: dict[str, Any], principal: PrincipalDepend
 
 
 @extended_router.get("/explain", response_model=None)
-async def list_explanations(method: str = None, principal: PrincipalDependency = None):
+async def list_explanations(method: str | None = None, principal: PrincipalDependency = None):
     """List explanations, optionally filtered by method."""
     enforce_scope(principal, "agent:run")
     items = list(_explanations.values())
@@ -10365,7 +10374,7 @@ async def advance_canary(release_id: str, payload: dict[str, Any], principal: Pr
 
 
 @extended_router.get("/canary/releases", response_model=None)
-async def list_canary_releases(status: str = None, principal: PrincipalDependency = None):
+async def list_canary_releases(status: str | None = None, principal: PrincipalDependency = None):
     """List canary releases, optionally filtered by status."""
     enforce_scope(principal, "agent:run")
     items = list(_canary_releases.values())
@@ -10569,7 +10578,7 @@ async def list_anomaly_baselines(principal: PrincipalDependency = None):
 
 
 @extended_router.get("/anomaly/alerts", response_model=None)
-async def list_anomaly_alerts(severity: str = None, principal: PrincipalDependency = None):
+async def list_anomaly_alerts(severity: str | None = None, principal: PrincipalDependency = None):
     """List anomaly alerts, optionally filtered by severity."""
     enforce_scope(principal, "agent:run")
     items = list(_anomaly_alerts)
@@ -10812,7 +10821,7 @@ async def create_conflict(payload: dict[str, Any], principal: PrincipalDependenc
 
 
 @extended_router.get("/conflicts", response_model=None)
-async def list_conflicts(strategy: str = None, principal: PrincipalDependency = None):
+async def list_conflicts(strategy: str | None = None, principal: PrincipalDependency = None):
     """List conflicts, optionally filtered by strategy."""
     enforce_scope(principal, "agent:run")
     items = list(_conflicts.values())
@@ -10983,7 +10992,7 @@ async def get_escrow(escrow_id: str, principal: PrincipalDependency = None):
 
 
 @extended_router.get("/escrow", response_model=None)
-async def list_escrows(status: str = None, principal: PrincipalDependency = None):
+async def list_escrows(status: str | None = None, principal: PrincipalDependency = None):
     """List escrow accounts."""
     enforce_scope(principal, "agent:run")
     items = list(_escrow_accounts.values())
@@ -11165,7 +11174,7 @@ async def transition_defect(defect_id: str, payload: dict[str, Any], principal: 
 
 
 @extended_router.get("/defects", response_model=None)
-async def list_defects(status: str = None, severity: str = None, principal: PrincipalDependency = None):
+async def list_defects(status: str | None = None, severity: str | None = None, principal: PrincipalDependency = None):
     """List defects with optional filters."""
     enforce_scope(principal, "agent:run")
     items = list(_defects.values())

@@ -6,11 +6,10 @@ Provides interactive setup for X-Agent CLI configuration and project structure.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional
 
 import typer
 
-from cli.config import CLIConfig, load_config, save_config
+from cli.config import load_config, save_config
 from cli.console import print_error, print_info, print_success, print_warning
 
 init_app = typer.Typer(
@@ -22,17 +21,17 @@ init_app = typer.Typer(
 
 @init_app.command()
 def setup(
-    api_url: Optional[str] = typer.Option(
+    api_url: str | None = typer.Option(
         None,
         "--api-url",
         help="API base URL (default: http://localhost:8000)",
     ),
-    api_key: Optional[str] = typer.Option(
+    api_key: str | None = typer.Option(
         None,
         "--api-key",
         help="API key for authentication (optional)",
     ),
-    mode: Optional[str] = typer.Option(
+    mode: str | None = typer.Option(
         None,
         "--mode",
         help="Client mode: 'http' or 'local' (default: http)",
@@ -102,7 +101,7 @@ def setup(
         try:
             save_config(config)
             print_success(f"Configuration saved to {config_path}")
-            print_info(f"\nActive Configuration:")
+            print_info("\nActive Configuration:")
             print_info(f"  API URL: {config.api_base_url}")
             print_info(f"  Mode: {config.mode}")
             print_info(f"  Timeout: {config.timeout}s")
@@ -124,7 +123,7 @@ def setup(
 
 @init_app.command()
 def project(
-    name: Optional[str] = typer.Option(
+    name: str | None = typer.Option(
         None,
         "--name",
         help="Project name",
@@ -202,13 +201,13 @@ __pycache__/
 *.log
 """
             gitignore_file.write_text(gitignore_content)
-            print_info(f"  Created .gitignore")
+            print_info("  Created .gitignore")
 
         print_success(f"Project '{name}' initialized successfully!")
-        print_info(f"\nNext steps:")
+        print_info("\nNext steps:")
         print_info(f"  1. cd {path}")
-        print_info(f"  2. xagent init setup")
-        print_info(f"  3. xagent agent run 'Your task here'")
+        print_info("  2. xagent init setup")
+        print_info("  3. xagent agent run 'Your task here'")
 
     except typer.Abort:
         print_warning("Project creation cancelled")

@@ -18,16 +18,14 @@ import asyncio
 import json
 import logging
 import time
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, AsyncIterator
+from typing import Any
 
 import httpx
 from rich.console import Console
-from rich.live import Live
-from rich.markdown import Markdown
 from rich.panel import Panel
-from rich.spinner import Spinner
 from rich.table import Table
 from rich.text import Text
 
@@ -97,7 +95,7 @@ class ChatSession:
         path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
     @classmethod
-    def load(cls, session_id: str) -> "ChatSession | None":
+    def load(cls, session_id: str) -> ChatSession | None:
         """Load session from disk."""
         path = SESSION_DIR / f"{session_id}.json"
         if not path.exists():

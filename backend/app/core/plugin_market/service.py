@@ -519,8 +519,8 @@ class PluginMarketService:
         except ValueError:
             return {"compatible": False, "reason": "Invalid version format"}
 
-        cur_major, cur_minor, cur_patch = (cur_parts + [0, 0, 0])[:3]
-        tgt_major, tgt_minor, tgt_patch = (tgt_parts + [0, 0, 0])[:3]
+        cur_major, _cur_minor, _cur_patch = ([*cur_parts, 0, 0, 0])[:3]
+        tgt_major, _tgt_minor, _tgt_patch = ([*tgt_parts, 0, 0, 0])[:3]
 
         if tgt_major > cur_major:
             return {

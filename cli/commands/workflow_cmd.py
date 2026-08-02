@@ -8,7 +8,7 @@ from __future__ import annotations
 import asyncio
 import json
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import typer
 
@@ -69,12 +69,12 @@ def list_workflows() -> None:
 
 @workflow_app.command()
 def create(
-    file: Optional[str] = typer.Option(
+    file: str | None = typer.Option(
         None,
         "--file",
         help="Path to workflow spec file (JSON or YAML)",
     ),
-    spec: Optional[str] = typer.Option(
+    spec: str | None = typer.Option(
         None,
         "--spec",
         help="Workflow spec as JSON string",
@@ -102,7 +102,7 @@ def create(
                 raise typer.Exit(code=1)
 
             try:
-                with open(file_path, "r") as f:
+                with open(file_path) as f:
                     if file_path.suffix.lower() == ".json":
                         workflow_spec = json.load(f)
                     elif file_path.suffix.lower() in (".yaml", ".yml"):
@@ -166,7 +166,7 @@ def create(
 @workflow_app.command()
 def run(
     workflow_id: str = typer.Argument(..., help="ID of the workflow to run"),
-    inputs: Optional[str] = typer.Option(
+    inputs: str | None = typer.Option(
         None,
         "--inputs",
         help="Workflow inputs as JSON string",

@@ -22,14 +22,14 @@ import time
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Coroutine
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 from uuid import uuid4
 
 logger = logging.getLogger(__name__)
 
 
-class PlatformType(str, Enum):
+class PlatformType(StrEnum):
     """Supported messaging platforms."""
 
     DISCORD = "discord"

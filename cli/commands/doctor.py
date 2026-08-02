@@ -59,8 +59,8 @@ def _check_python_version() -> DoctorCheck:
 
 def _check_backend_importable() -> DoctorCheck:
     try:
+        import backend.app.core.agent
         import backend.app.settings  # noqa: F401
-        import backend.app.core.agent  # noqa: F401
     except Exception as e:
         return DoctorCheck(
             "backend_import",
@@ -114,7 +114,7 @@ def _check_database_url() -> DoctorCheck:
 
 
 def _check_llm_keys() -> DoctorCheck:
-    settings, err = _load_settings()
+    settings, _err = _load_settings()
     if settings is None:
         # Fall back to raw environment variables.
         keys = {
@@ -136,7 +136,7 @@ def _check_llm_keys() -> DoctorCheck:
         return DoctorCheck(
             "llm_keys",
             "warn",
-            f"XAGENT_LLM_BACKEND=mock（使用确定性 mock 后端，不调用真实 LLM）"
+            "XAGENT_LLM_BACKEND=mock（使用确定性 mock 后端，不调用真实 LLM）"
             + (f"；已配置 key: {', '.join(configured)}" if configured else ""),
             "生产/真实调用请配置 XAGENT_DEEPSEEK_API_KEY（或 OPENAI/ANTHROPIC）并设置 XAGENT_LLM_BACKEND=deepseek",
         )

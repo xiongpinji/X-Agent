@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Optional
 
 import typer
 
@@ -14,7 +13,7 @@ memory_app = typer.Typer(no_args_is_help=True)
 @memory_app.command("search")
 def memory_search(
     query: str = typer.Argument(..., help="Search query"),
-    layers: Optional[str] = typer.Option(None, "--layers", "-l", help="Layer range, e.g. '1-10' or '4-7'"),
+    layers: str | None = typer.Option(None, "--layers", "-l", help="Layer range, e.g. '1-10' or '4-7'"),
     limit: int = typer.Option(10, "--limit", "-n", help="Max results"),
 ) -> None:
     """Search agent memory.
@@ -53,7 +52,7 @@ def memory_search(
 def memory_store(
     content: str = typer.Argument(..., help="Content to store"),
     layer: int = typer.Option(5, "--layer", "-l", help="Memory layer (1-10)"),
-    tags: Optional[str] = typer.Option(None, "--tags", "-t", help="Comma-separated tags"),
+    tags: str | None = typer.Option(None, "--tags", "-t", help="Comma-separated tags"),
 ) -> None:
     """Store content in agent memory.
 
@@ -88,7 +87,7 @@ def memory_store(
 
 @memory_app.command("list")
 def memory_list(
-    layer: Optional[int] = typer.Option(None, "--layer", "-l", help="Filter by layer"),
+    layer: int | None = typer.Option(None, "--layer", "-l", help="Filter by layer"),
     limit: int = typer.Option(20, "--limit", "-n", help="Max results"),
 ) -> None:
     """List recent memories.

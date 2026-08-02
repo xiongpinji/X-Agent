@@ -330,7 +330,16 @@ class StabilityTester:
 
 
 # 测试用例
+# 长耗时负载测试默认跳过：需要真实监听服务且单用例分钟级起，
+# 与 tests/performance/test_load.py 同一门禁（XAGENT_RUN_LIVE_LOAD_TESTS=1 才跑）。
+_requires_live_load = pytest.mark.skipif(
+    os.environ.get("XAGENT_RUN_LIVE_LOAD_TESTS") != "1",
+    reason="long-duration live-load tests are opt-in: set XAGENT_RUN_LIVE_LOAD_TESTS=1",
+)
+
+
 @pytest.mark.stability_test
+@_requires_live_load
 class TestLongDurationRun:
     """长时间运行测试"""
 

@@ -682,10 +682,7 @@ class WorkflowRepository:
         # (current snapshot format) and legacy envelopes such as
         # {"definitions": {...}} or a bare {id: definition} mapping.
         if isinstance(raw, dict):
-            if "definitions" in raw:
-                raw = raw["definitions"]
-            else:
-                raw = list(raw.values())
+            raw = raw["definitions"] if "definitions" in raw else list(raw.values())
         if isinstance(raw, dict):
             raw = list(raw.values())
         for item in raw:

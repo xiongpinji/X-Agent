@@ -10,19 +10,19 @@ from __future__ import annotations
 
 import logging
 import sys
-from typing import Optional
 
 import typer
 
 from cli import __version__
-from cli.config import CLIConfig, load_config
+from cli.config import load_config
 from cli.console import print_error, print_info
+
 # Shared config state lives in cli.state to avoid a circular import between
 # this module (which mounts command apps) and cli.commands.* (which read the
 # config). Re-exported here for backward compatibility.
 from cli.state import get_current_config, set_current_config
 
-__all__ = ["app", "get_current_config", "set_current_config", "main_entry"]
+__all__ = ["app", "get_current_config", "main_entry", "set_current_config"]
 
 # Configure logging
 logging.basicConfig(
@@ -54,25 +54,25 @@ def version_callback(value: bool) -> None:
 @app.callback()
 def main(
     ctx: typer.Context,
-    api_url: Optional[str] = typer.Option(
+    api_url: str | None = typer.Option(
         None,
         "--api-url",
         help="Base URL for X-Agent API (default: http://localhost:8000)",
         envvar="XAGENT_API_BASE_URL",
     ),
-    api_key: Optional[str] = typer.Option(
+    api_key: str | None = typer.Option(
         None,
         "--api-key",
         help="API key for authentication",
         envvar="XAGENT_API_KEY",
     ),
-    mode: Optional[str] = typer.Option(
+    mode: str | None = typer.Option(
         None,
         "--mode",
         help="Client mode: 'http' or 'local' (default: http)",
         envvar="XAGENT_MODE",
     ),
-    output: Optional[str] = typer.Option(
+    output: str | None = typer.Option(
         None,
         "--output",
         help="Output format: 'rich', 'json', or 'plain' (default: rich)",
@@ -116,7 +116,20 @@ def main(
 # ============================================================================
 # Mount command apps implemented in Wave 2.
 
-from cli.commands import agent_app, init_app, tools_app, workflow_app, hooks_app, approvals_app, github_app, gateway_app, chat_app, review_app, memory_app, skill_app
+from cli.commands import (
+    agent_app,
+    approvals_app,
+    chat_app,
+    gateway_app,
+    github_app,
+    hooks_app,
+    init_app,
+    memory_app,
+    review_app,
+    skill_app,
+    tools_app,
+    workflow_app,
+)
 
 app.add_typer(agent_app, name="agent", help="Agent management commands")
 app.add_typer(tools_app, name="tools", help="Tool management commands")
@@ -139,7 +152,7 @@ app.add_typer(skill_app, name="skill", help="Evolved skill management")
 
 @app.command()
 def health(
-    mode: Optional[str] = typer.Option(
+    mode: str | None = typer.Option(
         None,
         "--mode",
         help="Override client mode for this command: 'http' or 'local'",
