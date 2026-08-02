@@ -3,15 +3,25 @@ import asyncio
 import httpx
 import json
 import sys
+import os
 
 BASE = "http://127.0.0.1:18000"
 HEADERS = {"X-API-Key": "xagent-dev-key-2024", "Content-Type": "application/json"}
 
-# 任务：让 Agent 写一个有 bug 的函数，然后跑测试，触发自动修复
-TASK = """Create a file called _test_fix_demo.py with a function `add_numbers(a, b)` that returns a + b.
-Then create a test file _test_fix_demo_test.py with pytest tests for add_numbers.
-Then run the tests with: python -m pytest _test_fix_demo_test.py -v
-Make sure the tests pass."""
+# 用 venv Python 确保 pytest 可运行
+VENV_PY = os.path.join(os.path.dirname(__file__), "venv", "Scripts", "python.exe")
+
+# 任务：故意写一个有 bug 的函数，让测试失败，触发自动修复
+TASK = f"""Do the following steps in order:
+1. Create file _tf_calc.py with this EXACT content (has a bug - subtract uses + instead of -):
+   def add(a, b): return a + b
+   def subtract(a, b): return a + b
+2. Create file _tf_test_calc.py with pytest tests:
+   from _tf_calc import add, subtract
+   def test_add(): assert add(2, 3) == 5
+   def test_subtract(): assert subtract(5, 3) == 2
+3. Run tests: {VENV_PY} -m pytest _tf_test_calc.py -v
+4. If tests fail, fix the bug in _tf_calc.py and re-run tests until they pass."""
 
 
 async def main():
@@ -53,8 +63,12 @@ async def main():
                      or "test_failure" in str(e.get("event", "")).lower()]
     auto_verify = [e for e in events if "auto_verify" in str(e.get("event", "")).lower()]
 
-    print(f"\nRepair events: {len(repair_events)}")
-    print(f"Auto-verify events: {len(auto_verify)}")
+    # 也检查 execution_summary 中的修复轮次
+    repair_round = exec_summary.get("_test_repair_round", 0)
+
+    print(f"\nRepair events (in response): {len(repair_events)}")
+    print(f"Auto-verify events (in response): {len(auto_verify)}")
+    print(f"Repair rounds (from exec_summary): {repair_round}")
 
     # 显示工具调用
     print("\n--- Tool Calls ---")
@@ -69,15 +83,31 @@ async def main():
 
     # 判定
     print("\n" + "=" * 60)
+    has_repair = repair_round > 0 or len(repair_events) > 0
     if status == "completed" and len(tool_calls) >= 2:
         print("RESULT: PASS - Agent executed tools and completed task")
-        if repair_events:
-            print("  + Test-failure-repair loop TRIGGERED")
+        if has_repair:
+            print(f"  + Test-failure-repair loop TRIGGERED (rounds={repair_round})")
         if auto_verify:
             print("  + Auto-verify (run tests after write) TRIGGERED")
+        if not has_repair:
+            print("  ! Repair loop NOT triggered - checking if tests passed first try")
     else:
         print(f"RESULT: NEEDS REVIEW - status={status}, tools={len(tool_calls)}")
     print("=" * 60)
+
+    # 检查文件是否最终正确
+    print("\n--- Final File Check ---")
+    calc_path = os.path.join(os.path.dirname(__file__), "_tf_calc.py")
+    if os.path.exists(calc_path):
+        content = open(calc_path).read()
+        print(f"_tf_calc.py content:\n{content}")
+        if "a - b" in content:
+            print("  >>> BUG FIXED: subtract now uses '-' operator")
+        else:
+            print("  >>> BUG STILL PRESENT: subtract still uses '+'")
+    else:
+        print("_tf_calc.py not found")
 
 
 if __name__ == "__main__":
