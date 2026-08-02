@@ -1,20 +1,25 @@
 """Q: API Integration Tests — validates new endpoints end-to-end.
 
 Run: pytest tests/test_api_integration_mnr.py -v
-Requires: backend running on localhost:8099
+Uses FastAPI TestClient (in-process); no live server required.
 """
 
-import httpx
 import pytest
+from fastapi.testclient import TestClient
 
-BASE = "http://127.0.0.1:8099/api/v1"
-HEADERS = {"X-API-Key": "xagent-dev-key-2024"}
+from backend.app.main import app
+
+# conftest.py sets XAGENT_BOOTSTRAP_API_KEY=bootstrap before app import;
+# routers are registered idempotently at test-session import time.
+HEADERS = {"X-API-Key": "bootstrap"}
 
 
 @pytest.fixture(scope="module")
 def client():
-    with httpx.Client(base_url=BASE, headers=HEADERS, timeout=15) as c:
-        yield c
+    # NOTE: no lifespan (`with`) here — routers are registered eagerly by
+    # tests/conftest.py, and running full startup/shutdown would tear down
+    # shared app state (agent, pools) for other tests in the same session.
+    return TestClient(app, headers=HEADERS)
 
 
 # ─── M: Security endpoints ────────────────────────────────────────────────────
@@ -22,7 +27,7 @@ def client():
 
 class TestSecurityPosture:
     def test_posture_returns_200(self, client):
-        r = client.get("/security/posture")
+        r = client.get("/api/v1/security/posture")
         assert r.status_code == 200
         data = r.json()
         assert "prompt_guard" in data
@@ -30,7 +35,7 @@ class TestSecurityPosture:
         assert "hardening" in data
 
     def test_secret_scan(self, client):
-        r = client.post("/security/secret-scan")
+        r = client.post("/api/v1/security/secret-scan")
         assert r.status_code == 200
         data = r.json()
         assert "files_scanned" in data
@@ -38,7 +43,7 @@ class TestSecurityPosture:
         assert data["status"] in ("clean", "warnings_found")
 
     def test_audit_chain(self, client):
-        r = client.get("/security/audit-chain")
+        r = client.get("/api/v1/security/audit-chain")
         assert r.status_code == 200
         data = r.json()
         assert "chain_length" in data
@@ -50,21 +55,21 @@ class TestSecurityPosture:
 
 class TestTenantIsolation:
     def test_quotas(self, client):
-        r = client.get("/security/tenant-isolation/quotas")
+        r = client.get("/api/v1/security/tenant-isolation/quotas")
         assert r.status_code == 200
         data = r.json()
         assert "tenant_id" in data
         assert "quotas" in data
 
     def test_usage(self, client):
-        r = client.get("/security/tenant-isolation/usage")
+        r = client.get("/api/v1/security/tenant-isolation/usage")
         assert r.status_code == 200
         data = r.json()
         assert "usage" in data
         assert "total_runs" in data["usage"]
 
     def test_rbac_matrix(self, client):
-        r = client.get("/security/tenant-isolation/rbac-matrix")
+        r = client.get("/api/v1/security/tenant-isolation/rbac-matrix")
         assert r.status_code == 200
         data = r.json()
         assert "roles" in data
@@ -77,7 +82,7 @@ class TestTenantIsolation:
 
 class TestModelRouting:
     def test_model_routing_status(self, client):
-        r = client.get("/agents/model-routing")
+        r = client.get("/api/v1/agents/model-routing")
         assert r.status_code == 200
         data = r.json()
         assert "router" in data
@@ -90,7 +95,7 @@ class TestModelRouting:
 
 class TestPerformanceAndQueue:
     def test_performance_dashboard(self, client):
-        r = client.get("/agents/performance")
+        r = client.get("/api/v1/agents/performance")
         assert r.status_code == 200
         data = r.json()
         assert "spawner" in data
@@ -98,7 +103,7 @@ class TestPerformanceAndQueue:
         assert "parallel_pool" in data
 
     def test_queue_stats(self, client):
-        r = client.get("/agents/parallel/queue/stats")
+        r = client.get("/api/v1/agents/parallel/queue/stats")
         assert r.status_code == 200
         data = r.json()
         assert "pool" in data
@@ -106,7 +111,7 @@ class TestPerformanceAndQueue:
         assert "utilization_percent" in data["pool"]
 
     def test_queue_health(self, client):
-        r = client.get("/agents/parallel/queue/health")
+        r = client.get("/api/v1/agents/parallel/queue/health")
         assert r.status_code == 200
         data = r.json()
         assert "cpu_percent" in data

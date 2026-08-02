@@ -48,6 +48,11 @@ def run(
         help="CI/CD headless mode: JSON-only output, no interactive elements, exit code reflects success",
         envvar="XAGENT_HEADLESS",
     ),
+    mode: Optional[str] = typer.Option(
+        None,
+        "--mode",
+        help="Override client mode for this command: 'http' or 'local'",
+    ),
 ) -> None:
     """Run an agent with the given task.
 
@@ -59,6 +64,17 @@ def run(
     """
     try:
         config = get_current_config()
+        if mode is not None:
+            from cli.state import apply_mode_override
+
+            try:
+                config = apply_mode_override(mode)
+            except ValueError as e:
+                if headless:
+                    print(json.dumps({"error": str(e)}))
+                else:
+                    print_error(str(e), config)
+                raise typer.Exit(code=2)
         client = create_client(config)
 
         permission_scope = scope or ["tools:read", "memory:read", "memory:write"]

@@ -138,13 +138,27 @@ app.add_typer(skill_app, name="skill", help="Evolved skill management")
 
 
 @app.command()
-def health() -> None:
+def health(
+    mode: Optional[str] = typer.Option(
+        None,
+        "--mode",
+        help="Override client mode for this command: 'http' or 'local'",
+    ),
+) -> None:
     """Check X-Agent backend health.
 
     Verifies connectivity to the backend API or local modules.
     """
     try:
         config = get_current_config()
+        if mode is not None:
+            from cli.state import apply_mode_override
+
+            try:
+                config = apply_mode_override(mode)
+            except ValueError as e:
+                print_error(str(e))
+                raise typer.Exit(code=2)
         from cli.client import create_client
 
         client = create_client(config)
@@ -175,6 +189,14 @@ def health() -> None:
     except Exception as e:
         print_error(f"Health check failed: {e}")
         raise typer.Exit(code=1)
+
+
+@app.command()
+def doctor() -> None:
+    """Run local environment self-checks (delegates to cli.commands.doctor)."""
+    from cli.commands.doctor import doctor as run_doctor
+
+    run_doctor()
 
 
 @app.command()

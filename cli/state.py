@@ -39,3 +39,30 @@ def set_current_config(config: CLIConfig) -> None:
     """
     global _current_config
     _current_config = config
+
+
+def apply_mode_override(mode: str | None) -> CLIConfig:
+    """Apply a per-command ``--mode`` override to the active config.
+
+    ``--mode`` is a global option on the main callback and therefore must
+    appear *before* the subcommand (``xagent --mode local agent run ...``).
+    Codex-style CLIs accept it anywhere, so subcommands may also declare a
+    local ``--mode`` option and funnel it through this helper.
+
+    Args:
+        mode: 'http', 'local', or None (no override).
+
+    Returns:
+        The active (possibly updated) CLIConfig.
+
+    Raises:
+        ValueError: If mode is not 'http' or 'local'.
+    """
+    config = get_current_config()
+    if mode is None:
+        return config
+    if mode not in ("http", "local"):
+        raise ValueError(f"Invalid mode: {mode!r} (expected 'http' or 'local')")
+    config = config.model_copy(update={"mode": mode})
+    set_current_config(config)
+    return config

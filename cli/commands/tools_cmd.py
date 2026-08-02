@@ -21,7 +21,13 @@ tools_app = typer.Typer(
 
 
 @tools_app.command("list")
-def list_tools() -> None:
+def list_tools(
+    mode: str | None = typer.Option(
+        None,
+        "--mode",
+        help="Override client mode for this command: 'http' or 'local'",
+    ),
+) -> None:
     """List all available tools.
 
     Displays all tools registered in the X-Agent system with their
@@ -32,6 +38,14 @@ def list_tools() -> None:
     """
     try:
         config = get_current_config()
+        if mode is not None:
+            from cli.state import apply_mode_override
+
+            try:
+                config = apply_mode_override(mode)
+            except ValueError as e:
+                print_error(str(e), config)
+                raise typer.Exit(code=2)
         client = create_client(config)
 
         tools = asyncio.run(client.list_tools())
@@ -52,6 +66,8 @@ def list_tools() -> None:
 
         print_table(table_data, title=f"Available Tools ({config.mode} mode)", config=config)
 
+    except typer.Exit:
+        raise
     except (ConnectionError, AuthError, APIError) as e:
         print_error(f"Failed to list tools: {e}", config)
         raise typer.Exit(code=1)
