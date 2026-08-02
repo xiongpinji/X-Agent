@@ -213,7 +213,9 @@ class _AgentLoopParallelAgent:
 
     async def execute(self, task: AgentTask) -> dict[str, Any]:
         extra_context: dict[str, Any] = {
-            "task_id": task.task_id,
+            # executor's AgentTask primary key is ``id`` (``task_id`` lives on
+            # AgentTaskResult); tolerate both shapes for robustness.
+            "task_id": getattr(task, "task_id", None) or task.id,
             "description": task.description,
             "constraints": list(task.constraints),
             "success_criteria": list(task.success_criteria),
