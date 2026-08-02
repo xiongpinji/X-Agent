@@ -759,6 +759,9 @@ def _register_all_routers() -> None:
         return
     _routers_registered = True
     from backend.app.api.agents import router as agents_router
+    from backend.app.api.automations import router as automations_router
+    from backend.app.api.change_proposals import router as change_proposals_router
+    from backend.app.api.env_setup import router as env_setup_router
     from backend.app.api.approvals import router as approvals_router
     from backend.app.api.audit import router as audit_router
     from backend.app.api.audit_enterprise import router as audit_enterprise_router
@@ -1102,6 +1105,9 @@ def _register_all_routers() -> None:
 
     app.include_router(auth_router)
     app.include_router(agents_router)
+    app.include_router(automations_router)
+    app.include_router(change_proposals_router)
+    app.include_router(env_setup_router)
     app.include_router(approvals_router)
     app.include_router(audit_router)
     app.include_router(browser_router)

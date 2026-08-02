@@ -304,3 +304,143 @@ async def get_review_rules(principal: PrincipalDependency = None) -> dict[str, A
         "vulnerability_patterns": len(VULN_PATTERNS),
         "severity_levels": ["critical", "high", "medium", "low"],
     }
+
+
+# ─── Y5: Codex-style Inline PR Review ────────────────────────────────────────
+
+
+@router.post("/inline-review")
+async def inline_pr_review(
+    request: Request,
+    principal: PrincipalDependency = None,
+) -> dict[str, Any]:
+    """Codex-style structured inline review: line-level comments with suggestions.
+
+    Body:
+        files: [{"path": str, "diff": str}]  — unified diff per file
+        title: str (optional)
+        focus: str (optional) — "security" | "performance" | "style" | "all"
+
+    Returns structured inline comments suitable for GitHub/GitLab PR annotation.
+    """
+    enforce_scope(principal, "agent:run")
+    body = await request.json()
+    files: list[dict] = body.get("files", [])
+    title = body.get("title", "Inline Review")
+    focus = body.get("focus", "all")
+
+    if not files:
+        return {"error": "No files provided", "field": "files"}
+
+    all_comments: list[dict[str, Any]] = []
+    summary_stats = {"critical": 0, "high": 0, "medium": 0, "low": 0, "nitpick": 0}
+
+    for f in files:
+        path = f.get("path", "")
+        diff_text = f.get("diff", "")
+        if not diff_text:
+            continue
+
+        # Parse diff lines and analyze added lines
+        lines = diff_text.split("\n")
+        current_line = 0
+        for line in lines:
+            # Track line numbers from hunk headers
+            hunk_match = re.match(r"^@@ -\d+(?:,\d+)? \+(\d+)", line)
+            if hunk_match:
+                current_line = int(hunk_match.group(1)) - 1
+                continue
+            if line.startswith("+") and not line.startswith("+++"):
+                current_line += 1
+                content = line[1:]  # Strip the '+' prefix
+
+                # Security checks
+                if focus in ("all", "security"):
+                    for vp in VULN_PATTERNS:
+                        if re.search(vp["pattern"], content, re.IGNORECASE):
+                            comment = {
+                                "path": path,
+                                "line": current_line,
+                                "severity": vp["severity"],
+                                "category": "security",
+                                "body": f"⚠️ {vp['desc']} ({vp['cwe']})",
+                                "suggestion": _get_security_suggestion(vp["cwe"]),
+                            }
+                            all_comments.append(comment)
+                            summary_stats[vp["severity"]] = summary_stats.get(vp["severity"], 0) + 1
+
+                # Performance checks
+                if focus in ("all", "performance"):
+                    perf_issues = _check_performance(content, current_line, path)
+                    for pi in perf_issues:
+                        all_comments.append(pi)
+                        summary_stats[pi["severity"]] = summary_stats.get(pi["severity"], 0) + 1
+
+                # Style checks
+                if focus in ("all", "style"):
+                    style_issues = _check_style(content, current_line, path)
+                    for si in style_issues:
+                        all_comments.append(si)
+                        summary_stats[si["severity"]] = summary_stats.get(si["severity"], 0) + 1
+
+            elif line.startswith("-") and not line.startswith("---"):
+                pass  # Deleted lines don't increment new line counter
+            else:
+                current_line += 1
+
+    # Determine verdict
+    has_critical = summary_stats["critical"] > 0
+    has_high = summary_stats["high"] > 0
+    verdict = "request_changes" if has_critical or has_high else "comment" if all_comments else "approve"
+
+    review_record = {
+        "id": str(uuid4()),
+        "title": title,
+        "verdict": verdict,
+        "total_comments": len(all_comments),
+        "comments": all_comments,
+        "summary": summary_stats,
+        "files_reviewed": len(files),
+        "reviewed_at": datetime.now(UTC).isoformat(),
+        "reviewed_by": principal.user_id,
+    }
+    _reviews.append(review_record)
+    return review_record
+
+
+def _get_security_suggestion(cwe: str) -> str:
+    """Return actionable fix suggestion for a CWE."""
+    suggestions = {
+        "CWE-95": "Use ast.literal_eval() or a safe parser instead of eval()/exec()",
+        "CWE-78": "Use subprocess.run() with a list of args (shell=False)",
+        "CWE-502": "Use json.loads() or a safe deserializer with allow-list",
+        "CWE-89": "Use parameterized queries (placeholders) instead of string concatenation",
+        "CWE-79": "Sanitize output with a templating engine or DOMPurify",
+        "CWE-798": "Move secrets to environment variables or a vault (e.g. HashiCorp Vault)",
+        "CWE-295": "Remove verify=False; use proper CA certificates",
+        "CWE-328": "Use SHA-256 or stronger (hashlib.sha256)",
+    }
+    return suggestions.get(cwe, "Review and remediate according to OWASP guidelines")
+
+
+def _check_performance(content: str, line: int, path: str) -> list[dict[str, Any]]:
+    """Detect common performance anti-patterns."""
+    issues = []
+    stripped = content.strip()
+    if re.search(r"for .+ in .+:.*for .+ in", stripped):
+        issues.append({"path": path, "line": line, "severity": "medium", "category": "performance", "body": "🐌 Nested loop detected — consider O(n) algorithm or lookup table", "suggestion": "Use a dict/set for O(1) lookups instead of nested iteration"})
+    if re.search(r"\.count\(|\.index\(", stripped) and "for " in stripped:
+        issues.append({"path": path, "line": line, "severity": "low", "category": "performance", "body": "📊 .count()/.index() inside loop is O(n²)", "suggestion": "Pre-compute with Counter or a dict"})
+    if re.search(r"SELECT .* FROM", stripped, re.IGNORECASE) and "for " in stripped:
+        issues.append({"path": path, "line": line, "severity": "high", "category": "performance", "body": "🗄️ N+1 query: SQL inside loop", "suggestion": "Batch into a single query with IN clause or use eager loading"})
+    return issues
+
+
+def _check_style(content: str, line: int, path: str) -> list[dict[str, Any]]:
+    """Detect style issues."""
+    issues = []
+    if len(content) > 120:
+        issues.append({"path": path, "line": line, "severity": "nitpick", "category": "style", "body": f"📏 Line too long ({len(content)} > 120 chars)", "suggestion": "Break into multiple lines"})
+    if re.search(r"\t", content) and path.endswith(".py"):
+        issues.append({"path": path, "line": line, "severity": "nitpick", "category": "style", "body": "🔀 Tab character in Python file (PEP 8: use spaces)", "suggestion": "Replace tabs with 4 spaces"})
+    return issues

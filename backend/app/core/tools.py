@@ -1427,6 +1427,36 @@ def build_default_tool_registry(
     registry.register("summarize_text", "Summarize a short text locally.", summarize_text)
     registry.register("normalize_text", "Normalize whitespace in text.", normalize_text)
     registry.register("extract_keywords", "Extract simple keywords from text.", extract_keywords)
+
+    # ─── Codex 对齐: Web Search 工具（联网搜索文档/API）───────────────────
+    async def web_search(query: str, max_results: int = 5, **kwargs) -> dict:
+        """Search the internet for documentation, APIs, and technical references.
+
+        Use when you need up-to-date information about libraries, frameworks,
+        error messages, or best practices that may not be in your training data.
+        """
+        try:
+            from backend.app.services.search.search_engine import SearchEngine
+            engine = SearchEngine()
+            results = await engine.search(query, max_results=min(max_results, 10))
+            return {
+                "query": query,
+                "results": [
+                    {"title": r.get("title", ""), "url": r.get("url", ""), "snippet": r.get("snippet", r.get("content", ""))[:300]}
+                    for r in (results if isinstance(results, list) else [])
+                ][:max_results],
+                "source": "web_search",
+            }
+        except Exception as exc:
+            return {"query": query, "results": [], "error": str(exc)[:200], "source": "web_search"}
+
+    registry.register(
+        "web_search",
+        "Search the internet for documentation, APIs, error solutions, and technical references. "
+        "Use when you need current information about libraries or frameworks.",
+        web_search,
+    )
+
     # P1-10 协作委派工具(集成波接线): 惰性导入避免 collaboration 包依赖
     # 进入 tools.py 模块导入路径(潜在循环依赖)。
     from backend.app.core.collaboration.delegation import delegate_subtask

@@ -41,6 +41,12 @@ def run(
         "--stream/--no-stream",
         help="Stream results as they arrive",
     ),
+    headless: bool = typer.Option(
+        False,
+        "--headless",
+        help="CI/CD headless mode: JSON-only output, no interactive elements, exit code reflects success",
+        envvar="XAGENT_HEADLESS",
+    ),
 ) -> None:
     """Run an agent with the given task.
 
@@ -48,6 +54,7 @@ def run(
         xagent agent run "Analyze the market trends"
         xagent agent run "Search for Python tutorials" --scope tools:read --scope memory:read
         xagent agent run "Process data" --context '{"format": "json"}'
+        xagent agent run "Fix the bug" --headless  # CI/CD mode
     """
     try:
         config = get_current_config()
@@ -60,7 +67,10 @@ def run(
             try:
                 extra_context = json.loads(context)
             except json.JSONDecodeError as e:
-                print_error(f"Invalid JSON in --context: {e}", config)
+                if headless:
+                    print(json.dumps({"error": f"Invalid JSON in --context: {e}"}))
+                else:
+                    print_error(f"Invalid JSON in --context: {e}", config)
                 raise typer.Exit(code=1)
 
         result = asyncio.run(
@@ -72,6 +82,24 @@ def run(
             )
         )
 
+        # ─── Headless / CI-CD mode: machine-readable JSON only ───────────────
+        if headless or config.output_format == "json":
+            output = {
+                "trace_id": result.get("trace_id", ""),
+                "status": result.get("status", ""),
+                "answer": result.get("answer", ""),
+                "iterations": result.get("iterations", 0),
+                "tool_calls": [
+                    {"tool": tc.get("tool_name", ""), "success": tc.get("success", False)}
+                    for tc in result.get("tool_calls", [])
+                ],
+                "execution_summary": result.get("execution_summary", {}),
+            }
+            print(json.dumps(output, ensure_ascii=False, indent=2))
+            # Exit code: 0 if completed, 1 otherwise
+            raise typer.Exit(code=0 if result.get("status") == "completed" else 1)
+
+        # ─── Rich interactive mode ───────────────────────────────────────────
         display_result = {
             "trace_id": result.get("trace_id", "N/A"),
             "status": result.get("status", "N/A"),
@@ -98,14 +126,25 @@ def run(
 
         print_success("Agent execution completed", config)
 
+    except typer.Exit:
+        raise
     except (ConnectionError, AuthError, APIError) as e:
-        print_error(f"Agent execution failed: {e}", config)
+        if headless:
+            print(json.dumps({"error": str(e)}))
+        else:
+            print_error(f"Agent execution failed: {e}", config)
         raise typer.Exit(code=1)
     except XAgentCLIError as e:
-        print_error(f"CLI error: {e}", config)
+        if headless:
+            print(json.dumps({"error": str(e)}))
+        else:
+            print_error(f"CLI error: {e}", config)
         raise typer.Exit(code=1)
     except Exception as e:
-        print_error(f"Unexpected error: {e}", config)
+        if headless:
+            print(json.dumps({"error": str(e)}))
+        else:
+            print_error(f"Unexpected error: {e}", config)
         raise typer.Exit(code=1)
 
 

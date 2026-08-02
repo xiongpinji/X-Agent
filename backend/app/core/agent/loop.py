@@ -1301,6 +1301,41 @@ class AgentLoop:
                 self._emit_trace(context, "agent.iteration.started", iteration=iteration, step_kind=step.kind, instruction=step.instruction)
                 trajectory.stage = f"step_{iteration}_{step.kind}"
 
+                # ─── Hermes 对齐: Confidence-based Escalation ───
+                # 当置信度极低时，自动暂停并向用户请求澄清
+                if iteration > 1 and not extra_context.get("_escalation_done"):
+                    _esc_conf = float(self._build_tool_profile(
+                        self._build_task_profile(trajectory, extra_context, {}),
+                        self.tools.manifest()[:8],
+                    ).get("confidence", 0.5) or 0.5)
+                    _esc_threshold = float(extra_context.get("escalation_threshold", 0.25))
+                    if _esc_conf < _esc_threshold:
+                        extra_context["_escalation_done"] = True
+                        try:
+                            from backend.app.core.interactive_questions import (
+                                InteractiveQuestion, InteractiveQuestionManager,
+                                QuestionType, QuestionOption,
+                            )
+                            _qm = getattr(self, "_question_manager", None) or InteractiveQuestionManager()
+                            self._question_manager = _qm
+                            _esc_q = InteractiveQuestion(
+                                run_id=context.trace_id,
+                                type=QuestionType.SINGLE_CHOICE,
+                                title=f"Low confidence ({_esc_conf:.0%}) — need clarification",
+                                description=f"The agent is uncertain about how to proceed with: {trajectory.goal[:200]}",
+                                options=[
+                                    QuestionOption(value="continue", label="Continue as planned"),
+                                    QuestionOption(value="clarify", label="Let me provide more details"),
+                                    QuestionOption(value="abort", label="Stop this task"),
+                                ],
+                                timeout_seconds=300,
+                            )
+                            _qm.create_question(_esc_q)
+                            self._emit_trace(context, "agent.escalation.requested", confidence=_esc_conf, question_id=_esc_q.question_id)
+                            # Non-blocking: emit event and continue (frontend can poll questions)
+                        except Exception:
+                            pass  # Escalation must never break execution
+
                 observations_before = len(observations)
                 if step.kind == "observe":
                     answer, memory_hits, last_tool_result, observations, plan_records = await self._execute_observe_step(
@@ -1981,6 +2016,27 @@ class AgentLoop:
         except Exception:
             pass  # Evolution must never break agent execution
 
+        # ─── Codex 对齐: Post-Run Learning — 失败运行自动提取教训 ───────────
+        try:
+            from backend.app.core.evolution_engine import evolution_engine as _evo
+
+            _failed_tools = [tc for tc in tool_calls if not tc.success]
+            if _failed_tools or result.status != RunStatus.COMPLETED:
+                lesson = {
+                    "task": trajectory.task[:300],
+                    "status": result.status.value if hasattr(result.status, "value") else str(result.status),
+                    "failed_tools": [{"name": tc.tool_name, "error": (tc.error or "")[:200]} for tc in _failed_tools[:5]],
+                    "iterations_used": len(plan_records),
+                    "lesson": self._extract_lesson(trajectory, tool_calls, answer, result),
+                }
+                await _evo.on_task_complete(
+                    {"tool_calls": [{"name": tc.tool_name, "success": tc.success} for tc in tool_calls], "observations": observations[:5], "plan_steps": [s.instruction for s in plan_records]},
+                    {"status": "failed", "lesson": lesson, "output": (answer or "")[:300]},
+                )
+                self._emit_trace(context, "agent.post_run_learning", lesson_preview=str(lesson.get("lesson", ""))[:200], failed_count=len(_failed_tools))
+        except Exception:
+            pass  # Post-run learning must never break agent execution
+
         # ─── Codex 对齐: 任务完成后自动 git commit ───
         _auto_commit = (extra_context or {}).get("auto_commit", True)
         if _auto_commit and result.status == RunStatus.COMPLETED:
@@ -2577,6 +2633,24 @@ class AgentLoop:
         agents_md_message = agents_md.maybe_build_injection(extra_context)
         if agents_md_message is not None:
             messages.append(agents_md_message)
+        # ─── Codex 对齐: Multimodal 图片输入 ─────────────────────────────────
+        # extra_context["images"] = [{"url": "...", "detail": "auto"}] 或 base64
+        _images = extra_context.get("images") or []
+        if _images and isinstance(_images, list):
+            image_parts: list[dict[str, Any]] = []
+            for img in _images[:10]:  # Cap at 10 images
+                if isinstance(img, str):
+                    image_parts.append({"type": "image_url", "image_url": {"url": img, "detail": "auto"}})
+                elif isinstance(img, dict) and img.get("url"):
+                    image_parts.append({"type": "image_url", "image_url": {"url": img["url"], "detail": img.get("detail", "auto")}})
+            if image_parts:
+                # Convert the last user message to multimodal format
+                last_user_idx = next((i for i in range(len(messages) - 1, -1, -1) if messages[i]["role"] == "user"), None)
+                if last_user_idx is not None:
+                    existing_text = messages[last_user_idx]["content"]
+                    if isinstance(existing_text, str):
+                        messages[last_user_idx]["content"] = [{"type": "text", "text": existing_text}] + image_parts
+                self._emit_trace(context, "agent.multimodal.images_attached", count=len(image_parts))
         # P1-14: 上下文管理——按配置策略压缩/裁剪发给 LLM 的消息
         messages = await self._prepare_llm_context(context, messages)
         response = await self.llm.chat(messages, self.tools.definitions_for_llm())
@@ -2978,6 +3052,22 @@ class AgentLoop:
         if any(token in text for token in ["file", "code", "repo", "tree", "directory", "folder", "文件", "代码", "目录", "文件夹"]):
             return "search"
         return "general"
+
+    def _extract_lesson(self, trajectory: AgentTrajectory, tool_calls: list, answer: str, result) -> str:
+        """Extract a human-readable lesson from a failed/partial run for self-evolution."""
+        failed = [tc for tc in tool_calls if not tc.success]
+        parts: list[str] = []
+        if failed:
+            tool_names = list({tc.tool_name for tc in failed})
+            parts.append(f"Tools that failed: {', '.join(tool_names[:5])}")
+            first_error = next((tc.error for tc in failed if tc.error), "")
+            if first_error:
+                parts.append(f"First error: {first_error[:150]}")
+        if result.status != RunStatus.COMPLETED:
+            parts.append(f"Run ended with status: {result.status.value if hasattr(result.status, 'value') else result.status}")
+        if not parts:
+            parts.append("Run completed but with tool failures — review tool arguments and preconditions.")
+        return "; ".join(parts)
 
     def _build_execution_summary(self, trajectory: AgentTrajectory, observations: list[str], tool_calls: list[ToolCallRecord], plan_records: list[AgentPlanStepRecord], answer: str, extra_context: dict[str, object] | None = None) -> dict[str, object]:
         extra_context = extra_context or {}

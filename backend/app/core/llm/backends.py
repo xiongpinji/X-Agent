@@ -173,6 +173,8 @@ class BaseLLMBackend:
         self,
         messages: list[dict[str, str]],
         tools: list[dict[str, Any]],
+        *,
+        response_format: dict[str, Any] | None = None,
     ) -> LLMResponse:
         raise NotImplementedError
 
@@ -345,6 +347,8 @@ class OpenAIBackend(BaseLLMBackend):
         self,
         messages: list[dict[str, str]],
         tools: list[dict[str, Any]],
+        *,
+        response_format: dict[str, Any] | None = None,
     ) -> LLMResponse:
         """Send a chat request to OpenAI API using persistent connection pool."""
         client = await self._get_client()
@@ -362,6 +366,10 @@ class OpenAIBackend(BaseLLMBackend):
                 request_kwargs["tools"] = [
                     _to_openai_tool(tool) for tool in tools
                 ]
+
+            # Codex-style structured output enforcement
+            if response_format:
+                request_kwargs["response_format"] = response_format
 
             # Make request with retry logic
             response = await self._retry_with_backoff(
@@ -590,6 +598,7 @@ class LLMRouter:
         user_id: str | None = None,
         task_type: Any = None,
         strategy: Any = None,
+        response_format: dict[str, Any] | None = None,
     ) -> LLMResponse:
         if self._quota_manager is not None:
             await self._quota_manager.check_quota(tenant_id, user_id)
@@ -623,7 +632,7 @@ class LLMRouter:
             messages, tools, task_type=task_type, strategy=strategy
         ):
             try:
-                response = await backend.chat(messages, tools)
+                response = await backend.chat(messages, tools, response_format=response_format)
             except LLMBackendError as exc:
                 last_error = exc
                 continue
