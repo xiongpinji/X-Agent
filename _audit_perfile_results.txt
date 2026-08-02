@@ -333,3 +333,140 @@ DONE(0) tests/test_sandbox_api.py :: 9 passed, 1 warning in 56.36s
 DONE(0) tests/test_sandbox_orchestrator.py :: 6 passed in 8.35s
 DONE(0) tests/test_search.py :: 15 passed in 6.34s
 DONE(0) tests/test_sandbox_pooling.py :: no tests ran in 0.41s
+DONE(0) tests/test_security_api_comprehensive.py :: 22 passed, 1 warning in 9.71s
+DONE(0) tests/test_resume_recovery.py :: 10 passed in 66.45s (0:01:06)
+DONE(0) tests/test_scheduler.py :: 22 passed in 12.24s
+DONE(0) tests/test_security_authz.py :: 15 passed, 1 warning in 10.89s
+DONE(0) tests/test_security_auth.py :: 13 passed, 1 warning in 15.86s
+DONE(0) tests/test_security.py :: 2 failed, 23 passed, 1 warning in 28.04s
+DONE(0) tests/test_sandbox_api.py :: 9 passed, 1 warning in 57.55s
+DONE(0) tests/test_search.py :: 15 passed in 6.69s
+DONE(0) tests/test_security_hardening.py :: 14 passed, 1 skipped in 9.13s
+DONE(0) tests/test_security_api_comprehensive.py :: 22 passed, 1 warning in 11.52s
+DONE(0) tests/test_security_sandbox.py :: 10 passed, 5 skipped in 7.66s
+DONE(0) tests/test_security_fixes.py :: 39 passed, 1 warning in 19.63s
+DONE(0) tests/test_security_auth.py :: 13 passed, 1 warning in 14.78s
+DONE(0) tests/test_security_rate_limit.py :: 13 passed, 1 warning in 18.03s
+DONE(0) tests/test_security_authz.py :: 15 passed, 1 warning in 7.80s
+DONE(0) tests/test_security.py :: 2 failed, 23 passed, 1 warning in 27.00s
+DONE(0) tests/test_serverless_sandbox.py :: 13 passed in 9.32s
+DONE(0) tests/test_security_fixes.py :: 39 passed, 1 warning in 17.08s
+DONE(0) tests/test_security_hardening.py :: 14 passed, 1 skipped in 8.01s
+DONE(0) tests/test_service_layer_exceptions.py :: 26 passed, 7 skipped in 12.92s
+DONE(0) tests/test_security_sandbox.py :: 10 passed, 5 skipped in 5.16s
+DONE(0) tests/test_settings_production_guard_p119.py :: 11 passed in 6.32s
+DONE(0) tests/test_services_extended.py :: 25 passed, 2 skipped in 13.95s
+DONE(0) tests/test_security_rate_limit.py :: 13 passed, 1 warning in 14.56s
+DONE(0) tests/test_skill_curator_models.py :: 3 passed in 1.72s
+DONE(0) tests/test_skill_curator_api.py :: 3 passed, 1 warning in 2.17s
+DONE(0) tests/test_service_layer_exceptions.py :: 26 passed, 7 skipped in 13.05s
+DONE(0) tests/test_services_extended.py :: 25 passed, 2 skipped in 12.88s
+DONE(0) tests/test_serverless_sandbox.py :: 13 passed in 7.37s
+DONE(0) tests/test_skill_curator_scoring.py :: 2 passed in 1.19s
+DONE(0) tests/test_skill_distillation.py :: 14 passed in 5.92s
+DONE(0) tests/test_settings_production_guard_p119.py :: 11 passed in 6.36s
+DONE(0) tests/test_skill_curator_api.py :: 3 passed, 1 warning in 2.12s
+DONE(0) tests/test_skill_market_complete.py :: 3 passed, 11 skipped in 6.20s
+DONE(0) tests/test_skill_market_advanced.py :: 28 passed in 11.64s
+DONE(0) tests/test_skill_curator_scoring.py :: 2 passed in 1.18s
+DONE(0) tests/test_skill_curator_models.py :: 3 passed in 1.57s
+DONE(0) tests/test_skill_runtime_p1_11.py :: 19 passed, 1 warning in 8.31s
+DONE(0) tests/test_skill_system_v2.py :: 17 passed in 7.60s
+DONE(0) tests/test_skill_distillation.py :: 14 passed in 6.64s
+DONE(0) tests/test_skills.py :: 10 passed in 6.35s
+DONE(0) tests/test_skill_market_complete.py :: 3 passed, 11 skipped in 6.67s
+DONE(0) tests/test_skills_system.py :: 12 passed in 8.56s
+DONE(0) tests/test_skill_runtime_p1_11.py :: 19 passed, 1 warning in 8.75s
+DONE(0) tests/test_skill_market_advanced.py :: 28 passed in 13.70s
+DONE(0) tests/test_slack_channel_api.py :: 6 passed, 1 warning in 2.89s
+DONE(0) tests/test_streaming_api.py :: 1 passed, 1 warning in 3.80s
+DONE(0) tests/test_skill_system_v2.py :: 17 passed in 7.11s
+DONE(0) tests/test_skills.py :: 10 passed in 4.58s
+DONE(0) tests/test_structure_split.py :: 2 passed in 1.68s
+DONE(0) tests/test_streaming_enhanced.py :: 15 passed in 7.05s
+DONE(0) tests/test_slack_channel_api.py :: 6 passed, 1 warning in 3.70s
+DONE(0) tests/test_skills_system.py :: 12 passed in 6.47s
+DONE(0) tests/test_streaming_api.py :: 1 passed, 1 warning in 4.58s
+DONE(0) tests/test_streaming_comprehensive.py :: 23 passed, 1 warning in 26.72s
+DONE(0) tests/test_telegram_channel_api.py :: 4 passed, 1 warning in 2.18s
+DONE(0) tests/test_structure_split.py :: 2 passed in 1.33s
+DONE(0) tests/test_streaming_enhanced.py :: 15 passed in 6.35s
+DONE(0) tests/test_tenant_isolation_security.py :: 17 passed, 1 warning in 7.05s
+DONE(0) tests/test_tenant_quota.py :: 13 passed in 6.11s
+DONE(0) tests/test_streaming_comprehensive.py :: 23 passed, 1 warning in 25.53s
+DONE(0) tests/test_sync_api_integration.py :: 10 passed, 1 warning in 59.60s
+DONE(0) tests/test_test_commands.py :: 3 passed in 1.64s
+DONE(0) tests/test_telegram_channel_api.py :: 4 passed, 1 warning in 3.09s
+DONE(0) tests/test_test_taxonomy.py :: 1 passed in 1.18s
+DONE(0) tests/test_tenant_isolation_security.py :: 17 passed, 1 warning in 6.88s
+DONE(0) tests/test_todo_app.py :: 1 failed, 10 passed in 4.38s
+DONE(0) tests/test_tenant_quota.py :: 13 passed in 5.28s
+DONE(0) tests/test_tools.py :: 3 passed in 1.53s
+DONE(0) tests/test_sync_api_integration.py :: 10 passed, 1 warning in 59.65s
+DONE(0) tests/test_tool_detail.py :: 1 passed, 1 warning in 3.92s
+DONE(0) tests/test_test_commands.py :: 3 passed in 1.47s
+DONE(0) tests/test_tools_hooks_integration.py :: 8 passed in 3.18s
+DONE(0) tests/test_test_taxonomy.py :: 1 passed in 0.78s
+DONE(0) tests/test_todo_app.py :: 1 failed, 10 passed in 4.66s
+DONE(0) tests/test_trace_audit_integration.py :: 2 passed, 1 warning in 5.46s
+DONE(0) tests/test_tool_detail.py :: 1 passed, 1 warning in 4.13s
+DONE(0) tests/test_tools.py :: 3 passed in 1.60s
+DONE(0) tests/test_ultra_mode.py :: 8 passed in 3.32s
+DONE(0) tests/test_tools_hooks_integration.py :: 8 passed in 3.83s
+DONE(0) tests/test_trace_replay.py :: 1 passed, 1 warning in 16.04s
+DONE(0) tests/test_trace_correlation.py :: 1 passed, 1 warning in 16.27s
+DONE(0) tests/test_user_service.py :: 6 passed in 0.50s
+DONE(0) tests/test_trace_audit_integration.py :: 2 passed, 1 warning in 5.67s
+DONE(0) tests/test_ultra_mode.py :: 8 passed in 3.63s
+DONE(0) tests/test_trace_correlation.py :: 1 passed, 1 warning in 20.01s
+DONE(0) tests/test_vision_model.py :: 28 passed in 11.10s
+DONE(0) tests/test_trace_replay.py :: 1 passed, 1 warning in 16.75s
+DONE(0) tests/test_work_mode.py :: 18 passed in 8.10s
+DONE(0) tests/test_workflow_compose_contract.py :: 1 passed in 0.96s
+DONE(0) tests/test_user_service.py :: 6 passed in 0.31s
+DONE(0) tests/test_vision_processors.py :: 25 passed, 2 skipped in 28.89s
+DONE(0) tests/test_vision_model.py :: 28 passed in 12.80s
+DONE(0) tests/test_work_mode.py :: 18 passed in 7.52s
+DONE(0) tests/test_workflow_cron.py :: 28 passed in 13.05s
+DONE(0) tests/test_workflow_helpers_split.py :: 4 passed in 2.38s
+DONE(0) tests/test_workflow_compose_contract.py :: 1 passed in 1.15s
+DONE(0) tests/test_workflow_recovery.py :: 13 passed in 6.76s
+DONE(0) tests/test_vision_processors.py :: 25 passed, 2 skipped in 28.82s
+DONE(0) tests/test_workflow_run_correlation.py :: 1 passed, 1 warning in 3.93s
+DONE(0) tests/test_workflow_helpers_split.py :: 4 passed in 2.18s
+DONE(0) tests/test_workflow_cron.py :: 28 passed in 11.20s
+DONE(0) tests/test_workflow_run_detail.py :: 1 passed, 1 warning in 4.83s
+DONE(0) tests/test_workflow_run_observability.py :: 1 passed, 1 warning in 5.14s
+DONE(0) tests/test_workflow_recovery.py :: 13 passed in 6.29s
+DONE(0) tests/test_workflow_run_timeline.py :: 1 passed, 1 warning in 4.38s
+DONE(0) tests/test_workflow_run_correlation.py :: 1 passed, 1 warning in 5.12s
+DONE(0) tests/test_workflow_run_detail.py :: 1 passed, 1 warning in 3.80s
+DONE(0) tests/test_workflow_runtime.py :: 1 passed in 0.97s
+DONE(0) tests/test_workflow_runtime_complex.py :: 1 passed in 0.75s
+DONE(0) tests/test_workflow_run_trace_link.py :: 1 passed, 1 warning in 4.03s
+DONE(0) tests/test_workflow_run_observability.py :: 1 passed, 1 warning in 3.99s
+DONE(0) tests/test_workflow_runtime_helpers.py :: 1 passed in 1.26s
+DONE(0) tests/test_workflow_run_timeline.py :: 1 passed, 1 warning in 5.53s
+DONE(0) tests/test_workflow_run_trace_link.py :: 1 passed, 1 warning in 4.82s
+DONE(0) tests/test_workflow_runtime.py :: 1 passed in 0.81s
+DONE(0) tests/test_workflow_view_helpers.py :: 2 passed in 1.29s
+DONE(0) tests/test_workflow_runtime_complex.py :: 1 passed in 0.95s
+DONE(0) tests/test_workflow_store_sql.py :: 17 passed in 8.30s
+DONE(0) tests/test_workflow_schedule_detail.py :: 1 passed, 1 warning in 4.49s
+DONE(0) tests/test_workflow_worker.py :: 2 passed in 1.33s
+DONE(0) tests/test_workflow_runtime_helpers.py :: 1 passed in 0.89s
+DONE(0) tests/test_workflow_schedule_detail.py :: 1 passed, 1 warning in 4.81s
+DONE(0) tests/test_workflow_view_helpers.py :: 2 passed in 1.32s
+DONE(0) tests/test_workflow_store_sql.py :: 17 passed in 9.02s
+DONE(0) tests/test_workflows_comprehensive.py :: 26 passed in 10.79s
+DONE(0) tests/test_workflow_worker.py :: 2 passed in 1.59s
+DONE(0) tests/test_workflows_extended.py :: 18 passed in 7.76s
+DONE(0) tests/test_workflows.py :: 23 passed, 1 warning in 16.30s
+DONE(0) tests/test_workspace_management.py :: 42 passed in 16.96s
+DONE(0) tests/test_workflows_extended.py :: 18 passed in 7.65s
+DONE(0) tests/test_workflows_comprehensive.py :: 26 passed in 10.60s
+DONE(0) tests/test_xagent_doctor.py :: 2 passed in 1.48s
+ALL_FINISHED
+DONE(0) tests/test_workflows.py :: 23 passed, 1 warning in 16.58s
+DONE(0) tests/test_workspace_management.py :: 42 passed in 16.31s
+DONE(0) tests/test_xagent_doctor.py :: 2 passed in 0.86s
