@@ -175,3 +175,71 @@ async def get_plugin_stats(plugin_id: str):
         "total_reviews": stats.total_reviews,
         "risk_score": stats.risk_score,
     }
+
+
+# ─── 热加载 & 版本管理 (K1/K2) ────────────────────────────────────────────────
+
+
+@router.post("/plugins/{plugin_id}/reload")
+async def hot_reload_plugin(plugin_id: str):
+    """Hot-reload a plugin without system restart."""
+    service = get_plugin_market_service()
+    result = service.hot_reload(plugin_id)
+    if not result.get("success"):
+        raise HTTPException(status_code=400, detail=result.get("error", "Reload failed"))
+    return result
+
+
+@router.post("/plugins/{plugin_id}/unload")
+async def hot_unload_plugin(plugin_id: str):
+    """Unload a plugin module from memory."""
+    service = get_plugin_market_service()
+    result = service.hot_unload(plugin_id)
+    if not result.get("success"):
+        raise HTTPException(status_code=400, detail=result.get("error", "Unload failed"))
+    return result
+
+
+class UpgradePluginRequest(BaseModel):
+    target_version: str = Field(..., min_length=1)
+
+
+@router.post("/plugins/{plugin_id}/upgrade")
+async def upgrade_plugin(plugin_id: str, req: UpgradePluginRequest):
+    """Upgrade plugin to a new version with compatibility check."""
+    service = get_plugin_market_service()
+    result = service.upgrade_plugin(plugin_id, req.target_version)
+    if not result.get("success"):
+        raise HTTPException(status_code=400, detail=result.get("error", "Upgrade failed"))
+    return result
+
+
+@router.post("/plugins/{plugin_id}/rollback")
+async def rollback_plugin(plugin_id: str):
+    """Rollback plugin to the previous version."""
+    service = get_plugin_market_service()
+    result = service.rollback_plugin(plugin_id)
+    if not result.get("success"):
+        raise HTTPException(status_code=400, detail=result.get("error", "Rollback failed"))
+    return result
+
+
+@router.get("/plugins/{plugin_id}/versions")
+async def get_plugin_versions(plugin_id: str):
+    """Get version history for a plugin."""
+    service = get_plugin_market_service()
+    listing = service.get_plugin(plugin_id)
+    if not listing:
+        raise HTTPException(status_code=404, detail=f"Plugin '{plugin_id}' not found")
+    return {
+        "plugin_id": plugin_id,
+        "current_version": listing.manifest.version if listing.manifest else "unknown",
+        "history": service.get_version_history(plugin_id),
+    }
+
+
+@router.get("/plugins/{plugin_id}/compatibility/{target_version}")
+async def check_compatibility(plugin_id: str, target_version: str):
+    """Check version compatibility before upgrading."""
+    service = get_plugin_market_service()
+    return service.check_version_compatibility(plugin_id, target_version)

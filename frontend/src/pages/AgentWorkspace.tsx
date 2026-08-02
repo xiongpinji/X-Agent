@@ -13,6 +13,8 @@
 import React, { useEffect, useState } from 'react';
 import AgentStreamPanel from '../components/AgentStreamPanel';
 import FolderSelector from '../components/FolderSelector';
+import GitStatusPanel from '../components/GitStatusPanel';
+import RunHistoryPanel from '../components/RunHistoryPanel';
 import './AgentWorkspace.css';
 
 interface AgentWorkspaceProps {
@@ -69,6 +71,16 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
               onRunComplete={onRunComplete}
               onError={(err) => onError?.(new Error(String(err)))}
             />
+          </div>
+        </div>
+
+        {/* Right Panel - Git & History */}
+        <div className="workspace-right-panel">
+          <div className="panel-section">
+            <GitStatusPanel />
+          </div>
+          <div className="panel-section">
+            <RunHistoryPanel limit={10} />
           </div>
         </div>
       </div>

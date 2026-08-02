@@ -180,6 +180,8 @@ class SandboxManager:
             "success": result.success,
             "error_code": result.error_code,
             "execution_time_ms": result.execution_time_ms,
+            "memory_used_mb": getattr(result, "memory_used_mb", 0.0),
+            "stdout_bytes": len(getattr(result, "stdout", "") or ""),
         }
 
         self._execution_history.append(record)

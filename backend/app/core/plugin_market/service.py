@@ -437,6 +437,186 @@ class PluginMarketService:
         """获取插件评价列表."""
         return self._reviews.get(plugin_id, [])
 
+    # ─── 热加载引擎 (K1) ────────────────────────────────────────────────────
+
+    def hot_reload(self, plugin_id: str) -> dict[str, object]:
+        """Hot-reload a plugin without system restart.
+
+        Unloads the current module, clears cache, and reloads from source.
+        Returns status dict with timing info.
+        """
+        import importlib
+        import time
+
+        listing = self._registry.get(plugin_id)
+        if not listing:
+            return {"success": False, "error": "Plugin not found"}
+        if not listing.is_installed:
+            return {"success": False, "error": "Plugin not installed"}
+
+        start = time.perf_counter()
+        module_path = f"plugins.{plugin_id}.main"
+
+        try:
+            # Unload
+            import sys
+            if module_path in sys.modules:
+                del sys.modules[module_path]
+
+            # Reload
+            try:
+                mod = importlib.import_module(module_path)
+                if hasattr(mod, "activate"):
+                    mod.activate()
+                listing.is_enabled = True
+                listing.updated_at = datetime.now(UTC).isoformat()
+                elapsed_ms = (time.perf_counter() - start) * 1000
+                logger.info("Plugin hot-reloaded: %s (%.1fms)", plugin_id, elapsed_ms)
+                return {"success": True, "plugin_id": plugin_id, "reload_time_ms": round(elapsed_ms, 1)}
+            except ImportError as e:
+                return {"success": False, "error": f"Import failed: {e}"}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def hot_unload(self, plugin_id: str) -> dict[str, object]:
+        """Unload a plugin module from memory without uninstalling."""
+        import sys
+
+        listing = self._registry.get(plugin_id)
+        if not listing:
+            return {"success": False, "error": "Plugin not found"}
+
+        module_path = f"plugins.{plugin_id}.main"
+        try:
+            mod = sys.modules.get(module_path)
+            if mod and hasattr(mod, "deactivate"):
+                mod.deactivate()
+            if module_path in sys.modules:
+                del sys.modules[module_path]
+            listing.is_enabled = False
+            listing.updated_at = datetime.now(UTC).isoformat()
+            logger.info("Plugin unloaded: %s", plugin_id)
+            return {"success": True, "plugin_id": plugin_id}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    # ─── 版本管理 (K2) ──────────────────────────────────────────────────────
+
+    def check_version_compatibility(self, plugin_id: str, target_version: str) -> dict[str, object]:
+        """Check if upgrading to target_version is compatible.
+
+        Uses semver rules: major version changes are breaking,
+        minor/patch are backward-compatible.
+        """
+        listing = self._registry.get(plugin_id)
+        if not listing or not listing.manifest:
+            return {"compatible": False, "reason": "Plugin not found"}
+
+        current = listing.manifest.version
+        try:
+            cur_parts = [int(x) for x in current.split("-")[0].split(".")]
+            tgt_parts = [int(x) for x in target_version.split("-")[0].split(".")]
+        except ValueError:
+            return {"compatible": False, "reason": f"Invalid version format"}
+
+        cur_major, cur_minor, cur_patch = (cur_parts + [0, 0, 0])[:3]
+        tgt_major, tgt_minor, tgt_patch = (tgt_parts + [0, 0, 0])[:3]
+
+        if tgt_major > cur_major:
+            return {
+                "compatible": True,
+                "breaking": True,
+                "reason": f"Major version upgrade {current} → {target_version} may contain breaking changes",
+                "recommendation": "Review changelog before upgrading",
+            }
+        if tgt_major < cur_major:
+            return {
+                "compatible": False,
+                "breaking": True,
+                "reason": f"Downgrade across major versions not supported ({current} → {target_version})",
+            }
+        # Same major: minor/patch upgrades are compatible
+        return {
+            "compatible": True,
+            "breaking": False,
+            "reason": f"Compatible upgrade {current} → {target_version}",
+        }
+
+    def upgrade_plugin(self, plugin_id: str, target_version: str) -> dict[str, object]:
+        """Upgrade plugin to a new version with rollback support."""
+        listing = self._registry.get(plugin_id)
+        if not listing or not listing.manifest:
+            return {"success": False, "error": "Plugin not found"}
+
+        compat = self.check_version_compatibility(plugin_id, target_version)
+        if not compat.get("compatible"):
+            return {"success": False, "error": compat.get("reason", "Incompatible")}
+
+        old_version = listing.manifest.version
+
+        # Store rollback point
+        if not hasattr(listing, "_version_history"):
+            listing._version_history = []
+        listing._version_history.append({
+            "version": old_version,
+            "timestamp": datetime.now(UTC).isoformat(),
+        })
+
+        # Apply upgrade
+        listing.manifest.version = target_version
+        listing.updated_at = datetime.now(UTC).isoformat()
+
+        # Hot-reload if installed
+        reload_result = None
+        if listing.is_installed:
+            reload_result = self.hot_reload(plugin_id)
+
+        logger.info("Plugin upgraded: %s %s → %s", plugin_id, old_version, target_version)
+        return {
+            "success": True,
+            "plugin_id": plugin_id,
+            "old_version": old_version,
+            "new_version": target_version,
+            "breaking": compat.get("breaking", False),
+            "reload": reload_result,
+        }
+
+    def rollback_plugin(self, plugin_id: str) -> dict[str, object]:
+        """Rollback plugin to the previous version."""
+        listing = self._registry.get(plugin_id)
+        if not listing or not listing.manifest:
+            return {"success": False, "error": "Plugin not found"}
+
+        history = getattr(listing, "_version_history", [])
+        if not history:
+            return {"success": False, "error": "No version history available for rollback"}
+
+        prev = history.pop()
+        current = listing.manifest.version
+        listing.manifest.version = prev["version"]
+        listing.updated_at = datetime.now(UTC).isoformat()
+
+        # Hot-reload if installed
+        reload_result = None
+        if listing.is_installed:
+            reload_result = self.hot_reload(plugin_id)
+
+        logger.info("Plugin rolled back: %s %s → %s", plugin_id, current, prev["version"])
+        return {
+            "success": True,
+            "plugin_id": plugin_id,
+            "from_version": current,
+            "to_version": prev["version"],
+            "reload": reload_result,
+        }
+
+    def get_version_history(self, plugin_id: str) -> list[dict[str, object]]:
+        """Get version history for a plugin."""
+        listing = self._registry.get(plugin_id)
+        if not listing:
+            return []
+        return getattr(listing, "_version_history", [])
+
 
 # ─── 单例 ─────────────────────────────────────────────────────────────────────
 

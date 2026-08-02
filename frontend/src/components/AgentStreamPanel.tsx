@@ -185,6 +185,24 @@ export const AgentStreamPanel: React.FC<AgentStreamPanelProps> = ({ onRunComplet
           disabled={isStreaming}
           rows={3}
         />
+        {/* Task Templates */}
+        <div className="agent-stream-panel__templates">
+          {[
+            { label: '🐛 修 Bug', prompt: '找到并修复以下 bug：' },
+            { label: '🧪 写测试', prompt: '为以下代码编写完整的 pytest 单元测试，覆盖正常路径和边界情况：' },
+            { label: '♻️ 重构', prompt: '重构以下代码，改善可读性和性能，保持行为不变：' },
+            { label: '✨ 新功能', prompt: '实现以下功能，包含类型注解和文档字符串：' },
+          ].map((tpl) => (
+            <button
+              key={tpl.label}
+              className="agent-stream-panel__template-btn"
+              onClick={() => setTaskInput(tpl.prompt)}
+              disabled={isStreaming}
+            >
+              {tpl.label}
+            </button>
+          ))}
+        </div>
         <div className="agent-stream-panel__actions">
           <button
             onClick={handleStart}

@@ -1609,7 +1609,7 @@ def build_default_tool_registry(
         import asyncio as _aio
 
         # Resolve absolute path for volume mount
-        abs_work = _os.path.abspath(work_dir)
+        abs_work = os.path.abspath(work_dir)
         docker_cmd = (
             f'docker run --rm '
             f'--network none '
@@ -1647,7 +1647,7 @@ def build_default_tool_registry(
                 "stdout": "", "stderr": f"Docker command timed out after {timeout}s",
                 "command": command, "cwd": work_dir, "sandbox": "docker",
             }
-        except Exception as exc:
+        except Exception:
             # Docker not available → fallback to local
             return await _run_local(command, work_dir, timeout)
 
@@ -1815,6 +1815,209 @@ def build_default_tool_registry(
         "Create and switch to a new git branch.",
         git_create_branch,
         risk_level=RiskLevel.LOW,
+    )
+
+    # ─── 代码搜索工具: grep_code ───
+    async def grep_code(
+        pattern: str,
+        path: str | None = None,
+        file_glob: str | None = None,
+        max_results: int = 30,
+        context_lines: int = 2,
+    ) -> dict[str, Any]:
+        """Search code files using regex pattern matching (like grep/ripgrep).
+
+        Returns matching lines with file paths and line numbers.
+        Much more powerful than search_text: supports regex, file type filtering,
+        and returns exact line content with context.
+
+        Args:
+            pattern: Regex pattern to search for (e.g. "def test_.*", "import.*os").
+            path: Directory to search in (defaults to workspace root).
+            file_glob: File pattern filter (e.g. "*.py", "*.ts", "*.go").
+            max_results: Maximum number of matching files to return (default 30).
+            context_lines: Lines of context before/after each match (default 2).
+        """
+        import re as _re
+
+        work_dir = path or os.environ.get("XAGENT_WORKSPACE", ".")
+        base = Path(work_dir).resolve()
+        if not base.exists():
+            return {"success": False, "error": f"Path not found: {work_dir}", "matches": []}
+
+        try:
+            regex = _re.compile(pattern, _re.IGNORECASE)
+        except _re.error as e:
+            return {"success": False, "error": f"Invalid regex: {e}", "matches": []}
+
+        # Determine file filter
+        glob_pat = file_glob or "*"
+        skip_dirs = {".git", "node_modules", "__pycache__", ".venv", "venv", ".ruff_cache", ".pytest_cache", "htmlcov", ".mypy_cache"}
+        skip_exts = {".pyc", ".pyo", ".so", ".dll", ".exe", ".png", ".jpg", ".gif", ".ico", ".woff", ".woff2", ".ttf", ".eot", ".mp4", ".zip", ".tar", ".gz"}
+
+        matches: list[dict[str, Any]] = []
+        files_searched = 0
+
+        for fpath in base.rglob(glob_pat):
+            if len(matches) >= max_results:
+                break
+            # Skip directories
+            if any(part in skip_dirs for part in fpath.parts):
+                continue
+            if not fpath.is_file():
+                continue
+            if fpath.suffix.lower() in skip_exts:
+                continue
+            # Skip large files (>500KB)
+            try:
+                if fpath.stat().st_size > 500_000:
+                    continue
+            except OSError:
+                continue
+
+            files_searched += 1
+            try:
+                lines = fpath.read_text(encoding="utf-8", errors="ignore").splitlines()
+            except Exception:
+                continue
+
+            file_matches: list[dict[str, Any]] = []
+            for i, line in enumerate(lines):
+                if regex.search(line):
+                    start = max(0, i - context_lines)
+                    end = min(len(lines), i + context_lines + 1)
+                    file_matches.append({
+                        "line": i + 1,
+                        "content": line.rstrip(),
+                        "context": lines[start:end],
+                        "context_start": start + 1,
+                    })
+                    if len(file_matches) >= 5:  # Max 5 matches per file
+                        break
+
+            if file_matches:
+                matches.append({
+                    "file": str(fpath.relative_to(base)),
+                    "matches": file_matches,
+                })
+
+        return {
+            "success": True,
+            "pattern": pattern,
+            "files_searched": files_searched,
+            "files_matched": len(matches),
+            "matches": matches,
+        }
+
+    registry.register(
+        "grep_code",
+        "Search code using regex patterns across files. Returns matching lines with line numbers and context. "
+        "Supports file type filtering (e.g. '*.py', '*.ts'). Use for finding function definitions, "
+        "imports, usages, error patterns, etc. Much more powerful than search_text.",
+        grep_code,
+        risk_level=RiskLevel.LOW,
+        parameters_schema={
+            "type": "object",
+            "properties": {
+                "pattern": {"type": "string", "description": "Regex pattern to search for."},
+                "path": {"type": "string", "description": "Directory to search (default: workspace root)."},
+                "file_glob": {"type": "string", "description": "File filter glob (e.g. '*.py', '*.ts', '*.go')."},
+                "max_results": {"type": "integer", "description": "Max matching files (default 30)."},
+                "context_lines": {"type": "integer", "description": "Context lines around match (default 2)."},
+            },
+            "required": ["pattern"],
+            "additionalProperties": False,
+        },
+    )
+
+    # ─── 多语言测试命令识别: detect_test_command ───
+    async def detect_test_command(path: str | None = None) -> dict[str, Any]:
+        """Detect the project language and return the appropriate test command.
+
+        Inspects the workspace for project manifest files (package.json, pyproject.toml,
+        Cargo.toml, go.mod, pom.xml, etc.) and returns the recommended test command.
+
+        Args:
+            path: Project directory to inspect (defaults to workspace root).
+        """
+        work_dir = path or os.environ.get("XAGENT_WORKSPACE", ".")
+        base = Path(work_dir).resolve()
+        if not base.exists():
+            return {"success": False, "error": f"Path not found: {work_dir}"}
+
+        detected: list[dict[str, str]] = []
+
+        # Python
+        if (base / "pyproject.toml").exists() or (base / "setup.py").exists() or (base / "requirements.txt").exists():
+            cmd = "python -m pytest"
+            if (base / "pytest.ini").exists() or (base / "pyproject.toml").exists():
+                cmd = "python -m pytest"
+            detected.append({"language": "python", "test_command": cmd, "manifest": "pyproject.toml"})
+
+        # Node.js / TypeScript
+        pkg_json = base / "package.json"
+        if pkg_json.exists():
+            try:
+                import json as _json
+                pkg = _json.loads(pkg_json.read_text(encoding="utf-8"))
+                scripts = pkg.get("scripts", {})
+                if "test" in scripts:
+                    test_cmd = scripts["test"]
+                elif (base / "vitest.config.ts").exists() or (base / "vitest.config.js").exists():
+                    test_cmd = "npx vitest run"
+                elif (base / "jest.config.js").exists() or (base / "jest.config.ts").exists():
+                    test_cmd = "npx jest"
+                else:
+                    test_cmd = "npm test"
+                detected.append({"language": "javascript/typescript", "test_command": test_cmd, "manifest": "package.json"})
+            except Exception:
+                detected.append({"language": "javascript/typescript", "test_command": "npm test", "manifest": "package.json"})
+
+        # Rust
+        if (base / "Cargo.toml").exists():
+            detected.append({"language": "rust", "test_command": "cargo test", "manifest": "Cargo.toml"})
+
+        # Go
+        if (base / "go.mod").exists():
+            detected.append({"language": "go", "test_command": "go test ./...", "manifest": "go.mod"})
+
+        # Java (Maven)
+        if (base / "pom.xml").exists():
+            detected.append({"language": "java", "test_command": "mvn test", "manifest": "pom.xml"})
+
+        # Java (Gradle)
+        if (base / "build.gradle").exists() or (base / "build.gradle.kts").exists():
+            detected.append({"language": "java/kotlin", "test_command": "gradle test", "manifest": "build.gradle"})
+
+        # Ruby
+        if (base / "Gemfile").exists():
+            detected.append({"language": "ruby", "test_command": "bundle exec rspec", "manifest": "Gemfile"})
+
+        # PHP
+        if (base / "composer.json").exists():
+            detected.append({"language": "php", "test_command": "vendor/bin/phpunit", "manifest": "composer.json"})
+
+        return {
+            "success": True,
+            "workspace": str(base),
+            "detected": detected,
+            "primary_command": detected[0]["test_command"] if detected else None,
+        }
+
+    registry.register(
+        "detect_test_command",
+        "Detect project language and return the appropriate test command. "
+        "Supports Python, JavaScript/TypeScript, Rust, Go, Java, Ruby, PHP. "
+        "Use before running tests to determine the correct command.",
+        detect_test_command,
+        risk_level=RiskLevel.LOW,
+        parameters_schema={
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "Project directory (default: workspace root)."},
+            },
+            "additionalProperties": False,
+        },
     )
 
     return registry

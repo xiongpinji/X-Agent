@@ -6,7 +6,7 @@ import { apiClient } from '@/services/api'
 import { Loader, LogIn, UserPlus, AlertTriangle } from 'lucide-react'
 import clsx from 'clsx'
 
-type AuthMode = 'login' | 'register'
+type AuthMode = 'login' | 'register' | 'apikey'
 
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate()
@@ -15,12 +15,32 @@ export const LoginPage: React.FC = () => {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [apiKey, setApiKey] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
+
+    // API Key quick login
+    if (mode === 'apikey') {
+      if (!apiKey.trim()) {
+        setError('API Key is required')
+        return
+      }
+      try {
+        setLoading(true)
+        localStorage.setItem('api_key', apiKey.trim())
+        setUser({ id: 'api-key-user', name: 'Developer', email: 'dev@local' })
+        navigate('/')
+      } catch (err: any) {
+        setError(toErrorMessage(err, 'API Key login failed'))
+      } finally {
+        setLoading(false)
+      }
+      return
+    }
 
     if (!email.trim() || !password.trim()) {
       setError('Email and password are required')
@@ -108,6 +128,37 @@ export const LoginPage: React.FC = () => {
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-4">
+          {mode === 'apikey' ? (
+            <div>
+              <label
+                htmlFor="apikey"
+                className={clsx(
+                  'block text-sm font-medium mb-1',
+                  theme === 'dark' ? 'text-slate-300' : 'text-slate-700'
+                )}
+              >
+                API Key
+              </label>
+              <input
+                id="apikey"
+                type="password"
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                placeholder="xagent-dev-key-2024"
+                autoComplete="off"
+                className={clsx(
+                  'w-full px-4 py-2 rounded-lg border transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500',
+                  theme === 'dark'
+                    ? 'bg-slate-800 text-white border-slate-700 placeholder-slate-500'
+                    : 'bg-white text-slate-900 border-slate-300 placeholder-slate-400'
+                )}
+              />
+              <p className={clsx('mt-1 text-xs', theme === 'dark' ? 'text-slate-500' : 'text-slate-400')}>
+                开发模式：直接输入后端 X-API-Key 即可进入
+              </p>
+            </div>
+          ) : (
+            <>
           <div>
             <label
               htmlFor="email"
@@ -187,6 +238,8 @@ export const LoginPage: React.FC = () => {
               />
             </div>
           )}
+            </>
+          )}
 
           <button
             type="submit"
@@ -205,22 +258,33 @@ export const LoginPage: React.FC = () => {
             ) : (
               <UserPlus size={20} />
             )}
-            {mode === 'login' ? 'Sign In' : 'Create Account'}
+            {mode === 'login' ? 'Sign In' : mode === 'register' ? 'Create Account' : 'Enter'}
           </button>
         </form>
 
         {/* Toggle mode */}
-        <div className="mt-6 text-center">
+        <div className="mt-6 text-center space-y-2">
           <button
             onClick={() => {
               setMode(mode === 'login' ? 'register' : 'login')
               setError(null)
             }}
-            className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+            className="block w-full text-sm text-blue-600 hover:text-blue-700 font-medium"
           >
             {mode === 'login'
               ? "Don't have an account? Sign up"
-              : 'Already have an account? Sign in'}
+              : mode === 'register'
+              ? 'Already have an account? Sign in'
+              : 'Back to email login'}
+          </button>
+          <button
+            onClick={() => {
+              setMode(mode === 'apikey' ? 'login' : 'apikey')
+              setError(null)
+            }}
+            className="block w-full text-sm text-slate-500 hover:text-slate-700 font-medium"
+          >
+            {mode === 'apikey' ? '← Email login' : '🔑 API Key login (dev)'}
           </button>
         </div>
       </div>

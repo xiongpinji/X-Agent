@@ -275,3 +275,50 @@ async def detailed_health_check() -> dict:
             "unhealthy_checks": sum(1 for c in checks if c.status == HealthStatus.UNHEALTHY),
         },
     }
+
+
+# ─── R: Production Deployment Probes ─────────────────────────────────────────
+
+
+@router.get("/deploy-readiness")
+async def deploy_readiness() -> dict:
+    """K8s-style deployment readiness: all subsystems + version + uptime."""
+    import os
+    import time
+
+    checks = await asyncio.gather(
+        check_redis(),
+        check_database(),
+        check_memory_store(),
+    )
+    all_ok = all(c.status != HealthStatus.UNHEALTHY for c in checks)
+
+    # Version from pyproject or env
+    version = os.environ.get("XAGENT_VERSION", "0.4.0-alpha")
+
+    return {
+        "ready": all_ok,
+        "version": version,
+        "uptime_seconds": round(time.time() - _startup_time, 1),
+        "checks": {c.name: c.status for c in checks},
+        "environment": os.environ.get("XAGENT_APP_MODE", "development"),
+    }
+
+
+@router.get("/drain-status")
+async def drain_status() -> dict:
+    """Graceful shutdown drain status: active requests, shutdown flag."""
+    try:
+        from backend.app.core.lifecycle import lifecycle
+        return {
+            "is_shutting_down": lifecycle.is_shutting_down,
+            "active_requests": getattr(lifecycle, "active_requests", 0),
+            "drain_complete": lifecycle.is_shutting_down and getattr(lifecycle, "active_requests", 0) == 0,
+        }
+    except Exception:
+        return {"is_shutting_down": False, "active_requests": 0, "drain_complete": False}
+
+
+# Module-level startup timestamp
+import time as _time_mod
+_startup_time = _time_mod.time()

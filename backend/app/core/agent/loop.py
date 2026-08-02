@@ -576,6 +576,67 @@ class AgentLoop:
             return result.reason or f"{event.value} denied by hook"
         return None
 
+    # ─── Fast-path: 简单问题直接 LLM 回答，跳过重型管道 ───────────────────────
+    _COMPLEX_KEYWORDS = frozenset({
+        "file", "write", "create", "edit", "patch", "fix", "bug", "test",
+        "run", "execute", "deploy", "install", "build", "refactor",
+        "implement", "debug", "migrate", "config", "setup", "文件",
+        "写入", "创建", "编辑", "修复", "测试", "运行", "执行", "部署",
+        "安装", "构建", "重构", "实现", "调试", "迁移", "配置",
+    })
+
+    def _is_simple_question(self, task: str) -> bool:
+        """Detect if a task is a simple question that needs no tools.
+
+        Simple questions are short, contain no file paths or code-related
+        keywords, and can be answered directly by the LLM.
+        """
+        import re
+        t = task.strip()
+        # Too long → likely complex
+        if len(t) > 300:
+            return False
+        # Contains file path patterns (e.g. src/main.py, C:\Users) → complex
+        if re.search(r'[\w/\\]+\.\w{1,5}$', t) or "/" in t or "\\" in t:
+            return False
+        # Contains complex keywords → needs tools
+        words = set(t.lower().split())
+        if words & self._COMPLEX_KEYWORDS:
+            return False
+        # Short conversational / knowledge questions → simple
+        return True
+
+    async def _fast_path_answer(self, context: RunContext, task: str) -> AgentRunResponse | None:
+        """Try to answer a simple question directly via LLM (no planning loop).
+
+        Returns None if the fast path is not applicable (complex task).
+        """
+        if not self._is_simple_question(task):
+            return None
+        try:
+            resp = await self.llm.chat(
+                [{"role": "user", "content": task}], []
+            )
+            answer = (resp.content or "").strip()
+            if not answer:
+                return None  # Fall through to full pipeline
+            self._emit_trace(context, "agent.fast_path", task=task, answer_preview=answer[:200])
+            return AgentRunResponse(
+                trace_id=context.trace_id,
+                agent_id=context.agent_id,
+                status=RunStatus.COMPLETED,
+                answer=answer,
+                iterations=1,
+                memory_hits=0,
+                tool_calls=[],
+                events=[],
+                execution_summary={"fast_path": True, "model": resp.model, "tokens": resp.tokens_used},
+                snapshot={"fast_path": True},
+            )
+        except Exception as exc:
+            logger.debug("Fast-path LLM call failed, falling back to full pipeline: %s", exc)
+            return None
+
     async def run(
         self,
         context: RunContext,
@@ -587,6 +648,12 @@ class AgentLoop:
 
         # 保存 event_callback 供 _emit_trace 实时推送 SSE 事件
         self._event_callback = event_callback
+
+        # ─── Fast-path: 简单问题直接回答 ─────────────────────────────────────
+        fast = await self._fast_path_answer(context, task)
+        if fast is not None:
+            fast.events = [started]
+            return fast
 
         # 上下文管理（P1-14）：重置每次运行的压缩/会话状态
         self._compression_events = []
@@ -1437,7 +1504,7 @@ class AgentLoop:
     ) -> str:
         """处理工具执行结果。"""
         if record.success and record.output is not None:
-            observation = self._stringify(record.output)
+            observation = self._trim_observation(self._stringify(record.output))
             observations.append(observation)
             trajectory.observations.append(observation)
 
@@ -3769,6 +3836,22 @@ class AgentLoop:
         if isinstance(value, (str, int, float, bool)) or value is None:
             return json.dumps(value, ensure_ascii=False, default=str) if not isinstance(value, str) else value
         return json.dumps(value, ensure_ascii=False, default=str)
+
+    @staticmethod
+    def _trim_observation(text: str, max_chars: int = 4000) -> str:
+        """B3: 截断过大的工具输出，防止上下文窗口膨胀。
+
+        保留头部和尾部（尾部常含错误信息/摘要），中间用省略标记替代。
+        """
+        if len(text) <= max_chars:
+            return text
+        head_size = int(max_chars * 0.7)
+        tail_size = max_chars - head_size - 80  # 80 for separator
+        return (
+            text[:head_size]
+            + f"\n\n... [TRUNCATED: {len(text)} chars total, showing first {head_size} + last {tail_size}] ...\n\n"
+            + text[-tail_size:]
+        )
 
     async def _emit(self, event: TraceEvent) -> None:
         return None

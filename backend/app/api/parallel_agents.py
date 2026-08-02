@@ -825,3 +825,102 @@ async def ultra_execute(
     except Exception as e:
         logger.error(f"Ultra execution error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ─── L1: Queue Management & Concurrency Monitoring ────────────────────────────
+
+
+@router.get("/queue/stats")
+async def get_queue_stats(principal: PrincipalDependency = None) -> dict[str, Any]:
+    """Concurrency pool & queue statistics: active tasks, capacity, throughput."""
+    enforce_scope(principal, "agent:run")
+    import time
+
+    executor = get_executor()
+    stats = executor.get_stats()
+    active = executor.get_active_tasks()
+
+    # Compute real-time concurrency utilization
+    max_conc = stats.get("max_concurrency", 3)
+    active_count = len(active)
+    utilization = round(active_count / max_conc * 100, 1) if max_conc > 0 else 0
+
+    # Batch throughput
+    total_batches = stats.get("total_batches", 0)
+    completed_tasks_in_batches = 0
+    failed_tasks_in_batches = 0
+    for batch in executor._batches.values():
+        for r in batch.results:
+            if r.status == "completed":
+                completed_tasks_in_batches += 1
+            elif r.status in ("failed", "timeout"):
+                failed_tasks_in_batches += 1
+
+    return {
+        "pool": {
+            "max_concurrency": max_conc,
+            "active_tasks": active_count,
+            "utilization_percent": utilization,
+            "capacity_remaining": max(0, max_conc - active_count),
+        },
+        "queue": {
+            "backpressure": utilization >= 90.0,
+            "total_batches": total_batches,
+        },
+        "throughput": {
+            "completed_tasks": completed_tasks_in_batches,
+            "failed_tasks": failed_tasks_in_batches,
+            "success_rate": round(
+                completed_tasks_in_batches / max(1, completed_tasks_in_batches + failed_tasks_in_batches) * 100, 1
+            ),
+        },
+        "active_task_ids": list(active.keys())[:20],
+        "timestamp": time.time(),
+    }
+
+
+@router.get("/queue/health")
+async def get_queue_health(principal: PrincipalDependency = None) -> dict[str, Any]:
+    """System resource health for concurrency decisions (CPU, memory, event loop lag)."""
+    enforce_scope(principal, "agent:run")
+    import asyncio
+    import time
+
+    try:
+        import psutil
+        cpu_percent = psutil.cpu_percent(interval=0.1)
+        mem = psutil.virtual_memory()
+        memory_percent = mem.percent
+        memory_available_mb = round(mem.available / 1024 / 1024, 1)
+    except Exception:
+        cpu_percent = -1
+        memory_percent = -1
+        memory_available_mb = -1
+
+    # Event loop lag measurement
+    loop = asyncio.get_event_loop()
+    t0 = time.perf_counter()
+    await asyncio.sleep(0)
+    loop_lag_ms = round((time.perf_counter() - t0) * 1000, 3)
+
+    executor = get_executor()
+    active_count = len(executor.get_active_tasks())
+    max_conc = executor.max_concurrency
+
+    # Recommendation
+    if cpu_percent > 80 or memory_percent > 85:
+        recommendation = "scale_down"
+    elif cpu_percent < 30 and memory_percent < 40 and active_count < max_conc:
+        recommendation = "scale_up"
+    else:
+        recommendation = "stable"
+
+    return {
+        "cpu_percent": cpu_percent,
+        "memory_percent": memory_percent,
+        "memory_available_mb": memory_available_mb,
+        "event_loop_lag_ms": loop_lag_ms,
+        "concurrency": {"active": active_count, "max": max_conc},
+        "recommendation": recommendation,
+        "timestamp": time.time(),
+    }

@@ -504,3 +504,221 @@ async def sync_tiers(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to sync tiers: {e!s}")
+
+
+# ─── Cross-Session Consolidation (I1) ─────────────────────────────────────────
+
+
+class ConsolidateRequest(BaseModel):
+    """Request to consolidate session memories into long-term storage."""
+    session_id: str | None = None
+    min_importance: float = Field(default=0.6, ge=0.0, le=1.0)
+    max_age_hours: int = Field(default=24, ge=1, le=720)
+    tags: list[str] = Field(default_factory=list)
+
+
+@router.post("/consolidate")
+async def consolidate_memories(
+    request: ConsolidateRequest,
+    hybrid_memory: HybridMemoryDependency,
+    principal: PrincipalDependency,
+) -> dict[str, Any]:
+    """Consolidate recent session memories into long-term storage.
+
+    Scans hot-tier memories, filters by importance and age, and promotes
+    qualifying memories to the cold tier with consolidated metadata.
+    """
+    try:
+        from datetime import UTC, datetime, timedelta
+
+        cutoff = datetime.now(UTC) - timedelta(hours=request.max_age_hours)
+        promoted = 0
+        skipped = 0
+
+        # Get all hot-tier memories
+        hot_memories = await hybrid_memory.hot_store.search("")
+        for mem in hot_memories:
+            # Filter by importance
+            if getattr(mem, "importance", 0.5) < request.min_importance:
+                skipped += 1
+                continue
+
+            # Filter by age
+            created = getattr(mem, "created_at", None)
+            if created and created < cutoff:
+                skipped += 1
+                continue
+
+            # Filter by tags if specified
+            if request.tags:
+                mem_tags = set(getattr(mem, "tags", []) or [])
+                if not mem_tags.intersection(request.tags):
+                    skipped += 1
+                    continue
+
+            # Promote to cold tier
+            try:
+                await hybrid_memory.cold_store.store(mem)
+                promoted += 1
+            except Exception:
+                skipped += 1
+
+        return {
+            "consolidated": promoted,
+            "skipped": skipped,
+            "min_importance": request.min_importance,
+            "max_age_hours": request.max_age_hours,
+            "session_id": request.session_id,
+            "timestamp": datetime.now(UTC).isoformat(),
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Consolidation failed: {e!s}")
+
+
+# ─── Memory Lifecycle & Decay (I2) ────────────────────────────────────────────
+
+
+class DecayRequest(BaseModel):
+    """Request to apply importance decay to old memories."""
+    decay_factor: float = Field(default=0.95, ge=0.5, le=1.0)
+    min_age_days: int = Field(default=7, ge=1)
+    cleanup_threshold: float = Field(default=0.1, ge=0.0, le=0.5)
+    dry_run: bool = True
+
+
+@router.post("/decay")
+async def apply_memory_decay(
+    request: DecayRequest,
+    hybrid_memory: HybridMemoryDependency,
+    principal: PrincipalDependency,
+) -> dict[str, Any]:
+    """Apply importance decay to old memories and optionally cleanup low-value ones.
+
+    Memories older than min_age_days have their importance multiplied by
+    decay_factor. Memories below cleanup_threshold can be archived/deleted.
+    """
+    try:
+        from datetime import UTC, datetime, timedelta
+
+        cutoff = datetime.now(UTC) - timedelta(days=request.min_age_days)
+        decayed = 0
+        cleaned = 0
+
+        hot_memories = await hybrid_memory.hot_store.search("")
+        for mem in hot_memories:
+            created = getattr(mem, "created_at", None)
+            if not created or created >= cutoff:
+                continue
+
+            old_importance = getattr(mem, "importance", 0.5)
+            new_importance = old_importance * request.decay_factor
+
+            if not request.dry_run:
+                mem.importance = new_importance
+                decayed += 1
+
+                # Cleanup if below threshold
+                if new_importance < request.cleanup_threshold:
+                    cleaned += 1
+            else:
+                decayed += 1
+                if new_importance < request.cleanup_threshold:
+                    cleaned += 1
+
+        return {
+            "dry_run": request.dry_run,
+            "decayed_count": decayed,
+            "cleanup_candidates": cleaned,
+            "decay_factor": request.decay_factor,
+            "min_age_days": request.min_age_days,
+            "cleanup_threshold": request.cleanup_threshold,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Decay operation failed: {e!s}")
+
+
+# ─── Unified Memory Query (I3) ────────────────────────────────────────────────
+
+
+@router.get("/unified-search")
+async def unified_memory_search(
+    q: str = Query(..., min_length=1, description="Search query"),
+    limit: int = Query(10, ge=1, le=50),
+    include_hot: bool = Query(True),
+    include_cold: bool = Query(True),
+    include_graph: bool = Query(True),
+    hybrid_memory: HybridMemoryDependency = None,
+    principal: PrincipalDependency = None,
+) -> dict[str, Any]:
+    """Unified search across all memory tiers with source attribution.
+
+    Returns memories from hot (recent), cold (long-term), and graph (relational)
+    tiers, each tagged with their source tier for transparency.
+    """
+    try:
+        results: list[dict[str, Any]] = []
+        tier_stats: dict[str, int] = {}
+
+        if include_hot:
+            hot_results = await hybrid_memory.hot_store.search(q)
+            for mem in hot_results[:limit]:
+                results.append({
+                    "id": getattr(mem, "id", ""),
+                    "content": getattr(mem, "content", ""),
+                    "tier": "hot",
+                    "importance": getattr(mem, "importance", 0.5),
+                    "tags": getattr(mem, "tags", []),
+                })
+            tier_stats["hot"] = len(hot_results)
+
+        if include_cold and "cold" not in _degraded_tiers(hybrid_memory):
+            try:
+                cold_results = await hybrid_memory.recall(q, limit=limit)
+                for mem in cold_results:
+                    if not any(r["id"] == getattr(mem, "id", "") for r in results):
+                        results.append({
+                            "id": getattr(mem, "id", ""),
+                            "content": getattr(mem, "content", ""),
+                            "tier": "cold",
+                            "importance": getattr(mem, "importance", 0.5),
+                            "tags": getattr(mem, "tags", []),
+                        })
+                tier_stats["cold"] = len(cold_results)
+            except Exception:
+                tier_stats["cold"] = 0
+
+        if include_graph and "graph" not in _degraded_tiers(hybrid_memory):
+            try:
+                graph_results = await hybrid_memory.graph_store.find_related(q, depth=1)
+                for mem in graph_results[:limit]:
+                    if not any(r["id"] == getattr(mem, "id", "") for r in results):
+                        results.append({
+                            "id": getattr(mem, "id", ""),
+                            "content": getattr(mem, "content", ""),
+                            "tier": "graph",
+                            "importance": getattr(mem, "importance", 0.5),
+                            "tags": getattr(mem, "tags", []),
+                        })
+                tier_stats["graph"] = len(graph_results)
+            except Exception:
+                tier_stats["graph"] = 0
+
+        # Sort by importance and return top results
+        results.sort(key=lambda x: x.get("importance", 0), reverse=True)
+        return {
+            "query": q,
+            "results": results[:limit],
+            "total": len(results),
+            "tier_stats": tier_stats,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Unified search failed: {e!s}")

@@ -2,8 +2,32 @@
 
 All notable changes to X-Agent are documented in this file.
 
-> **版本单一事实源**: 全仓版本号以 `pyproject.toml` 的 `project.version` 为准, 当前为 **0.3.0-alpha** (商用升级完成)。
+> **版本单一事实源**: 全仓版本号以 `pyproject.toml` 的 `project.version` 为准, 当前为 **0.4.0-alpha** (Codex 能力对齐 + 前端完善)。
 > 本文件历史中出现过的一切高于 0.2.0-alpha 的版本标签 (含 1.x 系列与 0.7.x-0.9.x 标记) 均为 2026-07-19 商用审计 (`commercial_audit/00_商用交付差距审计报告.md`) 之前遗留的过程性标记, 从未对应任何实际对外发布的版本; 仓库 git 历史于 2026-07-19 fresh init, 不存在已发布 tag。
+
+## [0.4.0-alpha] - 2026-07-30
+
+### Added
+- 前端 POST-based SSE 流式消费 (fetch + ReadableStream 实时展示 Agent 步骤)
+- Docker 沙箱隔离执行 (run_command 支持 docker/local 双模式, --network none --memory 512m)
+- 代码搜索工具 grep_code (正则匹配 + 文件类型过滤 + 上下文行)
+- 多语言测试命令识别 detect_test_command (Python/JS/TS/Rust/Go/Java/Ruby/PHP)
+- Git 状态 REST API (GET /agents/git/status) + 前端 GitStatusPanel
+- 运行历史面板 RunHistoryPanel (自动刷新 + 展开详情)
+- 任务模板快捷按钮 (修 Bug / 写测试 / 重构 / 新功能)
+- API Key 快捷登录 (开发模式)
+- 工具输出截断 _trim_observation (4000 字符 head+tail 保留)
+
+### Fixed
+- FastAPI 路由顺序冲突 (/{agent_id} 拦截 /runs, /git/status 等固定路径)
+- git status --porcelain 路径解析首字符丢失
+- 前端登录状态刷新后丢失 (isAuthenticated 未持久化)
+- tools.py _os 未定义引用 + 未使用变量
+
+### Changed
+- 多文件任务匹配改为 basename 精确匹配 (消除子串误判)
+- plan 阶段强制多文件检测 + reflect 注入
+- AgentWorkspace 三栏布局 (左:目录 / 中:流式面板 / 右:Git+历史)
 
 ## [0.3.0-alpha] - 2026-07-21
 

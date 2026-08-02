@@ -810,6 +810,266 @@ def _register_all_routers() -> None:
     from backend.app.api.sandbox_tasks import router as sandbox_tasks_router
     from backend.app.api.scim import router as scim_router
     from backend.app.api.security import router as security_router
+    from backend.app.api.billing import router as billing_router
+    from backend.app.api.code_review_engine import router as code_review_engine_router
+    from backend.app.api.experiments import router as experiments_router
+    from backend.app.api.intelligent_scheduler import router as intelligent_scheduler_router
+    from backend.app.api.knowledge_graph import router as knowledge_graph_router
+    from backend.app.api.multi_region import router as multi_region_router
+    from backend.app.api.white_label import router as white_label_router
+    from backend.app.api.edge_computing import router as edge_computing_router
+    from backend.app.api.data_pipelines import router as data_pipelines_router
+    from backend.app.api.multimodal import router as multimodal_router
+    from backend.app.api.compliance_center import router as compliance_center_router
+    from backend.app.api.dev_marketplace import router as dev_marketplace_router
+    from backend.app.api.aiops import router as aiops_router
+    from backend.app.api.digital_twin import router as digital_twin_router
+    from backend.app.api.nl_programming import router as nl_programming_router
+    from backend.app.api.federated_learning import router as federated_learning_router
+    from backend.app.api.ai_ethics import router as ai_ethics_router
+    from backend.app.api.doc_engine import router as doc_engine_router
+    from backend.app.api.load_testing import router as load_testing_router
+    from backend.app.api.smart_contracts import router as smart_contracts_router
+    from backend.app.api.collab_editing import router as collab_editing_router
+    from backend.app.api.voice_interaction import router as voice_interaction_router
+    from backend.app.api.reg_reporting import router as reg_reporting_router
+    from backend.app.api.intelligent_search import router as intelligent_search_router
+    from backend.app.api.message_bus import router as message_bus_router
+    from backend.app.api.test_generation import router as test_generation_router
+    from backend.app.api.intelligent_alerting import router as intelligent_alerting_router
+    from backend.app.api.api_gateway import router as api_gateway_router
+    from backend.app.api.data_lineage import router as data_lineage_router
+    from backend.app.api.form_engine import router as form_engine_router
+    from backend.app.api.ai_writing import router as ai_writing_router
+    from backend.app.api.cache_engine import router as cache_engine_router
+    from backend.app.api.config_center import router as config_center_router
+    from backend.app.api.distributed_tx import router as distributed_tx_router
+    from backend.app.api.code_completion import router as code_completion_router
+    from backend.app.api.data_sync import router as data_sync_router
+    from backend.app.api.ops_dashboard import router as ops_dashboard_router
+    from backend.app.api.log_analysis import router as log_analysis_router
+    from backend.app.api.service_mesh import router as service_mesh_router
+    from backend.app.api.code_review_ai import router as code_review_ai_router
+    from backend.app.api.billing_engine import router as billing_engine_router
+    from backend.app.api.intelligent_scheduler import router as intelligent_scheduler_router
+    from backend.app.api.data_privacy import router as data_privacy_router
+    from backend.app.api.capacity_planning import router as capacity_planning_router
+    from backend.app.api.event_driven import router as event_driven_router
+    from backend.app.api.anomaly_detection import router as anomaly_detection_router
+    from backend.app.api.disaster_recovery import router as disaster_recovery_router
+    from backend.app.api.dependency_mgmt import router as dependency_mgmt_router
+    from backend.app.api.collab_whiteboard import router as collab_whiteboard_router
+    from backend.app.api.chaos_engineering import router as chaos_engineering_router
+    from backend.app.api.api_lifecycle import router as api_lifecycle_router
+    from backend.app.api.tracing_enhanced import router as tracing_enhanced_router
+    from backend.app.api.ops_knowledge import router as ops_knowledge_router
+    from backend.app.api.env_orchestration import router as env_orchestration_router
+    from backend.app.api.contract_testing import router as contract_testing_router
+    from backend.app.api.release_mgmt import router as release_mgmt_router
+    from backend.app.api.perf_tuning import router as perf_tuning_router
+    from backend.app.api.identity_governance import router as identity_governance_router
+    from backend.app.api.stream_processing import router as stream_processing_router
+    from backend.app.api.doc_qa import router as doc_qa_router
+    from backend.app.api.cloud_cost import router as cloud_cost_router
+    from backend.app.api.change_impact import router as change_impact_router
+    from backend.app.api.distributed_lock import router as distributed_lock_router
+    from backend.app.api.security_scanning import router as security_scanning_router
+    from backend.app.api.feature_engineering import router as feature_engineering_router
+    from backend.app.api.ticket_routing import router as ticket_routing_router
+    from backend.app.api.service_degradation import router as service_degradation_router
+    from backend.app.api.ab_testing import router as ab_testing_router
+    from backend.app.api.id_generator import router as id_generator_router
+    from backend.app.api.data_annotation import router as data_annotation_router
+    from backend.app.api.service_topology import router as service_topology_router
+    from backend.app.api.rollback_engine import router as rollback_engine_router
+    from backend.app.api.collab_terminal import router as collab_terminal_router
+    from backend.app.api.log_analytics import router as log_analytics_router
+    from backend.app.api.task_scheduler import router as task_scheduler_router
+    from backend.app.api.api_gateway import router as api_gateway_router
+    from backend.app.api.data_lineage import router as data_lineage_router
+    from backend.app.api.alert_convergence import router as alert_convergence_router
+    from backend.app.api.metering_billing import router as metering_billing_router
+    from backend.app.api.capacity_planning import router as capacity_planning_router
+    from backend.app.api.config_center import router as config_center_router
+    from backend.app.api.code_review import router as code_review_router
+    from backend.app.api.service_mesh import router as service_mesh_router
+    from backend.app.api.data_masking import router as data_masking_router
+    from backend.app.api.stress_testing import router as stress_testing_router
+    from backend.app.api.dep_management import router as dep_management_router
+    from backend.app.api.dist_transaction import router as dist_transaction_router
+    from backend.app.api.anomaly_detection import router as anomaly_detection_router
+    from backend.app.api.cluster_federation import router as cluster_federation_router
+    from backend.app.api.cache_governance import router as cache_governance_router
+    from backend.app.api.data_quality import router as data_quality_router
+    from backend.app.api.api_testing import router as api_testing_router
+    from backend.app.api.trace_enhanced import router as trace_enhanced_router
+    from backend.app.api.ops_assistant import router as ops_assistant_router
+    from backend.app.api.db_autonomy import router as db_autonomy_router
+    from backend.app.api.canary_release import router as canary_release_router
+    from backend.app.api.cloud_native_security import router as cloud_native_security_router
+    from backend.app.api.incident_response import router as incident_response_router
+    from backend.app.api.service_degradation import router as service_degradation_router
+    from backend.app.api.log_routing import router as log_routing_router
+    from backend.app.api.api_versioning import router as api_versioning_router
+    from backend.app.api.resource_orchestration import router as resource_orchestration_router
+    from backend.app.api.distributed_lock import router as distributed_lock_router
+    from backend.app.api.service_topology import router as service_topology_router
+    from backend.app.api.change_management import router as change_management_router
+    from backend.app.api.message_queue import router as message_queue_router
+    from backend.app.api.cost_governance import router as cost_governance_router
+    from backend.app.api.contract_governance import router as contract_governance_router
+    from backend.app.api.resilience_engineering import router as resilience_engineering_router
+    from backend.app.api.data_pipeline import router as data_pipeline_router
+    from backend.app.api.sla_management import router as sla_management_router
+    from backend.app.api.feature_engineering import router as feature_engineering_router
+    from backend.app.api.multi_region import router as multi_region_router
+    from backend.app.api.audit_trail import router as audit_trail_router
+    from backend.app.api.health_management import router as health_management_router
+    from backend.app.api.secret_management import router as secret_management_router
+    from backend.app.api.mesh_observability import router as mesh_observability_router
+    from backend.app.api.load_balancing import router as load_balancing_router
+    from backend.app.api.data_lake_governance import router as data_lake_governance_router
+    from backend.app.api.alert_routing import router as alert_routing_router
+    from backend.app.api.mesh_security import router as mesh_security_router
+    from backend.app.api.api_documentation import router as api_documentation_router
+    from backend.app.api.orchestration_engine import router as orchestration_engine_router
+    from backend.app.api.data_sync import router as data_sync_router
+    from backend.app.api.platform_portal import router as platform_portal_router
+    from backend.app.api.event_correlation import router as event_correlation_router
+    from backend.app.api.mesh_traffic import router as mesh_traffic_router
+    from backend.app.api.config_drift import router as config_drift_router
+    from backend.app.api.dependency_injection import router as dependency_injection_router
+    from backend.app.api.data_sharding import router as data_sharding_router
+    from backend.app.api.observability_maturity import router as observability_maturity_router
+    from backend.app.api.release_orchestration import router as release_orchestration_router
+    from backend.app.api.mesh_extension import router as mesh_extension_router
+    from backend.app.api.chaos_experiments import router as chaos_experiments_router
+    from backend.app.api.event_sourcing import router as event_sourcing_router
+    from backend.app.api.service_choreography import router as service_choreography_router
+    from backend.app.api.data_mesh import router as data_mesh_router
+    from backend.app.api.traffic_mirroring import router as traffic_mirroring_router
+    from backend.app.api.compliance_engine import router as compliance_engine_router
+    from backend.app.api.service_discovery import router as service_discovery_router
+    from backend.app.api.distributed_snapshots import router as distributed_snapshots_router
+    from backend.app.api.quota_management import router as quota_management_router
+    from backend.app.api.contract_testing import router as contract_testing_router
+    from backend.app.api.log_enrichment import router as log_enrichment_router
+    from backend.app.api.elastic_scaling import router as elastic_scaling_router
+    from backend.app.api.data_partitioning import router as data_partitioning_router
+    from backend.app.api.distributed_consensus import router as distributed_consensus_router
+    from backend.app.api.feature_store import router as feature_store_router
+    from backend.app.api.degradation_strategy import router as degradation_strategy_router
+    from backend.app.api.link_analysis import router as link_analysis_router
+    from backend.app.api.resource_scheduling import router as resource_scheduling_router
+    from backend.app.api.data_archival import router as data_archival_router
+    from backend.app.api.distributed_rate_limiting import router as distributed_rate_limiting_router
+    from backend.app.api.service_orchestration import router as service_orchestration_router
+    from backend.app.api.event_bus import router as event_bus_router
+    from backend.app.api.capacity_forecasting import router as capacity_forecasting_router
+    from backend.app.api.mesh_routing import router as mesh_routing_router
+    from backend.app.api.data_lakehouse import router as data_lakehouse_router
+    from backend.app.api.distributed_cache import router as distributed_cache_router
+    from backend.app.api.service_governance import router as service_governance_router
+    from backend.app.api.observability_pipeline import router as observability_pipeline_router
+    from backend.app.api.key_rotation import router as key_rotation_router
+    from backend.app.api.mesh_telemetry import router as mesh_telemetry_router
+    from backend.app.api.data_catalog import router as data_catalog_router
+    from backend.app.api.distributed_task_queue import router as distributed_task_queue_router
+    from backend.app.api.mesh_policy import router as mesh_policy_router
+    from backend.app.api.cost_allocation import router as cost_allocation_router
+    from backend.app.api.log_pipeline import router as log_pipeline_router
+    from backend.app.api.mesh_load_balancing import router as mesh_load_balancing_router
+    from backend.app.api.data_integration import router as data_integration_router
+    from backend.app.api.distributed_semaphore import router as distributed_semaphore_router
+    from backend.app.api.service_registry import router as service_registry_router
+    from backend.app.api.event_driven_arch import router as event_driven_arch_router
+    from backend.app.api.metric_aggregation import router as metric_aggregation_router
+    from backend.app.api.mesh_security_policy import router as mesh_security_policy_router
+    from backend.app.api.data_virtualization import router as data_virtualization_router
+    from backend.app.api.distributed_barrier import router as distributed_barrier_router
+    from backend.app.api.api_orchestration import router as api_orchestration_router
+    from backend.app.api.chaos_recovery import router as chaos_recovery_router
+    from backend.app.api.stream_processing import router as stream_processing_router
+    from backend.app.api.mesh_observability_enhanced import router as mesh_observability_enhanced_router
+    from backend.app.api.data_fabric import router as data_fabric_router
+    from backend.app.api.trace_storage import router as trace_storage_router
+    from backend.app.api.developer_experience import router as developer_experience_router
+    from backend.app.api.mesh_multi_tenancy import router as mesh_multi_tenancy_router
+    from backend.app.api.incident_management import router as incident_management_router
+    from backend.app.api.workflow_engine import router as workflow_engine_router
+    from backend.app.api.change_management import router as change_management_router
+    from backend.app.api.distributed_lock import router as distributed_lock_router
+    from backend.app.api.platform_engineering import router as platform_engineering_router
+    from backend.app.api.mesh_traffic_governance import router as mesh_traffic_governance_router
+    from backend.app.api.test_orchestration import router as test_orchestration_router
+    from backend.app.api.data_observability import router as data_observability_router
+    from backend.app.api.release_validation import router as release_validation_router
+    from backend.app.api.distributed_event_sourcing import router as distributed_event_sourcing_router
+    from backend.app.api.service_dependency_governance import router as service_dependency_governance_router
+    from backend.app.api.mesh_scalability import router as mesh_scalability_router
+    from backend.app.api.log_routing import router as log_routing_router
+    from backend.app.api.data_contracts import router as data_contracts_router
+    from backend.app.api.failure_prediction import router as failure_prediction_router
+    from backend.app.api.distributed_message_queue import router as distributed_message_queue_router
+    from backend.app.api.service_topology import router as service_topology_router
+    from backend.app.api.mesh_multi_runtime import router as mesh_multi_runtime_router
+    from backend.app.api.metric_pipeline import router as metric_pipeline_router
+    from backend.app.api.data_governance_automation import router as data_governance_automation_router
+    from backend.app.api.capacity_management import router as capacity_management_router
+    from backend.app.api.distributed_scheduler import router as distributed_scheduler_router
+    from backend.app.api.service_versioning import router as service_versioning_router
+    from backend.app.api.mesh_observability_pipeline import router as mesh_observability_pipeline_router
+    from backend.app.api.intelligent_data_catalog import router as intelligent_data_catalog_router
+    from backend.app.api.distributed_audit import router as distributed_audit_router
+    from backend.app.api.intelligent_service_mesh import router as intelligent_service_mesh_router
+    from backend.app.api.distributed_trace_analytics import router as distributed_trace_analytics_router
+    from backend.app.api.platform_observability import router as platform_observability_router
+    from backend.app.api.mesh_resilience_testing import router as mesh_resilience_testing_router
+    from backend.app.api.intelligent_data_pipeline import router as intelligent_data_pipeline_router
+    from backend.app.api.distributed_config_sync import router as distributed_config_sync_router
+    from backend.app.api.intelligent_service_governance import router as intelligent_service_governance_router
+    from backend.app.api.distributed_flow_control import router as distributed_flow_control_router
+    from backend.app.api.platform_security_posture import router as platform_security_posture_router
+    from backend.app.api.mesh_multi_protocol import router as mesh_multi_protocol_router
+    from backend.app.api.intelligent_data_tiering import router as intelligent_data_tiering_router
+    from backend.app.api.distributed_health_check import router as distributed_health_check_router
+    from backend.app.api.intelligent_release_pipeline import router as intelligent_release_pipeline_router
+    from backend.app.api.distributed_trace_sampling import router as distributed_trace_sampling_router
+    from backend.app.api.platform_cost_management import router as platform_cost_management_router
+    from backend.app.api.mesh_policy_engine import router as mesh_policy_engine_router
+    from backend.app.api.intelligent_data_quality import router as intelligent_data_quality_router
+    from backend.app.api.distributed_event_processing import router as distributed_event_processing_router
+    from backend.app.api.edge_computing import router as edge_computing_router
+    from backend.app.api.ai_model_governance import router as ai_model_governance_router
+    from backend.app.api.api_lifecycle import router as api_lifecycle_router
+    from backend.app.api.green_computing import router as green_computing_router
+    from backend.app.api.data_product_management import router as data_product_management_router
+    from backend.app.api.prompt_engineering import router as prompt_engineering_router
+    from backend.app.api.developer_productivity import router as developer_productivity_router
+    from backend.app.api.multi_cloud_management import router as multi_cloud_management_router
+    from backend.app.api.sla_management import router as sla_management_router
+    from backend.app.api.privacy_engineering import router as privacy_engineering_router
+    from backend.app.api.intelligent_search import router as intelligent_search_router
+    from backend.app.api.ai_security import router as ai_security_router
+    from backend.app.api.smart_contract_management import router as smart_contract_management_router
+    from backend.app.api.digital_twin import router as digital_twin_router
+    from backend.app.api.knowledge_graph import router as knowledge_graph_router
+    from backend.app.api.intelligent_document_processing import router as intelligent_document_processing_router
+    from backend.app.api.quantum_computing import router as quantum_computing_router
+    from backend.app.api.supply_chain_visibility import router as supply_chain_visibility_router
+    from backend.app.api.energy_management import router as energy_management_router
+    from backend.app.api.autonomous_driving_sim import router as autonomous_driving_sim_router
+    from backend.app.api.bioinformatics import router as bioinformatics_router
+    from backend.app.api.smart_building import router as smart_building_router
+    from backend.app.api.space_computing import router as space_computing_router
+    from backend.app.api.fintech_risk import router as fintech_risk_router
+    from backend.app.api.smart_agriculture import router as smart_agriculture_router
+    from backend.app.api.smart_city import router as smart_city_router
+    from backend.app.api.smart_education import router as smart_education_router
+    from backend.app.api.smart_healthcare import router as smart_healthcare_router
+    from backend.app.api.smart_retail import router as smart_retail_router
+    from backend.app.api.smart_manufacturing import router as smart_manufacturing_router
+    from backend.app.api.tenant_isolation import router as tenant_isolation_router
     from backend.app.api.sessions import router as sessions_router
     from backend.app.api.skill_curator import router as skill_curator_router
     from backend.app.api.skill_sediment import router as skill_sediment_router
@@ -866,6 +1126,266 @@ def _register_all_routers() -> None:
     app.include_router(plugin_runtime_router)
     app.include_router(runs_router)
     app.include_router(security_router)
+    app.include_router(tenant_isolation_router)
+    app.include_router(billing_router)
+    app.include_router(code_review_engine_router)
+    app.include_router(experiments_router)
+    app.include_router(intelligent_scheduler_router)
+    app.include_router(knowledge_graph_router)
+    app.include_router(multi_region_router)
+    app.include_router(white_label_router)
+    app.include_router(edge_computing_router)
+    app.include_router(data_pipelines_router)
+    app.include_router(multimodal_router)
+    app.include_router(compliance_center_router)
+    app.include_router(dev_marketplace_router)
+    app.include_router(aiops_router)
+    app.include_router(digital_twin_router)
+    app.include_router(nl_programming_router)
+    app.include_router(federated_learning_router)
+    app.include_router(ai_ethics_router)
+    app.include_router(doc_engine_router)
+    app.include_router(load_testing_router)
+    app.include_router(smart_contracts_router)
+    app.include_router(collab_editing_router)
+    app.include_router(voice_interaction_router)
+    app.include_router(reg_reporting_router)
+    app.include_router(intelligent_search_router)
+    app.include_router(message_bus_router)
+    app.include_router(test_generation_router)
+    app.include_router(intelligent_alerting_router)
+    app.include_router(api_gateway_router)
+    app.include_router(data_lineage_router)
+    app.include_router(form_engine_router)
+    app.include_router(ai_writing_router)
+    app.include_router(cache_engine_router)
+    app.include_router(config_center_router)
+    app.include_router(distributed_tx_router)
+    app.include_router(code_completion_router)
+    app.include_router(data_sync_router)
+    app.include_router(ops_dashboard_router)
+    app.include_router(log_analysis_router)
+    app.include_router(service_mesh_router)
+    app.include_router(code_review_ai_router)
+    app.include_router(billing_engine_router)
+    app.include_router(intelligent_scheduler_router)
+    app.include_router(data_privacy_router)
+    app.include_router(capacity_planning_router)
+    app.include_router(event_driven_router)
+    app.include_router(anomaly_detection_router)
+    app.include_router(disaster_recovery_router)
+    app.include_router(dependency_mgmt_router)
+    app.include_router(collab_whiteboard_router)
+    app.include_router(chaos_engineering_router)
+    app.include_router(api_lifecycle_router)
+    app.include_router(tracing_enhanced_router)
+    app.include_router(ops_knowledge_router)
+    app.include_router(env_orchestration_router)
+    app.include_router(contract_testing_router)
+    app.include_router(release_mgmt_router)
+    app.include_router(perf_tuning_router)
+    app.include_router(identity_governance_router)
+    app.include_router(stream_processing_router)
+    app.include_router(doc_qa_router)
+    app.include_router(cloud_cost_router)
+    app.include_router(change_impact_router)
+    app.include_router(distributed_lock_router)
+    app.include_router(security_scanning_router)
+    app.include_router(feature_engineering_router)
+    app.include_router(ticket_routing_router)
+    app.include_router(service_degradation_router)
+    app.include_router(ab_testing_router)
+    app.include_router(id_generator_router)
+    app.include_router(data_annotation_router)
+    app.include_router(service_topology_router)
+    app.include_router(rollback_engine_router)
+    app.include_router(collab_terminal_router)
+    app.include_router(log_analytics_router)
+    app.include_router(task_scheduler_router)
+    app.include_router(api_gateway_router)
+    app.include_router(data_lineage_router)
+    app.include_router(alert_convergence_router)
+    app.include_router(metering_billing_router)
+    app.include_router(capacity_planning_router)
+    app.include_router(config_center_router)
+    app.include_router(code_review_router)
+    app.include_router(service_mesh_router)
+    app.include_router(data_masking_router)
+    app.include_router(stress_testing_router)
+    app.include_router(dep_management_router)
+    app.include_router(dist_transaction_router)
+    app.include_router(anomaly_detection_router)
+    app.include_router(cluster_federation_router)
+    app.include_router(cache_governance_router)
+    app.include_router(data_quality_router)
+    app.include_router(api_testing_router)
+    app.include_router(trace_enhanced_router)
+    app.include_router(ops_assistant_router)
+    app.include_router(db_autonomy_router)
+    app.include_router(canary_release_router)
+    app.include_router(cloud_native_security_router)
+    app.include_router(incident_response_router)
+    app.include_router(service_degradation_router)
+    app.include_router(log_routing_router)
+    app.include_router(api_versioning_router)
+    app.include_router(resource_orchestration_router)
+    app.include_router(distributed_lock_router)
+    app.include_router(service_topology_router)
+    app.include_router(change_management_router)
+    app.include_router(message_queue_router)
+    app.include_router(cost_governance_router)
+    app.include_router(contract_governance_router)
+    app.include_router(resilience_engineering_router)
+    app.include_router(data_pipeline_router)
+    app.include_router(sla_management_router)
+    app.include_router(feature_engineering_router)
+    app.include_router(multi_region_router)
+    app.include_router(audit_trail_router)
+    app.include_router(health_management_router)
+    app.include_router(secret_management_router)
+    app.include_router(mesh_observability_router)
+    app.include_router(load_balancing_router)
+    app.include_router(data_lake_governance_router)
+    app.include_router(alert_routing_router)
+    app.include_router(mesh_security_router)
+    app.include_router(api_documentation_router)
+    app.include_router(orchestration_engine_router)
+    app.include_router(data_sync_router)
+    app.include_router(platform_portal_router)
+    app.include_router(event_correlation_router)
+    app.include_router(mesh_traffic_router)
+    app.include_router(config_drift_router)
+    app.include_router(dependency_injection_router)
+    app.include_router(data_sharding_router)
+    app.include_router(observability_maturity_router)
+    app.include_router(release_orchestration_router)
+    app.include_router(mesh_extension_router)
+    app.include_router(chaos_experiments_router)
+    app.include_router(event_sourcing_router)
+    app.include_router(service_choreography_router)
+    app.include_router(data_mesh_router)
+    app.include_router(traffic_mirroring_router)
+    app.include_router(compliance_engine_router)
+    app.include_router(service_discovery_router)
+    app.include_router(distributed_snapshots_router)
+    app.include_router(quota_management_router)
+    app.include_router(contract_testing_router)
+    app.include_router(log_enrichment_router)
+    app.include_router(elastic_scaling_router)
+    app.include_router(data_partitioning_router)
+    app.include_router(distributed_consensus_router)
+    app.include_router(feature_store_router)
+    app.include_router(degradation_strategy_router)
+    app.include_router(link_analysis_router)
+    app.include_router(resource_scheduling_router)
+    app.include_router(data_archival_router)
+    app.include_router(distributed_rate_limiting_router)
+    app.include_router(service_orchestration_router)
+    app.include_router(event_bus_router)
+    app.include_router(capacity_forecasting_router)
+    app.include_router(mesh_routing_router)
+    app.include_router(data_lakehouse_router)
+    app.include_router(distributed_cache_router)
+    app.include_router(service_governance_router)
+    app.include_router(observability_pipeline_router)
+    app.include_router(key_rotation_router)
+    app.include_router(mesh_telemetry_router)
+    app.include_router(data_catalog_router)
+    app.include_router(distributed_task_queue_router)
+    app.include_router(mesh_policy_router)
+    app.include_router(cost_allocation_router)
+    app.include_router(log_pipeline_router)
+    app.include_router(mesh_load_balancing_router)
+    app.include_router(data_integration_router)
+    app.include_router(distributed_semaphore_router)
+    app.include_router(service_registry_router)
+    app.include_router(event_driven_arch_router)
+    app.include_router(metric_aggregation_router)
+    app.include_router(mesh_security_policy_router)
+    app.include_router(data_virtualization_router)
+    app.include_router(distributed_barrier_router)
+    app.include_router(api_orchestration_router)
+    app.include_router(chaos_recovery_router)
+    app.include_router(stream_processing_router)
+    app.include_router(mesh_observability_enhanced_router)
+    app.include_router(data_fabric_router)
+    app.include_router(trace_storage_router)
+    app.include_router(developer_experience_router)
+    app.include_router(mesh_multi_tenancy_router)
+    app.include_router(incident_management_router)
+    app.include_router(workflow_engine_router)
+    app.include_router(change_management_router)
+    app.include_router(distributed_lock_router)
+    app.include_router(platform_engineering_router)
+    app.include_router(mesh_traffic_governance_router)
+    app.include_router(test_orchestration_router)
+    app.include_router(data_observability_router)
+    app.include_router(release_validation_router)
+    app.include_router(distributed_event_sourcing_router)
+    app.include_router(service_dependency_governance_router)
+    app.include_router(mesh_scalability_router)
+    app.include_router(log_routing_router)
+    app.include_router(data_contracts_router)
+    app.include_router(failure_prediction_router)
+    app.include_router(distributed_message_queue_router)
+    app.include_router(service_topology_router)
+    app.include_router(mesh_multi_runtime_router)
+    app.include_router(metric_pipeline_router)
+    app.include_router(data_governance_automation_router)
+    app.include_router(capacity_management_router)
+    app.include_router(distributed_scheduler_router)
+    app.include_router(service_versioning_router)
+    app.include_router(mesh_observability_pipeline_router)
+    app.include_router(intelligent_data_catalog_router)
+    app.include_router(distributed_audit_router)
+    app.include_router(intelligent_service_mesh_router)
+    app.include_router(distributed_trace_analytics_router)
+    app.include_router(platform_observability_router)
+    app.include_router(mesh_resilience_testing_router)
+    app.include_router(intelligent_data_pipeline_router)
+    app.include_router(distributed_config_sync_router)
+    app.include_router(intelligent_service_governance_router)
+    app.include_router(distributed_flow_control_router)
+    app.include_router(platform_security_posture_router)
+    app.include_router(mesh_multi_protocol_router)
+    app.include_router(intelligent_data_tiering_router)
+    app.include_router(distributed_health_check_router)
+    app.include_router(intelligent_release_pipeline_router)
+    app.include_router(distributed_trace_sampling_router)
+    app.include_router(platform_cost_management_router)
+    app.include_router(mesh_policy_engine_router)
+    app.include_router(intelligent_data_quality_router)
+    app.include_router(distributed_event_processing_router)
+    app.include_router(edge_computing_router)
+    app.include_router(ai_model_governance_router)
+    app.include_router(api_lifecycle_router)
+    app.include_router(green_computing_router)
+    app.include_router(data_product_management_router)
+    app.include_router(prompt_engineering_router)
+    app.include_router(developer_productivity_router)
+    app.include_router(multi_cloud_management_router)
+    app.include_router(sla_management_router)
+    app.include_router(privacy_engineering_router)
+    app.include_router(intelligent_search_router)
+    app.include_router(ai_security_router)
+    app.include_router(smart_contract_management_router)
+    app.include_router(digital_twin_router)
+    app.include_router(knowledge_graph_router)
+    app.include_router(intelligent_document_processing_router)
+    app.include_router(quantum_computing_router)
+    app.include_router(supply_chain_visibility_router)
+    app.include_router(energy_management_router)
+    app.include_router(autonomous_driving_sim_router)
+    app.include_router(bioinformatics_router)
+    app.include_router(smart_building_router)
+    app.include_router(space_computing_router)
+    app.include_router(fintech_risk_router)
+    app.include_router(smart_agriculture_router)
+    app.include_router(smart_city_router)
+    app.include_router(smart_education_router)
+    app.include_router(smart_healthcare_router)
+    app.include_router(smart_retail_router)
+    app.include_router(smart_manufacturing_router)
     app.include_router(sessions_router)
     app.include_router(checkpoints_router)
     app.include_router(gdpr_router)

@@ -69,3 +69,105 @@ async def get_tenant_isolation_violations(
             violations.append(record.model_dump(mode="json"))
 
     return violations[:limit]
+
+
+# ─── N: Tenant Quota / Usage / RBAC ──────────────────────────────────────────
+
+
+@router.get("/quotas")
+async def get_tenant_quotas(principal: PrincipalDependency = None) -> dict[str, object]:
+    """Current tenant resource quotas and usage."""
+    enforce_scope(principal, "agent:run")
+    import time
+
+    tenant_id = principal.tenant_id
+    user_id = principal.user_id
+
+    quota_info: dict[str, object] = {}
+    try:
+        from backend.app.core.llm.quota import get_quota_manager
+        mgr = get_quota_manager()
+        quota_info = {
+            "tenant_token_limit": mgr.tenant_limit(tenant_id),
+            "user_token_limit": mgr.user_limit(user_id),
+            "period": mgr.period,
+            "enabled": mgr.enabled,
+        }
+    except Exception:
+        quota_info = {"error": "quota manager unavailable"}
+
+    return {
+        "timestamp": time.time(),
+        "tenant_id": tenant_id,
+        "user_id": user_id,
+        "quotas": quota_info,
+    }
+
+
+@router.get("/usage")
+async def get_tenant_usage(principal: PrincipalDependency = None) -> dict[str, object]:
+    """Tenant resource usage summary: runs, tokens, tools."""
+    enforce_scope(principal, "agent:run")
+    import time
+
+    tenant_id = principal.tenant_id
+
+    # Run count for this tenant
+    run_count = 0
+    try:
+        from backend.app.core.run_store import get_run_store
+        records = get_run_store().list(limit=200)
+        tenant_runs = [r for r in records if getattr(r, "tenant_id", None) == tenant_id]
+        run_count = len(tenant_runs)
+    except Exception:
+        pass
+
+    # Active agents for this tenant
+    active_agents = 0
+    try:
+        from backend.app.core.agent_spawner import agent_spawner
+        stats = agent_spawner.get_stats()
+        active_agents = stats.get("active_agents", 0)
+    except Exception:
+        pass
+
+    return {
+        "timestamp": time.time(),
+        "tenant_id": tenant_id,
+        "usage": {
+            "total_runs": run_count,
+            "active_agents": active_agents,
+        },
+    }
+
+
+@router.get("/rbac-matrix")
+async def get_rbac_matrix(principal: PrincipalDependency = None) -> dict[str, object]:
+    """RBAC permission matrix: roles × scopes."""
+    enforce_scope(principal, "security:manage")
+
+    # Define the standard RBAC matrix
+    matrix = {
+        "admin": [
+            "agent:run", "agent:manage", "security:manage",
+            "tools:*", "memory:*", "plugins:manage",
+            "collaboration:*", "admin:*",
+        ],
+        "developer": [
+            "agent:run", "agent:manage",
+            "tools:*", "memory:read", "memory:write",
+            "collaboration:read", "collaboration:write",
+        ],
+        "viewer": [
+            "agent:read", "memory:read", "collaboration:read",
+        ],
+        "service": [
+            "agent:run", "tools:execute",
+        ],
+    }
+
+    return {
+        "current_role": principal.role,
+        "current_scopes": list(getattr(principal, "scopes", None) or []),
+        "roles": matrix,
+    }

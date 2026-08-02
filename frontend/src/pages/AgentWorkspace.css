@@ -587,6 +587,35 @@
   color: var(--text-secondary);
 }
 
+.agent-stream-panel__templates {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+.agent-stream-panel__template-btn {
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color, #e5e7eb);
+  background: var(--bg-tertiary, #f9fafb);
+  color: var(--text-secondary, #374151);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.agent-stream-panel__template-btn:hover {
+  background: var(--bg-hover, #eff6ff);
+  border-color: #3b82f6;
+  color: #2563eb;
+}
+
+.agent-stream-panel__template-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .agent-stream-panel__actions {
   display: flex;
   gap: 8px;

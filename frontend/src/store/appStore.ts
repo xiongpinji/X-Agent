@@ -165,6 +165,7 @@ export const useAppStore = create<AppState>()(
         theme: state.theme,
         sidebarOpen: state.sidebarOpen,
         user: state.user,
+        isAuthenticated: !!state.user,
       }),
     }
   )

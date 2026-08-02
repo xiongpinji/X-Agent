@@ -237,6 +237,104 @@ async def run_due_schedules(scheduler: WorkflowSchedulerDependency, schedule_sto
     return [{"schedule_id": item.schedule_id, "workflow_id": item.workflow_id, "status": item.status.value, "run_id": item.run_id, "resource_type": "workflow_schedule", "snapshot": {**records.get(item.schedule_id, item).snapshot, "schedule_id": item.schedule_id, "workflow_id": item.workflow_id}} for item in triggered]
 
 
+@router.get("/editor/templates")
+async def get_editor_templates(principal: PrincipalDependency = None) -> dict[str, Any]:
+    """W: Pre-built workflow templates for the low-code editor."""
+    enforce_scope(principal, "workflow:run")
+
+    templates = [
+        {
+            "id": "tpl-sequential-agent",
+            "name": "Sequential Agent Chain",
+            "description": "Run agents one after another, passing output as input",
+            "category": "basic",
+            "nodes": [
+                {"id": "trigger", "type": "trigger", "label": "Start"},
+                {"id": "agent-1", "type": "agent", "label": "Agent Step 1"},
+                {"id": "agent-2", "type": "agent", "label": "Agent Step 2"},
+                {"id": "output", "type": "output", "label": "Final Output"},
+            ],
+            "edges": [
+                {"source": "trigger", "target": "agent-1"},
+                {"source": "agent-1", "target": "agent-2"},
+                {"source": "agent-2", "target": "output"},
+            ],
+        },
+        {
+            "id": "tpl-conditional-branch",
+            "name": "Conditional Branch",
+            "description": "Route execution based on condition evaluation",
+            "category": "logic",
+            "nodes": [
+                {"id": "trigger", "type": "trigger", "label": "Start"},
+                {"id": "cond", "type": "condition", "label": "IF check", "config": {"expression": "score > 0.8"}},
+                {"id": "path-a", "type": "agent", "label": "High Quality Path"},
+                {"id": "path-b", "type": "agent", "label": "Retry Path"},
+                {"id": "output", "type": "output", "label": "Result"},
+            ],
+            "edges": [
+                {"source": "trigger", "target": "cond"},
+                {"source": "cond", "target": "path-a", "condition": "true"},
+                {"source": "cond", "target": "path-b", "condition": "false"},
+                {"source": "path-a", "target": "output"},
+                {"source": "path-b", "target": "output"},
+            ],
+        },
+        {
+            "id": "tpl-parallel-fan",
+            "name": "Parallel Fan-Out / Fan-In",
+            "description": "Execute multiple agents in parallel then aggregate",
+            "category": "parallel",
+            "nodes": [
+                {"id": "trigger", "type": "trigger", "label": "Start"},
+                {"id": "fan-out", "type": "parallel", "label": "Fan Out"},
+                {"id": "worker-1", "type": "agent", "label": "Worker A"},
+                {"id": "worker-2", "type": "agent", "label": "Worker B"},
+                {"id": "worker-3", "type": "agent", "label": "Worker C"},
+                {"id": "aggregate", "type": "transform", "label": "Aggregate"},
+                {"id": "output", "type": "output", "label": "Result"},
+            ],
+            "edges": [
+                {"source": "trigger", "target": "fan-out"},
+                {"source": "fan-out", "target": "worker-1"},
+                {"source": "fan-out", "target": "worker-2"},
+                {"source": "fan-out", "target": "worker-3"},
+                {"source": "worker-1", "target": "aggregate"},
+                {"source": "worker-2", "target": "aggregate"},
+                {"source": "worker-3", "target": "aggregate"},
+                {"source": "aggregate", "target": "output"},
+            ],
+        },
+        {
+            "id": "tpl-loop-retry",
+            "name": "Loop with Retry",
+            "description": "Retry agent execution until quality threshold met",
+            "category": "logic",
+            "nodes": [
+                {"id": "trigger", "type": "trigger", "label": "Start"},
+                {"id": "loop", "type": "loop", "label": "Retry Loop", "config": {"max_iterations": 3}},
+                {"id": "agent", "type": "agent", "label": "Execute Task"},
+                {"id": "check", "type": "condition", "label": "Quality OK?", "config": {"expression": "quality >= 0.9"}},
+                {"id": "output", "type": "output", "label": "Final Result"},
+            ],
+            "edges": [
+                {"source": "trigger", "target": "loop"},
+                {"source": "loop", "target": "agent"},
+                {"source": "agent", "target": "check"},
+                {"source": "check", "target": "output", "condition": "true"},
+                {"source": "check", "target": "loop", "condition": "false"},
+            ],
+        },
+    ]
+
+    return {
+        "templates": templates,
+        "total": len(templates),
+        "categories": sorted(set(t["category"] for t in templates)),
+        "node_types_available": ["agent", "condition", "transform", "trigger", "output", "parallel", "loop"],
+    }
+
+
 @router.get("/{workflow_id}")
 async def get_workflow(workflow_id: str, repository: WorkflowRepositoryDependency, principal: PrincipalDependency) -> dict[str, object]:
     enforce_scope(principal, "workflow:run")
@@ -721,3 +819,140 @@ async def stream_workflow_run(
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"},
     )
+
+
+# ─── W: Low-Code Workflow Editor Support ─────────────────────────────────────
+
+
+@router.post("/editor/validate-dag")
+async def validate_workflow_dag(
+    request: Request,
+    principal: PrincipalDependency = None,
+) -> dict[str, Any]:
+    """W: Validate a workflow DAG definition (cycle detection, orphan nodes, type checks)."""
+    enforce_scope(principal, "workflow:create")
+    body = await request.json()
+    nodes: list[dict] = body.get("nodes", [])
+    edges: list[dict] = body.get("edges", [])
+
+    errors: list[str] = []
+    warnings: list[str] = []
+    node_ids = {n.get("id") for n in nodes}
+
+    # 1. Check for duplicate node IDs
+    seen_ids: set[str] = set()
+    for n in nodes:
+        nid = n.get("id", "")
+        if nid in seen_ids:
+            errors.append(f"Duplicate node id: {nid}")
+        seen_ids.add(nid)
+
+    # 2. Edge references valid nodes
+    for e in edges:
+        src, tgt = e.get("source"), e.get("target")
+        if src not in node_ids:
+            errors.append(f"Edge source '{src}' not found in nodes")
+        if tgt not in node_ids:
+            errors.append(f"Edge target '{tgt}' not found in nodes")
+
+    # 3. Cycle detection (topological sort)
+    from collections import defaultdict, deque
+    adj: dict[str, list[str]] = defaultdict(list)
+    in_degree: dict[str, int] = {nid: 0 for nid in node_ids}
+    for e in edges:
+        src, tgt = e.get("source"), e.get("target")
+        if src in node_ids and tgt in node_ids:
+            adj[src].append(tgt)
+            in_degree[tgt] = in_degree.get(tgt, 0) + 1
+
+    queue = deque([nid for nid, deg in in_degree.items() if deg == 0])
+    visited_count = 0
+    while queue:
+        cur = queue.popleft()
+        visited_count += 1
+        for nxt in adj[cur]:
+            in_degree[nxt] -= 1
+            if in_degree[nxt] == 0:
+                queue.append(nxt)
+
+    if visited_count < len(node_ids):
+        errors.append("Cycle detected in workflow DAG")
+
+    # 4. Orphan nodes (no incoming/outgoing edges)
+    connected: set[str] = set()
+    for e in edges:
+        connected.add(e.get("source"))
+        connected.add(e.get("target"))
+    orphans = node_ids - connected
+    if orphans and len(nodes) > 1:
+        warnings.append(f"Orphan nodes (no connections): {sorted(orphans)}")
+
+    # 5. Node type validation
+    valid_types = {"agent", "condition", "transform", "trigger", "output", "parallel", "loop"}
+    for n in nodes:
+        ntype = n.get("type", "")
+        if ntype and ntype not in valid_types:
+            warnings.append(f"Unknown node type '{ntype}' for node '{n.get('id')}'")
+
+    return {
+        "valid": len(errors) == 0,
+        "errors": errors,
+        "warnings": warnings,
+        "stats": {
+            "node_count": len(nodes),
+            "edge_count": len(edges),
+            "node_types": {t: sum(1 for n in nodes if n.get("type") == t) for t in valid_types if any(n.get("type") == t for n in nodes)},
+        },
+    }
+
+
+@router.post("/editor/export")
+async def export_workflow_definition(
+    request: Request,
+    principal: PrincipalDependency = None,
+) -> dict[str, Any]:
+    """W: Export editor canvas state to executable workflow definition."""
+    enforce_scope(principal, "workflow:create")
+    body = await request.json()
+
+    nodes = body.get("nodes", [])
+    edges = body.get("edges", [])
+    name = body.get("name", "Untitled Workflow")
+
+    # Convert editor format to execution format
+    steps = []
+    for n in nodes:
+        if n.get("type") in ("agent", "transform"):
+            steps.append({
+                "id": n["id"],
+                "type": n["type"],
+                "label": n.get("label", n["id"]),
+                "config": n.get("config", {}),
+            })
+
+    # Build adjacency for execution order
+    conditions = []
+    for e in edges:
+        if e.get("condition"):
+            conditions.append({
+                "source": e["source"],
+                "target": e["target"],
+                "condition": e["condition"],
+            })
+
+    return {
+        "workflow": {
+            "name": name,
+            "version": "1.0",
+            "steps": steps,
+            "edges": edges,
+            "conditions": conditions,
+            "metadata": {
+                "exported_at": datetime.now(UTC).isoformat(),
+                "node_count": len(nodes),
+                "edge_count": len(edges),
+                "executable_steps": len(steps),
+            },
+        },
+        "format": "xagent-workflow-v1",
+    }

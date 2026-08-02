@@ -37,6 +37,7 @@ Cross-references:
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends
@@ -589,3 +590,109 @@ def _build_workflow_suggestion(prompt: str) -> dict[str, list[dict[str, object]]
             {"source": "agent_plan", "target": "output"},
         ])
     return {"nodes": nodes, "edges": edges}
+
+
+# ─── Shared Context Store (H1) ────────────────────────────────────────────────
+
+_shared_contexts: dict[str, dict[str, object]] = {}  # room_id -> {key: value}
+
+
+class SharedContextWriteRequest(BaseModel):
+    room_id: str = Field(..., min_length=1)
+    key: str = Field(..., min_length=1, max_length=200)
+    value: object = None
+    ttl_seconds: int | None = Field(None, ge=1, le=86400)
+
+
+@router.put("/shared-context")
+async def write_shared_context(request: SharedContextWriteRequest, principal: PrincipalDependency) -> dict[str, object]:
+    """Write a key-value pair to the room's shared context (visible to all member agents)."""
+    enforce_scope(principal, "agent:run")
+    _get_room_for_principal(request.room_id, principal)
+    if request.room_id not in _shared_contexts:
+        _shared_contexts[request.room_id] = {}
+    _shared_contexts[request.room_id][request.key] = {
+        "value": request.value,
+        "written_by": principal.user_id,
+        "written_at": datetime.now(UTC).isoformat(),
+        "ttl_seconds": request.ttl_seconds,
+    }
+    return {"room_id": request.room_id, "key": request.key, "status": "written"}
+
+
+@router.get("/shared-context/{room_id}")
+async def read_shared_context(room_id: str, principal: PrincipalDependency, key: str | None = None) -> dict[str, object]:
+    """Read shared context for a room. Optionally filter by key."""
+    enforce_scope(principal, "agent:run")
+    _get_room_for_principal(room_id, principal)
+    ctx = _shared_contexts.get(room_id, {})
+    if key:
+        entry = ctx.get(key)
+        return {"room_id": room_id, "key": key, "found": entry is not None, "entry": entry}
+    return {"room_id": room_id, "keys": list(ctx.keys()), "data": ctx}
+
+
+# ─── Agent Discovery & Dashboard (H2) ─────────────────────────────────────────
+
+
+@router.get("/agents/discover")
+async def discover_agents(
+    principal: PrincipalDependency,
+    capability: str | None = None,
+) -> dict[str, object]:
+    """Discover available agents and their capabilities for collaboration."""
+    enforce_scope(principal, "agent:run")
+    from backend.app.core.agent_spawner import agent_spawner
+
+    # Registered agents from spawner + static registry
+    agents: list[dict[str, object]] = []
+
+    # Default agent
+    agents.append({
+        "agent_id": "default-agent",
+        "agent_type": "general",
+        "capabilities": ["run", "trace", "memory", "tools", "code_execution", "git_ops"],
+        "status": "active",
+        "max_concurrent": 1,
+    })
+
+    # Spawner stats
+    spawner_stats = agent_spawner.get_stats() if hasattr(agent_spawner, "get_stats") else {}
+
+    # Filter by capability if requested
+    if capability:
+        agents = [a for a in agents if capability in (a.get("capabilities") or [])]
+
+    return {
+        "agents": agents,
+        "total": len(agents),
+        "spawner": spawner_stats,
+        "delegator_active": get_delegator() is not None,
+    }
+
+
+@router.get("/dashboard")
+async def collaboration_dashboard(principal: PrincipalDependency) -> dict[str, object]:
+    """Collaboration overview: active rooms, recent delegations, agent statuses."""
+    enforce_scope(principal, "agent:run")
+    tenant = principal.tenant_id
+
+    # Active rooms for tenant
+    all_rooms = collaboration_store.list_rooms(tenant_id=tenant) if hasattr(collaboration_store, "list_rooms") else []
+    active_rooms = [r for r in all_rooms if getattr(r, "status", "active") == "active"]
+
+    # Recent delegations
+    delegations = get_delegator().list_delegations(tenant_id=tenant, limit=10)
+
+    # Summary
+    return {
+        "tenant_id": tenant,
+        "active_rooms": len(active_rooms),
+        "total_rooms": len(all_rooms),
+        "rooms": [
+            {"room_id": r.room_id, "topic": r.topic, "members": len(r.members), "messages": len(r.messages)}
+            for r in active_rooms[:10]
+        ],
+        "recent_delegations": [d.model_dump(mode="json") for d in delegations[:5]],
+        "shared_context_rooms": list(_shared_contexts.keys()),
+    }
