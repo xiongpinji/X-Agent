@@ -332,3 +332,4 @@ DONE(0) tests/test_resume_recovery.py :: 10 passed in 60.70s (0:01:00)
 DONE(0) tests/test_sandbox_api.py :: 9 passed, 1 warning in 56.36s
 DONE(0) tests/test_sandbox_orchestrator.py :: 6 passed in 8.35s
 DONE(0) tests/test_search.py :: 15 passed in 6.34s
+DONE(0) tests/test_sandbox_pooling.py :: no tests ran in 0.41s
