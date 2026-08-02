@@ -200,6 +200,8 @@ class MockLLMBackend(BaseLLMBackend):
         self,
         messages: list[dict[str, str]],
         tools: list[dict[str, Any]],
+        *,
+        response_format: dict[str, Any] | None = None,
     ) -> LLMResponse:
         if messages and messages[-1]["role"] == "tool":
             tool_output = messages[-1]["content"]
