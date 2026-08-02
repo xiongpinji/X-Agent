@@ -209,9 +209,30 @@ class Settings(BaseSettings):
     smtp_from: str = ""  # XAGENT_SMTP_FROM: sender address (defaults to smtp_username)
     notification_webhook_url: str = ""  # XAGENT_NOTIFICATION_WEBHOOK_URL: fallback webhook
 
+    # ─── Message Platform Gateway (Telegram / Discord / DingTalk / Feishu) ────
+    telegram_bot_token: str = ""  # XAGENT_TELEGRAM_BOT_TOKEN
+    telegram_webhook_secret: str = ""  # XAGENT_TELEGRAM_WEBHOOK_SECRET: X-Telegram-Bot-Api-Secret-Token
+    telegram_webhook_url: str = ""  # XAGENT_TELEGRAM_WEBHOOK_URL: public webhook URL registered via setWebhook
+    discord_bot_token: str = ""  # XAGENT_DISCORD_BOT_TOKEN
+    discord_public_key: str = ""  # XAGENT_DISCORD_PUBLIC_KEY: Ed25519 public key (hex) for interaction signing
+    discord_application_id: str = ""  # XAGENT_DISCORD_APPLICATION_ID: optional (defaults to bot user id)
+    dingtalk_app_key: str = ""  # XAGENT_DINGTALK_APP_KEY
+    dingtalk_app_secret: str = ""  # XAGENT_DINGTALK_APP_SECRET
+    dingtalk_webhook_url: str = ""  # XAGENT_DINGTALK_WEBHOOK_URL: custom robot webhook for outbound
+    dingtalk_robot_code: str = ""  # XAGENT_DINGTALK_ROBOT_CODE: robot code for server API (defaults to app_key)
+    feishu_app_id: str = ""  # XAGENT_FEISHU_APP_ID
+    feishu_app_secret: str = ""  # XAGENT_FEISHU_APP_SECRET
+    feishu_encrypt_key: str = ""  # XAGENT_FEISHU_ENCRYPT_KEY: event subscription signature key
+    feishu_base_url: str = "https://open.feishu.cn"  # XAGENT_FEISHU_BASE_URL (use https://open.larksuite.com for Lark)
+
     # ─── Graceful Shutdown & Connection Lifecycle ──────────────────────────────
     shutdown_timeout: float = 30.0  # XAGENT_SHUTDOWN_TIMEOUT: max seconds to wait for in-flight requests
     shutdown_drain_seconds: float = 5.0  # XAGENT_SHUTDOWN_DRAIN_SECONDS: LB detection window (health→503)
+
+    # ─── Cloud Executor (Async Task Queue) ─────────────────────────────────────
+    cloud_executor_max_concurrent: int = 3  # XAGENT_CLOUD_EXECUTOR_MAX_CONCURRENT: max parallel tasks
+    cloud_executor_timeout: float = 3600.0  # XAGENT_CLOUD_EXECUTOR_TIMEOUT: per-task timeout (seconds)
+    cloud_executor_queue_size: int = 1000  # XAGENT_CLOUD_EXECUTOR_QUEUE_SIZE: max queued tasks
 
     # P1-01: MCP (Model Context Protocol) — 官方 SDK 工具发现与管理
     mcp_enabled: bool = False  # opt-in：显式启用 MCP 服务器连接

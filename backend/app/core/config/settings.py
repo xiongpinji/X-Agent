@@ -183,7 +183,25 @@ class Settings(BaseConfig):
         default=None,
         description="Feishu event callback encrypt key",
     )
+    # Telegram Integration
+    telegram_bot_token: str | None = Field(
+        default=None,
+        description="Telegram bot token (BotFather)",
+    )
+    # Discord Integration
+    discord_bot_token: str | None = Field(
+        default=None,
+        description="Discord bot token",
+    )
     # DingTalk Integration
+    dingtalk_app_key: str | None = Field(
+        default=None,
+        description="DingTalk app key",
+    )
+    dingtalk_app_secret: str | None = Field(
+        default=None,
+        description="DingTalk app secret",
+    )
     dingtalk_webhook_url: str | None = Field(
         default=None,
         description="DingTalk webhook URL",
