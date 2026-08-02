@@ -33,44 +33,46 @@ X-Agent Core combines cutting-edge LLM capabilities with enterprise-grade infras
 
 ### Prerequisites
 
-- Python 3.11 or higher
-- PostgreSQL 14+
+- Python 3.11 or higher（其余依赖由安装脚本自动处理；本地快速体验使用内置 SQLite，无需 PostgreSQL）
 - Docker and Docker Compose (optional, for containerized deployment)
 
-### Installation
+### 一条命令安装
 
-1. **Clone the repository**
-   ```bash
-   git clone <本仓库地址>.git
-   cd X-Agent
-   ```
-   （本仓库暂未发布到公共托管平台；请使用内部仓库地址，或直接在本仓库目录中继续后续步骤。）
+**Windows (PowerShell)**
+```powershell
+powershell -ExecutionPolicy Bypass -File install.ps1
+```
 
-2. **Create a virtual environment**
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   ```
+**macOS / Linux / Windows Git Bash**
+```bash
+bash install.sh
+```
 
-3. **Install dependencies**
-   ```bash
-   pip install -e ".[dev]"
-   ```
+预期输出: 末尾 `==> 安装完成。下一步:`，且 `xagent doctor` 自检无 ✗ 项（首次完整安装约需数分钟；脚本幂等，重复执行只补缺失项，已有可用 venv 时数秒内完成）。附加 `--dev` / `-Dev` 可安装开发依赖。
 
-4. **Configure environment variables**
-   ```bash
-   cp .env.example .env
-   # Edit .env with your configuration
-   ```
+### 验证环境
 
-5. **(Optional) Initialize the database**
+```bash
+xagent doctor   # Windows 未激活 venv 时: venv/Scripts/xagent doctor
+```
 
-   The database initializes automatically on first run — local SQLite stores are
-   created lazily, so you can skip this step for a quick start. To pre-initialize
-   the local store explicitly:
-   ```bash
-   python -c "from backend.local.migration import initialize_local_database; initialize_local_database()"
-   ```
+预期输出: 7 项检查全部 ✓/⚠，无 ✗（`XAGENT_LLM_BACKEND=mock` 时 LLM key 项为 ⚠ 属正常）。
+
+### 跑一个任务（本地模式，无需启动服务）
+
+```bash
+xagent agent run "你好，介绍一下你自己" --mode local
+```
+
+预期输出: `status: completed`，末尾证据判定行 `evidence_complete: ✓ true`（加 `--contract contract.json` 可将证据化完成判定落盘）。
+
+### 启动 API 服务
+
+```bash
+uvicorn backend.app.main:app --port 8000
+```
+
+预期输出: `Uvicorn running on http://127.0.0.1:8000`，API 文档见 `http://127.0.0.1:8000/docs`。
 
 ## Architecture
 
