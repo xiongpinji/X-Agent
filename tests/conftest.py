@@ -57,6 +57,34 @@ import pytest
 import pytest_asyncio
 
 
+# ---------------------------------------------------------------------------
+# 防止 lifespan 测试的真实 shutdown 拆除进程级服务（2026-08-04 顺序污染根因）
+#
+# 任何用 `with TestClient(app)` 的测试在 teardown 时触发 shutdown_event →
+# LifecycleManager.on_shutdown() → 关闭全局 DB engine / Redis pool / MCP /
+# 审计 shipper 等进程级单例，并把 _shutdown_event 置位。后果：
+#   1) _shutdown_event 置位 → lifecycle_tracking_middleware 对后续所有请求 503
+#      （首个污染源 tests/performance/test_api_latency.py，带崩后续 test_api_*
+#      130+ 用例，全部 503）
+#   2) 全局服务被真实关闭 → 后续测试的请求在端点内部永久挂起（anyio portal
+#      死等），pytest-timeout thread 模式无法中断 → 会话崩死
+# 测试会话内把 on_shutdown 替换为轻量版：只置位标记（保持本 client 生命周期
+# 内的停机语义），不拆除任何共享服务。生产行为不变（真实进程只 shutdown 一次）。
+# per-test 的 _reset_global_state 负责在下个测试前清除标记。
+# 注：tests/unit/test_main_full.py 自行 patch on_shutdown（patch 叠加在本包装
+# 之上），不受影响。
+# ---------------------------------------------------------------------------
+from backend.app.core.lifecycle import LifecycleManager as _LifecycleManager
+
+
+async def _test_light_on_shutdown(self, timeout: float = 30.0, drain_seconds: float = 5.0) -> None:
+    self._shutdown_at = __import__("time").monotonic()
+    self._shutdown_event.set()
+
+
+_LifecycleManager.on_shutdown = _test_light_on_shutdown
+
+
 @pytest_asyncio.fixture(autouse=True)
 async def _init_global_db():
     """为根级测试初始化全局 DatabaseManager（临时文件 SQLite）。
@@ -185,6 +213,17 @@ def _reset_global_state():
     """Reset global in-memory state before each test to avoid cross-test pollution."""
     from backend.app.main import _rate_limiter
     _rate_limiter._windows.clear()
+
+    # LifecycleManager 是进程级单例：任何用 `with TestClient(app)`（触发
+    # lifespan）的测试在 teardown 时走 shutdown_event → on_shutdown() →
+    # _shutdown_event.set()，之后同进程所有测试被 lifecycle_tracking_middleware
+    # 一律 503（/health 返 draining）。首个污染源是
+    # tests/performance/test_api_latency.py（实测带崩后续 test_api_* 共 130+
+    # 用例）。每个测试前清除停机标记，生产行为不变（真实进程只会 shutdown 一次）。
+    from backend.app.core.lifecycle import get_lifecycle_manager
+    _lifecycle = get_lifecycle_manager()
+    _lifecycle._shutdown_event.clear()
+    _lifecycle._active_requests = 0
 
     from backend.app.api import auth
     with getattr(auth, "_token_lock", pytest.importorskip("threading").Lock()):

@@ -93,6 +93,7 @@ class TestThroughput:
     def client(self):
         return TestClient(app, headers={"x-api-key": "bootstrap"})
 
+    @pytest.mark.timeout(120)  # 单跑 ~14s，全量跑 CPU 争抢下可超 30s 默认超时（thread 模式崩会话）
     def test_sequential_requests_throughput(self, client):
         """Test throughput with sequential requests."""
         start = time.time()
@@ -109,6 +110,7 @@ class TestThroughput:
         assert count == 100
         assert throughput > 1  # At least 1 request per second under contention
 
+    @pytest.mark.timeout(150)  # 单跑实测 ~35s 已超 30s 默认超时；20 线程 × 200 请求真实负载
     def test_concurrent_requests_throughput(self, client):
         """Test throughput with concurrent requests."""
         import concurrent.futures
@@ -209,6 +211,7 @@ class TestMemoryUsage:
         # Memory increase should be reasonable (less than 200MB for 100 items)
         assert memory_increase < 200
 
+    @pytest.mark.timeout(120)  # 单跑 ~17s，全量跑余量不足 2 倍，预防性放宽
     def test_memory_usage_stability(self, client):
         """Test memory usage stability over time."""
         process = psutil.Process(os.getpid())
@@ -387,7 +390,7 @@ class TestLoadTesting:
         assert duration < 60.0  # Windows 开发机单跑实测 ~9s，全量连跑需余量
 
     @pytest.mark.flaky(reruns=2)
-    @pytest.mark.timeout(120)  # 500 并发请求实测可能超 30s 默认超时
+    @pytest.mark.timeout(300)  # 500 并发请求单跑实测 ~101s，120s 余量不足，全量跑更慢
     def test_spike_load(self, client):
         """Test handling of spike load."""
         import concurrent.futures

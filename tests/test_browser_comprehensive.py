@@ -10,6 +10,11 @@ import pytest
 # core install). Skip cleanly when playwright is unavailable instead of
 # erroring at collection in a core-only environment.
 pytest.importorskip("playwright", reason="playwright not installed (browser automation optional)")
+
+# 本文件全部用例访问真实外网（example.com）。网络抖动时 page.goto 可挂起超
+# 30s（默认导航超时即 30s），撞 pytest-timeout thread 模式无法中断 → 会话崩死
+# （2026-08-04 全量跑实测命中一次）。放宽到 120s 覆盖导航超时 + 系统争抢余量。
+pytestmark = pytest.mark.timeout(120)
 from playwright.async_api import async_playwright, Browser, Page
 
 logger = logging.getLogger(__name__)

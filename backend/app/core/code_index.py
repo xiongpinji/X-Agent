@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -36,17 +37,22 @@ class CodeIndex:
         self._files: list[IndexedFile] = []
         self._root: Path | None = None
 
-    def index(self, root: str = ".", limit: int = 2_000) -> dict[str, Any]:
+    def index(self, root: str = ".", limit: int = 2_000, time_budget: float = 10.0) -> dict[str, Any]:
         base = Path(root).expanduser().resolve()
         self._root = base
         self._files = []
         if not base.exists():
             return {"root": str(base), "count": 0, "files": []}
         max_files = max(1, limit)
+        # 墙钟预算：AV 扫描抖动时逐文件 read_text 可拖到 20s~120s+，
+        # 既拖垮 agent run 首延迟，也让触发真实索引的测试随机撞 30s
+        # pytest-timeout（thread 模式无法中断 → 会话崩死）。超预算即返回
+        # 部分索引——code_index 只是提示结构，部分结果优于阻塞。
+        deadline = time.monotonic() + max(0.1, time_budget)
         for dirpath, dirnames, filenames in os.walk(base):
             dirnames[:] = sorted(d for d in dirnames if d not in _SKIP_DIRS)
             for name in sorted(filenames):
-                if len(self._files) >= max_files:
+                if len(self._files) >= max_files or time.monotonic() > deadline:
                     break
                 path = Path(dirpath) / name
                 if not path.is_file():
@@ -67,7 +73,7 @@ class CodeIndex:
                     kind=self._kind_for(path),
                 )
                 self._files.append(indexed)
-            if len(self._files) >= max_files:
+            if len(self._files) >= max_files or time.monotonic() > deadline:
                 break
         return {"root": str(base), "count": len(self._files), "files": [file.__dict__ for file in self._files[: max(1, limit)]]}
 
