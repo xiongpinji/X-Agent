@@ -9,6 +9,11 @@ import pytest
 # erroring at collection.
 pytest.importorskip("PIL", reason="vision deps not installed (requirements-vision.txt)")
 pytest.importorskip("numpy")
+
+# transformers 冷导入在本机实测 ~35s（AV 扫描），超过默认 30s pytest-timeout
+# （thread 模式无法中断 → 会话崩死）。首个触发导入的用例支付该成本后
+# sys.modules 缓存生效，后续用例为毫秒级。统一放宽本文件超时。
+pytestmark = pytest.mark.timeout(180)
 import tempfile
 from pathlib import Path
 from PIL import Image
