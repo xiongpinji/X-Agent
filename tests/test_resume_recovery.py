@@ -231,7 +231,7 @@ async def test_run_store_continue_from_merges_previous_execution_summary() -> No
 
 
 @pytest.mark.asyncio
-async def test_repair_failure_records_retry_budget_exhaustion() -> None:
+async def test_repair_failure_records_retry_budget_exhaustion(tmp_path) -> None:
     class ExhaustedToolRegistry(DummyToolRegistry):
         async def execute(self, context, tool_name: str, arguments: dict[str, object]):  # noqa: ANN001
             return ToolCallRecord(
@@ -270,7 +270,7 @@ async def test_repair_failure_records_retry_budget_exhaustion() -> None:
         max_iterations=1,
     )
     context = RunContext(trace_id="trace-retry", agent_id="agent-a")
-    result = await loop.run(context, "update file", extra_context={"path": "demo.py", "old_text": "old", "new_text": "new", "retry_budget": 0})
+    result = await loop.run(context, "update file", extra_context={"root": str(tmp_path), "path": "demo.py", "old_text": "old", "new_text": "new", "retry_budget": 0})
 
     assert result.execution_summary.get("repair_failures")
     assert result.execution_summary.get("repair_retries") == []
@@ -278,7 +278,7 @@ async def test_repair_failure_records_retry_budget_exhaustion() -> None:
 
 
 @pytest.mark.asyncio
-async def test_resume_run_reuses_previous_subtask_state() -> None:
+async def test_resume_run_reuses_previous_subtask_state(tmp_path) -> None:
     store = RunStore()
     previous = AgentRunResponse(
         trace_id="resume-source",
@@ -315,7 +315,7 @@ async def test_resume_run_reuses_previous_subtask_state() -> None:
     result = await loop.run(
         RunContext(trace_id="resume-target", agent_id="agent-a", session_id="session-1"),
         "resume task",
-        extra_context={"resume_trace_id": "resume-source", "skip_observe_on_resume": True},
+        extra_context={"root": str(tmp_path), "resume_trace_id": "resume-source", "skip_observe_on_resume": True},
     )
 
     assert result.status == RunStatus.COMPLETED
@@ -329,7 +329,7 @@ async def test_resume_run_reuses_previous_subtask_state() -> None:
 
 
 @pytest.mark.asyncio
-async def test_resume_run_skips_completed_plan_labels() -> None:
+async def test_resume_run_skips_completed_plan_labels(tmp_path) -> None:
     store = RunStore()
     previous = AgentRunResponse(
         trace_id="resume-source-2",
@@ -360,7 +360,7 @@ async def test_resume_run_skips_completed_plan_labels() -> None:
     result = await loop.run(
         RunContext(trace_id="resume-target-2", agent_id="agent-a", session_id="session-1"),
         "resume task",
-        extra_context={"resume_trace_id": "resume-source-2", "skip_observe_on_resume": True},
+        extra_context={"root": str(tmp_path), "resume_trace_id": "resume-source-2", "skip_observe_on_resume": True},
     )
 
     assert result.status == RunStatus.COMPLETED
@@ -371,7 +371,7 @@ async def test_resume_run_skips_completed_plan_labels() -> None:
 
 
 @pytest.mark.asyncio
-async def test_failed_run_can_resume_and_succeed_end_to_end() -> None:
+async def test_failed_run_can_resume_and_succeed_end_to_end(tmp_path) -> None:
     store = RunStore()
     tools = ControlledToolRegistry(failures=1)
     loop = AgentLoop(
@@ -387,7 +387,7 @@ async def test_failed_run_can_resume_and_succeed_end_to_end() -> None:
     first = await loop.run(
         RunContext(trace_id="failed-trace", agent_id="agent-a", session_id="session-1"),
         "update file",
-        extra_context={"path": "demo.py", "old_text": "old", "new_text": "new", "retry_budget": 0},
+        extra_context={"root": str(tmp_path), "path": "demo.py", "old_text": "old", "new_text": "new", "retry_budget": 0},
     )
     assert first.execution_summary.get("repair_failures")
 
@@ -398,7 +398,7 @@ async def test_failed_run_can_resume_and_succeed_end_to_end() -> None:
     second = await loop.run(
         RunContext(trace_id="resumed-trace", agent_id="agent-a", session_id="session-1"),
         "update file",
-        extra_context={"path": "demo.py", "old_text": "old", "new_text": "new", "resume_trace_id": first.trace_id, "skip_observe_on_resume": True, "retry_budget": 2},
+        extra_context={"root": str(tmp_path), "path": "demo.py", "old_text": "old", "new_text": "new", "resume_trace_id": first.trace_id, "skip_observe_on_resume": True, "retry_budget": 2},
     )
 
     assert second.status == RunStatus.COMPLETED
