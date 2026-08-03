@@ -119,6 +119,31 @@ def _mock_llm_backend(monkeypatch):
     dependencies.get_memory.cache_clear()
 
 
+@pytest.fixture(autouse=True)
+def _stub_code_index(monkeypatch):
+    """委派测试不关心代码索引；真实 index(".") 即使剪枝后仍需 ~20s（本机 AV 抖动
+    可超 30s pytest-timeout 崩会话），对真实 AgentLoop.run 的调用一律打桩。
+    注意：进程隔离用例（spawn 子进程）跨进程不生效，子进程靠剪枝后的索引
+    速度余量跑过。"""
+
+    class _StubCodeIndex:
+        def index(self, root=".", limit=2000):
+            return {"root": str(root), "count": 0, "files": []}
+
+        def related_files(self, query, limit=10):
+            return []
+
+        def impact_hints(self, path, limit=10):
+            return []
+
+        def test_files_for(self, query, limit=10):
+            return []
+
+    monkeypatch.setattr(
+        "backend.app.core.agent.loop.code_index", _StubCodeIndex()
+    )
+
+
 @pytest.fixture
 def client_factory():
     holder: dict = {}

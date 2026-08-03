@@ -1,8 +1,21 @@
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+
+# 索引时剪枝的通用垃圾目录（依赖安装/版本控制/缓存/构建产物）。
+# 不剪枝时 rglob 会把 venv（数万文件）卷进来，sorted 全量物化 + 逐文件
+# read_text 在本机实测 20s~120s+（Windows AV 扫描抖动），既拖慢每次 agent
+# run，也让触发真实 AgentLoop 的测试随机撞 30s pytest-timeout 崩掉会话。
+_SKIP_DIRS = frozenset({
+    ".git", ".hg", ".svn",
+    "venv", ".venv", "env", ".env",
+    "node_modules", "__pycache__", ".pytest_cache", ".ruff_cache",
+    ".mypy_cache", ".tox", "dist", "build", "htmlcov", "site-packages",
+    "archive", ".xagent_runtime",
+})
 
 
 @dataclass
@@ -29,27 +42,33 @@ class CodeIndex:
         self._files = []
         if not base.exists():
             return {"root": str(base), "count": 0, "files": []}
-        for path in sorted(base.rglob("*")):
-            if len(self._files) >= max(1, limit):
+        max_files = max(1, limit)
+        for dirpath, dirnames, filenames in os.walk(base):
+            dirnames[:] = sorted(d for d in dirnames if d not in _SKIP_DIRS)
+            for name in sorted(filenames):
+                if len(self._files) >= max_files:
+                    break
+                path = Path(dirpath) / name
+                if not path.is_file():
+                    continue
+                try:
+                    size = path.stat().st_size
+                    text = path.read_text(encoding="utf-8", errors="ignore")[:20_000]
+                except Exception:
+                    size = 0
+                    text = ""
+                indexed = IndexedFile(
+                    path=str(path.relative_to(base)),
+                    suffix=path.suffix.lower(),
+                    size=size,
+                    keywords=self._extract_keywords(path.name + " " + text),
+                    symbols=self._extract_symbols(text),
+                    imports=self._extract_imports(text),
+                    kind=self._kind_for(path),
+                )
+                self._files.append(indexed)
+            if len(self._files) >= max_files:
                 break
-            if not path.is_file():
-                continue
-            try:
-                size = path.stat().st_size
-                text = path.read_text(encoding="utf-8", errors="ignore")[:20_000]
-            except Exception:
-                size = 0
-                text = ""
-            indexed = IndexedFile(
-                path=str(path.relative_to(base)),
-                suffix=path.suffix.lower(),
-                size=size,
-                keywords=self._extract_keywords(path.name + " " + text),
-                symbols=self._extract_symbols(text),
-                imports=self._extract_imports(text),
-                kind=self._kind_for(path),
-            )
-            self._files.append(indexed)
         return {"root": str(base), "count": len(self._files), "files": [file.__dict__ for file in self._files[: max(1, limit)]]}
 
     def related_files(self, query: str, limit: int = 10) -> list[dict[str, Any]]:
