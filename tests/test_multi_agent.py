@@ -195,8 +195,33 @@ async def test_task_retry():
     assert results[0].attempts == 2
 
 
+class _StubCodeIndex:
+    """空调用代码索引：协调策略测试不关心代码索引内容。"""
+
+    def index(self, root=".", limit=2000):
+        return {"root": str(root), "count": 0, "files": []}
+
+    def related_files(self, query, limit=10):
+        return []
+
+    def impact_hints(self, path, limit=10):
+        return []
+
+    def test_files_for(self, query, limit=10):
+        return []
+
+
+@pytest.fixture
+def stub_code_index(monkeypatch):
+    # 真实 code_index.index(".") 会 rglob 整个项目根（含 venv/.git）并 sorted 全量物化，
+    # 实测 >120s，触发 pytest-timeout(thread) 崩掉整个会话。协调测试只需打桩。
+    monkeypatch.setattr(
+        "backend.app.core.agent.loop.code_index", _StubCodeIndex()
+    )
+
+
 @pytest.mark.asyncio
-async def test_agent_coordinator_parallel():
+async def test_agent_coordinator_parallel(stub_code_index):
     """Test agent coordination with parallel strategy."""
     # Create mock agents
     class MockAgent:
@@ -216,7 +241,7 @@ async def test_agent_coordinator_parallel():
 
 
 @pytest.mark.asyncio
-async def test_agent_coordinator_sequential():
+async def test_agent_coordinator_sequential(stub_code_index):
     """Test agent coordination with sequential strategy."""
     class MockAgent:
         def __init__(self, agent_id):
@@ -322,7 +347,7 @@ async def test_agent_cleanup():
 
 
 @pytest.mark.asyncio
-async def test_coordination_history():
+async def test_coordination_history(stub_code_index):
     """Test coordination history tracking."""
     class MockAgent:
         def __init__(self, agent_id):

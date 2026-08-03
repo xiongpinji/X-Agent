@@ -156,7 +156,7 @@ class PostgresMemorySystem:
         owner_filter = ""
         params_extra: list = []
         if scope is not None and scope.owner_agent_id:
-            owner_filter = " AND agent_id = $%d::uuid"
+            owner_filter = " AND agent_id = $5::uuid"
             params_extra = [scope.owner_agent_id]
         if self._enable_vector_search and self._embedding_model is not None:
             query_embedding = await self._embed(query)
@@ -167,7 +167,7 @@ class PostgresMemorySystem:
                     layer, importance, tags, metadata, created_at
                 FROM memories
                 WHERE tenant_id = $1
-                  AND layer = ANY($2::int[])""" + owner_filter % 5 + """
+                  AND layer = ANY($2::int[])""" + owner_filter + """
                 ORDER BY embedding <=> $3::vector, importance DESC, created_at DESC
                 LIMIT $4
                 """,
@@ -194,7 +194,7 @@ class PostgresMemorySystem:
                     SELECT 1 FROM unnest(tags) AS tag
                     WHERE tag ILIKE ('%' || $3 || '%') ESCAPE '\'
                 )
-              )""" + owner_filter % 5 + """
+              )""" + owner_filter + """
             ORDER BY importance DESC, created_at DESC
             LIMIT $4
             """,

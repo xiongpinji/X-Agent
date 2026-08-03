@@ -9,12 +9,21 @@ X-Agent 性能压力测试套件
 """
 
 import asyncio
+import os
 import threading
 import time
 from typing import List
 from uuid import uuid4
 
 import pytest
+
+# 长耗时负载/压力测试默认跳过：单用例按设计就跑满 30s（如稳定性测试 duration_seconds=30），
+# pytest-timeout(thread 法, 默认30s) 无法中断其阻塞调用，会硬杀整个进程拖垮全量套件。
+# 与 tests/performance/test_load.py 同一门禁（XAGENT_RUN_LIVE_LOAD_TESTS=1 才跑）。
+pytestmark = pytest.mark.skipif(
+    os.environ.get("XAGENT_RUN_LIVE_LOAD_TESTS") != "1",
+    reason="long-duration load/stress tests are opt-in: set XAGENT_RUN_LIVE_LOAD_TESTS=1",
+)
 
 from backend.app.core.agent import AgentLoop
 from backend.app.core.llm import LLMRouter, MockLLMBackend

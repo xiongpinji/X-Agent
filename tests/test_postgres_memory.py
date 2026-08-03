@@ -91,15 +91,19 @@ async def test_postgres_memory_vector_store_and_search_use_pgvector() -> None:
 
 
 def test_memory_factory_selects_backend(tmp_path) -> None:
+    # embedding_backend="local": 工厂选型测试只需离线 hash 嵌入；
+    # 默认 "auto" 会在本机加载 sentence-transformers（首次 ~90s+），导致 30s 测试超时挂死。
     jsonl = build_memory_system(
         memory_backend="jsonl",
         database_url="postgresql://example",
         memory_store_path=tmp_path / "memory.jsonl",
+        embedding_backend="local",
     )
     memory_only = build_memory_system(
         memory_backend="memory",
         database_url="postgresql://example",
         memory_store_path=tmp_path / "memory.jsonl",
+        embedding_backend="local",
     )
     postgres = build_memory_system(
         memory_backend="postgres",
@@ -112,6 +116,7 @@ def test_memory_factory_selects_backend(tmp_path) -> None:
         memory_store_path=tmp_path / "memory.jsonl",
         postgres_enable_vector_search=True,
         postgres_vector_dimensions=8,
+        embedding_backend="local",
     )
 
     assert isinstance(jsonl, MemorySystem)
