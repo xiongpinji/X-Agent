@@ -4,10 +4,18 @@
 """
 import pytest
 import asyncio
+import os
 import time
 from typing import List, Dict, Any, Callable
 from dataclasses import dataclass
 import json
+
+# 真实负载/压力测试默认跳过：依赖 localhost:8000 真实服务且单用例可挂死，
+# 与 tests/performance/test_load.py 同一门禁（XAGENT_RUN_LIVE_LOAD_TESTS=1 才跑）。
+requires_live_load = pytest.mark.skipif(
+    os.environ.get("XAGENT_RUN_LIVE_LOAD_TESTS") != "1",
+    reason="live stress tests are opt-in: set XAGENT_RUN_LIVE_LOAD_TESTS=1",
+)
 import random
 import string
 
@@ -275,6 +283,7 @@ class StressTester:
 
 # 测试用例
 @pytest.mark.stress_test
+@requires_live_load
 class TestBreakingPoint:
     """系统破裂点测试"""
 
@@ -318,6 +327,7 @@ class TestBreakingPoint:
 
 
 @pytest.mark.stress_test
+@requires_live_load
 class TestResourceExhaustion:
     """资源耗尽测试"""
 
@@ -344,6 +354,7 @@ class TestResourceExhaustion:
 
 
 @pytest.mark.stress_test
+@requires_live_load
 class TestLargeDataVolume:
     """大数据量测试"""
 
@@ -370,6 +381,7 @@ class TestLargeDataVolume:
 
 
 @pytest.mark.stress_test
+@requires_live_load
 class TestConcurrencyLimits:
     """并发限制测试"""
 

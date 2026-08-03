@@ -21,6 +21,14 @@ from backend.app.main import app
 
 @pytest.fixture
 async def client():
+    # httpx ASGITransport 不触发 FastAPI lifespan，而本项目路由在 startup 事件中
+    # 惰性注册（main.py::_register_all_routers），必须手动触发，否则全部 404。
+    import asyncio as _asyncio
+
+    for handler in app.router.on_startup:
+        result = handler()
+        if _asyncio.iscoroutine(result):
+            await result
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as c:
         yield c
@@ -28,19 +36,12 @@ async def client():
 
 @pytest.fixture
 async def auth_headers(client: AsyncClient):
-    """Get auth headers."""
-    await client.post("/api/v1/auth/register", json={
-        "username": "perfuser",
-        "email": "perf@example.com",
-        "password": "PerfPass123!",
-    })
-    resp = await client.post("/api/v1/auth/login", json={
-        "username": "perfuser",
-        "password": "PerfPass123!",
-    })
-    data = resp.json()
-    token = data.get("access_token") or data.get("token", "")
-    return {"Authorization": f"Bearer {token}"}
+    """Auth headers.
+
+    register/login 端点已在 2026-08 API 收敛（C2）中移除，统一改用 bootstrap
+    API Key（与 tests/conftest.py 的 XAGENT_BOOTSTRAP_API_KEY=bootstrap 对齐）。
+    """
+    return {"X-API-Key": "bootstrap"}
 
 
 # ---------------------------------------------------------------------------
@@ -52,7 +53,7 @@ class TestConcurrentAgents:
     async def test_10_concurrent_agent_runs(self, client, auth_headers):
         """10 concurrent agent runs should complete within 60s."""
         async def run_agent(i: int):
-            resp = await client.post("/api/v1/agent/run", headers=auth_headers, json={
+            resp = await client.post("/api/v1/agents/run", headers=auth_headers, json={
                 "task": f"Task {i}: echo: hello {i}",
             })
             return resp.status_code
@@ -89,7 +90,7 @@ class TestAPIThroughput:
         """Health endpoint should handle 100 requests quickly."""
         start = time.perf_counter()
         for _ in range(100):
-            resp = await client.get("/api/v1/health")
+            resp = await client.get("/health")
             assert resp.status_code == 200
         elapsed = time.perf_counter() - start
 
@@ -101,7 +102,7 @@ class TestAPIThroughput:
         """Memory list should handle 50 requests within 30s."""
         start = time.perf_counter()
         for _ in range(50):
-            resp = await client.get("/api/v1/memory", headers=auth_headers)
+            resp = await client.get("/api/v1/memory/stats", headers=auth_headers)
             assert resp.status_code == 200
         elapsed = time.perf_counter() - start
 
@@ -117,7 +118,7 @@ class TestLatency:
     async def test_agent_run_latency(self, client, auth_headers):
         """Single agent run should complete within 30s."""
         start = time.perf_counter()
-        resp = await client.post("/api/v1/agent/run", headers=auth_headers, json={
+        resp = await client.post("/api/v1/agents/run", headers=auth_headers, json={
             "task": "echo: latency test",
         })
         elapsed = time.perf_counter() - start
@@ -130,7 +131,7 @@ class TestLatency:
         start = time.perf_counter()
         resp = await client.post("/api/v1/workflows", headers=auth_headers, json={
             "name": "Perf WF",
-            "nodes": [{"id": "n1", "type": "input", "config": {}}],
+            "nodes": [],
             "edges": [],
         })
         elapsed = time.perf_counter() - start
@@ -139,18 +140,13 @@ class TestLatency:
         assert elapsed < 5.0, f"Workflow create took {elapsed:.1f}s"
 
     async def test_auth_login_latency(self, client):
-        """Login should complete within 5s."""
-        await client.post("/api/v1/auth/register", json={
-            "username": "latencyuser",
-            "email": "latency@example.com",
-            "password": "LatencyPass1!",
-        })
+        """Bootstrap API key auth (entry) should complete within 5s.
+
+        register/login 端点在 2026-08 API 收敛中移除，改为测量 API key 认证链路延迟。
+        """
         start = time.perf_counter()
-        resp = await client.post("/api/v1/auth/login", json={
-            "username": "latencyuser",
-            "password": "LatencyPass1!",
-        })
+        resp = await client.get("/api/v1/entry", headers={"X-API-Key": "bootstrap"})
         elapsed = time.perf_counter() - start
 
         assert resp.status_code == 200
-        assert elapsed < 5.0, f"Login took {elapsed:.1f}s"
+        assert elapsed < 5.0, f"Auth entry took {elapsed:.1f}s"

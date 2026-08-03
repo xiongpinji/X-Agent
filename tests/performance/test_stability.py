@@ -396,6 +396,7 @@ class TestMemoryLeakDetection:
 
 
 @pytest.mark.stability_test
+@_requires_live_load
 class TestResourceCleanup:
     """资源清理测试"""
 
@@ -419,6 +420,7 @@ class TestResourceCleanup:
 
 
 @pytest.mark.stability_test
+@_requires_live_load
 class TestErrorRecovery:
     """错误恢复测试"""
 
