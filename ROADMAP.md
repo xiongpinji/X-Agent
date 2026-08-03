@@ -14,6 +14,7 @@ Build the most capable, secure, and user-friendly autonomous agent framework for
 **Status**: 商用修复中 — Phase 1「止血与架构收敛」(2026-07-19 启动)
 **Audit Baseline**: 2026-07-19 商用交付差距审计综合评分约 31/100, **暂不具备任何形态的对外商用交付条件** (SaaS / 自托管 / 框架 SDK 均不可); 问题集中在"接线、收敛、验证"而非"从零建设", 修复路径是"收敛"而非"重写"。详见 `commercial_audit/00_商用交付差距审计报告.md`。
 **Release**: 尚无对外发布版本; git 仓库于 2026-07-19 fresh init (基线提交 f3aab93)。
+**Latest Progress**: 2026-08-03 商用交付冲刺收官 — RC 发布门禁绿、全量测试首次一次跑通 (7649 用例无挂死)、路由 2429→300、ruff 0 errors、CLI 编码体验与 Quick Start 实测通过，详见 `DELIVERY_2026-08-02_商用交付验证报告.md`。
 
 ## Roadmap Timeline
 
@@ -251,5 +252,5 @@ For questions about the roadmap:
 
 ---
 
-**Last Updated**: 2026-07-19 (按 commercial_audit/00 审计结论重写时间线)
+**Last Updated**: 2026-08-03 (商用交付冲刺收官，见 DELIVERY_2026-08-02_商用交付验证报告.md)
 **Next Review**: 2026-10-19
