@@ -20,6 +20,11 @@ P1-10 架构裁决（单一事实来源）：
 * **审计单轨**：工具*执行*审计的唯一轨道是运行时注册表写入的
   ``ToolExecutionStore``；``ToolCatalog.record_call`` 仅供
   ``core/tool_executor.py`` 的旧管理面调用，不再承接 MCP/主循环执行审计。
+* **实例唯一（2026-08-04 收尾）**：``ToolCatalog`` 的唯一生产实例由
+  ``backend.app.dependencies.get_tool_catalog()`` 持有（lru_cache 单例），
+  main.py startup（MCP 发现双写）、container、ToolExecutor/ToolManager
+  旧管理面全部共享；仅显式传 ``storage_path`` 的场景（测试/离线工具）
+  允许构造隔离实例。
 """
 from __future__ import annotations
 

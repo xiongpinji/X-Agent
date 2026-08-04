@@ -282,8 +282,8 @@ class ToolExecutionEngine:
 class ToolExecutor(ToolExecutionEngine):
     """便捷的工具执行器。
 
-    相比 ToolExecutionEngine，构造时可不传 registry（自动新建一个），
-    并接受可选的 timeout_seconds 参数。
+    相比 ToolExecutionEngine，构造时可不传 registry（默认共享 dependencies
+    持有的 ToolCatalog 单例，P1-10），并接受可选的 timeout_seconds 参数。
     """
 
     def __init__(
@@ -291,5 +291,9 @@ class ToolExecutor(ToolExecutionEngine):
         registry: ToolCatalog | None = None,
         timeout_seconds: float | None = None,
     ) -> None:
-        super().__init__(registry if registry is not None else ToolCatalog())
+        if registry is None:
+            from backend.app.dependencies import get_tool_catalog
+
+            registry = get_tool_catalog()
+        super().__init__(registry)
         self.timeout_seconds = timeout_seconds

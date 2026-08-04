@@ -172,8 +172,8 @@ def _register_default_factories() -> None:
         return get_memory()
     
     def _create_tool_registry() -> Any:
-        from backend.app.core.tool_registry import ToolCatalog
-        return ToolCatalog()
+        from backend.app.dependencies import get_tool_catalog
+        return get_tool_catalog()
     
     def _create_workflow_repository() -> Any:
         from backend.app.dependencies import get_workflow_repository

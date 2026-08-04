@@ -62,7 +62,7 @@ Build the most capable, secure, and user-friendly autonomous agent framework for
 #### 协议与路由
 - [x] MCP 改用官方 SDK (stdio + Streamable HTTP), 工具桥接进运行时 ToolRegistry (P1-01) — 官方 mcp 1.28.1 客户端 + 真实 e2e 背书；2026-08-04 收尾：runtime_registry 接线闭环、默认配置路径修正、P2-04 白名单接入、.mcp.json 兼容层；系统 B 遗留（api/mcp.py，843 行从未挂载）已归档清除
 - [x] LLM 路由收敛为一套 + Anthropic/Ollama 接线 + 租户级成本配额 (P1-08) — build_llm_router 单一构造入口 + anthropic/ollama 已接线 + profiles/定价外置 + TokenQuotaManager 租户/用户双桶；2026-08-04 残留收尾：tenant_id/user_id 穿透主循环（fast-path+规划循环）、断链状态端点修复（get_quota_manager）、QuotaExceededError→429 全局映射（tests/test_llm_quota_wiring.py 6 用例）；三套配额系统（llm/quota・tenant_quota・quota_manager）裁决单独立项
-- [ ] ToolRegistry 合并为单一运行时注册表 + 单一 ToolCatalog (P1-10)
+- [x] ToolRegistry 合并为单一运行时注册表 + 单一 ToolCatalog (P1-10) — 运行时表 dependencies 单例（8c600c9）；2026-08-04 目录侧实例级单例化收尾：get_tool_catalog() 唯一实例，main/container/ToolExecutor/ToolManager 旧管理面四处构造点改指（显式 storage_path 仍允许隔离实例），裁决记录见 core/tool_registry.py docstring
 
 #### Multi-Agent Collaboration
 - [ ] Agent-to-agent communication protocol (协作包收敛, P1-09)

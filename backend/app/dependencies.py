@@ -12,10 +12,11 @@ if TYPE_CHECKING:  # 仅类型标注, 运行时惰性导入(可选依赖 qdrant-
     from backend.app.core.agent_context import AgentContextManager
     from backend.app.core.audit_shipper import AuditShipper
     from backend.app.core.memory import MemorySystem
-    from backend.app.core.tools import ToolRegistry
     from backend.app.core.memory_postgres import PostgresMemorySystem
     from backend.app.core.memory_qdrant import QdrantMemorySystem
     from backend.app.core.orchestrator import Orchestrator
+    from backend.app.core.tool_registry import ToolCatalog
+    from backend.app.core.tools import ToolRegistry
     from backend.app.core.unified_memory import UnifiedMemorySystem
     from backend.app.core.workflows import (
         WorkflowExecutor,
@@ -530,6 +531,21 @@ def get_runtime_tool_registry() -> "ToolRegistry":
         approval_store=get_approval_store(),
         execution_store=get_tool_execution_store(),
     )
+
+
+@lru_cache
+def get_tool_catalog() -> "ToolCatalog":
+    """唯一的工具 schema 目录（P1-10 实例级单例化）。
+
+    main.py startup（MCP 发现双写）、container、ToolExecutor/ToolManager
+    旧管理面全部共享本实例，修复目录侧多实例导致的
+    “MCP 写入 main.py 那份目录、container 消费者读另一份空目录”问题。
+    运行时执行表见 get_runtime_tool_registry()；目录与运行时的组合
+    关系裁决见 core/tool_registry.py 模块 docstring。
+    """
+    from backend.app.core.tool_registry import ToolCatalog
+
+    return ToolCatalog()
 
 
 @lru_cache

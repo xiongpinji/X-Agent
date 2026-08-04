@@ -32,7 +32,6 @@ from backend.app.core.llm.quota import QuotaExceededError
 from backend.app.core.mcp.manager import initialize_mcp_manager
 from backend.app.core.security import Principal
 from backend.app.core.tenant_isolation import TenantIsolationMiddleware
-from backend.app.core.tool_registry import ToolCatalog
 from backend.app.dependencies import (
     get_audit_store,
     get_browser_store,
@@ -289,8 +288,7 @@ _csrf_middleware = CSRFProtectionMiddleware(None)
 settings = get_settings()
 logger = logging.getLogger("xagent.http")
 
-# 创建全局工具注册表实例
-tool_registry = ToolCatalog()
+# 工具 schema 目录使用 dependencies 单例（P1-10 实例级单例化），见 startup 接线
 
 frontend_dir = settings.static_dir
 # React 构建产物目录(frontend/dist)。存在时优先伺服构建产物,不存在时回退源码目录。
@@ -922,16 +920,17 @@ async def startup_event():
     # P1-10 "1+1" 最后接线：唯一的运行时工具注册表由 dependencies 持有，
     # AgentLoop（get_agent）、技能注册、MCP 桥接全部共享同一实例，
     # 修复此前各建一套、技能/MCP 工具进不了主循环的双实例问题。
-    from backend.app.dependencies import get_runtime_tool_registry
+    from backend.app.dependencies import get_runtime_tool_registry, get_tool_catalog
     runtime_registry = get_runtime_tool_registry()
     app.state.runtime_tool_registry = runtime_registry
+    tool_catalog = get_tool_catalog()
 
     try:
         # P1-01: 初始化MCP管理器（官方 SDK 工具发现与管理）
         # 仅当 XAGENT_MCP_ENABLED=true 时启用（opt-in）
         if _settings.mcp_enabled:
             mcp_manager = await initialize_mcp_manager(
-                tool_registry=tool_registry,
+                tool_registry=tool_catalog,
                 config_path=_settings.mcp_config_path,
                 runtime_registry=runtime_registry,
                 server_whitelist=_settings.mcp_server_whitelist,

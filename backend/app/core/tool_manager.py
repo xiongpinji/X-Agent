@@ -13,10 +13,19 @@ from backend.app.core.tool_schema import ToolCallInput, ToolCallOutput
 
 
 class ToolManager:
-    """工具管理器 - 初始化和管理所有工具"""
+    """工具管理器 - 初始化和管理所有工具
+
+    P1-10：默认共享 dependencies 持有的 ToolCatalog 单例；仅当显式传入
+    storage_path 时构造隔离实例（测试/离线工具场景）。
+    """
 
     def __init__(self, storage_path: str | Path | None = None):
-        self.registry = ToolCatalog(storage_path)
+        if storage_path is None:
+            from backend.app.dependencies import get_tool_catalog
+
+            self.registry = get_tool_catalog()
+        else:
+            self.registry = ToolCatalog(storage_path)
         self.engine = ToolExecutionEngine(self.registry)
         self._initialized = False
 
