@@ -100,17 +100,23 @@ from backend.app.core.mcp.manager import (
 > 支持 `.mcp.json`（Claude Code/Codex 格式）+ `${VAR}` 环境变量展开，旧 `sse`
 > type 映射 streamable HTTP（tests/test_mcp_config_compat.py）。
 
-### 系统 B：`backend/app/api/mcp.py`（历史遗留，未启用）
+### 系统 B：`backend/app/api/mcp.py`（历史遗留，**已归档清除 2026-08-04**）
 
-**角色**：一套面向 file/search/browser 工具的 MCP HTTP API。
+> 决策落定：系统 B 整文件（843 行）已归档至
+> `archive/dead_code_2026-08/backend/app/api/mcp.py`。归档前验证：router 从未注册到
+> `main.py`、全生产树零 import（仅 `core/mcp/protocol.py` 弃用说明注释提及，已同步更新）；
+> 其依赖的 `MCPToolAdapter` / file/search/browser 工具 / `MCPClient` / `MCPConfig` 均被
+> 系统 A 或既有测试使用，不受影响。`protocol.py` 旧私有协议类型仅为既有测试保留。
+
+**角色**（归档前）：一套面向 file/search/browser 工具的 MCP HTTP API。
 
 | 项 | 状态 |
 |----|------|
-| HTTP 端点定义 | ✅ 代码中存在 |
-| 初始化函数 `initialize_mcp_system()` | ✅ 存在，但**未在 startup 调用** |
-| router 注册到 `main.py` | ❌ **未注册**（`app.include_router` 列表中无 mcp_router） |
-| 因此端点实际可达性 | ❌ **不可达** |
-| 适配器内部结构 | ✅ P1-10 已收敛：`MCPToolAdapter` 显式组合运行时 `ToolRegistry`，无裸 dict |
+| HTTP 端点定义 | 已随文件归档 |
+| 初始化函数 `initialize_mcp_system()` | 已随文件归档（生前未在 startup 调用） |
+| router 注册到 `main.py` | ❌ 从未注册（`app.include_router` 列表中无 mcp_router） |
+| 端点实际可达性 | ❌ 生前不可达，现已移出生产树 |
+| 适配器内部结构 | `MCPToolAdapter` 保留于 `core/mcp/adapter.py`（系统 A 与测试使用中） |
 
 **系统 B 代码中定义的端点**（当前均不可达）：
 ```
@@ -148,13 +154,10 @@ POST /api/v1/mcp/tools/batch/execute
 
 以下是已识别但**有意推迟**的架构决策，需单独立项：
 
-1. **系统 B 端点是否启用**：注册 `api/mcp.py` 的 router 到 `main.py` 并在 startup 调 `initialize_mcp_system()`。
-   - 风险：两套 MCP 并存、职责重叠（都管"工具"），需先想清分工。
-   - 已知问题：该文件 `execute_tool` 端点构造 `ToolCallInput` 时缺必填的
-     `tool_id` 字段（pydantic 校验会失败），启用前必须修复。
+1. ~~**系统 B 端点是否启用**~~ **已决策（2026-08-04）：不启用，整文件归档**。两套 MCP 并存、职责重叠无必要；归档文件保留于 `archive/dead_code_2026-08/` 可整体回迁。
 
 2. **系统 A 是否暴露 HTTP 端点**：基于 `MCPManager.get_stats()` / `health_check()` 等给系统 A 写一套 router。
-   - 更干净，但需决定系统 B 的去留（合并 / 废弃）。
+   - 更干净；系统 B 已归档，职责重叠问题已消除。
 
 3. **文档收敛**：将脱节的 `MCP_API_REFERENCE.md` 与现实对齐（删除/标注不存在的端点）。
 
@@ -194,6 +197,5 @@ grep -c "include_router.*mcp" backend/app/main.py   # → 0
 
 ---
 
-**最后更新**：2026-07-20（Phase 2 Wave A：P1-01 真实 MCP 协议 + P1-10 注册表收敛）
-**结论**：系统 A 已完成并验证（真实 MCP 协议 + 主循环桥接）；`main.py` 的
-`runtime_registry` 接线待集成波；系统 B 端点接入及文档收敛为独立待决策事项。
+**最后更新**：2026-08-04（P1-01 残留清零：系统 B 遗留 api/mcp.py 归档清除）
+**结论**：系统 A 已完成并验证（真实 MCP 协议 + 主循环桥接 + runtime_registry 接线闭环）；系统 B 已归档；文档收敛（MCP_API_REFERENCE.md 对齐）仍为独立待决策事项。

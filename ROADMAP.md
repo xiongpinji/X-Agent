@@ -60,7 +60,7 @@ Build the most capable, secure, and user-friendly autonomous agent framework for
 > 目标: 对照 2026 五维 checklist 补齐 P1, 达到"可演示的商用部署"。约 158 人日 (3 名工程师 × 8-10 周)。
 
 #### 协议与路由
-- [x] MCP 改用官方 SDK (stdio + Streamable HTTP), 工具桥接进运行时 ToolRegistry (P1-01) — 官方 mcp 1.28.1 客户端 + 真实 e2e 背书；2026-08-04 收尾：runtime_registry 接线闭环、默认配置路径修正、P2-04 白名单接入、.mcp.json 兼容层（残留：系统 B 遗留清除待决策）
+- [x] MCP 改用官方 SDK (stdio + Streamable HTTP), 工具桥接进运行时 ToolRegistry (P1-01) — 官方 mcp 1.28.1 客户端 + 真实 e2e 背书；2026-08-04 收尾：runtime_registry 接线闭环、默认配置路径修正、P2-04 白名单接入、.mcp.json 兼容层；系统 B 遗留（api/mcp.py，843 行从未挂载）已归档清除
 - [ ] LLM 路由收敛为一套 + Anthropic/Ollama 接线 + 租户级成本配额 (P1-08)
 - [ ] ToolRegistry 合并为单一运行时注册表 + 单一 ToolCatalog (P1-10)
 

@@ -84,3 +84,9 @@
 
 第三波终验（run17）：`27 failed, 7020 passed, 247 skipped in 1:05:47`，无挂死一次跑完；
 失败清单与固有基线完全一致（少 1 个阈值敏感 flake），零新增回归。
+
+## P1-01 系统 B 遗留归档（2026-08-04，第四波单项）
+
+| 项 | 原路径 | 说明 |
+|---|---|---|
+| mcp.py（843 行） | backend/app/api/ | MCP「系统 B」：历史遗留 HTTP API，router 从未注册、端点不可达；归档前验证全生产树零 import；其依赖（MCPToolAdapter / file/search/browser 工具 / MCPClient / MCPConfig）均被系统 A 或测试使用，不受影响；决策记录见 `docs/developer/reports/MCP_IMPLEMENTATION_STATUS.md` |

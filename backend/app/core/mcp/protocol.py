@@ -3,8 +3,9 @@
 .. deprecated:: P1-01
    本模块中的 ``MCPRequest`` / ``MCPResponse`` / ``MCPMessage`` / ``MCPServer``
    是 X-Agent 早期自造的私有 JSON 协议（HTTP POST ``/mcp/request``），**不是**
-   官方 Model Context Protocol。它们仅为 ``backend/app/api/mcp.py`` 的旧端点
-   与既有测试保留。
+   官方 Model Context Protocol。它们仅为既有测试保留；旧端点文件
+   ``backend/app/api/mcp.py``（系统 B，从未挂载）已于 2026-08-04 归档至
+   ``archive/dead_code_2026-08/``。
 
    真实的 MCP 协议（JSON-RPC 2.0，``initialize`` / ``tools/list`` /
    ``tools/call``，stdio 与 Streamable HTTP 传输）由
