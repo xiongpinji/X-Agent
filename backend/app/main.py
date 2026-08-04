@@ -917,6 +917,13 @@ async def startup_event():
         )
 
 
+    # P1-10 "1+1" 最后接线：唯一的运行时工具注册表由 dependencies 持有，
+    # AgentLoop（get_agent）、技能注册、MCP 桥接全部共享同一实例，
+    # 修复此前各建一套、技能/MCP 工具进不了主循环的双实例问题。
+    from backend.app.dependencies import get_runtime_tool_registry
+    runtime_registry = get_runtime_tool_registry()
+    app.state.runtime_tool_registry = runtime_registry
+
     try:
         # P1-01: 初始化MCP管理器（官方 SDK 工具发现与管理）
         # 仅当 XAGENT_MCP_ENABLED=true 时启用（opt-in）
@@ -924,6 +931,7 @@ async def startup_event():
             mcp_manager = await initialize_mcp_manager(
                 tool_registry=tool_registry,
                 config_path=_settings.mcp_config_path,
+                runtime_registry=runtime_registry,
             )
 
             if mcp_manager:
@@ -982,13 +990,7 @@ async def startup_event():
     # P1-11: 技能系统接入主循环 —— 将 skills/ 目录下的技能桥接为 AgentLoop 可消费工具
     try:
         from backend.app.core.skill_agent_adapter import register_skills_into_tool_registry
-        from backend.app.core.tools import ToolRegistry as RuntimeToolRegistry
-
-        # 获取或创建运行时工具注册表（AgentLoop 咽喉点）
-        runtime_registry = getattr(app.state, "runtime_tool_registry", None)
-        if runtime_registry is None:
-            runtime_registry = RuntimeToolRegistry()
-            app.state.runtime_tool_registry = runtime_registry
+        # 技能注册进唯一的运行时工具注册表（上方已统一为 dependencies 实例）
         registered_skills = await register_skills_into_tool_registry(runtime_registry)
         if registered_skills:
             logger.info(f"P1-11: Registered {len(registered_skills)} skill(s) into agent loop: {registered_skills}")

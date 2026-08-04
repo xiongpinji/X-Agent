@@ -12,6 +12,7 @@ if TYPE_CHECKING:  # 仅类型标注, 运行时惰性导入(可选依赖 qdrant-
     from backend.app.core.agent_context import AgentContextManager
     from backend.app.core.audit_shipper import AuditShipper
     from backend.app.core.memory import MemorySystem
+    from backend.app.core.tools import ToolRegistry
     from backend.app.core.memory_postgres import PostgresMemorySystem
     from backend.app.core.memory_qdrant import QdrantMemorySystem
     from backend.app.core.orchestrator import Orchestrator
@@ -39,7 +40,7 @@ from backend.app.core.security import (
     RBACPolicy,
     anonymous_principal,
 )
-from backend.app.core.tools import ToolExecutionStore, build_default_tool_registry
+from backend.app.core.tools import ToolExecutionStore
 from backend.app.core.tracing import TraceStore, build_tracer
 from backend.app.core.tracing_postgres import PostgresTraceStore
 from backend.app.settings import get_settings
@@ -512,17 +513,32 @@ def get_agent_context_manager() -> "AgentContextManager":
 
 
 @lru_cache
+def get_runtime_tool_registry() -> "ToolRegistry":
+    """唯一的运行时工具注册表（P1-10 "1+1" 收敛的最后接线）。
+
+    AgentLoop（get_agent）、main.py startup（技能注册）、MCP 发现桥接
+    （initialize_mcp_manager 的 runtime_registry 参数）全部共享本实例。
+    修复此前 main.py 与 dependencies 各建一套注册表、技能/MCP 工具注册进
+    agent 用不到的那一套的双实例问题。
+    """
+    from backend.app.core.tools import build_default_tool_registry
+
+    settings = get_settings()
+    policy = ToolPolicyEngine(enable_high_risk_tools=settings.enable_high_risk_tools)
+    return build_default_tool_registry(
+        policy,
+        approval_store=get_approval_store(),
+        execution_store=get_tool_execution_store(),
+    )
+
+
+@lru_cache
 def get_agent() -> "AgentLoop":
     from backend.app.core.agent import AgentLoop
     from backend.app.core.llm import build_llm_router
 
     settings = get_settings()
-    policy = ToolPolicyEngine(enable_high_risk_tools=settings.enable_high_risk_tools)
-    tools = build_default_tool_registry(
-        policy,
-        approval_store=get_approval_store(),
-        execution_store=get_tool_execution_store(),
-    )
+    tools = get_runtime_tool_registry()
     return AgentLoop(
         llm_router=build_llm_router(
             llm_backend=settings.llm_backend,
