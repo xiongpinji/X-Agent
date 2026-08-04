@@ -149,6 +149,29 @@ def _error_response(
     return JSONResponse(status_code=status_code, content=payload.model_dump(mode="json"))
 
 
+async def quota_exceeded_handler(request: Request, exc: Exception) -> JSONResponse:
+    """Map LLM quota rejection (P1-08) to HTTP 429.
+
+    QuotaExceededError is raised by the LLM router BEFORE any provider call
+    when a tenant/user exhausts its token budget. Without this handler it
+    would surface as a generic 500 from agent/chat endpoints.
+    """
+    details = {
+        "scope": getattr(exc, "scope", None),
+        "identifier": getattr(exc, "identifier", None),
+        "used_tokens": getattr(exc, "used_tokens", None),
+        "limit_tokens": getattr(exc, "limit_tokens", None),
+        "period": getattr(exc, "period", None),
+    }
+    return _error_response(
+        status_code=429,
+        code=ErrorCode.RATE_LIMIT_EXCEEDED,
+        message=str(exc),
+        request_id=request.headers.get("x-request-id"),
+        details={k: v for k, v in details.items() if v is not None},
+    )
+
+
 async def pydantic_validation_error_handler(
     request: Request,
     exc: PydanticValidationError,

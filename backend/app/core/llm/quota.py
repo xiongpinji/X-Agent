@@ -251,3 +251,21 @@ def build_quota_manager_from_config(
         tenant_overrides=tenant_overrides,
         user_overrides=user_overrides,
     )
+
+
+def get_quota_manager() -> TokenQuotaManager | None:
+    """Return the quota manager attached to the shared LLM router (P1-08).
+
+    Observability accessor for API layers (status/tenant-quota endpoints).
+    Returns None when quotas are disabled (the default) or the shared router
+    cannot be built (e.g. no LLM credentials configured). Bucket storage
+    reuses the shared cache manager, so any router built via
+    ``build_llm_router`` observes the same usage data.
+    """
+    try:
+        from backend.app.dependencies import get_llm_router
+
+        return getattr(get_llm_router(), "quota_manager", None)
+    except Exception:  # pragma: no cover - router build failures are environmental
+        logger.debug("get_quota_manager: shared LLM router unavailable", exc_info=True)
+        return None

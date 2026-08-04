@@ -109,7 +109,7 @@ async def test_code_change_plan_inserts_reflect_before_final_after_read_only_pla
     from backend.app.core.llm.backends import LLMResponse
 
     class _ReadOnlyPlanner:
-        async def chat(self, messages, tools):
+        async def chat(self, messages, tools, **_kwargs):
             return LLMResponse(
                 content=(
                     '[{"kind":"tool","instruction":"inspect repo","tool_name":"inspect_tree","arguments":{"root":"."}},'

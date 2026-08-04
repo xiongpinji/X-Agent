@@ -126,7 +126,7 @@ class ResumeLLM:
     def __init__(self, plan_text: str = "observe\nfinal") -> None:
         self.plan_text = plan_text
 
-    async def chat(self, messages, defs):  # noqa: ANN001
+    async def chat(self, messages, defs, **_kwargs):  # noqa: ANN001
         return DummyLLMResponse(content=self.plan_text)
 
 
@@ -138,7 +138,7 @@ class DummyLLMResponse:
 
 
 class DummyLLM:
-    async def chat(self, messages, defs):  # noqa: ANN001
+    async def chat(self, messages, defs, **_kwargs):  # noqa: ANN001
         return DummyLLMResponse(content="finalize")
 
 

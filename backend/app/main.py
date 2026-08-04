@@ -17,6 +17,7 @@ from starlette.requests import Request
 from backend.app.api.errors import (
     XAgentAPIError,
     pydantic_validation_error_handler,
+    quota_exceeded_handler,
     validation_error_handler,
     xagent_api_error_handler,
 )
@@ -27,6 +28,7 @@ from backend.app.core.hooks import (
     register_hooks_from_config,
 )
 from backend.app.core.lifecycle import get_lifecycle_manager
+from backend.app.core.llm.quota import QuotaExceededError
 from backend.app.core.mcp.manager import initialize_mcp_manager
 from backend.app.core.security import Principal
 from backend.app.core.tenant_isolation import TenantIsolationMiddleware
@@ -789,8 +791,7 @@ _KEPT_ROUTER_MODULES: tuple[str, ...] = (
     "traces",
     "ops",
     "overview",
-    # integrations
-    "mcp",
+    # integrations（mcp 系统 B router 已于 2026-08-04 归档，不再注册）
     "channels",
     "feishu",
     # collaboration
@@ -853,6 +854,7 @@ def _register_all_routers() -> None:
 
 
 app.add_exception_handler(XAgentAPIError, xagent_api_error_handler)
+app.add_exception_handler(QuotaExceededError, quota_exceeded_handler)
 app.add_exception_handler(RequestValidationError, validation_error_handler)
 app.add_exception_handler(PydanticValidationError, pydantic_validation_error_handler)
 

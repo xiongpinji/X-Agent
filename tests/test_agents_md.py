@@ -115,7 +115,7 @@ class _CapturingPlanner:
     def __init__(self) -> None:
         self.captured_messages: list[dict[str, str]] = []
 
-    async def chat(self, messages, tools):
+    async def chat(self, messages, tools, **_kwargs):
         from backend.app.core.llm.backends import LLMResponse
 
         self.captured_messages = list(messages)

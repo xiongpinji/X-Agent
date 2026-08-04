@@ -590,12 +590,15 @@ async def get_model_routing_status(principal: PrincipalDependency = None) -> dic
     try:
         from backend.app.core.llm.quota import get_quota_manager
         mgr = get_quota_manager()
-        quota_info = {
-            "enabled": mgr.enabled,
-            "period": mgr.period,
-            "default_tenant_tokens": mgr.default_tenant_tokens,
-            "default_user_tokens": mgr.default_user_tokens,
-        }
+        if mgr is None:
+            quota_info = {"enabled": False}
+        else:
+            quota_info = {
+                "enabled": mgr.enabled,
+                "period": mgr.period,
+                "default_tenant_tokens": mgr.default_tenant_tokens,
+                "default_user_tokens": mgr.default_user_tokens,
+            }
     except Exception:
         quota_info = {"error": "unavailable"}
 

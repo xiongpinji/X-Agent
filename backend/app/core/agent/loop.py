@@ -618,7 +618,9 @@ class AgentLoop:
             return None
         try:
             resp = await self.llm.chat(
-                [{"role": "user", "content": task}], []
+                [{"role": "user", "content": task}], [],
+                tenant_id=context.tenant_id,
+                user_id=context.user_id,
             )
             answer = (resp.content or "").strip()
             if not answer:
@@ -2659,7 +2661,12 @@ class AgentLoop:
                 self._emit_trace(context, "agent.multimodal.images_attached", count=len(image_parts))
         # P1-14: 上下文管理——按配置策略压缩/裁剪发给 LLM 的消息
         messages = await self._prepare_llm_context(context, messages)
-        response = await self.llm.chat(messages, self.tools.definitions_for_llm())
+        response = await self.llm.chat(
+            messages,
+            self.tools.definitions_for_llm(),
+            tenant_id=context.tenant_id,
+            user_id=context.user_id,
+        )
         plan_text = response.content or ""
         if response.tool_calls:
             steps: list[AgentPlanStep] = []

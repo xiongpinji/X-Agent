@@ -89,4 +89,4 @@
 
 | 项 | 原路径 | 说明 |
 |---|---|---|
-| mcp.py（843 行） | backend/app/api/ | MCP「系统 B」：历史遗留 HTTP API，router 从未注册、端点不可达；归档前验证全生产树零 import；其依赖（MCPToolAdapter / file/search/browser 工具 / MCPClient / MCPConfig）均被系统 A 或测试使用，不受影响；决策记录见 `docs/developer/reports/MCP_IMPLEMENTATION_STATUS.md` |
+| mcp.py（843 行） | backend/app/api/ | MCP「系统 B」：历史遗留 HTTP API，`initialize_mcp_system()` 从未接线、端点运行时不可用；曾经 `main.py` `_KEPT_ROUTER_MODULES` 动态清单挂载（本次已同步移除该条目，否则启动 ModuleNotFoundError）；归档前验证全生产树零显式 import；其依赖（MCPToolAdapter / file/search/browser 工具 / MCPClient / MCPConfig）均被系统 A 或测试使用，不受影响；决策记录见 `docs/developer/reports/MCP_IMPLEMENTATION_STATUS.md` |

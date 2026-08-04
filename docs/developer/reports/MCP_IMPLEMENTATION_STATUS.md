@@ -15,8 +15,9 @@
   支持 **stdio** 与 **Streamable HTTP** 两种官方传输，市面标准 MCP server 可直接接入。
 - ✅ **发现的工具桥接进运行时 ToolRegistry**——Agent 主循环可真实调用 MCP 工具，
   风险等级/审批策略由运行时策略引擎统一裁决（单轨）。
-- ⚠️ **MCP 的 HTTP 端点目前对外不可达**——`api/mcp.py` 的 router 尚未注册到
-  `main.py`，属于待决策的独立事项。
+- ✅ **系统 B（旧 MCP HTTP API）已归档清除（2026-08-04）**——`api/mcp.py`
+  移出生产树（`archive/dead_code_2026-08/`）并从 `_KEPT_ROUTER_MODULES`
+  动态注册清单移除；MCP 不再暴露 HTTP 端点。
 
 ---
 
@@ -103,10 +104,15 @@ from backend.app.core.mcp.manager import (
 ### 系统 B：`backend/app/api/mcp.py`（历史遗留，**已归档清除 2026-08-04**）
 
 > 决策落定：系统 B 整文件（843 行）已归档至
-> `archive/dead_code_2026-08/backend/app/api/mcp.py`。归档前验证：router 从未注册到
-> `main.py`、全生产树零 import（仅 `core/mcp/protocol.py` 弃用说明注释提及，已同步更新）；
-> 其依赖的 `MCPToolAdapter` / file/search/browser 工具 / `MCPClient` / `MCPConfig` 均被
-> 系统 A 或既有测试使用，不受影响。`protocol.py` 旧私有协议类型仅为既有测试保留。
+> `archive/dead_code_2026-08/backend/app/api/mcp.py`，并同步从 `main.py`
+> 的 `_KEPT_ROUTER_MODULES` 动态注册清单中移除（**不清除会启动即崩**：
+> 该清单无条件 `importlib.import_module` 每个条目）。更正此前记录：系统 B
+> 生前实际**经动态清单挂载**（静态 grep `include_router.*mcp` 未能发现），
+> 但 `initialize_mcp_system()` 从未在 startup 调用，端点运行时不可用。
+> 归档前验证：全生产树零显式 import（仅 `core/mcp/protocol.py` 弃用说明
+> 注释提及，已同步更新）；其依赖的 `MCPToolAdapter` / file/search/browser
+> 工具 / `MCPClient` / `MCPConfig` 均被系统 A 或既有测试使用，不受影响。
+> `protocol.py` 旧私有协议类型仅为既有测试保留。
 
 **角色**（归档前）：一套面向 file/search/browser 工具的 MCP HTTP API。
 
@@ -114,8 +120,8 @@ from backend.app.core.mcp.manager import (
 |----|------|
 | HTTP 端点定义 | 已随文件归档 |
 | 初始化函数 `initialize_mcp_system()` | 已随文件归档（生前未在 startup 调用） |
-| router 注册到 `main.py` | ❌ 从未注册（`app.include_router` 列表中无 mcp_router） |
-| 端点实际可达性 | ❌ 生前不可达，现已移出生产树 |
+| router 注册到 `main.py` | 曾经 `_KEPT_ROUTER_MODULES` 动态清单挂载（此前文档“未注册”为误判），本次已随归档移除 |
+| 端点实际可达性 | 生前已挂载但运行时不可用（未初始化），现已移出生产树 |
 | 适配器内部结构 | `MCPToolAdapter` 保留于 `core/mcp/adapter.py`（系统 A 与测试使用中） |
 
 **系统 B 代码中定义的端点**（当前均不可达）：

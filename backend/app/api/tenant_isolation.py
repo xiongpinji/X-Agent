@@ -88,12 +88,15 @@ async def get_tenant_quotas(principal: PrincipalDependency = None) -> dict[str, 
     try:
         from backend.app.core.llm.quota import get_quota_manager
         mgr = get_quota_manager()
-        quota_info = {
-            "tenant_token_limit": mgr.tenant_limit(tenant_id),
-            "user_token_limit": mgr.user_limit(user_id),
-            "period": mgr.period,
-            "enabled": mgr.enabled,
-        }
+        if mgr is None:
+            quota_info = {"enabled": False}
+        else:
+            quota_info = {
+                "tenant_token_limit": mgr.tenant_limit(tenant_id),
+                "user_token_limit": mgr.user_limit(user_id),
+                "period": mgr.period,
+                "enabled": mgr.enabled,
+            }
     except Exception:
         quota_info = {"error": "quota manager unavailable"}
 
