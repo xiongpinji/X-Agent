@@ -932,6 +932,7 @@ async def startup_event():
                 tool_registry=tool_registry,
                 config_path=_settings.mcp_config_path,
                 runtime_registry=runtime_registry,
+                server_whitelist=_settings.mcp_server_whitelist,
             )
 
             if mcp_manager:

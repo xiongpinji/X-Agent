@@ -120,8 +120,10 @@ class TestLoadConfig:
 
         assert result is False
 
-    def test_load_config_no_path_specified(self, mock_tool_registry):
+    def test_load_config_no_path_specified(self, mock_tool_registry, tmp_path, monkeypatch):
         """Test loading config when no path is specified."""
+        # 默认搜索路径是相对 CWD 的；隔离到空目录，避免命中仓根 .mcp.json
+        monkeypatch.chdir(tmp_path)
         manager = MCPManager(mock_tool_registry)
 
         result = manager._load_config()

@@ -89,10 +89,16 @@ from backend.app.core.mcp.manager import (
 - 配置正确且至少一个服务器连接成功 → 初始化全局 manager，工具双写进
   `ToolCatalog` 与（经集成波接线后）运行时 `ToolRegistry`。
 
-> ⚠️ **接线说明（Wave A 交付状态）**：`initialize_mcp_manager()` 已支持
-> `runtime_registry=` 参数；`main.py` 当前调用点尚未传该参数（Wave A 禁止
-> 改 `main.py`），需在集成波补一行接线——见当次 Wave 报告。未接线前工具
-> 仍写入目录，但主循环调不到。
+> ✅ **接线已闭环（2026-08-04）**：`main.py` 调用点已传 `runtime_registry=`
+> （dependencies 单例，commit 8c600c9）——AgentLoop、技能注册、MCP 桥接共享
+> 同一运行时 ToolRegistry，主循环可直接调用 MCP 工具。回归测试：
+> `tests/test_runtime_registry_wiring.py`。
+>
+> 同批收尾：① 默认 `mcp_config_path` 从 example 文件改为 `config/mcp_servers.yaml`
+> （不存在即跳过，避免对 5 个假 server 健康检查）；② P2-04 白名单接入 settings
+> （`mcp_server_whitelist`）并经 `MCPManager` 透传 discovery；③ 配置兼容层：
+> 支持 `.mcp.json`（Claude Code/Codex 格式）+ `${VAR}` 环境变量展开，旧 `sse`
+> type 映射 streamable HTTP（tests/test_mcp_config_compat.py）。
 
 ### 系统 B：`backend/app/api/mcp.py`（历史遗留，未启用）
 

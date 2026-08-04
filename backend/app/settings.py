@@ -236,7 +236,10 @@ class Settings(BaseSettings):
 
     # P1-01: MCP (Model Context Protocol) — 官方 SDK 工具发现与管理
     mcp_enabled: bool = False  # opt-in：显式启用 MCP 服务器连接
-    mcp_config_path: str = "config/mcp_servers.example.yaml"  # MCP 服务器配置文件路径
+    # 默认指向非 example 路径：不存在时跳过初始化（example 文件内置 5 个
+    # enabled 的假 server，作为默认值会导致启动时对不存在的服务做健康检查）
+    mcp_config_path: str = "config/mcp_servers.yaml"  # MCP 服务器配置文件路径（支持 .mcp.json）
+    mcp_server_whitelist: list[str] | None = None  # P2-04 服务器白名单（None=允许所有）
 
     @field_validator("database_url")
     @classmethod

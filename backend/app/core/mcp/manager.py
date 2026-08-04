@@ -25,6 +25,7 @@ class MCPManager:
         tool_registry: ToolCatalog,
         config_path: str | None = None,
         runtime_registry: Any | None = None,
+        server_whitelist: list[str] | None = None,
     ):
         """初始化MCP管理器
 
@@ -34,13 +35,14 @@ class MCPManager:
             runtime_registry: 唯一的运行时 ToolRegistry（core/tools.py）。
                 传入后发现的 MCP 工具会桥接进 Agent 主循环执行表；
                 缺省时回退 tool_registry.runtime_registry（显式组合绑定）。
+            server_whitelist: P2-04 服务器白名单（None=允许所有），透传给 discovery。
         """
         self.tool_registry = tool_registry
         self.config_path = Path(config_path) if config_path else None
         self.config: dict[str, Any] = {}
 
         # 初始化组件
-        self.discovery = MCPToolDiscovery(tool_registry, runtime_registry=runtime_registry)
+        self.discovery = MCPToolDiscovery(tool_registry, runtime_registry=runtime_registry, server_whitelist=server_whitelist)
 
         # 状态
         self.initialized = False
@@ -115,7 +117,7 @@ class MCPManager:
             return False
 
     def _load_config(self) -> bool:
-        """加载配置文件
+        """加载配置文件（YAML 或 .mcp.json）
 
         Returns:
             是否成功加载
@@ -126,6 +128,7 @@ class MCPManager:
                 Path("config/mcp_servers.yaml"),
                 Path("config/mcp_servers.yml"),
                 Path("mcp_servers.yaml"),
+                Path(".mcp.json"),
             ]
 
             for path in default_paths:
@@ -138,8 +141,14 @@ class MCPManager:
             return False
 
         try:
-            with open(self.config_path, encoding="utf-8") as f:
-                self.config = yaml.safe_load(f) or {}
+            text = self.config_path.read_text(encoding="utf-8")
+            if self.config_path.suffix.lower() == ".json":
+                self.config = self._parse_mcp_json(text)
+            else:
+                self.config = yaml.safe_load(text) or {}
+                # YAML 文件若内容为 mcpServers map（.mcp.json 内容改后缀），同样兼容
+                if "mcpServers" in self.config and "mcp_servers" not in self.config:
+                    self.config = self._convert_mcp_servers_map(self.config["mcpServers"])
 
             logger.info(f"Loaded MCP configuration from {self.config_path}")
             return True
@@ -147,6 +156,58 @@ class MCPManager:
         except Exception as e:
             logger.error(f"Failed to load MCP configuration: {e}")
             return False
+
+    @staticmethod
+    def _expand_env_vars(value: Any) -> Any:
+        """递归展开字符串中的 ${VAR} 环境变量占位（.mcp.json 生态惯例）。"""
+        import os
+        import re
+
+        if isinstance(value, str):
+            return re.sub(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}", lambda m: os.environ.get(m.group(1), m.group(0)), value)
+        if isinstance(value, list):
+            return [MCPManager._expand_env_vars(item) for item in value]
+        if isinstance(value, dict):
+            return {k: MCPManager._expand_env_vars(v) for k, v in value.items()}
+        return value
+
+    def _convert_mcp_servers_map(self, servers_map: dict[str, Any]) -> dict[str, Any]:
+        """把 Claude Code/Codex 的 mcpServers JSON map 转换为内部 mcp_servers 列表格式。
+
+        字段映射：command/args/env/cwd → stdio；url → http（transport 推断）；
+        "type": "sse" 映射为 streamable HTTP（spec 已废弃旧 SSE 传输）。
+        """
+        servers: list[dict[str, Any]] = []
+        for name, spec in (servers_map or {}).items():
+            if not isinstance(spec, dict):
+                logger.warning(f"Skipping invalid MCP server entry: {name!r}")
+                continue
+            entry: dict[str, Any] = {"name": name, "enabled": spec.get("enabled", True)}
+            for key in ("command", "args", "env", "cwd", "headers", "timeout"):
+                if key in spec:
+                    entry[key] = spec[key]
+            if "url" in spec:
+                entry["url"] = spec["url"]
+                transport = str(spec.get("type", "http")).lower()
+                if transport == "sse":
+                    logger.info(f"MCP server {name!r}: legacy 'sse' type mapped to streamable HTTP")
+                entry["transport"] = "http"
+            else:
+                entry["transport"] = "stdio"
+            servers.append(self._expand_env_vars(entry))
+        return {"mcp_servers": servers}
+
+    def _parse_mcp_json(self, text: str) -> dict[str, Any]:
+        """解析 .mcp.json（Claude Code/Codex 兼容格式）。"""
+        import json
+
+        raw = json.loads(text)
+        if "mcpServers" in raw:
+            return self._convert_mcp_servers_map(raw["mcpServers"])
+        if "mcp_servers" in raw:  # 已是内部格式
+            return raw
+        logger.warning("JSON config has neither 'mcpServers' nor 'mcp_servers' key")
+        return {}
 
     async def refresh_tools(
         self,
@@ -371,6 +432,7 @@ async def initialize_mcp_manager(
     tool_registry: ToolCatalog,
     config_path: str | None = None,
     runtime_registry: Any | None = None,
+    server_whitelist: list[str] | None = None,
 ) -> MCPManager | None:
     """初始化全局MCP管理器
 
@@ -379,6 +441,7 @@ async def initialize_mcp_manager(
         config_path: 配置文件路径
         runtime_registry: 唯一的运行时 ToolRegistry（core/tools.py）。
             传入后 MCP 发现的工具会桥接进 Agent 主循环执行表（P1-01）。
+        server_whitelist: P2-04 服务器白名单（None=允许所有）。
 
     Returns:
         MCP管理器实例，初始化失败返回None
@@ -389,7 +452,7 @@ async def initialize_mcp_manager(
         logger.warning("MCP manager already initialized")
         return _mcp_manager
 
-    manager = MCPManager(tool_registry, config_path, runtime_registry=runtime_registry)
+    manager = MCPManager(tool_registry, config_path, runtime_registry=runtime_registry, server_whitelist=server_whitelist)
 
     if await manager.initialize():
         _mcp_manager = manager
