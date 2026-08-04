@@ -26,7 +26,7 @@ AlertManager (告警通知)
 ### 启动监控栈
 
 ```bash
-docker-compose -f deployment/docker-compose.monitoring.yml up -d
+docker-compose -f monitoring/docker-compose.monitoring.yml up -d
 ```
 
 ### 访问服务
@@ -424,7 +424,7 @@ PROMETHEUS_SCRAPE_INTERVAL=15s
 
 ### Prometheus配置
 
-编辑 `deployment/prometheus/prometheus.yml`:
+编辑 `monitoring/prometheus.yml`:
 
 ```yaml
 global:
@@ -453,7 +453,7 @@ datasources:
 ### Prometheus无法连接到X-Agent
 
 1. 检查X-Agent是否运行: `curl http://localhost:8000/health/live`
-2. 检查Prometheus配置: `cat deployment/prometheus/prometheus.yml`
+2. 检查Prometheus配置: `cat monitoring/prometheus.yml`
 3. 查看Prometheus日志: `docker logs xagent-prometheus`
 
 ### Grafana无法显示数据

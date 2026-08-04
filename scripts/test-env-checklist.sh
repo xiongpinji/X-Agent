@@ -107,18 +107,26 @@ main() {
         check_fail "scripts/deploy-test-env.sh not found"
     fi
 
-    # Prometheus config
-    if [ -f "deployment/prometheus/prometheus.yml" ]; then
-        check_pass "deployment/prometheus/prometheus.yml exists"
+    # Prometheus config（P0-04 收敛：唯一权威监控栈在 monitoring/，
+    # deployment/prometheus 已归档至 archive/monitoring_duplicate_2026-08/）
+    if [ -f "monitoring/prometheus.yml" ]; then
+        check_pass "monitoring/prometheus.yml exists"
     else
-        check_fail "deployment/prometheus/prometheus.yml not found"
+        check_fail "monitoring/prometheus.yml not found"
     fi
 
     # Alert rules
-    if [ -f "deployment/prometheus/alerts.yml" ]; then
-        check_pass "deployment/prometheus/alerts.yml exists"
+    if [ -f "monitoring/alert_rules.yml" ]; then
+        check_pass "monitoring/alert_rules.yml exists"
     else
-        check_fail "deployment/prometheus/alerts.yml not found"
+        check_fail "monitoring/alert_rules.yml not found"
+    fi
+
+    # Recording rules
+    if [ -f "monitoring/recording_rules.yml" ]; then
+        check_pass "monitoring/recording_rules.yml exists"
+    else
+        check_fail "monitoring/recording_rules.yml not found"
     fi
 
     # ========================================================================

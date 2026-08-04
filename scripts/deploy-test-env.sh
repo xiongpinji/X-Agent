@@ -71,8 +71,8 @@ create_directories() {
     mkdir -p "${PROJECT_DIR}/test-results"
     mkdir -p "${PROJECT_DIR}/coverage"
     mkdir -p "${PROJECT_DIR}/performance-results"
-    mkdir -p "${PROJECT_DIR}/deployment/migrations"
-    mkdir -p "${PROJECT_DIR}/deployment/prometheus"
+    # P0-01/P0-04 收敛：deployment/migrations（init.sql 旧路径）与
+    # deployment/prometheus（监控栈已归 monitoring/）均不再创建
     mkdir -p "${PROJECT_DIR}/deployment/grafana/provisioning/dashboards"
     mkdir -p "${PROJECT_DIR}/deployment/grafana/provisioning/datasources"
     mkdir -p "${PROJECT_DIR}/deployment/alertmanager"

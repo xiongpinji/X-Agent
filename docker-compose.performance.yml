@@ -73,7 +73,8 @@ services:
       - "9090:9090"
     volumes:
       # P1-15 修正: 根目录 prometheus.yml 不存在; 指向真实存在的配置文件
-      - ./deployment/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      # P0-04 收敛: deployment/prometheus 已归档, 唯一权威配置在 monitoring/
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
       - prometheus_data:/prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'

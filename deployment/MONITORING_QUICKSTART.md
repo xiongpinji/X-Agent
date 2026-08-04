@@ -1,5 +1,10 @@
 # X-Agent 监控告警系统快速启动指南
 
+> **2026-08-04 P0-04 收敛**：唯一权威监控栈在 `monitoring/`（`docker-compose.monitoring.yml` +
+> `prometheus.yml` + `alert_rules.yml` + `recording_rules.yml`，Makefile 监控目标同口径）。
+> 原 `deployment/docker-compose.monitoring.yml` 与 `deployment/prometheus/` 已归档至
+> `archive/monitoring_duplicate_2026-08/`。本文命令已全部改指 monitoring/ 路径。
+
 ## 概述
 
 本指南帮助您快速启动和配置X-Agent的完整监控告警系统。
@@ -16,14 +21,14 @@
 
 ```bash
 # 在项目根目录执行(compose 内挂载路径以 deployment/ 目录为基准, -f 调用时自动正确解析)
-docker-compose -f deployment/docker-compose.monitoring.yml up -d
+docker-compose -f monitoring/docker-compose.monitoring.yml up -d
 ```
 
 ### 2. 验证服务
 
 ```bash
 # 检查所有容器是否运行
-docker-compose -f deployment/docker-compose.monitoring.yml ps
+docker-compose -f monitoring/docker-compose.monitoring.yml ps
 
 # 检查X-Agent健康状态
 curl http://localhost:8000/api/v1/health/live
@@ -55,7 +60,7 @@ curl http://localhost:8000/api/v1/health/ready
 
 3. 重启AlertManager:
    ```bash
-   docker-compose -f deployment/docker-compose.monitoring.yml restart alertmanager
+   docker-compose -f monitoring/docker-compose.monitoring.yml restart alertmanager
    ```
 
 ### PagerDuty通知
@@ -103,10 +108,10 @@ xagent_memory_usage_bytes
 
 ### Q: 如何修改告警阈值?
 
-A: 编辑 `deployment/prometheus/alerts.yml` 文件，修改相应告警规则的条件，然后重启Prometheus:
+A: 编辑 `monitoring/alert_rules.yml` 文件，修改相应告警规则的条件，然后重启Prometheus:
 
 ```bash
-docker-compose -f deployment/docker-compose.monitoring.yml restart prometheus
+docker-compose -f monitoring/docker-compose.monitoring.yml restart prometheus
 ```
 
 ### Q: 如何增加数据保留期?
@@ -217,7 +222,7 @@ resource "docker_container" "prometheus" {
   
   volumes {
     container_path = "/etc/prometheus"
-    host_path      = "${path.module}/../deployment/prometheus"
+    host_path      = "${path.module}/../monitoring"
   }
 }
 ```

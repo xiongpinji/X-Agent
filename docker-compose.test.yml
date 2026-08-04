@@ -293,8 +293,11 @@ services:
     ports:
       - "9090:9090"
     volumes:
-      - ./deployment/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - ./deployment/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      # P0-04 收敛: deployment/prometheus 已归档, 唯一权威配置在 monitoring/
+      # (alert_rules.yml 对应原 alerts.yml; recording_rules.yml 同栈挂载)
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
+      - ./monitoring/recording_rules.yml:/etc/prometheus/recording_rules.yml:ro
       - prometheus_test_data:/prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
