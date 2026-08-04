@@ -975,14 +975,8 @@ async def startup_event():
         logger.error(f"Failed to start sandbox worker: {e}", exc_info=True)
         logger.warning("Application startup continuing without sandbox worker")
 
-    # Start the Cloud Executor worker pool (background task execution)
-    try:
-        from backend.app.core.cloud_executor import get_cloud_executor
-        cloud_executor = get_cloud_executor()
-        await cloud_executor.start()
-        logger.info("Cloud executor worker pool started")
-    except Exception as e:
-        logger.error(f"Failed to start cloud executor: {e}", exc_info=True)
+    # Cloud Executor 已归档（2026-08-04 第三波决策：有启停接线但全仓无生产者，
+    # 永远空转；实体在 archive/dead_code_2026-08/backend/app/core/cloud_executor.py）
         logger.warning("Application startup continuing without cloud executor")
 
     # P1-11: 技能系统接入主循环 —— 将 skills/ 目录下的技能桥接为 AgentLoop 可消费工具
@@ -1109,13 +1103,7 @@ async def shutdown_event():
     2. 等待在飞请求完成 (可配置超时)
     3. 反依赖顺序关闭所有服务连接
     """
-    # Stop cloud executor gracefully (wait for running tasks)
-    try:
-        from backend.app.core.cloud_executor import get_cloud_executor
-        cloud_executor = get_cloud_executor()
-        await cloud_executor.stop(graceful_timeout=settings.shutdown_timeout)
-    except Exception as e:
-        logger.warning(f"Cloud executor shutdown error: {e}")
+    # cloud_executor 已归档（2026-08-04，见 startup 处注释），无需停表
 
     lifecycle = get_lifecycle_manager()
     await lifecycle.on_shutdown(

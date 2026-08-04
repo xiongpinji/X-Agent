@@ -10,7 +10,8 @@ Live surface of this package:
   core.dispatch wired in for org-aware candidate ranking.
 - ``orchestrator``: MultiAgentOrchestrator for structured multi-agent
   orchestration (parallel/sequential/hierarchical modes), used by
-  api/multi_agent.py (P2-01).
+  api/multi_agent.py (P2-01，2026-08-04 决策：保留不挂载——G3 路由预算
+  300/300 零余量，挂载需路由预算评审；有测试维护)。
 
 The task-collaboration framework (protocol / registry / dispatcher /
 state_sync / aggregator / patterns / monitor / benchmarks / examples)
@@ -27,7 +28,8 @@ Canonical modules (use these):
 - ``core/parallel_agent_executor.py``
     Independent parallel fan-out (used by api/parallel_agents.py).
 - ``core/agent_coordinator.py``
-    Lightweight coordination (used by api/agents_v2.py).
+    Lightweight coordination（2026-08-04 注：原注"used by api/agents_v2.py"
+    已过时，该文件不存在；本模块现由测试维护）。
 
 Deprecated / superseded (do NOT extend):
 

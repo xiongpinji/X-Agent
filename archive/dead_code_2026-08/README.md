@@ -64,10 +64,20 @@
 
 ## 待决策（第三波，未动）
 
-- core/cloud_executor.py（main.py 启停接线但无生产者，空转）
-- core/collaboration/orchestrator.py + api/multi_agent.py（canonical 但未挂载）
-- core/agent_communication_bus.py（router 写好未挂载）
-- core/plugin_market/ + api/plugin_ecosystem.py（市场定位）
-- skill_market_manager/complete/models、skill_adapter、skill_crawler、skill_evolution、skill_distillation/、skill_curator/ 等技能市场子岛（未逐一验证，疑死链）
+- ~~core/cloud_executor.py~~ **已归档（第三波）**：main.py 启停接线已摘除，全仓无生产者的空转实现
+- core/collaboration/orchestrator.py + api/multi_agent.py：**保留不挂载**（决策见下）
+- ~~core/agent_communication_bus.py~~ **保留（实活）**：无独立 router，被已挂载的 api/parallel_agents.py 与 parallel_execution_engine 使用
+- ~~core/plugin_market/ + api/plugin_ecosystem.py~~ **已归档（第三波，市场类）**：零生产引用；测试 test_multi_agent_plugin_audit.py 已拆分（orchestrator/audit 部分保留）
+- ~~技能市场子岛~~ **已归档（第三波）**：skill_market_manager/complete/models、skill_adapter、skill_crawler、skill_evolution、skill_development_tools（死链验证：skill_market_models→skill_adapter→skill_market_manager→零引用）；保留 skill_curator/（api 存活）、skill_distillation/（main.py 引用）
 - core/llm/ 包内 README/USAGE_GUIDE/INTEGRATION_GUIDE（文档漂移，引用更早归档的 llm/router.py）
 - run_command 内联 `_run_in_docker`（tools.py:1664，第 7 套 Docker 沙箱，应并入 DockerSandbox——重构项非归档项）
+
+## 第三波决策记录（2026-08-04）
+
+| 项 | 决策 | 理由 |
+|---|---|---|
+| cloud_executor.py（665 行） | 归档 | 有启停接线但零生产者，永远空转；main.py 两处调用已摘除 |
+| orchestrator + api/multi_agent.py（617 行） | **保留不挂载** | canonical P2-01 且有测试（test_multi_agent + plugin_audit 拆分后保留部分）；G3 路由预算 300/300 零余量，挂载 4 条路由即破门禁——挂载留待路由预算评审 |
+| agent_communication_bus.py（608 行） | 保留 | 实活：被已挂载的 parallel_agents / parallel_execution_engine 引用（探查报告“未挂载 router”为误判） |
+| plugin_market/ + plugin_ecosystem.py（903 行） | 归档 | 市场功能非当前交付面，零生产引用 |
+| 技能市场子岛（7 模块） | 归档 | 死链验证零外部引用；skill_curator/skill_distillation 实活保留 |
