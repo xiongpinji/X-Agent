@@ -261,12 +261,6 @@ class TestBootstrapKeyEnforcer:
 # CODE MODULES
 # ═══════════════════════════════════════════════════════════════════════════════
 
-class TestCodeCompletion:
-    def test_module_imports(self):
-        from backend.app.core import code_completion
-        assert code_completion is not None
-
-
 class TestCodeEditor:
     def test_module_imports(self):
         from backend.app.core import code_editor
@@ -422,12 +416,6 @@ class TestApiScheduler:
     def test_module_imports(self):
         from backend.app.api import scheduler
         assert scheduler is not None
-
-
-class TestApiSearch:
-    def test_module_imports(self):
-        from backend.app.api import search
-        assert search is not None
 
 
 class TestApiSecurity:

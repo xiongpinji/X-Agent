@@ -142,6 +142,7 @@ class TestAPIErrorHandling:
         )
         assert response.status_code in [200, 401, 403]
 
+    @pytest.mark.timeout(120)  # 50 并发真实请求，全量跑 CPU 争抢下可超 30s（thread 模式崩会话）
     def test_api_concurrent_requests(self, client):
         """Test API with concurrent requests."""
         import concurrent.futures
@@ -157,6 +158,7 @@ class TestAPIErrorHandling:
         assert len(results) == 50
         assert all(r.status_code in [200, 401, 403] for r in results)
 
+    @pytest.mark.timeout(120)  # 100 次串行真实请求，同类防护
     def test_api_rapid_requests(self, client):
         """Test API with rapid sequential requests."""
         responses = []

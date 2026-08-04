@@ -31,10 +31,10 @@
 | performance_optimization_integration.py optimized_stores.py performance_config.py | backend/app/core/ | 缓存死链级联 |
 | search/（整目录）+ api/search.py | backend/app/core/、backend/app/api/ | search_cache 死链；router 未挂载；存活搜索为 services/search/ |
 | tool_sandbox.py | backend/app/core/ | 仅 test_security_hardening 一个类引用（已拆分随迁） |
-| 技能死线：skills_manager skill_system_v2 skills_marketplace skills_cli skill_review_system skill_dependency_manager skill_search_engine skill_update_manager skill_version_manager skill_chain skill_review skills_registry skills_sandbox skills_executor | backend/app/core/ | 生产零引用；存活技能线为 core/skills/ loader + skill_agent_adapter + skills_core（skills_loader 依赖，保留） |
+| 技能死线：skill_system_v2 skills_cli skill_review_system skill_dependency_manager skill_search_engine skill_update_manager skill_version_manager skill_chain skill_review | backend/app/core/ | 生产零引用；存活技能线为 core/skills/ loader + skill_agent_adapter + skills_core（skills_loader 依赖，保留） |
 | 代码能力死线：code_completion context_aware code_generation code_refactoring code_understanding code_formatter | backend/app/core/ | 生产零引用 |
 | code_generation_workflow.py | backend/app/workflows/ | 仅测试引用 |
-| api/skills.py api/skills_api.py | backend/app/api/ | 死 router，未挂载 |
+| api/skills.py api/skills_api.py | backend/app/api/ | ~~死 router~~ **已回迁**：test_skill_runtime_p1_11.py 证实其为 P1-11 维护中的可挂载 router（含租户解析/路由顺序测试），连同依赖链 skills_manager/skills_executor/skills_marketplace/skills_registry/skills_sandbox 一并回迁 |
 | api/plugin_market.py | backend/app/api/ | 未挂载，仅测试引用 |
 | translation_service.py | backend/app/services/ | 零引用 |
 
@@ -51,6 +51,14 @@
 - **协作**：collaboration/store+delegation、agent_spawner、parallel_agent_executor、api/collaboration、api/parallel_agents
 - **技能活线**：core/skills/、skills_loader、skill_agent_adapter、skills_core
 - **缓存活线**：core/cache.py、config/cache.py、tool_result_cache、sandbox/container_cache、services/search/cache
+
+## 回迁记录（归档后验证修正）
+
+全量测试发现 11 个新失败，根因两类：
+1. **api/skills_api.py 误判**：P1-11 技能运行时测试（test_skill_runtime_p1_11.py，19 个用例）主动挂载该 router 并测试租户隔离/路由顺序——属维护中代码。已连同依赖链（skills_manager/skills_executor/skills_marketplace/skills_registry/skills_sandbox）及其测试 test_skills_system.py 一并回迁。
+2. **冒烟测试引用**：tests/unit/test_tail_batch8_part{1,3} 的 TestCodeCompletion（import code_completion）、part3 的 TestApiSearch（import api.search）为机械冒烟类，测试对象确为死代码——冒烟类随迁归档，模块不回迁。
+
+修正后全量测试回归 28 个固有失败基线（run14 验证）。
 
 ## 待决策（第三波，未动）
 

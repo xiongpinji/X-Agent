@@ -231,6 +231,7 @@ class TestAPIRateLimitingAndThrottling:
     def client(self):
         return TestClient(app, headers={"x-api-key": "bootstrap"})
 
+    @pytest.mark.timeout(120)  # 100 次真实请求，全量跑 CPU 争抢下可超 30s（thread 模式崩会话）
     def test_api_rapid_requests(self, client):
         """Test API with rapid sequential requests."""
         responses = []
@@ -241,6 +242,7 @@ class TestAPIRateLimitingAndThrottling:
         # Should have mix of 200 and 429 (rate limited)
         assert 200 in responses or 429 in responses
 
+    @pytest.mark.timeout(120)  # 并发真实请求，同类预防
     def test_api_concurrent_requests(self, client):
         """Test API with concurrent requests."""
         import concurrent.futures

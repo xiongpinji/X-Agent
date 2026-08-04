@@ -321,12 +321,6 @@ class TestAgentSerializers:
 # CODE MODULES
 # ═══════════════════════════════════════════════════════════════════════════════
 
-class TestCodeCompletion:
-    def test_module_imports(self):
-        from backend.app.core import code_completion
-        assert code_completion is not None
-
-
 class TestCodeEditor:
     def test_module_imports(self):
         from backend.app.core import code_editor

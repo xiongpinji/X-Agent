@@ -1,0 +1,8 @@
+"""归档自 tests/unit/test_tail_batch8_part3.py（2026-08-04）：测试对象已归档（冒烟 import 冒烟类，归档态不可运行）。"""
+
+class TestApiSearch:
+    def test_module_imports(self):
+        from backend.app.api import search
+        assert search is not None
+
+

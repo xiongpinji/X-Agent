@@ -51,7 +51,7 @@ Build the most capable, secure, and user-friendly autonomous agent framework for
 > 目标: 消除全部"假成功"与"启动即崩", 让标准部署路径真实可用, 质量证据链可信。约 60 人日 (2 名工程师 × 4-6 周)。验收标准见 commercial_audit/00 第六节。
 
 - [x] 18 项 P0 修复清零 (compose init.sql / Celery 启动命令 / 环境变量前缀 / 监控接线 / OIDC 签名校验 / 租户隔离 / 审批可信化 / git 历史决策关闭 / 测试路径修复 / 浏览器与并行 Agent 假成功 / React 接线 / 控制台路由与登录 UI / 沙箱宿主直写 / templates.py / 记忆路由冲突与 Cypher 注入 / AST 黑名单沙箱) — 2026-08-04 复核清零，见 `commercial_audit/P0_STATUS_2026-08-04.md`
-- [ ] 死代码与重复实现收敛 (LLM 路由 ×5→1、沙箱 ×6→1、ToolRegistry ×3+1→1+1、协作 ×3→1、workflow ×2→1、缓存 ×6、插件 ×6 套归档)
+- [~] 死代码与重复实现收敛 — **2026-08-04 第一+二波收官**：生产树移出 ~20,500 行（backend 口径），LLM 路由/ToolRegistry/workflow/缓存/协作主目标达成（详见 `archive/dead_code_2026-08/README.md` 的 REMOVED/KEPT 清单与回迁记录）；残留第三波决策项（cloud_executor、multi_agent、agent_communication_bus、plugin_market、技能市场子岛）
 - [x] 版本叙事统一 (P1-20 提前: pyproject 单一事实源 0.4.0-alpha; 砍 CHANGELOG_NEW; ROADMAP/前端/SDK 口径对齐)
 - [x] git init + 基线提交 (2026-07-19, f3aab93); 唯一 CI 打通进行中 (P0-09)
 
