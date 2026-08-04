@@ -58,7 +58,9 @@
 1. **api/skills_api.py 误判**：P1-11 技能运行时测试（test_skill_runtime_p1_11.py，19 个用例）主动挂载该 router 并测试租户隔离/路由顺序——属维护中代码。已连同依赖链（skills_manager/skills_executor/skills_marketplace/skills_registry/skills_sandbox）及其测试 test_skills_system.py 一并回迁。
 2. **冒烟测试引用**：tests/unit/test_tail_batch8_part{1,3} 的 TestCodeCompletion（import code_completion）、part3 的 TestApiSearch（import api.search）为机械冒烟类，测试对象确为死代码——冒烟类随迁归档，模块不回迁。
 
-修正后全量测试回归 28 个固有失败基线（run14 验证）。
+修正后全量测试回归固有失败基线（run16 终验：`28 failed, 7052 passed`，27 项与 run12 基线完全一致，1 项为阈值敏感互换 test_hybrid_memory::test_search_performance——单跑 3.06s 通过，非回归）。
+
+终验前另补 4 处慢测试超时标记（test_api_extended / test_api_error_scenarios 的 rapid/concurrent requests，全量 CPU 争抢下可超 30s 默认超时）。
 
 ## 待决策（第三波，未动）
 
