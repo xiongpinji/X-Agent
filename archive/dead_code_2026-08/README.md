@@ -81,3 +81,6 @@
 | agent_communication_bus.py（608 行） | 保留 | 实活：被已挂载的 parallel_agents / parallel_execution_engine 引用（探查报告“未挂载 router”为误判） |
 | plugin_market/ + plugin_ecosystem.py（903 行） | 归档 | 市场功能非当前交付面，零生产引用 |
 | 技能市场子岛（7 模块） | 归档 | 死链验证零外部引用；skill_curator/skill_distillation 实活保留 |
+
+第三波终验（run17）：`27 failed, 7020 passed, 247 skipped in 1:05:47`，无挂死一次跑完；
+失败清单与固有基线完全一致（少 1 个阈值敏感 flake），零新增回归。
