@@ -6,13 +6,12 @@ the legacy backend classes (``LLMRouter`` and friends) became unreachable via
 ``from backend.app.core.llm import LLMRouter``. Those classes now live in
 ``backends.py`` inside this package and are re-exported below, so both the legacy
 callers and the enhanced-routing submodules share a single namespace.
+
+2026-08-04 死代码收敛：``adapters/``、``fallback.py``、``monitor.py``、
+``prompt_optimizer.py``、``streaming.py`` 经全仓核查零生产调用，已归档至
+``archive/dead_code_2026-08/backend/app/core/llm/``（含对应测试）。
 """
 
-# Legacy backend classes + core router (moved here from the old llm.py module).
-from .adapters.base import LLMAdapter
-from .adapters.deepseek_adapter import DeepSeekAdapter
-from .adapters.local_adapter import LocalAdapter
-from .adapters.openai_adapter import OpenAIAdapter
 from .anthropic_backend import AnthropicBackend
 from .backends import (
     BaseLLMBackend,
@@ -27,9 +26,7 @@ from .backends import (
     get_pricing_table,
 )
 from .cost_optimizer import CostOptimizer, CostTracker, TokenEstimator
-from .fallback import FallbackManager, FallbackStrategy
 from .llm_settings import LLMFeatureSettings, get_llm_feature_settings
-from .monitor import ModelMetrics, PerformanceMonitor
 from .ollama_backend import OllamaBackend
 
 # P1-08 routing convergence: external profiles, new providers, smart routing,
@@ -42,13 +39,11 @@ from .profiles import (
     load_model_profiles,
     pricing_table_from_profiles,
 )
-from .prompt_optimizer import PromptOptimizer, PromptTemplate
 from .quota import QuotaExceededError, TokenQuotaManager
 
 # Enhanced routing / optimization components.
 from .selector import ModelProfile, ModelSelector, SelectionStrategy, TaskType
 from .smart_router import SmartLLMRouter, classify_task
-from .streaming import StreamingResponse, StreamManager
 
 __all__ = [
     "AnthropicBackend",
@@ -56,17 +51,11 @@ __all__ = [
     "BaseLLMBackend",
     "CostOptimizer",
     "CostTracker",
-    "DeepSeekAdapter",
-    "FallbackManager",
-    "FallbackStrategy",
-    "LLMAdapter",
     "LLMBackendError",
     "LLMFeatureSettings",
     "LLMResponse",
     "LLMRouter",
-    "LocalAdapter",
     "MockLLMBackend",
-    "ModelMetrics",
     "ModelProfile",
     # P1-08 routing convergence
     "ModelProfileConfig",
@@ -74,18 +63,12 @@ __all__ = [
     # Enhanced routing / optimization
     "ModelSelector",
     "OllamaBackend",
-    "OpenAIAdapter",
     "OpenAIBackend",
     "OpenAIResponsesBackend",
-    "PerformanceMonitor",
-    "PromptOptimizer",
-    "PromptTemplate",
     "QuotaExceededError",
     "QuotaFileConfig",
     "SelectionStrategy",
     "SmartLLMRouter",
-    "StreamManager",
-    "StreamingResponse",
     "TaskType",
     "TokenEstimator",
     "TokenQuotaManager",

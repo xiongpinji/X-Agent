@@ -14,7 +14,8 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 from backend.app.core.path_security import PathSecurityValidator
-from backend.app.core.tool_sandbox import ToolSandbox
+# tool_sandbox 已归档（2026-08-04 死代码收敛），对应测试见
+# archive/dead_code_2026-08/tests/test_security_hardening_tool_sandbox.py
 from backend.app.core.rate_limiter import RateLimiter, RATE_LIMITS
 from backend.app.core.data_encryption import DataEncryptor
 from backend.app.core.log_sanitizer import LogSanitizer
@@ -67,39 +68,6 @@ class TestPathSecurity:
         # Should accept valid path
         result = validator.validate_path(str(valid_file))
         assert result == valid_file.resolve()
-
-
-class TestToolSandbox:
-    """Test tool sandbox functionality."""
-
-    def test_sandbox_file_listing(self, tmp_path):
-        """Test safe directory listing."""
-        sandbox = ToolSandbox(tmp_path)
-
-        # Create test files
-        (tmp_path / "file1.txt").write_text("content1")
-        (tmp_path / "file2.txt").write_text("content2")
-        (tmp_path / "subdir").mkdir()
-
-        # List directory
-        items = sandbox.list_directory(tmp_path)
-
-        assert len(items) == 3
-        assert any(item["name"] == "file1.txt" for item in items)
-        assert any(item["name"] == "file2.txt" for item in items)
-        assert any(item["name"] == "subdir" for item in items)
-
-    def test_file_size_limit(self, tmp_path):
-        """Test file size limit enforcement."""
-        sandbox = ToolSandbox(tmp_path, max_file_size=100)
-
-        # Create a large file
-        large_file = tmp_path / "large.txt"
-        large_file.write_text("x" * 1000)
-
-        # Should reject file exceeding size limit
-        with pytest.raises(Exception):
-            sandbox.validate_file_size(str(large_file))
 
 
 class TestRateLimiter:
