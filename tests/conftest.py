@@ -8,6 +8,9 @@ os.environ.setdefault("APP_MODE", "development")
 os.environ.setdefault("XAGENT_AUDIT_HMAC_SECRET", "test-audit-secret")
 os.environ.setdefault("XAGENT_BOOTSTRAP_API_KEY", "bootstrap")
 os.environ.setdefault("XAGENT_QDRANT_URL", "")
+# P0-15：测试会话属开发环境，显式 opt-in 宿主机降级写（agent_fix_runner 在无
+# Docker sandbox 时默认 fail-closed；test_agent_fix_runner 走 sandbox=None 路径）
+os.environ.setdefault("XAGENT_ALLOW_DEGRADED_HOST_WRITE", "1")
 
 # Per-worker isolated data directory for xdist parallel runs.
 # Prevents PermissionError when multiple workers write to the same

@@ -398,9 +398,25 @@ class AgentFixRunner:
                 container_clone_root,
             )
         else:
+            # P0-15 残留清零：无 Docker sandbox 时默认 fail-closed，拒绝降级为宿主机写。
+            # 开发/测试环境可显式 opt-in（XAGENT_ALLOW_DEGRADED_HOST_WRITE=1），
+            # 生产环境不应设置该变量——不可信负载必须走容器隔离。
+            import os
+
+            if os.environ.get("XAGENT_ALLOW_DEGRADED_HOST_WRITE", "").lower() not in ("1", "true", "yes"):
+                logger.error(
+                    "AgentFixRunner: no Docker-backed sandbox (backend=%s); refusing to degrade to host "
+                    "file writes (set XAGENT_ALLOW_DEGRADED_HOST_WRITE=1 to opt in for development only) "
+                    "(issue %s)",
+                    getattr(sandbox, "backend", None),
+                    getattr(issue, "issue_number", "?"),
+                )
+                reset_tool_root_override(token)
+                return False
             logger.warning(
                 "AgentFixRunner: no Docker-backed sandbox (backend=%s); file tools execute on the HOST "
-                "confined to %s — degraded isolation, do not use for untrusted workloads",
+                "confined to %s — degraded isolation (XAGENT_ALLOW_DEGRADED_HOST_WRITE opt-in), "
+                "do not use for untrusted workloads",
                 getattr(sandbox, "backend", None),
                 clone_dir,
             )
