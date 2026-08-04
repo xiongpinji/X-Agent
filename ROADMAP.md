@@ -14,7 +14,7 @@ Build the most capable, secure, and user-friendly autonomous agent framework for
 **Status**: 商用修复中 — Phase 1「止血与架构收敛」(2026-07-19 启动)
 **Audit Baseline**: 2026-07-19 商用交付差距审计综合评分约 31/100, **暂不具备任何形态的对外商用交付条件** (SaaS / 自托管 / 框架 SDK 均不可); 问题集中在"接线、收敛、验证"而非"从零建设", 修复路径是"收敛"而非"重写"。详见 `commercial_audit/00_商用交付差距审计报告.md`。
 **Release**: 尚无对外发布版本; git 仓库于 2026-07-19 fresh init (基线提交 f3aab93)。
-**Latest Progress**: 2026-08-04 顺序污染隔离工程收官 — 全量测试 7359 passed / 28 failed（324→28，残留全部为非回归固有失败），LifecycleManager 停机标记污染/慢测试撞超时/code_index 无界索引三大机制根治，质量证据链可信。前序：2026-08-03 商用交付冲刺收官（G1-G8 全绿）。详见 `DELIVERY_2026-08-02_商用交付验证报告.md` §2A。
+**Latest Progress**: 2026-08-04 **18 项 P0 修复清零**（复核 16 项已修 + 本日补 P0-04 监控栈收敛 / P0-06 审批租户收敛 / P0-15 降级路径 fail-closed，见 `commercial_audit/P0_STATUS_2026-08-04.md`）；顺序污染隔离工程收官（全量 7359 passed / 28 failed 全固有）。前序：2026-08-03 商用交付冲刺 G1-G8 全绿。
 
 ## Roadmap Timeline
 
@@ -50,7 +50,7 @@ Build the most capable, secure, and user-friendly autonomous agent framework for
 
 > 目标: 消除全部"假成功"与"启动即崩", 让标准部署路径真实可用, 质量证据链可信。约 60 人日 (2 名工程师 × 4-6 周)。验收标准见 commercial_audit/00 第六节。
 
-- [ ] 18 项 P0 修复清零 (compose init.sql / Celery 启动命令 / 环境变量前缀 / 监控接线 / OIDC 签名校验 / 租户隔离 / 审批可信化 / git 历史决策关闭 / 测试路径修复 / 浏览器与并行 Agent 假成功 / React 接线 / 控制台路由与登录 UI / 沙箱宿主直写 / templates.py / 记忆路由冲突与 Cypher 注入 / AST 黑名单沙箱)
+- [x] 18 项 P0 修复清零 (compose init.sql / Celery 启动命令 / 环境变量前缀 / 监控接线 / OIDC 签名校验 / 租户隔离 / 审批可信化 / git 历史决策关闭 / 测试路径修复 / 浏览器与并行 Agent 假成功 / React 接线 / 控制台路由与登录 UI / 沙箱宿主直写 / templates.py / 记忆路由冲突与 Cypher 注入 / AST 黑名单沙箱) — 2026-08-04 复核清零，见 `commercial_audit/P0_STATUS_2026-08-04.md`
 - [ ] 死代码与重复实现收敛 (LLM 路由 ×5→1、沙箱 ×6→1、ToolRegistry ×3+1→1+1、协作 ×3→1、workflow ×2→1、缓存 ×6、插件 ×6 套归档)
 - [x] 版本叙事统一 (P1-20 提前: pyproject 单一事实源 0.4.0-alpha; 砍 CHANGELOG_NEW; ROADMAP/前端/SDK 口径对齐)
 - [x] git init + 基线提交 (2026-07-19, f3aab93); 唯一 CI 打通进行中 (P0-09)
