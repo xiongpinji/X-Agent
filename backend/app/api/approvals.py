@@ -29,6 +29,25 @@ PrincipalDependency = Annotated[Principal, Depends(get_current_principal)]
 AgentDependency = Annotated[AgentLoop, Depends(get_agent)]
 
 
+def _enforce_approval_tenant_scope(principal: Principal, tenant_id: str | None) -> str | None:
+    """强制审批列表查询的租户边界（P0-06 残留修复，与 audit 同模式）。
+
+    非 admin 角色只能访问本租户审批记录：
+    - 显式传入与本租户不符的 tenant_id，视为越权尝试，返回 403；
+    - 未传入时强制收敛到本租户（store 层 tenant_id=None 不过滤，必须在此兜底）。
+    admin 可指定任意租户过滤，或不指定（跨租户全量）。
+    """
+    if principal.role == "admin":
+        return tenant_id
+    if tenant_id is not None and tenant_id != principal.tenant_id:
+        raise api_error(
+            403,
+            ErrorCode.AUTHORIZATION_FAILED,
+            "Access denied: cannot list approvals of another tenant.",
+        )
+    return principal.tenant_id
+
+
 @router.get("", response_model=list[ApprovalRequestRecord])
 async def list_approvals(
     approval_store: ApprovalStoreDependency,
@@ -38,7 +57,11 @@ async def list_approvals(
     tenant_id: str | None = None,
 ) -> list[ApprovalRequestRecord]:
     enforce_scope(principal, "workflow:control")
-    return approval_store.list(limit=limit, status=status, tenant_id=tenant_id)
+    return approval_store.list(
+        limit=limit,
+        status=status,
+        tenant_id=_enforce_approval_tenant_scope(principal, tenant_id),
+    )
 
 
 @router.get("/{approval_id}", response_model=ApprovalRequestRecord)
@@ -51,6 +74,9 @@ async def get_approval(
     record = approval_store.get(approval_id)
     if record is None:
         raise api_error(404, ErrorCode.AUTHORIZATION_FAILED, "Approval request not found.")
+    # P0-06 残留修复：按 ID 读取同样强制租户边界（admin 除外，与 list 口径一致）
+    if principal.authenticated and principal.role != "admin" and principal.tenant_id != record.tenant_id:
+        raise api_error(403, ErrorCode.AUTHORIZATION_FAILED, "Approval tenant mismatch.")
     return record
 
 
