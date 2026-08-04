@@ -23,7 +23,7 @@ Build the most capable, secure, and user-friendly autonomous agent framework for
 > 以下勾选表示仓内**存在**对应实现代码, 不代表已验证的生产可用性; 各项实现深度经 2026-07-19 审计复核 (普遍存在"宣称-存在-接通"三层脱节), 详见 `commercial_audit/` 各分报告。
 
 #### Core Features
-- [x] Multi-LLM Router with intelligent routing (生产路径为顺序 fallback, 智能路由未接线, P1-08)
+- [x] Multi-LLM Router with intelligent routing (生产路径为顺序 fallback, 智能路由 SmartLLMRouter 已接线、flag-gated XAGENT_LLM_ROUTING_MODE=smart, P1-08)
 - [x] Advanced Memory System with vector search (伪嵌入/无去重, P1-13)
 - [x] Workflow Orchestration and scheduling (JSON 文件存储, 无 cron, P1-07)
 - [x] Browser Automation with Playwright (主 API 恒 fallback, P0-11 修复中)
@@ -61,7 +61,7 @@ Build the most capable, secure, and user-friendly autonomous agent framework for
 
 #### 协议与路由
 - [x] MCP 改用官方 SDK (stdio + Streamable HTTP), 工具桥接进运行时 ToolRegistry (P1-01) — 官方 mcp 1.28.1 客户端 + 真实 e2e 背书；2026-08-04 收尾：runtime_registry 接线闭环、默认配置路径修正、P2-04 白名单接入、.mcp.json 兼容层；系统 B 遗留（api/mcp.py，843 行从未挂载）已归档清除
-- [ ] LLM 路由收敛为一套 + Anthropic/Ollama 接线 + 租户级成本配额 (P1-08)
+- [x] LLM 路由收敛为一套 + Anthropic/Ollama 接线 + 租户级成本配额 (P1-08) — build_llm_router 单一构造入口 + anthropic/ollama 已接线 + profiles/定价外置 + TokenQuotaManager 租户/用户双桶；2026-08-04 残留收尾：tenant_id/user_id 穿透主循环（fast-path+规划循环）、断链状态端点修复（get_quota_manager）、QuotaExceededError→429 全局映射（tests/test_llm_quota_wiring.py 6 用例）；三套配额系统（llm/quota・tenant_quota・quota_manager）裁决单独立项
 - [ ] ToolRegistry 合并为单一运行时注册表 + 单一 ToolCatalog (P1-10)
 
 #### Multi-Agent Collaboration
