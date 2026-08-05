@@ -107,6 +107,20 @@ class DatabaseManager:
             await self._redis_client.close()
         logger.info("数据库连接已关闭")
 
+    async def ensure_models_schema(self) -> None:
+        """幂等创建 ``backend.app.models`` 声明的表（users 等，P1-03 收尾）。
+
+        与 admin_store / workflow_store 的 ``create_all`` 幂等模式一致：
+        开发/测试环境建表便捷，生产以迁移 SQL 为准（create_all 不覆盖既有表）。
+        """
+        from backend.app.models import Base
+
+        if self._engine is None:
+            await self.initialize()
+        assert self._engine is not None
+        async with self._engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+
     @asynccontextmanager
     async def get_session(self) -> AsyncGenerator[AsyncSession, None]:
         """获取数据库会话"""

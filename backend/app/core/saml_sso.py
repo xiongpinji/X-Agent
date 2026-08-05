@@ -1138,6 +1138,10 @@ class UserStoreAdapter:
             with self._resolve_lock:
                 if not self._probed:
                     try:
+                        # P1-03: 幂等建表（users 等），dev/测试环境免手工迁移
+                        from backend.app.core.database import get_db_manager
+
+                        await get_db_manager().ensure_models_schema()
                         await backend.count_users("default")
                     except Exception as exc:
                         self._backend = InMemoryUserBackend()
