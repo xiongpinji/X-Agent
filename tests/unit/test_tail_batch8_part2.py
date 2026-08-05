@@ -7,12 +7,6 @@ from unittest.mock import MagicMock, patch
 # MORE CORE MODULES
 # ═══════════════════════════════════════════════════════════════════════════════
 
-class TestAdvancedFeatures:
-    def test_module_imports(self):
-        from backend.app.core import advanced_features
-        assert advanced_features is not None
-
-
 class TestAdvancedRbac:
     def test_module_imports(self):
         from backend.app.core import advanced_rbac

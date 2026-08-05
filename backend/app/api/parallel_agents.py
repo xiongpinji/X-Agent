@@ -23,7 +23,8 @@ Cross-references:
     - backend.app.api.multi_agent (orchestration API, P2-01)
     - backend.app.core.parallel_agent_executor (core executor)
 
-NOTE: backend.app.core.parallel_execution_engine is DEPRECATED;
+NOTE: backend.app.core.parallel_execution_engine was DEPRECATED and is now
+    archived (archive/dead_code_2026-08, P1-09 批次 C);
     use backend.app.core.parallel_agent_executor instead.
 """
 
@@ -512,7 +513,7 @@ async def cancel_batch(
 
 # Communication Bus Endpoints
 
-@extended_router.post("/messages/send")
+@router.post("/messages/send")
 async def send_message(
     request: MessageRequest,
     principal: PrincipalDependency,
@@ -545,7 +546,7 @@ async def send_message(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@extended_router.post("/messages/broadcast")
+@router.post("/messages/broadcast")
 async def broadcast_message(
     request: BroadcastRequest,
     principal: PrincipalDependency,
@@ -577,7 +578,7 @@ async def broadcast_message(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@extended_router.post("/messages/publish")
+@router.post("/messages/publish")
 async def publish_message(
     request: PublishRequest,
     principal: PrincipalDependency,
@@ -609,7 +610,7 @@ async def publish_message(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@extended_router.get("/messages/stats")
+@router.get("/messages/stats")
 async def get_message_stats(
     principal: PrincipalDependency,
     bus: AgentCommunicationBus = Depends(get_bus),

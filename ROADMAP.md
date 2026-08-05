@@ -65,7 +65,7 @@ Build the most capable, secure, and user-friendly autonomous agent framework for
 - [x] ToolRegistry 合并为单一运行时注册表 + 单一 ToolCatalog (P1-10) — 运行时表 dependencies 单例（8c600c9）；2026-08-04 目录侧实例级单例化收尾：get_tool_catalog() 唯一实例，main/container/ToolExecutor/ToolManager 旧管理面四处构造点改指（显式 storage_path 仍允许隔离实例），裁决记录见 core/tool_registry.py docstring
 
 #### Multi-Agent Collaboration
-- [ ] Agent-to-agent communication protocol (协作包收敛, P1-09)
+- [x] Agent-to-agent communication protocol (协作包收敛, P1-09) — 2026-08-04 批次 C 裁决：agent_communication_bus 为唯一通信面，messages send/broadcast/publish/stats 4 端点挂载（295/300）；deprecated 簇闭环归档：parallel_execution_engine+parallel_execution_benchmark+advanced_features（~1700 行，互引闭环零生产引用）；至此协作/通信收敛为 collaboration 包 + parallel_agent_executor + bus 唯一 live 面
 - [ ] Task delegation and load balancing
 - [ ] Capability matching and discovery
 - [x] PROCESS/CONTAINER 隔离落地或删除参数 (P1-09) — spawner 侧 PROCESS 真子进程已落地、CONTAINER 显式拒绝指向沙箱；2026-08-04 批次 B：parallel_agent_executor 的 IsolationMode 装饰参数收敛——SANDBOXED/PROCESS 显式拒绝（NotImplementedError→API 501，指向 agent_spawner 真实隔离），SHARED/ISOLATED/THREAD 为诚实同进程语义（裁决记录见枚举 docstring）

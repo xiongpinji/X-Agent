@@ -35,12 +35,17 @@ Archived (P1-09 batch A, 2026-08-04 — zero production callers):
     幽灵协作模块（唯一引用方为测试/演示脚本），归档至
     archive/dead_code_2026-08/backend/app/core/，引用测试同步拆分随迁。
 
-Deprecated / superseded (do NOT extend):
+Archived (P1-09 batch C, 2026-08-04 — deprecated 簇闭环，零生产引用):
 
-- ``core/parallel_execution_engine.py``
-    Superseded by parallel_agent_executor.py. Retained for benchmarks only.
-- ``core/advanced_features.py::MultiAgentCoordinator``
-    Zero callers. Superseded by orchestrator + parallel_agent_executor.
+- ``core/parallel_execution_engine.py`` / ``core/parallel_execution_benchmark.py``
+    Superseded by parallel_agent_executor.py；engine↔benchmark 互引闭环，无生产引用。
+- ``core/advanced_features.py``（含 MultiAgentCoordinator / TaskScheduler /
+  AdaptivePlanner / LearningEngine）
+    唯一生产引用方为 engine（TaskScheduler），随 engine 一并归档。
+
+Agent-to-agent 通信协议裁决（P1-09 批次 C）：
+``core/agent_communication_bus.py`` 为唯一通信面，其 messages send/broadcast/
+publish/stats 4 端点已挂载（api/parallel_agents.py 主 router）。
 """
 
 from backend.app.core.collaboration.delegation import (

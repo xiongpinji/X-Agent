@@ -2,7 +2,7 @@
 
 P1-09 convergence: This is the CANONICAL parallel agent executor, used by
 ``api/parallel_agents.py``. The older ``core/parallel_execution_engine.py``
-is DEPRECATED and retained only for benchmark backward compat.
+was archived on 2026-08-04 (P1-09 批次 C, archive/dead_code_2026-08/).
 
 For structured orchestration (decompose + dependencies), see
 ``core/collaboration/orchestrator.py`` (MultiAgentOrchestrator).

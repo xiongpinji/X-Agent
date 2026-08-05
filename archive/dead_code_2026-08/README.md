@@ -103,4 +103,18 @@
 | demo_feature_enhancements.py（437 行） | scripts/ | task_dispatcher 演示脚本，随主模块归档 |
 
 - 测试拆分：tests/test_multi_agent.py 保留 agent_spawner 存活面 6 用例，幽灵模块 10 用例归档为 tests/test_multi_agent_ghost_modules.py（记录用，不参与收集）。
-- **未动**：advanced_features.py（含 MultiAgentCoordinator）——被 deprecated 的 parallel_execution_engine.py 引用（TaskScheduler），随批次 C 对 engine 的裁决一并处理。 |
+- **未动**：advanced_features.py（含 MultiAgentCoordinator）——被 deprecated 的 parallel_execution_engine.py 引用（TaskScheduler），随批次 C 对 engine 的裁决一并处理。
+
+## P1-09 批次 C：通信协议落地 + deprecated 簇归档（2026-08-04）
+
+**裁决**：`core/agent_communication_bus.py` 为唯一 agent 间通信面，其 messages
+send/broadcast/publish/stats 4 端点从 extended_router 移入 api/parallel_agents.py
+主 router 挂载（鉴权 agent:run 已有；路由 295/300）。
+
+| 项 | 原路径 | 说明 |
+|---|---|---|
+| parallel_execution_engine.py（825 行） | backend/app/core/ | deprecated 旧并行引擎；与 benchmark 互引闭环，零生产引用（仅测试/benchmark）；测试 test_parallel_execution_engine.py 随迁 |
+| parallel_execution_benchmark.py（436 行） | backend/app/core/ | 旧引擎基准模块，随 engine 归档 |
+| advanced_features.py（461 行） | backend/app/core/ | MultiAgentCoordinator/TaskScheduler/AdaptivePlanner/LearningEngine；唯一生产引用方为 engine（TaskScheduler），级联归档；测试 test_capability_improvements.py 随迁 |
+
+- 测试拆分：tests/unit/test_services_batch7.py 移除 10 个 engine 冒烟类（其余 i18n/workflow/desktop 等类保留）；tests/unit/test_tail_batch8_part2.py 移除 advanced_features 冒烟类。 |
