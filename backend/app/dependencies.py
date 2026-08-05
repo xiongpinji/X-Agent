@@ -2,7 +2,7 @@ import logging
 from functools import lru_cache
 from hashlib import sha256
 from secrets import compare_digest, token_urlsafe
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from fastapi import Request
 
@@ -511,6 +511,18 @@ def get_agent_context_manager() -> "AgentContextManager":
     settings = get_settings()
     storage_path = getattr(settings, "agent_context_store_path", None) or "data/agent_contexts"
     return AgentContextManager(storage_path=storage_path)
+
+
+@lru_cache
+def get_context_manager() -> Any:
+    """P1-14: 共享 ContextManager（sessions REST API 注入用）。
+
+    与 AgentLoop 桥接（AgentLoopContextBridge.create_default）同一构造路径、
+    同一 data/sessions 存储，sessions API 因此能看到 agent run 产生的会话。
+    """
+    from backend.app.core.context.agent_integration import AgentLoopContextBridge
+
+    return AgentLoopContextBridge.create_default().context_manager
 
 
 @lru_cache

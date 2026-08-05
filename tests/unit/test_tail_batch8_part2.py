@@ -126,12 +126,6 @@ class TestApiHealth:
         assert health is not None
 
 
-class TestApiSkills:
-    def test_module_imports(self):
-        from backend.app.api import skills
-        assert skills is not None
-
-
 class TestApiTools:
     def test_module_imports(self):
         from backend.app.api import tools

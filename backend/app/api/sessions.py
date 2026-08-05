@@ -10,10 +10,9 @@ SECURITY (P1-14): tenant_id 一律强制收敛到认证主体（Principal），
 （恢复/删除/统计/保存/读上下文/写消息）都做租户归属校验：
 不匹配一律返回 404（不泄露会话存在性）。
 
-集成波接线说明：本路由当前未在 main.py 注册。挂载时需：
-1. ``app.include_router(router)``（本模块 router）
-2. 启动时调用 ``set_context_manager(context_manager)`` 注入共享 ContextManager
-   （见 backend/app/core/context/INTEGRATION_GUIDE.md 第 2.2 节）。
+集成波接线说明：本路由已挂载（``main.py`` ``_KEPT_ROUTER_MODULES``），
+startup 时经 ``set_context_manager()`` 注入 dependencies 持有的共享
+ContextManager（与 AgentLoop 桥接同一 data/sessions 存储）。
 """
 
 from __future__ import annotations

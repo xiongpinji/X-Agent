@@ -7,9 +7,10 @@ P1-11 修复（2026-07-20）：
   （此前 GET /health、GET /stats/* 会被 /{skill_id} 抢占）。
 - scope 改用 RBAC 中真实存在的值（tools:read / agent:run / tools:*）。
 
-状态：达到可挂载状态，但未挂载（由集成波决定挂载时机与前缀）。
+状态：已挂载（2026-08-04 集成波，``_KEPT_ROUTER_MODULES``）。
 注意：本路由服务的是 legacy 管理平面（skills_* 扁平栈），
-技能唯一运行时为 backend.app.core.skills（见 SKILLS_SYSTEM_README.md）。
+技能唯一运行时为 backend.app.core.skills（见 SKILLS_SYSTEM_README.md）；
+/api/v1/skills 的第二套管理 API（api/skills.py）已归档消除重复。
 """
 
 from __future__ import annotations

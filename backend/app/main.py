@@ -775,6 +775,8 @@ _KEPT_ROUTER_MODULES: tuple[str, ...] = (
     # memory
     "memory",
     "memory_enhanced",
+    # sessions（P1-14 会话管理/上下文控制）
+    "sessions",
     # governance & security basics
     "approvals",
     "audit",
@@ -799,6 +801,7 @@ _KEPT_ROUTER_MODULES: tuple[str, ...] = (
     "browser",
     "desktop",
     "skill_curator",
+    "skills_api",
     "evolution",
     "sync",
     "messages",
@@ -924,6 +927,12 @@ async def startup_event():
     runtime_registry = get_runtime_tool_registry()
     app.state.runtime_tool_registry = runtime_registry
     tool_catalog = get_tool_catalog()
+
+    # P1-14: sessions REST API 注入共享 ContextManager（与 AgentLoop 桥接同存储）
+    from backend.app.api.sessions import set_context_manager
+    from backend.app.dependencies import get_context_manager
+
+    set_context_manager(get_context_manager())
 
     try:
         # P1-01: 初始化MCP管理器（官方 SDK 工具发现与管理）

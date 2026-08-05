@@ -71,9 +71,9 @@ Build the most capable, secure, and user-friendly autonomous agent framework for
 - [ ] PROCESS/CONTAINER 隔离落地或删除参数 (P1-09)
 
 #### Memory & Reasoning
-- [ ] 真实嵌入服务替换哈希伪嵌入; 去重接通主存储 (P1-13)
-- [ ] 上下文管理接入 Agent 主循环 (token 级压缩 + 会话恢复, P1-14)
-- [ ] 技能系统接线或删除; 插件系统接线或归档 (P1-11/12)
+- [x] 真实嵌入服务替换哈希伪嵌入; 去重接通主存储 (P1-13) — OpenAI/sentence-transformers 真实嵌入 + 显式降级；去重已接主存储（写路径 WritePathDeduper）；2026-08-04 残留收尾：UnifiedMemorySystem 结束零消费——主循环运行结束镜像存储 + 相关记忆检索合并（失败不阻断，tests/test_unified_memory_wiring.py 3 用例）；三套记忆模型统一（MemorySystem/Unified/Hybrid）与默认部署哈希 fallback 文档兜底单独立项
+- [x] 上下文管理接入 Agent 主循环 (token 级压缩 + 会话恢复, P1-14) — tiktoken 真实 token 压缩 + Bridge/ACM 双轨会话恢复已在主循环；2026-08-04 残留收尾：sessions REST 路由注册（+10 路由，291/300）+ startup 注入 dependencies 共享 ContextManager（与 AgentLoop 桥接同 data/sessions 存储），全生命周期冒烟通过；ACM/Bridge 双轨合并为技术债
+- [x] 技能系统接线或删除; 插件系统接线或归档 (P1-11/12) — 技能：主循环接线（skill__ 工具进统一 ToolRegistry）+ 管理平面裁决挂载 skills_api（P1-11 修复版、测试齐全）、重复实现 api/skills.py 已归档；插件：plugin_runtime_router 挂载 + startup 加载冒烟通过（5 插件发现、legacy 格式诚实标注）；skill_sediment 路由保持不挂载（Phase 3 技能自沉淀闭环 surface）
 - [ ] Chain-of-thought reasoning / Multi-step planning (延后至 Phase 3 评估)
 
 #### Workflow & Developer Experience

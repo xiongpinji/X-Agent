@@ -1821,6 +1821,26 @@ class AgentLoop:
             session_id=session_id,
         )
 
+        # P1-13: 镜像到统一记忆增强层（真实嵌入向量检索面），失败不阻断主循环
+        if self.unified_memory is not None:
+            try:
+                from backend.app.core.unified_memory import MemoryType
+
+                await self.unified_memory.store_memory(
+                    content=answer,
+                    memory_type=MemoryType.EXPERIENCE,
+                    metadata={
+                        "trace_id": context.trace_id,
+                        "tenant_id": context.tenant_id,
+                        "session_id": session_id,
+                        "task": task,
+                        "primary_memory_id": memory_id,
+                    },
+                    tags=["agent", "run"],
+                )
+            except Exception:
+                logger.debug("unified memory store failed (non-fatal)", exc_info=True)
+
         # 构建最终执行摘要
         execution_summary = self._build_execution_summary(trajectory, observations, tool_calls, plan_records, answer, compact_context)
         if resume_trace_id:
@@ -2502,6 +2522,25 @@ class AgentLoop:
                 "score": hit.score,
                 "tags": hit.item.tags,
             })
+        # P1-13: 统一记忆增强层（真实嵌入向量召回）并入相关记忆，失败不阻断主循环
+        if self.unified_memory is not None:
+            try:
+                um_hits = await self.unified_memory.retrieve_memories(
+                    query=trajectory.goal or trajectory.task, top_k=2
+                )
+                for record in um_hits:
+                    scan = _guard.scan_memory_content(record.id, record.content)
+                    if scan.is_malicious:
+                        continue
+                    results.append({
+                        "id": record.id,
+                        "content": record.content[:300],
+                        "layer": "unified",
+                        "score": record.relevance_score,
+                        "tags": record.tags,
+                    })
+            except Exception:
+                logger.debug("unified memory retrieve failed (non-fatal)", exc_info=True)
         return results
 
     def _extract_browser_context(self, extra_context: dict[str, object]) -> dict[str, object]:
