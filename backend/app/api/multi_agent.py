@@ -30,9 +30,9 @@ Cross-references:
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Annotated, Any
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from backend.app.core.collaboration.orchestrator import (
@@ -42,8 +42,16 @@ from backend.app.core.collaboration.orchestrator import (
     SubTask,
     get_multi_agent_orchestrator,
 )
+from backend.app.core.security import Principal
+from backend.app.dependencies import enforce_scope, get_current_principal
 
 router = APIRouter(prefix="/api/v1/multi-agent", tags=["multi-agent"])
+PrincipalDependency = Annotated[Principal, Depends(get_current_principal)]
+
+# 挂载状态（P1-09 批次 E-lite，2026-08-04）：orchestrator 假实现已真实化、
+# 本 API 已补鉴权与租户上下文注入，达到可挂载状态；当前仍**不挂载**——
+# 挂载 +4 路由会顶满 G3（300/300），留待路由预算评审。decompose_task 为
+# 规则分解（关键词启发式），非 LLM 分解。
 
 
 # ─── 请求/响应模型 ─────────────────────────────────────────────────────────────
@@ -99,9 +107,16 @@ class PlanResponse(BaseModel):
 
 
 @router.post("/execute", response_model=ExecutionResponse)
-async def execute_orchestration(req: ExecuteRequest):
+async def execute_orchestration(req: ExecuteRequest, principal: PrincipalDependency):
     """提交编排计划并执行."""
+    enforce_scope(principal, "agent:run")
     orchestrator = get_multi_agent_orchestrator()
+    # 租户/用户上下文注入委派路径（不信任客户端 context 中的同名字段）
+    tenant_context = {
+        **dict(req.context),
+        "tenant_id": principal.tenant_id,
+        "user_id": principal.user_id,
+    }
 
     # 构建计划
     if req.subtasks:
@@ -120,10 +135,10 @@ async def execute_orchestration(req: ExecuteRequest):
             failure_policy=FailurePolicy(req.failure_policy),
             max_concurrency=req.max_concurrency,
             timeout_seconds=req.timeout_seconds,
-            context=req.context,
+            context=tenant_context,
         )
     else:
-        plan = orchestrator.decompose_task(req.task, req.context)
+        plan = orchestrator.decompose_task(req.task, tenant_context)
         plan.mode = OrchestrationMode(req.mode)
         plan.failure_policy = FailurePolicy(req.failure_policy)
         plan.max_concurrency = req.max_concurrency
@@ -134,16 +149,18 @@ async def execute_orchestration(req: ExecuteRequest):
 
 
 @router.post("/decompose", response_model=PlanResponse)
-async def decompose_task(req: DecomposeRequest):
-    """任务分解(返回计划不执行)."""
+async def decompose_task(req: DecomposeRequest, principal: PrincipalDependency):
+    """任务分解(返回计划不执行). 规则分解（关键词启发式），非 LLM 分解。"""
+    enforce_scope(principal, "agent:run")
     orchestrator = get_multi_agent_orchestrator()
     plan = orchestrator.decompose_task(req.task, req.context)
     return PlanResponse(**plan.to_dict())
 
 
 @router.get("/executions/{execution_id}", response_model=ExecutionResponse)
-async def get_execution(execution_id: str):
+async def get_execution(execution_id: str, principal: PrincipalDependency):
     """查询执行状态."""
+    enforce_scope(principal, "agent:run")
     orchestrator = get_multi_agent_orchestrator()
     result = orchestrator.get_execution(execution_id)
     if result is None:
@@ -152,8 +169,9 @@ async def get_execution(execution_id: str):
 
 
 @router.get("/executions", response_model=list[ExecutionResponse])
-async def list_executions(limit: int = Query(20, ge=1, le=100)):
+async def list_executions(principal: PrincipalDependency, limit: int = Query(20, ge=1, le=100)):
     """执行历史列表."""
+    enforce_scope(principal, "agent:run")
     orchestrator = get_multi_agent_orchestrator()
     executions = orchestrator.list_executions(limit)
     return [ExecutionResponse(**e.to_dict()) for e in executions]

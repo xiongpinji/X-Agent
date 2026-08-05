@@ -152,10 +152,13 @@ class MultiAgentOrchestrator:
         max_concurrency: int = 5,
         timeout_seconds: int = 600,
         failure_policy: FailurePolicy = FailurePolicy.RETRY,
+        delegator: Any | None = None,
     ):
         self._max_concurrency = max_concurrency
         self._timeout = timeout_seconds
         self._failure_policy = failure_policy
+        # 可注入委派器（默认 get_delegator() 全局实例），便于测试与集成波接线
+        self._delegator = delegator
         self._executions: dict[str, OrchestrationResult] = {}
         self._semaphore: asyncio.Semaphore | None = None
 
@@ -349,17 +352,65 @@ class MultiAgentOrchestrator:
                 subtask.completed_at = datetime.now(UTC).isoformat()
 
     async def _delegate_subtask(self, subtask: SubTask, plan: OrchestrationPlan) -> dict[str, Any]:
-        """委派子任务到 Agent.
+        """委派子任务到 Agent —— 真实实现（P1-09 批次 E-lite，2026-08-04）。
 
-        当前为模拟实现, 生产环境接入 CollaborationDelegator。
+        经 CollaborationDelegator 跑真实子 AgentLoop（与 /delegate 端点同一
+        运行时路径）。``plan.context`` 可携带 candidates / room_id / org_id /
+        department_id / tenant_id / user_id / isolation / timeout_seconds /
+        max_iterations / metadata。
+
+        诚实性：子 agent 未成功（无候选 / failed / timeout）一律抛
+        DelegationError，由上层 failure_policy（retry/skip/abort）裁决——
+        绝不编造输出（取代此前 sleep(0.01) + 编造 "Completed: ..." 的假实现）。
         """
-        # 模拟执行延迟
-        await asyncio.sleep(0.01)
+        from backend.app.core.collaboration.delegation import (
+            CandidateSpec,
+            DelegationError,
+            DelegationRequest,
+            get_delegator,
+        )
+
+        delegator = self._delegator or get_delegator()
+        ctx = dict(plan.context or {})
+        candidates = [
+            CandidateSpec(**c) if isinstance(c, dict) else c
+            for c in (ctx.get("candidates") or [])
+        ]
+        request = DelegationRequest(
+            task=subtask.description or plan.task,
+            required_capabilities=list(subtask.required_capabilities),
+            candidates=candidates,
+            org_id=ctx.get("org_id"),
+            department_id=ctx.get("department_id"),
+            room_id=ctx.get("room_id"),
+            tenant_id=str(ctx.get("tenant_id") or "default"),
+            user_id=str(ctx.get("user_id") or "system"),
+            isolation=ctx.get("isolation"),
+            wait=True,
+            timeout_seconds=int(ctx.get("timeout_seconds") or plan.timeout_seconds),
+            max_iterations=int(ctx.get("max_iterations") or 10),
+            metadata={
+                "delegator": "multi-agent-orchestrator",
+                "plan_id": plan.plan_id,
+                **dict(ctx.get("metadata") or {}),
+            },
+        )
+        result = await delegator.delegate(request)
+        if result.status != "completed":
+            raise DelegationError(
+                f"Subtask '{subtask.task_id}' delegation ended with status "
+                f"'{result.status}': {result.error or 'no error detail'}"
+            )
+        output: Any = result.result
+        if isinstance(output, dict) and "answer" in output:
+            output = output["answer"]
         return {
             "task_id": subtask.task_id,
             "description": subtask.description,
-            "output": f"Completed: {subtask.description}",
+            "output": output,
             "capabilities_used": subtask.required_capabilities,
+            "delegation_id": result.delegation_id,
+            "assigned_agent_id": result.spawned_agent_id,
         }
 
     def get_execution(self, execution_id: str) -> OrchestrationResult | None:

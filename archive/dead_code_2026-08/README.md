@@ -77,7 +77,7 @@
 | 项 | 决策 | 理由 |
 |---|---|---|
 | cloud_executor.py（665 行） | 归档 | 有启停接线但零生产者，永远空转；main.py 两处调用已摘除 |
-| orchestrator + api/multi_agent.py（617 行） | **保留不挂载** | canonical P2-01 且有测试（test_multi_agent + plugin_audit 拆分后保留部分）；G3 路由预算 300/300 零余量，挂载 4 条路由即破门禁——挂载留待路由预算评审 |
+| orchestrator + api/multi_agent.py（617 行） | **保留不挂载** | canonical P2-01 且有测试（test_multi_agent + plugin_audit 拆分后保留部分）；G3 路由预算 300/300 零余量，挂载 4 条路由即破门禁——挂载留待路由预算评审。**2026-08-05 批次 E-lite 更新**：`_delegate_subtask` 假实现已真实化（接 CollaborationDelegator，真实子 AgentLoop + failure_policy 裁决），api 已补鉴权与租户注入，达可挂载状态；仍不挂载原因不变（路由预算），tests/test_orchestrator_real_delegation.py 背书 |
 | agent_communication_bus.py（608 行） | 保留 | 实活：被已挂载的 parallel_agents / parallel_execution_engine 引用（探查报告“未挂载 router”为误判） |
 | plugin_market/ + plugin_ecosystem.py（903 行） | 归档 | 市场功能非当前交付面，零生产引用 |
 | 技能市场子岛（7 模块） | 归档 | 死链验证零外部引用；skill_curator/skill_distillation 实活保留 |
