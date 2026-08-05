@@ -1121,19 +1121,49 @@ class UserStoreAdapter:
         with self._resolve_lock:
             self._backend = None
             self._mode = None
+            self._probed = False
+
+    _probed: bool = False
+
+    async def _resolve_ready(self) -> UserBackend:
+        """解析并探测后端可用性（P1-02 挂载收尾，2026-08-05）。
+
+        Postgres 后端仅靠可导入性判定会漏掉“表未建”场景（用户库建表属
+        P1-03 范围，dev sqlite 无 users 表）。首次使用时以 count_users
+        轻量探测，失败即按本类 docstring 承诺显式降级为内存后端
+        （WARNING 日志，绝不静默）。
+        """
+        backend = self._resolve_backend()
+        if self._mode == "postgres" and not self._probed:
+            with self._resolve_lock:
+                if not self._probed:
+                    try:
+                        await backend.count_users("default")
+                    except Exception as exc:
+                        self._backend = InMemoryUserBackend()
+                        self._mode = "memory"
+                        logger.warning(
+                            "UserStoreAdapter: Postgres 用户存储探测失败 (%s), "
+                            "显式降级为内存后端 — 数据不持久, 仅适用于开发/测试 "
+                            "(用户库建表/迁移属 P1-03 范围)。",
+                            exc,
+                        )
+                        backend = self._backend
+                    self._probed = True
+        return backend
 
     # ------------------------------------------------------------------ 委托
 
     async def get_user_by_email(self, email: str, tenant_id: str = "default") -> UserRecord | None:
-        return await self._resolve_backend().get_user_by_email(email, tenant_id)
+        return await (await self._resolve_ready()).get_user_by_email(email, tenant_id)
 
     async def get_user_by_id(self, user_id: str) -> UserRecord | None:
-        return await self._resolve_backend().get_user_by_id(user_id)
+        return await (await self._resolve_ready()).get_user_by_id(user_id)
 
     async def create_user(self, *, email: str, tenant_id: str, full_name: str | None = None,
                           role: str = "user", metadata: dict[str, Any] | None = None,
                           password_hash: str | None = None) -> UserRecord:
-        return await self._resolve_backend().create_user(
+        return await (await self._resolve_ready()).create_user(
             email=email,
             tenant_id=tenant_id,
             full_name=full_name,
@@ -1143,21 +1173,21 @@ class UserStoreAdapter:
         )
 
     async def update_user(self, user_id: str, **fields: Any) -> UserRecord | None:
-        return await self._resolve_backend().update_user(user_id, **fields)
+        return await (await self._resolve_ready()).update_user(user_id, **fields)
 
     async def deactivate_user(self, user_id: str) -> bool:
-        return await self._resolve_backend().deactivate_user(user_id)
+        return await (await self._resolve_ready()).deactivate_user(user_id)
 
     async def activate_user(self, user_id: str) -> bool:
-        user = await self._resolve_backend().update_user(user_id, is_active=True)
+        user = await (await self._resolve_ready()).update_user(user_id, is_active=True)
         return user is not None
 
     async def list_users(self, tenant_id: str = "default", skip: int = 0,
                          limit: int = 100) -> list[UserRecord]:
-        return await self._resolve_backend().list_users(tenant_id, skip, limit)
+        return await (await self._resolve_ready()).list_users(tenant_id, skip, limit)
 
     async def count_users(self, tenant_id: str = "default") -> int:
-        return await self._resolve_backend().count_users(tenant_id)
+        return await (await self._resolve_ready()).count_users(tenant_id)
 
 
 # ============================================================================

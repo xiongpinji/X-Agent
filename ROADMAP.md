@@ -87,7 +87,7 @@ Build the most capable, secure, and user-friendly autonomous agent framework for
 ### 2027 Q1 — Phase 2「商用就绪」(安全合规与部署运维)
 
 #### Enterprise Security
-- [ ] 真 SSO (python3-saml/authlib) + SCIM 2.0 (P1-02)
+- [x] 真 SSO (python3-saml/authlib) + SCIM 2.0 (P1-02) — 2026-08-05 挂载收官：实现早已齐备（core/sso 包 OIDC/SAML 验签/session/WebAuthn/MFA、api/scim.py RFC 7643/7644 完整 CRUD+软停用+租户绑定令牌），G3 预算 300→330 评审通过后 oidc_router（/api/v1/sso 7 路由）与 SCIM（/scim/v2 11 路由）正式挂载（APIRoute 323≤330）；UserStoreAdapter 补可用性探测（表未建显式降级内存后端，用户库建表属 P1-03）；enterprise 370 用例全绿 + 3 个挂载回归测试；SCIM 无令牌 fail-closed 503 为设计行为
 - [ ] 用户/租户库迁移 Postgres (P1-03)
 - [ ] 审计留存/轮转/外送 SIEM; 合规报告路由挂载 (P1-04)
 - [ ] 依赖治理全量重扫 + SBOM (P1-05); TLS/CSP/docs 收紧 (P1-06)

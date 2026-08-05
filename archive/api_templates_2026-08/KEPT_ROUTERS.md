@@ -178,8 +178,9 @@ C1 结果：941 条路由（OpenAPI 819 路径，dup 0）。
 - /api/v1/forum/*（forum 域；模块文件保留未挂载，主 app 不可达）
 - /api/v1/plugin-market/、/api/v1/skill-market/（市场域）
 - /api/v1/marketplace-control/*（市场域控制面）
-- /api/v1/sso、/api/v1/sso/providers、/api/v1/sso/status（企业 SSO；
-  模块文件保留未挂载供 tests/enterprise 使用）
+- ~~/api/v1/sso、/api/v1/sso/providers、/api/v1/sso/status（企业 SSO）~~
+  **2026-08-05 已正式挂载**（P1-02，G3 预算 300→330 评审通过）；
+  同批挂载 /scim/v2（SCIM 2.0，11 路由）
 
 ## 五、归档的测试文件
 无。所有被 tests/ 引用的 api 模块均按第二节保留（挂载或不挂载），
@@ -190,3 +191,15 @@ C1 结果：941 条路由（OpenAPI 819 路径，dup 0）。
   （与 audit.py 的 operation id 冲突，纯命名修复，业务逻辑未动），
   duplicate operation id 警告 130 → 0。
 - `backend/app/api/__init__.py` 仅含 docstring，无 re-export，无需清理。
+
+
+---
+
+## 2026-08-05 补记：G3 预算 300 → 330
+
+P1-02（真 SSO + SCIM，B7 级企业要求）挂载评审：oidc_router（7 路由）+
+SCIM（11 路由）为合规必需，300 预算无法容纳。决策（用户批准）：
+**G3 预算正式调整为 330**（为 multi_agent 挂载 +4 等后续项预留余量）。
+挂载后实测 APIRoute 323（sso 7 + scim 11 + 其他 305）≤ 330。
+同批 P1-14 sessions(+10)、P1-11 skills_api(+11)、批次 C messages(+4)、
+批次 D discover(+1) 已在前期会话中挂载并计入当前总数。

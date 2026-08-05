@@ -833,11 +833,18 @@ def _register_all_routers() -> None:
         app.include_router(_module.router)
 
     # auth 基础补充：sso.py 的 auth_router 承载 /api/v1/auth 下的 MFA、会话管理、
-    # WebAuthn 等端点（前端登录/安全页面对齐）。oidc_router（/api/v1/sso，企业 SSO）
-    # 不挂载，sso.py 文件保留供 tests/enterprise 自构子 app 使用。
+    # WebAuthn 等端点（前端登录/安全页面对齐）。
+    # P1-02（2026-08-05，G3 预算 300→320 评审通过）：oidc_router（/api/v1/sso，
+    # 企业 OIDC/SAML SSO，7 路由）与 SCIM 2.0（/scim/v2，11 路由）正式挂载。
     from backend.app.api.sso import auth_router as sso_auth_router
+    from backend.app.api.sso import oidc_router as sso_oidc_router
 
     app.include_router(sso_auth_router)
+    app.include_router(sso_oidc_router)
+
+    from backend.app.api.scim import router as scim_router
+
+    app.include_router(scim_router)
 
     from backend.plugins.router import router as plugin_runtime_router
 
