@@ -75,7 +75,7 @@ structlog==24.1.0
 python-json-logger==2.0.7
 
 # Utilities
-click==8.1.7
+click>=8.4.2  # P1-05: PYSEC-2026-2132 fix; huggingface-hub 需要 >=8.4.2
 pytz==2024.1
 packaging==24.0
 semver==3.0.2

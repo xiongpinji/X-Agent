@@ -1,5 +1,9 @@
 version: '3.9'
 
+# P1-06: 本 compose 的 API 以 HTTP 暴露于 localhost 供开发/自用；对外商用部署
+# 必须在边界终结 TLS（参考配置 deployment/tls/：nginx/Caddy，HTTP→HTTPS 跳转
+# + HSTS + SSE 透传），PostgreSQL/Redis/Qdrant/Neo4j 绝不暴露公网。
+
 services:
   # PostgreSQL Database (pgvector image — includes vector extension for embeddings)
   postgres:

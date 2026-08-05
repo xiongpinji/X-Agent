@@ -6,8 +6,8 @@
 -r requirements.txt
 
 # Testing
-pytest==8.2.0
-pytest-asyncio==0.25.0   # PINNED: 0.23 has collection bug, 1.x changes async-fixture mechanics (2929 errors)
+pytest==9.0.3  # P1-05: PYSEC-2026-1845 fix
+pytest-asyncio>=0.26.0   # P1-05: pytest 9 兼容（1.x async-fixture 机制已验证：RC 门禁+定向套件绿）
 pytest-cov==4.0.0
 pytest-timeout==2.3.1    # provides the @pytest.mark.timeout marker used by several suites
 psutil>=6.0.0            # also in requirements.txt; required by performance/skill-sandbox tests

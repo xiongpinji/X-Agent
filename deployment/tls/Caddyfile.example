@@ -1,0 +1,26 @@
+# P1-06: Caddy TLS 终结参考配置（X-Agent）
+# Caddy 自动申请/续期 Let's Encrypt 证书，适合单节点快速部署。
+
+xagent.example.com {
+    # 反向代理到 API（compose 部署写 api:8000）
+    reverse_proxy 127.0.0.1:8000 {
+        header_up Host {host}
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+        # SSE 流式端点：flush 立即下推
+        flush_interval -1
+    }
+
+    # 安全响应头（应用层已有 CSP；此处只补传输层头）
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        -Server
+    }
+
+    # TLS 1.2+（Caddy 默认即为安全套件，显式声明以便审计）
+    tls {
+        protocols tls1.2 tls1.3
+    }
+}

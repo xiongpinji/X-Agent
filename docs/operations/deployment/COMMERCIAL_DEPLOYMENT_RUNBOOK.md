@@ -263,6 +263,8 @@ python scripts/rc_external_smoke.py --require-configured --github-execute-prefli
 For customer-facing web access, place TLS termination and authentication-aware
 routing in front of the API/frontend host. Do not expose PostgreSQL, Redis,
 Qdrant, or Neo4j directly to the public internet.
+Reference TLS termination configs (P1-06): `deployment/tls/` (nginx + Caddy,
+含 HTTP→HTTPS 跳转、TLS1.2+、HSTS、SSE 流式透传、X-Forwarded-* 传递)。
 
 ## 5. Kubernetes Or Helm Deployment
 

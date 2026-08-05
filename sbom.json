@@ -1,1269 +1,1144 @@
 {
-  "bomFormat": "CycloneDX",
-  "specVersion": "1.5",
-  "version": 1,
-  "metadata": {
-    "timestamp": "2026-07-25T06:37:40.324139+00:00",
-    "component": {
-      "type": "application",
-      "name": "x-agent-core",
-      "version": "0.3.0-alpha"
-    }
-  },
   "components": [
     {
-      "type": "library",
+      "bom-ref": "BomRef.8954270403060102.19303540452323786",
       "name": "aiohappyeyeballs",
-      "version": "2.7.1",
-      "purl": "pkg:pypi/aiohappyeyeballs@2.7.1"
+      "purl": "pkg:pypi/aiohappyeyeballs@2.7.1",
+      "type": "library",
+      "version": "2.7.1"
     },
     {
-      "type": "library",
+      "bom-ref": "BomRef.3892145789387297.24218585719182606",
       "name": "aiohttp",
-      "version": "3.14.1",
-      "purl": "pkg:pypi/aiohttp@3.14.1"
+      "purl": "pkg:pypi/aiohttp@3.14.3",
+      "type": "library",
+      "version": "3.14.3"
     },
     {
-      "type": "library",
+      "bom-ref": "BomRef.7592450868800489.6742838491639618",
       "name": "aiosignal",
-      "version": "1.4.0",
-      "purl": "pkg:pypi/aiosignal@1.4.0"
+      "purl": "pkg:pypi/aiosignal@1.4.0",
+      "type": "library",
+      "version": "1.4.0"
     },
     {
-      "type": "library",
-      "name": "aiosqlite",
-      "version": "0.22.1",
-      "purl": "pkg:pypi/aiosqlite@0.22.1"
-    },
-    {
-      "type": "library",
+      "bom-ref": "BomRef.31452374077913803.23049849088416163",
       "name": "alembic",
-      "version": "1.18.5",
-      "purl": "pkg:pypi/alembic@1.18.5"
+      "purl": "pkg:pypi/alembic@1.19.0",
+      "type": "library",
+      "version": "1.19.0"
     },
     {
-      "type": "library",
+      "bom-ref": "BomRef.8748996431129975.16339590251345693",
       "name": "amqp",
-      "version": "5.3.1",
-      "purl": "pkg:pypi/amqp@5.3.1"
+      "purl": "pkg:pypi/amqp@5.3.1",
+      "type": "library",
+      "version": "5.3.1"
     },
     {
-      "type": "library",
+      "bom-ref": "BomRef.15672818423965307.686536718270724",
       "name": "annotated-doc",
-      "version": "0.0.4",
-      "purl": "pkg:pypi/annotated-doc@0.0.4"
+      "purl": "pkg:pypi/annotated-doc@0.0.4",
+      "type": "library",
+      "version": "0.0.4"
     },
     {
-      "type": "library",
+      "bom-ref": "BomRef.260145403457819.7163832457555804",
       "name": "annotated-types",
-      "version": "0.7.0",
-      "purl": "pkg:pypi/annotated-types@0.7.0"
+      "purl": "pkg:pypi/annotated-types@0.7.0",
+      "type": "library",
+      "version": "0.7.0"
     },
     {
-      "type": "library",
-      "name": "anthropic",
-      "version": "0.117.0",
-      "purl": "pkg:pypi/anthropic@0.117.0"
-    },
-    {
-      "type": "library",
+      "bom-ref": "BomRef.012139160536634552.13046528285223458",
       "name": "anyio",
-      "version": "4.13.0",
-      "purl": "pkg:pypi/anyio@4.13.0"
+      "purl": "pkg:pypi/anyio@4.4.0",
+      "type": "library",
+      "version": "4.4.0"
     },
     {
-      "type": "library",
-      "name": "ast_serialize",
-      "version": "0.5.0",
-      "purl": "pkg:pypi/ast_serialize@0.5.0"
-    },
-    {
-      "type": "library",
-      "name": "astroid",
-      "version": "4.0.4",
-      "purl": "pkg:pypi/astroid@4.0.4"
-    },
-    {
-      "type": "library",
+      "bom-ref": "BomRef.5360551636476911.04464285220078734",
       "name": "asyncpg",
-      "version": "0.31.0",
-      "purl": "pkg:pypi/asyncpg@0.31.0"
+      "purl": "pkg:pypi/asyncpg@0.29.0",
+      "type": "library",
+      "version": "0.29.0"
     },
     {
-      "type": "library",
+      "bom-ref": "BomRef.8876029752429967.5567352461019738",
       "name": "attrs",
-      "version": "26.1.0",
-      "purl": "pkg:pypi/attrs@26.1.0"
+      "purl": "pkg:pypi/attrs@26.1.0",
+      "type": "library",
+      "version": "26.1.0"
     },
     {
-      "type": "library",
-      "name": "Authlib",
-      "version": "1.7.2",
-      "purl": "pkg:pypi/Authlib@1.7.2"
-    },
-    {
-      "type": "library",
+      "bom-ref": "BomRef.003447666676037464.7896818642056009",
       "name": "backoff",
-      "version": "2.2.1",
-      "purl": "pkg:pypi/backoff@2.2.1"
+      "purl": "pkg:pypi/backoff@2.2.1",
+      "type": "library",
+      "version": "2.2.1"
     },
     {
-      "type": "library",
-      "name": "bandit",
-      "version": "1.9.4",
-      "purl": "pkg:pypi/bandit@1.9.4"
-    },
-    {
-      "type": "library",
+      "bom-ref": "BomRef.7813339558750088.36177728759729133",
       "name": "bcrypt",
-      "version": "4.3.0",
-      "purl": "pkg:pypi/bcrypt@4.3.0"
+      "purl": "pkg:pypi/bcrypt@4.3.0",
+      "type": "library",
+      "version": "4.3.0"
     },
     {
-      "type": "library",
+      "bom-ref": "BomRef.6539146011989259.4655805251147639",
       "name": "billiard",
-      "version": "4.2.4",
-      "purl": "pkg:pypi/billiard@4.2.4"
+      "purl": "pkg:pypi/billiard@4.2.4",
+      "type": "library",
+      "version": "4.2.4"
     },
     {
-      "type": "library",
-      "name": "black",
-      "version": "26.5.1",
-      "purl": "pkg:pypi/black@26.5.1"
-    },
-    {
-      "type": "library",
-      "name": "blinker",
-      "version": "1.9.0",
-      "purl": "pkg:pypi/blinker@1.9.0"
-    },
-    {
-      "type": "library",
-      "name": "boolean.py",
-      "version": "5.0",
-      "purl": "pkg:pypi/boolean.py@5.0"
-    },
-    {
-      "type": "library",
-      "name": "brotli",
-      "version": "1.2.0",
-      "purl": "pkg:pypi/brotli@1.2.0"
-    },
-    {
-      "type": "library",
-      "name": "CacheControl",
-      "version": "0.14.4",
-      "purl": "pkg:pypi/CacheControl@0.14.4"
-    },
-    {
-      "type": "library",
+      "bom-ref": "BomRef.08669255599887571.29878303882948165",
       "name": "celery",
-      "version": "5.6.3",
-      "purl": "pkg:pypi/celery@5.6.3"
+      "purl": "pkg:pypi/celery@5.3.0",
+      "type": "library",
+      "version": "5.3.0"
     },
     {
-      "type": "library",
+      "bom-ref": "BomRef.6159846586227556.8442203625166587",
       "name": "certifi",
-      "version": "2026.5.20",
-      "purl": "pkg:pypi/certifi@2026.5.20"
+      "purl": "pkg:pypi/certifi@2024.7.4",
+      "type": "library",
+      "version": "2024.7.4"
     },
     {
-      "type": "library",
+      "bom-ref": "BomRef.6999343411592264.36933069420135733",
       "name": "cffi",
-      "version": "2.0.0",
-      "purl": "pkg:pypi/cffi@2.0.0"
+      "purl": "pkg:pypi/cffi@2.0.0",
+      "type": "library",
+      "version": "2.0.0"
     },
     {
-      "type": "library",
-      "name": "cfgv",
-      "version": "3.5.0",
-      "purl": "pkg:pypi/cfgv@3.5.0"
-    },
-    {
-      "type": "library",
+      "bom-ref": "BomRef.1014458398503656.8299443518340561",
       "name": "charset-normalizer",
-      "version": "3.4.7",
-      "purl": "pkg:pypi/charset-normalizer@3.4.7"
+      "purl": "pkg:pypi/charset-normalizer@3.3.2",
+      "type": "library",
+      "version": "3.3.2"
     },
     {
-      "type": "library",
+      "bom-ref": "BomRef.7963704569218034.265333698567503",
       "name": "click",
-      "version": "8.4.2",
-      "purl": "pkg:pypi/click@8.4.2"
+      "purl": "pkg:pypi/click@8.4.2",
+      "type": "library",
+      "version": "8.4.2"
     },
     {
-      "type": "library",
+      "bom-ref": "BomRef.9263559538029279.6783231731916618",
       "name": "click-didyoumean",
-      "version": "0.3.1",
-      "purl": "pkg:pypi/click-didyoumean@0.3.1"
+      "purl": "pkg:pypi/click-didyoumean@0.3.1",
+      "type": "library",
+      "version": "0.3.1"
     },
     {
-      "type": "library",
+      "bom-ref": "BomRef.7412254504724354.405569216405825",
       "name": "click-plugins",
-      "version": "1.1.1.2",
-      "purl": "pkg:pypi/click-plugins@1.1.1.2"
+      "purl": "pkg:pypi/click-plugins@1.1.1.2",
+      "type": "library",
+      "version": "1.1.1.2"
     },
     {
-      "type": "library",
+      "bom-ref": "BomRef.8988993298276833.17225769895446164",
       "name": "click-repl",
-      "version": "0.3.0",
-      "purl": "pkg:pypi/click-repl@0.3.0"
+      "purl": "pkg:pypi/click-repl@0.3.0",
+      "type": "library",
+      "version": "0.3.0"
     },
     {
-      "type": "library",
+      "bom-ref": "BomRef.8151293118119334.7431008863098155",
       "name": "colorama",
-      "version": "0.4.6",
-      "purl": "pkg:pypi/colorama@0.4.6"
+      "purl": "pkg:pypi/colorama@0.4.6",
+      "type": "library",
+      "version": "0.4.6"
     },
     {
-      "type": "library",
-      "name": "ConfigArgParse",
-      "version": "1.7.5",
-      "purl": "pkg:pypi/ConfigArgParse@1.7.5"
-    },
-    {
-      "type": "library",
-      "name": "coverage",
-      "version": "7.14.1",
-      "purl": "pkg:pypi/coverage@7.14.1"
-    },
-    {
-      "type": "library",
-      "name": "croniter",
-      "version": "6.2.4",
-      "purl": "pkg:pypi/croniter@6.2.4"
-    },
-    {
-      "type": "library",
+      "bom-ref": "BomRef.1719568160067717.24621985374363198",
       "name": "cryptography",
-      "version": "48.0.0",
-      "purl": "pkg:pypi/cryptography@48.0.0"
+      "purl": "pkg:pypi/cryptography@50.0.0",
+      "type": "library",
+      "version": "50.0.0"
     },
     {
-      "type": "library",
-      "name": "cyclonedx-python-lib",
-      "version": "11.8.0",
-      "purl": "pkg:pypi/cyclonedx-python-lib@11.8.0"
-    },
-    {
-      "type": "library",
-      "name": "defusedxml",
-      "version": "0.7.1",
-      "purl": "pkg:pypi/defusedxml@0.7.1"
-    },
-    {
-      "type": "library",
-      "name": "dill",
-      "version": "0.4.1",
-      "purl": "pkg:pypi/dill@0.4.1"
-    },
-    {
-      "type": "library",
-      "name": "distlib",
-      "version": "0.4.1",
-      "purl": "pkg:pypi/distlib@0.4.1"
-    },
-    {
-      "type": "library",
+      "bom-ref": "BomRef.4246885979128917.008310017846853257",
       "name": "distro",
-      "version": "1.9.0",
-      "purl": "pkg:pypi/distro@1.9.0"
+      "purl": "pkg:pypi/distro@1.9.0",
+      "type": "library",
+      "version": "1.9.0"
     },
     {
-      "type": "library",
-      "name": "docstring_parser",
-      "version": "0.18.0",
-      "purl": "pkg:pypi/docstring_parser@0.18.0"
-    },
-    {
-      "type": "library",
-      "name": "execnet",
-      "version": "2.1.2",
-      "purl": "pkg:pypi/execnet@2.1.2"
-    },
-    {
-      "type": "library",
-      "name": "fakeredis",
-      "version": "2.35.1",
-      "purl": "pkg:pypi/fakeredis@2.35.1"
-    },
-    {
-      "type": "library",
+      "bom-ref": "BomRef.15437953115321557.26232443095608915",
       "name": "fastapi",
-      "version": "0.136.3",
-      "purl": "pkg:pypi/fastapi@0.136.3"
+      "purl": "pkg:pypi/fastapi@0.136.3",
+      "type": "library",
+      "version": "0.136.3"
     },
     {
-      "type": "library",
+      "bom-ref": "BomRef.3436616549822834.38554939255745146",
       "name": "filelock",
-      "version": "3.29.1",
-      "purl": "pkg:pypi/filelock@3.29.1"
+      "purl": "pkg:pypi/filelock@3.32.2",
+      "type": "library",
+      "version": "3.32.2"
     },
     {
-      "type": "library",
-      "name": "flake8",
-      "version": "7.3.0",
-      "purl": "pkg:pypi/flake8@7.3.0"
-    },
-    {
-      "type": "library",
-      "name": "Flask",
-      "version": "3.1.3",
-      "purl": "pkg:pypi/Flask@3.1.3"
-    },
-    {
-      "type": "library",
-      "name": "Flask-BasicAuth",
-      "version": "0.2.0",
-      "purl": "pkg:pypi/Flask-BasicAuth@0.2.0"
-    },
-    {
-      "type": "library",
-      "name": "flask-cors",
-      "version": "6.0.5",
-      "purl": "pkg:pypi/flask-cors@6.0.5"
-    },
-    {
-      "type": "library",
+      "bom-ref": "BomRef.22893887856874595.06579020196894858",
       "name": "frozenlist",
-      "version": "1.8.0",
-      "purl": "pkg:pypi/frozenlist@1.8.0"
+      "purl": "pkg:pypi/frozenlist@1.8.0",
+      "type": "library",
+      "version": "1.8.0"
     },
     {
-      "type": "library",
+      "bom-ref": "BomRef.24894426108227552.25053519543300096",
       "name": "fsspec",
-      "version": "2026.6.0",
-      "purl": "pkg:pypi/fsspec@2026.6.0"
+      "purl": "pkg:pypi/fsspec@2026.7.0",
+      "type": "library",
+      "version": "2026.7.0"
     },
     {
-      "type": "library",
-      "name": "gevent",
-      "version": "26.7.0",
-      "purl": "pkg:pypi/gevent@26.7.0"
-    },
-    {
-      "type": "library",
-      "name": "geventhttpclient",
-      "version": "2.3.9",
-      "purl": "pkg:pypi/geventhttpclient@2.3.9"
-    },
-    {
-      "type": "library",
-      "name": "googleapis-common-protos",
-      "version": "1.75.0",
-      "purl": "pkg:pypi/googleapis-common-protos@1.75.0"
-    },
-    {
-      "type": "library",
+      "bom-ref": "BomRef.08813614356468058.7081011182932831",
       "name": "greenlet",
-      "version": "3.5.1",
-      "purl": "pkg:pypi/greenlet@3.5.1"
+      "purl": "pkg:pypi/greenlet@3.1.1",
+      "type": "library",
+      "version": "3.1.1"
     },
     {
-      "type": "library",
+      "bom-ref": "BomRef.19488829860092738.9444658118844771",
       "name": "grpcio",
-      "version": "1.81.0",
-      "purl": "pkg:pypi/grpcio@1.81.0"
+      "purl": "pkg:pypi/grpcio@1.76.0",
+      "type": "library",
+      "version": "1.76.0"
     },
     {
+      "bom-ref": "BomRef.9537432432291125.2289484631347507",
+      "name": "grpcio-tools",
+      "purl": "pkg:pypi/grpcio-tools@1.76.0",
       "type": "library",
+      "version": "1.76.0"
+    },
+    {
+      "bom-ref": "BomRef.6691678838950701.4864517547238083",
       "name": "h11",
-      "version": "0.16.0",
-      "purl": "pkg:pypi/h11@0.16.0"
+      "purl": "pkg:pypi/h11@0.16.0",
+      "type": "library",
+      "version": "0.16.0"
     },
     {
-      "type": "library",
+      "bom-ref": "BomRef.6392865141645251.7376557936818362",
       "name": "h2",
-      "version": "4.3.0",
-      "purl": "pkg:pypi/h2@4.3.0"
+      "purl": "pkg:pypi/h2@4.3.0",
+      "type": "library",
+      "version": "4.3.0"
     },
     {
-      "type": "library",
+      "bom-ref": "BomRef.3675978731457965.12323796281890564",
       "name": "hf-xet",
-      "version": "1.5.2",
-      "purl": "pkg:pypi/hf-xet@1.5.2"
+      "purl": "pkg:pypi/hf-xet@1.6.0",
+      "type": "library",
+      "version": "1.6.0"
     },
     {
-      "type": "library",
+      "bom-ref": "BomRef.061886275552351044.5800934668051485",
       "name": "hpack",
-      "version": "4.1.0",
-      "purl": "pkg:pypi/hpack@4.1.0"
+      "purl": "pkg:pypi/hpack@4.1.0",
+      "type": "library",
+      "version": "4.1.0"
     },
     {
-      "type": "library",
+      "bom-ref": "BomRef.30852847947259054.03085029883406487",
       "name": "httpcore",
-      "version": "1.0.9",
-      "purl": "pkg:pypi/httpcore@1.0.9"
+      "purl": "pkg:pypi/httpcore@1.0.9",
+      "type": "library",
+      "version": "1.0.9"
     },
     {
-      "type": "library",
+      "bom-ref": "BomRef.6017970561108218.8072979659390909",
       "name": "httptools",
-      "version": "0.8.0",
-      "purl": "pkg:pypi/httptools@0.8.0"
+      "purl": "pkg:pypi/httptools@0.8.0",
+      "type": "library",
+      "version": "0.8.0"
     },
     {
-      "type": "library",
+      "bom-ref": "BomRef.993302894751869.053135895272752864",
       "name": "httpx",
-      "version": "0.28.1",
-      "purl": "pkg:pypi/httpx@0.28.1"
+      "purl": "pkg:pypi/httpx@0.27.0",
+      "type": "library",
+      "version": "0.27.0"
     },
     {
+      "bom-ref": "BomRef.812268468332119.8972396054252305",
+      "name": "huggingface-hub",
+      "purl": "pkg:pypi/huggingface-hub@1.26.0",
       "type": "library",
-      "name": "httpx-sse",
-      "version": "0.4.3",
-      "purl": "pkg:pypi/httpx-sse@0.4.3"
+      "version": "1.26.0"
     },
     {
-      "type": "library",
-      "name": "huggingface_hub",
-      "version": "1.24.0",
-      "purl": "pkg:pypi/huggingface_hub@1.24.0"
-    },
-    {
-      "type": "library",
+      "bom-ref": "BomRef.41177400752281423.48558018888204924",
       "name": "hyperframe",
-      "version": "6.1.0",
-      "purl": "pkg:pypi/hyperframe@6.1.0"
+      "purl": "pkg:pypi/hyperframe@6.1.0",
+      "type": "library",
+      "version": "6.1.0"
     },
     {
-      "type": "library",
-      "name": "identify",
-      "version": "2.6.19",
-      "purl": "pkg:pypi/identify@2.6.19"
-    },
-    {
-      "type": "library",
+      "bom-ref": "BomRef.5458886498511258.10939927963014129",
       "name": "idna",
-      "version": "3.18",
-      "purl": "pkg:pypi/idna@3.18"
+      "purl": "pkg:pypi/idna@3.15",
+      "type": "library",
+      "version": "3.15"
     },
     {
+      "bom-ref": "BomRef.3880812644142839.3737027256932782",
+      "name": "jinja2",
+      "purl": "pkg:pypi/jinja2@3.1.6",
       "type": "library",
-      "name": "iniconfig",
-      "version": "2.3.0",
-      "purl": "pkg:pypi/iniconfig@2.3.0"
+      "version": "3.1.6"
     },
     {
-      "type": "library",
-      "name": "isort",
-      "version": "8.0.1",
-      "purl": "pkg:pypi/isort@8.0.1"
-    },
-    {
-      "type": "library",
-      "name": "itsdangerous",
-      "version": "2.2.0",
-      "purl": "pkg:pypi/itsdangerous@2.2.0"
-    },
-    {
-      "type": "library",
-      "name": "Jinja2",
-      "version": "3.1.6",
-      "purl": "pkg:pypi/Jinja2@3.1.6"
-    },
-    {
-      "type": "library",
+      "bom-ref": "BomRef.8291768030991189.9052497952248747",
       "name": "jiter",
-      "version": "0.15.0",
-      "purl": "pkg:pypi/jiter@0.15.0"
+      "purl": "pkg:pypi/jiter@0.15.0",
+      "type": "library",
+      "version": "0.15.0"
     },
     {
-      "type": "library",
+      "bom-ref": "BomRef.4101028496621165.6398907847149026",
       "name": "joblib",
-      "version": "1.5.3",
-      "purl": "pkg:pypi/joblib@1.5.3"
+      "purl": "pkg:pypi/joblib@1.5.3",
+      "type": "library",
+      "version": "1.5.3"
     },
     {
-      "type": "library",
-      "name": "joserfc",
-      "version": "1.7.4",
-      "purl": "pkg:pypi/joserfc@1.7.4"
-    },
-    {
-      "type": "library",
-      "name": "jsonschema",
-      "version": "4.26.0",
-      "purl": "pkg:pypi/jsonschema@4.26.0"
-    },
-    {
-      "type": "library",
-      "name": "jsonschema-specifications",
-      "version": "2025.9.1",
-      "purl": "pkg:pypi/jsonschema-specifications@2025.9.1"
-    },
-    {
-      "type": "library",
+      "bom-ref": "BomRef.727736194181502.34915464714946",
       "name": "kombu",
-      "version": "5.6.2",
-      "purl": "pkg:pypi/kombu@5.6.2"
+      "purl": "pkg:pypi/kombu@5.3.4",
+      "type": "library",
+      "version": "5.3.4"
     },
     {
-      "type": "library",
+      "bom-ref": "BomRef.3971059863973653.5777053635235784",
       "name": "langfuse",
-      "version": "4.7.1",
-      "purl": "pkg:pypi/langfuse@4.7.1"
+      "purl": "pkg:pypi/langfuse@2.60.0",
+      "type": "library",
+      "version": "2.60.0"
     },
     {
+      "bom-ref": "BomRef.6822068461047618.6418763275819069",
+      "name": "ldap3",
+      "purl": "pkg:pypi/ldap3@2.9.1",
       "type": "library",
-      "name": "librt",
-      "version": "0.11.0",
-      "purl": "pkg:pypi/librt@0.11.0"
+      "version": "2.9.1"
     },
     {
+      "bom-ref": "BomRef.749838334452855.46577875646354205",
+      "name": "mako",
+      "purl": "pkg:pypi/mako@1.4.1",
       "type": "library",
-      "name": "license-expression",
-      "version": "30.4.4",
-      "purl": "pkg:pypi/license-expression@30.4.4"
+      "version": "1.4.1"
     },
     {
-      "type": "library",
-      "name": "locust",
-      "version": "2.20.0",
-      "purl": "pkg:pypi/locust@2.20.0"
-    },
-    {
-      "type": "library",
-      "name": "lupa",
-      "version": "2.8",
-      "purl": "pkg:pypi/lupa@2.8"
-    },
-    {
-      "type": "library",
-      "name": "Mako",
-      "version": "1.3.12",
-      "purl": "pkg:pypi/Mako@1.3.12"
-    },
-    {
-      "type": "library",
+      "bom-ref": "BomRef.5266297672455539.5140254106283922",
       "name": "markdown-it-py",
-      "version": "4.2.0",
-      "purl": "pkg:pypi/markdown-it-py@4.2.0"
+      "purl": "pkg:pypi/markdown-it-py@4.2.0",
+      "type": "library",
+      "version": "4.2.0"
     },
     {
+      "bom-ref": "BomRef.07427645008648365.9190137599897511",
+      "name": "markupsafe",
+      "purl": "pkg:pypi/markupsafe@3.0.3",
       "type": "library",
-      "name": "MarkupSafe",
-      "version": "3.0.3",
-      "purl": "pkg:pypi/MarkupSafe@3.0.3"
+      "version": "3.0.3"
     },
     {
-      "type": "library",
-      "name": "mccabe",
-      "version": "0.7.0",
-      "purl": "pkg:pypi/mccabe@0.7.0"
-    },
-    {
-      "type": "library",
-      "name": "mcp",
-      "version": "1.28.1",
-      "purl": "pkg:pypi/mcp@1.28.1"
-    },
-    {
-      "type": "library",
+      "bom-ref": "BomRef.13179202274697877.6863373353249056",
       "name": "mdurl",
-      "version": "0.1.2",
-      "purl": "pkg:pypi/mdurl@0.1.2"
+      "purl": "pkg:pypi/mdurl@0.1.2",
+      "type": "library",
+      "version": "0.1.2"
     },
     {
-      "type": "library",
+      "bom-ref": "BomRef.4922990324053357.15270880926823271",
       "name": "mpmath",
-      "version": "1.3.0",
-      "purl": "pkg:pypi/mpmath@1.3.0"
+      "purl": "pkg:pypi/mpmath@1.3.0",
+      "type": "library",
+      "version": "1.3.0"
     },
     {
-      "type": "library",
-      "name": "msgpack",
-      "version": "1.1.2",
-      "purl": "pkg:pypi/msgpack@1.1.2"
-    },
-    {
-      "type": "library",
+      "bom-ref": "BomRef.4388439790775446.871799145982103",
       "name": "multidict",
-      "version": "6.7.1",
-      "purl": "pkg:pypi/multidict@6.7.1"
+      "purl": "pkg:pypi/multidict@6.7.1",
+      "type": "library",
+      "version": "6.7.1"
     },
     {
-      "type": "library",
-      "name": "mypy",
-      "version": "2.1.0",
-      "purl": "pkg:pypi/mypy@2.1.0"
-    },
-    {
-      "type": "library",
-      "name": "mypy_extensions",
-      "version": "1.1.0",
-      "purl": "pkg:pypi/mypy_extensions@1.1.0"
-    },
-    {
-      "type": "library",
+      "bom-ref": "BomRef.3710869360648046.26970937220224755",
       "name": "narwhals",
-      "version": "2.22.1",
-      "purl": "pkg:pypi/narwhals@2.22.1"
+      "purl": "pkg:pypi/narwhals@2.22.1",
+      "type": "library",
+      "version": "2.22.1"
     },
     {
-      "type": "library",
+      "bom-ref": "BomRef.23437352595840621.012772880378511542",
       "name": "neo4j",
-      "version": "6.2.0",
-      "purl": "pkg:pypi/neo4j@6.2.0"
+      "purl": "pkg:pypi/neo4j@5.28.1",
+      "type": "library",
+      "version": "5.28.1"
     },
     {
-      "type": "library",
-      "name": "nest-asyncio",
-      "version": "1.6.0",
-      "purl": "pkg:pypi/nest-asyncio@1.6.0"
-    },
-    {
-      "type": "library",
+      "bom-ref": "BomRef.28798503354049687.0944926837614446",
       "name": "networkx",
-      "version": "3.6.1",
-      "purl": "pkg:pypi/networkx@3.6.1"
+      "purl": "pkg:pypi/networkx@3.6.1",
+      "type": "library",
+      "version": "3.6.1"
     },
     {
-      "type": "library",
-      "name": "nodeenv",
-      "version": "1.10.0",
-      "purl": "pkg:pypi/nodeenv@1.10.0"
-    },
-    {
-      "type": "library",
+      "bom-ref": "BomRef.5046293693543968.1786573233869505",
       "name": "numpy",
-      "version": "2.4.6",
-      "purl": "pkg:pypi/numpy@2.4.6"
+      "purl": "pkg:pypi/numpy@2.4.6",
+      "type": "library",
+      "version": "2.4.6"
     },
     {
-      "type": "library",
+      "bom-ref": "BomRef.8621581657284318.9379712773326608",
       "name": "openai",
-      "version": "2.41.0",
-      "purl": "pkg:pypi/openai@2.41.0"
+      "purl": "pkg:pypi/openai@1.100.0",
+      "type": "library",
+      "version": "1.100.0"
     },
     {
-      "type": "library",
-      "name": "opentelemetry-api",
-      "version": "1.42.1",
-      "purl": "pkg:pypi/opentelemetry-api@1.42.1"
-    },
-    {
-      "type": "library",
-      "name": "opentelemetry-exporter-otlp-proto-common",
-      "version": "1.42.1",
-      "purl": "pkg:pypi/opentelemetry-exporter-otlp-proto-common@1.42.1"
-    },
-    {
-      "type": "library",
-      "name": "opentelemetry-exporter-otlp-proto-http",
-      "version": "1.42.1",
-      "purl": "pkg:pypi/opentelemetry-exporter-otlp-proto-http@1.42.1"
-    },
-    {
-      "type": "library",
-      "name": "opentelemetry-proto",
-      "version": "1.42.1",
-      "purl": "pkg:pypi/opentelemetry-proto@1.42.1"
-    },
-    {
-      "type": "library",
-      "name": "opentelemetry-sdk",
-      "version": "1.42.1",
-      "purl": "pkg:pypi/opentelemetry-sdk@1.42.1"
-    },
-    {
-      "type": "library",
-      "name": "opentelemetry-semantic-conventions",
-      "version": "0.63b1",
-      "purl": "pkg:pypi/opentelemetry-semantic-conventions@0.63b1"
-    },
-    {
-      "type": "library",
-      "name": "orjson",
-      "version": "3.11.9",
-      "purl": "pkg:pypi/orjson@3.11.9"
-    },
-    {
-      "type": "library",
-      "name": "packageurl-python",
-      "version": "0.17.6",
-      "purl": "pkg:pypi/packageurl-python@0.17.6"
-    },
-    {
-      "type": "library",
+      "bom-ref": "BomRef.1713881526333959.1011283335804739",
       "name": "packaging",
-      "version": "26.2",
-      "purl": "pkg:pypi/packaging@26.2"
+      "purl": "pkg:pypi/packaging@24.0",
+      "type": "library",
+      "version": "24.0"
     },
     {
-      "type": "library",
-      "name": "pathspec",
-      "version": "1.1.1",
-      "purl": "pkg:pypi/pathspec@1.1.1"
-    },
-    {
-      "type": "library",
-      "name": "pillow",
-      "version": "12.3.0",
-      "purl": "pkg:pypi/pillow@12.3.0"
-    },
-    {
-      "type": "library",
-      "name": "pip",
-      "version": "26.1.2",
-      "purl": "pkg:pypi/pip@26.1.2"
-    },
-    {
-      "type": "library",
-      "name": "pip-api",
-      "version": "0.0.34",
-      "purl": "pkg:pypi/pip-api@0.0.34"
-    },
-    {
-      "type": "library",
-      "name": "pip-requirements-parser",
-      "version": "32.0.1",
-      "purl": "pkg:pypi/pip-requirements-parser@32.0.1"
-    },
-    {
-      "type": "library",
-      "name": "pip_audit",
-      "version": "2.10.0",
-      "purl": "pkg:pypi/pip_audit@2.10.0"
-    },
-    {
-      "type": "library",
-      "name": "platformdirs",
-      "version": "4.10.0",
-      "purl": "pkg:pypi/platformdirs@4.10.0"
-    },
-    {
-      "type": "library",
+      "bom-ref": "BomRef.5398552608760554.10139230722762582",
       "name": "playwright",
-      "version": "1.60.0",
-      "purl": "pkg:pypi/playwright@1.60.0"
+      "purl": "pkg:pypi/playwright@1.48.0",
+      "type": "library",
+      "version": "1.48.0"
     },
     {
-      "type": "library",
-      "name": "pluggy",
-      "version": "1.6.0",
-      "purl": "pkg:pypi/pluggy@1.6.0"
-    },
-    {
-      "type": "library",
+      "bom-ref": "BomRef.4960133031321752.7209470756806484",
       "name": "portalocker",
-      "version": "3.2.0",
-      "purl": "pkg:pypi/portalocker@3.2.0"
+      "purl": "pkg:pypi/portalocker@2.10.1",
+      "type": "library",
+      "version": "2.10.1"
     },
     {
+      "bom-ref": "BomRef.813765920927081.34141001107736213",
+      "name": "prometheus-client",
+      "purl": "pkg:pypi/prometheus-client@0.25.0",
       "type": "library",
-      "name": "pre_commit",
-      "version": "4.6.0",
-      "purl": "pkg:pypi/pre_commit@4.6.0"
+      "version": "0.25.0"
     },
     {
+      "bom-ref": "BomRef.4399233810230372.5226713378602856",
+      "name": "prompt-toolkit",
+      "purl": "pkg:pypi/prompt-toolkit@3.0.52",
       "type": "library",
-      "name": "prometheus_client",
-      "version": "0.20.0",
-      "purl": "pkg:pypi/prometheus_client@0.20.0"
+      "version": "3.0.52"
     },
     {
-      "type": "library",
-      "name": "prompt_toolkit",
-      "version": "3.0.52",
-      "purl": "pkg:pypi/prompt_toolkit@3.0.52"
-    },
-    {
-      "type": "library",
+      "bom-ref": "BomRef.052877532305822594.27417439165314705",
       "name": "propcache",
-      "version": "0.5.2",
-      "purl": "pkg:pypi/propcache@0.5.2"
+      "purl": "pkg:pypi/propcache@0.5.2",
+      "type": "library",
+      "version": "0.5.2"
     },
     {
-      "type": "library",
+      "bom-ref": "BomRef.5790394958975694.22961163616693903",
       "name": "protobuf",
-      "version": "6.33.6",
-      "purl": "pkg:pypi/protobuf@6.33.6"
+      "purl": "pkg:pypi/protobuf@6.33.6",
+      "type": "library",
+      "version": "6.33.6"
     },
     {
-      "type": "library",
-      "name": "psutil",
-      "version": "7.2.2",
-      "purl": "pkg:pypi/psutil@7.2.2"
-    },
-    {
-      "type": "library",
+      "bom-ref": "BomRef.5422555718246229.5272589846091136",
       "name": "psycopg",
-      "version": "3.3.4",
-      "purl": "pkg:pypi/psycopg@3.3.4"
+      "purl": "pkg:pypi/psycopg@3.3.4",
+      "type": "library",
+      "version": "3.3.4"
     },
     {
-      "type": "library",
+      "bom-ref": "BomRef.9348241501668896.9635132468114571",
       "name": "psycopg-binary",
-      "version": "3.3.4",
-      "purl": "pkg:pypi/psycopg-binary@3.3.4"
+      "purl": "pkg:pypi/psycopg-binary@3.3.4",
+      "type": "library",
+      "version": "3.3.4"
     },
     {
+      "bom-ref": "BomRef.10782174373683939.6824944725809651",
+      "name": "pyasn1",
+      "purl": "pkg:pypi/pyasn1@0.6.4",
       "type": "library",
-      "name": "py-serializable",
-      "version": "2.1.0",
-      "purl": "pkg:pypi/py-serializable@2.1.0"
+      "version": "0.6.4"
     },
     {
-      "type": "library",
-      "name": "pycodestyle",
-      "version": "2.14.0",
-      "purl": "pkg:pypi/pycodestyle@2.14.0"
-    },
-    {
-      "type": "library",
+      "bom-ref": "BomRef.5655796010132289.37567783824688883",
       "name": "pycparser",
-      "version": "3.0",
-      "purl": "pkg:pypi/pycparser@3.0"
+      "purl": "pkg:pypi/pycparser@3.0",
+      "type": "library",
+      "version": "3.0"
     },
     {
-      "type": "library",
+      "bom-ref": "BomRef.198181732708409.9049577233035898",
       "name": "pydantic",
-      "version": "2.13.4",
-      "purl": "pkg:pypi/pydantic@2.13.4"
+      "purl": "pkg:pypi/pydantic@2.13.4",
+      "type": "library",
+      "version": "2.13.4"
     },
     {
+      "bom-ref": "BomRef.3894725440593041.015731553626509354",
+      "name": "pydantic-core",
+      "purl": "pkg:pypi/pydantic-core@2.46.4",
       "type": "library",
+      "version": "2.46.4"
+    },
+    {
+      "bom-ref": "BomRef.47612110773885064.43073321699457345",
       "name": "pydantic-settings",
-      "version": "2.14.1",
-      "purl": "pkg:pypi/pydantic-settings@2.14.1"
+      "purl": "pkg:pypi/pydantic-settings@2.14.2",
+      "type": "library",
+      "version": "2.14.2"
     },
     {
-      "type": "library",
-      "name": "pydantic_core",
-      "version": "2.46.4",
-      "purl": "pkg:pypi/pydantic_core@2.46.4"
-    },
-    {
-      "type": "library",
+      "bom-ref": "BomRef.9082167454265755.7586889614214821",
       "name": "pyee",
-      "version": "13.0.1",
-      "purl": "pkg:pypi/pyee@13.0.1"
+      "purl": "pkg:pypi/pyee@12.0.0",
+      "type": "library",
+      "version": "12.0.0"
     },
     {
+      "bom-ref": "BomRef.6874851923332395.4581630278436982",
+      "name": "pygments",
+      "purl": "pkg:pypi/pygments@2.20.0",
       "type": "library",
-      "name": "pyflakes",
-      "version": "3.4.0",
-      "purl": "pkg:pypi/pyflakes@3.4.0"
+      "version": "2.20.0"
     },
     {
-      "type": "library",
-      "name": "Pygments",
-      "version": "2.20.0",
-      "purl": "pkg:pypi/Pygments@2.20.0"
-    },
-    {
-      "type": "library",
-      "name": "PyJWT",
-      "version": "2.13.0",
-      "purl": "pkg:pypi/PyJWT@2.13.0"
-    },
-    {
-      "type": "library",
-      "name": "pylint",
-      "version": "4.0.5",
-      "purl": "pkg:pypi/pylint@4.0.5"
-    },
-    {
-      "type": "library",
-      "name": "pyparsing",
-      "version": "3.3.2",
-      "purl": "pkg:pypi/pyparsing@3.3.2"
-    },
-    {
-      "type": "library",
-      "name": "pytest",
-      "version": "8.4.2",
-      "purl": "pkg:pypi/pytest@8.4.2"
-    },
-    {
-      "type": "library",
-      "name": "pytest-asyncio",
-      "version": "0.25.3",
-      "purl": "pkg:pypi/pytest-asyncio@0.25.3"
-    },
-    {
-      "type": "library",
-      "name": "pytest-cov",
-      "version": "7.1.0",
-      "purl": "pkg:pypi/pytest-cov@7.1.0"
-    },
-    {
-      "type": "library",
-      "name": "pytest-timeout",
-      "version": "2.3.1",
-      "purl": "pkg:pypi/pytest-timeout@2.3.1"
-    },
-    {
-      "type": "library",
-      "name": "pytest-xdist",
-      "version": "3.8.0",
-      "purl": "pkg:pypi/pytest-xdist@3.8.0"
-    },
-    {
-      "type": "library",
+      "bom-ref": "BomRef.2559647802230034.5190484334142401",
       "name": "python-dateutil",
-      "version": "2.9.0.post0",
-      "purl": "pkg:pypi/python-dateutil@2.9.0.post0"
+      "purl": "pkg:pypi/python-dateutil@2.9.0.post0",
+      "type": "library",
+      "version": "2.9.0.post0"
     },
     {
-      "type": "library",
-      "name": "python-discovery",
-      "version": "1.4.0",
-      "purl": "pkg:pypi/python-discovery@1.4.0"
-    },
-    {
-      "type": "library",
+      "bom-ref": "BomRef.11446080083694266.1998010612647112",
       "name": "python-dotenv",
-      "version": "1.2.2",
-      "purl": "pkg:pypi/python-dotenv@1.2.2"
+      "purl": "pkg:pypi/python-dotenv@1.2.2",
+      "type": "library",
+      "version": "1.2.2"
     },
     {
-      "type": "library",
+      "bom-ref": "BomRef.4039452303023844.11351941245591646",
       "name": "python-multipart",
-      "version": "0.0.32",
-      "purl": "pkg:pypi/python-multipart@0.0.32"
+      "purl": "pkg:pypi/python-multipart@0.0.32",
+      "type": "library",
+      "version": "0.0.32"
     },
     {
-      "type": "library",
-      "name": "pytokens",
-      "version": "0.4.1",
-      "purl": "pkg:pypi/pytokens@0.4.1"
-    },
-    {
-      "type": "library",
+      "bom-ref": "BomRef.3774531478065809.0833793423691287",
       "name": "pytz",
-      "version": "2024.1",
-      "purl": "pkg:pypi/pytz@2024.1"
+      "purl": "pkg:pypi/pytz@2026.3.post1",
+      "type": "library",
+      "version": "2026.3.post1"
     },
     {
-      "type": "library",
+      "bom-ref": "BomRef.019386367751569655.5752841313115558",
       "name": "pywin32",
-      "version": "312",
-      "purl": "pkg:pypi/pywin32@312"
+      "purl": "pkg:pypi/pywin32@312",
+      "type": "library",
+      "version": "312"
     },
     {
+      "bom-ref": "BomRef.4866843704372682.65404998043364",
+      "name": "pyyaml",
+      "purl": "pkg:pypi/pyyaml@6.0.3",
       "type": "library",
-      "name": "PyYAML",
-      "version": "6.0.3",
-      "purl": "pkg:pypi/PyYAML@6.0.3"
+      "version": "6.0.3"
     },
     {
-      "type": "library",
-      "name": "pyzmq",
-      "version": "27.1.0",
-      "purl": "pkg:pypi/pyzmq@27.1.0"
-    },
-    {
-      "type": "library",
+      "bom-ref": "BomRef.7954729719465788.7975003662398822",
       "name": "qdrant-client",
-      "version": "1.18.0",
-      "purl": "pkg:pypi/qdrant-client@1.18.0"
+      "purl": "pkg:pypi/qdrant-client@1.11.0",
+      "type": "library",
+      "version": "1.11.0"
     },
     {
-      "type": "library",
+      "bom-ref": "BomRef.9018910498304816.7134553195653176",
       "name": "redis",
-      "version": "8.0.0",
-      "purl": "pkg:pypi/redis@8.0.0"
+      "purl": "pkg:pypi/redis@5.0.0",
+      "type": "library",
+      "version": "5.0.0"
     },
     {
-      "type": "library",
-      "name": "referencing",
-      "version": "0.37.0",
-      "purl": "pkg:pypi/referencing@0.37.0"
-    },
-    {
-      "type": "library",
+      "bom-ref": "BomRef.3525426580641813.04097826563397278",
       "name": "regex",
-      "version": "2026.7.19",
-      "purl": "pkg:pypi/regex@2026.7.19"
+      "purl": "pkg:pypi/regex@2026.7.19",
+      "type": "library",
+      "version": "2026.7.19"
     },
     {
-      "type": "library",
-      "name": "reportlab",
-      "version": "5.0.0",
-      "purl": "pkg:pypi/reportlab@5.0.0"
-    },
-    {
-      "type": "library",
+      "bom-ref": "BomRef.12802132806689515.4217116528421324",
       "name": "requests",
-      "version": "2.34.2",
-      "purl": "pkg:pypi/requests@2.34.2"
+      "purl": "pkg:pypi/requests@2.33.0",
+      "type": "library",
+      "version": "2.33.0"
     },
     {
-      "type": "library",
+      "bom-ref": "BomRef.8771045947146219.25408728165963446",
       "name": "rich",
-      "version": "15.0.0",
-      "purl": "pkg:pypi/rich@15.0.0"
+      "purl": "pkg:pypi/rich@15.0.0",
+      "type": "library",
+      "version": "15.0.0"
     },
     {
-      "type": "library",
-      "name": "roundrobin",
-      "version": "0.1.0",
-      "purl": "pkg:pypi/roundrobin@0.1.0"
-    },
-    {
-      "type": "library",
-      "name": "rpds-py",
-      "version": "2026.6.3",
-      "purl": "pkg:pypi/rpds-py@2026.6.3"
-    },
-    {
-      "type": "library",
-      "name": "ruff",
-      "version": "0.15.16",
-      "purl": "pkg:pypi/ruff@0.15.16"
-    },
-    {
-      "type": "library",
+      "bom-ref": "BomRef.9181938015007177.8507941870012465",
       "name": "safetensors",
-      "version": "0.8.0",
-      "purl": "pkg:pypi/safetensors@0.8.0"
+      "purl": "pkg:pypi/safetensors@0.8.0",
+      "type": "library",
+      "version": "0.8.0"
     },
     {
-      "type": "library",
+      "bom-ref": "BomRef.8751101671776341.6173312693823049",
       "name": "scikit-learn",
-      "version": "1.9.0",
-      "purl": "pkg:pypi/scikit-learn@1.9.0"
+      "purl": "pkg:pypi/scikit-learn@1.9.0",
+      "type": "library",
+      "version": "1.9.0"
     },
     {
-      "type": "library",
+      "bom-ref": "BomRef.4731088385285789.9347971674649167",
       "name": "scipy",
-      "version": "1.17.1",
-      "purl": "pkg:pypi/scipy@1.17.1"
+      "purl": "pkg:pypi/scipy@1.17.1",
+      "type": "library",
+      "version": "1.17.1"
     },
     {
-      "type": "library",
-      "name": "semver",
-      "version": "3.0.2",
-      "purl": "pkg:pypi/semver@3.0.2"
-    },
-    {
-      "type": "library",
+      "bom-ref": "BomRef.3478294190149984.19714943772015958",
       "name": "sentence-transformers",
-      "version": "5.6.0",
-      "purl": "pkg:pypi/sentence-transformers@5.6.0"
+      "purl": "pkg:pypi/sentence-transformers@5.6.1",
+      "type": "library",
+      "version": "5.6.1"
     },
     {
-      "type": "library",
+      "bom-ref": "BomRef.2605296741828619.31680251053808006",
       "name": "setuptools",
-      "version": "83.0.0",
-      "purl": "pkg:pypi/setuptools@83.0.0"
+      "purl": "pkg:pypi/setuptools@83.0.0",
+      "type": "library",
+      "version": "83.0.0"
     },
     {
-      "type": "library",
+      "bom-ref": "BomRef.9143983657365261.15280599582342946",
       "name": "shellingham",
-      "version": "1.5.4",
-      "purl": "pkg:pypi/shellingham@1.5.4"
+      "purl": "pkg:pypi/shellingham@1.5.4",
+      "type": "library",
+      "version": "1.5.4"
     },
     {
-      "type": "library",
+      "bom-ref": "BomRef.1900061830298706.06581511092602765",
       "name": "six",
-      "version": "1.17.0",
-      "purl": "pkg:pypi/six@1.17.0"
+      "purl": "pkg:pypi/six@1.17.0",
+      "type": "library",
+      "version": "1.17.0"
     },
     {
-      "type": "library",
+      "bom-ref": "BomRef.21660467515230897.23444339562759686",
       "name": "sniffio",
-      "version": "1.3.1",
-      "purl": "pkg:pypi/sniffio@1.3.1"
+      "purl": "pkg:pypi/sniffio@1.3.1",
+      "type": "library",
+      "version": "1.3.1"
     },
     {
+      "bom-ref": "BomRef.8534174055691782.6295915606269681",
+      "name": "sqlalchemy",
+      "purl": "pkg:pypi/sqlalchemy@2.0.50",
       "type": "library",
-      "name": "sortedcontainers",
-      "version": "2.4.0",
-      "purl": "pkg:pypi/sortedcontainers@2.4.0"
+      "version": "2.0.50"
     },
     {
-      "type": "library",
-      "name": "SQLAlchemy",
-      "version": "2.0.50",
-      "purl": "pkg:pypi/SQLAlchemy@2.0.50"
-    },
-    {
-      "type": "library",
-      "name": "sse-starlette",
-      "version": "3.4.5",
-      "purl": "pkg:pypi/sse-starlette@3.4.5"
-    },
-    {
-      "type": "library",
+      "bom-ref": "BomRef.1951959505418588.8692083219661486",
       "name": "starlette",
-      "version": "1.2.1",
-      "purl": "pkg:pypi/starlette@1.2.1"
+      "purl": "pkg:pypi/starlette@1.3.1",
+      "type": "library",
+      "version": "1.3.1"
     },
     {
-      "type": "library",
-      "name": "stevedore",
-      "version": "5.8.0",
-      "purl": "pkg:pypi/stevedore@5.8.0"
-    },
-    {
-      "type": "library",
+      "bom-ref": "BomRef.30494059766446036.46344900311308557",
       "name": "sympy",
-      "version": "1.14.0",
-      "purl": "pkg:pypi/sympy@1.14.0"
+      "purl": "pkg:pypi/sympy@1.14.0",
+      "type": "library",
+      "version": "1.14.0"
     },
     {
-      "type": "library",
+      "bom-ref": "BomRef.08082346324625811.14392639237468896",
       "name": "threadpoolctl",
-      "version": "3.6.0",
-      "purl": "pkg:pypi/threadpoolctl@3.6.0"
+      "purl": "pkg:pypi/threadpoolctl@3.6.0",
+      "type": "library",
+      "version": "3.6.0"
     },
     {
-      "type": "library",
-      "name": "tiktoken",
-      "version": "0.13.0",
-      "purl": "pkg:pypi/tiktoken@0.13.0"
-    },
-    {
-      "type": "library",
+      "bom-ref": "BomRef.5174642125993311.29595233120173126",
       "name": "tokenizers",
-      "version": "0.22.2",
-      "purl": "pkg:pypi/tokenizers@0.22.2"
+      "purl": "pkg:pypi/tokenizers@0.22.2",
+      "type": "library",
+      "version": "0.22.2"
     },
     {
-      "type": "library",
-      "name": "tomli",
-      "version": "2.4.1",
-      "purl": "pkg:pypi/tomli@2.4.1"
-    },
-    {
-      "type": "library",
-      "name": "tomli_w",
-      "version": "1.2.0",
-      "purl": "pkg:pypi/tomli_w@1.2.0"
-    },
-    {
-      "type": "library",
-      "name": "tomlkit",
-      "version": "0.15.0",
-      "purl": "pkg:pypi/tomlkit@0.15.0"
-    },
-    {
-      "type": "library",
+      "bom-ref": "BomRef.043932121935678636.7621116837849748",
       "name": "torch",
-      "version": "2.13.0",
-      "purl": "pkg:pypi/torch@2.13.0"
+      "purl": "pkg:pypi/torch@2.13.0",
+      "type": "library",
+      "version": "2.13.0"
     },
     {
-      "type": "library",
+      "bom-ref": "BomRef.12530457232360748.8198690488961795",
       "name": "tqdm",
-      "version": "4.68.1",
-      "purl": "pkg:pypi/tqdm@4.68.1"
+      "purl": "pkg:pypi/tqdm@4.68.1",
+      "type": "library",
+      "version": "4.68.1"
     },
     {
-      "type": "library",
+      "bom-ref": "BomRef.38422456401660066.8566741750838004",
       "name": "transformers",
-      "version": "5.14.1",
-      "purl": "pkg:pypi/transformers@5.14.1"
+      "purl": "pkg:pypi/transformers@5.14.1",
+      "type": "library",
+      "version": "5.14.1"
     },
     {
-      "type": "library",
+      "bom-ref": "BomRef.5084355279447517.7914052638036911",
       "name": "typer",
-      "version": "0.26.7",
-      "purl": "pkg:pypi/typer@0.26.7"
+      "purl": "pkg:pypi/typer@0.26.7",
+      "type": "library",
+      "version": "0.26.7"
     },
     {
+      "bom-ref": "BomRef.4653159569854619.8007857464232407",
+      "name": "typing-extensions",
+      "purl": "pkg:pypi/typing-extensions@4.15.0",
       "type": "library",
+      "version": "4.15.0"
+    },
+    {
+      "bom-ref": "BomRef.043293017720772875.7967148733616509",
       "name": "typing-inspection",
-      "version": "0.4.2",
-      "purl": "pkg:pypi/typing-inspection@0.4.2"
+      "purl": "pkg:pypi/typing-inspection@0.4.2",
+      "type": "library",
+      "version": "0.4.2"
     },
     {
-      "type": "library",
-      "name": "typing_extensions",
-      "version": "4.15.0",
-      "purl": "pkg:pypi/typing_extensions@4.15.0"
-    },
-    {
-      "type": "library",
+      "bom-ref": "BomRef.995482646794574.4185656326274807",
       "name": "tzdata",
-      "version": "2026.2",
-      "purl": "pkg:pypi/tzdata@2026.2"
+      "purl": "pkg:pypi/tzdata@2026.2",
+      "type": "library",
+      "version": "2026.2"
     },
     {
-      "type": "library",
-      "name": "tzlocal",
-      "version": "5.3.1",
-      "purl": "pkg:pypi/tzlocal@5.3.1"
-    },
-    {
-      "type": "library",
+      "bom-ref": "BomRef.6384565038567034.9940143705681764",
       "name": "urllib3",
-      "version": "2.7.0",
-      "purl": "pkg:pypi/urllib3@2.7.0"
+      "purl": "pkg:pypi/urllib3@2.7.0",
+      "type": "library",
+      "version": "2.7.0"
     },
     {
-      "type": "library",
+      "bom-ref": "BomRef.29885439982302.9329739352904655",
       "name": "uvicorn",
-      "version": "0.49.0",
-      "purl": "pkg:pypi/uvicorn@0.49.0"
+      "purl": "pkg:pypi/uvicorn@0.30.0",
+      "type": "library",
+      "version": "0.30.0"
     },
     {
-      "type": "library",
+      "bom-ref": "BomRef.30992577968579194.6752912069198048",
       "name": "vine",
-      "version": "5.1.0",
-      "purl": "pkg:pypi/vine@5.1.0"
+      "purl": "pkg:pypi/vine@5.1.0",
+      "type": "library",
+      "version": "5.1.0"
     },
     {
-      "type": "library",
-      "name": "virtualenv",
-      "version": "21.4.2",
-      "purl": "pkg:pypi/virtualenv@21.4.2"
-    },
-    {
-      "type": "library",
+      "bom-ref": "BomRef.7257130182975614.008995085618843102",
       "name": "watchfiles",
-      "version": "1.2.0",
-      "purl": "pkg:pypi/watchfiles@1.2.0"
+      "purl": "pkg:pypi/watchfiles@1.2.0",
+      "type": "library",
+      "version": "1.2.0"
     },
     {
-      "type": "library",
+      "bom-ref": "BomRef.5972627346076339.11514551197843881",
       "name": "wcwidth",
-      "version": "0.8.0",
-      "purl": "pkg:pypi/wcwidth@0.8.0"
+      "purl": "pkg:pypi/wcwidth@0.8.0",
+      "type": "library",
+      "version": "0.8.0"
     },
     {
-      "type": "library",
+      "bom-ref": "BomRef.5966227704330911.7278335388164882",
       "name": "websockets",
-      "version": "16.0",
-      "purl": "pkg:pypi/websockets@16.0"
+      "purl": "pkg:pypi/websockets@16.0",
+      "type": "library",
+      "version": "16.0"
     },
     {
-      "type": "library",
-      "name": "Werkzeug",
-      "version": "3.1.8",
-      "purl": "pkg:pypi/Werkzeug@3.1.8"
-    },
-    {
-      "type": "library",
+      "bom-ref": "BomRef.16335829803186985.6502274705105593",
       "name": "wrapt",
-      "version": "1.17.3",
-      "purl": "pkg:pypi/wrapt@1.17.3"
+      "purl": "pkg:pypi/wrapt@1.17.3",
+      "type": "library",
+      "version": "1.17.3"
     },
     {
-      "type": "library",
-      "name": "x-agent-core",
-      "version": "0.1.0",
-      "purl": "pkg:pypi/x-agent-core@0.1.0"
-    },
-    {
-      "type": "library",
+      "bom-ref": "BomRef.7661104769197292.3256134633420944",
       "name": "yarl",
-      "version": "1.24.2",
-      "purl": "pkg:pypi/yarl@1.24.2"
-    },
-    {
+      "purl": "pkg:pypi/yarl@1.24.5",
       "type": "library",
-      "name": "zope.event",
-      "version": "6.2",
-      "purl": "pkg:pypi/zope.event@6.2"
-    },
-    {
-      "type": "library",
-      "name": "zope.interface",
-      "version": "8.5",
-      "purl": "pkg:pypi/zope.interface@8.5"
+      "version": "1.24.5"
     }
-  ]
+  ],
+  "dependencies": [
+    {
+      "ref": "BomRef.8954270403060102.19303540452323786"
+    },
+    {
+      "ref": "BomRef.3892145789387297.24218585719182606"
+    },
+    {
+      "ref": "BomRef.7592450868800489.6742838491639618"
+    },
+    {
+      "ref": "BomRef.31452374077913803.23049849088416163"
+    },
+    {
+      "ref": "BomRef.8748996431129975.16339590251345693"
+    },
+    {
+      "ref": "BomRef.15672818423965307.686536718270724"
+    },
+    {
+      "ref": "BomRef.260145403457819.7163832457555804"
+    },
+    {
+      "ref": "BomRef.012139160536634552.13046528285223458"
+    },
+    {
+      "ref": "BomRef.5360551636476911.04464285220078734"
+    },
+    {
+      "ref": "BomRef.8876029752429967.5567352461019738"
+    },
+    {
+      "ref": "BomRef.003447666676037464.7896818642056009"
+    },
+    {
+      "ref": "BomRef.7813339558750088.36177728759729133"
+    },
+    {
+      "ref": "BomRef.6539146011989259.4655805251147639"
+    },
+    {
+      "ref": "BomRef.08669255599887571.29878303882948165"
+    },
+    {
+      "ref": "BomRef.6159846586227556.8442203625166587"
+    },
+    {
+      "ref": "BomRef.6999343411592264.36933069420135733"
+    },
+    {
+      "ref": "BomRef.1014458398503656.8299443518340561"
+    },
+    {
+      "ref": "BomRef.7963704569218034.265333698567503"
+    },
+    {
+      "ref": "BomRef.9263559538029279.6783231731916618"
+    },
+    {
+      "ref": "BomRef.7412254504724354.405569216405825"
+    },
+    {
+      "ref": "BomRef.8988993298276833.17225769895446164"
+    },
+    {
+      "ref": "BomRef.8151293118119334.7431008863098155"
+    },
+    {
+      "ref": "BomRef.1719568160067717.24621985374363198"
+    },
+    {
+      "ref": "BomRef.4246885979128917.008310017846853257"
+    },
+    {
+      "ref": "BomRef.15437953115321557.26232443095608915"
+    },
+    {
+      "ref": "BomRef.3436616549822834.38554939255745146"
+    },
+    {
+      "ref": "BomRef.22893887856874595.06579020196894858"
+    },
+    {
+      "ref": "BomRef.24894426108227552.25053519543300096"
+    },
+    {
+      "ref": "BomRef.08813614356468058.7081011182932831"
+    },
+    {
+      "ref": "BomRef.19488829860092738.9444658118844771"
+    },
+    {
+      "ref": "BomRef.9537432432291125.2289484631347507"
+    },
+    {
+      "ref": "BomRef.6691678838950701.4864517547238083"
+    },
+    {
+      "ref": "BomRef.6392865141645251.7376557936818362"
+    },
+    {
+      "ref": "BomRef.3675978731457965.12323796281890564"
+    },
+    {
+      "ref": "BomRef.061886275552351044.5800934668051485"
+    },
+    {
+      "ref": "BomRef.30852847947259054.03085029883406487"
+    },
+    {
+      "ref": "BomRef.6017970561108218.8072979659390909"
+    },
+    {
+      "ref": "BomRef.993302894751869.053135895272752864"
+    },
+    {
+      "ref": "BomRef.812268468332119.8972396054252305"
+    },
+    {
+      "ref": "BomRef.41177400752281423.48558018888204924"
+    },
+    {
+      "ref": "BomRef.5458886498511258.10939927963014129"
+    },
+    {
+      "ref": "BomRef.3880812644142839.3737027256932782"
+    },
+    {
+      "ref": "BomRef.8291768030991189.9052497952248747"
+    },
+    {
+      "ref": "BomRef.4101028496621165.6398907847149026"
+    },
+    {
+      "ref": "BomRef.727736194181502.34915464714946"
+    },
+    {
+      "ref": "BomRef.3971059863973653.5777053635235784"
+    },
+    {
+      "ref": "BomRef.6822068461047618.6418763275819069"
+    },
+    {
+      "ref": "BomRef.749838334452855.46577875646354205"
+    },
+    {
+      "ref": "BomRef.5266297672455539.5140254106283922"
+    },
+    {
+      "ref": "BomRef.07427645008648365.9190137599897511"
+    },
+    {
+      "ref": "BomRef.13179202274697877.6863373353249056"
+    },
+    {
+      "ref": "BomRef.4922990324053357.15270880926823271"
+    },
+    {
+      "ref": "BomRef.4388439790775446.871799145982103"
+    },
+    {
+      "ref": "BomRef.3710869360648046.26970937220224755"
+    },
+    {
+      "ref": "BomRef.23437352595840621.012772880378511542"
+    },
+    {
+      "ref": "BomRef.28798503354049687.0944926837614446"
+    },
+    {
+      "ref": "BomRef.5046293693543968.1786573233869505"
+    },
+    {
+      "ref": "BomRef.8621581657284318.9379712773326608"
+    },
+    {
+      "ref": "BomRef.1713881526333959.1011283335804739"
+    },
+    {
+      "ref": "BomRef.5398552608760554.10139230722762582"
+    },
+    {
+      "ref": "BomRef.4960133031321752.7209470756806484"
+    },
+    {
+      "ref": "BomRef.813765920927081.34141001107736213"
+    },
+    {
+      "ref": "BomRef.4399233810230372.5226713378602856"
+    },
+    {
+      "ref": "BomRef.052877532305822594.27417439165314705"
+    },
+    {
+      "ref": "BomRef.5790394958975694.22961163616693903"
+    },
+    {
+      "ref": "BomRef.5422555718246229.5272589846091136"
+    },
+    {
+      "ref": "BomRef.9348241501668896.9635132468114571"
+    },
+    {
+      "ref": "BomRef.10782174373683939.6824944725809651"
+    },
+    {
+      "ref": "BomRef.5655796010132289.37567783824688883"
+    },
+    {
+      "ref": "BomRef.198181732708409.9049577233035898"
+    },
+    {
+      "ref": "BomRef.3894725440593041.015731553626509354"
+    },
+    {
+      "ref": "BomRef.47612110773885064.43073321699457345"
+    },
+    {
+      "ref": "BomRef.9082167454265755.7586889614214821"
+    },
+    {
+      "ref": "BomRef.6874851923332395.4581630278436982"
+    },
+    {
+      "ref": "BomRef.2559647802230034.5190484334142401"
+    },
+    {
+      "ref": "BomRef.11446080083694266.1998010612647112"
+    },
+    {
+      "ref": "BomRef.4039452303023844.11351941245591646"
+    },
+    {
+      "ref": "BomRef.3774531478065809.0833793423691287"
+    },
+    {
+      "ref": "BomRef.019386367751569655.5752841313115558"
+    },
+    {
+      "ref": "BomRef.4866843704372682.65404998043364"
+    },
+    {
+      "ref": "BomRef.7954729719465788.7975003662398822"
+    },
+    {
+      "ref": "BomRef.9018910498304816.7134553195653176"
+    },
+    {
+      "ref": "BomRef.3525426580641813.04097826563397278"
+    },
+    {
+      "ref": "BomRef.12802132806689515.4217116528421324"
+    },
+    {
+      "ref": "BomRef.8771045947146219.25408728165963446"
+    },
+    {
+      "ref": "BomRef.9181938015007177.8507941870012465"
+    },
+    {
+      "ref": "BomRef.8751101671776341.6173312693823049"
+    },
+    {
+      "ref": "BomRef.4731088385285789.9347971674649167"
+    },
+    {
+      "ref": "BomRef.3478294190149984.19714943772015958"
+    },
+    {
+      "ref": "BomRef.2605296741828619.31680251053808006"
+    },
+    {
+      "ref": "BomRef.9143983657365261.15280599582342946"
+    },
+    {
+      "ref": "BomRef.1900061830298706.06581511092602765"
+    },
+    {
+      "ref": "BomRef.21660467515230897.23444339562759686"
+    },
+    {
+      "ref": "BomRef.8534174055691782.6295915606269681"
+    },
+    {
+      "ref": "BomRef.1951959505418588.8692083219661486"
+    },
+    {
+      "ref": "BomRef.30494059766446036.46344900311308557"
+    },
+    {
+      "ref": "BomRef.08082346324625811.14392639237468896"
+    },
+    {
+      "ref": "BomRef.5174642125993311.29595233120173126"
+    },
+    {
+      "ref": "BomRef.043932121935678636.7621116837849748"
+    },
+    {
+      "ref": "BomRef.12530457232360748.8198690488961795"
+    },
+    {
+      "ref": "BomRef.38422456401660066.8566741750838004"
+    },
+    {
+      "ref": "BomRef.5084355279447517.7914052638036911"
+    },
+    {
+      "ref": "BomRef.4653159569854619.8007857464232407"
+    },
+    {
+      "ref": "BomRef.043293017720772875.7967148733616509"
+    },
+    {
+      "ref": "BomRef.995482646794574.4185656326274807"
+    },
+    {
+      "ref": "BomRef.6384565038567034.9940143705681764"
+    },
+    {
+      "ref": "BomRef.29885439982302.9329739352904655"
+    },
+    {
+      "ref": "BomRef.30992577968579194.6752912069198048"
+    },
+    {
+      "ref": "BomRef.7257130182975614.008995085618843102"
+    },
+    {
+      "ref": "BomRef.5972627346076339.11514551197843881"
+    },
+    {
+      "ref": "BomRef.5966227704330911.7278335388164882"
+    },
+    {
+      "ref": "BomRef.16335829803186985.6502274705105593"
+    },
+    {
+      "ref": "BomRef.7661104769197292.3256134633420944"
+    }
+  ],
+  "metadata": {
+    "timestamp": "2026-08-05T13:26:00.010521+00:00"
+  },
+  "serialNumber": "urn:uuid:f7fedc30-0c53-4fd7-8466-d9d74682c16d",
+  "version": 1,
+  "$schema": "http://cyclonedx.org/schema/bom-1.5.schema.json",
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.5"
 }
