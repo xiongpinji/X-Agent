@@ -18,6 +18,16 @@ Honesty rules enforced here:
   back to an unqualified agent).
 - ``wait=True`` timeout -> explicit ``status="timeout"`` result.
 - Unsupported isolation levels raise from the spawner (CONTAINER points to the
+
+Known limitation (P1-09 批次 D 裁决，2026-08-04): the org-store candidate
+source is only populated when the organization_control API is mounted (it is
+currently NOT in ``_KEPT_ROUTER_MODULES``), so production org pools are
+usually empty and delegation relies on explicit candidates / room members /
+the implicit generalist. Load balancing is deliberately RoundRobin-only:
+the composite scorer in ``api/agents.py`` extended_router (routing/dispatch)
+is the unmounted second implementation and stays unmounted — single
+canonical balancing semantics lives here. Cross-process worker pools with
+heartbeats are explicitly out of scope (see ROADMAP Phase 2 note).
   sandbox path).
 """
 

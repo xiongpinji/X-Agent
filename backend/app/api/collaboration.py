@@ -37,6 +37,7 @@ Cross-references:
 
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime
 from typing import Annotated
 
@@ -58,6 +59,8 @@ from backend.app.core.memory import MemorySystem
 from backend.app.core.memory.store import MemoryScope
 from backend.app.core.security import Principal
 from backend.app.dependencies import enforce_scope, get_current_principal, get_memory
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/collaboration", tags=["collaboration"])
 extended_router = APIRouter(prefix="/api/v1/collaboration", tags=["collaboration-extended"])  # C2: unmounted; handler bodies unchanged
@@ -636,37 +639,95 @@ async def read_shared_context(room_id: str, principal: PrincipalDependency, key:
 # ─── Agent Discovery & Dashboard (H2) ─────────────────────────────────────────
 
 
-@extended_router.get("/agents/discover")
+@router.get("/agents/discover")
 async def discover_agents(
     principal: PrincipalDependency,
     capability: str | None = None,
 ) -> dict[str, object]:
-    """Discover available agents and their capabilities for collaboration."""
+    """Discover available agents and their capabilities for collaboration.
+
+    P1-09 批次 D（2026-08-04）：真实枚举候选源（此前只回静态 default-agent）：
+    org 花名册（需挂载 organization_control 填充，见 ROADMAP 注记）、
+    spawner 活跃子 agent 实例、租户 room 成员、隐式 generalist 兜底。
+    capability 过滤与 delegation 共用 capability_match（单一匹配语义）。
+    """
     enforce_scope(principal, "agent:run")
     from backend.app.core.agent_spawner import agent_spawner
+    from backend.app.core.collaboration.delegation import CandidateSpec, capability_match
+    from backend.app.core.org import organization_store
 
-    # Registered agents from spawner + static registry
     agents: list[dict[str, object]] = []
+    seen: set[str] = set()
 
-    # Default agent
-    agents.append({
+    def _add(entry: dict[str, object]) -> None:
+        agent_id = str(entry.get("agent_id") or "")
+        if agent_id and agent_id not in seen:
+            seen.add(agent_id)
+            agents.append(entry)
+
+    # 1. org 花名册（生产填充依赖 organization_control API，当前未挂载 → 通常为空）
+    for node in organization_store.list_agents():
+        _add({
+            "agent_id": node.agent_id,
+            "agent_type": f"org:{getattr(node.role, 'value', node.role)}",
+            "capabilities": list(node.capabilities or []),
+            "status": str(getattr(node.status, 'value', node.status)),
+            "source": "org",
+        })
+
+    # 2. spawner 活跃子 agent 实例
+    try:
+        for item in await agent_spawner.list_agents():
+            _add({
+                "agent_id": item.get("agent_id"),
+                "agent_type": item.get("agent_type") or "spawned",
+                "capabilities": list(item.get("capabilities") or []),
+                "status": item.get("status"),
+                "source": "spawner",
+            })
+    except Exception:
+        logger.debug("discover_agents: spawner listing failed", exc_info=True)
+
+    # 3. 租户 room 成员
+    for room in collaboration_store.list_rooms(tenant_id=principal.tenant_id):
+        for member_id in room.members:
+            _add({
+                "agent_id": str(member_id),
+                "agent_type": "room-member",
+                "capabilities": [],
+                "status": "active",
+                "source": "room",
+            })
+
+    # 4. 隐式 generalist（delegation 零配置回退的真实默认能力面）
+    _add({
         "agent_id": "default-agent",
         "agent_type": "general",
         "capabilities": ["run", "trace", "memory", "tools", "code_execution", "git_ops"],
         "status": "active",
+        "source": "implicit",
         "max_concurrent": 1,
     })
 
-    # Spawner stats
-    spawner_stats = agent_spawner.get_stats() if hasattr(agent_spawner, "get_stats") else {}
-
-    # Filter by capability if requested
+    # capability 过滤：与 delegation 同一匹配语义（大小写不敏感子集）
     if capability:
-        agents = [a for a in agents if capability in (a.get("capabilities") or [])]
+        agents = [
+            a for a in agents
+            if capability_match(
+                CandidateSpec(agent_id=str(a["agent_id"]), capabilities=list(a.get("capabilities") or [])),
+                [capability],
+            )
+        ]
+
+    spawner_stats = agent_spawner.get_stats() if hasattr(agent_spawner, "get_stats") else {}
+    sources: dict[str, int] = {}
+    for a in agents:
+        sources[str(a["source"])] = sources.get(str(a["source"]), 0) + 1
 
     return {
         "agents": agents,
         "total": len(agents),
+        "sources": sources,
         "spawner": spawner_stats,
         "delegator_active": get_delegator() is not None,
     }

@@ -66,8 +66,8 @@ Build the most capable, secure, and user-friendly autonomous agent framework for
 
 #### Multi-Agent Collaboration
 - [x] Agent-to-agent communication protocol (协作包收敛, P1-09) — 2026-08-04 批次 C 裁决：agent_communication_bus 为唯一通信面，messages send/broadcast/publish/stats 4 端点挂载（295/300）；deprecated 簇闭环归档：parallel_execution_engine+parallel_execution_benchmark+advanced_features（~1700 行，互引闭环零生产引用）；至此协作/通信收敛为 collaboration 包 + parallel_agent_executor + bus 唯一 live 面
-- [ ] Task delegation and load balancing
-- [ ] Capability matching and discovery
+- [x] Task delegation and load balancing — delegation 真实落地（capability_match + RoundRobin + agent_spawner 真实子 AgentLoop，已进主循环工具面与 /delegate 端点）；2026-08-04 批次 D 裁决：负载均衡定为 RoundRobin 单语义——api/agents.py extended_router 的复合打分 routing/dispatch 为第二实现、保持不挂载；跨进程 worker 池/心跳明确不做；org 候选源依赖未挂载的 organization_control（生产通常为空，已文档化）
+- [x] Capability matching and discovery — 匹配：capability_match（子集、大小写不敏感）已在 /delegate 生效；发现：2026-08-04 批次 D 真实化并挂载 /collaboration/agents/discover（+1 路由，296/300）——真实枚举 org 花名册/spawner 实例/room 成员/隐式 generalist，capability 过滤与 delegation 同一匹配语义（tests/test_collaboration_discover.py 3 用例）
 - [x] PROCESS/CONTAINER 隔离落地或删除参数 (P1-09) — spawner 侧 PROCESS 真子进程已落地、CONTAINER 显式拒绝指向沙箱；2026-08-04 批次 B：parallel_agent_executor 的 IsolationMode 装饰参数收敛——SANDBOXED/PROCESS 显式拒绝（NotImplementedError→API 501，指向 agent_spawner 真实隔离），SHARED/ISOLATED/THREAD 为诚实同进程语义（裁决记录见枚举 docstring）
 - 批次 A（2026-08-04）：4 个零生产引用协作幽灵模块（task_dispatcher/agent_coordinator/parallel_executor/agent_recovery，~1700 行）已归档，测试拆分随迁；advanced_features 随批次 C 对 parallel_execution_engine 的裁决一并处理
 
