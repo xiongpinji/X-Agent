@@ -28,7 +28,7 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-__version__ = "0.3.0-alpha"  # 版本单一事实源: pyproject.toml 通过 [tool.setuptools.dynamic] 动态读取本值
+__version__ = "0.4.0-alpha"  # 版本单一事实源: pyproject.toml 通过 [tool.setuptools.dynamic] 动态读取本值; 与仓根 pyproject.toml (P1-20 版本叙事统一) 对齐
 __all__ = [
     "PartnerClient",
     "PartnerAPIError",

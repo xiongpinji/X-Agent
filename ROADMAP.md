@@ -80,7 +80,7 @@ Build the most capable, secure, and user-friendly autonomous agent framework for
 
 #### Workflow & Developer Experience
 - [ ] Workflow 存储迁移 Postgres + cron 调度 + 并行分支 (P1-07)
-- [ ] CLI 循环导入修复; SDK 补打包元数据 (P1-22)
+- [x] CLI 循环导入修复; SDK 补打包元数据 (P1-22) — 核验已在产：CLI 23 个模块全量导入零失败、console script xagent 可用；SDK pyproject 元数据齐备（构建后端/依赖/分类器，动态版本）；2026-08-05 修 SDK __version__ 0.3.0-alpha→0.4.0-alpha 与仓根单一事实源对齐（dist/ 旧 0.2.0 轮子为过时构建产物，重新发布时需重建）
 - [ ] 文档收敛为概念/操作/管理员/安全四分册 (P1-21)
 - [ ] Visual workflow builder (延后评估)
 
