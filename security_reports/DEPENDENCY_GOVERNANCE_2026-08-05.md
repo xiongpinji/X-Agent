@@ -23,7 +23,7 @@
 - `pyproject.toml` 的 `cryptography>=46.0.0,<49.0.0` 陈旧上限（x-agent-core 0.1.0 时代遗留）已改为 `>=50.0.0`——否则 lock 编译永远解析回漏洞版本；
 - `aiohttp` 补入 pyproject dependencies（audit_export/dingtalk/feishu 生产路径实际使用，此前只在 requirements.txt，lock 编译会漏）；
 - `requirements-lock.txt` 重新编译（uv，cli+prod extras）：87 → **113 components**（覆盖 aiohttp/msgpack 等此前漏网的实际依赖）；
-- `sbom.json` 重新生成（CycloneDX 1.5，113 components），生成器 `scripts/generate_sbom.py` 可复跑。
+- `sbom.json` 重新生成（CycloneDX 1.5，**1911 components**：Python lock 113 + Node lockfile 全树），生成器 `scripts/generate_sbom.py`（既有脚本，stdlib 无第三方依赖）可复跑。
 
 ## 2. npm 依赖：部分清零，残留已处置
 
