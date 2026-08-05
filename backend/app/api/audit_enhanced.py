@@ -12,8 +12,6 @@
 """
 
 from datetime import UTC, datetime, timedelta
-from functools import lru_cache
-from secrets import token_urlsafe
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
@@ -32,8 +30,11 @@ from backend.app.core.audit_enhanced import (
 )
 from backend.app.core.contracts import ErrorCode
 from backend.app.core.security import Principal
-from backend.app.dependencies import enforce_scope, get_current_principal
-from backend.app.settings import get_settings
+from backend.app.dependencies import (
+    enforce_scope,
+    get_current_principal,
+    get_enhanced_audit_store,
+)
 
 router = APIRouter(prefix="/api/v1/audit", tags=["audit"])
 
@@ -57,30 +58,6 @@ def _enforce_audit_tenant_scope(principal: Principal, tenant_id: str | None) -> 
             "Access denied: cannot access audit logs of another tenant.",
         )
     return principal.tenant_id
-
-
-@lru_cache
-def get_enhanced_audit_store() -> EnhancedAuditStore:
-    """增强审计存储 provider(挂载前自包含; 集成波可迁入 dependencies.py)。
-
-    HMAC secret 处理与 ``backend.app.dependencies.get_audit_store`` 一致:
-    生产环境缺失即 fail-fast; 开发/测试使用临时密钥并告警。
-
-    存储路径默认使用独立文件 ``audit_enhanced.jsonl``(与基础
-    audit.jsonl 的 AuditLogRecord schema 不同, 混写同一文件会破坏
-    哈希链验证; 集成波如需统一存储, 需同步迁移基础存储的记录模型)。
-    """
-    settings = get_settings()
-    hmac_secret = settings.audit_hmac_secret
-    if not hmac_secret:
-        if settings.app_mode == "production":
-            raise RuntimeError(
-                "audit_hmac_secret must be configured in production "
-                "(set XAGENT_AUDIT_HMAC_SECRET; see .env.example)"
-            )
-        hmac_secret = token_urlsafe(32)
-    storage_path = settings.audit_store_path.with_name("audit_enhanced.jsonl")
-    return EnhancedAuditStore(storage_path=storage_path, hmac_secret=hmac_secret)
 
 
 AuditStoreDependency = Annotated[EnhancedAuditStore, Depends(get_enhanced_audit_store)]

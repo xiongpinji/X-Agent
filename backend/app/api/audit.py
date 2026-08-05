@@ -205,3 +205,36 @@ async def export_audit_logs_json(
         outcome=outcome,
     )
     return {"data": records, "count": len(records)}
+
+
+@router.get("/reports/compliance", response_model=dict[str, object])
+async def get_compliance_report(
+    principal: PrincipalDependency,
+    report_type: str = Query(default="SOC2"),
+    days: int = Query(default=30, ge=1, le=365),
+    tenant_id: str | None = None,
+) -> dict[str, object]:
+    """Generate compliance report (P1-04: 自 audit_enhanced 挂载到主审计路由).
+
+    使用增强审计存储（dependencies.get_enhanced_audit_store，与
+    audit_enhanced.py 共享单例）——基础 AuditStore 缺少
+    generate_compliance_report 能力。租户边界同本文件其他端点。
+    """
+    from datetime import UTC, datetime, timedelta
+
+    from backend.app.dependencies import get_enhanced_audit_store
+
+    enforce_scope(principal, "audit:read")
+    tenant_id = _enforce_audit_tenant_scope(principal, tenant_id)
+
+    period_end = datetime.now(UTC)
+    period_start = period_end - timedelta(days=days)
+
+    report = get_enhanced_audit_store().generate_compliance_report(
+        report_type=report_type,
+        period_start=period_start,
+        period_end=period_end,
+        tenant_id=tenant_id,
+    )
+
+    return {"data": report.model_dump(mode="json")}

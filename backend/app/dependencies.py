@@ -546,6 +546,34 @@ def get_runtime_tool_registry() -> "ToolRegistry":
 
 
 @lru_cache
+def get_enhanced_audit_store() -> Any:
+    """增强审计存储（P1-04：合规报告/搜索/分析/导出 XML 能力面）。
+
+    自 backend/app/api/audit_enhanced.py 迁入（该文件 docstring 预留的
+    “集成波可迁入 dependencies.py”），audit.py 与 audit_enhanced.py
+    共享本实例（lru_cache 单例）。HMAC secret 语义与 get_audit_store
+    一致：生产缺失 fail-fast，开发/测试临时密钥并告警。
+    存储路径为独立文件 audit_enhanced.jsonl（与基础 audit.jsonl 的记录
+    schema 不同，混写会破坏哈希链验证）。
+    """
+    from secrets import token_urlsafe
+
+    from backend.app.core.audit_enhanced import AuditStore as EnhancedAuditStore
+
+    settings = get_settings()
+    hmac_secret = settings.audit_hmac_secret
+    if not hmac_secret:
+        if settings.app_mode == "production":
+            raise RuntimeError(
+                "audit_hmac_secret must be configured in production "
+                "(set XAGENT_AUDIT_HMAC_SECRET; see .env.example)"
+            )
+        hmac_secret = token_urlsafe(32)
+    storage_path = settings.audit_store_path.with_name("audit_enhanced.jsonl")
+    return EnhancedAuditStore(storage_path=storage_path, hmac_secret=hmac_secret)
+
+
+@lru_cache
 def get_tool_catalog() -> "ToolCatalog":
     """唯一的工具 schema 目录（P1-10 实例级单例化）。
 

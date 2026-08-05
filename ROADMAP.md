@@ -89,7 +89,7 @@ Build the most capable, secure, and user-friendly autonomous agent framework for
 #### Enterprise Security
 - [x] 真 SSO (python3-saml/authlib) + SCIM 2.0 (P1-02) — 2026-08-05 挂载收官：实现早已齐备（core/sso 包 OIDC/SAML 验签/session/WebAuthn/MFA、api/scim.py RFC 7643/7644 完整 CRUD+软停用+租户绑定令牌），G3 预算 300→330 评审通过后 oidc_router（/api/v1/sso 7 路由）与 SCIM（/scim/v2 11 路由）正式挂载（APIRoute 323≤330）；UserStoreAdapter 补可用性探测（表未建显式降级内存后端，用户库建表属 P1-03）；enterprise 370 用例全绿 + 3 个挂载回归测试；SCIM 无令牌 fail-closed 503 为设计行为
 - [x] 用户/租户库迁移 Postgres (P1-03) — 核验已在产：core/admin_store.py SqlUserStore/SqlTenantStore（契约一致 SQL 后端、create_all 幂等、_records 写穿透兼容、生产 sqlite 被 P1-19 fail-fast 拦截），create_user_store 按 admin_store_backend 接线，31 用例背书；2026-08-05 收尾：models/user_store（SCIM/JIT 路径）补 ensure_models_schema 幂等建表（dev sqlite 实测跨进程持久化，不再 503）；**遗留**：users（SCIM/JIT 写）与 admin_users（主认证读写）两表并存待收敛，单独立项
-- [ ] 审计留存/轮转/外送 SIEM; 合规报告路由挂载 (P1-04)
+- [x] 审计留存/轮转/外送 SIEM; 合规报告路由挂载 (P1-04) — 核验已在产：audit_rotation（大小+日期轮转、可配留存、哈希链跨段完整）、audit_shipper startup 接线（syslog/webhook 配置驱动、无配置零开销）；2026-08-05 合规报告路由挂载：/reports/compliance 移植进已挂载的 audit.py（audit_enhanced 整挂会与 audit.py 同前缀阴影且超 G3，移植 +1 路由 324≤330），增强审计存储 provider 迁入 dependencies 共享单例；57 用例全绿（轮转/外送/增强 API/挂载回归）
 - [ ] 依赖治理全量重扫 + SBOM (P1-05); TLS/CSP/docs 收紧 (P1-06)
 - [ ] Advanced audit logging / Compliance reporting (SOC 2 差距评估期末启动, P2-01)
 
