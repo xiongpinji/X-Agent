@@ -97,7 +97,7 @@ Build the most capable, secure, and user-friendly autonomous agent framework for
 - [ ] 部署资产收敛为 Helm 单一权威; CD 真实跑通 (P1-15)
 - [x] readinessProbe 切 `/ready` + 优雅停机 (P1-16) — 核验已在产：根级 /ready 深探针挂载于 main.py（components 本地存储深查 + integrations 只读，停机 503 draining），清单 terminationGracePeriodSeconds 90 + preStop sleep、优雅停机 lifecycle drain 齐备；2026-08-05 补 tests/test_readiness_probe.py 回归锁定（注意：api/health.py extended_router 上有一份未挂载的第二实现，C2 保留不生效）
 - [ ] Qdrant 快照备份 + 恢复演练 (P1-17)
-- [ ] 真实性能基准报告 (替换占位符, P1-18)
+- [x] 真实性能基准报告 (替换占位符, P1-18) — 2026-08-05 Wave A 复测回填根目录 PERFORMANCE_BENCHMARK_REPORT.md（复测环境/复现命令/原始 JSON 齐备）：核心 API p95 40–85ms（login 591ms 为 bcrypt 设计使然）、吞吐 64–113 rps（距 1000 rps 愿景值一个数量级，首个诚实差距数据）、限流显式开启后 100 放行/50 拒绝精确执行（dev 默认关为设计行为）；样例数据报告已带作废声明；内存基线/真实 LLM 延迟/多 worker 形态列入未覆盖清单
 - [x] 生产模式 sqlite/文件存储 fail-fast (P1-19) — settings `_production_storage_fail_fast` model validator 已在产：production 下 sqlite database_url / memory・jsonl memory_backend / memory trace_backend / memory・file admin_store_backend 任一命中即拒启动并一次列出全部违规项，tests/test_settings_production_guard_p119.py 11 用例背书
 
 #### Product Surface
@@ -202,9 +202,9 @@ We value your feedback! Share your ideas:
 > 以下为目标值, 非现状宣称。现状性能数据为零 (基准报告均为占位符, 见审计 13), Phase 2 将发布首个真实基准 (P1-18)。
 
 ### Performance Goals
-- API response time: <100ms (p95)
-- Memory usage: <500MB baseline
-- Throughput: >1000 requests/second
+- API response time: <100ms (p95) — 2026-08-05 实测：核心 API 达标（40–85ms），login 591ms（bcrypt 设计）
+- Memory usage: <500MB baseline — 未测量（见基准报告 §5）
+- Throughput: >1000 requests/second — 2026-08-05 实测 64–113 rps（单 worker mock），差距一个数量级，愿景值未达成
 - Availability: 99.9% uptime
 
 ### Quality Goals
