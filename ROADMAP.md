@@ -95,10 +95,10 @@ Build the most capable, secure, and user-friendly autonomous agent framework for
 
 #### Deployment & Operations
 - [ ] 部署资产收敛为 Helm 单一权威; CD 真实跑通 (P1-15)
-- [ ] readinessProbe 切 `/ready` + 优雅停机 (P1-16)
+- [x] readinessProbe 切 `/ready` + 优雅停机 (P1-16) — 核验已在产：根级 /ready 深探针挂载于 main.py（components 本地存储深查 + integrations 只读，停机 503 draining），清单 terminationGracePeriodSeconds 90 + preStop sleep、优雅停机 lifecycle drain 齐备；2026-08-05 补 tests/test_readiness_probe.py 回归锁定（注意：api/health.py extended_router 上有一份未挂载的第二实现，C2 保留不生效）
 - [ ] Qdrant 快照备份 + 恢复演练 (P1-17)
 - [ ] 真实性能基准报告 (替换占位符, P1-18)
-- [ ] 生产模式 sqlite/文件存储 fail-fast (P1-19)
+- [x] 生产模式 sqlite/文件存储 fail-fast (P1-19) — settings `_production_storage_fail_fast` model validator 已在产：production 下 sqlite database_url / memory・jsonl memory_backend / memory trace_backend / memory・file admin_store_backend 任一命中即拒启动并一次列出全部违规项，tests/test_settings_production_guard_p119.py 11 用例背书
 
 #### Product Surface
 - [ ] Web/桌面/扩展/移动端四形态"可安装冒烟" (P1-22)
