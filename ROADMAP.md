@@ -94,7 +94,7 @@ Build the most capable, secure, and user-friendly autonomous agent framework for
 - [ ] Advanced audit logging / Compliance reporting (SOC 2 差距评估期末启动, P2-01)
 
 #### Deployment & Operations
-- [ ] 部署资产收敛为 Helm 单一权威; CD 真实跑通 (P1-15)
+- [x] 部署资产收敛为 Helm 单一权威; CD 真实跑通 (P1-15) — 模板已补全（14 个：api/worker/beat/DB×4/CronJob/Ingress/HPA 等）、values 重复键已修（lint 0 失败）；第二套 deployment/kubernetes/ 2026-07-20 已归档；2026-08-05 收尾：deployment/k8s/ 参考用裸清单归档（全仓无执行路径实证），脚本与文档引用全部指向 Helm；CD 按证据分级——L1（lint×2+template×3 values，各 22 manifest/10 kind）CI 每次必跑且 2026-08-05 复验通过（helm v4.2.1），L2/L3 需真实集群（前置条件清单见 deployment/CD_VERIFICATION.md，诚实标注阻塞）
 - [x] readinessProbe 切 `/ready` + 优雅停机 (P1-16) — 核验已在产：根级 /ready 深探针挂载于 main.py（components 本地存储深查 + integrations 只读，停机 503 draining），清单 terminationGracePeriodSeconds 90 + preStop sleep、优雅停机 lifecycle drain 齐备；2026-08-05 补 tests/test_readiness_probe.py 回归锁定（注意：api/health.py extended_router 上有一份未挂载的第二实现，C2 保留不生效）
 - [x] Qdrant 快照备份 + 恢复演练 (P1-17) — 核验已在产：backup.sh 走官方快照 API（POST /collections/{name}/snapshots + 下载）；Helm backup-cronjob（每日 02:00、retention 30d、S3 可选）经 `helm template` 渲染验证（24 资源含 CronJob）+ `helm lint` 0 失败；恢复演练 2026-07-26 已执行并归档（disaster-recovery/QDRANT_RESTORE_DRILL.md，mock 环境快照→灾难模拟→upload 恢复→points_count 一致，真实集群演练与 RTO/RPO 实测仍列为待办已诚实标注）
 - [x] 真实性能基准报告 (替换占位符, P1-18) — 2026-08-05 Wave A 复测回填根目录 PERFORMANCE_BENCHMARK_REPORT.md（复测环境/复现命令/原始 JSON 齐备）：核心 API p95 40–85ms（login 591ms 为 bcrypt 设计使然）、吞吐 64–113 rps（距 1000 rps 愿景值一个数量级，首个诚实差距数据）、限流显式开启后 100 放行/50 拒绝精确执行（dev 默认关为设计行为）；样例数据报告已带作废声明；内存基线/真实 LLM 延迟/多 worker 形态列入未覆盖清单

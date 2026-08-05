@@ -1,4 +1,4 @@
-# P1-15: 已收敛对齐到 deployment/k8s/ 权威清单约定:
+# P1-15: 已收敛对齐到 deployment/helm/ 权威 chart 约定（原 deployment/k8s/ 裸清单 2026-08-05 已归档）:
 #   - namespace: xagent (原 production, 与已归档的 deployment/kubernetes/ 配套, 该套已归档)
 #   - 标签 app: xagent-api + version: canary, 使 xagent-api Service 按副本比例分流 stable/canary
 #   - env 改用真实存在的 xagent-config ConfigMap 与 xagent-secrets Secret

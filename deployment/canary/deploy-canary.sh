@@ -15,7 +15,8 @@
 set -euo pipefail
 
 # Configuration
-# P1-15: 命名空间与容器名对齐权威清单 deployment/k8s/ 与 deployment/canary/
+# P1-15: 命名空间与容器名对齐权威 Helm chart deployment/helm/ 与 deployment/canary/
+# (deployment/k8s/ 裸清单已于 2026-08-05 归档, Helm 为唯一部署权威)
 NAMESPACE=${NAMESPACE:-xagent}
 NEW_VERSION=${1:-}
 MODE=${2:-"--argo"}

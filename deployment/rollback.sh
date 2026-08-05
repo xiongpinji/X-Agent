@@ -6,8 +6,10 @@
 set -euo pipefail
 
 # Configuration
-# P1-15: 默认命名空间对齐权威清单 deployment/k8s/ (namespace: xagent);
-# 容器名与 deployment/k8s/*.yaml 一致(每个 Deployment 的容器名 == Deployment 名)
+# P1-15: 默认命名空间对齐权威 Helm chart deployment/helm/ (namespace: xagent);
+# 容器名与 deployment/helm/templates/*.yaml 一致(每个 Deployment 的容器名 == Deployment 名)。
+# 注: 原始裸清单 deployment/k8s/ 已于 2026-08-05 归档至 archive/legacy_k8s_manifests_2026-08/,
+# Helm 为唯一部署权威。
 NAMESPACE=${NAMESPACE:-xagent}
 DEPLOYMENT_API=${DEPLOYMENT_API:-xagent-api}
 DEPLOYMENT_WORKER=${DEPLOYMENT_WORKER:-xagent-worker}

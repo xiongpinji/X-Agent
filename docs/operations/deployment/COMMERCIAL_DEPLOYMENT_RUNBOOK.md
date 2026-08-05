@@ -270,7 +270,7 @@ Use the existing deployment assets as the baseline:
 
 - Helm chart: `deployment/helm/`
 - Production values: `deployment/helm/values-production.yaml`
-- K8s manifests: `deployment/k8s/`
+- K8s manifests: **已归档**（`archive/legacy_k8s_manifests_2026-08/`，2026-08-05；Helm 为唯一部署权威，P1-15）
 - Monitoring stack: `monitoring/`（唯一权威，P0-04 已收敛；原 `deployment/prometheus/` 已归档）、`deployment/grafana/`
 
 Minimum verification after rollout:

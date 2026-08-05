@@ -1,9 +1,10 @@
 # X-Agent Helm Chart
 
-唯一权威的 Helm 部署入口(Phase 2 Wave A / P1-15 收敛后)。
-原始 K8s 清单见 `deployment/k8s/`(与本 Chart 模板保持一致), 旧的
-`deployment/kubernetes/` 第二套清单已于 2026-07-20 归档至
-`archive/legacy_kubernetes_manifests_2026-07-20/`。
+唯一权威的部署入口(Phase 2 Wave A / P1-15 收敛后)。
+旧的 `deployment/kubernetes/` 第二套清单已于 2026-07-20 归档至
+`archive/legacy_kubernetes_manifests_2026-07-20/`; 原始裸清单
+`deployment/k8s/`(仅参考用、无执行路径)已于 2026-08-05 归档至
+`archive/legacy_k8s_manifests_2026-08/`, 本 Chart 自此为唯一部署资产。
 
 ## 包含的模板
 

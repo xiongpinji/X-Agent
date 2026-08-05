@@ -100,10 +100,12 @@ else
     check_fail "Dockerfile not found"
 fi
 
+# P1-15: deployment/k8s/ 裸清单已归档(archive/legacy_k8s_manifests_2026-08/),
+# Helm chart 为唯一部署权威, 下方 helm 检查即覆盖。
 if [ -d "deployment/k8s" ]; then
-    check_pass "Kubernetes manifests directory exists"
+    check_warn "deployment/k8s reappeared; raw manifests were archived in favor of deployment/helm"
 else
-    check_warn "Kubernetes manifests directory not found"
+    check_pass "Raw k8s manifests archived (helm is the single authority)"
 fi
 
 if [ -d "deployment/helm" ]; then

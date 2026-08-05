@@ -26,6 +26,15 @@
 - **条件触发 (L3 冒烟)**: 配置 `STAGING_SMOKE_URL` 后 smoke test 步骤转为真实
   `curl -fsS $STAGING_SMOKE_URL/health`。
 
+## 2026-08-05 收尾：裸清单归档 + L1 复验
+
+- `deployment/k8s/` 原始裸清单（仅参考用、全仓无 kubectl apply 执行路径）已归档至
+  `archive/legacy_k8s_manifests_2026-08/`；rollback/canary/checklist/backup-Dockerfile/
+  helm-README 与 3 份部署文档的引用已同步指向 Helm。**Helm chart 自此为唯一部署资产**。
+- L1 复验（helm v4.2.1）：`helm lint`（default + values-production）0 失败；
+  `helm template` × 3 套 values（default/production/multiregion）各渲染 22 个 manifest、
+  10 种 kind（含 CronJob/HPA/Ingress），产物 YAML 全部可解析。
+
 ## L2/L3 前置条件清单
 
 1. 预置 staging 命名空间的 k8s 集群(EKS/GKE/自建均可), 已安装 ingress-nginx;

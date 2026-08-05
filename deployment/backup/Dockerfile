@@ -1,4 +1,4 @@
-# P1-17: X-Agent 备份工具镜像 —— 供 deployment/k8s/backup-cronjob.yaml 与
+# P1-17: X-Agent 备份工具镜像 —— 供 archive/legacy_k8s_manifests_2026-08/backup-cronjob.yaml (归档参考) 与
 # deployment/helm (backup-cronjob 模板) 使用。
 # 包含 backup.sh 所需的全部客户端工具: pg_dump/pg_restore、redis-cli、curl、jq。
 #

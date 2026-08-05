@@ -159,24 +159,10 @@ kubectl create secret generic xagent-secrets \
   --from-literal=SECRET_KEY=secure_secret_key \
   -n xagent
 
-# Apply configurations
-kubectl apply -f deployment/k8s/namespace.yaml
-kubectl apply -f deployment/k8s/configmap.yaml
-kubectl apply -f deployment/k8s/secret.yaml
-
-# Deploy services
-kubectl apply -f deployment/k8s/postgres-deployment.yaml
-kubectl apply -f deployment/k8s/redis-deployment.yaml
-kubectl apply -f deployment/k8s/qdrant-deployment.yaml
-kubectl apply -f deployment/k8s/neo4j-deployment.yaml
-
-# Deploy application
-kubectl apply -f deployment/k8s/xagent-api-deployment.yaml
-kubectl apply -f deployment/k8s/xagent-worker-deployment.yaml
-kubectl apply -f deployment/k8s/xagent-beat-deployment.yaml
-
-# Deploy ingress
-kubectl apply -f deployment/k8s/ingress.yaml
+# Apply configurations + deploy all services (P1-15: Helm 为唯一部署权威;
+# 原 deployment/k8s/ 裸清单已于 2026-08-05 归档至 archive/legacy_k8s_manifests_2026-08/,
+# 下列 kubectl apply 序列仅作历史参考, 请使用下节 Helm 部署)
+helm upgrade --install xagent deployment/helm   --namespace xagent   --values deployment/helm/values.yaml
 
 # Check deployment status
 kubectl get deployments -n xagent

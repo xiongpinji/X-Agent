@@ -5,9 +5,9 @@
 This document outlines the disaster recovery procedures for X-Agent production environment. It covers prevention, detection, and recovery strategies for various failure scenarios.
 
 > 2026-07-20 (P1-15/P1-17) 更新:
-> - 权威 K8s 清单为 `deployment/k8s/`(namespace: **xagent**); 旧 `deployment/kubernetes/`(namespace production)已归档至 `archive/legacy_kubernetes_manifests_2026-07-20/`。本文所有 `kubectl` 命令已对齐到 `xagent` 命名空间。
+> - 权威部署资产为 Helm chart `deployment/helm/`(namespace: **xagent**); 旧 `deployment/kubernetes/`(namespace production)已归档至 `archive/legacy_kubernetes_manifests_2026-07-20/`, 参考用裸清单 `deployment/k8s/` 已于 2026-08-05 归档至 `archive/legacy_k8s_manifests_2026-08/`。本文所有 `kubectl` 命令已对齐到 `xagent` 命名空间。
 > - Qdrant 备份/恢复改用官方快照 API(创建 `POST /collections/{name}/snapshots`; 下载 `GET /collections/{name}/snapshots/{file}`; 恢复 `POST /collections/{name}/snapshots/upload` 或 `PUT /collections/{name}/snapshots/recover`)。旧的 `/collections/backup`、`/collections/restore` 端点不存在, 已废弃。
-> - 定时备份由 K8s CronJob 执行: `deployment/k8s/backup-cronjob.yaml`(或 Helm `backup.enabled`, 二选一, 勿重复部署), 脚本 `deployment/backup/backup.sh`。
+> - 定时备份由 Helm CronJob 执行(`deployment/helm/templates/backup-cronjob.yaml`, `backup.enabled=true`), 脚本 `deployment/backup/backup.sh`。
 
 ## Recovery Time Objectives (RTO) and Recovery Point Objectives (RPO)
 
