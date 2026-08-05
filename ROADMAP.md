@@ -79,9 +79,9 @@ Build the most capable, secure, and user-friendly autonomous agent framework for
 - [ ] Chain-of-thought reasoning / Multi-step planning (延后至 Phase 3 评估)
 
 #### Workflow & Developer Experience
-- [ ] Workflow 存储迁移 Postgres + cron 调度 + 并行分支 (P1-07)
+- [x] Workflow 存储迁移 Postgres + cron 调度 + 并行分支 (P1-07) — 核验已在产：workflow_store.py SQL 实现（Postgres/SQLite 双后端 auto/db/file 显式选择，db 模式失败显式报错）、5 字段 cron（croniter + 内置降级）、层级并行分支执行（max_parallel/parallel_mode）、崩溃恢复（worker lease + 快照版本 + 中间进度持久化）、独立 worker console script；103 个 workflow 测试全绿（2026-08-05 核验）
 - [x] CLI 循环导入修复; SDK 补打包元数据 (P1-22) — 核验已在产：CLI 23 个模块全量导入零失败、console script xagent 可用；SDK pyproject 元数据齐备（构建后端/依赖/分类器，动态版本）；2026-08-05 修 SDK __version__ 0.3.0-alpha→0.4.0-alpha 与仓根单一事实源对齐（dist/ 旧 0.2.0 轮子为过时构建产物，重新发布时需重建）
-- [ ] 文档收敛为概念/操作/管理员/安全四分册 (P1-21)
+- [x] 文档收敛为概念/操作/管理员/安全四分册 (P1-21) — 核验已在产（2026-07-20 迁移）：docs/ 四分册索引（concepts/operations/admin/developer，安全子卷在 admin/security，与审计四分册口径的偏差已文档化）；失效示例已清除（虚构的 01_basic_agent 等 8 个已删），examples/ 现存 4 个真实示例 2026-08-05 复验（py_compile 全过 + llm_provider_example 无 key 显式跳过可运行）；README 无仓库地址占位符（Quick Start 已重写不含 clone 占位）
 - [ ] Visual workflow builder (延后评估)
 
 ### 2027 Q1 — Phase 2「商用就绪」(安全合规与部署运维)
