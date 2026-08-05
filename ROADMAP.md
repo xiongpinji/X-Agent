@@ -68,7 +68,8 @@ Build the most capable, secure, and user-friendly autonomous agent framework for
 - [ ] Agent-to-agent communication protocol (协作包收敛, P1-09)
 - [ ] Task delegation and load balancing
 - [ ] Capability matching and discovery
-- [ ] PROCESS/CONTAINER 隔离落地或删除参数 (P1-09)
+- [x] PROCESS/CONTAINER 隔离落地或删除参数 (P1-09) — spawner 侧 PROCESS 真子进程已落地、CONTAINER 显式拒绝指向沙箱；2026-08-04 批次 B：parallel_agent_executor 的 IsolationMode 装饰参数收敛——SANDBOXED/PROCESS 显式拒绝（NotImplementedError→API 501，指向 agent_spawner 真实隔离），SHARED/ISOLATED/THREAD 为诚实同进程语义（裁决记录见枚举 docstring）
+- 批次 A（2026-08-04）：4 个零生产引用协作幽灵模块（task_dispatcher/agent_coordinator/parallel_executor/agent_recovery，~1700 行）已归档，测试拆分随迁；advanced_features 随批次 C 对 parallel_execution_engine 的裁决一并处理
 
 #### Memory & Reasoning
 - [x] 真实嵌入服务替换哈希伪嵌入; 去重接通主存储 (P1-13) — OpenAI/sentence-transformers 真实嵌入 + 显式降级；去重已接主存储（写路径 WritePathDeduper）；2026-08-04 残留收尾：UnifiedMemorySystem 结束零消费——主循环运行结束镜像存储 + 相关记忆检索合并（失败不阻断，tests/test_unified_memory_wiring.py 3 用例）；三套记忆模型统一（MemorySystem/Unified/Hybrid）与默认部署哈希 fallback 文档兜底单独立项

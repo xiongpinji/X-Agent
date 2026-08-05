@@ -27,9 +27,13 @@ Canonical modules (use these):
     Rooms, delegation, orchestration.
 - ``core/parallel_agent_executor.py``
     Independent parallel fan-out (used by api/parallel_agents.py).
-- ``core/agent_coordinator.py``
-    Lightweight coordination（2026-08-04 注：原注"used by api/agents_v2.py"
-    已过时，该文件不存在；本模块现由测试维护）。
+
+Archived (P1-09 batch A, 2026-08-04 — zero production callers):
+
+- ``core/task_dispatcher.py`` / ``core/agent_coordinator.py`` /
+  ``core/parallel_executor.py`` / ``core/agent_recovery.py``
+    幽灵协作模块（唯一引用方为测试/演示脚本），归档至
+    archive/dead_code_2026-08/backend/app/core/，引用测试同步拆分随迁。
 
 Deprecated / superseded (do NOT extend):
 

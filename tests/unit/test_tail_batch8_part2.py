@@ -25,18 +25,6 @@ class TestAgentCommunication:
         assert agent_communication is not None
 
 
-class TestAgentCoordinator:
-    def test_module_imports(self):
-        from backend.app.core import agent_coordinator
-        assert agent_coordinator is not None
-
-
-class TestAgentRecovery:
-    def test_module_imports(self):
-        from backend.app.core import agent_recovery
-        assert agent_recovery is not None
-
-
 class TestAgentSpawner:
     def test_module_imports(self):
         from backend.app.core import agent_spawner

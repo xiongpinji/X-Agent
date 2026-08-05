@@ -200,12 +200,6 @@ class TestAgentIsolationManager:
         assert agent_isolation_manager is not None
 
 
-class TestAgentRecovery:
-    def test_module_imports(self):
-        from backend.app.core import agent_recovery
-        assert agent_recovery is not None
-
-
 class TestAgentRefactoredRun:
     def test_module_imports(self):
         from backend.app.core import agent_refactored_run
@@ -374,12 +368,6 @@ class TestApiIntegrations:
     def test_module_imports(self):
         from backend.app.api import integrations
         assert integrations is not None
-
-
-class TestApiMcp:
-    def test_module_imports(self):
-        from backend.app.api import mcp
-        assert mcp is not None
 
 
 class TestApiMedia:

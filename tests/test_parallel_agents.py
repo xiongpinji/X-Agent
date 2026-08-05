@@ -152,17 +152,22 @@ class TestParallelAgentExecutor:
         assert result.metadata["isolation_mode"] == "thread"
 
     @pytest.mark.asyncio
-    async def test_spawn_agents_process_isolation(self, executor, sample_tasks, mock_agent_factory):
-        """Test process isolation mode."""
-        result = await executor.spawn_agents(
-            tasks=sample_tasks,
-            isolation=IsolationMode.PROCESS,
-            max_parallel=2,
-            agent_factory=mock_agent_factory,
-        )
-
-        assert result.total_tasks == 3
-        assert result.metadata["isolation_mode"] == "process"
+    async def test_spawn_agents_process_isolation_rejected(self, executor, sample_tasks, mock_agent_factory):
+        """process/sandboxed 为装饰参数，P1-09 批次 B 起显式拒绝（诚实语义）。"""
+        with pytest.raises(NotImplementedError, match="agent_spawner"):
+            await executor.spawn_agents(
+                tasks=sample_tasks,
+                isolation=IsolationMode.PROCESS,
+                max_parallel=2,
+                agent_factory=mock_agent_factory,
+            )
+        with pytest.raises(NotImplementedError):
+            await executor.spawn_agents(
+                tasks=sample_tasks,
+                isolation=IsolationMode.SANDBOXED,
+                max_parallel=2,
+                agent_factory=mock_agent_factory,
+            )
 
     @pytest.mark.asyncio
     async def test_get_batch_status(self, executor, sample_tasks, mock_agent_factory):

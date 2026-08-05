@@ -23,12 +23,29 @@ logger = logging.getLogger(__name__)
 
 
 class IsolationMode(StrEnum):
-    """Agent isolation mode for parallel execution."""
+    """Agent isolation mode for parallel execution.
+
+    P1-09 批次 B 裁决（2026-08-04，诚实语义）：本执行器在**同进程**内
+    fan-out，不执行任何 OS 级隔离。接受的模式仅为同进程语义：
+
+    - ``SHARED``：共享内存与工具（默认）；
+    - ``ISOLATED``：独立上下文语义——由 agent_factory 兑现，执行器透传；
+    - ``THREAD``：``SHARED`` 的别名（历史默认值，保留兼容）。
+
+    ``SANDBOXED`` / ``PROCESS`` 在本执行器是装饰参数（曾被注释为互为别名
+    而实际均为同进程），现在**显式拒绝**（NotImplementedError）：真实
+    PROCESS 隔离请走 ``core/agent_spawner.py``（已实现子进程执行），
+    CONTAINER 隔离走 core/sandbox 沙箱路径。
+    """
     SHARED = "shared"  # Shared memory and tools
-    ISOLATED = "isolated"  # Independent context per agent
-    SANDBOXED = "sandboxed"  # Full sandbox isolation
-    THREAD = "thread"  # Thread-based isolation (alias for shared)
-    PROCESS = "process"  # Process-based isolation (alias for sandboxed)
+    ISOLATED = "isolated"  # Independent context per agent (factory-honored)
+    SANDBOXED = "sandboxed"  # 不支持：显式拒绝，见 spawn_agents
+    THREAD = "thread"  # Alias for shared (same-process)
+    PROCESS = "process"  # 不支持：真实进程隔离请用 agent_spawner
+
+
+#: 本执行器实际接受的同进程模式（其余显式拒绝，杜绝装饰参数）。
+SUPPORTED_ISOLATION_MODES = frozenset({IsolationMode.SHARED, IsolationMode.ISOLATED, IsolationMode.THREAD})
 
 
 class AgentTaskStatus(StrEnum):
@@ -214,6 +231,14 @@ class ParallelAgentExecutor:
         isolation_value = isolation.value if isinstance(isolation, IsolationMode) else str(isolation)
         if isolation_value not in valid_modes:
             raise ValueError(f"Invalid isolation mode: {isolation}. Valid modes: {valid_modes}")
+        mode = IsolationMode(isolation_value)
+        if mode not in SUPPORTED_ISOLATION_MODES:
+            raise NotImplementedError(
+                f"Isolation mode '{mode.value}' is not implemented by the parallel "
+                "executor (same-process fan-out only). Use 'shared'/'isolated' here, "
+                "backend.app.core.agent_spawner for real PROCESS isolation, or "
+                "core/sandbox for CONTAINER isolation."
+            )
 
         if agent_factory is None:
             raise AgentFactoryNotConfiguredError(

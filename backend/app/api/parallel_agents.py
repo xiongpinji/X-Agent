@@ -325,13 +325,17 @@ async def spawn_agents(
         # not configured, instead of falling back to simulated results.
         agent_factory = build_agent_loop_factory(principal)
 
-        # Execute agents
-        batch_result = await executor.spawn_agents(
-            tasks=tasks,
-            isolation=isolation,
-            max_parallel=request.max_parallel,
-            agent_factory=agent_factory,
-        )
+        # Execute agents. Unsupported isolation modes (sandboxed/process) are
+        # explicitly rejected by the executor (P1-09 批次 B 诚实语义) -> 501.
+        try:
+            batch_result = await executor.spawn_agents(
+                tasks=tasks,
+                isolation=isolation,
+                max_parallel=request.max_parallel,
+                agent_factory=agent_factory,
+            )
+        except NotImplementedError as exc:
+            raise HTTPException(status_code=501, detail=str(exc))
 
         # Aggregate results if requested
         if request.aggregate_results:

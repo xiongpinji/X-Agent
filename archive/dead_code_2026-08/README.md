@@ -91,3 +91,16 @@
 |---|---|---|
 | mcp.py（843 行） | backend/app/api/ | MCP「系统 B」：历史遗留 HTTP API，`initialize_mcp_system()` 从未接线、端点运行时不可用；曾经 `main.py` `_KEPT_ROUTER_MODULES` 动态清单挂载（本次已同步移除该条目，否则启动 ModuleNotFoundError）；归档前验证全生产树零显式 import；其依赖（MCPToolAdapter / file/search/browser 工具 / MCPClient / MCPConfig）均被系统 A 或测试使用，不受影响；决策记录见 `docs/developer/reports/MCP_IMPLEMENTATION_STATUS.md` |
 | skills.py（~220 行） | backend/app/api/ | 第二套技能管理 API（/api/v1/skills，无测试背书），与 P1-11 管理平面 skills_api.py 重复；裁决挂载 skills_api（测试齐全），本文件归档消除重复；import 冒烟类（tests/unit/test_tail_batch8_part2 TestApiSkills）已同步移除 |
+
+## P1-09 批次 A：协作幽灵模块归档（2026-08-04）
+
+| 项 | 原路径 | 说明 |
+|---|---|---|
+| task_dispatcher.py（438 行） | backend/app/core/ | 零生产调用方（唯一引用：test_feature_enhancements 的 TestTaskDispatcher 类 + demo 脚本）；测试类已拆分随迁 tests/test_task_dispatcher.py |
+| agent_coordinator.py（446 行） | backend/app/core/ | 零生产调用方（collaboration 收敛图原注 "used by api/agents_v2.py" 为过时叙事）；测试随 test_multi_agent.py 拆分归档 |
+| parallel_executor.py（350 行） | backend/app/core/ | 零生产调用方（canonical 为 parallel_agent_executor.py）；测试同上拆分 |
+| agent_recovery.py（432 行） | backend/app/core/ | 零生产调用方；测试同上拆分 + 两处 import 冒烟类移除 |
+| demo_feature_enhancements.py（437 行） | scripts/ | task_dispatcher 演示脚本，随主模块归档 |
+
+- 测试拆分：tests/test_multi_agent.py 保留 agent_spawner 存活面 6 用例，幽灵模块 10 用例归档为 tests/test_multi_agent_ghost_modules.py（记录用，不参与收集）。
+- **未动**：advanced_features.py（含 MultiAgentCoordinator）——被 deprecated 的 parallel_execution_engine.py 引用（TaskScheduler），随批次 C 对 engine 的裁决一并处理。 |
