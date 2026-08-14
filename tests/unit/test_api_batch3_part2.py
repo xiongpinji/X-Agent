@@ -945,8 +945,9 @@ class TestFeedbackStore:
     def test_get_feedback_store_singleton(self):
         import backend.app.api.feedback as fb_mod
         fb_mod._feedback_store = None
-        with patch("backend.app.api.feedback.FeedbackStorePostgres") as MockStore:
-            instance = MockStore.return_value
+        # 2026-08 起工厂为 auto 模式：Postgres 仅在 DatabaseManager 可用时选用。
+        # 这里显式强制 postgres 后端以锁定单例契约。
+        with patch("backend.app.api.feedback.FeedbackStorePostgres") as MockStore,              patch.dict("os.environ", {"XAGENT_FEEDBACK_STORE_BACKEND": "postgres"}):
             s1 = fb_mod.get_feedback_store()
             s2 = fb_mod.get_feedback_store()
             assert s1 is s2
@@ -957,6 +958,9 @@ class TestFeedbackStore:
 def _mock_feedback_obj(**kwargs):
     fb = MagicMock()
     fb.id = kwargs.get("id", "fb-1")
+    # 2026-08 起反馈端点强制租户收敛 (record.tenant_id 须与 principal 一致,
+    # 不匹配返回 404)。测试 principal 租户为 t1 (_make_principal 默认)。
+    fb.tenant_id = kwargs.get("tenant_id", "t1")
     fb.user_id = kwargs.get("user_id", "u1")
     fb.feedback_type = kwargs.get("feedback_type", "bug")
     fb.title = kwargs.get("title", "Test Bug")

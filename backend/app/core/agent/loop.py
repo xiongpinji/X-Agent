@@ -654,19 +654,10 @@ class AgentLoop:
         # 保存 event_callback 供 _emit_trace 实时推送 SSE 事件
         self._event_callback = event_callback
 
-        # ─── Fast-path: 简单问题直接回答 ─────────────────────────────────────
-        fast = await self._fast_path_answer(context, task)
-        if fast is not None:
-            completed_evt = self._emit_trace(context, "agent.completed", task=task, answer=(fast.answer or "")[:200])
-            fast.events = [started, completed_evt]
-            return fast
-
-        # 上下文管理（P1-14）：重置每次运行的压缩/会话状态
-        self._compression_events = []
-        self._run_context_mgmt = {"enabled": False}
-
-        # 控制平面 Hooks：AGENT_START 与 USER_PROMPT_SUBMIT 在执行开始前触发。
-        # 任一被拒绝（DENY）则提前返回 FAILED，不进入主循环。
+        # 控制平面 Hooks：AGENT_START 与 USER_PROMPT_SUBMIT 必须在任何执行路径
+        # （含 fast-path）之前触发。任一被拒绝（DENY）则提前返回 FAILED。
+        # 安全关键：fast-path 不得绕过控制平面拒绝（2026-08-14 修复——此前
+        # fast-path 在 hooks 之前返回，简单问题可绕过 AGENT_START 拒绝）。
         from backend.app.core.hooks import HookEvent
 
         denial = await self._fire_lifecycle_hook(
@@ -692,6 +683,17 @@ class AgentLoop:
                 memory_hits=0,
                 error=denial,
             )
+
+        # ─── Fast-path: 简单问题直接回答 ─────────────────────────────────────
+        fast = await self._fast_path_answer(context, task)
+        if fast is not None:
+            completed_evt = self._emit_trace(context, "agent.completed", task=task, answer=(fast.answer or "")[:200])
+            fast.events = [started, completed_evt]
+            return fast
+
+        # 上下文管理（P1-14）：重置每次运行的压缩/会话状态
+        self._compression_events = []
+        self._run_context_mgmt = {"enabled": False}
 
         # 会话恢复（P1-14）：session_id 存在时打开/恢复会话，
         # 恢复的历史以 recap 形式注入规划提示词；失败显式降级（继续运行并记录错误）。
