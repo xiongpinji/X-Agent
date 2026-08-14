@@ -2,9 +2,8 @@ import React from 'react'
 import { useAppStore } from '@/store/appStore'
 import { useI18n } from '@/i18n/context'
 import { SUPPORTED_LANGUAGES, LanguageCode } from '@/i18n/config'
-import { Menu, X, Moon, Sun, LogOut, Globe } from 'lucide-react'
+import { Menu, X, Moon, Sun, LogOut } from 'lucide-react'
 import clsx from 'clsx'
-import NotificationCenter from '@/components/NotificationCenter'
 
 interface LayoutProps {
   children: React.ReactNode
@@ -14,80 +13,153 @@ interface LayoutProps {
 // SUPPORTED_LANGUAGES would fall back to English anyway.
 const AVAILABLE_LANGUAGES: LanguageCode[] = ['en', 'zh', 'ja', 'ko', 'es', 'ar']
 
+const DIVIDER = 'rgba(163,169,177,.15)'
+
+interface NavItem {
+  href: string
+  labelKey: string
+  fallback: string
+}
+
+interface NavGroup {
+  labelKey: string
+  fallback: string
+  items: NavItem[]
+}
+
 export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const { sidebarOpen, toggleSidebar, theme, toggleTheme, user, logout } = useAppStore()
   const { t, language, setLanguage } = useI18n()
 
+  const navGroups: NavGroup[] = [
+    {
+      labelKey: 'navigation.groupWorkspace',
+      fallback: 'Workspace',
+      items: [
+        { href: '/', labelKey: 'navigation.dashboard', fallback: 'Dashboard' },
+        { href: '/chat', labelKey: 'navigation.chat', fallback: 'Chat' },
+        { href: '/tasks', labelKey: 'navigation.tasks', fallback: 'Tasks' },
+        { href: '/work-sessions', labelKey: 'navigation.workSessions', fallback: 'Work Sessions' },
+        { href: '/forum', labelKey: 'navigation.forum', fallback: 'Forum' },
+        { href: '/console', labelKey: 'navigation.console', fallback: 'Console' },
+      ],
+    },
+    {
+      labelKey: 'navigation.groupManage',
+      fallback: 'Manage',
+      items: [
+        { href: '/workflows', labelKey: 'navigation.workflows', fallback: 'Workflows' },
+        { href: '/workflows/schedules', labelKey: 'navigation.workflowSchedules', fallback: 'Schedules' },
+        { href: '/workflows/runs', labelKey: 'navigation.workflowRuns', fallback: 'Runs' },
+        { href: '/checkpoints', labelKey: 'navigation.checkpoints', fallback: 'Checkpoints' },
+        { href: '/tools', labelKey: 'navigation.tools', fallback: 'Tools' },
+        { href: '/memory', labelKey: 'navigation.memory', fallback: 'Memory' },
+        { href: '/agents', labelKey: 'navigation.agents', fallback: 'Agents' },
+        { href: '/goals', labelKey: 'navigation.goals', fallback: 'Goals' },
+        { href: '/mcp', labelKey: 'navigation.mcp', fallback: 'MCP' },
+        { href: '/sandbox-tasks', labelKey: 'navigation.sandboxTasks', fallback: 'Sandbox' },
+        { href: '/approvals', labelKey: 'navigation.approvals', fallback: 'Approvals' },
+        { href: '/automation', labelKey: 'navigation.automation', fallback: 'Automation' },
+        { href: '/sync', labelKey: 'navigation.sync', fallback: 'Sync' },
+      ],
+    },
+    {
+      labelKey: 'navigation.groupSystem',
+      fallback: 'System',
+      items: [
+        { href: '/audit-logs', labelKey: 'navigation.auditLogs', fallback: 'Audit Logs' },
+        { href: '/backup', labelKey: 'navigation.backup', fallback: 'Backup' },
+        { href: '/observability', labelKey: 'navigation.observability', fallback: 'Observability' },
+        { href: '/analytics', labelKey: 'navigation.analytics', fallback: 'Analytics' },
+        { href: '/compliance', labelKey: 'navigation.compliance', fallback: 'Compliance' },
+        { href: '/admin/tenants', labelKey: 'navigation.tenants', fallback: 'Tenants' },
+        { href: '/admin/users', labelKey: 'navigation.usersAdmin', fallback: 'Users' },
+        { href: '/security', labelKey: 'navigation.security', fallback: 'Security' },
+        { href: '/evolution', labelKey: 'navigation.evolution', fallback: 'Evolution' },
+        { href: '/review', labelKey: 'navigation.review', fallback: 'Code Review' },
+        { href: '/settings', labelKey: 'navigation.settings', fallback: 'Settings' },
+      ],
+    },
+  ]
+
   return (
-    <div className={clsx('flex h-screen', theme === 'dark' ? 'dark bg-slate-950' : 'bg-white')}>
+    <div
+      className={clsx(
+        'flex h-screen',
+        theme === 'dark' ? 'dark bg-slate-950' : 'bg-[#fafafa]'
+      )}
+    >
       {/* Sidebar */}
       <aside
         className={clsx(
-          'fixed inset-y-0 left-0 z-50 w-64 bg-slate-900 text-white transition-transform duration-300 lg:relative lg:translate-x-0',
+          'fixed inset-y-0 left-0 z-50 w-60 transition-transform duration-300 lg:relative lg:translate-x-0 border-r',
+          theme === 'dark'
+            ? 'bg-slate-950 text-slate-200'
+            : 'bg-[#fafafa] text-[#333333]',
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         )}
+        style={{ borderColor: DIVIDER }}
       >
         <div className="flex flex-col h-full">
           {/* Logo */}
-          <div className="flex items-center justify-between p-6 border-b border-slate-700">
-            <h1 className="text-2xl font-bold">{t('common.appName', 'X-Agent')}</h1>
+          <div
+            className="flex items-center justify-between px-5 py-5 border-b"
+            style={{ borderColor: DIVIDER }}
+          >
+            <h1 className="text-[15px] font-semibold tracking-tight">
+              {t('common.appName', 'X-Agent')}
+            </h1>
             <button
               onClick={toggleSidebar}
-              className="lg:hidden p-2 hover:bg-slate-800 rounded-lg transition-colors"
+              className="lg:hidden p-1.5 opacity-50 hover:opacity-100 transition-opacity"
               aria-label={t('common.closeMenu', 'Close menu')}
             >
-              <X size={20} />
+              <X size={18} />
             </button>
           </div>
 
-          {/* Navigation */}
-          <nav className="flex-1 overflow-y-auto p-4 space-y-2" aria-label={t('navigation.main', 'Main navigation')}>
-            <NavLink href="/" icon="🏠" label={t('navigation.dashboard', 'Dashboard')} />
-            <NavLink href="/chat" icon="💬" label={t('navigation.chat', 'Chat')} />
-            <NavLink href="/tasks" icon="✓" label={t('navigation.tasks', 'Tasks')} />
-            <NavLink href="/workflows" icon="🔀" label={t('navigation.workflows', 'Workflows')} />
-            <NavLink href="/workflows/schedules" icon="⏰" label={t('navigation.workflowSchedules', 'Schedules')} />
-            <NavLink href="/workflows/runs" icon="▶️" label={t('navigation.workflowRuns', 'Runs')} />
-            <NavLink href="/checkpoints" icon="🧷" label={t('navigation.checkpoints', 'Checkpoints')} />
-            <NavLink href="/tools" icon="🔧" label={t('navigation.tools', 'Tools')} />
-            <NavLink href="/memory" icon="🧠" label={t('navigation.memory', 'Memory')} />
-            <NavLink href="/agents" icon="🤖" label={t('navigation.agents', 'Agents')} />
-            <NavLink href="/goals" icon="🎯" label={t('navigation.goals', 'Goals')} />
-            <NavLink href="/mcp" icon="🔌" label={t('navigation.mcp', 'MCP')} />
-            <NavLink href="/sandbox-tasks" icon="📦" label={t('navigation.sandboxTasks', 'Sandbox')} />
-            <NavLink href="/approvals" icon="✅" label={t('navigation.approvals', 'Approvals')} />
-            <NavLink href="/audit-logs" icon="📜" label={t('navigation.auditLogs', 'Audit Logs')} />
-            <NavLink href="/backup" icon="💾" label={t('navigation.backup', 'Backup')} />
-            <NavLink href="/observability" icon="📈" label={t('navigation.observability', 'Observability')} />
-            <NavLink href="/analytics" icon="📊" label={t('navigation.analytics', 'Analytics')} />
-            <NavLink href="/automation" icon="🌐" label={t('navigation.automation', 'Automation')} />
-            <NavLink href="/compliance" icon="🛡️" label={t('navigation.compliance', 'Compliance')} />
-            <NavLink href="/sync" icon="🔄" label={t('navigation.sync', 'Sync')} />
-            <NavLink href="/work-sessions" icon="🗂️" label={t('navigation.workSessions', 'Work Sessions')} />
-            <NavLink href="/forum" icon="💡" label={t('navigation.forum', 'Forum')} />
-            <NavLink href="/console" icon="🖥️" label={t('navigation.console', 'Console')} />
-            <NavLink href="/admin/tenants" icon="🏢" label={t('navigation.tenants', 'Tenants')} />
-            <NavLink href="/admin/users" icon="👥" label={t('navigation.usersAdmin', 'Users')} />
-            <NavLink href="/security" icon="🔐" label={t('navigation.security', 'Security')} />
-            <NavLink href="/evolution" icon="🧬" label={t('navigation.evolution', 'Evolution')} />
-            <NavLink href="/review" icon="🔍" label={t('navigation.review', 'Code Review')} />
-            <NavLink href="/settings" icon="⚙️" label={t('navigation.settings', 'Settings')} />
+          {/* Navigation — text-only, 50% → 100% opacity, 2px accent bar */}
+          <nav
+            className="flex-1 overflow-y-auto py-3"
+            aria-label={t('navigation.main', 'Main navigation')}
+          >
+            {navGroups.map((group) => (
+              <div key={group.labelKey} className="mb-1">
+                <div
+                  className="px-5 pt-4 pb-1.5 text-[11px] uppercase tracking-[0.08em] opacity-50 select-none"
+                  aria-hidden="true"
+                >
+                  {t(group.labelKey, group.fallback)}
+                </div>
+                {group.items.map((item) => (
+                  <NavLink
+                    key={item.href}
+                    href={item.href}
+                    label={t(item.labelKey, item.fallback)}
+                  />
+                ))}
+              </div>
+            ))}
           </nav>
 
           {/* User Profile */}
-          <div className="p-4 border-t border-slate-700">
-            <div className="flex items-center justify-between">
-              <div className="flex-1">
-                <p className="text-sm font-medium">{user?.name || 'Guest'}</p>
-                <p className="text-xs text-slate-400">{user?.email || t('errors.unauthorized', 'Not logged in')}</p>
+          <div className="px-5 py-4 border-t" style={{ borderColor: DIVIDER }}>
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex-1 min-w-0">
+                <p className="text-[13px] font-medium truncate">
+                  {user?.name || 'Guest'}
+                </p>
+                <p className="text-[11px] opacity-50 truncate">
+                  {user?.email || t('errors.unauthorized', 'Not logged in')}
+                </p>
               </div>
               <button
                 onClick={logout}
-                className="p-2 hover:bg-slate-800 rounded-lg transition-colors"
+                className="p-1.5 opacity-50 hover:opacity-100 transition-opacity"
                 title={t('common.logout', 'Logout')}
                 aria-label={t('common.logout', 'Logout')}
               >
-                <LogOut size={18} />
+                <LogOut size={16} />
               </button>
             </div>
           </div>
@@ -96,73 +168,67 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Header */}
-        <header className={clsx(
-          'flex items-center justify-between px-6 py-4 border-b',
-          theme === 'dark' ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200'
-        )}>
+        {/* Header — connection dot + language + theme only */}
+        <header
+          className={clsx(
+            'flex items-center justify-between px-6 py-3 border-b',
+            theme === 'dark' ? 'bg-slate-950' : 'bg-[#fafafa]'
+          )}
+          style={{ borderColor: DIVIDER }}
+        >
           <button
             onClick={toggleSidebar}
-            className="lg:hidden p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
+            className="lg:hidden p-1.5 opacity-50 hover:opacity-100 transition-opacity"
             aria-label={t('common.openMenu', 'Open menu')}
           >
-            <Menu size={24} />
+            <Menu size={20} />
           </button>
 
           <div className="flex-1" />
 
-          <div className="flex items-center gap-4">
-            {/* Notifications */}
-            <NotificationCenter />
+          <div className="flex items-center gap-5">
+            {/* Connection Status */}
+            <ConnectionStatus />
 
             {/* Language Switcher */}
-            <div className="flex items-center gap-2">
-              <Globe size={18} className={theme === 'dark' ? 'text-slate-400' : 'text-slate-600'} aria-hidden="true" />
-              <select
-                value={language}
-                onChange={(e) => setLanguage(e.target.value as LanguageCode)}
-                className={clsx(
-                  'px-2 py-1 rounded-lg text-sm',
-                  theme === 'dark'
-                    ? 'bg-slate-800 text-white border border-slate-700'
-                    : 'bg-white text-slate-900 border border-slate-300'
-                )}
-                aria-label={t('common.language', 'Language')}
-              >
-                {AVAILABLE_LANGUAGES.map((code) => (
-                  <option key={code} value={code}>
-                    {SUPPORTED_LANGUAGES[code].nativeName}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <select
+              value={language}
+              onChange={(e) => setLanguage(e.target.value as LanguageCode)}
+              className={clsx(
+                'bg-transparent text-[12px] opacity-70 hover:opacity-100 transition-opacity cursor-pointer border-0 outline-none',
+                theme === 'dark' ? 'text-slate-200' : 'text-[#333333]'
+              )}
+              aria-label={t('common.language', 'Language')}
+            >
+              {AVAILABLE_LANGUAGES.map((code) => (
+                <option key={code} value={code}>
+                  {SUPPORTED_LANGUAGES[code].nativeName}
+                </option>
+              ))}
+            </select>
 
             {/* Theme Toggle */}
             <button
               onClick={toggleTheme}
-              className={clsx(
-                'p-2 rounded-lg transition-colors',
-                theme === 'dark'
-                  ? 'bg-slate-800 hover:bg-slate-700'
-                  : 'bg-slate-100 hover:bg-slate-200'
-              )}
+              className="p-1.5 opacity-50 hover:opacity-100 transition-opacity"
               title={t('common.toggleTheme', 'Toggle theme')}
               aria-label={t('common.toggleTheme', 'Toggle theme')}
             >
-              {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
+              {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
             </button>
-
-            {/* Connection Status */}
-            <ConnectionStatus />
           </div>
         </header>
 
         {/* Content */}
         <main className="flex-1 overflow-auto">
-          <div className={clsx(
-            'h-full',
-            theme === 'dark' ? 'bg-slate-950 text-white' : 'bg-white text-slate-900'
-          )}>
+          <div
+            className={clsx(
+              'h-full',
+              theme === 'dark'
+                ? 'bg-slate-950 text-slate-200'
+                : 'bg-[#fafafa] text-[#333333]'
+            )}
+          >
             {children}
           </div>
         </main>
@@ -176,7 +242,9 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           aria-label="Close sidebar"
           className="fixed inset-0 bg-black/50 z-40 lg:hidden"
           onClick={toggleSidebar}
-          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') toggleSidebar(); }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') toggleSidebar()
+          }}
         />
       )}
     </div>
@@ -185,11 +253,10 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
 
 interface NavLinkProps {
   href: string
-  icon: string
   label: string
 }
 
-const NavLink: React.FC<NavLinkProps> = ({ href, icon, label }) => {
+const NavLink: React.FC<NavLinkProps> = ({ href, label }) => {
   const isActive = window.location.pathname === href
 
   return (
@@ -197,14 +264,18 @@ const NavLink: React.FC<NavLinkProps> = ({ href, icon, label }) => {
       href={href}
       aria-current={isActive ? 'page' : undefined}
       className={clsx(
-        'flex items-center gap-3 px-4 py-2 rounded-lg transition-colors',
-        isActive
-          ? 'bg-blue-600 text-white'
-          : 'text-slate-300 hover:bg-slate-800'
+        'link-plain relative flex items-center pl-5 pr-3 py-[7px] text-[13px] leading-5 transition-opacity duration-150',
+        isActive ? 'opacity-100 font-medium' : 'opacity-50 hover:opacity-90'
       )}
     >
-      <span className="text-xl" aria-hidden="true">{icon}</span>
-      <span className="text-sm font-medium">{label}</span>
+      <span
+        className={clsx(
+          'absolute left-0 top-1/2 -translate-y-1/2 w-[2px] h-4 bg-blue-600 transition-opacity duration-150',
+          isActive ? 'opacity-100' : 'opacity-0'
+        )}
+        aria-hidden="true"
+      />
+      {label}
     </a>
   )
 }
@@ -217,13 +288,15 @@ const ConnectionStatus: React.FC = () => {
     <div className="flex items-center gap-2" role="status" aria-live="polite">
       <div
         className={clsx(
-          'w-2 h-2 rounded-full',
+          'w-1.5 h-1.5 rounded-full',
           isConnected ? 'bg-green-500' : 'bg-red-500'
         )}
         aria-hidden="true"
       />
-      <span className="text-xs text-slate-500">
-        {isConnected ? t('common.connected', 'Connected') : t('common.disconnected', 'Disconnected')}
+      <span className="text-[11px] opacity-50">
+        {isConnected
+          ? t('common.connected', 'Connected')
+          : t('common.disconnected', 'Disconnected')}
       </span>
     </div>
   )

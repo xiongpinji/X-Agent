@@ -2,7 +2,6 @@ import React, { useEffect, useState, useMemo, useCallback } from 'react'
 import { useAppStore } from '@/store/appStore'
 import { apiClient, DashboardMetrics } from '@/services/api'
 import { useI18n } from '@/i18n/context'
-import { Activity, Users, Zap, Clock } from 'lucide-react'
 import clsx from 'clsx'
 
 interface DashboardStats {
@@ -15,70 +14,7 @@ interface DashboardStats {
   avgLatency: string
 }
 
-// Memoized StatCard component
-const StatCard: React.FC<{
-  icon: React.ReactNode
-  label: string
-  value: string | number
-  color: 'blue' | 'green' | 'purple' | 'orange'
-}> = React.memo(({ icon, label, value, color }) => {
-  const { theme } = useAppStore()
-  const colorClasses = {
-    blue: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
-    green: 'bg-green-500/10 text-green-600 dark:text-green-400',
-    purple: 'bg-purple-500/10 text-purple-600 dark:text-purple-400',
-    orange: 'bg-orange-500/10 text-orange-600 dark:text-orange-400',
-  }
-
-  return (
-    <div className={clsx(
-      'rounded-lg p-6',
-      theme === 'dark' ? 'bg-slate-900 border border-slate-700' : 'bg-white border border-slate-200'
-    )}>
-      <div className={clsx('p-3 rounded-lg w-fit mb-4', colorClasses[color])}>
-        {icon}
-      </div>
-      <p className={clsx(
-        'text-sm font-medium mb-1',
-        theme === 'dark' ? 'text-slate-400' : 'text-slate-600'
-      )}>
-        {label}
-      </p>
-      <p className={clsx(
-        'text-3xl font-bold',
-        theme === 'dark' ? 'text-white' : 'text-slate-900'
-      )}>
-        {value}
-      </p>
-    </div>
-  )
-})
-
-StatCard.displayName = 'StatCard'
-
-// Memoized QuickActionButton component
-const QuickActionButton: React.FC<{
-  label: string
-  href: string
-}> = React.memo(({ label, href }) => {
-  const { theme } = useAppStore()
-
-  return (
-    <a
-      href={href}
-      className={clsx(
-        'px-4 py-3 rounded-lg font-medium transition-colors text-center',
-        theme === 'dark'
-          ? 'bg-blue-600 hover:bg-blue-700 text-white'
-          : 'bg-blue-500 hover:bg-blue-600 text-white'
-      )}
-    >
-      {label}
-    </a>
-  )
-})
-
-QuickActionButton.displayName = 'QuickActionButton'
+const DIVIDER = 'rgba(163,169,177,.15)'
 
 export const Dashboard: React.FC = React.memo(() => {
   const { theme, setLoading, setError } = useAppStore()
@@ -129,32 +65,12 @@ export const Dashboard: React.FC = React.memo(() => {
     }
   }, [setLoading, setError])
 
-  // Memoize stat cards to prevent unnecessary re-renders
-  const statCards = useMemo(() => [
-    {
-      icon: <Users size={24} />,
-      label: t('dashboard.totalAgents', 'Total Agents'),
-      value: stats.totalAgents,
-      color: 'blue' as const,
-    },
-    {
-      icon: <Activity size={24} />,
-      label: t('dashboard.activeTasks', 'Active Tasks'),
-      value: stats.activeTasks,
-      color: 'green' as const,
-    },
-    {
-      icon: <Zap size={24} />,
-      label: t('dashboard.totalTools', 'Total Tools'),
-      value: stats.totalTools,
-      color: 'purple' as const,
-    },
-    {
-      icon: <Clock size={24} />,
-      label: t('dashboard.uptime', 'Uptime'),
-      value: stats.uptime,
-      color: 'orange' as const,
-    },
+  // Status row items (numbers in tabular mono, labels 12px uppercase 50%)
+  const statusItems = useMemo(() => [
+    { label: t('dashboard.totalAgents', 'Total Agents'), value: String(stats.totalAgents) },
+    { label: t('dashboard.activeTasks', 'Active Tasks'), value: String(stats.activeTasks) },
+    { label: t('dashboard.totalTools', 'Total Tools'), value: String(stats.totalTools) },
+    { label: t('dashboard.uptime', 'Uptime'), value: stats.uptime },
   ], [stats, t])
 
   const quickActions = useMemo(() => [
@@ -164,89 +80,110 @@ export const Dashboard: React.FC = React.memo(() => {
     { label: t('dashboard.manageTools', 'Manage Tools'), href: '/tools' },
   ], [t])
 
+  // System metrics rows (mono tabular)
+  const metricRows = useMemo(() => [
+    { label: t('dashboard.requests', 'Total Requests'), value: String(stats.requestCount) },
+    { label: t('dashboard.errorRate', 'Error Rate'), value: stats.errorRate },
+    { label: t('dashboard.avgLatency', 'Avg Latency'), value: stats.avgLatency },
+  ], [stats, t])
+
   return (
-    <div className={clsx(
-      'p-8',
-      theme === 'dark' ? 'bg-slate-950' : 'bg-slate-50'
-    )}>
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className={clsx(
-            'text-4xl font-bold mb-2',
-            theme === 'dark' ? 'text-white' : 'text-slate-900'
-          )}>
+    <div
+      className={clsx(
+        'min-h-full px-8 py-10 md:px-12',
+        theme === 'dark' ? 'bg-slate-950 text-slate-200' : 'bg-[#fafafa] text-[#333333]'
+      )}
+    >
+      <div className="max-w-4xl">
+        {/* Editorial header: short 2px rule + 32px/500 title */}
+        <header className="mb-10">
+          <div
+            className={clsx(
+              'w-12 border-t-2 mb-5',
+              theme === 'dark' ? 'border-slate-200' : 'border-[#333333]'
+            )}
+            aria-hidden="true"
+          />
+          <h1 className="text-[32px] leading-tight font-medium tracking-tight">
             {t('dashboard.title', 'Dashboard')}
           </h1>
-          <p className={clsx(
-            'text-lg',
-            theme === 'dark' ? 'text-slate-400' : 'text-slate-600'
-          )}>
+          <p className="text-[13px] opacity-50 mt-2">
             {t('dashboard.subtitle', 'Welcome to X-Agent Control Center')}
           </p>
-        </div>
+        </header>
 
-        {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          {statCards.map((card, index) => (
-            <StatCard
-              key={index}
-              icon={card.icon}
-              label={card.label}
-              value={card.value}
-              color={card.color}
-            />
-          ))}
-        </div>
+        {/* Status row — no cards, 1px vertical dividers */}
+        <section aria-label={t('dashboard.title', 'Dashboard')}>
+          <dl className="flex flex-wrap gap-y-6">
+            {statusItems.map((item, i) => (
+              <div
+                key={item.label}
+                className={clsx(
+                  'flex flex-col gap-2 pr-8 mr-8',
+                  i < statusItems.length - 1 && 'border-r'
+                )}
+                style={i < statusItems.length - 1 ? { borderColor: DIVIDER } : undefined}
+              >
+                <dd className="font-data text-[26px] leading-none order-2">
+                  {item.value}
+                </dd>
+                <dt className="text-[12px] uppercase tracking-[0.06em] opacity-50 order-1">
+                  {item.label}
+                </dt>
+              </div>
+            ))}
+          </dl>
+        </section>
 
-        {/* Quick Actions */}
-        <div className={clsx(
-          'rounded-lg p-6 mb-8',
-          theme === 'dark' ? 'bg-slate-900 border border-slate-700' : 'bg-white border border-slate-200'
-        )}>
-          <h2 className={clsx(
-            'text-xl font-bold mb-4',
-            theme === 'dark' ? 'text-white' : 'text-slate-900'
-          )}>
+        <hr className="my-10 border-0 border-t" style={{ borderColor: DIVIDER }} />
+
+        {/* Quick actions — text links with → micro-interaction */}
+        <section>
+          <h2 className="text-[11px] uppercase tracking-[0.08em] opacity-50 mb-2">
             {t('dashboard.quickActions', 'Quick Actions')}
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            {quickActions.map((action, index) => (
-              <QuickActionButton
-                key={index}
-                label={action.label}
+          <nav className="flex flex-col">
+            {quickActions.map((action) => (
+              <a
+                key={action.href}
                 href={action.href}
-              />
+                className="link-plain group flex items-center justify-between py-3 border-b text-[14px]"
+                style={{ borderColor: DIVIDER }}
+              >
+                <span className="opacity-80 group-hover:opacity-100 transition-opacity duration-200">
+                  {action.label}
+                </span>
+                <span
+                  className="opacity-50 transition-transform duration-200 ease-out group-hover:translate-x-[3px]"
+                  aria-hidden="true"
+                >
+                  →
+                </span>
+              </a>
             ))}
-          </div>
-        </div>
+          </nav>
+        </section>
 
-        {/* Recent Activity */}
-        <div className={clsx(
-          'rounded-lg p-6',
-          theme === 'dark' ? 'bg-slate-900 border border-slate-700' : 'bg-white border border-slate-200'
-        )}>
-          <h2 className={clsx(
-            'text-xl font-bold mb-4',
-            theme === 'dark' ? 'text-white' : 'text-slate-900'
-          )}>
+        <hr className="my-10 border-0 border-t" style={{ borderColor: DIVIDER }} />
+
+        {/* System metrics — mono tabular rows */}
+        <section>
+          <h2 className="text-[11px] uppercase tracking-[0.08em] opacity-50 mb-2">
             {t('dashboard.systemMetrics', 'System Metrics')}
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className={clsx('p-4 rounded-lg', theme === 'dark' ? 'bg-slate-800' : 'bg-slate-50')}>
-              <p className={clsx('text-xs mb-1', theme === 'dark' ? 'text-slate-400' : 'text-slate-500')}>{t('dashboard.requests', 'Total Requests')}</p>
-              <p className="text-lg font-bold">{stats.requestCount}</p>
-            </div>
-            <div className={clsx('p-4 rounded-lg', theme === 'dark' ? 'bg-slate-800' : 'bg-slate-50')}>
-              <p className={clsx('text-xs mb-1', theme === 'dark' ? 'text-slate-400' : 'text-slate-500')}>{t('dashboard.errorRate', 'Error Rate')}</p>
-              <p className="text-lg font-bold">{stats.errorRate}</p>
-            </div>
-            <div className={clsx('p-4 rounded-lg', theme === 'dark' ? 'bg-slate-800' : 'bg-slate-50')}>
-              <p className={clsx('text-xs mb-1', theme === 'dark' ? 'text-slate-400' : 'text-slate-500')}>{t('dashboard.avgLatency', 'Avg Latency')}</p>
-              <p className="text-lg font-bold">{stats.avgLatency}</p>
-            </div>
+          <div className="font-data text-[13px]">
+            {metricRows.map((row) => (
+              <div
+                key={row.label}
+                className="flex items-baseline justify-between py-2.5 border-b"
+                style={{ borderColor: DIVIDER }}
+              >
+                <span className="opacity-50">{row.label}</span>
+                <span className="tabular-nums">{row.value}</span>
+              </div>
+            ))}
           </div>
-        </div>
+        </section>
       </div>
     </div>
   )
