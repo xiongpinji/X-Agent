@@ -337,6 +337,12 @@ class ApiClient {
         if (token) {
           config.headers.Authorization = `Bearer ${token}`
         }
+        // API-key(dev)登录的凭证也要实际发送——否则登录后所有请求匿名 401,
+        // 响应拦截器再把用户踢回 /login(2026-08-14 实测发现的死循环)。
+        const apiKey = localStorage.getItem('api_key')
+        if (apiKey) {
+          config.headers['x-api-key'] = apiKey
+        }
         return config
       },
       (error) => Promise.reject(error)
