@@ -13,7 +13,7 @@ interface LayoutProps {
 // SUPPORTED_LANGUAGES would fall back to English anyway.
 const AVAILABLE_LANGUAGES: LanguageCode[] = ['en', 'zh', 'ja', 'ko', 'es', 'ar']
 
-const DIVIDER = 'rgba(163,169,177,.15)'
+const DIVIDER = 'var(--divider)'
 
 interface NavItem {
   href: string
@@ -85,17 +85,14 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   return (
     <div
       className={clsx(
-        'flex h-screen',
-        theme === 'dark' ? 'dark bg-slate-950' : 'bg-[#fafafa]'
+        'flex h-screen bg-[var(--bg)] text-[var(--fg)]',
+        theme === 'dark' && 'dark'
       )}
     >
       {/* Sidebar */}
       <aside
         className={clsx(
           'fixed inset-y-0 left-0 z-50 w-60 transition-transform duration-300 lg:relative lg:translate-x-0 border-r',
-          theme === 'dark'
-            ? 'bg-slate-950 text-slate-200'
-            : 'bg-[#fafafa] text-[#333333]',
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         )}
         style={{ borderColor: DIVIDER }}
@@ -170,10 +167,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header — connection dot + language + theme only */}
         <header
-          className={clsx(
-            'flex items-center justify-between px-6 py-3 border-b',
-            theme === 'dark' ? 'bg-slate-950' : 'bg-[#fafafa]'
-          )}
+          className="flex items-center justify-between px-6 py-3 border-b"
           style={{ borderColor: DIVIDER }}
         >
           <button
@@ -194,10 +188,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             <select
               value={language}
               onChange={(e) => setLanguage(e.target.value as LanguageCode)}
-              className={clsx(
-                'bg-transparent text-[12px] opacity-70 hover:opacity-100 transition-opacity cursor-pointer border-0 outline-none',
-                theme === 'dark' ? 'text-slate-200' : 'text-[#333333]'
-              )}
+              className="bg-transparent text-[12px] opacity-70 hover:opacity-100 transition-opacity cursor-pointer border-0 outline-none"
               aria-label={t('common.language', 'Language')}
             >
               {AVAILABLE_LANGUAGES.map((code) => (
@@ -221,14 +212,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
 
         {/* Content */}
         <main className="flex-1 overflow-auto">
-          <div
-            className={clsx(
-              'h-full',
-              theme === 'dark'
-                ? 'bg-slate-950 text-slate-200'
-                : 'bg-[#fafafa] text-[#333333]'
-            )}
-          >
+          <div className="h-full">
             {children}
           </div>
         </main>

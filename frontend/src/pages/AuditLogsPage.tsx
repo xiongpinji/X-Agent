@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react'
 import { useAppStore } from '@/store/appStore'
 import { governanceOps, AuditLogRecord, AuditChainVerification, AuditSummary } from '@/services/governanceOps'
 import { useI18n } from '@/i18n/context'
-import { ScrollText, RefreshCw, Download, ShieldCheck, ChevronDown, ChevronUp, BarChart3 } from 'lucide-react'
+import { RefreshCw, Download, ShieldCheck, ChevronDown, ChevronUp } from 'lucide-react'
 import clsx from 'clsx'
 
 interface Filters {
@@ -15,10 +15,10 @@ interface Filters {
 
 const EMPTY_FILTERS: Filters = { action: '', resource_type: '', outcome: '', startDate: '', endDate: '' }
 
-const OUTCOME_STYLES: Record<string, string> = {
-  success: 'bg-green-500/10 text-green-600 dark:text-green-400',
-  failed: 'bg-red-500/10 text-red-600 dark:text-red-400',
-  denied: 'bg-orange-500/10 text-orange-600 dark:text-orange-400',
+const OUTCOME_BADGE: Record<string, string> = {
+  success: 'badge-success',
+  failed: 'badge-danger',
+  denied: 'badge-warning',
 }
 
 export const AuditLogsPage: React.FC = () => {
@@ -110,19 +110,23 @@ export const AuditLogsPage: React.FC = () => {
   )
 
   return (
-    <div className={clsx('p-8', theme === 'dark' ? 'bg-slate-950' : 'bg-slate-50')}>
-      <div className="max-w-6xl mx-auto">
-        {/* Header */}
-        <div className="mb-8 flex items-start justify-between flex-wrap gap-4">
-          <div>
-            <h1 className={clsx('text-3xl font-bold mb-2', theme === 'dark' ? 'text-white' : 'text-slate-900')}>
-              {t('audit.title', 'Audit Logs')}
-            </h1>
-            <p className={clsx('text-sm', theme === 'dark' ? 'text-slate-400' : 'text-slate-600')}>
-              {t('audit.subtitle', 'Inspect, verify and export tamper-evident audit logs')}
-            </p>
-          </div>
-          <div className="flex gap-2 flex-wrap">
+    <div className={clsx('min-h-full px-8 py-10', theme === 'dark' ? 'bg-slate-950 text-slate-200' : 'bg-[#fafafa] text-[#333333]')}>
+      <div className="max-w-6xl">
+        {/* Header — Dashboard-style */}
+        <header className="mb-8">
+          <div
+            className={clsx(
+              'w-12 border-t-2 mb-5',
+              theme === 'dark' ? 'border-slate-200' : 'border-[#333333]'
+            )}
+            aria-hidden="true"
+          />
+          <div className="flex items-end justify-between gap-4 flex-wrap">
+            <div>
+              <h1 className="page-title">{t('audit.title', 'Audit Logs')}</h1>
+              <p className="page-subtitle">{t('audit.subtitle', 'Inspect, verify and export tamper-evident audit logs')}</p>
+            </div>
+            <div className="flex gap-2 flex-wrap">
             <button
               onClick={() => handleExport('csv')}
               disabled={exportBusy}
@@ -180,8 +184,9 @@ export const AuditLogsPage: React.FC = () => {
             >
               <RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />
             </button>
+            </div>
           </div>
-        </div>
+        </header>
 
         {/* Chain verification result */}
         {verification && (
@@ -218,21 +223,16 @@ export const AuditLogsPage: React.FC = () => {
           </div>
         )}
 
-        {/* Summary cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-          <SummaryCard theme={theme} label={t('audit.totalLogs', 'Total logs')} value={summary?.count ?? '—'} />
-          <SummaryCard theme={theme} label={t('audit.success', 'Success')} value={summary?.by_outcome?.success ?? '—'} />
-          <SummaryCard theme={theme} label={t('audit.failed', 'Failed')} value={summary?.by_outcome?.failed ?? '—'} />
-          <SummaryCard
-            theme={theme}
-            label={t('audit.topAction', 'Top action')}
-            value={summary ? topKey(summary.by_action) : '—'}
-            small
-          />
-        </div>
+        {/* Summary — Dashboard-style stat row, no cards */}
+        <dl className="flex flex-wrap gap-y-6 mb-8">
+          <SummaryStat label={t('audit.totalLogs', 'Total logs')} value={summary?.count ?? '—'} />
+          <SummaryStat label={t('audit.success', 'Success')} value={summary?.by_outcome?.success ?? '—'} border />
+          <SummaryStat label={t('audit.failed', 'Failed')} value={summary?.by_outcome?.failed ?? '—'} border />
+          <SummaryStat label={t('audit.topAction', 'Top action')} value={summary ? topKey(summary.by_action) : '—'} border small />
+        </dl>
 
-        {/* Filters */}
-        <div className={clsx('rounded-lg border p-4 mb-6 flex flex-wrap gap-3 items-end', theme === 'dark' ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200')}>
+        {/* Filters — flat row, hairline bottom divider */}
+        <div className="pb-4 mb-6 flex flex-wrap gap-3 items-end border-b" style={{ borderColor: 'rgba(163,169,177,.15)' }}>
           <div>
             <label className={clsx('block text-xs mb-1', theme === 'dark' ? 'text-slate-400' : 'text-slate-500')}>{t('audit.filter.action', 'Action')}</label>
             <input className={inputCls} value={filters.action} onChange={(e) => setFilters({ ...filters, action: e.target.value })} placeholder="approval.approve" />
@@ -277,15 +277,13 @@ export const AuditLogsPage: React.FC = () => {
           </button>
         </div>
 
-        {/* Log list */}
+        {/* Log list — hairline divider rows */}
         {records.length === 0 && !isLoading ? (
-          <div className={clsx('text-center py-12 rounded-lg border', theme === 'dark' ? 'border-slate-800 text-slate-400' : 'border-slate-200 text-slate-500 bg-white')}>
-            <ScrollText size={32} className="mx-auto mb-3 opacity-50" />
-            <p className="text-lg font-medium mb-1">{t('audit.noLogs', 'No audit logs')}</p>
-            <p className="text-sm">{t('audit.noLogsHint', 'Logs will appear once actions are recorded')}</p>
-          </div>
+          <p className="empty-state">
+            {t('audit.noLogs', 'No audit logs')} · {t('audit.noLogsHint', 'Logs will appear once actions are recorded')}
+          </p>
         ) : (
-          <div className="space-y-2">
+          <div>
             {records.map((record) => (
               <AuditLogRow key={record.id} record={record} />
             ))}
@@ -302,15 +300,15 @@ function topKey(map: Record<string, number>): string {
   return entries.sort((a, b) => b[1] - a[1])[0][0]
 }
 
-const SummaryCard: React.FC<{ theme: string; label: string; value: string | number; small?: boolean }> = ({ theme, label, value, small }) => (
-  <div className={clsx('rounded-lg border p-4', theme === 'dark' ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200')}>
-    <div className={clsx('text-xs mb-1 flex items-center gap-1', theme === 'dark' ? 'text-slate-400' : 'text-slate-500')}>
-      <BarChart3 size={12} />
-      {label}
-    </div>
-    <div className={clsx(small ? 'text-sm font-semibold truncate' : 'text-2xl font-bold', theme === 'dark' ? 'text-white' : 'text-slate-900')}>
+const SummaryStat: React.FC<{ label: string; value: string | number; border?: boolean; small?: boolean }> = ({ label, value, border, small }) => (
+  <div
+    className={clsx('flex flex-col gap-2 pr-8 mr-8', border && 'border-r')}
+    style={border ? { borderColor: 'rgba(163,169,177,.15)' } : undefined}
+  >
+    <dd className={clsx('font-data leading-none order-2', small ? 'text-[13px] truncate max-w-[160px]' : 'text-[26px]')}>
       {value}
-    </div>
+    </dd>
+    <dt className="text-[12px] uppercase tracking-[0.06em] opacity-50 order-1">{label}</dt>
   </div>
 )
 
@@ -320,28 +318,28 @@ const AuditLogRow: React.FC<{ record: AuditLogRecord }> = ({ record }) => {
   const [expanded, setExpanded] = useState(false)
 
   return (
-    <div className={clsx('rounded-lg border', theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200')}>
+    <div className="row-line">
       <button
         onClick={() => setExpanded((v) => !v)}
-        className="w-full flex items-center gap-3 px-4 py-3 text-left"
+        className="w-full flex items-center gap-3 py-1 text-left"
         aria-expanded={expanded}
       >
-        <span className={clsx('px-2 py-0.5 rounded-full text-xs font-medium shrink-0', OUTCOME_STYLES[record.outcome] ?? 'bg-slate-500/10 text-slate-600 dark:text-slate-300')}>
+        <span className={clsx('badge-status shrink-0', OUTCOME_BADGE[record.outcome] ?? 'badge-muted')}>
           {record.outcome}
         </span>
-        <span className={clsx('font-medium text-sm truncate', theme === 'dark' ? 'text-white' : 'text-slate-900')}>
+        <span className="font-medium text-[13px] truncate">
           {record.action}
         </span>
-        <span className={clsx('text-xs truncate flex-1', theme === 'dark' ? 'text-slate-500' : 'text-slate-400')}>
+        <span className="cell-data truncate flex-1 opacity-50">
           {record.resource_type}{record.resource_id ? `/${record.resource_id}` : ''} · {record.actor_id}
         </span>
-        <span className={clsx('text-xs shrink-0', theme === 'dark' ? 'text-slate-500' : 'text-slate-400')}>
+        <span className="cell-data shrink-0 opacity-50">
           {new Date(record.created_at).toLocaleString()}
         </span>
-        {expanded ? <ChevronUp size={16} className="shrink-0 opacity-60" /> : <ChevronDown size={16} className="shrink-0 opacity-60" />}
+        {expanded ? <ChevronUp size={14} className="shrink-0 opacity-50" /> : <ChevronDown size={14} className="shrink-0 opacity-50" />}
       </button>
       {expanded && (
-        <div className={clsx('px-4 pb-4 pt-1 border-t', theme === 'dark' ? 'border-slate-800' : 'border-slate-100')}>
+        <div className={clsx('pb-3 pt-2 border-t', theme === 'dark' ? 'border-slate-800' : 'border-slate-100')}>
           <dl className={clsx('grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1 text-xs mb-3', theme === 'dark' ? 'text-slate-400' : 'text-slate-600')}>
             <div><span className="font-medium">id:</span> {record.id}</div>
             <div><span className="font-medium">tenant:</span> {record.tenant_id}</div>

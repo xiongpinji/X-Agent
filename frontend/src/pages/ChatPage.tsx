@@ -3,8 +3,13 @@ import { useAppStore } from '@/store/appStore'
 import { Agent, apiClient, ChatMessage, ChatRunResponse } from '@/services/api'
 import { SSEClient, AnyStreamEvent } from '@/services/sseClient'
 import { useI18n } from '@/i18n/context'
-import { Activity, AlertTriangle, CheckCircle2, Loader, Paperclip, Send, Radio, Zap } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Paperclip } from 'lucide-react'
 import clsx from 'clsx'
+import './ChatPage.css'
+
+const DIVIDER = 'rgba(163,169,177,.15)'
+const TIMELINE_GREY = 'rgba(163,169,177,.55)'
+const ACCENT = '#2563eb'
 
 interface ParallelTaskCard {
   agent_id: string
@@ -149,7 +154,7 @@ export const ChatPage: React.FC = () => {
     }
   }
 
-  const handleSendMessage = async (e: React.FormEvent) => {
+  const handleSendMessage = async (e: React.FormEvent | React.KeyboardEvent) => {
     e.preventDefault()
     if (!input.trim()) return
 
@@ -275,44 +280,51 @@ export const ChatPage: React.FC = () => {
     }
   }
 
+  const handleInputKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // Enter sends; Shift+Enter inserts a newline.
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      if (!isLoading && input.trim()) {
+        void handleSendMessage(e)
+      }
+    }
+  }
+
   return (
     <div className={clsx(
       'flex flex-col h-full',
-      theme === 'dark' ? 'bg-slate-950' : 'bg-white'
+      theme === 'dark' ? 'bg-slate-950 text-slate-200' : 'bg-[#fafafa] text-[#333333]'
     )}>
-      {/* Header */}
-      <div className={clsx(
-        'p-6 border-b',
-        theme === 'dark' ? 'border-slate-700 bg-slate-900' : 'border-slate-200 bg-slate-50'
-      )}>
-        <h1 className={clsx(
-          'text-2xl font-bold mb-4',
-          theme === 'dark' ? 'text-white' : 'text-slate-900'
-        )}>
+      {/* Header — editorial rule + hairline divider, no card */}
+      <header
+        className="px-8 pt-8 pb-6 border-b"
+        style={{ borderColor: DIVIDER }}
+      >
+        <div
+          className={clsx(
+            'w-10 border-t-2 mb-4',
+            theme === 'dark' ? 'border-slate-200' : 'border-[#333333]'
+          )}
+          aria-hidden="true"
+        />
+        <h1 className="text-[24px] leading-tight font-medium tracking-tight">
           {t('chat.title', 'Chat with X-Agent')}
         </h1>
 
-        {/* Agent Selector */}
-        <div className="flex items-center gap-2">
+        {/* Agent selector + Ultra toggle — plain text row */}
+        <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2">
           <label
             htmlFor="chat-agent-select"
-            className={clsx(
-              'text-sm font-medium',
-              theme === 'dark' ? 'text-slate-300' : 'text-slate-700'
-            )}
+            className="text-[11px] uppercase tracking-[0.08em] opacity-50"
           >
-            {t('chat.selectAgent', 'Select Agent')}:
+            {t('chat.selectAgent', 'Select Agent')}
           </label>
           <select
             id="chat-agent-select"
             value={selectedAgent}
             onChange={(e) => setSelectedAgent(e.target.value)}
-            className={clsx(
-              'px-3 py-1 rounded-lg text-sm',
-              theme === 'dark'
-                ? 'bg-slate-800 text-white border border-slate-700'
-                : 'bg-white text-slate-900 border border-slate-300'
-            )}
+            className="bg-transparent border-b pb-0.5 text-[13px] focus:outline-none cursor-pointer"
+            style={{ borderColor: DIVIDER }}
           >
             {agents.map((agent) => (
               <option key={agent.id} value={agent.id}>
@@ -320,57 +332,55 @@ export const ChatPage: React.FC = () => {
               </option>
             ))}
           </select>
-          {/* Ultra Mode Toggle */}
+          {/* Ultra Mode — text toggle with 2px active indicator */}
           <button
             type="button"
             onClick={() => setUltraMode(!ultraMode)}
             className={clsx(
-              'ml-2 inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium transition-colors',
-              ultraMode
-                ? 'bg-purple-600 text-white shadow-sm'
-                : theme === 'dark'
-                  ? 'bg-slate-800 text-slate-300 hover:bg-slate-700'
-                  : 'bg-slate-200 text-slate-600 hover:bg-slate-300'
+              'relative pb-1 text-[11px] uppercase tracking-[0.08em] transition-opacity duration-200',
+              ultraMode ? 'opacity-100' : 'opacity-50 hover:opacity-100'
             )}
             title={t('chat.ultraMode', 'Ultra Mode: 4 parallel agents')}
             aria-pressed={ultraMode}
           >
-            <Zap size={12} />
             Ultra
+            <span
+              className={clsx(
+                'absolute left-0 right-0 -bottom-px h-[2px] transition-opacity duration-200',
+                ultraMode ? 'opacity-100' : 'opacity-0'
+              )}
+              style={{ backgroundColor: ACCENT }}
+              aria-hidden="true"
+            />
           </button>
         </div>
 
         {lastRun && (
-          <div className={clsx(
-            'mt-4 flex flex-wrap items-center gap-2 text-xs',
-            theme === 'dark' ? 'text-slate-300' : 'text-slate-600'
-          )}>
-            <span className={clsx(
-              'inline-flex items-center gap-1 rounded-md border px-2 py-1',
-              theme === 'dark' ? 'border-slate-700 bg-slate-800' : 'border-slate-200 bg-white'
-            )}>
-              {lastRun.status === 'failed' ? <AlertTriangle size={14} /> : <CheckCircle2 size={14} />}
+          <div className="mt-5 flex flex-wrap items-center gap-y-2 text-[12px]">
+            <span className="inline-flex items-center gap-1.5 pr-5 opacity-80">
+              {lastRun.status === 'failed' ? <AlertTriangle size={12} /> : <CheckCircle2 size={12} />}
               {lastRun.status}
             </span>
-            <span className={clsx(
-              'inline-flex min-w-0 items-center gap-1 rounded-md border px-2 py-1',
-              theme === 'dark' ? 'border-slate-700 bg-slate-800' : 'border-slate-200 bg-white'
-            )}>
-              <Activity size={14} />
-              <span className="truncate">run {lastRun.run_id}</span>
+            <span
+              className="inline-flex min-w-0 items-center pl-5 border-l"
+              style={{ borderColor: DIVIDER }}
+            >
+              <span className="font-data truncate opacity-50">run {lastRun.run_id}</span>
             </span>
             {lastRun.approval_required && (
-              <span className="inline-flex items-center gap-1 rounded-md bg-amber-100 px-2 py-1 text-amber-700">
-                <AlertTriangle size={14} />
+              <span
+                className="inline-flex items-center gap-1.5 pl-5 ml-5 border-l text-amber-600"
+                style={{ borderColor: DIVIDER }}
+              >
+                <AlertTriangle size={12} />
                 approval required
               </span>
             )}
             {tokenUsage && (
-              <span className={clsx(
-                'inline-flex items-center gap-1 rounded-md border px-2 py-1',
-                theme === 'dark' ? 'border-emerald-800 bg-emerald-950 text-emerald-300' : 'border-emerald-200 bg-emerald-50 text-emerald-700'
-              )}>
-                <Zap size={12} />
+              <span
+                className="font-data inline-flex items-center pl-5 ml-5 border-l opacity-50"
+                style={{ borderColor: DIVIDER }}
+              >
                 {tokenUsage.tokens ? `${tokenUsage.tokens} tokens` : ''}
                 {tokenUsage.iterations ? ` · ${tokenUsage.iterations} iter` : ''}
                 {tokenUsage.model ? ` · ${tokenUsage.model}` : ''}
@@ -378,200 +388,269 @@ export const ChatPage: React.FC = () => {
             )}
           </div>
         )}
-      </div>
+      </header>
 
-      {lastRun && (
-        <div className={clsx(
-          'border-b px-6 py-3',
-          theme === 'dark' ? 'border-slate-700 bg-slate-950' : 'border-slate-200 bg-white'
-        )}>
-          <div className={clsx(
-            'grid gap-2 text-xs md:grid-cols-2',
-            theme === 'dark' ? 'text-slate-300' : 'text-slate-600'
-          )}>
+      {/* Run events — hairline rows instead of cards */}
+      {lastRun && lastRun.events.length > 0 && (
+        <div className="px-8 py-4 border-b" style={{ borderColor: DIVIDER }}>
+          <div className="max-w-3xl grid gap-x-8 md:grid-cols-2">
             {lastRun.events.map((event, index) => (
               <div
                 key={`${event.type}-${index}`}
-                className={clsx(
-                  'rounded-md border px-3 py-2',
-                  theme === 'dark' ? 'border-slate-700 bg-slate-900' : 'border-slate-200 bg-slate-50'
-                )}
+                className="py-2 border-b"
+                style={{ borderColor: DIVIDER }}
               >
-                <div className="font-medium">{event.type}</div>
-                <div className="mt-1">{event.message}</div>
+                <div className="text-[11px] uppercase tracking-[0.06em] opacity-50">{event.type}</div>
+                <div className="text-[13px] mt-0.5 opacity-80">{event.message}</div>
               </div>
             ))}
           </div>
         </div>
       )}
 
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-6 space-y-4" role="log" aria-live="polite" aria-label={t('chat.messages', 'Messages')}>
+      {/* Messages — timeline, no bubbles */}
+      <div
+        className="flex-1 overflow-y-auto px-8 py-8"
+        role="log"
+        aria-live="polite"
+        aria-label={t('chat.messages', 'Messages')}
+      >
         {messages.length === 0 && !streamContent ? (
-          <div className={clsx(
-            'flex items-center justify-center h-full text-center',
-            theme === 'dark' ? 'text-slate-400' : 'text-slate-500'
-          )}>
+          <div className="flex items-center justify-center h-full text-center opacity-50">
             <div>
-              <p className="text-lg font-medium mb-2">{t('chat.noMessages', 'No messages yet')}</p>
-              <p className="text-sm">{t('chat.startConversation', 'Start a conversation with X-Agent')}</p>
+              <p className="text-[15px] font-medium mb-1">{t('chat.noMessages', 'No messages yet')}</p>
+              <p className="text-[13px]">{t('chat.startConversation', 'Start a conversation with X-Agent')}</p>
             </div>
           </div>
         ) : (
-          <>
+          <div className="max-w-3xl space-y-7">
             {messages.map((message) => (
-              <ChatBubble key={message.id} message={message} />
+              <MessageItem key={message.id} message={message} />
             ))}
-            {/* Streaming indicator */}
+
+            {/* Streaming — timeline entry with blinking block cursor / dot pulse */}
             {isStreaming && (
-              <div className={clsx('flex justify-start')}>
-                <div className={clsx(
-                  'max-w-xs lg:max-w-md px-4 py-2 rounded-lg',
-                  theme === 'dark' ? 'bg-slate-800 text-slate-100' : 'bg-slate-200 text-slate-900'
-                )}>
-                  {streamContent ? (
-                    <p className="text-sm break-words whitespace-pre-wrap">{streamContent}</p>
-                  ) : (
-                    <div className="flex items-center gap-2 text-sm">
-                      <Radio size={14} className="animate-pulse text-blue-500" />
-                      <span>{t('chat.streaming', 'Agent is thinking...')}</span>
-                    </div>
-                  )}
-                </div>
-              </div>
+              <article className="pl-4 border-l-2" style={{ borderColor: TIMELINE_GREY }}>
+                <header className="flex items-baseline gap-3 mb-1.5">
+                  <span className="text-[11px] uppercase tracking-[0.08em] opacity-50">
+                    {t('chat.assistant', 'X-Agent')}
+                  </span>
+                </header>
+                {streamContent ? (
+                  <div className="text-[15px] leading-[1.7] break-words whitespace-pre-wrap">
+                    {renderMessageContent(streamContent, theme === 'dark')}
+                    <span
+                      className={clsx(
+                        'chat-cursor inline-block align-text-bottom w-[8px] h-[16px] ml-0.5',
+                        theme === 'dark' ? 'bg-slate-300' : 'bg-[#333333]'
+                      )}
+                      aria-hidden="true"
+                    />
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2.5 text-[13px] opacity-50">
+                    <DotPulse />
+                    <span>{t('chat.streaming', 'Agent is thinking...')}</span>
+                  </div>
+                )}
+              </article>
             )}
-            {/* Parallel task cards (Ultra Mode) */}
+
+            {/* Parallel task rows (Ultra Mode) — hairlines, no cards */}
             {(parallelRunning || parallelTasks.length > 0) && (
-              <div className="space-y-2 mt-2">
+              <article className="pl-4 border-l-2" style={{ borderColor: TIMELINE_GREY }}>
+                <header className="flex items-baseline gap-3 mb-1.5">
+                  <span className="text-[11px] uppercase tracking-[0.08em] opacity-50">
+                    Ultra · {parallelTasks.length || 4} agents
+                  </span>
+                </header>
                 {parallelRunning && parallelTasks.length === 0 && (
-                  <div className="flex items-center gap-2 text-sm text-purple-500">
-                    <Loader size={14} className="animate-spin" />
+                  <div className="flex items-center gap-2.5 text-[13px] opacity-50 py-1">
+                    <DotPulse />
                     <span>Dispatching to parallel agents...</span>
                   </div>
                 )}
-                {parallelTasks.map((task, i) => (
-                  <div key={task.agent_id + i} className={clsx(
-                    'p-3 rounded-lg border text-xs',
-                    theme === 'dark' ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200'
-                  )}>
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="font-medium flex items-center gap-1">
-                        <Zap size={11} className="text-purple-500" />
-                        Agent {i + 1}
-                      </span>
-                      <span className={clsx(
-                        'px-1.5 py-0.5 rounded text-[10px] font-medium',
-                        task.status === 'completed' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
-                        task.status === 'failed' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
-                        'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
-                      )}>
-                        {task.status}
-                      </span>
+                <div>
+                  {parallelTasks.map((task, i) => (
+                    <div
+                      key={task.agent_id + i}
+                      className="py-2.5 border-b last:border-b-0"
+                      style={{ borderColor: DIVIDER }}
+                    >
+                      <div className="flex items-baseline justify-between gap-3">
+                        <span className="text-[13px] font-medium">Agent {i + 1}</span>
+                        <span className={clsx(
+                          'font-data text-[11px] uppercase tracking-[0.06em]',
+                          task.status === 'completed' && 'text-emerald-600',
+                          task.status === 'failed' && 'text-red-600',
+                          task.status !== 'completed' && task.status !== 'failed' && 'opacity-50'
+                        )}>
+                          {task.status}
+                        </span>
+                      </div>
+                      {task.output && (
+                        <p className="text-[13px] mt-1 opacity-60">{String(task.output).slice(0, 200)}</p>
+                      )}
+                      {task.error && <p className="text-[13px] mt-1 text-red-600">{task.error}</p>}
                     </div>
-                    {task.output && <p className={theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}>{String(task.output).slice(0, 200)}</p>}
-                    {task.error && <p className="text-red-500">{task.error}</p>}
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              </article>
             )}
-          </>
+          </div>
         )}
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input */}
-      <div className={clsx(
-        'p-6 border-t',
-        theme === 'dark' ? 'border-slate-700 bg-slate-900' : 'border-slate-200 bg-slate-50'
-      )}>
-        <form onSubmit={handleSendMessage} className="flex gap-3">
-          {/* File upload has no backend endpoint yet — disabled and labelled. */}
-          <button
-            type="button"
-            disabled
-            className={clsx(
-              'p-2 rounded-lg transition-colors opacity-50 cursor-not-allowed',
-              theme === 'dark'
-                ? 'text-slate-400'
-                : 'text-slate-600'
-            )}
-            title={`${t('chat.attachFile', 'Attach file')} (${t('common.comingSoon', 'Coming soon')})`}
-            aria-label={`${t('chat.attachFile', 'Attach file')} (${t('common.comingSoon', 'Coming soon')})`}
-          >
-            <Paperclip size={20} />
-          </button>
+      {/* Input — bottom fixed, single rounded grey frame */}
+      <div className="border-t px-8 py-4" style={{ borderColor: DIVIDER }}>
+        <form onSubmit={handleSendMessage} className="max-w-3xl">
+          <div className={clsx(
+            'flex items-end gap-3 rounded-2xl px-4 py-3',
+            theme === 'dark' ? 'bg-slate-900' : 'bg-[#f5f5f5]'
+          )}>
+            {/* File upload has no backend endpoint yet — disabled and labelled. */}
+            <button
+              type="button"
+              disabled
+              className="pb-0.5 opacity-40 cursor-not-allowed"
+              title={`${t('chat.attachFile', 'Attach file')} (${t('common.comingSoon', 'Coming soon')})`}
+              aria-label={`${t('chat.attachFile', 'Attach file')} (${t('common.comingSoon', 'Coming soon')})`}
+            >
+              <Paperclip size={16} />
+            </button>
 
-          <input
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder={t('chat.typeMessage', 'Type your message...')}
-            disabled={isLoading}
-            aria-label={t('chat.typeMessage', 'Type your message...')}
-            className={clsx(
-              'flex-1 px-4 py-2 rounded-lg transition-colors',
-              theme === 'dark'
-                ? 'bg-slate-800 text-white placeholder-slate-500 border border-slate-700 focus:border-blue-500'
-                : 'bg-white text-slate-900 placeholder-slate-400 border border-slate-300 focus:border-blue-500',
-              'focus:outline-none'
-            )}
-          />
+            <textarea
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleInputKeyDown}
+              placeholder={t('chat.typeMessage', 'Type your message...')}
+              disabled={isLoading}
+              rows={1}
+              aria-label={t('chat.typeMessage', 'Type your message...')}
+              className="flex-1 bg-transparent resize-none text-[15px] leading-[1.6] focus:outline-none placeholder:opacity-50 max-h-40"
+            />
 
-          <button
-            type="submit"
-            disabled={isLoading || !input.trim()}
-            aria-label={t('chat.send', 'Send')}
-            className={clsx(
-              'px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2',
-              isLoading || !input.trim()
-                ? 'opacity-50 cursor-not-allowed'
-                : 'bg-blue-600 hover:bg-blue-700 text-white'
-            )}
-          >
-            {isLoading ? <Loader size={20} className="animate-spin" /> : <Send size={20} />}
-            {t('chat.send', 'Send')}
-          </button>
+            <button
+              type="submit"
+              disabled={isLoading || !input.trim()}
+              aria-label={t('chat.send', 'Send')}
+              className="group flex items-center gap-1.5 pb-0.5 text-[13px] font-medium transition-opacity duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {isLoading ? (
+                <DotPulse />
+              ) : (
+                <>
+                  {t('chat.send', 'Send')}
+                  <span
+                    className="transition-transform duration-200 ease-out group-hover:translate-x-[3px]"
+                    aria-hidden="true"
+                  >
+                    →
+                  </span>
+                </>
+              )}
+            </button>
+          </div>
+          <p className="mt-2 text-[11px] opacity-50">
+            {t('chat.enterToSend', 'Enter to send · Shift+Enter for a new line')}
+          </p>
         </form>
       </div>
     </div>
   )
 }
 
-interface ChatBubbleProps {
+/* ── Content rendering ────────────────────────────────────────────────────
+   Fenced code blocks → mono on flat #f5f5f5 (no coloured border);
+   inline `code` → same treatment at smaller size. Plain text keeps
+   15px/1.7 via the parent. */
+
+const renderInline = (text: string, baseKey: string, dark: boolean): React.ReactNode[] =>
+  text.split(/`([^`]+)`/g).map((seg, i) =>
+    i % 2 === 1 ? (
+      <code
+        key={`${baseKey}-c${i}`}
+        className={clsx(
+          'font-data text-[0.85em] px-1.5 py-0.5 rounded',
+          dark ? 'bg-slate-800' : 'bg-[#f5f5f5]'
+        )}
+      >
+        {seg}
+      </code>
+    ) : (
+      <React.Fragment key={`${baseKey}-t${i}`}>{seg}</React.Fragment>
+    )
+  )
+
+const renderMessageContent = (content: string, dark: boolean): React.ReactNode => {
+  const parts: React.ReactNode[] = []
+  const fence = /```(\w*)\n?([\s\S]*?)(?:```|$)/g
+  let lastIndex = 0
+  let match: RegExpExecArray | null
+  let n = 0
+  while ((match = fence.exec(content)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(...renderInline(content.slice(lastIndex, match.index), `p${n++}`, dark))
+    }
+    parts.push(
+      <pre
+        key={`pre${n++}`}
+        className={clsx(
+          'font-data text-[13px] leading-relaxed my-3 p-4 rounded-lg overflow-x-auto',
+          dark ? 'bg-slate-900' : 'bg-[#f5f5f5]'
+        )}
+      >
+        <code className="bg-transparent p-0">{match[2].replace(/\n$/, '')}</code>
+      </pre>
+    )
+    lastIndex = fence.lastIndex
+  }
+  if (lastIndex < content.length) {
+    parts.push(...renderInline(content.slice(lastIndex), `p${n++}`, dark))
+  }
+  return parts
+}
+
+/* ── Three-dot pulse loading affordance ─────────────────────────────────── */
+
+const DotPulse: React.FC = () => (
+  <span className="inline-flex items-center gap-1" aria-hidden="true">
+    <span className="chat-dot inline-block w-1 h-1 rounded-full bg-current" />
+    <span className="chat-dot inline-block w-1 h-1 rounded-full bg-current" />
+    <span className="chat-dot inline-block w-1 h-1 rounded-full bg-current" />
+  </span>
+)
+
+/* ── Timeline message item ──────────────────────────────────────────────── */
+
+interface MessageItemProps {
   message: ChatMessage
 }
 
-const ChatBubble: React.FC<ChatBubbleProps> = ({ message }) => {
+const MessageItem: React.FC<MessageItemProps> = ({ message }) => {
   const { theme } = useAppStore()
+  const { t } = useI18n()
   const isUser = message.role === 'user'
+  const dark = theme === 'dark'
 
   return (
-    <div className={clsx('flex', isUser ? 'justify-end' : 'justify-start')}>
-      <div
-        className={clsx(
-          'max-w-xs lg:max-w-md px-4 py-2 rounded-lg',
-          isUser
-            ? theme === 'dark'
-              ? 'bg-blue-600 text-white'
-              : 'bg-blue-500 text-white'
-            : theme === 'dark'
-              ? 'bg-slate-800 text-slate-100'
-              : 'bg-slate-200 text-slate-900'
-        )}
-      >
-        <p className="text-sm break-words">{message.content}</p>
-        <p className={clsx(
-          'text-xs mt-1',
-          isUser
-            ? 'text-blue-100'
-            : theme === 'dark'
-              ? 'text-slate-400'
-              : 'text-slate-500'
-        )}>
+    <article
+      className="pl-4 border-l-2"
+      style={{ borderColor: isUser ? ACCENT : TIMELINE_GREY }}
+    >
+      <header className="flex items-baseline gap-3 mb-1.5">
+        <span className="text-[11px] uppercase tracking-[0.08em] opacity-50">
+          {isUser ? t('chat.you', 'You') : t('chat.assistant', 'X-Agent')}
+        </span>
+        <span className="font-data text-[11px] opacity-50">
           {new Date(message.timestamp).toLocaleTimeString()}
-        </p>
+        </span>
+      </header>
+      <div className="text-[15px] leading-[1.7] break-words whitespace-pre-wrap">
+        {renderMessageContent(message.content, dark)}
       </div>
-    </div>
+    </article>
   )
 }
 

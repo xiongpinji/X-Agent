@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { useAppStore } from '@/store/appStore'
 import { apiClient, Task } from '@/services/api'
 import { useI18n } from '@/i18n/context'
-import { Plus, Trash2, Eye, CheckCircle, Clock, AlertCircle } from 'lucide-react'
+import { Plus, Trash2, Eye } from 'lucide-react'
 import clsx from 'clsx'
 
 export const TasksPage: React.FC = () => {
@@ -39,140 +39,73 @@ export const TasksPage: React.FC = () => {
     }
   }
 
-  const getStatusIcon = (status: Task['status']) => {
-    switch (status) {
-      case 'completed':
-        return <CheckCircle size={16} className="text-green-500" />
-      case 'in_progress':
-        return <Clock size={16} className="text-blue-500 animate-spin" />
-      case 'failed':
-        return <AlertCircle size={16} className="text-red-500" />
-      default:
-        return <Clock size={16} className="text-slate-500" />
-    }
-  }
-
-  const statusColor = (status: Task['status']) =>
-    status === 'completed' ? 'text-green-600' :
-    status === 'in_progress' ? 'text-blue-600' :
-    status === 'failed' ? 'text-red-600' :
-    'text-slate-600'
+  const statusBadge = (status: Task['status']) =>
+    status === 'completed' ? 'badge-success' :
+    status === 'in_progress' ? 'badge-warning' :
+    status === 'failed' ? 'badge-danger' :
+    'badge-muted'
 
   return (
     <div className={clsx(
-      'p-8',
-      theme === 'dark' ? 'bg-slate-950' : 'bg-slate-50'
+      'min-h-full px-8 py-10',
+      theme === 'dark' ? 'bg-slate-950 text-slate-200' : 'bg-[#fafafa] text-[#333333]'
     )}>
-      <div className="max-w-6xl mx-auto">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className={clsx(
-              'text-3xl font-bold mb-2',
-              theme === 'dark' ? 'text-white' : 'text-slate-900'
-            )}>
-              {t('tasks.title', 'Tasks')}
-            </h1>
-            <p className={clsx(
-              'text-sm',
-              theme === 'dark' ? 'text-slate-400' : 'text-slate-600'
-            )}>
-              {t('tasks.allTasks', 'Manage and monitor your tasks')}
-            </p>
-          </div>
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
-          >
-            <Plus size={20} />
-            {t('tasks.newTask', 'New Task')}
-          </button>
-        </div>
-
-        {/* Tasks Table */}
-        <div className={clsx(
-          'rounded-lg overflow-hidden',
-          theme === 'dark' ? 'bg-slate-900 border border-slate-700' : 'bg-white border border-slate-200'
-        )}>
-          {tasks.length === 0 ? (
-            <div className={clsx(
-              'p-8 text-center',
-              theme === 'dark' ? 'text-slate-400' : 'text-slate-500'
-            )}>
-              <p className="text-lg font-medium mb-2">{t('tasks.noTasks', 'No tasks yet')}</p>
-              <p className="text-sm">{t('tasks.createToStart', 'Create a new task to get started')}</p>
+      <div className="max-w-6xl">
+        {/* Header — Dashboard-style: 2px rule + 32px/500 title + 50% subtitle */}
+        <header className="mb-8">
+          <div
+            className={clsx(
+              'w-12 border-t-2 mb-5',
+              theme === 'dark' ? 'border-slate-200' : 'border-[#333333]'
+            )}
+            aria-hidden="true"
+          />
+          <div className="flex items-end justify-between gap-4">
+            <div>
+              <h1 className="page-title">{t('tasks.title', 'Tasks')}</h1>
+              <p className="page-subtitle">{t('tasks.allTasks', 'Manage and monitor your tasks')}</p>
             </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className={clsx(
-                  'border-b',
-                  theme === 'dark' ? 'border-slate-700 bg-slate-800' : 'border-slate-200 bg-slate-50'
-                )}>
-                  <tr>
-                    <th className={clsx(
-                      'px-6 py-3 text-left text-sm font-semibold',
-                      theme === 'dark' ? 'text-slate-300' : 'text-slate-900'
-                    )}>
-                      {t('tasks.taskName', 'Name')}
-                    </th>
-                    <th className={clsx(
-                      'px-6 py-3 text-left text-sm font-semibold',
-                      theme === 'dark' ? 'text-slate-300' : 'text-slate-900'
-                    )}>
-                      {t('tasks.status', 'Status')}
-                    </th>
-                    <th className={clsx(
-                      'px-6 py-3 text-left text-sm font-semibold',
-                      theme === 'dark' ? 'text-slate-300' : 'text-slate-900'
-                    )}>
-                      {t('workflows.progress', 'Progress')}
-                    </th>
-                    <th className={clsx(
-                      'px-6 py-3 text-left text-sm font-semibold',
-                      theme === 'dark' ? 'text-slate-300' : 'text-slate-900'
-                    )}>
-                      {t('tasks.createdAt', 'Created')}
-                    </th>
-                    <th className={clsx(
-                      'px-6 py-3 text-right text-sm font-semibold',
-                      theme === 'dark' ? 'text-slate-300' : 'text-slate-900'
-                    )}>
-                      {t('common.actions', 'Actions')}
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {tasks.map((task) => (
-                    <tr
-                      key={task.id}
-                      className={clsx(
-                        'border-b transition-colors',
-                        theme === 'dark'
-                          ? 'border-slate-700 hover:bg-slate-800'
-                          : 'border-slate-200 hover:bg-slate-50'
-                      )}
-                    >
-                      <td className={clsx(
-                        'px-6 py-4 text-sm font-medium',
-                        theme === 'dark' ? 'text-white' : 'text-slate-900'
-                      )}>
-                        {task.name}
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-2">
-                          {getStatusIcon(task.status)}
-                          <span className={clsx(
-                            'text-sm font-medium capitalize',
-                            statusColor(task.status)
-                          )}>
-                            {task.status}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
+            >
+              <Plus size={16} />
+              {t('tasks.newTask', 'New Task')}
+            </button>
+          </div>
+        </header>
+
+        {/* Tasks Table — dense, hairline dividers */}
+        {tasks.length === 0 ? (
+          <p className="empty-state">
+            {t('tasks.noTasks', 'No tasks yet')} · {t('tasks.createToStart', 'Create a new task to get started')}
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="table-dense">
+              <thead>
+                <tr>
+                  <th>{t('tasks.taskName', 'Name')}</th>
+                  <th>{t('tasks.status', 'Status')}</th>
+                  <th>{t('workflows.progress', 'Progress')}</th>
+                  <th>{t('tasks.createdAt', 'Created')}</th>
+                  <th className="ta-right">{t('common.actions', 'Actions')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {tasks.map((task) => (
+                  <tr key={task.id}>
+                    <td className="font-medium">{task.name}</td>
+                    <td>
+                      <span className={clsx('badge-status', statusBadge(task.status))}>
+                        {task.status}
+                      </span>
+                    </td>
+                    <td>
+                      <div className="flex items-center gap-2">
                         <div
-                          className="w-32 bg-slate-200 rounded-full h-2"
+                          className="w-24 h-[3px]"
+                          style={{ backgroundColor: 'rgba(163,169,177,.25)' }}
                           role="progressbar"
                           aria-valuenow={Math.round(task.progress * 100)}
                           aria-valuemin={0}
@@ -180,57 +113,45 @@ export const TasksPage: React.FC = () => {
                           aria-label={`${task.name} ${t('workflows.progress', 'Progress')}`}
                         >
                           <div
-                            className="bg-blue-600 h-2 rounded-full transition-all"
+                            className={clsx('h-[3px] transition-all', theme === 'dark' ? 'bg-slate-300' : 'bg-[#333333]')}
                             style={{ width: `${Math.round(task.progress * 100)}%` }}
                           />
                         </div>
-                      </td>
-                      <td className={clsx(
-                        'px-6 py-4 text-sm',
-                        theme === 'dark' ? 'text-slate-400' : 'text-slate-600'
-                      )}>
-                        {new Date(task.createdAt).toLocaleDateString()}
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <button
-                            onClick={() => {
-                              setSelectedTask(task)
-                              setShowModal(true)
-                            }}
-                            className={clsx(
-                              'p-2 rounded-lg transition-colors',
-                              theme === 'dark'
-                                ? 'hover:bg-slate-700 text-slate-400'
-                                : 'hover:bg-slate-200 text-slate-600'
-                            )}
-                            title={t('tasks.viewDetails', 'View details')}
-                            aria-label={t('tasks.viewDetails', 'View details')}
-                          >
-                            <Eye size={16} />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteTask(task.id)}
-                            className={clsx(
-                              'p-2 rounded-lg transition-colors',
-                              theme === 'dark'
-                                ? 'hover:bg-red-900/20 text-red-400'
-                                : 'hover:bg-red-100 text-red-600'
-                            )}
-                            title={t('tasks.deleteTask', 'Delete task')}
-                            aria-label={t('tasks.deleteTask', 'Delete task')}
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
+                        <span className="cell-data opacity-60">{Math.round(task.progress * 100)}%</span>
+                      </div>
+                    </td>
+                    <td className="cell-data opacity-70">
+                      {new Date(task.createdAt).toLocaleDateString()}
+                    </td>
+                    <td className="ta-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <button
+                          onClick={() => {
+                            setSelectedTask(task)
+                            setShowModal(true)
+                          }}
+                          className="p-1.5 opacity-50 hover:opacity-100 transition-opacity"
+                          title={t('tasks.viewDetails', 'View details')}
+                          aria-label={t('tasks.viewDetails', 'View details')}
+                        >
+                          <Eye size={15} />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteTask(task.id)}
+                          className="p-1.5 text-[#dc2626] opacity-50 hover:opacity-100 transition-opacity"
+                          title={t('tasks.deleteTask', 'Delete task')}
+                          aria-label={t('tasks.deleteTask', 'Delete task')}
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* Task Detail Modal */}

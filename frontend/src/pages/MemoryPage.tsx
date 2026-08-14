@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { useAppStore } from '@/store/appStore'
 import { apiClient, Memory } from '@/services/api'
 import { useI18n } from '@/i18n/context'
-import { Search, Plus, Trash2, Edit2, Tag } from 'lucide-react'
+import { Search, Plus, Trash2, Edit2 } from 'lucide-react'
 import clsx from 'clsx'
 
 export const MemoryPage: React.FC = () => {
@@ -75,84 +75,80 @@ export const MemoryPage: React.FC = () => {
 
   return (
     <div className={clsx(
-      'p-8',
-      theme === 'dark' ? 'bg-slate-950' : 'bg-slate-50'
+      'min-h-full px-8 py-10',
+      theme === 'dark' ? 'bg-slate-950 text-slate-200' : 'bg-[#fafafa] text-[#333333]'
     )}>
-      <div className="max-w-6xl mx-auto">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className={clsx(
-              'text-3xl font-bold mb-2',
-              theme === 'dark' ? 'text-white' : 'text-slate-900'
-            )}>
-              {t('memory.title', 'Memory Management')}
-            </h1>
-            <p className={clsx(
-              'text-sm',
-              theme === 'dark' ? 'text-slate-400' : 'text-slate-600'
-            )}>
-              {t('memory.subtitle', 'Browse and manage your agent memories')}
-            </p>
-          </div>
-          <button
-            onClick={() => setShowModal(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
-          >
-            <Plus size={20} />
-            {t('memory.newMemory', 'New Memory')}
-          </button>
-        </div>
-
-        {/* Search */}
-        <div className="mb-6">
-          <div className={clsx(
-            'flex items-center gap-2 px-4 py-2 rounded-lg',
-            theme === 'dark'
-              ? 'bg-slate-900 border border-slate-700'
-              : 'bg-white border border-slate-300'
-          )}>
-            <Search size={20} className={theme === 'dark' ? 'text-slate-400' : 'text-slate-600'} aria-hidden="true" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder={t('memory.searchPlaceholder', 'Search memories...')}
-              aria-label={t('memory.searchMemories', 'Search memories')}
-              className={clsx(
-                'flex-1 bg-transparent outline-none text-sm',
-                theme === 'dark' ? 'text-white placeholder-slate-500' : 'text-slate-900 placeholder-slate-400'
-              )}
-            />
-          </div>
-        </div>
-
-        {/* Memories List */}
-        <div className="space-y-4">
-          {filteredMemories.length === 0 ? (
-            <div className={clsx(
-              'text-center py-12 rounded-lg',
-              theme === 'dark' ? 'bg-slate-900 border border-slate-700' : 'bg-white border border-slate-200'
-            )}>
-              <p className={clsx(
-                'text-lg font-medium mb-2',
-                theme === 'dark' ? 'text-slate-400' : 'text-slate-500'
-              )}>
-                {searchQuery ? t('memory.noFound', 'No memories found') : t('memory.noYet', 'No memories yet')}
-              </p>
-              <p className={clsx(
-                'text-sm',
-                theme === 'dark' ? 'text-slate-500' : 'text-slate-600'
-              )}>
-                {searchQuery ? t('memory.tryDifferent', 'Try a different search query') : t('memory.createToStart', 'Create a new memory to get started')}
-              </p>
+      <div className="max-w-6xl">
+        {/* Header — Dashboard-style */}
+        <header className="mb-8">
+          <div
+            className={clsx(
+              'w-12 border-t-2 mb-5',
+              theme === 'dark' ? 'border-slate-200' : 'border-[#333333]'
+            )}
+            aria-hidden="true"
+          />
+          <div className="flex items-end justify-between gap-4">
+            <div>
+              <h1 className="page-title">{t('memory.title', 'Memory Management')}</h1>
+              <p className="page-subtitle">{t('memory.subtitle', 'Browse and manage your agent memories')}</p>
             </div>
-          ) : (
-            filteredMemories.map((memory) => (
-              <MemoryCard key={memory.id} memory={memory} onEdit={handleEdit} onDelete={handleDelete} />
-            ))
-          )}
+            <button
+              onClick={() => setShowModal(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
+            >
+              <Plus size={16} />
+              {t('memory.newMemory', 'New Memory')}
+            </button>
+          </div>
+        </header>
+
+        {/* Search — underline style, no box */}
+        <div
+          className="mb-6 flex items-center gap-2 pb-2 border-b"
+          style={{ borderColor: 'rgba(163,169,177,.15)' }}
+        >
+          <Search size={16} className="opacity-50" aria-hidden="true" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder={t('memory.searchPlaceholder', 'Search memories...')}
+            aria-label={t('memory.searchMemories', 'Search memories')}
+            className={clsx(
+              'flex-1 bg-transparent outline-none text-sm',
+              theme === 'dark' ? 'text-slate-200 placeholder-slate-500' : 'text-[#333333] placeholder-slate-400'
+            )}
+          />
         </div>
+
+        {/* Memories Table — dense, hairline dividers */}
+        {filteredMemories.length === 0 ? (
+          <p className="empty-state">
+            {searchQuery
+              ? `${t('memory.noFound', 'No memories found')} · ${t('memory.tryDifferent', 'Try a different search query')}`
+              : `${t('memory.noYet', 'No memories yet')} · ${t('memory.createToStart', 'Create a new memory to get started')}`}
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="table-dense">
+              <thead>
+                <tr>
+                  <th>{t('memory.content', 'Content')}</th>
+                  <th>{t('memory.layer', 'Layer')}</th>
+                  <th>{t('memory.tags', 'Tags')}</th>
+                  <th>{t('memory.createdAt', 'Created')}</th>
+                  <th className="ta-right">{t('common.actions', 'Actions')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredMemories.map((memory) => (
+                  <MemoryRow key={memory.id} memory={memory} onEdit={handleEdit} onDelete={handleDelete} />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* Memory Modal (create / edit) */}
@@ -170,99 +166,53 @@ export const MemoryPage: React.FC = () => {
   )
 }
 
-interface MemoryCardProps {
+interface MemoryRowProps {
   memory: Memory
   onEdit: (memory: Memory) => void
   onDelete: (memory: Memory) => void
 }
 
-const MemoryCard: React.FC<MemoryCardProps> = ({ memory, onEdit, onDelete }) => {
-  const { theme } = useAppStore()
+const MemoryRow: React.FC<MemoryRowProps> = ({ memory, onEdit, onDelete }) => {
   const { t } = useI18n()
 
   return (
-    <div className={clsx(
-      'rounded-lg p-6 transition-all',
-      theme === 'dark'
-        ? 'bg-slate-900 border border-slate-700 hover:border-slate-600'
-        : 'bg-white border border-slate-200 hover:border-slate-300'
-    )}>
-      <div className="flex items-start justify-between mb-4">
-        <div className="flex-1">
-          <p className={clsx(
-            'text-sm font-medium mb-2',
-            theme === 'dark' ? 'text-slate-400' : 'text-slate-600'
-          )}>
-            {t('memory.layer', 'Layer')} {memory.layer}
-          </p>
-          <p className={clsx(
-            'text-sm line-clamp-2',
-            theme === 'dark' ? 'text-slate-300' : 'text-slate-700'
-          )}>
-            {memory.content}
-          </p>
-        </div>
-        <div className="flex items-center gap-2 ml-4">
+    <tr>
+      <td className="max-w-lg">
+        <span className="truncate-lines-1">{memory.content}</span>
+      </td>
+      <td className="cell-data opacity-70">{memory.layer}</td>
+      <td>
+        {memory.tags && memory.tags.length > 0 ? (
+          <span className="text-[11px] opacity-60">{memory.tags.join(' · ')}</span>
+        ) : (
+          <span className="text-[11px] opacity-40">—</span>
+        )}
+        {memory.relevance !== undefined && (
+          <span className="cell-data opacity-40 ml-2">{(memory.relevance * 100).toFixed(0)}%</span>
+        )}
+      </td>
+      <td className="cell-data opacity-70">{new Date(memory.createdAt).toLocaleString()}</td>
+      <td className="ta-right">
+        <div className="flex items-center justify-end gap-1">
           <button
             onClick={() => onEdit(memory)}
-            className={clsx(
-              'p-2 rounded-lg transition-colors',
-              theme === 'dark'
-                ? 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'
-                : 'text-slate-600 hover:bg-slate-100'
-            )}
+            className="p-1.5 opacity-50 hover:opacity-100 transition-opacity"
             title={t('memory.editMemory', 'Edit')}
             aria-label={t('memory.editMemory', 'Edit')}
           >
-            <Edit2 size={16} />
+            <Edit2 size={15} />
           </button>
           <button
             onClick={() => onDelete(memory)}
-            className={clsx(
-              'p-2 rounded-lg transition-colors',
-              theme === 'dark'
-                ? 'text-red-400 hover:bg-slate-800'
-                : 'text-red-600 hover:bg-red-50'
-            )}
+            className="p-1.5 text-[#dc2626] opacity-50 hover:opacity-100 transition-opacity"
             title={t('memory.deleteMemory', 'Delete')}
             aria-label={t('memory.deleteMemory', 'Delete')}
           >
-            <Trash2 size={16} />
+            <Trash2 size={15} />
           </button>
         </div>
-      </div>
-
-      {/* Tags */}
-      {memory.tags && memory.tags.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          {memory.tags.map((tag) => (
-            <span
-              key={tag}
-              className={clsx(
-                'inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium',
-                theme === 'dark'
-                  ? 'bg-blue-500/20 text-blue-400'
-                  : 'bg-blue-100 text-blue-700'
-              )}
-            >
-              <Tag size={12} aria-hidden="true" />
-              {tag}
-            </span>
-          ))}
-        </div>
-      )}
-
-      {/* Metadata */}
-      <div className={clsx(
-        'mt-4 pt-4 border-t text-xs',
-        theme === 'dark' ? 'border-slate-700 text-slate-500' : 'border-slate-200 text-slate-600'
-      )}>
-        <p>{t('memory.createdAt', 'Created')}: {new Date(memory.createdAt).toLocaleString()}</p>
-        {memory.relevance !== undefined && (
-          <p>Relevance: {(memory.relevance * 100).toFixed(0)}%</p>
-        )}
-      </div>
-    </div>
+      </td>
+    </tr>
   )
 }
 

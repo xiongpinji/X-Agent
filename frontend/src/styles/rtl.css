@@ -92,7 +92,7 @@
   left: auto;
   right: 0;
   border-left: none;
-  border-right: 1px solid #e5e7eb;
+  border-right: 1px solid var(--divider, #e5e7eb);
 }
 
 [dir="rtl"] .sidebar-content {

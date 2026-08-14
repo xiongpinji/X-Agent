@@ -2,21 +2,21 @@ import React, { useCallback, useEffect, useState } from 'react'
 import { useAppStore } from '@/store/appStore'
 import { governanceOps, ApprovalRecord } from '@/services/governanceOps'
 import { useI18n } from '@/i18n/context'
-import { ShieldCheck, Check, X, Play, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react'
+import { Check, X, Play, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react'
 import clsx from 'clsx'
 
-const RISK_STYLES: Record<string, string> = {
-  low: 'bg-slate-500/10 text-slate-600 dark:text-slate-300',
-  medium: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
-  high: 'bg-orange-500/10 text-orange-600 dark:text-orange-400',
-  critical: 'bg-red-500/10 text-red-600 dark:text-red-400',
+const RISK_BADGE: Record<string, string> = {
+  low: 'badge-muted',
+  medium: 'badge-warning',
+  high: 'badge-danger',
+  critical: 'badge-danger',
 }
 
-const STATUS_STYLES: Record<string, string> = {
-  pending: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
-  approved: 'bg-green-500/10 text-green-600 dark:text-green-400',
-  rejected: 'bg-red-500/10 text-red-600 dark:text-red-400',
-  executed: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
+const STATUS_BADGE: Record<string, string> = {
+  pending: 'badge-warning',
+  approved: 'badge-success',
+  rejected: 'badge-danger',
+  executed: 'badge-muted',
 }
 
 export const ApprovalsPage: React.FC = () => {
@@ -52,31 +52,36 @@ export const ApprovalsPage: React.FC = () => {
     .sort((a, b) => String(b.decided_at ?? b.created_at).localeCompare(String(a.decided_at ?? a.created_at)))
 
   return (
-    <div className={clsx('p-8', theme === 'dark' ? 'bg-slate-950' : 'bg-slate-50')}>
-      <div className="max-w-6xl mx-auto">
-        {/* Header */}
-        <div className="mb-8 flex items-start justify-between">
-          <div>
-            <h1 className={clsx('text-3xl font-bold mb-2', theme === 'dark' ? 'text-white' : 'text-slate-900')}>
-              {t('approvals.title', 'Approvals')}
-            </h1>
-            <p className={clsx('text-sm', theme === 'dark' ? 'text-slate-400' : 'text-slate-600')}>
-              {t('approvals.subtitle', 'Review and decide high-risk tool execution requests')}
-            </p>
-          </div>
-          <button
-            onClick={loadApprovals}
-            disabled={isLoading}
+    <div className={clsx('min-h-full px-8 py-10', theme === 'dark' ? 'bg-slate-950 text-slate-200' : 'bg-[#fafafa] text-[#333333]')}>
+      <div className="max-w-6xl">
+        {/* Header — Dashboard-style */}
+        <header className="mb-8">
+          <div
             className={clsx(
-              'flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50',
-              theme === 'dark' ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
+              'w-12 border-t-2 mb-5',
+              theme === 'dark' ? 'border-slate-200' : 'border-[#333333]'
             )}
-            aria-label={t('common.refresh', 'Refresh')}
-          >
-            <RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />
-            {t('common.refresh', 'Refresh')}
-          </button>
-        </div>
+            aria-hidden="true"
+          />
+          <div className="flex items-end justify-between gap-4">
+            <div>
+              <h1 className="page-title">{t('approvals.title', 'Approvals')}</h1>
+              <p className="page-subtitle">{t('approvals.subtitle', 'Review and decide high-risk tool execution requests')}</p>
+            </div>
+            <button
+              onClick={loadApprovals}
+              disabled={isLoading}
+              className={clsx(
+                'flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50',
+                theme === 'dark' ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
+              )}
+              aria-label={t('common.refresh', 'Refresh')}
+            >
+              <RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />
+              {t('common.refresh', 'Refresh')}
+            </button>
+          </div>
+        </header>
 
         {loadError && (
           <div
@@ -92,16 +97,13 @@ export const ApprovalsPage: React.FC = () => {
 
         {/* Pending list */}
         <section className="mb-10">
-          <h2 className={clsx('text-lg font-semibold mb-4 flex items-center gap-2', theme === 'dark' ? 'text-white' : 'text-slate-900')}>
-            <ShieldCheck size={18} />
+          <h2 className="text-[11px] uppercase tracking-[0.08em] opacity-50 mb-2">
             {t('approvals.pending', 'Pending approvals')} ({pending.length})
           </h2>
           {pending.length === 0 && !isLoading ? (
-            <div className={clsx('text-center py-10 rounded-lg border', theme === 'dark' ? 'border-slate-800 text-slate-400' : 'border-slate-200 text-slate-500 bg-white')}>
-              {t('approvals.noPending', 'No pending approval requests')}
-            </div>
+            <p className="empty-state">{t('approvals.noPending', 'No pending approval requests')}</p>
           ) : (
-            <div className="space-y-4">
+            <div>
               {pending.map((record) => (
                 <PendingCard key={record.id} record={record} onDecided={loadApprovals} />
               ))}
@@ -111,46 +113,44 @@ export const ApprovalsPage: React.FC = () => {
 
         {/* History */}
         <section>
-          <h2 className={clsx('text-lg font-semibold mb-4', theme === 'dark' ? 'text-white' : 'text-slate-900')}>
+          <h2 className="text-[11px] uppercase tracking-[0.08em] opacity-50 mb-2">
             {t('approvals.history', 'Approval history')} ({history.length})
           </h2>
           {history.length === 0 && !isLoading ? (
-            <div className={clsx('text-center py-10 rounded-lg border', theme === 'dark' ? 'border-slate-800 text-slate-400' : 'border-slate-200 text-slate-500 bg-white')}>
-              {t('approvals.noHistory', 'No approval history yet')}
-            </div>
+            <p className="empty-state">{t('approvals.noHistory', 'No approval history yet')}</p>
           ) : (
-            <div className={clsx('rounded-lg border overflow-hidden', theme === 'dark' ? 'border-slate-800' : 'border-slate-200 bg-white')}>
-              <table className="w-full text-sm">
-                <thead className={theme === 'dark' ? 'bg-slate-900 text-slate-400' : 'bg-slate-50 text-slate-600'}>
+            <div className="overflow-x-auto">
+              <table className="table-dense">
+                <thead>
                   <tr>
-                    <th className="text-left px-4 py-3 font-medium">{t('approvals.col.action', 'Action')}</th>
-                    <th className="text-left px-4 py-3 font-medium">{t('approvals.col.risk', 'Risk')}</th>
-                    <th className="text-left px-4 py-3 font-medium">{t('approvals.col.status', 'Status')}</th>
-                    <th className="text-left px-4 py-3 font-medium">{t('approvals.col.decidedBy', 'Decided by')}</th>
-                    <th className="text-left px-4 py-3 font-medium">{t('approvals.col.decidedAt', 'Decided at')}</th>
+                    <th>{t('approvals.col.action', 'Action')}</th>
+                    <th>{t('approvals.col.risk', 'Risk')}</th>
+                    <th>{t('approvals.col.status', 'Status')}</th>
+                    <th>{t('approvals.col.decidedBy', 'Decided by')}</th>
+                    <th>{t('approvals.col.decidedAt', 'Decided at')}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {history.map((record) => (
-                    <tr key={record.id} className={clsx('border-t', theme === 'dark' ? 'border-slate-800 text-slate-300' : 'border-slate-100 text-slate-700')}>
-                      <td className="px-4 py-3">
+                    <tr key={record.id}>
+                      <td>
                         <div className="font-medium">{record.action}</div>
-                        <div className={clsx('text-xs', theme === 'dark' ? 'text-slate-500' : 'text-slate-400')}>
+                        <div className="cell-data opacity-50">
                           {record.resource_type}/{record.resource_id}
                         </div>
                       </td>
-                      <td className="px-4 py-3">
-                        <span className={clsx('px-2 py-0.5 rounded-full text-xs font-medium', RISK_STYLES[record.risk_level] ?? RISK_STYLES.low)}>
+                      <td>
+                        <span className={clsx('badge-status', RISK_BADGE[record.risk_level] ?? 'badge-muted')}>
                           {record.risk_level}
                         </span>
                       </td>
-                      <td className="px-4 py-3">
-                        <span className={clsx('px-2 py-0.5 rounded-full text-xs font-medium', STATUS_STYLES[record.status] ?? STATUS_STYLES.pending)}>
+                      <td>
+                        <span className={clsx('badge-status', STATUS_BADGE[record.status] ?? 'badge-muted')}>
                           {record.status}
                         </span>
                       </td>
-                      <td className="px-4 py-3">{record.decided_by ?? record.executed_by ?? '—'}</td>
-                      <td className="px-4 py-3">{formatTime(record.decided_at ?? record.executed_at)}</td>
+                      <td className="cell-data opacity-70">{record.decided_by ?? record.executed_by ?? '—'}</td>
+                      <td className="cell-data opacity-70">{formatTime(record.decided_at ?? record.executed_at)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -204,26 +204,26 @@ const PendingCard: React.FC<{ record: ApprovalRecord; onDecided: () => void }> =
   }
 
   return (
-    <div className={clsx('rounded-lg border p-5', theme === 'dark' ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200')}>
+    <div className="row-line" style={{ padding: '20px 0' }}>
       <div className="flex items-start justify-between gap-4 mb-3">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap mb-1">
-            <span className={clsx('px-2 py-0.5 rounded-full text-xs font-medium', RISK_STYLES[record.risk_level] ?? RISK_STYLES.low)}>
+            <span className={clsx('badge-status', RISK_BADGE[record.risk_level] ?? 'badge-muted')}>
               {record.risk_level}
             </span>
-            <span className={clsx('text-sm font-semibold', theme === 'dark' ? 'text-white' : 'text-slate-900')}>
+            <span className="text-sm font-semibold">
               {record.action}
             </span>
           </div>
-          <p className={clsx('text-sm', theme === 'dark' ? 'text-slate-400' : 'text-slate-600')}>
+          <p className="text-sm opacity-60">
             {t('approvals.tool', 'Tool')}: {record.resource_id}
             {' · '}
             {t('approvals.requester', 'Requester')}: {record.actor_id}
             {' · '}
-            {formatTime(record.created_at)}
+            <span className="cell-data">{formatTime(record.created_at)}</span>
           </p>
           {record.reason && (
-            <p className={clsx('text-sm mt-1', theme === 'dark' ? 'text-slate-400' : 'text-slate-600')}>
+            <p className="text-sm opacity-60 mt-1">
               {t('approvals.reason', 'Reason')}: {record.reason}
             </p>
           )}

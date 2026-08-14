@@ -14,10 +14,10 @@ interface DashboardStats {
   avgLatency: string
 }
 
-const DIVIDER = 'rgba(163,169,177,.15)'
+const DIVIDER = 'var(--divider)'
 
 export const Dashboard: React.FC = React.memo(() => {
-  const { theme, setLoading, setError } = useAppStore()
+  const { setLoading, setError } = useAppStore()
   const { t } = useI18n()
   const [stats, setStats] = useState<DashboardStats>({
     totalAgents: 0,
@@ -88,20 +88,13 @@ export const Dashboard: React.FC = React.memo(() => {
   ], [stats, t])
 
   return (
-    <div
-      className={clsx(
-        'min-h-full px-8 py-10 md:px-12',
-        theme === 'dark' ? 'bg-slate-950 text-slate-200' : 'bg-[#fafafa] text-[#333333]'
-      )}
-    >
+    <div className="min-h-full px-8 py-10 md:px-12">
       <div className="max-w-4xl">
         {/* Editorial header: short 2px rule + 32px/500 title */}
         <header className="mb-10">
           <div
-            className={clsx(
-              'w-12 border-t-2 mb-5',
-              theme === 'dark' ? 'border-slate-200' : 'border-[#333333]'
-            )}
+            className="w-12 border-t-2 mb-5"
+            style={{ borderColor: 'var(--fg)' }}
             aria-hidden="true"
           />
           <h1 className="text-[32px] leading-tight font-medium tracking-tight">

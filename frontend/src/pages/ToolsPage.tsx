@@ -31,25 +31,22 @@ export const ToolsPage: React.FC = () => {
 
   return (
     <div className={clsx(
-      'p-8',
-      theme === 'dark' ? 'bg-slate-950' : 'bg-slate-50'
+      'min-h-full px-8 py-10',
+      theme === 'dark' ? 'bg-slate-950 text-slate-200' : 'bg-[#fafafa] text-[#333333]'
     )}>
-      <div className="max-w-6xl mx-auto">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className={clsx(
-            'text-3xl font-bold mb-2',
-            theme === 'dark' ? 'text-white' : 'text-slate-900'
-          )}>
-            {t('tools.title', 'Tools')}
-          </h1>
-          <p className={clsx(
-            'text-sm',
-            theme === 'dark' ? 'text-slate-400' : 'text-slate-600'
-          )}>
-            {t('tools.subtitle', 'Manage and configure available tools')}
-          </p>
-        </div>
+      <div className="max-w-6xl">
+        {/* Header — Dashboard-style */}
+        <header className="mb-8">
+          <div
+            className={clsx(
+              'w-12 border-t-2 mb-5',
+              theme === 'dark' ? 'border-slate-200' : 'border-[#333333]'
+            )}
+            aria-hidden="true"
+          />
+          <h1 className="page-title">{t('tools.title', 'Tools')}</h1>
+          <p className="page-subtitle">{t('tools.subtitle', 'Manage and configure available tools')}</p>
+        </header>
 
         {loadError && (
           <div
@@ -65,20 +62,29 @@ export const ToolsPage: React.FC = () => {
           </div>
         )}
 
-        {/* Tools Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {tools.map((tool) => (
-            <ToolCard key={tool.id} tool={tool} />
-          ))}
-        </div>
-
-        {tools.length === 0 && !isLoading && !loadError && (
-          <div className={clsx(
-            'text-center py-12',
-            theme === 'dark' ? 'text-slate-400' : 'text-slate-500'
-          )}>
-            <p className="text-lg font-medium mb-2">{t('tools.noTools', 'No tools available')}</p>
-            <p className="text-sm">{t('tools.toolsAppear', 'Tools will appear here once configured')}</p>
+        {/* Tools Table — dense, hairline dividers */}
+        {tools.length === 0 && !isLoading && !loadError ? (
+          <p className="empty-state">
+            {t('tools.noTools', 'No tools available')} · {t('tools.toolsAppear', 'Tools will appear here once configured')}
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="table-dense">
+              <thead>
+                <tr>
+                  <th>{t('tools.col.name', 'Name')}</th>
+                  <th>{t('tools.riskLevel', 'Risk level')}</th>
+                  <th>{t('tools.col.description', 'Description')}</th>
+                  <th>{t('tools.col.status', 'Status')}</th>
+                  <th className="ta-right">{t('common.actions', 'Actions')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {tools.map((tool) => (
+                  <ToolRow key={tool.id} tool={tool} />
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </div>
@@ -86,11 +92,11 @@ export const ToolsPage: React.FC = () => {
   )
 }
 
-interface ToolCardProps {
+interface ToolRowProps {
   tool: Tool
 }
 
-const ToolCard: React.FC<ToolCardProps> = ({ tool }) => {
+const ToolRow: React.FC<ToolRowProps> = ({ tool }) => {
   const { theme } = useAppStore()
   const { t } = useI18n()
 
@@ -134,98 +140,63 @@ const ToolCard: React.FC<ToolCardProps> = ({ tool }) => {
   }
 
   return (
-    <div className={clsx(
-      'rounded-lg p-6 transition-all',
-      theme === 'dark'
-        ? 'bg-slate-900 border border-slate-700 hover:border-slate-600'
-        : 'bg-white border border-slate-200 hover:border-slate-300'
-    )}>
-      {/* Header */}
-      <div className="flex items-start justify-between mb-4">
-        <div className="flex-1">
-          <h3 className={clsx(
-            'text-lg font-bold mb-1',
-            theme === 'dark' ? 'text-white' : 'text-slate-900'
-          )}>
-            {tool.name}
-          </h3>
-          <p className={clsx(
-            'text-sm',
-            theme === 'dark' ? 'text-slate-400' : 'text-slate-600'
-          )}>
-            {t('tools.riskLevel', 'Risk level')}: {tool.riskLevel}
-          </p>
-        </div>
+    <tr>
+      <td className="cell-data font-medium">{tool.name}</td>
+      <td>
+        <span className="cell-data opacity-70">{tool.riskLevel}</span>
+      </td>
+      <td className="max-w-md">
+        <span className="truncate-lines-1 opacity-70">{tool.description}</span>
+        {testResult && (
+          <span
+            role="status"
+            title={testResult.detail || testResult.status}
+            className={clsx(
+              'badge-status ml-2',
+              testResult.status === 'success' ? 'badge-success' : 'badge-danger'
+            )}
+          >
+            {testResult.status}
+          </span>
+        )}
+      </td>
+      <td>
         <button
           onClick={handleToggle}
           disabled={busy}
           className={clsx(
-            'p-2 rounded-lg transition-colors disabled:opacity-50',
-            enabled
-              ? 'bg-green-500/10 text-green-600 hover:bg-green-500/20'
-              : 'bg-slate-500/10 text-slate-600 hover:bg-slate-500/20'
+            'inline-flex items-center transition-opacity disabled:opacity-50',
+            enabled ? 'text-[#16a34a]' : 'opacity-40'
           )}
           title={enabled ? t('tools.disable', 'Disable') : t('tools.enable', 'Enable')}
           aria-label={enabled ? t('tools.disable', 'Disable') : t('tools.enable', 'Enable')}
           aria-pressed={enabled}
         >
-          {enabled ? <ToggleRight size={20} /> : <ToggleLeft size={20} />}
+          {enabled ? <ToggleRight size={18} /> : <ToggleLeft size={18} />}
         </button>
-      </div>
-
-      {/* Description */}
-      <p className={clsx(
-        'text-sm mb-4 line-clamp-2',
-        theme === 'dark' ? 'text-slate-400' : 'text-slate-600'
-      )}>
-        {tool.description}
-      </p>
-
-      {/* Test result */}
-      {testResult && (
-        <div className={clsx(
-          'mb-4 rounded-md border px-3 py-2 text-xs break-words',
-          testResult.status === 'success'
-            ? theme === 'dark' ? 'border-green-900 bg-green-950/40 text-green-300' : 'border-green-200 bg-green-50 text-green-700'
-            : theme === 'dark' ? 'border-red-900 bg-red-950/40 text-red-300' : 'border-red-200 bg-red-50 text-red-700'
-        )} role="status">
-          {testResult.detail || testResult.status}
+      </td>
+      <td className="ta-right">
+        <div className="flex items-center justify-end gap-1">
+          <button
+            onClick={handleTest}
+            disabled={busy}
+            className="p-1.5 opacity-50 hover:opacity-100 transition-opacity disabled:opacity-30"
+            title={busy ? t('common.loading', 'Loading...') : t('tools.test', 'Test')}
+            aria-label={t('tools.test', 'Test')}
+          >
+            <Play size={15} />
+          </button>
+          <button
+            disabled
+            className="p-1.5 opacity-30 cursor-not-allowed"
+            title={`${t('tools.configure', 'Config')} (${comingSoon})`}
+            aria-label={`${t('tools.configure', 'Config')} (${comingSoon})`}
+          >
+            <Settings size={15} />
+          </button>
         </div>
-      )}
-
-      {/* Actions */}
-      <div className="flex gap-2">
-        <button
-          onClick={handleTest}
-          disabled={busy}
-          className={clsx(
-            'flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50',
-            theme === 'dark'
-              ? 'bg-blue-600/20 text-blue-400 hover:bg-blue-600/30'
-              : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
-          )}
-          title={t('tools.test', 'Test')}
-          aria-label={t('tools.test', 'Test')}
-        >
-          <Play size={16} />
-          {busy ? t('common.loading', 'Loading...') : t('tools.test', 'Test')}
-        </button>
-        <button
-          disabled
-          className={clsx(
-            'flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors opacity-50 cursor-not-allowed',
-            theme === 'dark'
-              ? 'bg-slate-700 text-slate-300'
-              : 'bg-slate-200 text-slate-700'
-          )}
-          title={`${t('tools.configure', 'Config')} (${comingSoon})`}
-          aria-label={`${t('tools.configure', 'Config')} (${comingSoon})`}
-        >
-          <Settings size={16} />
-          {t('tools.configure', 'Config')}
-        </button>
-      </div>
-    </div>
+      </td>
+    </tr>
   )
 }
 
