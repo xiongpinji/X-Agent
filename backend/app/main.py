@@ -806,6 +806,19 @@ _KEPT_ROUTER_MODULES: tuple[str, ...] = (
     "sync",
     "messages",
     "workbench",
+    # 2026-08-14 恢复（前端页面依赖，owner 决策；详见
+    # archive/api_templates_2026-08/KEPT_ROUTERS.md 恢复登记）：
+    "mcp",            # P1-01 MCP 官方 SDK 管理 API（自 archive 恢复，修复 tool_id）
+    "checkpoints",    # P2-09 断点续跑（修复 tenant 直信 → 标准鉴权链）
+    "backup",         # 备份管理
+    "backup_qdrant",  # Qdrant 备份
+    "chat_history",   # 聊天历史
+    "tasks_ui",       # 任务 UI
+    "work_mode",      # 工作模式/会话
+    "gdpr",           # GDPR 合规
+    "analytics",      # 实时分析
+    "forum",          # 论坛
+    "forum_search",   # 论坛搜索（自 archive 恢复）
 )
 
 

@@ -31,6 +31,16 @@ ROLE_SCOPES: dict[str, list[str]] = {
         "feedback:write",
         "notifications:subscribe",
         "notifications:manage",
+        "sync:read",
+        "sync:write",
+        "sync:admin",
+        # 2026-08-14 路由恢复配套: mcp/backup/analytics 管理面 scope
+        "mcp:read",
+        "mcp:execute",
+        "mcp:admin",
+        "backup:read",
+        "backup:write",
+        "analytics:read",
     ],
     "developer": [
         "agent:run",
@@ -46,6 +56,12 @@ ROLE_SCOPES: dict[str, list[str]] = {
         "feedback:read",
         "feedback:write",
         "notifications:subscribe",
+        "sync:read",
+        "sync:write",
+        # 2026-08-14: developer 只读管理面
+        "mcp:read",
+        "backup:read",
+        "analytics:read",
     ],
     "user": [
         "agent:run",

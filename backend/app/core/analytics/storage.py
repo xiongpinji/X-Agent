@@ -29,6 +29,18 @@ class AnalyticsStorage:
         """
         self.database_url = database_url
         self.pool: asyncpg.Pool | None = None
+        self._degrade_warned = False
+
+    def _pool_or_none(self):
+        """Dev 环境未连接 Postgres 时显式降级: 读返回空、写跳过(各一次 WARNING)。"""
+        if self.pool is None and not self._degrade_warned:
+            import logging
+            logging.getLogger(__name__).warning(
+                "AnalyticsStorage: no database pool (dev without Postgres); "
+                "metrics reads return empty and writes are skipped."
+            )
+            self._degrade_warned = True
+        return self.pool
 
     async def initialize(self) -> None:
         """Initialize database connection pool and create tables."""
@@ -174,6 +186,8 @@ class AnalyticsStorage:
 
     async def store_api_call(self, metric: APICallMetric) -> None:
         """Store API call metric."""
+        if self._pool_or_none() is None:
+            return
         async with self.pool.acquire() as conn:
             await conn.execute("""
                 INSERT INTO analytics_api_calls
@@ -188,6 +202,8 @@ class AnalyticsStorage:
 
     async def store_token_usage(self, metric: TokenUsageMetric) -> None:
         """Store token usage metric."""
+        if self._pool_or_none() is None:
+            return
         async with self.pool.acquire() as conn:
             await conn.execute("""
                 INSERT INTO analytics_token_usage
@@ -200,6 +216,8 @@ class AnalyticsStorage:
 
     async def store_tool_usage(self, metric: ToolUsageMetric) -> None:
         """Store tool usage metric."""
+        if self._pool_or_none() is None:
+            return
         async with self.pool.acquire() as conn:
             await conn.execute("""
                 INSERT INTO analytics_tool_usage
@@ -212,6 +230,8 @@ class AnalyticsStorage:
 
     async def store_error(self, metric: ErrorMetric) -> None:
         """Store error metric."""
+        if self._pool_or_none() is None:
+            return
         async with self.pool.acquire() as conn:
             await conn.execute("""
                 INSERT INTO analytics_errors
@@ -224,6 +244,8 @@ class AnalyticsStorage:
 
     async def store_performance(self, metric: PerformanceMetric) -> None:
         """Store performance metric."""
+        if self._pool_or_none() is None:
+            return
         async with self.pool.acquire() as conn:
             await conn.execute("""
                 INSERT INTO analytics_performance
@@ -234,6 +256,8 @@ class AnalyticsStorage:
 
     async def store_aggregated(self, metric: AggregatedMetric) -> None:
         """Store aggregated metric."""
+        if self._pool_or_none() is None:
+            return
         async with self.pool.acquire() as conn:
             await conn.execute("""
                 INSERT INTO analytics_aggregated
@@ -255,6 +279,8 @@ class AnalyticsStorage:
         limit: int = 1000,
     ) -> list[dict[str, Any]]:
         """Get API call metrics."""
+        if self._pool_or_none() is None:
+            return []
         async with self.pool.acquire() as conn:
             rows = await conn.fetch("""
                 SELECT * FROM analytics_api_calls
@@ -272,6 +298,8 @@ class AnalyticsStorage:
         limit: int = 1000,
     ) -> list[dict[str, Any]]:
         """Get token usage metrics."""
+        if self._pool_or_none() is None:
+            return []
         async with self.pool.acquire() as conn:
             rows = await conn.fetch("""
                 SELECT * FROM analytics_token_usage

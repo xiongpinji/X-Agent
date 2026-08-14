@@ -20,6 +20,7 @@ from backend.app.core.checkpoint import (
     get_checkpoint_store,
 )
 from backend.app.core.security import Principal
+from backend.app.dependencies import get_current_principal
 
 logger = logging.getLogger(__name__)
 
@@ -30,10 +31,8 @@ router = APIRouter(prefix="/api/v1/checkpoints", tags=["checkpoints"])
 
 
 def get_principal(request: Request) -> Principal:
-    """获取当前认证主体."""
-    return getattr(request.state, "principal", None) or Principal(
-        user_id="anonymous", tenant_id="default", scopes=[]
-    )
+    """获取当前认证主体（统一走标准鉴权链，不再直接信任 request.state）."""
+    return get_current_principal(request)
 
 
 # ─── 响应模型 ─────────────────────────────────────────────────────────────────

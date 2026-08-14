@@ -203,3 +203,40 @@ SCIM（11 路由）为合规必需，300 预算无法容纳。决策（用户批
 挂载后实测 APIRoute 323（sso 7 + scim 11 + 其他 305）≤ 330。
 同批 P1-14 sessions(+10)、P1-11 skills_api(+11)、批次 C messages(+4)、
 批次 D discover(+1) 已在前期会话中挂载并计入当前总数。
+
+---
+
+## 2026-08-14 恢复登记
+
+**背景**：8 月初"路由瘦身"（2429→332）将一批有前端页面的后端路由摘除挂载，
+导致 10 个 UI 页面后端 404（用户实测巡检确认）。owner 决策：用户体验优先，
+恢复这些能力；330 路由预算为文档级治理（非 CI 硬门禁），恢复后在此登记偏差。
+
+**恢复的 12 个模块**（均在 `backend/app/main.py` `_KEPT_ROUTER_MODULES` 重新挂载）：
+
+| 模块 | 前缀 | 说明 |
+| --- | --- | --- |
+| mcp | /api/v1/mcp | P1-01 MCP 官方 SDK 管理 API（17 端点）；自 archive/dead_code_2026-08 恢复，并修复 /tools/execute 构造 ToolCallInput 缺必填 tool_id 的 bug |
+| checkpoints | /api/v1/checkpoints | P2-09 断点续跑；恢复前修复 tenant 直信问题（本地 get_principal 直接信任 request.state 并回落匿名 default 租户 → 统一走 dependencies.get_current_principal 标准鉴权链） |
+| backup | /api/v1/backup | 备份管理 |
+| backup_qdrant | /api/v1/backup/qdrant | Qdrant 备份 |
+| chat_history | /api/v1/chat | 聊天历史 |
+| tasks_ui | /api/v1/tasks | 任务 UI |
+| work_mode | /api/v1/work | 工作模式/会话 |
+| sessions | /api/sessions | P1-14 会话管理（此前已挂载，本次复核确认） |
+| gdpr | /api/v1/gdpr | GDPR 合规 |
+| analytics | /api/v1/analytics | 实时分析 |
+| forum | /api/v1/forum | 论坛 |
+| forum_search | /api/v1/forum/search | 论坛搜索；自 archive/api_templates_2026-08 恢复文件 |
+
+**恢复原因**：上述路由均有前端页面直接依赖，摘除后对应 UI 页面后端 404，
+影响可用性；owner 决策恢复（用户体验优先）。
+
+**路由预算偏差**：恢复后实测 APIRoute 总数 **431**（恢复前 323，净增约 108，
+含 SPA fallback），超出 G3 预算 330 约 101。偏差性质：文档级治理预算，
+非 CI 硬门禁；后续如恢复硬门禁需重新评审预算或拆分 extended_router。
+
+**同批附带修复**：sync 403 —— `sync:read/write/admin` 三个 scope 此前不在任何
+角色的 ROLE_SCOPES 中，bootstrap key（admin 全 scope）访问 /api/v1/sync/stats
+返回 403。已将 sync:read/write/admin 加入 admin、sync:read/write 加入
+developer 的 ROLE_SCOPES；bootstrap key 访问 /api/v1/sync/stats 实测 200。
