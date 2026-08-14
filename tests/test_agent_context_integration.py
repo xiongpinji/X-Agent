@@ -37,7 +37,7 @@ class CapturingMockBackend(BaseLLMBackend):
     def __init__(self) -> None:
         self.calls: list[list[dict[str, str]]] = []
 
-    async def chat(self, messages, tools):
+    async def chat(self, messages, tools, **kwargs):  # 兼容 response_format 等扩展参数
         self.calls.append([dict(m) for m in messages])
         return LLMResponse(content="X-Agent Phase 0 mock response: captured", model="capturing-mock")
 
@@ -104,7 +104,7 @@ async def test_agent_run_compresses_llm_messages_over_budget(tmp_path) -> None:
         "goal": "分析这个超长的上下文字段 " + "数据" * 500,
         "notes": "很长的备注 " + "内容" * 800,
     }
-    result = await agent.run(RunContext(session_id="pytest-compress"), "分析任务", big_context)
+    result = await agent.run(RunContext(session_id="pytest-compress"), "分析这个代码文件的实现", big_context)
 
     assert result.status == RunStatus.COMPLETED
     events = result.execution_summary["context_management"]["llm_compression_events"]

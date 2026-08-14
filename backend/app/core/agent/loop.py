@@ -25,6 +25,7 @@ if TYPE_CHECKING:
     from backend.app.core.hooks.types import HookEvent
     from backend.app.core.unified_memory import UnifiedMemorySystem
 import contextlib
+import asyncio
 
 from backend.app.core import agents_md
 from backend.app.core.agent_context import AgentContextManager
@@ -609,7 +610,7 @@ class AgentLoop:
         # Short conversational / knowledge questions → simple
         return True
 
-    async def _fast_path_answer(self, context: RunContext, task: str) -> AgentRunResponse | None:
+    async def _fast_path_answer(self, context: RunContext, task: str, session_recap: str | None = None) -> AgentRunResponse | None:
         """Try to answer a simple question directly via LLM (no planning loop).
 
         Returns None if the fast path is not applicable (complex task).
@@ -617,8 +618,20 @@ class AgentLoop:
         if not self._is_simple_question(task):
             return None
         try:
+            messages: list[dict[str, str]] = []
+            if session_recap:
+                # 与主管线（_plan）相同的措辞注入恢复历史，确保"记住"类上下文
+                # 在 fast-path 下对 LLM 同样可见。
+                messages.append({
+                    "role": "user",
+                    "content": (
+                        "Recovered session context from previous conversation "
+                        "(use as background, most recent last):\n" + session_recap
+                    ),
+                })
+            messages.append({"role": "user", "content": task})
             resp = await self.llm.chat(
-                [{"role": "user", "content": task}], [],
+                messages, [],
                 tenant_id=context.tenant_id,
                 user_id=context.user_id,
             )
@@ -635,7 +648,7 @@ class AgentLoop:
                 memory_hits=0,
                 tool_calls=[],
                 events=[],
-                execution_summary={"fast_path": True, "branch": "done", "model": resp.model, "tokens": resp.tokens_used},
+                execution_summary={"fast_path": True, "branch": "done", "model": resp.model, "tokens": resp.tokens_used, "context_management": {"enabled": False}},
                 snapshot={"fast_path": True},
             )
         except Exception as exc:
@@ -685,11 +698,55 @@ class AgentLoop:
             )
 
         # ─── Fast-path: 简单问题直接回答 ─────────────────────────────────────
-        fast = await self._fast_path_answer(context, task)
+        # fast-path 也要维持会话契约（P1-14）：有 session_id 且配置了桥接器时,
+        # 先打开/恢复会话把 recap 注入 LLM 消息, 返回前记录本轮问答并保存快照——
+        # 否则"记住: …"类请求会丢记忆, 且后续追问看不到恢复的历史。
+        session_id = getattr(context, "session_id", None)
+        bridge = self._acquire_context_bridge(session_id)
+        fast_recap = ""
+        fast_restored = 0
+        fast_bridge_open = False
+        if bridge is not None and session_id:
+            try:
+                await bridge.open_session(
+                    session_id=session_id,
+                    agent_id=getattr(context, "agent_id", "") or "",
+                    tenant_id=getattr(context, "tenant_id", "") or "",
+                )
+                fast_bridge_open = True
+                fast_restored = int(getattr(bridge, "restored_message_count", 0) or 0)
+                if fast_restored:
+                    fast_recap = bridge.build_session_recap()
+            except Exception as exc:
+                logger.debug("fast-path session open failed: %s", exc)
+                fast_bridge_open = False
+
+        fast = await self._fast_path_answer(context, task, session_recap=fast_recap or None)
         if fast is not None:
+            fast.execution_summary.setdefault("context_management", {"enabled": False})
+            if fast_bridge_open:
+                try:
+                    await bridge.record("user", task)
+                    await bridge.record("assistant", fast.answer or "")
+                    await bridge.close(save=True)
+                    fast.execution_summary["context_management"] = {
+                        "enabled": True,
+                        "session_restored": fast_restored > 0,
+                        "session_saved": True,
+                        "restored_messages": fast_restored,
+                        "fast_path": True,
+                    }
+                except Exception as exc:
+                    logger.debug("fast-path session persistence failed: %s", exc)
             completed_evt = self._emit_trace(context, "agent.completed", task=task, answer=(fast.answer or "")[:200])
             fast.events = [started, completed_evt]
             return fast
+        if fast_bridge_open:
+            # fast-path 不适用（转入完整管线）：关闭刚打开的会话, 由主管线重新管理。
+            try:
+                await bridge.close(save=False)
+            except Exception:
+                pass
 
         # 上下文管理（P1-14）：重置每次运行的压缩/会话状态
         self._compression_events = []
@@ -764,6 +821,10 @@ class AgentLoop:
         answer, memory_hits, tool_calls, observations, plan_records, events = await self._execute_main_loop(
             context, task, trajectory, plan, execution_frame, run_extra, started, tool_decision, resume_trace_id
         )
+
+        # 真实 LLM 下把内部状态摘要替换为 LLM 生成的用户可读最终答案
+        # (legacy _finalize_answer 会把 reflect 阶段的内部 digest 当 answer 返回)。
+        answer = await self._maybe_synthesize_user_answer(context, task, trajectory, answer)
 
         # 第五阶段：完成执行并返回结果
         result = await self._finalize_execution(
@@ -1379,6 +1440,58 @@ class AgentLoop:
             answer = self._finalize_answer(task, trajectory, last_tool_result, extra_context)
 
         return answer, memory_hits, tool_calls, observations, plan_records, events
+
+    async def _maybe_synthesize_user_answer(
+        self,
+        context: RunContext,
+        task: str,
+        trajectory: AgentTrajectory,
+        answer: str | None,
+    ) -> str | None:
+        """真实 LLM 场景下，把内部状态摘要替换为 LLM 生成的最终答案。
+
+        Legacy 路径（_finalize_answer）在存在 reflections 时直接返回 reflect
+        阶段的内部 digest（"Goal: … | Task mode: … | Recent evidence: …"），
+        那是面向演化存储的遥测文本，不是给用户看的答案。仅当 answer 呈该
+        digest 形态且路由配置了非 mock 后端时，用 LLM 基于轨迹要点生成最终
+        答案；任何失败都保留原 answer，不阻断主流程。
+        """
+        if not answer:
+            return answer
+        if not (answer.startswith("Goal:") and " | Task mode:" in answer):
+            return answer
+        backends = getattr(self.llm, "_backends", None) or []
+        if not backends or all(b.__class__.__name__ == "MockLLMBackend" for b in backends):
+            return answer
+
+        observations = [str(o)[:400] for o in (trajectory.observations or [])[-4:]]
+        if not observations and not trajectory.reflections:
+            return answer
+        digest_lines = [
+            f"用户任务: {task}",
+            f"目标: {trajectory.goal}",
+        ]
+        if observations:
+            digest_lines.append("执行观察（截断）:")
+            digest_lines.extend(f"- {o}" for o in observations)
+        subtask_done = [s for s, st in trajectory.subtask_status.items() if st == "done"]
+        if subtask_done:
+            digest_lines.append(f"已完成子任务: {', '.join(subtask_done[:5])}")
+        prompt = (
+            "\n".join(digest_lines)
+            + "\n\n基于以上执行结果，直接给出面向用户的最终答案（简洁、中文、不要复述过程元数据）。"
+        )
+        try:
+            response = await asyncio.wait_for(
+                self.llm.chat([{"role": "user", "content": prompt}], []),
+                timeout=45,
+            )
+            synthesized = (response.content or "").strip()
+            if synthesized:
+                return synthesized
+        except Exception as exc:
+            logger.debug("final answer synthesis failed, keeping original: %s", exc)
+        return answer
 
     async def _execute_observe_step(
         self,

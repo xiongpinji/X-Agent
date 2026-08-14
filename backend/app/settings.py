@@ -25,6 +25,8 @@ class Settings(BaseSettings):
     llm_fallback_order: str = "openai,deepseek,anthropic,ollama"
     openai_api_key: str | None = None
     openai_model: str = "gpt-4o-mini"
+    # OpenAI 兼容服务自定义端点 (relay/网关/私有化部署), 如 https://your-relay/v1
+    openai_base_url: str | None = None
     deepseek_api_key: str | None = None
     deepseek_model: str = "deepseek-chat"
     deepseek_base_url: str | None = None

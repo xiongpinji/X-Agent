@@ -101,7 +101,7 @@ class TestAgentLoopInitialization:
         assert agent.llm == llm
         assert agent.memory == memory
         assert agent.tools == tools
-        assert agent.max_iterations == 4
+        assert agent.max_iterations == 20  # 默认迭代上限 (2026-08 由 4 调整为 20)
 
     def test_agent_loop_custom_iterations(self) -> None:
         """Test agent loop with custom max iterations."""

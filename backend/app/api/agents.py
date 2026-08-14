@@ -211,6 +211,7 @@ async def run_agent(payload: dict[str, Any] | None = None, principal: PrincipalD
         tenant_id=principal.tenant_id,
         user_id=principal.user_id,
         permission_scope=allowed_scope,
+        session_id=str(request.get("session_id") or "") or None,
     )
     # Allow per-request override of max_iterations for long-running tasks
     req_max_iter = request.get("max_iterations")

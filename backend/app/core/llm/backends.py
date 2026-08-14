@@ -678,7 +678,8 @@ def build_llm_router(
     fallback_order: str,
     openai_api_key: str | None,
     openai_model: str,
-    deepseek_api_key: str | None,
+    openai_base_url: str | None = None,
+    deepseek_api_key: str | None = None,
     deepseek_model: str,
     deepseek_base_url: str,
     anthropic_api_key: str | None = None,
@@ -726,7 +727,14 @@ def build_llm_router(
     backends: list[BaseLLMBackend] = []
     for name in requested:
         if name == "openai" and openai_api_key:
-            backends.append(OpenAIBackend(openai_api_key, openai_model, name="openai"))
+            backends.append(
+                OpenAIBackend(
+                    openai_api_key,
+                    openai_model,
+                    base_url=openai_base_url,
+                    name="openai",
+                )
+            )
         elif name == "deepseek" and deepseek_api_key:
             backends.append(
                 OpenAIBackend(
