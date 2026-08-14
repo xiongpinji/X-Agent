@@ -20,9 +20,9 @@ from scripts.rc_source_bundle import ROOT
 REPORT_DIR = ROOT / ".xagent_runtime" / "reports"
 RELEASE_DIR = ROOT / ".xagent_runtime" / "release"
 
-DEFAULT_RUNBOOK = ROOT / "docs" / "COMMERCIAL_DEPLOYMENT_RUNBOOK.md"
-DEFAULT_CHECKLIST = ROOT / "docs" / "RC_COMMERCIAL_DEPLOYMENT_CHECKLIST.md"
-DEFAULT_INSTALL_QUICKSTART = ROOT / "docs" / "INSTALL_QUICKSTART.md"
+DEFAULT_RUNBOOK = ROOT / "docs" / "operations" / "deployment" / "COMMERCIAL_DEPLOYMENT_RUNBOOK.md"
+DEFAULT_CHECKLIST = ROOT / "docs" / "operations" / "deployment" / "RC_COMMERCIAL_DEPLOYMENT_CHECKLIST.md"
+DEFAULT_INSTALL_QUICKSTART = ROOT / "docs" / "operations" / "setup" / "INSTALL_QUICKSTART.md"
 DEFAULT_RELEASE_NOTES = ROOT / "archive" / "process_docs_2026-07-19" / "RELEASE_NOTES.md"
 DEFAULT_FINAL_GATE = REPORT_DIR / "rc-final-gate.json"
 DEFAULT_RELEASE_RECEIPT = RELEASE_DIR / "x-agent-commercial-rc-receipt.json"

@@ -186,16 +186,17 @@ def build_checks() -> list[MatrixCheck]:
                 "-c",
                 (
                     "from pathlib import Path; "
-                    "required=['docs/CODEX_HERMES_GAP_CLOSURE_REPORT.md',"
-                    "'docs/IDE_EXTENSION_ROADMAP.md','docs/specs/vscode-extension-mvp.md']; "
+                    "required=['docs/developer/reports/CODEX_HERMES_GAP_CLOSURE_REPORT.md',"
+                    "'docs/concepts/planning/IDE_EXTENSION_ROADMAP.md',"
+                    "'docs/developer/specs/vscode-extension-mvp.md']; "
                     "missing=[p for p in required if not Path(p).exists()]; "
                     "assert not missing, missing"
                 ),
             ],
             evidence_paths=(
-                "docs/CODEX_HERMES_GAP_CLOSURE_REPORT.md",
-                "docs/IDE_EXTENSION_ROADMAP.md",
-                "docs/specs/vscode-extension-mvp.md",
+                "docs/developer/reports/CODEX_HERMES_GAP_CLOSURE_REPORT.md",
+                "docs/concepts/planning/IDE_EXTENSION_ROADMAP.md",
+                "docs/developer/specs/vscode-extension-mvp.md",
             ),
         ),
     ]

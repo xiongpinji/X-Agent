@@ -28,6 +28,28 @@ def _anon_client() -> TestClient:
     return TestClient(app)
 
 
+class _enable_rate_limit:
+    """Temporarily force rate limiting on for a test.
+
+    M1 policy: rate limiting defaults OFF in development / ON in production
+    (Settings.rate_limit_active). These tests exercise the limiter itself, so
+    they flip the explicit override on the shared settings object and restore
+    it afterwards regardless of outcome.
+    """
+
+    def __enter__(self):
+        from backend.app import main as main_module
+
+        self._settings = main_module.settings
+        self._previous = self._settings.rate_limit_enabled
+        object.__setattr__(self._settings, "rate_limit_enabled", True)
+        return self
+
+    def __exit__(self, *exc):
+        object.__setattr__(self._settings, "rate_limit_enabled", self._previous)
+        return False
+
+
 def test_anonymous_principal_has_workbench_contract_fields() -> None:
     principal = anonymous_principal()
 
@@ -219,19 +241,21 @@ def test_execution_draft_blocks_traversal_root() -> None:
 
 
 def test_login_rate_limit() -> None:
-    client = _anon_client()
-    # Exhaust the 10/minute limit
-    for i in range(12):
-        response = client.post("/api/v1/auth/login", json={"email": f"rate{i}@xagent.ai", "password": "x"})
-    # The last requests should be rate-limited
-    assert response.status_code == 429
+    with _enable_rate_limit():
+        client = _anon_client()
+        # Exhaust the 10/minute limit
+        for i in range(12):
+            response = client.post("/api/v1/auth/login", json={"email": f"rate{i}@xagent.ai", "password": "x"})
+        # The last requests should be rate-limited
+        assert response.status_code == 429
 
 
 def test_register_rate_limit() -> None:
-    client = _anon_client()
-    for i in range(7):
-        response = client.post("/api/v1/auth/register", json={"email": f"rate{i}@xagent.ai", "password": "x"})
-    assert response.status_code == 429
+    with _enable_rate_limit():
+        client = _anon_client()
+        for i in range(7):
+            response = client.post("/api/v1/auth/register", json={"email": f"rate{i}@xagent.ai", "password": "x"})
+        assert response.status_code == 429
 
 
 # =============================================================================

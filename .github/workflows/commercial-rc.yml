@@ -60,7 +60,7 @@ jobs:
       - name: Frontend audit, type-check, and build
         working-directory: frontend
         run: |
-          npm audit --audit-level=critical || true
+          npm audit --audit-level=moderate
           npm run type-check
           npm run build
 

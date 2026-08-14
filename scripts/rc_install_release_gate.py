@@ -97,7 +97,14 @@ def _json_load(path: Path) -> tuple[dict[str, Any] | None, str | None]:
 
 
 def _powershell_executable() -> str:
-    return shutil.which("powershell") or shutil.which("pwsh") or "powershell"
+    found = shutil.which("powershell") or shutil.which("pwsh")
+    if found:
+        return found
+    system_root = os.environ.get("SystemRoot", r"C:\Windows")
+    fallback = Path(system_root) / "System32" / "WindowsPowerShell" / "v1.0" / "powershell.exe"
+    if fallback.exists():
+        return str(fallback)
+    return "powershell"
 
 
 def _is_windows_wsl_relay(path: str | None) -> bool:

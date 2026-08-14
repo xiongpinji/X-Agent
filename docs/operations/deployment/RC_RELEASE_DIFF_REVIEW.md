@@ -112,7 +112,7 @@ git diff --check
 Observed local results:
 
 - RC release gate group: 299 passed.
-- Release audit: passed, 117 candidate files, no secret-like findings, no
+- Release audit: passed, 115 candidate files, no secret-like findings, no
   manifest unsafe paths, no excluded-area references, no local user/runtime
   path findings, and no file hygiene findings.
 - Release diff review gate: passed.

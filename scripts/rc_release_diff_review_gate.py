@@ -20,7 +20,7 @@ from typing import Any
 from scripts.rc_source_bundle import ROOT
 
 REPORT_DIR = ROOT / ".xagent_runtime" / "reports"
-DEFAULT_REVIEW = ROOT / "docs" / "RC_RELEASE_DIFF_REVIEW.md"
+DEFAULT_REVIEW = ROOT / "docs" / "operations" / "deployment" / "RC_RELEASE_DIFF_REVIEW.md"
 DEFAULT_RELEASE_AUDIT = REPORT_DIR / "rc-release-audit.json"
 DEFAULT_STAGING_PLAN = REPORT_DIR / "rc-staging-plan.json"
 DEFAULT_SOURCE_BUNDLE = REPORT_DIR / "rc-source-bundle.json"
