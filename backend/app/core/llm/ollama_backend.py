@@ -72,6 +72,7 @@ class OllamaBackend(BaseLLMBackend):
         self,
         messages: list[dict[str, str]],
         tools: list[dict[str, Any]],
+        **kwargs: Any,
     ) -> LLMResponse:
         """Send a chat request to the Ollama server."""
         payload: dict[str, Any] = {

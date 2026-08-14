@@ -176,6 +176,7 @@ class AnthropicBackend(BaseLLMBackend):
         self,
         messages: list[dict[str, str]],
         tools: list[dict[str, Any]],
+        **kwargs: Any,
     ) -> LLMResponse:
         """Send a chat request to the Anthropic Messages API using persistent connection pool."""
         client = await self._get_client()
