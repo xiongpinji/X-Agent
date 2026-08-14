@@ -342,7 +342,10 @@ def _run_ollama_smoke(*, timeout_seconds: float) -> ExternalCheck:
                 "model": model,
                 "prompt": _provider_prompt(),
                 "stream": False,
-                "options": {"num_predict": 8},
+                # 8 tokens is too few for thinking models (qwen3 etc.) that
+                # emit a <think> block before the answer; 512 still keeps the
+                # smoke cheap while letting the sentinel through.
+                "options": {"num_predict": 512},
             }
         ).encode("utf-8"),
     )
@@ -351,6 +354,10 @@ def _run_ollama_smoke(*, timeout_seconds: float) -> ExternalCheck:
             raw = response.read().decode("utf-8", errors="replace")
             payload = json.loads(raw)
         content = str(payload.get("response") or "")
+        # Thinking models (qwen3 etc.) emit a <think>…</think> preamble; strip
+        # it before matching the sentinel and allow enough tokens for it.
+        if "</think>" in content:
+            content = content.split("</think>", 1)[1]
         ok = _provider_sentinel_matched(content)
         return ExternalCheck(
             name="provider",
