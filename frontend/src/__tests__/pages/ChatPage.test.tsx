@@ -31,6 +31,19 @@ const completedFrame = {
   },
 }
 
+const sensitiveError = 'SENSITIVE_INTERNAL_DETAIL_DO_NOT_LEAK'
+
+const failedFrame = {
+  _final: true,
+  result: {
+    trace_id: 'trace-failed',
+    status: 'failed',
+    answer: '',
+    error: sensitiveError,
+    error_code: 'agent_execution_failed',
+  },
+}
+
 
 const sseResponse = (frame: object = completedFrame): Response => {
   const bytes = new TextEncoder().encode(`event: completed\ndata: ${JSON.stringify(frame)}\n\n`)
@@ -143,22 +156,55 @@ describe('default ChatPage agent stream', () => {
     }))
   })
 
-  it('shows a real stream failure without creating a successful assistant result', async () => {
-    vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('provider unavailable'))
+  it('sanitizes a terminal failed frame before displaying or persisting it', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(sseResponse(failedFrame))
     const user = userEvent.setup()
     renderChat()
 
     await user.type(screen.getByRole('textbox'), 'fail this task')
     await user.click(screen.getByRole('button', { name: 'Send' }))
 
-    await screen.findByText('Agent run failed: provider unavailable')
+    await screen.findByText('Agent run failed: Agent execution failed')
     await waitFor(() => {
       const assistantMessages = useAppStore.getState().messages.filter((message) => message.role === 'assistant')
       expect(assistantMessages).toHaveLength(1)
       expect(assistantMessages[0]).toMatchObject({
-        metadata: { status: 'failed', error: 'provider unavailable' },
+        metadata: { trace_id: 'trace-failed', status: 'failed', error_code: 'agent_execution_failed' },
       })
-      expect(assistantMessages[0].content).not.toContain('demo mode')
+      expect(JSON.stringify(assistantMessages)).not.toContain(sensitiveError)
+      expect(assistantMessages.some((message) => message.metadata?.status === 'completed')).toBe(false)
+      expect(apiClient.addChatMessage).toHaveBeenCalledWith('session-a', {
+        role: 'assistant',
+        content: 'Agent run failed: Agent execution failed',
+        metadata: { trace_id: 'trace-failed', status: 'failed', error_code: 'agent_execution_failed' },
+      })
     })
+    expect(document.body.textContent).not.toContain(sensitiveError)
+    expect(JSON.stringify(vi.mocked(apiClient.addChatMessage).mock.calls)).not.toContain(sensitiveError)
+  })
+
+  it('sanitizes a network failure before displaying or persisting it', async () => {
+    vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error(sensitiveError))
+    const user = userEvent.setup()
+    renderChat()
+
+    await user.type(screen.getByRole('textbox'), 'network failure')
+    await user.click(screen.getByRole('button', { name: 'Send' }))
+
+    await screen.findByText('Agent run failed: Unable to reach the agent service')
+    await waitFor(() => {
+      const assistantMessages = useAppStore.getState().messages.filter((message) => message.role === 'assistant')
+      expect(assistantMessages).toHaveLength(1)
+      expect(assistantMessages[0]).toMatchObject({ metadata: { status: 'failed', error_code: 'stream_unavailable' } })
+      expect(JSON.stringify(assistantMessages)).not.toContain(sensitiveError)
+      expect(assistantMessages.some((message) => message.metadata?.status === 'completed')).toBe(false)
+      expect(apiClient.addChatMessage).toHaveBeenCalledWith('session-a', {
+        role: 'assistant',
+        content: 'Agent run failed: Unable to reach the agent service',
+        metadata: { trace_id: undefined, status: 'failed', error_code: 'stream_unavailable' },
+      })
+    })
+    expect(document.body.textContent).not.toContain(sensitiveError)
+    expect(JSON.stringify(vi.mocked(apiClient.addChatMessage).mock.calls)).not.toContain(sensitiveError)
   })
 })

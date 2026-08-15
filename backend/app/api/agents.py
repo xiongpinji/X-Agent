@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import difflib
 import json
+import logging
 import os
 import re
 import shutil
@@ -26,6 +27,8 @@ from backend.app.dependencies import (
     get_run_store,
     get_trace_store,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/agents", tags=["agents"])
 extended_router = APIRouter(prefix="/api/v1/agents", tags=["agents-extended"])  # C2: unmounted; handler bodies unchanged
@@ -11774,14 +11777,15 @@ async def run_agent_stream(payload: dict[str, Any] | None = None, principal: Pri
             )
             # Push final result as completion signal
             queue.put_nowait({"_final": True, "result": result.model_dump(mode="json")})
-        except Exception as exc:
+        except Exception:
+            logger.exception("Agent stream execution failed (trace_id=%s)", context.trace_id)
             queue.put_nowait({
                 "_final": True,
                 "result": {
                     "trace_id": context.trace_id,
                     "status": "failed",
                     "answer": "",
-                    "error": str(exc),
+                    "error": "Agent execution failed",
                     "error_code": ErrorCode.AGENT_EXECUTION_FAILED.value,
                 },
             })

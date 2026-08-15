@@ -40,7 +40,7 @@ class _FailingAgent:
     max_iterations = 20
 
     async def run(self, context, task, extra_context, event_callback=None) -> AgentRunResponse:
-        raise RuntimeError("provider unavailable")
+        raise RuntimeError("SENSITIVE_INTERNAL_DETAIL_DO_NOT_LEAK")
 
 
 def _principal() -> Principal:
@@ -123,3 +123,5 @@ def test_post_sse_emits_stable_failed_final_frame(client: TestClient, monkeypatc
     assert final[0]["result"]["trace_id"]
     assert final[0]["result"]["answer"] == ""
     assert final[0]["result"]["error_code"] == "agent_execution_failed"
+    assert final[0]["result"]["error"] == "Agent execution failed"
+    assert "SENSITIVE_INTERNAL_DETAIL_DO_NOT_LEAK" not in response.text

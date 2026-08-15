@@ -85,10 +85,10 @@ export const ChatPage: React.FC = () => {
     }
   }
 
-  const recordStreamFailure = (errorMessage: string, traceId?: string) => {
-    const content = `Agent run failed: ${errorMessage}`
+  const recordStreamFailure = (safeMessage: string, traceId?: string, errorCode: string = 'agent_execution_failed') => {
+    const content = `Agent run failed: ${safeMessage}`
     const runId = traceId || 'unavailable'
-    setError(errorMessage)
+    setError(safeMessage)
     setStreamContent('')
     setLastRun({
       run_id: runId,
@@ -106,12 +106,12 @@ export const ChatPage: React.FC = () => {
       role: 'assistant',
       content,
       timestamp: new Date().toISOString(),
-      metadata: { trace_id: traceId, status: 'failed', error: errorMessage },
+      metadata: { trace_id: traceId, status: 'failed', error_code: errorCode },
     })
     void persistChatMessage('assistant', content, {
       trace_id: traceId,
       status: 'failed',
-      error: errorMessage,
+      error_code: errorCode,
     })
   }
 
@@ -136,9 +136,11 @@ export const ChatPage: React.FC = () => {
   const handleStreamComplete = (streamResult: AgentStreamResult) => {
     const result = streamResult.result
     if (!result || result.status !== 'completed') {
+      const errorCode = result?.error_code || 'agent_execution_failed'
       recordStreamFailure(
-        result?.error || streamResult.error || `Agent run ended with status ${result?.status || 'unknown'}`,
+        errorCode === 'agent_execution_failed' ? 'Agent execution failed' : 'Agent run failed',
         result?.trace_id,
+        errorCode,
       )
       return
     }
@@ -183,7 +185,7 @@ export const ChatPage: React.FC = () => {
   const { isStreaming, startStream, stopStream } = useAgentStream({
     onEvent: handleStreamEvent,
     onComplete: handleStreamComplete,
-    onError: (message) => recordStreamFailure(message),
+    onError: () => recordStreamFailure('Unable to reach the agent service', undefined, 'stream_unavailable'),
   })
 
   useEffect(() => () => stopStream(), [stopStream])
@@ -295,8 +297,8 @@ export const ChatPage: React.FC = () => {
       setInput('')
 
       await startStream(messageText, { agent_id: selectedAgent || 'default-agent' })
-    } catch (error) {
-      recordStreamFailure(error instanceof Error ? error.message : 'Failed to send message')
+    } catch {
+      recordStreamFailure('Unable to reach the agent service', undefined, 'stream_unavailable')
     } finally {
       setLoading(false)
     }
