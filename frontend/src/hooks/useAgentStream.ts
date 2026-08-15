@@ -8,6 +8,9 @@
 
 import { useCallback, useRef, useState } from 'react';
 
+const AGENT_STREAM_UNAVAILABLE_MESSAGE = 'Unable to reach the agent service';
+const AGENT_EXECUTION_FAILED_MESSAGE = 'Agent execution failed';
+
 export interface TraceEvent {
   event_type?: string;
   type?: string;
@@ -156,6 +159,7 @@ export function useAgentStream(options?: {
               if (frame.event === 'completed' || parsed._final) {
                 const result: AgentStreamResult = parsed;
                 setFinalResult(result);
+                setError(result.result?.status === 'failed' ? AGENT_EXECUTION_FAILED_MESSAGE : null);
                 setIsStreaming(false);
                 onComplete?.(result);
               } else {
@@ -180,15 +184,14 @@ export function useAgentStream(options?: {
 
       // Stream ended without explicit completion
       setIsStreaming(false);
-    } catch (err: any) {
-      if (err.name === 'AbortError') {
+    } catch (err: unknown) {
+      if (err instanceof Error && err.name === 'AbortError') {
         setIsStreaming(false);
         return;
       }
-      const msg = err instanceof Error ? err.message : String(err);
-      setError(msg);
+      setError(AGENT_STREAM_UNAVAILABLE_MESSAGE);
       setIsStreaming(false);
-      onError?.(msg);
+      onError?.(AGENT_STREAM_UNAVAILABLE_MESSAGE);
     }
   }, [maxEvents, onEvent, onComplete, onError]);
 
