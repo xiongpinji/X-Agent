@@ -219,6 +219,7 @@ class ParallelAgentExecutor:
         isolation: IsolationMode = IsolationMode.SHARED,
         max_parallel: int | None = None,
         agent_factory: Callable[[str, IsolationMode], Any] | None = None,
+        batch_id: str | None = None,
     ) -> SpawnResult:
         """Spawn multiple agents to execute tasks in parallel.
 
@@ -227,6 +228,7 @@ class ParallelAgentExecutor:
             isolation: Isolation mode for agents
             max_parallel: Maximum parallel agents (defaults to max_concurrency)
             agent_factory: Factory function (agent_id, isolation) -> agent with async execute(task)
+            batch_id: Optional caller-owned stable batch identifier
 
         Returns:
             SpawnResult with batch_id, results, and metadata
@@ -259,7 +261,7 @@ class ParallelAgentExecutor:
                 "Provide a callable(agent_id, isolation) -> agent."
             )
 
-        batch_id = str(uuid4())
+        batch_id = batch_id or str(uuid4())
         concurrency = max_parallel or self.max_concurrency
         semaphore = asyncio.Semaphore(concurrency)
         start_time = time.time()
@@ -291,14 +293,20 @@ class ParallelAgentExecutor:
                             result.status = AgentTaskStatus.TIMEOUT
                             result.error = f"Task timed out after {task.timeout_seconds}s"
                             break
+                        except _BILLING_CONTROL_ERRORS:
+                            raise
                         except Exception as e:
                             result.retry_attempts = attempt
                             if attempt >= attempts - 1:
                                 result.status = AgentTaskStatus.FAILED
-                                result.error = str(e)
+                                result.error = "Agent execution failed."
                             else:
                                 logger.warning(
-                                    f"Task {task.id} attempt {attempt + 1} failed, retrying: {e}"
+                                    "Task attempt failed; retrying: task_id=%s "
+                                    "attempt=%d error_type=%s",
+                                    task.id,
+                                    attempt + 1,
+                                    type(e).__name__,
                                 )
                 finally:
                     result.duration = time.time() - task_start
@@ -311,11 +319,13 @@ class ParallelAgentExecutor:
 
         final_results = []
         for i, r in enumerate(results):
+            if isinstance(r, _BILLING_CONTROL_ERRORS):
+                raise r
             if isinstance(r, Exception):
                 final_results.append(AgentTaskResult(
                     task_id=tasks[i].id,
                     status=AgentTaskStatus.FAILED,
-                    error=str(r),
+                    error="Agent execution failed.",
                 ))
             else:
                 final_results.append(r)

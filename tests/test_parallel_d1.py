@@ -82,6 +82,7 @@ class TestApiParallelFanOut:
             "/api/v1/agents/parallel/spawn",
             headers=AUTH_HEADERS,
             json={
+                "operation_id": "parallel-d1-fanout",
                 "tasks": [{"goal": f"subtask {i}", "timeout_seconds": 30} for i in range(3)],
                 "max_parallel": 3,
                 "aggregate_results": True,
@@ -140,6 +141,7 @@ class TestApiParallelFanOut:
             "/api/v1/agents/parallel/spawn",
             headers=AUTH_HEADERS,
             json={
+                "operation_id": "parallel-d1-serial",
                 "tasks": [{"goal": f"subtask {i}", "timeout_seconds": 30} for i in range(3)],
                 "max_parallel": 1,
                 "aggregate_results": False,

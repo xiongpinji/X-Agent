@@ -122,6 +122,7 @@ def _orchestration_http_error(
     operation: str,
     generic_code: str,
     generic_message: str,
+    correlation_id: str | None = None,
 ) -> HTTPException:
     if isinstance(exc, LLMReplayBlockedError):
         status_code = 409
@@ -140,10 +141,11 @@ def _orchestration_http_error(
         code = generic_code
         message = generic_message
     logger.error(
-        "%s failed: code=%s error_type=%s",
+        "%s failed: code=%s error_type=%s correlation_id=%s",
         operation,
         code,
         type(exc).__name__,
+        correlation_id or "none",
     )
     return HTTPException(
         status_code=status_code,
@@ -183,12 +185,23 @@ class TaskRequest(BaseModel):
 
 class SpawnAgentsRequest(BaseModel):
     """Request to spawn parallel agents."""
+    operation_id: str = Field(min_length=1, max_length=220)
     tasks: list[TaskRequest]
     isolation: str = "thread"
     max_parallel: int | None = None
     aggregate_results: bool = True
     merge_strategy: str = "merge"
     conflict_resolution: str = "keep_last"
+
+    @field_validator("operation_id", mode="before")
+    @classmethod
+    def _operation_id_must_not_be_blank(cls, value: Any) -> Any:
+        if not isinstance(value, str):
+            return value
+        value = value.strip()
+        if not value:
+            raise ValueError("operation_id must not be blank")
+        return value
 
 
 class BatchStatusResponse(BaseModel):
@@ -269,6 +282,13 @@ class _AgentLoopParallelAgent:
         self._principal = principal
 
     async def execute(self, task: AgentTask) -> dict[str, Any]:
+        task_metadata = dict(task.metadata or {})
+        billing_context = task_metadata.pop("_billing_context", {})
+        required = ("operation_id", "run_id", "trace_id", "batch_id")
+        if not all(billing_context.get(key) for key in required):
+            raise LLMReservationPersistenceError(
+                "parallel spawn billing correlation is required"
+            )
         extra_context: dict[str, Any] = {
             # executor's AgentTask primary key is ``id`` (``task_id`` lives on
             # AgentTaskResult); tolerate both shapes for robustness.
@@ -279,11 +299,14 @@ class _AgentLoopParallelAgent:
             "isolation": self.isolation.value,
             "parallel_agent_id": self.agent_id,
         }
-        extra_context.update(task.metadata or {})
+        extra_context.update(task_metadata)
+        extra_context.update(billing_context)
         context = RunContext(
+            trace_id=str(billing_context["trace_id"]),
             tenant_id=self._principal.tenant_id,
             user_id=self._principal.user_id,
             agent_id=self.agent_id,
+            request_id=str(billing_context["operation_id"]),
             permission_scope=list(getattr(self._principal, "scopes", None) or []),
         )
         response = await self._loop.run(context, task.goal, extra_context)
@@ -318,6 +341,12 @@ def build_agent_loop_factory(
         from backend.app.dependencies import get_agent
 
         agent_loop = get_agent()
+    except (
+        LLMReplayBlockedError,
+        LLMReservationPersistenceError,
+        LLMSubmissionUnknownError,
+    ):
+        raise
     except Exception as exc:
         raise AgentFactoryNotConfiguredError(
             f"Parallel agent factory is not configured: {exc}"
@@ -351,21 +380,34 @@ async def spawn_agents(
         Batch execution result
     """
     enforce_scope(principal, "agent:run")
+    batch_context = _billing_context(principal, request.operation_id)
+    batch_id = batch_context["run_id"]
 
     try:
         # Convert requests to tasks
         tasks = [
             AgentTask(
+                id=f"task-{index}-{batch_id}",
                 goal=t.goal,
                 description=t.description,
                 constraints=t.constraints,
                 success_criteria=t.success_criteria,
                 timeout_seconds=t.timeout_seconds,
                 max_retries=t.max_retries,
-                metadata=t.metadata,
+                metadata={
+                    **t.metadata,
+                    "_billing_context": {
+                        **_billing_context(
+                            principal,
+                            f"{request.operation_id}:{index}",
+                        ),
+                        "batch_id": batch_id,
+                        "task_index": index,
+                    },
+                },
                 dependencies=t.dependencies,
             )
-            for t in request.tasks
+            for index, t in enumerate(request.tasks)
         ]
 
         # Determine isolation mode
@@ -390,9 +432,16 @@ async def spawn_agents(
                 isolation=isolation,
                 max_parallel=request.max_parallel,
                 agent_factory=agent_factory,
+                batch_id=batch_id,
             )
-        except NotImplementedError as exc:
-            raise HTTPException(status_code=501, detail=str(exc))
+        except NotImplementedError:
+            raise HTTPException(
+                status_code=501,
+                detail={
+                    "code": "PARALLEL_ISOLATION_UNSUPPORTED",
+                    "message": "Requested isolation mode is not supported.",
+                },
+            )
 
         # Aggregate results if requested
         if request.aggregate_results:
@@ -424,12 +473,30 @@ async def spawn_agents(
         else:
             return batch_result.to_dict()
 
-    except AgentFactoryNotConfiguredError as e:
-        logger.error(f"Parallel agent factory unavailable: {e}")
-        raise HTTPException(status_code=501, detail=str(e))
-    except Exception as e:
-        logger.error(f"Error spawning agents: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+    except HTTPException:
+        raise
+    except AgentFactoryNotConfiguredError as exc:
+        logger.error(
+            "parallel.spawn failed: code=%s error_type=%s batch_id=%s",
+            "PARALLEL_AGENT_FACTORY_UNAVAILABLE",
+            type(exc).__name__,
+            batch_id,
+        )
+        raise HTTPException(
+            status_code=501,
+            detail={
+                "code": "PARALLEL_AGENT_FACTORY_UNAVAILABLE",
+                "message": "Parallel agent factory is unavailable.",
+            },
+        ) from None
+    except Exception as exc:
+        raise _orchestration_http_error(
+            exc,
+            "parallel.spawn",
+            "PARALLEL_SPAWN_FAILED",
+            "Parallel agent spawn failed.",
+            correlation_id=batch_id,
+        ) from None
 
 
 @router.get("/{batch_id}/status")

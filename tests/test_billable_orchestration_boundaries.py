@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from hashlib import sha256
 from types import SimpleNamespace
 
 import pytest
@@ -16,6 +17,7 @@ from backend.app.core.llm import (
 )
 from backend.app.core.parallel_agent_executor import (
     AgentResult,
+    ParallelAgentExecutor,
     ParallelAgentOrchestrator,
 )
 from backend.app.core.security import Principal
@@ -41,6 +43,12 @@ def _billing_context() -> dict[str, str]:
         "run_id": "parallel-run-1",
         "trace_id": "parallel-run-1",
     }
+
+
+def _parallel_run_id(operation_id: str) -> str:
+    return "parallel-" + sha256(
+        f"tenant-a\0user-a\0{operation_id}".encode()
+    ).hexdigest()[:32]
 
 
 @pytest.mark.parametrize(
@@ -805,3 +813,316 @@ def test_parallel_replay_after_confirm_failure_does_not_call_provider_twice(
     )
     assert len(reservations) == 1
     assert reservations[0].status == "reserved"
+
+
+@pytest.mark.parametrize("operation_id", [None, "", " " * 3, "x" * 221])
+def test_spawn_requires_bounded_operation_id_before_agent_execution(
+    monkeypatch,
+    operation_id,
+) -> None:
+    factory_calls = 0
+    executor_calls = 0
+
+    def provider_factory(_principal):
+        nonlocal factory_calls
+        factory_calls += 1
+        raise AssertionError("agent factory must not run")
+
+    class ExecutorMustNotRun:
+        async def spawn_agents(self, **_kwargs):
+            nonlocal executor_calls
+            executor_calls += 1
+            raise AssertionError("executor must not run")
+
+    monkeypatch.setattr(
+        parallel_agents,
+        "build_agent_loop_factory",
+        provider_factory,
+    )
+    app = FastAPI()
+    app.include_router(parallel_agents.router)
+    app.dependency_overrides[get_current_principal] = _principal
+    app.dependency_overrides[parallel_agents.get_executor] = ExecutorMustNotRun
+    payload = {"tasks": [{"goal": "child"}]}
+    if operation_id is not None:
+        payload["operation_id"] = operation_id
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/v1/agents/parallel/spawn",
+            json=payload,
+        )
+
+    assert response.status_code == 422
+    assert factory_calls == 0
+    assert executor_calls == 0
+
+
+def test_spawn_passes_stable_batch_and_task_run_context(
+    monkeypatch,
+) -> None:
+    from backend.app import dependencies
+
+    contexts: list[RunContext] = []
+    extras: list[dict] = []
+    executor_calls: list[dict] = []
+
+    class RecordingLoop:
+        async def run(self, context, task, extra_context=None):
+            contexts.append(context)
+            extras.append(extra_context or {})
+            return SimpleNamespace(
+                status=SimpleNamespace(value="completed"),
+                answer=f"done:{task}",
+                iterations=1,
+                trace_id=context.trace_id,
+                error=None,
+            )
+
+    class RecordingExecutor:
+        async def spawn_agents(self, **kwargs):
+            executor_calls.append(kwargs)
+            for index, task in enumerate(kwargs["tasks"]):
+                agent = kwargs["agent_factory"](
+                    f"agent-{index}",
+                    kwargs["isolation"],
+                )
+                await agent.execute(task)
+            batch_id = kwargs["batch_id"]
+            return SimpleNamespace(
+                to_dict=lambda: {
+                    "batch_id": batch_id,
+                    "total_tasks": len(kwargs["tasks"]),
+                }
+            )
+
+    monkeypatch.setattr(dependencies, "get_agent", lambda: RecordingLoop())
+    app = FastAPI()
+    app.include_router(parallel_agents.router)
+    app.dependency_overrides[get_current_principal] = _principal
+    app.dependency_overrides[parallel_agents.get_executor] = RecordingExecutor
+    payload = {
+        "operation_id": "  spawn-op-1  ",
+        "tasks": [{"goal": "alpha"}, {"goal": "beta"}],
+        "aggregate_results": False,
+    }
+
+    with TestClient(app) as client:
+        first = client.post("/api/v1/agents/parallel/spawn", json=payload)
+        second = client.post("/api/v1/agents/parallel/spawn", json=payload)
+
+    assert first.status_code == second.status_code == 200
+    assert first.json()["batch_id"] == second.json()["batch_id"]
+    expected_batch = _parallel_run_id("spawn-op-1")
+    assert first.json()["batch_id"] == expected_batch
+    assert [call["batch_id"] for call in executor_calls] == [
+        expected_batch,
+        expected_batch,
+    ]
+    assert [task.id for task in executor_calls[0]["tasks"]] == [
+        f"task-0-{expected_batch}",
+        f"task-1-{expected_batch}",
+    ]
+    expected_traces = [
+        _parallel_run_id(f"spawn-op-1:{index}")
+        for index in range(2)
+    ]
+    assert [context.trace_id for context in contexts] == expected_traces * 2
+    assert [extra["operation_id"] for extra in extras] == [
+        "spawn-op-1:0",
+        "spawn-op-1:1",
+    ] * 2
+    assert [extra["run_id"] for extra in extras] == expected_traces * 2
+
+
+@pytest.mark.parametrize(
+    ("error", "status_code", "error_code"),
+    [
+        (LLMReplayBlockedError("spawn-secret"), 409, "LLM_REPLAY_BLOCKED"),
+        (
+            LLMReservationPersistenceError("spawn-secret"),
+            503,
+            "LLM_RESERVATION_PERSISTENCE_FAILED",
+        ),
+        (
+            LLMSubmissionUnknownError("spawn-secret"),
+            502,
+            "LLM_SUBMISSION_UNKNOWN",
+        ),
+        (RuntimeError("spawn-secret"), 500, "PARALLEL_SPAWN_FAILED"),
+    ],
+)
+def test_spawn_maps_errors_without_secret_leakage(
+    monkeypatch,
+    error: Exception,
+    status_code: int,
+    error_code: str,
+    caplog,
+) -> None:
+    class FailingExecutor:
+        async def spawn_agents(self, **_kwargs):
+            raise error
+
+    monkeypatch.setattr(
+        parallel_agents,
+        "build_agent_loop_factory",
+        lambda _principal: object(),
+    )
+    app = FastAPI()
+    app.include_router(parallel_agents.router)
+    app.dependency_overrides[get_current_principal] = _principal
+    app.dependency_overrides[parallel_agents.get_executor] = FailingExecutor
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/v1/agents/parallel/spawn",
+            json={
+                "operation_id": "spawn-error-op",
+                "tasks": [{"goal": "child"}],
+                "aggregate_results": False,
+            },
+        )
+
+    expected_batch = _parallel_run_id("spawn-error-op")
+    assert response.status_code == status_code
+    assert response.json()["detail"]["code"] == error_code
+    assert "spawn-secret" not in response.text
+    assert "spawn-secret" not in caplog.text
+    assert expected_batch in caplog.text
+
+
+def test_spawn_does_not_reclassify_billing_error_during_agent_construction(
+    monkeypatch,
+) -> None:
+    from backend.app import dependencies
+
+    monkeypatch.setattr(
+        dependencies,
+        "get_agent",
+        lambda: (_ for _ in ()).throw(
+            LLMSubmissionUnknownError("agent-construction-secret")
+        ),
+    )
+    app = FastAPI()
+    app.include_router(parallel_agents.router)
+    app.dependency_overrides[get_current_principal] = _principal
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/v1/agents/parallel/spawn",
+            json={
+                "operation_id": "spawn-construction-op",
+                "tasks": [{"goal": "child"}],
+                "aggregate_results": False,
+            },
+        )
+
+    assert response.status_code == 502
+    assert response.json()["detail"]["code"] == "LLM_SUBMISSION_UNKNOWN"
+    assert "agent-construction-secret" not in response.text
+
+
+def test_spawn_task_failure_does_not_leak_internal_error(
+    monkeypatch,
+    caplog,
+) -> None:
+    class FailingAgent:
+        async def execute(self, _task):
+            raise RuntimeError("spawn-task-secret")
+
+    monkeypatch.setattr(
+        parallel_agents,
+        "build_agent_loop_factory",
+        lambda _principal: lambda _agent_id, _isolation: FailingAgent(),
+    )
+    app = FastAPI()
+    app.include_router(parallel_agents.router)
+    app.dependency_overrides[get_current_principal] = _principal
+    app.dependency_overrides[
+        parallel_agents.get_executor
+    ] = lambda: ParallelAgentExecutor(max_workers=1)
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/v1/agents/parallel/spawn",
+            json={
+                "operation_id": "spawn-task-failure",
+                "tasks": [{"goal": "child", "max_retries": 1}],
+                "aggregate_results": False,
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.json()["results"][0]["status"] == "failed"
+    assert response.json()["results"][0]["error"] == "Agent execution failed."
+    assert "spawn-task-secret" not in response.text
+    assert "spawn-task-secret" not in caplog.text
+
+
+def test_spawn_real_agent_loop_confirm_failure_replay_calls_provider_once(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    from backend.app import dependencies
+    from backend.app.core.agent.loop import AgentLoop
+    from backend.app.core.billing.reservations import SqlUsageReservationStore
+    from backend.app.core.hooks import HookManager
+    from backend.app.core.llm import BaseLLMBackend, LLMRouter
+    from backend.app.core.tracing import TraceStore
+
+    class ConfirmFailsStore(SqlUsageReservationStore):
+        async def confirm(self, *args, **kwargs):
+            raise OSError("spawn-database-secret")
+
+    class CountingBackend(BaseLLMBackend):
+        name = "fake"
+        model = "fake-v1"
+
+        def __init__(self):
+            self.calls = 0
+
+        async def chat(self, messages, tools, *, response_format=None):
+            self.calls += 1
+            return LLMResponse(
+                content="hello",
+                model=self.model,
+                tokens_used=3,
+                cost=0.001,
+            )
+
+    store = ConfirmFailsStore(
+        f"sqlite:///{(tmp_path / 'usage.db').as_posix()}",
+        create_schema=True,
+    )
+    backend = CountingBackend()
+    llm_router = LLMRouter(backends=[backend], reservation_store=store)
+    agent_loop = AgentLoop(
+        llm_router=llm_router,
+        memory=None,
+        tools=None,
+        tracer=TraceStore(tmp_path / "trace.jsonl"),
+        hook_manager=HookManager(),
+    )
+    monkeypatch.setattr(dependencies, "get_agent", lambda: agent_loop)
+    app = FastAPI()
+    app.include_router(parallel_agents.router)
+    app.dependency_overrides[get_current_principal] = _principal
+    app.dependency_overrides[
+        parallel_agents.get_executor
+    ] = lambda: ParallelAgentExecutor(max_workers=1)
+    payload = {
+        "operation_id": "spawn-confirm-failure",
+        "tasks": [{"goal": "hello?", "max_retries": 3}],
+        "aggregate_results": False,
+    }
+
+    with TestClient(app) as client:
+        first = client.post("/api/v1/agents/parallel/spawn", json=payload)
+        replay = client.post("/api/v1/agents/parallel/spawn", json=payload)
+
+    assert first.status_code == 503
+    assert first.json()["detail"]["code"] == "LLM_RESERVATION_PERSISTENCE_FAILED"
+    assert replay.status_code == 409
+    assert replay.json()["detail"]["code"] == "LLM_REPLAY_BLOCKED"
+    assert "spawn-database-secret" not in first.text + replay.text
+    assert backend.calls == 1
