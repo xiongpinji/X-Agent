@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useAppStore } from '@/store/appStore'
-import { Agent, apiClient, ChatMessage, ChatRunResponse } from '@/services/api'
-import { SSEClient, AnyStreamEvent } from '@/services/sseClient'
+import { Agent, apiClient, ChatMessage, ChatRunEvent, ChatRunResponse } from '@/services/api'
+import { AgentStreamResult, TraceEvent, useAgentStream } from '@/hooks/useAgentStream'
 import { useI18n } from '@/i18n/context'
 import { AlertTriangle, CheckCircle2, Paperclip } from 'lucide-react'
 import clsx from 'clsx'
@@ -26,7 +26,6 @@ export const ChatPage: React.FC = () => {
   const [agents, setAgents] = useState<Agent[]>([])
   const [selectedAgent, setSelectedAgent] = useState<string>('')
   const [lastRun, setLastRun] = useState<ChatRunResponse | null>(null)
-  const [isStreaming, setIsStreaming] = useState(false)
   const [streamContent, setStreamContent] = useState('')
   const [ultraMode, setUltraMode] = useState(false)
   const [parallelTasks, setParallelTasks] = useState<ParallelTaskCard[]>([])
@@ -34,14 +33,11 @@ export const ChatPage: React.FC = () => {
   const [tokenUsage, setTokenUsage] = useState<{ tokens?: number; iterations?: number; model?: string } | null>(null)
   const sessionIdRef = useRef<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
-  const sseClientRef = useRef<SSEClient | null>(null)
+  const streamEventsRef = useRef<ChatRunEvent[]>([])
 
   useEffect(() => {
     loadAgents()
     loadHistory()
-    return () => {
-      sseClientRef.current?.disconnect()
-    }
   }, [])
 
   useEffect(() => {
@@ -88,6 +84,109 @@ export const ChatPage: React.FC = () => {
       console.error('Failed to persist chat message:', error)
     }
   }
+
+  const recordStreamFailure = (errorMessage: string, traceId?: string) => {
+    const content = `Agent run failed: ${errorMessage}`
+    const runId = traceId || 'unavailable'
+    setError(errorMessage)
+    setStreamContent('')
+    setLastRun({
+      run_id: runId,
+      trace_id: traceId,
+      status: 'failed',
+      message: content,
+      events: [...streamEventsRef.current],
+      approval_required: false,
+      next_actions: [],
+      agent_id: selectedAgent || 'default-agent',
+      resource_type: 'agent_run',
+    })
+    addMessage({
+      id: traceId ? `${traceId}-failed` : `agent-failure-${Date.now()}`,
+      role: 'assistant',
+      content,
+      timestamp: new Date().toISOString(),
+      metadata: { trace_id: traceId, status: 'failed', error: errorMessage },
+    })
+    void persistChatMessage('assistant', content, {
+      trace_id: traceId,
+      status: 'failed',
+      error: errorMessage,
+    })
+  }
+
+  const handleStreamEvent = (event: TraceEvent) => {
+    const eventType = event.event_type || event.type || event.event || 'trace'
+    const eventMessage = typeof event.content === 'string'
+      ? event.content
+      : typeof event.message === 'string'
+        ? event.message
+        : event.data
+          ? JSON.stringify(event.data)
+          : eventType
+    streamEventsRef.current.push({
+      type: eventType,
+      status: event.status,
+      message: eventMessage,
+      created_at: event.timestamp,
+    })
+    setStreamContent((current) => current ? `${current}\n${eventMessage}` : eventMessage)
+  }
+
+  const handleStreamComplete = (streamResult: AgentStreamResult) => {
+    const result = streamResult.result
+    if (!result || result.status !== 'completed') {
+      recordStreamFailure(
+        result?.error || streamResult.error || `Agent run ended with status ${result?.status || 'unknown'}`,
+        result?.trace_id,
+      )
+      return
+    }
+    if (!result.trace_id) {
+      recordStreamFailure('Agent stream completed without a trace ID')
+      return
+    }
+
+    const answer = result.answer || ''
+    const summary = result.execution_summary || {}
+    setError(null)
+    setTokenUsage({
+      tokens: summary.tokens_used || summary.total_tokens,
+      iterations: result.iterations,
+      model: summary.model || undefined,
+    })
+    setLastRun({
+      run_id: result.trace_id,
+      trace_id: result.trace_id,
+      status: 'completed',
+      message: answer,
+      events: [...streamEventsRef.current],
+      approval_required: false,
+      next_actions: [],
+      agent_id: selectedAgent || result.agent_id || 'default-agent',
+      resource_type: 'agent_run',
+    })
+    addMessage({
+      id: result.trace_id,
+      role: 'assistant',
+      content: answer,
+      timestamp: new Date().toISOString(),
+      metadata: { trace_id: result.trace_id, status: result.status },
+    })
+    void persistChatMessage('assistant', answer, {
+      trace_id: result.trace_id,
+      status: result.status,
+    })
+    setStreamContent('')
+  }
+
+  const { isStreaming, startStream, stopStream } = useAgentStream({
+    onEvent: handleStreamEvent,
+    onComplete: handleStreamComplete,
+    onError: (message) => recordStreamFailure(message),
+  })
+
+  useEffect(() => () => stopStream(), [stopStream])
 
   const loadAgents = async () => {
     const fallbackAgent = (agentId: string = 'default-agent'): Agent => ({
@@ -138,17 +237,22 @@ export const ChatPage: React.FC = () => {
         timestamp: new Date().toISOString(),
       })
       void persistChatMessage('assistant', summaryContent, { execution_id: resp?.execution_id })
-    } catch {
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Parallel agent run failed'
       setParallelTasks([{
-        agent_id: 'agent-1', task: messageText, status: 'completed',
-        output: 'Task completed (demo mode)',
+        agent_id: 'agent-1', task: messageText, status: 'failed',
+        error: errorMessage,
       }])
+      const failureContent = `Ultra Mode failed: ${errorMessage}`
       addMessage({
         id: `parallel-${Date.now()}`,
         role: 'assistant',
-        content: '⚡ Ultra Mode: Task dispatched to parallel agents (demo mode).',
+        content: failureContent,
         timestamp: new Date().toISOString(),
+        metadata: { status: 'failed', error: errorMessage },
       })
+      setError(errorMessage)
+      void persistChatMessage('assistant', failureContent, { status: 'failed', error: errorMessage })
     } finally {
       setParallelRunning(false)
     }
@@ -176,6 +280,7 @@ export const ChatPage: React.FC = () => {
     try {
       setLoading(true)
       setStreamContent('')
+      streamEventsRef.current = []
 
       // Add user message
       const userMessage: ChatMessage = {
@@ -189,92 +294,9 @@ export const ChatPage: React.FC = () => {
       const messageText = input
       setInput('')
 
-      // Send to API
-      const response = await apiClient.sendMessage(messageText, selectedAgent)
-      setLastRun(response)
-
-      // Connect to SSE stream for real-time updates
-      if (response.run_id) {
-        setIsStreaming(true)
-        const sse = new SSEClient({ maxReconnectAttempts: 3 })
-        sseClientRef.current = sse
-
-        let accumulated = ''
-        sse.connect(
-          response.run_id,
-          (event: AnyStreamEvent) => {
-            if (event.event_type === 'message' && 'content' in event) {
-              accumulated += (event as any).content || ''
-              setStreamContent(accumulated)
-            } else if (event.event_type === 'completion') {
-              const result = (event as any).result
-              if (result && typeof result === 'string') {
-                accumulated = result
-              } else if (result && typeof result === 'object') {
-                // Extract token usage from execution_summary
-                const summary = result.execution_summary || {}
-                setTokenUsage({
-                  tokens: summary.tokens_used || summary.total_tokens || result.iterations,
-                  iterations: result.iterations,
-                  model: summary.model || undefined,
-                })
-                if (result.answer) accumulated = result.answer
-              }
-            }
-          },
-          (error) => {
-            console.error('SSE error:', error)
-            setIsStreaming(false)
-          },
-          () => {
-            // On complete, add the final assistant message
-            setIsStreaming(false)
-            const finalContent = accumulated || response.message
-            addMessage({
-              id: response.run_id,
-              role: 'assistant',
-              content: finalContent,
-              timestamp: new Date().toISOString(),
-              metadata: {
-                run_id: response.run_id,
-                status: 'completed',
-              },
-            })
-            void persistChatMessage('assistant', finalContent, { run_id: response.run_id })
-            setStreamContent('')
-          }
-        )
-
-        // Fallback: if SSE doesn't complete in 5s, show the initial response
-        setTimeout(() => {
-          if (!accumulated) {
-            setIsStreaming(false)
-            addMessage({
-              id: response.run_id,
-              role: 'assistant',
-              content: response.message,
-              timestamp: new Date().toISOString(),
-              metadata: {
-                run_id: response.run_id,
-                status: response.status,
-                events: response.events,
-              },
-            })
-            void persistChatMessage('assistant', response.message, { run_id: response.run_id, status: response.status })
-          }
-        }, 5000)
-      } else {
-        // No run_id, just show the response
-        addMessage({
-          id: Date.now().toString() + '-response',
-          role: 'assistant',
-          content: response.message,
-          timestamp: new Date().toISOString(),
-        })
-        void persistChatMessage('assistant', response.message)
-      }
+      await startStream(messageText, { agent_id: selectedAgent || 'default-agent' })
     } catch (error) {
-      setError(error instanceof Error ? error.message : 'Failed to send message')
+      recordStreamFailure(error instanceof Error ? error.message : 'Failed to send message')
     } finally {
       setLoading(false)
     }

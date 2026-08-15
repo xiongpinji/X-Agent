@@ -160,7 +160,7 @@ export interface ChatRunResponse {
   next_actions: ChatNextAction[]
   agent_id: string
   workflow_id?: string
-  resource_type: 'workflow_chat'
+  resource_type: 'agent_run'
 }
 
 export interface WorkbenchBootstrap {
@@ -549,15 +549,6 @@ class ApiClient {
     const response = await this.client.get('/workflows/runs', { params: { limit } })
     const payload = response.data
     return Array.isArray(payload) ? payload : payload?.items ?? []
-  }
-
-  // Chat API — POST /api/v1/workflows/create/chat
-  async sendMessage(message: string, agentId?: string): Promise<ChatRunResponse> {
-    const response = await this.client.post<ChatRunResponse>('/workflows/create/chat', {
-      request: message,
-      agent_id: agentId,
-    })
-    return response.data
   }
 
   // Chat history API — backend: api/chat_history.py, prefix /api/v1/chat.

@@ -11775,7 +11775,16 @@ async def run_agent_stream(payload: dict[str, Any] | None = None, principal: Pri
             # Push final result as completion signal
             queue.put_nowait({"_final": True, "result": result.model_dump(mode="json")})
         except Exception as exc:
-            queue.put_nowait({"_final": True, "error": str(exc)})
+            queue.put_nowait({
+                "_final": True,
+                "result": {
+                    "trace_id": context.trace_id,
+                    "status": "failed",
+                    "answer": "",
+                    "error": str(exc),
+                    "error_code": ErrorCode.AGENT_EXECUTION_FAILED.value,
+                },
+            })
         finally:
             queue.put_nowait(None)  # Sentinel to stop generator
 

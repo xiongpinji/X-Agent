@@ -31,6 +31,8 @@ export interface AgentStreamResult {
     tool_calls?: any[];
     iterations?: number;
     trace_id?: string;
+    error?: string;
+    error_code?: string;
     [key: string]: any;
   };
   error?: string;
@@ -104,11 +106,11 @@ export function useAgentStream(options?: {
       };
       if (token) {
         headers['Authorization'] = `Bearer ${token}`;
-      }
-      // Also support API key auth
-      const apiKey = localStorage.getItem('api_key');
-      if (apiKey) {
-        headers['X-API-Key'] = apiKey;
+      } else {
+        const apiKey = localStorage.getItem('api_key');
+        if (apiKey) {
+          headers['X-API-Key'] = apiKey;
+        }
       }
 
       const response = await fetch('/api/v1/agents/run/stream', {
@@ -133,7 +135,7 @@ export function useAgentStream(options?: {
 
       const decoder = new TextDecoder();
 
-      while (true) {
+      for (;;) {
         const { done, value } = await reader.read();
         if (done) break;
 
