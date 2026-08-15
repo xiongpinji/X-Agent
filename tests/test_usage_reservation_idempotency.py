@@ -262,3 +262,174 @@ async def test_raw_timeout_is_unknown_and_never_falls_back(tmp_path) -> None:
     )
     assert [item.status for item in attempts] == ["submission_unknown"]
     assert fallback.calls == 0
+
+
+@pytest.mark.asyncio
+async def test_run_correlated_request_blocks_replay_after_confirm_failure(tmp_path) -> None:
+    class ConfirmFailsOnceStore(SqlUsageReservationStore):
+        failed = False
+
+        async def confirm(self, *args, **kwargs):
+            if not self.failed:
+                self.failed = True
+                raise OSError("database unavailable")
+            return await super().confirm(*args, **kwargs)
+
+    store = ConfirmFailsOnceStore(
+        f"sqlite:///{(tmp_path / 'usage.db').as_posix()}", create_schema=True
+    )
+    backend = FakeBackend(
+        "mock", LLMResponse(content="accepted", tokens_used=3, cost=0.001)
+    )
+    router = LLMRouter(backends=[backend], reservation_store=store)
+    request = {
+        "tenant_id": "tenant-a",
+        "run_id": "run-stable",
+        "trace_id": "trace-stable",
+    }
+
+    with pytest.raises(LLMReservationPersistenceError):
+        await router.chat([{"role": "user", "content": "same"}], [], **request)
+    with pytest.raises(LLMReplayBlockedError):
+        await router.chat([{"role": "user", "content": "same"}], [], **request)
+    assert backend.calls == 1
+
+
+@pytest.mark.asyncio
+async def test_billable_router_requires_operation_or_run_correlation(tmp_path) -> None:
+    store = _store(tmp_path)
+    backend = FakeBackend("mock", LLMResponse(content="must not run"))
+    router = LLMRouter(backends=[backend], reservation_store=store)
+
+    with pytest.raises(LLMReservationPersistenceError, match="correlation"):
+        await router.chat(
+            [{"role": "user", "content": "hello"}],
+            [],
+            tenant_id="tenant-a",
+        )
+    assert backend.calls == 0
+
+
+@pytest.mark.asyncio
+async def test_cancelled_provider_is_marked_unknown_without_fallback(tmp_path) -> None:
+    class BlockingBackend(BaseLLMBackend):
+        name = "blocking"
+        model = "blocking-v1"
+
+        def __init__(self) -> None:
+            self.calls = 0
+            self.started = asyncio.Event()
+
+        async def chat(self, messages, tools, *, response_format=None):
+            self.calls += 1
+            self.started.set()
+            await asyncio.Event().wait()
+
+    store = _store(tmp_path)
+    blocking = BlockingBackend()
+    fallback = FakeBackend("fallback", LLMResponse(content="must not run"))
+    router = LLMRouter(backends=[blocking, fallback], reservation_store=store)
+    task = asyncio.create_task(
+        router.chat(
+            [{"role": "user", "content": "hello"}],
+            [],
+            tenant_id="tenant-a",
+            operation_id="chat-cancelled",
+        )
+    )
+    await asyncio.wait_for(blocking.started.wait(), timeout=1)
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await asyncio.wait_for(task, timeout=2)
+
+    attempts = await store.list_for_root(
+        tenant_id="tenant-a", root_operation_id="chat-cancelled"
+    )
+    assert [item.status for item in attempts] == ["submission_unknown"]
+    assert blocking.calls == 1
+    assert fallback.calls == 0
+
+
+@pytest.mark.asyncio
+async def test_cancellation_during_confirm_does_not_leave_reserved(tmp_path) -> None:
+    class ConfirmBlocksStore(SqlUsageReservationStore):
+        def __init__(self, *args, **kwargs) -> None:
+            super().__init__(*args, **kwargs)
+            self.confirm_started = asyncio.Event()
+
+        async def confirm(self, *args, **kwargs):
+            self.confirm_started.set()
+            await asyncio.Event().wait()
+
+    store = ConfirmBlocksStore(
+        f"sqlite:///{(tmp_path / 'usage.db').as_posix()}", create_schema=True
+    )
+    backend = FakeBackend("mock", LLMResponse(content="accepted"))
+    router = LLMRouter(backends=[backend], reservation_store=store)
+    task = asyncio.create_task(
+        router.chat(
+            [{"role": "user", "content": "hello"}],
+            [],
+            tenant_id="tenant-a",
+            operation_id="chat-confirm-cancelled",
+        )
+    )
+    await asyncio.wait_for(store.confirm_started.wait(), timeout=1)
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await asyncio.wait_for(task, timeout=2)
+    attempts = await store.list_for_root(
+        tenant_id="tenant-a", root_operation_id="chat-confirm-cancelled"
+    )
+    assert [item.status for item in attempts] == ["submission_unknown"]
+    assert backend.calls == 1
+
+
+@pytest.mark.asyncio
+async def test_agent_llm_calls_all_pass_run_and_trace_correlation() -> None:
+    from backend.app.core.agent import AgentLoop, AgentTrajectory
+    from backend.app.core.contracts import RunContext
+    from backend.app.core.memory import InMemoryMemorySystem
+    from backend.app.core.policy import ToolPolicyEngine
+    from backend.app.core.tools import build_default_tool_registry
+
+    class CapturingRouter:
+        _backends = [object()]
+
+        def __init__(self) -> None:
+            self.calls: list[dict] = []
+            self.responses = [
+                LLMResponse(content="fast answer"),
+                LLMResponse(content="synthesized answer"),
+                LLMResponse(content='[{"kind":"final","instruction":"done"}]'),
+            ]
+
+        async def chat(self, messages, tools, **kwargs):
+            self.calls.append(kwargs)
+            return self.responses.pop(0)
+
+    router = CapturingRouter()
+    agent = AgentLoop(
+        llm_router=router,
+        memory=InMemoryMemorySystem(),
+        tools=build_default_tool_registry(ToolPolicyEngine()),
+    )
+    context = RunContext(
+        tenant_id="tenant-a", user_id="user-a", trace_id="trace-agent"
+    )
+    trajectory = AgentTrajectory(task="task", goal="goal", observations=["done"])
+
+    assert await agent._fast_path_answer(context, "hello") is not None
+    await agent._maybe_synthesize_user_answer(
+        context,
+        "task",
+        trajectory,
+        "Goal: goal | Task mode: execute",
+    )
+    await agent._plan(context, trajectory, {})
+
+    assert len(router.calls) == 3
+    assert all(call["tenant_id"] == "tenant-a" for call in router.calls)
+    assert all(call["user_id"] == "user-a" for call in router.calls)
+    assert all(call["run_id"] == "trace-agent" for call in router.calls)
+    assert all(call["trace_id"] == "trace-agent" for call in router.calls)

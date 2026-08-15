@@ -23,12 +23,15 @@ from sqlalchemy import (
     Numeric,
     String,
     UniqueConstraint,
+    and_,
     create_engine,
     event,
     func,
+    or_,
     select,
     update,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
@@ -40,6 +43,22 @@ ReservationStatus = Literal[
     "reserved", "confirmed", "refunded", "submission_unknown"
 ]
 _TERMINAL_STATUSES = {"confirmed", "refunded", "submission_unknown"}
+_MONEY_QUANTUM = Decimal("0.00000001")
+_MAX_MONEY = Decimal("9999999999.99999999")
+
+
+def _normalize_money(value: Any, field_name: str) -> Decimal:
+    try:
+        amount = Decimal(str(value))
+    except Exception as exc:
+        raise ValueError(f"{field_name} must be a finite NUMERIC(18,8) value") from exc
+    if not amount.is_finite():
+        raise ValueError(f"{field_name} must be a finite NUMERIC(18,8) value")
+    if amount < 0 or amount > _MAX_MONEY:
+        raise ValueError(f"{field_name} must fit non-negative NUMERIC(18,8)")
+    if amount.as_tuple().exponent < -8:
+        raise ValueError(f"{field_name} must have at most 8 decimal places")
+    return amount.quantize(_MONEY_QUANTUM)
 
 
 class UsageReservationError(RuntimeError):
@@ -91,8 +110,10 @@ class UsageAuditOutboxEntry(BaseModel):
     tenant_id: str
     operation_id: str
     action: str
-    status: Literal["pending", "delivered"]
+    status: Literal["pending", "delivering", "delivered"]
     audit_id: str | None = None
+    delivery_token: str | None = None
+    lease_expires_at: float | None = None
     attempt_count: int
     last_error: str | None = None
     payload: dict[str, Any]
@@ -172,7 +193,7 @@ class UsageAuditOutboxModel(UsageReservationBase):
     __tablename__ = "usage_reservation_audit_outbox"
     __table_args__ = (
         CheckConstraint(
-            "status IN ('pending', 'delivered')",
+            "status IN ('pending', 'delivering', 'delivered')",
             name="ck_usage_audit_outbox_status",
         ),
         Index("idx_usage_audit_outbox_pending", "status", "created_at"),
@@ -185,9 +206,14 @@ class UsageAuditOutboxModel(UsageReservationBase):
     action: Mapped[str] = mapped_column(String(64), nullable=False)
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending")
     audit_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    delivery_token: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    lease_expires_at: Mapped[float | None] = mapped_column(Float, nullable=True)
     attempt_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     last_error: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    payload: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    payload: Mapped[dict[str, Any]] = mapped_column(
+        JSON().with_variant(JSONB(), "postgresql"),
+        nullable=False,
+    )
     created_at: Mapped[float] = mapped_column(Float, nullable=False)
     updated_at: Mapped[float] = mapped_column(Float, nullable=False)
 
@@ -275,12 +301,10 @@ class SqlUsageReservationStore:
         request_payload: dict[str, Any] | None = None,
     ) -> UsageReservation:
         root_id = root_operation_id or operation_id
-        estimate = Decimal(str(estimated_cost))
+        estimate = _normalize_money(estimated_cost, "estimated_cost")
         if not tenant_id or not operation_id or not root_id:
             raise ValueError("tenant_id and operation IDs are required")
-        if estimate < 0:
-            raise ValueError("estimated_cost must be non-negative")
-        estimate_fingerprint = format(estimate.normalize(), "f")
+        estimate_fingerprint = format(estimate, "f")
         fingerprint = _canonical_hash(
             {
                 "root_operation_id": root_id,
@@ -375,9 +399,9 @@ class SqlUsageReservationStore:
         actual_cost: Decimal,
         tokens_used: int,
     ) -> UsageReservation:
-        resolved_cost = Decimal(str(actual_cost))
-        if resolved_cost < 0 or tokens_used < 0:
-            raise ValueError("confirmed cost and tokens must be non-negative")
+        resolved_cost = _normalize_money(actual_cost, "actual_cost")
+        if tokens_used < 0:
+            raise ValueError("tokens_used must be non-negative")
         return await self._transition(
             tenant_id,
             operation_id,
@@ -566,6 +590,8 @@ class SqlUsageReservationStore:
                 action=action,
                 status="pending",
                 audit_id=None,
+                delivery_token=None,
+                lease_expires_at=None,
                 attempt_count=0,
                 last_error=None,
                 payload=payload,
@@ -665,13 +691,33 @@ class SqlUsageReservationStore:
             rows = session.scalars(query.order_by(UsageAuditOutboxModel.created_at)).all()
             return [self._outbox_record(row) for row in rows]
 
-    async def deliver_pending(self, audit_store: Any | None = None) -> int:
+    async def deliver_pending(
+        self,
+        audit_store: Any | None = None,
+        *,
+        lease_seconds: float = 30.0,
+        limit: int = 100,
+    ) -> int:
+        """Deliver claimed events with at-least-once, stable-event-id semantics."""
         sink = audit_store or self.audit_store
         if sink is None:
             return 0
-        pending = await self.list_outbox(status="pending")
+        if lease_seconds <= 0 or limit <= 0:
+            raise ValueError("lease_seconds and limit must be positive")
         delivered = 0
-        for entry in pending:
+        attempted_ids: set[str] = set()
+        for _ in range(limit):
+            delivery_token = uuid.uuid4().hex
+            entry = await self._run(
+                self._claim_next_outbox,
+                time.time(),
+                time.time() + lease_seconds,
+                delivery_token,
+                tuple(attempted_ids),
+            )
+            if entry is None:
+                break
+            attempted_ids.add(entry.id)
             try:
                 record = await asyncio.to_thread(
                     sink.record,
@@ -689,46 +735,126 @@ class SqlUsageReservationStore:
                     raise UsageReservationError("audit sink returned no record id")
             except Exception as exc:
                 await self._run(
-                    self._mark_outbox_failed, entry.id, exc.__class__.__name__
+                    self._release_outbox_claim,
+                    entry.id,
+                    delivery_token,
+                    exc.__class__.__name__,
                 )
                 continue
-            await self._run(self._mark_outbox_delivered, entry.id, str(audit_id))
+            await self._run(
+                self._mark_outbox_delivered,
+                entry.id,
+                delivery_token,
+                str(audit_id),
+            )
             delivered += 1
         return delivered
 
-    def _mark_outbox_failed(self, outbox_id: str, error_code: str) -> None:
+    def _claim_next_outbox(
+        self,
+        now: float,
+        lease_expires_at: float,
+        delivery_token: str,
+        excluded_ids: tuple[str, ...],
+    ) -> UsageAuditOutboxEntry | None:
+        available = or_(
+            UsageAuditOutboxModel.status == "pending",
+            and_(
+                UsageAuditOutboxModel.status == "delivering",
+                UsageAuditOutboxModel.lease_expires_at <= now,
+            ),
+        )
+        while True:
+            with self._session_factory() as session:
+                query = (
+                    select(UsageAuditOutboxModel.id)
+                    .where(available)
+                    .order_by(UsageAuditOutboxModel.created_at)
+                    .limit(1)
+                )
+                if excluded_ids:
+                    query = query.where(
+                        UsageAuditOutboxModel.id.not_in(excluded_ids)
+                    )
+                outbox_id = session.scalar(query)
+                if outbox_id is None:
+                    return None
+                result = session.execute(
+                    update(UsageAuditOutboxModel)
+                    .where(
+                        UsageAuditOutboxModel.id == outbox_id,
+                        available,
+                    )
+                    .values(
+                        status="delivering",
+                        delivery_token=delivery_token,
+                        lease_expires_at=lease_expires_at,
+                        attempt_count=UsageAuditOutboxModel.attempt_count + 1,
+                        last_error=None,
+                        updated_at=now,
+                    )
+                )
+                session.commit()
+                if result.rowcount == 1:
+                    claimed = session.get(UsageAuditOutboxModel, outbox_id)
+                    if claimed is None:
+                        raise UsageReservationError(
+                            "claimed audit outbox event disappeared"
+                        )
+                    return self._outbox_record(claimed)
+
+    def _release_outbox_claim(
+        self,
+        outbox_id: str,
+        delivery_token: str,
+        error_code: str,
+    ) -> None:
         with self._session_factory() as session:
-            session.execute(
+            result = session.execute(
                 update(UsageAuditOutboxModel)
                 .where(
                     UsageAuditOutboxModel.id == outbox_id,
-                    UsageAuditOutboxModel.status == "pending",
+                    UsageAuditOutboxModel.status == "delivering",
+                    UsageAuditOutboxModel.delivery_token == delivery_token,
                 )
                 .values(
-                    attempt_count=UsageAuditOutboxModel.attempt_count + 1,
+                    status="pending",
+                    delivery_token=None,
+                    lease_expires_at=None,
                     last_error=error_code[:128],
                     updated_at=time.time(),
                 )
             )
             session.commit()
+            if result.rowcount != 1:
+                raise UsageReservationError("audit outbox claim ownership was lost")
 
-    def _mark_outbox_delivered(self, outbox_id: str, audit_id: str) -> None:
+    def _mark_outbox_delivered(
+        self,
+        outbox_id: str,
+        delivery_token: str,
+        audit_id: str,
+    ) -> None:
         with self._session_factory() as session:
-            session.execute(
+            result = session.execute(
                 update(UsageAuditOutboxModel)
                 .where(
                     UsageAuditOutboxModel.id == outbox_id,
-                    UsageAuditOutboxModel.status == "pending",
+                    UsageAuditOutboxModel.status == "delivering",
+                    UsageAuditOutboxModel.delivery_token == delivery_token,
                 )
                 .values(
                     status="delivered",
                     audit_id=audit_id,
-                    attempt_count=UsageAuditOutboxModel.attempt_count + 1,
+                    delivery_token=None,
+                    lease_expires_at=None,
                     last_error=None,
                     updated_at=time.time(),
                 )
             )
             session.commit()
+            if result.rowcount != 1:
+                raise UsageReservationError("audit outbox claim ownership was lost")
 
     async def monthly_summary(
         self, *, tenant_id: str, month: str
@@ -789,11 +915,11 @@ class SqlUsageReservationStore:
                 UsageLedgerModel.reservation_id == model.id
             )
         )
-        pending_count = session.scalar(
+        undelivered_count = session.scalar(
             select(func.count(UsageAuditOutboxModel.id)).where(
                 UsageAuditOutboxModel.tenant_id == model.tenant_id,
                 UsageAuditOutboxModel.operation_id == model.operation_id,
-                UsageAuditOutboxModel.status == "pending",
+                UsageAuditOutboxModel.status != "delivered",
             )
         )
         return UsageReservation(
@@ -813,7 +939,7 @@ class SqlUsageReservationStore:
             created_at=model.created_at,
             updated_at=model.updated_at,
             ledger_entry_count=int(ledger_count or 0),
-            audit_status="pending" if pending_count else "delivered",
+            audit_status="pending" if undelivered_count else "delivered",
             created=created,
         )
 
@@ -826,6 +952,8 @@ class SqlUsageReservationStore:
             action=model.action,
             status=model.status,
             audit_id=model.audit_id,
+            delivery_token=model.delivery_token,
+            lease_expires_at=model.lease_expires_at,
             attempt_count=model.attempt_count,
             last_error=model.last_error,
             payload=dict(model.payload or {}),

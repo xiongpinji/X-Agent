@@ -353,7 +353,7 @@ async def run_structured_output(payload: dict[str, Any] | None = None, principal
         LLMReservationPersistenceError,
         LLMSubmissionUnknownError,
     )
-    from backend.app.dependencies import get_llm_router
+    from backend.app.dependencies import get_billable_llm_router
 
     request = payload or {}
     enforce_scope(principal, "agent:run")
@@ -364,12 +364,15 @@ async def run_structured_output(payload: dict[str, Any] | None = None, principal
     if not schema or not isinstance(schema, dict):
         raise api_error(422, ErrorCode.VALIDATION_ERROR, "schema (JSON Schema object) is required.")
 
-    llm_router = get_llm_router()
+    llm_router = get_billable_llm_router()
     messages = [
         {"role": "system", "content": "You are a precise assistant. Respond ONLY with valid JSON matching the provided schema. No markdown, no explanation."},
         {"role": "user", "content": f"{prompt}\n\nRespond with JSON conforming to this schema:\n{json.dumps(schema, indent=2)}"},
     ]
     response_format = {"type": "json_schema", "json_schema": {"name": "structured_response", "strict": True, "schema": schema}}
+    structured_root = str(
+        request.get("operation_id") or f"structured-{uuid4().hex}"
+    )
     try:
         # Try with strict response_format first (OpenAI-compatible)
         try:
@@ -378,6 +381,7 @@ async def run_structured_output(payload: dict[str, Any] | None = None, principal
                 tenant_id=principal.tenant_id,
                 user_id=principal.user_id,
                 response_format=response_format,
+                operation_id=f"{structured_root}:strict",
             )
         except (
             LLMReplayBlockedError,
@@ -391,6 +395,7 @@ async def run_structured_output(payload: dict[str, Any] | None = None, principal
                 messages, [],
                 tenant_id=principal.tenant_id,
                 user_id=principal.user_id,
+                operation_id=f"{structured_root}:prompt",
             )
         import json as _json
         # Extract JSON from response (handle markdown code fences)

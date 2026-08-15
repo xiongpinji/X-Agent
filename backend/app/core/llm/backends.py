@@ -13,6 +13,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import hashlib
+import json
 import logging
 import time
 import uuid
@@ -646,6 +647,40 @@ class LLMRouter:
         return f"llm-attempt-{digest}"
 
     @staticmethod
+    def correlated_root_operation_id(
+        *,
+        tenant_id: str,
+        user_id: str | None,
+        run_id: str | None,
+        trace_id: str | None,
+        messages: list[dict[str, str]],
+        tools: list[dict[str, Any]],
+        response_format: dict[str, Any] | None,
+        task_type: Any,
+        strategy: Any,
+    ) -> str:
+        payload = {
+            "tenant_id": tenant_id,
+            "user_id": user_id,
+            "run_id": run_id,
+            "trace_id": trace_id,
+            "messages": messages,
+            "tools": tools,
+            "response_format": response_format,
+            "task_type": task_type,
+            "strategy": strategy,
+        }
+        canonical = json.dumps(
+            payload,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=True,
+            default=str,
+        )
+        digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+        return f"llm-root-{digest}"
+
+    @staticmethod
     def _total_tokens(tokens_used: Any) -> int:
         if isinstance(tokens_used, dict):
             if "total" in tokens_used:
@@ -673,6 +708,41 @@ class LLMRouter:
             completion_tokens=max(0, output_tokens),
         ).calculate_cost(str(getattr(backend, "model", backend.name)))
         return Decimal(str(estimate))
+
+    async def _settle_cancelled_attempt(
+        self,
+        *,
+        tenant_id: str,
+        attempt_operation_id: str,
+    ) -> None:
+        async def settle() -> None:
+            current = await self._reservation_store.get(
+                tenant_id=tenant_id,
+                operation_id=attempt_operation_id,
+            )
+            if current is None:
+                raise LLMReservationPersistenceError(
+                    "cancelled usage reservation was not found"
+                )
+            if current.status == "reserved":
+                await self._reservation_store.mark_submission_unknown(
+                    attempt_operation_id,
+                    tenant_id=tenant_id,
+                    reason_code="CancelledError",
+                )
+
+        cleanup_task = asyncio.create_task(settle())
+        while not cleanup_task.done():
+            try:
+                await asyncio.shield(cleanup_task)
+            except asyncio.CancelledError:
+                continue
+        try:
+            cleanup_task.result()
+        except Exception as persistence_exc:
+            raise LLMReservationPersistenceError(
+                "cancelled submission state could not be persisted"
+            ) from persistence_exc
 
     def _order_backends(
         self,
@@ -737,17 +807,37 @@ class LLMRouter:
             logger.warning("MoA path failed, falling back to sequential: %s", moa_exc)
 
         last_error: Exception | None = None
-        root_operation_id = operation_id or f"llm-{uuid.uuid4().hex}"
+        if self._reservation_store is not None:
+            if not tenant_id:
+                raise LLMReservationPersistenceError(
+                    "tenant_id is required for durable usage reservation"
+                )
+            if operation_id:
+                root_operation_id = operation_id
+            elif run_id or trace_id:
+                root_operation_id = self.correlated_root_operation_id(
+                    tenant_id=tenant_id,
+                    user_id=user_id,
+                    run_id=run_id,
+                    trace_id=trace_id,
+                    messages=messages,
+                    tools=tools,
+                    response_format=response_format,
+                    task_type=task_type,
+                    strategy=strategy,
+                )
+            else:
+                raise LLMReservationPersistenceError(
+                    "operation_id or run/trace correlation is required"
+                )
+        else:
+            root_operation_id = operation_id or f"llm-{uuid.uuid4().hex}"
         ordered_backends = self._order_backends(
             messages, tools, task_type=task_type, strategy=strategy
         )
         for attempt_index, backend in enumerate(ordered_backends):
             attempt_operation_id: str | None = None
             if self._reservation_store is not None:
-                if not tenant_id:
-                    raise LLMReservationPersistenceError(
-                        "tenant_id is required for durable usage reservation"
-                    )
                 attempt_operation_id = self.provider_attempt_id(
                     root_operation_id, attempt_index, backend
                 )
@@ -762,7 +852,25 @@ class LLMRouter:
                         estimated_cost=self._estimated_cost(backend, messages),
                         run_id=run_id,
                         trace_id=trace_id,
-                        request_payload={"messages": messages, "tools": tools},
+                        request_payload={
+                            "messages": messages,
+                            "tools": tools,
+                            **(
+                                {"response_format": response_format}
+                                if response_format is not None
+                                else {}
+                            ),
+                            **(
+                                {"task_type": task_type}
+                                if task_type is not None
+                                else {}
+                            ),
+                            **(
+                                {"strategy": strategy}
+                                if strategy is not None
+                                else {}
+                            ),
+                        },
                     )
                 except Exception as exc:
                     raise LLMReservationPersistenceError(
@@ -781,6 +889,13 @@ class LLMRouter:
                         tools,
                         response_format=response_format,
                     )
+            except asyncio.CancelledError:
+                if self._reservation_store is not None and attempt_operation_id:
+                    await self._settle_cancelled_attempt(
+                        tenant_id=tenant_id,
+                        attempt_operation_id=attempt_operation_id,
+                    )
+                raise
             except LLMSubmissionUnknownError as exc:
                 if self._reservation_store is not None and attempt_operation_id:
                     try:
@@ -789,6 +904,12 @@ class LLMRouter:
                             tenant_id=tenant_id,
                             reason_code=exc.__class__.__name__,
                         )
+                    except asyncio.CancelledError:
+                        await self._settle_cancelled_attempt(
+                            tenant_id=tenant_id,
+                            attempt_operation_id=attempt_operation_id,
+                        )
+                        raise
                     except Exception as persistence_exc:
                         raise LLMReservationPersistenceError(
                             "unknown submission state could not be persisted"
@@ -803,6 +924,12 @@ class LLMRouter:
                             tenant_id=tenant_id,
                             reason_code=exc.__class__.__name__,
                         )
+                    except asyncio.CancelledError:
+                        await self._settle_cancelled_attempt(
+                            tenant_id=tenant_id,
+                            attempt_operation_id=attempt_operation_id,
+                        )
+                        raise
                     except Exception as persistence_exc:
                         raise LLMReservationPersistenceError(
                             "provider failure refund could not be persisted"
@@ -821,6 +948,12 @@ class LLMRouter:
                             tenant_id=tenant_id,
                             reason_code=unknown_error.__class__.__name__,
                         )
+                    except asyncio.CancelledError:
+                        await self._settle_cancelled_attempt(
+                            tenant_id=tenant_id,
+                            attempt_operation_id=attempt_operation_id,
+                        )
+                        raise
                     except Exception as persistence_exc:
                         raise LLMReservationPersistenceError(
                             "unknown submission state could not be persisted"
@@ -834,6 +967,12 @@ class LLMRouter:
                         actual_cost=Decimal(str(response.cost or 0)),
                         tokens_used=self._total_tokens(response.tokens_used),
                     )
+                except asyncio.CancelledError:
+                    await self._settle_cancelled_attempt(
+                        tenant_id=tenant_id,
+                        attempt_operation_id=attempt_operation_id,
+                    )
+                    raise
                 except Exception as exc:
                     raise LLMReservationPersistenceError(
                         "provider success settlement could not be persisted"

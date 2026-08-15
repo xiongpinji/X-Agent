@@ -595,7 +595,7 @@ def get_agent() -> "AgentLoop":
     settings = get_settings()
     tools = get_runtime_tool_registry()
     return AgentLoop(
-        llm_router=get_llm_router(),
+        llm_router=get_billable_llm_router(),
         memory=get_memory(),
         tools=tools,
         max_iterations=settings.max_iterations,
@@ -627,7 +627,19 @@ def get_usage_reservation_store():
 
 @lru_cache
 def get_llm_router():
-    """Return the shared LLMRouter instance (cached)."""
+    """Return the cached non-billable router for trusted internal workflows."""
+    return _build_configured_llm_router(reservation_store=None)
+
+
+@lru_cache
+def get_billable_llm_router():
+    """Return the cached reservation-enforced router for principal API/Agent runs."""
+    return _build_configured_llm_router(
+        reservation_store=get_usage_reservation_store()
+    )
+
+
+def _build_configured_llm_router(*, reservation_store):
     from backend.app.core.llm import build_llm_router
 
     settings = get_settings()
@@ -640,5 +652,5 @@ def get_llm_router():
         deepseek_api_key=settings.deepseek_api_key,
         deepseek_model=settings.deepseek_model,
         deepseek_base_url=settings.deepseek_base_url,
-        reservation_store=get_usage_reservation_store(),
+        reservation_store=reservation_store,
     )
