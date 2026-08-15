@@ -137,24 +137,40 @@ class RunArtifactManager:
         except ValueError:
             return None
 
-        def _read() -> RunArtifactManifest | None:
-            if not path.is_file():
-                return None
-            try:
-                manifest = RunArtifactManifest.model_validate_json(
-                    path.read_text(encoding="utf-8")
-                )
-                if (
-                    manifest.run_id != run_id
-                    or manifest.tenant_id != tenant_id
-                    or manifest.user_id != user_id
-                ):
-                    return None
-                return manifest
-            except (OSError, ValueError):
-                return None
+        return await asyncio.to_thread(
+            self._read_manifest,
+            path,
+            run_id,
+            tenant_id,
+            user_id,
+        )
 
-        return await asyncio.to_thread(_read)
+    @staticmethod
+    def _read_manifest(
+        path: Path,
+        run_id: str,
+        tenant_id: str,
+        user_id: str,
+    ) -> RunArtifactManifest | None:
+        if not path.is_file():
+            return None
+        try:
+            _safe_component(path.stem)
+            manifest = RunArtifactManifest.model_validate_json(
+                path.read_text(encoding="utf-8")
+            )
+        except (OSError, ValueError):
+            return None
+        if (
+            path.stem != run_id
+            or manifest.run_id != run_id
+            or manifest.trace_id != run_id
+            or manifest.status not in {"completed", "failed"}
+            or manifest.tenant_id != tenant_id
+            or manifest.user_id != user_id
+        ):
+            return None
+        return manifest
 
     async def create_answer_artifact(
         self,
@@ -239,7 +255,7 @@ class RunArtifactManager:
         run_id: str,
         tenant_id: str,
         user_id: str,
-    ) -> RunArtifactManifest | None:
+    ) -> tuple[RunArtifactManifest, bool] | None:
         manifest = await self.get_manifest(run_id, tenant_id, user_id)
         if manifest is None or manifest.status != "completed":
             return None
@@ -257,7 +273,7 @@ class RunArtifactManager:
                 or len(existing) != manifest.archive.size_bytes
             ):
                 raise ValueError("Declared archive integrity check failed")
-            return manifest
+            return manifest, False
         verified: list[tuple[Artifact, bytes]] = []
         for reference in manifest.artifacts:
             stored = await self.artifact_storage.content_bytes(
@@ -303,7 +319,7 @@ class RunArtifactManager:
             size_bytes=len(archive_bytes),
             download_url=f"/api/v1/artifacts/archives/{archive_id}/download",
         )
-        return await self.save_manifest(manifest)
+        return await self.save_manifest(manifest), True
 
     async def remove_archive(self, manifest: RunArtifactManifest) -> None:
         """Make an archive unreachable and remove its bytes after audit failure."""
@@ -352,13 +368,14 @@ class RunArtifactManager:
             return list(scope.glob("*.json"))
 
         for path in await asyncio.to_thread(_manifest_files):
-            try:
-                manifest = RunArtifactManifest.model_validate_json(
-                    await asyncio.to_thread(path.read_text, encoding="utf-8")
-                )
-            except (OSError, ValueError):
-                continue
-            if manifest.tenant_id != tenant_id or manifest.user_id != user_id:
+            manifest = await asyncio.to_thread(
+                self._read_manifest,
+                path,
+                path.stem,
+                tenant_id,
+                user_id,
+            )
+            if manifest is None:
                 continue
             if manifest.archive is None or manifest.archive.archive_id != archive_id:
                 continue

@@ -90,7 +90,7 @@ def lifecycle(tmp_path, monkeypatch) -> Iterator[tuple[TestClient, RunArtifactMa
 def test_successful_stream_closes_manifest_download_archive_and_audit(
     lifecycle, monkeypatch
 ) -> None:
-    client, _manager, audit = lifecycle
+    client, manager, audit = lifecycle
     monkeypatch.setattr(agents_api, "get_agent", lambda: _CompletingAgent())
 
     response = client.post(
@@ -141,9 +141,30 @@ def test_successful_stream_closes_manifest_download_archive_and_audit(
     assert archive["size_bytes"] > 0
     persisted = client.get("/api/v1/artifacts/runs/run-lifecycle/manifest").json()
     assert persisted["archive"]["archive_id"] == archive["archive_id"]
+    audit_ids_before_repeat = list(persisted["audit_ids"])
+    first_archive_bytes = asyncio.run(
+        manager.archive_bytes(
+            archive["archive_id"],
+            "tenant-a",
+            "user-a",
+        )
+    )[1]
     repeated = client.post("/api/v1/artifacts/runs/run-lifecycle/archive")
     assert repeated.status_code == 200
     assert repeated.json()["archive"]["archive_id"] == archive["archive_id"]
+    assert repeated.json()["archive"]["archive_sha256"] == archive["archive_sha256"]
+    repeated_manifest = client.get(
+        "/api/v1/artifacts/runs/run-lifecycle/manifest"
+    ).json()
+    assert repeated_manifest["audit_ids"] == audit_ids_before_repeat
+    second_archive_bytes = asyncio.run(
+        manager.archive_bytes(
+            archive["archive_id"],
+            "tenant-a",
+            "user-a",
+        )
+    )[1]
+    assert second_archive_bytes == first_archive_bytes
 
     archive_download = client.get(
         f"/api/v1/artifacts/archives/{archive['archive_id']}/download"
@@ -178,6 +199,7 @@ def test_successful_stream_closes_manifest_download_archive_and_audit(
     assert set(final_manifest["audit_ids"]) == {
         record.id for record in scoped_records
     }
+    assert sum(record.action == "run.archive.created" for record in records) == 1
 
 
 def test_failed_stream_persists_failed_manifest_without_artifact(
@@ -193,6 +215,7 @@ def test_failed_stream_persists_failed_manifest_without_artifact(
     final = _final(response.text)
     assert final["status"] == "failed"
     assert final["manifest"]["status"] == "failed"
+    assert final["persistence_status"] == "persisted"
     assert final["manifest"]["artifacts"] == []
     assert final["manifest"]["error_code"] == "agent_execution_failed"
     manifest_response = client.get(
@@ -209,6 +232,35 @@ def test_failed_stream_persists_failed_manifest_without_artifact(
     )
     assert len(failures) == 1
     assert failures[0].run_id == failures[0].trace_id == final["trace_id"]
+
+
+def test_failed_stream_does_not_claim_manifest_when_persistence_fails(
+    lifecycle,
+    monkeypatch,
+) -> None:
+    client, manager, _audit = lifecycle
+    monkeypatch.setattr(agents_api, "get_agent", lambda: _FailingAgent())
+
+    async def _fail_save(_manifest):
+        raise OSError("PRIVATE_PERSISTENCE_FAILURE")
+
+    monkeypatch.setattr(manager, "save_manifest", _fail_save)
+    response = client.post("/api/v1/agents/run/stream", json={"task": "fail safely"})
+
+    assert response.status_code == 200
+    assert "PRIVATE_PERSISTENCE_FAILURE" not in response.text
+    final = _final(response.text)
+    assert final["status"] == "failed"
+    assert final["manifest"] is None
+    assert final["persistence_status"] == "failed"
+    assert asyncio.run(
+        RunArtifactManager.get_manifest(
+            manager,
+            final["trace_id"],
+            "tenant-a",
+            "user-a",
+        )
+    ) is None
 
 
 def test_archive_refuses_artifact_content_that_no_longer_matches_manifest(
@@ -236,6 +288,55 @@ def test_archive_refuses_artifact_content_that_no_longer_matches_manifest(
     assert response.status_code == 409
     assert response.json()["message"] == "Run archive integrity check failed."
     assert "tampered" not in response.text
+
+
+@pytest.mark.parametrize(
+    ("field", "replacement"),
+    [
+        ("trace_id", "different-trace"),
+        ("status", "running"),
+        ("run_id", "different-run"),
+        ("tenant_id", "tenant-b"),
+        ("user_id", "user-b"),
+    ],
+)
+def test_manifest_reads_and_archives_reject_tampered_invariants(
+    lifecycle,
+    monkeypatch,
+    field,
+    replacement,
+) -> None:
+    client, manager, _audit = lifecycle
+    monkeypatch.setattr(agents_api, "get_agent", lambda: _CompletingAgent())
+    _final(
+        client.post(
+            "/api/v1/agents/run/stream",
+            json={"task": "create a result"},
+        ).text
+    )
+    archive = client.post(
+        "/api/v1/artifacts/runs/run-lifecycle/archive"
+    ).json()["archive"]
+    manifest_file = next(manager.manifest_path.rglob("run-lifecycle.json"))
+    payload = json.loads(manifest_file.read_text(encoding="utf-8"))
+    payload[field] = replacement
+    manifest_file.write_text(json.dumps(payload), encoding="utf-8")
+
+    assert client.get("/api/v1/artifacts/runs/run-lifecycle/manifest").status_code == 404
+    assert client.post("/api/v1/artifacts/runs/run-lifecycle/archive").status_code == 404
+    assert client.get(
+        f"/api/v1/artifacts/archives/{archive['archive_id']}/download"
+    ).status_code == 404
+    assert asyncio.run(
+        manager.get_manifest("run-lifecycle", "tenant-a", "user-a")
+    ) is None
+    assert asyncio.run(
+        manager.archive_bytes(
+            archive["archive_id"],
+            "tenant-a",
+            "user-a",
+        )
+    ) is None
 
 
 def test_archive_is_rolled_back_when_required_audit_write_fails(
@@ -299,6 +400,12 @@ def test_artifact_routes_are_mounted_and_reachable_in_production_app(
             )
             assert response.status_code == 200
             assert response.json()["run_id"] == "mounted-run"
+            stats = client.get(
+                "/api/v1/artifacts/stats",
+                headers={"Authorization": "Bearer test-token"},
+            )
+            assert stats.status_code == 200
+            assert "storage_path" not in stats.json()
     finally:
         app.dependency_overrides.pop(get_current_principal, None)
         app.dependency_overrides.pop(get_run_artifact_manager, None)

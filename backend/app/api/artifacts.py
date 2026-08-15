@@ -124,7 +124,7 @@ async def archive_run(
     enforce_scope(principal, "agent:run")
     tenant_id, user_id = _scope(principal)
     try:
-        manifest = await manager.create_archive(run_id, tenant_id, user_id)
+        archive_result = await manager.create_archive(run_id, tenant_id, user_id)
     except (OSError, ValueError):
         raise api_error(
             409,
@@ -132,28 +132,32 @@ async def archive_run(
             "Run archive integrity check failed.",
             trace_id=run_id,
         ) from None
-    if manifest is None or manifest.archive is None:
+    if archive_result is None:
         raise _not_found(run_id)
-    try:
-        audit_id = await _audit(
-            action="run.archive.created",
-            resource_type="run_archive",
-            resource_id=manifest.archive.archive_id,
-            tenant_id=tenant_id,
-            actor_id=user_id,
-            trace_id=run_id,
-            run_id=run_id,
-            details={"status": "created", "size_bytes": manifest.archive.size_bytes},
-        )
-        await manager.add_audit_id(manifest, audit_id)
-    except Exception:
-        await manager.remove_archive(manifest)
-        raise api_error(
-            503,
-            ErrorCode.INTERNAL_ERROR,
-            "Run archive could not be audited.",
-            trace_id=run_id,
-        ) from None
+    manifest, created = archive_result
+    if manifest.archive is None:
+        raise _not_found(run_id)
+    if created:
+        try:
+            audit_id = await _audit(
+                action="run.archive.created",
+                resource_type="run_archive",
+                resource_id=manifest.archive.archive_id,
+                tenant_id=tenant_id,
+                actor_id=user_id,
+                trace_id=run_id,
+                run_id=run_id,
+                details={"status": "created", "size_bytes": manifest.archive.size_bytes},
+            )
+            await manager.add_audit_id(manifest, audit_id)
+        except Exception:
+            await manager.remove_archive(manifest)
+            raise api_error(
+                503,
+                ErrorCode.INTERNAL_ERROR,
+                "Run archive could not be audited.",
+                trace_id=run_id,
+            ) from None
     return {"run_id": run_id, "archive": manifest.archive.model_dump(mode="json")}
 
 

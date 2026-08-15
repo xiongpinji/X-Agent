@@ -11832,8 +11832,10 @@ async def run_agent_stream(
             error_code=error_code,
             audit_ids=audit_ids,
         )
+        persisted = False
         try:
             await artifact_manager.save_manifest(manifest)
+            persisted = True
         except Exception as manifest_exc:
             logger.error(
                 "Agent stream failed manifest write failed trace_id=%s exception_type=%s error_code=%s",
@@ -11847,7 +11849,8 @@ async def run_agent_stream(
             "answer": "",
             "error": "Agent execution failed",
             "error_code": error_code,
-            "manifest": manifest.model_dump(mode="json"),
+            "manifest": manifest.model_dump(mode="json") if persisted else None,
+            "persistence_status": "persisted" if persisted else "failed",
         }
 
     async def _run_agent_task():

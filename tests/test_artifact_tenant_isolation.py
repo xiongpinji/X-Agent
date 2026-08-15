@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from collections.abc import Iterator
 
 import pytest
@@ -123,6 +124,57 @@ def test_path_traversal_ids_and_header_injection_are_rejected(isolated_api) -> N
     assert artifact["tenant_id"] == "tenant-a"
     assert artifact["user_id"] == "user-a"
     assert artifact["content_sha256"] != "forged"
+    assert "storage_path" not in client.get("/api/v1/artifacts/stats").json()
+
+
+@pytest.mark.parametrize(
+    ("field", "replacement"),
+    [
+        ("id", "different-artifact"),
+        ("tenant_id", "tenant-b"),
+        ("user_id", "user-b"),
+        ("content_sha256", "0" * 64),
+        ("size_bytes", 999_999),
+    ],
+)
+@pytest.mark.asyncio
+async def test_artifact_reads_reject_tampered_authoritative_fields(
+    isolated_api,
+    field,
+    replacement,
+) -> None:
+    client, manager, _active = isolated_api
+    created = client.post(
+        "/api/v1/artifacts",
+        json={"name": "integrity.html", "type": "html", "content": "trusted"},
+    )
+    artifact_id = created.json()["id"]
+    artifact_file = next(
+        manager.artifact_storage.storage_path.rglob(f"{artifact_id}.json")
+    )
+    payload = json.loads(artifact_file.read_text(encoding="utf-8"))
+    payload[field] = replacement
+    artifact_file.write_text(json.dumps(payload), encoding="utf-8")
+
+    assert client.get(f"/api/v1/artifacts/{artifact_id}").status_code == 404
+    assert client.get(f"/api/v1/artifacts/{artifact_id}/render").status_code == 404
+    assert client.get(f"/api/v1/artifacts/{artifact_id}/download").status_code == 404
+    assert client.get("/api/v1/artifacts").json()["artifacts"] == []
+    assert client.get(
+        "/api/v1/artifacts/search",
+        params={"query": "integrity"},
+    ).json()["results"] == []
+    assert client.get("/api/v1/artifacts/stats").json()["total_artifacts"] == 0
+    assert await manager.artifact_storage.load_artifact(
+        artifact_id,
+        "tenant-a",
+        "user-a",
+    ) is None
+    assert await manager.artifact_storage.content_bytes(
+        artifact_id,
+        "tenant-a",
+        "user-a",
+    ) is None
 
 
 def test_render_errors_are_stable_and_do_not_expose_internal_details(isolated_api) -> None:

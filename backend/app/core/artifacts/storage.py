@@ -105,13 +105,31 @@ class ArtifactStorage:
         return artifact.id
 
     @staticmethod
-    def _read_artifact(path: Path) -> Artifact | None:
+    def _read_artifact(
+        path: Path,
+        tenant_id: str | None = None,
+        user_id: str | None = None,
+    ) -> Artifact | None:
         if not path.is_file():
             return None
         try:
-            return Artifact.model_validate_json(path.read_text(encoding="utf-8"))
+            artifact = Artifact.model_validate_json(path.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             return None
+        content = artifact.content.encode("utf-8")
+        if (
+            artifact.id != path.stem
+            or artifact.content_sha256 != sha256(content).hexdigest()
+            or artifact.size_bytes != len(content)
+        ):
+            return None
+        if tenant_id is not None and (
+            user_id is None
+            or artifact.tenant_id != tenant_id
+            or artifact.user_id != user_id
+        ):
+            return None
+        return artifact
 
     async def load_artifact(
         self,
@@ -125,14 +143,12 @@ class ArtifactStorage:
                 if tenant_id is None or user_id is None:
                     return None
                 path = self._artifact_path(artifact_id, tenant_id, user_id)
-                artifact = await asyncio.to_thread(self._read_artifact, path)
-                if (
-                    artifact is None
-                    or artifact.tenant_id != tenant_id
-                    or artifact.user_id != user_id
-                ):
-                    return None
-                return artifact
+                return await asyncio.to_thread(
+                    self._read_artifact,
+                    path,
+                    tenant_id,
+                    user_id,
+                )
         except ValueError:
             return None
 
@@ -184,12 +200,13 @@ class ArtifactStorage:
             return []
         artifacts = []
         for path in files:
-            artifact = await asyncio.to_thread(self._read_artifact, path)
+            artifact = await asyncio.to_thread(
+                self._read_artifact,
+                path,
+                tenant_id,
+                user_id,
+            )
             if artifact is None:
-                continue
-            if tenant_id is not None and (
-                artifact.tenant_id != tenant_id or artifact.user_id != user_id
-            ):
                 continue
             if artifact_type and artifact.type != artifact_type:
                 continue
@@ -252,7 +269,6 @@ class ArtifactStorage:
         return {
             "total_artifacts": len(artifacts),
             "by_type": type_counts,
-            "storage_path": str(self.storage_path),
         }
 
     async def content_bytes(
@@ -265,6 +281,9 @@ class ArtifactStorage:
         if artifact is None:
             return None
         content = artifact.content.encode("utf-8")
-        if sha256(content).hexdigest() != artifact.content_sha256:
+        if (
+            sha256(content).hexdigest() != artifact.content_sha256
+            or len(content) != artifact.size_bytes
+        ):
             return None
         return artifact, content
