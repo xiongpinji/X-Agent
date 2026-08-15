@@ -11722,12 +11722,38 @@ async def cancel_agent(agent_id: str, principal: PrincipalDependency = None) -> 
 @router.post("/run/stream")
 async def run_agent_stream(payload: dict[str, Any] | None = None, principal: PrincipalDependency = None):
     """True SSE streaming endpoint: emits real-time trace events as the agent works."""
-    agent = get_agent()
     request = payload or {}
     enforce_scope(principal, "agent:run")
     task = str(request.get("task", ""))
     if not task:
         raise api_error(422, ErrorCode.VALIDATION_ERROR, "task is required.", details={"errors": [{"field": "task", "message": "task is required."}]})
+
+    agent_id = str(request.get("agent_id") or "default-agent")
+    agent_record = _AGENTS.get(agent_id)
+    if agent_record is None:
+        raise api_error(
+            404,
+            ErrorCode.RESOURCE_NOT_FOUND,
+            "Agent not found.",
+            details={"resource_type": "agent", "resource_id": agent_id},
+        )
+    if agent_record.get("status") != "active":
+        raise api_error(
+            409,
+            ErrorCode.RESOURCE_CONFLICT,
+            "Agent is not active.",
+            details={"resource_type": "agent", "resource_id": agent_id},
+        )
+
+    session_id = str(request.get("session_id") or "") or None
+    raw_extra_context = request.get("extra_context")
+    extra_context = dict(raw_extra_context) if isinstance(raw_extra_context, dict) else {}
+    for reserved_key in ("agent_profile", "persona", "profile"):
+        extra_context.pop(reserved_key, None)
+    if agent_id != "default-agent" and isinstance(agent_record.get("persona"), dict):
+        extra_context["agent_profile"] = dict(agent_record["persona"])
+
+    agent = get_agent()
 
     requested_scope = request.get("permission_scope", ["tools:read", "memory:read", "memory:write"])
     if not isinstance(requested_scope, list):
@@ -11744,6 +11770,8 @@ async def run_agent_stream(payload: dict[str, Any] | None = None, principal: Pri
     context = RunContext(
         tenant_id=principal.tenant_id,
         user_id=principal.user_id,
+        agent_id=agent_id,
+        session_id=session_id,
         permission_scope=allowed_scope,
     )
     req_max_iter = request.get("max_iterations")
@@ -11764,7 +11792,7 @@ async def run_agent_stream(payload: dict[str, Any] | None = None, principal: Pri
     async def _run_agent_task():
         """Background task: run agent and signal completion."""
         try:
-            result = await agent.run(context, task, request.get("extra_context", {}), event_callback=_on_event)
+            result = await agent.run(context, task, extra_context, event_callback=_on_event)
             get_audit_store().record(
                 action="agent.run.stream",
                 resource_type="agent",
@@ -11777,8 +11805,33 @@ async def run_agent_stream(payload: dict[str, Any] | None = None, principal: Pri
             )
             # Push final result as completion signal
             queue.put_nowait({"_final": True, "result": result.model_dump(mode="json")})
-        except Exception:
-            logger.exception("Agent stream execution failed (trace_id=%s)", context.trace_id)
+        except Exception as exc:
+            error_code = ErrorCode.AGENT_EXECUTION_FAILED.value
+            logger.error(
+                "Agent stream execution failed trace_id=%s exception_type=%s error_code=%s",
+                context.trace_id,
+                type(exc).__name__,
+                error_code,
+            )
+            try:
+                get_audit_store().record(
+                    action="agent.run.stream",
+                    resource_type="agent",
+                    resource_id=context.agent_id,
+                    tenant_id=context.tenant_id,
+                    actor_id=context.user_id,
+                    outcome="failure",
+                    trace_id=context.trace_id,
+                    run_id=context.trace_id,
+                    details={"status": "failed", "error_code": error_code},
+                )
+            except Exception as audit_exc:
+                logger.error(
+                    "Agent stream failure audit write failed trace_id=%s exception_type=%s error_code=%s",
+                    context.trace_id,
+                    type(audit_exc).__name__,
+                    error_code,
+                )
             queue.put_nowait({
                 "_final": True,
                 "result": {
@@ -11786,7 +11839,7 @@ async def run_agent_stream(payload: dict[str, Any] | None = None, principal: Pri
                     "status": "failed",
                     "answer": "",
                     "error": "Agent execution failed",
-                    "error_code": ErrorCode.AGENT_EXECUTION_FAILED.value,
+                    "error_code": error_code,
                 },
             })
         finally:

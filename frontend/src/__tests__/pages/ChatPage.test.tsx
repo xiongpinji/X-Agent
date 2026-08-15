@@ -126,6 +126,9 @@ describe('default ChatPage agent stream', () => {
     }))
     expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body))).toMatchObject({
       task: 'summarize this workspace',
+      agent_id: 'default-agent',
+      session_id: 'session-a',
+      extra_context: {},
     })
     expect(screen.getByText('run trace-123')).toBeInTheDocument()
     const assistantMessages = useAppStore.getState().messages.filter((message) => message.role === 'assistant')
@@ -205,6 +208,74 @@ describe('default ChatPage agent stream', () => {
       })
     })
     expect(document.body.textContent).not.toContain(sensitiveError)
+    expect(JSON.stringify(vi.mocked(apiClient.addChatMessage).mock.calls)).not.toContain(sensitiveError)
+  })
+
+  it('runs the agent without a session when best-effort history creation fails', async () => {
+    vi.mocked(apiClient.createChatSession).mockRejectedValue(new Error('history unavailable'))
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(sseResponse())
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const user = userEvent.setup()
+    renderChat()
+
+    await user.type(screen.getByRole('textbox'), 'continue without history')
+    await user.click(screen.getByRole('button', { name: 'Send' }))
+
+    await screen.findByText('A real streamed answer')
+    expect(fetchMock).toHaveBeenCalledOnce()
+    expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body))).toEqual({
+      task: 'continue without history',
+      agent_id: 'default-agent',
+      extra_context: {},
+    })
+    expect(consoleError).toHaveBeenCalled()
+  })
+
+  it('records EOF without a final frame as exactly one failed assistant', async () => {
+    const bytes = new TextEncoder().encode('event: trace\ndata: {"type":"thinking"}\n\n')
+    const read = vi.fn()
+      .mockResolvedValueOnce({ done: false, value: bytes })
+      .mockResolvedValueOnce({ done: true, value: undefined })
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      status: 200,
+      body: { getReader: () => ({ read }) },
+    } as unknown as Response)
+    const user = userEvent.setup()
+    renderChat()
+
+    await user.type(screen.getByRole('textbox'), 'missing terminal frame')
+    await user.click(screen.getByRole('button', { name: 'Send' }))
+
+    await screen.findByText('Agent run failed: Unable to reach the agent service')
+    const assistantMessages = useAppStore.getState().messages.filter((message) => message.role === 'assistant')
+    expect(assistantMessages).toHaveLength(1)
+    expect(assistantMessages[0].metadata).toMatchObject({ status: 'failed', error_code: 'stream_unavailable' })
+  })
+
+  it('sanitizes Ultra Mode failures in UI, store, and persisted history', async () => {
+    vi.spyOn(apiClient, 'runParallelAgents').mockRejectedValue(new Error(sensitiveError))
+    const user = userEvent.setup()
+    renderChat()
+
+    await user.click(screen.getByRole('button', { name: 'Ultra' }))
+    await user.type(screen.getByRole('textbox'), 'parallel sensitive failure')
+    await user.click(screen.getByRole('button', { name: 'Send' }))
+
+    await screen.findByText('Ultra Mode failed: agent service unavailable')
+    await screen.findByText('agent service unavailable')
+    const assistantMessages = useAppStore.getState().messages.filter((message) => message.role === 'assistant')
+    expect(assistantMessages).toHaveLength(1)
+    expect(assistantMessages[0]).toMatchObject({
+      content: 'Ultra Mode failed: agent service unavailable',
+      metadata: {
+        status: 'failed',
+        error: 'agent service unavailable',
+        error_code: 'parallel_agent_unavailable',
+      },
+    })
+    expect(document.body.textContent).not.toContain(sensitiveError)
+    expect(JSON.stringify(useAppStore.getState().messages)).not.toContain(sensitiveError)
     expect(JSON.stringify(vi.mocked(apiClient.addChatMessage).mock.calls)).not.toContain(sensitiveError)
   })
 })

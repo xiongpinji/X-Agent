@@ -17,6 +17,7 @@ interface ParallelTaskCard {
   status: 'pending' | 'running' | 'completed' | 'failed'
   output?: string
   error?: string
+  error_code?: string
 }
 
 export const ChatPage: React.FC = () => {
@@ -72,14 +73,25 @@ export const ChatPage: React.FC = () => {
     }
   }
 
+  /** Best-effort session creation; a history outage never blocks the agent run. */
+  const ensureChatSession = async (): Promise<string | undefined> => {
+    if (sessionIdRef.current) return sessionIdRef.current
+    try {
+      const session = await apiClient.createChatSession({ agent_id: selectedAgent || 'default-agent' })
+      sessionIdRef.current = session.id
+      return session.id
+    } catch (error) {
+      console.error('Failed to create chat session:', error)
+      return undefined
+    }
+  }
+
   /** Best-effort persistence of one message; never blocks or breaks the chat. */
   const persistChatMessage = async (role: string, content: string, metadata?: Record<string, any>) => {
+    const sessionId = await ensureChatSession()
+    if (!sessionId) return
     try {
-      if (!sessionIdRef.current) {
-        const session = await apiClient.createChatSession({ agent_id: selectedAgent || 'default' })
-        sessionIdRef.current = session.id
-      }
-      await apiClient.addChatMessage(sessionIdRef.current, { role, content, metadata })
+      await apiClient.addChatMessage(sessionId, { role, content, metadata })
     } catch (error) {
       console.error('Failed to persist chat message:', error)
     }
@@ -239,11 +251,13 @@ export const ChatPage: React.FC = () => {
         timestamp: new Date().toISOString(),
       })
       void persistChatMessage('assistant', summaryContent, { execution_id: resp?.execution_id })
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Parallel agent run failed'
+    } catch {
+      const errorMessage = 'agent service unavailable'
+      const errorCode = 'parallel_agent_unavailable'
       setParallelTasks([{
         agent_id: 'agent-1', task: messageText, status: 'failed',
         error: errorMessage,
+        error_code: errorCode,
       }])
       const failureContent = `Ultra Mode failed: ${errorMessage}`
       addMessage({
@@ -251,10 +265,14 @@ export const ChatPage: React.FC = () => {
         role: 'assistant',
         content: failureContent,
         timestamp: new Date().toISOString(),
-        metadata: { status: 'failed', error: errorMessage },
+        metadata: { status: 'failed', error: errorMessage, error_code: errorCode },
       })
       setError(errorMessage)
-      void persistChatMessage('assistant', failureContent, { status: 'failed', error: errorMessage })
+      void persistChatMessage('assistant', failureContent, {
+        status: 'failed',
+        error: errorMessage,
+        error_code: errorCode,
+      })
     } finally {
       setParallelRunning(false)
     }
@@ -292,11 +310,15 @@ export const ChatPage: React.FC = () => {
         timestamp: new Date().toISOString(),
       }
       addMessage(userMessage)
-      void persistChatMessage('user', userMessage.content)
       const messageText = input
       setInput('')
 
-      await startStream(messageText, { agent_id: selectedAgent || 'default-agent' })
+      const sessionId = await ensureChatSession()
+      if (sessionId) void persistChatMessage('user', userMessage.content)
+      await startStream(messageText, {
+        agent_id: selectedAgent || 'default-agent',
+        session_id: sessionId,
+      })
     } catch {
       recordStreamFailure('Unable to reach the agent service', undefined, 'stream_unavailable')
     } finally {

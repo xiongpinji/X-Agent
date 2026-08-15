@@ -41,12 +41,18 @@ export interface AgentStreamResult {
   error?: string;
 }
 
+export interface AgentStreamOptions {
+  agent_id?: string;
+  session_id?: string;
+  extra_context?: Record<string, unknown>;
+}
+
 export interface UseAgentStreamReturn {
   events: TraceEvent[];
   isStreaming: boolean;
   finalResult: AgentStreamResult | null;
   error: string | null;
-  startStream: (task: string, extraContext?: Record<string, any>) => Promise<void>;
+  startStream: (task: string, options?: AgentStreamOptions) => Promise<void>;
   stopStream: () => void;
   reset: () => void;
 }
@@ -54,25 +60,47 @@ export interface UseAgentStreamReturn {
 /** Parse a single SSE frame from raw text. Returns [eventName, data] pairs. */
 function parseSSEFrames(chunk: string): Array<{ event: string; data: string }> {
   const frames: Array<{ event: string; data: string }> = [];
-  const blocks = chunk.split('\n\n');
+  const blocks = chunk.split(/\r\n\r\n|\n\n|\r\r/);
   for (const block of blocks) {
     if (!block.trim()) continue;
     let eventName = 'message';
-    let data = '';
-    for (const line of block.split('\n')) {
-      if (line.startsWith('event: ')) {
-        eventName = line.slice(7).trim();
-      } else if (line.startsWith('data: ')) {
-        data += line.slice(6);
+    const dataLines: string[] = [];
+    for (const line of block.split(/\r\n|\n|\r/)) {
+      if (line.startsWith('event:')) {
+        eventName = line.slice(6).trimStart();
       } else if (line.startsWith('data:')) {
-        data += line.slice(5);
+        const data = line.slice(5);
+        dataLines.push(data.startsWith(' ') ? data.slice(1) : data);
       }
     }
-    if (data) {
-      frames.push({ event: eventName, data });
+    if (dataLines.length) {
+      frames.push({ event: eventName, data: dataLines.join('\n') });
     }
   }
   return frames;
+}
+
+function takeCompleteSSEFrames(buffer: string): { frames: string[]; rest: string } {
+  const frames: string[] = [];
+  let rest = buffer;
+  for (;;) {
+    const boundary = rest.match(/\r\n\r\n|\n\n|\r\r/);
+    if (!boundary || boundary.index === undefined) break;
+    frames.push(rest.slice(0, boundary.index));
+    rest = rest.slice(boundary.index + boundary[0].length);
+  }
+  return { frames, rest };
+}
+
+function isValidFinalResult(value: unknown): value is AgentStreamResult {
+  if (!value || typeof value !== 'object') return false;
+  const envelope = value as AgentStreamResult;
+  const result = envelope.result;
+  return envelope._final === true
+    && !!result
+    && (result.status === 'completed' || result.status === 'failed')
+    && typeof result.trace_id === 'string'
+    && result.trace_id.length > 0;
 }
 
 export function useAgentStream(options?: {
@@ -91,7 +119,7 @@ export function useAgentStream(options?: {
   const abortRef = useRef<AbortController | null>(null);
   const bufferRef = useRef('');
 
-  const startStream = useCallback(async (task: string, extraContext?: Record<string, any>) => {
+  const startStream = useCallback(async (task: string, streamOptions: AgentStreamOptions = {}) => {
     // Reset state
     setEvents([]);
     setFinalResult(null);
@@ -101,6 +129,7 @@ export function useAgentStream(options?: {
 
     const controller = new AbortController();
     abortRef.current = controller;
+    let finalReceived = false;
 
     try {
       const token = localStorage.getItem('auth_token');
@@ -116,12 +145,19 @@ export function useAgentStream(options?: {
         }
       }
 
+      const extraContext = { ...(streamOptions.extra_context || {}) };
+      for (const reservedKey of ['agent_profile', 'persona', 'profile']) {
+        delete extraContext[reservedKey];
+      }
+
       const response = await fetch('/api/v1/agents/run/stream', {
         method: 'POST',
         headers,
         body: JSON.stringify({
           task,
-          extra_context: extraContext || {},
+          ...(streamOptions.agent_id ? { agent_id: streamOptions.agent_id } : {}),
+          ...(streamOptions.session_id ? { session_id: streamOptions.session_id } : {}),
+          extra_context: extraContext,
         }),
         signal: controller.signal,
       });
@@ -144,54 +180,60 @@ export function useAgentStream(options?: {
 
         bufferRef.current += decoder.decode(value, { stream: true });
 
-        // Process complete frames (separated by \n\n)
-        const parts = bufferRef.current.split('\n\n');
-        // Keep the last incomplete part in buffer
-        bufferRef.current = parts.pop() || '';
+        const { frames: parts, rest } = takeCompleteSSEFrames(bufferRef.current);
+        bufferRef.current = rest;
 
         for (const part of parts) {
           if (!part.trim()) continue;
-          const frames = parseSSEFrames(part + '\n\n');
+          const frames = parseSSEFrames(part);
           for (const frame of frames) {
-            try {
-              const parsed = JSON.parse(frame.data);
+            const parsed: unknown = JSON.parse(frame.data);
 
-              if (frame.event === 'completed' || parsed._final) {
-                const result: AgentStreamResult = parsed;
-                setFinalResult(result);
-                setError(result.result?.status === 'failed' ? AGENT_EXECUTION_FAILED_MESSAGE : null);
-                setIsStreaming(false);
-                onComplete?.(result);
-              } else {
-                // Trace event
-                const traceEvent: TraceEvent = {
-                  ...parsed,
-                  event_type: parsed.event_type || parsed.type || frame.event,
-                  timestamp: parsed.timestamp || new Date().toISOString(),
-                };
-                setEvents((prev) => {
-                  const updated = [...prev, traceEvent];
-                  return updated.length > maxEvents ? updated.slice(-maxEvents) : updated;
-                });
-                onEvent?.(traceEvent);
+            if (frame.event === 'completed' || (parsed as AgentStreamResult)?._final) {
+              if (finalReceived || !isValidFinalResult(parsed)) {
+                throw new Error('Invalid agent stream final frame');
               }
-            } catch {
-              // Skip malformed JSON
+              finalReceived = true;
+              setFinalResult(parsed);
+              setError(parsed.result?.status === 'failed' ? AGENT_EXECUTION_FAILED_MESSAGE : null);
+              setIsStreaming(false);
+              onComplete?.(parsed);
+            } else {
+              if (!parsed || typeof parsed !== 'object') {
+                throw new Error('Invalid agent stream event');
+              }
+              const traceEvent: TraceEvent = {
+                ...parsed,
+                event_type: (parsed as TraceEvent).event_type || (parsed as TraceEvent).type || frame.event,
+                timestamp: (parsed as TraceEvent).timestamp || new Date().toISOString(),
+              };
+              setEvents((prev) => {
+                const updated = [...prev, traceEvent];
+                return updated.length > maxEvents ? updated.slice(-maxEvents) : updated;
+              });
+              onEvent?.(traceEvent);
             }
           }
         }
       }
 
-      // Stream ended without explicit completion
+      bufferRef.current += decoder.decode();
+      if (!finalReceived) {
+        throw new Error('Agent stream ended without a final frame');
+      }
       setIsStreaming(false);
     } catch (err: unknown) {
-      if (err instanceof Error && err.name === 'AbortError') {
+      if (controller.signal.aborted || (err && typeof err === 'object' && 'name' in err && err.name === 'AbortError')) {
         setIsStreaming(false);
         return;
       }
       setError(AGENT_STREAM_UNAVAILABLE_MESSAGE);
       setIsStreaming(false);
       onError?.(AGENT_STREAM_UNAVAILABLE_MESSAGE);
+    } finally {
+      if (abortRef.current === controller) {
+        abortRef.current = null;
+      }
     }
   }, [maxEvents, onEvent, onComplete, onError]);
 

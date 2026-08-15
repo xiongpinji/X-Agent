@@ -161,7 +161,7 @@ export const AgentStreamPanel: React.FC<AgentStreamPanelProps> = ({ onRunComplet
         extraContext = { raw_context: extraContextStr };
       }
     }
-    await startStream(taskInput.trim(), extraContext);
+    await startStream(taskInput.trim(), { extra_context: extraContext });
     setTaskInput('');
   }, [taskInput, isStreaming, showAdvanced, extraContextStr, startStream]);
 
