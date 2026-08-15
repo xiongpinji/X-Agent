@@ -874,8 +874,9 @@ async def test_goal_decompose_uses_stable_owner_correlation_and_propagates_billi
         "tenant_id": "tenant-a",
         "user_id": "user-a",
         "goal_id": "goal-1",
-        "run_id": "goal-1",
-        "trace_id": "goal-1",
+        "operation_id": "goal-1:attempt-1",
+        "run_id": "goal-1:attempt-1",
+        "trace_id": "goal-1:attempt-1",
     }
 
     class RecordingRouter:
@@ -895,9 +896,9 @@ async def test_goal_decompose_uses_stable_owner_correlation_and_propagates_billi
     assert router.calls == [{
         "tenant_id": "tenant-a",
         "user_id": "user-a",
-        "run_id": "goal-1",
-        "trace_id": "goal-1",
-        "operation_id": "goal-1:decompose",
+        "run_id": "goal-1:attempt-1",
+        "trace_id": "goal-1:attempt-1",
+        "operation_id": "goal-1:attempt-1:decompose",
     }]
 
     class ReplayRouter:

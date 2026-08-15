@@ -184,6 +184,8 @@ class UltraOrchestrator:
         # 处理异常
         processed_results: list[UltraAgentResult] = []
         for i, ar in enumerate(agent_results):
+            if isinstance(ar, _BILLING_CONTROL_ERRORS):
+                raise ar
             if isinstance(ar, Exception):
                 processed_results.append(UltraAgentResult(
                     task_id=subtasks[i].task_id,
@@ -264,7 +266,10 @@ class UltraOrchestrator:
         except _BILLING_CONTROL_ERRORS:
             raise
         except Exception as exc:
-            logger.warning("LLM decompose failed, using heuristic: %s", exc)
+            logger.warning(
+                "LLM decompose failed; using heuristic: error_type=%s",
+                type(exc).__name__,
+            )
             return self._heuristic_decompose(task, max_agents)
 
     def _heuristic_decompose(self, task: str, max_agents: int) -> list[UltraSubTask]:
@@ -319,6 +324,8 @@ class UltraOrchestrator:
 
             agent_result.status = "completed"
 
+        except _BILLING_CONTROL_ERRORS:
+            raise
         except TimeoutError:
             agent_result.status = "timeout"
             agent_result.error = f"Agent timed out after {config.timeout_seconds}s"
@@ -373,7 +380,10 @@ class UltraOrchestrator:
             except _BILLING_CONTROL_ERRORS:
                 raise
             except Exception as exc:
-                logger.warning("LLM merge failed, falling back to concat: %s", exc)
+                logger.warning(
+                    "LLM merge failed; falling back to concat: error_type=%s",
+                    type(exc).__name__,
+                )
 
         return "\n\n---\n\n".join(outputs)
 

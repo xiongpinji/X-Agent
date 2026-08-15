@@ -43,6 +43,11 @@ from backend.app.core.agent_communication_bus import (
     MessagePriority,
 )
 from backend.app.core.contracts import RunContext
+from backend.app.core.llm import (
+    LLMReplayBlockedError,
+    LLMReservationPersistenceError,
+    LLMSubmissionUnknownError,
+)
 from backend.app.core.parallel_agent_executor import (
     AgentFactoryNotConfiguredError,
     AgentResult,
@@ -83,17 +88,67 @@ def get_executor() -> ParallelAgentExecutor:
 
 
 def get_orchestrator() -> ParallelAgentOrchestrator:
-    """Get or create the parallel agent orchestrator."""
+    """Get or create the user-facing billable parallel orchestrator."""
     global _orchestrator
     if _orchestrator is None:
-        from backend.app.dependencies import get_llm_router
+        from backend.app.dependencies import get_billable_llm_router
 
-        try:
-            llm_router = get_llm_router()
-        except Exception:
-            llm_router = None
-        _orchestrator = ParallelAgentOrchestrator(llm_router=llm_router)
+        _orchestrator = ParallelAgentOrchestrator(
+            llm_router=get_billable_llm_router()
+        )
     return _orchestrator
+
+
+def _billing_context(
+    principal: Principal,
+    operation_id: str,
+) -> dict[str, str]:
+    execution_id = "parallel-" + sha256(
+        (
+            f"{principal.tenant_id}\0{principal.user_id}\0{operation_id}"
+        ).encode()
+    ).hexdigest()[:32]
+    return {
+        "tenant_id": principal.tenant_id,
+        "user_id": principal.user_id,
+        "operation_id": operation_id,
+        "run_id": execution_id,
+        "trace_id": execution_id,
+    }
+
+
+def _orchestration_http_error(
+    exc: Exception,
+    operation: str,
+    generic_code: str,
+    generic_message: str,
+) -> HTTPException:
+    if isinstance(exc, LLMReplayBlockedError):
+        status_code = 409
+        code = "LLM_REPLAY_BLOCKED"
+        message = "Operation cannot be replayed."
+    elif isinstance(exc, LLMReservationPersistenceError):
+        status_code = 503
+        code = "LLM_RESERVATION_PERSISTENCE_FAILED"
+        message = "Billing state could not be persisted."
+    elif isinstance(exc, LLMSubmissionUnknownError):
+        status_code = 502
+        code = "LLM_SUBMISSION_UNKNOWN"
+        message = "Provider submission state is unknown."
+    else:
+        status_code = 500
+        code = generic_code
+        message = generic_message
+    logger.error(
+        "%s failed: code=%s error_type=%s",
+        operation,
+        code,
+        type(exc).__name__,
+    )
+    return HTTPException(
+        status_code=status_code,
+        detail={"code": code, "message": message},
+    )
 
 
 def get_bus() -> AgentCommunicationBus:
@@ -639,7 +694,18 @@ async def get_message_stats(
 # ─── Orchestrator Endpoints (P1-08) ─────────────────────────────────────────────
 
 
-class FanOutRequest(BaseModel):
+class _BillableOrchestrationRequest(BaseModel):
+    operation_id: str = Field(min_length=1, max_length=220)
+
+    @field_validator("operation_id")
+    @classmethod
+    def _operation_id_must_not_be_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("operation_id must not be blank")
+        return value
+
+
+class FanOutRequest(_BillableOrchestrationRequest):
     """Request for fan-out parallel execution."""
     task: str = Field(..., min_length=1, description="Parent task description")
     subtasks: list[str] = Field(..., min_length=1, description="Subtask instructions")
@@ -649,13 +715,13 @@ class FanOutRequest(BaseModel):
     token_budget: int = Field(default=100_000, ge=1000, le=1_000_000)
 
 
-class FanInRequest(BaseModel):
+class FanInRequest(_BillableOrchestrationRequest):
     """Request for fan-in aggregation."""
     results: list[dict[str, Any]] = Field(..., min_length=1, description="Agent results to aggregate")
     aggregation: str = Field(default="merge", pattern="^(first_success|majority_vote|merge)$")
 
 
-class PipelineRequest(BaseModel):
+class PipelineRequest(_BillableOrchestrationRequest):
     """Request for pipeline execution."""
     stages: list[str] = Field(..., min_length=1, description="Ordered stage instructions")
     timeout_seconds: int = Field(default=300, ge=10, le=3600)
@@ -686,6 +752,7 @@ async def orchestrator_fan_out(
             task=request.task,
             subtasks=request.subtasks,
             config=config,
+            billing_context=_billing_context(principal, request.operation_id),
         )
         return {
             "pattern": "fan_out",
@@ -696,9 +763,13 @@ async def orchestrator_fan_out(
             "timeout": sum(1 for r in results if r.status == "timeout"),
             "results": [r.to_dict() for r in results],
         }
-    except Exception as e:
-        logger.error(f"Fan-out execution error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as exc:
+        raise _orchestration_http_error(
+            exc,
+            "parallel.fan_out",
+            "PARALLEL_ORCHESTRATION_FAILED",
+            "Parallel orchestration failed.",
+        ) from None
 
 
 @router.post("/orchestrator/fan-in")
@@ -727,15 +798,20 @@ async def orchestrator_fan_in(
         result = await orchestrator.execute_fan_in(
             results=agent_results,
             aggregation=request.aggregation,
+            billing_context=_billing_context(principal, request.operation_id),
         )
         return {
             "pattern": "fan_in",
             "aggregation": request.aggregation,
             "result": result.to_dict(),
         }
-    except Exception as e:
-        logger.error(f"Fan-in aggregation error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as exc:
+        raise _orchestration_http_error(
+            exc,
+            "parallel.fan_in",
+            "PARALLEL_ORCHESTRATION_FAILED",
+            "Parallel orchestration failed.",
+        ) from None
 
 
 @extended_router.post("/orchestrator/pipeline")
@@ -758,15 +834,20 @@ async def orchestrator_pipeline(
         result = await orchestrator.execute_pipeline(
             stages=request.stages,
             config=config,
+            billing_context=_billing_context(principal, request.operation_id),
         )
         return {
             "pattern": "pipeline",
             "total_stages": len(request.stages),
             "result": result.to_dict(),
         }
-    except Exception as e:
-        logger.error(f"Pipeline execution error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as exc:
+        raise _orchestration_http_error(
+            exc,
+            "parallel.pipeline",
+            "PARALLEL_ORCHESTRATION_FAILED",
+            "Parallel orchestration failed.",
+        ) from None
 
 
 # ─── Ultra 4-Agent 并行端点 ────────────────────────────────────────────────────
@@ -869,9 +950,13 @@ async def ultra_execute(
 
     except HTTPException:
         raise
-    except Exception as e:
-        logger.error(f"Ultra execution error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as exc:
+        raise _orchestration_http_error(
+            exc,
+            "ultra.execute",
+            "ULTRA_EXECUTION_FAILED",
+            "Ultra execution failed.",
+        ) from None
 
 
 # ─── L1: Queue Management & Concurrency Monitoring ────────────────────────────

@@ -24,6 +24,11 @@ from pydantic import BaseModel, Field
 
 from backend.app.core.goal_mode import GoalControl, GoalResult, goal_orchestrator
 from backend.app.core.goal_store import GoalStore
+from backend.app.core.llm import (
+    LLMReplayBlockedError,
+    LLMReservationPersistenceError,
+    LLMSubmissionUnknownError,
+)
 from backend.app.core.security import Principal
 from backend.app.dependencies import enforce_scope, get_current_principal
 
@@ -39,8 +44,19 @@ _goals: list[dict[str, Any]] = _store.goals
 # 后台执行任务注册表: goal_id -> asyncio.Task
 _tasks: dict[str, asyncio.Task] = {}
 
-TERMINAL_STATUSES = {"completed", "failed", "timeout", "cancelled"}
+TERMINAL_STATUSES = {
+    "completed",
+    "failed",
+    "timeout",
+    "cancelled",
+    "needs_attention",
+}
 RESTARTABLE_STATUSES = {"failed", "timeout", "cancelled"}
+_BILLING_CONTROL_ERRORS = (
+    LLMReplayBlockedError,
+    LLMReservationPersistenceError,
+    LLMSubmissionUnknownError,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -66,6 +82,8 @@ class GoalResponse(BaseModel):
     created_at: float = Field(default=0.0, json_schema_extra={"example": 1753372800.0})
     output: str = Field(default="", description="执行输出 (完成或失败原因)")
     updated_at: float = Field(default=0.0, description="最近状态更新时间")
+    attempt_count: int = Field(default=0, ge=0)
+    error_code: str | None = None
 
     model_config = {"json_schema_extra": {"examples": [{
         "id": "goal-a1b2c3d4e5f6",
@@ -123,6 +141,8 @@ def _goal_response(goal: dict[str, Any]) -> GoalResponse:
         created_at=goal.get("created_at", 0.0),
         output=goal.get("output", ""),
         updated_at=goal.get("updated_at", 0.0),
+        attempt_count=int(goal.get("attempt_count", 0) or 0),
+        error_code=goal.get("error_code"),
     )
 
 
@@ -138,6 +158,9 @@ def _serialize_goal(goal: dict[str, Any]) -> dict[str, Any]:
         "updated_at": goal.get("updated_at", 0.0),
         "output": goal.get("output", ""),
         "total_duration": goal.get("total_duration", 0.0),
+        "attempt_count": int(goal.get("attempt_count", 0) or 0),
+        "active_attempt_id": goal.get("active_attempt_id"),
+        "error_code": goal.get("error_code"),
         "events": goal.get("events", []),
         "progress": [_subgoal_view(sg) for sg in goal.get("progress", [])],
     }
@@ -160,6 +183,14 @@ def _add_event(goal: dict[str, Any], event: str, detail: str = "") -> None:
 
 
 _orchestrator_wired = False
+
+
+def _billing_error_code(exc: Exception) -> str:
+    if isinstance(exc, LLMReplayBlockedError):
+        return "LLM_REPLAY_BLOCKED"
+    if isinstance(exc, LLMReservationPersistenceError):
+        return "LLM_RESERVATION_PERSISTENCE_FAILED"
+    return "LLM_SUBMISSION_UNKNOWN"
 
 
 def _wire_orchestrator() -> None:
@@ -186,14 +217,19 @@ async def _run_goal(goal: dict[str, Any]) -> None:
     control: GoalControl = goal["control"]
     try:
         _wire_orchestrator()
+        attempt_id = str(
+            goal.get("active_attempt_id")
+            or f"{goal['id']}:attempt-{int(goal.get('attempt_count', 1) or 1)}"
+        )
         result: GoalResult = await goal_orchestrator.execute_goal(
             goal["objective"],
             context={
                 "tenant_id": goal["tenant_id"],
                 "user_id": goal["user_id"],
                 "goal_id": goal["id"],
-                "run_id": goal["id"],
-                "trace_id": goal["id"],
+                "operation_id": attempt_id,
+                "run_id": attempt_id,
+                "trace_id": attempt_id,
             },
             goal_id=goal["id"],
             control=control,
@@ -206,25 +242,58 @@ async def _run_goal(goal: dict[str, Any]) -> None:
             parts = [sg.result for sg in result.progress
                      if getattr(sg, "status", None) == "completed" and getattr(sg, "result", "")]
             goal["output"] = result.output or "\n".join(parts)
-        elif result.output:
-            goal["output"] = result.output
+            goal["error_code"] = None
+        elif result.status in {"failed", "timeout"}:
+            goal["output"] = (
+                "Goal execution timed out."
+                if result.status == "timeout"
+                else "Goal execution failed."
+            )
+            goal["error_code"] = (
+                "GOAL_EXECUTION_TIMEOUT"
+                if result.status == "timeout"
+                else "GOAL_EXECUTION_FAILED"
+            )
 
         # 用户已手动取消/完成的目标不被编排器结果降级覆盖
         if goal["status"] in ("cancelled", "completed") and result.status != "completed":
             pass
         else:
             goal["status"] = result.status
-        _add_event(goal, result.status, f"duration={result.total_duration:.1f}s")
+        _add_event(
+            goal,
+            result.status,
+            goal.get("error_code") or f"duration={result.total_duration:.1f}s",
+        )
     except asyncio.CancelledError:
         if goal["status"] not in TERMINAL_STATUSES:
             goal["status"] = "cancelled"
+            goal["error_code"] = "GOAL_CANCELLED"
         _add_event(goal, "cancelled", "execution task cancelled")
         raise
+    except _BILLING_CONTROL_ERRORS as exc:
+        code = _billing_error_code(exc)
+        goal["status"] = "needs_attention"
+        goal["output"] = "Billing reconciliation is required."
+        goal["error_code"] = code
+        _add_event(goal, "needs_attention", code)
+        logger.error(
+            "Goal execution requires reconciliation: goal_id=%s code=%s error_type=%s",
+            goal["id"],
+            code,
+            type(exc).__name__,
+        )
     except Exception as exc:
         goal["status"] = "failed"
-        goal["output"] = str(exc)
-        _add_event(goal, "failed", str(exc))
-        logger.exception("Goal %s execution crashed", goal["id"])
+        goal["output"] = "Goal execution failed."
+        goal["error_code"] = "GOAL_EXECUTION_FAILED"
+        _add_event(goal, "failed", "GOAL_EXECUTION_FAILED")
+        logger.error(
+            "Goal execution failed: goal_id=%s code=%s error_type=%s",
+            goal["id"],
+            "GOAL_EXECUTION_FAILED",
+            type(exc).__name__,
+        )
     finally:
         goal["updated_at"] = time.time()
         _tasks.pop(goal["id"], None)
@@ -260,6 +329,9 @@ async def create_goal(
         "progress": [],
         "output": "",
         "total_duration": 0.0,
+        "attempt_count": 0,
+        "active_attempt_id": None,
+        "error_code": None,
         "events": [],
         "control": None,
         "result": None,
@@ -322,6 +394,11 @@ async def complete_goal(
     """手动标记目标完成; 若正在执行则先请求取消后台任务。"""
     enforce_scope(principal, "agent:run")
     goal = _find(goal_id, principal)
+    if goal["status"] == "needs_attention":
+        raise HTTPException(
+            status_code=409,
+            detail=f"Goal requires billing reconciliation: {goal_id}",
+        )
     control = goal.get("control")
     if goal["status"] in ("running", "paused") and control is not None:
         control.cancel()
@@ -355,20 +432,37 @@ async def start_goal(
     """
     enforce_scope(principal, "agent:run")
     goal = _find(goal_id, principal)
+    active_task = _tasks.get(goal_id)
+    if active_task is not None and not active_task.done():
+        raise HTTPException(
+            status_code=409,
+            detail=f"Goal execution is still active: {goal_id}",
+        )
     if goal["status"] in ("running", "paused"):
         raise HTTPException(status_code=409, detail=f"Goal already running: {goal_id}")
-    if goal["status"] == "completed":
-        raise HTTPException(status_code=409, detail=f"Goal already completed: {goal_id}")
+    if goal["status"] in {"completed", "needs_attention"}:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Goal cannot be started from {goal['status']}: {goal_id}",
+        )
 
     restarted = goal["status"] in RESTARTABLE_STATUSES
+    attempt_count = int(goal.get("attempt_count", 0) or 0) + 1
+    goal["attempt_count"] = attempt_count
+    goal["active_attempt_id"] = f"{goal_id}:attempt-{attempt_count}"
     goal["progress"] = []
     goal["output"] = ""
+    goal["error_code"] = None
     goal["control"] = GoalControl()
     goal["status"] = "running"
     _add_event(goal, "restarted" if restarted else "started")
     _tasks[goal_id] = asyncio.create_task(_run_goal(goal))
     _persist()
-    return {"id": goal_id, "status": "running"}
+    return {
+        "id": goal_id,
+        "status": "running",
+        "attempt_count": attempt_count,
+    }
 
 
 @router.post(

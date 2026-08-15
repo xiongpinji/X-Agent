@@ -19,7 +19,20 @@ from enum import StrEnum
 from typing import Any
 from uuid import uuid4
 
+from backend.app.core.contracts import RunContext
+from backend.app.core.llm import (
+    LLMReplayBlockedError,
+    LLMReservationPersistenceError,
+    LLMSubmissionUnknownError,
+)
+
 logger = logging.getLogger(__name__)
+
+_BILLING_CONTROL_ERRORS = (
+    LLMReplayBlockedError,
+    LLMReservationPersistenceError,
+    LLMSubmissionUnknownError,
+)
 
 
 class IsolationMode(StrEnum):
@@ -521,6 +534,7 @@ class ParallelAgentOrchestrator:
         task: str,
         subtasks: list[str],
         config: ParallelConfig | None = None,
+        billing_context: dict[str, str] | None = None,
     ) -> list[AgentResult]:
         """Fan-out: execute multiple subtasks in parallel with independent agents.
 
@@ -542,19 +556,30 @@ class ParallelAgentOrchestrator:
                 result = AgentResult(agent_id=agent_id, status="running")
                 try:
                     output = await asyncio.wait_for(
-                        self._execute_agent(subtask, task_context=task),
+                        self._execute_agent(
+                            subtask,
+                            task_context=task,
+                            billing_context=billing_context,
+                            stage=f"fanout:{index}",
+                        ),
                         timeout=cfg.timeout_seconds,
                     )
                     result.status = "completed"
                     result.output = output
+                except _BILLING_CONTROL_ERRORS:
+                    raise
                 except TimeoutError:
                     result.status = "timeout"
                     result.error = f"Subtask timed out after {cfg.timeout_seconds}s"
                     logger.warning(f"Fan-out agent {agent_id} timed out")
                 except Exception as exc:
                     result.status = "failed"
-                    result.error = str(exc)
-                    logger.error(f"Fan-out agent {agent_id} failed: {exc}")
+                    result.error = "Agent execution failed."
+                    logger.error(
+                        "Fan-out agent failed: agent_id=%s error_type=%s",
+                        agent_id,
+                        type(exc).__name__,
+                    )
                 finally:
                     result.duration_ms = (time.time() - start) * 1000
                 return result
@@ -566,11 +591,13 @@ class ParallelAgentOrchestrator:
 
         final_results: list[AgentResult] = []
         for i, r in enumerate(results):
+            if isinstance(r, _BILLING_CONTROL_ERRORS):
+                raise r
             if isinstance(r, Exception):
                 final_results.append(AgentResult(
                     agent_id=f"fan-out-{i}-error",
                     status="failed",
-                    error=str(r),
+                    error="Agent execution failed.",
                 ))
             else:
                 final_results.append(r)
@@ -588,6 +615,7 @@ class ParallelAgentOrchestrator:
         self,
         results: list[AgentResult],
         aggregation: str = "merge",
+        billing_context: dict[str, str] | None = None,
     ) -> AgentResult:
         """Fan-in: aggregate results from parallel agents.
 
@@ -617,7 +645,11 @@ class ParallelAgentOrchestrator:
             elif aggregation == "majority_vote":
                 output = self._majority_vote(successful)
             else:  # "merge"
-                output = await self._merge_results(successful)
+                output = await self._merge_results(
+                    successful,
+                    billing_context=billing_context,
+                    stage="fanin:merge",
+                )
 
             return AgentResult(
                 agent_id=agent_id,
@@ -626,12 +658,17 @@ class ParallelAgentOrchestrator:
                 duration_ms=(time.time() - start) * 1000,
                 metadata={"aggregation": aggregation, "input_count": len(results)},
             )
+        except _BILLING_CONTROL_ERRORS:
+            raise
         except Exception as exc:
-            logger.error(f"Fan-in aggregation failed: {exc}")
+            logger.error(
+                "Fan-in aggregation failed: error_type=%s",
+                type(exc).__name__,
+            )
             return AgentResult(
                 agent_id=agent_id,
                 status="failed",
-                error=str(exc),
+                error="Fan-in aggregation failed.",
                 duration_ms=(time.time() - start) * 1000,
             )
 
@@ -639,6 +676,7 @@ class ParallelAgentOrchestrator:
         self,
         stages: list[str],
         config: ParallelConfig | None = None,
+        billing_context: dict[str, str] | None = None,
     ) -> AgentResult:
         """Pipeline: execute stages sequentially, feeding output to next stage.
 
@@ -660,11 +698,18 @@ class ParallelAgentOrchestrator:
 
             try:
                 output = await asyncio.wait_for(
-                    self._execute_agent(stage_input, task_context=f"Pipeline stage {i+1}/{len(stages)}"),
+                    self._execute_agent(
+                        stage_input,
+                        task_context=f"Pipeline stage {i+1}/{len(stages)}",
+                        billing_context=billing_context,
+                        stage=f"pipeline:{i}",
+                    ),
                     timeout=cfg.timeout_seconds,
                 )
                 accumulated_output = output
                 logger.info(f"Pipeline {pipeline_id} stage {i+1} completed in {(time.time()-stage_start)*1000:.0f}ms")
+            except _BILLING_CONTROL_ERRORS:
+                raise
             except TimeoutError:
                 return AgentResult(
                     agent_id=pipeline_id,
@@ -674,10 +719,16 @@ class ParallelAgentOrchestrator:
                     duration_ms=(time.time() - start) * 1000,
                 )
             except Exception as exc:
+                logger.error(
+                    "Pipeline stage failed: pipeline_id=%s stage=%d error_type=%s",
+                    pipeline_id,
+                    i + 1,
+                    type(exc).__name__,
+                )
                 return AgentResult(
                     agent_id=pipeline_id,
                     status="failed",
-                    error=f"Pipeline stage {i+1} failed: {exc}",
+                    error="Pipeline stage execution failed.",
                     output=accumulated_output,
                     duration_ms=(time.time() - start) * 1000,
                 )
@@ -698,7 +749,13 @@ class ParallelAgentOrchestrator:
 
     # ─── Internal helpers ─────────────────────────────────────────────────────
 
-    async def _execute_agent(self, instruction: str, task_context: str = "") -> str:
+    async def _execute_agent(
+        self,
+        instruction: str,
+        task_context: str = "",
+        billing_context: dict[str, str] | None = None,
+        stage: str = "agent",
+    ) -> str:
         """Execute a single agent with independent context and LLM session.
 
         Uses the project's AgentLoop when available, falls back to direct LLM call.
@@ -712,13 +769,40 @@ class ParallelAgentOrchestrator:
                 memory=self.memory,
                 tools=self.tools,
             )
-            context = {"task_context": task_context} if task_context else {}
-            run_result = await loop.run(context=context, task=instruction)
-            return run_result.output if hasattr(run_result, "output") else str(run_result)
+            stage_context = self._stage_billing_context(
+                billing_context,
+                stage,
+            )
+            context = RunContext(
+                trace_id=stage_context.get("trace_id") or str(uuid4()),
+                tenant_id=stage_context.get("tenant_id") or "default",
+                user_id=stage_context.get("user_id") or "anonymous",
+                agent_id=f"parallel-{stage}",
+            )
+            extra_context = {"task_context": task_context} if task_context else {}
+            extra_context.update({
+                "operation_id": stage_context.get("operation_id", ""),
+                "run_id": stage_context.get("run_id", context.trace_id),
+            })
+            run_result = await loop.run(
+                context=context,
+                task=instruction,
+                extra_context=extra_context,
+            )
+            if hasattr(run_result, "answer"):
+                return run_result.answer or ""
+            if hasattr(run_result, "output"):
+                return run_result.output or ""
+            return str(run_result)
         except ImportError:
             pass
+        except _BILLING_CONTROL_ERRORS:
+            raise
         except Exception as exc:
-            logger.debug(f"AgentLoop execution failed, falling back to LLM: {exc}")
+            logger.debug(
+                "AgentLoop execution failed; falling back to LLM: error_type=%s",
+                type(exc).__name__,
+            )
 
         # Fallback: direct LLM call
         if self.llm_router:
@@ -726,7 +810,11 @@ class ParallelAgentOrchestrator:
             if task_context:
                 messages.append({"role": "system", "content": f"Context: {task_context}"})
             messages.append({"role": "user", "content": instruction})
-            response = await self.llm_router.chat(messages, tools=[])
+            response = await self.llm_router.chat(
+                messages,
+                tools=[],
+                **self._stage_billing_context(billing_context, stage),
+            )
             return response.content if hasattr(response, "content") else str(response)
 
         raise RuntimeError("No LLM router or AgentLoop available for agent execution")
@@ -741,7 +829,12 @@ class ParallelAgentOrchestrator:
         counter = Counter(outputs)
         return counter.most_common(1)[0][0]
 
-    async def _merge_results(self, results: list[AgentResult]) -> str:
+    async def _merge_results(
+        self,
+        results: list[AgentResult],
+        billing_context: dict[str, str] | None = None,
+        stage: str = "merge",
+    ) -> str:
         """Merge multiple outputs using LLM synthesis or concatenation."""
         outputs = [r.output for r in results if r.output]
         if not outputs:
@@ -759,13 +852,42 @@ class ParallelAgentOrchestrator:
                     f"any conflicts:\n\n{combined[:8000]}"
                 )
                 messages = [{"role": "user", "content": prompt}]
-                response = await self.llm_router.chat(messages, tools=[])
+                response = await self.llm_router.chat(
+                    messages,
+                    tools=[],
+                    **self._stage_billing_context(billing_context, stage),
+                )
                 return response.content if hasattr(response, "content") else str(response)
+            except _BILLING_CONTROL_ERRORS:
+                raise
             except Exception as exc:
-                logger.warning(f"LLM merge failed, falling back to concat: {exc}")
+                logger.warning(
+                    "LLM merge failed; falling back to concat: error_type=%s",
+                    type(exc).__name__,
+                )
 
         # Fallback: simple concatenation
         return "\n\n---\n\n".join(outputs)
+
+    @staticmethod
+    def _stage_billing_context(
+        context: dict[str, str] | None,
+        stage: str,
+    ) -> dict[str, str]:
+        if context is None:
+            return {}
+        required = ("tenant_id", "user_id", "operation_id", "run_id", "trace_id")
+        if not all(context.get(key) for key in required):
+            raise LLMReservationPersistenceError(
+                "parallel billing correlation is required"
+            )
+        return {
+            "tenant_id": context["tenant_id"],
+            "user_id": context["user_id"],
+            "operation_id": f"{context['operation_id']}:{stage}",
+            "run_id": context["run_id"],
+            "trace_id": context["trace_id"],
+        }
 
     def get_execution_log(self, limit: int = 50) -> list[dict[str, Any]]:
         """Get recent execution log entries."""

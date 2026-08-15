@@ -173,10 +173,14 @@ class GoalModeOrchestrator:
 
         except _BILLING_CONTROL_ERRORS:
             raise
-        except Exception as e:
+        except Exception as exc:
             result.status = "failed"
-            result.output = str(e)
-            logger.error(f"Goal {goal_id} failed: {e}")
+            result.output = "Goal execution failed."
+            logger.error(
+                "Goal execution failed: goal_id=%s error_type=%s",
+                goal_id,
+                type(exc).__name__,
+            )
 
         result.total_duration = time.time() - start_time
         result.checkpoints_count = len([
@@ -189,7 +193,14 @@ class GoalModeOrchestrator:
     async def _decompose_goal(self, goal: str, context: dict[str, Any]) -> list[SubGoal]:
         """Decompose a high-level goal into executable sub-goals."""
         if self.llm_router:
-            required = ("tenant_id", "user_id", "goal_id", "run_id", "trace_id")
+            required = (
+                "tenant_id",
+                "user_id",
+                "goal_id",
+                "operation_id",
+                "run_id",
+                "trace_id",
+            )
             if not all(context.get(key) for key in required):
                 raise LLMReservationPersistenceError(
                     "goal billing correlation is required"
@@ -209,7 +220,7 @@ class GoalModeOrchestrator:
                     user_id=str(context["user_id"]),
                     run_id=str(context["run_id"]),
                     trace_id=str(context["trace_id"]),
-                    operation_id=f"{context['goal_id']}:decompose",
+                    operation_id=f"{context['operation_id']}:decompose",
                 )
                 content = response.content if hasattr(response, "content") else str(response)
                 json_start = content.find("[")
@@ -219,8 +230,11 @@ class GoalModeOrchestrator:
                     return [SubGoal(description=str(item)) for item in items]
             except _BILLING_CONTROL_ERRORS:
                 raise
-            except Exception as e:
-                logger.warning(f"Goal decomposition via LLM failed: {e}")
+            except Exception as exc:
+                logger.warning(
+                    "Goal decomposition via LLM failed: error_type=%s",
+                    type(exc).__name__,
+                )
 
         return [SubGoal(description=goal)]
 
@@ -241,8 +255,12 @@ class GoalModeOrchestrator:
                 return result.output if hasattr(result, "output") else str(result)
             except _BILLING_CONTROL_ERRORS:
                 raise
-            except Exception as e:
-                return f"Error: {e}"
+            except Exception as exc:
+                logger.warning(
+                    "Goal subtask execution failed: error_type=%s",
+                    type(exc).__name__,
+                )
+                return "Subgoal execution failed."
         return f"Executed: {subgoal.description}"
 
     async def _goal_complete(self, goal: str, result: GoalResult) -> bool:
