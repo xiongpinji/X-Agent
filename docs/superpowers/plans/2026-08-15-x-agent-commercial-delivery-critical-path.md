@@ -13,11 +13,11 @@
 ## 当前基线与硬边界
 
 - 实际工作树：`D:\AI编程库\项目库\进行中的项目\X-Agent\.worktrees\commercial-delivery`
-- 分支/HEAD：`codex/commercial-delivery@69ad8ee`；基线 `main@4f1f5dc` 保持干净。
+- 分支/HEAD：`codex/commercial-delivery@90fe9f2`；基线 `main@4f1f5dc` 保持干净。
 - 已从 `333065d` 仅提取 25 个源码/测试/计划白名单路径并提交为 `69ad8ee`；候选历史不含 Playwright 状态、运行数据、截图或临时备份。
-- 当前候选已通过 10 个定向 Python 合同、TypeScript 和生产构建；Python 全量 7198 个测试与前端 83 个 Vitest 是旧脏快照证据，必须在本候选 SHA 上重跑后才可复用。
-- 当前候选全局 ESLint 有 23 个错误/242 个警告；Vitest 缺脚本和测试依赖，均为明确未完成门禁。
-- 当前默认 ChatPage 仍调用占位 `/api/v1/workflows/create/chat`，没有进入真实 Agent/LLM；现代 Console 仍有 6 个虚构 overview 404 和消息流 401。
+- 当前候选已通过 19 个 Chat/stream Vitest、9 个 Python Agent stream 合同、TypeScript、生产构建、npm audit、定向 Ruff/ESLint 0 errors；Python 全量 7198 个测试与旧前端 83 个 Vitest 仍须在本候选 SHA 上重跑后才可复用。
+- 当前候选全局 ESLint 仍有 22 个错误/239 个警告，是明确未完成门禁。
+- 默认 ChatPage 已在 `90fe9f2` 接入真实 Agent POST-SSE；现代 Console 仍有 6 个虚构 overview 404 和消息流 401。
 - `333065d` 历史包含 Playwright、运行数据和临时备份工件；后续不得把该提交整体 cherry-pick 或推送到候选。
 - 真实付费模型、外部 GitHub/渠道、Hosted CI、真实集群、生产密钥、部署和恢复均是发布所有者授权门。
 
@@ -53,16 +53,17 @@
 **文件：**
 - 修改：`frontend/src/pages/ChatPage.tsx`
 - 修改：`frontend/src/hooks/useAgentStream.ts`
+- 修改：`frontend/src/components/AgentStreamPanel.tsx`
 - 修改：`frontend/src/services/api.ts`
 - 修改：`frontend/package.json`
 - 修改：`frontend/package-lock.json`
-- 修改：`frontend/vite.config.ts`
 - 修改：`backend/app/api/agents.py`
 - 创建：`frontend/src/__tests__/pages/ChatPage.test.tsx`
+- 创建：`frontend/src/__tests__/components/AgentStreamPanel.test.tsx`
 - 测试：`tests/test_chat_entrypoint_contract.py`
 - 创建：`tests/test_agent_stream_api.py`
 
-- [ ] **步骤 1：写失败合同，禁止默认聊天调用占位 workflow**
+- [x] **步骤 1：写失败合同，禁止默认聊天调用占位 workflow**
 
 ```python
 def test_default_chat_uses_real_agent_stream() -> None:
@@ -74,18 +75,18 @@ def test_default_chat_uses_real_agent_stream() -> None:
 
 Vitest 同时断言：发送一次消息只产生 `POST /api/v1/agents/run/stream`；Authorization 或 `X-API-Key` 存在；completion 的 `trace_id/answer/status` 写入助手消息；error completion 显示失败且不生成成功消息。
 
-- [ ] **步骤 2：运行红灯测试**
+- [x] **步骤 2：运行红灯测试**
 
 运行：
 
 ```powershell
 python -m pytest tests/test_chat_entrypoint_contract.py tests/test_agent_stream_api.py -q
-npm --prefix frontend exec vitest run src/__tests__/pages/ChatPage.test.tsx
+npm --prefix frontend run test -- src/__tests__/pages/ChatPage.test.tsx src/__tests__/components/AgentStreamPanel.test.tsx
 ```
 
 预期：旧 ChatPage 仍调用 `apiClient.sendMessage` 和占位 SSE，测试失败。
 
-- [ ] **步骤 3：最小实现真实 POST-SSE**
+- [x] **步骤 3：最小实现真实 POST-SSE**
 
 `ChatPage` 使用 `useAgentStream`：
 
@@ -110,13 +111,13 @@ await startStream(messageText, {
 
 异常返回 `status=failed` 和稳定错误码；不得用 5 秒 timeout 或 demo 文本伪装成功。Ultra Mode 失败同样显示真实失败，不得生成 demo completed。
 
-- [ ] **步骤 4：回归验证**
+- [x] **步骤 4：回归验证**
 
-运行任务 1 的 Python/Vitest、`npm --prefix frontend run type-check`、`npm --prefix frontend run lint`。
+已运行任务 1 的 Python/Vitest、`npm --prefix frontend run type-check`、生产构建、npm audit、定向 ESLint/Ruff 和候选卫生检查；全局 lint 失败保留给任务 6，不作为本任务伪造通过。
 
-- [ ] **步骤 5：规格审查、质量审查和精确提交**
+- [x] **步骤 5：规格审查、质量审查和精确提交**
 
-仅暂存任务 1 文件清单中的路径，运行 `git diff --cached --check`；确认没有其他会话修改同一路径后提交：
+任务 1 以 5 个精确修复提交完成，最终 HEAD `90fe9f2`；规格审查与代码质量审查均通过，`git diff --check`、秘密扫描和运行工件 denylist 通过。
 
 ```text
 fix(chat): connect default chat to real agent stream
