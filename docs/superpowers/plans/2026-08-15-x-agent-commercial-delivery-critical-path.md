@@ -175,6 +175,9 @@ python -m pytest tests/test_chat_history_persistence.py tests/test_chat_history_
 - 修改：`backend/app/core/artifacts/storage.py`
 - 修改：`backend/app/api/artifacts.py`
 - 修改：`backend/app/api/agents.py`
+- 修改：`backend/app/main.py`
+- 修改：`tests/test_artifacts.py`
+- 修改：`tests/test_agent_stream_api.py`
 - 测试：`tests/test_run_artifact_lifecycle.py`
 - 测试：`tests/test_artifact_tenant_isolation.py`
 
@@ -186,11 +189,11 @@ python -m pytest tests/test_chat_history_persistence.py tests/test_chat_history_
 {
   "run_id":"...","trace_id":"...","tenant_id":"tenant-a","user_id":"user-a",
   "status":"completed","artifacts":[{"artifact_id":"...","sha256":"...","download_url":"..."}],
-  "archive_id":"...","audit_id":"..."
+  "archive":null,"audit_ids":["..."]
 }
 ```
 
-验证 `GET artifact`、render、download、archive 均可打开；SHA-256 与下载字节一致；tenant B 全部返回 404；失败 run 写入 failed manifest 且不生成虚假 completed artifact。
+完成终态先返回持久 manifest，不提前伪造 archive。随后调用归档端点得到 `archive_id/archive_sha256/download_url`。验证 `GET artifact`、render、download、manifest、archive download 均可打开；SHA-256 与下载字节一致；tenant B 全部返回 404；失败 run 写入 failed manifest 且不生成虚假 completed artifact。
 
 - [ ] **步骤 2：实现 run manifest 与所有权字段**
 
@@ -198,12 +201,12 @@ python -m pytest tests/test_chat_history_persistence.py tests/test_chat_history_
 
 - [ ] **步骤 3：增加安全下载和归档端点**
 
-下载使用固定 artifact ID 定位，不接受任意文件路径；归档只包含 manifest 声明的文件，并生成 archive SHA-256。创建、下载、归档和失败都写同一 `run_id/trace_id` 审计记录。
+将 `artifacts` router 加入显式 keep-list，确保 OpenAPI 和真实应用均可达。下载使用固定 artifact ID 定位，不接受任意文件路径；归档只包含 manifest 声明的文件，并生成 archive SHA-256。创建、下载、归档和失败都写同一 `run_id/trace_id` 审计记录。旧 `agents.py` 中未挂载的 `_run_artifacts/_archived_runs` 占位不得作为通过证据。
 
 - [ ] **步骤 4：运行生命周期、隔离、秘密扫描和审计链测试**
 
 ```powershell
-python -m pytest tests/test_artifacts.py tests/test_run_artifact_lifecycle.py tests/test_artifact_tenant_isolation.py tests/test_audit*.py -q
+python -m pytest tests/test_artifacts.py tests/test_run_artifact_lifecycle.py tests/test_artifact_tenant_isolation.py tests/test_agent_stream_api.py tests/test_first_release_entrypoints.py tests/test_audit*.py -q
 ```
 
 - [ ] **步骤 5：双阶段审查并提交**
