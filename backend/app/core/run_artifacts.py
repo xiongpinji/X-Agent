@@ -70,6 +70,10 @@ class RunArtifactAuditError(RuntimeError):
     """A required lifecycle audit could not be committed."""
 
 
+class RunArtifactRollbackError(RuntimeError):
+    """A required archive rollback could not restore authoritative state."""
+
+
 ArchiveAuditCallback = Callable[[RunArtifactManifest], Awaitable[str]]
 ArchiveRollbackAuditCallback = Callable[[RunArtifactManifest, str], Awaitable[str]]
 
@@ -529,7 +533,16 @@ class RunArtifactManager:
                         await asyncio.shield(cleanup)
                     except asyncio.CancelledError:
                         continue
-                cleanup.result()
+                    except Exception:
+                        break
+                try:
+                    cleanup.result()
+                except RunArtifactRollbackError:
+                    raise
+                except Exception as cleanup_failure:
+                    raise RunArtifactRollbackError(
+                        "Archive rollback could not be completed"
+                    ) from cleanup_failure
                 if isinstance(failure, Exception) and audit_started:
                     raise RunArtifactAuditError(
                         "Required archive audit could not be committed"
@@ -554,16 +567,16 @@ class RunArtifactManager:
         audit_id: str | None,
         rollback_audit_callback: ArchiveRollbackAuditCallback | None,
     ) -> None:
-        rolled_back: RunArtifactManifest | None = None
-        try:
-            rolled_back = await self._remove_archive_unlocked(
-                run_id,
-                tenant_id,
-                user_id,
-                archive_id,
+        rolled_back = await self._remove_archive_unlocked(
+            run_id,
+            tenant_id,
+            user_id,
+            archive_id,
+        )
+        if rolled_back is None or rolled_back.archive is not None:
+            raise RunArtifactRollbackError(
+                "Authoritative archive rollback could not be confirmed"
             )
-        except Exception:
-            pass
         if not audit_id or rollback_audit_callback is None:
             return
         try:
@@ -589,6 +602,8 @@ class RunArtifactManager:
     ) -> RunArtifactManifest | None:
         archive_file = self._archive_file(archive_id, tenant_id, user_id)
         await asyncio.to_thread(self._remove_file, archive_file)
+        if await asyncio.to_thread(archive_file.exists):
+            raise OSError("Archive rollback did not remove archive bytes")
         authoritative = await self._get_manifest_unlocked(
             run_id,
             tenant_id,

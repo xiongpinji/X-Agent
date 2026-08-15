@@ -16,6 +16,7 @@ from backend.app.core.run_artifacts import (
     RunArtifactAuditError,
     RunArtifactManager,
     RunArtifactManifest,
+    RunArtifactRollbackError,
     get_run_artifact_manager,
 )
 from backend.app.core.security import Principal
@@ -179,6 +180,13 @@ async def archive_run(
             audit_callback=_record_created,
             rollback_audit_callback=_record_rollback,
         )
+    except RunArtifactRollbackError:
+        raise api_error(
+            503,
+            ErrorCode.INTERNAL_ERROR,
+            "Run archive rollback could not be completed.",
+            trace_id=run_id,
+        ) from None
     except RunArtifactAuditError:
         raise api_error(
             503,
