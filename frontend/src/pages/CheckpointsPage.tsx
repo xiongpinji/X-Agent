@@ -6,16 +6,14 @@ import {
   CheckpointDetail,
 } from '@/services/workflowOps'
 import { useI18n } from '@/i18n/context'
-import {
-  AlertTriangle,
-  Bookmark,
-  CheckCircle2,
-  PauseCircle,
-  Play,
-  RefreshCw,
-  Trash2,
-} from 'lucide-react'
+import { Play, RefreshCw, Trash2 } from 'lucide-react'
 import clsx from 'clsx'
+
+const STATUS_BADGE: Record<string, string> = {
+  completed: 'badge-success',
+  failed: 'badge-danger',
+  paused: 'badge-warning',
+}
 
 /**
  * 断点恢复页 — 端点全部来自 backend/app/api/checkpoints.py:
@@ -93,119 +91,110 @@ export const CheckpointsPage: React.FC = () => {
     }
   }
 
-  const statusIcon = (status: string) => {
-    switch (status) {
-      case 'completed':
-        return <CheckCircle2 size={16} className="text-green-500" />
-      case 'failed':
-        return <AlertTriangle size={16} className="text-red-500" />
-      case 'paused':
-        return <PauseCircle size={16} className="text-amber-500" />
-      default:
-        return <RefreshCw size={16} className="text-blue-500" />
-    }
-  }
-
-  const cardCls = clsx(
-    'rounded-lg p-4 border',
-    theme === 'dark' ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200'
-  )
-  const mutedCls = clsx('text-xs', theme === 'dark' ? 'text-slate-500' : 'text-slate-400')
+  const statusBadge = (status: string) => STATUS_BADGE[status] ?? 'badge-muted'
 
   return (
-    <div className={clsx('p-8', theme === 'dark' ? 'bg-slate-950' : 'bg-slate-50')}>
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className={clsx('text-3xl font-bold mb-2', theme === 'dark' ? 'text-white' : 'text-slate-900')}>
-              {t('checkpoints.title', 'Checkpoints')}
-            </h1>
-            <p className={clsx('text-sm', theme === 'dark' ? 'text-slate-400' : 'text-slate-600')}>
-              {t('checkpoints.subtitle', 'Resume interrupted agent runs from checkpoints')}
-            </p>
+    <div className={clsx(
+      'min-h-full px-8 py-10',
+      theme === 'dark' ? 'bg-slate-950 text-slate-200' : 'bg-[#fafafa] text-[#333333]'
+    )}>
+      <div className="max-w-6xl">
+        {/* Header — Dashboard-style */}
+        <header className="mb-8">
+          <div
+            className={clsx(
+              'w-12 border-t-2 mb-5',
+              theme === 'dark' ? 'border-slate-200' : 'border-[#333333]'
+            )}
+            aria-hidden="true"
+          />
+          <div className="flex items-end justify-between gap-4">
+            <div>
+              <h1 className="page-title">{t('checkpoints.title', 'Checkpoints')}</h1>
+              <p className="page-subtitle">{t('checkpoints.subtitle', 'Resume interrupted agent runs from checkpoints')}</p>
+            </div>
+            <button
+              onClick={loadList}
+              className={clsx(
+                'flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
+                theme === 'dark' ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
+              )}
+              aria-label={t('checkpoints.refresh', 'Refresh')}
+            >
+              <RefreshCw size={16} />
+              {t('checkpoints.refresh', 'Refresh')}
+            </button>
           </div>
-          <button
-            onClick={loadList}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
-          >
-            <RefreshCw size={16} />
-            {t('checkpoints.refresh', 'Refresh')}
-          </button>
-        </div>
+        </header>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Checkpoint 列表 */}
-          <div className="space-y-3">
-            <h2 className={clsx('text-lg font-semibold', theme === 'dark' ? 'text-white' : 'text-slate-900')}>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+          {/* Checkpoint 列表 — divider rows, no cards */}
+          <section>
+            <h2 className="text-[11px] uppercase tracking-[0.08em] opacity-50 mb-2">
               {t('checkpoints.list', 'Resumable Runs')} ({total})
             </h2>
             {items.length === 0 ? (
-              <div className={clsx(cardCls, 'p-8 text-center', theme === 'dark' ? 'text-slate-400' : 'text-slate-500')}>
-                <Bookmark size={40} className="mx-auto mb-3 opacity-50" />
-                <p>{t('checkpoints.empty', 'No resumable checkpoints')}</p>
-              </div>
+              <p className="empty-state">{t('checkpoints.empty', 'No resumable checkpoints')}</p>
             ) : (
-              items.map((cp) => (
-                <div
-                  key={cp.checkpoint_id}
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => openDetail(cp.trace_id)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') openDetail(cp.trace_id)
-                  }}
-                  className={clsx(
-                    'rounded-lg p-4 cursor-pointer transition-colors border',
-                    selected?.trace_id === cp.trace_id
-                      ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/30'
-                      : theme === 'dark'
-                        ? 'bg-slate-900 border-slate-700 hover:border-slate-600'
-                        : 'bg-white border-slate-200 hover:border-slate-300'
-                  )}
-                >
-                  <div className="flex items-center gap-2">
-                    {statusIcon(cp.status)}
-                    <span className={clsx('text-sm font-medium truncate', theme === 'dark' ? 'text-white' : 'text-slate-900')}>
-                      {cp.task_preview || cp.trace_id}
-                    </span>
+              <div>
+                {items.map((cp) => (
+                  <div
+                    key={cp.checkpoint_id}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => openDetail(cp.trace_id)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') openDetail(cp.trace_id)
+                    }}
+                    className={clsx(
+                      'row-line cursor-pointer px-2 -mx-2',
+                      selected?.trace_id === cp.trace_id && (theme === 'dark' ? 'bg-slate-800' : 'bg-slate-100')
+                    )}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className={clsx('badge-status', statusBadge(cp.status))}>
+                        {cp.status}
+                      </span>
+                      <span className="text-sm font-medium truncate">
+                        {cp.task_preview || cp.trace_id}
+                      </span>
+                    </div>
+                    <div className="mt-1 flex items-center gap-4 flex-wrap cell-data opacity-50">
+                      <span>
+                        {t('checkpoints.iteration', 'Iteration')}: {cp.iteration}
+                      </span>
+                      <span>agent: {cp.agent_id}</span>
+                      <span>{new Date(cp.created_at).toLocaleString()}</span>
+                    </div>
                   </div>
-                  <div className={clsx('mt-1 flex items-center gap-4 flex-wrap', mutedCls)}>
-                    <span>{cp.status}</span>
-                    <span>
-                      {t('checkpoints.iteration', 'Iteration')}: {cp.iteration}
-                    </span>
-                    <span>agent: {cp.agent_id}</span>
-                    <span>{new Date(cp.created_at).toLocaleString()}</span>
-                  </div>
-                </div>
-              ))
+                ))}
+              </div>
             )}
-          </div>
+          </section>
 
           {/* 详情与恢复 */}
-          <div className="space-y-3">
-            <h2 className={clsx('text-lg font-semibold', theme === 'dark' ? 'text-white' : 'text-slate-900')}>
+          <section>
+            <h2 className="text-[11px] uppercase tracking-[0.08em] opacity-50 mb-2">
               {t('checkpoints.detail', 'Checkpoint Detail')}
             </h2>
             {detailLoading ? (
-              <div className={clsx(cardCls, 'p-8 text-center', theme === 'dark' ? 'text-slate-400' : 'text-slate-500')}>
-                <RefreshCw size={24} className="mx-auto animate-spin opacity-50" />
-              </div>
+              <p className="empty-state">
+                <RefreshCw size={16} className="inline animate-spin" aria-label={t('common.loading', 'Loading')} />
+              </p>
             ) : !selected ? (
-              <div className={clsx(cardCls, 'p-8 text-center text-sm', theme === 'dark' ? 'text-slate-400' : 'text-slate-500')}>
-                {t('checkpoints.selectHint', 'Select a run to view its checkpoints')}
-              </div>
+              <p className="empty-state">{t('checkpoints.selectHint', 'Select a run to view its checkpoints')}</p>
             ) : (
               <>
-                <div className={cardCls}>
+                <div className="row-line" style={{ padding: '16px 0' }}>
                   <div className="flex items-center gap-2 mb-2 flex-wrap">
-                    {statusIcon(selected.status)}
-                    <span className={clsx('font-medium font-mono text-sm', theme === 'dark' ? 'text-white' : 'text-slate-900')}>
+                    <span className={clsx('badge-status', statusBadge(selected.status))}>
+                      {selected.status}
+                    </span>
+                    <span className="font-medium cell-data">
                       {selected.trace_id}
                     </span>
                   </div>
-                  <div className={clsx('grid grid-cols-2 gap-2 mb-4', mutedCls)}>
+                  <div className="grid grid-cols-2 gap-2 mb-4 cell-data opacity-60">
                     <span>agent: {selected.agent_id}</span>
                     <span>
                       {t('checkpoints.latestIteration', 'Latest iteration')}: {selected.latest_iteration}
@@ -221,7 +210,7 @@ export const CheckpointsPage: React.FC = () => {
                     <button
                       onClick={() => handleResume(selected.trace_id)}
                       disabled={acting || !selected.resumable}
-                      className="flex items-center gap-1 px-3 py-1.5 text-sm bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white rounded-md transition-colors"
+                      className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg transition-colors"
                     >
                       <Play size={14} />
                       {t('checkpoints.resume', 'Resume Execution')}
@@ -229,7 +218,10 @@ export const CheckpointsPage: React.FC = () => {
                     <button
                       onClick={() => handleDelete(selected.trace_id)}
                       disabled={acting}
-                      className="flex items-center gap-1 px-3 py-1.5 text-sm bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded-md transition-colors"
+                      className={clsx(
+                        'flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg transition-colors disabled:opacity-50',
+                        theme === 'dark' ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
+                      )}
                     >
                       <Trash2 size={14} />
                       {t('checkpoints.delete', 'Clean Up')}
@@ -238,28 +230,23 @@ export const CheckpointsPage: React.FC = () => {
                 </div>
 
                 {/* 历次 checkpoint 快照 */}
-                <div className={cardCls}>
-                  <h3 className={clsx('text-sm font-semibold mb-3', theme === 'dark' ? 'text-white' : 'text-slate-900')}>
+                <div className="mt-6">
+                  <h3 className="text-[11px] uppercase tracking-[0.08em] opacity-50 mb-2">
                     {t('checkpoints.snapshots', 'Snapshots')}
                   </h3>
-                  <div className="space-y-2 max-h-96 overflow-y-auto">
+                  <div className="max-h-96 overflow-y-auto">
                     {selected.checkpoints.map((cp) => (
-                      <div
-                        key={cp.checkpoint_id}
-                        className={clsx(
-                          'rounded-md p-3 border text-xs',
-                          theme === 'dark' ? 'border-slate-700 bg-slate-800/60' : 'border-slate-200 bg-slate-50'
-                        )}
-                      >
+                      <div key={cp.checkpoint_id} className="row-line text-xs">
                         <div className="flex items-center gap-2 flex-wrap">
-                          {statusIcon(cp.status)}
-                          <span className={clsx('font-medium', theme === 'dark' ? 'text-white' : 'text-slate-900')}>
-                            #{cp.iteration}
+                          <span className={clsx('badge-status', statusBadge(cp.status))}>
+                            {cp.status}
                           </span>
-                          <span className={mutedCls}>{cp.status}</span>
-                          {cp.created_at && <span className={mutedCls}>{new Date(cp.created_at).toLocaleString()}</span>}
+                          <span className="font-medium cell-data">#{cp.iteration}</span>
+                          {cp.created_at && (
+                            <span className="cell-data opacity-50">{new Date(cp.created_at).toLocaleString()}</span>
+                          )}
                         </div>
-                        <div className={clsx('mt-1 flex items-center gap-4 flex-wrap', mutedCls)}>
+                        <div className="mt-1 flex items-center gap-4 flex-wrap cell-data opacity-50">
                           <span>
                             {t('checkpoints.remaining', 'Remaining steps')}: {cp.remaining_steps?.length ?? 0}
                           </span>
@@ -271,7 +258,7 @@ export const CheckpointsPage: React.FC = () => {
                           </span>
                         </div>
                         {cp.answer_so_far && (
-                          <p className={clsx('mt-1 line-clamp-3', theme === 'dark' ? 'text-slate-300' : 'text-slate-600')}>
+                          <p className="mt-1 line-clamp-3 opacity-70">
                             {cp.answer_so_far}
                           </p>
                         )}
@@ -281,7 +268,7 @@ export const CheckpointsPage: React.FC = () => {
                 </div>
               </>
             )}
-          </div>
+          </section>
         </div>
       </div>
     </div>

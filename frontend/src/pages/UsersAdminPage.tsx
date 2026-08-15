@@ -14,15 +14,11 @@ type PageTab = 'users' | 'activity'
 
 const ROLE_OPTIONS = ['admin', 'developer', 'viewer'] as const
 
-const roleBadgeCls = (role: string) =>
-  clsx(
-    'px-2 py-0.5 rounded-full text-xs font-medium',
-    role === 'admin'
-      ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300'
-      : role === 'developer'
-        ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
-        : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'
-  )
+const ROLE_BADGE: Record<string, string> = {
+  admin: 'badge-danger',
+  developer: 'badge-muted',
+  viewer: 'badge-muted',
+}
 
 const UsersAdminPage: React.FC = () => {
   const { t } = useI18n()
@@ -143,256 +139,258 @@ const UsersAdminPage: React.FC = () => {
     }
   }
 
+  const inputCls = clsx(
+    'px-3 py-2 rounded-lg border text-sm',
+    isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-300'
+  )
+
   // 403 — graceful permission notice instead of a crash
   if (forbidden) {
     return (
-      <div className="p-6 max-w-3xl mx-auto">
-        <div className={clsx(
-          'p-8 rounded-xl border text-center',
-          isDark ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200'
-        )}>
-          <div className="text-4xl mb-3">🔒</div>
-          <h1 className="text-xl font-bold mb-2">{t('admin.forbidden.title', 'Admin access required')}</h1>
-          <p className={clsx('text-sm', isDark ? 'text-slate-400' : 'text-slate-500')}>
-            {t('admin.forbidden.usersDesc', 'User management requires the security:manage scope. Contact an administrator to request access.')}
-          </p>
+      <div className={clsx(
+        'min-h-full px-8 py-10',
+        isDark ? 'bg-slate-950 text-slate-200' : 'bg-[#fafafa] text-[#333333]'
+      )}>
+        <div className="max-w-3xl">
+          <header className="mb-8">
+            <div
+              className={clsx('w-12 border-t-2 mb-5', isDark ? 'border-slate-200' : 'border-[#333333]')}
+              aria-hidden="true"
+            />
+            <h1 className="page-title">{t('admin.forbidden.title', 'Admin access required')}</h1>
+            <p className="page-subtitle">
+              {t('admin.forbidden.usersDesc', 'User management requires the security:manage scope. Contact an administrator to request access.')}
+            </p>
+          </header>
         </div>
       </div>
     )
   }
 
-  const inputCls = clsx(
-    'px-3 py-2 rounded-lg border text-sm',
-    isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-300'
-  )
-  const cardCls = clsx(
-    'p-4 rounded-xl border',
-    isDark ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200'
-  )
-
-  const tabs: Array<{ id: PageTab; label: string; icon: string }> = [
-    { id: 'users', label: t('admin.tabs.users', 'Users'), icon: '👥' },
-    { id: 'activity', label: t('admin.tabs.activity', 'Activity'), icon: '📜' },
+  const tabs: Array<{ id: PageTab; label: string }> = [
+    { id: 'users', label: t('admin.tabs.users', 'Users') },
+    { id: 'activity', label: t('admin.tabs.activity', 'Activity') },
   ]
 
   const activityUser = users.find(u => u.id === activityUserId) || null
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
-      <h1 className="text-2xl font-bold mb-6">{t('admin.usersAdmin.title', 'User Administration')}</h1>
+    <div className={clsx(
+      'min-h-full px-8 py-10',
+      isDark ? 'bg-slate-950 text-slate-200' : 'bg-[#fafafa] text-[#333333]'
+    )}>
+      <div className="max-w-5xl">
+        {/* Header — Dashboard-style */}
+        <header className="mb-8">
+          <div
+            className={clsx('w-12 border-t-2 mb-5', isDark ? 'border-slate-200' : 'border-[#333333]')}
+            aria-hidden="true"
+          />
+          <h1 className="page-title">{t('admin.usersAdmin.title', 'User Administration')}</h1>
+          <p className="page-subtitle">{t('admin.usersAdmin.subtitle', 'Manage users, roles and activity')}</p>
+        </header>
 
-      {message && (
-        <div className={clsx(
-          'mb-4 p-3 rounded-lg text-sm',
-          message.type === 'success'
-            ? 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400'
-            : 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-400'
-        )} role="alert">
-          {message.text}
-        </div>
-      )}
-
-      {/* Tabs */}
-      <div className="flex gap-1 mb-6 border-b border-slate-200 dark:border-slate-700" role="tablist">
-        {tabs.map(tab => (
-          <button
-            key={tab.id}
-            role="tab"
-            aria-selected={activeTab === tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className={clsx(
-              'px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px',
-              activeTab === tab.id
-                ? 'border-blue-600 text-blue-600 dark:text-blue-400'
-                : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
-            )}
-          >
-            <span className="mr-1.5">{tab.icon}</span>
-            {tab.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Users Tab */}
-      {activeTab === 'users' && (
-        <div className="space-y-6">
-          {/* Create user */}
-          <div className={cardCls}>
-            <h2 className="text-sm font-semibold mb-3">{t('admin.users.create', 'Create User')}</h2>
-            <div className="flex flex-wrap gap-2">
-              <input
-                type="email"
-                value={newUserEmail}
-                onChange={e => setNewUserEmail(e.target.value)}
-                placeholder={t('admin.users.emailPlaceholder', 'Email')}
-                className={clsx(inputCls, 'flex-1 min-w-[180px]')}
-              />
-              <input
-                type="text"
-                value={newUserName}
-                onChange={e => setNewUserName(e.target.value)}
-                placeholder={t('admin.users.namePlaceholder', 'Display name')}
-                className={clsx(inputCls, 'flex-1 min-w-[140px]')}
-              />
-              <select
-                value={newUserRole}
-                onChange={e => setNewUserRole(e.target.value)}
-                className={inputCls}
-                aria-label={t('admin.users.role', 'Role')}
-              >
-                {ROLE_OPTIONS.map(r => <option key={r} value={r}>{r}</option>)}
-              </select>
-              <input
-                type="text"
-                value={newUserTenant}
-                onChange={e => setNewUserTenant(e.target.value)}
-                placeholder={t('admin.users.tenantPlaceholder', 'Tenant ID')}
-                className={clsx(inputCls, 'w-32')}
-              />
-              <button
-                onClick={handleCreateUser}
-                disabled={!newUserEmail.trim() || creating}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
-              >
-                {creating ? t('common.saving', 'Saving...') : t('common.create', 'Create')}
-              </button>
-            </div>
+        {message && (
+          <div className={clsx(
+            'mb-4 px-3 py-2 rounded-lg text-sm border',
+            message.type === 'success'
+              ? 'border-[#16a34a]/30 text-[#16a34a]'
+              : 'border-[#dc2626]/30 text-[#dc2626]'
+          )} role="alert">
+            {message.text}
           </div>
+        )}
 
-          {/* User list */}
-          <div className={cardCls}>
-            <h2 className="text-sm font-semibold mb-3">{t('admin.users.list', 'Users')}</h2>
-            {loading ? (
-              <p className={clsx('text-sm py-6 text-center', isDark ? 'text-slate-500' : 'text-slate-400')}>
-                {t('common.loading', 'Loading...')}
-              </p>
-            ) : users.length === 0 ? (
-              <p className={clsx('text-sm py-6 text-center', isDark ? 'text-slate-500' : 'text-slate-400')}>
-                {t('admin.users.empty', 'No users found.')}
+        {/* Tabs */}
+        <div className="flex gap-1 mb-8 border-b" style={{ borderColor: 'var(--divider)' }} role="tablist">
+          {tabs.map(tab => (
+            <button
+              key={tab.id}
+              role="tab"
+              aria-selected={activeTab === tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={clsx(
+                'px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px',
+                activeTab === tab.id
+                  ? 'border-blue-600 text-blue-600 dark:text-blue-400'
+                  : 'border-transparent opacity-50 hover:opacity-100'
+              )}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Users Tab */}
+        {activeTab === 'users' && (
+          <div>
+            {/* Create user */}
+            <section className="mb-10">
+              <h2 className="text-[11px] uppercase tracking-[0.08em] opacity-50 mb-3">
+                {t('admin.users.create', 'Create User')}
+              </h2>
+              <div className="flex flex-wrap gap-2">
+                <input
+                  type="email"
+                  value={newUserEmail}
+                  onChange={e => setNewUserEmail(e.target.value)}
+                  placeholder={t('admin.users.emailPlaceholder', 'Email')}
+                  className={clsx(inputCls, 'flex-1 min-w-[180px]')}
+                />
+                <input
+                  type="text"
+                  value={newUserName}
+                  onChange={e => setNewUserName(e.target.value)}
+                  placeholder={t('admin.users.namePlaceholder', 'Display name')}
+                  className={clsx(inputCls, 'flex-1 min-w-[140px]')}
+                />
+                <select
+                  value={newUserRole}
+                  onChange={e => setNewUserRole(e.target.value)}
+                  className={inputCls}
+                  aria-label={t('admin.users.role', 'Role')}
+                >
+                  {ROLE_OPTIONS.map(r => <option key={r} value={r}>{r}</option>)}
+                </select>
+                <input
+                  type="text"
+                  value={newUserTenant}
+                  onChange={e => setNewUserTenant(e.target.value)}
+                  placeholder={t('admin.users.tenantPlaceholder', 'Tenant ID')}
+                  className={clsx(inputCls, 'w-32')}
+                />
+                <button
+                  onClick={handleCreateUser}
+                  disabled={!newUserEmail.trim() || creating}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {creating ? t('common.saving', 'Saving...') : t('common.create', 'Create')}
+                </button>
+              </div>
+            </section>
+
+            {/* User list — divider rows, no cards */}
+            <section>
+              <h2 className="text-[11px] uppercase tracking-[0.08em] opacity-50 mb-2">
+                {t('admin.users.list', 'Users')}
+              </h2>
+              {loading ? (
+                <p className="empty-state">{t('common.loading', 'Loading...')}</p>
+              ) : users.length === 0 ? (
+                <p className="empty-state">{t('admin.users.empty', 'No users found.')}</p>
+              ) : (
+                <div>
+                  {users.map(u => {
+                    const locked = u.locked_until && new Date(u.locked_until) > new Date()
+                    return (
+                      <div key={u.id} className="row-line" style={{ padding: '14px 0' }}>
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium truncate">
+                              {u.display_name}
+                              {currentUser?.email === u.email && (
+                                <span className="ml-2 text-xs font-normal opacity-50">
+                                  ({t('admin.users.you', 'you')})
+                                </span>
+                              )}
+                            </p>
+                            <p className="cell-data opacity-50 truncate">
+                              {u.email} • {u.tenant_id}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className={clsx('badge-status', ROLE_BADGE[u.role] ?? 'badge-muted')}>{u.role}</span>
+                            <span className={clsx('badge-status', locked ? 'badge-danger' : 'badge-success')}>
+                              {locked ? t('admin.users.locked', 'locked') : t('admin.users.active', 'active')}
+                            </span>
+                            {/* Role edit (admin scope) */}
+                            <select
+                              value={roleEdits[u.id] ?? u.role}
+                              onChange={e => setRoleEdits(prev => ({ ...prev, [u.id]: e.target.value }))}
+                              className={clsx(inputCls, 'py-1 text-xs')}
+                              aria-label={t('admin.users.editRole', 'Edit role')}
+                            >
+                              {ROLE_OPTIONS.map(r => <option key={r} value={r}>{r}</option>)}
+                            </select>
+                            <button
+                              onClick={() => handleSaveRole(u.id)}
+                              disabled={savingRoleFor === u.id || (roleEdits[u.id] ?? u.role) === u.role}
+                              className="px-2 py-1 text-xs font-medium text-blue-600 hover:text-blue-800 disabled:opacity-40"
+                            >
+                              {savingRoleFor === u.id ? t('common.saving', 'Saving...') : t('common.save', 'Save Changes')}
+                            </button>
+                            <button
+                              onClick={() => openActivity(u.id)}
+                              className="px-2 py-1 text-xs font-medium opacity-50 hover:opacity-100 transition-opacity"
+                            >
+                              {t('admin.users.viewActivity', 'Activity')}
+                            </button>
+                            <button
+                              onClick={() => handleDeleteUser(u.id)}
+                              className="px-2 py-1 text-xs font-medium text-[#dc2626] opacity-60 hover:opacity-100 transition-opacity"
+                            >
+                              {t('common.delete', 'Delete')}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </section>
+          </div>
+        )}
+
+        {/* Activity Tab */}
+        {activeTab === 'activity' && (
+          <section>
+            <div className="flex flex-wrap items-center gap-2 mb-4">
+              <h2 className="text-[11px] uppercase tracking-[0.08em] opacity-50">
+                {t('admin.activity.title', 'User Activity')}
+              </h2>
+              <select
+                value={activityUserId ?? ''}
+                onChange={e => { setActivityUserId(e.target.value); if (e.target.value) loadActivity(e.target.value) }}
+                className={clsx(inputCls, 'max-w-xs')}
+                aria-label={t('admin.activity.selectUser', 'Select user')}
+              >
+                <option value="">{t('admin.activity.selectUser', 'Select user')}</option>
+                {users.map(u => <option key={u.id} value={u.id}>{u.display_name} ({u.email})</option>)}
+              </select>
+            </div>
+            {loadingActivity ? (
+              <p className="empty-state">{t('common.loading', 'Loading...')}</p>
+            ) : !activityUserId ? (
+              <p className="empty-state">{t('admin.activity.selectFirst', 'Select a user to view activity.')}</p>
+            ) : !activity || activity.items.length === 0 ? (
+              <p className="empty-state">
+                {t('admin.activity.empty', 'No activity recorded')}
+                {activityUser ? ` — ${activityUser.display_name}` : ''}
               </p>
             ) : (
-              <div className="space-y-2">
-                {users.map(u => {
-                  const locked = u.locked_until && new Date(u.locked_until) > new Date()
-                  return (
-                    <div
-                      key={u.id}
-                      className={clsx(
-                        'flex flex-wrap items-center justify-between gap-2 p-3 rounded-lg border',
-                        isDark ? 'border-slate-700' : 'border-slate-200'
-                      )}
-                    >
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium truncate">
-                          {u.display_name}
-                          {currentUser?.email === u.email && (
-                            <span className={clsx('ml-2 text-xs font-normal', isDark ? 'text-slate-500' : 'text-slate-400')}>
-                              ({t('admin.users.you', 'you')})
-                            </span>
-                          )}
-                        </p>
-                        <p className={clsx('text-xs truncate', isDark ? 'text-slate-500' : 'text-slate-400')}>
-                          {u.email} • {u.tenant_id}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className={roleBadgeCls(u.role)}>{u.role}</span>
-                        <span className={clsx(
-                          'px-2 py-0.5 rounded-full text-xs font-medium',
-                          locked
-                            ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
-                            : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
-                        )}>
-                          {locked ? t('admin.users.locked', 'locked') : t('admin.users.active', 'active')}
-                        </span>
-                        {/* Role edit (admin scope) */}
-                        <select
-                          value={roleEdits[u.id] ?? u.role}
-                          onChange={e => setRoleEdits(prev => ({ ...prev, [u.id]: e.target.value }))}
-                          className={clsx(inputCls, 'py-1 text-xs')}
-                          aria-label={t('admin.users.editRole', 'Edit role')}
-                        >
-                          {ROLE_OPTIONS.map(r => <option key={r} value={r}>{r}</option>)}
-                        </select>
-                        <button
-                          onClick={() => handleSaveRole(u.id)}
-                          disabled={savingRoleFor === u.id || (roleEdits[u.id] ?? u.role) === u.role}
-                          className="px-2 py-1 text-xs font-medium text-blue-600 hover:text-blue-800 disabled:opacity-40"
-                        >
-                          {savingRoleFor === u.id ? t('common.saving', 'Saving...') : t('common.save', 'Save Changes')}
-                        </button>
-                        <button
-                          onClick={() => openActivity(u.id)}
-                          className="px-2 py-1 text-xs font-medium text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
-                        >
-                          {t('admin.users.viewActivity', 'Activity')}
-                        </button>
-                        <button
-                          onClick={() => handleDeleteUser(u.id)}
-                          className="px-2 py-1 text-xs font-medium text-red-500 hover:text-red-700"
-                        >
-                          {t('common.delete', 'Delete')}
-                        </button>
-                      </div>
+              <div>
+                {activity.items.map((item, i) => (
+                  <div key={String(item.id ?? i)} className="row-line">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-sm font-medium">{String(item.action ?? item.event ?? item.type ?? 'event')}</p>
+                      <p className="cell-data opacity-50">
+                        {item.created_at || item.timestamp ? new Date(String(item.created_at ?? item.timestamp)).toLocaleString() : '—'}
+                      </p>
                     </div>
-                  )
-                })}
+                    {(item.resource_type || item.resource_id || item.details) && (
+                      <p className="cell-data opacity-50 mt-1 break-all">
+                        {[item.resource_type, item.resource_id].filter(Boolean).join(' / ')}
+                        {item.details ? ` — ${typeof item.details === 'string' ? item.details : JSON.stringify(item.details)}` : ''}
+                      </p>
+                    )}
+                  </div>
+                ))}
               </div>
             )}
-          </div>
-        </div>
-      )}
-
-      {/* Activity Tab */}
-      {activeTab === 'activity' && (
-        <div className={cardCls}>
-          <div className="flex flex-wrap items-center gap-2 mb-4">
-            <h2 className="text-sm font-semibold">{t('admin.activity.title', 'User Activity')}</h2>
-            <select
-              value={activityUserId ?? ''}
-              onChange={e => { setActivityUserId(e.target.value); if (e.target.value) loadActivity(e.target.value) }}
-              className={clsx(inputCls, 'max-w-xs')}
-              aria-label={t('admin.activity.selectUser', 'Select user')}
-            >
-              <option value="">{t('admin.activity.selectUser', 'Select user')}</option>
-              {users.map(u => <option key={u.id} value={u.id}>{u.display_name} ({u.email})</option>)}
-            </select>
-          </div>
-          {loadingActivity ? (
-            <p className={clsx('text-sm py-6 text-center', isDark ? 'text-slate-500' : 'text-slate-400')}>
-              {t('common.loading', 'Loading...')}
-            </p>
-          ) : !activityUserId ? (
-            <p className={clsx('text-sm py-6 text-center', isDark ? 'text-slate-500' : 'text-slate-400')}>
-              {t('admin.activity.selectFirst', 'Select a user to view activity.')}
-            </p>
-          ) : !activity || activity.items.length === 0 ? (
-            <p className={clsx('text-sm py-6 text-center', isDark ? 'text-slate-500' : 'text-slate-400')}>
-              {t('admin.activity.empty', 'No activity recorded')}
-              {activityUser ? ` — ${activityUser.display_name}` : ''}
-            </p>
-          ) : (
-            <div className="space-y-2">
-              {activity.items.map((item, i) => (
-                <div key={String(item.id ?? i)} className={clsx('p-3 rounded-lg', isDark ? 'bg-slate-800' : 'bg-slate-50')}>
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-sm font-medium">{String(item.action ?? item.event ?? item.type ?? 'event')}</p>
-                    <p className={clsx('text-xs', isDark ? 'text-slate-500' : 'text-slate-400')}>
-                      {item.created_at || item.timestamp ? new Date(String(item.created_at ?? item.timestamp)).toLocaleString() : '—'}
-                    </p>
-                  </div>
-                  {(item.resource_type || item.resource_id || item.details) && (
-                    <p className={clsx('text-xs mt-1 break-all', isDark ? 'text-slate-500' : 'text-slate-400')}>
-                      {[item.resource_type, item.resource_id].filter(Boolean).join(' / ')}
-                      {item.details ? ` — ${typeof item.details === 'string' ? item.details : JSON.stringify(item.details)}` : ''}
-                    </p>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+          </section>
+        )}
+      </div>
     </div>
   )
 }

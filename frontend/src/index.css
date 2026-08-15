@@ -666,3 +666,173 @@ tbody tr:hover {
 .dark .placeholder-slate-400::placeholder {
   color: rgba(229, 229, 229, 0.35);
 }
+
+/* ============================================
+   Console sub-app (/console/*) design alignment
+   Scoped utility remapping onto the shared token
+   set (--bg/--fg/--divider/--accent). Pages keep
+   their Tailwind classes; under .console-root the
+   hard-coded gray/slate palette, card chrome and
+   gradients converge onto the admin spec
+   (hairline dividers, flat surfaces, mono data).
+   Dark mode is inherited automatically via vars.
+   ============================================ */
+
+/* Surfaces: white cards → token surface; gray washes → hover tint */
+.console-root .bg-white {
+  background-color: var(--surface);
+}
+
+/* 根元素自身的底色类（后代选择器盖不住根） */
+.console-root.bg-slate-100,
+.console-root.bg-gray-100,
+.console-root.bg-white,
+.console-root {
+  background-color: var(--bg);
+}
+
+.console-root .bg-slate-100,
+.console-root .bg-gray-100 {
+  background-color: var(--bg);
+}
+
+.console-root .bg-gray-50 {
+  background-color: var(--surface);
+}
+
+.console-root .hover\:bg-gray-50:hover,
+.console-root .hover\:bg-gray-100:hover {
+  background-color: var(--hover);
+}
+
+/* Selected state washes → accent tint */
+.console-root .bg-blue-50 {
+  background-color: rgba(37, 99, 235, 0.08);
+}
+
+.dark .console-root .bg-blue-50 {
+  background-color: rgba(37, 99, 235, 0.16);
+}
+
+/* Status pill backgrounds → transparent (badge-status carries color) */
+.console-root .bg-blue-100,
+.console-root .bg-green-100,
+.console-root .bg-yellow-100,
+.console-root .bg-red-100 {
+  background-color: transparent;
+}
+
+/* Borders: every hairline converges on --divider */
+.console-root .border,
+.console-root .border-b,
+.console-root .border-t,
+.console-root .border-r,
+.console-root .border-l {
+  border-color: var(--divider);
+}
+
+.console-root .border-blue-500 {
+  border-color: var(--accent);
+}
+
+/* Card chrome removal: no shadows, tighter radius */
+.console-root .shadow-sm,
+.console-root .shadow,
+.console-root .shadow-md {
+  box-shadow: none;
+}
+
+.console-root .rounded-2xl {
+  border-radius: 6px;
+}
+
+.console-root .rounded-xl {
+  border-radius: 4px;
+}
+
+/* Type color: gray/slate ramp → --fg with stepped opacity */
+.console-root .text-gray-900,
+.console-root .text-gray-800,
+.console-root .text-slate-900 {
+  color: var(--fg);
+}
+
+.console-root .text-gray-700,
+.console-root .text-gray-600 {
+  color: color-mix(in srgb, var(--fg) 72%, transparent);
+}
+
+.console-root .text-gray-500,
+.console-root .text-slate-500 {
+  color: color-mix(in srgb, var(--fg) 50%, transparent);
+}
+
+.console-root .text-gray-400,
+.console-root .text-slate-400 {
+  color: color-mix(in srgb, var(--fg) 38%, transparent);
+}
+
+/* Gradients banned: strip image, fall back to flat token surfaces */
+.console-root .bg-gradient-to-r,
+.console-root .bg-gradient-to-br,
+.console-root .bg-gradient-to-b {
+  background-image: none;
+}
+
+.console-root .from-blue-500 {
+  background-color: var(--accent);
+}
+
+.console-root .from-gray-200 {
+  background-color: var(--surface-raised);
+}
+
+.console-root .from-slate-900 {
+  background-color: var(--surface);
+  color: var(--fg);
+}
+
+/* Console page header: unboxed, editorial, divider-separated */
+.console-page-header {
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--divider);
+}
+
+.console-page-header .console-resource-id {
+  font-family: ui-monospace, 'Fira Code', SFMono-Regular, Menlo, Consolas,
+    monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  opacity: 0.5;
+  margin-top: 4px;
+}
+
+.console-page-header .console-summary-line {
+  font-size: 12px;
+  opacity: 0.5;
+  margin-top: 4px;
+}
+
+/* Console nav: plain text rows, hairline separators, no button boxes */
+.console-nav {
+  display: flex;
+  flex-direction: column;
+}
+
+.console-nav button {
+  display: block;
+  width: 100%;
+  padding: 7px 4px;
+  border: none;
+  border-bottom: 1px solid var(--divider);
+  background: transparent;
+  font-size: 13px;
+  text-align: left;
+  color: var(--fg);
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.console-nav button:hover {
+  background-color: var(--hover);
+}

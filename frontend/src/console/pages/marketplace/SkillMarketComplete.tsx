@@ -57,7 +57,7 @@ function mapSkillRecord(record: {
     is_installed: false,
     is_favorite: false,
     description_zh: record.description ?? '',
-    icon_emoji: '🧩',
+    icon_emoji: '',
     keywords: tags,
     tags,
     what_is_it: record.description ?? '',
@@ -105,7 +105,7 @@ export const SkillMarketComplete: React.FC = () => {
     setCategories([...counts.entries()].map(([id, count]) => ({
       id,
       name_zh: id,
-      icon: '🏷️',
+      icon: '',
       skill_count: count,
     })));
   };

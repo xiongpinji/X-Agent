@@ -14,17 +14,11 @@ import {
 } from '@/services/complianceOps'
 import { useI18n } from '@/i18n/context'
 import {
-  ShieldCheck,
   RefreshCw,
-  Download,
   Trash2,
   FileJson,
   ScanSearch,
   EyeOff,
-  Globe2,
-  ClipboardCheck,
-  AlertTriangle,
-  GitPullRequest,
   ChevronDown,
   ChevronUp,
 } from 'lucide-react'
@@ -48,21 +42,25 @@ const INCIDENT_CATEGORIES = [
 ]
 const INCIDENT_SEVERITIES = ['critical', 'high', 'medium', 'low']
 
-const RISK_STYLES: Record<string, string> = {
-  low: 'bg-green-500/10 text-green-600 dark:text-green-400',
-  medium: 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400',
-  high: 'bg-orange-500/10 text-orange-600 dark:text-orange-400',
-  critical: 'bg-red-500/10 text-red-600 dark:text-red-400',
+const DIVIDER = 'var(--divider)'
+
+const RISK_BADGE: Record<string, string> = {
+  low: 'badge-success',
+  medium: 'badge-warning',
+  high: 'badge-danger',
+  critical: 'badge-danger',
 }
 
-const STATUS_STYLES: Record<string, string> = {
-  implemented: 'bg-green-500/10 text-green-600 dark:text-green-400',
-  partial: 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400',
-  planned: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
-  approved: 'bg-green-500/10 text-green-600 dark:text-green-400',
-  pending: 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400',
-  rejected: 'bg-red-500/10 text-red-600 dark:text-red-400',
+const STATUS_BADGE: Record<string, string> = {
+  implemented: 'badge-success',
+  partial: 'badge-warning',
+  planned: 'badge-muted',
+  approved: 'badge-success',
+  pending: 'badge-warning',
+  rejected: 'badge-danger',
 }
+
+const badgeOf = (map: Record<string, string>, key: string) => map[key] ?? 'badge-muted'
 
 export const GdprCompliancePage: React.FC = () => {
   const { theme, setError } = useAppStore()
@@ -79,32 +77,38 @@ export const GdprCompliancePage: React.FC = () => {
     [setError],
   )
 
-  const tabs: Array<{ key: TabKey; label: string; icon: React.ReactNode }> = [
-    { key: 'rights', label: t('compliance.tab.rights', 'Data Rights'), icon: <ShieldCheck size={16} /> },
-    { key: 'pii', label: t('compliance.tab.pii', 'PII Governance'), icon: <ScanSearch size={16} /> },
-    { key: 'residency', label: t('compliance.tab.residency', 'Data Residency'), icon: <Globe2 size={16} /> },
-    { key: 'soc2', label: t('compliance.tab.soc2', 'SOC2 Compliance'), icon: <ClipboardCheck size={16} /> },
+  const tabs: Array<{ key: TabKey; label: string }> = [
+    { key: 'rights', label: t('compliance.tab.rights', 'Data Rights') },
+    { key: 'pii', label: t('compliance.tab.pii', 'PII Governance') },
+    { key: 'residency', label: t('compliance.tab.residency', 'Data Residency') },
+    { key: 'soc2', label: t('compliance.tab.soc2', 'SOC2 Compliance') },
   ]
 
   return (
-    <div className={clsx('p-8 min-h-full', theme === 'dark' ? 'bg-slate-950' : 'bg-slate-50')}>
-      <div className="max-w-6xl mx-auto">
-        <div className="mb-8">
-          <h1 className={clsx('text-3xl font-bold mb-2', theme === 'dark' ? 'text-white' : 'text-slate-900')}>
-            {t('compliance.title', 'GDPR & SOC2 Compliance')}
-          </h1>
-          <p className={clsx('text-sm', theme === 'dark' ? 'text-slate-400' : 'text-slate-600')}>
+    <div className={clsx(
+      'min-h-full px-8 py-10',
+      theme === 'dark' ? 'bg-slate-950 text-slate-200' : 'bg-[#fafafa] text-[#333333]'
+    )}>
+      <div className="max-w-6xl">
+        {/* Header — Dashboard-style */}
+        <header className="mb-8">
+          <div
+            className={clsx(
+              'w-12 border-t-2 mb-5',
+              theme === 'dark' ? 'border-slate-200' : 'border-[#333333]'
+            )}
+            aria-hidden="true"
+          />
+          <h1 className="page-title">{t('compliance.title', 'GDPR & SOC2 Compliance')}</h1>
+          <p className="page-subtitle">
             {t('compliance.subtitle', 'Data subject rights (Art.17/20), PII governance, data residency and SOC2 trust criteria')}
           </p>
-        </div>
+        </header>
 
         {pageError && (
           <div
             role="alert"
-            className={clsx(
-              'mb-6 rounded-lg border px-4 py-3 text-sm flex items-start justify-between gap-4',
-              theme === 'dark' ? 'border-red-900 bg-red-950/40 text-red-300' : 'border-red-200 bg-red-50 text-red-700',
-            )}
+            className="mb-6 rounded-lg border border-[#dc2626]/30 px-4 py-3 text-sm text-[#dc2626] flex items-start justify-between gap-4"
           >
             <span>{pageError}</span>
             <button onClick={() => setPageError(null)} className="text-xs underline shrink-0" aria-label={t('common.dismiss', 'Dismiss')}>
@@ -113,8 +117,8 @@ export const GdprCompliancePage: React.FC = () => {
           </div>
         )}
 
-        {/* Tab bar */}
-        <div className={clsx('flex gap-1 mb-6 border-b', theme === 'dark' ? 'border-slate-800' : 'border-slate-200')} role="tablist">
+        {/* Tab bar — underline style */}
+        <div className="flex gap-1 mb-8 border-b" style={{ borderColor: DIVIDER }} role="tablist">
           {tabs.map((tab) => (
             <button
               key={tab.key}
@@ -122,17 +126,12 @@ export const GdprCompliancePage: React.FC = () => {
               aria-selected={activeTab === tab.key}
               onClick={() => setActiveTab(tab.key)}
               className={clsx(
-                'flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-t-lg border-b-2 -mb-px transition-colors',
+                'px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors',
                 activeTab === tab.key
-                  ? theme === 'dark'
-                    ? 'border-blue-500 text-blue-400 bg-slate-900'
-                    : 'border-blue-600 text-blue-700 bg-white'
-                  : theme === 'dark'
-                    ? 'border-transparent text-slate-400 hover:text-slate-200'
-                    : 'border-transparent text-slate-500 hover:text-slate-800',
+                  ? 'border-blue-600 text-blue-600 dark:text-blue-400'
+                  : 'border-transparent opacity-50 hover:opacity-100',
               )}
             >
-              {tab.icon}
               {tab.label}
             </button>
           ))}
@@ -149,18 +148,17 @@ export const GdprCompliancePage: React.FC = () => {
 
 type ErrorReporter = (error: unknown, fallback: string) => void
 
-// ─── 共享小组件 ──────────────────────────────────────────────────────────────
+// ─── 共享样式 ────────────────────────────────────────────────────────────────
 
 const useStyles = () => {
   const { theme } = useAppStore()
-  const card = clsx('rounded-lg border p-4', theme === 'dark' ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200')
   const input = clsx(
     'px-3 py-2 rounded-lg text-sm border outline-none w-full',
     theme === 'dark'
-      ? 'bg-slate-950 border-slate-700 text-white placeholder-slate-500'
+      ? 'bg-slate-800 border-slate-600 text-white placeholder-slate-500'
       : 'bg-white border-slate-300 text-slate-900 placeholder-slate-400',
   )
-  const label = clsx('block text-xs mb-1', theme === 'dark' ? 'text-slate-400' : 'text-slate-500')
+  const label = 'block text-[11px] uppercase tracking-[0.06em] opacity-50 mb-1'
   const primaryBtn = clsx(
     'flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-50',
   )
@@ -169,11 +167,10 @@ const useStyles = () => {
     theme === 'dark' ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100',
   )
   const dangerBtn = clsx(
-    'flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-red-600 text-white hover:bg-red-700 transition-colors disabled:opacity-50',
+    'flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium border border-[#dc2626]/40 text-[#dc2626] hover:bg-[#dc2626]/5 transition-colors disabled:opacity-50',
   )
-  const muted = clsx('text-sm', theme === 'dark' ? 'text-slate-400' : 'text-slate-600')
-  const heading = clsx('text-base font-semibold mb-3', theme === 'dark' ? 'text-white' : 'text-slate-900')
-  return { theme, card, input, label, primaryBtn, ghostBtn, dangerBtn, muted, heading }
+  const sectionTitle = 'text-[11px] uppercase tracking-[0.08em] opacity-50 mb-2'
+  return { theme, input, label, primaryBtn, ghostBtn, dangerBtn, sectionTitle }
 }
 
 // ─── Tab 1: 数据权利 ─────────────────────────────────────────────────────────
@@ -238,10 +235,10 @@ const DataRightsTab: React.FC<{ reportError: ErrorReporter }> = ({ reportError }
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-10">
       {/* 删除权 / 导出权 */}
-      <div className={s.card}>
-        <h2 className={s.heading}>
+      <section>
+        <h2 className={s.sectionTitle}>
           {t('compliance.rights.title', 'Data Subject Rights')}
         </h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
@@ -256,12 +253,12 @@ const DataRightsTab: React.FC<{ reportError: ErrorReporter }> = ({ reportError }
         </div>
 
         {/* Art.17 删除权 — 二次确认 */}
-        <div className={clsx('rounded-lg border p-3 mb-4', s.theme === 'dark' ? 'border-red-900/60 bg-red-950/20' : 'border-red-200 bg-red-50/60')}>
-          <div className={clsx('text-sm font-medium mb-2 flex items-center gap-1.5', s.theme === 'dark' ? 'text-red-300' : 'text-red-700')}>
+        <div className="rounded-lg border border-[#dc2626]/30 p-3 mb-4">
+          <div className="text-sm font-medium mb-2 flex items-center gap-1.5 text-[#dc2626]">
             <Trash2 size={14} />
             {t('compliance.rights.erase', 'Right to Erasure (Art. 17)')}
           </div>
-          <p className={clsx('text-xs mb-2', s.theme === 'dark' ? 'text-red-300/70' : 'text-red-600/80')}>
+          <p className="text-xs mb-2 text-[#dc2626]/80">
             {t('compliance.rights.eraseHint', 'Irreversible. Type the user ID again to confirm deletion of all data.')}
           </p>
           <div className="flex flex-wrap gap-2">
@@ -290,21 +287,21 @@ const DataRightsTab: React.FC<{ reportError: ErrorReporter }> = ({ reportError }
             className={clsx(
               'rounded-lg border px-4 py-3 text-sm',
               eraseResult.success
-                ? s.theme === 'dark' ? 'border-green-900 bg-green-950/40 text-green-300' : 'border-green-200 bg-green-50 text-green-700'
-                : s.theme === 'dark' ? 'border-orange-900 bg-orange-950/40 text-orange-300' : 'border-orange-200 bg-orange-50 text-orange-700',
+                ? 'border-[#16a34a]/30 text-[#16a34a]'
+                : 'border-[#d97706]/30 text-[#d97706]',
             )}
           >
             <div className="font-medium mb-1">
               {eraseResult.success
                 ? t('compliance.rights.eraseOk', 'Erasure completed')
                 : t('compliance.rights.erasePartial', 'Erasure completed with errors')}
-              {' · '}{t('compliance.rights.totalDeleted', 'Total deleted')}: {eraseResult.total_deleted}
+              {' · '}{t('compliance.rights.totalDeleted', 'Total deleted')}: <span className="cell-data">{eraseResult.total_deleted}</span>
             </div>
-            <div className="text-xs break-all">request_id: {eraseResult.request_id} · {eraseResult.completed_at}</div>
+            <div className="cell-data break-all opacity-80">request_id: {eraseResult.request_id} · {eraseResult.completed_at}</div>
             {Object.keys(eraseResult.deleted_counts).length > 0 && (
               <div className="flex flex-wrap gap-1.5 mt-2">
                 {Object.entries(eraseResult.deleted_counts).map(([store, count]) => (
-                  <span key={store} className="px-2 py-0.5 rounded-full text-xs bg-black/10 dark:bg-white/10">
+                  <span key={store} className="badge-status badge-muted">
                     {store}: {count}
                   </span>
                 ))}
@@ -317,27 +314,27 @@ const DataRightsTab: React.FC<{ reportError: ErrorReporter }> = ({ reportError }
             )}
           </div>
         )}
-      </div>
+      </section>
 
       {/* 删除记录列表 */}
-      <div className={s.card}>
-        <div className="flex items-center justify-between mb-3">
-          <h2 className={clsx(s.heading, 'mb-0')}>{t('compliance.rights.deletions', 'Deletion Records')}</h2>
+      <section>
+        <div className="flex items-center justify-between mb-2">
+          <h2 className={clsx(s.sectionTitle, 'mb-0')}>{t('compliance.rights.deletions', 'Deletion Records')}</h2>
           <button onClick={loadDeletions} disabled={listLoading} className={s.ghostBtn} aria-label={t('common.refresh', 'Refresh')}>
             <RefreshCw size={16} className={listLoading ? 'animate-spin' : ''} />
           </button>
         </div>
         {deletions.length === 0 && !listLoading ? (
-          <p className={s.muted}>{t('compliance.rights.noDeletions', 'No deletion requests recorded')}</p>
+          <p className="empty-state">{t('compliance.rights.noDeletions', 'No deletion requests recorded')}</p>
         ) : (
-          <div className="space-y-2">
+          <div>
             {deletions.map((d) => (
-              <div key={d.request_id} className={clsx('flex items-center gap-3 rounded-lg border px-3 py-2 text-sm', s.theme === 'dark' ? 'border-slate-800' : 'border-slate-200')}>
-                <span className={clsx('px-2 py-0.5 rounded-full text-xs font-medium shrink-0', d.success ? STATUS_STYLES.approved : STATUS_STYLES.rejected)}>
+              <div key={d.request_id} className="row-line flex items-center gap-3">
+                <span className={clsx('badge-status shrink-0', d.success ? 'badge-success' : 'badge-danger')}>
                   {d.success ? 'success' : 'failed'}
                 </span>
-                <span className={clsx('font-medium truncate', s.theme === 'dark' ? 'text-white' : 'text-slate-900')}>{d.user_id}</span>
-                <span className={clsx('text-xs flex-1 truncate', s.theme === 'dark' ? 'text-slate-500' : 'text-slate-400')}>
+                <span className="font-medium truncate text-sm">{d.user_id}</span>
+                <span className="cell-data opacity-50 flex-1 truncate">
                   {t('compliance.rights.totalDeleted', 'Total deleted')}: {d.total_deleted} · {new Date(d.completed_at).toLocaleString()}
                 </span>
                 <button
@@ -358,11 +355,11 @@ const DataRightsTab: React.FC<{ reportError: ErrorReporter }> = ({ reportError }
           </div>
         )}
         {proof && (
-          <pre className={clsx('mt-3 rounded-md p-3 text-xs overflow-auto max-h-64', s.theme === 'dark' ? 'bg-slate-950 text-slate-300 border border-slate-800' : 'bg-slate-50 text-slate-700 border border-slate-200')}>
+          <pre className="mt-3 cell-data opacity-70 overflow-auto max-h-64 whitespace-pre-wrap break-all">
             {JSON.stringify(proof, null, 2)}
           </pre>
         )}
-      </div>
+      </section>
     </div>
   )
 }
@@ -419,9 +416,9 @@ const PiiTab: React.FC<{ reportError: ErrorReporter }> = ({ reportError }) => {
   }, [scanResult, text])
 
   return (
-    <div className="space-y-6">
-      <div className={s.card}>
-        <h2 className={s.heading}>{t('compliance.pii.title', 'PII Scan & Masking')}</h2>
+    <div className="space-y-10">
+      <section>
+        <h2 className={s.sectionTitle}>{t('compliance.pii.title', 'PII Scan & Masking')}</h2>
         <label className={s.label}>{t('compliance.pii.input', 'Text to inspect')}</label>
         <textarea
           className={clsx(s.input, 'min-h-[120px] font-mono')}
@@ -446,19 +443,22 @@ const PiiTab: React.FC<{ reportError: ErrorReporter }> = ({ reportError }) => {
             {maskBusy ? t('common.loading', 'Loading...') : t('compliance.pii.maskPreview', 'Mask preview')}
           </button>
         </div>
-      </div>
+      </section>
 
       {/* 扫描结果 */}
       {scanResult && (
-        <div className={s.card}>
+        <section>
           <div className="flex items-center gap-2 mb-3">
-            <span className={clsx('px-2 py-0.5 rounded-full text-xs font-medium', scanResult.has_pii ? STATUS_STYLES.rejected : STATUS_STYLES.approved)}>
+            <span className={clsx('badge-status', scanResult.has_pii ? 'badge-danger' : 'badge-success')}>
               {scanResult.has_pii ? t('compliance.pii.found', 'PII detected') : t('compliance.pii.clean', 'No PII')}
             </span>
-            <span className={s.muted}>{t('compliance.pii.count', 'Matches')}: {scanResult.pii_count}</span>
+            <span className="cell-data opacity-60">{t('compliance.pii.count', 'Matches')}: {scanResult.pii_count}</span>
           </div>
           {highlighted && (
-            <div className={clsx('rounded-md p-3 text-sm font-mono whitespace-pre-wrap break-all mb-3', s.theme === 'dark' ? 'bg-slate-950 border border-slate-800 text-slate-300' : 'bg-slate-50 border border-slate-200 text-slate-700')}>
+            <div
+              className="rounded-lg p-3 text-sm font-mono whitespace-pre-wrap break-all mb-3 border"
+              style={{ borderColor: DIVIDER }}
+            >
               {highlighted.map((part, i) =>
                 part.hit ? (
                   <mark key={i} title={part.type} className="bg-yellow-300/70 dark:bg-yellow-500/40 text-inherit rounded px-0.5">
@@ -471,31 +471,31 @@ const PiiTab: React.FC<{ reportError: ErrorReporter }> = ({ reportError }) => {
             </div>
           )}
           {scanResult.matches.length > 0 && (
-            <div className="space-y-1.5">
+            <div>
               {scanResult.matches.map((m, i) => (
-                <div key={i} className={clsx('flex items-center gap-3 text-xs rounded-md border px-3 py-1.5', s.theme === 'dark' ? 'border-slate-800' : 'border-slate-200')}>
-                  <span className="px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 font-medium shrink-0">{m.type}</span>
-                  <span className={clsx('truncate flex-1 font-mono', s.theme === 'dark' ? 'text-slate-300' : 'text-slate-700')}>{m.value}</span>
-                  <span className={clsx('shrink-0', s.theme === 'dark' ? 'text-slate-500' : 'text-slate-400')}>
+                <div key={i} className="row-line flex items-center gap-3 text-xs">
+                  <span className="badge-status badge-muted shrink-0">{m.type}</span>
+                  <span className="truncate flex-1 font-mono">{m.value}</span>
+                  <span className="cell-data opacity-50 shrink-0">
                     [{m.start}, {m.end}) · {(m.confidence * 100).toFixed(0)}%
                   </span>
                 </div>
               ))}
             </div>
           )}
-        </div>
+        </section>
       )}
 
       {/* 脱敏预览 */}
       {maskResult && (
-        <div className={s.card}>
-          <h3 className={clsx('text-sm font-semibold mb-2', s.theme === 'dark' ? 'text-white' : 'text-slate-900')}>
+        <section>
+          <h3 className={s.sectionTitle}>
             {t('compliance.pii.maskResult', 'Masked output')} · {strategy} · {t('compliance.pii.count', 'Matches')}: {maskResult.pii_count} · {t('compliance.pii.origLen', 'Original length')}: {maskResult.original_length}
           </h3>
-          <pre className={clsx('rounded-md p-3 text-sm whitespace-pre-wrap break-all', s.theme === 'dark' ? 'bg-slate-950 text-green-300 border border-slate-800' : 'bg-slate-50 text-green-700 border border-slate-200')}>
+          <pre className="rounded-lg p-3 text-sm whitespace-pre-wrap break-all border border-[#16a34a]/30 text-[#16a34a]">
             {maskResult.masked_text}
           </pre>
-        </div>
+        </section>
       )}
     </div>
   )
@@ -556,36 +556,36 @@ const ResidencyTab: React.FC<{ reportError: ErrorReporter }> = ({ reportError })
   const ruleEntries = Object.entries(config?.rules ?? {})
 
   return (
-    <div className="space-y-6">
-      <div className={s.card}>
-        <div className="flex items-center justify-between mb-3">
-          <h2 className={clsx(s.heading, 'mb-0')}>{t('compliance.residency.config', 'Residency Configuration')}</h2>
+    <div className="space-y-10">
+      <section>
+        <div className="flex items-center justify-between mb-2">
+          <h2 className={clsx(s.sectionTitle, 'mb-0')}>{t('compliance.residency.config', 'Residency Configuration')}</h2>
           <button onClick={load} disabled={loading} className={s.ghostBtn} aria-label={t('common.refresh', 'Refresh')}>
             <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
           </button>
         </div>
         <div className="flex flex-wrap gap-4 text-sm mb-4">
-          <span className={s.muted}>
+          <span className="opacity-60">
             {t('compliance.residency.enabled', 'Enabled')}:{' '}
-            <span className={clsx('px-2 py-0.5 rounded-full text-xs font-medium', config?.enabled ? STATUS_STYLES.approved : STATUS_STYLES.pending)}>
+            <span className={clsx('badge-status', config?.enabled ? 'badge-success' : 'badge-warning')}>
               {config ? String(config.enabled) : '—'}
             </span>
           </span>
-          <span className={s.muted}>{t('compliance.residency.defaultRegion', 'Default region')}: <strong>{config?.default_region ?? '—'}</strong></span>
+          <span className="opacity-60">{t('compliance.residency.defaultRegion', 'Default region')}: <span className="cell-data">{config?.default_region ?? '—'}</span></span>
         </div>
         {ruleEntries.length === 0 ? (
-          <p className={s.muted}>{t('compliance.residency.noRules', 'No tenant-specific rules')}</p>
+          <p className="empty-state">{t('compliance.residency.noRules', 'No tenant-specific rules')}</p>
         ) : (
-          <div className="space-y-2">
+          <div>
             {ruleEntries.map(([tid, rule]) => (
-              <div key={tid} className={clsx('flex flex-wrap items-center gap-3 rounded-lg border px-3 py-2 text-sm', s.theme === 'dark' ? 'border-slate-800' : 'border-slate-200')}>
-                <span className={clsx('font-medium', s.theme === 'dark' ? 'text-white' : 'text-slate-900')}>{tid}</span>
-                <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-500/10 text-blue-600 dark:text-blue-400">{rule.region}</span>
-                <span className={clsx('text-xs', s.theme === 'dark' ? 'text-slate-500' : 'text-slate-400')}>
+              <div key={tid} className="row-line flex flex-wrap items-center gap-3">
+                <span className="font-medium text-sm">{tid}</span>
+                <span className="badge-status badge-muted">{rule.region}</span>
+                <span className="cell-data opacity-50">
                   {t('compliance.residency.allowed', 'Allowed')}: {rule.allowed_regions.length > 0 ? rule.allowed_regions.join(', ') : '—'}
                 </span>
                 {rule.block_cross_border && (
-                  <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-orange-500/10 text-orange-600 dark:text-orange-400">
+                  <span className="badge-status badge-warning">
                     {t('compliance.residency.blockCross', 'Cross-border blocked')}
                   </span>
                 )}
@@ -593,11 +593,11 @@ const ResidencyTab: React.FC<{ reportError: ErrorReporter }> = ({ reportError })
             ))}
           </div>
         )}
-      </div>
+      </section>
 
       {/* 设置规则 */}
-      <div className={s.card}>
-        <h2 className={s.heading}>{t('compliance.residency.setRule', 'Set Tenant Rule')}</h2>
+      <section>
+        <h2 className={s.sectionTitle}>{t('compliance.residency.setRule', 'Set Tenant Rule')}</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
           <div>
             <label className={s.label}>{t('compliance.rights.tenantId', 'Tenant ID')}</label>
@@ -622,25 +622,26 @@ const ResidencyTab: React.FC<{ reportError: ErrorReporter }> = ({ reportError })
                   'px-3 py-1 rounded-full text-xs font-medium border transition-colors',
                   allowed.includes(r)
                     ? 'bg-blue-600 text-white border-blue-600'
-                    : s.theme === 'dark' ? 'border-slate-700 text-slate-400 hover:border-slate-500' : 'border-slate-300 text-slate-600 hover:border-slate-400',
+                    : 'opacity-60 hover:opacity-100',
                 )}
+                style={allowed.includes(r) ? undefined : { borderColor: 'rgba(163,169,177,.4)' }}
               >
                 {r}
               </button>
             ))}
           </div>
         </div>
-        <label className={clsx('flex items-center gap-2 text-sm mb-4 cursor-pointer', s.theme === 'dark' ? 'text-slate-300' : 'text-slate-700')}>
-          <input type="checkbox" checked={blockCrossBorder} onChange={(e) => setBlockCrossBorder(e.target.checked)} className="rounded" />
+        <label className="flex items-center gap-2 text-sm mb-4 cursor-pointer">
+          <input type="checkbox" checked={blockCrossBorder} onChange={(e) => setBlockCrossBorder(e.target.checked)} className="rounded accent-blue-600" />
           {t('compliance.residency.blockCross', 'Block cross-border transfer')}
         </label>
         <div className="flex items-center gap-3">
           <button onClick={handleSave} disabled={!tenantId.trim() || saveBusy} className={s.primaryBtn} aria-label={t('common.save', 'Save')}>
             {saveBusy ? t('common.loading', 'Loading...') : t('common.save', 'Save rule')}
           </button>
-          {savedMsg && <span className={clsx('text-xs', s.theme === 'dark' ? 'text-green-400' : 'text-green-600')}>{savedMsg}</span>}
+          {savedMsg && <span className="text-xs text-[#16a34a] cell-data">{savedMsg}</span>}
         </div>
-      </div>
+      </section>
     </div>
   )
 }
@@ -724,7 +725,7 @@ const Soc2Tab: React.FC<{ reportError: ErrorReporter }> = ({ reportError }) => {
   const score = matrix ? Math.round(matrix.compliance_score * (matrix.compliance_score <= 1 ? 100 : 1)) : null
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-10">
       <div className="flex justify-end">
         <button onClick={load} disabled={loading} className={s.ghostBtn} aria-label={t('common.refresh', 'Refresh')}>
           <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
@@ -733,11 +734,11 @@ const Soc2Tab: React.FC<{ reportError: ErrorReporter }> = ({ reportError }) => {
       </div>
 
       {/* TSC 控制项状态矩阵 */}
-      <div className={s.card}>
-        <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-          <h2 className={clsx(s.heading, 'mb-0')}>{t('compliance.soc2.matrix', 'Trust Services Criteria Matrix')}</h2>
+      <section>
+        <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+          <h2 className={clsx(s.sectionTitle, 'mb-0')}>{t('compliance.soc2.matrix', 'Trust Services Criteria Matrix')}</h2>
           {score !== null && (
-            <span className={clsx('px-3 py-1 rounded-full text-sm font-semibold', score >= 80 ? STATUS_STYLES.approved : STATUS_STYLES.pending)}>
+            <span className={clsx('badge-status', score >= 80 ? 'badge-success' : 'badge-warning')}>
               {t('compliance.soc2.score', 'Compliance score')}: {score}%
             </span>
           )}
@@ -745,46 +746,46 @@ const Soc2Tab: React.FC<{ reportError: ErrorReporter }> = ({ reportError }) => {
         {matrix && Object.keys(matrix.summary).length > 0 && (
           <div className="flex flex-wrap gap-2 mb-3">
             {Object.entries(matrix.summary).map(([status, count]) => (
-              <span key={status} className={clsx('px-2 py-0.5 rounded-full text-xs font-medium', STATUS_STYLES[status] ?? 'bg-slate-500/10 text-slate-600 dark:text-slate-300')}>
+              <span key={status} className={clsx('badge-status', badgeOf(STATUS_BADGE, status))}>
                 {status}: {count}
               </span>
             ))}
           </div>
         )}
         {!matrix || matrix.matrix.length === 0 ? (
-          <p className={s.muted}>{loading ? t('common.loading', 'Loading...') : t('compliance.soc2.empty', 'No criteria mappings')}</p>
+          <p className="empty-state">{loading ? t('common.loading', 'Loading...') : t('compliance.soc2.empty', 'No criteria mappings')}</p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="table-dense">
               <thead>
-                <tr className={clsx('text-left text-xs', s.theme === 'dark' ? 'text-slate-400' : 'text-slate-500')}>
-                  <th className="pb-2 pr-3">{t('compliance.soc2.criteria', 'Criteria')}</th>
-                  <th className="pb-2 pr-3">{t('compliance.soc2.category', 'Category')}</th>
-                  <th className="pb-2 pr-3">{t('compliance.soc2.status', 'Status')}</th>
-                  <th className="pb-2">{t('compliance.soc2.implementation', 'Implementation')}</th>
+                <tr>
+                  <th>{t('compliance.soc2.criteria', 'Criteria')}</th>
+                  <th>{t('compliance.soc2.category', 'Category')}</th>
+                  <th>{t('compliance.soc2.status', 'Status')}</th>
+                  <th>{t('compliance.soc2.implementation', 'Implementation')}</th>
                 </tr>
               </thead>
               <tbody>
                 {matrix.matrix.map((m) => (
-                  <tr key={m.criteria_id} className={clsx('border-t', s.theme === 'dark' ? 'border-slate-800' : 'border-slate-100')}>
-                    <td className={clsx('py-2 pr-3 font-medium', s.theme === 'dark' ? 'text-white' : 'text-slate-900')}>
-                      {m.criteria_id}
-                      <div className={clsx('text-xs font-normal', s.theme === 'dark' ? 'text-slate-500' : 'text-slate-400')}>{m.criteria_name}</div>
+                  <tr key={m.criteria_id}>
+                    <td>
+                      <span className="font-medium cell-data">{m.criteria_id}</span>
+                      <div className="text-xs opacity-50">{m.criteria_name}</div>
                     </td>
-                    <td className="py-2 pr-3"><span className="px-2 py-0.5 rounded-full text-xs bg-blue-500/10 text-blue-600 dark:text-blue-400">{m.category}</span></td>
-                    <td className="py-2 pr-3"><span className={clsx('px-2 py-0.5 rounded-full text-xs font-medium', STATUS_STYLES[m.status] ?? 'bg-slate-500/10 text-slate-600 dark:text-slate-300')}>{m.status}</span></td>
-                    <td className={clsx('py-2 text-xs', s.theme === 'dark' ? 'text-slate-400' : 'text-slate-600')}>{m.implementation}</td>
+                    <td><span className="badge-status badge-muted">{m.category}</span></td>
+                    <td><span className={clsx('badge-status', badgeOf(STATUS_BADGE, m.status))}>{m.status}</span></td>
+                    <td className="text-xs opacity-70">{m.implementation}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
         )}
-      </div>
+      </section>
 
       {/* 变更管理 */}
-      <div className={s.card}>
-        <h2 className={clsx(s.heading, 'flex items-center gap-2')}><GitPullRequest size={16} />{t('compliance.soc2.changes', 'Change Management')}</h2>
+      <section>
+        <h2 className={s.sectionTitle}>{t('compliance.soc2.changes', 'Change Management')}</h2>
         <div className="flex flex-wrap gap-2 mb-4">
           <input className={clsx(s.input, 'flex-1 min-w-[200px]')} value={changeTitle} onChange={(e) => setChangeTitle(e.target.value)} placeholder={t('compliance.soc2.changeTitle', 'Change title')} aria-label={t('compliance.soc2.changeTitle', 'Change title')} />
           <select className={clsx(s.input, 'w-auto')} value={changeType} onChange={(e) => setChangeType(e.target.value)} aria-label={t('compliance.soc2.changeType', 'Type')}>
@@ -798,19 +799,19 @@ const Soc2Tab: React.FC<{ reportError: ErrorReporter }> = ({ reportError }) => {
           </button>
         </div>
         {changes.length === 0 ? (
-          <p className={s.muted}>{t('compliance.soc2.noChanges', 'No change requests')}</p>
+          <p className="empty-state">{t('compliance.soc2.noChanges', 'No change requests')}</p>
         ) : (
-          <div className="space-y-2">
+          <div>
             {changes.map((c) => (
               <ChangeRow key={c.change_id} change={c} onApprove={handleApprove} />
             ))}
           </div>
         )}
-      </div>
+      </section>
 
       {/* 事件响应 */}
-      <div className={s.card}>
-        <h2 className={clsx(s.heading, 'flex items-center gap-2')}><AlertTriangle size={16} />{t('compliance.soc2.incidents', 'Security Incidents')}</h2>
+      <section>
+        <h2 className={s.sectionTitle}>{t('compliance.soc2.incidents', 'Security Incidents')}</h2>
         <div className="flex flex-wrap gap-2 mb-4">
           <input className={clsx(s.input, 'flex-1 min-w-[200px]')} value={incidentTitle} onChange={(e) => setIncidentTitle(e.target.value)} placeholder={t('compliance.soc2.incidentTitle', 'Incident title')} aria-label={t('compliance.soc2.incidentTitle', 'Incident title')} />
           <select className={clsx(s.input, 'w-auto')} value={incidentCategory} onChange={(e) => setIncidentCategory(e.target.value)} aria-label={t('compliance.soc2.incidentCategory', 'Category')}>
@@ -824,23 +825,23 @@ const Soc2Tab: React.FC<{ reportError: ErrorReporter }> = ({ reportError }) => {
           </button>
         </div>
         {incidents.length === 0 ? (
-          <p className={s.muted}>{t('compliance.soc2.noIncidents', 'No incidents reported')}</p>
+          <p className="empty-state">{t('compliance.soc2.noIncidents', 'No incidents reported')}</p>
         ) : (
-          <div className="space-y-2">
+          <div>
             {incidents.map((i) => (
-              <div key={i.incident_id} className={clsx('flex items-center gap-3 rounded-lg border px-3 py-2 text-sm', s.theme === 'dark' ? 'border-slate-800' : 'border-slate-200')}>
-                <span className={clsx('px-2 py-0.5 rounded-full text-xs font-medium shrink-0', RISK_STYLES[i.severity] ?? 'bg-slate-500/10 text-slate-600 dark:text-slate-300')}>
+              <div key={i.incident_id} className="row-line flex items-center gap-3">
+                <span className={clsx('badge-status shrink-0', badgeOf(RISK_BADGE, i.severity))}>
                   {i.severity}
                 </span>
-                <span className={clsx('font-medium truncate', s.theme === 'dark' ? 'text-white' : 'text-slate-900')}>{i.title}</span>
-                <span className={clsx('text-xs flex-1 truncate', s.theme === 'dark' ? 'text-slate-500' : 'text-slate-400')}>
+                <span className="font-medium truncate text-sm">{i.title}</span>
+                <span className="cell-data opacity-50 flex-1 truncate">
                   {i.category} · {i.phase} · {new Date(i.detected_at).toLocaleString()}
                 </span>
               </div>
             ))}
           </div>
         )}
-      </div>
+      </section>
     </div>
   )
 }
@@ -852,23 +853,23 @@ const ChangeRow: React.FC<{ change: ChangeRecord; onApprove: (id: string) => voi
   const approvable = change.status !== 'approved' && change.status !== 'rejected'
 
   return (
-    <div className={clsx('rounded-lg border', s.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200')}>
-      <button onClick={() => setExpanded((v) => !v)} className="w-full flex items-center gap-3 px-3 py-2 text-sm text-left" aria-expanded={expanded}>
-        <span className={clsx('px-2 py-0.5 rounded-full text-xs font-medium shrink-0', RISK_STYLES[change.risk_level] ?? 'bg-slate-500/10 text-slate-600 dark:text-slate-300')}>
+    <div className="row-line" style={{ padding: 0 }}>
+      <button onClick={() => setExpanded((v) => !v)} className="w-full flex items-center gap-3 py-2.5 text-sm text-left" aria-expanded={expanded}>
+        <span className={clsx('badge-status shrink-0', badgeOf(RISK_BADGE, change.risk_level))}>
           {change.risk_level}
         </span>
-        <span className={clsx('font-medium truncate', s.theme === 'dark' ? 'text-white' : 'text-slate-900')}>{change.title}</span>
-        <span className={clsx('px-2 py-0.5 rounded-full text-xs font-medium shrink-0', STATUS_STYLES[change.status] ?? 'bg-slate-500/10 text-slate-600 dark:text-slate-300')}>
+        <span className="font-medium truncate">{change.title}</span>
+        <span className={clsx('badge-status shrink-0', badgeOf(STATUS_BADGE, change.status))}>
           {change.status}
         </span>
-        <span className={clsx('text-xs flex-1 truncate', s.theme === 'dark' ? 'text-slate-500' : 'text-slate-400')}>
+        <span className="cell-data opacity-50 flex-1 truncate">
           {change.change_type} · {change.requester} · {new Date(change.created_at).toLocaleString()}
         </span>
         {expanded ? <ChevronUp size={16} className="shrink-0 opacity-60" /> : <ChevronDown size={16} className="shrink-0 opacity-60" />}
       </button>
       {expanded && (
-        <div className={clsx('px-3 pb-3 pt-1 border-t text-xs space-y-2', s.theme === 'dark' ? 'border-slate-800 text-slate-400' : 'border-slate-100 text-slate-600')}>
-          <div>id: {change.change_id} · {t('compliance.soc2.requiredApprovals', 'Required approvals')}: {change.required_approvals}</div>
+        <div className="pb-3 pt-1 text-xs space-y-2 opacity-80">
+          <div className="cell-data">id: {change.change_id} · {t('compliance.soc2.requiredApprovals', 'Required approvals')}: {change.required_approvals}</div>
           {change.description && <div>{change.description}</div>}
           {change.approvals.length > 0 && (
             <div>

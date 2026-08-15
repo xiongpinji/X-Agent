@@ -10,8 +10,6 @@ import {
 } from '@/services/automationOps'
 import {
   Globe,
-  Monitor,
-  Sparkles,
   Play,
   RefreshCw,
   XCircle,
@@ -24,6 +22,8 @@ import {
 import clsx from 'clsx'
 
 type TabKey = 'sessions' | 'advanced' | 'desktop'
+
+const DIVIDER = 'var(--divider)'
 
 export const BrowserAutomationPage: React.FC = () => {
   const { theme } = useAppStore()
@@ -41,33 +41,37 @@ export const BrowserAutomationPage: React.FC = () => {
     return false
   }, [])
 
-  const tabs: { key: TabKey; label: string; icon: React.ReactNode }[] = [
-    { key: 'sessions', label: t('automation.tabs.sessions', 'Session Control'), icon: <Globe size={16} /> },
-    { key: 'advanced', label: t('automation.tabs.advanced', 'Advanced'), icon: <Sparkles size={16} /> },
-    { key: 'desktop', label: t('automation.tabs.desktop', 'Desktop Macros'), icon: <Monitor size={16} /> },
+  const tabs: { key: TabKey; label: string }[] = [
+    { key: 'sessions', label: t('automation.tabs.sessions', 'Session Control') },
+    { key: 'advanced', label: t('automation.tabs.advanced', 'Advanced') },
+    { key: 'desktop', label: t('automation.tabs.desktop', 'Desktop Macros') },
   ]
 
   return (
-    <div className={clsx('p-8', theme === 'dark' ? 'bg-slate-950' : 'bg-slate-50')}>
-      <div className="max-w-6xl mx-auto">
-        <div className="mb-6">
-          <h1 className={clsx('text-3xl font-bold mb-2', theme === 'dark' ? 'text-white' : 'text-slate-900')}>
-            {t('automation.title', 'Browser Automation')}
-          </h1>
-          <p className={clsx('text-sm', theme === 'dark' ? 'text-slate-400' : 'text-slate-600')}>
+    <div className={clsx(
+      'min-h-full px-8 py-10',
+      theme === 'dark' ? 'bg-slate-950 text-slate-200' : 'bg-[#fafafa] text-[#333333]'
+    )}>
+      <div className="max-w-6xl">
+        {/* Header — Dashboard-style */}
+        <header className="mb-8">
+          <div
+            className={clsx(
+              'w-12 border-t-2 mb-5',
+              theme === 'dark' ? 'border-slate-200' : 'border-[#333333]'
+            )}
+            aria-hidden="true"
+          />
+          <h1 className="page-title">{t('automation.title', 'Browser Automation')}</h1>
+          <p className="page-subtitle">
             {t('automation.subtitle', 'Real Playwright browser sessions, advanced monitoring, and desktop automation')}
           </p>
-        </div>
+        </header>
 
         {backendUnavailable && (
           <div
             role="alert"
-            className={clsx(
-              'mb-6 rounded-lg border px-4 py-3 text-sm flex items-start justify-between gap-4',
-              theme === 'dark'
-                ? 'border-amber-900 bg-amber-950/40 text-amber-300'
-                : 'border-amber-200 bg-amber-50 text-amber-700'
-            )}
+            className="mb-6 rounded-lg border border-[#d97706]/30 px-4 py-3 text-sm text-[#d97706] flex items-start justify-between gap-4"
           >
             <span>
               <strong>{t('automation.unavailable', 'Browser backend unavailable')}</strong>
@@ -76,7 +80,7 @@ export const BrowserAutomationPage: React.FC = () => {
                 'automation.unavailableHint',
                 'The server has no Playwright browser runtime (503). Session operations are disabled until the backend installs a browser.'
               )}
-              <span className="block mt-1 text-xs opacity-80">{backendUnavailable}</span>
+              <span className="block mt-1 cell-data opacity-80">{backendUnavailable}</span>
             </span>
             <button
               onClick={() => setBackendUnavailable(null)}
@@ -88,8 +92,8 @@ export const BrowserAutomationPage: React.FC = () => {
           </div>
         )}
 
-        {/* Tabs */}
-        <div className="flex gap-2 mb-6" role="tablist">
+        {/* Tabs — underline style */}
+        <div className="flex gap-1 mb-8 border-b" style={{ borderColor: DIVIDER }} role="tablist">
           {tabs.map((item) => (
             <button
               key={item.key}
@@ -97,17 +101,12 @@ export const BrowserAutomationPage: React.FC = () => {
               aria-selected={tab === item.key}
               onClick={() => setTab(item.key)}
               className={clsx(
-                'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors',
+                'px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px',
                 tab === item.key
-                  ? theme === 'dark'
-                    ? 'bg-blue-600/20 text-blue-400 border border-blue-800'
-                    : 'bg-blue-100 text-blue-700 border border-blue-200'
-                  : theme === 'dark'
-                    ? 'text-slate-400 hover:text-slate-200 border border-transparent'
-                    : 'text-slate-600 hover:text-slate-900 border border-transparent'
+                  ? 'border-blue-600 text-blue-600 dark:text-blue-400'
+                  : 'border-transparent opacity-50 hover:opacity-100'
               )}
             >
-              {item.icon}
               {item.label}
             </button>
           ))}
@@ -125,22 +124,14 @@ export const BrowserAutomationPage: React.FC = () => {
 // Shared small components
 // ---------------------------------------------------------------------------
 
-const Panel: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => {
-  const { theme } = useAppStore()
-  return (
-    <div
-      className={clsx(
-        'rounded-lg p-5 border',
-        theme === 'dark' ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200'
-      )}
-    >
-      <h3 className={clsx('text-sm font-semibold mb-3', theme === 'dark' ? 'text-white' : 'text-slate-900')}>
-        {title}
-      </h3>
-      {children}
-    </div>
-  )
-}
+const Panel: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
+  <section>
+    <h3 className="text-[11px] uppercase tracking-[0.08em] opacity-50 mb-3">
+      {title}
+    </h3>
+    {children}
+  </section>
+)
 
 const ActionButton: React.FC<{
   onClick: () => void
@@ -149,7 +140,8 @@ const ActionButton: React.FC<{
   icon?: React.ReactNode
   children: React.ReactNode
   danger?: boolean
-}> = ({ onClick, busy, disabled, icon, children, danger }) => {
+  primary?: boolean
+}> = ({ onClick, busy, disabled, icon, children, danger, primary }) => {
   const { theme } = useAppStore()
   const { t } = useI18n()
   return (
@@ -158,13 +150,13 @@ const ActionButton: React.FC<{
       disabled={busy || disabled}
       className={clsx(
         'flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50',
-        danger
-          ? theme === 'dark'
-            ? 'bg-red-600/20 text-red-400 hover:bg-red-600/30'
-            : 'bg-red-100 text-red-700 hover:bg-red-200'
-          : theme === 'dark'
-            ? 'bg-blue-600/20 text-blue-400 hover:bg-blue-600/30'
-            : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+        primary
+          ? 'bg-blue-600 hover:bg-blue-700 text-white'
+          : danger
+            ? 'text-[#dc2626] ' + (theme === 'dark' ? 'bg-slate-800 hover:bg-slate-700' : 'bg-white border border-slate-200 hover:bg-slate-100')
+            : theme === 'dark'
+              ? 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+              : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
       )}
     >
       {icon}
@@ -190,31 +182,49 @@ const TextInput: React.FC<{
         'w-full px-3 py-2 rounded-lg text-sm border outline-none',
         theme === 'dark'
           ? 'bg-slate-800 border-slate-700 text-slate-100 placeholder-slate-500'
-          : 'bg-slate-50 border-slate-300 text-slate-900 placeholder-slate-400'
+          : 'bg-white border-slate-300 text-slate-900 placeholder-slate-400'
       )}
     />
   )
 }
 
 const ResultBox: React.FC<{ result: string | null; error?: boolean }> = ({ result, error }) => {
-  const { theme } = useAppStore()
   if (!result) return null
   return (
     <pre
       role="status"
       className={clsx(
-        'mt-3 rounded-md border px-3 py-2 text-xs whitespace-pre-wrap break-words max-h-64 overflow-auto',
+        'mt-3 rounded-lg border px-3 py-2 text-xs whitespace-pre-wrap break-words max-h-64 overflow-auto cell-data',
         error
-          ? theme === 'dark'
-            ? 'border-red-900 bg-red-950/40 text-red-300'
-            : 'border-red-200 bg-red-50 text-red-700'
-          : theme === 'dark'
-            ? 'border-slate-700 bg-slate-800 text-slate-300'
-            : 'border-slate-200 bg-slate-50 text-slate-700'
+          ? 'border-[#dc2626]/30 text-[#dc2626]'
+          : 'border-[rgba(163,169,177,.25)] opacity-80'
       )}
     >
       {result}
     </pre>
+  )
+}
+
+const SessionListItem: React.FC<{
+  id: string
+  sub: string
+  selected: boolean
+  onSelect: () => void
+}> = ({ id, sub, selected, onSelect }) => {
+  const { theme } = useAppStore()
+  return (
+    <button
+      onClick={onSelect}
+      className={clsx(
+        'row-line w-full text-left px-2 -mx-2',
+        selected && (theme === 'dark' ? 'bg-slate-800' : 'bg-slate-100')
+      )}
+    >
+      <span className="cell-data block truncate">{id}</span>
+      <span className="block truncate text-xs opacity-50">
+        {sub}
+      </span>
+    </button>
   )
 }
 
@@ -223,7 +233,6 @@ const ResultBox: React.FC<{ result: string | null; error?: boolean }> = ({ resul
 // ---------------------------------------------------------------------------
 
 const SessionsTab: React.FC<{ on503: (e: unknown) => boolean; unavailable: boolean }> = ({ on503, unavailable }) => {
-  const { theme } = useAppStore()
   const { t } = useI18n()
   const [sessions, setSessions] = useState<BrowserSession[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -287,11 +296,11 @@ const SessionsTab: React.FC<{ on503: (e: unknown) => boolean; unavailable: boole
     `${a.ok ? 'OK' : 'FAIL'} [${a.action}] ${a.detail || ''}\n${JSON.stringify(a.data, null, 2)}`.trim()
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
       {/* Session list */}
       <Panel title={t('automation.sessions', 'Browser Sessions')}>
         <div className="flex gap-2 mb-3">
-          <ActionButton onClick={createSession} busy={busy} disabled={unavailable} icon={<Plus size={16} />}>
+          <ActionButton primary onClick={createSession} busy={busy} disabled={unavailable} icon={<Plus size={16} />}>
             {t('automation.createSession', 'New session')}
           </ActionButton>
           <ActionButton onClick={refresh} icon={<RefreshCw size={16} />}>
@@ -299,40 +308,26 @@ const SessionsTab: React.FC<{ on503: (e: unknown) => boolean; unavailable: boole
           </ActionButton>
         </div>
         {loadError && <ResultBox result={loadError} error />}
-        <ul className="space-y-2">
+        <div>
           {sessions.map((s) => (
-            <li key={s.session_id}>
-              <button
-                onClick={() => setSelectedId(s.session_id)}
-                className={clsx(
-                  'w-full text-left px-3 py-2 rounded-lg text-xs border transition-colors',
-                  selectedId === s.session_id
-                    ? theme === 'dark'
-                      ? 'border-blue-700 bg-blue-600/10 text-blue-300'
-                      : 'border-blue-300 bg-blue-50 text-blue-700'
-                    : theme === 'dark'
-                      ? 'border-slate-700 text-slate-300 hover:border-slate-600'
-                      : 'border-slate-200 text-slate-700 hover:border-slate-300'
-                )}
-              >
-                <span className="font-mono block truncate">{s.session_id}</span>
-                <span className={clsx('block truncate', theme === 'dark' ? 'text-slate-500' : 'text-slate-500')}>
-                  {s.current_url || t('automation.noUrl', '(no page)')} ·{' '}
-                  {s.active ? t('automation.active', 'active') : t('automation.closed', 'closed')}
-                </span>
-              </button>
-            </li>
+            <SessionListItem
+              key={s.session_id}
+              id={s.session_id}
+              sub={`${s.current_url || t('automation.noUrl', '(no page)')} · ${s.active ? t('automation.active', 'active') : t('automation.closed', 'closed')}`}
+              selected={selectedId === s.session_id}
+              onSelect={() => setSelectedId(s.session_id)}
+            />
           ))}
           {sessions.length === 0 && (
-            <li className={clsx('text-xs py-4 text-center', theme === 'dark' ? 'text-slate-500' : 'text-slate-500')}>
+            <p className="empty-state">
               {t('automation.noSessions', 'No sessions yet')}
-            </li>
+            </p>
           )}
-        </ul>
+        </div>
       </Panel>
 
       {/* Actions */}
-      <div className="lg:col-span-2 space-y-6">
+      <div className="lg:col-span-2 space-y-8">
         <Panel title={t('automation.navigate', 'Navigate & Capture')}>
           <div className="space-y-3">
             <div className="flex gap-2">
@@ -377,7 +372,8 @@ const SessionsTab: React.FC<{ on503: (e: unknown) => boolean; unavailable: boole
               <img
                 src={screenshotSrc}
                 alt={t('automation.screenshot', 'Screenshot')}
-                className="rounded-lg border border-slate-300 max-w-full"
+                className="rounded-lg border max-w-full"
+                style={{ borderColor: DIVIDER }}
               />
             )}
           </div>
@@ -484,7 +480,7 @@ const AdvancedTab: React.FC<{ on503: (e: unknown) => boolean }> = ({ on503 }) =>
   const needSession = !sessionId.trim()
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <Panel title={t('automation.advancedSession', 'Target Session')}>
         <TextInput
           value={sessionId}
@@ -493,7 +489,7 @@ const AdvancedTab: React.FC<{ on503: (e: unknown) => boolean }> = ({ on503 }) =>
         />
       </Panel>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         <Panel title={t('automation.network', 'Network Monitoring')}>
           <div className="flex flex-wrap gap-2">
             <ActionButton busy={busy} disabled={needSession} icon={<Play size={16} />} onClick={() => run(() => automationOps.networkRequests(sessionId))}>
@@ -577,7 +573,6 @@ const AdvancedTab: React.FC<{ on503: (e: unknown) => boolean }> = ({ on503 }) =>
 // ---------------------------------------------------------------------------
 
 const DesktopTab: React.FC = () => {
-  const { theme } = useAppStore()
   const { t } = useI18n()
   const [sessions, setSessions] = useState<DesktopSession[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -622,10 +617,11 @@ const DesktopTab: React.FC = () => {
   const selected = sessions.find((s) => s.session_id === selectedId) ?? null
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
       <Panel title={t('automation.desktopSessions', 'Desktop Sessions')}>
         <div className="flex gap-2 mb-3">
           <ActionButton
+            primary
             busy={busy}
             icon={<Plus size={16} />}
             onClick={() =>
@@ -644,38 +640,25 @@ const DesktopTab: React.FC = () => {
           </ActionButton>
         </div>
         {loadError && <ResultBox result={loadError} error />}
-        <ul className="space-y-2">
+        <div>
           {sessions.map((s) => (
-            <li key={s.session_id}>
-              <button
-                onClick={() => setSelectedId(s.session_id)}
-                className={clsx(
-                  'w-full text-left px-3 py-2 rounded-lg text-xs border transition-colors',
-                  selectedId === s.session_id
-                    ? theme === 'dark'
-                      ? 'border-blue-700 bg-blue-600/10 text-blue-300'
-                      : 'border-blue-300 bg-blue-50 text-blue-700'
-                    : theme === 'dark'
-                      ? 'border-slate-700 text-slate-300 hover:border-slate-600'
-                      : 'border-slate-200 text-slate-700 hover:border-slate-300'
-                )}
-              >
-                <span className="font-mono block truncate">{s.session_id}</span>
-                <span className={clsx('block', theme === 'dark' ? 'text-slate-500' : 'text-slate-500')}>
-                  {s.provider ?? 'ui-tars'} · {s.active ? t('automation.active', 'active') : t('automation.closed', 'closed')}
-                </span>
-              </button>
-            </li>
+            <SessionListItem
+              key={s.session_id}
+              id={s.session_id}
+              sub={`${s.provider ?? 'ui-tars'} · ${s.active ? t('automation.active', 'active') : t('automation.closed', 'closed')}`}
+              selected={selectedId === s.session_id}
+              onSelect={() => setSelectedId(s.session_id)}
+            />
           ))}
           {sessions.length === 0 && (
-            <li className={clsx('text-xs py-4 text-center', theme === 'dark' ? 'text-slate-500' : 'text-slate-500')}>
+            <p className="empty-state">
               {t('automation.noSessions', 'No sessions yet')}
-            </li>
+            </p>
           )}
-        </ul>
+        </div>
       </Panel>
 
-      <div className="lg:col-span-2 space-y-6">
+      <div className="lg:col-span-2 space-y-8">
         <Panel title={t('automation.desktopAction', 'Execute Desktop Action')}>
           <div className="space-y-3">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-2">

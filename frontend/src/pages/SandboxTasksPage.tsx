@@ -9,12 +9,6 @@ import { useI18n } from '@/i18n/context'
 import {
   Plus,
   RefreshCw,
-  CheckCircle,
-  Clock,
-  AlertCircle,
-  Loader2,
-  TerminalSquare,
-  XCircle,
   Ban,
 } from 'lucide-react'
 import clsx from 'clsx'
@@ -22,6 +16,22 @@ import clsx from 'clsx'
 type TaskStatus = 'queued' | 'running' | 'completed' | 'failed' | 'error' | string
 
 const ACTIVE_STATUSES = new Set(['queued', 'running'])
+
+const STATUS_BADGE: Record<string, string> = {
+  completed: 'badge-success',
+  running: 'badge-muted',
+  failed: 'badge-danger',
+  error: 'badge-danger',
+  queued: 'badge-warning',
+}
+
+const STATUS_LABEL_KEY: Record<string, [string, string]> = {
+  completed: ['sandbox.completed', 'Completed'],
+  running: ['sandbox.running', 'Running'],
+  failed: ['sandbox.failed', 'Failed'],
+  error: ['sandbox.error', 'Error'],
+  queued: ['sandbox.queued', 'Queued'],
+}
 
 export const SandboxTasksPage: React.FC = () => {
   const { theme, setError } = useAppStore()
@@ -46,12 +56,7 @@ export const SandboxTasksPage: React.FC = () => {
     enable_network: false,
   })
 
-  const card = clsx(
-    'rounded-lg p-6',
-    theme === 'dark' ? 'bg-slate-900 border border-slate-700' : 'bg-white border border-slate-200'
-  )
-  const muted = clsx('text-sm', theme === 'dark' ? 'text-slate-400' : 'text-slate-600')
-  const heading = clsx('text-lg font-bold', theme === 'dark' ? 'text-white' : 'text-slate-900')
+  const muted = clsx('text-sm opacity-60')
   const input = clsx(
     'w-full px-3 py-2 rounded-lg border text-sm outline-none transition-colors',
     theme === 'dark'
@@ -60,9 +65,11 @@ export const SandboxTasksPage: React.FC = () => {
   )
   const errBox = clsx(
     'mb-6 rounded-lg border px-4 py-3 text-sm',
-    theme === 'dark'
-      ? 'border-red-900 bg-red-950/40 text-red-300'
-      : 'border-red-200 bg-red-50 text-red-700'
+    'border-[#dc2626]/30 text-[#dc2626]'
+  )
+  const ghostBtnCls = clsx(
+    'flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50',
+    theme === 'dark' ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
   )
 
   const loadTasks = useCallback(async () => {
@@ -144,96 +151,68 @@ export const SandboxTasksPage: React.FC = () => {
   }
 
   const statusBadge = (status: TaskStatus) => {
-    switch (status) {
-      case 'completed':
-        return (
-          <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-500/10 text-green-600">
-            <CheckCircle size={12} /> {t('sandbox.completed', 'Completed')}
-          </span>
-        )
-      case 'running':
-        return (
-          <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-500/10 text-blue-600">
-            <Loader2 size={12} className="animate-spin" /> {t('sandbox.running', 'Running')}
-          </span>
-        )
-      case 'failed':
-        return (
-          <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-500/10 text-red-600">
-            <AlertCircle size={12} /> {t('sandbox.failed', 'Failed')}
-          </span>
-        )
-      case 'error':
-        return (
-          <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-500/10 text-red-600">
-            <XCircle size={12} /> {t('sandbox.error', 'Error')}
-          </span>
-        )
-      default:
-        return (
-          <span className={clsx(
-            'flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium',
-            theme === 'dark' ? 'bg-slate-700 text-slate-300' : 'bg-slate-100 text-slate-600'
-          )}>
-            <Clock size={12} /> {t('sandbox.queued', 'Queued')}
-          </span>
-        )
-    }
+    const [key, fallback] = STATUS_LABEL_KEY[status] ?? STATUS_LABEL_KEY.queued
+    return (
+      <span className={clsx('badge-status', STATUS_BADGE[status] ?? 'badge-muted')}>
+        {t(key, fallback)}
+      </span>
+    )
   }
 
   return (
-    <div className={clsx('p-8', theme === 'dark' ? 'bg-slate-950' : 'bg-slate-50')}>
-      <div className="max-w-6xl mx-auto">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className={clsx('text-3xl font-bold mb-2', theme === 'dark' ? 'text-white' : 'text-slate-900')}>
-              {t('sandbox.title', 'Sandbox Tasks')}
-            </h1>
-            <p className={muted}>
-              {t('sandbox.subtitle', 'Submit and monitor isolated sandbox executions')}
-            </p>
+    <div className={clsx(
+      'min-h-full px-8 py-10',
+      theme === 'dark' ? 'bg-slate-950 text-slate-200' : 'bg-[#fafafa] text-[#333333]'
+    )}>
+      <div className="max-w-6xl">
+        {/* Header — Dashboard-style */}
+        <header className="mb-8">
+          <div
+            className={clsx(
+              'w-12 border-t-2 mb-5',
+              theme === 'dark' ? 'border-slate-200' : 'border-[#333333]'
+            )}
+            aria-hidden="true"
+          />
+          <div className="flex items-end justify-between gap-4">
+            <div>
+              <h1 className="page-title">{t('sandbox.title', 'Sandbox Tasks')}</h1>
+              <p className="page-subtitle">
+                {t('sandbox.subtitle', 'Submit and monitor isolated sandbox executions')}
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={loadTasks}
+                disabled={loading}
+                className={ghostBtnCls}
+                aria-label={t('common.refresh', 'Refresh')}
+              >
+                <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+              </button>
+              <button
+                onClick={() => setShowSubmit(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
+              >
+                <Plus size={16} />
+                {t('sandbox.newTask', 'New Task')}
+              </button>
+            </div>
           </div>
-          <div className="flex gap-2">
-            <button
-              onClick={loadTasks}
-              disabled={loading}
-              className={clsx(
-                'flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50',
-                theme === 'dark' ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
-              )}
-              aria-label={t('common.refresh', 'Refresh')}
-            >
-              <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
-            </button>
-            <button
-              onClick={() => setShowSubmit(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
-            >
-              <Plus size={20} />
-              {t('sandbox.newTask', 'New Task')}
-            </button>
-          </div>
-        </div>
+        </header>
 
         {loadError && <div role="alert" className={errBox}>{loadError}</div>}
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Task list */}
-          <div className={clsx(card, 'p-0 overflow-hidden')}>
-            <div className={clsx(
-              'px-6 py-4 border-b flex items-center gap-2',
-              theme === 'dark' ? 'border-slate-700' : 'border-slate-200'
-            )}>
-              <TerminalSquare size={18} className="text-blue-500" />
-              <h2 className={heading}>{t('sandbox.taskList', 'Tasks')}</h2>
-              <span className={muted}>({tasks.length})</span>
-            </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+          {/* Task list — divider rows, no cards */}
+          <section>
+            <h2 className="text-[11px] uppercase tracking-[0.08em] opacity-50 mb-2">
+              {t('sandbox.taskList', 'Tasks')} ({tasks.length})
+            </h2>
             {tasks.length === 0 ? (
-              <div className={clsx('p-8 text-center', muted)}>
-                <p className="text-lg font-medium mb-2">{t('sandbox.noTasks', 'No sandbox tasks yet')}</p>
-                <p className="text-sm">{t('sandbox.submitToStart', 'Submit a task to get started')}</p>
-              </div>
+              <p className="empty-state">
+                {t('sandbox.noTasks', 'No sandbox tasks yet')} · {t('sandbox.submitToStart', 'Submit a task to get started')}
+              </p>
             ) : (
               <div className="max-h-[32rem] overflow-y-auto">
                 {tasks.map((task) => (
@@ -241,15 +220,11 @@ export const SandboxTasksPage: React.FC = () => {
                     key={task.task_id}
                     onClick={() => setSelectedId(task.task_id)}
                     className={clsx(
-                      'w-full flex items-center justify-between gap-3 px-6 py-3 text-left transition-colors border-b last:border-b-0',
-                      theme === 'dark' ? 'border-slate-800 hover:bg-slate-800/60' : 'border-slate-100 hover:bg-slate-50',
-                      selectedId === task.task_id && (theme === 'dark' ? 'bg-slate-800' : 'bg-blue-50')
+                      'row-line w-full flex items-center justify-between gap-3 px-2 -mx-2 text-left',
+                      selectedId === task.task_id && (theme === 'dark' ? 'bg-slate-800' : 'bg-slate-100')
                     )}
                   >
-                    <span className={clsx(
-                      'text-sm font-mono truncate',
-                      theme === 'dark' ? 'text-slate-300' : 'text-slate-700'
-                    )}>
+                    <span className="cell-data opacity-70 truncate">
                       {task.task_id}
                     </span>
                     {statusBadge(task.status)}
@@ -257,49 +232,45 @@ export const SandboxTasksPage: React.FC = () => {
                 ))}
               </div>
             )}
-          </div>
+          </section>
 
           {/* Task detail */}
-          <div className={clsx(card, 'p-0 overflow-hidden')}>
-            <div className={clsx(
-              'px-6 py-4 border-b flex items-center justify-between',
-              theme === 'dark' ? 'border-slate-700' : 'border-slate-200'
-            )}>
-              <h2 className={heading}>{t('sandbox.detail', 'Detail')}</h2>
+          <section>
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="text-[11px] uppercase tracking-[0.08em] opacity-50">
+                {t('sandbox.detail', 'Detail')}
+              </h2>
               {detail && statusBadge(detail.status)}
             </div>
             {!selectedId ? (
-              <div className={clsx('p-8 text-center', muted)}>
+              <p className="empty-state">
                 {t('sandbox.selectTask', 'Select a task to view its output')}
-              </div>
+              </p>
             ) : detailError ? (
-              <div className={clsx('p-6', errBox, 'm-6 mb-6')}>{detailError}</div>
+              <div role="alert" className={errBox}>{detailError}</div>
             ) : !detail ? (
-              <div className={clsx('p-8 text-center', muted)}>{t('common.loading', 'Loading...')}</div>
+              <p className="empty-state">{t('common.loading', 'Loading...')}</p>
             ) : (
-              <div className="p-6 space-y-4 max-h-[32rem] overflow-y-auto">
-                <div>
-                  <p className={clsx('text-xs mb-1', muted)}>{t('sandbox.taskId', 'Task ID')}</p>
-                  <p className={clsx('text-sm font-mono break-all', theme === 'dark' ? 'text-slate-300' : 'text-slate-700')}>
+              <div className="space-y-4 max-h-[32rem] overflow-y-auto">
+                <div className="row-line">
+                  <p className="text-[11px] uppercase tracking-[0.06em] opacity-50 mb-1">{t('sandbox.taskId', 'Task ID')}</p>
+                  <p className="cell-data break-all">
                     {detail.task_id}
                   </p>
                 </div>
                 {detail.backend && (
-                  <div>
-                    <p className={clsx('text-xs mb-1', muted)}>{t('sandbox.backend', 'Backend')}</p>
-                    <p className={clsx('text-sm', theme === 'dark' ? 'text-slate-300' : 'text-slate-700')}>{detail.backend}</p>
+                  <div className="row-line">
+                    <p className="text-[11px] uppercase tracking-[0.06em] opacity-50 mb-1">{t('sandbox.backend', 'Backend')}</p>
+                    <p className="text-sm">{detail.backend}</p>
                   </div>
                 )}
                 {detail.error && (
-                  <div className={clsx(
-                    'rounded-md border px-3 py-2 text-sm break-words',
-                    theme === 'dark' ? 'border-red-900 bg-red-950/40 text-red-300' : 'border-red-200 bg-red-50 text-red-700'
-                  )} role="alert">
+                  <div className={clsx('rounded-lg border px-3 py-2 text-sm break-words', 'border-[#dc2626]/30 text-[#dc2626]')} role="alert">
                     {detail.error}
                   </div>
                 )}
                 <div>
-                  <p className={clsx('text-xs mb-2', muted)}>
+                  <p className="text-[11px] uppercase tracking-[0.06em] opacity-50 mb-2">
                     {t('sandbox.steps', 'Steps')} ({detail.steps.length})
                   </p>
                   {detail.steps.length === 0 ? (
@@ -309,22 +280,13 @@ export const SandboxTasksPage: React.FC = () => {
                         : t('sandbox.noSteps', 'No step output recorded')}
                     </p>
                   ) : (
-                    <div className="space-y-2">
+                    <div>
                       {detail.steps.map((step, i) => (
-                        <div key={i} className={clsx(
-                          'rounded-md border',
-                          theme === 'dark' ? 'border-slate-700' : 'border-slate-200'
-                        )}>
-                          <div className={clsx(
-                            'px-3 py-1.5 text-xs font-semibold border-b',
-                            theme === 'dark' ? 'border-slate-700 text-slate-300 bg-slate-800' : 'border-slate-200 text-slate-700 bg-slate-50'
-                          )}>
+                        <div key={i} className="row-line">
+                          <p className="text-xs font-semibold mb-1">
                             {String(step.name ?? `step ${i + 1}`)}
-                          </div>
-                          <pre className={clsx(
-                            'px-3 py-2 text-xs overflow-x-auto whitespace-pre-wrap break-all',
-                            theme === 'dark' ? 'text-slate-400' : 'text-slate-600'
-                          )}>
+                          </p>
+                          <pre className="cell-data opacity-70 overflow-x-auto whitespace-pre-wrap break-all">
                             {JSON.stringify(step, null, 2)}
                           </pre>
                         </div>
@@ -337,24 +299,24 @@ export const SandboxTasksPage: React.FC = () => {
                   disabled
                   title={`${t('sandbox.cancelTask', 'Cancel task')} (${comingSoon})`}
                   aria-label={`${t('sandbox.cancelTask', 'Cancel task')} (${comingSoon})`}
-                  className={clsx(
-                    'flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium opacity-50 cursor-not-allowed',
-                    theme === 'dark' ? 'bg-slate-700 text-slate-300' : 'bg-slate-200 text-slate-700'
-                  )}
+                  className={clsx(ghostBtnCls, 'opacity-50 cursor-not-allowed')}
                 >
                   <Ban size={16} />
                   {t('sandbox.cancelTask', 'Cancel task')} ({comingSoon})
                 </button>
               </div>
             )}
-          </div>
+          </section>
         </div>
 
         {/* Submit modal */}
         {showSubmit && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true">
-            <div className={clsx(card, 'w-full max-w-lg max-h-[90vh] overflow-y-auto')}>
-              <h3 className={clsx(heading, 'mb-4')}>{t('sandbox.newTask', 'New Task')}</h3>
+            <div className={clsx(
+              'rounded-lg p-6 border w-full max-w-lg max-h-[90vh] overflow-y-auto',
+              theme === 'dark' ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200'
+            )}>
+              <h3 className="text-lg font-medium mb-4">{t('sandbox.newTask', 'New Task')}</h3>
               <div className="space-y-3">
                 <div>
                   <label className={clsx(muted, 'block mb-1')}>{t('sandbox.taskName', 'Name')}</label>
@@ -403,7 +365,7 @@ export const SandboxTasksPage: React.FC = () => {
                     onChange={(e) => setForm({ ...form, enable_network: e.target.checked })}
                     className="w-4 h-4 accent-blue-600"
                   />
-                  <span className={theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}>
+                  <span>
                     {t('sandbox.enableNetwork', 'Enable network access')}
                   </span>
                 </label>

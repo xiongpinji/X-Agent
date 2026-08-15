@@ -3,17 +3,14 @@ import { useAppStore } from '@/store/appStore'
 import { securityOps, MFASetupResponse, SessionItem, SSOProvidersResponse, SSOStatusResponse } from '@/services/securityOps'
 import { useI18n } from '@/i18n/context'
 import {
-  ShieldCheck,
-  KeyRound,
-  MonitorSmartphone,
   RefreshCw,
   Copy,
   Check,
   Trash2,
-  Globe,
-  Lock,
 } from 'lucide-react'
 import clsx from 'clsx'
+
+const DIVIDER = 'var(--divider)'
 
 /**
  * SecurityAuthPage (A17) — 安全与认证管理。
@@ -134,40 +131,45 @@ export const SecurityAuthPage: React.FC = () => {
     }
   }
 
-  const cardCls = clsx(
-    'rounded-lg p-6',
-    theme === 'dark' ? 'bg-slate-900 border border-slate-700' : 'bg-white border border-slate-200'
-  )
-  const headingCls = clsx('text-lg font-semibold mb-4 flex items-center gap-2', theme === 'dark' ? 'text-white' : 'text-slate-900')
-  const subTextCls = clsx('text-sm', theme === 'dark' ? 'text-slate-400' : 'text-slate-600')
   const inputCls = clsx(
     'px-3 py-2 rounded-lg border text-sm w-full',
     theme === 'dark'
       ? 'bg-slate-800 border-slate-600 text-white placeholder-slate-500'
       : 'bg-white border-slate-300 text-slate-900 placeholder-slate-400'
   )
+  const ghostBtnCls = clsx(
+    'flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50',
+    theme === 'dark' ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
+  )
 
   return (
-    <div className={clsx('p-8', theme === 'dark' ? 'bg-slate-950' : 'bg-slate-50')}>
-      <div className="max-w-6xl mx-auto">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className={clsx('text-3xl font-bold mb-2', theme === 'dark' ? 'text-white' : 'text-slate-900')}>
-            {t('security.title', 'Security & Authentication')}
-          </h1>
-          <p className={subTextCls}>
+    <div className={clsx(
+      'min-h-full px-8 py-10',
+      theme === 'dark' ? 'bg-slate-950 text-slate-200' : 'bg-[#fafafa] text-[#333333]'
+    )}>
+      <div className="max-w-6xl">
+        {/* Header — Dashboard-style */}
+        <header className="mb-8">
+          <div
+            className={clsx(
+              'w-12 border-t-2 mb-5',
+              theme === 'dark' ? 'border-slate-200' : 'border-[#333333]'
+            )}
+            aria-hidden="true"
+          />
+          <h1 className="page-title">{t('security.title', 'Security & Authentication')}</h1>
+          <p className="page-subtitle">
             {t('security.subtitle', 'MFA, SSO providers and active session management')}
           </p>
-        </div>
+        </header>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
           {/* ── MFA 设置 ─────────────────────────────────────────── */}
-          <div className={cardCls}>
-            <h2 className={headingCls}>
-              <KeyRound size={20} className="text-blue-500" />
+          <section>
+            <h2 className="text-[11px] uppercase tracking-[0.08em] opacity-50 mb-2">
               {t('security.mfaSetup', 'Multi-Factor Authentication')}
             </h2>
-            <p className={clsx(subTextCls, 'mb-4')}>
+            <p className="text-[13px] opacity-60 mb-4">
               {t('security.mfaHint', 'Set up TOTP / SMS / Email verification for your account')}
             </p>
 
@@ -192,31 +194,31 @@ export const SecurityAuthPage: React.FC = () => {
 
             {/* TOTP secret + otpauth URI (无 qrcode 依赖 — 明文展示) */}
             {mfaSetup?.provisioning_uri && (
-              <div className={clsx('rounded-lg p-4 mb-4 text-sm', theme === 'dark' ? 'bg-slate-800' : 'bg-slate-50')}>
-                <p className={clsx('font-medium mb-2', theme === 'dark' ? 'text-slate-200' : 'text-slate-700')}>
+              <div className="row-line text-sm" style={{ padding: '16px 0' }}>
+                <p className="text-[11px] uppercase tracking-[0.06em] opacity-50 mb-2">
                   {t('security.secretLabel', 'Secret')}
                 </p>
-                <code className={clsx('block break-all mb-3 font-mono text-xs', theme === 'dark' ? 'text-green-400' : 'text-green-700')}>
+                <code className="block break-all mb-3 cell-data text-[#16a34a]">
                   {mfaSetup.secret}
                 </code>
-                <p className={clsx('font-medium mb-2', theme === 'dark' ? 'text-slate-200' : 'text-slate-700')}>
+                <p className="text-[11px] uppercase tracking-[0.06em] opacity-50 mb-2">
                   {t('security.provisioningUri', 'Provisioning URI (paste into your authenticator)')}
                 </p>
-                <code className={clsx('block break-all font-mono text-xs mb-3', theme === 'dark' ? 'text-slate-300' : 'text-slate-600')}>
+                <code className="block break-all cell-data opacity-70 mb-3">
                   {mfaSetup.provisioning_uri}
                 </code>
                 <button
                   onClick={handleCopyURI}
-                  className="flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                  className={clsx(ghostBtnCls, 'py-1.5 text-xs')}
                 >
-                  {copied ? <Check size={14} className="text-green-500" /> : <Copy size={14} />}
+                  {copied ? <Check size={14} className="text-[#16a34a]" /> : <Copy size={14} />}
                   {copied ? t('common.copied', 'Copied') : t('common.copy', 'Copy URI')}
                 </button>
               </div>
             )}
 
             {/* MFA 验证 */}
-            <div className="space-y-2">
+            <div className="space-y-2 mt-4">
               <input
                 value={challengeId}
                 onChange={(e) => setChallengeId(e.target.value)}
@@ -233,13 +235,13 @@ export const SecurityAuthPage: React.FC = () => {
                 <button
                   onClick={handleVerifyMFA}
                   disabled={verifyLoading || !challengeId || !verifyCode}
-                  className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white rounded-lg text-sm font-medium whitespace-nowrap transition-colors"
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-sm font-medium whitespace-nowrap transition-colors"
                 >
                   {t('security.verify', 'Verify')}
                 </button>
               </div>
               {verifyResult !== null && (
-                <p className={clsx('text-sm font-medium', verifyResult ? 'text-green-600' : 'text-red-600')}>
+                <p className={clsx('text-sm font-medium', verifyResult ? 'text-[#16a34a]' : 'text-[#dc2626]')}>
                   {verifyResult
                     ? t('security.verifySuccess', 'MFA code verified successfully')
                     : t('security.verifyFailed', 'Verification failed')}
@@ -251,22 +253,21 @@ export const SecurityAuthPage: React.FC = () => {
             <button
               disabled
               title={t('security.comingSoon', 'Coming soon — backend endpoint not available')}
-              className="mt-4 px-4 py-2 rounded-lg text-sm font-medium bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-500 cursor-not-allowed"
+              className={clsx(ghostBtnCls, 'mt-4 opacity-50 cursor-not-allowed')}
             >
               {t('security.disableMfa', 'Disable MFA')} · {t('common.comingSoon', 'Coming soon')}
             </button>
-          </div>
+          </section>
 
           {/* ── SSO 提供方 ───────────────────────────────────────── */}
-          <div className={cardCls}>
-            <h2 className={headingCls}>
-              <Globe size={20} className="text-purple-500" />
+          <section>
+            <h2 className="text-[11px] uppercase tracking-[0.08em] opacity-50 mb-2">
               {t('security.ssoProviders', 'SSO Providers')}
             </h2>
 
-            {/* 能力状态 */}
+            {/* 能力状态 — divider rows */}
             {ssoStatus && (
-              <div className="grid grid-cols-2 gap-2 mb-4 text-sm">
+              <div className="mb-4">
                 {([
                   ['OIDC', ssoStatus.oidc?.status, `${ssoStatus.oidc?.providers_configured ?? 0} configured`],
                   ['SAML 2.0', ssoStatus.saml?.status, ssoStatus.saml?.message],
@@ -275,76 +276,77 @@ export const SecurityAuthPage: React.FC = () => {
                 ] as Array<[string, string | undefined, string | undefined]>).map(([name, status, detail]) => (
                   <div
                     key={name}
-                    className={clsx('rounded-lg p-3', theme === 'dark' ? 'bg-slate-800' : 'bg-slate-50')}
+                    className="flex items-baseline justify-between gap-4 py-2 border-b"
+                    style={{ borderColor: DIVIDER }}
                   >
-                    <p className={clsx('font-medium', theme === 'dark' ? 'text-slate-200' : 'text-slate-700')}>{name}</p>
-                    <p className={clsx('text-xs', status === 'GA' ? 'text-green-600' : 'text-amber-600')}>
-                      {status ?? '—'}
-                    </p>
-                    {detail && <p className="text-xs text-slate-500 truncate">{String(detail)}</p>}
+                    <span className="text-sm font-medium">{name}</span>
+                    <span className="flex items-center gap-2">
+                      {detail && <span className="cell-data opacity-50 truncate">{String(detail)}</span>}
+                      <span className={clsx('badge-status', status === 'GA' ? 'badge-success' : 'badge-warning')}>
+                        {status ?? '—'}
+                      </span>
+                    </span>
                   </div>
                 ))}
               </div>
             )}
 
             {/* 已配置 OIDC 提供方 */}
-            <p className={clsx('text-sm font-medium mb-2', theme === 'dark' ? 'text-slate-300' : 'text-slate-700')}>
+            <h3 className="text-[11px] uppercase tracking-[0.08em] opacity-50 mb-2 mt-6">
               {t('security.configuredOidc', 'Configured OIDC providers')}
-            </p>
+            </h3>
             {!providers || providers.oidc_providers.length === 0 ? (
-              <p className={subTextCls}>
+              <p className="empty-state">
                 {t('security.noProviders', 'No OIDC providers configured (set XAGENT_SSO_PROVIDERS)')}
               </p>
             ) : (
-              <ul className="space-y-2">
+              <div>
                 {providers.oidc_providers.map((p, idx) => (
-                  <li
+                  <div
                     key={String(p.provider_name ?? idx)}
-                    className={clsx('rounded-lg p-3 text-sm flex items-center justify-between', theme === 'dark' ? 'bg-slate-800' : 'bg-slate-50')}
+                    className="row-line flex items-center justify-between gap-4"
                   >
-                    <div>
-                      <p className={clsx('font-medium', theme === 'dark' ? 'text-slate-200' : 'text-slate-700')}>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate">
                         {String(p.provider_name ?? `provider-${idx}`)}
                       </p>
-                      <p className="text-xs text-slate-500">
+                      <p className="cell-data opacity-50 truncate">
                         tenant: {String(p.tenant_id ?? 'default')}
                         {p.discovery_url ? ` · ${String(p.discovery_url)}` : ''}
                       </p>
                     </div>
-                    <span className="text-xs px-2 py-1 rounded bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
-                      OIDC
-                    </span>
-                  </li>
+                    <span className="badge-status badge-success">OIDC</span>
+                  </div>
                 ))}
-              </ul>
+              </div>
             )}
             {providers?.saml && (
-              <p className={clsx('text-xs mt-3', theme === 'dark' ? 'text-slate-500' : 'text-slate-500')}>
+              <p className="cell-data opacity-50 mt-3">
                 SAML: {providers.saml.status} — {providers.saml.message ?? ''}
               </p>
             )}
-          </div>
+          </section>
         </div>
 
         {/* ── 活跃会话 ─────────────────────────────────────────── */}
-        <div className={clsx(cardCls, 'mt-6')}>
-          <div className="flex items-center justify-between mb-4">
-            <h2 className={clsx(headingCls, 'mb-0')}>
-              <MonitorSmartphone size={20} className="text-amber-500" />
+        <section className="mt-10">
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-[11px] uppercase tracking-[0.08em] opacity-50">
               {t('security.activeSessions', 'Active Sessions')}
             </h2>
             <div className="flex gap-2">
               <button
                 onClick={loadSessions}
                 disabled={sessionsLoading}
-                className="flex items-center gap-1 px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50 transition-colors"
+                className={ghostBtnCls}
+                aria-label={t('common.refresh', 'Refresh')}
               >
                 <RefreshCw size={14} className={sessionsLoading ? 'animate-spin' : ''} />
                 {t('common.refresh', 'Refresh')}
               </button>
               <button
                 onClick={handleRevokeAll}
-                className="flex items-center gap-1 px-3 py-2 text-sm rounded-lg bg-red-600 hover:bg-red-700 text-white transition-colors"
+                className={ghostBtnCls}
               >
                 <Trash2 size={14} />
                 {t('security.revokeAll', 'Revoke All Others')}
@@ -353,50 +355,47 @@ export const SecurityAuthPage: React.FC = () => {
           </div>
 
           {sessions.length === 0 ? (
-            <p className={subTextCls}>{t('security.noSessions', 'No active sessions found')}</p>
+            <p className="empty-state">{t('security.noSessions', 'No active sessions found')}</p>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className={clsx('border-b', theme === 'dark' ? 'border-slate-700' : 'border-slate-200')}>
+              <table className="table-dense">
+                <thead>
                   <tr>
-                    {[t('security.device', 'Device'), t('security.ipAddress', 'IP'), t('security.createdAt', 'Created'), t('security.lastActivity', 'Last Activity'), t('security.mfaVerified', 'MFA'), ''].map((h, i) => (
-                      <th key={i} className={clsx('px-4 py-2 text-left text-sm font-semibold', theme === 'dark' ? 'text-slate-300' : 'text-slate-900')}>
-                        {h}
-                      </th>
-                    ))}
+                    <th>{t('security.device', 'Device')}</th>
+                    <th>{t('security.ipAddress', 'IP')}</th>
+                    <th>{t('security.createdAt', 'Created')}</th>
+                    <th>{t('security.lastActivity', 'Last Activity')}</th>
+                    <th>{t('security.mfaVerified', 'MFA')}</th>
+                    <th />
                   </tr>
                 </thead>
                 <tbody>
                   {sessions.map((s) => (
-                    <tr key={s.session_id} className={clsx('border-b', theme === 'dark' ? 'border-slate-800' : 'border-slate-100')}>
-                      <td className={clsx('px-4 py-3 text-sm', theme === 'dark' ? 'text-slate-200' : 'text-slate-700')}>
+                    <tr key={s.session_id}>
+                      <td>
                         {s.device_name ?? '—'}
                         {s.trusted_device && (
-                          <span className="ml-2 text-xs px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
-                            trusted
-                          </span>
+                          <span className="ml-2 badge-status badge-muted">trusted</span>
                         )}
                       </td>
-                      <td className={clsx('px-4 py-3 text-sm font-mono', theme === 'dark' ? 'text-slate-400' : 'text-slate-600')}>
+                      <td className="cell-data opacity-70">
                         {s.ip_address ?? '—'}
                       </td>
-                      <td className={clsx('px-4 py-3 text-sm', theme === 'dark' ? 'text-slate-400' : 'text-slate-600')}>
+                      <td className="cell-data opacity-70">
                         {new Date(s.created_at).toLocaleString()}
                       </td>
-                      <td className={clsx('px-4 py-3 text-sm', theme === 'dark' ? 'text-slate-400' : 'text-slate-600')}>
+                      <td className="cell-data opacity-70">
                         {new Date(s.last_activity).toLocaleString()}
                       </td>
-                      <td className="px-4 py-3 text-sm">
-                        {s.mfa_verified ? (
-                          <ShieldCheck size={16} className="text-green-500" />
-                        ) : (
-                          <Lock size={16} className="text-slate-400" />
-                        )}
+                      <td>
+                        <span className={clsx('badge-status', s.mfa_verified ? 'badge-success' : 'badge-muted')}>
+                          {s.mfa_verified ? t('security.mfaVerified', 'MFA') : '—'}
+                        </span>
                       </td>
-                      <td className="px-4 py-3 text-right">
+                      <td className="text-right">
                         <button
                           onClick={() => handleRevokeSession(s.session_id)}
-                          className="text-sm text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 font-medium"
+                          className="text-sm text-[#dc2626] opacity-60 hover:opacity-100 transition-opacity font-medium"
                         >
                           {t('security.revoke', 'Revoke')}
                         </button>
@@ -407,7 +406,7 @@ export const SecurityAuthPage: React.FC = () => {
               </table>
             </div>
           )}
-        </div>
+        </section>
       </div>
     </div>
   )

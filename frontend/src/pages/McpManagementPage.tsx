@@ -12,32 +12,22 @@ import {
 } from '@/services/mcpOps'
 import { useI18n } from '@/i18n/context'
 import {
-  Server,
   Plus,
   Trash2,
   RefreshCw,
-  Activity,
-  ScrollText,
-  Wrench,
-  ShieldCheck,
-  Plug,
   PlugZap,
 } from 'lucide-react'
 import clsx from 'clsx'
 
 type TabKey = 'servers' | 'tools' | 'health'
 
+const DIVIDER = 'var(--divider)'
+
 export const McpManagementPage: React.FC = () => {
   const { theme, setError } = useAppStore()
   const { t } = useI18n()
   const [tab, setTab] = useState<TabKey>('servers')
 
-  const card = clsx(
-    'rounded-lg p-6',
-    theme === 'dark' ? 'bg-slate-900 border border-slate-700' : 'bg-white border border-slate-200'
-  )
-  const muted = clsx('text-sm', theme === 'dark' ? 'text-slate-400' : 'text-slate-600')
-  const heading = clsx('text-lg font-bold', theme === 'dark' ? 'text-white' : 'text-slate-900')
   const input = clsx(
     'w-full px-3 py-2 rounded-lg border text-sm outline-none transition-colors',
     theme === 'dark'
@@ -46,31 +36,38 @@ export const McpManagementPage: React.FC = () => {
   )
   const errBox = clsx(
     'mb-6 rounded-lg border px-4 py-3 text-sm',
-    theme === 'dark'
-      ? 'border-red-900 bg-red-950/40 text-red-300'
-      : 'border-red-200 bg-red-50 text-red-700'
+    'border-[#dc2626]/30 text-[#dc2626]'
   )
 
-  const tabs: Array<{ key: TabKey; label: string; icon: React.ReactNode }> = [
-    { key: 'servers', label: t('mcp.servers', 'Servers'), icon: <Server size={16} /> },
-    { key: 'tools', label: t('mcp.tools', 'Tools'), icon: <Wrench size={16} /> },
-    { key: 'health', label: t('mcp.healthAudit', 'Health & Audit'), icon: <Activity size={16} /> },
+  const tabs: Array<{ key: TabKey; label: string }> = [
+    { key: 'servers', label: t('mcp.servers', 'Servers') },
+    { key: 'tools', label: t('mcp.tools', 'Tools') },
+    { key: 'health', label: t('mcp.healthAudit', 'Health & Audit') },
   ]
 
   return (
-    <div className={clsx('p-8', theme === 'dark' ? 'bg-slate-950' : 'bg-slate-50')}>
-      <div className="max-w-6xl mx-auto">
-        <div className="mb-8">
-          <h1 className={clsx('text-3xl font-bold mb-2', theme === 'dark' ? 'text-white' : 'text-slate-900')}>
-            {t('mcp.title', 'MCP Management')}
-          </h1>
-          <p className={muted}>
+    <div className={clsx(
+      'min-h-full px-8 py-10',
+      theme === 'dark' ? 'bg-slate-950 text-slate-200' : 'bg-[#fafafa] text-[#333333]'
+    )}>
+      <div className="max-w-6xl">
+        {/* Header — Dashboard-style */}
+        <header className="mb-8">
+          <div
+            className={clsx(
+              'w-12 border-t-2 mb-5',
+              theme === 'dark' ? 'border-slate-200' : 'border-[#333333]'
+            )}
+            aria-hidden="true"
+          />
+          <h1 className="page-title">{t('mcp.title', 'MCP Management')}</h1>
+          <p className="page-subtitle">
             {t('mcp.subtitle', 'Manage MCP servers, discovered tools, health and audit logs')}
           </p>
-        </div>
+        </header>
 
-        {/* Tabs */}
-        <div className="flex gap-2 mb-6" role="tablist">
+        {/* Tabs — underline style */}
+        <div className="flex gap-1 mb-8 border-b" style={{ borderColor: DIVIDER }} role="tablist">
           {tabs.map((tb) => (
             <button
               key={tb.key}
@@ -78,28 +75,25 @@ export const McpManagementPage: React.FC = () => {
               aria-selected={tab === tb.key}
               onClick={() => setTab(tb.key)}
               className={clsx(
-                'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors',
+                'px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px',
                 tab === tb.key
-                  ? 'bg-blue-600 text-white'
-                  : theme === 'dark'
-                    ? 'bg-slate-800 text-slate-300 hover:bg-slate-700'
-                    : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
+                  ? 'border-blue-600 text-blue-600 dark:text-blue-400'
+                  : 'border-transparent opacity-50 hover:opacity-100'
               )}
             >
-              {tb.icon}
               {tb.label}
             </button>
           ))}
         </div>
 
         {tab === 'servers' && (
-          <ServersTab theme={theme} card={card} muted={muted} heading={heading} input={input} errBox={errBox} setError={setError} />
+          <ServersTab theme={theme} input={input} errBox={errBox} setError={setError} />
         )}
         {tab === 'tools' && (
-          <ToolsTab theme={theme} card={card} muted={muted} heading={heading} errBox={errBox} setError={setError} />
+          <ToolsTab theme={theme} errBox={errBox} setError={setError} />
         )}
         {tab === 'health' && (
-          <HealthTab theme={theme} card={card} muted={muted} heading={heading} input={input} errBox={errBox} setError={setError} />
+          <HealthTab theme={theme} input={input} errBox={errBox} setError={setError} />
         )}
       </div>
     </div>
@@ -110,17 +104,19 @@ export const McpManagementPage: React.FC = () => {
 
 interface TabProps {
   theme: 'light' | 'dark'
-  card: string
-  muted: string
-  heading: string
   input?: string
   errBox: string
   setError: (e: string | null) => void
 }
 
+const ghostBtn = (theme: 'light' | 'dark') => clsx(
+  'flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50',
+  theme === 'dark' ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
+)
+
 // ─── Servers tab ─────────────────────────────────────────────────────────────
 
-const ServersTab: React.FC<TabProps> = ({ theme, card, muted, heading, input, errBox, setError }) => {
+const ServersTab: React.FC<TabProps> = ({ theme, input, errBox, setError }) => {
   const { t } = useI18n()
   const [servers, setServers] = useState<McpServerInfo[]>([])
   const [cmServers, setCmServers] = useState<CmServerInfo[]>([])
@@ -228,20 +224,21 @@ const ServersTab: React.FC<TabProps> = ({ theme, card, muted, heading, input, er
     }
   }
 
+  const labelCls = 'block text-[13px] opacity-60 mb-1'
+
   return (
     <div>
       {loadError && <div role="alert" className={errBox}>{loadError}</div>}
 
-      <div className="flex items-center justify-between mb-4">
-        <h2 className={heading}>{t('mcp.serverList', 'MCP Servers')}</h2>
+      <div className="flex items-center justify-between mb-2">
+        <h2 className="text-[11px] uppercase tracking-[0.08em] opacity-50">
+          {t('mcp.serverList', 'MCP Servers')}
+        </h2>
         <div className="flex gap-2">
           <button
             onClick={load}
             disabled={loading}
-            className={clsx(
-              'flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50',
-              theme === 'dark' ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
-            )}
+            className={ghostBtn(theme)}
             aria-label={t('common.refresh', 'Refresh')}
           >
             <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
@@ -249,7 +246,7 @@ const ServersTab: React.FC<TabProps> = ({ theme, card, muted, heading, input, er
           </button>
           <button
             onClick={() => setShowAdd(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
           >
             <Plus size={16} />
             {t('mcp.addServer', 'Add Server')}
@@ -258,43 +255,31 @@ const ServersTab: React.FC<TabProps> = ({ theme, card, muted, heading, input, er
       </div>
 
       {!mcpEnabled && (
-        <div className={clsx(
-          'mb-4 rounded-lg border px-4 py-3 text-sm',
-          theme === 'dark' ? 'border-amber-900 bg-amber-950/40 text-amber-300' : 'border-amber-200 bg-amber-50 text-amber-700'
-        )}>
+        <div className="mb-4 rounded-lg border border-[#d97706]/30 px-4 py-3 text-sm text-[#d97706]">
           {t('mcp.disabled', 'MCP manager not initialized (XAGENT_MCP_ENABLED=false or no config)')}
         </div>
       )}
 
-      {/* Discovery-layer servers */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+      {/* Discovery-layer servers — divider rows */}
+      <div className="mb-8">
         {servers.map((s) => (
-          <div key={s.name} className={card}>
-            <div className="flex items-start justify-between mb-3">
+          <div key={s.name} className="row-line flex items-center justify-between gap-4" style={{ padding: '14px 0' }}>
+            <div className="min-w-0">
               <div className="flex items-center gap-2">
-                {s.connected ? <PlugZap size={18} className="text-green-500" /> : <Plug size={18} className="text-slate-500" />}
-                <h3 className={clsx('font-bold', theme === 'dark' ? 'text-white' : 'text-slate-900')}>{s.name}</h3>
+                <h3 className="font-medium text-sm truncate">{s.name}</h3>
+                <span className={clsx('badge-status', s.connected ? 'badge-success' : 'badge-muted')}>
+                  {s.connected ? t('mcp.connected', 'Connected') : t('mcp.disconnected', 'Disconnected')}
+                </span>
               </div>
-              <span className={clsx(
-                'px-2 py-0.5 rounded-full text-xs font-medium',
-                s.connected
-                  ? 'bg-green-500/10 text-green-600'
-                  : theme === 'dark' ? 'bg-slate-700 text-slate-400' : 'bg-slate-100 text-slate-500'
-              )}>
-                {s.connected ? t('mcp.connected', 'Connected') : t('mcp.disconnected', 'Disconnected')}
-              </span>
+              <p className="cell-data opacity-50 mt-1">{t('mcp.transport', 'Transport')}: {s.transport}</p>
             </div>
-            <p className={muted}>{t('mcp.transport', 'Transport')}: {s.transport}</p>
             {/* Backend exposes no delete for discovery-layer servers; only
                 client-manager connections can be disconnected. */}
             <button
               disabled
               title={`${t('mcp.removeServer', 'Remove')} (${comingSoon})`}
               aria-label={`${t('mcp.removeServer', 'Remove')} (${comingSoon})`}
-              className={clsx(
-                'mt-4 w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium opacity-50 cursor-not-allowed',
-                theme === 'dark' ? 'bg-slate-700 text-slate-300' : 'bg-slate-200 text-slate-700'
-              )}
+              className={clsx(ghostBtn(theme), 'opacity-50 cursor-not-allowed shrink-0')}
             >
               <Trash2 size={16} />
               {t('mcp.removeServer', 'Remove')} ({comingSoon})
@@ -302,43 +287,44 @@ const ServersTab: React.FC<TabProps> = ({ theme, card, muted, heading, input, er
           </div>
         ))}
         {servers.length === 0 && cmServers.length === 0 && !loading && (
-          <div className={clsx('col-span-full text-center py-8', muted)}>
+          <p className="empty-state">
             {t('mcp.noServers', 'No MCP servers configured')}
-          </div>
+          </p>
         )}
       </div>
 
       {/* Client-manager connections */}
       {cmServers.length > 0 && (
         <>
-          <h2 className={clsx(heading, 'mb-4')}>{t('mcp.cmServers', 'Client-Manager Connections')}</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+          <h2 className="text-[11px] uppercase tracking-[0.08em] opacity-50 mb-2">
+            {t('mcp.cmServers', 'Client-Manager Connections')}
+          </h2>
+          <div className="mb-8">
             {cmServers.map((s, i) => {
               const id = String(s.server_id ?? s.name ?? i)
               return (
-                <div key={id} className={card}>
-                  <div className="flex items-start justify-between mb-3">
-                    <h3 className={clsx('font-bold', theme === 'dark' ? 'text-white' : 'text-slate-900')}>
-                      {String(s.name ?? s.server_id ?? id)}
-                    </h3>
-                    <span className={clsx(
-                      'px-2 py-0.5 rounded-full text-xs font-medium',
-                      s.connected ? 'bg-green-500/10 text-green-600' : theme === 'dark' ? 'bg-slate-700 text-slate-400' : 'bg-slate-100 text-slate-500'
-                    )}>
-                      {s.connected ? t('mcp.connected', 'Connected') : t('mcp.disconnected', 'Disconnected')}
-                    </span>
+                <div key={id} className="row-line flex items-center justify-between gap-4" style={{ padding: '14px 0' }}>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-medium text-sm truncate">
+                        {String(s.name ?? s.server_id ?? id)}
+                      </h3>
+                      <span className={clsx('badge-status', s.connected ? 'badge-success' : 'badge-muted')}>
+                        {s.connected ? t('mcp.connected', 'Connected') : t('mcp.disconnected', 'Disconnected')}
+                      </span>
+                    </div>
+                    {s.transport && (
+                      <p className="cell-data opacity-50 mt-1">{t('mcp.transport', 'Transport')}: {String(s.transport)}</p>
+                    )}
                   </div>
-                  {s.transport && <p className={muted}>{t('mcp.transport', 'Transport')}: {String(s.transport)}</p>}
                   <button
                     onClick={() => handleDisconnect(id)}
                     disabled={busy}
-                    className={clsx(
-                      'mt-4 w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50',
-                      theme === 'dark' ? 'bg-red-600/20 text-red-400 hover:bg-red-600/30' : 'bg-red-100 text-red-700 hover:bg-red-200'
-                    )}
+                    className="p-1.5 text-[#dc2626] opacity-60 hover:opacity-100 transition-opacity disabled:opacity-30 shrink-0"
+                    aria-label={t('mcp.disconnect', 'Disconnect')}
+                    title={t('mcp.disconnect', 'Disconnect')}
                   >
                     <Trash2 size={16} />
-                    {t('mcp.disconnect', 'Disconnect')}
                   </button>
                 </div>
               )
@@ -350,15 +336,18 @@ const ServersTab: React.FC<TabProps> = ({ theme, card, muted, heading, input, er
       {/* Add server modal */}
       {showAdd && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true">
-          <div className={clsx(card, 'w-full max-w-lg max-h-[90vh] overflow-y-auto')}>
-            <h3 className={clsx(heading, 'mb-4')}>{t('mcp.addServer', 'Add Server')}</h3>
+          <div className={clsx(
+            'rounded-lg p-6 border w-full max-w-lg max-h-[90vh] overflow-y-auto',
+            theme === 'dark' ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200'
+          )}>
+            <h3 className="text-lg font-medium mb-4">{t('mcp.addServer', 'Add Server')}</h3>
             <div className="space-y-3">
               <div>
-                <label className={clsx(muted, 'block mb-1')}>{t('mcp.serverName', 'Name')}</label>
+                <label className={labelCls}>{t('mcp.serverName', 'Name')}</label>
                 <input className={input} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="my-mcp-server" />
               </div>
               <div>
-                <label className={clsx(muted, 'block mb-1')}>{t('mcp.transport', 'Transport')}</label>
+                <label className={labelCls}>{t('mcp.transport', 'Transport')}</label>
                 <select className={input} value={form.transport} onChange={(e) => setForm({ ...form, transport: e.target.value })}>
                   <option value="http">HTTP</option>
                   <option value="stdio">stdio</option>
@@ -367,32 +356,32 @@ const ServersTab: React.FC<TabProps> = ({ theme, card, muted, heading, input, er
               {form.transport === 'http' ? (
                 <>
                   <div>
-                    <label className={clsx(muted, 'block mb-1')}>URL</label>
+                    <label className={labelCls}>URL</label>
                     <input className={input} value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} placeholder="http://localhost:8001" />
                   </div>
                   <div>
-                    <label className={clsx(muted, 'block mb-1')}>{t('mcp.headers', 'Headers (JSON, optional)')}</label>
+                    <label className={labelCls}>{t('mcp.headers', 'Headers (JSON, optional)')}</label>
                     <input className={input} value={form.headers} onChange={(e) => setForm({ ...form, headers: e.target.value })} placeholder='{"Authorization": "Bearer ..."}' />
                   </div>
                 </>
               ) : (
                 <>
                   <div>
-                    <label className={clsx(muted, 'block mb-1')}>{t('mcp.command', 'Command')}</label>
+                    <label className={labelCls}>{t('mcp.command', 'Command')}</label>
                     <input className={input} value={form.command} onChange={(e) => setForm({ ...form, command: e.target.value })} placeholder="npx" />
                   </div>
                   <div>
-                    <label className={clsx(muted, 'block mb-1')}>{t('mcp.args', 'Args (space-separated)')}</label>
+                    <label className={labelCls}>{t('mcp.args', 'Args (space-separated)')}</label>
                     <input className={input} value={form.args} onChange={(e) => setForm({ ...form, args: e.target.value })} placeholder="-y @modelcontextprotocol/server-everything" />
                   </div>
                   <div>
-                    <label className={clsx(muted, 'block mb-1')}>{t('mcp.env', 'Env (JSON, optional)')}</label>
+                    <label className={labelCls}>{t('mcp.env', 'Env (JSON, optional)')}</label>
                     <input className={input} value={form.env} onChange={(e) => setForm({ ...form, env: e.target.value })} placeholder='{"KEY": "value"}' />
                   </div>
                 </>
               )}
               <div>
-                <label className={clsx(muted, 'block mb-1')}>{t('mcp.timeout', 'Timeout (seconds)')}</label>
+                <label className={labelCls}>{t('mcp.timeout', 'Timeout (seconds)')}</label>
                 <input className={input} type="number" min={1} value={form.timeout} onChange={(e) => setForm({ ...form, timeout: e.target.value })} />
               </div>
             </div>
@@ -424,7 +413,7 @@ const ServersTab: React.FC<TabProps> = ({ theme, card, muted, heading, input, er
 
 // ─── Tools tab ───────────────────────────────────────────────────────────────
 
-const ToolsTab: React.FC<TabProps> = ({ theme, card, muted, heading, errBox, setError }) => {
+const ToolsTab: React.FC<TabProps> = ({ theme, errBox, setError }) => {
   const { t } = useI18n()
   const [legacyTools, setLegacyTools] = useState<McpLegacyTool[]>([])
   const [discovered, setDiscovered] = useState<McpDiscoveredTool[]>([])
@@ -473,15 +462,14 @@ const ToolsTab: React.FC<TabProps> = ({ theme, card, muted, heading, errBox, set
     <div>
       {loadError && <div role="alert" className={errBox}>{loadError}</div>}
 
-      <div className="flex items-center justify-between mb-4">
-        <h2 className={heading}>{t('mcp.toolInventory', 'Tool Inventory')}</h2>
+      <div className="flex items-center justify-between mb-2">
+        <h2 className="text-[11px] uppercase tracking-[0.08em] opacity-50">
+          {t('mcp.toolInventory', 'Tool Inventory')}
+        </h2>
         <button
           onClick={load}
           disabled={loading}
-          className={clsx(
-            'flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50',
-            theme === 'dark' ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
-          )}
+          className={ghostBtn(theme)}
           aria-label={t('common.refresh', 'Refresh')}
         >
           <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
@@ -492,40 +480,37 @@ const ToolsTab: React.FC<TabProps> = ({ theme, card, muted, heading, errBox, set
       {/* Discovered tools (official SDK) */}
       {discovered.length > 0 && (
         <>
-          <h3 className={clsx('text-sm font-semibold mb-3', theme === 'dark' ? 'text-slate-300' : 'text-slate-700')}>
+          <h3 className="text-[11px] uppercase tracking-[0.08em] opacity-50 mb-2 mt-6">
             {t('mcp.discoveredTools', 'Discovered (MCP SDK)')}
           </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+          <div className="mb-8">
             {discovered.map((tool) => {
               const key = `${tool.server}/${tool.name}`
               return (
-                <div key={key} className={card}>
-                  <div className="flex items-start justify-between mb-2">
-                    <div>
-                      <h4 className={clsx('font-bold', theme === 'dark' ? 'text-white' : 'text-slate-900')}>{tool.name}</h4>
-                      <p className={muted}>{t('mcp.server', 'Server')}: {tool.server}</p>
+                <div key={key} className="row-line" style={{ padding: '16px 0' }}>
+                  <div className="flex items-start justify-between gap-4 mb-1">
+                    <div className="min-w-0">
+                      <h4 className="font-medium text-sm">{tool.name}</h4>
+                      <p className="cell-data opacity-50">{t('mcp.server', 'Server')}: {tool.server}</p>
                     </div>
                     {/* Backend does not expose risk level / approval flags for MCP tools */}
                     <span
-                      className={clsx(
-                        'px-2 py-0.5 rounded-full text-xs font-medium opacity-60',
-                        theme === 'dark' ? 'bg-slate-700 text-slate-400' : 'bg-slate-100 text-slate-500'
-                      )}
+                      className="badge-status badge-muted shrink-0"
                       title={`${t('mcp.riskLevel', 'Risk level')} / ${t('mcp.approval', 'Approval')} (${comingSoon})`}
                     >
-                      {t('mcp.riskLevel', 'Risk')}: — ({comingSoon})
+                      {t('mcp.riskLevel', 'Risk')}: —
                     </span>
                   </div>
-                  <p className={clsx(muted, 'mb-3 line-clamp-2')}>{tool.description || '—'}</p>
-                  <p className={clsx('text-xs mb-3 font-mono', theme === 'dark' ? 'text-slate-500' : 'text-slate-400')}>
+                  <p className="text-[13px] opacity-60 mb-2 line-clamp-2">{tool.description || '—'}</p>
+                  <p className="cell-data opacity-50 mb-2">
                     {tool.registered_name}
                   </p>
                   {invokeResult?.key === key && (
                     <pre className={clsx(
-                      'mb-3 rounded-md border px-3 py-2 text-xs overflow-x-auto whitespace-pre-wrap break-all',
+                      'mb-3 rounded-lg border px-3 py-2 text-xs overflow-x-auto whitespace-pre-wrap break-all',
                       invokeResult.ok
-                        ? theme === 'dark' ? 'border-green-900 bg-green-950/40 text-green-300' : 'border-green-200 bg-green-50 text-green-700'
-                        : theme === 'dark' ? 'border-red-900 bg-red-950/40 text-red-300' : 'border-red-200 bg-red-50 text-red-700'
+                        ? 'border-[#16a34a]/30 text-[#16a34a]'
+                        : 'border-[#dc2626]/30 text-[#dc2626]'
                     )} role="status">
                       {invokeResult.text}
                     </pre>
@@ -533,10 +518,7 @@ const ToolsTab: React.FC<TabProps> = ({ theme, card, muted, heading, errBox, set
                   <button
                     onClick={() => handleInvoke(tool)}
                     disabled={busyKey === key}
-                    className={clsx(
-                      'flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50',
-                      theme === 'dark' ? 'bg-blue-600/20 text-blue-400 hover:bg-blue-600/30' : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
-                    )}
+                    className={ghostBtn(theme)}
                   >
                     <PlugZap size={16} />
                     {busyKey === key ? t('common.loading', 'Loading...') : t('mcp.invoke', 'Invoke (no args)')}
@@ -549,40 +531,33 @@ const ToolsTab: React.FC<TabProps> = ({ theme, card, muted, heading, errBox, set
       )}
 
       {/* Legacy server tools */}
-      <h3 className={clsx('text-sm font-semibold mb-3', theme === 'dark' ? 'text-slate-300' : 'text-slate-700')}>
+      <h3 className="text-[11px] uppercase tracking-[0.08em] opacity-50 mb-2">
         {t('mcp.legacyTools', 'Registered (Legacy Server)')}
       </h3>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div>
         {legacyTools.map((tool) => (
-          <div key={tool.name} className={card}>
-            <div className="flex items-start justify-between mb-2">
-              <h4 className={clsx('font-bold', theme === 'dark' ? 'text-white' : 'text-slate-900')}>{tool.name}</h4>
+          <div key={tool.name} className="row-line" style={{ padding: '16px 0' }}>
+            <div className="flex items-start justify-between gap-4 mb-1">
+              <h4 className="font-medium text-sm">{tool.name}</h4>
               <span
-                className={clsx(
-                  'px-2 py-0.5 rounded-full text-xs font-medium opacity-60',
-                  theme === 'dark' ? 'bg-slate-700 text-slate-400' : 'bg-slate-100 text-slate-500'
-                )}
+                className="badge-status badge-muted shrink-0"
                 title={`${t('mcp.approval', 'Approval required')} (${comingSoon})`}
               >
-                <ShieldCheck size={12} className="inline mr-1" />
                 {comingSoon}
               </span>
             </div>
-            <p className={clsx(muted, 'line-clamp-2')}>{tool.description || '—'}</p>
+            <p className="text-[13px] opacity-60 line-clamp-2">{tool.description || '—'}</p>
             {tool.input_schema && (
-              <pre className={clsx(
-                'mt-3 rounded-md px-3 py-2 text-xs overflow-x-auto',
-                theme === 'dark' ? 'bg-slate-800 text-slate-400' : 'bg-slate-50 text-slate-600'
-              )}>
+              <pre className="mt-2 cell-data opacity-60 overflow-x-auto whitespace-pre-wrap break-all">
                 {JSON.stringify(tool.input_schema, null, 2)}
               </pre>
             )}
           </div>
         ))}
         {legacyTools.length === 0 && discovered.length === 0 && !loading && (
-          <div className={clsx('col-span-full text-center py-8', muted)}>
+          <p className="empty-state">
             {t('mcp.noTools', 'No MCP tools available')}
-          </div>
+          </p>
         )}
       </div>
     </div>
@@ -591,7 +566,7 @@ const ToolsTab: React.FC<TabProps> = ({ theme, card, muted, heading, errBox, set
 
 // ─── Health & Audit tab ──────────────────────────────────────────────────────
 
-const HealthTab: React.FC<TabProps> = ({ theme, card, muted, heading, input, errBox, setError }) => {
+const HealthTab: React.FC<TabProps> = ({ theme, input, errBox, setError }) => {
   const { t } = useI18n()
   const [health, setHealth] = useState<McpHealthResponse | null>(null)
   const [status, setStatus] = useState<McpStatusResponse | null>(null)
@@ -680,24 +655,20 @@ const HealthTab: React.FC<TabProps> = ({ theme, card, muted, heading, input, err
     }
   }
 
-  const statusBadge = (ok: boolean) => clsx(
-    'px-2 py-0.5 rounded-full text-xs font-medium',
-    ok ? 'bg-green-500/10 text-green-600' : 'bg-red-500/10 text-red-600'
-  )
+  const statusBadge = (ok: boolean) => clsx('badge-status', ok ? 'badge-success' : 'badge-danger')
 
   return (
     <div>
       {loadError && <div role="alert" className={errBox}>{loadError}</div>}
 
-      <div className="flex items-center justify-between mb-4">
-        <h2 className={heading}>{t('mcp.healthCheck', 'Health Check')}</h2>
+      <div className="flex items-center justify-between mb-2">
+        <h2 className="text-[11px] uppercase tracking-[0.08em] opacity-50">
+          {t('mcp.healthCheck', 'Health Check')}
+        </h2>
         <button
           onClick={loadHealth}
           disabled={loading}
-          className={clsx(
-            'flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50',
-            theme === 'dark' ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
-          )}
+          className={ghostBtn(theme)}
           aria-label={t('common.refresh', 'Refresh')}
         >
           <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
@@ -705,11 +676,11 @@ const HealthTab: React.FC<TabProps> = ({ theme, card, muted, heading, input, err
         </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-10">
         {/* Adapter health */}
-        <div className={card}>
-          <div className="flex items-center justify-between mb-3">
-            <h3 className={clsx('font-bold', theme === 'dark' ? 'text-white' : 'text-slate-900')}>
+        <section>
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-[11px] uppercase tracking-[0.08em] opacity-50">
               {t('mcp.adapterHealth', 'Adapter')}
             </h3>
             {health && (
@@ -719,47 +690,53 @@ const HealthTab: React.FC<TabProps> = ({ theme, card, muted, heading, input, err
             )}
           </div>
           {health ? (
-            <div className="space-y-1">
+            <div className="font-data text-[13px]">
               {Object.entries(health.components).map(([k, v]) => (
-                <div key={k} className="flex justify-between">
-                  <span className={muted}>{k}</span>
-                  <span className={clsx('text-xs font-mono', String(v).includes('error') ? 'text-red-500' : 'text-green-600')}>
+                <div key={k} className="flex justify-between gap-3 py-1.5 border-b" style={{ borderColor: DIVIDER }}>
+                  <span className="opacity-50">{k}</span>
+                  <span className={clsx('text-[12px]', String(v).includes('error') ? 'text-[#dc2626]' : 'text-[#16a34a]')}>
                     {String(v).slice(0, 40)}
                   </span>
                 </div>
               ))}
-              <p className={clsx('text-xs mt-2', muted)}>{health.timestamp}</p>
+              <p className="cell-data opacity-50 mt-2">{health.timestamp}</p>
             </div>
           ) : (
-            <p className={muted}>{t('mcp.unavailable', 'Unavailable')}</p>
+            <p className="empty-state">{t('mcp.unavailable', 'Unavailable')}</p>
           )}
-        </div>
+        </section>
 
         {/* Legacy server status */}
-        <div className={card}>
-          <div className="flex items-center justify-between mb-3">
-            <h3 className={clsx('font-bold', theme === 'dark' ? 'text-white' : 'text-slate-900')}>
+        <section>
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-[11px] uppercase tracking-[0.08em] opacity-50">
               {t('mcp.serverStatus', 'Server')}
             </h3>
             {status && <span className={statusBadge(status.status === 'running')}>{status.status}</span>}
           </div>
           {status ? (
-            <div className="space-y-1">
-              <p className={muted}>{status.host}:{status.port}</p>
-              <p className={muted}>{t('mcp.toolsCount', 'Tools')}: {status.tools_count}</p>
-              <p className={clsx('text-xs font-mono break-all', theme === 'dark' ? 'text-slate-500' : 'text-slate-400')}>
+            <div className="font-data text-[13px]">
+              <div className="flex justify-between gap-3 py-1.5 border-b" style={{ borderColor: DIVIDER }}>
+                <span className="opacity-50">endpoint</span>
+                <span className="text-[12px]">{status.host}:{status.port}</span>
+              </div>
+              <div className="flex justify-between gap-3 py-1.5 border-b" style={{ borderColor: DIVIDER }}>
+                <span className="opacity-50">{t('mcp.toolsCount', 'Tools')}</span>
+                <span className="text-[12px]">{status.tools_count}</span>
+              </div>
+              <p className="cell-data opacity-50 break-all mt-2">
                 {status.tools.join(', ')}
               </p>
             </div>
           ) : (
-            <p className={muted}>{t('mcp.unavailable', 'Unavailable')}</p>
+            <p className="empty-state">{t('mcp.unavailable', 'Unavailable')}</p>
           )}
-        </div>
+        </section>
 
         {/* Client-manager health */}
-        <div className={card}>
-          <div className="flex items-center justify-between mb-3">
-            <h3 className={clsx('font-bold', theme === 'dark' ? 'text-white' : 'text-slate-900')}>
+        <section>
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-[11px] uppercase tracking-[0.08em] opacity-50">
               {t('mcp.cmHealth', 'Client Manager')}
             </h3>
             {cmHealth && (
@@ -769,23 +746,19 @@ const HealthTab: React.FC<TabProps> = ({ theme, card, muted, heading, input, err
             )}
           </div>
           {cmHealth ? (
-            <pre className={clsx(
-              'text-xs overflow-x-auto rounded-md px-3 py-2',
-              theme === 'dark' ? 'bg-slate-800 text-slate-400' : 'bg-slate-50 text-slate-600'
-            )}>
+            <pre className="cell-data opacity-60 overflow-x-auto whitespace-pre-wrap break-all">
               {JSON.stringify(cmHealth, null, 2).slice(0, 400)}
             </pre>
           ) : (
-            <p className={muted}>{t('mcp.unavailable', 'Unavailable')}</p>
+            <p className="empty-state">{t('mcp.unavailable', 'Unavailable')}</p>
           )}
-        </div>
+        </section>
       </div>
 
       {/* Permissions */}
-      <div className={clsx(card, 'mb-8')}>
-        <div className="flex items-center gap-3 mb-4">
-          <ShieldCheck size={18} className="text-blue-500" />
-          <h3 className={clsx('font-bold', theme === 'dark' ? 'text-white' : 'text-slate-900')}>
+      <section className="mb-10">
+        <div className="flex items-center gap-3 mb-2">
+          <h3 className="text-[11px] uppercase tracking-[0.08em] opacity-50">
             {t('mcp.permissions', 'Tool Permissions')}
           </h3>
           <select
@@ -801,17 +774,17 @@ const HealthTab: React.FC<TabProps> = ({ theme, card, muted, heading, input, err
           </select>
         </div>
         {permissions ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8">
             {Object.entries(permissions).map(([perm, allowed]) => (
               <label
                 key={perm}
                 className={clsx(
-                  'flex items-center justify-between rounded-lg border px-3 py-2 text-sm',
-                  theme === 'dark' ? 'border-slate-700' : 'border-slate-200',
+                  'flex items-center justify-between py-2 border-b text-sm',
                   permBusy && 'opacity-50 pointer-events-none'
                 )}
+                style={{ borderColor: DIVIDER }}
               >
-                <span className={theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}>{perm}</span>
+                <span>{perm}</span>
                 <input
                   type="checkbox"
                   checked={allowed}
@@ -824,49 +797,41 @@ const HealthTab: React.FC<TabProps> = ({ theme, card, muted, heading, input, err
             ))}
           </div>
         ) : (
-          <p className={muted}>
+          <p className="empty-state">
             {category ? t('mcp.permsUnavailable', 'Permissions unavailable for this category') : t('mcp.permsHint', 'Select a category (file / search / browser) to view and edit permissions')}
           </p>
         )}
-      </div>
+      </section>
 
       {/* Audit logs */}
-      <div className={card}>
-        <div className="flex items-center gap-3 mb-4">
-          <ScrollText size={18} className="text-blue-500" />
-          <h3 className={clsx('font-bold', theme === 'dark' ? 'text-white' : 'text-slate-900')}>
-            {t('mcp.auditLogs', 'Audit Logs')}
+      <section>
+        <div className="flex items-center gap-3 mb-2">
+          <h3 className="text-[11px] uppercase tracking-[0.08em] opacity-50">
+            {t('mcp.auditLogs', 'Audit Logs')} ({auditCount})
           </h3>
-          <span className={muted}>({auditCount})</span>
           <button
             onClick={() => loadAudit(category)}
-            className={clsx(
-              'ml-auto flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-colors',
-              theme === 'dark' ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-            )}
+            className="ml-auto p-1.5 opacity-50 hover:opacity-100 transition-opacity"
             aria-label={t('common.refresh', 'Refresh')}
           >
             <RefreshCw size={14} />
           </button>
         </div>
         {auditEntries.length === 0 ? (
-          <p className={muted}>{t('mcp.noAuditLogs', 'No audit log entries')}</p>
+          <p className="empty-state">{t('mcp.noAuditLogs', 'No audit log entries')}</p>
         ) : (
-          <div className="space-y-2 max-h-96 overflow-y-auto">
+          <div className="max-h-96 overflow-y-auto">
             {auditEntries.map((entry, i) => (
               <pre
                 key={i}
-                className={clsx(
-                  'rounded-md px-3 py-2 text-xs overflow-x-auto whitespace-pre-wrap break-all',
-                  theme === 'dark' ? 'bg-slate-800 text-slate-400' : 'bg-slate-50 text-slate-600'
-                )}
+                className="row-line cell-data opacity-70 overflow-x-auto whitespace-pre-wrap break-all"
               >
                 {JSON.stringify(entry, null, 2)}
               </pre>
             ))}
           </div>
         )}
-      </div>
+      </section>
     </div>
   )
 }

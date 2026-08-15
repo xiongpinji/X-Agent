@@ -68,14 +68,14 @@ export function ToolsOverviewPage(props: ToolsOverviewPageProps) {
 
   return (
     <div className="space-y-4">
-      <section className="rounded-2xl border bg-white p-4 shadow-sm">
-        <div className="text-xs text-gray-500">{resourceType}</div>
-        <div className="mt-1 text-sm text-gray-700">资源 ID：{resourceId}</div>
-        <div className="mt-2 text-xs text-gray-500">工具摘要：{apiData?.linked_summaries.tools?.summary?.title ?? props.linkedToolsSummary?.summary?.title ?? "tools"} · {totalTools} 个工具</div>
-        <div className="mt-1 text-xs text-gray-500">插件摘要：{apiData?.linked_summaries.plugins?.summary?.title ?? props.linkedPluginsSummary?.summary?.title ?? "plugins"} · {pluginCount} 个插件</div>
-        <div className="mt-1 text-xs text-gray-500">资源摘要：{apiData?.linked_summaries.resources?.summary?.title ?? props.linkedResourcesSummary?.summary?.title ?? "resources"} · {resourceCount} 个资源</div>
-        <div className="mt-1 text-xs text-gray-500">历史摘要：{apiData?.linked_summaries.history?.summary?.title ?? props.linkedHistorySummary?.summary?.title ?? "history"} · {disabledTools} 个停用项</div>
-      </section>
+      <header className="console-page-header">
+        <h1 className="page-title">工具中心</h1>
+        <div className="console-resource-id">{resourceType} · 资源 ID：{resourceId}</div>
+        <div className="console-summary-line">工具摘要：{apiData?.linked_summaries.tools?.summary?.title ?? props.linkedToolsSummary?.summary?.title ?? "tools"} · {totalTools} 个工具</div>
+        <div className="console-summary-line">插件摘要：{apiData?.linked_summaries.plugins?.summary?.title ?? props.linkedPluginsSummary?.summary?.title ?? "plugins"} · {pluginCount} 个插件</div>
+        <div className="console-summary-line">资源摘要：{apiData?.linked_summaries.resources?.summary?.title ?? props.linkedResourcesSummary?.summary?.title ?? "resources"} · {resourceCount} 个资源</div>
+        <div className="console-summary-line">历史摘要：{apiData?.linked_summaries.history?.summary?.title ?? props.linkedHistorySummary?.summary?.title ?? "history"} · {disabledTools} 个停用项</div>
+      </header>
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         <StatCard label="工具总数" value={String(totalTools)} />

@@ -66,14 +66,14 @@ export function MarketplaceOverviewPage(props: MarketplaceOverviewPageProps) {
 
   return (
     <div className="space-y-4">
-      <section className="rounded-2xl border bg-white p-4 shadow-sm">
-        <div className="text-xs text-gray-500">{resourceType}</div>
-        <div className="mt-1 text-sm text-gray-700">资源 ID：{resourceId}</div>
-        <div className="mt-2 text-xs text-gray-500">市场摘要：{apiData?.linked_summaries.market?.summary?.title ?? props.linkedMarketSummary?.summary?.title ?? "market"} · {totalItems} 个能力</div>
-        <div className="mt-1 text-xs text-gray-500">插件摘要：{apiData?.linked_summaries.plugins?.summary?.title ?? props.linkedPluginsSummary?.summary?.title ?? "plugins"} · {publishedItems} 个已发布</div>
-        <div className="mt-1 text-xs text-gray-500">工具摘要：{apiData?.linked_summaries.tools?.summary?.title ?? props.linkedToolsSummary?.summary?.title ?? "tools"} · {installedItems} 个已安装</div>
-        <div className="mt-1 text-xs text-gray-500">历史摘要：{apiData?.linked_summaries.history?.summary?.title ?? props.linkedHistorySummary?.summary?.title ?? "history"} · {pendingApprovals} 个待审批</div>
-      </section>
+      <header className="console-page-header">
+        <h1 className="page-title">能力市场</h1>
+        <div className="console-resource-id">{resourceType} · 资源 ID：{resourceId}</div>
+        <div className="console-summary-line">市场摘要：{apiData?.linked_summaries.market?.summary?.title ?? props.linkedMarketSummary?.summary?.title ?? "market"} · {totalItems} 个能力</div>
+        <div className="console-summary-line">插件摘要：{apiData?.linked_summaries.plugins?.summary?.title ?? props.linkedPluginsSummary?.summary?.title ?? "plugins"} · {publishedItems} 个已发布</div>
+        <div className="console-summary-line">工具摘要：{apiData?.linked_summaries.tools?.summary?.title ?? props.linkedToolsSummary?.summary?.title ?? "tools"} · {installedItems} 个已安装</div>
+        <div className="console-summary-line">历史摘要：{apiData?.linked_summaries.history?.summary?.title ?? props.linkedHistorySummary?.summary?.title ?? "history"} · {pendingApprovals} 个待审批</div>
+      </header>
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         <StatCard label="能力总数" value={String(totalItems)} />

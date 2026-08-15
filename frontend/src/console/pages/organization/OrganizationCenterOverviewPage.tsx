@@ -66,14 +66,14 @@ export function OrganizationCenterOverviewPage(props: OrganizationCenterOverview
 
   return (
     <div className="space-y-4">
-      <section className="rounded-2xl border bg-white p-4 shadow-sm">
-        <div className="text-xs text-gray-500">{resourceType}</div>
-        <div className="mt-1 text-sm text-gray-700">资源 ID：{resourceId}</div>
-        <div className="mt-2 text-xs text-gray-500">组织摘要：{apiData?.linked_summaries.organization?.summary?.title ?? props.linkedOrganizationSummary?.summary?.title ?? "organization"} · {totalMembers} 名成员</div>
-        <div className="mt-1 text-xs text-gray-500">部门摘要：{apiData?.linked_summaries.departments?.summary?.title ?? props.linkedDepartmentsSummary?.summary?.title ?? "departments"} · {totalDepartments} 个部门</div>
-        <div className="mt-1 text-xs text-gray-500">角色摘要：{apiData?.linked_summaries.roles?.summary?.title ?? props.linkedRolesSummary?.summary?.title ?? "roles"} · {totalRoles} 个角色</div>
-        <div className="mt-1 text-xs text-gray-500">审计摘要：{apiData?.linked_summaries.audits?.summary?.title ?? props.linkedAuditsSummary?.summary?.title ?? "audits"} · {pendingReviews} 个待审</div>
-      </section>
+      <header className="console-page-header">
+        <h1 className="page-title">组织权限中心</h1>
+        <div className="console-resource-id">{resourceType} · 资源 ID：{resourceId}</div>
+        <div className="console-summary-line">组织摘要：{apiData?.linked_summaries.organization?.summary?.title ?? props.linkedOrganizationSummary?.summary?.title ?? "organization"} · {totalMembers} 名成员</div>
+        <div className="console-summary-line">部门摘要：{apiData?.linked_summaries.departments?.summary?.title ?? props.linkedDepartmentsSummary?.summary?.title ?? "departments"} · {totalDepartments} 个部门</div>
+        <div className="console-summary-line">角色摘要：{apiData?.linked_summaries.roles?.summary?.title ?? props.linkedRolesSummary?.summary?.title ?? "roles"} · {totalRoles} 个角色</div>
+        <div className="console-summary-line">审计摘要：{apiData?.linked_summaries.audits?.summary?.title ?? props.linkedAuditsSummary?.summary?.title ?? "audits"} · {pendingReviews} 个待审</div>
+      </header>
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         <StatCard label="部门数" value={String(totalDepartments)} />

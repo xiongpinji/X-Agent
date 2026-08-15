@@ -343,7 +343,7 @@ export const SkillMarket: React.FC = () => {
                     <div className="bg-gradient-to-r from-blue-500 to-indigo-600 p-4 text-white">
                       <div className="flex items-start justify-between">
                         <div className="flex items-center gap-3">
-                          <span className="text-3xl">🧩</span>
+                          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M3 9h18M9 9v12" /></svg>
                           <div>
                             <h3 className="font-semibold text-lg">{skill.name}</h3>
                             <p className="text-sm text-blue-100">v{skill.version}{skill.author ? ` · ${skill.author}` : ''}</p>
@@ -493,7 +493,7 @@ export const SkillMarket: React.FC = () => {
             <div className="bg-gradient-to-r from-blue-500 to-indigo-600 p-6 text-white">
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-4">
-                  <span className="text-5xl">🧩</span>
+                  <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M3 9h18M9 9v12" /></svg>
                   <div>
                     <h2 className="text-2xl font-bold">{selectedSkill.name}</h2>
                     <p className="text-blue-100">v{selectedSkill.version}</p>

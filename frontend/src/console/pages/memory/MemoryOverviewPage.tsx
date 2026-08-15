@@ -66,14 +66,14 @@ export function MemoryOverviewPage(props: MemoryOverviewPageProps) {
 
   return (
     <div className="space-y-4">
-      <section className="rounded-2xl border bg-white p-4 shadow-sm">
-        <div className="text-xs text-gray-500">{resourceType}</div>
-        <div className="mt-1 text-sm text-gray-700">资源 ID：{resourceId}</div>
-        <div className="mt-2 text-xs text-gray-500">记忆摘要：{apiData?.linked_summaries.memories?.summary?.title ?? props.linkedMemoriesSummary?.summary?.title ?? "memories"} · {totalMemories} 条记忆</div>
-        <div className="mt-1 text-xs text-gray-500">经验摘要：{apiData?.linked_summaries.experiences?.summary?.title ?? props.linkedExperiencesSummary?.summary?.title ?? "experiences"} · {activeMemories} 条活跃经验</div>
-        <div className="mt-1 text-xs text-gray-500">引用摘要：{apiData?.linked_summaries.references?.summary?.title ?? props.linkedReferencesSummary?.summary?.title ?? "references"} · {referencedMemories} 次引用</div>
-        <div className="mt-1 text-xs text-gray-500">历史摘要：{apiData?.linked_summaries.history?.summary?.title ?? props.linkedHistorySummary?.summary?.title ?? "history"} · {archivedMemories} 条归档</div>
-      </section>
+      <header className="console-page-header">
+        <h1 className="page-title">记忆中心</h1>
+        <div className="console-resource-id">{resourceType} · 资源 ID：{resourceId}</div>
+        <div className="console-summary-line">记忆摘要：{apiData?.linked_summaries.memories?.summary?.title ?? props.linkedMemoriesSummary?.summary?.title ?? "memories"} · {totalMemories} 条记忆</div>
+        <div className="console-summary-line">经验摘要：{apiData?.linked_summaries.experiences?.summary?.title ?? props.linkedExperiencesSummary?.summary?.title ?? "experiences"} · {activeMemories} 条活跃经验</div>
+        <div className="console-summary-line">引用摘要：{apiData?.linked_summaries.references?.summary?.title ?? props.linkedReferencesSummary?.summary?.title ?? "references"} · {referencedMemories} 次引用</div>
+        <div className="console-summary-line">历史摘要：{apiData?.linked_summaries.history?.summary?.title ?? props.linkedHistorySummary?.summary?.title ?? "history"} · {archivedMemories} 条归档</div>
+      </header>
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StatCard label="记忆总数" value={String(totalMemories)} />

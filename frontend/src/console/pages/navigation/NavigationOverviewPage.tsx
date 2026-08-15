@@ -25,14 +25,14 @@ export function NavigationOverviewPage(props: NavigationOverviewPageProps) {
 
   return (
     <div className="space-y-4">
-      <section className="rounded-2xl border bg-white p-4 shadow-sm">
-        <div className="text-xs text-gray-500">{resourceType}</div>
-        <div className="mt-1 text-sm text-gray-700">资源 ID：{resourceId}</div>
-        <div className="mt-2 text-xs text-gray-500">最近摘要：{props.linkedRecentSummary?.summary?.title ?? "recent pages"} · {recentPages.length} 条最近访问</div>
-        <div className="mt-1 text-xs text-gray-500">收藏摘要：{props.linkedFavoritesSummary?.summary?.title ?? "favorite pages"} · {favoritePages.length} 个常用入口</div>
-        <div className="mt-1 text-xs text-gray-500">搜索摘要：{props.linkedSearchSummary?.summary?.title ?? "search index"} · {searchEnabled ? "搜索已启用" : "搜索未启用"}</div>
-        <div className="mt-1 text-xs text-gray-500">快捷摘要：{props.linkedShortcutsSummary?.summary?.title ?? "quick shortcuts"} · {String((props.linkedShortcutsSummary?.data && Object.keys(props.linkedShortcutsSummary.data).length) || 0)} 个快捷项</div>
-      </section>
+      <header className="console-page-header">
+        <h1 className="page-title">全局导航</h1>
+        <div className="console-resource-id">{resourceType} · 资源 ID：{resourceId}</div>
+        <div className="console-summary-line">最近摘要：{props.linkedRecentSummary?.summary?.title ?? "recent pages"} · {recentPages.length} 条最近访问</div>
+        <div className="console-summary-line">收藏摘要：{props.linkedFavoritesSummary?.summary?.title ?? "favorite pages"} · {favoritePages.length} 个常用入口</div>
+        <div className="console-summary-line">搜索摘要：{props.linkedSearchSummary?.summary?.title ?? "search index"} · {searchEnabled ? "搜索已启用" : "搜索未启用"}</div>
+        <div className="console-summary-line">快捷摘要：{props.linkedShortcutsSummary?.summary?.title ?? "quick shortcuts"} · {String((props.linkedShortcutsSummary?.data && Object.keys(props.linkedShortcutsSummary.data).length) || 0)} 个快捷项</div>
+      </header>
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         <StatCard label="最近访问" value={String(recentPages.length)} />

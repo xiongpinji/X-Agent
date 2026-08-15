@@ -12,17 +12,24 @@ import {
 import {
   RefreshCw,
   Plus,
-  AlertTriangle,
-  CheckCircle,
-  Clock,
   Wifi,
   WifiOff,
-  Activity,
   X,
 } from 'lucide-react'
 import clsx from 'clsx'
 
 const RESOLUTION_STRATEGIES = ['local_wins', 'cloud_wins', 'merge', 'manual']
+
+const DIVIDER = 'var(--divider)'
+
+const HISTORY_STATUS_BADGE: Record<string, string> = {
+  completed: 'badge-success',
+  success: 'badge-success',
+  failed: 'badge-danger',
+  error: 'badge-danger',
+  pending: 'badge-muted',
+  running: 'badge-muted',
+}
 
 const SyncPage: React.FC = () => {
   const { theme, setLoading, setError } = useAppStore()
@@ -78,148 +85,148 @@ const SyncPage: React.FC = () => {
     }
   }
 
-  const healthColor = (status?: string) =>
-    status === 'healthy' ? 'text-green-600' :
-    status === 'degraded' ? 'text-amber-600' :
-    status ? 'text-red-600' : 'text-slate-500'
+  const healthBadge =
+    health?.status === 'healthy' ? 'badge-success' :
+    health?.status === 'degraded' ? 'badge-warning' :
+    health?.status ? 'badge-danger' : 'badge-muted'
 
-  const statusBadge = (status: string) =>
-    clsx(
-      'px-2 py-0.5 rounded-full text-xs font-medium capitalize',
-      status === 'completed' || status === 'success' ? 'bg-green-100 text-green-700' :
-      status === 'failed' || status === 'error' ? 'bg-red-100 text-red-700' :
-      status === 'pending' || status === 'running' ? 'bg-blue-100 text-blue-700' :
-      'bg-slate-100 text-slate-600',
-    )
+  const statItems = [
+    { label: t('sync.health', 'Health'), value: health ? `${health.health_score}` : '—', badge: health ? healthBadge : null, badgeText: health?.status },
+    { label: t('sync.pending', 'Pending'), value: stats ? String(stats.pending_syncs) : '—' },
+    { label: t('sync.failed', 'Failed'), value: stats ? String(stats.failed_syncs) : '—', alert: Boolean(stats && stats.failed_syncs > 0) },
+    { label: t('sync.conflicts', 'Conflicts'), value: stats ? String(stats.unresolved_conflicts) : '—', warn: Boolean(stats && stats.unresolved_conflicts > 0) },
+    { label: t('sync.offlineOps', 'Offline Ops'), value: stats ? String(stats.offline_operations) : '—' },
+    { label: t('sync.dbSize', 'DB Size (MB)'), value: stats ? stats.database_size_mb.toFixed(2) : '—' },
+  ]
 
   return (
-    <div className={clsx('p-8', isDark ? 'bg-slate-950' : 'bg-slate-50')}>
-      <div className="max-w-6xl mx-auto">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className={clsx('text-3xl font-bold mb-2', isDark ? 'text-white' : 'text-slate-900')}>
-              {t('sync.title', 'Sync Center')}
-            </h1>
-            <p className={clsx('text-sm', isDark ? 'text-slate-400' : 'text-slate-600')}>
-              {t('sync.subtitle', 'Local-cloud synchronization status, queue, conflicts and history')}
-            </p>
+    <div className={clsx(
+      'min-h-full px-8 py-10',
+      isDark ? 'bg-slate-950 text-slate-200' : 'bg-[#fafafa] text-[#333333]'
+    )}>
+      <div className="max-w-6xl">
+        {/* Header — Dashboard-style */}
+        <header className="mb-8">
+          <div
+            className={clsx('w-12 border-t-2 mb-5', isDark ? 'border-slate-200' : 'border-[#333333]')}
+            aria-hidden="true"
+          />
+          <div className="flex items-end justify-between gap-4 flex-wrap">
+            <div>
+              <h1 className="page-title">{t('sync.title', 'Sync Center')}</h1>
+              <p className="page-subtitle">
+                {t('sync.subtitle', 'Local-cloud synchronization status, queue, conflicts and history')}
+              </p>
+            </div>
+            <div className="flex gap-2 flex-wrap">
+              <button
+                onClick={() => setShowEnqueue(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
+              >
+                <Plus size={16} />
+                {t('sync.enqueue', 'Enqueue')}
+              </button>
+              <button
+                onClick={handleTrigger}
+                className={clsx(
+                  'flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
+                  isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-300' : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200',
+                )}
+              >
+                <RefreshCw size={16} />
+                {t('sync.trigger', 'Trigger Sync')}
+              </button>
+              {/* Offline toggle requires sync:admin scope + cloud connection — coming soon */}
+              <button
+                disabled
+                title={t('sync.offlineComingSoon', 'Offline toggle requires cloud connection (coming soon)')}
+                className={clsx(
+                  'flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium opacity-50 cursor-not-allowed',
+                  isDark ? 'bg-slate-800 text-slate-400' : 'bg-white border border-slate-200 text-slate-500',
+                )}
+              >
+                {offline?.enabled ? <WifiOff size={16} /> : <Wifi size={16} />}
+                {t('sync.offlineMode', 'Offline Mode')}
+                <span className="text-xs">({t('common.comingSoon', 'coming soon')})</span>
+              </button>
+            </div>
           </div>
-          <div className="flex gap-2">
-            <button
-              onClick={() => setShowEnqueue(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
-            >
-              <Plus size={18} />
-              {t('sync.enqueue', 'Enqueue')}
-            </button>
-            <button
-              onClick={handleTrigger}
-              className={clsx(
-                'flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors',
-                isDark ? 'bg-slate-800 hover:bg-slate-700 text-white' : 'bg-white hover:bg-slate-100 text-slate-900 border border-slate-300',
-              )}
-            >
-              <RefreshCw size={18} />
-              {t('sync.trigger', 'Trigger Sync')}
-            </button>
-            {/* Offline toggle requires sync:admin scope + cloud connection — coming soon */}
-            <button
-              disabled
-              title={t('sync.offlineComingSoon', 'Offline toggle requires cloud connection (coming soon)')}
-              className={clsx(
-                'flex items-center gap-2 px-4 py-2 rounded-lg font-medium opacity-50 cursor-not-allowed',
-                isDark ? 'bg-slate-800 text-slate-400' : 'bg-slate-200 text-slate-500',
-              )}
-            >
-              {offline?.enabled ? <WifiOff size={18} /> : <Wifi size={18} />}
-              {t('sync.offlineMode', 'Offline Mode')}
-              <span className="text-xs">({t('common.comingSoon', 'coming soon')})</span>
-            </button>
-          </div>
-        </div>
+        </header>
 
         {loadError && (
-          <div className={clsx(
-            'mb-6 p-4 rounded-lg text-sm',
-            isDark ? 'bg-red-900/30 text-red-300' : 'bg-red-50 text-red-700',
-          )}>
+          <div role="alert" className="mb-6 rounded-lg border border-[#dc2626]/30 px-4 py-3 text-sm text-[#dc2626]">
             {loadError}
           </div>
         )}
 
-        {/* Status cards */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
-          <StatCard dark={isDark} icon={<Activity size={18} />} label={t('sync.health', 'Health')}
-            value={health ? `${health.health_score}` : '—'} valueClass={healthColor(health?.status)} />
-          <StatCard dark={isDark} icon={<Clock size={18} />} label={t('sync.pending', 'Pending')}
-            value={stats ? String(stats.pending_syncs) : '—'} />
-          <StatCard dark={isDark} icon={<AlertTriangle size={18} />} label={t('sync.failed', 'Failed')}
-            value={stats ? String(stats.failed_syncs) : '—'}
-            valueClass={stats && stats.failed_syncs > 0 ? 'text-red-600' : undefined} />
-          <StatCard dark={isDark} icon={<AlertTriangle size={18} />} label={t('sync.conflicts', 'Conflicts')}
-            value={stats ? String(stats.unresolved_conflicts) : '—'}
-            valueClass={stats && stats.unresolved_conflicts > 0 ? 'text-amber-600' : undefined} />
-          <StatCard dark={isDark} icon={<WifiOff size={18} />} label={t('sync.offlineOps', 'Offline Ops')}
-            value={stats ? String(stats.offline_operations) : '—'} />
-          <StatCard dark={isDark} icon={<CheckCircle size={18} />} label={t('sync.dbSize', 'DB Size (MB)')}
-            value={stats ? stats.database_size_mb.toFixed(2) : '—'} />
-        </div>
+        {/* Status row — no cards, 1px vertical dividers */}
+        <section aria-label={t('sync.title', 'Sync Center')} className="mb-10">
+          <dl className="flex flex-wrap gap-y-6">
+            {statItems.map((item, i) => (
+              <div
+                key={item.label}
+                className={clsx('flex flex-col gap-2 pr-8 mr-8', i < statItems.length - 1 && 'border-r')}
+                style={i < statItems.length - 1 ? { borderColor: DIVIDER } : undefined}
+              >
+                <dd className={clsx(
+                  'font-data text-[26px] leading-none order-2',
+                  item.alert && 'text-[#dc2626]',
+                  item.warn && 'text-[#d97706]'
+                )}>
+                  {item.badge ? (
+                    <span className={clsx('badge-status', item.badge)}>{item.badgeText}</span>
+                  ) : (
+                    item.value
+                  )}
+                </dd>
+                <dt className="text-[12px] uppercase tracking-[0.06em] opacity-50 order-1">
+                  {item.label}
+                </dt>
+              </div>
+            ))}
+          </dl>
+        </section>
 
-        {/* Conflicts */}
-        <section className={clsx(
-          'rounded-lg mb-8 overflow-hidden',
-          isDark ? 'bg-slate-900 border border-slate-700' : 'bg-white border border-slate-200',
-        )}>
-          <header className={clsx(
-            'px-6 py-4 border-b flex items-center justify-between',
-            isDark ? 'border-slate-700' : 'border-slate-200',
-          )}>
-            <h2 className={clsx('text-lg font-semibold', isDark ? 'text-white' : 'text-slate-900')}>
-              {t('sync.conflictList', 'Unresolved Conflicts')} ({conflicts.length})
-            </h2>
-          </header>
+        {/* Conflicts — dense table */}
+        <section className="mb-10">
+          <h2 className="text-[11px] uppercase tracking-[0.08em] opacity-50 mb-2">
+            {t('sync.conflictList', 'Unresolved Conflicts')} ({conflicts.length})
+          </h2>
           {conflicts.length === 0 ? (
-            <p className={clsx('p-6 text-sm', isDark ? 'text-slate-400' : 'text-slate-500')}>
+            <p className="empty-state">
               {t('sync.noConflicts', 'No unresolved conflicts')}
             </p>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className={clsx(isDark ? 'bg-slate-800' : 'bg-slate-50')}>
+              <table className="table-dense">
+                <thead>
                   <tr>
-                    {[t('sync.entity', 'Entity'), t('sync.conflictType', 'Type'),
-                      t('sync.localVersion', 'Local v'), t('sync.cloudVersion', 'Cloud v'),
-                      t('common.actions', 'Actions')].map((h, i) => (
-                      <th key={i} className={clsx(
-                        'px-6 py-3 text-left text-sm font-semibold',
-                        isDark ? 'text-slate-300' : 'text-slate-900',
-                      )}>{h}</th>
-                    ))}
+                    <th>{t('sync.entity', 'Entity')}</th>
+                    <th>{t('sync.conflictType', 'Type')}</th>
+                    <th>{t('sync.localVersion', 'Local v')}</th>
+                    <th>{t('sync.cloudVersion', 'Cloud v')}</th>
+                    <th>{t('common.actions', 'Actions')}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {conflicts.map((c) => (
-                    <tr key={c.id} className={clsx(
-                      'border-b',
-                      isDark ? 'border-slate-700 hover:bg-slate-800' : 'border-slate-200 hover:bg-slate-50',
-                    )}>
-                      <td className={clsx('px-6 py-3 text-sm', isDark ? 'text-white' : 'text-slate-900')}>
-                        {c.entity_type} / {c.entity_id}
+                    <tr key={c.id}>
+                      <td className="font-medium">
+                        {c.entity_type} / <span className="cell-data opacity-70">{c.entity_id}</span>
                       </td>
-                      <td className={clsx('px-6 py-3 text-sm', isDark ? 'text-slate-300' : 'text-slate-600')}>
+                      <td className="opacity-70">
                         {c.conflict_type}
                       </td>
-                      <td className={clsx('px-6 py-3 text-sm', isDark ? 'text-slate-300' : 'text-slate-600')}>
+                      <td className="cell-data opacity-70">
                         {c.local_version}
                       </td>
-                      <td className={clsx('px-6 py-3 text-sm', isDark ? 'text-slate-300' : 'text-slate-600')}>
+                      <td className="cell-data opacity-70">
                         {c.cloud_version}
                       </td>
-                      <td className="px-6 py-3">
+                      <td>
                         <button
                           onClick={() => setResolving(c)}
-                          className="px-3 py-1 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+                          className="px-3 py-1.5 text-xs font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
                         >
                           {t('sync.resolve', 'Resolve')}
                         </button>
@@ -232,61 +239,53 @@ const SyncPage: React.FC = () => {
           )}
         </section>
 
-        {/* History */}
-        <section className={clsx(
-          'rounded-lg overflow-hidden',
-          isDark ? 'bg-slate-900 border border-slate-700' : 'bg-white border border-slate-200',
-        )}>
-          <header className={clsx(
-            'px-6 py-4 border-b',
-            isDark ? 'border-slate-700' : 'border-slate-200',
-          )}>
-            <h2 className={clsx('text-lg font-semibold', isDark ? 'text-white' : 'text-slate-900')}>
-              {t('sync.history', 'Sync History')} ({history.length})
-            </h2>
-          </header>
+        {/* History — dense table */}
+        <section>
+          <h2 className="text-[11px] uppercase tracking-[0.08em] opacity-50 mb-2">
+            {t('sync.history', 'Sync History')} ({history.length})
+          </h2>
           {history.length === 0 ? (
-            <p className={clsx('p-6 text-sm', isDark ? 'text-slate-400' : 'text-slate-500')}>
+            <p className="empty-state">
               {t('sync.noHistory', 'No sync history yet')}
             </p>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className={clsx(isDark ? 'bg-slate-800' : 'bg-slate-50')}>
+              <table className="table-dense">
+                <thead>
                   <tr>
-                    {[t('sync.batch', 'Batch'), t('sync.entity', 'Entity'), t('sync.operation', 'Op'),
-                      t('sync.direction', 'Direction'), t('tasks.status', 'Status'),
-                      t('sync.duration', 'Duration (ms)'), t('tasks.createdAt', 'Created')].map((h, i) => (
-                      <th key={i} className={clsx(
-                        'px-6 py-3 text-left text-sm font-semibold whitespace-nowrap',
-                        isDark ? 'text-slate-300' : 'text-slate-900',
-                      )}>{h}</th>
-                    ))}
+                    <th>{t('sync.batch', 'Batch')}</th>
+                    <th>{t('sync.entity', 'Entity')}</th>
+                    <th>{t('sync.operation', 'Op')}</th>
+                    <th>{t('sync.direction', 'Direction')}</th>
+                    <th>{t('tasks.status', 'Status')}</th>
+                    <th>{t('sync.duration', 'Duration (ms)')}</th>
+                    <th>{t('tasks.createdAt', 'Created')}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {history.map((h) => (
-                    <tr key={h.id} className={clsx(
-                      'border-b',
-                      isDark ? 'border-slate-700 hover:bg-slate-800' : 'border-slate-200 hover:bg-slate-50',
-                    )}>
-                      <td className={clsx('px-6 py-3 text-xs font-mono', isDark ? 'text-slate-400' : 'text-slate-500')}>
+                    <tr key={h.id}>
+                      <td className="cell-data opacity-50">
                         {h.sync_batch_id.slice(0, 8)}
                       </td>
-                      <td className={clsx('px-6 py-3 text-sm', isDark ? 'text-white' : 'text-slate-900')}>
-                        {h.entity_type} / {h.entity_id}
+                      <td className="font-medium">
+                        {h.entity_type} / <span className="cell-data opacity-70">{h.entity_id}</span>
                       </td>
-                      <td className={clsx('px-6 py-3 text-sm', isDark ? 'text-slate-300' : 'text-slate-600')}>
+                      <td className="opacity-70">
                         {h.operation}
                       </td>
-                      <td className={clsx('px-6 py-3 text-sm', isDark ? 'text-slate-300' : 'text-slate-600')}>
+                      <td className="opacity-70">
                         {h.direction}
                       </td>
-                      <td className="px-6 py-3"><span className={statusBadge(h.status)}>{h.status}</span></td>
-                      <td className={clsx('px-6 py-3 text-sm', isDark ? 'text-slate-300' : 'text-slate-600')}>
+                      <td>
+                        <span className={clsx('badge-status', HISTORY_STATUS_BADGE[h.status] ?? 'badge-muted')}>
+                          {h.status}
+                        </span>
+                      </td>
+                      <td className="cell-data opacity-70">
                         {h.duration_ms}
                       </td>
-                      <td className={clsx('px-6 py-3 text-sm whitespace-nowrap', isDark ? 'text-slate-400' : 'text-slate-600')}>
+                      <td className="cell-data opacity-70 whitespace-nowrap">
                         {new Date(h.created_at).toLocaleString()}
                       </td>
                     </tr>
@@ -316,29 +315,6 @@ const SyncPage: React.FC = () => {
     </div>
   )
 }
-
-interface StatCardProps {
-  dark: boolean
-  icon: React.ReactNode
-  label: string
-  value: string
-  valueClass?: string
-}
-
-const StatCard: React.FC<StatCardProps> = ({ dark, icon, label, value, valueClass }) => (
-  <div className={clsx(
-    'rounded-lg p-4',
-    dark ? 'bg-slate-900 border border-slate-700' : 'bg-white border border-slate-200',
-  )}>
-    <div className={clsx('flex items-center gap-2 mb-2', dark ? 'text-slate-400' : 'text-slate-500')}>
-      {icon}
-      <span className="text-xs font-medium">{label}</span>
-    </div>
-    <p className={clsx('text-xl font-bold', valueClass ?? (dark ? 'text-white' : 'text-slate-900'))}>
-      {value}
-    </p>
-  </div>
-)
 
 interface EnqueueModalProps {
   dark: boolean
@@ -385,17 +361,17 @@ const EnqueueModal: React.FC<EnqueueModalProps> = ({ dark, onClose, onDone }) =>
     'w-full px-3 py-2 rounded-lg text-sm',
     dark ? 'bg-slate-800 text-white border border-slate-700' : 'bg-slate-50 text-slate-900 border border-slate-300',
   )
-  const labelCls = clsx('block text-sm font-medium mb-1', dark ? 'text-slate-300' : 'text-slate-700')
+  const labelCls = 'block text-[13px] opacity-60 mb-1'
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" role="dialog" aria-modal="true">
-      <div className={clsx('rounded-lg p-6 max-w-md w-full mx-4', dark ? 'bg-slate-900' : 'bg-white')}>
+      <div className={clsx('rounded-lg p-6 max-w-md w-full mx-4 border', dark ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200')}>
         <div className="flex items-center justify-between mb-4">
-          <h2 className={clsx('text-xl font-bold', dark ? 'text-white' : 'text-slate-900')}>
+          <h2 className="text-lg font-medium">
             {t('sync.enqueueTitle', 'Enqueue Sync Operation')}
           </h2>
           <button onClick={onClose} aria-label={t('common.close', 'Close')}
-            className={dark ? 'text-slate-400 hover:text-white' : 'text-slate-500 hover:text-slate-900'}>
+            className="opacity-50 hover:opacity-100 transition-opacity">
             <X size={20} />
           </button>
         </div>
@@ -432,7 +408,7 @@ const EnqueueModal: React.FC<EnqueueModalProps> = ({ dark, onClose, onDone }) =>
         </div>
         <div className="flex gap-2">
           <button onClick={onClose} className={clsx(
-            'flex-1 px-4 py-2 rounded-lg font-medium transition-colors',
+            'flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-colors',
             dark ? 'bg-slate-700 hover:bg-slate-600 text-white' : 'bg-slate-200 hover:bg-slate-300 text-slate-900',
           )}>
             {t('common.cancel', 'Cancel')}
@@ -440,7 +416,7 @@ const EnqueueModal: React.FC<EnqueueModalProps> = ({ dark, onClose, onDone }) =>
           <button
             onClick={handleSubmit}
             disabled={submitting || !entityType.trim() || !entityId.trim()}
-            className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50"
+            className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
           >
             {submitting ? t('common.loading', 'Loading...') : t('sync.enqueue', 'Enqueue')}
           </button>
@@ -482,41 +458,39 @@ const ResolveModal: React.FC<ResolveModalProps> = ({ dark, conflict, onClose, on
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" role="dialog" aria-modal="true">
-      <div className={clsx('rounded-lg p-6 max-w-lg w-full mx-4', dark ? 'bg-slate-900' : 'bg-white')}>
-        <h2 className={clsx('text-xl font-bold mb-4', dark ? 'text-white' : 'text-slate-900')}>
+      <div className={clsx('rounded-lg p-6 max-w-lg w-full mx-4 border', dark ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200')}>
+        <h2 className="text-lg font-medium mb-4">
           {t('sync.resolveTitle', 'Resolve Conflict')}
         </h2>
-        <p className={clsx('text-sm mb-4', dark ? 'text-slate-400' : 'text-slate-600')}>
-          {conflict.entity_type} / {conflict.entity_id} — {conflict.conflict_type}
+        <p className="text-sm opacity-60 mb-4">
+          {conflict.entity_type} / <span className="cell-data">{conflict.entity_id}</span> — {conflict.conflict_type}
         </p>
         <div className="grid grid-cols-2 gap-4 mb-4">
           <div>
-            <p className={clsx('text-xs font-semibold mb-1', dark ? 'text-slate-400' : 'text-slate-500')}>
+            <p className="text-[11px] uppercase tracking-[0.06em] opacity-50 mb-1">
               {t('sync.localData', 'Local')} (v{conflict.local_version})
             </p>
             <pre className={clsx(
-              'text-xs p-3 rounded-lg overflow-auto max-h-40',
-              dark ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-700',
+              'cell-data text-xs p-3 rounded-lg overflow-auto max-h-40',
+              dark ? 'bg-slate-800' : 'bg-slate-50',
             )}>
               {JSON.stringify(conflict.local_data, null, 2)}
             </pre>
           </div>
           <div>
-            <p className={clsx('text-xs font-semibold mb-1', dark ? 'text-slate-400' : 'text-slate-500')}>
+            <p className="text-[11px] uppercase tracking-[0.06em] opacity-50 mb-1">
               {t('sync.cloudData', 'Cloud')} (v{conflict.cloud_version})
             </p>
             <pre className={clsx(
-              'text-xs p-3 rounded-lg overflow-auto max-h-40',
-              dark ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-700',
+              'cell-data text-xs p-3 rounded-lg overflow-auto max-h-40',
+              dark ? 'bg-slate-800' : 'bg-slate-50',
             )}>
               {JSON.stringify(conflict.cloud_data, null, 2)}
             </pre>
           </div>
         </div>
         <div className="mb-6">
-          <label htmlFor="sync-strategy" className={clsx(
-            'block text-sm font-medium mb-1', dark ? 'text-slate-300' : 'text-slate-700',
-          )}>
+          <label htmlFor="sync-strategy" className="block text-[13px] opacity-60 mb-1">
             {t('sync.strategy', 'Resolution strategy')}
           </label>
           <select
@@ -535,7 +509,7 @@ const ResolveModal: React.FC<ResolveModalProps> = ({ dark, conflict, onClose, on
         </div>
         <div className="flex gap-2">
           <button onClick={onClose} className={clsx(
-            'flex-1 px-4 py-2 rounded-lg font-medium transition-colors',
+            'flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-colors',
             dark ? 'bg-slate-700 hover:bg-slate-600 text-white' : 'bg-slate-200 hover:bg-slate-300 text-slate-900',
           )}>
             {t('common.cancel', 'Cancel')}
@@ -543,7 +517,7 @@ const ResolveModal: React.FC<ResolveModalProps> = ({ dark, conflict, onClose, on
           <button
             onClick={handleResolve}
             disabled={submitting}
-            className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50"
+            className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
           >
             {submitting ? t('common.loading', 'Loading...') : t('sync.resolve', 'Resolve')}
           </button>

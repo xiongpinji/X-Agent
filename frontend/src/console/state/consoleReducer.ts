@@ -306,7 +306,18 @@ function hydrateStateFromEnvelope(state: ConsoleState, payload: ConsoleBootstrap
       ...consoleSummary,
     },
     envelope,
-    organizationGraph: (primary.organization_graph as OrganizationGraphView | undefined) ?? state.organizationGraph,
+    organizationGraph: (() => {
+      // 后端可能返回空对象 {}（无数据时），直接覆盖会让 agent_instances/
+      // meeting_rooms 变 undefined 导致渲染崩溃（2026-08-14 实测）。空对象或
+      // 缺字段时保留/回退默认结构。
+      const incoming = primary.organization_graph as OrganizationGraphView | undefined;
+      if (!incoming || Object.keys(incoming).length === 0) return state.organizationGraph;
+      return {
+        ...incoming,
+        agent_instances: incoming.agent_instances ?? [],
+        meeting_rooms: incoming.meeting_rooms ?? [],
+      } as OrganizationGraphView;
+    })(),
     meetingRooms: ((primary.meeting_rooms as { rooms?: MeetingRoomSummary[] } | undefined)?.rooms) ?? state.meetingRooms,
     realtime: (primary.realtime as RealtimeSnapshot | undefined) ?? state.realtime,
     memory: (primary.memory as MemorySnapshot | undefined) ?? state.memory,

@@ -11,7 +11,7 @@ export type ConsoleLayoutProps = {
 
 export function ConsoleLayout(props: ConsoleLayoutProps) {
   return (
-    <div className={["min-h-screen bg-slate-100", props.className].filter(Boolean).join(" ")}>
+    <div className={["console-root min-h-screen bg-slate-100", props.className].filter(Boolean).join(" ")}>
       <div className="grid min-h-screen grid-cols-[280px_minmax(0,1fr)_320px] grid-rows-[64px_minmax(0,1fr)_44px]">
         <aside className="row-span-3 border-r bg-white">{props.sidebar}</aside>
         <header className="col-start-2 row-start-1 border-b bg-white">{props.topBar}</header>

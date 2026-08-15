@@ -4,7 +4,6 @@ import { apiClient } from '@/services/api'
 import { workflowOps, WorkflowScheduleItem } from '@/services/workflowOps'
 import { useI18n } from '@/i18n/context'
 import {
-  CalendarClock,
   Play,
   Plus,
   RefreshCw,
@@ -17,6 +16,12 @@ import clsx from 'clsx'
 interface WorkflowOption {
   id: string
   name: string
+}
+
+const STATUS_BADGE: Record<string, string> = {
+  triggered: 'badge-success',
+  pending: 'badge-muted',
+  failed: 'badge-danger',
 }
 
 /**
@@ -112,70 +117,66 @@ export const WorkflowSchedulesPage: React.FC = () => {
     }
   }
 
-  const statusBadge = (status: string) => {
-    const color =
-      status === 'triggered'
-        ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
-        : status === 'pending'
-          ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
-          : status === 'failed'
-            ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
-            : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'
-    return <span className={clsx('px-2 py-0.5 rounded-full text-xs font-medium', color)}>{status}</span>
-  }
-
-  const cardCls = clsx(
-    'rounded-lg p-4 border',
-    theme === 'dark' ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200'
-  )
-  const labelCls = clsx('block text-xs font-medium mb-1', theme === 'dark' ? 'text-slate-400' : 'text-slate-600')
+  const labelCls = clsx('block text-xs font-medium mb-1 opacity-60')
   const inputCls = clsx(
     'w-full px-3 py-2 rounded-md border text-sm focus:outline-none focus:ring-2 focus:ring-blue-500',
     theme === 'dark' ? 'bg-slate-800 border-slate-600 text-white' : 'bg-white border-slate-300 text-slate-900'
   )
+  const ghostBtnCls = clsx(
+    'flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50',
+    theme === 'dark' ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
+  )
 
   return (
-    <div className={clsx('p-8', theme === 'dark' ? 'bg-slate-950' : 'bg-slate-50')}>
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className={clsx('text-3xl font-bold mb-2', theme === 'dark' ? 'text-white' : 'text-slate-900')}>
-              {t('schedules.title', 'Workflow Schedules')}
-            </h1>
-            <p className={clsx('text-sm', theme === 'dark' ? 'text-slate-400' : 'text-slate-600')}>
-              {t('schedules.subtitle', 'Cron and one-shot workflow scheduling')}
-            </p>
+    <div className={clsx(
+      'min-h-full px-8 py-10',
+      theme === 'dark' ? 'bg-slate-950 text-slate-200' : 'bg-[#fafafa] text-[#333333]'
+    )}>
+      <div className="max-w-6xl">
+        {/* Header — Dashboard-style */}
+        <header className="mb-8">
+          <div
+            className={clsx(
+              'w-12 border-t-2 mb-5',
+              theme === 'dark' ? 'border-slate-200' : 'border-[#333333]'
+            )}
+            aria-hidden="true"
+          />
+          <div className="flex items-end justify-between gap-4">
+            <div>
+              <h1 className="page-title">{t('schedules.title', 'Workflow Schedules')}</h1>
+              <p className="page-subtitle">{t('schedules.subtitle', 'Cron and one-shot workflow scheduling')}</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleRunDue}
+                disabled={triggering}
+                className={ghostBtnCls}
+              >
+                <Zap size={16} />
+                {t('schedules.runDue', 'Trigger Due')}
+              </button>
+              <button
+                onClick={() => setShowForm(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
+              >
+                <Plus size={16} />
+                {t('schedules.create', 'New Schedule')}
+              </button>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleRunDue}
-              disabled={triggering}
-              className="flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white rounded-lg font-medium transition-colors"
-            >
-              <Zap size={16} />
-              {t('schedules.runDue', 'Trigger Due')}
-            </button>
-            <button
-              onClick={() => setShowForm(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
-            >
-              <Plus size={18} />
-              {t('schedules.create', 'New Schedule')}
-            </button>
-          </div>
-        </div>
+        </header>
 
         {/* 创建调度表单 */}
         {showForm && (
-          <div className={clsx(cardCls, 'mb-6')}>
+          <section className="mb-8 row-line" style={{ padding: '20px 0' }}>
             <div className="flex items-center justify-between mb-4">
-              <h2 className={clsx('text-lg font-semibold', theme === 'dark' ? 'text-white' : 'text-slate-900')}>
+              <h2 className="text-[11px] uppercase tracking-[0.08em] opacity-50">
                 {t('schedules.formTitle', 'Create Schedule')}
               </h2>
               <button
                 onClick={() => setShowForm(false)}
-                className={clsx('p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700', theme === 'dark' ? 'text-slate-400' : 'text-slate-500')}
+                className="p-1.5 opacity-50 hover:opacity-100 transition-opacity"
                 aria-label="Close"
               >
                 <X size={18} />
@@ -237,72 +238,68 @@ export const WorkflowSchedulesPage: React.FC = () => {
               <button
                 onClick={handleCreate}
                 disabled={submitting}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg font-medium transition-colors"
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-sm font-medium transition-colors"
               >
                 <Play size={16} />
                 {submitting ? t('schedules.creating', 'Creating...') : t('schedules.submit', 'Create Schedule')}
               </button>
             </div>
-          </div>
+          </section>
         )}
 
-        {/* 调度列表 */}
-        {schedules.length === 0 ? (
-          <div className={clsx(cardCls, 'p-8 text-center', theme === 'dark' ? 'text-slate-400' : 'text-slate-500')}>
-            <CalendarClock size={40} className="mx-auto mb-3 opacity-50" />
-            <p>{t('schedules.empty', 'No schedules yet')}</p>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {schedules.map((s) => (
-              <div key={s.schedule_id} className={cardCls}>
-                <div className="flex items-center justify-between flex-wrap gap-3">
-                  <div className="min-w-0">
+        {/* 调度列表 — divider rows, no cards */}
+        <section>
+          {schedules.length === 0 ? (
+            <p className="empty-state">{t('schedules.empty', 'No schedules yet')}</p>
+          ) : (
+            <div>
+              {schedules.map((s) => (
+                <div key={s.schedule_id} className="row-line" style={{ padding: '14px 0' }}>
+                  <div className="flex items-center justify-between flex-wrap gap-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium truncate text-sm">
+                          {s.workflow_id}
+                        </span>
+                        <span className={clsx('badge-status', STATUS_BADGE[s.status] ?? 'badge-muted')}>
+                          {s.status}
+                        </span>
+                      </div>
+                      <div className="mt-1 flex items-center gap-4 flex-wrap cell-data opacity-50">
+                        <span>cron: {s.snapshot?.cron || '—'}</span>
+                        <span>
+                          {t('schedules.nextRun', 'Next run')}:{' '}
+                          {s.snapshot?.run_at ? new Date(s.snapshot.run_at).toLocaleString() : '—'}
+                        </span>
+                        {s.run_id && <span>run: {s.run_id.slice(0, 8)}</span>}
+                      </div>
+                    </div>
                     <div className="flex items-center gap-2">
-                      <span className={clsx('font-medium truncate', theme === 'dark' ? 'text-white' : 'text-slate-900')}>
-                        {s.workflow_id}
-                      </span>
-                      {statusBadge(s.status)}
+                      {/* 后端暂无启用/禁用端点 — coming soon */}
+                      <button
+                        disabled
+                        title={t('schedules.toggleSoon', 'Enable/disable toggle: coming soon (no backend endpoint yet)')}
+                        className={clsx(ghostBtnCls, 'cursor-not-allowed opacity-50')}
+                      >
+                        <ToggleLeft size={14} />
+                        {t('schedules.toggle', 'Toggle')}
+                      </button>
+                      <button
+                        onClick={handleRunDue}
+                        disabled={triggering}
+                        title={t('schedules.triggerHint', 'Trigger all due schedules (POST /schedules/run-due)')}
+                        className={ghostBtnCls}
+                      >
+                        <RefreshCw size={14} className={triggering ? 'animate-spin' : ''} />
+                        {t('schedules.trigger', 'Trigger')}
+                      </button>
                     </div>
-                    <div className={clsx('text-sm mt-1 space-x-4', theme === 'dark' ? 'text-slate-400' : 'text-slate-600')}>
-                      <span>
-                        cron: <code className="font-mono text-xs">{s.snapshot?.cron || '—'}</code>
-                      </span>
-                      <span>
-                        {t('schedules.nextRun', 'Next run')}:{' '}
-                        {s.snapshot?.run_at ? new Date(s.snapshot.run_at).toLocaleString() : '—'}
-                      </span>
-                      {s.run_id && <span>run: {s.run_id.slice(0, 8)}</span>}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {/* 后端暂无启用/禁用端点 — coming soon */}
-                    <button
-                      disabled
-                      title={t('schedules.toggleSoon', 'Enable/disable toggle: coming soon (no backend endpoint yet)')}
-                      className={clsx(
-                        'flex items-center gap-1 px-3 py-1.5 text-sm rounded-md border cursor-not-allowed opacity-50',
-                        theme === 'dark' ? 'border-slate-600 text-slate-400' : 'border-slate-300 text-slate-500'
-                      )}
-                    >
-                      <ToggleLeft size={14} />
-                      {t('schedules.toggle', 'Toggle')}
-                    </button>
-                    <button
-                      onClick={handleRunDue}
-                      disabled={triggering}
-                      title={t('schedules.triggerHint', 'Trigger all due schedules (POST /schedules/run-due)')}
-                      className="flex items-center gap-1 px-3 py-1.5 text-sm bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white rounded-md transition-colors"
-                    >
-                      <RefreshCw size={14} className={triggering ? 'animate-spin' : ''} />
-                      {t('schedules.trigger', 'Trigger')}
-                    </button>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        )}
+              ))}
+            </div>
+          )}
+        </section>
       </div>
     </div>
   )

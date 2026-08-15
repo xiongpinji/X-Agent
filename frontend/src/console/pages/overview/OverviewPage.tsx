@@ -52,24 +52,23 @@ export function OverviewPage(props: OverviewPageProps) {
 
   return (
     <div className="space-y-4">
-      <section className="rounded-2xl border bg-gradient-to-r from-slate-900 to-slate-700 p-5 text-white shadow-sm">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+      <header className="console-page-header">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <div className="text-sm text-slate-300">平台驾驶舱</div>
-            <h1 className="mt-1 text-2xl font-bold">统一控制台总览</h1>
-            <p className="mt-2 max-w-2xl text-sm text-slate-200">集中查看运行态势、能力入口、待处理事项和最近访问，快速切换到核心业务板块。</p>
+            <h1 className="page-title">统一控制台总览</h1>
+            <p className="page-subtitle">平台驾驶舱 · 集中查看运行态势、能力入口、待处理事项和最近访问</p>
           </div>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-            <button className="rounded-lg bg-white/10 px-3 py-2 text-sm hover:bg-white/20" onClick={() => props.onOpenAction?.("open_search")}>全局搜索</button>
-            <button className="rounded-lg bg-white/10 px-3 py-2 text-sm hover:bg-white/20" onClick={() => props.onOpenAction?.("open_audit")}>统一审计</button>
-            <button className="rounded-lg bg-white/10 px-3 py-2 text-sm hover:bg-white/20" onClick={() => props.onOpenAction?.("open_execution")}>运行控制</button>
-            <button className="rounded-lg bg-white/10 px-3 py-2 text-sm hover:bg-white/20" onClick={() => props.onOpenAction?.("open_tools")}>工具中心</button>
-            <button className="rounded-lg bg-white/10 px-3 py-2 text-sm hover:bg-white/20" onClick={() => props.onOpenAction?.("open_memory")}>记忆中心</button>
-            <button className="rounded-lg bg-white/10 px-3 py-2 text-sm hover:bg-white/20" onClick={() => props.onOpenAction?.("open_org")}>组织权限</button>
-            <button className="rounded-lg bg-white/10 px-3 py-2 text-sm hover:bg-white/20" onClick={() => props.onOpenAction?.("open_market")}>能力市场</button>
+          <div className="flex flex-wrap gap-2">
+            <button className="rounded-lg border px-3 py-2 text-sm hover:bg-gray-50" onClick={() => props.onOpenAction?.("open_search")}>全局搜索</button>
+            <button className="rounded-lg border px-3 py-2 text-sm hover:bg-gray-50" onClick={() => props.onOpenAction?.("open_audit")}>统一审计</button>
+            <button className="rounded-lg border px-3 py-2 text-sm hover:bg-gray-50" onClick={() => props.onOpenAction?.("open_execution")}>运行控制</button>
+            <button className="rounded-lg border px-3 py-2 text-sm hover:bg-gray-50" onClick={() => props.onOpenAction?.("open_tools")}>工具中心</button>
+            <button className="rounded-lg border px-3 py-2 text-sm hover:bg-gray-50" onClick={() => props.onOpenAction?.("open_memory")}>记忆中心</button>
+            <button className="rounded-lg border px-3 py-2 text-sm hover:bg-gray-50" onClick={() => props.onOpenAction?.("open_org")}>组织权限</button>
+            <button className="rounded-lg border px-3 py-2 text-sm hover:bg-gray-50" onClick={() => props.onOpenAction?.("open_market")}>能力市场</button>
           </div>
         </div>
-      </section>
+      </header>
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <MetricCard label="在线智能体" value={String(onlineAgents)} description={`当前参与协作的智能体 ${onlineAgents} 个`} onClick={() => props.onOpenAction?.("open_agents")} />

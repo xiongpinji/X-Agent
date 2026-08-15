@@ -2,8 +2,10 @@ import React, { useCallback, useEffect, useState } from 'react'
 import { useAppStore } from '@/store/appStore'
 import { governanceOps, BackupListItem, BackupSchedulerStatus, BackupRunResult } from '@/services/governanceOps'
 import { useI18n } from '@/i18n/context'
-import { DatabaseBackup, RefreshCw, Play, ShieldCheck, RotateCcw, Trash2, Layers } from 'lucide-react'
+import { RefreshCw, Play, ShieldCheck, RotateCcw, Trash2 } from 'lucide-react'
 import clsx from 'clsx'
+
+const DIVIDER = 'var(--divider)'
 
 export const BackupPage: React.FC = () => {
   const { theme, setError } = useAppStore()
@@ -78,125 +80,156 @@ export const BackupPage: React.FC = () => {
     return `${value.toFixed(1)} ${units[unit]}`
   }
 
+  const ghostBtnCls = clsx(
+    'flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50',
+    theme === 'dark' ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
+  )
+
+  const statusItems = [
+    { label: t('backup.scheduler', 'Scheduler'), value: status ? (status.enabled ? (status.running ? t('backup.running', 'Running') : t('backup.idle', 'Idle')) : t('backup.disabled', 'Disabled')) : '—' },
+    { label: t('backup.cron', 'Schedule'), value: status?.schedule_cron ?? '—' },
+    { label: t('backup.lastRun', 'Last run'), value: status?.last_run ? new Date(status.last_run).toLocaleString() : '—' },
+    { label: t('backup.lastResult', 'Last result'), value: status?.last_success == null ? '—' : status.last_success ? '✓' : '✗' },
+  ]
+
   return (
-    <div className={clsx('p-8', theme === 'dark' ? 'bg-slate-950' : 'bg-slate-50')}>
-      <div className="max-w-6xl mx-auto">
-        {/* Header */}
-        <div className="mb-8 flex items-start justify-between flex-wrap gap-4">
-          <div>
-            <h1 className={clsx('text-3xl font-bold mb-2', theme === 'dark' ? 'text-white' : 'text-slate-900')}>
-              {t('backup.title', 'Backup & Recovery')}
-            </h1>
-            <p className={clsx('text-sm', theme === 'dark' ? 'text-slate-400' : 'text-slate-600')}>
-              {t('backup.subtitle', 'Run, verify and restore data backups and Qdrant snapshots')}
-            </p>
+    <div className={clsx(
+      'min-h-full px-8 py-10',
+      theme === 'dark' ? 'bg-slate-950 text-slate-200' : 'bg-[#fafafa] text-[#333333]'
+    )}>
+      <div className="max-w-6xl">
+        {/* Header — Dashboard-style */}
+        <header className="mb-8">
+          <div
+            className={clsx(
+              'w-12 border-t-2 mb-5',
+              theme === 'dark' ? 'border-slate-200' : 'border-[#333333]'
+            )}
+            aria-hidden="true"
+          />
+          <div className="flex items-end justify-between gap-4 flex-wrap">
+            <div>
+              <h1 className="page-title">{t('backup.title', 'Backup & Recovery')}</h1>
+              <p className="page-subtitle">
+                {t('backup.subtitle', 'Run, verify and restore data backups and Qdrant snapshots')}
+              </p>
+            </div>
+            <div className="flex gap-2 flex-wrap">
+              <button
+                onClick={handleRun}
+                disabled={runBusy || status?.enabled === false}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-50"
+                aria-label={t('backup.runNow', 'Run backup now')}
+                title={status?.enabled === false ? t('backup.disabled', 'Backup is disabled on the server') : undefined}
+              >
+                <Play size={16} />
+                {runBusy ? t('common.loading', 'Loading...') : t('backup.runNow', 'Run backup now')}
+              </button>
+              <button
+                onClick={handleCleanup}
+                className={ghostBtnCls}
+                aria-label={t('backup.cleanup', 'Cleanup old backups')}
+              >
+                <Trash2 size={16} />
+                {t('backup.cleanup', 'Cleanup')}
+              </button>
+              {/* 备份计划 CRUD (backup.py /schedule/*) 与监控告警 (backup_monitoring.py) 未挂载 → coming soon */}
+              <button
+                disabled
+                title={`${t('backup.schedules', 'Schedules')} (${comingSoon})`}
+                aria-label={`${t('backup.schedules', 'Schedules')} (${comingSoon})`}
+                className={clsx(ghostBtnCls, 'opacity-50 cursor-not-allowed')}
+              >
+                {t('backup.schedules', 'Schedules')} ({comingSoon})
+              </button>
+              <button
+                onClick={load}
+                disabled={isLoading}
+                className={ghostBtnCls}
+                aria-label={t('common.refresh', 'Refresh')}
+              >
+                <RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />
+              </button>
+            </div>
           </div>
-          <div className="flex gap-2 flex-wrap">
-            <button
-              onClick={handleRun}
-              disabled={runBusy || status?.enabled === false}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-50"
-              aria-label={t('backup.runNow', 'Run backup now')}
-              title={status?.enabled === false ? t('backup.disabled', 'Backup is disabled on the server') : undefined}
-            >
-              <Play size={16} />
-              {runBusy ? t('common.loading', 'Loading...') : t('backup.runNow', 'Run backup now')}
-            </button>
-            <button
-              onClick={handleCleanup}
-              className={clsx(
-                'flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
-                theme === 'dark' ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
-              )}
-              aria-label={t('backup.cleanup', 'Cleanup old backups')}
-            >
-              <Trash2 size={16} />
-              {t('backup.cleanup', 'Cleanup')}
-            </button>
-            {/* 备份计划 CRUD (backup.py /schedule/*) 与监控告警 (backup_monitoring.py) 未挂载 → coming soon */}
-            <button
-              disabled
-              title={`${t('backup.schedules', 'Schedules')} (${comingSoon})`}
-              aria-label={`${t('backup.schedules', 'Schedules')} (${comingSoon})`}
-              className={clsx(
-                'flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium opacity-50 cursor-not-allowed',
-                theme === 'dark' ? 'bg-slate-800 text-slate-500' : 'bg-slate-200 text-slate-500'
-              )}
-            >
-              {t('backup.schedules', 'Schedules')} ({comingSoon})
-            </button>
-            <button
-              onClick={load}
-              disabled={isLoading}
-              className={clsx(
-                'flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50',
-                theme === 'dark' ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
-              )}
-              aria-label={t('common.refresh', 'Refresh')}
-            >
-              <RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />
-            </button>
-          </div>
-        </div>
+        </header>
 
         {loadError && (
-          <div role="alert" className={clsx('mb-6 rounded-lg border px-4 py-3 text-sm', theme === 'dark' ? 'border-red-900 bg-red-950/40 text-red-300' : 'border-red-200 bg-red-50 text-red-700')}>
+          <div role="alert" className="mb-6 rounded-lg border border-[#dc2626]/30 px-4 py-3 text-sm text-[#dc2626]">
             {loadError}
           </div>
         )}
         {notice && (
-          <div role="status" className={clsx('mb-6 rounded-lg border px-4 py-3 text-sm', theme === 'dark' ? 'border-green-900 bg-green-950/40 text-green-300' : 'border-green-200 bg-green-50 text-green-700')}>
+          <div role="status" className="mb-6 rounded-lg border border-[#16a34a]/30 px-4 py-3 text-sm text-[#16a34a]">
             {notice}
           </div>
         )}
 
-        {/* Scheduler status cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-          <StatusCard theme={theme} label={t('backup.scheduler', 'Scheduler')} value={status ? (status.enabled ? (status.running ? t('backup.running', 'Running') : t('backup.idle', 'Idle')) : t('backup.disabled', 'Disabled')) : '—'} />
-          <StatusCard theme={theme} label={t('backup.cron', 'Schedule')} value={status?.schedule_cron ?? '—'} small />
-          <StatusCard theme={theme} label={t('backup.lastRun', 'Last run')} value={status?.last_run ? new Date(status.last_run).toLocaleString() : '—'} small />
-          <StatusCard theme={theme} label={t('backup.lastResult', 'Last result')} value={status?.last_success == null ? '—' : status.last_success ? '✓' : '✗'} />
-        </div>
+        {/* Scheduler status — Dashboard-style status row, no cards */}
+        <section aria-label={t('backup.title', 'Backup & Recovery')} className="mb-10">
+          <dl className="flex flex-wrap gap-y-6">
+            {statusItems.map((item, i) => (
+              <div
+                key={item.label}
+                className={clsx('flex flex-col gap-2 pr-8 mr-8', i < statusItems.length - 1 && 'border-r')}
+                style={i < statusItems.length - 1 ? { borderColor: DIVIDER } : undefined}
+              >
+                <dd className="font-data text-[16px] leading-none order-2">{item.value}</dd>
+                <dt className="text-[12px] uppercase tracking-[0.06em] opacity-50 order-1">{item.label}</dt>
+              </div>
+            ))}
+          </dl>
+        </section>
 
         {/* Last manual run result */}
         {runResult && (
-          <div className={clsx('mb-8 rounded-lg border p-4', theme === 'dark' ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200')}>
-            <div className={clsx('text-sm font-semibold mb-2', theme === 'dark' ? 'text-white' : 'text-slate-900')}>
-              {t('backup.lastRunResult', 'Manual backup result')}: {runResult.backup_id} — {runResult.success ? '✓' : '✗'} ({fmtSize(runResult.total_size_bytes)})
+          <section className="mb-10">
+            <h2 className="text-[11px] uppercase tracking-[0.08em] opacity-50 mb-2">
+              {t('backup.lastRunResult', 'Manual backup result')}
+            </h2>
+            <div className="row-line" style={{ padding: '14px 0' }}>
+              <div className="text-sm font-medium mb-2">
+                <span className="cell-data">{runResult.backup_id}</span>
+                {' — '}
+                <span className={runResult.success ? 'text-[#16a34a]' : 'text-[#dc2626]'}>
+                  {runResult.success ? '✓' : '✗'}
+                </span>
+                {' '}
+                <span className="cell-data opacity-60">({fmtSize(runResult.total_size_bytes)})</span>
+              </div>
+              <div className="space-y-1">
+                {runResult.components.map((c) => (
+                  <div key={c.component} className="cell-data opacity-70 flex gap-2">
+                    <span className={c.success ? 'text-[#16a34a]' : 'text-[#dc2626]'}>{c.success ? '✓' : '✗'}</span>
+                    <span className="font-medium">{c.component}</span>
+                    <span>{fmtSize(c.size_bytes)} · {c.duration_seconds}s</span>
+                    {c.error && <span className="text-[#dc2626]">{c.error}</span>}
+                  </div>
+                ))}
+              </div>
             </div>
-            <div className="space-y-1">
-              {runResult.components.map((c) => (
-                <div key={c.component} className={clsx('text-xs flex gap-2', theme === 'dark' ? 'text-slate-400' : 'text-slate-600')}>
-                  <span className={c.success ? 'text-green-500' : 'text-red-500'}>{c.success ? '✓' : '✗'}</span>
-                  <span className="font-medium">{c.component}</span>
-                  <span>{fmtSize(c.size_bytes)} · {c.duration_seconds}s</span>
-                  {c.error && <span className="text-red-500">{c.error}</span>}
-                </div>
-              ))}
-            </div>
-          </div>
+          </section>
         )}
 
-        {/* Backup list */}
+        {/* Backup list — dense table, hairline dividers */}
         <section className="mb-10">
-          <h2 className={clsx('text-lg font-semibold mb-4 flex items-center gap-2', theme === 'dark' ? 'text-white' : 'text-slate-900')}>
-            <DatabaseBackup size={18} />
+          <h2 className="text-[11px] uppercase tracking-[0.08em] opacity-50 mb-2">
             {t('backup.list', 'Backups')} ({backups.length})
           </h2>
           {backups.length === 0 && !isLoading ? (
-            <div className={clsx('text-center py-10 rounded-lg border', theme === 'dark' ? 'border-slate-800 text-slate-400' : 'border-slate-200 text-slate-500 bg-white')}>
+            <p className="empty-state">
               {t('backup.empty', 'No backups yet — run one manually to get started')}
-            </div>
+            </p>
           ) : (
-            <div className={clsx('rounded-lg border overflow-hidden', theme === 'dark' ? 'border-slate-800' : 'border-slate-200 bg-white')}>
-              <table className="w-full text-sm">
-                <thead className={theme === 'dark' ? 'bg-slate-900 text-slate-400' : 'bg-slate-50 text-slate-600'}>
+            <div className="overflow-x-auto">
+              <table className="table-dense">
+                <thead>
                   <tr>
-                    <th className="text-left px-4 py-3 font-medium">{t('backup.col.id', 'Backup ID')}</th>
-                    <th className="text-left px-4 py-3 font-medium">{t('backup.col.created', 'Created')}</th>
-                    <th className="text-left px-4 py-3 font-medium">{t('backup.col.size', 'Size')}</th>
-                    <th className="text-left px-4 py-3 font-medium">{t('backup.col.status', 'Status')}</th>
-                    <th className="text-right px-4 py-3 font-medium">{t('backup.col.actions', 'Actions')}</th>
+                    <th>{t('backup.col.id', 'Backup ID')}</th>
+                    <th>{t('backup.col.created', 'Created')}</th>
+                    <th>{t('backup.col.size', 'Size')}</th>
+                    <th>{t('backup.col.status', 'Status')}</th>
+                    <th className="text-right">{t('backup.col.actions', 'Actions')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -216,19 +249,11 @@ export const BackupPage: React.FC = () => {
   )
 }
 
-const StatusCard: React.FC<{ theme: string; label: string; value: string; small?: boolean }> = ({ theme, label, value, small }) => (
-  <div className={clsx('rounded-lg border p-4', theme === 'dark' ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200')}>
-    <div className={clsx('text-xs mb-1', theme === 'dark' ? 'text-slate-400' : 'text-slate-500')}>{label}</div>
-    <div className={clsx(small ? 'text-sm font-semibold' : 'text-xl font-bold', theme === 'dark' ? 'text-white' : 'text-slate-900')}>{value}</div>
-  </div>
-)
-
 const BackupRow: React.FC<{
   backup: BackupListItem
   fmtSize: (n: number) => string
   onChanged: () => void
 }> = ({ backup, fmtSize, onChanged }) => {
-  const { theme } = useAppStore()
   const { t } = useI18n()
   const [busy, setBusy] = useState(false)
   const [rowNotice, setRowNotice] = useState<string | null>(null)
@@ -266,41 +291,37 @@ const BackupRow: React.FC<{
   }
 
   return (
-    <tr className={clsx('border-t', theme === 'dark' ? 'border-slate-800 text-slate-300' : 'border-slate-100 text-slate-700')}>
-      <td className="px-4 py-3">
-        <div className="font-medium">{backup.backup_id}</div>
-        {rowNotice && <div className={clsx('text-xs mt-1', theme === 'dark' ? 'text-slate-400' : 'text-slate-500')}>{rowNotice}</div>}
+    <tr>
+      <td>
+        <div className="font-medium cell-data">{backup.backup_id}</div>
+        {rowNotice && <div className="cell-data opacity-50 mt-1">{rowNotice}</div>}
       </td>
-      <td className="px-4 py-3">{backup.created_at ? new Date(backup.created_at).toLocaleString() : '—'}</td>
-      <td className="px-4 py-3">{fmtSize(backup.total_size_bytes)}</td>
-      <td className="px-4 py-3">
-        <span className={clsx('px-2 py-0.5 rounded-full text-xs font-medium', backup.success ? 'bg-green-500/10 text-green-600 dark:text-green-400' : 'bg-red-500/10 text-red-600 dark:text-red-400')}>
+      <td className="cell-data opacity-70">{backup.created_at ? new Date(backup.created_at).toLocaleString() : '—'}</td>
+      <td className="cell-data opacity-70">{fmtSize(backup.total_size_bytes)}</td>
+      <td>
+        <span className={clsx('badge-status', backup.success ? 'badge-success' : 'badge-danger')}>
           {backup.success ? 'success' : 'failed'}
         </span>
       </td>
-      <td className="px-4 py-3">
-        <div className="flex gap-2 justify-end">
+      <td>
+        <div className="flex gap-1 justify-end">
           <button
             onClick={handleVerify}
             disabled={busy}
-            className={clsx(
-              'flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors disabled:opacity-50',
-              theme === 'dark' ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-            )}
+            className="p-1.5 opacity-50 hover:opacity-100 transition-opacity disabled:opacity-30"
             aria-label={t('backup.verify', 'Verify')}
+            title={t('backup.verify', 'Verify')}
           >
-            <ShieldCheck size={14} />
-            {t('backup.verify', 'Verify')}
+            <ShieldCheck size={15} />
           </button>
           <button
             onClick={handleRestore}
             disabled={busy || !backup.success}
-            className="flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-medium bg-amber-600 text-white hover:bg-amber-700 transition-colors disabled:opacity-50"
+            className="p-1.5 opacity-50 hover:opacity-100 transition-opacity disabled:opacity-30"
             aria-label={t('backup.restore', 'Restore')}
             title={t('backup.confirmRestore', 'Restore from this backup? Current data may be overwritten. Continue?')}
           >
-            <RotateCcw size={14} />
-            {t('backup.restore', 'Restore')}
+            <RotateCcw size={15} />
           </button>
         </div>
       </td>
@@ -317,7 +338,11 @@ const QdrantSection: React.FC<{ onError: (msg: string | null) => void; onNotice:
 
   const inputCls = clsx(
     'px-3 py-2 rounded-lg text-sm border outline-none',
-    theme === 'dark' ? 'bg-slate-950 border-slate-700 text-white placeholder-slate-500' : 'bg-white border-slate-300 text-slate-900 placeholder-slate-400'
+    theme === 'dark' ? 'bg-slate-800 border-slate-600 text-white placeholder-slate-500' : 'bg-white border-slate-300 text-slate-900 placeholder-slate-400'
+  )
+  const ghostBtnCls = clsx(
+    'px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50',
+    theme === 'dark' ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
   )
 
   const run = async (fn: () => Promise<unknown>) => {
@@ -359,13 +384,12 @@ const QdrantSection: React.FC<{ onError: (msg: string | null) => void; onNotice:
 
   return (
     <section>
-      <h2 className={clsx('text-lg font-semibold mb-4 flex items-center gap-2', theme === 'dark' ? 'text-white' : 'text-slate-900')}>
-        <Layers size={18} />
+      <h2 className="text-[11px] uppercase tracking-[0.08em] opacity-50 mb-2">
         {t('backup.qdrant.title', 'Qdrant snapshots')}
       </h2>
-      <div className={clsx('rounded-lg border p-4 mb-4 flex flex-wrap gap-3 items-end', theme === 'dark' ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200')}>
+      <div className="row-line mb-4 flex flex-wrap gap-3 items-end" style={{ padding: '14px 0' }}>
         <div>
-          <label className={clsx('block text-xs mb-1', theme === 'dark' ? 'text-slate-400' : 'text-slate-500')}>
+          <label className="block text-[11px] uppercase tracking-[0.06em] opacity-50 mb-1">
             {t('backup.qdrant.collection', 'Collection name')}
           </label>
           <input
@@ -385,33 +409,27 @@ const QdrantSection: React.FC<{ onError: (msg: string | null) => void; onNotice:
         <button
           onClick={handleList}
           disabled={busy || !collection}
-          className={clsx(
-            'px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50',
-            theme === 'dark' ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-          )}
+          className={ghostBtnCls}
         >
           {t('backup.qdrant.listSnapshots', 'List snapshots')}
         </button>
         <button
           onClick={handleCleanup}
           disabled={busy}
-          className={clsx(
-            'px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50',
-            theme === 'dark' ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-          )}
+          className={ghostBtnCls}
         >
           {t('backup.qdrant.cleanup', 'Cleanup old')}
         </button>
       </div>
 
       {snapshots.length > 0 && (
-        <div className={clsx('rounded-lg border overflow-hidden', theme === 'dark' ? 'border-slate-800' : 'border-slate-200 bg-white')}>
-          <table className="w-full text-sm">
-            <thead className={theme === 'dark' ? 'bg-slate-900 text-slate-400' : 'bg-slate-50 text-slate-600'}>
+        <div className="overflow-x-auto">
+          <table className="table-dense">
+            <thead>
               <tr>
-                <th className="text-left px-4 py-3 font-medium">{t('backup.qdrant.col.name', 'Snapshot')}</th>
-                <th className="text-left px-4 py-3 font-medium">{t('backup.qdrant.col.created', 'Created')}</th>
-                <th className="text-right px-4 py-3 font-medium">{t('backup.col.actions', 'Actions')}</th>
+                <th>{t('backup.qdrant.col.name', 'Snapshot')}</th>
+                <th>{t('backup.qdrant.col.created', 'Created')}</th>
+                <th className="text-right">{t('backup.col.actions', 'Actions')}</th>
               </tr>
             </thead>
             <tbody>
@@ -419,18 +437,18 @@ const QdrantSection: React.FC<{ onError: (msg: string | null) => void; onNotice:
                 const name = String(snapshot.name ?? snapshot.snapshot_name ?? `#${index}`)
                 const created = snapshot.creation_time ?? snapshot.created_at
                 return (
-                  <tr key={name} className={clsx('border-t', theme === 'dark' ? 'border-slate-800 text-slate-300' : 'border-slate-100 text-slate-700')}>
-                    <td className="px-4 py-3 font-medium">{name}</td>
-                    <td className="px-4 py-3">{created ? new Date(String(created)).toLocaleString() : '—'}</td>
-                    <td className="px-4 py-3 text-right">
+                  <tr key={name}>
+                    <td className="font-medium cell-data">{name}</td>
+                    <td className="cell-data opacity-70">{created ? new Date(String(created)).toLocaleString() : '—'}</td>
+                    <td className="text-right">
                       <button
                         onClick={() => handleRestore(name)}
                         disabled={busy}
-                        className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-medium bg-amber-600 text-white hover:bg-amber-700 transition-colors disabled:opacity-50"
+                        className="p-1.5 opacity-50 hover:opacity-100 transition-opacity disabled:opacity-30"
                         aria-label={t('backup.restore', 'Restore')}
+                        title={t('backup.qdrant.confirmRestore', 'Restore this collection from the snapshot? Current vectors may be overwritten. Continue?')}
                       >
-                        <RotateCcw size={14} />
-                        {t('backup.restore', 'Restore')}
+                        <RotateCcw size={15} />
                       </button>
                     </td>
                   </tr>

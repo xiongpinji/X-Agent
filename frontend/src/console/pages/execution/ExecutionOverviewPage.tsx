@@ -76,14 +76,14 @@ export function ExecutionOverviewPage(props: ExecutionOverviewPageProps) {
 
   return (
     <div className="space-y-4">
-      <section className="rounded-2xl border bg-white p-4 shadow-sm">
-        <div className="text-xs text-gray-500">{resourceType}</div>
-        <div className="mt-1 text-sm text-gray-700">资源 ID：{resourceId}</div>
-        {props.linkedDispatchSummary?.summary?.title ? <div className="mt-2 text-xs text-gray-500">调度摘要：{props.linkedDispatchSummary.summary.title} · {activeRuns} 个活跃任务</div> : null}
-        {props.linkedExecutionSummary?.summary?.title ? <div className="mt-1 text-xs text-gray-500">执行摘要：{props.linkedExecutionSummary.summary.title} · {completedRuns} 个已完成</div> : null}
-        {props.linkedAuditSummary?.summary?.title ? <div className="mt-1 text-xs text-gray-500">审计摘要：{props.linkedAuditSummary.summary.title} · {failedRuns} 个失败</div> : null}
-        {props.linkedMessagesSummary?.summary?.title ? <div className="mt-1 text-xs text-gray-500">消息摘要：{props.linkedMessagesSummary.summary.title} · {pendingRuns} 个待处理</div> : null}
-      </section>
+      <header className="console-page-header">
+        <h1 className="page-title">运行控制</h1>
+        <div className="console-resource-id">{resourceType} · 资源 ID：{resourceId}</div>
+        {props.linkedDispatchSummary?.summary?.title ? <div className="console-summary-line">调度摘要：{props.linkedDispatchSummary.summary.title} · {activeRuns} 个活跃任务</div> : null}
+        {props.linkedExecutionSummary?.summary?.title ? <div className="console-summary-line">执行摘要：{props.linkedExecutionSummary.summary.title} · {completedRuns} 个已完成</div> : null}
+        {props.linkedAuditSummary?.summary?.title ? <div className="console-summary-line">审计摘要：{props.linkedAuditSummary.summary.title} · {failedRuns} 个失败</div> : null}
+        {props.linkedMessagesSummary?.summary?.title ? <div className="console-summary-line">消息摘要：{props.linkedMessagesSummary.summary.title} · {pendingRuns} 个待处理</div> : null}
+      </header>
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
         <StatCard label="活跃执行" value={String(activeRuns)} />

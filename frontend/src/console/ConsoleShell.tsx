@@ -501,42 +501,44 @@ export function ConsoleShell() {
     <ConsoleLayout
       sidebar={
         <div className="p-4">
-          <div className="text-lg font-bold">统一控制台</div>
-          <div className="mt-2 space-y-2 text-sm text-gray-600">
+          <div className="text-base font-medium">统一控制台</div>
+          <div className="cell-data mt-3 space-y-1 text-xs opacity-60">
             <div>在线智能体：{overviewPageData.onlineAgents}</div>
             <div>活跃会议室：{overviewPageData.activeRooms}</div>
           </div>
-          <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
-            <button className="rounded-lg border px-2 py-1 hover:bg-gray-50" onClick={() => dispatch({ type: "page/set", payload: "overview" })}>概览</button>
-            <button className="rounded-lg border px-2 py-1 hover:bg-gray-50" onClick={() => dispatch({ type: "page/set", payload: "organization_graph" })}>组织图</button>
-            <button className="rounded-lg border px-2 py-1 hover:bg-gray-50" onClick={() => dispatch({ type: "page/set", payload: "org_overview" })}>组织权限中心</button>
-            <button className="rounded-lg border px-2 py-1 hover:bg-gray-50" onClick={() => dispatch({ type: "page/set", payload: "org_structure" })}>组织结构</button>
-            <button className="rounded-lg border px-2 py-1 hover:bg-gray-50" onClick={() => dispatch({ type: "page/set", payload: "org_roles" })}>角色权限</button>
-            <button className="rounded-lg border px-2 py-1 hover:bg-gray-50" onClick={() => dispatch({ type: "page/set", payload: "org_audit" })}>组织审核</button>
-            <button className="rounded-lg border px-2 py-1 hover:bg-gray-50" onClick={() => dispatch({ type: "page/set", payload: "meeting_room" })}>会议室</button>
-            <button className="rounded-lg border px-2 py-1 hover:bg-gray-50" onClick={() => dispatch({ type: "page/set", payload: "realtime_chat" })}>对话</button>
-            <button className="rounded-lg border px-2 py-1 hover:bg-gray-50" onClick={() => dispatch({ type: "page/set", payload: "workflow" })}>工作流</button>
-            <button className="rounded-lg border px-2 py-1 hover:bg-gray-50" onClick={() => dispatch({ type: "page/set", payload: "execution_overview" })}>运行控制</button>
-            <button className="rounded-lg border px-2 py-1 hover:bg-gray-50" onClick={() => dispatch({ type: "page/set", payload: "tools_overview" })}>工具中心</button>
-            <button className="rounded-lg border px-2 py-1 hover:bg-gray-50" onClick={() => dispatch({ type: "page/set", payload: "tools_detail" })}>工具详情</button>
-            <button className="rounded-lg border px-2 py-1 hover:bg-gray-50" onClick={() => dispatch({ type: "page/set", payload: "tools_management" })}>工具管理</button>
-            <button className="rounded-lg border px-2 py-1 hover:bg-gray-50" onClick={() => dispatch({ type: "page/set", payload: "tools_history" })}>调用历史</button>
-            <button className="rounded-lg border px-2 py-1 hover:bg-gray-50" onClick={() => dispatch({ type: "page/set", payload: "market_overview" })}>能力市场</button>
-            <button className="rounded-lg border px-2 py-1 hover:bg-gray-50" onClick={() => dispatch({ type: "page/set", payload: "search_overview" })}>全局导航</button>
-            <button className="rounded-lg border px-2 py-1 hover:bg-gray-50" onClick={() => dispatch({ type: "page/set", payload: "memory_overview" })}>记忆中心</button>
-            <button className="rounded-lg border px-2 py-1 hover:bg-gray-50" onClick={() => dispatch({ type: "page/set", payload: "memory_detail" })}>记忆详情</button>
-            <button className="rounded-lg border px-2 py-1 hover:bg-gray-50" onClick={() => dispatch({ type: "page/set", payload: "memory_management" })}>记忆管理</button>
-            <button className="rounded-lg border px-2 py-1 hover:bg-gray-50" onClick={() => dispatch({ type: "page/set", payload: "memory_history" })}>记忆历史</button>
-            <button className="rounded-lg border px-2 py-1 hover:bg-gray-50" onClick={() => dispatch({ type: "page/set", payload: "audit" })}>审计</button>
-          </div>
+          <nav className="console-nav mt-4">
+            <button onClick={() => dispatch({ type: "page/set", payload: "overview" })}>概览</button>
+            <button onClick={() => dispatch({ type: "page/set", payload: "organization_graph" })}>组织图</button>
+            <button onClick={() => dispatch({ type: "page/set", payload: "org_overview" })}>组织权限中心</button>
+            <button onClick={() => dispatch({ type: "page/set", payload: "org_structure" })}>组织结构</button>
+            <button onClick={() => dispatch({ type: "page/set", payload: "org_roles" })}>角色权限</button>
+            <button onClick={() => dispatch({ type: "page/set", payload: "org_audit" })}>组织审核</button>
+            <button onClick={() => dispatch({ type: "page/set", payload: "meeting_room" })}>会议室</button>
+            <button onClick={() => dispatch({ type: "page/set", payload: "realtime_chat" })}>对话</button>
+            <button onClick={() => dispatch({ type: "page/set", payload: "workflow" })}>工作流</button>
+            <button onClick={() => dispatch({ type: "page/set", payload: "execution_overview" })}>运行控制</button>
+            <button onClick={() => dispatch({ type: "page/set", payload: "tools_overview" })}>工具中心</button>
+            <button onClick={() => dispatch({ type: "page/set", payload: "tools_detail" })}>工具详情</button>
+            <button onClick={() => dispatch({ type: "page/set", payload: "tools_management" })}>工具管理</button>
+            <button onClick={() => dispatch({ type: "page/set", payload: "tools_history" })}>调用历史</button>
+            <button onClick={() => dispatch({ type: "page/set", payload: "market_overview" })}>能力市场</button>
+            <button onClick={() => dispatch({ type: "page/set", payload: "search_overview" })}>全局导航</button>
+            <button onClick={() => dispatch({ type: "page/set", payload: "memory_overview" })}>记忆中心</button>
+            <button onClick={() => dispatch({ type: "page/set", payload: "memory_detail" })}>记忆详情</button>
+            <button onClick={() => dispatch({ type: "page/set", payload: "memory_management" })}>记忆管理</button>
+            <button onClick={() => dispatch({ type: "page/set", payload: "memory_history" })}>记忆历史</button>
+            <button onClick={() => dispatch({ type: "page/set", payload: "audit" })}>审计</button>
+          </nav>
         </div>
       }
       topBar={
         <div className="flex h-full items-center justify-between gap-4 px-4">
-          <div>
-            <div className="text-sm font-medium text-gray-700">组织：{overviewData.organizationGraph?.organization?.name ?? "统一控制台"}</div>
-            <div className="text-xs text-gray-500">模式：{identityData.mode}</div>
-            <div className="text-xs text-gray-500">页面：{shellUiData.pageTitle}</div>
+          <div className="text-xs opacity-60">
+            <span>组织：{overviewData.organizationGraph?.organization?.name ?? "统一控制台"}</span>
+            <span className="mx-2">·</span>
+            <span>模式：{identityData.mode}</span>
+            <span className="mx-2">·</span>
+            <span>页面：{shellUiData.pageTitle}</span>
           </div>
           <ConsoleSyncStatusBadge
             status={sync.syncStatus}
@@ -551,8 +553,8 @@ export function ConsoleShell() {
       mainArea={renderPage()}
       contextPanel={
         <div className="h-full overflow-y-auto p-4">
-          <h3 className="text-lg font-semibold">上下文详情</h3>
-          <div className="mt-4 space-y-3 text-sm text-gray-600">
+          <h3 className="text-sm font-medium">上下文详情</h3>
+          <div className="mt-4 space-y-3 text-sm opacity-70">
             <div>当前用户：{contextData.currentUser}</div>
             <div>当前会议室：{contextData.activeRoomName}</div>
             <div>当前对话：{contextData.activeConversationTitle}</div>
@@ -565,7 +567,7 @@ export function ConsoleShell() {
         </div>
       }
       statusBar={
-        <div className="flex h-full items-center justify-between px-4 text-xs text-gray-500">
+        <div className="cell-data flex h-full items-center justify-between px-4 text-xs opacity-60">
           <div>同步状态：{sync.syncStatus}</div>
           <div>最近同步：{sync.lastSyncedAt ?? "-"}</div>
           <div>未读消息：{overviewData.realtime.unread_count}</div>
