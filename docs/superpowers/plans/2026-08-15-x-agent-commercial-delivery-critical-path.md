@@ -220,7 +220,11 @@ python -m pytest tests/test_artifacts.py tests/test_run_artifact_lifecycle.py te
 **文件：**
 - 创建：`backend/app/core/billing/__init__.py`
 - 创建：`backend/app/core/billing/reservations.py`
+- 创建：`backend/migrations/011_usage_reservations.sql`
 - 修改：`backend/app/core/llm/backends.py`
+- 修改：`backend/app/core/llm/anthropic_backend.py`
+- 修改：`backend/app/core/agent/loop.py`
+- 修改：`backend/app/dependencies.py`
 - 修改：`backend/app/api/agents.py`
 - 修改：`backend/app/api/tenants.py`
 - 测试：`tests/test_usage_reservation_lifecycle.py`
@@ -238,17 +242,19 @@ assert (await store.confirm("op-1", actual_cost=Decimal("0.008"))).ledger_entry_
 
 - [ ] **步骤 2：实现持久 reservation/ledger**
 
-权威状态仅为 `reserved/confirmed/refunded/submission_unknown`。唯一键为 `tenant_id + operation_id`；每次转换在事务内写不可变 ledger 和审计记录。
+权威状态仅为 `reserved/confirmed/refunded/submission_unknown`。唯一键为 `tenant_id + operation_id`；每次转换在同一 SQL 事务内写不可变 ledger 和持久 audit outbox，再尝试同步投递到现有 AuditStore。投递失败不丢记录，必须显式显示 `pending`，不得伪装审计成功。开发/测试使用持久 SQLite，生产只接受 PostgreSQL 且不自动建表；不允许内存 fallback。
 
 - [ ] **步骤 3：接入真实 Agent/LLM 生命周期**
 
-供应商调用前 reserve；拿到明确成功和 token/cost 后 confirm；明确失败 refund；网络超时且无法确认供应商状态时写 `submission_unknown` 并停止自动重试。
+供应商调用前 reserve；拿到明确成功和 token/cost 后 confirm；明确失败 refund；网络超时且无法确认供应商状态时写 `submission_unknown` 并停止自动重试。一次 router 调用生成一个 root operation ID，每个 provider 尝试使用稳定的子 ID；重复的 `reserved` 请求必须阻断自动重放。明确 `LLMBackendError` 退款后才能 fallback；新增模糊提交异常类，超时/无法确认的连接结果不得被通用 fallback 捕获。Agent 调用传入 run/trace 关联，OpenAI 请求补硬性输出 token 上限。
 
 - [ ] **步骤 4：以 mock provider 完成成功/失败/未知/重复回调测试**
 
 ```powershell
 python -m pytest tests/test_llm_quota_wiring.py tests/test_usage_reservation_lifecycle.py tests/test_usage_reservation_idempotency.py -q
 ```
+
+以 mock provider 模拟 success/explicit failure/unknown result，断言 reservation、ledger、audit outbox 和返回状态一致；不在本任务发出真实供应商请求。租户 billing 端点改从权威 store 按月汇总 confirmed/refunded/submission_unknown，不再固定返回 0 或伪造 `paid`；未接入支付网关时只能标记 `unsettled/no_usage`。默认 Agent 和共享 LLM router 使用同一个持久 store。
 
 - [ ] **步骤 5：双阶段审查并提交**
 
