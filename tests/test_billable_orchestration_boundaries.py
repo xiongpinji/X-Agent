@@ -858,6 +858,138 @@ def test_spawn_requires_bounded_operation_id_before_agent_execution(
     assert executor_calls == 0
 
 
+@pytest.mark.parametrize(
+    "payload_update",
+    [
+        {"tasks": []},
+        {"tasks": [{"goal": "child"}] * 33},
+        {"max_parallel": 0},
+        {"max_parallel": 33},
+        {"tasks": [{"goal": "child", "timeout_seconds": 0}]},
+        {"tasks": [{"goal": "child", "timeout_seconds": 3601}]},
+        {"tasks": [{"goal": "child", "max_retries": -1}]},
+        {"tasks": [{"goal": "child", "max_retries": 4}]},
+        {"tasks": [{"goal": "   "}]},
+        {"tasks": [{"goal": "g" * 20_001}]},
+        {"tasks": [{"goal": "child", "description": "d" * 20_001}]},
+        {"tasks": [{"goal": "child", "constraints": ["c"] * 33}]},
+        {"tasks": [{"goal": "child", "constraints": ["c" * 2_001]}]},
+        {
+            "tasks": [
+                {
+                    "goal": "child",
+                    "metadata": {f"key-{index}": "v" for index in range(65)},
+                }
+            ]
+        },
+        {"tasks": [{"goal": "child", "metadata": {"blob": "x" * 65_536}}]},
+        {"tasks": [{"goal": "child", "metadata": {"blob": "界" * 22_000}}]},
+    ],
+)
+def test_spawn_rejects_unbounded_work_before_agent_execution(
+    monkeypatch,
+    payload_update,
+) -> None:
+    factory_calls = 0
+    executor_calls = 0
+
+    def provider_factory(_principal):
+        nonlocal factory_calls
+        factory_calls += 1
+        raise AssertionError("agent/provider factory must not run")
+
+    class ExecutorMustNotRun:
+        async def spawn_agents(self, **_kwargs):
+            nonlocal executor_calls
+            executor_calls += 1
+            raise AssertionError("executor must not run")
+
+    monkeypatch.setattr(
+        parallel_agents,
+        "build_agent_loop_factory",
+        provider_factory,
+    )
+    app = FastAPI()
+    app.include_router(parallel_agents.router)
+    app.dependency_overrides[get_current_principal] = _principal
+    app.dependency_overrides[parallel_agents.get_executor] = ExecutorMustNotRun
+    payload = {
+        "operation_id": "spawn-resource-boundary",
+        "tasks": [{"goal": "child"}],
+        "aggregate_results": False,
+        **payload_update,
+    }
+
+    with TestClient(app) as client:
+        response = client.post("/api/v1/agents/parallel/spawn", json=payload)
+
+    assert response.status_code == 422
+    assert factory_calls == 0
+    assert executor_calls == 0
+
+
+def test_spawn_accepts_documented_resource_boundaries(monkeypatch) -> None:
+    executor_calls: list[dict] = []
+
+    class RecordingExecutor:
+        async def spawn_agents(self, **kwargs):
+            executor_calls.append(kwargs)
+            return SimpleNamespace(
+                to_dict=lambda: {
+                    "batch_id": kwargs["batch_id"],
+                    "total_tasks": len(kwargs["tasks"]),
+                    "results": [],
+                }
+            )
+
+    monkeypatch.setattr(
+        parallel_agents,
+        "build_agent_loop_factory",
+        lambda _principal: object(),
+    )
+    app = FastAPI()
+    app.include_router(parallel_agents.router)
+    app.dependency_overrides[get_current_principal] = _principal
+    app.dependency_overrides[parallel_agents.get_executor] = RecordingExecutor
+    boundary_task = {
+        "goal": "g" * 20_000,
+        "description": "d" * 20_000,
+        "constraints": ["c" * 2_000] * 32,
+        "success_criteria": ["s" * 2_000] * 32,
+        "dependencies": [f"dependency-{index}" for index in range(32)],
+        "metadata": {f"key-{index}": "value" for index in range(64)},
+        "timeout_seconds": 1,
+        "max_retries": 0,
+    }
+    tasks = [
+        boundary_task,
+        {
+            "goal": "child",
+            "metadata": {"blob": "x" * 65_525},
+            "timeout_seconds": 3600,
+        },
+    ]
+    tasks.extend({"goal": f"child-{index}"} for index in range(30))
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/v1/agents/parallel/spawn",
+            json={
+                "operation_id": "spawn-valid-boundary",
+                "tasks": tasks,
+                "max_parallel": 32,
+                "aggregate_results": False,
+            },
+        )
+
+    assert response.status_code == 200
+    assert len(executor_calls) == 1
+    assert len(executor_calls[0]["tasks"]) == 32
+    assert executor_calls[0]["max_parallel"] == 32
+    assert executor_calls[0]["tasks"][0].timeout_seconds == 1
+    assert executor_calls[0]["tasks"][1].timeout_seconds == 3600
+
+
 def test_spawn_passes_stable_batch_and_task_run_context(
     monkeypatch,
 ) -> None:

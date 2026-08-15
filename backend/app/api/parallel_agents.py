@@ -30,6 +30,7 @@ NOTE: backend.app.core.parallel_execution_engine was DEPRECATED and is now
 
 from __future__ import annotations
 
+import json
 import logging
 from collections.abc import Callable
 from hashlib import sha256
@@ -71,6 +72,15 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/agents/parallel", tags=["parallel_agents"])
 extended_router = APIRouter(prefix="/api/v1/agents/parallel", tags=["parallel-extended"])  # C2: unmounted; handler bodies unchanged
 PrincipalDependency = Annotated[Principal, Depends(get_current_principal)]
+
+MAX_SPAWN_TASKS = 32
+MAX_TASK_TEXT_CHARS = 20_000
+MAX_TASK_LIST_ITEMS = 32
+MAX_TASK_LIST_ITEM_CHARS = 2_000
+MAX_TASK_METADATA_KEYS = 64
+MAX_TASK_METADATA_BYTES = 65_536
+TaskListItem = Annotated[str, Field(max_length=MAX_TASK_LIST_ITEM_CHARS)]
+TaskDependency = Annotated[str, Field(min_length=1, max_length=220)]
 
 # Global instances
 _executor: ParallelAgentExecutor | None = None
@@ -173,22 +183,60 @@ def get_aggregator() -> ResultAggregator:
 
 class TaskRequest(BaseModel):
     """Request to execute a task."""
-    goal: str
-    description: str = ""
-    constraints: list[str] = Field(default_factory=list)
-    success_criteria: list[str] = Field(default_factory=list)
-    timeout_seconds: int = 300
-    max_retries: int = 3
+    goal: str = Field(min_length=1, max_length=MAX_TASK_TEXT_CHARS)
+    description: str = Field(default="", max_length=MAX_TASK_TEXT_CHARS)
+    constraints: list[TaskListItem] = Field(
+        default_factory=list,
+        max_length=MAX_TASK_LIST_ITEMS,
+    )
+    success_criteria: list[TaskListItem] = Field(
+        default_factory=list,
+        max_length=MAX_TASK_LIST_ITEMS,
+    )
+    timeout_seconds: int = Field(default=300, ge=1, le=3600)
+    max_retries: int = Field(default=3, ge=0, le=3)
     metadata: dict[str, Any] = Field(default_factory=dict)
-    dependencies: list[str] = Field(default_factory=list)
+    dependencies: list[TaskDependency] = Field(
+        default_factory=list,
+        max_length=MAX_TASK_LIST_ITEMS,
+    )
+
+    @field_validator("goal", mode="before")
+    @classmethod
+    def _goal_must_not_be_blank(cls, value: Any) -> Any:
+        if not isinstance(value, str):
+            return value
+        value = value.strip()
+        if not value:
+            raise ValueError("goal must not be blank")
+        return value
+
+    @field_validator("metadata")
+    @classmethod
+    def _metadata_must_be_bounded(cls, value: dict[str, Any]) -> dict[str, Any]:
+        if len(value) > MAX_TASK_METADATA_KEYS:
+            raise ValueError("metadata has too many keys")
+        try:
+            encoded = json.dumps(
+                value,
+                ensure_ascii=False,
+                allow_nan=False,
+                separators=(",", ":"),
+                sort_keys=True,
+            ).encode("utf-8")
+        except (TypeError, ValueError):
+            raise ValueError("metadata must be JSON serializable") from None
+        if len(encoded) > MAX_TASK_METADATA_BYTES:
+            raise ValueError("metadata is too large")
+        return value
 
 
 class SpawnAgentsRequest(BaseModel):
     """Request to spawn parallel agents."""
     operation_id: str = Field(min_length=1, max_length=220)
-    tasks: list[TaskRequest]
+    tasks: list[TaskRequest] = Field(min_length=1, max_length=MAX_SPAWN_TASKS)
     isolation: str = "thread"
-    max_parallel: int | None = None
+    max_parallel: int | None = Field(default=None, ge=1, le=MAX_SPAWN_TASKS)
     aggregate_results: bool = True
     merge_strategy: str = "merge"
     conflict_resolution: str = "keep_last"
