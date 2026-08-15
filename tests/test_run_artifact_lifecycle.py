@@ -590,6 +590,174 @@ def test_archive_manifest_commit_failure_records_compensating_audit(
     assert {created[0].id, rolled_back[0].id}.issubset(persisted.audit_ids)
 
 
+def test_archive_cancellation_during_audit_rolls_back_without_created_audit(
+    lifecycle,
+    monkeypatch,
+) -> None:
+    client, manager, audit = lifecycle
+    monkeypatch.setattr(agents_api, "get_agent", lambda: _CompletingAgent())
+    _final(
+        client.post(
+            "/api/v1/agents/run/stream",
+            json={"task": "create a result"},
+        ).text
+    )
+
+    async def _cancel_during_audit() -> None:
+        audit_started = asyncio.Event()
+        never_finish = asyncio.Event()
+
+        async def _blocked_created_audit(_manifest) -> str:
+            audit_started.set()
+            await never_finish.wait()
+            raise AssertionError("unreachable")
+
+        async def _unexpected_rollback_audit(_manifest, _created_id) -> str:
+            raise AssertionError("created audit id does not exist")
+
+        task = asyncio.create_task(
+            manager.create_archive(
+                "run-lifecycle",
+                "tenant-a",
+                "user-a",
+                audit_callback=_blocked_created_audit,
+                rollback_audit_callback=_unexpected_rollback_audit,
+            )
+        )
+        await asyncio.wait_for(audit_started.wait(), timeout=2)
+        published = await manager.get_manifest(
+            "run-lifecycle",
+            "tenant-a",
+            "user-a",
+        )
+        assert published is not None
+        assert published.archive is not None
+        assert len(list(manager.archive_path.rglob("*.zip"))) == 1
+
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await asyncio.wait_for(task, timeout=2)
+
+    asyncio.run(_cancel_during_audit())
+
+    authoritative = asyncio.run(
+        manager.get_manifest("run-lifecycle", "tenant-a", "user-a")
+    )
+    assert authoritative is not None
+    assert authoritative.archive is None
+    assert list(manager.archive_path.rglob("*.zip")) == []
+    assert list(manager.lock_path.rglob("*.lock")) == []
+    assert audit.list(
+        limit=100,
+        tenant_id="tenant-a",
+        actor_id="user-a",
+        action="run.archive.created",
+    ) == []
+
+
+def test_archive_cancellation_after_created_audit_records_rollback(
+    lifecycle,
+    monkeypatch,
+) -> None:
+    client, manager, audit = lifecycle
+    monkeypatch.setattr(agents_api, "get_agent", lambda: _CompletingAgent())
+    _final(
+        client.post(
+            "/api/v1/agents/run/stream",
+            json={"task": "create a result"},
+        ).text
+    )
+
+    async def _cancel_during_audit_id_commit() -> None:
+        final_save_started = asyncio.Event()
+        never_finish = asyncio.Event()
+        original_save = manager._save_manifest_unlocked
+        save_calls = 0
+
+        async def _controlled_save(manifest):
+            nonlocal save_calls
+            save_calls += 1
+            if save_calls == 2:
+                final_save_started.set()
+                await never_finish.wait()
+            return await original_save(manifest)
+
+        async def _record_created(manifest) -> str:
+            assert manifest.archive is not None
+            record = await asyncio.to_thread(
+                audit.record,
+                action="run.archive.created",
+                resource_type="run_archive",
+                resource_id=manifest.archive.archive_id,
+                tenant_id="tenant-a",
+                actor_id="user-a",
+                trace_id=manifest.trace_id,
+                run_id=manifest.run_id,
+                details={"status": "created"},
+            )
+            return str(record.id)
+
+        async def _record_rollback(manifest, created_audit_id: str) -> str:
+            assert manifest.archive is not None
+            record = await asyncio.to_thread(
+                audit.record,
+                action="run.archive.rollback",
+                resource_type="run_archive",
+                resource_id=manifest.archive.archive_id,
+                tenant_id="tenant-a",
+                actor_id="user-a",
+                outcome="failure",
+                trace_id=manifest.trace_id,
+                run_id=manifest.run_id,
+                details={
+                    "status": "rolled_back",
+                    "created_audit_id": created_audit_id,
+                },
+            )
+            return str(record.id)
+
+        monkeypatch.setattr(manager, "_save_manifest_unlocked", _controlled_save)
+        task = asyncio.create_task(
+            manager.create_archive(
+                "run-lifecycle",
+                "tenant-a",
+                "user-a",
+                audit_callback=_record_created,
+                rollback_audit_callback=_record_rollback,
+            )
+        )
+        await asyncio.wait_for(final_save_started.wait(), timeout=2)
+        published = await manager.get_manifest(
+            "run-lifecycle",
+            "tenant-a",
+            "user-a",
+        )
+        assert published is not None
+        assert published.archive is not None
+        assert len(list(manager.archive_path.rglob("*.zip"))) == 1
+
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await asyncio.wait_for(task, timeout=2)
+
+    asyncio.run(_cancel_during_audit_id_commit())
+
+    authoritative = asyncio.run(
+        manager.get_manifest("run-lifecycle", "tenant-a", "user-a")
+    )
+    assert authoritative is not None
+    assert authoritative.archive is None
+    assert list(manager.archive_path.rglob("*.zip")) == []
+    assert list(manager.lock_path.rglob("*.lock")) == []
+    records = audit.list(limit=100, tenant_id="tenant-a", actor_id="user-a")
+    created = [record for record in records if record.action == "run.archive.created"]
+    rolled_back = [record for record in records if record.action == "run.archive.rollback"]
+    assert len(created) == 1
+    assert len(rolled_back) == 1
+    assert rolled_back[0].details["created_audit_id"] == created[0].id
+    assert {created[0].id, rolled_back[0].id}.issubset(authoritative.audit_ids)
+
+
 def test_artifact_download_audit_failure_never_claims_downloaded_or_returns_bytes(
     lifecycle,
     monkeypatch,

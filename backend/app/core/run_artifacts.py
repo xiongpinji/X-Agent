@@ -500,58 +500,41 @@ class RunArtifactManager:
                 size_bytes=len(archive_bytes),
                 download_url=f"/api/v1/artifacts/archives/{archive_id}/download",
             )
+            audit_id: str | None = None
+            audit_started = False
             try:
                 await self._save_manifest_unlocked(manifest)
-            except Exception:
-                await asyncio.to_thread(self._remove_file, archive_file)
-                raise
-
-            if audit_callback is not None:
-                audit_id: str | None = None
-                try:
+                if audit_callback is not None:
+                    audit_started = True
                     audit_id = await audit_callback(manifest)
                     if not audit_id:
                         raise RunArtifactAuditError("Required audit id is missing")
                     if audit_id not in manifest.audit_ids:
                         manifest.audit_ids.append(audit_id)
                     await self._save_manifest_unlocked(manifest)
-                except Exception:
-                    rolled_back: RunArtifactManifest | None = None
+            except BaseException as failure:
+                cleanup = asyncio.create_task(
+                    self._rollback_archive_commit(
+                        run_id,
+                        tenant_id,
+                        user_id,
+                        archive_id,
+                        manifest,
+                        audit_id,
+                        rollback_audit_callback,
+                    )
+                )
+                while not cleanup.done():
                     try:
-                        rolled_back = await self._remove_archive_unlocked(
-                            run_id,
-                            tenant_id,
-                            user_id,
-                            archive_id,
-                        )
-                    except Exception:
-                        pass
-                    if audit_id and rollback_audit_callback is not None:
-                        try:
-                            rollback_audit_id = await rollback_audit_callback(
-                                manifest,
-                                audit_id,
-                            )
-                            if not rollback_audit_id:
-                                raise RunArtifactAuditError(
-                                    "Required rollback audit id is missing"
-                                )
-                            if rolled_back is not None:
-                                rolled_back.audit_ids = list(
-                                    dict.fromkeys(
-                                        [
-                                            *rolled_back.audit_ids,
-                                            audit_id,
-                                            rollback_audit_id,
-                                        ]
-                                    )
-                                )
-                                await self._save_manifest_unlocked(rolled_back)
-                        except Exception:
-                            pass
+                        await asyncio.shield(cleanup)
+                    except asyncio.CancelledError:
+                        continue
+                cleanup.result()
+                if isinstance(failure, Exception) and audit_started:
                     raise RunArtifactAuditError(
                         "Required archive audit could not be committed"
                     ) from None
+                raise
             return manifest, True
 
     @staticmethod
@@ -559,6 +542,42 @@ class RunArtifactManager:
         try:
             path.unlink()
         except FileNotFoundError:
+            pass
+
+    async def _rollback_archive_commit(
+        self,
+        run_id: str,
+        tenant_id: str,
+        user_id: str,
+        archive_id: str,
+        manifest: RunArtifactManifest,
+        audit_id: str | None,
+        rollback_audit_callback: ArchiveRollbackAuditCallback | None,
+    ) -> None:
+        rolled_back: RunArtifactManifest | None = None
+        try:
+            rolled_back = await self._remove_archive_unlocked(
+                run_id,
+                tenant_id,
+                user_id,
+                archive_id,
+            )
+        except Exception:
+            pass
+        if not audit_id or rollback_audit_callback is None:
+            return
+        try:
+            rollback_audit_id = await rollback_audit_callback(manifest, audit_id)
+            if not rollback_audit_id:
+                raise RunArtifactAuditError("Required rollback audit id is missing")
+            if rolled_back is not None:
+                rolled_back.audit_ids = list(
+                    dict.fromkeys(
+                        [*rolled_back.audit_ids, audit_id, rollback_audit_id]
+                    )
+                )
+                await self._save_manifest_unlocked(rolled_back)
+        except Exception:
             pass
 
     async def _remove_archive_unlocked(
