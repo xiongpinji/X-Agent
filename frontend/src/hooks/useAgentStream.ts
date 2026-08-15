@@ -198,6 +198,10 @@ export function useAgentStream(options?: {
               setError(parsed.result?.status === 'failed' ? AGENT_EXECUTION_FAILED_MESSAGE : null);
               setIsStreaming(false);
               onComplete?.(parsed);
+              if (typeof reader.cancel === 'function') {
+                await reader.cancel().catch(() => undefined);
+              }
+              return;
             } else {
               if (!parsed || typeof parsed !== 'object') {
                 throw new Error('Invalid agent stream event');
@@ -224,6 +228,10 @@ export function useAgentStream(options?: {
       setIsStreaming(false);
     } catch (err: unknown) {
       if (controller.signal.aborted || (err && typeof err === 'object' && 'name' in err && err.name === 'AbortError')) {
+        setIsStreaming(false);
+        return;
+      }
+      if (finalReceived) {
         setIsStreaming(false);
         return;
       }

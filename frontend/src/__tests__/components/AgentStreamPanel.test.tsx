@@ -97,6 +97,54 @@ describe('shared agent stream failure contract', () => {
     expect(onError).not.toHaveBeenCalled()
   })
 
+  it('stops after the first valid final when a duplicate final follows', async () => {
+    const firstFinal = {
+      _final: true,
+      result: { trace_id: 'trace-first', status: 'completed', answer: 'first answer' },
+    }
+    const duplicateFinal = {
+      _final: true,
+      result: { trace_id: 'trace-duplicate', status: 'completed', answer: 'duplicate answer' },
+    }
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(chunkedSseResponse([
+      `event: completed\ndata: ${JSON.stringify(firstFinal)}\n\n`,
+      `event: completed\ndata: ${JSON.stringify(duplicateFinal)}\n\n`,
+    ]))
+    const onComplete = vi.fn()
+    const onError = vi.fn()
+    const { result } = renderHook(() => useAgentStream({ onComplete, onError }))
+
+    await act(async () => {
+      await result.current.startStream('duplicate final')
+    })
+
+    expect(onComplete).toHaveBeenCalledOnce()
+    expect(onComplete).toHaveBeenCalledWith(firstFinal)
+    expect(onError).not.toHaveBeenCalled()
+  })
+
+  it('ignores a malformed tail after the first valid final', async () => {
+    const firstFinal = {
+      _final: true,
+      result: { trace_id: 'trace-first', status: 'completed', answer: 'first answer' },
+    }
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(chunkedSseResponse([
+      `event: completed\ndata: ${JSON.stringify(firstFinal)}\n\n`,
+      'event: completed\ndata: {malformed-tail}\n\n',
+    ]))
+    const onComplete = vi.fn()
+    const onError = vi.fn()
+    const { result } = renderHook(() => useAgentStream({ onComplete, onError }))
+
+    await act(async () => {
+      await result.current.startStream('malformed tail')
+    })
+
+    expect(onComplete).toHaveBeenCalledOnce()
+    expect(onComplete).toHaveBeenCalledWith(firstFinal)
+    expect(onError).not.toHaveBeenCalled()
+  })
+
   it('parses CRLF frame boundaries and joins split multi-line data with a newline', async () => {
     const frameJson = JSON.stringify({
       _final: true,

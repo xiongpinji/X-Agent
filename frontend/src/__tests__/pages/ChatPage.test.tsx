@@ -253,6 +253,44 @@ describe('default ChatPage agent stream', () => {
     expect(assistantMessages[0].metadata).toMatchObject({ status: 'failed', error_code: 'stream_unavailable' })
   })
 
+  it('keeps exactly one completed assistant when a duplicate final follows', async () => {
+    const duplicateFrame = {
+      _final: true,
+      result: { ...completedFrame.result, trace_id: 'trace-duplicate', answer: 'duplicate answer' },
+    }
+    const bytes = new TextEncoder().encode(
+      `event: completed\ndata: ${JSON.stringify(completedFrame)}\n\n`
+      + `event: completed\ndata: ${JSON.stringify(duplicateFrame)}\n\n`,
+    )
+    const read = vi.fn()
+      .mockResolvedValueOnce({ done: false, value: bytes })
+      .mockResolvedValueOnce({ done: true, value: undefined })
+    const cancel = vi.fn().mockResolvedValue(undefined)
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      status: 200,
+      body: { getReader: () => ({ read, cancel }) },
+    } as unknown as Response)
+    const user = userEvent.setup()
+    renderChat()
+
+    await user.type(screen.getByRole('textbox'), 'duplicate terminal frame')
+    await user.click(screen.getByRole('button', { name: 'Send' }))
+
+    await screen.findByText('A real streamed answer')
+    await waitFor(() => {
+      const assistantMessages = useAppStore.getState().messages.filter((message) => message.role === 'assistant')
+      expect(assistantMessages).toHaveLength(1)
+      expect(assistantMessages[0]).toMatchObject({
+        content: 'A real streamed answer',
+        metadata: { trace_id: 'trace-123', status: 'completed' },
+      })
+    })
+    expect(screen.queryByText(/Agent run failed:/)).not.toBeInTheDocument()
+    expect(screen.queryByText('duplicate answer')).not.toBeInTheDocument()
+    expect(cancel).toHaveBeenCalledOnce()
+  })
+
   it('sanitizes Ultra Mode failures in UI, store, and persisted history', async () => {
     vi.spyOn(apiClient, 'runParallelAgents').mockRejectedValue(new Error(sensitiveError))
     const user = userEvent.setup()
