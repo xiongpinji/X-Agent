@@ -1,203 +1,94 @@
-"""Artifacts API endpoints."""
+"""Tenant-scoped artifact, manifest, download, and archive APIs."""
 
-from typing import Annotated
+from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Query
+import asyncio
+import re
+from typing import Annotated, Any
+
+from fastapi import APIRouter, Depends, Query, Response, status
+from pydantic import BaseModel, Field
 
 from backend.app.api.errors import api_error
-from backend.app.core.artifacts import Artifact, ArtifactRenderer, ArtifactStorage
+from backend.app.core.artifacts import Artifact, ArtifactRenderer
 from backend.app.core.contracts import ErrorCode
+from backend.app.core.run_artifacts import (
+    RunArtifactManager,
+    get_run_artifact_manager,
+)
 from backend.app.core.security import Principal
-from backend.app.dependencies import enforce_scope, get_current_principal
+from backend.app.dependencies import enforce_scope, get_audit_store, get_current_principal
 
 router = APIRouter(prefix="/api/v1/artifacts", tags=["artifacts"])
 PrincipalDependency = Annotated[Principal, Depends(get_current_principal)]
+ManagerDependency = Annotated[RunArtifactManager, Depends(get_run_artifact_manager)]
 
-# Initialize storage and renderer
-artifact_storage = ArtifactStorage("./data/artifacts")
 artifact_renderer = ArtifactRenderer()
 
 
-@router.post("")
-async def create_artifact(
-    artifact: Artifact,
-    principal: PrincipalDependency,
-) -> dict:
-    """Create a new artifact.
-
-    Args:
-        artifact: Artifact to create
-        principal: Current principal
-
-    Returns:
-        Created artifact
-    """
-    enforce_scope(principal, "artifacts:write")
-
-    artifact_id = await artifact_storage.save_artifact(artifact)
-    return {"id": artifact_id, "status": "created"}
+class CreateArtifactRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=255)
+    type: str = Field(min_length=1, max_length=32)
+    content: str
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    tags: list[str] = Field(default_factory=list)
+    description: str = ""
 
 
-@router.get("")
-async def list_artifacts(
-    artifact_type: str | None = Query(None),
-    tags: str | None = Query(None),
-    limit: int = Query(100, ge=1, le=1000),
-    offset: int = Query(0, ge=0),
-    *,
-    principal: PrincipalDependency,
-) -> dict:
-    """List artifacts with optional filtering.
+class UpdateArtifactRequest(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=255)
+    content: str | None = None
+    metadata: dict[str, Any] | None = None
+    tags: list[str] | None = None
+    description: str | None = None
 
-    Args:
-        artifact_type: Filter by artifact type
-        tags: Filter by tags (comma-separated)
-        limit: Maximum number of results
-        offset: Number of results to skip
-        principal: Current principal
 
-    Returns:
-        List of artifacts
-    """
-    enforce_scope(principal, "artifacts:read")
-
-    tag_list = tags.split(",") if tags else None
-    artifacts = await artifact_storage.list_artifacts(
-        artifact_type=artifact_type,
-        tags=tag_list,
-        limit=limit,
-        offset=offset,
+def _not_found(resource_id: str):
+    return api_error(
+        404,
+        ErrorCode.RESOURCE_NOT_FOUND,
+        "Artifact resource not found.",
+        trace_id=resource_id,
     )
 
+
+def _download_headers(name: str, fallback: str) -> dict[str, str]:
+    cleaned = re.sub(r"[^A-Za-z0-9._-]+", "_", name).strip("._")[:120]
+    filename = cleaned or fallback
     return {
-        "artifacts": [a.model_dump(mode="json") for a in artifacts],
-        "count": len(artifacts),
-        "limit": limit,
-        "offset": offset,
+        "Content-Disposition": f'attachment; filename="{filename}"',
+        "X-Content-Type-Options": "nosniff",
     }
 
 
-@router.get("/{artifact_id}")
-async def get_artifact(
-    artifact_id: str,
-    principal: PrincipalDependency,
-) -> dict:
-    """Get artifact by ID.
-
-    Args:
-        artifact_id: Artifact ID
-        principal: Current principal
-
-    Returns:
-        Artifact details
-    """
-    enforce_scope(principal, "artifacts:read")
-
-    artifact = await artifact_storage.load_artifact(artifact_id)
-    if not artifact:
-        raise api_error(404, ErrorCode.RUN_NOT_FOUND, "Artifact not found.", trace_id=artifact_id)
-
-    return artifact.model_dump(mode="json")
+async def _audit(**kwargs: Any) -> str | None:
+    record = await asyncio.to_thread(get_audit_store().record, **kwargs)
+    return str(record.id) if getattr(record, "id", None) else None
 
 
-@router.put("/{artifact_id}")
-async def update_artifact(
-    artifact_id: str,
-    updates: dict,
-    principal: PrincipalDependency,
-) -> dict:
-    """Update artifact.
-
-    Args:
-        artifact_id: Artifact ID
-        updates: Fields to update
-        principal: Current principal
-
-    Returns:
-        Updated artifact
-    """
-    enforce_scope(principal, "artifacts:write")
-
-    artifact = await artifact_storage.update_artifact(artifact_id, updates)
-    if not artifact:
-        raise api_error(404, ErrorCode.RUN_NOT_FOUND, "Artifact not found.", trace_id=artifact_id)
-
-    return artifact.model_dump(mode="json")
+def _scope(principal: Principal) -> tuple[str, str]:
+    return principal.tenant_id, principal.user_id
 
 
-@router.delete("/{artifact_id}")
-async def delete_artifact(
-    artifact_id: str,
-    principal: PrincipalDependency,
-) -> dict:
-    """Delete artifact.
-
-    Args:
-        artifact_id: Artifact ID
-        principal: Current principal
-
-    Returns:
-        Deletion result
-    """
-    enforce_scope(principal, "artifacts:write")
-
-    deleted = await artifact_storage.delete_artifact(artifact_id)
-    if not deleted:
-        raise api_error(404, ErrorCode.RUN_NOT_FOUND, "Artifact not found.", trace_id=artifact_id)
-
-    return {"status": "deleted", "id": artifact_id}
-
-
-@router.get("/{artifact_id}/render")
-async def render_artifact(
-    artifact_id: str,
-    principal: PrincipalDependency,
-) -> dict:
-    """Render artifact to HTML.
-
-    Args:
-        artifact_id: Artifact ID
-        principal: Current principal
-
-    Returns:
-        Rendered HTML
-    """
-    enforce_scope(principal, "artifacts:read")
-
-    artifact = await artifact_storage.load_artifact(artifact_id)
-    if not artifact:
-        raise api_error(404, ErrorCode.RUN_NOT_FOUND, "Artifact not found.", trace_id=artifact_id)
-
-    try:
-        html = await artifact_renderer.render(artifact)
-        return {"html": html, "artifact_id": artifact_id}
-    except Exception as e:
-        raise api_error(400, ErrorCode.INVALID_REQUEST, f"Render failed: {e!s}")
-
-
+# Fixed paths must precede /{artifact_id}.
 @router.get("/search")
 async def search_artifacts(
+    principal: PrincipalDependency,
+    manager: ManagerDependency,
     query: str = Query(..., min_length=1),
     limit: int = Query(50, ge=1, le=500),
-    *,
-    principal: PrincipalDependency,
-) -> dict:
-    """Search artifacts.
-
-    Args:
-        query: Search query
-        limit: Maximum number of results
-        principal: Current principal
-
-    Returns:
-        Search results
-    """
-    enforce_scope(principal, "artifacts:read")
-
-    results = await artifact_storage.search_artifacts(query, limit)
+) -> dict[str, Any]:
+    enforce_scope(principal, "agent:read")
+    tenant_id, user_id = _scope(principal)
+    results = await manager.artifact_storage.search_artifacts(
+        query,
+        limit,
+        tenant_id,
+        user_id,
+    )
     return {
         "query": query,
-        "results": [a.model_dump(mode="json") for a in results],
+        "results": [item.model_dump(mode="json") for item in results],
         "count": len(results),
     }
 
@@ -205,16 +96,289 @@ async def search_artifacts(
 @router.get("/stats")
 async def get_artifact_stats(
     principal: PrincipalDependency,
-) -> dict:
-    """Get artifact storage statistics.
+    manager: ManagerDependency,
+) -> dict[str, Any]:
+    enforce_scope(principal, "agent:read")
+    return await manager.artifact_storage.get_artifact_stats(*_scope(principal))
 
-    Args:
-        principal: Current principal
 
-    Returns:
-        Storage statistics
-    """
-    enforce_scope(principal, "artifacts:read")
+@router.get("/runs/{run_id}/manifest")
+async def get_run_manifest(
+    run_id: str,
+    principal: PrincipalDependency,
+    manager: ManagerDependency,
+) -> dict[str, Any]:
+    enforce_scope(principal, "agent:read")
+    manifest = await manager.get_manifest(run_id, *_scope(principal))
+    if manifest is None:
+        raise _not_found(run_id)
+    return manifest.model_dump(mode="json")
 
-    stats = await artifact_storage.get_artifact_stats()
-    return stats
+
+@router.post("/runs/{run_id}/archive")
+async def archive_run(
+    run_id: str,
+    principal: PrincipalDependency,
+    manager: ManagerDependency,
+) -> dict[str, Any]:
+    enforce_scope(principal, "agent:run")
+    tenant_id, user_id = _scope(principal)
+    try:
+        manifest = await manager.create_archive(run_id, tenant_id, user_id)
+    except (OSError, ValueError):
+        raise api_error(
+            409,
+            ErrorCode.RESOURCE_CONFLICT,
+            "Run archive integrity check failed.",
+            trace_id=run_id,
+        ) from None
+    if manifest is None or manifest.archive is None:
+        raise _not_found(run_id)
+    try:
+        audit_id = await _audit(
+            action="run.archive.created",
+            resource_type="run_archive",
+            resource_id=manifest.archive.archive_id,
+            tenant_id=tenant_id,
+            actor_id=user_id,
+            trace_id=run_id,
+            run_id=run_id,
+            details={"status": "created", "size_bytes": manifest.archive.size_bytes},
+        )
+        await manager.add_audit_id(manifest, audit_id)
+    except Exception:
+        await manager.remove_archive(manifest)
+        raise api_error(
+            503,
+            ErrorCode.INTERNAL_ERROR,
+            "Run archive could not be audited.",
+            trace_id=run_id,
+        ) from None
+    return {"run_id": run_id, "archive": manifest.archive.model_dump(mode="json")}
+
+
+@router.get("/archives/{archive_id}/download")
+async def download_archive(
+    archive_id: str,
+    principal: PrincipalDependency,
+    manager: ManagerDependency,
+) -> Response:
+    enforce_scope(principal, "agent:read")
+    tenant_id, user_id = _scope(principal)
+    stored = await manager.archive_bytes(archive_id, tenant_id, user_id)
+    if stored is None:
+        raise _not_found(archive_id)
+    manifest, content = stored
+    try:
+        audit_id = await _audit(
+            action="run.archive.downloaded",
+            resource_type="run_archive",
+            resource_id=archive_id,
+            tenant_id=tenant_id,
+            actor_id=user_id,
+            trace_id=manifest.trace_id,
+            run_id=manifest.run_id,
+            details={"status": "downloaded", "size_bytes": len(content)},
+        )
+        await manager.add_audit_id(manifest, audit_id)
+    except Exception:
+        raise api_error(
+            503,
+            ErrorCode.INTERNAL_ERROR,
+            "Run archive download could not be audited.",
+            trace_id=manifest.trace_id,
+        ) from None
+    return Response(
+        content=content,
+        media_type="application/zip",
+        headers=_download_headers(f"run-{manifest.run_id}.zip", "archive.zip"),
+    )
+
+
+@router.post("", status_code=status.HTTP_201_CREATED)
+async def create_artifact(
+    request: CreateArtifactRequest,
+    principal: PrincipalDependency,
+    manager: ManagerDependency,
+) -> dict[str, str]:
+    enforce_scope(principal, "agent:run")
+    tenant_id, user_id = _scope(principal)
+    artifact = Artifact(
+        **request.model_dump(),
+        tenant_id=tenant_id,
+        user_id=user_id,
+    )
+    await manager.artifact_storage.save_artifact(artifact)
+    try:
+        await _audit(
+            action="artifact.created",
+            resource_type="artifact",
+            resource_id=artifact.id,
+            tenant_id=tenant_id,
+            actor_id=user_id,
+            trace_id=artifact.trace_id,
+            run_id=artifact.run_id,
+            details={"status": "created", "content_sha256": artifact.content_sha256},
+        )
+    except Exception:
+        await manager.artifact_storage.delete_artifact(
+            artifact.id,
+            tenant_id,
+            user_id,
+        )
+        raise api_error(
+            503,
+            ErrorCode.INTERNAL_ERROR,
+            "Artifact creation could not be audited.",
+        ) from None
+    return {"id": artifact.id, "status": "created"}
+
+
+@router.get("")
+async def list_artifacts(
+    principal: PrincipalDependency,
+    manager: ManagerDependency,
+    artifact_type: str | None = Query(None),
+    tags: str | None = Query(None),
+    limit: int = Query(100, ge=1, le=1000),
+    offset: int = Query(0, ge=0),
+) -> dict[str, Any]:
+    enforce_scope(principal, "agent:read")
+    items = await manager.artifact_storage.list_artifacts(
+        artifact_type,
+        tags.split(",") if tags else None,
+        limit,
+        offset,
+        *_scope(principal),
+    )
+    return {
+        "artifacts": [item.model_dump(mode="json") for item in items],
+        "count": len(items),
+        "limit": limit,
+        "offset": offset,
+    }
+
+
+@router.get("/{artifact_id}/download")
+async def download_artifact(
+    artifact_id: str,
+    principal: PrincipalDependency,
+    manager: ManagerDependency,
+) -> Response:
+    enforce_scope(principal, "agent:read")
+    tenant_id, user_id = _scope(principal)
+    stored = await manager.artifact_storage.content_bytes(
+        artifact_id,
+        tenant_id,
+        user_id,
+    )
+    if stored is None:
+        raise _not_found(artifact_id)
+    artifact, content = stored
+    try:
+        audit_id = await _audit(
+            action="artifact.downloaded",
+            resource_type="artifact",
+            resource_id=artifact.id,
+            tenant_id=tenant_id,
+            actor_id=user_id,
+            trace_id=artifact.trace_id,
+            run_id=artifact.run_id,
+            details={"status": "downloaded", "size_bytes": len(content)},
+        )
+        if artifact.run_id and artifact.trace_id == artifact.run_id:
+            manifest = await manager.get_manifest(
+                artifact.run_id,
+                tenant_id,
+                user_id,
+            )
+            if manifest is not None:
+                await manager.add_audit_id(manifest, audit_id)
+    except Exception:
+        raise api_error(
+            503,
+            ErrorCode.INTERNAL_ERROR,
+            "Artifact download could not be audited.",
+            trace_id=artifact.trace_id,
+        ) from None
+    return Response(
+        content=content,
+        media_type=artifact.mime_type,
+        headers=_download_headers(artifact.name, f"artifact-{artifact.id}.txt"),
+    )
+
+
+@router.get("/{artifact_id}/render")
+async def render_artifact(
+    artifact_id: str,
+    principal: PrincipalDependency,
+    manager: ManagerDependency,
+) -> dict[str, str]:
+    enforce_scope(principal, "agent:read")
+    artifact = await manager.artifact_storage.load_artifact(
+        artifact_id,
+        *_scope(principal),
+    )
+    if artifact is None:
+        raise _not_found(artifact_id)
+    try:
+        html = await artifact_renderer.render(artifact)
+    except Exception:
+        raise api_error(
+            400,
+            ErrorCode.VALIDATION_ERROR,
+            "Artifact could not be rendered.",
+            trace_id=artifact.trace_id,
+        ) from None
+    return {"html": html, "artifact_id": artifact_id}
+
+
+@router.get("/{artifact_id}")
+async def get_artifact(
+    artifact_id: str,
+    principal: PrincipalDependency,
+    manager: ManagerDependency,
+) -> dict[str, Any]:
+    enforce_scope(principal, "agent:read")
+    artifact = await manager.artifact_storage.load_artifact(
+        artifact_id,
+        *_scope(principal),
+    )
+    if artifact is None:
+        raise _not_found(artifact_id)
+    return artifact.model_dump(mode="json")
+
+
+@router.put("/{artifact_id}")
+async def update_artifact(
+    artifact_id: str,
+    request: UpdateArtifactRequest,
+    principal: PrincipalDependency,
+    manager: ManagerDependency,
+) -> dict[str, Any]:
+    enforce_scope(principal, "agent:run")
+    updates = request.model_dump(exclude_none=True)
+    artifact = await manager.artifact_storage.update_artifact(
+        artifact_id,
+        updates,
+        *_scope(principal),
+    )
+    if artifact is None:
+        raise _not_found(artifact_id)
+    return artifact.model_dump(mode="json")
+
+
+@router.delete("/{artifact_id}")
+async def delete_artifact(
+    artifact_id: str,
+    principal: PrincipalDependency,
+    manager: ManagerDependency,
+) -> dict[str, str]:
+    enforce_scope(principal, "agent:run")
+    deleted = await manager.artifact_storage.delete_artifact(
+        artifact_id,
+        *_scope(principal),
+    )
+    if not deleted:
+        raise _not_found(artifact_id)
+    return {"status": "deleted", "id": artifact_id}

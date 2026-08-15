@@ -18,6 +18,7 @@ from fastapi.responses import StreamingResponse
 
 from backend.app.api.errors import api_error
 from backend.app.core.contracts import ErrorCode, RunContext
+from backend.app.core.run_artifacts import RunArtifactManager, get_run_artifact_manager
 from backend.app.core.security import Principal
 from backend.app.dependencies import (
     enforce_scope,
@@ -33,6 +34,10 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/agents", tags=["agents"])
 extended_router = APIRouter(prefix="/api/v1/agents", tags=["agents-extended"])  # C2: unmounted; handler bodies unchanged
 PrincipalDependency = Annotated[Principal, Depends(get_current_principal)]
+RunArtifactManagerDependency = Annotated[
+    RunArtifactManager,
+    Depends(get_run_artifact_manager),
+]
 
 _AGENTS: dict[str, dict[str, Any]] = {
     "default-agent": {
@@ -11720,7 +11725,11 @@ async def cancel_agent(agent_id: str, principal: PrincipalDependency = None) -> 
 
 
 @router.post("/run/stream")
-async def run_agent_stream(payload: dict[str, Any] | None = None, principal: PrincipalDependency = None):
+async def run_agent_stream(
+    payload: dict[str, Any] | None = None,
+    principal: PrincipalDependency = None,
+    artifact_manager: RunArtifactManagerDependency = None,
+):
     """True SSE streaming endpoint: emits real-time trace events as the agent works."""
     request = payload or {}
     enforce_scope(principal, "agent:run")
@@ -11789,11 +11798,86 @@ async def run_agent_stream(payload: dict[str, Any] | None = None, principal: Pri
         except Exception:
             pass
 
+    async def _record_audit(**kwargs: Any) -> str | None:
+        record = await asyncio.to_thread(get_audit_store().record, **kwargs)
+        return str(record.id) if getattr(record, "id", None) else None
+
+    async def _failed_result(run_id: str, error_code: str) -> dict[str, Any]:
+        audit_ids: list[str] = []
+        try:
+            audit_id = await _record_audit(
+                action="agent.run.stream",
+                resource_type="agent",
+                resource_id=context.agent_id,
+                tenant_id=context.tenant_id,
+                actor_id=context.user_id,
+                outcome="failure",
+                trace_id=run_id,
+                run_id=run_id,
+                details={"status": "failed", "error_code": error_code},
+            )
+            if audit_id:
+                audit_ids.append(audit_id)
+        except Exception as audit_exc:
+            logger.error(
+                "Agent stream failure audit write failed trace_id=%s exception_type=%s error_code=%s",
+                run_id,
+                type(audit_exc).__name__,
+                error_code,
+            )
+        manifest = artifact_manager.failed_manifest(
+            run_id=run_id,
+            tenant_id=context.tenant_id,
+            user_id=context.user_id,
+            error_code=error_code,
+            audit_ids=audit_ids,
+        )
+        try:
+            await artifact_manager.save_manifest(manifest)
+        except Exception as manifest_exc:
+            logger.error(
+                "Agent stream failed manifest write failed trace_id=%s exception_type=%s error_code=%s",
+                run_id,
+                type(manifest_exc).__name__,
+                error_code,
+            )
+        return {
+            "trace_id": run_id,
+            "status": "failed",
+            "answer": "",
+            "error": "Agent execution failed",
+            "error_code": error_code,
+            "manifest": manifest.model_dump(mode="json"),
+        }
+
     async def _run_agent_task():
         """Background task: run agent and signal completion."""
+        created_artifact = None
         try:
             result = await agent.run(context, task, extra_context, event_callback=_on_event)
-            get_audit_store().record(
+            if result.status.value != "completed":
+                raise RuntimeError("Agent returned a non-completed result")
+            run_id = result.trace_id
+            created_artifact = await artifact_manager.create_answer_artifact(
+                run_id=run_id,
+                tenant_id=context.tenant_id,
+                user_id=context.user_id,
+                answer=result.answer,
+            )
+            artifact_audit_id = await _record_audit(
+                action="artifact.created",
+                resource_type="artifact",
+                resource_id=created_artifact.id,
+                tenant_id=context.tenant_id,
+                actor_id=context.user_id,
+                trace_id=run_id,
+                run_id=run_id,
+                details={
+                    "status": "created",
+                    "content_sha256": created_artifact.content_sha256,
+                },
+            )
+            run_audit_id = await _record_audit(
                 action="agent.run.stream",
                 resource_type="agent",
                 resource_id=context.agent_id,
@@ -11803,45 +11887,56 @@ async def run_agent_stream(payload: dict[str, Any] | None = None, principal: Pri
                 run_id=result.trace_id,
                 details={"task_preview": task[:120], "status": result.status.value, "tool_call_count": len(result.tool_calls)},
             )
+            manifest = artifact_manager.completed_manifest(
+                run_id=run_id,
+                tenant_id=context.tenant_id,
+                user_id=context.user_id,
+                artifacts=[created_artifact],
+                audit_ids=[
+                    audit_id
+                    for audit_id in (artifact_audit_id, run_audit_id)
+                    if audit_id
+                ],
+            )
+            await artifact_manager.save_manifest(manifest)
             # Push final result as completion signal
-            queue.put_nowait({"_final": True, "result": result.model_dump(mode="json")})
+            final_result = result.model_dump(mode="json")
+            final_result["manifest"] = manifest.model_dump(mode="json")
+            queue.put_nowait({"_final": True, "result": final_result})
         except Exception as exc:
             error_code = ErrorCode.AGENT_EXECUTION_FAILED.value
+            run_id = (
+                created_artifact.run_id
+                if created_artifact is not None and created_artifact.run_id
+                else context.trace_id
+            )
             logger.error(
                 "Agent stream execution failed trace_id=%s exception_type=%s error_code=%s",
-                context.trace_id,
+                run_id,
                 type(exc).__name__,
                 error_code,
             )
-            try:
-                get_audit_store().record(
-                    action="agent.run.stream",
-                    resource_type="agent",
-                    resource_id=context.agent_id,
-                    tenant_id=context.tenant_id,
-                    actor_id=context.user_id,
-                    outcome="failure",
-                    trace_id=context.trace_id,
-                    run_id=context.trace_id,
-                    details={"status": "failed", "error_code": error_code},
-                )
-            except Exception as audit_exc:
-                logger.error(
-                    "Agent stream failure audit write failed trace_id=%s exception_type=%s error_code=%s",
-                    context.trace_id,
-                    type(audit_exc).__name__,
-                    error_code,
-                )
-            queue.put_nowait({
-                "_final": True,
-                "result": {
-                    "trace_id": context.trace_id,
-                    "status": "failed",
-                    "answer": "",
-                    "error": "Agent execution failed",
-                    "error_code": error_code,
-                },
-            })
+            if created_artifact is not None:
+                try:
+                    await artifact_manager.artifact_storage.delete_artifact(
+                        created_artifact.id,
+                        context.tenant_id,
+                        context.user_id,
+                    )
+                except Exception as cleanup_exc:
+                    logger.error(
+                        "Agent stream artifact cleanup failed trace_id=%s exception_type=%s error_code=%s",
+                        run_id,
+                        type(cleanup_exc).__name__,
+                        error_code,
+                    )
+            failed_result = await _failed_result(run_id, error_code)
+            queue.put_nowait(
+                {
+                    "_final": True,
+                    "result": failed_result,
+                }
+            )
         finally:
             queue.put_nowait(None)  # Sentinel to stop generator
 

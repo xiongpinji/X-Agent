@@ -856,6 +856,7 @@ _KEPT_ROUTER_MODULES: tuple[str, ...] = (
     "backup",         # 备份管理
     "backup_qdrant",  # Qdrant 备份
     "chat_history",   # 聊天历史
+    "artifacts",      # 可下载、可归档的 run 工件
     "tasks_ui",       # 任务 UI
     "work_mode",      # 工作模式/会话
     "gdpr",           # GDPR 合规

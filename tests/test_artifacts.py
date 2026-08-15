@@ -1,10 +1,10 @@
 """Artifact system tests."""
 
-import pytest
 import tempfile
-from pathlib import Path
 
-from backend.app.core.artifacts import Artifact, ArtifactStorage, ArtifactRenderer
+import pytest
+
+from backend.app.core.artifacts import Artifact, ArtifactRenderer, ArtifactStorage
 
 
 @pytest.fixture
@@ -45,6 +45,25 @@ async def test_save_and_load_artifact(temp_storage):
     assert loaded is not None
     assert loaded.name == "Test"
     assert loaded.type == "html"
+
+
+@pytest.mark.asyncio
+async def test_save_computes_authoritative_utf8_integrity_fields(temp_storage):
+    artifact = Artifact(
+        name="Chinese",
+        type="html",
+        content="<p>你好</p>",
+        content_sha256="client-forged",
+        size_bytes=1,
+    )
+
+    await temp_storage.save_artifact(artifact)
+    stored = await temp_storage.load_artifact(artifact.id)
+
+    assert stored is not None
+    assert stored.content_sha256 != "client-forged"
+    assert stored.size_bytes == len("<p>你好</p>".encode())
+    assert stored.mime_type == "text/html; charset=utf-8"
 
 
 @pytest.mark.asyncio
