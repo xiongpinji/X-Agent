@@ -6,7 +6,10 @@ import asyncio
 import json
 import os
 import re
+import time
 import zipfile
+from collections.abc import AsyncIterator, Awaitable, Callable
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from functools import lru_cache
 from hashlib import sha256
@@ -20,6 +23,9 @@ from pydantic import BaseModel, Field
 from backend.app.core.artifacts import Artifact, ArtifactStorage
 
 _SAFE_COMPONENT = re.compile(r"^[A-Za-z0-9_.-]{1,128}$")
+_LOCK_TIMEOUT_SECONDS = 5.0
+_LOCK_STALE_SECONDS = 300.0
+_LOCK_POLL_SECONDS = 0.02
 
 
 def _safe_component(value: str) -> str:
@@ -60,6 +66,14 @@ class RunArtifactManifest(BaseModel):
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
+class RunArtifactAuditError(RuntimeError):
+    """A required lifecycle audit could not be committed."""
+
+
+ArchiveAuditCallback = Callable[[RunArtifactManifest], Awaitable[str]]
+ArchiveRollbackAuditCallback = Callable[[RunArtifactManifest, str], Awaitable[str]]
+
+
 class RunArtifactManager:
     """Own manifests/archives while sharing the authoritative artifact store."""
 
@@ -72,11 +86,13 @@ class RunArtifactManager:
         self.root_path = Path(root_path)
         self.manifest_path = self.root_path / "manifests"
         self.archive_path = self.root_path / "archives"
+        self.lock_path = self.root_path / "locks"
         self.artifact_storage = artifact_storage or ArtifactStorage(
             self.root_path / "artifacts"
         )
         self.manifest_path.mkdir(parents=True, exist_ok=True)
         self.archive_path.mkdir(parents=True, exist_ok=True)
+        self.lock_path.mkdir(parents=True, exist_ok=True)
 
     @staticmethod
     def _atomic_write(path: Path, content: bytes) -> None:
@@ -107,7 +123,154 @@ class RunArtifactManager:
         archive = _safe_component(archive_id)
         return self._scope_path(self.archive_path, tenant_id, user_id) / f"{archive}.zip"
 
+    def _lock_file(self, run_id: str, tenant_id: str, user_id: str) -> Path:
+        run = _safe_component(run_id)
+        return self._scope_path(self.lock_path, tenant_id, user_id) / f"{run}.lock"
+
+    @staticmethod
+    def _try_acquire_lock(path: Path, token: str) -> bool:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            descriptor = os.open(
+                path,
+                os.O_CREAT | os.O_EXCL | os.O_WRONLY,
+                0o600,
+            )
+        except FileExistsError:
+            return False
+        try:
+            payload = json.dumps(
+                {
+                    "token": token,
+                    "pid": os.getpid(),
+                    "created_at": time.time(),
+                }
+            ).encode("utf-8")
+            os.write(descriptor, payload)
+        except Exception:
+            try:
+                path.unlink()
+            except FileNotFoundError:
+                pass
+            raise
+        finally:
+            os.close(descriptor)
+        return True
+
+    @staticmethod
+    def _pid_is_running(pid: int) -> bool:
+        if pid <= 0:
+            return True
+        if pid == os.getpid():
+            return True
+        if os.name == "nt":
+            import ctypes
+
+            synchronize = 0x00100000
+            handle = ctypes.windll.kernel32.OpenProcess(synchronize, False, pid)
+            if not handle:
+                return False
+            try:
+                wait_timeout = 0x00000102
+                return ctypes.windll.kernel32.WaitForSingleObject(handle, 0) == wait_timeout
+            finally:
+                ctypes.windll.kernel32.CloseHandle(handle)
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return False
+        except PermissionError:
+            return True
+        return True
+
+    @classmethod
+    def _remove_stale_lock(cls, path: Path) -> bool:
+        try:
+            stat = path.stat()
+            if time.time() - stat.st_mtime <= _LOCK_STALE_SECONDS:
+                return False
+            observed = path.read_text(encoding="utf-8")
+            payload = json.loads(observed)
+            pid = int(payload["pid"])
+            token = str(payload["token"])
+        except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError):
+            return False
+        if not token or cls._pid_is_running(pid):
+            return False
+        try:
+            if path.read_text(encoding="utf-8") != observed:
+                return False
+            path.unlink()
+        except (FileNotFoundError, OSError):
+            return False
+        return True
+
+    @staticmethod
+    def _release_lock(path: Path, token: str) -> None:
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            if payload.get("token") != token:
+                return
+            path.unlink()
+        except (FileNotFoundError, OSError, ValueError, json.JSONDecodeError):
+            return
+
+    @asynccontextmanager
+    async def _run_lock(
+        self,
+        run_id: str,
+        tenant_id: str,
+        user_id: str,
+    ) -> AsyncIterator[None]:
+        path = self._lock_file(run_id, tenant_id, user_id)
+        token = uuid4().hex
+        deadline = time.monotonic() + _LOCK_TIMEOUT_SECONDS
+        while True:
+            acquired = await asyncio.to_thread(self._try_acquire_lock, path, token)
+            if acquired:
+                break
+            await asyncio.to_thread(self._remove_stale_lock, path)
+            if time.monotonic() >= deadline:
+                raise TimeoutError("Run artifact lock acquisition timed out")
+            await asyncio.sleep(_LOCK_POLL_SECONDS)
+        try:
+            yield
+        finally:
+            release = asyncio.create_task(
+                asyncio.to_thread(self._release_lock, path, token)
+            )
+            try:
+                await asyncio.shield(release)
+            except asyncio.CancelledError:
+                await release
+                raise
+
     async def save_manifest(self, manifest: RunArtifactManifest) -> RunArtifactManifest:
+        async with self._run_lock(
+            manifest.run_id,
+            manifest.tenant_id,
+            manifest.user_id,
+        ):
+            authoritative = await self._get_manifest_unlocked(
+                manifest.run_id,
+                manifest.tenant_id,
+                manifest.user_id,
+            )
+            if authoritative is not None:
+                if authoritative.status != manifest.status:
+                    raise ValueError("Manifest status is immutable")
+                manifest.created_at = authoritative.created_at
+                manifest.audit_ids = list(
+                    dict.fromkeys([*authoritative.audit_ids, *manifest.audit_ids])
+                )
+                if authoritative.archive is not None:
+                    manifest.archive = authoritative.archive
+            return await self._save_manifest_unlocked(manifest)
+
+    async def _save_manifest_unlocked(
+        self,
+        manifest: RunArtifactManifest,
+    ) -> RunArtifactManifest:
         if manifest.status not in {"completed", "failed"}:
             raise ValueError("Invalid manifest status")
         if manifest.run_id != manifest.trace_id:
@@ -126,7 +289,7 @@ class RunArtifactManager:
         await asyncio.to_thread(self._atomic_write, path, payload)
         return manifest
 
-    async def get_manifest(
+    async def _get_manifest_unlocked(
         self,
         run_id: str,
         tenant_id: str,
@@ -136,7 +299,6 @@ class RunArtifactManager:
             path = self._manifest_file(run_id, tenant_id, user_id)
         except ValueError:
             return None
-
         return await asyncio.to_thread(
             self._read_manifest,
             path,
@@ -144,6 +306,14 @@ class RunArtifactManager:
             tenant_id,
             user_id,
         )
+
+    async def get_manifest(
+        self,
+        run_id: str,
+        tenant_id: str,
+        user_id: str,
+    ) -> RunArtifactManifest | None:
+        return await self._get_manifest_unlocked(run_id, tenant_id, user_id)
 
     @staticmethod
     def _read_manifest(
@@ -255,102 +425,205 @@ class RunArtifactManager:
         run_id: str,
         tenant_id: str,
         user_id: str,
+        *,
+        audit_callback: ArchiveAuditCallback | None = None,
+        rollback_audit_callback: ArchiveRollbackAuditCallback | None = None,
     ) -> tuple[RunArtifactManifest, bool] | None:
-        manifest = await self.get_manifest(run_id, tenant_id, user_id)
-        if manifest is None or manifest.status != "completed":
-            return None
-        if manifest.archive is not None:
-            archive_file = self._archive_file(
-                manifest.archive.archive_id,
-                tenant_id,
-                user_id,
-            )
-            if not await asyncio.to_thread(archive_file.is_file):
-                raise ValueError("Declared archive is missing")
-            existing = await asyncio.to_thread(archive_file.read_bytes)
-            if (
-                sha256(existing).hexdigest() != manifest.archive.archive_sha256
-                or len(existing) != manifest.archive.size_bytes
-            ):
-                raise ValueError("Declared archive integrity check failed")
-            return manifest, False
-        verified: list[tuple[Artifact, bytes]] = []
-        for reference in manifest.artifacts:
-            stored = await self.artifact_storage.content_bytes(
-                reference.artifact_id,
-                tenant_id,
-                user_id,
-            )
-            if stored is None:
-                raise ValueError("Artifact integrity check failed")
-            artifact, content = stored
-            if (
-                artifact.run_id != run_id
-                or artifact.trace_id != run_id
-                or artifact.content_sha256 != reference.content_sha256
-                or len(content) != reference.size_bytes
-            ):
-                raise ValueError("Artifact manifest integrity check failed")
-            verified.append((artifact, content))
-
-        def _build_zip() -> bytes:
-            buffer = BytesIO()
-            with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as archive:
-                archive.writestr(
-                    "manifest.json",
-                    json.dumps(
-                        manifest.model_dump(mode="json"),
-                        ensure_ascii=False,
-                        indent=2,
-                    ),
+        if (audit_callback is None) != (rollback_audit_callback is None):
+            raise ValueError("Archive audit callbacks must be provided together")
+        async with self._run_lock(run_id, tenant_id, user_id):
+            manifest = await self._get_manifest_unlocked(run_id, tenant_id, user_id)
+            if manifest is None or manifest.status != "completed":
+                return None
+            if manifest.archive is not None:
+                archive_file = self._archive_file(
+                    manifest.archive.archive_id,
+                    tenant_id,
+                    user_id,
                 )
-                for artifact, content in verified:
-                    suffix = ".html" if artifact.type == "html" else ".txt"
-                    archive.writestr(f"artifacts/{artifact.id}{suffix}", content)
-            return buffer.getvalue()
+                if not await asyncio.to_thread(archive_file.is_file):
+                    raise ValueError("Declared archive is missing")
+                existing = await asyncio.to_thread(archive_file.read_bytes)
+                if (
+                    sha256(existing).hexdigest()
+                    != manifest.archive.archive_sha256
+                    or len(existing) != manifest.archive.size_bytes
+                ):
+                    raise ValueError("Declared archive integrity check failed")
+                return manifest, False
+            verified: list[tuple[Artifact, bytes]] = []
+            for reference in manifest.artifacts:
+                stored = await self.artifact_storage.content_bytes(
+                    reference.artifact_id,
+                    tenant_id,
+                    user_id,
+                )
+                if stored is None:
+                    raise ValueError("Artifact integrity check failed")
+                artifact, content = stored
+                if (
+                    artifact.run_id != run_id
+                    or artifact.trace_id != run_id
+                    or artifact.content_sha256 != reference.content_sha256
+                    or len(content) != reference.size_bytes
+                ):
+                    raise ValueError("Artifact manifest integrity check failed")
+                verified.append((artifact, content))
 
-        archive_bytes = await asyncio.to_thread(_build_zip)
-        archive_id = str(uuid4())
+            def _build_zip() -> bytes:
+                buffer = BytesIO()
+                with zipfile.ZipFile(
+                    buffer,
+                    "w",
+                    compression=zipfile.ZIP_DEFLATED,
+                ) as archive:
+                    archive.writestr(
+                        "manifest.json",
+                        json.dumps(
+                            manifest.model_dump(mode="json"),
+                            ensure_ascii=False,
+                            indent=2,
+                        ),
+                    )
+                    for artifact, content in verified:
+                        suffix = ".html" if artifact.type == "html" else ".txt"
+                        archive.writestr(f"artifacts/{artifact.id}{suffix}", content)
+                return buffer.getvalue()
+
+            archive_bytes = await asyncio.to_thread(_build_zip)
+            archive_id = str(uuid4())
+            archive_file = self._archive_file(archive_id, tenant_id, user_id)
+            await asyncio.to_thread(self._atomic_write, archive_file, archive_bytes)
+            manifest.archive = ArchiveReference(
+                archive_id=archive_id,
+                archive_sha256=sha256(archive_bytes).hexdigest(),
+                size_bytes=len(archive_bytes),
+                download_url=f"/api/v1/artifacts/archives/{archive_id}/download",
+            )
+            try:
+                await self._save_manifest_unlocked(manifest)
+            except Exception:
+                await asyncio.to_thread(self._remove_file, archive_file)
+                raise
+
+            if audit_callback is not None:
+                audit_id: str | None = None
+                try:
+                    audit_id = await audit_callback(manifest)
+                    if not audit_id:
+                        raise RunArtifactAuditError("Required audit id is missing")
+                    if audit_id not in manifest.audit_ids:
+                        manifest.audit_ids.append(audit_id)
+                    await self._save_manifest_unlocked(manifest)
+                except Exception:
+                    rolled_back: RunArtifactManifest | None = None
+                    try:
+                        rolled_back = await self._remove_archive_unlocked(
+                            run_id,
+                            tenant_id,
+                            user_id,
+                            archive_id,
+                        )
+                    except Exception:
+                        pass
+                    if audit_id and rollback_audit_callback is not None:
+                        try:
+                            rollback_audit_id = await rollback_audit_callback(
+                                manifest,
+                                audit_id,
+                            )
+                            if not rollback_audit_id:
+                                raise RunArtifactAuditError(
+                                    "Required rollback audit id is missing"
+                                )
+                            if rolled_back is not None:
+                                rolled_back.audit_ids = list(
+                                    dict.fromkeys(
+                                        [
+                                            *rolled_back.audit_ids,
+                                            audit_id,
+                                            rollback_audit_id,
+                                        ]
+                                    )
+                                )
+                                await self._save_manifest_unlocked(rolled_back)
+                        except Exception:
+                            pass
+                    raise RunArtifactAuditError(
+                        "Required archive audit could not be committed"
+                    ) from None
+            return manifest, True
+
+    @staticmethod
+    def _remove_file(path: Path) -> None:
+        try:
+            path.unlink()
+        except FileNotFoundError:
+            pass
+
+    async def _remove_archive_unlocked(
+        self,
+        run_id: str,
+        tenant_id: str,
+        user_id: str,
+        archive_id: str,
+    ) -> RunArtifactManifest | None:
         archive_file = self._archive_file(archive_id, tenant_id, user_id)
-        await asyncio.to_thread(self._atomic_write, archive_file, archive_bytes)
-        manifest.archive = ArchiveReference(
-            archive_id=archive_id,
-            archive_sha256=sha256(archive_bytes).hexdigest(),
-            size_bytes=len(archive_bytes),
-            download_url=f"/api/v1/artifacts/archives/{archive_id}/download",
+        await asyncio.to_thread(self._remove_file, archive_file)
+        authoritative = await self._get_manifest_unlocked(
+            run_id,
+            tenant_id,
+            user_id,
         )
-        return await self.save_manifest(manifest), True
+        if (
+            authoritative is not None
+            and authoritative.archive is not None
+            and authoritative.archive.archive_id == archive_id
+        ):
+            authoritative.archive = None
+            await self._save_manifest_unlocked(authoritative)
+        return authoritative
 
     async def remove_archive(self, manifest: RunArtifactManifest) -> None:
         """Make an archive unreachable and remove its bytes after audit failure."""
         archive = manifest.archive
         if archive is None:
             return
-        archive_file = self._archive_file(
-            archive.archive_id,
+        async with self._run_lock(
+            manifest.run_id,
             manifest.tenant_id,
             manifest.user_id,
-        )
-
-        def _remove() -> None:
-            try:
-                archive_file.unlink()
-            except FileNotFoundError:
-                pass
-
-        await asyncio.to_thread(_remove)
-        manifest.archive = None
-        await self.save_manifest(manifest)
+        ):
+            await self._remove_archive_unlocked(
+                manifest.run_id,
+                manifest.tenant_id,
+                manifest.user_id,
+                archive.archive_id,
+            )
 
     async def add_audit_id(
         self,
         manifest: RunArtifactManifest,
-        audit_id: str | None,
+        audit_id: str,
     ) -> RunArtifactManifest:
-        if audit_id and audit_id not in manifest.audit_ids:
-            manifest.audit_ids.append(audit_id)
-            await self.save_manifest(manifest)
-        return manifest
+        if not audit_id:
+            raise RunArtifactAuditError("Required audit id is missing")
+        async with self._run_lock(
+            manifest.run_id,
+            manifest.tenant_id,
+            manifest.user_id,
+        ):
+            authoritative = await self._get_manifest_unlocked(
+                manifest.run_id,
+                manifest.tenant_id,
+                manifest.user_id,
+            )
+            if authoritative is None:
+                raise ValueError("Run artifact manifest is missing")
+            if audit_id not in authoritative.audit_ids:
+                authoritative.audit_ids.append(audit_id)
+                await self._save_manifest_unlocked(authoritative)
+            return authoritative
 
     async def archive_bytes(
         self,

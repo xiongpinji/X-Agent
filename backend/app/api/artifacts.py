@@ -13,7 +13,9 @@ from backend.app.api.errors import api_error
 from backend.app.core.artifacts import Artifact, ArtifactRenderer
 from backend.app.core.contracts import ErrorCode
 from backend.app.core.run_artifacts import (
+    RunArtifactAuditError,
     RunArtifactManager,
+    RunArtifactManifest,
     get_run_artifact_manager,
 )
 from backend.app.core.security import Principal
@@ -61,9 +63,19 @@ def _download_headers(name: str, fallback: str) -> dict[str, str]:
     }
 
 
-async def _audit(**kwargs: Any) -> str | None:
+async def _audit(**kwargs: Any) -> str:
     record = await asyncio.to_thread(get_audit_store().record, **kwargs)
-    return str(record.id) if getattr(record, "id", None) else None
+    audit_id = getattr(record, "id", None)
+    if not audit_id:
+        raise RunArtifactAuditError("Required audit id is missing")
+    return str(audit_id)
+
+
+async def _best_effort_failure_audit(**kwargs: Any) -> None:
+    try:
+        await _audit(**kwargs)
+    except Exception:
+        return
 
 
 def _scope(principal: Principal) -> tuple[str, str]:
@@ -123,8 +135,57 @@ async def archive_run(
 ) -> dict[str, Any]:
     enforce_scope(principal, "agent:run")
     tenant_id, user_id = _scope(principal)
+
+    async def _record_created(manifest: RunArtifactManifest) -> str:
+        if manifest.archive is None:
+            raise RunArtifactAuditError("Archive reference is missing")
+        return await _audit(
+            action="run.archive.created",
+            resource_type="run_archive",
+            resource_id=manifest.archive.archive_id,
+            tenant_id=tenant_id,
+            actor_id=user_id,
+            trace_id=run_id,
+            run_id=run_id,
+            details={"status": "created", "size_bytes": manifest.archive.size_bytes},
+        )
+
+    async def _record_rollback(
+        manifest: RunArtifactManifest,
+        created_audit_id: str,
+    ) -> str:
+        if manifest.archive is None:
+            raise RunArtifactAuditError("Archive reference is missing")
+        return await _audit(
+            action="run.archive.rollback",
+            resource_type="run_archive",
+            resource_id=manifest.archive.archive_id,
+            tenant_id=tenant_id,
+            actor_id=user_id,
+            outcome="failure",
+            trace_id=run_id,
+            run_id=run_id,
+            details={
+                "status": "rolled_back",
+                "created_audit_id": created_audit_id,
+            },
+        )
+
     try:
-        archive_result = await manager.create_archive(run_id, tenant_id, user_id)
+        archive_result = await manager.create_archive(
+            run_id,
+            tenant_id,
+            user_id,
+            audit_callback=_record_created,
+            rollback_audit_callback=_record_rollback,
+        )
+    except RunArtifactAuditError:
+        raise api_error(
+            503,
+            ErrorCode.INTERNAL_ERROR,
+            "Run archive could not be audited.",
+            trace_id=run_id,
+        ) from None
     except (OSError, ValueError):
         raise api_error(
             409,
@@ -134,30 +195,9 @@ async def archive_run(
         ) from None
     if archive_result is None:
         raise _not_found(run_id)
-    manifest, created = archive_result
+    manifest, _created = archive_result
     if manifest.archive is None:
         raise _not_found(run_id)
-    if created:
-        try:
-            audit_id = await _audit(
-                action="run.archive.created",
-                resource_type="run_archive",
-                resource_id=manifest.archive.archive_id,
-                tenant_id=tenant_id,
-                actor_id=user_id,
-                trace_id=run_id,
-                run_id=run_id,
-                details={"status": "created", "size_bytes": manifest.archive.size_bytes},
-            )
-            await manager.add_audit_id(manifest, audit_id)
-        except Exception:
-            await manager.remove_archive(manifest)
-            raise api_error(
-                503,
-                ErrorCode.INTERNAL_ERROR,
-                "Run archive could not be audited.",
-                trace_id=run_id,
-            ) from None
     return {"run_id": run_id, "archive": manifest.archive.model_dump(mode="json")}
 
 
@@ -175,17 +215,36 @@ async def download_archive(
     manifest, content = stored
     try:
         audit_id = await _audit(
-            action="run.archive.downloaded",
+            action="run.archive.download.requested",
             resource_type="run_archive",
             resource_id=archive_id,
             tenant_id=tenant_id,
             actor_id=user_id,
             trace_id=manifest.trace_id,
             run_id=manifest.run_id,
-            details={"status": "downloaded", "size_bytes": len(content)},
+            details={"status": "requested", "size_bytes": len(content)},
         )
+    except Exception:
+        raise api_error(
+            503,
+            ErrorCode.INTERNAL_ERROR,
+            "Run archive download could not be audited.",
+            trace_id=manifest.trace_id,
+        ) from None
+    try:
         await manager.add_audit_id(manifest, audit_id)
     except Exception:
+        await _best_effort_failure_audit(
+            action="run.archive.download.manifest_failed",
+            resource_type="run_archive",
+            resource_id=archive_id,
+            tenant_id=tenant_id,
+            actor_id=user_id,
+            outcome="failure",
+            trace_id=manifest.trace_id,
+            run_id=manifest.run_id,
+            details={"status": "manifest_failed", "request_audit_id": audit_id},
+        )
         raise api_error(
             503,
             ErrorCode.INTERNAL_ERROR,
@@ -281,15 +340,23 @@ async def download_artifact(
     artifact, content = stored
     try:
         audit_id = await _audit(
-            action="artifact.downloaded",
+            action="artifact.download.requested",
             resource_type="artifact",
             resource_id=artifact.id,
             tenant_id=tenant_id,
             actor_id=user_id,
             trace_id=artifact.trace_id,
             run_id=artifact.run_id,
-            details={"status": "downloaded", "size_bytes": len(content)},
+            details={"status": "requested", "size_bytes": len(content)},
         )
+    except Exception:
+        raise api_error(
+            503,
+            ErrorCode.INTERNAL_ERROR,
+            "Artifact download could not be audited.",
+            trace_id=artifact.trace_id,
+        ) from None
+    try:
         if artifact.run_id and artifact.trace_id == artifact.run_id:
             manifest = await manager.get_manifest(
                 artifact.run_id,
@@ -299,6 +366,17 @@ async def download_artifact(
             if manifest is not None:
                 await manager.add_audit_id(manifest, audit_id)
     except Exception:
+        await _best_effort_failure_audit(
+            action="artifact.download.manifest_failed",
+            resource_type="artifact",
+            resource_id=artifact.id,
+            tenant_id=tenant_id,
+            actor_id=user_id,
+            outcome="failure",
+            trace_id=artifact.trace_id,
+            run_id=artifact.run_id,
+            details={"status": "manifest_failed", "request_audit_id": audit_id},
+        )
         raise api_error(
             503,
             ErrorCode.INTERNAL_ERROR,

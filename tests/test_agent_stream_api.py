@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 from collections.abc import Iterator
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -21,9 +22,9 @@ class _AuditSink:
     def __init__(self) -> None:
         self.records: list[dict[str, Any]] = []
 
-    def record(self, **kwargs: Any) -> None:
+    def record(self, **kwargs: Any) -> SimpleNamespace:
         self.records.append(kwargs)
-        return None
+        return SimpleNamespace(id=f"audit-{len(self.records)}")
 
 
 class _CompletingAgent:
@@ -60,6 +61,11 @@ class _FailingAuditSink:
         raise RuntimeError("SENSITIVE_AUDIT_DETAIL_DO_NOT_LEAK")
 
 
+class _NoIdAuditSink:
+    def record(self, **_kwargs: Any) -> None:
+        return None
+
+
 def _principal() -> Principal:
     return Principal(
         tenant_id="tenant-a",
@@ -78,7 +84,8 @@ def client(monkeypatch, tmp_path) -> Iterator[TestClient]:
     )
     app.dependency_overrides[get_current_principal] = _principal
     app.dependency_overrides[get_run_artifact_manager] = lambda: manager
-    monkeypatch.setattr(agents_api, "get_audit_store", lambda: _AuditSink())
+    audit_sink = _AuditSink()
+    monkeypatch.setattr(agents_api, "get_audit_store", lambda: audit_sink)
     try:
         with TestClient(app) as test_client:
             yield test_client
@@ -181,6 +188,30 @@ def test_post_sse_binds_server_agent_and_session_context(client: TestClient, mon
     assert agent.context.agent_id == "custom-agent"
     assert agent.context.session_id == "session-123"
     assert agent.extra_context == {"source": "chat", "agent_profile": server_profile}
+
+
+def test_successful_stream_fails_closed_when_audit_sink_returns_no_id(
+    client: TestClient,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(agents_api, "get_agent", lambda: _CompletingAgent())
+    monkeypatch.setattr(agents_api, "get_audit_store", lambda: _NoIdAuditSink())
+
+    response = client.post(
+        "/api/v1/agents/run/stream",
+        headers={"Authorization": "Bearer test-token"},
+        json={"task": "summarize this workspace"},
+    )
+
+    assert response.status_code == 200
+    frames = _completed_frames(response.text)
+    assert len(frames) == 1
+    result = frames[0]["result"]
+    assert result["status"] == "failed"
+    assert result["error_code"] == "agent_execution_failed"
+    assert result["manifest"]["status"] == "failed"
+    assert result["manifest"]["artifacts"] == []
+    assert result["manifest"]["audit_ids"] == []
 
 
 def test_post_sse_rejects_unknown_agent(client: TestClient, monkeypatch) -> None:

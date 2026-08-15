@@ -11798,9 +11798,12 @@ async def run_agent_stream(
         except Exception:
             pass
 
-    async def _record_audit(**kwargs: Any) -> str | None:
+    async def _record_audit(**kwargs: Any) -> str:
         record = await asyncio.to_thread(get_audit_store().record, **kwargs)
-        return str(record.id) if getattr(record, "id", None) else None
+        audit_id = getattr(record, "id", None)
+        if not audit_id:
+            raise RuntimeError("Required audit id is missing")
+        return str(audit_id)
 
     async def _failed_result(run_id: str, error_code: str) -> dict[str, Any]:
         audit_ids: list[str] = []
@@ -11890,16 +11893,14 @@ async def run_agent_stream(
                 run_id=result.trace_id,
                 details={"task_preview": task[:120], "status": result.status.value, "tool_call_count": len(result.tool_calls)},
             )
+            if artifact_audit_id == run_audit_id:
+                raise RuntimeError("Required audit ids must be distinct")
             manifest = artifact_manager.completed_manifest(
                 run_id=run_id,
                 tenant_id=context.tenant_id,
                 user_id=context.user_id,
                 artifacts=[created_artifact],
-                audit_ids=[
-                    audit_id
-                    for audit_id in (artifact_audit_id, run_audit_id)
-                    if audit_id
-                ],
+                audit_ids=[artifact_audit_id, run_audit_id],
             )
             await artifact_manager.save_manifest(manifest)
             # Push final result as completion signal

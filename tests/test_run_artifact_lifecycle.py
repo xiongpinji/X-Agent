@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 from collections.abc import Iterator
 from hashlib import sha256
 from io import BytesIO
@@ -46,6 +47,11 @@ class _FailingAgent:
 class _FailingAudit:
     def record(self, **_kwargs) -> None:
         raise RuntimeError("PRIVATE_AUDIT_FAILURE")
+
+
+class _NoIdAudit:
+    def record(self, **_kwargs) -> None:
+        return None
 
 
 def _principal() -> Principal:
@@ -186,9 +192,9 @@ def test_successful_stream_closes_manifest_download_archive_and_audit(
     assert {
         "artifact.created",
         "agent.run.stream",
-        "artifact.downloaded",
+        "artifact.download.requested",
         "run.archive.created",
-        "run.archive.downloaded",
+        "run.archive.download.requested",
     } <= actions
     scoped_records = [record for record in records if record.run_id == "run-lifecycle"]
     assert scoped_records
@@ -200,6 +206,161 @@ def test_successful_stream_closes_manifest_download_archive_and_audit(
         record.id for record in scoped_records
     }
     assert sum(record.action == "run.archive.created" for record in records) == 1
+
+
+def test_concurrent_archive_creation_converges_on_one_archive(
+    lifecycle,
+    monkeypatch,
+) -> None:
+    client, manager, audit = lifecycle
+    monkeypatch.setattr(agents_api, "get_agent", lambda: _CompletingAgent())
+    final = _final(
+        client.post(
+            "/api/v1/agents/run/stream",
+            json={"task": "create a result"},
+        ).text
+    )
+    second_manager = RunArtifactManager(
+        manager.root_path,
+        artifact_storage=ArtifactStorage(manager.artifact_storage.storage_path),
+    )
+
+    async def _record_created(manifest) -> str:
+        assert manifest.archive is not None
+        record = await asyncio.to_thread(
+            audit.record,
+            action="run.archive.created",
+            resource_type="run_archive",
+            resource_id=manifest.archive.archive_id,
+            tenant_id="tenant-a",
+            actor_id="user-a",
+            trace_id=manifest.trace_id,
+            run_id=manifest.run_id,
+            details={"status": "created", "size_bytes": manifest.archive.size_bytes},
+        )
+        return str(record.id)
+
+    async def _record_rollback(manifest, created_audit_id: str) -> str:
+        assert manifest.archive is not None
+        record = await asyncio.to_thread(
+            audit.record,
+            action="run.archive.rollback",
+            resource_type="run_archive",
+            resource_id=manifest.archive.archive_id,
+            tenant_id="tenant-a",
+            actor_id="user-a",
+            outcome="failure",
+            trace_id=manifest.trace_id,
+            run_id=manifest.run_id,
+            details={
+                "status": "rolled_back",
+                "created_audit_id": created_audit_id,
+            },
+        )
+        return str(record.id)
+
+    async def _create_both():
+        return await asyncio.gather(
+            manager.create_archive(
+                final["trace_id"],
+                "tenant-a",
+                "user-a",
+                audit_callback=_record_created,
+                rollback_audit_callback=_record_rollback,
+            ),
+            second_manager.create_archive(
+                final["trace_id"],
+                "tenant-a",
+                "user-a",
+                audit_callback=_record_created,
+                rollback_audit_callback=_record_rollback,
+            ),
+        )
+
+    first, second = asyncio.run(_create_both())
+
+    assert first is not None
+    assert second is not None
+    first_manifest, first_created = first
+    second_manifest, second_created = second
+    assert sorted((first_created, second_created)) == [False, True]
+    assert first_manifest.archive is not None
+    assert second_manifest.archive is not None
+    assert first_manifest.archive.archive_id == second_manifest.archive.archive_id
+    assert first_manifest.archive.archive_sha256 == second_manifest.archive.archive_sha256
+    assert len(list(manager.archive_path.rglob("*.zip"))) == 1
+    persisted = asyncio.run(
+        manager.get_manifest(final["trace_id"], "tenant-a", "user-a")
+    )
+    assert persisted is not None
+    assert persisted.archive == first_manifest.archive
+    first_bytes = asyncio.run(
+        manager.archive_bytes(
+            first_manifest.archive.archive_id,
+            "tenant-a",
+            "user-a",
+        )
+    )
+    second_bytes = asyncio.run(
+        second_manager.archive_bytes(
+            second_manifest.archive.archive_id,
+            "tenant-a",
+            "user-a",
+        )
+    )
+    assert first_bytes is not None
+    assert second_bytes is not None
+    assert first_bytes[1] == second_bytes[1]
+    created_records = audit.list(
+        limit=100,
+        tenant_id="tenant-a",
+        actor_id="user-a",
+        action="run.archive.created",
+    )
+    assert len(created_records) == 1
+    assert created_records[0].id in persisted.audit_ids
+
+
+def test_concurrent_audit_id_updates_merge_from_authoritative_manifest(
+    lifecycle,
+    monkeypatch,
+) -> None:
+    client, manager, _audit = lifecycle
+    monkeypatch.setattr(agents_api, "get_agent", lambda: _CompletingAgent())
+    final = _final(
+        client.post(
+            "/api/v1/agents/run/stream",
+            json={"task": "create a result"},
+        ).text
+    )
+    second_manager = RunArtifactManager(
+        manager.root_path,
+        artifact_storage=ArtifactStorage(manager.artifact_storage.storage_path),
+    )
+    stale_one = asyncio.run(
+        manager.get_manifest(final["trace_id"], "tenant-a", "user-a")
+    )
+    stale_two = asyncio.run(
+        second_manager.get_manifest(final["trace_id"], "tenant-a", "user-a")
+    )
+    assert stale_one is not None
+    assert stale_two is not None
+
+    async def _merge_both() -> None:
+        await asyncio.gather(
+            manager.add_audit_id(stale_one, "concurrent-audit-one"),
+            second_manager.add_audit_id(stale_two, "concurrent-audit-two"),
+        )
+
+    asyncio.run(_merge_both())
+
+    persisted = asyncio.run(
+        manager.get_manifest(final["trace_id"], "tenant-a", "user-a")
+    )
+    assert persisted is not None
+    assert {"concurrent-audit-one", "concurrent-audit-two"}.issubset(
+        persisted.audit_ids
+    )
 
 
 def test_failed_stream_persists_failed_manifest_without_artifact(
@@ -339,11 +500,11 @@ def test_manifest_reads_and_archives_reject_tampered_invariants(
     ) is None
 
 
-def test_archive_is_rolled_back_when_required_audit_write_fails(
+def test_archive_audit_failure_releases_lock_rolls_back_and_allows_retry(
     lifecycle,
     monkeypatch,
 ) -> None:
-    client, manager, _audit = lifecycle
+    client, manager, audit = lifecycle
     monkeypatch.setattr(agents_api, "get_agent", lambda: _CompletingAgent())
     final = _final(
         client.post(
@@ -368,6 +529,199 @@ def test_archive_is_rolled_back_when_required_audit_write_fails(
     assert manifest is not None
     assert manifest.archive is None
     assert list(manager.archive_path.rglob("*.zip")) == []
+    assert list(manager.lock_path.rglob("*.lock")) == []
+
+    monkeypatch.setattr(artifacts_api, "get_audit_store", lambda: audit)
+    retry = client.post("/api/v1/artifacts/runs/run-lifecycle/archive")
+
+    assert retry.status_code == 200
+    assert len(list(manager.archive_path.rglob("*.zip"))) == 1
+    assert list(manager.lock_path.rglob("*.lock")) == []
+    created_records = audit.list(
+        limit=100,
+        tenant_id="tenant-a",
+        actor_id="user-a",
+        action="run.archive.created",
+    )
+    assert len(created_records) == 1
+
+
+def test_archive_manifest_commit_failure_records_compensating_audit(
+    lifecycle,
+    monkeypatch,
+) -> None:
+    client, manager, audit = lifecycle
+    monkeypatch.setattr(agents_api, "get_agent", lambda: _CompletingAgent())
+    _final(
+        client.post(
+            "/api/v1/agents/run/stream",
+            json={"task": "create a result"},
+        ).text
+    )
+    original_save = manager._save_manifest_unlocked
+    save_calls = 0
+
+    async def _fail_after_created_audit(manifest):
+        nonlocal save_calls
+        save_calls += 1
+        if save_calls == 2:
+            raise OSError("PRIVATE_FINAL_MANIFEST_FAILURE")
+        return await original_save(manifest)
+
+    monkeypatch.setattr(manager, "_save_manifest_unlocked", _fail_after_created_audit)
+    response = client.post("/api/v1/artifacts/runs/run-lifecycle/archive")
+
+    assert response.status_code == 503
+    assert "PRIVATE_FINAL_MANIFEST_FAILURE" not in response.text
+    assert list(manager.archive_path.rglob("*.zip")) == []
+    assert list(manager.lock_path.rglob("*.lock")) == []
+    persisted = asyncio.run(
+        manager.get_manifest("run-lifecycle", "tenant-a", "user-a")
+    )
+    assert persisted is not None
+    assert persisted.archive is None
+    records = audit.list(limit=100, tenant_id="tenant-a", actor_id="user-a")
+    created = [record for record in records if record.action == "run.archive.created"]
+    rolled_back = [record for record in records if record.action == "run.archive.rollback"]
+    assert len(created) == 1
+    assert len(rolled_back) == 1
+    assert rolled_back[0].outcome == "failure"
+    assert rolled_back[0].details["created_audit_id"] == created[0].id
+    assert {created[0].id, rolled_back[0].id}.issubset(persisted.audit_ids)
+
+
+def test_artifact_download_audit_failure_never_claims_downloaded_or_returns_bytes(
+    lifecycle,
+    monkeypatch,
+) -> None:
+    client, manager, audit = lifecycle
+    monkeypatch.setattr(agents_api, "get_agent", lambda: _CompletingAgent())
+    final = _final(
+        client.post(
+            "/api/v1/agents/run/stream",
+            json={"task": "create a result"},
+        ).text
+    )
+    artifact_id = final["manifest"]["artifacts"][0]["artifact_id"]
+
+    async def _fail_manifest_update(_manifest, _audit_id):
+        raise OSError("PRIVATE_MANIFEST_FAILURE")
+
+    monkeypatch.setattr(manager, "add_audit_id", _fail_manifest_update)
+    response = client.get(f"/api/v1/artifacts/{artifact_id}/download")
+
+    assert response.status_code == 503
+    assert b"<!doctype html>" not in response.content
+    assert "PRIVATE_MANIFEST_FAILURE" not in response.text
+    actions = [
+        record.action
+        for record in audit.list(limit=100, tenant_id="tenant-a", actor_id="user-a")
+    ]
+    assert "artifact.downloaded" not in actions
+    assert "artifact.download.requested" in actions
+    assert "artifact.download.manifest_failed" in actions
+
+
+def test_archive_download_audit_failure_never_claims_downloaded_or_returns_bytes(
+    lifecycle,
+    monkeypatch,
+) -> None:
+    client, manager, audit = lifecycle
+    monkeypatch.setattr(agents_api, "get_agent", lambda: _CompletingAgent())
+    _final(
+        client.post(
+            "/api/v1/agents/run/stream",
+            json={"task": "create a result"},
+        ).text
+    )
+    archive = client.post(
+        "/api/v1/artifacts/runs/run-lifecycle/archive"
+    ).json()["archive"]
+
+    async def _fail_manifest_update(_manifest, _audit_id):
+        raise OSError("PRIVATE_ARCHIVE_MANIFEST_FAILURE")
+
+    monkeypatch.setattr(manager, "add_audit_id", _fail_manifest_update)
+    response = client.get(
+        f"/api/v1/artifacts/archives/{archive['archive_id']}/download"
+    )
+
+    assert response.status_code == 503
+    assert response.content != asyncio.run(
+        manager.archive_bytes(
+            archive["archive_id"],
+            "tenant-a",
+            "user-a",
+        )
+    )[1]
+    assert "PRIVATE_ARCHIVE_MANIFEST_FAILURE" not in response.text
+    actions = [
+        record.action
+        for record in audit.list(limit=100, tenant_id="tenant-a", actor_id="user-a")
+    ]
+    assert "run.archive.downloaded" not in actions
+    assert "run.archive.download.requested" in actions
+    assert "run.archive.download.manifest_failed" in actions
+
+
+def test_missing_audit_ids_fail_closed_for_create_archive_and_download(
+    lifecycle,
+    monkeypatch,
+) -> None:
+    client, manager, _audit = lifecycle
+    monkeypatch.setattr(agents_api, "get_agent", lambda: _CompletingAgent())
+    final = _final(
+        client.post(
+            "/api/v1/agents/run/stream",
+            json={"task": "create a result"},
+        ).text
+    )
+    artifact_id = final["manifest"]["artifacts"][0]["artifact_id"]
+    monkeypatch.setattr(artifacts_api, "get_audit_store", lambda: _NoIdAudit())
+
+    archive = client.post("/api/v1/artifacts/runs/run-lifecycle/archive")
+    artifact_download = client.get(f"/api/v1/artifacts/{artifact_id}/download")
+    created = client.post(
+        "/api/v1/artifacts",
+        json={"name": "no-audit.html", "type": "html", "content": "private"},
+    )
+
+    assert archive.status_code == 503
+    assert artifact_download.status_code == 503
+    assert b"<!doctype html>" not in artifact_download.content
+    assert created.status_code == 503
+    persisted = asyncio.run(
+        manager.get_manifest("run-lifecycle", "tenant-a", "user-a")
+    )
+    assert persisted is not None
+    assert persisted.archive is None
+    assert list(manager.archive_path.rglob("*.zip")) == []
+    assert list(manager.lock_path.rglob("*.lock")) == []
+    assert client.get("/api/v1/artifacts").json()["count"] == 1
+
+
+def test_stale_dead_process_lock_is_recovered_under_valid_tmp_root(tmp_path) -> None:
+    manager = RunArtifactManager(tmp_path / "valid-run-root")
+    manifest = manager.failed_manifest(
+        run_id="stale-lock-run",
+        tenant_id="tenant-a",
+        user_id="user-a",
+        error_code="agent_execution_failed",
+        audit_ids=[],
+    )
+    asyncio.run(manager.save_manifest(manifest))
+    lock_file = manager._lock_file("stale-lock-run", "tenant-a", "user-a")
+    lock_file.parent.mkdir(parents=True, exist_ok=True)
+    lock_file.write_text(
+        json.dumps({"token": "orphan", "pid": 2_147_483_647}),
+        encoding="utf-8",
+    )
+    os.utime(lock_file, (0, 0))
+
+    updated = asyncio.run(manager.add_audit_id(manifest, "recovered-audit"))
+
+    assert updated.audit_ids == ["recovered-audit"]
+    assert list(manager.lock_path.rglob("*.lock")) == []
 
 
 def test_artifact_routes_are_mounted_and_reachable_in_production_app(
