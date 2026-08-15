@@ -132,7 +132,7 @@ fix(chat): connect default chat to real agent stream
 - 测试：`tests/test_chat_history_persistence.py`
 - 测试：`tests/test_chat_history_tenant_isolation.py`
 
-- [ ] **步骤 1：写失败测试**
+- [x] **步骤 1：写失败测试**
 
 ```python
 session_id = client_a.post("/api/v1/chat/history", json={"title": "A"}).json()["id"]
@@ -142,7 +142,7 @@ assert client_b.post(f"/api/v1/chat/history/{session_id}/messages", json={"role"
 
 创建 store、写入消息、销毁并重建 store 后，tenant A/user A 必须仍能读取相同消息；tenant B、user B 和匿名 principal 必须不可见。
 
-- [ ] **步骤 2：实现权威仓储合同**
+- [x] **步骤 2：实现权威仓储合同**
 
 ```python
 class ChatHistoryStore(Protocol):
@@ -156,15 +156,17 @@ class ChatHistoryStore(Protocol):
 
 生产使用配置的 PostgreSQL 且依赖显式 migration，缺表时失败关闭；SQLite 自动建表仅用于开发/测试。所有 API 查询都带 `tenant_id + user_id + session_id`，不存在或不属于当前 principal 时统一 404，禁止自动接管他人的 session ID。删除单会话与清空历史同样只作用于当前 principal。
 
-- [ ] **步骤 3：运行持久化、隔离和现有聊天回归**
+- [x] **步骤 3：运行持久化、隔离和现有聊天回归**
 
 ```powershell
 python -m pytest tests/test_chat_history_persistence.py tests/test_chat_history_tenant_isolation.py tests/test_chat_entrypoint_contract.py tests/test_agent_stream_api.py -q
 ```
 
-- [ ] **步骤 4：双阶段审查并提交**
+- [x] **步骤 4：双阶段审查并提交**
 
 提交信息：`feat(chat): persist tenant-isolated history`。
+
+任务 2 以 `fac2bcd`、`e7b05f8`、`d6c9be2` 三个独立提交完成。红灯实际覆盖重启丢失、跨租户/跨用户越权、未知 session 接管、并发计数丢更新、时间戳倒退和非法请求写入；最终目标测试 26 个通过，叠加任务 1 Agent stream 回归共 35 个通过。规格复审与质量复审均通过，最终为 0 Critical、0 Important；生产 PostgreSQL 仍需在任务 7 的受控环境应用 `010_chat_history_tables.sql` 并验收。
 
 ### 任务 3：Run 工件、下载、归档与审计闭环
 
