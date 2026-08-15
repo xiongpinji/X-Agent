@@ -1,4 +1,5 @@
 import axios, { AxiosInstance } from 'axios'
+import { applyStoredAuth } from './authHeaders'
 
 /**
  * Sync / Work-Session operations client — aligned with:
@@ -171,13 +172,7 @@ class SyncOpsClient {
       headers: { 'Content-Type': 'application/json' },
     })
     // Same auth convention as services/api.ts: Bearer token from localStorage.
-    this.client.interceptors.request.use((config) => {
-      const token = localStorage.getItem('auth_token')
-      if (token) {
-        config.headers.Authorization = `Bearer ${token}`
-      }
-      return config
-    })
+    this.client.interceptors.request.use(applyStoredAuth)
   }
 
   // --- sync.py (prefix /api/v1/sync) ---

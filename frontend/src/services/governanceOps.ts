@@ -1,4 +1,5 @@
 import axios, { AxiosInstance } from 'axios'
+import { applyStoredAuth } from './authHeaders'
 
 /**
  * Governance operations service — 审批 / 审计 / 备份三组治理端点，
@@ -168,13 +169,7 @@ class GovernanceOpsClient {
       timeout: 30000,
       headers: { 'Content-Type': 'application/json' },
     })
-    this.client.interceptors.request.use((config) => {
-      const token = localStorage.getItem('auth_token')
-      if (token) {
-        config.headers.Authorization = `Bearer ${token}`
-      }
-      return config
-    })
+    this.client.interceptors.request.use(applyStoredAuth)
   }
 
   // ── 审批: /api/v1/approvals ────────────────────────────────────────────────
@@ -278,41 +273,41 @@ class GovernanceOpsClient {
     URL.revokeObjectURL(url)
   }
 
-  // ── 备份调度: /api/v1/backup (backup_scheduler.py, 已挂载) ─────────────────
+  // ── 备份调度: /api/v1/backup/scheduler (真实数据备份, 已挂载) ─────────────
 
-  /** POST /backup/run — 手动触发一次全量备份 */
+  /** POST /backup/scheduler/run — 手动触发一次全量备份 */
   async runBackup(): Promise<BackupRunResult> {
-    const response = await this.client.post('/backup/run')
+    const response = await this.client.post('/backup/scheduler/run')
     return response.data
   }
 
-  /** GET /backup/list — 备份列表 */
+  /** GET /backup/scheduler/list — 备份列表 */
   async listBackups(): Promise<{ backups: BackupListItem[]; total: number }> {
-    const response = await this.client.get('/backup/list')
+    const response = await this.client.get('/backup/scheduler/list')
     return response.data
   }
 
-  /** GET /backup/status — 调度器状态 */
+  /** GET /backup/scheduler/status — 调度器状态 */
   async getBackupStatus(): Promise<BackupSchedulerStatus> {
-    const response = await this.client.get('/backup/status')
+    const response = await this.client.get('/backup/scheduler/status')
     return response.data
   }
 
-  /** POST /backup/restore/{backup_id} — 从备份恢复 */
+  /** POST /backup/scheduler/restore/{backup_id} — 从备份恢复 */
   async restoreBackup(backupId: string): Promise<{ backup_id: string; success: boolean; message: string }> {
-    const response = await this.client.post(`/backup/restore/${backupId}`)
+    const response = await this.client.post(`/backup/scheduler/restore/${backupId}`)
     return response.data
   }
 
-  /** POST /backup/verify/{backup_id} — 校验备份完整性 */
+  /** POST /backup/scheduler/verify/{backup_id} — 校验备份完整性 */
   async verifyBackup(backupId: string): Promise<{ backup_id: string; valid: boolean; message: string }> {
-    const response = await this.client.post(`/backup/verify/${backupId}`)
+    const response = await this.client.post(`/backup/scheduler/verify/${backupId}`)
     return response.data
   }
 
-  /** DELETE /backup/cleanup?keep=N — 清理旧备份 */
+  /** DELETE /backup/scheduler/cleanup?keep=N — 清理旧备份 */
   async cleanupBackups(keep: number = 7): Promise<{ removed_count: number; message: string }> {
-    const response = await this.client.delete('/backup/cleanup', { params: { keep } })
+    const response = await this.client.delete('/backup/scheduler/cleanup', { params: { keep } })
     return response.data
   }
 

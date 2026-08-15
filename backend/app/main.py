@@ -44,12 +44,54 @@ from backend.app.dependencies import (
 from backend.app.settings import get_settings
 
 
+_PUBLIC_API_KEY_PATHS = frozenset({
+    "/",
+    "/health",
+    "/ready",
+    "/metrics",
+    "/api-key/status",
+    "/api/v1/health/live",
+    "/api/v1/csrf-token",
+    "/api/v1/auth/login",
+    "/api/v1/auth/login/oauth",
+    "/api/v1/auth/register",
+    "/api/v1/auth/refresh",
+    "/api/v1/auth/verify-email",
+    "/api/v1/auth/reset-password",
+    "/manifest.json",
+    "/sw.js",
+    "/favicon.ico",
+})
+_PUBLIC_WEBHOOK_PATHS = frozenset({
+    "/api/v1/channels/telegram/webhook",
+    "/api/v1/channels/slack/events",
+    "/api/v1/channels/discord/interactions",
+    "/api/v1/channels/dingtalk/webhook",
+})
+_PUBLIC_STATIC_PREFIXES = ("/js/", "/css/")
+
+
+def _api_key_gate_allows(request: Request) -> bool:
+    path = request.url.path
+    if path in _PUBLIC_WEBHOOK_PATHS or path in _PUBLIC_API_KEY_PATHS:
+        return True
+    if request.headers.get("x-api-key"):
+        return True
+    if request.headers.get("authorization", "").lower().startswith("bearer "):
+        return True
+
+    if request.method.upper() not in {"GET", "HEAD"}:
+        return False
+    if path.startswith(_PUBLIC_STATIC_PREFIXES):
+        return True
+    route_prefix = path.lstrip("/").split("/", 1)[0]
+    return route_prefix in _SPA_ROUTE_PREFIXES
+
+
 def require_api_key_header(request: Request) -> None:
     if not settings.require_api_key:
         return
-    if request.url.path in {"/", "/health", "/ready", "/metrics", "/api/v1/channels/telegram/webhook", "/api/v1/channels/slack/events", "/api/v1/channels/discord/interactions", "/api/v1/channels/dingtalk/webhook"}:
-        return
-    if request.headers.get("x-api-key"):
+    if _api_key_gate_allows(request):
         return
     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing API key")
 
@@ -607,11 +649,10 @@ async def request_logging_middleware(request: Request, call_next):
         clear_request_context = None
 
     try:
-        if settings.require_api_key and request.url.path not in {"/", "/health", "/ready", "/metrics", "/api/v1/channels/telegram/webhook", "/api/v1/channels/slack/events", "/api/v1/channels/discord/interactions", "/api/v1/channels/dingtalk/webhook"}:
-            if not request.headers.get("x-api-key"):
-                response = JSONResponse({"detail": "Missing API key"}, status_code=401)
-                response.headers["x-request-id"] = request_id
-                return response
+        if settings.require_api_key and not _api_key_gate_allows(request):
+            response = JSONResponse({"detail": "Missing API key"}, status_code=401)
+            response.headers["x-request-id"] = request_id
+            return response
         response = await call_next(request)
         latency_ms = round((time.perf_counter() - started) * 1000, 3)
         response.headers["x-request-id"] = request_id
@@ -810,6 +851,8 @@ _KEPT_ROUTER_MODULES: tuple[str, ...] = (
     # archive/api_templates_2026-08/KEPT_ROUTERS.md 恢复登记）：
     "mcp",            # P1-01 MCP 官方 SDK 管理 API（自 archive 恢复，修复 tool_id）
     "checkpoints",    # P2-09 断点续跑（修复 tenant 直信 → 标准鉴权链）
+    # Must precede backup.py's dynamic /backup/{backup_id}/status route.
+    "backup_scheduler_api",  # 可校验、可恢复的真实数据备份
     "backup",         # 备份管理
     "backup_qdrant",  # Qdrant 备份
     "chat_history",   # 聊天历史
@@ -844,6 +887,12 @@ def _register_all_routers() -> None:
     for _mod_name in _KEPT_ROUTER_MODULES:
         _module = importlib.import_module(f"backend.app.api.{_mod_name}")
         app.include_router(_module.router)
+
+    # The tenant list/create routes live on `router`; real update/delete CRUD
+    # routes are kept separately to avoid mounting placeholder usage/billing APIs.
+    from backend.app.api.tenants import extended_router as tenants_extended_router
+
+    app.include_router(tenants_extended_router)
 
     # auth 基础补充：sso.py 的 auth_router 承载 /api/v1/auth 下的 MFA、会话管理、
     # WebAuthn 等端点（前端登录/安全页面对齐）。

@@ -1,4 +1,5 @@
 import axios, { AxiosInstance, AxiosError } from 'axios'
+import { applyStoredAuth } from './authHeaders'
 
 /**
  * Admin operations service (A15/A16), aligned with the real backend routes
@@ -201,13 +202,7 @@ class AdminOpsClient {
       timeout: 30000,
       headers: { 'Content-Type': 'application/json' },
     })
-    this.client.interceptors.request.use((config) => {
-      const token = localStorage.getItem('auth_token')
-      if (token) {
-        config.headers.Authorization = `Bearer ${token}`
-      }
-      return config
-    })
+    this.client.interceptors.request.use(applyStoredAuth)
   }
 
   // --- Tenants (backend/app/api/tenants.py) — security:manage required ---

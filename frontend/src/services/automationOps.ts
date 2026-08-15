@@ -1,4 +1,5 @@
 import axios, { AxiosInstance } from 'axios'
+import { applyStoredAuth } from './authHeaders'
 
 /**
  * Automation operations client — aligned with real backend routers
@@ -136,13 +137,7 @@ class AutomationOpsClient {
       headers: { 'Content-Type': 'application/json' },
     })
     // Same auth convention as services/api.ts: Bearer token from localStorage.
-    this.client.interceptors.request.use((config) => {
-      const token = localStorage.getItem('auth_token')
-      if (token) {
-        config.headers.Authorization = `Bearer ${token}`
-      }
-      return config
-    })
+    this.client.interceptors.request.use(applyStoredAuth)
   }
 
   // ---------- browser.py: session control ----------

@@ -141,7 +141,7 @@ const TenantsBillingPage: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const loadBillingData = useCallback(async () => {
+  const _loadBillingData = useCallback(async () => {
     try {
       const [planList, usage, invoiceList] = await Promise.all([
         adminOps.listBillingPlans(),
@@ -165,9 +165,7 @@ const TenantsBillingPage: React.FC = () => {
 
   useEffect(() => {
     loadTenants()
-    loadQuotaReport()
-    loadBillingData()
-  }, [loadTenants, loadQuotaReport, loadBillingData])
+  }, [loadTenants])
 
   const loadTenantUsage = useCallback(async () => {
     if (!selectedTenantId) return
@@ -211,6 +209,9 @@ const TenantsBillingPage: React.FC = () => {
   }
 
   const handleDeleteTenant = async (id: string) => {
+    if (!window.confirm(t('admin.tenants.deleteConfirm', 'Delete this tenant? This action cannot be undone.'))) {
+      return
+    }
     try {
       await adminOps.deleteTenant(id)
       setTenants(prev => prev.filter(tn => tn.id !== id))
@@ -270,11 +271,11 @@ const TenantsBillingPage: React.FC = () => {
     )
   }
 
-  const tabs: Array<{ id: PageTab; label: string }> = [
+  const tabs: Array<{ id: PageTab; label: string; disabled?: boolean }> = [
     { id: 'tenants', label: t('admin.tabs.tenants', 'Tenants') },
-    { id: 'detail', label: t('admin.tabs.detail', 'Tenant Detail') },
-    { id: 'billing', label: t('admin.tabs.billing', 'Billing') },
-    { id: 'quota', label: t('admin.tabs.quota', 'Quota') },
+    { id: 'detail', label: t('admin.tabs.detail', 'Tenant Detail'), disabled: true },
+    { id: 'billing', label: t('admin.tabs.billing', 'Billing'), disabled: true },
+    { id: 'quota', label: t('admin.tabs.quota', 'Quota'), disabled: true },
   ]
 
   const selectedTenant = tenants.find(tn => tn.id === selectedTenantId) || null
@@ -322,12 +323,16 @@ const TenantsBillingPage: React.FC = () => {
               key={tab.id}
               role="tab"
               aria-selected={activeTab === tab.id}
+              aria-disabled={tab.disabled || undefined}
+              disabled={tab.disabled}
+              title={tab.disabled ? t('admin.tabs.unavailable', 'Unavailable until real usage and billing data sources are connected') : undefined}
               onClick={() => setActiveTab(tab.id)}
               className={clsx(
                 'px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px',
                 activeTab === tab.id
                   ? 'border-blue-600 text-blue-600 dark:text-blue-400'
-                  : 'border-transparent opacity-50 hover:opacity-100'
+                  : 'border-transparent opacity-50 enabled:hover:opacity-100',
+                tab.disabled && 'cursor-not-allowed'
               )}
             >
               {tab.label}
@@ -384,10 +389,9 @@ const TenantsBillingPage: React.FC = () => {
                     <div
                       key={tn.id}
                       className={clsx(
-                        'row-line flex items-center justify-between gap-3 cursor-pointer px-2 -mx-2',
+                        'row-line flex items-center justify-between gap-3 px-2 -mx-2',
                         selectedTenantId === tn.id && (isDark ? 'bg-slate-800' : 'bg-slate-100')
                       )}
-                      onClick={() => { setSelectedTenantId(tn.id); setActiveTab('detail') }}
                     >
                       <div className="min-w-0">
                         <p className="text-sm font-medium truncate">{tn.name}</p>

@@ -1,4 +1,5 @@
 import axios, { AxiosInstance } from 'axios'
+import { applyStoredAuth } from './authHeaders'
 
 /**
  * MCP operations client — aligned 1:1 with backend/app/api/mcp.py
@@ -165,13 +166,7 @@ class McpOpsClient {
       headers: { 'Content-Type': 'application/json' },
     })
     // Same auth convention as services/api.ts: Bearer token from localStorage.
-    this.client.interceptors.request.use((config) => {
-      const token = localStorage.getItem('auth_token')
-      if (token) {
-        config.headers.Authorization = `Bearer ${token}`
-      }
-      return config
-    })
+    this.client.interceptors.request.use(applyStoredAuth)
   }
 
   private async unwrap<T>(promise: Promise<{ data: T }>): Promise<T> {

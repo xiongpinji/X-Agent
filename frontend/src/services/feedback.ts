@@ -1,4 +1,5 @@
 import axios, { AxiosInstance } from 'axios'
+import { applyStoredAuth } from './authHeaders'
 
 export interface Feedback {
   id: string
@@ -127,13 +128,7 @@ class FeedbackService {
 
   private setupInterceptors() {
     this.client.interceptors.request.use(
-      (config) => {
-        const token = localStorage.getItem('auth_token')
-        if (token) {
-          config.headers.Authorization = `Bearer ${token}`
-        }
-        return config
-      },
+      applyStoredAuth,
       (error) => Promise.reject(error)
     )
 

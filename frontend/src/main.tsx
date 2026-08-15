@@ -39,21 +39,12 @@ if ('PerformanceObserver' in window) {
 
 // Lazy load non-critical resources
 const loadNonCriticalResources = () => {
-  // Preload fonts
-  const link = document.createElement('link')
-  link.rel = 'preload'
-  link.as = 'font'
-  link.href = '/fonts/inter.woff2'
-  link.type = 'font/woff2'
-  link.crossOrigin = 'anonymous'
-  document.head.appendChild(link)
-
   // Prefetch API endpoints
   if ('requestIdleCallback' in window) {
     requestIdleCallback(() => {
       const link = document.createElement('link')
       link.rel = 'prefetch'
-      link.href = '/api/health'
+      link.href = '/api/v1/health/live'
       document.head.appendChild(link)
     })
   }

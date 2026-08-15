@@ -73,7 +73,7 @@ export const useAppStore = create<AppState>()(
 
       // UI state
       theme: 'light',
-      sidebarOpen: true,
+      sidebarOpen: false,
       toggleTheme: () =>
         set((state) => ({
           theme: state.theme === 'light' ? 'dark' : 'light',
@@ -163,9 +163,14 @@ export const useAppStore = create<AppState>()(
       name: 'x-agent-store',
       partialize: (state) => ({
         theme: state.theme,
-        sidebarOpen: state.sidebarOpen,
         user: state.user,
         isAuthenticated: !!state.user,
+      }),
+      merge: (persistedState, currentState) => ({
+        ...currentState,
+        ...(persistedState as Partial<AppState>),
+        // Ignore legacy persisted UI state so mobile never boots behind an overlay.
+        sidebarOpen: false,
       }),
     }
   )

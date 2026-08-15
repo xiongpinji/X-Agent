@@ -1,4 +1,5 @@
 import axios, { AxiosInstance } from 'axios'
+import { applyStoredAuth } from './authHeaders'
 
 /**
  * Observability operations service — 封装已核对的真实后端端点
@@ -130,13 +131,7 @@ class ObservabilityOpsClient {
       timeout: 30000,
       headers: { 'Content-Type': 'application/json' },
     })
-    this.client.interceptors.request.use((config) => {
-      const token = localStorage.getItem('auth_token')
-      if (token) {
-        config.headers.Authorization = `Bearer ${token}`
-      }
-      return config
-    })
+    this.client.interceptors.request.use(applyStoredAuth)
   }
 
   // ── Metrics: /api/v1/metrics (backend: api/metrics.py) ────────────────────

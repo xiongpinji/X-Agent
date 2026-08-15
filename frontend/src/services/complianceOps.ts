@@ -1,4 +1,5 @@
 import axios, { AxiosInstance } from 'axios'
+import { applyStoredAuth } from './authHeaders'
 
 /**
  * Compliance operations service — GDPR 数据主体权利 + SOC2 合规端点。
@@ -166,13 +167,7 @@ class ComplianceOpsClient {
       timeout: 30000,
       headers: { 'Content-Type': 'application/json' },
     })
-    this.client.interceptors.request.use((config) => {
-      const token = localStorage.getItem('auth_token')
-      if (token) {
-        config.headers.Authorization = `Bearer ${token}`
-      }
-      return config
-    })
+    this.client.interceptors.request.use(applyStoredAuth)
   }
 
   // ── GDPR 数据主体权利 ──────────────────────────────────────────────────────

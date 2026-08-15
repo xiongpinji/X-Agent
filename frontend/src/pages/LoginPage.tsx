@@ -32,9 +32,15 @@ export const LoginPage: React.FC = () => {
       try {
         setLoading(true)
         localStorage.setItem('api_key', apiKey.trim())
-        setUser({ id: 'api-key-user', name: 'Developer', email: 'dev@local' })
+        const principal = await apiClient.getCurrentPrincipal()
+        setUser({
+          id: principal.user_id || 'api-key-user',
+          name: principal.role || 'API Key User',
+          email: 'API Key authenticated',
+        })
         navigate('/')
       } catch (err: any) {
+        localStorage.removeItem('api_key')
         setError(toErrorMessage(err, 'API Key login failed'))
       } finally {
         setLoading(false)
@@ -114,7 +120,11 @@ export const LoginPage: React.FC = () => {
             'text-sm',
             theme === 'dark' ? 'text-slate-400' : 'text-slate-600'
           )}>
-            {mode === 'login' ? 'Sign in to your account' : 'Create a new account'}
+            {mode === 'apikey'
+              ? 'Authenticate with an API key'
+              : mode === 'login'
+                ? 'Sign in to your account'
+                : 'Create a new account'}
           </p>
         </div>
 

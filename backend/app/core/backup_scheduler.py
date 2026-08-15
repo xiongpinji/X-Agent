@@ -533,8 +533,13 @@ class BackupScheduler:
                             if not candidate.is_absolute():
                                 candidate = _PROJECT_ROOT / candidate
                             if candidate.exists():
-                                rel = candidate.relative_to(_PROJECT_ROOT)
-                                file_map[fname] = str(rel)
+                                try:
+                                    original_path = candidate.relative_to(_PROJECT_ROOT)
+                                except ValueError:
+                                    # Configured stores may live outside the checkout.
+                                    # Restore already accepts absolute paths.
+                                    original_path = candidate
+                                file_map[fname] = str(original_path)
                                 break
 
             manifest = {

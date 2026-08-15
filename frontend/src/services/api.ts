@@ -1,4 +1,11 @@
 import axios, { AxiosInstance, AxiosError } from 'axios'
+import { applyStoredAuth } from './authHeaders'
+
+const redirectToLogin = () => {
+  if (window.location.pathname !== '/login') {
+    window.location.href = '/login'
+  }
+}
 
 /**
  * API client aligned with the real backend routes (re-verified against the
@@ -332,19 +339,7 @@ class ApiClient {
 
   private setupInterceptors() {
     this.client.interceptors.request.use(
-      (config) => {
-        const token = localStorage.getItem('auth_token')
-        if (token) {
-          config.headers.Authorization = `Bearer ${token}`
-        }
-        // API-key(dev)登录的凭证也要实际发送——否则登录后所有请求匿名 401,
-        // 响应拦截器再把用户踢回 /login(2026-08-14 实测发现的死循环)。
-        const apiKey = localStorage.getItem('api_key')
-        if (apiKey) {
-          config.headers['x-api-key'] = apiKey
-        }
-        return config
-      },
+      applyStoredAuth,
       (error) => Promise.reject(error)
     )
 
@@ -368,11 +363,13 @@ class ApiClient {
               // Refresh failed, force logout
               localStorage.removeItem('auth_token')
               localStorage.removeItem('refresh_token')
-              window.location.href = '/login'
+              localStorage.removeItem('api_key')
+              redirectToLogin()
             }
           } else {
             localStorage.removeItem('auth_token')
-            window.location.href = '/login'
+            localStorage.removeItem('api_key')
+            redirectToLogin()
           }
         }
         return Promise.reject(error)
@@ -617,6 +614,15 @@ class ApiClient {
       email,
       password,
     })
+    return response.data
+  }
+
+  async getCurrentPrincipal(): Promise<{
+    user_id?: string
+    tenant_id?: string
+    role?: string
+  }> {
+    const response = await this.client.get('/auth/me')
     return response.data
   }
 

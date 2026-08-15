@@ -1,4 +1,5 @@
 import axios, { AxiosInstance } from 'axios'
+import { applyStoredAuth } from './authHeaders'
 
 /**
  * Workflow operations service — 封装三组已核对的真实后端端点
@@ -210,13 +211,7 @@ class WorkflowOpsClient {
       timeout: 30000,
       headers: { 'Content-Type': 'application/json' },
     })
-    this.client.interceptors.request.use((config) => {
-      const token = localStorage.getItem('auth_token')
-      if (token) {
-        config.headers.Authorization = `Bearer ${token}`
-      }
-      return config
-    })
+    this.client.interceptors.request.use(applyStoredAuth)
   }
 
   // ── 调度: /api/v1/workflows/schedules 系列 ────────────────────────────────
