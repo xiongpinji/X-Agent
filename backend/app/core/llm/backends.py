@@ -12,10 +12,13 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import hashlib
 import logging
 import time
+import uuid
 from collections.abc import AsyncGenerator
 from dataclasses import dataclass, field
+from decimal import Decimal
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -191,6 +194,38 @@ class LLMBackendError(RuntimeError):
     """Raised when a provider backend cannot complete a chat request."""
 
 
+class LLMSubmissionUnknownError(RuntimeError):
+    """The provider request may have been accepted; automatic replay is unsafe."""
+
+
+class LLMReplayBlockedError(RuntimeError):
+    """A durable reservation already exists, so the provider is not replayed."""
+
+
+class LLMReservationPersistenceError(RuntimeError):
+    """Billing state could not be persisted after a provider lifecycle step."""
+
+
+def _is_ambiguous_submission_error(exc: BaseException) -> bool:
+    if isinstance(exc, (TimeoutError, ConnectionError, asyncio.TimeoutError)):
+        return True
+    return exc.__class__.__name__ in {
+        "APIConnectionError",
+        "APITimeoutError",
+        "ConnectError",
+        "ConnectTimeout",
+        "ConnectionError",
+        "NetworkError",
+        "PoolTimeout",
+        "ReadError",
+        "ReadTimeout",
+        "RemoteProtocolError",
+        "TimeoutException",
+        "WriteError",
+        "WriteTimeout",
+    }
+
+
 class MockLLMBackend(BaseLLMBackend):
     """Deterministic local LLM substitute for tests and first-run smoke checks."""
 
@@ -251,6 +286,7 @@ class OpenAIBackend(BaseLLMBackend):
         rate_limit_rpm: int = 3500,
         timeout: float = 30.0,
         max_connections: int = 100,
+        max_output_tokens: int = 4096,
     ) -> None:
         self.name = name
         self.api_key = api_key
@@ -261,6 +297,7 @@ class OpenAIBackend(BaseLLMBackend):
         self.rate_limit_rpm = rate_limit_rpm
         self.timeout = timeout
         self.max_connections = max_connections
+        self.max_output_tokens = max_output_tokens
         self._request_times: list[float] = []
         self._lock = asyncio.Lock()
         self._client: Any = None  # Persistent client with connection pool
@@ -336,15 +373,17 @@ class OpenAIBackend(BaseLLMBackend):
         try:
             await self._check_rate_limit()
             return await asyncio.wait_for(coro_factory(), timeout=self.timeout)
-        except (TimeoutError, Exception) as exc:
+        except Exception as exc:
+            if _is_ambiguous_submission_error(exc):
+                raise LLMSubmissionUnknownError(
+                    f"{self.name} submission result is unknown"
+                ) from exc
             if attempt < self.max_retries:
-                delay = self.retry_delay * (2 ** attempt)
-                logger.warning(
-                    f"Attempt {attempt + 1} failed: {exc}. Retrying in {delay}s..."
-                )
-                await asyncio.sleep(delay)
+                await asyncio.sleep(self.retry_delay * (2**attempt))
                 return await self._retry_with_backoff(coro_factory, attempt + 1)
-            raise LLMBackendError(f"{self.name} failed after {self.max_retries} retries: {exc}") from exc
+            raise LLMBackendError(
+                f"{self.name} failed after {self.max_retries} retries"
+            ) from exc
     async def chat(
         self,
         messages: list[dict[str, str]],
@@ -362,6 +401,7 @@ class OpenAIBackend(BaseLLMBackend):
                 "model": self.model,
                 "messages": messages,
                 "temperature": 0.7,
+                "max_tokens": self.max_output_tokens,
             }
 
             if tools:
@@ -421,6 +461,8 @@ class OpenAIBackend(BaseLLMBackend):
                 latency_ms=latency_ms,
             )
 
+        except LLMSubmissionUnknownError:
+            raise
         except Exception as exc:
             if _OpenAIAPIError is not None and isinstance(exc, _OpenAIAPIError):
                 raise LLMBackendError(f"{self.name} API error: {exc}") from exc
@@ -449,6 +491,7 @@ class OpenAIBackend(BaseLLMBackend):
                 "messages": messages,
                 "temperature": 0.7,
                 "stream": True,
+                "max_tokens": self.max_output_tokens,
             }
 
             if tools:
@@ -474,6 +517,8 @@ class OpenAIBackend(BaseLLMBackend):
                     if delta.content:
                         yield delta.content
 
+        except LLMSubmissionUnknownError:
+            raise
         except Exception as exc:
             raise LLMBackendError(f"{self.name} streaming failed: {exc}") from exc
 class OpenAIResponsesBackend(BaseLLMBackend):
@@ -490,11 +535,13 @@ class OpenAIResponsesBackend(BaseLLMBackend):
         *,
         base_url: str | None = None,
         name: str = "openai",
+        max_output_tokens: int = 4096,
     ) -> None:
         self.name = name
         self.api_key = api_key
         self.model = model
         self.base_url = base_url
+        self.max_output_tokens = max_output_tokens
 
     async def chat(
         self,
@@ -515,8 +562,13 @@ class OpenAIResponsesBackend(BaseLLMBackend):
             response = await client.responses.create(
                 model=self.model,
                 input=self._to_response_input(messages),
+                max_output_tokens=self.max_output_tokens,
             )
         except Exception as exc:
+            if _is_ambiguous_submission_error(exc):
+                raise LLMSubmissionUnknownError(
+                    f"{self.name} submission result is unknown"
+                ) from exc
             if _OpenAIAPIError is not None and isinstance(exc, _OpenAIAPIError):
                 raise LLMBackendError(f"{self.name} API error: {exc}") from exc
             raise LLMBackendError(f"{self.name} backend failed: {exc}") from exc
@@ -564,15 +616,63 @@ class LLMRouter:
         backends: list[BaseLLMBackend] | None = None,
         *,
         quota_manager: Any | None = None,
+        reservation_store: Any | None = None,
     ) -> None:
         if backend and backends:
             raise ValueError("Pass either backend or backends, not both.")
         self._backends = backends or [backend or MockLLMBackend()]
         self._quota_manager = quota_manager
+        self._reservation_store = reservation_store
 
     @property
     def quota_manager(self) -> Any | None:
         return self._quota_manager
+
+    @property
+    def reservation_store(self) -> Any | None:
+        return self._reservation_store
+
+    @staticmethod
+    def provider_attempt_id(
+        root_operation_id: str,
+        attempt_index: int,
+        backend: BaseLLMBackend,
+    ) -> str:
+        identity = (
+            f"{root_operation_id}\0{attempt_index}\0{backend.name}\0"
+            f"{getattr(backend, 'model', backend.name)}"
+        )
+        digest = hashlib.sha256(identity.encode("utf-8")).hexdigest()
+        return f"llm-attempt-{digest}"
+
+    @staticmethod
+    def _total_tokens(tokens_used: Any) -> int:
+        if isinstance(tokens_used, dict):
+            if "total" in tokens_used:
+                return int(tokens_used["total"] or 0)
+            return int(tokens_used.get("input", 0) or 0) + int(
+                tokens_used.get("output", 0) or 0
+            )
+        return int(tokens_used or 0)
+
+    @staticmethod
+    def _estimated_cost(
+        backend: BaseLLMBackend, messages: list[dict[str, str]]
+    ) -> Decimal:
+        input_characters = sum(len(str(message.get("content", ""))) for message in messages)
+        input_tokens = max(1, (input_characters + 3) // 4)
+        output_tokens = int(
+            getattr(
+                backend,
+                "max_output_tokens",
+                getattr(backend, "max_tokens", 4096),
+            )
+        )
+        estimate = TokenUsage(
+            prompt_tokens=input_tokens,
+            completion_tokens=max(0, output_tokens),
+        ).calculate_cost(str(getattr(backend, "model", backend.name)))
+        return Decimal(str(estimate))
 
     def _order_backends(
         self,
@@ -601,6 +701,9 @@ class LLMRouter:
         task_type: Any = None,
         strategy: Any = None,
         response_format: dict[str, Any] | None = None,
+        operation_id: str | None = None,
+        run_id: str | None = None,
+        trace_id: str | None = None,
     ) -> LLMResponse:
         if self._quota_manager is not None:
             await self._quota_manager.check_quota(tenant_id, user_id)
@@ -609,7 +712,11 @@ class LLMRouter:
         try:
             from backend.app.settings import get_settings
             _s = get_settings()
-            if _s.moa_enabled and len(self._backends) >= 2:
+            if (
+                self._reservation_store is None
+                and _s.moa_enabled
+                and len(self._backends) >= 2
+            ):
                 from backend.app.core.llm.moa import MoAConfig, MoAEngine
                 moa_engine = MoAEngine(backends=list(self._backends))
                 moa_cfg = MoAConfig(
@@ -630,14 +737,107 @@ class LLMRouter:
             logger.warning("MoA path failed, falling back to sequential: %s", moa_exc)
 
         last_error: Exception | None = None
-        for backend in self._order_backends(
+        root_operation_id = operation_id or f"llm-{uuid.uuid4().hex}"
+        ordered_backends = self._order_backends(
             messages, tools, task_type=task_type, strategy=strategy
-        ):
+        )
+        for attempt_index, backend in enumerate(ordered_backends):
+            attempt_operation_id: str | None = None
+            if self._reservation_store is not None:
+                if not tenant_id:
+                    raise LLMReservationPersistenceError(
+                        "tenant_id is required for durable usage reservation"
+                    )
+                attempt_operation_id = self.provider_attempt_id(
+                    root_operation_id, attempt_index, backend
+                )
+                try:
+                    reservation = await self._reservation_store.reserve(
+                        tenant_id=tenant_id,
+                        user_id=user_id,
+                        operation_id=attempt_operation_id,
+                        root_operation_id=root_operation_id,
+                        provider=backend.name,
+                        model=str(getattr(backend, "model", backend.name)),
+                        estimated_cost=self._estimated_cost(backend, messages),
+                        run_id=run_id,
+                        trace_id=trace_id,
+                        request_payload={"messages": messages, "tools": tools},
+                    )
+                except Exception as exc:
+                    raise LLMReservationPersistenceError(
+                        "usage reservation could not be persisted"
+                    ) from exc
+                if not reservation.created:
+                    raise LLMReplayBlockedError(
+                        "provider replay blocked by an existing reservation"
+                    )
             try:
-                response = await backend.chat(messages, tools, response_format=response_format)
+                if response_format is None:
+                    response = await backend.chat(messages, tools)
+                else:
+                    response = await backend.chat(
+                        messages,
+                        tools,
+                        response_format=response_format,
+                    )
+            except LLMSubmissionUnknownError as exc:
+                if self._reservation_store is not None and attempt_operation_id:
+                    try:
+                        await self._reservation_store.mark_submission_unknown(
+                            attempt_operation_id,
+                            tenant_id=tenant_id,
+                            reason_code=exc.__class__.__name__,
+                        )
+                    except Exception as persistence_exc:
+                        raise LLMReservationPersistenceError(
+                            "unknown submission state could not be persisted"
+                        ) from persistence_exc
+                raise
             except LLMBackendError as exc:
                 last_error = exc
+                if self._reservation_store is not None and attempt_operation_id:
+                    try:
+                        await self._reservation_store.refund(
+                            attempt_operation_id,
+                            tenant_id=tenant_id,
+                            reason_code=exc.__class__.__name__,
+                        )
+                    except Exception as persistence_exc:
+                        raise LLMReservationPersistenceError(
+                            "provider failure refund could not be persisted"
+                        ) from persistence_exc
                 continue
+            except Exception as exc:
+                if not _is_ambiguous_submission_error(exc):
+                    raise
+                unknown_error = LLMSubmissionUnknownError(
+                    f"{backend.name} submission result is unknown"
+                )
+                if self._reservation_store is not None and attempt_operation_id:
+                    try:
+                        await self._reservation_store.mark_submission_unknown(
+                            attempt_operation_id,
+                            tenant_id=tenant_id,
+                            reason_code=unknown_error.__class__.__name__,
+                        )
+                    except Exception as persistence_exc:
+                        raise LLMReservationPersistenceError(
+                            "unknown submission state could not be persisted"
+                        ) from persistence_exc
+                raise unknown_error from exc
+            if self._reservation_store is not None and attempt_operation_id:
+                try:
+                    await self._reservation_store.confirm(
+                        attempt_operation_id,
+                        tenant_id=tenant_id,
+                        actual_cost=Decimal(str(response.cost or 0)),
+                        tokens_used=self._total_tokens(response.tokens_used),
+                    )
+                except Exception as exc:
+                    raise LLMReservationPersistenceError(
+                        "provider success settlement could not be persisted"
+                    ) from exc
             if self._quota_manager is not None:
                 await self._quota_manager.record_usage(
                     tenant_id, user_id, response.tokens_used, response.cost
@@ -693,6 +893,7 @@ def build_llm_router(
     quota_manager: Any | None = None,
     quota_enabled: bool | None = None,
     selector: Any | None = None,
+    reservation_store: Any | None = None,
 ) -> LLMRouter:
     """Build provider router from settings — the single construction entry point.
 
@@ -798,7 +999,11 @@ def build_llm_router(
     # --- Routing mode ---
     mode = (routing_mode or features.llm_routing_mode or "sequential").strip().lower()
     if mode == "sequential":
-        return LLMRouter(backends=backends, quota_manager=quota_manager)
+        return LLMRouter(
+            backends=backends,
+            quota_manager=quota_manager,
+            reservation_store=reservation_store,
+        )
     if mode == "smart":
         from backend.app.core.llm.profiles import build_selector, load_model_profiles
         from backend.app.core.llm.smart_router import SmartLLMRouter
@@ -808,16 +1013,14 @@ def build_llm_router(
                 model_profiles_path or features.llm_model_profiles_path
             )
             selector = build_selector(profile_config)
-        return SmartLLMRouter(
+        router = SmartLLMRouter(
             backends=backends,
             selector=selector,
             strategy=smart_strategy or features.llm_smart_strategy,
             quota_manager=quota_manager,
         )
+        router._reservation_store = reservation_store
+        return router
     raise ValueError(
         f"unknown llm routing mode '{mode}'; valid: 'sequential', 'smart'"
     )
-
-
-
-

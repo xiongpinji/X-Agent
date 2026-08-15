@@ -348,6 +348,11 @@ async def run_structured_output(payload: dict[str, Any] | None = None, principal
         model: str (optional) — model override
         temperature: float (optional, default 0.2)
     """
+    from backend.app.core.llm import (
+        LLMReplayBlockedError,
+        LLMReservationPersistenceError,
+        LLMSubmissionUnknownError,
+    )
     from backend.app.dependencies import get_llm_router
 
     request = payload or {}
@@ -374,6 +379,12 @@ async def run_structured_output(payload: dict[str, Any] | None = None, principal
                 user_id=principal.user_id,
                 response_format=response_format,
             )
+        except (
+            LLMReplayBlockedError,
+            LLMReservationPersistenceError,
+            LLMSubmissionUnknownError,
+        ):
+            raise
         except Exception:
             # Fallback: prompt-only approach for backends without response_format support
             response = await llm_router.chat(

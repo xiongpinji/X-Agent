@@ -591,21 +591,11 @@ def get_tool_catalog() -> "ToolCatalog":
 @lru_cache
 def get_agent() -> "AgentLoop":
     from backend.app.core.agent import AgentLoop
-    from backend.app.core.llm import build_llm_router
 
     settings = get_settings()
     tools = get_runtime_tool_registry()
     return AgentLoop(
-        llm_router=build_llm_router(
-            llm_backend=settings.llm_backend,
-            fallback_order=settings.llm_fallback_order,
-            openai_api_key=settings.openai_api_key,
-            openai_model=settings.openai_model,
-            openai_base_url=settings.openai_base_url,
-            deepseek_api_key=settings.deepseek_api_key,
-            deepseek_model=settings.deepseek_model,
-            deepseek_base_url=settings.deepseek_base_url,
-        ),
+        llm_router=get_llm_router(),
         memory=get_memory(),
         tools=tools,
         max_iterations=settings.max_iterations,
@@ -625,6 +615,17 @@ def get_orchestrator() -> "Orchestrator":
 
 
 @lru_cache
+def get_usage_reservation_store():
+    """Return the shared durable usage store with the process audit sink."""
+    from backend.app.core.billing.reservations import create_usage_reservation_store
+
+    return create_usage_reservation_store(
+        get_settings(),
+        audit_store=get_audit_store(),
+    )
+
+
+@lru_cache
 def get_llm_router():
     """Return the shared LLMRouter instance (cached)."""
     from backend.app.core.llm import build_llm_router
@@ -639,4 +640,5 @@ def get_llm_router():
         deepseek_api_key=settings.deepseek_api_key,
         deepseek_model=settings.deepseek_model,
         deepseek_base_url=settings.deepseek_base_url,
+        reservation_store=get_usage_reservation_store(),
     )

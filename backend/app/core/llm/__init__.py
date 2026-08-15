@@ -16,8 +16,11 @@ from .anthropic_backend import AnthropicBackend
 from .backends import (
     BaseLLMBackend,
     LLMBackendError,
+    LLMReplayBlockedError,
+    LLMReservationPersistenceError,
     LLMResponse,
     LLMRouter,
+    LLMSubmissionUnknownError,
     MockLLMBackend,
     OpenAIBackend,
     OpenAIResponsesBackend,
@@ -53,8 +56,11 @@ __all__ = [
     "CostTracker",
     "LLMBackendError",
     "LLMFeatureSettings",
+    "LLMReplayBlockedError",
+    "LLMReservationPersistenceError",
     "LLMResponse",
     "LLMRouter",
+    "LLMSubmissionUnknownError",
     "MockLLMBackend",
     "ModelProfile",
     # P1-08 routing convergence

@@ -20,7 +20,9 @@ from backend.app.core.llm.backends import (
     BaseLLMBackend,
     LLMBackendError,
     LLMResponse,
+    LLMSubmissionUnknownError,
     TokenUsage,
+    _is_ambiguous_submission_error,
     _normalize_tool_parameters,
 )
 
@@ -127,7 +129,7 @@ class AnthropicBackend(BaseLLMBackend):
                         kwargs: dict[str, Any] = {
                             "api_key": self.api_key,
                             "timeout": self.timeout,
-                            "max_retries": self.max_retries,
+                            "max_retries": 0,
                             "http_client": http_client,
                         }
                         if self.base_url:
@@ -164,7 +166,7 @@ class AnthropicBackend(BaseLLMBackend):
         kwargs: dict[str, Any] = {
             "api_key": self.api_key,
             "timeout": self.timeout,
-            "max_retries": self.max_retries,
+            "max_retries": 0,
         }
         if self.base_url:
             kwargs["base_url"] = self.base_url
@@ -196,6 +198,10 @@ class AnthropicBackend(BaseLLMBackend):
         try:
             response = await client.messages.create(**request_kwargs)
         except Exception as exc:
+            if _is_ambiguous_submission_error(exc):
+                raise LLMSubmissionUnknownError(
+                    f"{self.name} submission result is unknown"
+                ) from exc
             raise LLMBackendError(f"{self.name} backend failed: {exc}") from exc
 
         content_parts: list[str] = []
@@ -269,4 +275,8 @@ class AnthropicBackend(BaseLLMBackend):
                     if text:
                         yield text
         except Exception as exc:
+            if _is_ambiguous_submission_error(exc):
+                raise LLMSubmissionUnknownError(
+                    f"{self.name} submission result is unknown"
+                ) from exc
             raise LLMBackendError(f"{self.name} streaming failed: {exc}") from exc

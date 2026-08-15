@@ -7,13 +7,21 @@ from fastapi import APIRouter, Depends, Query
 
 from backend.app.api.errors import api_error
 from backend.app.core.admin import TenantCreateRequest, TenantUpdateRequest, tenant_store
+from backend.app.core.billing.reservations import SqlUsageReservationStore
 from backend.app.core.contracts import ErrorCode
 from backend.app.core.security import Principal
-from backend.app.dependencies import enforce_scope, get_current_principal
+from backend.app.dependencies import (
+    enforce_scope,
+    get_current_principal,
+    get_usage_reservation_store,
+)
 
 router = APIRouter(prefix="/api/v1/tenants", tags=["tenants"])
 extended_router = APIRouter(prefix="/api/v1/tenants", tags=["tenants-extended"])  # C2: unmounted
 PrincipalDependency = Annotated[Principal, Depends(get_current_principal)]
+BillingStoreDependency = Annotated[
+    SqlUsageReservationStore, Depends(get_usage_reservation_store)
+]
 
 
 @router.post("")
@@ -109,6 +117,7 @@ async def get_tenant_usage(
 async def get_tenant_billing(
     tenant_id: str,
     principal: PrincipalDependency,
+    billing_store: BillingStoreDependency,
     month: str | None = Query(None),
 ) -> dict[str, object]:
     """Get tenant billing information.
@@ -146,12 +155,19 @@ async def get_tenant_billing(
         now = datetime.now(UTC)
         billing_month = now.strftime("%Y-%m")
 
-    # NOTE: Requires billing database integration for real billing data
-    # This would involve:
-    # 1. Fetching plan details
-    # 2. Calculating usage-based charges
-    # 3. Retrieving payment status
-    # 4. Generating invoice data
+    try:
+        summary = await billing_store.monthly_summary(
+            tenant_id=tenant_id, month=billing_month
+        )
+    except ValueError:
+        raise api_error(
+            400,
+            ErrorCode.VALIDATION_ERROR,
+            "Invalid month format. Use YYYY-MM.",
+        ) from None
+
+    usage_amount = float(summary.confirmed_cost)
+    billing_status = "no_usage" if summary.reservation_count == 0 else "unsettled"
 
     return {
         "tenant_id": tenant_id,
@@ -159,10 +175,13 @@ async def get_tenant_billing(
         "billing_month": billing_month,
         "billing": {
             "plan_amount": 0.0,
-            "usage_amount": 0.0,
-            "total_amount": 0.0,
+            "usage_amount": usage_amount,
+            "total_amount": usage_amount,
             "currency": "USD",
-            "status": "paid",
+            "status": billing_status,
+            "confirmed_count": summary.confirmed_count,
+            "refunded_count": summary.refunded_count,
+            "submission_unknown_count": summary.submission_unknown_count,
         },
         "next_billing_date": (datetime.now(UTC) + timedelta(days=30)).isoformat(),
     }

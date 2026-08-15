@@ -24,8 +24,8 @@ if TYPE_CHECKING:
     from backend.app.core.hooks import HookManager
     from backend.app.core.hooks.types import HookEvent
     from backend.app.core.unified_memory import UnifiedMemorySystem
-import contextlib
 import asyncio
+import contextlib
 
 from backend.app.core import agents_md
 from backend.app.core.agent_context import AgentContextManager
@@ -42,7 +42,12 @@ from backend.app.core.context_compactor import ContextCompactor
 from backend.app.core.desktop import DesktopAutomationStore
 from backend.app.core.evolution import ReflectionRecord, evolution_store
 from backend.app.core.execution_planner import execution_planner
-from backend.app.core.llm import LLMRouter
+from backend.app.core.llm import (
+    LLMReplayBlockedError,
+    LLMReservationPersistenceError,
+    LLMRouter,
+    LLMSubmissionUnknownError,
+)
 from backend.app.core.memory import MemorySystem
 from backend.app.core.open_source_store import open_source_discovery_store
 from backend.app.core.orchestrator import Orchestrator
@@ -634,6 +639,8 @@ class AgentLoop:
                 messages, [],
                 tenant_id=context.tenant_id,
                 user_id=context.user_id,
+                run_id=context.trace_id,
+                trace_id=context.trace_id,
             )
             answer = (resp.content or "").strip()
             if not answer:
@@ -651,6 +658,12 @@ class AgentLoop:
                 execution_summary={"fast_path": True, "branch": "done", "model": resp.model, "tokens": resp.tokens_used, "context_management": {"enabled": False}},
                 snapshot={"fast_path": True},
             )
+        except (
+            LLMReplayBlockedError,
+            LLMReservationPersistenceError,
+            LLMSubmissionUnknownError,
+        ):
+            raise
         except Exception as exc:
             logger.debug("Fast-path LLM call failed, falling back to full pipeline: %s", exc)
             return None
@@ -1483,12 +1496,25 @@ class AgentLoop:
         )
         try:
             response = await asyncio.wait_for(
-                self.llm.chat([{"role": "user", "content": prompt}], []),
+                self.llm.chat(
+                    [{"role": "user", "content": prompt}],
+                    [],
+                    tenant_id=context.tenant_id,
+                    user_id=context.user_id,
+                    run_id=context.trace_id,
+                    trace_id=context.trace_id,
+                ),
                 timeout=45,
             )
             synthesized = (response.content or "").strip()
             if synthesized:
                 return synthesized
+        except (
+            LLMReplayBlockedError,
+            LLMReservationPersistenceError,
+            LLMSubmissionUnknownError,
+        ):
+            raise
         except Exception as exc:
             logger.debug("final answer synthesis failed, keeping original: %s", exc)
         return answer
@@ -2820,6 +2846,8 @@ class AgentLoop:
             self.tools.definitions_for_llm(),
             tenant_id=context.tenant_id,
             user_id=context.user_id,
+            run_id=context.trace_id,
+            trace_id=context.trace_id,
         )
         plan_text = response.content or ""
         if response.tool_calls:
