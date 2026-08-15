@@ -204,3 +204,39 @@ def test_invalid_create_payload_returns_422_without_writing(
     assert "validationerror" not in response.text.lower()
     assert list_response.status_code == 200
     assert list_response.json() == {"sessions": [], "total": 0}
+
+
+@pytest.mark.parametrize("raw_body", ["null", "[]", '"not-an-object"'])
+def test_create_requires_a_json_object_body_without_writing(
+    api_context: ApiContext,
+    raw_body: str,
+) -> None:
+    response = api_context.client.post(
+        "/api/v1/chat/history",
+        content=raw_body,
+        headers={"content-type": "application/json"},
+    )
+    list_response = api_context.client.get("/api/v1/chat/history")
+
+    assert response.status_code == 422
+    assert list_response.status_code == 200
+    assert list_response.json() == {"sessions": [], "total": 0}
+
+
+def test_create_requires_a_request_body_without_writing(api_context: ApiContext) -> None:
+    response = api_context.client.post("/api/v1/chat/history")
+    list_response = api_context.client.get("/api/v1/chat/history")
+
+    assert response.status_code == 422
+    assert list_response.status_code == 200
+    assert list_response.json() == {"sessions": [], "total": 0}
+
+
+def test_create_accepts_an_empty_json_object(api_context: ApiContext) -> None:
+    response = api_context.client.post("/api/v1/chat/history", json={})
+    list_response = api_context.client.get("/api/v1/chat/history")
+
+    assert response.status_code == 200
+    assert response.json()["title"] == ""
+    assert list_response.status_code == 200
+    assert list_response.json()["total"] == 1

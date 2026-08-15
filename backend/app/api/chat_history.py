@@ -115,13 +115,12 @@ async def get_chat_session(
 
 @router.post("/history")
 async def create_chat_session(
-    payload: CreateChatSessionRequest | None = None,
+    payload: CreateChatSessionRequest,
     principal: PrincipalDependency = None,
     store: StoreDependency = None,
 ) -> dict[str, Any]:
     """Create a new chat session."""
     enforce_scope(principal, "agent:run")
-    payload = payload or CreateChatSessionRequest()
     tenant_id = principal.tenant_id if principal else "default"
     user_id = principal.user_id if principal else "anonymous"
     session = await store.create_session(
