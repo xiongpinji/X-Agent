@@ -48,7 +48,7 @@ def api_context(tmp_path) -> Iterator[ApiContext]:
     app.dependency_overrides[get_current_principal] = lambda: principal["current"]
     app.dependency_overrides[chat_history.get_chat_history_store] = lambda: store
 
-    with TestClient(app) as client:
+    with TestClient(app, raise_server_exceptions=False) as client:
         yield ApiContext(client=client, principal=principal)
 
     import asyncio
@@ -147,3 +147,60 @@ def test_clear_only_removes_current_principals_sessions(api_context: ApiContext)
 
     api_context.principal["current"] = _principal("tenant-b", "user-a")
     assert api_context.client.get(f"/api/v1/chat/history/{other_tenant_session}").status_code == 200
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"role": "tool", "content": "invalid role"},
+        {"role": 123, "content": "invalid role type"},
+        {"role": "user", "content": 123},
+        {"role": "user", "content": ""},
+        {"role": "user", "content": "x" * 100_001},
+        {"role": "user", "content": "invalid metadata", "metadata": []},
+        {"role": "user"},
+    ],
+)
+def test_invalid_message_payload_returns_422_without_writing(
+    api_context: ApiContext,
+    payload: dict,
+) -> None:
+    session_id = _create_session(api_context, "Validation session")
+
+    response = api_context.client.post(
+        f"/api/v1/chat/history/{session_id}/messages",
+        json=payload,
+    )
+    session_response = api_context.client.get(f"/api/v1/chat/history/{session_id}")
+    list_response = api_context.client.get("/api/v1/chat/history")
+
+    assert response.status_code == 422
+    assert "traceback" not in response.text.lower()
+    assert "validationerror" not in response.text.lower()
+    assert session_response.status_code == 200
+    assert session_response.json()["messages"] == []
+    assert list_response.json()["sessions"][0]["message_count"] == 0
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"title": 123, "agent_id": "support-agent"},
+        {"title": "x" * 256, "agent_id": "support-agent"},
+        {"title": "valid", "agent_id": 123},
+        {"title": "valid", "agent_id": ""},
+        {"title": "valid", "agent_id": "x" * 65},
+    ],
+)
+def test_invalid_create_payload_returns_422_without_writing(
+    api_context: ApiContext,
+    payload: dict,
+) -> None:
+    response = api_context.client.post("/api/v1/chat/history", json=payload)
+    list_response = api_context.client.get("/api/v1/chat/history")
+
+    assert response.status_code == 422
+    assert "traceback" not in response.text.lower()
+    assert "validationerror" not in response.text.lower()
+    assert list_response.status_code == 200
+    assert list_response.json() == {"sessions": [], "total": 0}

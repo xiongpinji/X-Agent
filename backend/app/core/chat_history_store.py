@@ -18,11 +18,13 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    case,
     create_engine,
     delete,
     event,
     func,
     select,
+    update,
 )
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
@@ -329,13 +331,29 @@ class SqlChatHistoryStore:
         record: ChatMessageRecord,
     ) -> ChatMessageRecord | None:
         with self._session_factory() as session:
-            statement = select(ChatSessionModel).where(
-                ChatSessionModel.id == session_id,
-                ChatSessionModel.tenant_id == tenant_id,
-                ChatSessionModel.user_id == user_id,
+            title = ChatSessionModel.title
+            if record.role == "user":
+                title = case(
+                    (ChatSessionModel.title == "", record.content[:50]),
+                    else_=ChatSessionModel.title,
+                )
+            result = session.execute(
+                update(ChatSessionModel)
+                .where(
+                    ChatSessionModel.id == session_id,
+                    ChatSessionModel.tenant_id == tenant_id,
+                    ChatSessionModel.user_id == user_id,
+                )
+                .values(
+                    message_count=ChatSessionModel.message_count + 1,
+                    updated_at=case(
+                        (ChatSessionModel.updated_at < record.timestamp, record.timestamp),
+                        else_=ChatSessionModel.updated_at,
+                    ),
+                    title=title,
+                )
             )
-            chat_session = session.scalar(statement)
-            if chat_session is None:
+            if result.rowcount != 1:
                 return None
             session.add(
                 ChatMessageModel(
@@ -349,10 +367,6 @@ class SqlChatHistoryStore:
                     metadata_payload=record.metadata,
                 )
             )
-            chat_session.message_count += 1
-            chat_session.updated_at = record.timestamp
-            if not chat_session.title and record.role == "user":
-                chat_session.title = record.content[:50]
             session.commit()
         return record
 

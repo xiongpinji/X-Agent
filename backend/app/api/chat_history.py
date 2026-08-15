@@ -12,10 +12,10 @@ Endpoints:
 
 from __future__ import annotations
 
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from backend.app.core.chat_history_store import (
     ChatHistoryStore,
@@ -39,6 +39,17 @@ class SessionSummary(BaseModel):
     created_at: float
     updated_at: float
     message_count: int
+
+
+class CreateChatSessionRequest(BaseModel):
+    title: str = Field(default="", max_length=255, strict=True)
+    agent_id: str = Field(default="default", min_length=1, max_length=64, strict=True)
+
+
+class AddChatMessageRequest(BaseModel):
+    role: Literal["user", "assistant", "system"] = "user"
+    content: str = Field(min_length=1, max_length=100_000, strict=True)
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 # ─── Endpoints ─────────────────────────────────────────────────────────────────
@@ -104,20 +115,20 @@ async def get_chat_session(
 
 @router.post("/history")
 async def create_chat_session(
-    payload: dict[str, Any] | None = None,
+    payload: CreateChatSessionRequest | None = None,
     principal: PrincipalDependency = None,
     store: StoreDependency = None,
 ) -> dict[str, Any]:
     """Create a new chat session."""
     enforce_scope(principal, "agent:run")
-    payload = payload or {}
+    payload = payload or CreateChatSessionRequest()
     tenant_id = principal.tenant_id if principal else "default"
     user_id = principal.user_id if principal else "anonymous"
     session = await store.create_session(
         tenant_id=tenant_id,
         user_id=user_id,
-        title=payload.get("title", ""),
-        agent_id=payload.get("agent_id", "default"),
+        title=payload.title,
+        agent_id=payload.agent_id,
     )
     return {"id": session.id, "title": session.title, "created_at": session.created_at}
 
@@ -125,7 +136,7 @@ async def create_chat_session(
 @router.post("/history/{session_id}/messages")
 async def add_message_to_session(
     session_id: str,
-    payload: dict[str, Any],
+    payload: AddChatMessageRequest,
     principal: PrincipalDependency = None,
     store: StoreDependency = None,
 ) -> dict[str, Any]:
@@ -137,9 +148,9 @@ async def add_message_to_session(
         tenant_id=tenant_id,
         user_id=user_id,
         session_id=session_id,
-        role=payload.get("role", "user"),
-        content=payload.get("content", ""),
-        metadata=payload.get("metadata", {}),
+        role=payload.role,
+        content=payload.content,
+        metadata=payload.metadata,
     )
     if message is None:
         raise HTTPException(status_code=404, detail="Session not found")
