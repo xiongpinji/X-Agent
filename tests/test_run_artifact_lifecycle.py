@@ -373,7 +373,13 @@ def test_archive_is_rolled_back_when_required_audit_write_fails(
 def test_artifact_routes_are_mounted_and_reachable_in_production_app(
     tmp_path,
 ) -> None:
-    from backend.app.main import app
+    from backend.app import main as main_module
+
+    app = main_module.app
+    original_routes = list(app.router.routes)
+    original_startup_handlers = list(app.router.on_startup)
+    original_routers_registered = main_module._routers_registered
+    original_openapi_schema = app.openapi_schema
 
     manager = RunArtifactManager(
         tmp_path / "mounted-runs",
@@ -389,23 +395,48 @@ def test_artifact_routes_are_mounted_and_reachable_in_production_app(
     asyncio.run(manager.save_manifest(manifest))
     app.dependency_overrides[get_current_principal] = _principal
     app.dependency_overrides[get_run_artifact_manager] = lambda: manager
+
+    async def _forbid_lifespan_startup() -> None:
+        raise AssertionError("main route acceptance must not run application startup")
+
+    app.router.on_startup.insert(0, _forbid_lifespan_startup)
     try:
-        with TestClient(app) as client:
+        main_module._register_all_routers()
+        app.openapi_schema = None
+        client = TestClient(app)
+        try:
             paths = app.openapi()["paths"]
             assert "/api/v1/artifacts/runs/{run_id}/manifest" in paths
+            assert "/api/v1/artifacts/runs/{run_id}/archive" in paths
             assert "/api/v1/artifacts/{artifact_id}/download" in paths
+            assert "/api/v1/artifacts/archives/{archive_id}/download" in paths
             response = client.get(
                 "/api/v1/artifacts/runs/mounted-run/manifest",
                 headers={"Authorization": "Bearer test-token"},
             )
             assert response.status_code == 200
-            assert response.json()["run_id"] == "mounted-run"
+            payload = response.json()
+            assert payload["run_id"] == "mounted-run"
+            assert payload["tenant_id"] == "tenant-a"
+            assert payload["user_id"] == "user-a"
             stats = client.get(
                 "/api/v1/artifacts/stats",
                 headers={"Authorization": "Bearer test-token"},
             )
             assert stats.status_code == 200
+            assert stats.json()["total_artifacts"] == 0
             assert "storage_path" not in stats.json()
+        finally:
+            client.close()
     finally:
+        app.router.on_startup.remove(_forbid_lifespan_startup)
         app.dependency_overrides.pop(get_current_principal, None)
         app.dependency_overrides.pop(get_run_artifact_manager, None)
+        app.router.routes[:] = original_routes
+        main_module._routers_registered = original_routers_registered
+        app.openapi_schema = original_openapi_schema
+
+    assert app.router.routes == original_routes
+    assert app.router.on_startup == original_startup_handlers
+    assert main_module._routers_registered is original_routers_registered
+    assert app.openapi_schema is original_openapi_schema
