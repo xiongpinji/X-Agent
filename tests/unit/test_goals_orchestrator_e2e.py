@@ -15,7 +15,8 @@ from fastapi.testclient import TestClient
 import backend.app.api.goals as goals_module
 from backend.app.api.goals import _goals, router
 from backend.app.core.goal_mode import goal_orchestrator
-
+from backend.app.core.security import Principal
+from backend.app.dependencies import get_current_principal
 
 # ---------------------------------------------------------------------------
 # Mocks
@@ -30,7 +31,7 @@ class _MockLLMResponse:
 class _MockLLMRouter:
     """分解目标为 3 个子目标的 mock LLM。"""
 
-    async def chat(self, messages, tools=None):
+    async def chat(self, messages, tools=None, **_kwargs):
         return _MockLLMResponse('["收集资料", "撰写草稿", "审校定稿"]')
 
 
@@ -72,6 +73,13 @@ def client(tmp_path, monkeypatch):
     goals_module._tasks.clear()
     app = FastAPI()
     app.include_router(router)
+    app.dependency_overrides[get_current_principal] = lambda: Principal(
+        tenant_id="tenant-test",
+        user_id="user-test",
+        role="user",
+        scopes=["agent:read", "agent:run"],
+        authenticated=True,
+    )
     with TestClient(app) as c:
         yield c
     _goals.clear()

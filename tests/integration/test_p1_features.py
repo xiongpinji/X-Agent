@@ -9,9 +9,9 @@ Covers:
 """
 from __future__ import annotations
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -25,11 +25,21 @@ class TestGoalsAPI:
     @pytest.fixture(autouse=True)
     def setup(self):
         """Create fresh app + clear in-memory store for each test."""
-        from backend.app.api.goals import router as goals_router, _goals
+        from backend.app.api.goals import _goals
+        from backend.app.api.goals import router as goals_router
+        from backend.app.core.security import Principal
+        from backend.app.dependencies import get_current_principal
 
         _goals.clear()
         app = FastAPI()
         app.include_router(goals_router)
+        app.dependency_overrides[get_current_principal] = lambda: Principal(
+            tenant_id="tenant-test",
+            user_id="user-test",
+            role="user",
+            scopes=["agent:read", "agent:run"],
+            authenticated=True,
+        )
         self.client = TestClient(app)
 
     def test_create_goal(self):

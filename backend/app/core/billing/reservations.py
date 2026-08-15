@@ -729,6 +729,7 @@ class SqlUsageReservationStore:
                     trace_id=entry.payload.get("trace_id"),
                     run_id=entry.payload.get("run_id"),
                     details=entry.payload,
+                    event_id=entry.id,
                 )
                 audit_id = getattr(record, "id", None)
                 if not audit_id:

@@ -346,6 +346,58 @@ async def test_expired_delivery_lease_retries_with_the_same_event_id(tmp_path) -
 
 
 @pytest.mark.asyncio
+async def test_outbox_retry_is_idempotent_in_real_audit_store(tmp_path, monkeypatch) -> None:
+    from backend.app.core.audit import AuditStore
+
+    store = SqlUsageReservationStore(
+        f"sqlite:///{(tmp_path / 'usage.db').as_posix()}",
+        create_schema=True,
+    )
+    await store.reserve(
+        tenant_id="tenant-a",
+        user_id="user-a",
+        operation_id="op-audit-idempotent",
+        root_operation_id="root-audit-idempotent",
+        provider="mock",
+        model="mock-v1",
+        estimated_cost=Decimal("0.001"),
+    )
+    await store.confirm(
+        tenant_id="tenant-a",
+        operation_id="op-audit-idempotent",
+        actual_cost=Decimal("0.001"),
+        tokens_used=3,
+    )
+    audit = AuditStore(storage_path=tmp_path / "audit.jsonl")
+    real_mark = store._mark_outbox_delivered
+    mark_calls = 0
+
+    def fail_first_mark(*args, **kwargs):
+        nonlocal mark_calls
+        mark_calls += 1
+        if mark_calls == 1:
+            raise OSError("simulated mark crash")
+        return real_mark(*args, **kwargs)
+
+    monkeypatch.setattr(store, "_mark_outbox_delivered", fail_first_mark)
+    with pytest.raises(OSError, match="mark crash"):
+        await store.deliver_pending(audit, lease_seconds=0.01)
+    assert audit.count() == 1
+
+    await asyncio.sleep(0.02)
+    assert await store.deliver_pending(audit, lease_seconds=0.01) == 2
+    assert audit.count() == 2
+    records = audit.list(resource_type="usage_reservation")
+    assert {record.action for record in records} == {
+        "usage.reserved",
+        "usage.confirmed",
+    }
+    outbox = await store.list_outbox(operation_id="op-audit-idempotent")
+    assert {record.id for record in records} == {entry.id for entry in outbox}
+    assert all(entry.status == "delivered" for entry in outbox)
+
+
+@pytest.mark.asyncio
 async def test_cancelled_delivery_keeps_lease_for_same_event_retry(tmp_path) -> None:
     store = SqlUsageReservationStore(
         f"sqlite:///{(tmp_path / 'usage.db').as_posix()}", create_schema=True
@@ -464,6 +516,7 @@ async def test_structured_endpoint_explicitly_uses_billable_router(monkeypatch) 
     )
     payload = await agents.run_structured_output(
         {
+            "operation_id": "structured-op-1",
             "prompt": "return ok",
             "schema": {"type": "object", "properties": {"ok": {"type": "boolean"}}},
         },
@@ -471,4 +524,389 @@ async def test_structured_endpoint_explicitly_uses_billable_router(monkeypatch) 
     )
     assert payload["status"] == "completed"
     assert len(billable.calls) == 1
-    assert billable.calls[0]["operation_id"].endswith(":strict")
+    assert billable.calls[0]["operation_id"] == "structured-op-1:strict"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("operation_id", [None, "", "x" * 249])
+async def test_structured_endpoint_requires_bounded_operation_id_before_provider(
+    monkeypatch,
+    operation_id,
+) -> None:
+    from backend.app import dependencies
+    from backend.app.api import agents
+    from backend.app.api.errors import XAgentAPIError
+
+    class ProviderMustNotRun:
+        calls = 0
+
+        async def chat(self, *_args, **_kwargs):
+            self.calls += 1
+            raise AssertionError("provider must not run")
+
+    router = ProviderMustNotRun()
+    monkeypatch.setattr(dependencies, "get_billable_llm_router", lambda: router)
+    principal = Principal(
+        tenant_id="tenant-a",
+        user_id="user-a",
+        role="user",
+        scopes=["agent:run"],
+        authenticated=True,
+    )
+    request = {
+        "prompt": "return ok",
+        "schema": {"type": "object"},
+    }
+    if operation_id is not None:
+        request["operation_id"] = operation_id
+
+    with pytest.raises(XAgentAPIError) as caught:
+        await agents.run_structured_output(request, principal)
+
+    assert caught.value.status_code == 422
+    assert caught.value.code.value == "validation_error"
+    assert caught.value.message == "operation_id is required and must be at most 248 characters."
+    assert router.calls == 0
+
+
+@pytest.mark.asyncio
+async def test_structured_endpoint_failure_is_sanitized(monkeypatch) -> None:
+    from backend.app import dependencies
+    from backend.app.api import agents
+    from backend.app.api.errors import XAgentAPIError
+
+    class FailingRouter:
+        async def chat(self, *_args, **_kwargs):
+            raise RuntimeError("database-password-should-not-leak")
+
+    monkeypatch.setattr(dependencies, "get_billable_llm_router", lambda: FailingRouter())
+    principal = Principal(
+        tenant_id="tenant-a",
+        user_id="user-a",
+        role="user",
+        scopes=["agent:run"],
+        authenticated=True,
+    )
+
+    with pytest.raises(XAgentAPIError) as caught:
+        await agents.run_structured_output(
+            {
+                "operation_id": "structured-safe-error",
+                "prompt": "return ok",
+                "schema": {"type": "object"},
+            },
+            principal,
+        )
+
+    assert caught.value.status_code == 502
+    assert caught.value.message == "Structured output generation failed."
+    assert caught.value.details == {"error_code": "STRUCTURED_OUTPUT_FAILED"}
+
+
+@pytest.mark.asyncio
+async def test_structured_endpoint_replay_after_confirm_failure_does_not_call_provider(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    from backend.app import dependencies
+    from backend.app.api import agents
+    from backend.app.api.errors import XAgentAPIError
+    from backend.app.core.llm import BaseLLMBackend, LLMResponse, LLMRouter
+
+    class ConfirmFailsStore(SqlUsageReservationStore):
+        async def confirm(self, *args, **kwargs):
+            raise OSError("database unavailable")
+
+    class CountingBackend(BaseLLMBackend):
+        name = "fake"
+        model = "fake-v1"
+
+        def __init__(self):
+            self.calls = 0
+
+        async def chat(self, messages, tools, *, response_format=None):
+            self.calls += 1
+            return LLMResponse(
+                content='{"ok":true}',
+                model=self.model,
+                tokens_used=3,
+                cost=0.001,
+            )
+
+    store = ConfirmFailsStore(
+        f"sqlite:///{(tmp_path / 'usage.db').as_posix()}",
+        create_schema=True,
+    )
+    backend = CountingBackend()
+    router = LLMRouter(backends=[backend], reservation_store=store)
+    monkeypatch.setattr(dependencies, "get_billable_llm_router", lambda: router)
+    principal = Principal(
+        tenant_id="tenant-a",
+        user_id="user-a",
+        role="user",
+        scopes=["agent:run"],
+        authenticated=True,
+    )
+    request = {
+        "operation_id": "structured-confirm-failure",
+        "prompt": "return ok",
+        "schema": {"type": "object"},
+    }
+
+    with pytest.raises(XAgentAPIError) as first:
+        await agents.run_structured_output(request, principal)
+    with pytest.raises(XAgentAPIError) as replay:
+        await agents.run_structured_output(request, principal)
+
+    assert first.value.status_code == 502
+    assert replay.value.status_code == 409
+    assert replay.value.code.value == "resource_conflict"
+    assert replay.value.message == "Structured operation cannot be replayed."
+    assert replay.value.details == {"error_code": "STRUCTURED_OPERATION_CONFLICT"}
+    assert backend.calls == 1
+
+
+@pytest.mark.parametrize("operation_id", [None, "", "x" * 221])
+def test_ultra_request_requires_bounded_operation_id_before_provider(
+    operation_id,
+    monkeypatch,
+) -> None:
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from backend.app import dependencies
+    from backend.app.api.parallel_agents import router
+    from backend.app.dependencies import get_current_principal
+
+    class ProviderMustNotRun:
+        calls = 0
+
+        async def chat(self, *_args, **_kwargs):
+            self.calls += 1
+            raise AssertionError("provider must not run")
+
+    provider = ProviderMustNotRun()
+    monkeypatch.setattr(dependencies, "get_billable_llm_router", lambda: provider)
+    app = FastAPI()
+    app.include_router(router)
+    app.dependency_overrides[get_current_principal] = lambda: Principal(
+        tenant_id="tenant-a",
+        user_id="user-a",
+        role="user",
+        scopes=["agent:run"],
+        authenticated=True,
+    )
+    request = {"task": "ship safely"}
+    if operation_id is not None:
+        request["operation_id"] = operation_id
+
+    with TestClient(app) as client:
+        response = client.post("/api/v1/agents/parallel/ultra", json=request)
+
+    assert response.status_code == 422
+    assert provider.calls == 0
+
+
+@pytest.mark.asyncio
+async def test_ultra_endpoint_uses_billable_router_with_stable_stage_correlation(
+    monkeypatch,
+) -> None:
+    from backend.app import dependencies
+    from backend.app.api import parallel_agents
+    from backend.app.api.parallel_agents import UltraRequest
+    from backend.app.core.llm import LLMResponse
+    from backend.app.settings import get_settings
+
+    settings = get_settings()
+
+    class RecordingRouter:
+        def __init__(self):
+            self.calls = []
+
+        async def chat(self, messages, tools, **kwargs):
+            self.calls.append(kwargs)
+            if len(self.calls) == 1:
+                return LLMResponse(
+                    content=(
+                        '[{"description":"one","focus_area":"a"},'
+                        '{"description":"two","focus_area":"b"}]'
+                    ),
+                    model="fake",
+                )
+            return LLMResponse(content="merged", model="fake")
+
+    class RecordingAgent:
+        def __init__(self):
+            self.contexts = []
+
+        async def run(self, context, task, metadata):
+            self.contexts.append(context)
+            return SimpleNamespace(answer=f"done:{task}")
+
+    router = RecordingRouter()
+    agent = RecordingAgent()
+    monkeypatch.setattr(dependencies, "get_billable_llm_router", lambda: router)
+    monkeypatch.setattr(dependencies, "get_agent", lambda: agent)
+    monkeypatch.setattr(
+        dependencies,
+        "get_llm_router",
+        lambda: (_ for _ in ()).throw(AssertionError("internal router used")),
+    )
+    monkeypatch.setattr(settings, "ultra_mode_enabled", True)
+    monkeypatch.setattr(settings, "ultra_max_agents", 4)
+    principal = Principal(
+        tenant_id="tenant-a",
+        user_id="user-a",
+        agent_id="agent-a",
+        role="user",
+        scopes=["agent:run"],
+        authenticated=True,
+    )
+
+    result = await parallel_agents.ultra_execute(
+        UltraRequest(task="one;two", operation_id="ultra-operation-1"),
+        principal,
+    )
+
+    assert result["status"] == "completed"
+    assert [call["operation_id"] for call in router.calls] == [
+        "ultra-operation-1:decompose",
+        "ultra-operation-1:merge",
+    ]
+    correlation = {
+        key: router.calls[0][key]
+        for key in ("tenant_id", "user_id", "run_id", "trace_id")
+    }
+    assert correlation["tenant_id"] == "tenant-a"
+    assert correlation["user_id"] == "user-a"
+    assert correlation["run_id"] == correlation["trace_id"]
+    assert router.calls[1] | correlation == router.calls[1]
+    assert len(agent.contexts) == 2
+    assert all(context.trace_id == correlation["trace_id"] for context in agent.contexts)
+    assert all(context.tenant_id == "tenant-a" for context in agent.contexts)
+
+
+def test_goals_resources_are_owner_scoped(tmp_path, monkeypatch) -> None:
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from backend.app.api import goals
+    from backend.app.dependencies import get_current_principal
+
+    tenant_a = Principal(
+        tenant_id="tenant-a",
+        user_id="user-a",
+        role="user",
+        scopes=["agent:read", "agent:run"],
+        authenticated=True,
+    )
+    tenant_b = Principal(
+        tenant_id="tenant-b",
+        user_id="user-b",
+        role="user",
+        scopes=["agent:read", "agent:run"],
+        authenticated=True,
+    )
+    other_user = Principal(
+        tenant_id="tenant-a",
+        user_id="user-b",
+        role="user",
+        scopes=["agent:read", "agent:run"],
+        authenticated=True,
+    )
+    monkeypatch.setattr(goals._store, "_path", tmp_path / "goals.json")
+    goals._goals.clear()
+    app = FastAPI()
+    app.include_router(goals.router)
+    app.dependency_overrides[get_current_principal] = lambda: tenant_a
+
+    with TestClient(app) as client:
+        created = client.post("/api/v1/goals", json={"objective": "private goal"})
+        assert created.status_code == 200
+        goal_id = created.json()["id"]
+        assert goals._goals[0]["tenant_id"] == "tenant-a"
+        assert goals._goals[0]["user_id"] == "user-a"
+
+        for foreign in (tenant_b, other_user):
+            app.dependency_overrides[get_current_principal] = (
+                lambda foreign=foreign: foreign
+            )
+            assert client.get("/api/v1/goals").json() == []
+            assert client.get(f"/api/v1/goals/{goal_id}").status_code == 404
+            assert client.post(f"/api/v1/goals/{goal_id}/start").status_code == 404
+            assert client.post(f"/api/v1/goals/{goal_id}/complete").status_code == 404
+            assert client.post(f"/api/v1/goals/{goal_id}/pause").status_code == 404
+            assert client.post(f"/api/v1/goals/{goal_id}/resume").status_code == 404
+            assert client.post(f"/api/v1/goals/{goal_id}/cancel").status_code == 404
+            assert client.get(f"/api/v1/goals/{goal_id}/history").status_code == 404
+    goals._goals.clear()
+
+
+def test_goal_api_wires_only_billable_router(monkeypatch) -> None:
+    from backend.app import dependencies
+    from backend.app.api import goals
+
+    billable = object()
+    agent = object()
+    monkeypatch.setattr(goals, "_orchestrator_wired", False)
+    monkeypatch.setattr(goals.goal_orchestrator, "llm_router", None)
+    monkeypatch.setattr(goals.goal_orchestrator, "agent_loop", None)
+    monkeypatch.setattr(dependencies, "get_billable_llm_router", lambda: billable)
+    monkeypatch.setattr(dependencies, "get_agent", lambda: agent)
+    monkeypatch.setattr(
+        dependencies,
+        "get_llm_router",
+        lambda: (_ for _ in ()).throw(AssertionError("internal router used")),
+    )
+
+    goals._wire_orchestrator()
+
+    assert goals.goal_orchestrator.llm_router is billable
+    assert goals.goal_orchestrator.agent_loop is agent
+
+
+@pytest.mark.asyncio
+async def test_goal_decompose_uses_stable_owner_correlation_and_propagates_billing_errors() -> None:
+    from backend.app.core.goal_mode import GoalModeOrchestrator
+    from backend.app.core.llm import LLMReplayBlockedError, LLMResponse
+
+    context = {
+        "tenant_id": "tenant-a",
+        "user_id": "user-a",
+        "goal_id": "goal-1",
+        "run_id": "goal-1",
+        "trace_id": "goal-1",
+    }
+
+    class RecordingRouter:
+        calls = []
+
+        async def chat(self, messages, tools, **kwargs):
+            self.calls.append(kwargs)
+            return LLMResponse(content='["step one"]', model="fake")
+
+    router = RecordingRouter()
+    result = await GoalModeOrchestrator(llm_router=router).execute_goal(
+        "ship",
+        context=context,
+        goal_id="goal-1",
+    )
+    assert result.status == "completed"
+    assert router.calls == [{
+        "tenant_id": "tenant-a",
+        "user_id": "user-a",
+        "run_id": "goal-1",
+        "trace_id": "goal-1",
+        "operation_id": "goal-1:decompose",
+    }]
+
+    class ReplayRouter:
+        async def chat(self, messages, tools, **kwargs):
+            raise LLMReplayBlockedError("must not downgrade")
+
+    with pytest.raises(LLMReplayBlockedError):
+        await GoalModeOrchestrator(llm_router=ReplayRouter()).execute_goal(
+            "ship",
+            context=context,
+            goal_id="goal-1",
+        )

@@ -9,7 +9,20 @@ from dataclasses import dataclass, field
 from typing import Any
 from uuid import uuid4
 
+from backend.app.core.contracts import RunContext
+from backend.app.core.llm import (
+    LLMReplayBlockedError,
+    LLMReservationPersistenceError,
+    LLMSubmissionUnknownError,
+)
+
 logger = logging.getLogger(__name__)
+
+_BILLING_CONTROL_ERRORS = (
+    LLMReplayBlockedError,
+    LLMReservationPersistenceError,
+    LLMSubmissionUnknownError,
+)
 
 
 class GoalControl:
@@ -158,6 +171,8 @@ class GoalModeOrchestrator:
             if result.status == "running":
                 result.status = "completed"
 
+        except _BILLING_CONTROL_ERRORS:
+            raise
         except Exception as e:
             result.status = "failed"
             result.output = str(e)
@@ -174,6 +189,11 @@ class GoalModeOrchestrator:
     async def _decompose_goal(self, goal: str, context: dict[str, Any]) -> list[SubGoal]:
         """Decompose a high-level goal into executable sub-goals."""
         if self.llm_router:
+            required = ("tenant_id", "user_id", "goal_id", "run_id", "trace_id")
+            if not all(context.get(key) for key in required):
+                raise LLMReservationPersistenceError(
+                    "goal billing correlation is required"
+                )
             try:
                 prompt = (
                     f"Decompose this goal into 3-7 concrete sub-goals:\n\n"
@@ -182,13 +202,23 @@ class GoalModeOrchestrator:
                     "Respond with a JSON array of strings, each describing one sub-goal."
                 )
                 messages = [{"role": "user", "content": prompt}]
-                response = await self.llm_router.chat(messages, tools=[])
+                response = await self.llm_router.chat(
+                    messages,
+                    tools=[],
+                    tenant_id=str(context["tenant_id"]),
+                    user_id=str(context["user_id"]),
+                    run_id=str(context["run_id"]),
+                    trace_id=str(context["trace_id"]),
+                    operation_id=f"{context['goal_id']}:decompose",
+                )
                 content = response.content if hasattr(response, "content") else str(response)
                 json_start = content.find("[")
                 json_end = content.rfind("]") + 1
                 if json_start >= 0 and json_end > json_start:
                     items = json.loads(content[json_start:json_end])
                     return [SubGoal(description=str(item)) for item in items]
+            except _BILLING_CONTROL_ERRORS:
+                raise
             except Exception as e:
                 logger.warning(f"Goal decomposition via LLM failed: {e}")
 
@@ -198,8 +228,19 @@ class GoalModeOrchestrator:
         """Execute a single sub-goal."""
         if self.agent_loop:
             try:
-                result = await self.agent_loop.run(context=context, task=subgoal.description)
+                agent_context = RunContext(
+                    trace_id=str(context["trace_id"]),
+                    tenant_id=str(context["tenant_id"]),
+                    user_id=str(context["user_id"]),
+                    agent_id=f"goal-{context['goal_id']}",
+                )
+                result = await self.agent_loop.run(
+                    context=agent_context,
+                    task=subgoal.description,
+                )
                 return result.output if hasattr(result, "output") else str(result)
+            except _BILLING_CONTROL_ERRORS:
+                raise
             except Exception as e:
                 return f"Error: {e}"
         return f"Executed: {subgoal.description}"

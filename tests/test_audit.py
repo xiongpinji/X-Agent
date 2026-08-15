@@ -1,4 +1,5 @@
 import json
+from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -48,6 +49,33 @@ def test_audit_store_persists_records(tmp_path) -> None:
     assert records[0].resource_id == "agent-1"
     assert records[0].hash is not None
     assert reloaded.verify_chain().valid is True
+
+
+def test_audit_event_id_is_idempotent_and_conflicts_fail_closed(tmp_path) -> None:
+    path = tmp_path / "audit.jsonl"
+    store = AuditStore(storage_path=path)
+    kwargs = {
+        "event_id": "usage-event-1",
+        "action": "usage.confirmed",
+        "resource_type": "usage_reservation",
+        "resource_id": "operation-1",
+        "tenant_id": "tenant-1",
+        "actor_id": "user-1",
+        "details": {"tokens": 3},
+    }
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first, second = list(pool.map(lambda _index: store.record(**kwargs), range(2)))
+
+    assert first.id == second.id == "usage-event-1"
+    assert store.count() == 1
+    assert len(path.read_text(encoding="utf-8").splitlines()) == 1
+    assert store.verify_chain().valid is True
+
+    with pytest.raises(ValueError, match="event_id"):
+        store.record(**{**kwargs, "details": {"tokens": 4}})
+    assert store.count() == 1
+    assert store.verify_chain().valid is True
 
 
 def test_audit_hmac_signature_detects_rehashed_tampering(tmp_path) -> None:

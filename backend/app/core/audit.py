@@ -43,6 +43,10 @@ class AuditChainVerification(BaseModel):
     reason: str | None = None
 
 
+class AuditEventConflictError(ValueError):
+    """Raised when an event id is reused for different audit content."""
+
+
 class AuditStore:
     def __init__(
         self,
@@ -85,33 +89,55 @@ class AuditStore:
         run_id: str | None = None,
         workflow_id: str | None = None,
         details: dict[str, Any] | None = None,
+        event_id: str | None = None,
     ) -> AuditLogRecord:
-        previous_hash = self._records[-1].hash if self._records else None
-        record = AuditLogRecord(
-            tenant_id=tenant_id,
-            actor_id=actor_id,
-            action=action,
-            resource_type=resource_type,
-            resource_id=resource_id,
-            outcome=outcome,
-            trace_id=trace_id,
-            run_id=run_id,
-            workflow_id=workflow_id,
-            details=details or {},
-            prev_hash=previous_hash,
-            snapshot={
-                "trace_id": trace_id,
-                "run_id": run_id,
-                "workflow_id": workflow_id,
-                "action": action,
-                "resource_type": resource_type,
-                "resource_id": resource_id,
-                "outcome": outcome,
-            },
-        )
-        record.hash = self._hash_record(record)
-        record.signature = self._signature_record(record)
+        if event_id is not None and not event_id.strip():
+            raise ValueError("event_id must not be empty")
+        event_content = {
+            "tenant_id": tenant_id,
+            "actor_id": actor_id,
+            "action": action,
+            "resource_type": resource_type,
+            "resource_id": resource_id,
+            "outcome": outcome,
+            "trace_id": trace_id,
+            "run_id": run_id,
+            "workflow_id": workflow_id,
+            "details": details or {},
+        }
         with self._lock:
+            if event_id is not None:
+                existing = next(
+                    (record for record in self._records if record.id == event_id),
+                    None,
+                )
+                if existing is not None:
+                    existing_content = {
+                        key: getattr(existing, key) for key in event_content
+                    }
+                    if existing_content != event_content:
+                        raise AuditEventConflictError(
+                            "event_id already exists with different audit content"
+                        )
+                    return existing
+
+            previous_hash = self._records[-1].hash if self._records else None
+            record = AuditLogRecord(
+                id=event_id or str(uuid4()),
+                **event_content,
+                prev_hash=previous_hash,
+                snapshot={
+                    "trace_id": trace_id,
+                    "run_id": run_id,
+                    "workflow_id": workflow_id,
+                    "action": action,
+                    "resource_type": resource_type,
+                    "resource_id": resource_id,
+                    "outcome": outcome,
+                },
+            )
+            record.hash = self._hash_record(record)
+            record.signature = self._signature_record(record)
             self._records.append(record)
             self._append_to_disk(record)
         return record

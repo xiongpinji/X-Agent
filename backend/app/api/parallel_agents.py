@@ -32,10 +32,11 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
+from hashlib import sha256
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from backend.app.core.agent_communication_bus import (
     AgentCommunicationBus,
@@ -774,10 +775,18 @@ async def orchestrator_pipeline(
 class UltraRequest(BaseModel):
     """Request for Ultra 4-Agent parallel execution."""
     task: str
+    operation_id: str = Field(min_length=1, max_length=220)
     max_agents: int = Field(default=4, ge=2, le=8)
     budget_tokens_per_agent: int = Field(default=50000, ge=1000, le=200000)
     timeout_seconds: int = Field(default=600, ge=60, le=3600)
     merge_strategy: str = "synthesize"  # synthesize | concat | vote
+
+    @field_validator("operation_id")
+    @classmethod
+    def _operation_id_must_not_be_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("operation_id must not be blank")
+        return value
 
 
 @router.post("/ultra")
@@ -792,16 +801,31 @@ async def ultra_execute(
     """
     enforce_scope(principal, "agent:run")
 
-    from backend.app.settings import settings
+    from backend.app.settings import get_settings
+
+    settings = get_settings()
     if not settings.ultra_mode_enabled:
         raise HTTPException(status_code=403, detail="Ultra mode is not enabled")
 
     try:
         from backend.app.core.ultra_mode import UltraConfig, UltraOrchestrator
-        from backend.app.dependencies import get_agent, get_llm_router
+        from backend.app.dependencies import get_agent, get_billable_llm_router
 
         agent_loop = get_agent()
-        llm_router = get_llm_router()
+        llm_router = get_billable_llm_router()
+        execution_id = "ultra-" + sha256(
+            (
+                f"{principal.tenant_id}\0{principal.user_id}\0"
+                f"{request.operation_id}"
+            ).encode()
+        ).hexdigest()[:32]
+        execution_context = {
+            "tenant_id": principal.tenant_id,
+            "user_id": principal.user_id,
+            "operation_id": request.operation_id,
+            "run_id": execution_id,
+            "trace_id": execution_id,
+        }
 
         config = UltraConfig(
             max_agents=min(request.max_agents, settings.ultra_max_agents),
@@ -811,21 +835,36 @@ async def ultra_execute(
         )
 
         # agent_factory: (task_description) -> coroutine returning output str
-        async def agent_factory(task_description: str) -> str:
+        async def agent_factory(
+            task_description: str,
+            context_data: dict[str, Any],
+        ) -> str:
             context = RunContext(
+                trace_id=context_data["trace_id"],
                 tenant_id=principal.tenant_id,
                 user_id=principal.user_id,
                 agent_id=f"ultra-{principal.agent_id}",
                 permission_scope=list(getattr(principal, "scopes", None) or []),
             )
-            response = await agent_loop.run(context, task_description, {})
+            response = await agent_loop.run(
+                context,
+                task_description,
+                {
+                    "operation_id": request.operation_id,
+                    "run_id": context_data["run_id"],
+                },
+            )
             return getattr(response, "answer", "") or ""
 
         orchestrator = UltraOrchestrator(
             agent_factory=agent_factory,
             llm_router=llm_router,
         )
-        result = await orchestrator.execute(request.task, {}, config)
+        result = await orchestrator.execute(
+            request.task,
+            execution_context,
+            config,
+        )
         return result.to_dict()
 
     except HTTPException:

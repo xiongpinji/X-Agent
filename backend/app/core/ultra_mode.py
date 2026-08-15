@@ -22,7 +22,19 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
+from backend.app.core.llm import (
+    LLMReplayBlockedError,
+    LLMReservationPersistenceError,
+    LLMSubmissionUnknownError,
+)
+
 logger = logging.getLogger(__name__)
+
+_BILLING_CONTROL_ERRORS = (
+    LLMReplayBlockedError,
+    LLMReservationPersistenceError,
+    LLMSubmissionUnknownError,
+)
 
 
 # ─── 数据模型 ─────────────────────────────────────────────────────────────────
@@ -145,10 +157,14 @@ class UltraOrchestrator:
         context = context or {}
         start_time = time.time()
 
-        result = UltraResult(task=task, merge_strategy=config.merge_strategy)
+        result = UltraResult(
+            execution_id=str(context.get("run_id") or uuid.uuid4()),
+            task=task,
+            merge_strategy=config.merge_strategy,
+        )
 
         # 1. 协调者拆分任务
-        subtasks = await self._decompose(task, config.max_agents)
+        subtasks = await self._decompose(task, config.max_agents, context)
         result.subtasks = subtasks
 
         if not subtasks:
@@ -183,7 +199,12 @@ class UltraOrchestrator:
         # 3. 聚合结果
         successful_outputs = [r.output for r in processed_results if r.status == "completed" and r.output]
         if successful_outputs:
-            result.merged_answer = await self._merge(task, successful_outputs, config.merge_strategy)
+            result.merged_answer = await self._merge(
+                task,
+                successful_outputs,
+                config.merge_strategy,
+                context,
+            )
             result.status = "completed" if result.agents_used == len(subtasks) else "partial"
         else:
             result.merged_answer = ""
@@ -200,7 +221,12 @@ class UltraOrchestrator:
         )
         return result
 
-    async def _decompose(self, task: str, max_agents: int) -> list[UltraSubTask]:
+    async def _decompose(
+        self,
+        task: str,
+        max_agents: int,
+        context: dict[str, Any],
+    ) -> list[UltraSubTask]:
         """使用 LLM 将复杂任务拆分为 N 个独立可并行的子任务."""
         if self._router is None:
             # 无 LLM 时按简单规则拆分
@@ -220,6 +246,7 @@ class UltraOrchestrator:
             response = await self._router.chat(
                 messages=[{"role": "user", "content": decompose_prompt}],
                 tools=[],
+                **self._stage_billing_context(context, "decompose"),
             )
             content = response.content or ""
             # 解析 JSON
@@ -234,6 +261,8 @@ class UltraOrchestrator:
                     focus_area=str(item.get("focus_area", "")),
                 ))
             return subtasks
+        except _BILLING_CONTROL_ERRORS:
+            raise
         except Exception as exc:
             logger.warning("LLM decompose failed, using heuristic: %s", exc)
             return self._heuristic_decompose(task, max_agents)
@@ -305,7 +334,13 @@ class UltraOrchestrator:
 
         return agent_result
 
-    async def _merge(self, task: str, outputs: list[str], strategy: str) -> str:
+    async def _merge(
+        self,
+        task: str,
+        outputs: list[str],
+        strategy: str,
+        context: dict[str, Any],
+    ) -> str:
         """聚合多个 Agent 的输出."""
         if len(outputs) == 1:
             return outputs[0]
@@ -332,12 +367,31 @@ class UltraOrchestrator:
                 response = await self._router.chat(
                     messages=[{"role": "user", "content": merge_prompt}],
                     tools=[],
+                    **self._stage_billing_context(context, "merge"),
                 )
                 return response.content or "\n\n".join(outputs)
+            except _BILLING_CONTROL_ERRORS:
+                raise
             except Exception as exc:
                 logger.warning("LLM merge failed, falling back to concat: %s", exc)
 
         return "\n\n---\n\n".join(outputs)
+
+    @staticmethod
+    def _stage_billing_context(
+        context: dict[str, Any],
+        stage: str,
+    ) -> dict[str, str]:
+        required = ("tenant_id", "user_id", "run_id", "trace_id", "operation_id")
+        if not all(context.get(key) for key in required):
+            return {}
+        return {
+            "tenant_id": str(context["tenant_id"]),
+            "user_id": str(context["user_id"]),
+            "run_id": str(context["run_id"]),
+            "trace_id": str(context["trace_id"]),
+            "operation_id": f"{context['operation_id']}:{stage}",
+        }
 
 
 # ─── 全局单例 ─────────────────────────────────────────────────────────────────

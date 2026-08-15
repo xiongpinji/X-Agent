@@ -6,7 +6,8 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from backend.app.api.goals import _goals, router
-
+from backend.app.core.security import Principal
+from backend.app.dependencies import get_current_principal
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -18,6 +19,13 @@ def client():
     """TestClient with only the goals router mounted."""
     app = FastAPI()
     app.include_router(router)
+    app.dependency_overrides[get_current_principal] = lambda: Principal(
+        tenant_id="tenant-test",
+        user_id="user-test",
+        role="user",
+        scopes=["agent:read", "agent:run"],
+        authenticated=True,
+    )
     return TestClient(app)
 
 

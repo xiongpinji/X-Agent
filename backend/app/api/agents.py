@@ -343,6 +343,7 @@ async def run_structured_output(payload: dict[str, Any] | None = None, principal
     """Codex-style structured output: force LLM to respond with a strict JSON schema.
 
     Body params:
+        operation_id: str (required, max 248 chars) — caller-stable idempotency key
         prompt: str (required) — the instruction/question
         schema: dict (required) — JSON Schema the response must conform to
         model: str (optional) — model override
@@ -363,6 +364,17 @@ async def run_structured_output(payload: dict[str, Any] | None = None, principal
         raise api_error(422, ErrorCode.VALIDATION_ERROR, "prompt is required.")
     if not schema or not isinstance(schema, dict):
         raise api_error(422, ErrorCode.VALIDATION_ERROR, "schema (JSON Schema object) is required.")
+    raw_operation_id = request.get("operation_id")
+    if (
+        not isinstance(raw_operation_id, str)
+        or not raw_operation_id.strip()
+        or len(raw_operation_id) > 248
+    ):
+        raise api_error(
+            422,
+            ErrorCode.VALIDATION_ERROR,
+            "operation_id is required and must be at most 248 characters.",
+        )
 
     llm_router = get_billable_llm_router()
     messages = [
@@ -370,9 +382,7 @@ async def run_structured_output(payload: dict[str, Any] | None = None, principal
         {"role": "user", "content": f"{prompt}\n\nRespond with JSON conforming to this schema:\n{json.dumps(schema, indent=2)}"},
     ]
     response_format = {"type": "json_schema", "json_schema": {"name": "structured_response", "strict": True, "schema": schema}}
-    structured_root = str(
-        request.get("operation_id") or f"structured-{uuid4().hex}"
-    )
+    structured_root = raw_operation_id
     try:
         # Try with strict response_format first (OpenAI-compatible)
         try:
@@ -413,8 +423,20 @@ async def run_structured_output(payload: dict[str, Any] | None = None, principal
             "tokens_used": response.tokens_used,
             "latency_ms": response.latency_ms,
         }
+    except LLMReplayBlockedError as exc:
+        raise api_error(
+            409,
+            ErrorCode.RESOURCE_CONFLICT,
+            "Structured operation cannot be replayed.",
+            details={"error_code": "STRUCTURED_OPERATION_CONFLICT"},
+        ) from exc
     except Exception as exc:
-        raise api_error(502, ErrorCode.INTERNAL_ERROR, f"Structured output generation failed: {exc}") from exc
+        raise api_error(
+            502,
+            ErrorCode.INTERNAL_ERROR,
+            "Structured output generation failed.",
+            details={"error_code": "STRUCTURED_OUTPUT_FAILED"},
+        ) from exc
 
 
 @router.get("/git/status")
