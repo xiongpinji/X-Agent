@@ -7,13 +7,15 @@ import re
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Query, Response, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from backend.app.api.errors import api_error
 from backend.app.core.artifacts import Artifact, ArtifactRenderer
+from backend.app.core.artifacts.storage import validate_artifact_content
 from backend.app.core.contracts import ErrorCode
 from backend.app.core.run_artifacts import (
     RunArtifactAuditError,
+    RunArtifactLockError,
     RunArtifactManager,
     RunArtifactManifest,
     RunArtifactRollbackError,
@@ -37,6 +39,12 @@ class CreateArtifactRequest(BaseModel):
     tags: list[str] = Field(default_factory=list)
     description: str = ""
 
+    @field_validator("content")
+    @classmethod
+    def validate_content(cls, value: str) -> str:
+        validate_artifact_content(value)
+        return value
+
 
 class UpdateArtifactRequest(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=255)
@@ -44,6 +52,13 @@ class UpdateArtifactRequest(BaseModel):
     metadata: dict[str, Any] | None = None
     tags: list[str] | None = None
     description: str | None = None
+
+    @field_validator("content")
+    @classmethod
+    def validate_content(cls, value: str | None) -> str | None:
+        if value is not None:
+            validate_artifact_content(value)
+        return value
 
 
 def _not_found(resource_id: str):
@@ -81,6 +96,20 @@ async def _best_effort_failure_audit(**kwargs: Any) -> None:
 
 def _scope(principal: Principal) -> tuple[str, str]:
     return principal.tenant_id, principal.user_id
+
+
+def _lock_failure(error: RunArtifactLockError, trace_id: str):
+    message = (
+        "Run artifact lock is temporarily unavailable."
+        if error.timed_out
+        else "Run artifact lock could not be released."
+    )
+    return api_error(
+        503,
+        ErrorCode.INTERNAL_ERROR,
+        message,
+        trace_id=trace_id,
+    )
 
 
 # Fixed paths must precede /{artifact_id}.
@@ -180,6 +209,8 @@ async def archive_run(
             audit_callback=_record_created,
             rollback_audit_callback=_record_rollback,
         )
+    except RunArtifactLockError as error:
+        raise _lock_failure(error, run_id) from None
     except RunArtifactRollbackError:
         raise api_error(
             503,
@@ -217,7 +248,17 @@ async def download_archive(
 ) -> Response:
     enforce_scope(principal, "agent:read")
     tenant_id, user_id = _scope(principal)
-    stored = await manager.archive_bytes(archive_id, tenant_id, user_id)
+    try:
+        stored = await manager.archive_bytes(archive_id, tenant_id, user_id)
+    except RunArtifactLockError as error:
+        raise _lock_failure(error, archive_id) from None
+    except OSError:
+        raise api_error(
+            503,
+            ErrorCode.INTERNAL_ERROR,
+            "Run archive could not be read.",
+            trace_id=archive_id,
+        ) from None
     if stored is None:
         raise _not_found(archive_id)
     manifest, content = stored

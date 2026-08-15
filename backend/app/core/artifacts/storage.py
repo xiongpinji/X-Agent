@@ -15,6 +15,8 @@ from uuid import uuid4
 from pydantic import BaseModel, Field
 
 _SAFE_COMPONENT = re.compile(r"^[A-Za-z0-9_.-]{1,128}$")
+MAX_ARTIFACT_CONTENT_CHARS = 10 * 1024 * 1024
+MAX_ARTIFACT_CONTENT_BYTES = 10 * 1024 * 1024
 _MIME_TYPES = {
     "html": "text/html; charset=utf-8",
     "chart": "application/json; charset=utf-8",
@@ -27,6 +29,15 @@ def _validated_component(value: str) -> str:
     if not _SAFE_COMPONENT.fullmatch(value) or value in {".", ".."}:
         raise ValueError("Invalid storage identifier")
     return value
+
+
+def validate_artifact_content(content: str) -> bytes:
+    if len(content) > MAX_ARTIFACT_CONTENT_CHARS:
+        raise ValueError("Artifact content exceeds the character limit")
+    encoded = content.encode("utf-8")
+    if len(encoded) > MAX_ARTIFACT_CONTENT_BYTES:
+        raise ValueError("Artifact content exceeds the UTF-8 byte limit")
+    return encoded
 
 
 class Artifact(BaseModel):
@@ -91,7 +102,7 @@ class ArtifactStorage:
         _validated_component(artifact.id)
         _validated_component(artifact.tenant_id)
         _validated_component(artifact.user_id)
-        content_bytes = artifact.content.encode("utf-8")
+        content_bytes = validate_artifact_content(artifact.content)
         artifact.content_sha256 = sha256(content_bytes).hexdigest()
         artifact.size_bytes = len(content_bytes)
         artifact.mime_type = _MIME_TYPES.get(artifact.type, artifact.mime_type)
@@ -116,7 +127,10 @@ class ArtifactStorage:
             artifact = Artifact.model_validate_json(path.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             return None
-        content = artifact.content.encode("utf-8")
+        try:
+            content = validate_artifact_content(artifact.content)
+        except ValueError:
+            return None
         if (
             artifact.id != path.stem
             or artifact.content_sha256 != sha256(content).hexdigest()
@@ -280,7 +294,7 @@ class ArtifactStorage:
         artifact = await self.load_artifact(artifact_id, tenant_id, user_id)
         if artifact is None:
             return None
-        content = artifact.content.encode("utf-8")
+        content = validate_artifact_content(artifact.content)
         if (
             sha256(content).hexdigest() != artifact.content_sha256
             or len(content) != artifact.size_bytes

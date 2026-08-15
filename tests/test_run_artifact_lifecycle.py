@@ -3,9 +3,11 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import threading
 from collections.abc import Iterator
 from hashlib import sha256
 from io import BytesIO
+from pathlib import Path
 from zipfile import ZipFile
 
 import pytest
@@ -15,7 +17,9 @@ from fastapi.testclient import TestClient
 from backend.app.api import agents as agents_api
 from backend.app.api import artifacts as artifacts_api
 from backend.app.api.errors import XAgentAPIError, xagent_api_error_handler
+from backend.app.core import run_artifacts as run_artifacts_core
 from backend.app.core.artifacts import ArtifactStorage
+from backend.app.core.artifacts import storage as artifact_storage_core
 from backend.app.core.audit import AuditStore
 from backend.app.core.contracts import AgentRunResponse, RunStatus
 from backend.app.core.run_artifacts import RunArtifactManager, get_run_artifact_manager
@@ -52,6 +56,19 @@ class _FailingAudit:
 class _NoIdAudit:
     def record(self, **_kwargs) -> None:
         return None
+
+
+class _RollbackFailingAudit:
+    def __init__(self, delegate: AuditStore, mode: str) -> None:
+        self.delegate = delegate
+        self.mode = mode
+
+    def record(self, **kwargs):
+        if kwargs.get("action") == "run.archive.rollback":
+            if self.mode == "none":
+                return None
+            raise RuntimeError("PRIVATE_ROLLBACK_AUDIT_FAILURE")
+        return self.delegate.record(**kwargs)
 
 
 def _principal() -> Principal:
@@ -552,19 +569,17 @@ def test_archive_manifest_commit_failure_records_compensating_audit(
 ) -> None:
     client, manager, audit = lifecycle
     monkeypatch.setattr(agents_api, "get_agent", lambda: _CompletingAgent())
-    _final(
+    final = _final(
         client.post(
             "/api/v1/agents/run/stream",
             json={"task": "create a result"},
         ).text
     )
+    baseline_ids = set(final["manifest"]["audit_ids"])
     original_save = manager._save_manifest_unlocked
-    save_calls = 0
 
     async def _fail_after_created_audit(manifest):
-        nonlocal save_calls
-        save_calls += 1
-        if save_calls == 2:
+        if manifest.archive is not None and set(manifest.audit_ids) - baseline_ids:
             raise OSError("PRIVATE_FINAL_MANIFEST_FAILURE")
         return await original_save(manifest)
 
@@ -606,8 +621,12 @@ def test_archive_cancellation_during_audit_rolls_back_without_created_audit(
     async def _cancel_during_audit() -> None:
         audit_started = asyncio.Event()
         never_finish = asyncio.Event()
+        staged_archive_id: str | None = None
 
-        async def _blocked_created_audit(_manifest) -> str:
+        async def _blocked_created_audit(manifest) -> str:
+            nonlocal staged_archive_id
+            assert manifest.archive is not None
+            staged_archive_id = manifest.archive.archive_id
             audit_started.set()
             await never_finish.wait()
             raise AssertionError("unreachable")
@@ -631,12 +650,19 @@ def test_archive_cancellation_during_audit_rolls_back_without_created_audit(
             "user-a",
         )
         assert published is not None
-        assert published.archive is not None
+        published_archive = published.archive
+        assert staged_archive_id is not None
+        staged_download = client.get(
+            f"/api/v1/artifacts/archives/{staged_archive_id}/download"
+        )
+        staged_download_status = staged_download.status_code
         assert len(list(manager.archive_path.rglob("*.zip"))) == 1
 
         task.cancel()
         with pytest.raises(asyncio.CancelledError):
             await asyncio.wait_for(task, timeout=2)
+        assert published_archive is None
+        assert staged_download_status == 404
 
     asyncio.run(_cancel_during_audit())
 
@@ -661,23 +687,21 @@ def test_archive_cancellation_after_created_audit_records_rollback(
 ) -> None:
     client, manager, audit = lifecycle
     monkeypatch.setattr(agents_api, "get_agent", lambda: _CompletingAgent())
-    _final(
+    final = _final(
         client.post(
             "/api/v1/agents/run/stream",
             json={"task": "create a result"},
         ).text
     )
+    baseline_ids = set(final["manifest"]["audit_ids"])
 
     async def _cancel_during_audit_id_commit() -> None:
         final_save_started = asyncio.Event()
         never_finish = asyncio.Event()
         original_save = manager._save_manifest_unlocked
-        save_calls = 0
 
         async def _controlled_save(manifest):
-            nonlocal save_calls
-            save_calls += 1
-            if save_calls == 2:
+            if manifest.archive is not None and set(manifest.audit_ids) - baseline_ids:
                 final_save_started.set()
                 await never_finish.wait()
             return await original_save(manifest)
@@ -733,7 +757,7 @@ def test_archive_cancellation_after_created_audit_records_rollback(
             "user-a",
         )
         assert published is not None
-        assert published.archive is not None
+        assert published.archive is None
         assert len(list(manager.archive_path.rglob("*.zip"))) == 1
 
         task.cancel()
@@ -756,6 +780,196 @@ def test_archive_cancellation_after_created_audit_records_rollback(
     assert len(rolled_back) == 1
     assert rolled_back[0].details["created_audit_id"] == created[0].id
     assert {created[0].id, rolled_back[0].id}.issubset(authoritative.audit_ids)
+
+
+def test_archive_cancellation_during_inflight_zip_write_leaves_no_orphan(
+    lifecycle,
+    monkeypatch,
+) -> None:
+    client, manager, audit = lifecycle
+    monkeypatch.setattr(agents_api, "get_agent", lambda: _CompletingAgent())
+    _final(
+        client.post(
+            "/api/v1/agents/run/stream",
+            json={"task": "create a result"},
+        ).text
+    )
+    write_started = threading.Event()
+    allow_write = threading.Event()
+    write_finished = threading.Event()
+    original_atomic_write = manager._atomic_write
+
+    def _controlled_atomic_write(path: Path, content: bytes) -> None:
+        if path.suffix == ".zip":
+            write_started.set()
+            if not allow_write.wait(timeout=2):
+                raise TimeoutError("archive write test gate timed out")
+        original_atomic_write(path, content)
+        if path.suffix == ".zip":
+            write_finished.set()
+
+    async def _unexpected_created_audit(_manifest) -> str:
+        raise AssertionError("archive cancellation must precede audit")
+
+    async def _unexpected_rollback_audit(_manifest, _created_id) -> str:
+        raise AssertionError("created audit id does not exist")
+
+    monkeypatch.setattr(manager, "_atomic_write", _controlled_atomic_write)
+
+    async def _cancel_inflight_write() -> bool:
+        task = asyncio.create_task(
+            manager.create_archive(
+                "run-lifecycle",
+                "tenant-a",
+                "user-a",
+                audit_callback=_unexpected_created_audit,
+                rollback_audit_callback=_unexpected_rollback_audit,
+            )
+        )
+        started = await asyncio.to_thread(write_started.wait, 2)
+        assert started
+
+        async def _allow_later() -> None:
+            await asyncio.sleep(0.05)
+            allow_write.set()
+
+        allow_task = asyncio.create_task(_allow_later())
+        task.cancel()
+        await asyncio.sleep(0)
+        task.cancel()
+        finished_before_exit = False
+        try:
+            with pytest.raises(asyncio.CancelledError):
+                await asyncio.wait_for(task, timeout=2)
+            finished_before_exit = write_finished.is_set()
+        finally:
+            allow_write.set()
+            await asyncio.wait_for(allow_task, timeout=2)
+            finished = await asyncio.to_thread(write_finished.wait, 2)
+            assert finished
+        return finished_before_exit
+
+    assert asyncio.run(_cancel_inflight_write()) is True
+    authoritative = asyncio.run(
+        manager.get_manifest("run-lifecycle", "tenant-a", "user-a")
+    )
+    assert authoritative is not None
+    assert authoritative.archive is None
+    assert list(manager.archive_path.rglob("*.zip")) == []
+    assert list(manager.lock_path.rglob("*.lock")) == []
+    assert audit.list(
+        limit=100,
+        tenant_id="tenant-a",
+        actor_id="user-a",
+        action="run.archive.created",
+    ) == []
+
+
+def test_archive_cancellation_waits_for_inflight_manifest_write_before_rollback(
+    lifecycle,
+    monkeypatch,
+) -> None:
+    client, manager, audit = lifecycle
+    monkeypatch.setattr(agents_api, "get_agent", lambda: _CompletingAgent())
+    _final(
+        client.post(
+            "/api/v1/agents/run/stream",
+            json={"task": "create a result"},
+        ).text
+    )
+    write_started = threading.Event()
+    allow_write = threading.Event()
+    write_finished = threading.Event()
+    original_atomic_write = manager._atomic_write
+
+    def _controlled_atomic_write(path: Path, content: bytes) -> None:
+        is_archive_manifest = (
+            manager.manifest_path in path.parents
+            and b'"archive": {' in content
+        )
+        if is_archive_manifest:
+            write_started.set()
+            if not allow_write.wait(timeout=2):
+                raise TimeoutError("manifest write test gate timed out")
+        original_atomic_write(path, content)
+        if is_archive_manifest:
+            write_finished.set()
+
+    async def _record_created(manifest) -> str:
+        assert manifest.archive is not None
+        record = await asyncio.to_thread(
+            audit.record,
+            action="run.archive.created",
+            resource_type="run_archive",
+            resource_id=manifest.archive.archive_id,
+            tenant_id="tenant-a",
+            actor_id="user-a",
+            trace_id=manifest.trace_id,
+            run_id=manifest.run_id,
+            details={"status": "created"},
+        )
+        return str(record.id)
+
+    async def _record_rollback(manifest, created_audit_id: str) -> str:
+        assert manifest.archive is not None
+        record = await asyncio.to_thread(
+            audit.record,
+            action="run.archive.rollback",
+            resource_type="run_archive",
+            resource_id=manifest.archive.archive_id,
+            tenant_id="tenant-a",
+            actor_id="user-a",
+            outcome="failure",
+            trace_id=manifest.trace_id,
+            run_id=manifest.run_id,
+            details={"created_audit_id": created_audit_id},
+        )
+        return str(record.id)
+
+    monkeypatch.setattr(manager, "_atomic_write", _controlled_atomic_write)
+
+    async def _cancel_inflight_write() -> bool:
+        task = asyncio.create_task(
+            manager.create_archive(
+                "run-lifecycle",
+                "tenant-a",
+                "user-a",
+                audit_callback=_record_created,
+                rollback_audit_callback=_record_rollback,
+            )
+        )
+        started = await asyncio.to_thread(write_started.wait, 2)
+        assert started
+
+        async def _allow_later() -> None:
+            await asyncio.sleep(0.05)
+            allow_write.set()
+
+        allow_task = asyncio.create_task(_allow_later())
+        task.cancel()
+        await asyncio.sleep(0)
+        task.cancel()
+        finished_before_exit = False
+        try:
+            with pytest.raises(asyncio.CancelledError):
+                await asyncio.wait_for(task, timeout=2)
+            finished_before_exit = write_finished.is_set()
+        finally:
+            allow_write.set()
+            await asyncio.wait_for(allow_task, timeout=2)
+            finished = await asyncio.to_thread(write_finished.wait, 2)
+            assert finished
+        return finished_before_exit
+
+    assert asyncio.run(_cancel_inflight_write()) is True
+
+    authoritative = asyncio.run(
+        manager.get_manifest("run-lifecycle", "tenant-a", "user-a")
+    )
+    assert authoritative is not None
+    assert authoritative.archive is None
+    assert list(manager.archive_path.rglob("*.zip")) == []
+    assert list(manager.lock_path.rglob("*.lock")) == []
 
 
 def test_archive_cancellation_surfaces_unlink_rollback_failure(
@@ -810,7 +1024,7 @@ def test_archive_cancellation_surfaces_unlink_rollback_failure(
         manager.get_manifest("run-lifecycle", "tenant-a", "user-a")
     )
     assert authoritative is not None
-    assert authoritative.archive is not None
+    assert authoritative.archive is None
     assert len(list(manager.archive_path.rglob("*.zip"))) == 1
     assert list(manager.lock_path.rglob("*.lock")) == []
 
@@ -833,12 +1047,14 @@ def test_archive_manifest_cleanup_failure_is_a_distinct_stable_api_error(
     async def _fail_manifest_cleanup(manifest):
         nonlocal save_calls
         save_calls += 1
+        if save_calls == 1:
+            await original_save(manifest)
+            raise OSError("PRIVATE_ARCHIVE_PUBLISH_ACK_FAILURE")
         if save_calls == 2:
             raise OSError("PRIVATE_MANIFEST_CLEANUP_FAILURE")
         return await original_save(manifest)
 
     monkeypatch.setattr(manager, "_save_manifest_unlocked", _fail_manifest_cleanup)
-    monkeypatch.setattr(artifacts_api, "get_audit_store", lambda: _FailingAudit())
 
     async def _request_archive():
         return await asyncio.wait_for(
@@ -861,6 +1077,365 @@ def test_archive_manifest_cleanup_failure_is_a_distinct_stable_api_error(
     assert authoritative.archive is not None
     assert list(manager.archive_path.rglob("*.zip")) == []
     assert list(manager.lock_path.rglob("*.lock")) == []
+
+
+def test_archive_download_handles_file_disappearing_before_read(
+    lifecycle,
+    monkeypatch,
+) -> None:
+    client, manager, _audit = lifecycle
+    monkeypatch.setattr(agents_api, "get_agent", lambda: _CompletingAgent())
+    _final(
+        client.post(
+            "/api/v1/agents/run/stream",
+            json={"task": "create a result"},
+        ).text
+    )
+    archive = client.post(
+        "/api/v1/artifacts/runs/run-lifecycle/archive"
+    ).json()["archive"]
+    archive_file = manager._archive_file(
+        archive["archive_id"],
+        "tenant-a",
+        "user-a",
+    )
+    original_read_bytes = Path.read_bytes
+
+    def _vanish_before_read(path: Path) -> bytes:
+        if path == archive_file:
+            path.unlink()
+            raise FileNotFoundError("PRIVATE_ARCHIVE_RACE")
+        return original_read_bytes(path)
+
+    monkeypatch.setattr(Path, "read_bytes", _vanish_before_read)
+
+    response = client.get(
+        f"/api/v1/artifacts/archives/{archive['archive_id']}/download"
+    )
+
+    assert response.status_code == 404
+    assert "PRIVATE_ARCHIVE_RACE" not in response.text
+    assert list(manager.lock_path.rglob("*.lock")) == []
+
+
+def test_archive_lock_release_failure_returns_stable_503(
+    lifecycle,
+    monkeypatch,
+) -> None:
+    client, manager, _audit = lifecycle
+    monkeypatch.setattr(agents_api, "get_agent", lambda: _CompletingAgent())
+    _final(
+        client.post(
+            "/api/v1/agents/run/stream",
+            json={"task": "create a result"},
+        ).text
+    )
+    lock_file = manager._lock_file("run-lifecycle", "tenant-a", "user-a")
+    original_unlink = Path.unlink
+
+    def _fail_owned_lock_unlink(path: Path, *args, **kwargs) -> None:
+        if path == lock_file:
+            raise OSError("PRIVATE_LOCK_RELEASE_FAILURE")
+        original_unlink(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "unlink", _fail_owned_lock_unlink)
+    try:
+        response = client.post("/api/v1/artifacts/runs/run-lifecycle/archive")
+
+        assert response.status_code == 503
+        assert response.json()["message"] == "Run artifact lock could not be released."
+        assert "PRIVATE_LOCK_RELEASE_FAILURE" not in response.text
+        assert lock_file.is_file()
+    finally:
+        if lock_file.exists():
+            original_unlink(lock_file)
+
+
+@pytest.mark.parametrize(
+    ("payload", "token"),
+    [
+        ("not-json", "owned-token"),
+        (json.dumps({"token": "different-token"}), "owned-token"),
+    ],
+)
+def test_lock_release_rejects_corrupt_or_unowned_lock(
+    tmp_path,
+    payload,
+    token,
+) -> None:
+    manager = RunArtifactManager(tmp_path / "invalid-release-lock")
+    lock_file = manager._lock_file("release-check", "tenant-a", "user-a")
+    lock_file.parent.mkdir(parents=True, exist_ok=True)
+    lock_file.write_text(payload, encoding="utf-8")
+
+    with pytest.raises(RuntimeError) as failure:
+        manager._release_lock(lock_file, token)
+
+    assert type(failure.value).__name__ == "RunArtifactLockError"
+    assert lock_file.is_file()
+
+
+def test_archive_download_lock_timeout_returns_stable_503(
+    lifecycle,
+    monkeypatch,
+) -> None:
+    client, manager, _audit = lifecycle
+    monkeypatch.setattr(agents_api, "get_agent", lambda: _CompletingAgent())
+    _final(
+        client.post(
+            "/api/v1/agents/run/stream",
+            json={"task": "create a result"},
+        ).text
+    )
+    archive = client.post(
+        "/api/v1/artifacts/runs/run-lifecycle/archive"
+    ).json()["archive"]
+    lock_file = manager._lock_file("run-lifecycle", "tenant-a", "user-a")
+    lock_file.parent.mkdir(parents=True, exist_ok=True)
+    lock_file.write_text(
+        json.dumps({"token": "other-worker", "pid": os.getpid()}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(run_artifacts_core, "_LOCK_TIMEOUT_SECONDS", 0.02)
+    try:
+        response = client.get(
+            f"/api/v1/artifacts/archives/{archive['archive_id']}/download"
+        )
+
+        assert response.status_code == 503
+        assert response.json()["message"] == "Run artifact lock is temporarily unavailable."
+    finally:
+        lock_file.unlink(missing_ok=True)
+
+
+def test_double_cancellation_waits_for_lock_release(tmp_path, monkeypatch) -> None:
+    manager = RunArtifactManager(tmp_path / "double-cancel-run")
+    manifest = manager.failed_manifest(
+        run_id="double-cancel",
+        tenant_id="tenant-a",
+        user_id="user-a",
+        error_code="cancelled",
+        audit_ids=[],
+    )
+    lock_file = manager._lock_file("double-cancel", "tenant-a", "user-a")
+    release_started = threading.Event()
+    allow_release = threading.Event()
+    release_finished = threading.Event()
+    original_release = manager._release_lock
+
+    def _controlled_release(path: Path, token: str) -> None:
+        release_started.set()
+        if not allow_release.wait(timeout=2):
+            raise TimeoutError("release test gate timed out")
+        original_release(path, token)
+        release_finished.set()
+
+    monkeypatch.setattr(manager, "_release_lock", _controlled_release)
+
+    async def _cancel_twice() -> bool:
+        task = asyncio.create_task(manager.save_manifest(manifest))
+        started = await asyncio.to_thread(release_started.wait, 2)
+        assert started
+
+        async def _allow_later() -> None:
+            await asyncio.sleep(0.05)
+            allow_release.set()
+
+        allow_task = asyncio.create_task(_allow_later())
+        task.cancel()
+        await asyncio.sleep(0)
+        task.cancel()
+        completed_release_before_exit = False
+        try:
+            with pytest.raises(asyncio.CancelledError):
+                await asyncio.wait_for(task, timeout=2)
+            completed_release_before_exit = release_finished.is_set()
+        finally:
+            allow_release.set()
+            await asyncio.wait_for(allow_task, timeout=2)
+            finished = await asyncio.to_thread(release_finished.wait, 2)
+            assert finished
+        return completed_release_before_exit
+
+    assert asyncio.run(_cancel_twice()) is True
+    assert not lock_file.exists()
+
+
+@pytest.mark.parametrize("rollback_mode", ["raise", "none"])
+def test_archive_rollback_audit_failure_is_not_hidden(
+    lifecycle,
+    monkeypatch,
+    rollback_mode,
+) -> None:
+    client, manager, audit = lifecycle
+    monkeypatch.setattr(agents_api, "get_agent", lambda: _CompletingAgent())
+    final = _final(
+        client.post(
+            "/api/v1/agents/run/stream",
+            json={"task": "create a result"},
+        ).text
+    )
+    baseline_ids = set(final["manifest"]["audit_ids"])
+    original_save = manager._save_manifest_unlocked
+
+    async def _fail_publish_after_created_audit(manifest):
+        if manifest.archive is not None and set(manifest.audit_ids) - baseline_ids:
+            raise OSError("PRIVATE_ARCHIVE_PUBLISH_FAILURE")
+        return await original_save(manifest)
+
+    monkeypatch.setattr(
+        manager,
+        "_save_manifest_unlocked",
+        _fail_publish_after_created_audit,
+    )
+    monkeypatch.setattr(
+        artifacts_api,
+        "get_audit_store",
+        lambda: _RollbackFailingAudit(audit, rollback_mode),
+    )
+
+    response = client.post("/api/v1/artifacts/runs/run-lifecycle/archive")
+
+    assert response.status_code == 503
+    assert response.json()["message"] == "Run archive rollback could not be completed."
+    assert "PRIVATE_" not in response.text
+    persisted = asyncio.run(
+        manager.get_manifest("run-lifecycle", "tenant-a", "user-a")
+    )
+    assert persisted is not None
+    assert persisted.archive is None
+    assert list(manager.archive_path.rglob("*.zip")) == []
+    assert list(manager.lock_path.rglob("*.lock")) == []
+
+
+def test_archive_rollback_audit_id_merge_failure_is_not_hidden(
+    lifecycle,
+    monkeypatch,
+) -> None:
+    client, manager, audit = lifecycle
+    monkeypatch.setattr(agents_api, "get_agent", lambda: _CompletingAgent())
+    final = _final(
+        client.post(
+            "/api/v1/agents/run/stream",
+            json={"task": "create a result"},
+        ).text
+    )
+    baseline_ids = set(final["manifest"]["audit_ids"])
+    original_save = manager._save_manifest_unlocked
+    publish_failed = False
+
+    async def _fail_publish_and_rollback_merge(manifest):
+        nonlocal publish_failed
+        new_ids = set(manifest.audit_ids) - baseline_ids
+        if manifest.archive is not None and new_ids and not publish_failed:
+            publish_failed = True
+            raise OSError("PRIVATE_ARCHIVE_PUBLISH_FAILURE")
+        if publish_failed and manifest.archive is None and len(new_ids) >= 2:
+            raise OSError("PRIVATE_ROLLBACK_AUDIT_MERGE_FAILURE")
+        return await original_save(manifest)
+
+    monkeypatch.setattr(
+        manager,
+        "_save_manifest_unlocked",
+        _fail_publish_and_rollback_merge,
+    )
+
+    response = client.post("/api/v1/artifacts/runs/run-lifecycle/archive")
+
+    assert response.status_code == 503
+    assert response.json()["message"] == "Run archive rollback could not be completed."
+    assert "PRIVATE_" not in response.text
+    persisted = asyncio.run(
+        manager.get_manifest("run-lifecycle", "tenant-a", "user-a")
+    )
+    assert persisted is not None
+    assert persisted.archive is None
+    assert list(manager.archive_path.rglob("*.zip")) == []
+    assert list(manager.lock_path.rglob("*.lock")) == []
+    actions = [
+        record.action
+        for record in audit.list(limit=100, tenant_id="tenant-a", actor_id="user-a")
+    ]
+    assert "run.archive.created" in actions
+    assert "run.archive.rollback" in actions
+
+
+def test_artifact_create_and_update_reject_content_over_limits(
+    lifecycle,
+    monkeypatch,
+) -> None:
+    client, _manager, _audit = lifecycle
+    monkeypatch.setattr(
+        artifact_storage_core,
+        "MAX_ARTIFACT_CONTENT_CHARS",
+        4,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        artifact_storage_core,
+        "MAX_ARTIFACT_CONTENT_BYTES",
+        5,
+        raising=False,
+    )
+
+    accepted = client.post(
+        "/api/v1/artifacts",
+        json={"name": "small.txt", "type": "text", "content": "1234"},
+    )
+    too_many_chars = client.post(
+        "/api/v1/artifacts",
+        json={"name": "chars.txt", "type": "text", "content": "12345"},
+    )
+    too_many_bytes = client.put(
+        f"/api/v1/artifacts/{accepted.json()['id']}",
+        json={"content": "你你"},
+    )
+
+    assert accepted.status_code == 201
+    assert too_many_chars.status_code == 422
+    assert too_many_bytes.status_code == 422
+    persisted = client.get(f"/api/v1/artifacts/{accepted.json()['id']}")
+    assert persisted.status_code == 200
+    assert persisted.json()["content"] == "1234"
+
+
+@pytest.mark.parametrize(
+    "limit_name",
+    [
+        "MAX_ARCHIVE_ARTIFACTS",
+        "MAX_ARCHIVE_CONTENT_BYTES",
+        "MAX_ARCHIVE_BYTES",
+    ],
+)
+def test_archive_resource_limits_fail_closed(
+    lifecycle,
+    monkeypatch,
+    limit_name,
+) -> None:
+    client, manager, _audit = lifecycle
+    monkeypatch.setattr(agents_api, "get_agent", lambda: _CompletingAgent())
+    final = _final(
+        client.post(
+            "/api/v1/agents/run/stream",
+            json={"task": "create a result"},
+        ).text
+    )
+    artifact_size = final["manifest"]["artifacts"][0]["size_bytes"]
+    limit = 0 if limit_name == "MAX_ARCHIVE_ARTIFACTS" else artifact_size - 1
+    if limit_name == "MAX_ARCHIVE_BYTES":
+        limit = 1
+    monkeypatch.setattr(run_artifacts_core, limit_name, limit, raising=False)
+
+    response = client.post("/api/v1/artifacts/runs/run-lifecycle/archive")
+
+    assert response.status_code == 409
+    assert response.json()["message"] == "Run archive integrity check failed."
+    persisted = asyncio.run(
+        manager.get_manifest("run-lifecycle", "tenant-a", "user-a")
+    )
+    assert persisted is not None
+    assert persisted.archive is None
+    assert list(manager.archive_path.rglob("*.zip")) == []
 
 
 def test_artifact_download_audit_failure_never_claims_downloaded_or_returns_bytes(

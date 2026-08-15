@@ -26,6 +26,9 @@ _SAFE_COMPONENT = re.compile(r"^[A-Za-z0-9_.-]{1,128}$")
 _LOCK_TIMEOUT_SECONDS = 5.0
 _LOCK_STALE_SECONDS = 300.0
 _LOCK_POLL_SECONDS = 0.02
+MAX_ARCHIVE_ARTIFACTS = 100
+MAX_ARCHIVE_CONTENT_BYTES = 100 * 1024 * 1024
+MAX_ARCHIVE_BYTES = 110 * 1024 * 1024
 
 
 def _safe_component(value: str) -> str:
@@ -74,6 +77,14 @@ class RunArtifactRollbackError(RuntimeError):
     """A required archive rollback could not restore authoritative state."""
 
 
+class RunArtifactLockError(RuntimeError):
+    """A run lock could not be acquired or safely released."""
+
+    def __init__(self, message: str, *, timed_out: bool = False) -> None:
+        super().__init__(message)
+        self.timed_out = timed_out
+
+
 ArchiveAuditCallback = Callable[[RunArtifactManifest], Awaitable[str]]
 ArchiveRollbackAuditCallback = Callable[[RunArtifactManifest, str], Awaitable[str]]
 
@@ -108,6 +119,23 @@ class RunArtifactManager:
         finally:
             if temporary.exists():
                 temporary.unlink()
+
+    async def _atomic_write_required(self, path: Path, content: bytes) -> None:
+        write = asyncio.create_task(
+            asyncio.to_thread(self._atomic_write, path, content)
+        )
+        write_cancelled = False
+        while not write.done():
+            try:
+                await asyncio.shield(write)
+            except asyncio.CancelledError:
+                write_cancelled = True
+                continue
+            except Exception:
+                break
+        write.result()
+        if write_cancelled:
+            raise asyncio.CancelledError
 
     def _scope_path(self, root: Path, tenant_id: str, user_id: str) -> Path:
         _safe_component(tenant_id)
@@ -212,12 +240,27 @@ class RunArtifactManager:
     @staticmethod
     def _release_lock(path: Path, token: str) -> None:
         try:
-            payload = json.loads(path.read_text(encoding="utf-8"))
-            if payload.get("token") != token:
-                return
-            path.unlink()
-        except (FileNotFoundError, OSError, ValueError, json.JSONDecodeError):
+            raw_payload = path.read_text(encoding="utf-8")
+        except FileNotFoundError:
             return
+        except OSError as failure:
+            raise RunArtifactLockError("Run artifact lock could not be read") from failure
+        try:
+            payload = json.loads(raw_payload)
+        except (ValueError, json.JSONDecodeError) as failure:
+            raise RunArtifactLockError("Run artifact lock is invalid") from failure
+        if not isinstance(payload, dict):
+            raise RunArtifactLockError("Run artifact lock is invalid")
+        if payload.get("token") != token:
+            raise RunArtifactLockError("Run artifact lock ownership changed")
+        try:
+            path.unlink()
+        except FileNotFoundError:
+            return
+        except OSError as failure:
+            raise RunArtifactLockError(
+                "Run artifact lock could not be released"
+            ) from failure
 
     @asynccontextmanager
     async def _run_lock(
@@ -230,12 +273,21 @@ class RunArtifactManager:
         token = uuid4().hex
         deadline = time.monotonic() + _LOCK_TIMEOUT_SECONDS
         while True:
-            acquired = await asyncio.to_thread(self._try_acquire_lock, path, token)
+            try:
+                acquired = await asyncio.to_thread(self._try_acquire_lock, path, token)
+            except OSError as failure:
+                raise RunArtifactLockError(
+                    "Run artifact lock is unavailable",
+                    timed_out=True,
+                ) from failure
             if acquired:
                 break
             await asyncio.to_thread(self._remove_stale_lock, path)
             if time.monotonic() >= deadline:
-                raise TimeoutError("Run artifact lock acquisition timed out")
+                raise RunArtifactLockError(
+                    "Run artifact lock acquisition timed out",
+                    timed_out=True,
+                )
             await asyncio.sleep(_LOCK_POLL_SECONDS)
         try:
             yield
@@ -243,11 +295,25 @@ class RunArtifactManager:
             release = asyncio.create_task(
                 asyncio.to_thread(self._release_lock, path, token)
             )
+            release_cancelled = False
+            while not release.done():
+                try:
+                    await asyncio.shield(release)
+                except asyncio.CancelledError:
+                    release_cancelled = True
+                    continue
+                except Exception:
+                    break
             try:
-                await asyncio.shield(release)
-            except asyncio.CancelledError:
-                await release
+                release.result()
+            except RunArtifactLockError:
                 raise
+            except Exception as failure:
+                raise RunArtifactLockError(
+                    "Run artifact lock could not be released"
+                ) from failure
+            if release_cancelled:
+                raise asyncio.CancelledError
 
     async def save_manifest(self, manifest: RunArtifactManifest) -> RunArtifactManifest:
         async with self._run_lock(
@@ -290,7 +356,7 @@ class RunArtifactManager:
             manifest.tenant_id,
             manifest.user_id,
         )
-        await asyncio.to_thread(self._atomic_write, path, payload)
+        await self._atomic_write_required(path, payload)
         return manifest
 
     async def _get_manifest_unlocked(
@@ -440,6 +506,8 @@ class RunArtifactManager:
             if manifest is None or manifest.status != "completed":
                 return None
             if manifest.archive is not None:
+                if manifest.archive.size_bytes > MAX_ARCHIVE_BYTES:
+                    raise ValueError("Declared archive exceeds the size limit")
                 archive_file = self._archive_file(
                     manifest.archive.archive_id,
                     tenant_id,
@@ -455,6 +523,14 @@ class RunArtifactManager:
                 ):
                     raise ValueError("Declared archive integrity check failed")
                 return manifest, False
+            if len(manifest.artifacts) > MAX_ARCHIVE_ARTIFACTS:
+                raise ValueError("Archive artifact count exceeds the limit")
+            declared_bytes = sum(reference.size_bytes for reference in manifest.artifacts)
+            if (
+                any(reference.size_bytes < 0 for reference in manifest.artifacts)
+                or declared_bytes > MAX_ARCHIVE_CONTENT_BYTES
+            ):
+                raise ValueError("Archive content exceeds the declared size limit")
             verified: list[tuple[Artifact, bytes]] = []
             for reference in manifest.artifacts:
                 stored = await self.artifact_storage.content_bytes(
@@ -474,6 +550,14 @@ class RunArtifactManager:
                     raise ValueError("Artifact manifest integrity check failed")
                 verified.append((artifact, content))
 
+            manifest_bytes = json.dumps(
+                manifest.model_dump(mode="json"),
+                ensure_ascii=False,
+                indent=2,
+            ).encode("utf-8")
+            if len(manifest_bytes) > MAX_ARCHIVE_BYTES:
+                raise ValueError("Archive manifest exceeds the size limit")
+
             def _build_zip() -> bytes:
                 buffer = BytesIO()
                 with zipfile.ZipFile(
@@ -483,11 +567,7 @@ class RunArtifactManager:
                 ) as archive:
                     archive.writestr(
                         "manifest.json",
-                        json.dumps(
-                            manifest.model_dump(mode="json"),
-                            ensure_ascii=False,
-                            indent=2,
-                        ),
+                        manifest_bytes,
                     )
                     for artifact, content in verified:
                         suffix = ".html" if artifact.type == "html" else ".txt"
@@ -495,10 +575,12 @@ class RunArtifactManager:
                 return buffer.getvalue()
 
             archive_bytes = await asyncio.to_thread(_build_zip)
+            if len(archive_bytes) > MAX_ARCHIVE_BYTES:
+                raise ValueError("Archive exceeds the final size limit")
             archive_id = str(uuid4())
             archive_file = self._archive_file(archive_id, tenant_id, user_id)
-            await asyncio.to_thread(self._atomic_write, archive_file, archive_bytes)
-            manifest.archive = ArchiveReference(
+            staged_manifest = manifest.model_copy(deep=True)
+            staged_manifest.archive = ArchiveReference(
                 archive_id=archive_id,
                 archive_sha256=sha256(archive_bytes).hexdigest(),
                 size_bytes=len(archive_bytes),
@@ -507,15 +589,15 @@ class RunArtifactManager:
             audit_id: str | None = None
             audit_started = False
             try:
-                await self._save_manifest_unlocked(manifest)
+                await self._atomic_write_required(archive_file, archive_bytes)
                 if audit_callback is not None:
                     audit_started = True
-                    audit_id = await audit_callback(manifest)
+                    audit_id = await audit_callback(staged_manifest)
                     if not audit_id:
                         raise RunArtifactAuditError("Required audit id is missing")
-                    if audit_id not in manifest.audit_ids:
-                        manifest.audit_ids.append(audit_id)
-                    await self._save_manifest_unlocked(manifest)
+                    if audit_id not in staged_manifest.audit_ids:
+                        staged_manifest.audit_ids.append(audit_id)
+                await self._save_manifest_unlocked(staged_manifest)
             except BaseException as failure:
                 cleanup = asyncio.create_task(
                     self._rollback_archive_commit(
@@ -523,7 +605,7 @@ class RunArtifactManager:
                         tenant_id,
                         user_id,
                         archive_id,
-                        manifest,
+                        staged_manifest,
                         audit_id,
                         rollback_audit_callback,
                     )
@@ -548,7 +630,7 @@ class RunArtifactManager:
                         "Required archive audit could not be committed"
                     ) from None
                 raise
-            return manifest, True
+            return staged_manifest, True
 
     @staticmethod
     def _remove_file(path: Path) -> None:
@@ -567,31 +649,38 @@ class RunArtifactManager:
         audit_id: str | None,
         rollback_audit_callback: ArchiveRollbackAuditCallback | None,
     ) -> None:
-        rolled_back = await self._remove_archive_unlocked(
-            run_id,
-            tenant_id,
-            user_id,
-            archive_id,
-        )
-        if rolled_back is None or rolled_back.archive is not None:
-            raise RunArtifactRollbackError(
-                "Authoritative archive rollback could not be confirmed"
-            )
-        if not audit_id or rollback_audit_callback is None:
-            return
         try:
+            rolled_back = await self._remove_archive_unlocked(
+                run_id,
+                tenant_id,
+                user_id,
+                archive_id,
+            )
+            if rolled_back is None or rolled_back.archive is not None:
+                raise RunArtifactRollbackError(
+                    "Authoritative archive rollback could not be confirmed"
+                )
+            if not audit_id:
+                return
+            if rollback_audit_callback is None:
+                raise RunArtifactRollbackError(
+                    "Required rollback audit callback is missing"
+                )
             rollback_audit_id = await rollback_audit_callback(manifest, audit_id)
             if not rollback_audit_id:
-                raise RunArtifactAuditError("Required rollback audit id is missing")
-            if rolled_back is not None:
-                rolled_back.audit_ids = list(
-                    dict.fromkeys(
-                        [*rolled_back.audit_ids, audit_id, rollback_audit_id]
-                    )
+                raise RunArtifactRollbackError("Required rollback audit id is missing")
+            rolled_back.audit_ids = list(
+                dict.fromkeys(
+                    [*rolled_back.audit_ids, audit_id, rollback_audit_id]
                 )
-                await self._save_manifest_unlocked(rolled_back)
-        except Exception:
-            pass
+            )
+            await self._save_manifest_unlocked(rolled_back)
+        except RunArtifactRollbackError:
+            raise
+        except Exception as failure:
+            raise RunArtifactRollbackError(
+                "Archive rollback could not be completed"
+            ) from failure
 
     async def _remove_archive_unlocked(
         self,
@@ -686,16 +775,36 @@ class RunArtifactManager:
                 continue
             if manifest.archive is None or manifest.archive.archive_id != archive_id:
                 continue
-            archive_file = self._archive_file(archive_id, tenant_id, user_id)
-            if not await asyncio.to_thread(archive_file.is_file):
-                return None
-            content = await asyncio.to_thread(archive_file.read_bytes)
-            if (
-                sha256(content).hexdigest() != manifest.archive.archive_sha256
-                or len(content) != manifest.archive.size_bytes
+            async with self._run_lock(
+                manifest.run_id,
+                tenant_id,
+                user_id,
             ):
-                return None
-            return manifest, content
+                authoritative = await self._get_manifest_unlocked(
+                    manifest.run_id,
+                    tenant_id,
+                    user_id,
+                )
+                if (
+                    authoritative is None
+                    or authoritative.archive is None
+                    or authoritative.archive.archive_id != archive_id
+                ):
+                    return None
+                if authoritative.archive.size_bytes > MAX_ARCHIVE_BYTES:
+                    return None
+                archive_file = self._archive_file(archive_id, tenant_id, user_id)
+                try:
+                    content = await asyncio.to_thread(archive_file.read_bytes)
+                except FileNotFoundError:
+                    return None
+                if (
+                    sha256(content).hexdigest()
+                    != authoritative.archive.archive_sha256
+                    or len(content) != authoritative.archive.size_bytes
+                ):
+                    return None
+                return authoritative, content
         return None
 
 

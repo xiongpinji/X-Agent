@@ -5,6 +5,7 @@ import tempfile
 import pytest
 
 from backend.app.core.artifacts import Artifact, ArtifactRenderer, ArtifactStorage
+from backend.app.core.artifacts import storage as artifact_storage_core
 
 
 @pytest.fixture
@@ -64,6 +65,40 @@ async def test_save_computes_authoritative_utf8_integrity_fields(temp_storage):
     assert stored.content_sha256 != "client-forged"
     assert stored.size_bytes == len("<p>你好</p>".encode())
     assert stored.mime_type == "text/html; charset=utf-8"
+
+
+@pytest.mark.asyncio
+async def test_storage_enforces_character_and_utf8_byte_limits(
+    temp_storage,
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        artifact_storage_core,
+        "MAX_ARTIFACT_CONTENT_CHARS",
+        4,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        artifact_storage_core,
+        "MAX_ARTIFACT_CONTENT_BYTES",
+        5,
+        raising=False,
+    )
+    accepted = Artifact(name="accepted", type="text", content="1234")
+    await temp_storage.save_artifact(accepted)
+
+    with pytest.raises(ValueError, match="content"):
+        await temp_storage.save_artifact(
+            Artifact(name="chars", type="text", content="12345")
+        )
+    with pytest.raises(ValueError, match="content"):
+        await temp_storage.save_artifact(
+            Artifact(name="bytes", type="text", content="你你")
+        )
+
+    stored = await temp_storage.load_artifact(accepted.id)
+    assert stored is not None
+    assert stored.content == "1234"
 
 
 @pytest.mark.asyncio
