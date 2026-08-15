@@ -128,7 +128,7 @@ fix(chat): connect default chat to real agent stream
 **文件：**
 - 创建：`backend/app/core/chat_history_store.py`
 - 修改：`backend/app/api/chat_history.py`
-- 修改：`backend/app/core/config/database.py`
+- 创建：`backend/migrations/010_chat_history_tables.sql`
 - 测试：`tests/test_chat_history_persistence.py`
 - 测试：`tests/test_chat_history_tenant_isolation.py`
 
@@ -150,14 +150,16 @@ class ChatHistoryStore(Protocol):
     async def list_sessions(self, tenant_id: str, user_id: str, limit: int) -> list[ChatSession]: ...
     async def get_session(self, tenant_id: str, user_id: str, session_id: str) -> ChatSession | None: ...
     async def append_message(self, tenant_id: str, user_id: str, session_id: str, message: ChatMessageRecord) -> ChatSession | None: ...
+    async def delete_session(self, tenant_id: str, user_id: str, session_id: str) -> bool: ...
+    async def clear_sessions(self, tenant_id: str, user_id: str) -> int: ...
 ```
 
-生产使用配置数据库；SQLite 仅用于开发/测试。所有 API 查询都带 `tenant_id + user_id + session_id`，不存在或不属于当前 principal 时统一 404，禁止自动接管他人的 session ID。
+生产使用配置的 PostgreSQL 且依赖显式 migration，缺表时失败关闭；SQLite 自动建表仅用于开发/测试。所有 API 查询都带 `tenant_id + user_id + session_id`，不存在或不属于当前 principal 时统一 404，禁止自动接管他人的 session ID。删除单会话与清空历史同样只作用于当前 principal。
 
 - [ ] **步骤 3：运行持久化、隔离和现有聊天回归**
 
 ```powershell
-python -m pytest tests/test_chat_history_persistence.py tests/test_chat_history_tenant_isolation.py tests/test_chat_entrypoint_contract.py -q
+python -m pytest tests/test_chat_history_persistence.py tests/test_chat_history_tenant_isolation.py tests/test_chat_entrypoint_contract.py tests/test_agent_stream_api.py -q
 ```
 
 - [ ] **步骤 4：双阶段审查并提交**
