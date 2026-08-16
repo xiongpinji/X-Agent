@@ -1,7 +1,7 @@
 // mobile/src/native/BiometricAuth.ts
 // 生物识别认证原生模块
 
-import { NativeModules, Platform } from 'react-native';
+import { NativeModules } from 'react-native';
 
 const { BiometricAuthModule } = NativeModules;
 

@@ -13,7 +13,7 @@ from __future__ import annotations
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from backend.app.main import app, _register_all_routers
+from backend.app.main import _register_all_routers, app
 
 # Ensure routers are registered before tests run
 _register_all_routers()
@@ -115,6 +115,12 @@ class TestRefresh:
     async def test_refresh_with_valid_token(self, client, auth_headers):
         resp = await client.post("/api/v1/auth/refresh", headers=auth_headers)
         assert resp.status_code == 200
+        refreshed = resp.json()["access_token"]
+        me = await client.get(
+            "/api/v1/auth/me",
+            headers={"Authorization": f"Bearer {refreshed}"},
+        )
+        assert me.status_code == 200
 
     async def test_refresh_without_token(self, client):
         resp = await client.post("/api/v1/auth/refresh")

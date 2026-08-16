@@ -4,7 +4,13 @@
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import Constants from 'expo-constants';
+import * as SecureStore from 'expo-secure-store';
+import { Platform } from 'react-native';
+import { v4 as uuidv4 } from 'uuid';
 import { PushNotification } from '../types';
+import { apiClient } from './apiClient';
+
+const DEVICE_ID_KEY = 'mobile_device_id';
 
 class PushNotificationManager {
   async initialize(): Promise<void> {
@@ -25,7 +31,6 @@ class PushNotificationManager {
 
       // 获取推送token
       const token = await this.getPushToken();
-      console.log('Push token:', token);
 
       // 将token发送到后端
       await this.registerPushToken(token);
@@ -49,23 +54,26 @@ class PushNotificationManager {
   }
 
   private async registerPushToken(token: string): Promise<void> {
-    try {
-      await fetch('https://api.xagent.local/notifications/register-token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token }),
-      });
-    } catch (error) {
-      console.error('Register push token error:', error);
+    let deviceId = await SecureStore.getItemAsync(DEVICE_ID_KEY);
+    if (!deviceId) {
+      deviceId = uuidv4();
+      await SecureStore.setItemAsync(DEVICE_ID_KEY, deviceId);
     }
+    await apiClient.post('/api/v1/mobile/push/register', {
+      device_id: deviceId,
+      platform: Platform.OS,
+      push_token: token,
+    });
   }
 
   private setupNotificationHandlers(): void {
     // 处理前台通知
     Notifications.setNotificationHandler({
-      handleNotification: async (notification) => {
+      handleNotification: async (_notification) => {
         return {
           shouldShowAlert: true,
+          shouldShowBanner: true,
+          shouldShowList: true,
           shouldPlaySound: true,
           shouldSetBadge: true,
         };
@@ -85,7 +93,6 @@ class PushNotificationManager {
 
   private handleNotificationResponse(response: any): void {
     const notification = response.notification.request.content.data as PushNotification;
-    console.log('Notification response:', notification);
 
     // 处理深度链接
     if (notification.deepLink) {
@@ -93,13 +100,7 @@ class PushNotificationManager {
     }
   }
 
-  private handleNotificationReceived(notification: any): void {
-    const data = notification.request.content.data as PushNotification;
-    console.log('Notification received:', data);
-
-    // 更新应用状态
-    // 例如：刷新任务列表、更新工作流状态等
-  }
+  private handleNotificationReceived(_notification: any): void {}
 
   async sendLocalNotification(notification: PushNotification): Promise<void> {
     await Notifications.scheduleNotificationAsync({
@@ -110,7 +111,10 @@ class PushNotificationManager {
         sound: notification.sound,
         data: notification.data,
       },
-      trigger: { seconds: 1 },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+        seconds: 1,
+      },
     });
   }
 

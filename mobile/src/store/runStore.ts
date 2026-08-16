@@ -10,6 +10,7 @@ import {
   TriggerPriority,
   RunStatusData,
 } from '../services/mobileRunService';
+import { v4 as uuidv4 } from 'uuid';
 
 const POLL_INTERVAL_MS = 3000;
 
@@ -46,6 +47,7 @@ export const useRunStore = create<RunStore>((set, get) => ({
     get().stopPolling();
     try {
       const resp = await triggerAgentRun({
+        operation_id: uuidv4(),
         task: task.trim(),
         priority,
         metadata: { source: 'mobile', device_id: 'expo-app' },
@@ -69,8 +71,8 @@ export const useRunStore = create<RunStore>((set, get) => ({
       });
       get().startPolling();
       return true;
-    } catch (error) {
-      set({ error: String(error), submitting: false });
+    } catch {
+      set({ error: 'Unable to trigger task.', submitting: false });
       return false;
     }
   },
@@ -84,9 +86,9 @@ export const useRunStore = create<RunStore>((set, get) => ({
       if (isTerminalStatus(status.status)) {
         get().stopPolling();
       }
-    } catch (error) {
+    } catch {
       // 轮询失败不打断流程, 仅记录; 连续失败由用户手动停止
-      set({ error: String(error) });
+      set({ error: 'Unable to refresh task status.' });
     }
   },
 
@@ -112,8 +114,8 @@ export const useRunStore = create<RunStore>((set, get) => ({
     try {
       await cancelRun(runId);
       await get().refreshRunStatus();
-    } catch (error) {
-      set({ error: String(error) });
+    } catch {
+      set({ error: 'Unable to cancel task.' });
     } finally {
       get().stopPolling();
     }

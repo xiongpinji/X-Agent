@@ -164,7 +164,7 @@ export const capitalize = (text: string): string => {
 export const formatJSON = (obj: any, indent: number = 2): string => {
   try {
     return JSON.stringify(obj, null, indent);
-  } catch (error) {
+  } catch {
     return 'Invalid JSON';
   }
 };
@@ -175,7 +175,7 @@ export const formatJSON = (obj: any, indent: number = 2): string => {
 export const parseJSON = <T = any>(json: string, defaultValue?: T): T | undefined => {
   try {
     return JSON.parse(json);
-  } catch (error) {
+  } catch {
     return defaultValue;
   }
 };

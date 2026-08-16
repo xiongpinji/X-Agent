@@ -14,14 +14,9 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 type IconName = React.ComponentProps<typeof MaterialCommunityIcons>['name'];
 import { useTheme } from '../theme';
 import { useAuthStore } from '../store/authStore';
-import {
-  LoginScreen,
-  HomeScreen,
-  TaskListScreen,
-  TaskTriggerScreen,
-  WorkflowMonitorScreen,
-  SettingsScreen,
-} from '../screens';
+import { LoginScreen } from '../screens/LoginScreen';
+import { SettingsScreen } from '../screens/SettingsScreen';
+import { TaskTriggerScreen } from '../screens/TaskTriggerScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -76,16 +71,10 @@ const MainTabs = () => {
           marginTop: 4,
         },
         tabBarIcon: ({ color, size }) => {
-          let iconName: IconName = 'home-outline';
+          let iconName: IconName = 'rocket-launch-outline';
 
-          if (route.name === 'Home') {
-            iconName = 'home-outline';
-          } else if (route.name === 'Tasks') {
-            iconName = 'format-list-bulleted';
-          } else if (route.name === 'Trigger') {
+          if (route.name === 'Trigger') {
             iconName = 'rocket-launch-outline';
-          } else if (route.name === 'Workflows') {
-            iconName = 'play-circle-outline';
           } else if (route.name === 'Settings') {
             iconName = 'cog-outline';
           }
@@ -97,31 +86,10 @@ const MainTabs = () => {
       })}
     >
       <Tab.Screen
-        name="Home"
-        component={HomeScreen}
-        options={{
-          title: 'Dashboard',
-        }}
-      />
-      <Tab.Screen
-        name="Tasks"
-        component={TaskListScreen}
-        options={{
-          title: 'Tasks',
-        }}
-      />
-      <Tab.Screen
         name="Trigger"
         component={TaskTriggerScreen}
         options={{
           title: 'Trigger',
-        }}
-      />
-      <Tab.Screen
-        name="Workflows"
-        component={WorkflowMonitorScreen}
-        options={{
-          title: 'Workflows',
         }}
       />
       <Tab.Screen

@@ -1,9 +1,7 @@
 // mobile/src/services/database.ts
 // SQLite数据库管理
-// 说明：SDK 50 中异步 API（openDatabaseAsync/runAsync 等）位于 expo-sqlite/next 子路径
-
-import * as SQLite from 'expo-sqlite/next';
-import { Task, WorkflowRun, SyncQueue } from '../types';
+import * as SQLite from 'expo-sqlite';
+import { Task, SyncQueue } from '../types';
 
 const DB_NAME = 'xagent.db';
 

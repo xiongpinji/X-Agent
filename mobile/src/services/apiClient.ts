@@ -4,8 +4,8 @@
 import axios, { AxiosInstance, AxiosError } from 'axios';
 import * as SecureStore from 'expo-secure-store';
 import { useAuthStore } from '../store/authStore';
-
-const API_BASE_URL = 'https://api.xagent.local';
+import { buildWebSocketUrl, getApiBaseUrl } from './apiConfig';
+import { ACCESS_TOKEN_KEY, loadAuthHeaders } from './authCredentials';
 
 class ApiClient {
   private client: AxiosInstance;
@@ -17,7 +17,6 @@ class ApiClient {
 
   constructor() {
     this.client = axios.create({
-      baseURL: API_BASE_URL,
       timeout: 30000,
       headers: {
         'Content-Type': 'application/json',
@@ -27,10 +26,8 @@ class ApiClient {
     // 请求拦截器
     this.client.interceptors.request.use(
       async (config) => {
-        const token = await SecureStore.getItemAsync('token');
-        if (token) {
-          config.headers.Authorization = `Bearer ${token}`;
-        }
+        config.baseURL = getApiBaseUrl();
+        Object.assign(config.headers, await loadAuthHeaders());
         return config;
       },
       (error) => Promise.reject(error)
@@ -59,7 +56,7 @@ class ApiClient {
 
           try {
             await useAuthStore.getState().refreshAccessToken();
-            const token = await SecureStore.getItemAsync('token');
+            const token = await SecureStore.getItemAsync(ACCESS_TOKEN_KEY);
 
             this.failedQueue.forEach((prom) => prom.resolve(token));
             this.failedQueue = [];
@@ -103,28 +100,23 @@ class ApiClient {
   }
 
   // WebSocket连接
-  connectWebSocket(path: string, onMessage: (data: any) => void): WebSocket {
-    const ws = new WebSocket(`wss://api.xagent.local${path}`);
-
-    ws.onopen = () => {
-      console.log('WebSocket connected');
-    };
+  async connectWebSocket(
+    path: string,
+    onMessage: (data: any) => void
+  ): Promise<WebSocket> {
+    const headers = await loadAuthHeaders();
+    const NativeWebSocket = WebSocket as unknown as new (
+      uri: string,
+      protocols: string[],
+      options: { headers: Record<string, string> }
+    ) => WebSocket;
+    const ws = new NativeWebSocket(buildWebSocketUrl(path), [], { headers });
 
     ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
         onMessage(data);
-      } catch (error) {
-        console.error('WebSocket message parse error:', error);
-      }
-    };
-
-    ws.onerror = (error) => {
-      console.error('WebSocket error:', error);
-    };
-
-    ws.onclose = () => {
-      console.log('WebSocket disconnected');
+      } catch {}
     };
 
     return ws;

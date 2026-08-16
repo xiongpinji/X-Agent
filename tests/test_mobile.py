@@ -10,18 +10,18 @@
 """
 
 import pytest
+from pydantic import ValidationError
 
 from backend.app.api.mobile import (
     MobileRunManager,
     MobileRunRecord,
     PushRegisterRequest,
     TriggerRequest,
-    _estimate_progress,
     _current_step_desc,
+    _estimate_progress,
     get_mobile_manager,
 )
 from backend.app.core.security import Principal
-
 
 # ─── MobileRunManager 单元测试 ────────────────────────────────────────────────
 
@@ -29,9 +29,16 @@ from backend.app.core.security import Principal
 class TestMobileRunManager:
     def setup_method(self):
         self.manager = MobileRunManager()
-        self.principal = Principal(user_id="test-user", tenant_id="test-tenant", roles=["user"])
+        self.principal = Principal(
+            user_id="test-user",
+            tenant_id="test-tenant",
+            role="user",
+            scopes=["agent:read", "agent:run", "notifications:subscribe"],
+            authenticated=True,
+        )
 
     def _make_trigger(self, task="测试任务", **kwargs) -> TriggerRequest:
+        kwargs.setdefault("operation_id", f"test-{task}")
         return TriggerRequest(task=task, **kwargs)
 
     def test_create_run(self):
@@ -45,31 +52,31 @@ class TestMobileRunManager:
     def test_get_run(self):
         req = self._make_trigger()
         record = self.manager.create_run(req, self.principal)
-        fetched = self.manager.get_run(record.run_id)
+        fetched = self.manager.get_run(record.run_id, self.principal)
         assert fetched is not None
         assert fetched.run_id == record.run_id
 
     def test_get_run_not_found(self):
-        assert self.manager.get_run("nonexistent") is None
+        assert self.manager.get_run("nonexistent", self.principal) is None
 
     def test_list_runs(self):
         for i in range(5):
             self.manager.create_run(self._make_trigger(f"task-{i}"), self.principal)
-        runs = self.manager.list_runs()
+        runs = self.manager.list_runs(self.principal)
         assert len(runs) == 5
 
     def test_list_runs_with_limit(self):
         for i in range(10):
             self.manager.create_run(self._make_trigger(f"task-{i}"), self.principal)
-        runs = self.manager.list_runs(limit=3)
+        runs = self.manager.list_runs(self.principal, limit=3)
         assert len(runs) == 3
 
     def test_list_runs_by_device(self):
-        req1 = TriggerRequest(task="t1", metadata={"device_id": "dev-a"})
-        req2 = TriggerRequest(task="t2", metadata={"device_id": "dev-b"})
+        req1 = TriggerRequest(task="t1", operation_id="op-1", metadata={"device_id": "dev-a"})
+        req2 = TriggerRequest(task="t2", operation_id="op-2", metadata={"device_id": "dev-b"})
         self.manager.create_run(req1, self.principal)
         self.manager.create_run(req2, self.principal)
-        runs_a = self.manager.list_runs(device_id="dev-a")
+        runs_a = self.manager.list_runs(self.principal, device_id="dev-a")
         assert len(runs_a) == 1
         assert runs_a[0].device_id == "dev-a"
 
@@ -90,26 +97,27 @@ class TestMobileRunManager:
             push_token="apns-token-abc",
             topics=["agent_complete"],
         )
-        self.manager.register_push(req)
-        assert "iphone-123" in self.manager._push_tokens
-        assert self.manager._push_tokens["iphone-123"]["platform"] == "ios"
+        self.manager.register_push(req, self.principal)
+        key = ("test-tenant", "test-user", "iphone-123")
+        assert key in self.manager._push_tokens
+        assert self.manager._push_tokens[key]["platform"] == "ios"
 
     def test_unregister_push(self):
         req = PushRegisterRequest(device_id="dev-1", platform="android", push_token="fcm-xyz")
-        self.manager.register_push(req)
-        assert self.manager.unregister_push("dev-1")
-        assert "dev-1" not in self.manager._push_tokens
+        self.manager.register_push(req, self.principal)
+        assert self.manager.unregister_push("dev-1", self.principal)
+        assert ("test-tenant", "test-user", "dev-1") not in self.manager._push_tokens
 
     def test_unregister_push_not_found(self):
-        assert not self.manager.unregister_push("nonexistent")
+        assert not self.manager.unregister_push("nonexistent", self.principal)
 
     def test_priority_field(self):
-        req = TriggerRequest(task="urgent task", priority="urgent")
+        req = TriggerRequest(task="urgent task", operation_id="urgent-op", priority="urgent")
         record = self.manager.create_run(req, self.principal)
         assert record.priority == "urgent"
 
     def test_notify_flag(self):
-        req = TriggerRequest(task="t", notify_on_complete=False)
+        req = TriggerRequest(task="t", operation_id="notify-op", notify_on_complete=False)
         record = self.manager.create_run(req, self.principal)
         assert record.notify_on_complete is False
 
@@ -122,11 +130,14 @@ class TestHelpers:
         return MobileRunRecord(
             run_id="mob-test",
             trace_id="trace-1",
+            operation_id="helper-op",
             task="test",
-            agent_id="default",
+            agent_id="default-agent",
             priority="normal",
             status=status,
             created_at="2026-01-01T00:00:00+00:00",
+            tenant_id="test-tenant",
+            user_id="test-user",
             **kwargs,
         )
 
@@ -160,24 +171,28 @@ class TestHelpers:
 
 class TestTriggerRequestValidation:
     def test_valid_request(self):
-        req = TriggerRequest(task="分析销售数据")
+        req = TriggerRequest(task="分析销售数据", operation_id="valid-op")
         assert req.task == "分析销售数据"
         assert req.priority == "normal"
         assert req.timeout_seconds == 300
         assert req.notify_on_complete is True
 
     def test_empty_task_rejected(self):
-        with pytest.raises(Exception):
-            TriggerRequest(task="")
+        with pytest.raises(ValidationError):
+            TriggerRequest(task="", operation_id="empty-task-op")
 
     def test_timeout_bounds(self):
-        req = TriggerRequest(task="t", timeout_seconds=10)
+        req = TriggerRequest(task="t", operation_id="timeout-op", timeout_seconds=10)
         assert req.timeout_seconds == 10
-        with pytest.raises(Exception):
-            TriggerRequest(task="t", timeout_seconds=5)  # < 10
+        with pytest.raises(ValidationError):
+            TriggerRequest(task="t", operation_id="timeout-low-op", timeout_seconds=5)  # < 10
 
     def test_metadata_passthrough(self):
-        req = TriggerRequest(task="t", metadata={"device_id": "dev-x", "os": "iOS 18"})
+        req = TriggerRequest(
+            task="t",
+            operation_id="metadata-op",
+            metadata={"device_id": "dev-x", "os": "iOS 18"},
+        )
         assert req.metadata["device_id"] == "dev-x"
 
 

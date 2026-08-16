@@ -29,7 +29,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
 
   useEffect(() => {
     fetchTasks(1);
-  }, []);
+  }, [fetchTasks]);
 
   const handleRefresh = async () => {
     setRefreshing(true);

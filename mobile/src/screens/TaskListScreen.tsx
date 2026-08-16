@@ -21,11 +21,11 @@ interface TaskListScreenProps {
 export const TaskListScreen: React.FC<TaskListScreenProps> = ({ navigation }) => {
   const { tasks, loading, fetchTasks, setSelectedTask } = useTaskStore();
   const [refreshing, setRefreshing] = useState(false);
-  const [page, setPage] = useState(1);
+  const page = 1;
 
   useEffect(() => {
     fetchTasks(page);
-  }, [page]);
+  }, [fetchTasks, page]);
 
   const handleRefresh = async () => {
     setRefreshing(true);

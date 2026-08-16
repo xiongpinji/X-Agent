@@ -375,7 +375,9 @@ async def refresh(principal: PrincipalDependency) -> dict[str, object]:
     """Refresh access token using refresh token."""
     if not principal.authenticated:
         raise api_error(401, ErrorCode.AUTHENTICATION_FAILED, "Authentication required.")
-    return {"access_token": _issue_token(), "token_type": "Bearer", "expires_in": 900}
+    access_token = _issue_token()
+    _store_token_user(access_token, principal.user_id)
+    return {"access_token": access_token, "token_type": "Bearer", "expires_in": 900}
 
 
 @router.post("/logout")

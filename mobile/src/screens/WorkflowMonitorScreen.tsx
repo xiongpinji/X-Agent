@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { WorkflowRun, WorkflowNode } from '../types';
 import { ProgressBar } from '../components/ProgressBar';
+import { apiClient } from '../services/apiClient';
 
 interface WorkflowMonitorScreenProps {
   navigation: any;
@@ -18,7 +19,7 @@ interface WorkflowMonitorScreenProps {
 }
 
 export const WorkflowMonitorScreen: React.FC<WorkflowMonitorScreenProps> = ({
-  navigation,
+  navigation: _navigation,
   route,
 }) => {
   const { workflowId } = route.params ?? {};
@@ -26,24 +27,22 @@ export const WorkflowMonitorScreen: React.FC<WorkflowMonitorScreenProps> = ({
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchWorkflow();
-    const interval = setInterval(fetchWorkflow, 2000); // 每2秒刷新一次
+    const fetchWorkflow = async () => {
+      try {
+        const data = await apiClient.get<WorkflowRun>(
+          `/api/v1/workflows/${workflowId}`
+        );
+        setWorkflow(data);
+      } catch {
+        setWorkflow(null);
+      } finally {
+        setLoading(false);
+      }
+    };
+    void fetchWorkflow();
+    const interval = setInterval(() => void fetchWorkflow(), 2000);
     return () => clearInterval(interval);
   }, [workflowId]);
-
-  const fetchWorkflow = async () => {
-    try {
-      const response = await fetch(
-        `https://api.xagent.local/workflows/${workflowId}`
-      );
-      const data = await response.json();
-      setWorkflow(data);
-      setLoading(false);
-    } catch (error) {
-      console.error('Fetch workflow error:', error);
-      setLoading(false);
-    }
-  };
 
   const renderProgressBar = () => {
     if (!workflow) return null;

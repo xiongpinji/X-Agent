@@ -385,9 +385,9 @@ def get_current_principal(request: Request) -> Principal:
     if auth_header.lower().startswith("bearer "):
         token = auth_header[7:].strip()
         if token:
-            from backend.app.api.auth import _is_token_valid, _token_users
+            from backend.app.api.auth import _get_token_user, _is_token_valid
             if _is_token_valid(token):
-                user_id = _token_users.get(token)
+                user_id = _get_token_user(token)
                 if user_id:
                     from backend.app.core.admin import user_store
                     user = user_store.get(user_id)

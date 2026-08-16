@@ -17,15 +17,16 @@ import json
 import logging
 import uuid
 from collections import defaultdict
+from contextlib import suppress
 from datetime import UTC, datetime
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from backend.app.core.contracts import RunContext
 from backend.app.core.security import Principal
-from backend.app.dependencies import get_current_principal
+from backend.app.dependencies import enforce_scope, get_agent, get_current_principal
 
 logger = logging.getLogger(__name__)
 
@@ -41,11 +42,40 @@ class TriggerRequest(BaseModel):
     """移动端触发 Agent 执行请求."""
 
     task: str = Field(..., min_length=1, max_length=4096, description="任务描述")
-    agent_id: str = Field(default="default", description="Agent ID")
-    priority: str = Field(default="normal", description="优先级: low/normal/high/urgent")
+    operation_id: str = Field(..., min_length=1, max_length=220, description="幂等操作 ID")
+    agent_id: str = Field(default="default-agent", min_length=1, max_length=128, description="Agent ID")
+    priority: Literal["low", "normal", "high", "urgent"] = Field(
+        default="normal", description="优先级"
+    )
     timeout_seconds: int = Field(default=300, ge=10, le=3600, description="超时时间")
     notify_on_complete: bool = Field(default=True, description="完成后推送通知")
     metadata: dict[str, Any] = Field(default_factory=dict, description="附加元数据")
+
+    @field_validator("task", "operation_id", "agent_id")
+    @classmethod
+    def normalize_required_text(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("value must not be blank")
+        return normalized
+
+    @field_validator("metadata")
+    @classmethod
+    def validate_metadata(cls, value: dict[str, Any]) -> dict[str, Any]:
+        if len(value) > 64:
+            raise ValueError("metadata has too many keys")
+        try:
+            encoded = json.dumps(value, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+        except (TypeError, ValueError) as exc:
+            raise ValueError("metadata must be JSON serializable") from exc
+        if len(encoded) > 65_536:
+            raise ValueError("metadata is too large")
+        device_id = value.get("device_id")
+        if device_id is not None and (
+            not isinstance(device_id, str) or not device_id.strip() or len(device_id) > 220
+        ):
+            raise ValueError("metadata device_id is invalid")
+        return value
 
 
 class TriggerResponse(BaseModel):
@@ -71,6 +101,7 @@ class RunStatusResponse(BaseModel):
     completed_at: str | None = None
     result_summary: str = ""
     error: str | None = None
+    error_code: str | None = None
     iterations: int = 0
     tool_calls_count: int = 0
 
@@ -80,6 +111,7 @@ class MobileRunRecord(BaseModel):
 
     run_id: str
     trace_id: str
+    operation_id: str
     task: str
     agent_id: str
     priority: str
@@ -89,15 +121,41 @@ class MobileRunRecord(BaseModel):
     completed_at: str | None = None
     notify_on_complete: bool = True
     device_id: str = ""
+    timeout_seconds: int = 300
+    result_summary: str = ""
+    error: str | None = None
+    error_code: str | None = None
+    tenant_id: str = Field(exclude=True)
+    user_id: str = Field(exclude=True)
 
 
 class PushRegisterRequest(BaseModel):
     """注册推送 token."""
 
-    device_id: str = Field(..., min_length=1)
-    platform: str = Field(default="ios", description="ios | android | harmony")
-    push_token: str = Field(..., min_length=1, description="APNs/FCM token")
-    topics: list[str] = Field(default_factory=lambda: ["agent_complete", "agent_error"])
+    device_id: str = Field(..., min_length=1, max_length=220)
+    platform: Literal["ios", "android", "harmony"] = Field(
+        default="ios", description="ios | android | harmony"
+    )
+    push_token: str = Field(..., min_length=1, max_length=4096, description="APNs/FCM token")
+    topics: list[str] = Field(
+        default_factory=lambda: ["agent_complete", "agent_error"], max_length=32
+    )
+
+    @field_validator("device_id", "push_token")
+    @classmethod
+    def normalize_push_text(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("value must not be blank")
+        return normalized
+
+    @field_validator("topics")
+    @classmethod
+    def validate_topics(cls, value: list[str]) -> list[str]:
+        normalized = [topic.strip() for topic in value]
+        if any(not topic or len(topic) > 128 for topic in normalized):
+            raise ValueError("topic is invalid")
+        return normalized
 
 
 class PushRegisterResponse(BaseModel):
@@ -114,9 +172,10 @@ class MobileRunManager:
 
     def __init__(self):
         self._runs: dict[str, MobileRunRecord] = {}
-        self._push_tokens: dict[str, dict] = {}  # device_id -> {platform, token, topics}
-        self._ws_clients: dict[str, list[WebSocket]] = defaultdict(list)  # run_id -> [ws]
-        self._global_ws: list[WebSocket] = []  # 全局监听
+        self._push_tokens: dict[tuple[str, str, str], dict] = {}
+        self._execution_tasks: dict[str, asyncio.Task[None]] = {}
+        self._ws_clients: dict[tuple[str, str, str], list[WebSocket]] = defaultdict(list)
+        self._global_ws: dict[tuple[str, str], list[WebSocket]] = defaultdict(list)
 
     def create_run(self, req: TriggerRequest, principal: Principal) -> MobileRunRecord:
         run_id = f"mob-{uuid.uuid4().hex[:12]}"
@@ -124,6 +183,7 @@ class MobileRunManager:
         record = MobileRunRecord(
             run_id=run_id,
             trace_id=trace_id,
+            operation_id=req.operation_id,
             task=req.task,
             agent_id=req.agent_id,
             priority=req.priority,
@@ -131,15 +191,28 @@ class MobileRunManager:
             created_at=datetime.now(UTC).isoformat(),
             notify_on_complete=req.notify_on_complete,
             device_id=req.metadata.get("device_id", ""),
+            timeout_seconds=req.timeout_seconds,
+            tenant_id=principal.tenant_id,
+            user_id=principal.user_id,
         )
         self._runs[run_id] = record
         return record
 
-    def get_run(self, run_id: str) -> MobileRunRecord | None:
-        return self._runs.get(run_id)
+    @staticmethod
+    def _owns(record: MobileRunRecord, principal: Principal) -> bool:
+        return record.tenant_id == principal.tenant_id and record.user_id == principal.user_id
 
-    def list_runs(self, device_id: str = "", limit: int = 20) -> list[MobileRunRecord]:
-        runs = list(self._runs.values())
+    def get_run(self, run_id: str, principal: Principal) -> MobileRunRecord | None:
+        record = self._runs.get(run_id)
+        return record if record is not None and self._owns(record, principal) else None
+
+    def list_runs(
+        self,
+        principal: Principal,
+        device_id: str = "",
+        limit: int = 20,
+    ) -> list[MobileRunRecord]:
+        runs = [record for record in self._runs.values() if self._owns(record, principal)]
         if device_id:
             runs = [r for r in runs if r.device_id == device_id]
         runs.sort(key=lambda r: r.created_at, reverse=True)
@@ -154,50 +227,83 @@ class MobileRunManager:
                     setattr(record, k, v)
         return record
 
-    def register_push(self, req: PushRegisterRequest) -> None:
-        self._push_tokens[req.device_id] = {
+    def register_push(self, req: PushRegisterRequest, principal: Principal) -> None:
+        key = (principal.tenant_id, principal.user_id, req.device_id)
+        self._push_tokens[key] = {
             "platform": req.platform,
             "token": req.push_token,
             "topics": req.topics,
             "registered_at": datetime.now(UTC).isoformat(),
         }
 
-    def unregister_push(self, device_id: str) -> bool:
-        return self._push_tokens.pop(device_id, None) is not None
+    def unregister_push(self, device_id: str, principal: Principal) -> bool:
+        key = (principal.tenant_id, principal.user_id, device_id)
+        return self._push_tokens.pop(key, None) is not None
+
+    def attach_execution(self, run_id: str, task: asyncio.Task[None]) -> None:
+        self._execution_tasks[run_id] = task
+
+    def detach_execution(self, run_id: str) -> None:
+        self._execution_tasks.pop(run_id, None)
+
+    async def cancel_execution(self, run_id: str, principal: Principal) -> bool:
+        record = self.get_run(run_id, principal)
+        if record is None:
+            return False
+        task = self._execution_tasks.get(run_id)
+        if task is not None and not task.done():
+            task.cancel()
+            with suppress(asyncio.CancelledError):
+                await task
+        self.update_status(
+            run_id,
+            "cancelled",
+            completed_at=datetime.now(UTC).isoformat(),
+            error=None,
+            error_code=None,
+        )
+        return True
 
     async def broadcast_status(self, run_id: str, event: dict) -> None:
         """向订阅该 run 的 WebSocket 客户端广播状态."""
         message = json.dumps(event, ensure_ascii=False, default=str)
         # 发送给订阅该 run 的客户端
         dead = []
-        for ws in self._ws_clients.get(run_id, []):
+        record = self._runs.get(run_id)
+        if record is None:
+            return
+        owner = (record.tenant_id, record.user_id)
+        channel = (*owner, run_id)
+        for ws in self._ws_clients.get(channel, []):
             try:
                 await ws.send_text(message)
             except Exception:
                 dead.append(ws)
         for ws in dead:
-            self._ws_clients[run_id].remove(ws)
+            self._ws_clients[channel].remove(ws)
         # 发送给全局监听客户端
         dead_global = []
-        for ws in self._global_ws:
+        for ws in self._global_ws.get(owner, []):
             try:
                 await ws.send_text(message)
             except Exception:
                 dead_global.append(ws)
         for ws in dead_global:
-            self._global_ws.remove(ws)
+            self._global_ws[owner].remove(ws)
 
-    def add_ws_client(self, ws: WebSocket, run_id: str | None = None) -> None:
+    def add_ws_client(self, ws: WebSocket, principal: Principal, run_id: str | None = None) -> None:
         if run_id:
-            self._ws_clients[run_id].append(ws)
+            self._ws_clients[(principal.tenant_id, principal.user_id, run_id)].append(ws)
         else:
-            self._global_ws.append(ws)
+            self._global_ws[(principal.tenant_id, principal.user_id)].append(ws)
 
-    def remove_ws_client(self, ws: WebSocket, run_id: str | None = None) -> None:
-        if run_id and ws in self._ws_clients.get(run_id, []):
-            self._ws_clients[run_id].remove(ws)
-        elif ws in self._global_ws:
-            self._global_ws.remove(ws)
+    def remove_ws_client(self, ws: WebSocket, principal: Principal, run_id: str | None = None) -> None:
+        channel = (principal.tenant_id, principal.user_id, run_id or "")
+        owner = (principal.tenant_id, principal.user_id)
+        if run_id and ws in self._ws_clients.get(channel, []):
+            self._ws_clients[channel].remove(ws)
+        elif ws in self._global_ws.get(owner, []):
+            self._global_ws[owner].remove(ws)
 
 
 # 单例
@@ -217,11 +323,20 @@ async def trigger_agent(req: TriggerRequest, principal: PrincipalDependency):
 
     移动端通过此接口提交任务, 返回 run_id 用于后续状态查询和 WebSocket 订阅。
     """
+    enforce_scope(principal, "agent:run")
+    from backend.app.api.agents import _AGENTS
+
+    agent_record = _AGENTS.get(req.agent_id)
+    if agent_record is None:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    if agent_record.get("status") != "active":
+        raise HTTPException(status_code=409, detail="Agent is not active")
+
     manager = get_mobile_manager()
     record = manager.create_run(req, principal)
 
-    # 异步启动 Agent 执行 (fire-and-forget)
-    asyncio.create_task(_execute_mobile_run(record, principal))
+    execution = asyncio.create_task(_execute_mobile_run(record, principal))
+    manager.attach_execution(record.run_id, execution)
 
     return TriggerResponse(
         run_id=record.run_id,
@@ -240,15 +355,17 @@ async def list_mobile_runs(
     principal: PrincipalDependency = None,
 ):
     """列出移动端触发的 runs."""
+    enforce_scope(principal, "agent:read")
     manager = get_mobile_manager()
-    return manager.list_runs(device_id=device_id, limit=limit)
+    return manager.list_runs(principal, device_id=device_id, limit=limit)
 
 
 @router.get("/runs/{run_id}/status", response_model=RunStatusResponse)
 async def get_mobile_run_status(run_id: str, principal: PrincipalDependency = None):
     """查询 run 实时状态."""
+    enforce_scope(principal, "agent:read")
     manager = get_mobile_manager()
-    record = manager.get_run(run_id)
+    record = manager.get_run(run_id, principal)
     if record is None:
         raise HTTPException(status_code=404, detail=f"Run {run_id} not found")
 
@@ -260,8 +377,9 @@ async def get_mobile_run_status(run_id: str, principal: PrincipalDependency = No
         current_step=_current_step_desc(record),
         started_at=record.started_at,
         completed_at=record.completed_at,
-        result_summary="" if record.status != "completed" else "Task completed",
-        error=None,
+        result_summary=record.result_summary,
+        error=record.error,
+        error_code=record.error_code,
         iterations=0,
         tool_calls_count=0,
     )
@@ -270,14 +388,15 @@ async def get_mobile_run_status(run_id: str, principal: PrincipalDependency = No
 @router.post("/runs/{run_id}/cancel")
 async def cancel_mobile_run(run_id: str, principal: PrincipalDependency = None):
     """取消正在执行的 run."""
+    enforce_scope(principal, "agent:run")
     manager = get_mobile_manager()
-    record = manager.get_run(run_id)
+    record = manager.get_run(run_id, principal)
     if record is None:
         raise HTTPException(status_code=404, detail=f"Run {run_id} not found")
     if record.status in ("completed", "failed", "cancelled"):
         raise HTTPException(status_code=400, detail=f"Run already in terminal state: {record.status}")
 
-    manager.update_status(run_id, "cancelled", completed_at=datetime.now(UTC).isoformat())
+    await manager.cancel_execution(run_id, principal)
     await manager.broadcast_status(run_id, {
         "event": "status_changed",
         "run_id": run_id,
@@ -293,8 +412,9 @@ async def cancel_mobile_run(run_id: str, principal: PrincipalDependency = None):
 @router.post("/push/register", response_model=PushRegisterResponse)
 async def register_push(req: PushRegisterRequest, principal: PrincipalDependency = None):
     """注册移动端推送 token (APNs/FCM)."""
+    enforce_scope(principal, "notifications:subscribe")
     manager = get_mobile_manager()
-    manager.register_push(req)
+    manager.register_push(req, principal)
     return PushRegisterResponse(
         device_id=req.device_id,
         registered=True,
@@ -305,8 +425,9 @@ async def register_push(req: PushRegisterRequest, principal: PrincipalDependency
 @router.delete("/push/unregister")
 async def unregister_push(device_id: str = Query(...), principal: PrincipalDependency = None):
     """注销推送 token."""
+    enforce_scope(principal, "notifications:subscribe")
     manager = get_mobile_manager()
-    removed = manager.unregister_push(device_id)
+    removed = manager.unregister_push(device_id, principal)
     if not removed:
         raise HTTPException(status_code=404, detail=f"Device {device_id} not registered")
     return {"device_id": device_id, "unregistered": True}
@@ -329,9 +450,18 @@ async def mobile_websocket(websocket: WebSocket, run_id: str | None = Query(None
     参数:
     - run_id: 可选, 订阅特定 run; 不传则接收所有 run 事件
     """
-    await websocket.accept()
+    try:
+        principal = get_current_principal(websocket)  # type: ignore[arg-type]
+        enforce_scope(principal, "agent:read")
+    except Exception:
+        await websocket.close(code=4401)
+        return
     manager = get_mobile_manager()
-    manager.add_ws_client(websocket, run_id)
+    if run_id and manager.get_run(run_id, principal) is None:
+        await websocket.close(code=4404)
+        return
+    await websocket.accept()
+    manager.add_ws_client(websocket, principal, run_id)
 
     try:
         # 发送连接确认
@@ -352,8 +482,11 @@ async def mobile_websocket(websocket: WebSocket, run_id: str | None = Query(None
                         "timestamp": datetime.now(UTC).isoformat(),
                     }))
                 elif msg.get("type") == "subscribe" and msg.get("run_id"):
-                    # 动态订阅新 run
-                    manager.add_ws_client(websocket, msg["run_id"])
+                    subscribed_run_id = str(msg["run_id"])
+                    if manager.get_run(subscribed_run_id, principal) is None:
+                        await websocket.send_text(json.dumps({"event": "error", "message": "Run not found"}))
+                        continue
+                    manager.add_ws_client(websocket, principal, subscribed_run_id)
                     await websocket.send_text(json.dumps({
                         "event": "subscribed",
                         "run_id": msg["run_id"],
@@ -366,7 +499,7 @@ async def mobile_websocket(websocket: WebSocket, run_id: str | None = Query(None
     except WebSocketDisconnect:
         pass
     finally:
-        manager.remove_ws_client(websocket, run_id)
+        manager.remove_ws_client(websocket, principal, run_id)
 
 
 # ─── 内部: 异步执行 ──────────────────────────────────────────────────────────
@@ -390,13 +523,15 @@ async def _execute_mobile_run(record: MobileRunRecord, principal: Principal) -> 
         # 构建 RunContext
         context = RunContext(
             trace_id=record.trace_id,
-            tenant_id=getattr(principal, "tenant_id", "default"),
-            user_id=getattr(principal, "user_id", "mobile-user"),
+            tenant_id=principal.tenant_id,
+            user_id=principal.user_id,
+            agent_id=record.agent_id,
+            request_id=record.run_id,
+            operation_id=record.operation_id,
+            permission_scope=list(principal.scopes),
         )
 
-        # 调用 AgentLoop 执行
-        from backend.app.core.agent import AgentLoop
-        agent = AgentLoop()
+        agent = get_agent()
 
         # 广播进度
         await manager.broadcast_status(run_id, {
@@ -407,30 +542,53 @@ async def _execute_mobile_run(record: MobileRunRecord, principal: Principal) -> 
             "timestamp": datetime.now(UTC).isoformat(),
         })
 
-        result = await agent.run(task=record.task, context=context)
+        async with asyncio.timeout(record.timeout_seconds):
+            result = await agent.run(task=record.task, context=context)
 
         # 完成
-        manager.update_status(run_id, "completed", completed_at=datetime.now(UTC).isoformat())
+        answer = str(getattr(result, "answer", ""))[:200]
+        manager.update_status(
+            run_id,
+            "completed",
+            completed_at=datetime.now(UTC).isoformat(),
+            result_summary=answer,
+            error=None,
+            error_code=None,
+        )
         await manager.broadcast_status(run_id, {
             "event": "status_changed",
             "run_id": run_id,
             "status": "completed",
-            "result_summary": str(getattr(result, "answer", ""))[:200],
+            "result_summary": answer,
             "timestamp": datetime.now(UTC).isoformat(),
         })
 
     except asyncio.CancelledError:
         manager.update_status(run_id, "cancelled", completed_at=datetime.now(UTC).isoformat())
-    except Exception as e:
-        logger.error("Mobile run %s failed: %s", run_id, e, exc_info=True)
-        manager.update_status(run_id, "failed", completed_at=datetime.now(UTC).isoformat())
+        raise
+    except Exception as exc:
+        logger.error(
+            "Mobile run failed run_id=%s error_type=%s error_code=agent_execution_failed",
+            run_id,
+            type(exc).__name__,
+        )
+        manager.update_status(
+            run_id,
+            "failed",
+            completed_at=datetime.now(UTC).isoformat(),
+            error="Agent execution failed.",
+            error_code="agent_execution_failed",
+        )
         await manager.broadcast_status(run_id, {
             "event": "status_changed",
             "run_id": run_id,
             "status": "failed",
-            "error": str(e),
+            "error": "Agent execution failed.",
+            "error_code": "agent_execution_failed",
             "timestamp": datetime.now(UTC).isoformat(),
         })
+    finally:
+        manager.detach_execution(run_id)
 
 
 def _estimate_progress(record: MobileRunRecord) -> float:

@@ -17,7 +17,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../theme';
 import { useAuthStore } from '../store/authStore';
 import { ErrorAlert } from '../components';
-import { isValidEmail, validatePassword } from '../utils/validators';
+import { isValidEmail } from '../utils/validators';
 
 interface LoginScreenProps {
   navigation: any;
@@ -58,14 +58,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
       setError(err.message || 'Login failed');
       setShowError(true);
     }
-  };
-
-  const handleSignUp = () => {
-    navigation.navigate('SignUp');
-  };
-
-  const handleForgotPassword = () => {
-    navigation.navigate('ForgotPassword');
   };
 
   return (
@@ -184,16 +176,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
             </View>
           </View>
 
-          {/* Forgot Password Link */}
-          <TouchableOpacity
-            onPress={handleForgotPassword}
-            disabled={loading}
-          >
-            <Text style={[styles.forgotPassword, { color: theme.colors.primary }]}>
-              Forgot Password?
-            </Text>
-          </TouchableOpacity>
-
           {/* Login Button */}
           <TouchableOpacity
             style={[
@@ -213,48 +195,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
             )}
           </TouchableOpacity>
 
-          {/* Divider */}
-          <View style={styles.dividerContainer}>
-            <View
-              style={[styles.divider, { backgroundColor: theme.colors.border }]}
-            />
-            <Text style={[styles.dividerText, { color: theme.colors.textTertiary }]}>
-              OR
-            </Text>
-            <View
-              style={[styles.divider, { backgroundColor: theme.colors.border }]}
-            />
-          </View>
-
-          {/* Biometric Login */}
-          <TouchableOpacity
-            style={[
-              styles.biometricButton,
-              { borderColor: theme.colors.border },
-            ]}
-            disabled={loading}
-          >
-            <MaterialCommunityIcons
-              name="fingerprint"
-              size={24}
-              color={theme.colors.primary}
-            />
-            <Text style={[styles.biometricText, { color: theme.colors.text }]}>
-              Sign in with Biometric
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Sign Up Link */}
-        <View style={styles.footer}>
-          <Text style={[styles.footerText, { color: theme.colors.textSecondary }]}>
-            Don't have an account?{' '}
-          </Text>
-          <TouchableOpacity onPress={handleSignUp} disabled={loading}>
-            <Text style={[styles.signUpLink, { color: theme.colors.primary }]}>
-              Sign Up
-            </Text>
-          </TouchableOpacity>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -319,12 +259,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '400',
   },
-  forgotPassword: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 24,
-    textAlign: 'right',
-  },
   loginButton: {
     height: 48,
     borderRadius: 12,
@@ -337,46 +271,6 @@ const styles = StyleSheet.create({
   },
   loginButtonText: {
     fontSize: 16,
-    fontWeight: '600',
-  },
-  dividerContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  divider: {
-    flex: 1,
-    height: 1,
-  },
-  dividerText: {
-    fontSize: 12,
-    fontWeight: '600',
-    marginHorizontal: 12,
-  },
-  biometricButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: 48,
-    borderRadius: 12,
-    borderWidth: 1,
-  },
-  biometricText: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginLeft: 12,
-  },
-  footer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  footerText: {
-    fontSize: 14,
-    fontWeight: '400',
-  },
-  signUpLink: {
-    fontSize: 14,
     fontWeight: '600',
   },
 });

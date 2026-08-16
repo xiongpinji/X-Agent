@@ -6,6 +6,11 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AuthState, User } from '../types';
 import * as SecureStore from 'expo-secure-store';
+import { loginWithPassword, refreshWithToken } from '../services/authApi';
+import {
+  ACCESS_TOKEN_KEY,
+  REFRESH_TOKEN_KEY,
+} from '../services/authCredentials';
 
 interface AuthStore extends AuthState {
   loading: boolean;
@@ -30,40 +35,29 @@ export const useAuthStore = create<AuthStore>()(
       login: async (email: string, password: string) => {
         set({ loading: true });
         try {
-          // 调用后端API
-          const response = await fetch('https://api.xagent.local/auth/login', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, password }),
-          });
-
-          if (!response.ok) throw new Error('Login failed');
-
-          const data = await response.json();
-
-          // 安全存储token
-          await SecureStore.setItemAsync('token', data.token);
-          await SecureStore.setItemAsync('refreshToken', data.refreshToken);
+          const data = await loginWithPassword(email, password);
+          const expiresAt = new Date(Date.now() + data.expiresIn * 1000);
+          await SecureStore.setItemAsync(ACCESS_TOKEN_KEY, data.accessToken);
+          await SecureStore.setItemAsync(REFRESH_TOKEN_KEY, data.refreshToken);
 
           set({
             isAuthenticated: true,
             user: data.user,
-            token: data.token,
+            token: data.accessToken,
             refreshToken: data.refreshToken,
-            expiresAt: new Date(data.expiresAt),
+            expiresAt,
             loading: false,
           });
         } catch (error) {
           set({ loading: false });
-          console.error('Login error:', error);
           throw error;
         }
       },
 
       logout: async () => {
         try {
-          await SecureStore.deleteItemAsync('token');
-          await SecureStore.deleteItemAsync('refreshToken');
+          await SecureStore.deleteItemAsync(ACCESS_TOKEN_KEY);
+          await SecureStore.deleteItemAsync(REFRESH_TOKEN_KEY);
           set({
             isAuthenticated: false,
             user: undefined,
@@ -71,34 +65,27 @@ export const useAuthStore = create<AuthStore>()(
             refreshToken: undefined,
             expiresAt: undefined,
           });
-        } catch (error) {
-          console.error('Logout error:', error);
+        } catch {
+          set({ isAuthenticated: false });
         }
       },
 
       refreshAccessToken: async () => {
         try {
-          const refreshToken = await SecureStore.getItemAsync('refreshToken');
+          const refreshToken = await SecureStore.getItemAsync(REFRESH_TOKEN_KEY);
           if (!refreshToken) throw new Error('No refresh token');
 
-          const response = await fetch('https://api.xagent.local/auth/refresh', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ refreshToken }),
-          });
-
-          if (!response.ok) throw new Error('Token refresh failed');
-
-          const data = await response.json();
-          await SecureStore.setItemAsync('token', data.token);
+          const data = await refreshWithToken(refreshToken);
+          const expiresAt = new Date(Date.now() + data.expiresIn * 1000);
+          await SecureStore.setItemAsync(ACCESS_TOKEN_KEY, data.accessToken);
 
           set({
-            token: data.token,
-            expiresAt: new Date(data.expiresAt),
+            token: data.accessToken,
+            expiresAt,
           });
         } catch (error) {
-          console.error('Token refresh error:', error);
-          get().logout();
+          await get().logout();
+          throw error;
         }
       },
 

@@ -177,12 +177,6 @@ class SyncManager {
         }
       }
 
-      if (response.workflows) {
-        for (const workflow of response.workflows) {
-          // 更新工作流
-        }
-      }
-
       // 更新同步时间
       await database.setCache('lastSyncTime', new Date().toISOString());
     } catch (error) {

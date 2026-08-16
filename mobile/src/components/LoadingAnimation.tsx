@@ -74,7 +74,7 @@ export const LoadingAnimation: React.FC<LoadingAnimationProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 1000,
@@ -130,21 +130,6 @@ export const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({
         return theme.colors.textTertiary;
       default:
         return theme.colors.textTertiary;
-    }
-  };
-
-  const getStatusIcon = () => {
-    switch (status) {
-      case 'synced':
-        return 'check-circle';
-      case 'syncing':
-        return 'sync';
-      case 'failed':
-        return 'alert-circle';
-      case 'offline':
-        return 'wifi-off';
-      default:
-        return 'help-circle';
     }
   };
 

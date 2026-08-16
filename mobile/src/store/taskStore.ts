@@ -21,7 +21,7 @@ interface TaskStore {
   clearError: () => void;
 }
 
-export const useTaskStore = create<TaskStore>((set, get) => ({
+export const useTaskStore = create<TaskStore>((set) => ({
   tasks: [],
   loading: false,
 

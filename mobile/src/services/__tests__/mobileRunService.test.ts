@@ -37,13 +37,18 @@ describe('mobileRunService', () => {
       ws_url: '/api/v1/mobile/ws?run_id=mob-abc123',
     });
 
-    const resp = await triggerAgentRun({ task: 'test task', priority: 'high' });
+    const resp = await triggerAgentRun({
+      operation_id: 'mobile-op-1',
+      task: 'test task',
+      priority: 'high',
+    });
 
     expect(mockedPost).toHaveBeenCalledWith(
       '/api/v1/mobile/trigger',
       expect.objectContaining({
         task: 'test task',
-        agent_id: 'default',
+        operation_id: 'mobile-op-1',
+        agent_id: 'default-agent',
         priority: 'high',
         notify_on_complete: true,
       })

@@ -17,6 +17,7 @@ export type RunStatus =
 export type TriggerPriority = 'low' | 'normal' | 'high' | 'urgent';
 
 export interface TriggerRequestBody {
+  operation_id: string;
   task: string;
   agent_id?: string;
   priority?: TriggerPriority;
@@ -44,6 +45,7 @@ export interface RunStatusData {
   completed_at: string | null;
   result_summary: string;
   error: string | null;
+  error_code?: string | null;
   iterations: number;
   tool_calls_count: number;
 }
@@ -62,7 +64,7 @@ export async function triggerAgentRun(
   body: TriggerRequestBody
 ): Promise<TriggerResponseData> {
   return apiClient.post<TriggerResponseData>('/api/v1/mobile/trigger', {
-    agent_id: 'default',
+    agent_id: 'default-agent',
     priority: 'normal',
     notify_on_complete: true,
     ...body,
