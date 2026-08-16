@@ -19,7 +19,7 @@ from enum import StrEnum
 from typing import Any
 from uuid import uuid4
 
-from backend.app.core.contracts import RunContext
+from backend.app.core.contracts import RunContext, derive_operation_id
 from backend.app.core.llm import (
     LLMReplayBlockedError,
     LLMReservationPersistenceError,
@@ -788,6 +788,7 @@ class ParallelAgentOrchestrator:
                 tenant_id=stage_context.get("tenant_id") or "default",
                 user_id=stage_context.get("user_id") or "anonymous",
                 agent_id=f"parallel-{stage}",
+                operation_id=stage_context.get("operation_id") or None,
             )
             extra_context = {"task_context": task_context} if task_context else {}
             extra_context.update({
@@ -894,7 +895,11 @@ class ParallelAgentOrchestrator:
         return {
             "tenant_id": context["tenant_id"],
             "user_id": context["user_id"],
-            "operation_id": f"{context['operation_id']}:{stage}",
+            "operation_id": derive_operation_id(
+                context["operation_id"],
+                stage,
+                max_length=220,
+            ),
             "run_id": context["run_id"],
             "trace_id": context["trace_id"],
         }

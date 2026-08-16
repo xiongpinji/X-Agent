@@ -17,6 +17,7 @@ from backend.app.core.contracts import (
     TaskFrame,
     ToolCallRecord,
     TraceEvent,
+    derive_operation_id,
 )
 
 if TYPE_CHECKING:
@@ -630,7 +631,7 @@ class AgentLoop:
             return None
         if not context.operation_id:
             return None
-        return f"{context.operation_id}:{stage}"
+        return derive_operation_id(context.operation_id, stage)
 
     async def _fast_path_answer(self, context: RunContext, task: str, session_recap: str | None = None) -> AgentRunResponse | None:
         """Try to answer a simple question directly via LLM (no planning loop).

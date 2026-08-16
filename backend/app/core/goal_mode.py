@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 from typing import Any
 from uuid import uuid4
 
-from backend.app.core.contracts import RunContext
+from backend.app.core.contracts import RunContext, derive_operation_id
 from backend.app.core.llm import (
     LLMReplayBlockedError,
     LLMReservationPersistenceError,
@@ -154,7 +154,7 @@ class GoalModeOrchestrator:
                 subgoal.status = "in_progress"
                 subgoal.started_at = time.time()
 
-                sub_result = await self._execute_subgoal(subgoal, context)
+                sub_result = await self._execute_subgoal(subgoal, context, i)
                 subgoal.result = sub_result
                 subgoal.status = "completed"
                 subgoal.completed_at = time.time()
@@ -220,7 +220,10 @@ class GoalModeOrchestrator:
                     user_id=str(context["user_id"]),
                     run_id=str(context["run_id"]),
                     trace_id=str(context["trace_id"]),
-                    operation_id=f"{context['operation_id']}:decompose",
+                    operation_id=derive_operation_id(
+                        str(context["operation_id"]),
+                        "decompose",
+                    ),
                 )
                 content = response.content if hasattr(response, "content") else str(response)
                 json_start = content.find("[")
@@ -238,7 +241,12 @@ class GoalModeOrchestrator:
 
         return [SubGoal(description=goal)]
 
-    async def _execute_subgoal(self, subgoal: SubGoal, context: dict[str, Any]) -> str:
+    async def _execute_subgoal(
+        self,
+        subgoal: SubGoal,
+        context: dict[str, Any],
+        subgoal_index: int,
+    ) -> str:
         """Execute a single sub-goal."""
         if self.agent_loop:
             try:
@@ -247,6 +255,12 @@ class GoalModeOrchestrator:
                     tenant_id=str(context["tenant_id"]),
                     user_id=str(context["user_id"]),
                     agent_id=f"goal-{context['goal_id']}",
+                    operation_id=derive_operation_id(
+                        str(context["operation_id"]),
+                        "subgoal",
+                        subgoal_index,
+                        max_length=220,
+                    ),
                 )
                 result = await self.agent_loop.run(
                     context=agent_context,

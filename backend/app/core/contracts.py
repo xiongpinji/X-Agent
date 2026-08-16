@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
+from hashlib import sha256
 from typing import Any
 from uuid import uuid4
 
@@ -45,6 +46,24 @@ class ErrorCode(StrEnum):
     INVALID_CREDENTIALS = "invalid_credentials"
 
 
+def derive_operation_id(
+    root_operation_id: str,
+    *stages: object,
+    max_length: int = 255,
+) -> str:
+    """Derive a stable child operation ID without collision-prone truncation."""
+    parts = [str(root_operation_id).strip(), *(str(stage).strip() for stage in stages)]
+    candidate = ":".join(parts)
+    if not parts[0] or any(not part for part in parts[1:]):
+        raise ValueError("operation ID parts must not be blank")
+    if len(candidate) <= max_length:
+        return candidate
+    hashed = "op-" + sha256(candidate.encode("utf-8")).hexdigest()
+    if len(hashed) > max_length:
+        raise ValueError("max_length is too small for a collision-safe operation ID")
+    return hashed
+
+
 class RunContext(BaseModel):
     """Cross-module execution contract for tracing, budgets, authorization, and session continuity."""
 
@@ -53,7 +72,7 @@ class RunContext(BaseModel):
     user_id: str = "anonymous"
     agent_id: str = Field(default_factory=lambda: str(uuid4()))
     request_id: str = Field(default_factory=lambda: str(uuid4()))
-    operation_id: str | None = None
+    operation_id: str | None = Field(default=None, min_length=1, max_length=220)
     session_id: str | None = None
     permission_scope: list[str] = Field(
         default_factory=lambda: ["tools:read", "memory:read", "memory:write"]

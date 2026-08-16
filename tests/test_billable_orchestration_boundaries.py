@@ -51,6 +51,19 @@ def _parallel_run_id(operation_id: str) -> str:
     ).hexdigest()[:32]
 
 
+def test_operation_derivation_hashes_long_roots_without_collision() -> None:
+    from backend.app.core.contracts import derive_operation_id
+
+    first = derive_operation_id("x" * 220, "subtask", 0, max_length=220)
+    repeated = derive_operation_id("x" * 220, "subtask", 0, max_length=220)
+    different = derive_operation_id("x" * 220, "subtask", 1, max_length=220)
+
+    assert first == repeated
+    assert first != different
+    assert len(first) <= 220
+    assert len(different) <= 220
+
+
 @pytest.mark.parametrize(
     ("path", "payload"),
     [
@@ -294,7 +307,58 @@ async def test_parallel_core_agent_loop_receives_real_run_context(
     assert contexts[0].trace_id == "parallel-run-1"
     assert contexts[0].tenant_id == "tenant-a"
     assert contexts[0].user_id == "user-a"
+    assert contexts[0].operation_id == "parallel-op-1:pipeline:0"
     assert metadata[0]["operation_id"] == "parallel-op-1:pipeline:0"
+
+
+@pytest.mark.asyncio
+async def test_parallel_core_formal_operation_blocks_payload_drift_after_confirm_failure(
+    tmp_path,
+) -> None:
+    from backend.app.core.billing.reservations import SqlUsageReservationStore
+    from backend.app.core.llm import BaseLLMBackend, LLMRouter
+
+    class ConfirmFailsStore(SqlUsageReservationStore):
+        async def confirm(self, *args, **kwargs):
+            raise OSError("parallel-confirm-secret")
+
+    class CountingBackend(BaseLLMBackend):
+        name = "fake"
+        model = "fake-v1"
+
+        def __init__(self):
+            self.calls = 0
+
+        async def chat(self, messages, tools, *, response_format=None):
+            self.calls += 1
+            return LLMResponse(
+                content="ok",
+                model=self.model,
+                tokens_used=3,
+                cost=0.001,
+            )
+
+    store = ConfirmFailsStore(
+        f"sqlite:///{(tmp_path / 'usage.db').as_posix()}",
+        create_schema=True,
+    )
+    backend = CountingBackend()
+    orchestrator = ParallelAgentOrchestrator(
+        llm_router=LLMRouter(backends=[backend], reservation_store=store),
+    )
+
+    with pytest.raises(LLMReservationPersistenceError):
+        await orchestrator.execute_pipeline(
+            ["first payload?"],
+            billing_context=_billing_context(),
+        )
+    with pytest.raises(LLMReplayBlockedError):
+        await orchestrator.execute_pipeline(
+            ["different payload?"],
+            billing_context=_billing_context(),
+        )
+
+    assert backend.calls == 1
 
 
 @pytest.mark.parametrize("pattern", ["fan_out", "fan_in", "pipeline"])
@@ -526,6 +590,100 @@ async def test_ultra_agent_billing_error_reaches_api_boundary() -> None:
             },
             UltraConfig(max_agents=2),
         )
+
+
+def test_ultra_api_passes_unique_formal_operations_to_each_agent(
+    monkeypatch,
+) -> None:
+    from backend.app import dependencies
+    from backend.app.settings import get_settings
+
+    contexts: list[RunContext] = []
+
+    class RecordingAgent:
+        async def run(self, context, _task, _extra_context=None):
+            contexts.append(context)
+            return SimpleNamespace(answer="done")
+
+    class DecomposeRouter:
+        async def chat(self, *_args, **_kwargs):
+            return LLMResponse(
+                content=(
+                    '[{"description":"child-a","focus_area":"a"},'
+                    '{"description":"child-b","focus_area":"b"}]'
+                ),
+                model="fake",
+            )
+
+    settings = get_settings()
+    monkeypatch.setattr(settings, "ultra_mode_enabled", True)
+    monkeypatch.setattr(dependencies, "get_agent", lambda: RecordingAgent())
+    monkeypatch.setattr(
+        dependencies,
+        "get_billable_llm_router",
+        lambda: DecomposeRouter(),
+    )
+    app = FastAPI()
+    app.include_router(parallel_agents.router)
+    app.dependency_overrides[get_current_principal] = _principal
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/v1/agents/parallel/ultra",
+            json={
+                "operation_id": "ultra-op-1",
+                "task": "do work",
+                "max_agents": 2,
+                "merge_strategy": "concat",
+            },
+        )
+
+    assert response.status_code == 200
+    assert [context.operation_id for context in contexts] == [
+        "ultra-op-1:subtask:0",
+        "ultra-op-1:subtask:1",
+    ]
+    assert all(len(context.operation_id or "") <= 220 for context in contexts)
+
+
+@pytest.mark.asyncio
+async def test_goal_mode_passes_unique_formal_operations_to_each_subgoal() -> None:
+    from backend.app.core.goal_mode import GoalModeOrchestrator
+
+    contexts: list[RunContext] = []
+
+    class DecomposeRouter:
+        async def chat(self, *_args, **_kwargs):
+            return LLMResponse(content='["child-a", "child-b"]', model="fake")
+
+    class RecordingAgent:
+        async def run(self, context, task):
+            contexts.append(context)
+            return SimpleNamespace(output="done")
+
+    orchestrator = GoalModeOrchestrator(
+        llm_router=DecomposeRouter(),
+        agent_loop=RecordingAgent(),
+    )
+    result = await orchestrator.execute_goal(
+        "parent",
+        context={
+            "tenant_id": "tenant-a",
+            "user_id": "user-a",
+            "goal_id": "goal-test",
+            "operation_id": "goal-test:attempt-1",
+            "run_id": "goal-test:attempt-1",
+            "trace_id": "goal-test:attempt-1",
+        },
+        goal_id="goal-test",
+    )
+
+    assert result.status == "completed"
+    assert [context.operation_id for context in contexts] == [
+        "goal-test:attempt-1:subgoal:0",
+        "goal-test:attempt-1:subgoal:1",
+    ]
+    assert all(len(context.operation_id or "") <= 220 for context in contexts)
 
 
 def _goal_record(status: str = "running") -> dict:

@@ -22,6 +22,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
+from backend.app.core.contracts import derive_operation_id
 from backend.app.core.llm import (
     LLMReplayBlockedError,
     LLMReservationPersistenceError,
@@ -175,8 +176,8 @@ class UltraOrchestrator:
         # 2. 并行执行子任务
         agent_results = await asyncio.gather(
             *[
-                self._run_agent(st, context, config)
-                for st in subtasks
+                self._run_agent(st, context, config, task_index)
+                for task_index, st in enumerate(subtasks)
             ],
             return_exceptions=True,
         )
@@ -294,6 +295,7 @@ class UltraOrchestrator:
         subtask: UltraSubTask,
         context: dict[str, Any],
         config: UltraConfig,
+        task_index: int,
     ) -> UltraAgentResult:
         """执行单个子 Agent."""
         agent_result = UltraAgentResult(
@@ -307,9 +309,17 @@ class UltraOrchestrator:
             if self._factory is None:
                 raise RuntimeError("No agent_factory configured for Ultra mode")
 
+            agent_context = dict(context)
+            if context.get("operation_id"):
+                agent_context["operation_id"] = derive_operation_id(
+                    str(context["operation_id"]),
+                    "subtask",
+                    task_index,
+                    max_length=220,
+                )
             # 带超时执行
             response = await asyncio.wait_for(
-                self._factory(subtask.description, context),
+                self._factory(subtask.description, agent_context),
                 timeout=config.timeout_seconds,
             )
 
@@ -400,7 +410,10 @@ class UltraOrchestrator:
             "user_id": str(context["user_id"]),
             "run_id": str(context["run_id"]),
             "trace_id": str(context["trace_id"]),
-            "operation_id": f"{context['operation_id']}:{stage}",
+            "operation_id": derive_operation_id(
+                str(context["operation_id"]),
+                stage,
+            ),
         }
 
 

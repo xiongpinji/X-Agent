@@ -43,7 +43,7 @@ from backend.app.core.agent_communication_bus import (
     AgentCommunicationBus,
     MessagePriority,
 )
-from backend.app.core.contracts import RunContext
+from backend.app.core.contracts import RunContext, derive_operation_id
 from backend.app.core.llm import (
     LLMReplayBlockedError,
     LLMReservationPersistenceError,
@@ -453,7 +453,11 @@ async def spawn_agents(
                     "_billing_context": {
                         **_billing_context(
                             principal,
-                            f"{request.operation_id}:{index}",
+                            derive_operation_id(
+                                request.operation_id,
+                                index,
+                                max_length=220,
+                            ),
                         ),
                         "batch_id": batch_id,
                         "task_index": index,
@@ -1039,13 +1043,14 @@ async def ultra_execute(
                 tenant_id=principal.tenant_id,
                 user_id=principal.user_id,
                 agent_id=f"ultra-{principal.agent_id}",
+                operation_id=str(context_data["operation_id"]),
                 permission_scope=list(getattr(principal, "scopes", None) or []),
             )
             response = await agent_loop.run(
                 context,
                 task_description,
                 {
-                    "operation_id": request.operation_id,
+                    "operation_id": context_data["operation_id"],
                     "run_id": context_data["run_id"],
                 },
             )
