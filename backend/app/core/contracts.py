@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
 from hashlib import sha256
+from json import dumps
 from typing import Any
 from uuid import uuid4
 
@@ -53,12 +54,10 @@ def derive_operation_id(
 ) -> str:
     """Derive a stable child operation ID without collision-prone truncation."""
     parts = [str(root_operation_id).strip(), *(str(stage).strip() for stage in stages)]
-    candidate = ":".join(parts)
     if not parts[0] or any(not part for part in parts[1:]):
         raise ValueError("operation ID parts must not be blank")
-    if len(candidate) <= max_length:
-        return candidate
-    hashed = "op-" + sha256(candidate.encode("utf-8")).hexdigest()
+    canonical = dumps(parts, ensure_ascii=False, separators=(",", ":"))
+    hashed = "op-" + sha256(canonical.encode("utf-8")).hexdigest()
     if len(hashed) > max_length:
         raise ValueError("max_length is too small for a collision-safe operation ID")
     return hashed

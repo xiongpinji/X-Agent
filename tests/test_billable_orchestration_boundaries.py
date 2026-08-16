@@ -8,7 +8,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
 from backend.app.api import parallel_agents
-from backend.app.core.contracts import RunContext
+from backend.app.core.contracts import RunContext, derive_operation_id
 from backend.app.core.llm import (
     LLMReplayBlockedError,
     LLMReservationPersistenceError,
@@ -52,8 +52,6 @@ def _parallel_run_id(operation_id: str) -> str:
 
 
 def test_operation_derivation_hashes_long_roots_without_collision() -> None:
-    from backend.app.core.contracts import derive_operation_id
-
     first = derive_operation_id("x" * 220, "subtask", 0, max_length=220)
     repeated = derive_operation_id("x" * 220, "subtask", 0, max_length=220)
     different = derive_operation_id("x" * 220, "subtask", 1, max_length=220)
@@ -62,6 +60,21 @@ def test_operation_derivation_hashes_long_roots_without_collision() -> None:
     assert first != different
     assert len(first) <= 220
     assert len(different) <= 220
+
+
+def test_operation_derivation_uses_unambiguous_canonical_parts() -> None:
+    embedded_separator = derive_operation_id("x", "fanout:0")
+    separator_in_root = derive_operation_id("x:fanout", 0)
+    unicode_id = derive_operation_id(" 租户 ", " 阶段 ", 1)
+
+    assert embedded_separator != separator_in_root
+    assert unicode_id == derive_operation_id("租户", "阶段", "1")
+    assert all(
+        operation_id.startswith("op-") and len(operation_id) == 67
+        for operation_id in (embedded_separator, separator_in_root, unicode_id)
+    )
+    with pytest.raises(ValueError, match="must not be blank"):
+        derive_operation_id("x", " ")
 
 
 @pytest.mark.parametrize(
@@ -264,13 +277,16 @@ async def test_parallel_core_passes_stable_stage_operations_to_llm(
         billing_context=context,
     )
 
-    assert [call["operation_id"] for call in calls] == [
-        "parallel-op-1:fanout:0",
-        "parallel-op-1:fanout:1",
-        "parallel-op-1:fanin:merge",
-        "parallel-op-1:pipeline:0",
-        "parallel-op-1:pipeline:1",
+    operations = [call["operation_id"] for call in calls]
+    assert operations == [
+        derive_operation_id("parallel-op-1", "fanout:0", max_length=220),
+        derive_operation_id("parallel-op-1", "fanout:1", max_length=220),
+        derive_operation_id("parallel-op-1", "fanin:merge", max_length=220),
+        derive_operation_id("parallel-op-1", "pipeline:0", max_length=220),
+        derive_operation_id("parallel-op-1", "pipeline:1", max_length=220),
     ]
+    assert len(operations) == len(set(operations))
+    assert all(operation.startswith("op-") and len(operation) <= 220 for operation in operations)
     assert all(call["tenant_id"] == "tenant-a" for call in calls)
     assert all(call["user_id"] == "user-a" for call in calls)
     assert all(call["run_id"] == call["trace_id"] == "parallel-run-1" for call in calls)
@@ -307,8 +323,12 @@ async def test_parallel_core_agent_loop_receives_real_run_context(
     assert contexts[0].trace_id == "parallel-run-1"
     assert contexts[0].tenant_id == "tenant-a"
     assert contexts[0].user_id == "user-a"
-    assert contexts[0].operation_id == "parallel-op-1:pipeline:0"
-    assert metadata[0]["operation_id"] == "parallel-op-1:pipeline:0"
+    assert contexts[0].operation_id == derive_operation_id(
+        "parallel-op-1",
+        "pipeline:0",
+        max_length=220,
+    )
+    assert metadata[0]["operation_id"] == contexts[0].operation_id
 
 
 @pytest.mark.asyncio
@@ -639,11 +659,13 @@ def test_ultra_api_passes_unique_formal_operations_to_each_agent(
         )
 
     assert response.status_code == 200
-    assert [context.operation_id for context in contexts] == [
-        "ultra-op-1:subtask:0",
-        "ultra-op-1:subtask:1",
+    operations = [context.operation_id for context in contexts]
+    assert operations == [
+        derive_operation_id("ultra-op-1", "subtask", 0, max_length=220),
+        derive_operation_id("ultra-op-1", "subtask", 1, max_length=220),
     ]
-    assert all(len(context.operation_id or "") <= 220 for context in contexts)
+    assert len(operations) == len(set(operations))
+    assert all(operation and len(operation) <= 220 for operation in operations)
 
 
 @pytest.mark.asyncio
@@ -679,11 +701,23 @@ async def test_goal_mode_passes_unique_formal_operations_to_each_subgoal() -> No
     )
 
     assert result.status == "completed"
-    assert [context.operation_id for context in contexts] == [
-        "goal-test:attempt-1:subgoal:0",
-        "goal-test:attempt-1:subgoal:1",
+    operations = [context.operation_id for context in contexts]
+    assert operations == [
+        derive_operation_id(
+            "goal-test:attempt-1",
+            "subgoal",
+            0,
+            max_length=220,
+        ),
+        derive_operation_id(
+            "goal-test:attempt-1",
+            "subgoal",
+            1,
+            max_length=220,
+        ),
     ]
-    assert all(len(context.operation_id or "") <= 220 for context in contexts)
+    assert len(operations) == len(set(operations))
+    assert all(operation and len(operation) <= 220 for operation in operations)
 
 
 def _goal_record(status: str = "running") -> dict:
@@ -966,11 +1000,89 @@ def test_parallel_replay_after_confirm_failure_does_not_call_provider_twice(
     reservations = asyncio.run(
         store.list_for_root(
             tenant_id="tenant-a",
-            root_operation_id="parallel-replay-op:fanout:0",
+            root_operation_id=derive_operation_id(
+                "parallel-replay-op",
+                "fanout:0",
+                max_length=220,
+            ),
         )
     )
     assert len(reservations) == 1
     assert reservations[0].status == "reserved"
+
+
+def test_public_fanout_and_spawn_operations_do_not_share_a_reservation(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    from backend.app import dependencies
+    from backend.app.core.agent.loop import AgentLoop
+    from backend.app.core.billing.reservations import SqlUsageReservationStore
+    from backend.app.core.hooks import HookManager
+    from backend.app.core.llm import BaseLLMBackend, LLMRouter
+    from backend.app.core.tracing import TraceStore
+
+    class CountingBackend(BaseLLMBackend):
+        name = "fake"
+        model = "fake-v1"
+
+        def __init__(self):
+            self.calls = 0
+
+        async def chat(self, messages, tools, *, response_format=None):
+            self.calls += 1
+            return LLMResponse(
+                content="ok",
+                model=self.model,
+                tokens_used=3,
+                cost=0.001,
+            )
+
+    store = SqlUsageReservationStore(
+        f"sqlite:///{(tmp_path / 'usage.db').as_posix()}",
+        create_schema=True,
+    )
+    backend = CountingBackend()
+    llm_router = LLMRouter(backends=[backend], reservation_store=store)
+    agent_loop = AgentLoop(
+        llm_router=llm_router,
+        memory=None,
+        tools=None,
+        tracer=TraceStore(tmp_path / "trace.jsonl"),
+        hook_manager=HookManager(),
+    )
+    monkeypatch.setattr(dependencies, "get_agent", lambda: agent_loop)
+    app = FastAPI()
+    app.include_router(parallel_agents.router)
+    app.dependency_overrides[get_current_principal] = _principal
+    app.dependency_overrides[
+        parallel_agents.get_orchestrator
+    ] = lambda: ParallelAgentOrchestrator(llm_router=llm_router)
+    app.dependency_overrides[
+        parallel_agents.get_executor
+    ] = lambda: ParallelAgentExecutor(max_workers=1)
+
+    with TestClient(app) as client:
+        fanout = client.post(
+            "/api/v1/agents/parallel/orchestrator/fan-out",
+            json={
+                "operation_id": "x",
+                "task": "parent",
+                "subtasks": ["hello?"],
+            },
+        )
+        spawn = client.post(
+            "/api/v1/agents/parallel/spawn",
+            json={
+                "operation_id": "x:fanout",
+                "tasks": [{"goal": "hello?"}],
+                "aggregate_results": False,
+            },
+        )
+
+    assert fanout.status_code == 200
+    assert spawn.status_code == 200
+    assert backend.calls == 2
 
 
 @pytest.mark.parametrize("operation_id", [None, "", " " * 3, "x" * 221])
@@ -1269,23 +1381,15 @@ def test_spawn_passes_stable_batch_and_task_run_context(
         f"task-0-{expected_batch}",
         f"task-1-{expected_batch}",
     ]
-    expected_traces = [
-        _parallel_run_id(f"spawn-op-1:{index}")
+    expected_operations = [
+        derive_operation_id("spawn-op-1", index, max_length=220)
         for index in range(2)
     ]
+    expected_traces = [_parallel_run_id(operation) for operation in expected_operations]
     assert [context.trace_id for context in contexts] == expected_traces * 2
-    assert [context.operation_id for context in contexts] == [
-        "spawn-op-1:0",
-        "spawn-op-1:1",
-    ] * 2
-    assert [context.request_id for context in contexts] == [
-        "spawn-op-1:0",
-        "spawn-op-1:1",
-    ] * 2
-    assert [extra["operation_id"] for extra in extras] == [
-        "spawn-op-1:0",
-        "spawn-op-1:1",
-    ] * 2
+    assert [context.operation_id for context in contexts] == expected_operations * 2
+    assert [context.request_id for context in contexts] == expected_operations * 2
+    assert [extra["operation_id"] for extra in extras] == expected_operations * 2
     assert [extra["run_id"] for extra in extras] == expected_traces * 2
 
 
@@ -1559,9 +1663,12 @@ async def test_agent_loop_uses_distinct_operations_for_multiple_llm_stages(
 
     assert result.status.value == "completed"
     assert backend.calls >= 2
-    assert store.root_operations[0] == "agent-multi-stage:plan:initial"
+    assert store.root_operations[0] == derive_operation_id(
+        "agent-multi-stage",
+        "plan:initial",
+    )
     assert len(store.root_operations) == len(set(store.root_operations))
-    assert any(root.endswith(":synthesis") for root in store.root_operations)
+    assert derive_operation_id("agent-multi-stage", "synthesis") in store.root_operations
     for root_operation_id in store.root_operations:
         reservation = await store.get(
             tenant_id="tenant-a",
@@ -1618,7 +1725,12 @@ async def test_agent_loop_replan_does_not_swallow_billing_control_error(
     with pytest.raises(LLMReplayBlockedError, match="replan-secret"):
         await agent.run(context, "fix app.py after reviewing the current code")
 
-    assert router.operations[0] == "agent-replan:plan:initial"
+    assert router.operations[0] == derive_operation_id(
+        "agent-replan",
+        "plan:initial",
+    )
     assert len(router.operations) == 2
+    assert router.operations[1] != router.operations[0]
     assert router.operations[1] is not None
-    assert router.operations[1].startswith("agent-replan:plan:reflect:")
+    assert router.operations[1].startswith("op-")
+    assert len(router.operations[1]) <= 220

@@ -17,6 +17,7 @@ from backend.app.core.billing.reservations import (
     UsageAuditOutboxModel,
     create_usage_reservation_store,
 )
+from backend.app.core.contracts import derive_operation_id
 from backend.app.core.security import Principal
 
 
@@ -769,10 +770,13 @@ async def test_ultra_endpoint_uses_billable_router_with_stable_stage_correlation
     )
 
     assert result["status"] == "completed"
-    assert [call["operation_id"] for call in router.calls] == [
-        "ultra-operation-1:decompose",
-        "ultra-operation-1:merge",
+    router_operations = [call["operation_id"] for call in router.calls]
+    assert router_operations == [
+        derive_operation_id("ultra-operation-1", "decompose"),
+        derive_operation_id("ultra-operation-1", "merge"),
     ]
+    assert len(router_operations) == len(set(router_operations))
+    assert all(len(operation) <= 220 for operation in router_operations)
     correlation = {
         key: router.calls[0][key]
         for key in ("tenant_id", "user_id", "run_id", "trace_id")
@@ -784,6 +788,7 @@ async def test_ultra_endpoint_uses_billable_router_with_stable_stage_correlation
     assert len(agent.contexts) == 2
     assert all(context.trace_id == correlation["trace_id"] for context in agent.contexts)
     assert all(context.tenant_id == "tenant-a" for context in agent.contexts)
+    assert len({context.operation_id for context in agent.contexts}) == 2
 
 
 def test_goals_resources_are_owner_scoped(tmp_path, monkeypatch) -> None:
@@ -893,13 +898,18 @@ async def test_goal_decompose_uses_stable_owner_correlation_and_propagates_billi
         goal_id="goal-1",
     )
     assert result.status == "completed"
-    assert router.calls == [{
-        "tenant_id": "tenant-a",
-        "user_id": "user-a",
-        "run_id": "goal-1:attempt-1",
-        "trace_id": "goal-1:attempt-1",
-        "operation_id": "goal-1:attempt-1:decompose",
-    }]
+    assert router.calls == [
+        {
+            "tenant_id": "tenant-a",
+            "user_id": "user-a",
+            "run_id": "goal-1:attempt-1",
+            "trace_id": "goal-1:attempt-1",
+            "operation_id": derive_operation_id(
+                "goal-1:attempt-1",
+                "decompose",
+            ),
+        }
+    ]
 
     class ReplayRouter:
         async def chat(self, messages, tools, **kwargs):
