@@ -8,10 +8,12 @@
 - 熔断器
 - 补偿链
 """
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+
 from backend.app.core.agent import AgentLoop
-from backend.app.core.contracts import RiskLevel, RunContext, RunStatus
+from backend.app.core.contracts import RiskLevel, RunContext
 from backend.app.core.llm import LLMRouter
 from backend.app.core.memory import InMemoryMemorySystem
 from backend.app.core.policy import ToolPolicyEngine
@@ -36,7 +38,7 @@ class TestAgentLoopErrorHandling:
     @pytest.mark.asyncio
     async def test_agent_loop_llm_failure(self, setup):
         """测试LLM调用失败时的处理"""
-        agent, memory, context = setup
+        agent, _memory, context = setup
 
         # LLMRouter doesn't have 'route' method; test with chat instead.
         # 生产 run() 不在顶层吞依赖异常(无 try/except 包裹),底层 chat 抛错会传播;
@@ -52,7 +54,7 @@ class TestAgentLoopErrorHandling:
     @pytest.mark.asyncio
     async def test_agent_loop_tool_execution_error(self, setup):
         """测试工具执行错误时的处理"""
-        agent, memory, context = setup
+        agent, _memory, context = setup
 
         # 模拟工具执行失败
         with patch.object(agent.tools, 'execute', side_effect=RuntimeError("Tool execution failed")):
@@ -67,7 +69,7 @@ class TestAgentLoopErrorHandling:
     @pytest.mark.asyncio
     async def test_agent_loop_timeout(self, setup):
         """测试执行超时的处理"""
-        agent, memory, context = setup
+        agent, _memory, context = setup
         agent.max_iterations = 1
 
         # 模拟超时
@@ -82,7 +84,7 @@ class TestAgentLoopErrorHandling:
     @pytest.mark.asyncio
     async def test_error_recovery_retry(self, setup):
         """测试重试机制"""
-        agent, memory, context = setup
+        agent, _memory, context = setup
 
         call_count = 0
 
@@ -95,7 +97,7 @@ class TestAgentLoopErrorHandling:
 
         with patch.object(agent.tools, 'execute', side_effect=failing_then_success):
             try:
-                result = await agent.run(context, "echo: test")
+                await agent.run(context, "echo: test")
             except Exception:
                 pass
 
@@ -105,7 +107,7 @@ class TestAgentLoopErrorHandling:
     @pytest.mark.asyncio
     async def test_error_recovery_circuit_breaker(self, setup):
         """测试熔断器"""
-        agent, memory, context = setup
+        agent, _memory, context = setup
 
         # 模拟连续失败
         with patch.object(agent.llm, 'chat', side_effect=Exception("Service unavailable")):
@@ -119,7 +121,7 @@ class TestAgentLoopErrorHandling:
     @pytest.mark.asyncio
     async def test_error_recovery_compensation(self, setup):
         """测试补偿链"""
-        agent, memory, context = setup
+        agent, _memory, context = setup
 
         # 模拟需要补偿的失败
         with patch.object(agent.tools, 'execute', side_effect=Exception("Rollback needed")):
@@ -146,7 +148,7 @@ class TestAgentLoopErrorHandling:
     @pytest.mark.asyncio
     async def test_invalid_context(self, setup):
         """测试无效上下文"""
-        agent, memory, context = setup
+        agent, _memory, _context = setup
 
         # 创建无效上下文：trace_id 是非可选 str（contracts.py 默认 uuid4），
         # 传 None 会在 pydantic 构造期就抛 ValidationError，根本到不了 agent.run。
@@ -162,7 +164,7 @@ class TestAgentLoopErrorHandling:
     @pytest.mark.asyncio
     async def test_partial_failure_recovery(self, setup):
         """测试部分失败恢复"""
-        agent, memory, context = setup
+        agent, _memory, context = setup
 
         # 模拟部分工具失败
         call_count = 0
@@ -197,11 +199,17 @@ class TestToolExecutorErrorHandling:
         executor = ToolExecutionEngine(registry)
 
         # 模拟超时（execute_tool 是真实的 async 方法）
-        with patch.object(executor, 'execute_tool', new=AsyncMock(side_effect=TimeoutError("Tool timeout"))):
-            with pytest.raises(TimeoutError):
-                await executor.execute_tool(
-                    ToolCallInput(tool_id="t1", tool_name="test_tool", arguments={})
-                )
+        with (
+            patch.object(
+                executor,
+                'execute_tool',
+                new=AsyncMock(side_effect=TimeoutError("Tool timeout")),
+            ),
+            pytest.raises(TimeoutError),
+        ):
+            await executor.execute_tool(
+                ToolCallInput(tool_id="t1", tool_name="test_tool", arguments={})
+            )
 
     @pytest.mark.asyncio
     async def test_tool_invalid_arguments(self):
@@ -233,11 +241,17 @@ class TestToolExecutorErrorHandling:
         executor = ToolExecutionEngine(registry)
 
         # 模拟资源耗尽
-        with patch.object(executor, 'execute_tool', new=AsyncMock(side_effect=MemoryError("Out of memory"))):
-            with pytest.raises(MemoryError):
-                await executor.execute_tool(
-                    ToolCallInput(tool_id="t1", tool_name="test_tool", arguments={})
-                )
+        with (
+            patch.object(
+                executor,
+                'execute_tool',
+                new=AsyncMock(side_effect=MemoryError("Out of memory")),
+            ),
+            pytest.raises(MemoryError),
+        ):
+            await executor.execute_tool(
+                ToolCallInput(tool_id="t1", tool_name="test_tool", arguments={})
+            )
 
 
 class TestMemorySystemErrorHandling:
@@ -249,9 +263,11 @@ class TestMemorySystemErrorHandling:
         memory = InMemoryMemorySystem()
         context = RunContext()
 
-        with patch.object(memory, 'store', side_effect=Exception("Store failed")):
-            with pytest.raises(Exception):
-                await memory.store(context, "value")
+        with (
+            patch.object(memory, 'store', side_effect=RuntimeError("Store failed")),
+            pytest.raises(RuntimeError),
+        ):
+            await memory.store(context, "value")
 
     @pytest.mark.asyncio
     async def test_memory_retrieve_failure(self):
@@ -259,9 +275,11 @@ class TestMemorySystemErrorHandling:
         memory = InMemoryMemorySystem()
         context = RunContext()
 
-        with patch.object(memory, 'search', side_effect=Exception("Retrieve failed")):
-            with pytest.raises(Exception):
-                await memory.search(context, "key")
+        with (
+            patch.object(memory, 'search', side_effect=RuntimeError("Retrieve failed")),
+            pytest.raises(RuntimeError),
+        ):
+            await memory.search(context, "key")
 
     @pytest.mark.asyncio
     async def test_memory_capacity_exceeded(self):
@@ -286,18 +304,22 @@ class TestLLMRouterErrorHandling:
         """测试LLM API错误"""
         llm = LLMRouter()
 
-        with patch.object(llm, 'chat', side_effect=Exception("API Error")):
-            with pytest.raises(Exception):
-                await llm.chat([], [])
+        with (
+            patch.object(llm, 'chat', side_effect=RuntimeError("API Error")),
+            pytest.raises(RuntimeError),
+        ):
+            await llm.chat([], [])
 
     @pytest.mark.asyncio
     async def test_llm_rate_limit(self):
         """测试LLM速率限制"""
         llm = LLMRouter()
 
-        with patch.object(llm, 'chat', side_effect=Exception("Rate limit exceeded")):
-            with pytest.raises(Exception):
-                await llm.chat([], [])
+        with (
+            patch.object(llm, 'chat', side_effect=RuntimeError("Rate limit exceeded")),
+            pytest.raises(RuntimeError),
+        ):
+            await llm.chat([], [])
 
     @pytest.mark.asyncio
     async def test_llm_invalid_response(self):
@@ -320,9 +342,11 @@ class TestPolicyEngineErrorHandling:
         policy = ToolPolicyEngine()
 
         # evaluate 是同步方法；patch 为同步抛错，调用即抛（不 await）
-        with patch.object(policy, 'evaluate', side_effect=Exception("Policy check failed")):
-            with pytest.raises(Exception):
-                policy.evaluate(RunContext(), "tool_name", RiskLevel.LOW)
+        with (
+            patch.object(policy, 'evaluate', side_effect=RuntimeError("Policy check failed")),
+            pytest.raises(RuntimeError),
+        ):
+            policy.evaluate(RunContext(), "tool_name", RiskLevel.LOW)
 
     @pytest.mark.asyncio
     async def test_policy_denial(self):
@@ -384,9 +408,11 @@ class TestDatabaseErrorHandling:
 
         store = RunStore()
 
-        with patch.object(store, 'get', side_effect=Exception("Connection failed")):
-            with pytest.raises(Exception):
-                store.get("run_id")
+        with (
+            patch.object(store, 'get', side_effect=RuntimeError("Connection failed")),
+            pytest.raises(RuntimeError),
+        ):
+            store.get("run_id")
 
     @pytest.mark.asyncio
     async def test_database_query_timeout(self):
@@ -395,9 +421,11 @@ class TestDatabaseErrorHandling:
 
         store = RunStore()
 
-        with patch.object(store, 'get', side_effect=TimeoutError("Query timeout")):
-            with pytest.raises(TimeoutError):
-                store.get("run_id")
+        with (
+            patch.object(store, 'get', side_effect=TimeoutError("Query timeout")),
+            pytest.raises(TimeoutError),
+        ):
+            store.get("run_id")
 
     @pytest.mark.asyncio
     async def test_database_transaction_rollback(self):
@@ -407,9 +435,11 @@ class TestDatabaseErrorHandling:
         store = RunStore()
 
         # 模拟事务失败
-        with patch.object(store, 'save', side_effect=Exception("Transaction failed")):
-            with pytest.raises(Exception):
-                store.save(MagicMock())
+        with (
+            patch.object(store, 'save', side_effect=RuntimeError("Transaction failed")),
+            pytest.raises(RuntimeError),
+        ):
+            store.save(MagicMock())
 
 
 class TestExternalServiceErrorHandling:
@@ -458,6 +488,7 @@ class TestValidationErrorHandling:
     async def test_schema_validation_failure(self):
         """测试模式验证失败"""
         from pydantic import ValidationError
+
         from backend.app.core.contracts import RunContext
 
         # 测试无效数据

@@ -12,8 +12,8 @@ exercised against stub venvs in tmp directories only.
 from __future__ import annotations
 
 import shutil
-import subprocess
 import stat
+import subprocess
 from pathlib import Path
 
 import pytest

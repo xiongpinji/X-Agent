@@ -14,7 +14,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Optional
 
 
 @dataclass
@@ -53,7 +52,7 @@ class TodoFilter:
         tag: 按标签包含匹配过滤。
     """
 
-    completed: Optional[bool] = None
-    priority: Optional[int] = None
-    title: Optional[str] = None
-    tag: Optional[str] = None
+    completed: bool | None = None
+    priority: int | None = None
+    title: str | None = None
+    tag: str | None = None

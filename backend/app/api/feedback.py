@@ -975,9 +975,9 @@ async def get_feedback_stats(
             limit=10000,
         )
 
-        by_status = {name: 0 for name in ("new", "acknowledged", "in_progress", "resolved", "closed")}
-        by_severity = {name: 0 for name in ("low", "medium", "high", "critical")}
-        by_type = {name: 0 for name in ("bug", "feature", "improvement", "other")}
+        by_status = dict.fromkeys(("new", "acknowledged", "in_progress", "resolved", "closed"), 0)
+        by_severity = dict.fromkeys(("low", "medium", "high", "critical"), 0)
+        by_type = dict.fromkeys(("bug", "feature", "improvement", "other"), 0)
         priority_scores: list[float] = []
         for feedback in feedbacks:
             by_status[feedback.status] = by_status.get(feedback.status, 0) + 1

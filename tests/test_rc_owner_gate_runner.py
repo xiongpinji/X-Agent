@@ -114,7 +114,7 @@ def test_owner_gate_runner_does_not_refresh_after_failed_smoke(tmp_path: Path, m
     monkeypatch.setenv("XAGENT_FEISHU_ENCRYPT_KEY", "encrypt-key")
     calls: list[list[str]] = []
 
-    def fake_run(command, **kwargs):  # noqa: ANN001
+    def fake_run(command, **kwargs):
         calls.append(list(command))
         return subprocess.CompletedProcess(command, 1, stdout="missing token", stderr="")
 
@@ -132,7 +132,7 @@ def test_owner_gate_runner_handles_missing_subprocess_output(tmp_path: Path, mon
     monkeypatch.setenv("XAGENT_LLM_BACKEND", "ollama")
     monkeypatch.setenv("XAGENT_OLLAMA_MODEL", "qwen2.5:1.5b")
 
-    def fake_run(command, **kwargs):  # noqa: ANN001
+    def fake_run(command, **kwargs):
         return subprocess.CompletedProcess(command, 1, stdout=None, stderr=None)
 
     monkeypatch.setattr(rc_owner_gate_runner.subprocess, "run", fake_run)
@@ -150,7 +150,7 @@ def test_owner_gate_runner_redacts_secret_like_subprocess_output(tmp_path: Path,
     monkeypatch.setenv("XAGENT_LLM_BACKEND", "ollama")
     monkeypatch.setenv("XAGENT_OLLAMA_MODEL", "qwen2.5:1.5b")
 
-    def fake_run(command, **kwargs):  # noqa: ANN001
+    def fake_run(command, **kwargs):
         return subprocess.CompletedProcess(
             command,
             1,
@@ -175,7 +175,7 @@ def test_owner_gate_runner_redacts_bare_token_shaped_output(tmp_path: Path, monk
     monkeypatch.setenv("XAGENT_LLM_BACKEND", "ollama")
     monkeypatch.setenv("XAGENT_OLLAMA_MODEL", "qwen2.5:1.5b")
 
-    def fake_run(command, **kwargs):  # noqa: ANN001
+    def fake_run(command, **kwargs):
         return subprocess.CompletedProcess(
             command,
             1,
@@ -201,7 +201,7 @@ def test_owner_gate_runner_refreshes_after_passed_smoke(tmp_path: Path, monkeypa
     monkeypatch.setenv("XAGENT_OLLAMA_MODEL", "qwen2.5:1.5b")
     calls: list[list[str]] = []
 
-    def fake_run(command, **kwargs):  # noqa: ANN001
+    def fake_run(command, **kwargs):
         calls.append(list(command))
         return subprocess.CompletedProcess(command, 0, stdout="ok", stderr="")
 
@@ -239,7 +239,7 @@ def test_owner_gate_runner_loads_non_placeholder_env_file_values(tmp_path: Path,
     )
     calls: list[dict[str, object]] = []
 
-    def fake_run(command, **kwargs):  # noqa: ANN001
+    def fake_run(command, **kwargs):
         calls.append({"command": list(command), "env": dict(kwargs["env"])})
         return subprocess.CompletedProcess(command, 0, stdout="ok", stderr="")
 
@@ -308,7 +308,7 @@ def test_owner_gate_runner_report_does_not_leak_absolute_env_file_path(tmp_path:
         encoding="utf-8",
     )
 
-    def fake_run(command, **kwargs):  # noqa: ANN001
+    def fake_run(command, **kwargs):
         return subprocess.CompletedProcess(command, 0, stdout="ok", stderr="")
 
     monkeypatch.setattr(rc_owner_gate_runner.subprocess, "run", fake_run)
@@ -342,7 +342,7 @@ def test_owner_gate_runner_scopes_env_file_values_to_selected_gate(tmp_path: Pat
     )
     calls: list[dict[str, object]] = []
 
-    def fake_run(command, **kwargs):  # noqa: ANN001
+    def fake_run(command, **kwargs):
         calls.append({"command": list(command), "env": dict(kwargs["env"])})
         return subprocess.CompletedProcess(command, 0, stdout="ok", stderr="")
 
@@ -485,7 +485,7 @@ def test_owner_gate_runner_non_dry_run_fails_fast_when_required_env_groups_missi
     for name in ("XAGENT_LLM_BACKEND", "LLM_BACKEND", "XAGENT_OLLAMA_MODEL", "OLLAMA_MODEL"):
         monkeypatch.delenv(name, raising=False)
 
-    def fake_run(command, **kwargs):  # noqa: ANN001
+    def fake_run(command, **kwargs):
         raise AssertionError("owner gate smoke should not run when env preflight fails")
 
     monkeypatch.setattr(rc_owner_gate_runner.subprocess, "run", fake_run)

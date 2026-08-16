@@ -1,14 +1,15 @@
 """Edge case and error scenario tests for LLM module."""
 
 import pytest
+
 from backend.app.core.llm import (
     BaseLLMBackend,
     LLMBackendError,
     LLMResponse,
+    LLMRouter,
     MockLLMBackend,
     OpenAIBackend,
     OpenAIResponsesBackend,
-    LLMRouter,
     build_llm_router,
 )
 

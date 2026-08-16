@@ -1,7 +1,8 @@
 """Batch 3 Part 2: collaboration / browser / feedback / files_v2 全覆盖测试"""
+from datetime import UTC, datetime
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch, PropertyMock
-from datetime import datetime, UTC
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -28,8 +29,8 @@ def _make_principal(role="user", tenant_id="t1", user_id="u1"):
 
 def _make_test_app(router):
     """Create a minimal FastAPI app with just the given router and auth override."""
-    from backend.app.dependencies import get_current_principal
     from backend.app.api.errors import XAgentAPIError, xagent_api_error_handler
+    from backend.app.dependencies import get_current_principal
     app = FastAPI()
     app.include_router(router)
     app.add_exception_handler(XAgentAPIError, xagent_api_error_handler)
@@ -184,11 +185,13 @@ class TestCollaborationEndpoints:
         from backend.app.dependencies import get_current_principal
         app = _make_test_app(router)
         app.dependency_overrides[get_current_principal] = lambda: _make_principal(role="admin")
-        with TestClient(app, raise_server_exceptions=False) as c2:
-            with patch("backend.app.api.collaboration.collaboration_store") as mock_store:
-                mock_store.list_rooms.return_value = []
-                resp = c2.get("/api/v1/collaboration/rooms?tenant_id=other")
-                assert resp.status_code == 200
+        with (
+            TestClient(app, raise_server_exceptions=False) as c2,
+            patch("backend.app.api.collaboration.collaboration_store") as mock_store,
+        ):
+            mock_store.list_rooms.return_value = []
+            resp = c2.get("/api/v1/collaboration/rooms?tenant_id=other")
+            assert resp.status_code == 200
 
     def test_get_room(self, client):
         with patch("backend.app.api.collaboration.collaboration_store") as mock_store:
@@ -461,13 +464,15 @@ class TestCollaborationEndpoints:
         from backend.app.dependencies import get_current_principal
         app = _make_test_app(router)
         app.dependency_overrides[get_current_principal] = lambda: _make_principal(role="admin")
-        with TestClient(app, raise_server_exceptions=False) as c2:
-            with patch("backend.app.api.collaboration.get_delegator") as mock_get_del:
-                delegator = MagicMock()
-                delegator.list_delegations.return_value = []
-                mock_get_del.return_value = delegator
-                resp = c2.get("/api/v1/collaboration/delegations?tenant_id=x")
-                assert resp.status_code == 200
+        with (
+            TestClient(app, raise_server_exceptions=False) as c2,
+            patch("backend.app.api.collaboration.get_delegator") as mock_get_del,
+        ):
+            delegator = MagicMock()
+            delegator.list_delegations.return_value = []
+            mock_get_del.return_value = delegator
+            resp = c2.get("/api/v1/collaboration/delegations?tenant_id=x")
+            assert resp.status_code == 200
 
     def test_get_delegation_found(self, client):
         with patch("backend.app.api.collaboration.get_delegator") as mock_get_del:
@@ -500,50 +505,54 @@ class TestCollaborationEndpoints:
 
     def test_sync_room_memory_no_store_attr(self, client):
         from backend.app.api.collaboration import router
-        from backend.app.dependencies import get_current_principal, get_memory
+        from backend.app.dependencies import get_memory
         app = _make_test_app(router)
         app.dependency_overrides[get_memory] = lambda: object()  # no .store attr
-        with TestClient(app, raise_server_exceptions=False) as c2:
-            with patch("backend.app.api.collaboration.collaboration_store") as mock_store:
-                room = MagicMock()
-                room.tenant_id = "t1"
-                room.room_id = "r1"
-                mock_store.get_room.return_value = room
-                resp = c2.post("/api/v1/collaboration/rooms/r1/memory-sync")
-                assert resp.status_code == 400
+        with (
+            TestClient(app, raise_server_exceptions=False) as c2,
+            patch("backend.app.api.collaboration.collaboration_store") as mock_store,
+        ):
+            room = MagicMock()
+            room.tenant_id = "t1"
+            room.room_id = "r1"
+            mock_store.get_room.return_value = room
+            resp = c2.post("/api/v1/collaboration/rooms/r1/memory-sync")
+            assert resp.status_code == 400
 
     def test_sync_room_memory_success(self, client):
         from backend.app.api.collaboration import router
-        from backend.app.dependencies import get_current_principal, get_memory
+        from backend.app.dependencies import get_memory
         memory_mock = MagicMock()
         memory_mock.store = AsyncMock(return_value="mem-1")
         memory_mock.route_shared_memory = MagicMock()
         app = _make_test_app(router)
         app.dependency_overrides[get_memory] = lambda: memory_mock
-        with TestClient(app, raise_server_exceptions=False) as c2:
-            with patch("backend.app.api.collaboration.collaboration_store") as mock_store:
-                room = MagicMock()
-                room.tenant_id = "t1"
-                room.room_id = "r1"
-                room.topic = "test"
-                msg = MagicMock()
-                msg.content = "hello"
-                msg.metadata = {"agent_id": "a1", "department_id": "dept1"}
-                msg.message_id = "msg-1"
-                msg.sender_id = "s1"
-                msg.sender_type = "agent"
-                room.messages = [msg]
-                room.memory_refs = {"mem-1"}
-                room.agent_memory_refs = {"a1": {"mem-1"}}
-                room.department_memory_refs = {"dept1": {"mem-1"}}
-                mock_store.get_room.return_value = room
-                mock_store.add_memory_ref = MagicMock()
-                mock_store.add_agent_memory_ref = MagicMock()
-                mock_store.add_department_memory_ref = MagicMock()
-                resp = c2.post("/api/v1/collaboration/rooms/r1/memory-sync")
-                assert resp.status_code == 200
-                data = resp.json()
-                assert data["synced_count"] == 1
+        with (
+            TestClient(app, raise_server_exceptions=False) as c2,
+            patch("backend.app.api.collaboration.collaboration_store") as mock_store,
+        ):
+            room = MagicMock()
+            room.tenant_id = "t1"
+            room.room_id = "r1"
+            room.topic = "test"
+            msg = MagicMock()
+            msg.content = "hello"
+            msg.metadata = {"agent_id": "a1", "department_id": "dept1"}
+            msg.message_id = "msg-1"
+            msg.sender_id = "s1"
+            msg.sender_type = "agent"
+            room.messages = [msg]
+            room.memory_refs = {"mem-1"}
+            room.agent_memory_refs = {"a1": {"mem-1"}}
+            room.department_memory_refs = {"dept1": {"mem-1"}}
+            mock_store.get_room.return_value = room
+            mock_store.add_memory_ref = MagicMock()
+            mock_store.add_agent_memory_ref = MagicMock()
+            mock_store.add_department_memory_ref = MagicMock()
+            resp = c2.post("/api/v1/collaboration/rooms/r1/memory-sync")
+            assert resp.status_code == 200
+            data = resp.json()
+            assert data["synced_count"] == 1
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -616,10 +625,12 @@ class TestSanitizeScreenshotPath:
     def test_tmp_path_allowed(self):
         """On Linux /tmp is allowed; on Windows normpath converts to \tmp which fails the check."""
         import sys
+
         from backend.app.api.browser import _sanitize_screenshot_path
+        from backend.app.api.errors import XAgentAPIError
         if sys.platform == "win32":
             # On Windows, /tmp normalizes to \tmp which doesn't match "/tmp" prefix
-            with pytest.raises(Exception):
+            with pytest.raises(XAgentAPIError):
                 _sanitize_screenshot_path("/tmp/screenshot.png")
         else:
             result = _sanitize_screenshot_path("/tmp/screenshot.png")
@@ -633,7 +644,8 @@ class TestSanitizeScreenshotPath:
 
     def test_whitespace_stripped(self):
         from backend.app.api.browser import _sanitize_screenshot_path
-        with pytest.raises(Exception):
+        from backend.app.api.errors import XAgentAPIError
+        with pytest.raises(XAgentAPIError):
             _sanitize_screenshot_path("  C:/Windows/test.png")
 
 
@@ -835,7 +847,11 @@ class TestBrowserEndpoints:
     def test_click_success(self, client):
         with patch("backend.app.api.browser.browser_automation") as mock_ba:
             mock_ba.get_session.return_value = self._mock_session()
-            r = MagicMock(); r.action = "click"; r.ok = True; r.detail = ""; r.data = {}
+            r = MagicMock()
+            r.action = "click"
+            r.ok = True
+            r.detail = ""
+            r.data = {}
             mock_ba.click = AsyncMock(return_value=r)
             resp = client.post("/api/v1/browser/sessions/s1/click", json={"selector": "#btn"})
             assert resp.status_code == 200
@@ -849,7 +865,11 @@ class TestBrowserEndpoints:
     def test_fill_success(self, client):
         with patch("backend.app.api.browser.browser_automation") as mock_ba:
             mock_ba.get_session.return_value = self._mock_session()
-            r = MagicMock(); r.action = "fill"; r.ok = True; r.detail = ""; r.data = {}
+            r = MagicMock()
+            r.action = "fill"
+            r.ok = True
+            r.detail = ""
+            r.data = {}
             mock_ba.fill = AsyncMock(return_value=r)
             resp = client.post("/api/v1/browser/sessions/s1/fill", json={"selector": "#input", "value": "test"})
             assert resp.status_code == 200
@@ -863,7 +883,11 @@ class TestBrowserEndpoints:
     def test_extract_text_success(self, client):
         with patch("backend.app.api.browser.browser_automation") as mock_ba:
             mock_ba.get_session.return_value = self._mock_session()
-            r = MagicMock(); r.action = "extract_text"; r.ok = True; r.detail = ""; r.data = {}
+            r = MagicMock()
+            r.action = "extract_text"
+            r.ok = True
+            r.detail = ""
+            r.data = {}
             mock_ba.extract_text = AsyncMock(return_value=r)
             resp = client.post("/api/v1/browser/sessions/s1/extract-text", json={"selector": "p"})
             assert resp.status_code == 200
@@ -871,7 +895,11 @@ class TestBrowserEndpoints:
     def test_extract_text_uses_text_field(self, client):
         with patch("backend.app.api.browser.browser_automation") as mock_ba:
             mock_ba.get_session.return_value = self._mock_session()
-            r = MagicMock(); r.action = "extract_text"; r.ok = True; r.detail = ""; r.data = {}
+            r = MagicMock()
+            r.action = "extract_text"
+            r.ok = True
+            r.detail = ""
+            r.data = {}
             mock_ba.extract_text = AsyncMock(return_value=r)
             resp = client.post("/api/v1/browser/sessions/s1/extract-text", json={"text": "h1"})
             assert resp.status_code == 200
@@ -885,7 +913,11 @@ class TestBrowserEndpoints:
     def test_wait_for_success(self, client):
         with patch("backend.app.api.browser.browser_automation") as mock_ba:
             mock_ba.get_session.return_value = self._mock_session()
-            r = MagicMock(); r.action = "wait_for"; r.ok = True; r.detail = ""; r.data = {}
+            r = MagicMock()
+            r.action = "wait_for"
+            r.ok = True
+            r.detail = ""
+            r.data = {}
             mock_ba.wait_for = AsyncMock(return_value=r)
             resp = client.post("/api/v1/browser/sessions/s1/wait-for", json={"selector": ".loaded"})
             assert resp.status_code == 200
@@ -900,7 +932,11 @@ class TestBrowserEndpoints:
         with patch("backend.app.api.browser.browser_automation") as mock_ba, \
              patch("backend.app.api.browser._sanitize_screenshot_path", return_value="shot.png"):
             mock_ba.get_session.return_value = self._mock_session()
-            r = MagicMock(); r.action = "screenshot"; r.ok = True; r.detail = ""; r.data = {}
+            r = MagicMock()
+            r.action = "screenshot"
+            r.ok = True
+            r.detail = ""
+            r.data = {}
             mock_ba.screenshot = AsyncMock(return_value=r)
             resp = client.post("/api/v1/browser/sessions/s1/screenshot", json={"path": "shot.png"})
             assert resp.status_code == 200
@@ -978,7 +1014,7 @@ def _mock_feedback_obj(**kwargs):
     fb.tags = kwargs.get("tags", ["bug"])
     fb.created_at = kwargs.get("created_at", datetime(2024, 1, 1, tzinfo=UTC))
     fb.updated_at = kwargs.get("updated_at", datetime(2024, 1, 1, tzinfo=UTC))
-    fb.resolved_at = kwargs.get("resolved_at", None)
+    fb.resolved_at = kwargs.get("resolved_at")
     return fb
 
 
@@ -1101,10 +1137,12 @@ class TestFeedbackEndpoints:
         app.dependency_overrides[get_current_principal] = lambda: _make_principal(role="admin")
         mock_store = MagicMock()
         mock_store.get_feedback_by_id = AsyncMock(return_value=_mock_feedback_obj(user_id="other"))
-        with TestClient(app, raise_server_exceptions=False) as c2:
-            with patch("backend.app.api.feedback.get_feedback_store", return_value=mock_store):
-                resp = c2.get("/api/v1/feedback/fb-1")
-                assert resp.status_code == 200
+        with (
+            TestClient(app, raise_server_exceptions=False) as c2,
+            patch("backend.app.api.feedback.get_feedback_store", return_value=mock_store),
+        ):
+            resp = c2.get("/api/v1/feedback/fb-1")
+            assert resp.status_code == 200
 
     def test_list_feedback(self, client):
         mock_store = MagicMock()
