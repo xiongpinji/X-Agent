@@ -492,7 +492,7 @@ async def get_sandbox_status(principal: PrincipalDependency = None) -> dict[str,
     exec_history: list[dict[str, object]] = []
     try:
         from backend.app.core.sandbox.manager import get_sandbox_manager
-        mgr = get_sandbox_manager()
+        mgr = await get_sandbox_manager()
         exec_history = mgr._execution_history[-20:] if hasattr(mgr, "_execution_history") else []
     except Exception:
         pass
@@ -530,7 +530,7 @@ async def get_performance_dashboard(principal: PrincipalDependency = None) -> di
     sandbox_stats: dict[str, object] = {}
     try:
         from backend.app.core.sandbox.manager import get_sandbox_manager
-        mgr = get_sandbox_manager()
+        mgr = await get_sandbox_manager()
         sandbox_stats = mgr.get_execution_stats()
     except Exception:
         sandbox_stats = {"error": "not initialized"}
@@ -1449,7 +1449,7 @@ async def compute_adaptive_deadline(payload: dict[str, Any] | None = None, princ
         for run in recent:
             rd = run.model_dump(mode="json") if hasattr(run, "model_dump") else {}
             dur = rd.get("duration_ms") or rd.get("elapsed_ms")
-            if dur and isinstance(dur, (int, float)) and dur > 0:
+            if dur and isinstance(dur, int | float) and dur > 0:
                 durations.append(dur / 1000.0)
         if durations:
             historical_avg = sum(durations) / len(durations)
@@ -9046,7 +9046,7 @@ async def whatif_simulate(payload: dict[str, Any], principal: PrincipalDependenc
         for k, v in changes.items():
             # Simple sensitivity: each change contributes proportionally
             sensitivity = 0.1 * (hash(k + m) % 10) / 10.0
-            change_factor += sensitivity * (float(v) if isinstance(v, (int, float)) else 0.1)
+            change_factor += sensitivity * (float(v) if isinstance(v, int | float) else 0.1)
         predicted = round(base_val * change_factor, 3)
         margin = round(abs(predicted - base_val) * (1 - confidence) * 2, 3)
         predictions.append({
@@ -12131,7 +12131,7 @@ async def get_agent_evaluation(principal: PrincipalDependency = None) -> dict[st
     iterations_used = []
     for r in tenant_runs:
         iters = getattr(r, "iterations", None) or getattr(r, "step_count", None)
-        if iters and isinstance(iters, (int, float)):
+        if iters and isinstance(iters, int | float):
             iterations_used.append(iters)
     avg_iterations = round(sum(iterations_used) / len(iterations_used), 1) if iterations_used else 0
 

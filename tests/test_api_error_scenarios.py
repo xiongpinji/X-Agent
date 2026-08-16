@@ -1,8 +1,9 @@
 """API endpoint error scenario and edge case tests."""
 
+
 import pytest
 from fastapi.testclient import TestClient
-from unittest.mock import Mock, patch, AsyncMock
+
 from backend.app.main import app
 
 
@@ -169,14 +170,9 @@ class TestAPIErrorHandling:
         assert len(responses) == 100
 
     def test_api_request_timeout(self, client):
-        """Test API request timeout handling."""
-        # This would need a slow endpoint to test properly
-        # For now, just verify the client can handle timeouts
-        try:
-            response = client.get("/api/v1/workflows", timeout=0.001)
-        except Exception:
-            # Timeout is acceptable
-            pass
+        """The in-process client completes the request without transport timeouts."""
+        response = client.get("/api/v1/workflows")
+        assert response.status_code in [200, 401, 403]
 
     def test_api_large_response(self, client):
         """Test API with large response."""
@@ -230,7 +226,7 @@ class TestAPIResponseValidation:
         if response.status_code == 200:
             data = response.json()
             # Should be dict or list
-            assert isinstance(data, (dict, list))
+            assert isinstance(data, dict | list)
 
     def test_api_response_headers(self, client):
         """Test API response headers."""
@@ -243,7 +239,7 @@ class TestAPIResponseValidation:
         response = client.get("/api/v1/workflows")
         # Should be valid UTF-8
         try:
-            response.text
+            _ = response.text
         except UnicodeDecodeError:
             pytest.fail("Response is not valid UTF-8")
 
@@ -328,12 +324,4 @@ class TestAPISecurity:
         """Test API security headers."""
         response = client.get("/api/v1/workflows")
         # Should have security headers
-        security_headers = [
-            "x-content-type-options",
-            "x-frame-options",
-            "x-xss-protection",
-        ]
-        # At least some security headers should be present
-        present_headers = [h for h in security_headers if h in response.headers]
-        # Don't require all, but should have some
         assert response.status_code in [200, 401, 403]

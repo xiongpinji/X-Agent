@@ -101,6 +101,7 @@ class TestPerformanceAndQueue:
         assert "spawner" in data
         assert "memory" in data
         assert "parallel_pool" in data
+        assert "error" not in data["sandbox"]
 
     def test_queue_stats(self, client):
         r = client.get("/api/v1/agents/parallel/queue/stats")

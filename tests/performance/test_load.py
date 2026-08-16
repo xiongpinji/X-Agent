@@ -2,15 +2,14 @@
 负载测试
 测试范围: 正常负载、高负载、峰值负载、持续负载
 """
-import os
-import pytest
 import asyncio
+import os
 import time
-from typing import List, Dict, Any
 from dataclasses import dataclass, field
-import json
-from datetime import datetime, timedelta
+from datetime import datetime
+from typing import Any
 
+import pytest
 
 # 真实负载测试需要本机跑着 API 服务，且单条用例耗时 30s~6min。
 # pytest-timeout(thread 法) 无法中断其阻塞调用，会硬杀整个进程拖垮全量套件，
@@ -33,8 +32,8 @@ class LoadTestResult:
     total_requests: int
     successful_requests: int
     failed_requests: int
-    response_times: List[float] = field(default_factory=list)
-    errors: Dict[str, int] = field(default_factory=dict)
+    response_times: list[float] = field(default_factory=list)
+    errors: dict[str, int] = field(default_factory=dict)
     start_time: datetime = field(default_factory=datetime.now)
     end_time: datetime = field(default_factory=datetime.now)
 
@@ -88,14 +87,14 @@ class LoadTester:
 
     def __init__(self, base_url: str = "http://localhost:8000"):
         self.base_url = base_url
-        self.results: List[LoadTestResult] = []
+        self.results: list[LoadTestResult] = []
 
     async def run_load_test(
         self,
         endpoint: str,
         num_users: int,
         duration_seconds: int,
-        requests_per_user: int = None,
+        requests_per_user: int | None = None,
         test_name: str = ""
     ) -> LoadTestResult:
         """运行负载测试"""
@@ -133,7 +132,7 @@ class LoadTester:
                             result.errors[error_key] = result.errors.get(error_key, 0) + 1
                             result.failed_requests += 1
 
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     result.errors['TIMEOUT'] = result.errors.get('TIMEOUT', 0) + 1
                     result.failed_requests += 1
                 except Exception as e:
@@ -165,7 +164,7 @@ class LoadTester:
         ramp_up_duration: int,
         test_duration: int,
         test_name: str = ""
-    ) -> List[LoadTestResult]:
+    ) -> list[LoadTestResult]:
         """运行渐进式负载测试"""
         import aiohttp
 
@@ -177,16 +176,12 @@ class LoadTester:
         step_duration = ramp_up_duration // 10
 
         current_users = 0
-        start_time = time.time()
-
         async def user_session(user_id: int, session: aiohttp.ClientSession, end_time: float):
             """单个用户会话"""
             while time.time() < end_time:
                 try:
-                    req_start = time.time()
                     async with session.get(url, timeout=30) as resp:
                         await resp.text()
-                        response_time = time.time() - req_start
                         # 记录响应时间
                 except Exception:
                     pass
@@ -224,7 +219,7 @@ class LoadTester:
 
         return results
 
-    def get_summary(self) -> Dict[str, Any]:
+    def get_summary(self) -> dict[str, Any]:
         """获取测试摘要"""
         if not self.results:
             return {}
@@ -281,11 +276,11 @@ class TestNormalLoad:
             with TestClient(app, raise_server_exceptions=False) as client:
                 def _user_session(_uid: int) -> tuple:
                     ok = fail = 0
-                    times: List[float] = []
+                    times: list[float] = []
                     for _ in range(requests_per_user):
                         req_start = time.time()
                         try:
-                            resp = client.get("/health", timeout=30)
+                            resp = client.get("/health")
                             times.append(time.time() - req_start)
                             if resp.status_code >= 400:
                                 fail += 1
@@ -308,7 +303,7 @@ class TestNormalLoad:
         throughput = successful / duration if duration > 0 else 0.0
         avg_rt = sum(response_times) / len(response_times) if response_times else 0.0
 
-        print(f"\n正常负载测试结果 (in-process):")
+        print("\n正常负载测试结果 (in-process):")
         print(f"  用户数: {num_users}")
         print(f"  总请求数: {total}")
         print(f"  成功请求: {successful}")
@@ -352,7 +347,7 @@ class TestHighLoad:
             test_name='high_load_health_check'
         )
 
-        print(f"\n高负载测试结果:")
+        print("\n高负载测试结果:")
         print(f"  用户数: {result.num_users}")
         print(f"  吞吐量: {result.throughput:.2f} RPS")
         print(f"  错误率: {result.error_rate:.2f}%")
@@ -378,7 +373,7 @@ class TestPeakLoad:
             test_name='peak_load_health_check'
         )
 
-        print(f"\n峰值负载测试结果:")
+        print("\n峰值负载测试结果:")
         print(f"  用户数: {result.num_users}")
         print(f"  吞吐量: {result.throughput:.2f} RPS")
         print(f"  错误率: {result.error_rate:.2f}%")
@@ -407,7 +402,7 @@ class TestSustainedLoad:
             test_name='sustained_load_5min'
         )
 
-        print(f"\n持续负载测试结果:")
+        print("\n持续负载测试结果:")
         print(f"  用户数: {result.num_users}")
         print(f"  持续时间: {result.duration}秒")
         print(f"  吞吐量: {result.throughput:.2f} RPS")
@@ -433,7 +428,7 @@ class TestRampUpLoad:
             test_name='ramp_up_to_peak'
         )
 
-        print(f"\n渐进式负载测试结果:")
+        print("\n渐进式负载测试结果:")
         print(f"  总步骤数: {len(results)}")
         for i, result in enumerate(results):
             print(f"  步骤 {i}: {result.num_users} 用户")

@@ -210,7 +210,7 @@ class LLMReservationPersistenceError(RuntimeError):
 
 
 def _is_ambiguous_submission_error(exc: BaseException) -> bool:
-    if isinstance(exc, (TimeoutError, ConnectionError, asyncio.TimeoutError)):
+    if isinstance(exc, TimeoutError | ConnectionError | asyncio.TimeoutError):
         return True
     return exc.__class__.__name__ in {
         "APIConnectionError",

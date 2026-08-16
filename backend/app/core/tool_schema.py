@@ -8,7 +8,7 @@ from enum import StrEnum
 from typing import Any
 from uuid import uuid4
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ToolCategory(StrEnum):
@@ -76,6 +76,8 @@ class ToolExample(BaseModel):
 
 class ToolSchema(BaseModel):
     """统一的工具 Schema"""
+    model_config = ConfigDict(use_enum_values=False)
+
     id: str = Field(default_factory=lambda: str(uuid4()))
     name: str
     version: str = "1.0.0"
@@ -109,10 +111,6 @@ class ToolSchema(BaseModel):
     # 时间戳
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-
-    class Config:
-        use_enum_values = False
-
 
 class ToolCallInput(BaseModel):
     """工具调用输入"""

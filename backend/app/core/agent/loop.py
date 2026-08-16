@@ -3146,7 +3146,11 @@ class AgentLoop:
                 trajectory_goal=trajectory.goal,
                 trajectory_stage=trajectory.stage,
                 trajectory_reflections=trajectory.reflections[-5:],
-                extra_context={k: v for k, v in (extra_context or {}).items() if isinstance(v, (str, int, float, bool, list, dict))},
+                extra_context={
+                    k: v
+                    for k, v in (extra_context or {}).items()
+                    if isinstance(v, str | int | float | bool | list | dict)
+                },
                 session_id=getattr(context, "session_id", None),
             )
             store.save(checkpoint)
@@ -4227,7 +4231,7 @@ class AgentLoop:
         Returns:
             字符串表示
         """
-        if isinstance(value, (str, int, float, bool)) or value is None:
+        if isinstance(value, str | int | float | bool) or value is None:
             return json.dumps(value, ensure_ascii=False, default=str) if not isinstance(value, str) else value
         return json.dumps(value, ensure_ascii=False, default=str)
 

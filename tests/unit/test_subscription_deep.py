@@ -1,19 +1,22 @@
 """Deep coverage tests for backend/app/services/subscription.py."""
-import pytest
-from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+
+from backend.app.models.subscription import (
+    SubscriptionPlan,
+    SubscriptionStatus,
+)
 from backend.app.services.subscription import (
     SubscriptionService,
     get_subscription_service,
 )
-from backend.app.models.subscription import (
-    QuotaModel,
-    SubscriptionHistoryModel,
-    SubscriptionModel,
-    SubscriptionPlan,
-    SubscriptionStatus,
-)
+
+
+def _mock_async_session():
+    session = AsyncMock()
+    session.add = MagicMock()
+    return session
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -48,7 +51,7 @@ class TestCreateSubscription:
     @pytest.mark.asyncio
     @patch("backend.app.services.subscription.SessionManager")
     async def test_create_free_subscription(self, mock_sm):
-        session = AsyncMock()
+        session = _mock_async_session()
         mock_sm.get_session.return_value.__aenter__ = AsyncMock(return_value=session)
         mock_sm.get_session.return_value.__aexit__ = AsyncMock(return_value=False)
         svc = SubscriptionService()
@@ -61,7 +64,7 @@ class TestCreateSubscription:
     @pytest.mark.asyncio
     @patch("backend.app.services.subscription.SessionManager")
     async def test_create_paid_subscription_with_trial(self, mock_sm):
-        session = AsyncMock()
+        session = _mock_async_session()
         mock_sm.get_session.return_value.__aenter__ = AsyncMock(return_value=session)
         mock_sm.get_session.return_value.__aexit__ = AsyncMock(return_value=False)
         svc = SubscriptionService()
@@ -137,9 +140,11 @@ class TestUpgradeDowngrade:
         mock_sm.get_session.return_value.__aenter__ = AsyncMock(return_value=session)
         mock_sm.get_session.return_value.__aexit__ = AsyncMock(return_value=False)
         svc = SubscriptionService()
-        with patch.object(svc, "_update_quota", new_callable=AsyncMock):
-            with patch.object(svc, "_record_history", new_callable=AsyncMock):
-                result = await svc.upgrade_subscription("sub1", SubscriptionPlan.PROFESSIONAL)
+        with (
+            patch.object(svc, "_update_quota", new_callable=AsyncMock),
+            patch.object(svc, "_record_history", new_callable=AsyncMock),
+        ):
+            result = await svc.upgrade_subscription("sub1", SubscriptionPlan.PROFESSIONAL)
         assert result.plan == SubscriptionPlan.PROFESSIONAL
         assert result.price_per_month == 49.99
 
@@ -170,9 +175,11 @@ class TestUpgradeDowngrade:
         mock_sm.get_session.return_value.__aenter__ = AsyncMock(return_value=session)
         mock_sm.get_session.return_value.__aexit__ = AsyncMock(return_value=False)
         svc = SubscriptionService()
-        with patch.object(svc, "_update_quota", new_callable=AsyncMock):
-            with patch.object(svc, "_record_history", new_callable=AsyncMock):
-                result = await svc.downgrade_subscription("sub1", SubscriptionPlan.STARTER)
+        with (
+            patch.object(svc, "_update_quota", new_callable=AsyncMock),
+            patch.object(svc, "_record_history", new_callable=AsyncMock),
+        ):
+            result = await svc.downgrade_subscription("sub1", SubscriptionPlan.STARTER)
         assert result.plan == SubscriptionPlan.STARTER
 
     @pytest.mark.asyncio
