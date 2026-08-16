@@ -327,10 +327,18 @@ export function consoleAuthHeaders(): HeadersInit {
 **2026-08-16 Desktop / 浏览器扩展最小商用纵切验收设计**
 
 - Desktop 与扩展只交付同一条已验证后端合同：配置 HTTPS（仅开发 localhost 可用 HTTP）API 地址、真实 `/api/v1/auth/login`、`/api/v1/mobile/trigger`、状态查询和取消。凭证不得出现在 URL、日志、DOM 持久数据或构建产物；错误只显示稳定安全文案。
-- Desktop 必须删除发布面的任意 Shell、任意 HTTP、HOME/APPDATA 文件读写、全局快捷键、托盘和假 Agent/文件/统计入口；Tauri invoke 仅暴露配置、登录、登出、触发、状态、取消六类专用命令。CSP 非空，Cargo.lock 进入版本控制，配置、Rust 测试/check、前端 Vitest/type-check/build 均需从干净依赖安装复跑。
+- Desktop 必须删除发布面的任意 Shell、任意 HTTP、HOME/APPDATA 文件读写、全局快捷键、托盘和假 Agent/文件/统计入口；Tauri invoke 仅暴露配置、登录、登出、触发、状态、取消六类专用命令。使用 Tauri 2、非空 CSP 和只匹配主窗口且不授予任何 core/plugin 权限的 capability；Cargo.lock 进入版本控制，配置、Rust 测试/check、前端 Vitest/type-check/build 均需从干净依赖安装复跑。
 - 扩展 Manifest V3 只保留 popup 和 `storage` 权限，不包含 service worker、content script、nativeMessaging、`<all_urls>` 或 web-accessible 注入。API 地址存 `chrome.storage.local`，访问/刷新 token 只存 `chrome.storage.session`；运行时仅请求配置 API origin 的 optional host permission。
 - 扩展包必须由跨平台 Node 脚本按固定 allowlist 生成，ZIP 中只允许 manifest、popup 资源和图标；旧 automation/background/content/native messaging 源码可以保留为历史，但不得被 manifest 引用或进入商用 ZIP。新的 Jest 合同覆盖权限、登录 header、触发/状态/取消、错误脱敏和包内容。
 - 本任务只能声明“本地可复现 Desktop/Extension 候选通过”。未签名安装包、未在真实 Windows/macOS/Linux 安装、未在 Chrome Web Store 审核安装、未使用生产证书或真实外部后端时，状态必须保持 `action_required`，不得称四端完整商用通过。
+
+**2026-08-16 Desktop / 浏览器扩展本地候选证据**
+
+- Desktop 已迁移到 Tauri 2，只注册配置、登录、登出、触发、状态、取消六个专用 command；移除发布面任意 Shell/HTTP/文件系统能力和假数据页面，凭证仅保存在 Rust 进程内存，所有后端错误映射为稳定文案。Rust `test/check/clippy/fmt`、前端 3 个 Vitest、TypeScript、ESLint、production build、3 个 Python 商用合同均通过，npm audit 为 0 漏洞。
+- 最终 Windows release 主程序 SHA-256 为 `82413A736DBCA1ECDD8B6636717A15B3ACCDAD2FD272465C3C7A255E7544B7B6`（6,875,648 字节），NSIS SHA-256 为 `B1D8C1F107FA305EDF7836A361F49491EDE0A30129DCCCBB2C0A115D83DD8FDA`（2,024,384 字节）；主程序在本机启动 5 秒保持存活后只终止本次测试进程。两者 Authenticode 均为 `NotSigned`，安装器未执行，因此公开分发仍为 `action_required`。
+- Cargo advisory DB 对锁文件报告 0 个已知漏洞，但有 17 个允许的上游 warning，其中 Linux GTK3 链包含未维护包与 `glib` soundness advisory；Windows 候选不链接该 target-specific GTK 链，Linux 发布不得据此宣称通过。
+- Extension Manifest V3 仅保留 popup、`storage` 与运行时单 origin optional permission；token 仅在 `chrome.storage.session`。Jest 7 个合同、Python 2 个合同、ESLint 与 npm audit 均通过；真实 Playwright Chromium 已加载精确发布 allowlist，得到 runtime extension ID，popup 登录/运行表单和密码字段可用，无内联脚本或页面错误。
+- Extension ZIP 连续两次生成的 SHA-256 均为 `4AED1255D294D958C1A02A89ECD025D1EB7A305325856C63F7A2A66AE8FE3679`，大小均为 17,625 字节。该 ZIP 未签名、未上传 Chrome Web Store、未以商店安装包验收，也未调用生产外部后端，仍为本地候选而非商店发布通过。
 
 **文件：**
 - 修改：导致 Ruff 85 条错误和未 await warning 的精确源文件
