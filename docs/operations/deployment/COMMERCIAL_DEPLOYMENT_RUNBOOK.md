@@ -7,6 +7,9 @@ Evidence is valid only for the exact immutable commit and image digest recorded
 by the release receipt. Historical provider, browser, hosted CI, or deployment
 results from another commit are not acceptance evidence for the current candidate.
 
+This is not a GA claim and not a full Codex/Hermes parity claim. It does not
+claim full Codex/Hermes parity (`full_parity_claimed=false`).
+
 Local mock tests, builds, migration drills, and Helm rendering do not establish
 GA by themselves. Real provider, channel, hosted CI, backup/restore drill, and
 production rollout evidence remain owner-controlled gates and must be refreshed
