@@ -104,7 +104,8 @@ def test_audit_hmac_signature_detects_rehashed_tampering(tmp_path) -> None:
 
 def test_agent_run_writes_audit_log() -> None:
     client = TestClient(app, headers={"x-api-key": "bootstrap"})
-    run = client.post("/api/v1/agents/run", json={"task": "audit check"}).json()
+    run_response = client.post("/api/v1/agents/run", json={"task": "audit check"})
+    assert run_response.status_code == 200
 
     response = client.get(
         "/api/v1/audit-logs",

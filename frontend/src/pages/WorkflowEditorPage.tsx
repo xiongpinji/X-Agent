@@ -11,7 +11,7 @@ interface WorkflowNode {
   label: string
   x: number
   y: number
-  config?: Record<string, any>
+  config?: Record<string, unknown>
 }
 
 interface WorkflowEdge {
@@ -61,7 +61,7 @@ const WorkflowEditorPage: React.FC = () => {
     try {
       setLoading(true)
       const data = await apiClient.listWorkflows()
-      setWorkflows(data.map((w: any) => ({
+      setWorkflows(data.map((w) => ({
         id: w.id || w.workflow_id || '',
         name: w.name || w.title || 'Untitled',
         description: w.description || '',

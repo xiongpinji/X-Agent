@@ -9,7 +9,7 @@ export interface StreamEvent {
   event_type: string;
   timestamp: string;
   run_id: string;
-  data?: Record<string, any>;
+  data?: Record<string, unknown>;
   sequence?: number;
 }
 
@@ -23,14 +23,14 @@ export interface ToolCallEvent extends StreamEvent {
   event_type: 'tool_call';
   tool_name: string;
   tool_id: string;
-  arguments: Record<string, any>;
+  arguments: Record<string, unknown>;
 }
 
 export interface ToolResultEvent extends StreamEvent {
   event_type: 'tool_result';
   tool_id: string;
   tool_name: string;
-  result: any;
+  result: unknown;
   success: boolean;
 }
 
@@ -47,15 +47,15 @@ export interface ErrorEvent extends StreamEvent {
   event_type: 'error';
   error_code: string;
   error_message: string;
-  error_details: Record<string, any>;
+  error_details: Record<string, unknown>;
   recoverable: boolean;
 }
 
 export interface CompletionEvent extends StreamEvent {
   event_type: 'completion';
   status: string;
-  result: any;
-  summary: Record<string, any>;
+  result: unknown;
+  summary: Record<string, unknown>;
 }
 
 export type AnyStreamEvent =

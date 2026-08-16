@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useState } from 'react'
 import clsx from 'clsx'
 import { useAppStore } from '@/store/appStore'
 import { apiClient } from '@/services/api'
@@ -15,11 +15,7 @@ export const OptimizedDashboard: React.FC = () => {
     successRate: 98.5,
   })
 
-  useEffect(() => {
-    loadDashboardData()
-  }, [])
-
-  const loadDashboardData = async () => {
+  const loadDashboardData = useCallback(async () => {
     try {
       setLoading(true)
       const [agents, tools] = await Promise.all([
@@ -39,7 +35,11 @@ export const OptimizedDashboard: React.FC = () => {
     } finally {
       setLoading(false)
     }
-  }
+  }, [setError, setLoading])
+
+  useEffect(() => {
+    loadDashboardData()
+  }, [loadDashboardData])
 
   const tabs = [
     {

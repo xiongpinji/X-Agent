@@ -356,8 +356,8 @@ const ServersTab: React.FC<TabProps> = ({ theme, input, errBox, setError }) => {
               {form.transport === 'http' ? (
                 <>
                   <div>
-                    <label className={labelCls}>URL</label>
-                    <input className={input} value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} placeholder="http://localhost:8001" />
+                    <label htmlFor="mcp-server-url" className={labelCls}>URL</label>
+                    <input id="mcp-server-url" className={input} value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} placeholder="http://localhost:8001" />
                   </div>
                   <div>
                     <label className={labelCls}>{t('mcp.headers', 'Headers (JSON, optional)')}</label>
@@ -570,8 +570,8 @@ const HealthTab: React.FC<TabProps> = ({ theme, input, errBox, setError }) => {
   const { t } = useI18n()
   const [health, setHealth] = useState<McpHealthResponse | null>(null)
   const [status, setStatus] = useState<McpStatusResponse | null>(null)
-  const [cmHealth, setCmHealth] = useState<Record<string, any> | null>(null)
-  const [auditEntries, setAuditEntries] = useState<Array<Record<string, any>>>([])
+  const [cmHealth, setCmHealth] = useState<Record<string, unknown> | null>(null)
+  const [auditEntries, setAuditEntries] = useState<Array<Record<string, unknown>>>([])
   const [auditCount, setAuditCount] = useState(0)
   const [category, setCategory] = useState('')
   const [permissions, setPermissions] = useState<Record<string, boolean> | null>(null)

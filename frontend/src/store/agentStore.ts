@@ -34,7 +34,7 @@ export interface AgentState {
   selectedFilePath: string | null;
 
   // Actions
-  startRun: (task: string, extraContext?: Record<string, any>) => Promise<void>;
+  startRun: (task: string, extraContext?: Record<string, unknown>) => Promise<void>;
   stopRun: () => Promise<void>;
   connectStream: (runId: string) => void;
   disconnectStream: () => void;
@@ -42,7 +42,7 @@ export interface AgentState {
   updateTask: (taskId: string, updates: Partial<Task>) => Promise<void>;
   fetchTasks: (runId?: string) => Promise<void>;
   fetchPendingQuestions: (runId: string) => Promise<void>;
-  answerQuestion: (questionId: string, answer: any) => Promise<void>;
+  answerQuestion: (questionId: string, answer: unknown) => Promise<void>;
   cancelQuestion: (questionId: string) => Promise<void>;
   selectTask: (taskId: string | null) => void;
   selectQuestion: (questionId: string | null) => void;
@@ -74,7 +74,7 @@ const createAgentStore = () =>
           selectedFilePath: null,
 
           // Start agent run
-          startRun: async (task: string, extraContext?: Record<string, any>) => {
+          startRun: async (task: string, extraContext?: Record<string, unknown>) => {
             try {
               set({ isRunning: true, error: null });
               const { apiClient } = get();
@@ -196,7 +196,7 @@ const createAgentStore = () =>
           },
 
           // Answer question
-          answerQuestion: async (questionId: string, answer: any) => {
+          answerQuestion: async (questionId: string, answer: unknown) => {
             try {
               const { apiClient } = get();
               await apiClient.answerQuestion(questionId, answer);

@@ -33,6 +33,22 @@ module.exports = {
       },
     ],
   },
+  overrides: [
+    {
+      files: ['src/**/*.test.{ts,tsx}', 'src/**/__tests__/**/*.{ts,tsx}', 'src/**/*.d.ts'],
+      rules: {
+        // Test doubles and ambient declarations intentionally model untyped browser/API boundaries.
+        '@typescript-eslint/no-explicit-any': 'off',
+      },
+    },
+    {
+      files: ['src/**/context.tsx', 'src/**/*Context.tsx'],
+      rules: {
+        // Context modules intentionally colocate providers, hooks, and typed context values.
+        'react-refresh/only-export-components': 'off',
+      },
+    },
+  ],
   settings: {
     react: {
       version: 'detect',

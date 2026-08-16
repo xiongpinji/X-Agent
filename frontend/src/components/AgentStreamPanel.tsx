@@ -113,7 +113,7 @@ function renderEvent(event: TraceEvent, index: number) {
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 
-function formatArgs(args: Record<string, any>): string {
+function formatArgs(args: Record<string, unknown>): string {
   const entries = Object.entries(args);
   if (entries.length === 0) return '{}';
   if (entries.length <= 2) {
@@ -153,7 +153,7 @@ export const AgentStreamPanel: React.FC<AgentStreamPanelProps> = ({ onRunComplet
 
   const handleStart = useCallback(async () => {
     if (!taskInput.trim() || isStreaming) return;
-    let extraContext: Record<string, any> | undefined;
+    let extraContext: Record<string, unknown> | undefined;
     if (showAdvanced && extraContextStr.trim()) {
       try {
         extraContext = JSON.parse(extraContextStr);

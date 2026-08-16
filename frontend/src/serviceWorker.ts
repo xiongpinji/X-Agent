@@ -109,7 +109,7 @@ async function networkFirstStrategy(request: Request): Promise<Response> {
     }
 
     return response;
-  } catch (error) {
+  } catch {
     // Network failed, try cache
     const cached = await caches.match(request);
     if (cached) {
@@ -139,7 +139,7 @@ async function cacheFirstStrategy(request: Request): Promise<Response> {
       cache.put(request, response.clone());
     }
     return response;
-  } catch (error) {
+  } catch {
     return new Response('Not found', { status: 404 });
   }
 }
@@ -200,9 +200,10 @@ async function precacheApiEndpoints(endpoints: string[]): Promise<void> {
 }
 
 // Background sync for offline actions
-self.addEventListener('sync', (event: any) => {
-  if (event.tag === 'sync-offline-queue') {
-    event.waitUntil(syncOfflineQueue());
+self.addEventListener('sync', (event: Event) => {
+  const syncEvent = event as SyncEvent;
+  if (syncEvent.tag === 'sync-offline-queue') {
+    syncEvent.waitUntil(syncOfflineQueue());
   }
 });
 
@@ -243,7 +244,7 @@ function openIndexedDB(): Promise<IDBDatabase> {
   });
 }
 
-function getOfflineQueue(db: IDBDatabase): Promise<any[]> {
+function getOfflineQueue(db: IDBDatabase): Promise<OfflineQueueItem[]> {
   return new Promise((resolve, reject) => {
     const transaction = db.transaction('offline-queue', 'readonly');
     const store = transaction.objectStore('offline-queue');
@@ -267,7 +268,11 @@ function removeFromQueue(db: IDBDatabase, id: string): Promise<void> {
 
 // Type definitions
 interface ExtendedEvent extends Event {
-  waitUntil(promise: Promise<any>): void;
+  waitUntil(promise: Promise<unknown>): void;
+}
+
+interface SyncEvent extends ExtendedEvent {
+  tag: string;
 }
 
 interface FetchEvent extends Event {
@@ -278,8 +283,16 @@ interface FetchEvent extends Event {
 interface ExtendedMessageEvent extends MessageEvent {
   data: {
     type: string;
-    payload?: any;
+    payload?: unknown;
   };
+}
+
+interface OfflineQueueItem {
+  id: string;
+  url: string;
+  method: string;
+  headers?: Record<string, string>;
+  body?: unknown;
 }
 
 export {};

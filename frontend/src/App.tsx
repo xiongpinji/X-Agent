@@ -1,4 +1,4 @@
-import React, { useEffect, lazy, Suspense } from 'react'
+import React, { useCallback, useEffect, lazy, Suspense } from 'react'
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import { useAppStore } from '@/store/appStore'
 import { apiClient } from '@/services/api'
@@ -54,11 +54,7 @@ const PageLoader = () => (
 export const App: React.FC = () => {
   const { theme, setConnected, setError, isAuthenticated } = useAppStore()
 
-  useEffect(() => {
-    initializeApp()
-  }, [])
-
-  const initializeApp = async () => {
+  const initializeApp = useCallback(async () => {
     try {
       await apiClient.healthCheck()
       setConnected(true)
@@ -67,7 +63,11 @@ export const App: React.FC = () => {
       setConnected(false)
       setError(error instanceof Error ? error.message : 'Failed to initialize')
     }
-  }
+  }, [setConnected, setError])
+
+  useEffect(() => {
+    initializeApp()
+  }, [initializeApp])
 
   return (
     <ErrorBoundary>

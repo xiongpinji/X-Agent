@@ -71,9 +71,9 @@ export interface SSOStatusResponse {
     features: string[]
     providers_configured: number
   }
-  saml: Record<string, any>
-  webauthn: Record<string, any>
-  ldap: Record<string, any>
+  saml: { status?: string; message?: string } & Record<string, unknown>
+  webauthn: { status?: string } & Record<string, unknown>
+  ldap: { configured?: boolean; status?: string } & Record<string, unknown>
   jwt_backend: Record<string, any>
   user_storage_mode: string
   session_issuer_available: boolean

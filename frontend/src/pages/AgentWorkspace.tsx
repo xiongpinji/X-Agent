@@ -15,11 +15,12 @@ import AgentStreamPanel from '../components/AgentStreamPanel';
 import FolderSelector from '../components/FolderSelector';
 import GitStatusPanel from '../components/GitStatusPanel';
 import RunHistoryPanel from '../components/RunHistoryPanel';
+import type { AgentStreamResult } from '../hooks/useAgentStream';
 import './AgentWorkspace.css';
 
 interface AgentWorkspaceProps {
-  onRunComplete?: (result: any) => void;
-  onError?: (error: any) => void;
+  onRunComplete?: (result: AgentStreamResult) => void;
+  onError?: (error: string) => void;
 }
 
 export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({

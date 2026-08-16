@@ -2,6 +2,24 @@
  * PWA Service Worker Registration and Management
  */
 
+interface BeforeInstallPromptEvent extends Event {
+  prompt(): Promise<void>;
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
+}
+
+interface InstallableWindow extends Window {
+  deferredPrompt?: BeforeInstallPromptEvent;
+}
+
+interface StandaloneNavigator extends Navigator {
+  standalone?: boolean;
+}
+
+interface SyncCapableRegistration extends ServiceWorkerRegistration {
+  sync?: { register(tag: string): Promise<void> };
+  periodicSync?: { register(tag: string, options: { minInterval: number }): Promise<void> };
+}
+
 class PWAManager {
   private registration: ServiceWorkerRegistration | null = null;
   private updateCheckInterval: number | null = null;
@@ -169,7 +187,7 @@ class PWAManager {
    * Request install prompt
    */
   async requestInstall(): Promise<boolean> {
-    const event = (window as any).deferredPrompt;
+    const event = (window as InstallableWindow).deferredPrompt;
     if (!event) return false;
 
     event.prompt();
@@ -182,7 +200,7 @@ class PWAManager {
    */
   isStandalone(): boolean {
     return (
-      (window.navigator as any).standalone === true ||
+      (window.navigator as StandaloneNavigator).standalone === true ||
       window.matchMedia('(display-mode: standalone)').matches ||
       window.matchMedia('(display-mode: fullscreen)').matches
     );
@@ -233,7 +251,7 @@ class PWAManager {
     if ('serviceWorker' in navigator && 'SyncManager' in window) {
       try {
         const registration = await navigator.serviceWorker.ready;
-        await (registration as any).sync.register(tag);
+        await (registration as SyncCapableRegistration).sync?.register(tag);
       } catch (error) {
         console.warn('Background sync not supported:', error);
       }
@@ -247,7 +265,7 @@ class PWAManager {
     if ('serviceWorker' in navigator && 'PeriodicSyncManager' in window) {
       try {
         const registration = await navigator.serviceWorker.ready;
-        await (registration as any).periodicSync.register(tag, { minInterval });
+        await (registration as SyncCapableRegistration).periodicSync?.register(tag, { minInterval });
       } catch (error) {
         console.warn('Periodic sync not supported:', error);
       }
@@ -274,7 +292,7 @@ class PWAManager {
   /**
    * Emit event
    */
-  private emit(event: string, data?: any): void {
+  private emit(event: string, data?: unknown): void {
     this.listeners.get(event)?.forEach((callback) => {
       callback(data);
     });

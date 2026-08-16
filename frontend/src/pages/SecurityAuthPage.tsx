@@ -271,8 +271,8 @@ export const SecurityAuthPage: React.FC = () => {
                 {([
                   ['OIDC', ssoStatus.oidc?.status, `${ssoStatus.oidc?.providers_configured ?? 0} configured`],
                   ['SAML 2.0', ssoStatus.saml?.status, ssoStatus.saml?.message],
-                  ['LDAP', (ssoStatus.ldap as any)?.configured ? 'configured' : 'not configured', (ssoStatus.ldap as any)?.status],
-                  ['WebAuthn', (ssoStatus.webauthn as any)?.status, 'FIDO2'],
+                  ['LDAP', ssoStatus.ldap.configured ? 'configured' : 'not configured', ssoStatus.ldap.status],
+                  ['WebAuthn', ssoStatus.webauthn.status, 'FIDO2'],
                 ] as Array<[string, string | undefined, string | undefined]>).map(([name, status, detail]) => (
                   <div
                     key={name}

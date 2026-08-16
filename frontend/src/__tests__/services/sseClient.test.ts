@@ -2,7 +2,8 @@
  * SSE Client Tests
  */
 
-import { SSEClient } from '../services/sseClient';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import { SSEClient } from '@/services/sseClient';
 
 describe('SSEClient', () => {
   let client: SSEClient;
@@ -13,12 +14,12 @@ describe('SSEClient', () => {
 
     // Mock EventSource
     mockEventSource = {
-      addEventListener: jest.fn(),
-      close: jest.fn(),
-      readyState: EventSource.OPEN,
+      addEventListener: vi.fn(),
+      close: vi.fn(),
+      readyState: 1,
     };
 
-    global.EventSource = jest.fn(() => mockEventSource) as any;
+    global.EventSource = vi.fn(() => mockEventSource) as any;
   });
 
   afterEach(() => {
@@ -26,7 +27,7 @@ describe('SSEClient', () => {
   });
 
   test('should connect to SSE stream', () => {
-    const onMessage = jest.fn();
+    const onMessage = vi.fn();
     client.connect('test-run-id', onMessage);
 
     expect(global.EventSource).toHaveBeenCalledWith(
@@ -36,7 +37,7 @@ describe('SSEClient', () => {
   });
 
   test('should handle incoming messages', () => {
-    const onMessage = jest.fn();
+    const onMessage = vi.fn();
     client.connect('test-run-id', onMessage);
 
     const messageHandler = mockEventSource.addEventListener.mock.calls.find(
@@ -58,8 +59,8 @@ describe('SSEClient', () => {
   });
 
   test('should handle connection errors', () => {
-    const onError = jest.fn();
-    client.connect('test-run-id', jest.fn(), onError);
+    const onError = vi.fn();
+    client.connect('test-run-id', vi.fn(), onError);
 
     mockEventSource.onerror?.();
 
@@ -68,7 +69,7 @@ describe('SSEClient', () => {
   });
 
   test('should disconnect properly', () => {
-    client.connect('test-run-id', jest.fn());
+    client.connect('test-run-id', vi.fn());
     client.disconnect();
 
     expect(mockEventSource.close).toHaveBeenCalled();
@@ -76,10 +77,10 @@ describe('SSEClient', () => {
   });
 
   test('should handle max reconnect attempts', async () => {
-    const onError = jest.fn();
+    const onError = vi.fn();
     const clientWithLimit = new SSEClient({ maxReconnectAttempts: 2 });
 
-    clientWithLimit.connect('test-run-id', jest.fn(), onError);
+    clientWithLimit.connect('test-run-id', vi.fn(), onError);
 
     // Simulate multiple connection errors
     for (let i = 0; i < 3; i++) {

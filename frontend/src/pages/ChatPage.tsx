@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useAppStore } from '@/store/appStore'
 import { Agent, apiClient, ChatMessage, ChatRunEvent, ChatRunResponse } from '@/services/api'
 import { AgentStreamResult, TraceEvent, useAgentStream } from '@/hooks/useAgentStream'
@@ -20,6 +20,11 @@ interface ParallelTaskCard {
   error_code?: string
 }
 
+const normalizeParallelTaskStatus = (status: unknown): ParallelTaskCard['status'] => {
+  if (status === 'pending' || status === 'running' || status === 'failed') return status
+  return 'completed'
+}
+
 export const ChatPage: React.FC = () => {
   const { theme, messages, addMessage, clearMessages, isLoading, setLoading, setError } = useAppStore()
   const { t } = useI18n()
@@ -37,11 +42,6 @@ export const ChatPage: React.FC = () => {
   const streamEventsRef = useRef<ChatRunEvent[]>([])
 
   useEffect(() => {
-    loadAgents()
-    loadHistory()
-  }, [])
-
-  useEffect(() => {
     scrollToBottom()
   }, [messages])
 
@@ -52,7 +52,7 @@ export const ChatPage: React.FC = () => {
   // ── Chat history persistence (backend /api/v1/chat/history) ──────────────
 
   /** Load the most recent persisted session into the message list. */
-  const loadHistory = async () => {
+  const loadHistory = useCallback(async () => {
     try {
       const sessions = await apiClient.listChatSessions(1)
       if (!sessions.length) return
@@ -71,7 +71,12 @@ export const ChatPage: React.FC = () => {
     } catch (error) {
       console.error('Failed to load chat history:', error)
     }
-  }
+  }, [addMessage, clearMessages])
+
+  useEffect(() => {
+    loadAgents()
+    loadHistory()
+  }, [loadHistory])
 
   /** Best-effort session creation; a history outage never blocks the agent run. */
   const ensureChatSession = async (): Promise<string | undefined> => {
@@ -87,7 +92,7 @@ export const ChatPage: React.FC = () => {
   }
 
   /** Best-effort persistence of one message; never blocks or breaks the chat. */
-  const persistChatMessage = async (role: string, content: string, metadata?: Record<string, any>) => {
+  const persistChatMessage = async (role: string, content: string, metadata?: Record<string, unknown>) => {
     const sessionId = await ensureChatSession()
     if (!sessionId) return
     try {
@@ -134,7 +139,7 @@ export const ChatPage: React.FC = () => {
       : typeof event.message === 'string'
         ? event.message
         : event.data
-          ? JSON.stringify(event.data)
+          ? JSON.stringify(event.data) ?? eventType
           : eventType
     streamEventsRef.current.push({
       type: eventType,
@@ -234,15 +239,15 @@ export const ChatPage: React.FC = () => {
         4
       )
       const results = resp?.results || resp?.agent_results || []
-      setParallelTasks(results.map((r: any) => ({
+      setParallelTasks(results.map((r) => ({
         agent_id: r.agent_id || `agent-${Math.random().toString(36).slice(2, 8)}`,
         task: messageText,
-        status: r.status || 'completed',
+        status: normalizeParallelTaskStatus(r.status),
         output: r.output,
         error: r.error,
       })))
       // Add summary message
-      const summary = results.map((r: any, i: number) => `Agent ${i + 1}: ${r.status}${r.output ? ' - ' + String(r.output).slice(0, 100) : ''}`).join('\n')
+      const summary = results.map((r, i) => `Agent ${i + 1}: ${r.status}${r.output ? ' - ' + String(r.output).slice(0, 100) : ''}`).join('\n')
       const summaryContent = `⚡ Ultra Mode (${results.length} agents):\n${summary}`
       addMessage({
         id: `parallel-${Date.now()}`,

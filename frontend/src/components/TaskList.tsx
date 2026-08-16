@@ -5,7 +5,7 @@
  * Supports filtering, sorting, and real-time updates.
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 
 interface TaskModel {
   task_id: string;
@@ -21,8 +21,8 @@ interface TaskModel {
   depends_on: string[];
   blocks: string[];
   tags: string[];
-  metadata: Record<string, any>;
-  result?: any;
+  metadata: Record<string, unknown>;
+  result?: unknown;
   error?: string;
   run_id?: string;
   parent_task_id?: string;
@@ -77,7 +77,7 @@ export const TaskList: React.FC<TaskListProps> = ({
     pending: 0,
   });
 
-  const fetchTasks = async () => {
+  const fetchTasks = useCallback(async () => {
     try {
       setLoading(true);
       const params = new URLSearchParams();
@@ -102,7 +102,7 @@ export const TaskList: React.FC<TaskListProps> = ({
     } finally {
       setLoading(false);
     }
-  };
+  }, [filterStatus, runId]);
 
   useEffect(() => {
     fetchTasks();
@@ -111,7 +111,7 @@ export const TaskList: React.FC<TaskListProps> = ({
       const interval = setInterval(fetchTasks, refreshInterval);
       return () => clearInterval(interval);
     }
-  }, [runId, filterStatus, autoRefresh, refreshInterval]);
+  }, [autoRefresh, fetchTasks, refreshInterval]);
 
   const getProgressColor = (progress: number): string => {
     if (progress === 1) return 'bg-green-500';

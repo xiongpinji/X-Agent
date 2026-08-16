@@ -148,7 +148,7 @@ describe('FeedbackDetail Component', () => {
     const editButton = screen.getByText('Edit')
     fireEvent.click(editButton)
 
-    const statusSelect = screen.getByDisplayValue('open')
+    const statusSelect = screen.getByLabelText('Status')
     await userEvent.selectOptions(statusSelect, 'in_progress')
 
     const saveButton = screen.getByText('Save')
@@ -247,10 +247,10 @@ describe('NotificationSettings Component', () => {
     const emailInput = screen.getByPlaceholderText('user@example.com')
     await userEvent.type(emailInput, 'newuser@example.com')
 
-    const checkbox = screen.getByRole('checkbox', { name: /new_feedback/i })
+    const checkbox = screen.getByRole('checkbox', { name: /new feedback/i })
     fireEvent.click(checkbox)
 
-    const submitButton = screen.getByText('Add Channel')
+    const submitButton = screen.getAllByText('Add Channel').at(-1)!
     fireEvent.click(submitButton)
 
     expect(mockProps.onAdd).toHaveBeenCalled()
@@ -269,12 +269,7 @@ describe('NotificationSettings Component', () => {
     window.confirm = vi.fn(() => true)
     render(<NotificationSettings {...mockProps} />)
 
-    const deleteButtons = screen.getAllByRole('button')
-    const deleteButton = deleteButtons.find(btn => btn.querySelector('svg'))
-
-    if (deleteButton) {
-      fireEvent.click(deleteButton)
-    }
+    fireEvent.click(screen.getByRole('button', { name: 'Delete admin@example.com' }))
 
     expect(mockProps.onDelete).toHaveBeenCalled()
   })

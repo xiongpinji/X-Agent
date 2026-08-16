@@ -12,7 +12,24 @@ export interface StreamEvent {
   timestamp: string;
   run_id: string;
   sequence: number;
-  [key: string]: any;
+  role?: string;
+  content?: string;
+  tool_name?: string;
+  success?: boolean;
+  overall_progress?: number;
+  current_step?: string;
+  total_steps?: number;
+  completed_steps?: number;
+  estimated_time_remaining?: number;
+  level?: string;
+  message?: string;
+  error_code?: string;
+  error_message?: string;
+  status?: string;
+  metric_name?: string;
+  metric_value?: number | string;
+  unit?: string;
+  result?: unknown;
 }
 
 export interface ProgressData {
@@ -37,7 +54,7 @@ export interface UseStreamingEventsOptions {
   onProgress?: (progress: ProgressData) => void;
   onMetric?: (metric: { name: string; value: number | string; unit: string }) => void;
   onError?: (error: Error) => void;
-  onComplete?: (result: any) => void;
+  onComplete?: (result: unknown) => void;
 }
 
 export const useStreamingEvents = (
@@ -98,10 +115,10 @@ export const useStreamingEvents = (
       switch (event.event_type) {
         case 'progress': {
           const progressData: ProgressData = {
-            overall_progress: event.overall_progress,
-            current_step: event.current_step,
-            total_steps: event.total_steps,
-            completed_steps: event.completed_steps,
+            overall_progress: event.overall_progress ?? 0,
+            current_step: event.current_step ?? '',
+            total_steps: event.total_steps ?? 0,
+            completed_steps: event.completed_steps ?? 0,
             estimated_time_remaining: event.estimated_time_remaining,
           };
           setProgress(progressData);
@@ -110,6 +127,7 @@ export const useStreamingEvents = (
         }
 
         case 'metric':
+          if (!event.metric_name || event.metric_value === undefined) break;
           setMetrics((prev) => ({
             ...prev,
             [event.metric_name]: event.metric_value,
@@ -118,7 +136,7 @@ export const useStreamingEvents = (
             onMetric({
               name: event.metric_name,
               value: event.metric_value,
-              unit: event.unit,
+              unit: event.unit ?? '',
             });
           }
           break;
@@ -128,7 +146,7 @@ export const useStreamingEvents = (
           break;
 
         case 'error':
-          if (onError) onError(new Error(event.error_message));
+          if (onError) onError(new Error(event.error_message ?? 'Streaming error'));
           break;
 
         case 'heartbeat':

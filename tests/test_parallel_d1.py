@@ -28,9 +28,9 @@ from backend.app.core.parallel_agent_executor import (
     ParallelAgentExecutor,
 )
 from backend.app.main import app
+from cli.config import CLIConfig
 from cli.main import app as cli_app
 from cli.main import set_current_config
-from cli.config import CLIConfig
 
 AUTH_HEADERS = {"x-api-key": "bootstrap"}  # conftest sets XAGENT_BOOTSTRAP_API_KEY
 
@@ -215,7 +215,7 @@ class TestExecutorConcurrencyCap:
 
 def _fake_batch(subtasks: list[str], max_parallel: int, fail_index: int | None = None):
     results = []
-    for i, goal in enumerate(subtasks):
+    for i, _goal in enumerate(subtasks):
         failed = i == fail_index
         results.append(
             SimpleNamespace(

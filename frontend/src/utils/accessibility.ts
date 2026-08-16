@@ -90,14 +90,14 @@ export function isNavigationKey(key: string): boolean {
     KeyCode.END,
     KeyCode.PAGE_UP,
     KeyCode.PAGE_DOWN,
-  ].includes(key as any)
+  ].some((navigationKey) => navigationKey === key)
 }
 
 /**
  * Check if key is activation key
  */
 export function isActivationKey(key: string): boolean {
-  return [KeyCode.ENTER, KeyCode.SPACE].includes(key as any)
+  return [KeyCode.ENTER, KeyCode.SPACE].some((activationKey) => activationKey === key)
 }
 
 /**

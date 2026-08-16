@@ -54,6 +54,7 @@ export const OptimizedImage = memo(
       React.useImperativeHandle(ref, () => imgRef.current as HTMLImageElement)
 
       useEffect(() => {
+        const image = imgRef.current
         if (!priority) {
           // Use Intersection Observer for lazy loading
           if ('IntersectionObserver' in window) {
@@ -67,13 +68,13 @@ export const OptimizedImage = memo(
               { rootMargin: '50px' }
             )
 
-            if (imgRef.current) {
-              observer.observe(imgRef.current)
+            if (image) {
+              observer.observe(image)
             }
 
             return () => {
-              if (imgRef.current) {
-                observer.unobserve(imgRef.current)
+              if (image) {
+                observer.unobserve(image)
               }
             }
           } else {

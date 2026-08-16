@@ -56,7 +56,7 @@ export const WorkflowSchedulesPage: React.FC = () => {
       ])
       setSchedules(items)
       setWorkflows(
-        wfList.map((wf: any) => ({ id: String(wf.id ?? wf.workflow_id ?? ''), name: String(wf.name ?? wf.id ?? '') }))
+        wfList.map((wf) => ({ id: String(wf.id ?? wf.workflow_id ?? ''), name: String(wf.name ?? wf.id ?? '') }))
       )
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Failed to load schedules')
@@ -89,7 +89,7 @@ export const WorkflowSchedulesPage: React.FC = () => {
       setError(t('schedules.pickWorkflow', 'Please select a workflow'))
       return
     }
-    let inputs: Record<string, any> = {}
+    let inputs: Record<string, unknown> = {}
     try {
       inputs = formInputs.trim() ? JSON.parse(formInputs) : {}
     } catch {

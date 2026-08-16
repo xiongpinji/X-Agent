@@ -14,16 +14,18 @@ const AGENT_EXECUTION_FAILED_MESSAGE = 'Agent execution failed';
 export interface TraceEvent {
   event_type?: string;
   type?: string;
+  event?: string;
   timestamp?: string;
   tool_name?: string;
   tool_id?: string;
-  arguments?: Record<string, any>;
-  result?: any;
+  arguments?: Record<string, unknown>;
+  result?: unknown;
   success?: boolean;
   message?: string;
   content?: string;
+  data?: unknown;
   status?: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export interface AgentStreamResult {
@@ -31,12 +33,18 @@ export interface AgentStreamResult {
   result?: {
     status: string;
     answer?: string;
-    tool_calls?: any[];
+    tool_calls?: unknown[];
     iterations?: number;
     trace_id?: string;
+    agent_id?: string;
+    execution_summary?: {
+      tokens_used?: number;
+      total_tokens?: number;
+      model?: string;
+    };
     error?: string;
     error_code?: string;
-    [key: string]: any;
+    [key: string]: unknown;
   };
   error?: string;
 }

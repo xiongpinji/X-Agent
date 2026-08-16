@@ -55,9 +55,13 @@ interface I18nProviderProps {
 
 export const I18nProvider: React.FC<I18nProviderProps> = ({
   children,
-  defaultLanguage = DEFAULT_LANGUAGE,
+  defaultLanguage,
 }) => {
   const [language, setLanguageState] = useState<LanguageCode>(() => {
+    if (defaultLanguage && SUPPORTED_LANGUAGES[defaultLanguage]) {
+      return defaultLanguage
+    }
+
     // Try to get from localStorage
     const stored = localStorage.getItem('language') as LanguageCode | null
     if (stored && SUPPORTED_LANGUAGES[stored]) {
@@ -70,7 +74,7 @@ export const I18nProvider: React.FC<I18nProviderProps> = ({
       return browserLang
     }
 
-    return defaultLanguage
+    return DEFAULT_LANGUAGE
   })
 
   const setLanguage = (lang: LanguageCode) => {

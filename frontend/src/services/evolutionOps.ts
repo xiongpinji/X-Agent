@@ -70,8 +70,8 @@ export interface EvolutionRecordItem {
   id: string
   task_id: string
   stage: 'execute' | 'evaluate' | 'optimize' | 'learn' | string
-  input_data: Record<string, any>
-  output_data: Record<string, any>
+  input_data: Record<string, unknown>
+  output_data: Record<string, unknown>
   score: number | null
   created_at: string
 }
@@ -173,7 +173,7 @@ class EvolutionOpsClient {
   }
 
   /** POST /evolution/trigger — manual GEPA loop trigger (agent:write scope). */
-  async triggerGepa(trajectory: Record<string, any>, result: Record<string, any>): Promise<GepaTriggerResult> {
+  async triggerGepa(trajectory: Record<string, unknown>, result: Record<string, unknown>): Promise<GepaTriggerResult> {
     const response = await this.client.post<GepaTriggerResult>('/evolution/trigger', { trajectory, result })
     return response.data
   }
@@ -198,7 +198,7 @@ class EvolutionOpsClient {
   }
 
   /** Stage 1 — record an execution trace. */
-  async recordExecution(taskId: string, trace: Record<string, any>): Promise<RecordExecutionResult> {
+  async recordExecution(taskId: string, trace: Record<string, unknown>): Promise<RecordExecutionResult> {
     const response = await this.client.post<RecordExecutionResult>('/evolution/self-evolution/record', {
       task_id: taskId,
       trace,
@@ -207,7 +207,7 @@ class EvolutionOpsClient {
   }
 
   /** Stage 2 — evaluate an execution. */
-  async evaluateExecution(executionId: string, feedback?: Record<string, any>): Promise<EvaluateResult> {
+  async evaluateExecution(executionId: string, feedback?: Record<string, unknown>): Promise<EvaluateResult> {
     const response = await this.client.post<EvaluateResult>('/evolution/self-evolution/evaluate', {
       execution_id: executionId,
       feedback: feedback ?? null,

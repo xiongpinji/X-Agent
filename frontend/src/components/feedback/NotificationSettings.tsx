@@ -347,6 +347,7 @@ export const NotificationSettings: React.FC<NotificationSettingsProps> = ({
                           ? 'bg-slate-700 hover:bg-slate-600 text-slate-300'
                           : 'bg-slate-200 hover:bg-slate-300 text-slate-700'
                     )}
+                    aria-label={`Test ${notification.target}`}
                   >
                     {testingId === notification.id ? 'Testing...' : 'Test'}
                   </button>
@@ -363,6 +364,7 @@ export const NotificationSettings: React.FC<NotificationSettingsProps> = ({
                         ? 'hover:bg-slate-700 text-slate-400'
                         : 'hover:bg-slate-200 text-slate-600'
                     )}
+                    aria-label={`Edit ${notification.target}`}
                   >
                     <Edit2 size={16} />
                   </button>
@@ -379,6 +381,7 @@ export const NotificationSettings: React.FC<NotificationSettingsProps> = ({
                         ? 'hover:bg-red-900/20 text-red-400'
                         : 'hover:bg-red-100 text-red-600'
                     )}
+                    aria-label={`Delete ${notification.target}`}
                   >
                     <Trash2 size={16} />
                   </button>

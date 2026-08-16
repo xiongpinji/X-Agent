@@ -10,7 +10,7 @@ interface I18nContextType {
   region: string;
   setLanguage: (lang: string) => void;
   setRegion: (region: string) => void;
-  t: (key: string, params?: Record<string, any>) => string;
+  t: (key: string, params?: Record<string, unknown>) => string;
   formatDate: (date: Date, format?: string) => string;
   formatCurrency: (amount: number, currency?: string) => string;
   formatNumber: (num: number, decimals?: number) => string;
@@ -20,9 +20,8 @@ interface I18nContextType {
 
 const I18nContext = createContext<I18nContextType | undefined>(undefined);
 
-interface Translations {
-  [key: string]: any;
-}
+type TranslationValue = string | { [key: string]: TranslationValue };
+type Translations = { [key: string]: TranslationValue };
 
 const translations: Record<string, Translations> = {
   en: enTranslations,
@@ -89,16 +88,16 @@ export const I18nProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [language, setLanguage] = useState('en');
   const [region, setRegion] = useState('US');
 
-  const getNestedValue = (obj: any, path: string): string => {
+  const getNestedValue = (obj: TranslationValue, path: string): string => {
     const keys = path.split('.');
-    let value = obj;
+    let value: TranslationValue | undefined = obj;
     for (const key of keys) {
-      value = value?.[key];
+      value = value && typeof value === 'object' ? value[key] : undefined;
     }
-    return value || path;
+    return typeof value === 'string' ? value : path;
   };
 
-  const t = useCallback((key: string, params?: Record<string, any>): string => {
+  const t = useCallback((key: string, params?: Record<string, unknown>): string => {
     let translation = getNestedValue(translations[language] || translations.en, key);
 
     if (params) {

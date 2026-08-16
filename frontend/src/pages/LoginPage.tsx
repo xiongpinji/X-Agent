@@ -39,7 +39,7 @@ export const LoginPage: React.FC = () => {
           email: 'API Key authenticated',
         })
         navigate('/')
-      } catch (err: any) {
+      } catch (err: unknown) {
         localStorage.removeItem('api_key')
         setError(toErrorMessage(err, 'API Key login failed'))
       } finally {
@@ -92,7 +92,7 @@ export const LoginPage: React.FC = () => {
       })
 
       navigate('/')
-    } catch (err: any) {
+    } catch (err: unknown) {
       setError(toErrorMessage(err, 'Authentication failed'))
     } finally {
       setLoading(false)

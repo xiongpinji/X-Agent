@@ -7,7 +7,7 @@ interface OfflineQueueItem {
   timestamp: number;
   method: string;
   url: string;
-  body?: any;
+  body?: unknown;
   headers?: Record<string, string>;
   retries: number;
   maxRetries: number;
@@ -84,7 +84,7 @@ class OfflineDataManager {
   async queueRequest(
     method: string,
     url: string,
-    body?: any,
+    body?: unknown,
     headers?: Record<string, string>
   ): Promise<string> {
     if (!this.db) throw new Error('Database not initialized');
@@ -236,7 +236,7 @@ class OfflineDataManager {
   /**
    * Cache data
    */
-  async cacheData(key: string, data: any, ttl?: number): Promise<void> {
+  async cacheData(key: string, data: unknown, ttl?: number): Promise<void> {
     if (!this.db) throw new Error('Database not initialized');
 
     const cacheEntry = {
@@ -259,7 +259,7 @@ class OfflineDataManager {
   /**
    * Get cached data
    */
-  async getCachedData(key: string): Promise<any | null> {
+  async getCachedData<T = unknown>(key: string): Promise<T | null> {
     if (!this.db) throw new Error('Database not initialized');
 
     return new Promise((resolve, reject) => {
@@ -283,7 +283,7 @@ class OfflineDataManager {
           deleteStore.delete(key);
           resolve(null);
         } else {
-          resolve(entry.data);
+          resolve(entry.data as T);
         }
       };
     });
@@ -362,7 +362,7 @@ class OfflineDataManager {
   /**
    * Emit event
    */
-  private emit(event: string, data?: any): void {
+  private emit(event: string, data?: unknown): void {
     this.listeners.get(event)?.forEach((callback) => {
       callback(data);
     });

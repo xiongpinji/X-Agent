@@ -51,7 +51,9 @@ export const ProgressIndicator: React.FC<ProgressIndicatorProps> = ({
         const events = data.events || [];
 
         // Find the latest progress event
-        const progressEvents = events.filter((e: any) => e.event_type === 'progress');
+        const progressEvents = (events as ProgressData[]).filter(
+          (event) => 'event_type' in event && event.event_type === 'progress'
+        );
         if (progressEvents.length > 0) {
           const latestProgress = progressEvents[progressEvents.length - 1];
           const progressData: ProgressData = {

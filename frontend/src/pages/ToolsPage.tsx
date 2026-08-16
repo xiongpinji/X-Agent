@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useState } from 'react'
 import { useAppStore } from '@/store/appStore'
 import { apiClient, Tool } from '@/services/api'
 import { useI18n } from '@/i18n/context'
@@ -10,11 +10,7 @@ export const ToolsPage: React.FC = () => {
   const { t } = useI18n()
   const [loadError, setLoadError] = useState<string | null>(null)
 
-  useEffect(() => {
-    loadTools()
-  }, [])
-
-  const loadTools = async () => {
+  const loadTools = useCallback(async () => {
     try {
       setLoading(true)
       setLoadError(null)
@@ -27,7 +23,11 @@ export const ToolsPage: React.FC = () => {
     } finally {
       setLoading(false)
     }
-  }
+  }, [setError, setLoading, setTools])
+
+  useEffect(() => {
+    loadTools()
+  }, [loadTools])
 
   return (
     <div className={clsx(
@@ -97,7 +97,6 @@ interface ToolRowProps {
 }
 
 const ToolRow: React.FC<ToolRowProps> = ({ tool }) => {
-  const { theme } = useAppStore()
   const { t } = useI18n()
 
   // PUT /api/v1/tools/{name} and POST /api/v1/tools/{name}/test exist in the

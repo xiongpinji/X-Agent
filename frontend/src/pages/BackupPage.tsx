@@ -333,7 +333,7 @@ const QdrantSection: React.FC<{ onError: (msg: string | null) => void; onNotice:
   const { theme } = useAppStore()
   const { t } = useI18n()
   const [collection, setCollection] = useState('')
-  const [snapshots, setSnapshots] = useState<Array<Record<string, any>>>([])
+  const [snapshots, setSnapshots] = useState<Array<Record<string, unknown>>>([])
   const [busy, setBusy] = useState(false)
 
   const inputCls = clsx(

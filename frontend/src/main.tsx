@@ -31,7 +31,7 @@ if ('PerformanceObserver' in window) {
         }
       })
       longTaskObserver.observe({ entryTypes: ['longtask'] })
-    } catch (e) {
+    } catch {
       // Long task API not supported
     }
   }

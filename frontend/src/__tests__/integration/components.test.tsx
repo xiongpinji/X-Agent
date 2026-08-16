@@ -5,16 +5,17 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import StreamingOutput from '../components/StreamingOutput';
-import TaskList from '../components/TaskList';
-import ProgressIndicator from '../components/ProgressIndicator';
+import { beforeEach, describe, expect, test, vi } from 'vitest';
+import StreamingOutput from '@/components/StreamingOutput';
+import TaskList from '@/components/TaskList';
+import ProgressIndicator from '@/components/ProgressIndicator';
 
 describe('StreamingOutput Component', () => {
   beforeEach(() => {
-    global.EventSource = jest.fn(() => ({
-      addEventListener: jest.fn(),
-      close: jest.fn(),
-      readyState: EventSource.OPEN,
+    global.EventSource = vi.fn(() => ({
+      addEventListener: vi.fn(),
+      close: vi.fn(),
+      readyState: 1,
     })) as any;
   });
 
@@ -38,13 +39,13 @@ describe('StreamingOutput Component', () => {
   });
 
   test('should call onComplete callback', async () => {
-    const onComplete = jest.fn();
+    const onComplete = vi.fn();
     render(
       <StreamingOutput runId="test-run-1" onComplete={onComplete} />
     );
 
     // Simulate completion event
-    const eventSource = (global.EventSource as jest.Mock).mock.results[0].value;
+    const eventSource = vi.mocked(global.EventSource).mock.results[0].value;
     const completionHandler = eventSource.addEventListener.mock.calls.find(
       (call: any) => call[0] === 'completion'
     )?.[1];
@@ -70,11 +71,11 @@ describe('StreamingOutput Component', () => {
 
 describe('TaskList Component', () => {
   beforeEach(() => {
-    global.fetch = jest.fn();
+    global.fetch = vi.fn();
   });
 
   test('should render task list', async () => {
-    (global.fetch as jest.Mock).mockResolvedValueOnce({
+    vi.mocked(global.fetch).mockResolvedValueOnce({
       ok: true,
       json: async () => ({
         tasks: [
@@ -108,7 +109,7 @@ describe('TaskList Component', () => {
   });
 
   test('should display task stats', async () => {
-    (global.fetch as jest.Mock).mockResolvedValueOnce({
+    vi.mocked(global.fetch).mockResolvedValueOnce({
       ok: true,
       json: async () => ({
         tasks: [],
@@ -129,7 +130,7 @@ describe('TaskList Component', () => {
   });
 
   test('should handle refresh', async () => {
-    (global.fetch as jest.Mock).mockResolvedValue({
+    vi.mocked(global.fetch).mockResolvedValue({
       ok: true,
       json: async () => ({
         tasks: [],
@@ -143,7 +144,7 @@ describe('TaskList Component', () => {
 
     render(<TaskList runId="test-run-1" />);
 
-    const refreshButton = screen.getByText('Refresh');
+    const refreshButton = await screen.findByText('Refresh');
     fireEvent.click(refreshButton);
 
     await waitFor(() => {
@@ -152,7 +153,7 @@ describe('TaskList Component', () => {
   });
 
   test('should show empty state', async () => {
-    (global.fetch as jest.Mock).mockResolvedValueOnce({
+    vi.mocked(global.fetch).mockResolvedValueOnce({
       ok: true,
       json: async () => ({
         tasks: [],
@@ -174,11 +175,11 @@ describe('TaskList Component', () => {
 
 describe('ProgressIndicator Component', () => {
   beforeEach(() => {
-    global.fetch = jest.fn();
+    global.fetch = vi.fn();
   });
 
   test('should render progress indicator', async () => {
-    (global.fetch as jest.Mock).mockResolvedValueOnce({
+    vi.mocked(global.fetch).mockResolvedValueOnce({
       ok: true,
       json: async () => ({
         events: [
@@ -203,7 +204,7 @@ describe('ProgressIndicator Component', () => {
   });
 
   test('should display progress percentage', async () => {
-    (global.fetch as jest.Mock).mockResolvedValueOnce({
+    vi.mocked(global.fetch).mockResolvedValueOnce({
       ok: true,
       json: async () => ({
         events: [
@@ -228,7 +229,7 @@ describe('ProgressIndicator Component', () => {
   });
 
   test('should show step breakdown', async () => {
-    (global.fetch as jest.Mock).mockResolvedValueOnce({
+    vi.mocked(global.fetch).mockResolvedValueOnce({
       ok: true,
       json: async () => ({
         events: [
@@ -255,16 +256,16 @@ describe('ProgressIndicator Component', () => {
 
 describe('Component Integration', () => {
   beforeEach(() => {
-    global.fetch = jest.fn();
-    global.EventSource = jest.fn(() => ({
-      addEventListener: jest.fn(),
-      close: jest.fn(),
-      readyState: EventSource.OPEN,
+    global.fetch = vi.fn();
+    global.EventSource = vi.fn(() => ({
+      addEventListener: vi.fn(),
+      close: vi.fn(),
+      readyState: 1,
     })) as any;
   });
 
   test('should handle multiple components together', async () => {
-    (global.fetch as jest.Mock).mockResolvedValue({
+    vi.mocked(global.fetch).mockResolvedValue({
       ok: true,
       json: async () => ({
         tasks: [],

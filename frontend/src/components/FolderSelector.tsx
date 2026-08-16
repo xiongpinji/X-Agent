@@ -10,7 +10,7 @@
  * - Unmount operations
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useState, useEffect } from 'react';
 import './FolderSelector.css';
 
 interface Mount {
@@ -37,17 +37,12 @@ export const FolderSelector: React.FC<FolderSelectorProps> = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Load mounts on component mount
-  useEffect(() => {
-    loadMounts();
-  }, []);
-
   // Notify parent of mount changes
   useEffect(() => {
     onMountChange?.(mounts);
   }, [mounts, onMountChange]);
 
-  const loadMounts = async () => {
+  const loadMounts = useCallback(async () => {
     try {
       setLoading(true);
       const response = await fetch('/api/v1/workspace/mounts');
@@ -64,7 +59,12 @@ export const FolderSelector: React.FC<FolderSelectorProps> = ({
     } finally {
       setLoading(false);
     }
-  };
+  }, [onError]);
+
+  // Load mounts on component mount
+  useEffect(() => {
+    loadMounts();
+  }, [loadMounts]);
 
   const handleMount = async (e: React.FormEvent) => {
     e.preventDefault();

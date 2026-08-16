@@ -20,6 +20,15 @@ export interface ComponentMetrics {
   timestamp: number
 }
 
+interface LayoutShiftEntry extends PerformanceEntry {
+  hadRecentInput: boolean
+  value: number
+}
+
+interface FirstInputEntry extends PerformanceEntry {
+  processingDuration: number
+}
+
 class PerformanceMonitor {
   private metrics: PerformanceMetrics = {
     fcp: null,
@@ -70,7 +79,7 @@ class PerformanceMonitor {
         })
         observer.observe({ entryTypes: ['paint'] })
         this.observers.set('fcp', observer)
-      } catch (e) {
+      } catch {
         console.warn('FCP observer not supported')
       }
     }
@@ -86,7 +95,7 @@ class PerformanceMonitor {
         })
         observer.observe({ entryTypes: ['largest-contentful-paint'] })
         this.observers.set('lcp', observer)
-      } catch (e) {
+      } catch {
         console.warn('LCP observer not supported')
       }
     }
@@ -97,16 +106,17 @@ class PerformanceMonitor {
       try {
         let clsValue = 0
         const observer = new PerformanceObserver((list) => {
-          for (const entry of list.getEntries()) {
-            if (!(entry as any).hadRecentInput) {
-              clsValue += (entry as any).value
+          for (const rawEntry of list.getEntries()) {
+            const entry = rawEntry as LayoutShiftEntry
+            if (!entry.hadRecentInput) {
+              clsValue += entry.value
               this.metrics.cls = clsValue
             }
           }
         })
         observer.observe({ entryTypes: ['layout-shift'] })
         this.observers.set('cls', observer)
-      } catch (e) {
+      } catch {
         console.warn('CLS observer not supported')
       }
     }
@@ -118,11 +128,11 @@ class PerformanceMonitor {
         const observer = new PerformanceObserver((list) => {
           const entries = list.getEntries()
           const firstEntry = entries[0]
-          this.metrics.fid = (firstEntry as any).processingDuration
+          this.metrics.fid = (firstEntry as FirstInputEntry).processingDuration
         })
         observer.observe({ entryTypes: ['first-input'] })
         this.observers.set('fid', observer)
-      } catch (e) {
+      } catch {
         console.warn('FID observer not supported')
       }
     }

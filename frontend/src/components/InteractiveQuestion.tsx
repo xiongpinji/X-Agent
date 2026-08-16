@@ -5,7 +5,9 @@
  * Supports multiple question types: single choice, multiple choice, text input, confirmation.
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
+
+type QuestionAnswer = string | string[] | boolean | null;
 
 interface QuestionOption {
   value: string;
@@ -19,7 +21,7 @@ interface InteractiveQuestion {
   type: 'single_choice' | 'multiple_choice' | 'text_input' | 'confirmation' | 'file_selection' | 'code_review';
   title: string;
   description: string;
-  context: Record<string, any>;
+  context: Record<string, unknown>;
   options: QuestionOption[];
   allow_multiple: boolean;
   placeholder: string;
@@ -30,17 +32,17 @@ interface InteractiveQuestion {
   timeout_seconds?: number;
   expires_at?: string;
   status: 'pending' | 'answered' | 'timeout' | 'cancelled';
-  answer?: any;
+  answer?: QuestionAnswer;
   answered_at?: string;
   priority: string;
   blocking: boolean;
-  default_answer?: any;
+  default_answer?: QuestionAnswer;
   tags: string[];
 }
 
 interface InteractiveQuestionProps {
   question: InteractiveQuestion;
-  onAnswer: (answer: any) => Promise<void>;
+  onAnswer: (answer: QuestionAnswer) => Promise<void>;
   onTimeout?: () => void;
   onCancel?: () => void;
 }
@@ -51,7 +53,7 @@ export const InteractiveQuestion: React.FC<InteractiveQuestionProps> = ({
   onTimeout,
   onCancel,
 }) => {
-  const [answer, setAnswer] = useState<any>(null);
+  const [answer, setAnswer] = useState<QuestionAnswer>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
@@ -97,7 +99,7 @@ export const InteractiveQuestion: React.FC<InteractiveQuestionProps> = ({
     }
   };
 
-  const validateAnswer = (value: any): boolean => {
+  const validateAnswer = (value: QuestionAnswer): boolean => {
     switch (question.type) {
       case 'confirmation':
         return typeof value === 'boolean';
@@ -327,7 +329,7 @@ export const InteractiveQuestions: React.FC<InteractiveQuestionsProps> = ({
   const [questions, setQuestions] = useState<InteractiveQuestion[]>([]);
   const [, setLoading] = useState(false);
 
-  const fetchPendingQuestions = async () => {
+  const fetchPendingQuestions = useCallback(async () => {
     try {
       setLoading(true);
       const response = await fetch(`/api/v1/questions/pending?run_id=${runId}`);
@@ -341,15 +343,15 @@ export const InteractiveQuestions: React.FC<InteractiveQuestionsProps> = ({
     } finally {
       setLoading(false);
     }
-  };
+  }, [onQuestionsUpdate, runId]);
 
   useEffect(() => {
     fetchPendingQuestions();
     const interval = setInterval(fetchPendingQuestions, 2000);
     return () => clearInterval(interval);
-  }, [runId]);
+  }, [fetchPendingQuestions]);
 
-  const handleAnswer = async (questionId: string, answer: any) => {
+  const handleAnswer = async (questionId: string, answer: QuestionAnswer) => {
     try {
       const response = await fetch(`/api/v1/questions/${questionId}/answer`, {
         method: 'POST',

@@ -18,7 +18,7 @@ interface RunRecord {
   started_at?: string;
   finished_at?: string;
   duration_ms?: number;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 interface RunHistoryPanelProps {
@@ -82,8 +82,8 @@ export const RunHistoryPanel: React.FC<RunHistoryPanelProps> = ({
       const data = await resp.json();
       setRuns(Array.isArray(data) ? data : []);
       setError(null);
-    } catch (err: any) {
-      setError(err.message || 'Failed to fetch runs');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to fetch runs');
     } finally {
       setLoading(false);
     }
@@ -115,9 +115,18 @@ export const RunHistoryPanel: React.FC<RunHistoryPanelProps> = ({
           <div
             key={run.trace_id}
             className={`run-history__item ${expandedId === run.trace_id ? 'expanded' : ''}`}
+            role="button"
+            tabIndex={0}
             onClick={() => {
               setExpandedId(expandedId === run.trace_id ? null : run.trace_id);
               onSelectRun?.(run);
+            }}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                setExpandedId(expandedId === run.trace_id ? null : run.trace_id);
+                onSelectRun?.(run);
+              }
             }}
           >
             <div className="run-history__item-main">

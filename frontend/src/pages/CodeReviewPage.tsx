@@ -49,7 +49,7 @@ const CodeReviewPage: React.FC = () => {
         score: resp?.score,
         comments: resp?.comments ?? resp?.findings ?? resp?.results ?? [],
       })
-    } catch (err: any) {
+    } catch (err: unknown) {
       setError(toErrorMessage(err, 'Review request failed'))
     } finally {
       setLoading(false)

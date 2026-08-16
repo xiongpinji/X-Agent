@@ -15,7 +15,6 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-
 # ─── 1. Goals API ─────────────────────────────────────────────────────────────
 
 
@@ -198,8 +197,8 @@ class TestEvolutionAPI:
     def setup(self):
         """Create app with evolution router, override auth dependency."""
         from backend.app.api.evolution import router as evolution_router
-        from backend.app.dependencies import get_current_principal
         from backend.app.core.security import Principal
+        from backend.app.dependencies import get_current_principal
 
         app = FastAPI()
         app.include_router(evolution_router)
@@ -300,7 +299,7 @@ class TestWebAuthnFlow:
         # First create a challenge
         self.provider.create_registration_challenge("user-1", "alice")
         # Get the challenge_id from internal store
-        challenge_id = list(self.provider._challenges.keys())[0]
+        challenge_id = next(iter(self.provider._challenges))
 
         # Verify registration
         result = self.provider.verify_registration(
@@ -322,7 +321,7 @@ class TestWebAuthnFlow:
         """create_authentication_challenge returns challenge."""
         # Register a credential first
         self.provider.create_registration_challenge("user-1", "alice")
-        challenge_id = list(self.provider._challenges.keys())[0]
+        challenge_id = next(iter(self.provider._challenges))
         self.provider.verify_registration(
             challenge_id=challenge_id,
             credential_id="cred-abc123",
@@ -341,7 +340,7 @@ class TestWebAuthnFlow:
         """verify_authentication with invalid signature fails (fail-closed)."""
         # Register credential
         self.provider.create_registration_challenge("user-1", "alice")
-        reg_challenge_id = list(self.provider._challenges.keys())[0]
+        reg_challenge_id = next(iter(self.provider._challenges))
         self.provider.verify_registration(
             challenge_id=reg_challenge_id,
             credential_id="cred-abc123",
@@ -374,7 +373,7 @@ class TestWebAuthnFlow:
     def test_verify_authentication_wrong_credential(self):
         """verify_authentication with unknown credential fails."""
         self.provider.create_registration_challenge("user-1", "alice")
-        reg_challenge_id = list(self.provider._challenges.keys())[0]
+        reg_challenge_id = next(iter(self.provider._challenges))
         self.provider.verify_registration(
             challenge_id=reg_challenge_id,
             credential_id="cred-abc123",

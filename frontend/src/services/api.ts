@@ -17,7 +17,7 @@ const redirectToLogin = () => {
  * - GET /chat/stream and /ws still do not exist; callers must not use them.
  */
 
-export interface ApiResponse<T = any> {
+export interface ApiResponse<T = unknown> {
   data: T
   status: number
   message?: string
@@ -43,7 +43,7 @@ export interface Task {
   description?: string
   priority?: 'low' | 'medium' | 'high' | 'critical'
   tags?: string[]
-  result?: any
+  result?: unknown
   error?: string
 }
 
@@ -66,7 +66,7 @@ export interface Memory {
   /** 0..1 importance score */
   importance: number
   tags: string[]
-  metadata: Record<string, any>
+  metadata: Record<string, unknown>
   sessionId?: string
   createdAt: string
   /** Relevance score, present only on search hits */
@@ -85,7 +85,7 @@ export interface Tool {
   description: string
   riskLevel: string
   requiredScope?: string
-  parameters?: Record<string, any>
+  parameters?: Record<string, unknown>
 }
 
 export interface AuthTokenResponse {
@@ -95,7 +95,7 @@ export interface AuthTokenResponse {
     id: string
     email: string
     display_name?: string
-    [key: string]: any
+    [key: string]: unknown
   }
 }
 
@@ -104,7 +104,7 @@ export interface ChatMessage {
   role: 'user' | 'assistant'
   content: string
   timestamp: string
-  metadata?: Record<string, any>
+  metadata?: Record<string, unknown>
 }
 
 export interface ChatRunEvent {
@@ -112,7 +112,7 @@ export interface ChatRunEvent {
   status?: string
   message: string
   created_at?: string
-  metadata?: Record<string, any>
+  metadata?: Record<string, unknown>
 }
 
 /** Session summary returned by GET /api/v1/chat/history (snake_case, seconds). */
@@ -131,7 +131,7 @@ export interface ChatHistoryMessage {
   role: string
   content: string
   timestamp: number
-  metadata?: Record<string, any>
+  metadata?: Record<string, unknown>
 }
 
 /** Full session payload returned by GET /api/v1/chat/history/{session_id}. */
@@ -185,15 +185,15 @@ export interface AgentDetailRecord {
   status: string
   capabilities: string[]
   created_at?: string
-  config?: Record<string, any>
-  [key: string]: any
+  config?: Record<string, unknown>
+  [key: string]: unknown
 }
 
 /** Payload returned by POST /agent/run (ad-hoc agent task execution). */
 export interface AgentRunResult {
   message?: string
   answer?: string
-  [key: string]: any
+  [key: string]: unknown
 }
 
 /** A single agent's outcome inside a parallel ("ultra mode") run. */
@@ -205,7 +205,7 @@ export interface ParallelAgentResult {
   tokens_used?: number
   duration_seconds?: number
   error?: string
-  [key: string]: any
+  [key: string]: unknown
 }
 
 /**
@@ -220,7 +220,7 @@ export interface ParallelRunResponse {
   merged_answer?: string
   agents_used?: number
   status?: string
-  [key: string]: any
+  [key: string]: unknown
 }
 
 /**
@@ -241,7 +241,7 @@ export interface DashboardMetrics {
   request_count?: number
   error_rate?: number | null
   avg_latency_ms?: number | null
-  [key: string]: any
+  [key: string]: unknown
 }
 
 /** API key record as returned by the /security/api-keys endpoints. */
@@ -253,7 +253,7 @@ export interface ApiKeyRecord {
   created_at?: string
   expires_at?: string | null
   last_used_at?: string | null
-  [key: string]: any
+  [key: string]: unknown
 }
 
 /** Response of POST /security/api-keys: the raw key plus its record. */

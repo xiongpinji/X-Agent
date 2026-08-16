@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useState, useEffect } from 'react';
 import { Card, Button, Input, Textarea, Badge, Spinner } from './ui';
 
 interface ForumPost {
@@ -29,11 +29,7 @@ export const ForumHome: React.FC = () => {
   const [sortBy, setSortBy] = useState<'created_at' | 'views' | 'likes' | 'comments'>('created_at');
   const [category, setCategory] = useState<string>('');
 
-  useEffect(() => {
-    fetchPosts();
-  }, [sortBy, category]);
-
-  const fetchPosts = async () => {
+  const fetchPosts = useCallback(async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams();
@@ -49,7 +45,11 @@ export const ForumHome: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [category, sortBy]);
+
+  useEffect(() => {
+    fetchPosts();
+  }, [fetchPosts]);
 
   return (
     <div className="space-y-6">
@@ -76,7 +76,7 @@ export const ForumHome: React.FC = () => {
 
         <select
           value={sortBy}
-          onChange={(e) => setSortBy(e.target.value as any)}
+          onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
           className="px-4 py-2 border rounded-lg"
         >
           <option value="created_at">Latest</option>
@@ -132,12 +132,7 @@ export const ForumPostDetail: React.FC<{ postId: string }> = ({ postId }) => {
   const [liked, setLiked] = useState(false);
   const [bookmarked, setBookmarked] = useState(false);
 
-  useEffect(() => {
-    fetchPost();
-    fetchComments();
-  }, [postId]);
-
-  const fetchPost = async () => {
+  const fetchPost = useCallback(async () => {
     try {
       const response = await fetch(`/api/v1/forum/posts/${postId}`);
       const data = await response.json();
@@ -147,9 +142,9 @@ export const ForumPostDetail: React.FC<{ postId: string }> = ({ postId }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [postId]);
 
-  const fetchComments = async () => {
+  const fetchComments = useCallback(async () => {
     try {
       const response = await fetch(`/api/v1/forum/posts/${postId}/comments?limit=50`);
       const data = await response.json();
@@ -157,7 +152,12 @@ export const ForumPostDetail: React.FC<{ postId: string }> = ({ postId }) => {
     } catch (error) {
       console.error('Failed to fetch comments:', error);
     }
-  };
+  }, [postId]);
+
+  useEffect(() => {
+    fetchPost();
+    fetchComments();
+  }, [fetchComments, fetchPost]);
 
   const handleAddComment = async () => {
     if (!newComment.trim()) return;
@@ -414,19 +414,23 @@ export const ForumCreatePost: React.FC = () => {
   );
 };
 
+interface UserReputation {
+  level: string;
+  reputation_points: number;
+  post_count?: number;
+  comment_count?: number;
+  badges?: string[];
+}
+
 export const UserProfile: React.FC<{ userId: string }> = ({ userId }) => {
-  const [reputation, setReputation] = useState<any>(null);
+  const [reputation, setReputation] = useState<UserReputation | null>(null);
   const [followers, setFollowers] = useState(0);
   const [following, setFollowing] = useState(0);
   const [userPosts, setUserPosts] = useState<ForumPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [isFollowing, setIsFollowing] = useState(false);
 
-  useEffect(() => {
-    fetchUserData();
-  }, [userId]);
-
-  const fetchUserData = async () => {
+  const fetchUserData = useCallback(async () => {
     try {
       const [repRes, followersRes, followingRes, postsRes] = await Promise.all([
         fetch(`/api/v1/forum/users/${userId}/reputation`),
@@ -449,7 +453,11 @@ export const UserProfile: React.FC<{ userId: string }> = ({ userId }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [userId]);
+
+  useEffect(() => {
+    fetchUserData();
+  }, [fetchUserData]);
 
   const handleFollow = async () => {
     try {

@@ -124,7 +124,7 @@ export interface BillingPlan {
   monthly_api_calls?: number | null
   monthly_tokens?: number | null
   storage_gb?: number | null
-  features?: Record<string, any> | null
+  features?: Record<string, unknown> | null
   description?: string | null
 }
 
@@ -167,8 +167,8 @@ export interface BillingSubscription {
 /** GET /users/{id}/activity response body */
 export interface UserActivityResponse {
   user_id: string
-  items: Array<Record<string, any>>
-  pagination?: Record<string, any>
+  items: Array<Record<string, unknown>>
+  pagination?: Record<string, unknown>
 }
 
 // ---------------------------------------------------------------------------
@@ -182,7 +182,11 @@ export function isForbidden(error: unknown): boolean {
 
 /** Extract a human-readable message from a backend error envelope. */
 export function errorMessage(error: unknown, fallback: string): string {
-  const err = error as AxiosError<any>
+  const err = error as AxiosError<{
+    error?: { message?: string }
+    detail?: string
+    message?: string
+  }>
   const data = err?.response?.data
   return (
     data?.error?.message ||
@@ -255,7 +259,7 @@ class AdminOpsClient {
   }
 
   /** PUT /tenant/quota — update quota limits (security:manage scope). */
-  async updateTenantQuota(update: QuotaLimitsUpdate): Promise<any> {
+  async updateTenantQuota(update: QuotaLimitsUpdate): Promise<unknown> {
     const response = await this.client.put('/tenant/quota', update)
     return response.data
   }

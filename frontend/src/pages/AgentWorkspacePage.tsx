@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { apiClient } from '@/services/api'
 import { useAppStore } from '@/store/appStore'
@@ -11,7 +11,7 @@ interface AgentDetail {
   status: string
   capabilities: string[]
   created_at?: string
-  config?: Record<string, any>
+  config?: Record<string, unknown>
 }
 
 const AgentWorkspacePage: React.FC = () => {
@@ -25,18 +25,18 @@ const AgentWorkspacePage: React.FC = () => {
   const [chatLoading, setChatLoading] = useState(false)
   const [activeTab, setActiveTab] = useState<'chat' | 'tools' | 'memory'>('chat')
 
-  useEffect(() => {
-    loadAgent()
-  }, [id])
-
-  const loadAgent = async () => {
+  const loadAgent = useCallback(async () => {
     try {
       const data = await apiClient.getAgentDetail(id)
       setAgent(data || { id: id || 'unknown', name: `Agent ${id}`, status: 'active', capabilities: [] })
     } catch {
       setAgent({ id: id || 'unknown', name: `Agent ${id}`, status: 'active', capabilities: ['chat', 'tools'] })
     }
-  }
+  }, [id])
+
+  useEffect(() => {
+    loadAgent()
+  }, [loadAgent])
 
   const sendChat = async () => {
     if (!chatInput.trim()) return

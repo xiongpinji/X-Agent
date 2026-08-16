@@ -43,7 +43,6 @@ from backend.app.dependencies import (
 )
 from backend.app.settings import get_settings
 
-
 _PUBLIC_API_KEY_PATHS = frozenset({
     "/",
     "/health",

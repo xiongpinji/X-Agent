@@ -32,8 +32,8 @@ import { applyStoredAuth } from './authHeaders'
 export interface McpLegacyTool {
   name: string
   description?: string
-  input_schema?: Record<string, any>
-  [key: string]: any
+  input_schema?: Record<string, unknown>
+  [key: string]: unknown
 }
 
 export interface McpToolListResponse {
@@ -49,7 +49,7 @@ export interface McpHealthResponse {
 
 export interface McpAuditLogResponse {
   tool_category: string
-  entries: Array<Record<string, any>>
+  entries: Array<Record<string, unknown>>
   count: number
   timestamp: string
 }
@@ -58,7 +58,7 @@ export interface McpServerInfo {
   name: string
   connected: boolean
   transport: string
-  server_info?: Record<string, any>
+  server_info?: Record<string, unknown>
 }
 
 export interface McpServersResponse {
@@ -73,7 +73,7 @@ export interface McpServersResponse {
 export interface McpDiscoveredTool {
   name: string
   description?: string
-  input_schema?: Record<string, any>
+  input_schema?: Record<string, unknown>
   server: string
   registered_name: string
 }
@@ -121,7 +121,7 @@ export interface CmServerInfo {
   name?: string
   connected?: boolean
   transport?: string
-  [key: string]: any
+  [key: string]: unknown
 }
 
 export interface CmServersResponse {
@@ -132,7 +132,7 @@ export interface CmServersResponse {
 }
 
 export interface CmToolsResponse {
-  tools: Array<Record<string, any>>
+  tools: Array<Record<string, unknown>>
   count: number
   timestamp: string
 }
@@ -141,14 +141,14 @@ export interface ToolInvokeResponse {
   success: boolean
   server: string
   tool: string
-  result: any
+  result: unknown
   timestamp: string
 }
 
 export interface ToolExecutionResponse {
   tool_name: string
   success: boolean
-  result?: Record<string, any> | null
+  result?: Record<string, unknown> | null
   error?: string | null
   error_code?: string | null
   timestamp: string
@@ -176,11 +176,11 @@ class McpOpsClient {
 
   // ── Legacy server endpoints ──
 
-  sendMcpRequest(request: Record<string, any>): Promise<Record<string, any>> {
+  sendMcpRequest(request: Record<string, unknown>): Promise<Record<string, unknown>> {
     return this.unwrap(this.client.post('/mcp/request', request))
   }
 
-  executeTool(toolName: string, args?: Record<string, any>): Promise<ToolExecutionResponse> {
+  executeTool(toolName: string, args?: Record<string, unknown>): Promise<ToolExecutionResponse> {
     return this.unwrap(
       this.client.post('/mcp/tools/execute', { tool_name: toolName, arguments: args ?? {} })
     )
@@ -234,7 +234,7 @@ class McpOpsClient {
   invokeTool(
     serverName: string,
     toolName: string,
-    args: Record<string, any> = {}
+    args: Record<string, unknown> = {}
   ): Promise<ToolInvokeResponse> {
     return this.unwrap(
       this.client.post(
@@ -270,8 +270,8 @@ class McpOpsClient {
   cmCallTool(
     serverId: string,
     toolName: string,
-    args: Record<string, any> = {}
-  ): Promise<any> {
+    args: Record<string, unknown> = {}
+  ): Promise<unknown> {
     return this.unwrap(
       this.client.post(`/mcp/client-manager/${encodeURIComponent(serverId)}/call-tool`, {
         tool_name: toolName,
@@ -280,7 +280,7 @@ class McpOpsClient {
     )
   }
 
-  cmHealthCheck(): Promise<Record<string, any>> {
+  cmHealthCheck(): Promise<Record<string, unknown>> {
     return this.unwrap(this.client.get('/mcp/client-manager/health'))
   }
 }
