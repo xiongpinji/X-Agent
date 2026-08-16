@@ -230,7 +230,7 @@ python -m pytest tests/test_artifacts.py tests/test_run_artifact_lifecycle.py te
 - 测试：`tests/test_usage_reservation_lifecycle.py`
 - 测试：`tests/test_usage_reservation_idempotency.py`
 
-- [ ] **步骤 1：写失败的状态机测试**
+- [x] **步骤 1：写失败的状态机测试**
 
 ```python
 reservation = await store.reserve(operation_id="op-1", tenant_id="a", estimated_cost=Decimal("0.01"))
@@ -240,15 +240,15 @@ assert (await store.confirm("op-1", actual_cost=Decimal("0.008"))).ledger_entry_
 
 显式供应商失败必须 `refunded`；未知 POST 结果必须 `submission_unknown`，禁止自动重试和自动退款；重复 callback 不得二次扣费/退款；跨租户查询返回 404。
 
-- [ ] **步骤 2：实现持久 reservation/ledger**
+- [x] **步骤 2：实现持久 reservation/ledger**
 
 权威状态仅为 `reserved/confirmed/refunded/submission_unknown`。唯一键为 `tenant_id + operation_id`；每次转换在同一 SQL 事务内写不可变 ledger 和持久 audit outbox，再尝试同步投递到现有 AuditStore。投递失败不丢记录，必须显式显示 `pending`，不得伪装审计成功。开发/测试使用持久 SQLite，生产只接受 PostgreSQL 且不自动建表；不允许内存 fallback。
 
-- [ ] **步骤 3：接入真实 Agent/LLM 生命周期**
+- [x] **步骤 3：接入真实 Agent/LLM 生命周期**
 
 供应商调用前 reserve；拿到明确成功和 token/cost 后 confirm；明确失败 refund；网络超时且无法确认供应商状态时写 `submission_unknown` 并停止自动重试。一次 router 调用生成一个 root operation ID，每个 provider 尝试使用稳定的子 ID；重复的 `reserved` 请求必须阻断自动重放。明确 `LLMBackendError` 退款后才能 fallback；新增模糊提交异常类，超时/无法确认的连接结果不得被通用 fallback 捕获。Agent 调用传入 run/trace 关联，OpenAI 请求补硬性输出 token 上限。
 
-- [ ] **步骤 4：以 mock provider 完成成功/失败/未知/重复回调测试**
+- [x] **步骤 4：以 mock provider 完成成功/失败/未知/重复回调测试**
 
 ```powershell
 python -m pytest tests/test_llm_quota_wiring.py tests/test_usage_reservation_lifecycle.py tests/test_usage_reservation_idempotency.py -q
@@ -256,9 +256,11 @@ python -m pytest tests/test_llm_quota_wiring.py tests/test_usage_reservation_lif
 
 以 mock provider 模拟 success/explicit failure/unknown result，断言 reservation、ledger、audit outbox 和返回状态一致；不在本任务发出真实供应商请求。租户 billing 端点改从权威 store 按月汇总 confirmed/refunded/submission_unknown，不再固定返回 0 或伪造 `paid`；未接入支付网关时只能标记 `unsettled/no_usage`。默认 Agent 和共享 LLM router 使用同一个持久 store。
 
-- [ ] **步骤 5：双阶段审查并提交**
+- [x] **步骤 5：双阶段审查并提交**
 
 提交信息：`feat(billing): add idempotent run reservations`。
+
+任务 4 以 `67f7f17` 至 `19a83ce` 的独立实现与复审修复提交完成。最终同轮本地 mock/SQLite 限定回归 290 个通过；规格复审与质量复审均为 0 Critical、0 Important、0 Minor。已验证持久 reservation/ledger/audit outbox、并发幂等、confirm/refund/submission_unknown、明确失败后 fallback、未知提交不重试、tenant/user 所有权、金额精度、稳定且无歧义的 operation 派生、Agent/structured/Parallel/Ultra/Goals 全部用户计费入口、合法重启 attempt、资源上限和脱敏错误。`011_usage_reservations.sql` 从未在本分支外部持久库应用：首次生产必须执行当前最终版 011；若任何环境曾提前应用旧版 011，必须先补 forward migration 012。本任务未运行真实 provider、未联网、未 push、未部署；指定测试环境缺少可选 Anthropic SDK，已用注入 fake client 覆盖其 ambiguous submission 合同，依赖安装与真实供应商一次性验收留待任务 7。
 
 ### 任务 5：现代 Console 真实数据纵切
 
