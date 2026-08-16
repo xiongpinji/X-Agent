@@ -324,6 +324,14 @@ export function consoleAuthHeaders(): HeadersInit {
 - 同轮证据：后端相关 168 tests passed；前端 106 tests passed；完整 frontend lint、type-check、production build 通过。
 - 尚未升级为生产通过：当前 Alembic 仍有 `001` 与 `001_initial` 两个 head，Feedback ORM 也尚未进入可验证的单一生产迁移链。任务 7 必须先闭合迁移 dry-run/fail-closed，再允许生产部署声明。
 
+**2026-08-16 Desktop / 浏览器扩展最小商用纵切验收设计**
+
+- Desktop 与扩展只交付同一条已验证后端合同：配置 HTTPS（仅开发 localhost 可用 HTTP）API 地址、真实 `/api/v1/auth/login`、`/api/v1/mobile/trigger`、状态查询和取消。凭证不得出现在 URL、日志、DOM 持久数据或构建产物；错误只显示稳定安全文案。
+- Desktop 必须删除发布面的任意 Shell、任意 HTTP、HOME/APPDATA 文件读写、全局快捷键、托盘和假 Agent/文件/统计入口；Tauri invoke 仅暴露配置、登录、登出、触发、状态、取消六类专用命令。CSP 非空，Cargo.lock 进入版本控制，配置、Rust 测试/check、前端 Vitest/type-check/build 均需从干净依赖安装复跑。
+- 扩展 Manifest V3 只保留 popup 和 `storage` 权限，不包含 service worker、content script、nativeMessaging、`<all_urls>` 或 web-accessible 注入。API 地址存 `chrome.storage.local`，访问/刷新 token 只存 `chrome.storage.session`；运行时仅请求配置 API origin 的 optional host permission。
+- 扩展包必须由跨平台 Node 脚本按固定 allowlist 生成，ZIP 中只允许 manifest、popup 资源和图标；旧 automation/background/content/native messaging 源码可以保留为历史，但不得被 manifest 引用或进入商用 ZIP。新的 Jest 合同覆盖权限、登录 header、触发/状态/取消、错误脱敏和包内容。
+- 本任务只能声明“本地可复现 Desktop/Extension 候选通过”。未签名安装包、未在真实 Windows/macOS/Linux 安装、未在 Chrome Web Store 审核安装、未使用生产证书或真实外部后端时，状态必须保持 `action_required`，不得称四端完整商用通过。
+
 **文件：**
 - 修改：导致 Ruff 85 条错误和未 await warning 的精确源文件
 - 修改：`.github/workflows/commercial-rc.yml`
