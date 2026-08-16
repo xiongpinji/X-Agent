@@ -1,44 +1,26 @@
 {
   "name": "x-agent-chrome-extension",
-  "version": "0.3.0-alpha",
-  "description": "X-Agent Browser Extension - Intelligent web automation powered by AI",
-  "author": "X-Agent Team",
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/x-agent/x-agent-core.git",
-    "directory": "extension"
-  },
+  "version": "0.3.0",
+  "private": true,
+  "description": "Authenticated X-Agent runner for Chrome",
   "scripts": {
-    "test": "jest --coverage",
-    "test:watch": "jest --watch",
-    "test:integration": "jest --testPathPattern=integration",
-    "test:e2e": "jest --testPathPattern=e2e",
-    "lint": "eslint . --ext .js",
-    "lint:fix": "eslint . --ext .js --fix",
-    "format": "prettier --write \"**/*.{js,json,css,html,md}\"",
-    "package": "zip -r x-agent-extension.zip . -x 'node_modules/*' '.git/*' 'tests/*' 'scripts/*' '*.md'",
-    "clean": "rm -rf coverage/ x-agent-extension.zip"
+    "test": "jest --coverage --runInBand",
+    "lint": "eslint extension-api.js popup.js scripts/package-extension.js tests/commercial.test.js tests/browser-acceptance.js",
+    "browser:acceptance": "node tests/browser-acceptance.js",
+    "package": "node scripts/package-extension.js",
+    "verify": "npm run lint && npm test && npm run package"
   },
   "devDependencies": {
-    "eslint": "^8.50.0",
-    "eslint-config-prettier": "^9.0.0",
-    "eslint-plugin-prettier": "^5.0.0",
-    "jest": "^29.7.0",
-    "jest-environment-jsdom": "^29.7.0",
-    "prettier": "^3.0.0"
+    "@eslint/js": "10.0.1",
+    "archiver": "7.0.1",
+    "eslint": "10.8.1",
+    "globals": "17.11.0",
+    "jest": "30.4.2",
+    "jest-environment-jsdom": "30.4.1",
+    "playwright-core": "1.62.1"
   },
-  "dependencies": {},
   "engines": {
-    "node": ">=16.0.0",
-    "npm": ">=8.0.0"
-  },
-  "keywords": [
-    "chrome-extension",
-    "browser-automation",
-    "web-scraping",
-    "form-filling",
-    "ai",
-    "x-agent"
-  ]
+    "node": ">=24.15.0",
+    "npm": ">=11.0.0"
+  }
 }
