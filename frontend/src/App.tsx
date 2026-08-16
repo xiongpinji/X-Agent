@@ -43,6 +43,7 @@ const AnalyticsDashboard = lazy(() => import('@/components/AnalyticsDashboard'))
 const ForumPage = lazy(() => import('@/pages/ForumPage'))
 const ForumPostDetailPage = lazy(() => import('@/pages/ForumPostDetailPage'))
 const PerformanceMonitorPage = lazy(() => import('@/pages/PerformanceMonitorPage'))
+const FeedbackDashboard = lazy(() => import('@/pages/FeedbackDashboard'))
 
 // Loading fallback component
 const PageLoader = () => (
@@ -111,6 +112,7 @@ export const App: React.FC = () => {
                         <Route path="/work-sessions" element={<WorkSessionsPage />} />
                         <Route path="/analytics" element={<AnalyticsDashboard />} />
                         <Route path="/performance" element={<PerformanceMonitorPage />} />
+                        <Route path="/feedback" element={<FeedbackDashboard />} />
                         <Route path="/forum" element={<ForumPage />} />
                         <Route path="/forum/posts/:id" element={<ForumPostDetailPage />} />
                         <Route path="/agents" element={<AgentsPage />} />

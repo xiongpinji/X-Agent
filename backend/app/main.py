@@ -869,6 +869,7 @@ _KEPT_ROUTER_MODULES: tuple[str, ...] = (
     "work_mode",      # 工作模式/会话
     "gdpr",           # GDPR 合规
     "analytics",      # 实时分析
+    "feedback",       # 用户反馈收集、管理与租户内分析
     "forum",          # 论坛
     "forum_search",   # 论坛搜索（自 archive 恢复）
 )

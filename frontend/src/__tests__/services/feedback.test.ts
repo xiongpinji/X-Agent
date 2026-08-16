@@ -5,6 +5,7 @@ const axiosMock = vi.hoisted(() => {
     get: vi.fn(),
     post: vi.fn(),
     patch: vi.fn(),
+    put: vi.fn(),
     delete: vi.fn(),
     interceptors: {
       request: { use: vi.fn() },
@@ -40,6 +41,7 @@ describe('FeedbackService backend contract', () => {
     axiosMock.client.get.mockReset()
     axiosMock.client.post.mockReset()
     axiosMock.client.patch.mockReset()
+    axiosMock.client.put.mockReset()
     axiosMock.client.delete.mockReset()
     localStorage.clear()
   })
@@ -115,10 +117,12 @@ describe('FeedbackService backend contract', () => {
     })
   })
 
-  it('updates and resolves feedback through PATCH status parameters', async () => {
-    axiosMock.client.patch
+  it('updates and resolves feedback through the mounted write endpoints', async () => {
+    axiosMock.client.put
       .mockResolvedValueOnce({ data: { ...backendFeedback, status: 'in_progress' } })
-      .mockResolvedValueOnce({ data: { ...backendFeedback, status: 'resolved' } })
+    axiosMock.client.post.mockResolvedValueOnce({
+      data: { ...backendFeedback, status: 'resolved' },
+    })
 
     await expect(feedbackService.updateFeedback('feedback-1', {
       status: 'in_progress',
@@ -127,30 +131,21 @@ describe('FeedbackService backend contract', () => {
       status: 'resolved',
     })
 
-    expect(axiosMock.client.patch).toHaveBeenNthCalledWith(
-      1,
-      '/feedback/feedback-1',
-      null,
-      { params: { status: 'in_progress' } },
-    )
-    expect(axiosMock.client.patch).toHaveBeenNthCalledWith(
-      2,
-      '/feedback/feedback-1',
-      null,
-      { params: { status: 'resolved', response: 'fixed' } },
-    )
+    expect(axiosMock.client.put).toHaveBeenCalledWith('/feedback/feedback-1', {
+      status: 'in_progress',
+    })
+    expect(axiosMock.client.post).toHaveBeenCalledWith('/feedback/feedback-1/resolve')
   })
 
   it('adapts backend summary statistics', async () => {
-    axiosMock.client.get.mockResolvedValue({
-      data: {
+    axiosMock.client.get
+      .mockResolvedValueOnce({ data: {
         total: 10,
         by_type: { bug: 4 },
         by_status: { resolved: 3, closed: 2 },
-        by_sentiment: { negative: 4 },
         by_severity: { high: 4 },
-      },
-    })
+      } })
+      .mockResolvedValueOnce({ data: { distribution: { negative: 4 } } })
     await expect(feedbackService.getStats()).resolves.toMatchObject({
       total: 10,
       byType: { bug: 4 },
@@ -159,14 +154,38 @@ describe('FeedbackService backend contract', () => {
     })
   })
 
-  it.each([
-    ['deletion', () => feedbackService.deleteFeedback('feedback-1')],
-    ['trends', () => feedbackService.getTrends()],
-    ['notifications', () => feedbackService.listNotifications()],
-    ['export', () => feedbackService.exportFeedback('csv')],
-    ['search', () => feedbackService.searchFeedback('login')],
-  ])('fails closed when %s has no backend endpoint', async (feature, call) => {
-    await expect(call()).rejects.toThrow(`Feedback ${feature} is not supported by the backend`)
-    expect(axiosMock.client.delete).not.toHaveBeenCalled()
+  it('uses mounted delete, trends, export, and search endpoints', async () => {
+    axiosMock.client.delete.mockResolvedValue({ status: 204 })
+    axiosMock.client.get
+      .mockResolvedValueOnce({
+        data: { data_points: [{ date: '2026-08-16', count: 2, resolved: 1 }] },
+      })
+      .mockResolvedValueOnce({ data: new Blob(['id,title']) })
+      .mockResolvedValueOnce({ data: { items: [backendFeedback] } })
+
+    await expect(feedbackService.deleteFeedback('feedback-1')).resolves.toBeUndefined()
+    await expect(feedbackService.getTrends()).resolves.toMatchObject([
+      { date: '2026-08-16', count: 2 },
+    ])
+    await expect(feedbackService.exportFeedback('csv')).resolves.toBeInstanceOf(Blob)
+    await expect(feedbackService.searchFeedback('login')).resolves.toHaveLength(1)
+
+    expect(axiosMock.client.delete).toHaveBeenCalledWith('/feedback/feedback-1')
+    expect(axiosMock.client.get).toHaveBeenNthCalledWith(1, '/feedback/trends', {
+      params: { days: 30 },
+    })
+    expect(axiosMock.client.get).toHaveBeenNthCalledWith(2, '/feedback/export', {
+      params: { format: 'csv' },
+      responseType: 'blob',
+    })
+    expect(axiosMock.client.get).toHaveBeenNthCalledWith(3, '/feedback/search', {
+      params: { q: 'login' },
+    })
+  })
+
+  it('keeps notification settings explicitly unavailable', async () => {
+    await expect(feedbackService.listNotifications()).rejects.toThrow(
+      'Feedback notifications is not supported by the backend',
+    )
   })
 })

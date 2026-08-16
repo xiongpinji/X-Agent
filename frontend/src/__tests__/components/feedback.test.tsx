@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { FeedbackList } from '@/components/feedback/FeedbackList'
 import { FeedbackDetail } from '@/components/feedback/FeedbackDetail'
@@ -157,16 +157,10 @@ describe('FeedbackDetail Component', () => {
     expect(mockProps.onUpdate).toHaveBeenCalled()
   })
 
-  it('allows adding response', async () => {
+  it('allows marking feedback as resolved', async () => {
     render(<FeedbackDetail {...mockProps} />)
-
-    const textarea = screen.getByPlaceholderText('Type your response here...')
-    await userEvent.type(textarea, 'We are working on this issue')
-
-    const sendButton = screen.getByText('Send Response')
-    fireEvent.click(sendButton)
-
-    expect(mockProps.onResolve).toHaveBeenCalledWith('1', 'We are working on this issue')
+    await userEvent.click(screen.getByText('Mark resolved'))
+    await waitFor(() => expect(mockProps.onResolve).toHaveBeenCalledWith('1'))
   })
 
   it('closes modal when clicking close button', () => {

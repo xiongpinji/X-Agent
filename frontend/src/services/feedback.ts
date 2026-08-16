@@ -16,7 +16,6 @@ export interface Feedback {
   createdAt: string
   updatedAt: string
   resolvedAt?: string
-  response?: string
 }
 
 export interface FeedbackStats {
@@ -84,7 +83,6 @@ function adaptFeedback(raw: any): Feedback {
     createdAt: String(raw.created_at ?? raw.createdAt ?? ''),
     updatedAt: String(raw.updated_at ?? raw.updatedAt ?? ''),
     resolvedAt: raw.resolved_at ?? raw.resolvedAt ?? undefined,
-    response: raw.response ?? undefined,
   }
 }
 
@@ -195,52 +193,63 @@ class FeedbackService {
     return adaptFeedback(response.data)
   }
 
-  // The backend only supports status updates via PATCH /{id}?status=...
   async updateFeedback(id: string, data: Partial<Feedback>): Promise<Feedback> {
-    const response = await this.client.patch(`/feedback/${id}`, null, {
-      params: { status: data.status === 'open' ? 'new' : data.status },
-    })
+    const payload: Record<string, unknown> = {}
+    if (data.type !== undefined) payload.feedback_type = data.type
+    if (data.title !== undefined) payload.title = data.title
+    if (data.description !== undefined) payload.description = data.description
+    if (data.priority !== undefined) payload.severity = data.priority
+    if (data.status !== undefined) payload.status = data.status === 'open' ? 'new' : data.status
+    if (data.tags !== undefined) payload.metadata = { tags: data.tags }
+
+    const response = await this.client.put(`/feedback/${id}`, payload)
     return adaptFeedback(response.data)
   }
 
-  // No DELETE /feedback/{id} exists in the backend (B7).
-  async deleteFeedback(_id: string): Promise<void> {
-    throw unsupported('deletion')
+  async deleteFeedback(id: string): Promise<void> {
+    await this.client.delete(`/feedback/${id}`)
   }
 
-  // No POST /{id}/resolve exists; PATCH ?status=resolved sets resolved_at.
-  async resolveFeedback(id: string, response: string): Promise<Feedback> {
-    const result = await this.client.patch(`/feedback/${id}`, null, {
-      params: { status: 'resolved', response },
-    })
+  async resolveFeedback(id: string, _response?: string): Promise<Feedback> {
+    const result = await this.client.post(`/feedback/${id}/resolve`)
     return adaptFeedback(result.data)
   }
 
-  // Statistics — GET /api/v1/feedback/stats/summary (B6/C4 adapter above).
   async getStats(_dateRange?: { startDate: string; endDate: string }): Promise<FeedbackStats> {
-    const response = await this.client.get('/feedback/stats/summary')
-    return adaptStats(response.data)
+    const [statsResponse, sentimentResponse] = await Promise.all([
+      this.client.get('/feedback/stats/summary'),
+      this.client.get('/feedback/sentiment-analysis'),
+    ])
+    return {
+      ...adaptStats(statsResponse.data),
+      bySentiment: sentimentResponse.data?.distribution ?? {},
+    }
   }
 
-  // The following endpoints have no backend counterpart (B7): trends,
-  // sentiment-analysis, category-distribution, notifications CRUD, export,
-  // and search. They fail fast with a clear error instead of calling
-  // endpoints that can only 404.
   async getTrends(
-    _days: number = 30,
+    days: number = 30,
     _groupBy: 'day' | 'week' | 'month' = 'day'
   ): Promise<FeedbackTrend[]> {
-    throw unsupported('trends')
+    const response = await this.client.get('/feedback/trends', { params: { days } })
+    const points: any[] = response.data?.data_points ?? []
+    return points.map((point) => ({
+      date: String(point.date ?? ''),
+      count: Number(point.count ?? 0),
+      byType: {},
+      bySentiment: {},
+    }))
   }
 
   async getSentimentAnalysis(
     _dateRange?: { startDate: string; endDate: string }
   ): Promise<Record<string, number>> {
-    throw unsupported('sentiment analysis')
+    const response = await this.client.get('/feedback/sentiment-analysis')
+    return response.data?.distribution ?? {}
   }
 
   async getCategoryDistribution(): Promise<Record<string, number>> {
-    throw unsupported('category distribution')
+    const response = await this.client.get('/feedback/category-distribution')
+    return response.data?.distribution ?? {}
   }
 
   // Notifications — no backend endpoints exist.
@@ -267,17 +276,21 @@ class FeedbackService {
     throw unsupported('notifications')
   }
 
-  // Export — no backend endpoint exists.
   async exportFeedback(
-    _format: 'csv' | 'pdf',
+    format: 'csv' | 'json',
     _filters?: Record<string, any>
   ): Promise<Blob> {
-    throw unsupported('export')
+    const response = await this.client.get('/feedback/export', {
+      params: { format },
+      responseType: 'blob',
+    })
+    return response.data
   }
 
-  // Search — no backend endpoint exists.
-  async searchFeedback(_query: string): Promise<Feedback[]> {
-    throw unsupported('search')
+  async searchFeedback(query: string): Promise<Feedback[]> {
+    const response = await this.client.get('/feedback/search', { params: { q: query } })
+    const items: any[] = response.data?.items ?? []
+    return items.map(adaptFeedback)
   }
 }
 

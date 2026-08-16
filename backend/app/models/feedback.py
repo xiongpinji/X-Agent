@@ -250,6 +250,8 @@ class FeedbackStorePostgres:
     async def count_feedback(
         self,
         tenant_id: str,
+        user_id: str | None = None,
+        feedback_type: str | None = None,
         status: str | None = None,
         severity: str | None = None,
     ) -> int:
@@ -257,6 +259,10 @@ class FeedbackStorePostgres:
         async with SessionManager.get_session() as session:
             stmt = select(FeedbackModel).where(FeedbackModel.tenant_id == tenant_id)
 
+            if user_id:
+                stmt = stmt.where(FeedbackModel.user_id == user_id)
+            if feedback_type:
+                stmt = stmt.where(FeedbackModel.feedback_type == feedback_type)
             if status:
                 stmt = stmt.where(FeedbackModel.status == status)
             if severity:

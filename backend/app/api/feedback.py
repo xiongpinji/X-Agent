@@ -26,6 +26,7 @@ from backend.app.models.feedback import (
     FeedbackStorePostgres,
     FeedbackType,
 )
+from backend.app.settings import get_settings
 
 logger = logging.getLogger("xagent.feedback")
 
@@ -37,6 +38,10 @@ _feedback_store_backend: str | None = None
 _feedback_fallback_warned = False
 
 FEEDBACK_STORE_BACKEND_ENV = "XAGENT_FEEDBACK_STORE_BACKEND"
+
+
+def _log_failure(action: str, error: BaseException) -> None:
+    logger.error("%s failed error_type=%s", action, type(error).__name__)
 
 
 def _postgres_available() -> bool:
@@ -68,14 +73,20 @@ def get_feedback_store() -> FeedbackStorePostgres | FeedbackStoreFile:
                 降级到文件存储(不静默、不报错), 状态可经 get_feedback_store_backend() 查询。
     """
     global _feedback_store, _feedback_store_backend, _feedback_fallback_warned
-    if _feedback_store is not None:
-        return _feedback_store
-
     backend = (os.getenv(FEEDBACK_STORE_BACKEND_ENV) or "auto").strip().lower()
     if backend not in {"postgres", "file", "auto"}:
         raise ValueError(
             f"Unknown feedback store backend {backend!r}; expected one of: postgres, file, auto."
         )
+
+    production = get_settings().app_mode == "production"
+    if _feedback_store is not None:
+        if production and _feedback_store_backend != "postgres":
+            raise RuntimeError("Feedback storage requires Postgres in production.")
+        return _feedback_store
+
+    if production and backend == "file":
+        raise RuntimeError("Feedback storage requires Postgres in production.")
 
     if backend == "file":
         store: FeedbackStorePostgres | FeedbackStoreFile = FeedbackStoreFile()
@@ -83,7 +94,9 @@ def get_feedback_store() -> FeedbackStorePostgres | FeedbackStoreFile:
     elif backend == "postgres" or _postgres_available():
         store = FeedbackStorePostgres()
         name = "postgres"
-    else:  # auto + Postgres 不可用 -> 显式降级
+    else:  # auto + Postgres 不可用 -> 仅开发环境可显式降级
+        if production:
+            raise RuntimeError("Feedback storage requires Postgres in production.")
         if not _feedback_fallback_warned:
             logger.warning(
                 "反馈存储: 数据库管理器未初始化, 显式降级为 JSON 文件存储(dev)。"
@@ -253,6 +266,7 @@ async def create_feedback(
     - **feedback_type**: bug, feature, improvement, other
     - **severity**: low, medium, high, critical
     """
+    enforce_scope(principal, "feedback:write")
     try:
         # 验证输入
         if request.feedback_type not in [t.value for t in FeedbackType]:
@@ -324,7 +338,7 @@ async def create_feedback(
 
             logger.info(f"反馈分析完成: {feedback_id}")
         except Exception as e:
-            logger.error(f"反馈分析失败: {e}")
+            _log_failure("feedback analysis", e)
 
         # 重新获取反馈以获取最新数据
         feedback = await store.get_feedback_by_id(feedback_id)
@@ -350,7 +364,7 @@ async def create_feedback(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"创建反馈失败: {e}")
+        _log_failure("feedback create", e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to create feedback"
@@ -367,8 +381,10 @@ async def get_feedback_trends(
     try:
         store = get_feedback_store()
         since = datetime.now(UTC) - timedelta(days=days)
+        user_id = principal.user_id if principal.role != "admin" else None
         feedbacks = await store.list_feedback(
             tenant_id=principal.tenant_id,
+            user_id=user_id,
             skip=0,
             limit=10000,
         )
@@ -398,7 +414,7 @@ async def get_feedback_trends(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"获取反馈趋势失败: {e}")
+        _log_failure("feedback trends", e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to get feedback trends"
@@ -413,8 +429,10 @@ async def get_sentiment_analysis(
     enforce_scope(principal, "feedback:read")
     try:
         store = get_feedback_store()
+        user_id = principal.user_id if principal.role != "admin" else None
         feedbacks = await store.list_feedback(
             tenant_id=principal.tenant_id,
+            user_id=user_id,
             skip=0,
             limit=10000,
         )
@@ -439,7 +457,7 @@ async def get_sentiment_analysis(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"获取情感分布失败: {e}")
+        _log_failure("feedback sentiment", e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to get sentiment analysis"
@@ -454,8 +472,10 @@ async def get_category_distribution(
     enforce_scope(principal, "feedback:read")
     try:
         store = get_feedback_store()
+        user_id = principal.user_id if principal.role != "admin" else None
         feedbacks = await store.list_feedback(
             tenant_id=principal.tenant_id,
+            user_id=user_id,
             skip=0,
             limit=10000,
         )
@@ -473,7 +493,7 @@ async def get_category_distribution(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"获取分类分布失败: {e}")
+        _log_failure("feedback category distribution", e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to get category distribution"
@@ -509,7 +529,7 @@ async def search_feedback(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"搜索反馈失败: {e}")
+        _log_failure("feedback search", e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to search feedback"
@@ -570,7 +590,7 @@ async def export_feedback(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"导出反馈失败: {e}")
+        _log_failure("feedback export", e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to export feedback"
@@ -583,6 +603,7 @@ async def get_feedback(
     principal: Annotated[Principal, Depends(get_current_principal)],
 ) -> FeedbackResponse:
     """获取反馈详情"""
+    enforce_scope(principal, "feedback:read")
     try:
         store = get_feedback_store()
         feedback = await store.get_feedback_by_id(feedback_id)
@@ -621,7 +642,7 @@ async def get_feedback(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"获取反馈失败: {e}")
+        _log_failure("feedback get", e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to get feedback"
@@ -638,6 +659,7 @@ async def list_feedback(
     principal: Annotated[Principal, Depends(get_current_principal)] = None,
 ) -> FeedbackListResponse:
     """列出反馈"""
+    enforce_scope(principal, "feedback:read")
     try:
         store = get_feedback_store()
         user_id = principal.user_id if principal.role != "admin" else None
@@ -655,6 +677,8 @@ async def list_feedback(
 
         total = await store.count_feedback(
             tenant_id=tenant_id,
+            user_id=user_id,
+            feedback_type=feedback_type,
             status=status_filter,
             severity=severity,
         )
@@ -688,7 +712,7 @@ async def list_feedback(
         )
 
     except Exception as e:
-        logger.error(f"列出反馈失败: {e}")
+        _log_failure("feedback list", e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to list feedback"
@@ -701,8 +725,11 @@ async def get_feedback_analysis(
     principal: Annotated[Principal, Depends(get_current_principal)],
 ) -> FeedbackAnalysisResponse:
     """获取反馈分析"""
+    enforce_scope(principal, "feedback:read")
     try:
         store = get_feedback_store()
+        feedback = await _get_tenant_feedback_or_404(feedback_id, principal)
+        _enforce_owner_or_admin(feedback, principal)
         analysis = await store.get_analysis_by_feedback_id(feedback_id)
 
         if not analysis:
@@ -728,7 +755,7 @@ async def get_feedback_analysis(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"获取反馈分析失败: {e}")
+        _log_failure("feedback analysis get", e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to get feedback analysis"
@@ -742,6 +769,7 @@ async def update_feedback(
     principal: Annotated[Principal, Depends(get_current_principal)] = None,
 ) -> FeedbackResponse:
     """更新反馈状态"""
+    enforce_scope(principal, "feedback:write")
     try:
         if new_status and new_status not in [s.value for s in FeedbackStatus]:
             raise HTTPException(
@@ -795,7 +823,7 @@ async def update_feedback(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"更新反馈失败: {e}")
+        _log_failure("feedback status update", e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to update feedback"
@@ -857,7 +885,7 @@ async def replace_feedback(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"更新反馈失败: {e}")
+        _log_failure("feedback replace", e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to update feedback"
@@ -890,7 +918,7 @@ async def delete_feedback(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"删除反馈失败: {e}")
+        _log_failure("feedback delete", e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to delete feedback"
@@ -923,7 +951,7 @@ async def resolve_feedback(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"解决反馈失败: {e}")
+        _log_failure("feedback resolve", e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to resolve feedback"
@@ -935,33 +963,30 @@ async def get_feedback_stats(
     principal: Annotated[Principal, Depends(get_current_principal)],
 ) -> FeedbackStatsResponse:
     """获取反馈统计"""
+    enforce_scope(principal, "feedback:read")
     try:
         store = get_feedback_store()
         tenant_id = principal.tenant_id
+        user_id = principal.user_id if principal.role != "admin" else None
+        feedbacks = await store.list_feedback(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            skip=0,
+            limit=10000,
+        )
 
-        # 获取各状态的计数
-        statuses = ["new", "acknowledged", "in_progress", "resolved", "closed"]
-        by_status = {}
-        for s in statuses:
-            count = await store.count_feedback(tenant_id=tenant_id, status=s)
-            by_status[s] = count
+        by_status = {name: 0 for name in ("new", "acknowledged", "in_progress", "resolved", "closed")}
+        by_severity = {name: 0 for name in ("low", "medium", "high", "critical")}
+        by_type = {name: 0 for name in ("bug", "feature", "improvement", "other")}
+        priority_scores: list[float] = []
+        for feedback in feedbacks:
+            by_status[feedback.status] = by_status.get(feedback.status, 0) + 1
+            by_severity[feedback.severity] = by_severity.get(feedback.severity, 0) + 1
+            by_type[feedback.feedback_type] = by_type.get(feedback.feedback_type, 0) + 1
+            if feedback.priority_score is not None:
+                priority_scores.append(float(feedback.priority_score))
 
-        # 获取各严重程度的计数
-        severities = ["low", "medium", "high", "critical"]
-        by_severity = {}
-        for sev in severities:
-            count = await store.count_feedback(tenant_id=tenant_id, severity=sev)
-            by_severity[sev] = count
-
-        # 获取各类型的计数
-        by_type = {
-            "bug": 0,
-            "feature": 0,
-            "improvement": 0,
-            "other": 0,
-        }
-
-        total = await store.count_feedback(tenant_id=tenant_id)
+        total = len(feedbacks)
         critical_count = by_severity.get("critical", 0)
 
         return FeedbackStatsResponse(
@@ -969,12 +994,12 @@ async def get_feedback_stats(
             by_status=by_status,
             by_severity=by_severity,
             by_type=by_type,
-            average_priority_score=0.5,  # 简化计算
+            average_priority_score=(sum(priority_scores) / len(priority_scores) if priority_scores else 0.0),
             critical_count=critical_count,
         )
 
     except Exception as e:
-        logger.error(f"获取反馈统计失败: {e}")
+        _log_failure("feedback stats", e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to get feedback stats"

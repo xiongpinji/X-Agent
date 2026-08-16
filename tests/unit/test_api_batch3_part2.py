@@ -17,7 +17,11 @@ def _make_principal(role="user", tenant_id="t1", user_id="u1"):
         trace_id="trace-1",
         request_id="req-1",
         authenticated=True,
-        scopes=["*", "agent:run", "agent:read", "tools:read", "memory:write", "workflow:create", "files:read", "files:write"],
+        scopes=[
+            "*", "agent:run", "agent:read", "tools:read", "memory:write",
+            "workflow:create", "files:read", "files:write", "feedback:read",
+            "feedback:write",
+        ],
         permission_scope=["*"],
     )
 
@@ -1135,6 +1139,7 @@ class TestFeedbackEndpoints:
         analysis.impact_score = 0.6
         analysis.keywords = ["crash"]
         analysis.entities = {"component": "login"}
+        mock_store.get_feedback_by_id = AsyncMock(return_value=_mock_feedback_obj())
         mock_store.get_analysis_by_feedback_id = AsyncMock(return_value=analysis)
         with patch("backend.app.api.feedback.get_feedback_store", return_value=mock_store):
             resp = client.get("/api/v1/feedback/fb-1/analysis")
@@ -1143,6 +1148,7 @@ class TestFeedbackEndpoints:
 
     def test_get_feedback_analysis_not_found(self, client):
         mock_store = MagicMock()
+        mock_store.get_feedback_by_id = AsyncMock(return_value=_mock_feedback_obj())
         mock_store.get_analysis_by_feedback_id = AsyncMock(return_value=None)
         with patch("backend.app.api.feedback.get_feedback_store", return_value=mock_store):
             resp = client.get("/api/v1/feedback/fb-1/analysis")
@@ -1178,14 +1184,18 @@ class TestFeedbackEndpoints:
 
     def test_get_feedback_stats(self, client):
         mock_store = MagicMock()
-        mock_store.count_feedback = AsyncMock(return_value=5)
+        mock_store.list_feedback = AsyncMock(return_value=[
+            _mock_feedback_obj(feedback_type="bug", severity="high"),
+            _mock_feedback_obj(feedback_type="feature", severity="critical"),
+        ])
         with patch("backend.app.api.feedback.get_feedback_store", return_value=mock_store):
             resp = client.get("/api/v1/feedback/stats/summary")
             assert resp.status_code == 200
             data = resp.json()
-            assert data["total"] == 5
-            assert "by_status" in data
-            assert "by_severity" in data
+            assert data["total"] == 2
+            assert data["by_type"]["bug"] == 1
+            assert data["by_type"]["feature"] == 1
+            assert data["by_severity"]["critical"] == 1
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

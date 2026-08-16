@@ -1,13 +1,13 @@
 import React, { useState } from 'react'
 import { Feedback } from '@/services/feedback'
-import { X, Send, Edit2, Save } from 'lucide-react'
+import { CheckCircle, Edit2, Save, X } from 'lucide-react'
 import clsx from 'clsx'
 
 interface FeedbackDetailProps {
   feedback: Feedback
   onClose: () => void
   onUpdate: (id: string, data: Partial<Feedback>) => void
-  onResolve: (id: string, response: string) => void
+  onResolve: (id: string) => void | Promise<void>
   theme: 'light' | 'dark'
 }
 
@@ -21,8 +21,7 @@ export const FeedbackDetail: React.FC<FeedbackDetailProps> = ({
   const [isEditing, setIsEditing] = useState(false)
   const [editedStatus, setEditedStatus] = useState(feedback.status)
   const [editedPriority, setEditedPriority] = useState(feedback.priority)
-  const [responseText, setResponseText] = useState('')
-  const [isSubmittingResponse, setIsSubmittingResponse] = useState(false)
+  const [isResolving, setIsResolving] = useState(false)
 
   const handleSaveChanges = async () => {
     await onUpdate(feedback.id, {
@@ -32,15 +31,12 @@ export const FeedbackDetail: React.FC<FeedbackDetailProps> = ({
     setIsEditing(false)
   }
 
-  const handleSubmitResponse = async () => {
-    if (!responseText.trim()) return
-
-    setIsSubmittingResponse(true)
+  const handleResolve = async () => {
+    setIsResolving(true)
     try {
-      await onResolve(feedback.id, responseText)
-      setResponseText('')
+      await onResolve(feedback.id)
     } finally {
-      setIsSubmittingResponse(false)
+      setIsResolving(false)
     }
   }
 
@@ -323,8 +319,7 @@ export const FeedbackDetail: React.FC<FeedbackDetailProps> = ({
             )}
           </div>
 
-          {/* Response Section */}
-          {feedback.status !== 'closed' && (
+          {feedback.status !== 'resolved' && feedback.status !== 'closed' && (
             <div className={clsx(
               'p-4 rounded-lg border',
               theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'
@@ -333,56 +328,21 @@ export const FeedbackDetail: React.FC<FeedbackDetailProps> = ({
                 'text-sm font-semibold mb-3',
                 theme === 'dark' ? 'text-slate-300' : 'text-slate-700'
               )}>
-                Add Response
+                Resolution
               </h3>
-
-              <textarea
-                value={responseText}
-                onChange={(e) => setResponseText(e.target.value)}
-                placeholder="Type your response here..."
-                className={clsx(
-                  'w-full px-3 py-2 rounded border outline-none text-sm resize-none',
-                  theme === 'dark'
-                    ? 'bg-slate-700 border-slate-600 text-white placeholder-slate-500'
-                    : 'bg-white border-slate-300 text-slate-900 placeholder-slate-400'
-                )}
-                rows={4}
-              />
-
               <button
-                onClick={handleSubmitResponse}
-                disabled={!responseText.trim() || isSubmittingResponse}
+                onClick={handleResolve}
+                disabled={isResolving}
                 className={clsx(
                   'mt-3 flex items-center justify-center gap-2 w-full px-4 py-2 rounded font-medium transition-colors text-sm',
-                  isSubmittingResponse || !responseText.trim()
+                  isResolving
                     ? 'bg-slate-400 text-slate-600 cursor-not-allowed'
                     : 'bg-green-600 hover:bg-green-700 text-white'
                 )}
               >
-                <Send size={16} />
-                {isSubmittingResponse ? 'Sending...' : 'Send Response'}
+                <CheckCircle size={16} />
+                {isResolving ? 'Resolving...' : 'Mark resolved'}
               </button>
-            </div>
-          )}
-
-          {/* Existing Response */}
-          {feedback.response && (
-            <div className={clsx(
-              'p-4 rounded-lg border',
-              theme === 'dark' ? 'bg-green-900/20 border-green-700/50' : 'bg-green-50 border-green-200'
-            )}>
-              <h3 className={clsx(
-                'text-sm font-semibold mb-2',
-                theme === 'dark' ? 'text-green-400' : 'text-green-700'
-              )}>
-                Response
-              </h3>
-              <p className={clsx(
-                'text-sm',
-                theme === 'dark' ? 'text-green-300' : 'text-green-800'
-              )}>
-                {feedback.response}
-              </p>
             </div>
           )}
 

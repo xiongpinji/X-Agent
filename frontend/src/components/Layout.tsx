@@ -42,6 +42,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         { href: '/work-sessions', labelKey: 'navigation.workSessions', fallback: 'Work Sessions' },
         { href: '/forum', labelKey: 'navigation.forum', fallback: 'Forum' },
         { href: '/console', labelKey: 'navigation.console', fallback: 'Console' },
+        { href: '/feedback', labelKey: 'navigation.feedback', fallback: 'Feedback' },
       ],
     },
     {

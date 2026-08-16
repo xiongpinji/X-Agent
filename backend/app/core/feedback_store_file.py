@@ -323,6 +323,8 @@ class FeedbackStoreFile:
     async def count_feedback(
         self,
         tenant_id: str,
+        user_id: str | None = None,
+        feedback_type: str | None = None,
         status: str | None = None,
         severity: str | None = None,
     ) -> int:
@@ -333,6 +335,8 @@ class FeedbackStoreFile:
             1
             for r in data["feedback"].values()
             if r.get("tenant_id") == tenant_id
+            and (user_id is None or r.get("user_id") == user_id)
+            and (feedback_type is None or r.get("feedback_type") == feedback_type)
             and (status is None or r.get("status") == status)
             and (severity is None or r.get("severity") == severity)
         )
