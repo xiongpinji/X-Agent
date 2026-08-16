@@ -8,23 +8,22 @@ X-Agent 端到端测试框架 - 测试执行和报告生成
 - 缺陷追踪
 """
 
-import json
-import time
-from datetime import datetime, timedelta
-from typing import Dict, Any, List, Optional
-from dataclasses import dataclass, asdict
-from enum import Enum
 import csv
+import json
+from dataclasses import dataclass
+from datetime import datetime, timedelta
+from enum import StrEnum
 
 import pytest
-
 
 # ============================================================================
 # 数据模型
 # ============================================================================
 
-class TestStatus(str, Enum):
+class TestStatus(StrEnum):
     """测试状态"""
+    __test__ = False
+
     PENDING = "pending"
     RUNNING = "running"
     PASSED = "passed"
@@ -33,7 +32,7 @@ class TestStatus(str, Enum):
     ERROR = "error"
 
 
-class DefectSeverity(str, Enum):
+class DefectSeverity(StrEnum):
     """缺陷严重级别"""
     CRITICAL = "critical"
     HIGH = "high"
@@ -44,6 +43,8 @@ class DefectSeverity(str, Enum):
 @dataclass
 class TestResult:
     """测试结果"""
+    __test__ = False
+
     test_id: str
     test_name: str
     test_case_id: str
@@ -51,8 +52,8 @@ class TestResult:
     start_time: datetime
     end_time: datetime
     duration: float  # 秒
-    error_message: Optional[str] = None
-    stack_trace: Optional[str] = None
+    error_message: str | None = None
+    stack_trace: str | None = None
     assertions: int = 0
     passed_assertions: int = 0
 
@@ -68,15 +69,17 @@ class Defect:
     status: str  # new, assigned, fixed, verified, closed
     created_at: datetime
     updated_at: datetime
-    assigned_to: Optional[str] = None
-    reproduction_steps: Optional[str] = None
-    expected_result: Optional[str] = None
-    actual_result: Optional[str] = None
+    assigned_to: str | None = None
+    reproduction_steps: str | None = None
+    expected_result: str | None = None
+    actual_result: str | None = None
 
 
 @dataclass
 class TestExecutionReport:
     """测试执行报告"""
+    __test__ = False
+
     report_id: str
     execution_date: datetime
     total_tests: int
@@ -87,8 +90,8 @@ class TestExecutionReport:
     total_duration: float
     pass_rate: float
     code_coverage: float
-    defects: List[Defect]
-    test_results: List[TestResult]
+    defects: list[Defect]
+    test_results: list[TestResult]
 
 
 # ============================================================================
@@ -97,12 +100,13 @@ class TestExecutionReport:
 
 class TestExecutionManager:
     """测试执行管理器"""
+    __test__ = False
 
     def __init__(self):
-        self.test_results: List[TestResult] = []
-        self.defects: List[Defect] = []
-        self.execution_start_time: Optional[datetime] = None
-        self.execution_end_time: Optional[datetime] = None
+        self.test_results: list[TestResult] = []
+        self.defects: list[Defect] = []
+        self.execution_start_time: datetime | None = None
+        self.execution_end_time: datetime | None = None
         self.defect_counter = 0
         self.test_counter = 0
 
@@ -117,8 +121,8 @@ class TestExecutionManager:
         self.execution_end_time = datetime.now()
 
     def record_test_result(self, test_name: str, test_case_id: str, status: TestStatus,
-                          duration: float, error_message: Optional[str] = None,
-                          stack_trace: Optional[str] = None) -> TestResult:
+                          duration: float, error_message: str | None = None,
+                          stack_trace: str | None = None) -> TestResult:
         """记录测试结果"""
         self.test_counter += 1
         result = TestResult(
@@ -148,9 +152,9 @@ class TestExecutionManager:
         return result
 
     def create_defect(self, test_case_id: str, title: str, description: str,
-                     severity: DefectSeverity, reproduction_steps: Optional[str] = None,
-                     expected_result: Optional[str] = None,
-                     actual_result: Optional[str] = None) -> Defect:
+                     severity: DefectSeverity, reproduction_steps: str | None = None,
+                     expected_result: str | None = None,
+                     actual_result: str | None = None) -> Defect:
         """创建缺陷"""
         self.defect_counter += 1
         defect = Defect(
@@ -169,7 +173,7 @@ class TestExecutionManager:
         self.defects.append(defect)
         return defect
 
-    def update_defect_status(self, defect_id: str, status: str, assigned_to: Optional[str] = None) -> bool:
+    def update_defect_status(self, defect_id: str, status: str, assigned_to: str | None = None) -> bool:
         """更新缺陷状态"""
         for defect in self.defects:
             if defect.defect_id == defect_id:
@@ -208,11 +212,11 @@ class TestExecutionManager:
 
         return report
 
-    def get_defects_by_severity(self, severity: DefectSeverity) -> List[Defect]:
+    def get_defects_by_severity(self, severity: DefectSeverity) -> list[Defect]:
         """按严重级别获取缺陷"""
         return [d for d in self.defects if d.severity == severity]
 
-    def get_defects_by_status(self, status: str) -> List[Defect]:
+    def get_defects_by_status(self, status: str) -> list[Defect]:
         """按状态获取缺陷"""
         return [d for d in self.defects if d.status == status]
 
@@ -547,4 +551,3 @@ class TestReportGeneration:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "--tb=short"])
-

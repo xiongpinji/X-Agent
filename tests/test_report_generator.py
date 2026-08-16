@@ -6,11 +6,12 @@ MCP插件市场和技能市场测试报告生成器
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Any
+from typing import Any
 
 
 class TestReportGenerator:
     """测试报告生成器"""
+    __test__ = False
 
     def __init__(self):
         self.report = {
@@ -22,7 +23,7 @@ class TestReportGenerator:
             "recommendations": []
         }
 
-    def add_test_category(self, category: str, tests: List[Dict[str, Any]]):
+    def add_test_category(self, category: str, tests: list[dict[str, Any]]):
         """添加测试类别"""
         self.report["test_results"][category] = {
             "total": len(tests),
@@ -38,7 +39,7 @@ class TestReportGenerator:
         total_passed = 0
         total_failed = 0
 
-        for category, results in self.report["test_results"].items():
+        for _category, results in self.report["test_results"].items():
             total_tests += results["total"]
             total_passed += results["passed"]
             total_failed += results["failed"]
