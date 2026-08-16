@@ -11,7 +11,7 @@ starlette>=0.37.2  # loosened (transitive dep, resolver-managed)
 
 # API & HTTP
 httpx>=0.27.0
-requests==2.32.3
+requests==2.33.0
 
 # Enterprise SSO (P1-02): OIDC id_token 签名验证/JWKS (core/saml_sso.py, api/sso.py)
 # venv 实测 1.7.2 可用; 缺失时代码降级为内置 cryptography 验签 (仅 RS256/HS256)
