@@ -335,7 +335,6 @@ export function useConsoleRealtimeSync(
         try {
           const payload = JSON.parse(streamEvent.data) as UnifiedMessageEvent;
           if (streamEvent.id) lastEventIdRef.current = streamEvent.id;
-          if (payload.event_id) lastEventIdRef.current = payload.event_id;
           if (handleRealtimeEvent(payload)) {
             reconnectAttemptRef.current = 0;
             reconnectDelayRef.current = RECONNECT_BASE_DELAY_MS;

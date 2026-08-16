@@ -113,3 +113,63 @@ def test_collaboration_room_events_are_published_to_event_bus() -> None:
     finally:
         _clear_principal_override()
         _clear_event_bus()
+
+
+def test_collaboration_reports_applied_change_when_event_delivery_fails(
+    monkeypatch,
+) -> None:
+    client = TestClient(
+        app,
+        headers={"x-api-key": "bootstrap"},
+        raise_server_exceptions=False,
+    )
+    _set_principal_override()
+    _clear_event_bus()
+
+    try:
+        room_response = client.post(
+            "/api/v1/collaboration/rooms",
+            json={"topic": "Delivery failure room", "tenant_id": "tenant-1"},
+        )
+        assert room_response.status_code == 200
+        room_id = room_response.json()["room_id"]
+        record_calls = 0
+
+        def reject_record(*_args, **_kwargs):
+            nonlocal record_calls
+            record_calls += 1
+            return False
+
+        monkeypatch.setattr(message_event_bus, "record", reject_record)
+        response = client.post(
+            f"/api/v1/collaboration/rooms/{room_id}/messages",
+            json={
+                "sender_id": "agent-1",
+                "content": "applied once",
+            },
+        )
+
+        assert response.status_code == 503
+        assert response.json() == {
+            "code": "internal_error",
+            "message": (
+                "Collaboration operation completed, but realtime event delivery failed. "
+                "Reconcile before retrying."
+            ),
+            "request_id": None,
+            "trace_id": "trace-1",
+            "details": {
+                "delivery_status": "failed",
+                "operation_status": "completed",
+                "retry_safe": False,
+            },
+        }
+        assert record_calls == 1
+        persisted_room = client.get(f"/api/v1/collaboration/rooms/{room_id}")
+        assert persisted_room.status_code == 200
+        assert [message["content"] for message in persisted_room.json()["messages"]] == [
+            "applied once"
+        ]
+    finally:
+        _clear_principal_override()
+        _clear_event_bus()

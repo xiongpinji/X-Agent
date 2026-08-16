@@ -596,7 +596,7 @@ def test_messages_channel_registry_evicts_oldest_per_tenant_and_caps_debug_index
     monkeypatch,
 ) -> None:
     monkeypatch.setattr(
-        "backend.app.api.messages.MAX_CHANNELS_PER_TENANT",
+        "backend.app.api.messages.MAX_HISTORY_CHANNELS_PER_TENANT",
         3,
         raising=False,
     )

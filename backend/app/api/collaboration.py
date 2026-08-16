@@ -45,7 +45,12 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
 from backend.app.api.errors import api_error
-from backend.app.api.messages import UnifiedMessageEvent, build_channel_key, message_event_bus
+from backend.app.api.messages import (
+    MessageStreamCapacityError,
+    UnifiedMessageEvent,
+    build_channel_key,
+    message_event_bus,
+)
 from backend.app.core.collaboration import (
     CandidateSpec,
     CollaborationRoom,
@@ -100,6 +105,33 @@ def _get_room_for_principal(room_id: str, principal: Principal) -> Collaboration
     return room
 
 
+async def _publish_collaboration_event(
+    channel_key: str,
+    event: UnifiedMessageEvent,
+) -> None:
+    try:
+        await message_event_bus.publish(channel_key, event)
+    except MessageStreamCapacityError:
+        logger.warning(
+            "collaboration event delivery failed",
+            extra={"event_type": event.event_type, "trace_id": event.trace_id},
+        )
+        raise api_error(
+            503,
+            ErrorCode.INTERNAL_ERROR,
+            (
+                "Collaboration operation completed, but realtime event delivery failed. "
+                "Reconcile before retrying."
+            ),
+            details={
+                "delivery_status": "failed",
+                "operation_status": "completed",
+                "retry_safe": False,
+            },
+            trace_id=event.trace_id,
+        ) from None
+
+
 class CollaborationRoomCreateRequest(BaseModel):
     topic: str = Field(..., min_length=1, max_length=200)
     tenant_id: str | None = None
@@ -133,7 +165,7 @@ async def create_room(request: CollaborationRoomCreateRequest, principal: Princi
         },
     )
     channel_key = build_channel_key(tenant_id=room.tenant_id, room_id=room.room_id, agent_id=principal.agent_id, user_id=principal.user_id, trace_id=principal.trace_id)
-    await message_event_bus.publish(
+    await _publish_collaboration_event(
         channel_key,
         UnifiedMessageEvent(
             event_type="room.created",
@@ -320,7 +352,7 @@ async def add_member(room_id: str, request: dict[str, str], principal: Principal
     except (KeyError, ValueError):
         raise api_error(404, ErrorCode.RESOURCE_NOT_FOUND, "Collaboration room not found.", details={"resource_type": "collaboration_room", "resource_id": room_id})
     channel_key = build_channel_key(tenant_id=room.tenant_id, room_id=room.room_id, agent_id=principal.agent_id, user_id=principal.user_id, trace_id=principal.trace_id)
-    await message_event_bus.publish(
+    await _publish_collaboration_event(
         channel_key,
         UnifiedMessageEvent(
             event_type="room.member_added",
@@ -360,7 +392,7 @@ async def post_message(room_id: str, request: CollaborationMessageCreateRequest,
         # member_added / workflow.updated / room.closed. The conversation_id is
         # still preserved on the event object and payload for consumers.
         channel_key = build_channel_key(tenant_id=room.tenant_id, room_id=room.room_id, agent_id=principal.agent_id, user_id=principal.user_id, trace_id=principal.trace_id)
-        await message_event_bus.publish(
+        await _publish_collaboration_event(
             channel_key,
             UnifiedMessageEvent(
                 event_type="message.created",
@@ -399,7 +431,7 @@ async def suggest_workflow_from_room(room_id: str, principal: PrincipalDependenc
         },
     }
     channel_key = build_channel_key(tenant_id=room.tenant_id, room_id=room.room_id, agent_id=principal.agent_id, user_id=principal.user_id, trace_id=principal.trace_id)
-    await message_event_bus.publish(
+    await _publish_collaboration_event(
         channel_key,
         UnifiedMessageEvent(
             event_type="workflow.updated",
@@ -424,7 +456,7 @@ async def close_room(room_id: str, principal: PrincipalDependency) -> dict[str, 
     except (KeyError, ValueError):
         raise api_error(404, ErrorCode.RESOURCE_NOT_FOUND, "Collaboration room not found.", details={"resource_type": "collaboration_room", "resource_id": room_id})
     channel_key = build_channel_key(tenant_id=room.tenant_id, room_id=room.room_id, agent_id=principal.agent_id, user_id=principal.user_id, trace_id=principal.trace_id)
-    await message_event_bus.publish(
+    await _publish_collaboration_event(
         channel_key,
         UnifiedMessageEvent(
             event_type="room.closed",

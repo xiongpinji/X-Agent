@@ -441,7 +441,7 @@ def test_messages_stream_prefers_last_event_id_header(monkeypatch) -> None:
 def test_messages_stream_rejects_new_active_channel_at_tenant_capacity(
     monkeypatch,
 ) -> None:
-    monkeypatch.setattr("backend.app.api.messages.MAX_CHANNELS_PER_TENANT", 1)
+    monkeypatch.setattr("backend.app.api.messages.MAX_ACTIVE_CHANNELS_PER_TENANT", 1)
     client = TestClient(app, headers={"x-api-key": "bootstrap"})
     _set_principal_override()
     _clear_event_bus()
@@ -500,6 +500,43 @@ def test_messages_stream_rejects_new_active_channel_at_tenant_capacity(
         _clear_event_bus()
 
 
+def test_publish_test_fails_closed_when_history_cannot_record(
+    monkeypatch,
+) -> None:
+    client = TestClient(app, headers={"x-api-key": "bootstrap"})
+    _set_principal_override()
+    _clear_event_bus()
+    channel_key = build_channel_key(
+        tenant_id="tenant-1",
+        room_id="delivery-failure",
+        agent_id="agent-1",
+        user_id="user-1",
+        trace_id="trace-1",
+    )
+    queue = message_event_bus.subscribe(channel_key, tenant_id="tenant-1")
+    monkeypatch.setattr(message_event_bus, "record", lambda *_args, **_kwargs: False)
+
+    try:
+        response = client.post(
+            "/api/v1/messages/publish-test",
+            json={
+                "room_id": "delivery-failure",
+                "event_type": "message.created",
+            },
+        )
+        assert response.status_code == 503
+        assert response.json()["detail"] == {
+            "code": "message_delivery_unavailable",
+            "message": "Message delivery could not be recorded.",
+            "delivery_status": "not_delivered",
+        }
+        assert queue.empty()
+    finally:
+        message_event_bus.unsubscribe(channel_key, queue)
+        _clear_principal_override()
+        _clear_event_bus()
+
+
 def test_message_bus_overflow_emits_private_gap_and_keeps_authoritative_history() -> None:
     _clear_event_bus()
     channel_key = build_channel_key(tenant_id="tenant-1", trace_id="bounded-queue")
@@ -551,7 +588,7 @@ def test_message_bus_overflow_emits_private_gap_and_keeps_authoritative_history(
 def test_message_bus_lru_preserves_active_history_and_evicts_inactive_history(
     monkeypatch,
 ) -> None:
-    monkeypatch.setattr("backend.app.api.messages.MAX_CHANNELS_PER_TENANT", 2)
+    monkeypatch.setattr("backend.app.api.messages.MAX_HISTORY_CHANNELS_PER_TENANT", 2)
     _clear_event_bus()
     active_channel = build_channel_key(tenant_id="tenant-1", room_id="active-oldest")
     inactive_channel = build_channel_key(tenant_id="tenant-1", room_id="inactive")
@@ -622,6 +659,75 @@ def test_message_bus_lru_preserves_active_history_and_evicts_inactive_history(
         message_event_bus.unsubscribe(active_channel, active_queue)
         if newcomer_queue is not None:
             message_event_bus.unsubscribe(newcomer_channel, newcomer_queue)
+        _clear_event_bus()
+
+
+def test_message_bus_records_business_events_with_full_active_capacity_and_history_headroom(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr("backend.app.api.messages.MAX_ACTIVE_CHANNELS_PER_TENANT", 2)
+    monkeypatch.setattr("backend.app.api.messages.MAX_HISTORY_CHANNELS_PER_TENANT", 3)
+    _clear_event_bus()
+    active_channels = [
+        build_channel_key(tenant_id="tenant-1", room_id=f"active-{index}")
+        for index in range(2)
+    ]
+    inactive_channel = build_channel_key(tenant_id="tenant-1", room_id="inactive-oldest")
+    newcomer_channel = build_channel_key(tenant_id="tenant-1", room_id="newcomer")
+    queues = []
+    for index, channel_key in enumerate(active_channels):
+        assert message_event_bus.record(
+            channel_key,
+            UnifiedMessageEvent(
+                event_id=f"active-anchor-{index}",
+                event_type="message.created",
+                tenant_id="tenant-1",
+            ),
+        ) is True
+        queues.append(message_event_bus.subscribe(channel_key, tenant_id="tenant-1"))
+    assert message_event_bus.record(
+        inactive_channel,
+        UnifiedMessageEvent(
+            event_id="inactive-anchor",
+            event_type="message.created",
+            tenant_id="tenant-1",
+        ),
+    ) is True
+
+    try:
+        asyncio.run(
+            message_event_bus.publish(
+                active_channels[0],
+                UnifiedMessageEvent(
+                    event_id="active-business-event",
+                    event_type="message.created",
+                    tenant_id="tenant-1",
+                ),
+            )
+        )
+        asyncio.run(
+            message_event_bus.publish(
+                newcomer_channel,
+                UnifiedMessageEvent(
+                    event_id="newcomer-business-event",
+                    event_type="message.created",
+                    tenant_id="tenant-1",
+                ),
+            )
+        )
+
+        assert queues[0].get_nowait().event_id == "active-business-event"
+        assert message_event_bus.get_history(inactive_channel) == []
+        assert [event.event_id for event in message_event_bus.get_history(newcomer_channel)] == [
+            "newcomer-business-event"
+        ]
+        for index, channel_key in enumerate(active_channels):
+            assert message_event_bus.get_history(channel_key)[0].event_id == (
+                f"active-anchor-{index}"
+            )
+    finally:
+        for channel_key, queue in zip(active_channels, queues, strict=True):
+            message_event_bus.unsubscribe(channel_key, queue)
         _clear_event_bus()
 
 

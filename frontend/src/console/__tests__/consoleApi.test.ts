@@ -71,6 +71,28 @@ function hangingReaderResponse(chunks: string[]) {
   };
 }
 
+function failingReaderResponse(chunks: string[], errorMessage: string) {
+  const encoder = new TextEncoder();
+  let index = 0;
+  const reader = {
+    read: vi.fn().mockImplementation(() => (
+      index < chunks.length
+        ? Promise.resolve({ done: false, value: encoder.encode(chunks[index++]) })
+        : Promise.reject(new Error(errorMessage))
+    )),
+    cancel: vi.fn().mockResolvedValue(undefined),
+    releaseLock: vi.fn(),
+  };
+  return {
+    response: {
+      ok: true,
+      status: 200,
+      body: { getReader: () => reader },
+    } as unknown as Response,
+    reader,
+  };
+}
+
 const emptyBootstrap = {
   console: {
     mode: "unified_console",
@@ -428,6 +450,57 @@ describe("consoleApi authentication and SSE", () => {
       expect(gapReader.reader.cancel).toHaveBeenCalledTimes(1);
     }
     expect(recoveredReader.reader.cancel).toHaveBeenCalledTimes(1);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("uses only SSE frame ids as reconnect anchors after network failures", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, "random").mockReturnValue(0.5);
+    localStorage.setItem("auth_token", "bearer-secret");
+    const noDurableId = failingReaderResponse([
+      'event: system.notification\ndata: {"event_id":"ephemeral-random-1","event_type":"system.notification","payload":{"type":"heartbeat"}}\n\n',
+    ], "network-secret-1");
+    const durableThenEphemeral = failingReaderResponse([
+      'event: message.created\nid: durable-frame-1\ndata: {"event_id":"payload-copy","event_type":"message.created","payload":{"message":{"message_id":"durable-message","sender_id":"agent-a","content":"durable","created_at":"2026-08-16T00:00:00Z"}}}\n\n'
+      + 'event: system.notification\ndata: {"event_id":"ephemeral-random-2","event_type":"system.notification","payload":{"type":"heartbeat"}}\n\n',
+    ], "network-secret-2");
+    let streamCalls = 0;
+    const fetcher = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.startsWith("/api/v1/workbench")) {
+        return new Response(JSON.stringify(emptyBootstrap), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      if (url.startsWith("/api/v1/messages/stream")) {
+        streamCalls += 1;
+        if (streamCalls === 1) return noDurableId.response;
+        if (streamCalls === 2) return durableThenEphemeral.response;
+        return chunkedResponse([
+          'event: stream.closed\ndata: {"event_type":"stream.closed"}\n\n',
+        ]);
+      }
+      throw new Error(`Unexpected Console URL: ${url}`);
+    });
+
+    render(React.createElement(ConsoleApp));
+    await act(async () => vi.advanceTimersByTimeAsync(0));
+    await act(async () => vi.advanceTimersByTimeAsync(1000));
+    const streamRequests = fetcher.mock.calls.filter(
+      ([input]) => String(input).startsWith("/api/v1/messages/stream"),
+    );
+    expect(streamRequests).toHaveLength(2);
+    expect(streamRequests[1][1]?.headers).not.toHaveProperty("Last-Event-ID");
+
+    await act(async () => vi.advanceTimersByTimeAsync(1000));
+    const finalStreamRequests = fetcher.mock.calls.filter(
+      ([input]) => String(input).startsWith("/api/v1/messages/stream"),
+    );
+    expect(finalStreamRequests).toHaveLength(3);
+    expect(finalStreamRequests[2][1]?.headers).toEqual(
+      expect.objectContaining({ "Last-Event-ID": "durable-frame-1" }),
+    );
     expect(vi.getTimerCount()).toBe(0);
   });
 });

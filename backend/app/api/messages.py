@@ -19,7 +19,8 @@ PrincipalDependency = Annotated[Principal, Depends(get_current_principal)]
 HISTORY_LIMIT = 1000
 SUBSCRIBER_QUEUE_LIMIT = 256
 REPLAY_DEDUPE_LIMIT = HISTORY_LIMIT
-MAX_CHANNELS_PER_TENANT = 256
+MAX_ACTIVE_CHANNELS_PER_TENANT = 128
+MAX_HISTORY_CHANNELS_PER_TENANT = 256
 MAX_CHANNEL_INDEX_RESULTS = 100
 _UNSCOPED_TENANT = "*"
 
@@ -284,7 +285,10 @@ class _MessageEventBus:
         queues = self._subscribers.get(channel_key)
         if not queues:
             active_channels = self._active_tenant_channels.get(tenant_key)
-            if active_channels is not None and len(active_channels) >= MAX_CHANNELS_PER_TENANT:
+            if (
+                active_channels is not None
+                and len(active_channels) >= MAX_ACTIVE_CHANNELS_PER_TENANT
+            ):
                 raise MessageStreamCapacityError
             if active_channels is None:
                 active_channels = self._active_tenant_channels[tenant_key]
@@ -353,7 +357,7 @@ class _MessageEventBus:
         if channel_key in channels:
             channels.move_to_end(channel_key)
             return True
-        while len(channels) >= MAX_CHANNELS_PER_TENANT:
+        while len(channels) >= MAX_HISTORY_CHANNELS_PER_TENANT:
             evicted_channel = next(
                 (
                     candidate
@@ -401,7 +405,8 @@ class _MessageEventBus:
         self._history_by_id.pop(event_id, None)
 
     async def publish(self, channel_key: str, event: UnifiedMessageEvent) -> None:
-        self.record(channel_key, event)
+        if not self.record(channel_key, event):
+            raise MessageStreamCapacityError("message_history_capacity_exceeded")
         for queue in self._subscribers.get(channel_key, []):
             if queue.full():
                 while not queue.empty():
@@ -714,7 +719,17 @@ async def publish_test_event(principal: PrincipalDependency, payload: dict[str, 
         channel_type=str(payload.get("channel_type") or "system"),
         payload=payload,
     )
-    await message_event_bus.publish(channel_key, event)
+    try:
+        await message_event_bus.publish(channel_key, event)
+    except MessageStreamCapacityError:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "code": "message_delivery_unavailable",
+                "message": "Message delivery could not be recorded.",
+                "delivery_status": "not_delivered",
+            },
+        ) from None
     return {"published": True, "channel_key": channel_key, "event_id": event.event_id, "event_domain": _event_domain(event.event_type)}
 
 
