@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import React from "react";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ConsoleApp } from "../ConsoleApp";
@@ -25,6 +25,28 @@ function chunkedResponse(chunks: string[], status = 200): Response {
     status,
     headers: { "Content-Type": status === 200 ? "text/event-stream" : "application/json" },
   });
+}
+
+function readerBackedResponse(chunks: string[]) {
+  const encoder = new TextEncoder();
+  let index = 0;
+  const reader = {
+    read: vi.fn().mockImplementation(async () => (
+      index < chunks.length
+        ? { done: false, value: encoder.encode(chunks[index++]) }
+        : { done: true, value: undefined }
+    )),
+    cancel: vi.fn().mockResolvedValue(undefined),
+    releaseLock: vi.fn(),
+  };
+  return {
+    response: {
+      ok: true,
+      status: 200,
+      body: { getReader: () => reader },
+    } as unknown as Response,
+    reader,
+  };
 }
 
 const emptyBootstrap = {
@@ -176,6 +198,29 @@ describe("consoleApi authentication and SSE", () => {
     await expect(promise).rejects.toMatchObject({ name: "AbortError" });
   });
 
+  it("cancels oversized SSE buffers and data with a sanitized error", async () => {
+    for (const oversized of [
+      `event: message.created\ndata: ${"buffer-secret".repeat(90000)}`,
+      `event: message.created\ndata: ${"data-secret".repeat(30000)}\n\n`,
+    ]) {
+      const { response, reader } = readerBackedResponse([oversized]);
+      const fetcher = vi.fn().mockResolvedValue(response);
+
+      const result = readConsoleEventStream({ fetcher, onEvent: vi.fn() });
+
+      await expect(result).rejects.toEqual(
+        expect.objectContaining<Partial<ConsoleApiError>>({
+          name: "ConsoleApiError",
+          status: 413,
+          message: "Console event stream exceeded the safe size limit.",
+        }),
+      );
+      await expect(result.catch((error: Error) => error.message)).resolves.not.toMatch(/secret/);
+      expect(reader.cancel).toHaveBeenCalledTimes(1);
+      expect(reader.releaseLock).toHaveBeenCalledTimes(1);
+    }
+  });
+
   it("mounts using only workbench and the authenticated messages fetch-stream", async () => {
     localStorage.setItem("auth_token", "bearer-secret");
     vi.spyOn(console, "warn").mockImplementation(() => undefined);
@@ -210,5 +255,40 @@ describe("consoleApi authentication and SSE", () => {
     for (const [, init] of fetcher.mock.calls) {
       expect(init?.headers).toEqual(expect.objectContaining({ Authorization: "Bearer bearer-secret" }));
     }
+  });
+
+  it("renders real collaboration room and message payloads without accepting malformed events", async () => {
+    localStorage.setItem("auth_token", "bearer-secret");
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const fetcher = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.startsWith("/api/v1/workbench")) {
+        return new Response(JSON.stringify(emptyBootstrap), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      if (url.startsWith("/api/v1/messages/stream")) {
+        return chunkedResponse([
+          'event: room.created\ndata: {"event_type":"room.created","payload":{"room":{"room_id":"room-real","topic":"Launch Room","status":"active","members":["agent-a"],"message_count":0}}}\n\n',
+          'event: message.created\ndata: {"event_type":"message.created","payload":{"message":{"content":"malformed-secret"}}}\n\n',
+          'event: room.member_added\ndata: {"event_type":"room.member_added","payload":{"member_id":"agent-b","room":{"room_id":"room-real","topic":"Launch Room","status":"active","members":["agent-a","agent-b"],"message_count":1}}}\n\n',
+          'event: message.created\ndata: {"event_type":"message.created","room_id":"room-real","payload":{"message":{"message_id":"message-real","room_id":"room-real","sender_id":"agent-a","sender_type":"agent","content":"real collaboration message","created_at":"2026-08-16T00:00:00Z","metadata":{"message_type":"text"}}}}\n\n',
+          'event: room.closed\ndata: {"event_type":"room.closed","payload":{"room":{"room_id":"room-real","topic":"Launch Room","status":"closed","members":["agent-a","agent-b"],"message_count":1}}}\n\n',
+          'event: stream.closed\ndata: {"event_type":"stream.closed"}\n\n',
+        ]);
+      }
+      throw new Error(`Unexpected Console URL: ${url}`);
+    });
+
+    render(React.createElement(ConsoleApp));
+
+    await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2));
+    fireEvent.click(await screen.findByRole("button", { name: "会议室" }));
+    await waitFor(() => expect(screen.getAllByText("Launch Room").length).toBeGreaterThan(0));
+    expect(screen.getByText("2 成员")).toBeTruthy();
+    expect(screen.getByText("closed")).toBeTruthy();
+    expect(screen.getByText("real collaboration message")).toBeTruthy();
+    expect(screen.queryByText("malformed-secret")).toBeNull();
   });
 });

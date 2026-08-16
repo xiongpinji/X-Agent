@@ -10,6 +10,10 @@ export type ConsoleStreamResult = {
 };
 
 type Fetcher = typeof fetch;
+const MAX_SSE_BUFFER_BYTES = 1024 * 1024;
+const MAX_SSE_EVENT_BYTES = 512 * 1024;
+const MAX_SSE_DATA_BYTES = 256 * 1024;
+const textEncoder = new TextEncoder();
 
 export class ConsoleApiError extends Error {
   readonly status: number;
@@ -61,6 +65,9 @@ export async function fetchConsoleBootstrap<T = unknown>(options: {
 }
 
 function parseEventBlock(block: string): ConsoleSseEvent | null {
+  if (textEncoder.encode(block).byteLength > MAX_SSE_EVENT_BYTES) {
+    throw new ConsoleApiError("Console event stream exceeded the safe size limit.", 413);
+  }
   let name = "message";
   let id: string | null = null;
   const data: string[] = [];
@@ -76,7 +83,12 @@ function parseEventBlock(block: string): ConsoleSseEvent | null {
     if (field === "data") data.push(value);
   }
 
-  return data.length > 0 ? { name, id, data: data.join("\n") } : null;
+  if (data.length === 0) return null;
+  const joinedData = data.join("\n");
+  if (textEncoder.encode(joinedData).byteLength > MAX_SSE_DATA_BYTES) {
+    throw new ConsoleApiError("Console event stream exceeded the safe size limit.", 413);
+  }
+  return { name, id, data: joinedData };
 }
 
 function takeNextBlock(buffer: string): { block: string; rest: string } | null {
@@ -129,6 +141,9 @@ export async function readConsoleEventStream(options: {
       const { done, value } = await reader.read();
       streamDone = done;
       buffer += decoder.decode(value, { stream: !done });
+      if (textEncoder.encode(buffer).byteLength > MAX_SSE_BUFFER_BYTES) {
+        throw new ConsoleApiError("Console event stream exceeded the safe size limit.", 413);
+      }
 
       let next = takeNextBlock(buffer);
       while (next) {
@@ -147,6 +162,15 @@ export async function readConsoleEventStream(options: {
 
     }
     return { terminal: false, lastEventId: latestEventId };
+  } catch (error) {
+    if (error instanceof ConsoleApiError && error.status === 413) {
+      try {
+        await reader.cancel();
+      } catch {
+        // The stable size-limit error remains authoritative if cancellation fails.
+      }
+    }
+    throw error;
   } finally {
     reader.releaseLock();
   }

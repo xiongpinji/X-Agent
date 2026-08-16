@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
-from backend.app.api.messages import message_event_bus
+from backend.app.api.messages import UnifiedMessageEvent, build_channel_key, message_event_bus
 from backend.app.dependencies import get_current_principal
 from backend.app.main import app
 
@@ -402,6 +402,91 @@ def test_messages_debug_clear_domain_removes_domain_state() -> None:
         )
         assert domain_response.status_code == 200
         assert domain_response.json() == []
+    finally:
+        _clear_principal_override()
+        _clear_event_bus()
+
+
+def test_messages_debug_reads_and_clears_only_principal_tenant() -> None:
+    client = TestClient(app, headers={"x-api-key": "bootstrap"})
+    _set_principal_override()
+    _clear_event_bus()
+    tenant_a_channel = build_channel_key(
+        tenant_id="tenant-1",
+        agent_id="agent-1",
+        user_id="user-1",
+        channel_type="room",
+        trace_id="shared-trace",
+    )
+    tenant_b_channel = build_channel_key(
+        tenant_id="tenant-2",
+        agent_id="agent-2",
+        user_id="user-2",
+        channel_type="room",
+        trace_id="shared-trace",
+    )
+    for tenant_id, channel_key, event_id in (
+        ("tenant-1", tenant_a_channel, "event-a"),
+        ("tenant-2", tenant_b_channel, "event-b"),
+    ):
+        message_event_bus.record(
+            channel_key,
+            UnifiedMessageEvent(
+                event_id=event_id,
+                event_type="message.created",
+                tenant_id=tenant_id,
+                trace_id="shared-trace",
+                channel_type="room",
+                payload={"content": f"secret-{tenant_id}"},
+            ),
+        )
+
+    try:
+        index = client.get("/api/v1/messages/debug/channel-index")
+        trace = client.get(
+            "/api/v1/messages/debug/trace-events",
+            params={"trace_id": "shared-trace"},
+        )
+        domain = client.get(
+            "/api/v1/messages/debug/domain-events",
+            params={"domain": "room"},
+        )
+
+        assert index.status_code == 200
+        assert [item["channel_key"] for item in index.json()] == [tenant_a_channel]
+        assert [item["event_id"] for item in trace.json()] == ["event-a"]
+        assert [item["event_id"] for item in domain.json()] == ["event-a"]
+        assert "secret-tenant-2" not in trace.text + domain.text
+
+        clear_trace = client.delete(
+            "/api/v1/messages/debug/trace",
+            params={"trace_id": "shared-trace"},
+        )
+        assert clear_trace.status_code == 200
+        assert clear_trace.json()["removed_count"] == 1
+        assert [event.event_id for event in message_event_bus.get_history(tenant_b_channel)] == [
+            "event-b"
+        ]
+
+        message_event_bus.record(
+            tenant_a_channel,
+            UnifiedMessageEvent(
+                event_id="event-a-domain",
+                event_type="message.created",
+                tenant_id="tenant-1",
+                trace_id="domain-trace",
+                channel_type="room",
+            ),
+        )
+        clear_domain = client.delete(
+            "/api/v1/messages/debug/domain",
+            params={"domain": "room"},
+        )
+        assert clear_domain.status_code == 200
+        assert clear_domain.json()["removed_count"] == 1
+        assert [event.event_id for event in message_event_bus.get_history(tenant_b_channel)] == [
+            "event-b"
+        ]
     finally:
         _clear_principal_override()
         _clear_event_bus()

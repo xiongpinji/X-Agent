@@ -118,7 +118,6 @@ export function ConsoleShell() {
   }, [selectorValidation]);
 
   const handleCreateAgent = async (payload: AgentCreatePayload) => {
-    console.log("create agent", payload);
     dispatch({ type: "page/set", payload: "organization_graph" });
     if (payload.role_template_id) {
       dispatch({ type: "roleTemplate/setSelected", payload: payload.role_template_id });

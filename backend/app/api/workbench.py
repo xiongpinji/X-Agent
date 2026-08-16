@@ -27,6 +27,7 @@ from backend.app.dependencies import (
 from backend.app.settings import get_settings
 
 router = APIRouter(prefix="/api/v1/workbench", tags=["workbench"])
+WORKBENCH_SUMMARY_LIMIT = 50
 extended_router = APIRouter(prefix="/api/v1/workbench", tags=["workbench-extended"])  # C2: unmounted
 
 
@@ -86,26 +87,78 @@ async def get_workbench(
     can_read_memory = policy.has_scope(principal, "memory:read")
     can_read_collaboration = policy.has_scope(principal, "agent:read")
     can_stream_messages = policy.has_scope(principal, "agent:run")
-    runs = (
-        [
-            record
-            for record in run_store.list(limit=max(run_store.count(), 1))
-            if record.tenant_id == tenant_id
-        ]
+    tenant_runs = (
+        sorted(
+            (
+                record
+                for record in run_store.list(limit=max(run_store.count(), 1))
+                if record.tenant_id == tenant_id
+            ),
+            key=lambda record: (record.completed_at, record.trace_id),
+            reverse=True,
+        )
         if can_read_runs
         else []
     )
-    run_items = [record.model_dump(mode="json") for record in runs]
+    run_items = [
+        {
+            "trace_id": record.trace_id,
+            "agent_id": record.agent_id,
+            "user_id": record.user_id,
+            "status": record.status.value,
+            "iterations": record.iterations,
+            "memory_hits": record.memory_hits,
+            "tool_call_count": record.tool_call_count,
+            "stage": record.stage,
+            "created_at": record.created_at.isoformat(),
+            "completed_at": record.completed_at.isoformat(),
+        }
+        for record in tenant_runs[:WORKBENCH_SUMMARY_LIMIT]
+    ]
     active_runs = [item for item in run_items if item.get("status") == "running"]
 
     memory_available = can_read_memory and hasattr(memory, "export_bundle")
     if memory_available:
         memory_bundle = memory.export_bundle(tenant_id=tenant_id)
-        memory_items = [item.model_dump(mode="json") for item in memory_bundle.memories]
-        sessions = [session.model_dump(mode="json") for session in memory_bundle.sessions]
+        tenant_memories = sorted(
+            memory_bundle.memories,
+            key=lambda item: (item.created_at, item.id),
+            reverse=True,
+        )
+        memory_items = [
+            {
+                "id": item.id,
+                "agent_id": item.agent_id,
+                "session_id": item.session_id,
+                "layer": item.layer,
+                "importance": item.importance,
+                "created_at": item.created_at.isoformat(),
+            }
+            for item in tenant_memories[:WORKBENCH_SUMMARY_LIMIT]
+        ]
+        tenant_sessions = sorted(
+            memory_bundle.sessions,
+            key=lambda session: (session.updated_at, session.session_id),
+            reverse=True,
+        )
+        sessions = [
+            {
+                "session_id": session.session_id,
+                "user_id": session.user_id,
+                "agent_id": session.agent_id,
+                "shared": session.shared,
+                "room_id": session.room_id,
+                "project_id": session.project_id,
+                "created_at": session.created_at.isoformat(),
+                "updated_at": session.updated_at.isoformat(),
+            }
+            for session in tenant_sessions[:WORKBENCH_SUMMARY_LIMIT]
+        ]
+        memory_count = len(tenant_memories)
     else:
         memory_items = []
         sessions = []
+        memory_count = 0
 
     organizations = (
         organization_store.list_organizations(tenant_id=tenant_id)
@@ -146,11 +199,28 @@ async def get_workbench(
             ]
 
     rooms = (
-        collaboration_store.list_rooms(tenant_id=tenant_id)
+        sorted(
+            collaboration_store.list_rooms(tenant_id=tenant_id),
+            key=lambda room: (room.updated_at, room.room_id),
+            reverse=True,
+        )
         if can_read_collaboration
         else []
     )
-    room_items = [room.model_dump(mode="json") for room in rooms]
+    room_items = [
+        {
+            "room_id": room.room_id,
+            "name": room.topic,
+            "topic": room.topic,
+            "status": room.status,
+            "member_count": len(room.members),
+            "member_agent_ids": list(room.members),
+            "message_count": len(room.messages),
+            "created_at": room.created_at.isoformat(),
+            "updated_at": room.updated_at.isoformat(),
+        }
+        for room in rooms[:WORKBENCH_SUMMARY_LIMIT]
+    ]
     tool_items = tools.manifest()
 
     from backend.app.core import skills_registry
@@ -181,7 +251,7 @@ async def get_workbench(
         },
         execution={
             "availability": "available" if can_read_runs else "unavailable",
-            "count": len(run_items),
+            "count": len(tenant_runs),
             "runs": run_items,
             "active_runs": active_runs,
         },
@@ -197,7 +267,7 @@ async def get_workbench(
             {"id": "workbench", "label": "Workbench", "path": "/api/v1/workbench"},
         ],
         workflows={"availability": "unavailable", "templates": [], "active_workflows": [], "workflow_states": {}, "workflow_links": []},
-        memory={"availability": "available" if memory_available else "unavailable", "count": len(memory_items), "items": memory_items, "sessions": sessions, "session_summary": {}, "agent_summary": {}, "department_summary": {}, "layer_totals": {}, "memory_refs": [item["id"] for item in memory_items]},
+        memory={"availability": "available" if memory_available else "unavailable", "count": memory_count, "items": memory_items, "sessions": sessions, "session_summary": {}, "agent_summary": {}, "department_summary": {}, "layer_totals": {}, "memory_refs": [item["id"] for item in memory_items]},
         permissions={"scope": list(principal.scopes), "can_create_agent": policy.has_scope(principal, "agent:run"), "can_create_room": policy.has_scope(principal, "agent:run"), "can_manage_org": policy.has_scope(principal, "security:manage"), "can_read_memory": can_read_memory, "can_send_message": can_stream_messages, "can_trigger_execution": policy.has_scope(principal, "agent:run"), "can_approve": policy.has_scope(principal, "security:manage"), "can_audit": policy.has_scope(principal, "audit:read")},
     )
 

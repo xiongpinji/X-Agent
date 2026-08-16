@@ -37,8 +37,9 @@ export function selectActiveConversation(state: ConsoleState) {
 }
 
 export function selectActiveRoomMessages(state: ConsoleState) {
-  const room = selectActiveRoom(state);
-  return room?.messages ?? [];
+  const room = selectActiveRoom(state) ?? state.meetingRooms[0] ?? null;
+  if (!room) return [];
+  return state.realtime.messages.filter((message) => message.room_id === room.room_id);
 }
 
 export function selectActiveConversationMessages(state: ConsoleState) {

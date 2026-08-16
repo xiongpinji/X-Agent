@@ -17,6 +17,8 @@ router = APIRouter(prefix="/api/v1/messages", tags=["messages"])
 PrincipalDependency = Annotated[Principal, Depends(get_current_principal)]
 
 HISTORY_LIMIT = 1000
+SUBSCRIBER_QUEUE_LIMIT = 256
+REPLAY_DEDUPE_LIMIT = HISTORY_LIMIT
 
 # Final event reference for `messages/stream`.
 #
@@ -76,6 +78,27 @@ class UnifiedMessageEvent(BaseModel):
     payload: dict[str, object] = Field(default_factory=dict)
 
 
+class _BoundedEventIds:
+    def __init__(self, *, maxlen: int, values: list[str] | None = None) -> None:
+        self._maxlen = maxlen
+        self._order: deque[str] = deque()
+        self._values: set[str] = set()
+        for value in values or []:
+            self.remember(value)
+
+    def __len__(self) -> int:
+        return len(self._values)
+
+    def remember(self, value: str) -> bool:
+        if value in self._values:
+            return False
+        if len(self._order) >= self._maxlen:
+            self._values.discard(self._order.popleft())
+        self._order.append(value)
+        self._values.add(value)
+        return True
+
+
 class _MessageEventBus:
     def __init__(self) -> None:
         self._subscribers: dict[str, list[asyncio.Queue[UnifiedMessageEvent]]] = defaultdict(list)
@@ -93,17 +116,20 @@ class _MessageEventBus:
         history = self._history.pop(channel_key, None)
         if history is not None:
             for event in history:
-                self._history_by_id.pop(event.event_id, None)
+                self._prune_history_id(event.event_id)
         return existed
 
-    def clear_trace(self, trace_id: str) -> int:
+    def clear_trace(self, trace_id: str, *, tenant_id: str | None = None) -> int:
         removed_count = 0
         for channel_key in list(self._history.keys()):
             history = self._history[channel_key]
             remaining = deque(maxlen=HISTORY_LIMIT)
+            removed_ids: list[str] = []
             for event in history:
-                if event.trace_id == trace_id:
-                    self._history_by_id.pop(event.event_id, None)
+                if event.trace_id == trace_id and (
+                    tenant_id is None or event.tenant_id == tenant_id
+                ):
+                    removed_ids.append(event.event_id)
                     removed_count += 1
                     continue
                 remaining.append(event)
@@ -112,16 +138,21 @@ class _MessageEventBus:
             else:
                 self._history.pop(channel_key, None)
                 self._subscribers.pop(channel_key, None)
+            for event_id in removed_ids:
+                self._prune_history_id(event_id)
         return removed_count
 
-    def clear_domain(self, domain: str) -> int:
+    def clear_domain(self, domain: str, *, tenant_id: str | None = None) -> int:
         removed_count = 0
         for channel_key in list(self._history.keys()):
             history = self._history[channel_key]
             remaining = deque(maxlen=HISTORY_LIMIT)
+            removed_ids: list[str] = []
             for event in history:
-                if _event_domain(event.event_type) == domain:
-                    self._history_by_id.pop(event.event_id, None)
+                if _event_domain(event.event_type) == domain and (
+                    tenant_id is None or event.tenant_id == tenant_id
+                ):
+                    removed_ids.append(event.event_id)
                     removed_count += 1
                     continue
                 remaining.append(event)
@@ -130,6 +161,8 @@ class _MessageEventBus:
             else:
                 self._history.pop(channel_key, None)
                 self._subscribers.pop(channel_key, None)
+            for event_id in removed_ids:
+                self._prune_history_id(event_id)
         return removed_count
 
     def get_domain_counts(self, channel_key: str) -> dict[str, int]:
@@ -144,8 +177,17 @@ class _MessageEventBus:
     def get_history_by_domain(self, channel_key: str, domain: str) -> list[UnifiedMessageEvent]:
         return [event for event in self._history.get(channel_key, []) if _event_domain(event.event_type) == domain]
 
-    def get_channel_snapshot(self, channel_key: str) -> dict[str, object]:
-        history = list(self._history.get(channel_key, []))
+    def get_channel_snapshot(
+        self,
+        channel_key: str,
+        *,
+        tenant_id: str | None = None,
+    ) -> dict[str, object]:
+        history = [
+            event
+            for event in self._history.get(channel_key, [])
+            if tenant_id is None or event.tenant_id == tenant_id
+        ]
         return {
             "channel_key": channel_key,
             "history_count": len(history),
@@ -156,17 +198,46 @@ class _MessageEventBus:
             "last_event_type": history[-1].event_type if history else None,
         }
 
-    def get_channel_index(self) -> list[dict[str, object]]:
-        return [self.get_channel_snapshot(channel_key) for channel_key in sorted(self._history.keys())]
+    def get_channel_index(self, *, tenant_id: str | None = None) -> list[dict[str, object]]:
+        channel_keys = [
+            channel_key
+            for channel_key, events in self._history.items()
+            if tenant_id is None or any(event.tenant_id == tenant_id for event in events)
+        ]
+        return [
+            self.get_channel_snapshot(channel_key, tenant_id=tenant_id)
+            for channel_key in sorted(channel_keys)
+        ]
 
-    def get_history_by_trace(self, trace_id: str) -> list[UnifiedMessageEvent]:
-        return [event for events in self._history.values() for event in events if event.trace_id == trace_id]
+    def get_history_by_trace(
+        self,
+        trace_id: str,
+        *,
+        tenant_id: str | None = None,
+    ) -> list[UnifiedMessageEvent]:
+        return [
+            event
+            for events in self._history.values()
+            for event in events
+            if event.trace_id == trace_id and (tenant_id is None or event.tenant_id == tenant_id)
+        ]
 
-    def get_history_by_domain_global(self, domain: str) -> list[UnifiedMessageEvent]:
-        return [event for events in self._history.values() for event in events if _event_domain(event.event_type) == domain]
+    def get_history_by_domain_global(
+        self,
+        domain: str,
+        *,
+        tenant_id: str | None = None,
+    ) -> list[UnifiedMessageEvent]:
+        return [
+            event
+            for events in self._history.values()
+            for event in events
+            if _event_domain(event.event_type) == domain
+            and (tenant_id is None or event.tenant_id == tenant_id)
+        ]
 
     def subscribe(self, channel_key: str) -> asyncio.Queue[UnifiedMessageEvent]:
-        queue: asyncio.Queue[UnifiedMessageEvent] = asyncio.Queue()
+        queue: asyncio.Queue[UnifiedMessageEvent] = asyncio.Queue(maxsize=SUBSCRIBER_QUEUE_LIMIT)
         self._subscribers[channel_key].append(queue)
         return queue
 
@@ -185,13 +256,31 @@ class _MessageEventBus:
             return
         if event.event_id in self._history_by_id:
             return
+        evicted_id = (
+            history[0].event_id
+            if history.maxlen is not None and len(history) == history.maxlen
+            else None
+        )
         history.append(event)
         self._history_by_id[event.event_id] = event
+        if evicted_id is not None:
+            self._prune_history_id(evicted_id)
+
+    def _prune_history_id(self, event_id: str) -> None:
+        if any(
+            event.event_id == event_id
+            for history in self._history.values()
+            for event in history
+        ):
+            return
+        self._history_by_id.pop(event_id, None)
 
     async def publish(self, channel_key: str, event: UnifiedMessageEvent) -> None:
         self.record(channel_key, event)
         for queue in self._subscribers.get(channel_key, []):
-            await queue.put(event)
+            if queue.full():
+                queue.get_nowait()
+            queue.put_nowait(event)
 
     def get_history(
         self,
@@ -360,7 +449,10 @@ async def stream_messages(
         last_event_id=stream_filter.last_event_id,
     )
     history = [event for event in history if _event_matches_filter(event, stream_filter)]
-    replay_ids = {event.event_id for event in history}
+    replay_ids = _BoundedEventIds(
+        maxlen=REPLAY_DEDUPE_LIMIT,
+        values=[event.event_id for event in history],
+    )
 
     async def event_generator():
         try:
@@ -397,11 +489,10 @@ async def stream_messages(
             while True:
                 try:
                     event = await asyncio.wait_for(queue.get(), timeout=15)
-                    if event.event_id in replay_ids:
+                    if not replay_ids.remember(event.event_id):
                         continue
                     if not _event_matches_filter(event, stream_filter):
                         continue
-                    replay_ids.add(event.event_id)
                     yield _serialize_sse(event, event.event_type)
                 except TimeoutError:
                     heartbeat = UnifiedMessageEvent(
@@ -483,25 +574,40 @@ async def get_channel_snapshot(
         channel_type=channel_type,
         trace_id=trace_id or principal.trace_id,
     )
-    return message_event_bus.get_channel_snapshot(channel_key)
+    return message_event_bus.get_channel_snapshot(
+        channel_key,
+        tenant_id=principal.tenant_id,
+    )
 
 
 @router.get("/debug/channel-index")
 async def get_channel_index(principal: PrincipalDependency) -> list[dict[str, object]]:
     enforce_scope(principal, "agent:run")
-    return message_event_bus.get_channel_index()
+    return message_event_bus.get_channel_index(tenant_id=principal.tenant_id)
 
 
 @router.get("/debug/trace-events")
 async def get_trace_events(principal: PrincipalDependency, trace_id: str = Query(...)) -> list[dict[str, object]]:
     enforce_scope(principal, "agent:run")
-    return [event.model_dump(mode="json") for event in message_event_bus.get_history_by_trace(trace_id)]
+    return [
+        event.model_dump(mode="json")
+        for event in message_event_bus.get_history_by_trace(
+            trace_id,
+            tenant_id=principal.tenant_id,
+        )
+    ]
 
 
 @router.get("/debug/domain-events")
 async def get_domain_events(principal: PrincipalDependency, domain: str = Query(...)) -> list[dict[str, object]]:
     enforce_scope(principal, "agent:run")
-    return [event.model_dump(mode="json") for event in message_event_bus.get_history_by_domain_global(domain)]
+    return [
+        event.model_dump(mode="json")
+        for event in message_event_bus.get_history_by_domain_global(
+            domain,
+            tenant_id=principal.tenant_id,
+        )
+    ]
 
 
 @router.delete("/debug/channel")
@@ -533,12 +639,12 @@ async def clear_channel(
 @router.delete("/debug/trace")
 async def clear_trace(principal: PrincipalDependency, trace_id: str = Query(...)) -> dict[str, object]:
     enforce_scope(principal, "agent:run")
-    removed_count = message_event_bus.clear_trace(trace_id)
+    removed_count = message_event_bus.clear_trace(trace_id, tenant_id=principal.tenant_id)
     return {"trace_id": trace_id, "removed_count": removed_count}
 
 
 @router.delete("/debug/domain")
 async def clear_domain(principal: PrincipalDependency, domain: str = Query(...)) -> dict[str, object]:
     enforce_scope(principal, "agent:run")
-    removed_count = message_event_bus.clear_domain(domain)
+    removed_count = message_event_bus.clear_domain(domain, tenant_id=principal.tenant_id)
     return {"domain": domain, "removed_count": removed_count}

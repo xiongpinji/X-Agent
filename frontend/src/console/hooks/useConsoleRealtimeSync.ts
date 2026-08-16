@@ -38,6 +38,73 @@ type ConsoleRealtimeSyncHandle = {
   startPolling: () => void;
 };
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+function asNonEmptyString(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value : null;
+}
+
+function normalizeRealtimeMessage(event: UnifiedMessageEvent): RealtimeMessage | null {
+  const payload = asRecord(event.payload);
+  const message = asRecord(payload?.message) ?? payload;
+  if (!message) return null;
+  const messageId = asNonEmptyString(message.message_id);
+  const content = asNonEmptyString(message.content);
+  const createdAt = asNonEmptyString(message.created_at);
+  const senderId = asNonEmptyString(message.sender_id);
+  if (!messageId || !content || !createdAt || !senderId) return null;
+  const metadata = asRecord(message.metadata);
+
+  return {
+    message_id: messageId,
+    room_id: asNonEmptyString(message.room_id) ?? event.room_id ?? null,
+    conversation_id: asNonEmptyString(message.conversation_id)
+      ?? asNonEmptyString(metadata?.conversation_id)
+      ?? event.conversation_id
+      ?? null,
+    sender_id: senderId,
+    sender_type: asNonEmptyString(message.sender_type) ?? undefined,
+    sender_name: asNonEmptyString(message.sender_name) ?? senderId,
+    content,
+    message_type: asNonEmptyString(message.message_type)
+      ?? asNonEmptyString(metadata?.message_type)
+      ?? "text",
+    created_at: createdAt,
+  };
+}
+
+function normalizeMeetingRoom(event: UnifiedMessageEvent): MeetingRoomSummary | null {
+  const payload = asRecord(event.payload);
+  const room = asRecord(payload?.room) ?? payload;
+  if (!room) return null;
+  const roomId = asNonEmptyString(room.room_id) ?? event.room_id ?? null;
+  const topic = asNonEmptyString(room.topic) ?? asNonEmptyString(room.name);
+  if (!roomId || !topic) return null;
+  const rawMembers = Array.isArray(room.member_agent_ids)
+    ? room.member_agent_ids
+    : Array.isArray(room.members)
+      ? room.members
+      : [];
+  const members = rawMembers.filter((member): member is string => typeof member === "string" && Boolean(member.trim()));
+  const memberCount = typeof room.member_count === "number" && Number.isFinite(room.member_count)
+    ? room.member_count
+    : members.length;
+
+  return {
+    room_id: roomId,
+    name: asNonEmptyString(room.name) ?? topic,
+    topic,
+    status: asNonEmptyString(room.status) ?? "active",
+    department_id: asNonEmptyString(room.department_id) ?? undefined,
+    member_count: memberCount,
+    member_agent_ids: members,
+  };
+}
+
 function mergeRealtimeMessage(realtime: RealtimeSnapshot, message: RealtimeMessage): RealtimeSnapshot {
   const exists = realtime.messages.some((item) => item.message_id === message.message_id);
   const messages = exists
@@ -126,13 +193,22 @@ export function useConsoleRealtimeSync(
       switch (event.event_type) {
         case "message.created":
         case "message.updated": {
-          const message = event.payload as RealtimeMessage;
-          dispatch({ type: "realtime/update", payload: mergeRealtimeMessage(currentState.realtime, message) });
+          const message = normalizeRealtimeMessage(event);
+          if (!message) break;
+          const realtime = mergeRealtimeMessage(currentState.realtime, message);
+          stateRef.current = { ...currentState, realtime };
+          dispatch({ type: "realtime/update", payload: realtime });
           break;
         }
-        case "room.updated": {
-          const room = event.payload as MeetingRoomSummary;
-          dispatch({ type: "rooms/update", payload: mergeRoomUpdate(currentState.meetingRooms, room) });
+        case "room.created":
+        case "room.member_added":
+        case "room.updated":
+        case "room.closed": {
+          const room = normalizeMeetingRoom(event);
+          if (!room) break;
+          const rooms = mergeRoomUpdate(currentState.meetingRooms, room);
+          stateRef.current = { ...currentState, meetingRooms: rooms };
+          dispatch({ type: "rooms/update", payload: rooms });
           break;
         }
         case "conversation.updated": {

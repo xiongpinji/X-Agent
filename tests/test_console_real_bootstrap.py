@@ -189,11 +189,23 @@ def test_workbench_reads_real_tenant_scoped_stores_without_dispatch(monkeypatch)
     assert payload["execution"]["count"] == 1
     assert [item["trace_id"] for item in payload["execution"]["runs"]] == ["run-a"]
     assert payload["memory"]["count"] == 1
-    assert [item["content"] for item in payload["memory"]["items"]] == ["memory-a"]
+    assert len(payload["memory"]["items"]) == 1
+    assert "content" not in payload["memory"]["items"][0]
     assert payload["organization_graph"]["organization"]["org_id"] == org_a.org_id
     assert payload["organization_graph"]["role_templates"] == []
     assert all(node["node_type"] != "role_template" for node in payload["organization_graph"]["nodes"])
     assert [room["room_id"] for room in payload["meeting_rooms"]["rooms"]] == [room_a.room_id]
+    assert payload["meeting_rooms"]["rooms"][0] == {
+        "room_id": room_a.room_id,
+        "name": "Room A",
+        "topic": "Room A",
+        "status": "active",
+        "member_count": 0,
+        "member_agent_ids": [],
+        "message_count": 0,
+        "created_at": room_a.created_at.isoformat(),
+        "updated_at": room_a.updated_at.isoformat(),
+    }
     assert payload["tools"]["items"][0]["name"] == "real-tool"
     assert payload["tools"]["skills"]["items"][0]["skill_id"] == "skill-a"
     assert before_counts == {
@@ -206,6 +218,76 @@ def test_workbench_reads_real_tenant_scoped_stores_without_dispatch(monkeypatch)
     assert "memory-b" not in response.text
     assert "Org B" not in response.text
     assert "Room B" not in response.text
+
+
+def test_workbench_bounds_and_redacts_runtime_summaries(monkeypatch) -> None:
+    settings = _production_settings()
+    monkeypatch.setattr(workbench, "get_settings", lambda: settings)
+    monkeypatch.setattr("backend.app.dependencies.get_settings", lambda: settings)
+    api_key, _ = _install_auth(monkeypatch, tenant_id="tenant-a", user_id="user-a")
+    runs = RunStore()
+    memory = MemorySystem()
+    for index in range(55):
+        _save_run(
+            runs,
+            tenant_id="tenant-a",
+            user_id="user-a",
+            trace_id=f"run-{index:02d}",
+        )
+        memory.add(
+            f"private-memory-content-{index:02d}",
+            summary=f"private-memory-summary-{index:02d}",
+            tenant_id="tenant-a",
+        )
+    rooms = CollaborationStore()
+    room = rooms.create_room(
+        topic="Bounded Room",
+        tenant_id="tenant-a",
+        created_by="user-a",
+        members=["agent-a"],
+    )
+    rooms.post_message(
+        room.room_id,
+        sender_id="user-a",
+        sender_type="user",
+        content="private-room-message",
+    )
+    monkeypatch.setattr(workbench, "organization_store", OrganizationStore())
+    monkeypatch.setattr(workbench, "collaboration_store", rooms)
+
+    response = TestClient(
+        _build_app(
+            run_store=runs,
+            memory=memory,
+            tools=ToolRegistry(ToolPolicyEngine()),
+        )
+    ).get("/api/v1/workbench", headers={"x-api-key": api_key})
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["execution"]["count"] == 55
+    assert len(payload["execution"]["runs"]) == 50
+    assert payload["memory"]["count"] == 55
+    assert len(payload["memory"]["items"]) == 50
+    assert all(
+        forbidden not in run
+        for run in payload["execution"]["runs"]
+        for forbidden in ("answer", "tool_calls", "snapshot", "run_view", "execution_summary")
+    )
+    assert all(
+        forbidden not in item
+        for item in payload["memory"]["items"]
+        for forbidden in ("content", "metadata", "embedding", "revisions")
+    )
+    room_summary = payload["meeting_rooms"]["rooms"][0]
+    assert room_summary["member_count"] == 1
+    assert room_summary["member_agent_ids"] == ["agent-a"]
+    assert room_summary["message_count"] == 1
+    assert "messages" not in room_summary
+    assert "private-memory-content" not in response.text
+    assert "private-memory-summary" not in response.text
+    assert "answer-run" not in response.text
+    assert "private-room-message" not in response.text
 
 
 def test_workbench_empty_stores_report_truthful_availability(monkeypatch) -> None:

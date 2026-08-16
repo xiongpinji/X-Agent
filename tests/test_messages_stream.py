@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+
 from fastapi.testclient import TestClient
 
 from backend.app.api.auth import _issue_token, _store_token_user
@@ -401,3 +403,80 @@ def test_messages_stream_prefers_last_event_id_header(monkeypatch) -> None:
         assert "evt-header-2" in response.text
     finally:
         _clear_event_bus()
+
+
+def test_message_bus_bounds_slow_subscriber_and_keeps_latest_event() -> None:
+    _clear_event_bus()
+    channel_key = build_channel_key(tenant_id="tenant-1", trace_id="bounded-queue")
+    queue = message_event_bus.subscribe(channel_key)
+
+    try:
+        async def publish_all() -> None:
+            for index in range(257):
+                await message_event_bus.publish(
+                    channel_key,
+                    UnifiedMessageEvent(
+                        event_id=f"queue-{index}",
+                        event_type="message.created",
+                        tenant_id="tenant-1",
+                    ),
+                )
+
+        asyncio.run(asyncio.wait_for(publish_all(), timeout=1))
+
+        assert queue.maxsize == 256
+        assert queue.qsize() == 256
+        assert queue.get_nowait().event_id == "queue-1"
+        latest = None
+        while not queue.empty():
+            latest = queue.get_nowait()
+        assert latest is not None
+        assert latest.event_id == "queue-256"
+    finally:
+        message_event_bus.unsubscribe(channel_key, queue)
+        _clear_event_bus()
+
+
+def test_message_bus_prunes_evicted_history_ids(monkeypatch) -> None:
+    monkeypatch.setattr("backend.app.api.messages.HISTORY_LIMIT", 2)
+    _clear_event_bus()
+    channel_key = build_channel_key(tenant_id="tenant-1", trace_id="bounded-history")
+
+    try:
+        for event_id in ("reused", "middle", "latest"):
+            message_event_bus.record(
+                channel_key,
+                UnifiedMessageEvent(
+                    event_id=event_id,
+                    event_type="message.created",
+                    tenant_id="tenant-1",
+                ),
+            )
+        message_event_bus.record(
+            channel_key,
+            UnifiedMessageEvent(
+                event_id="reused",
+                event_type="message.created",
+                tenant_id="tenant-1",
+                payload={"generation": 2},
+            ),
+        )
+
+        assert [event.event_id for event in message_event_bus.get_history(channel_key)] == [
+            "latest",
+            "reused",
+        ]
+        assert message_event_bus.get_history(channel_key)[-1].payload == {"generation": 2}
+    finally:
+        _clear_event_bus()
+
+
+def test_replay_event_id_dedupe_has_a_fixed_capacity() -> None:
+    from backend.app.api.messages import _BoundedEventIds
+
+    event_ids = _BoundedEventIds(maxlen=2, values=["one", "two"])
+
+    assert event_ids.remember("two") is False
+    assert event_ids.remember("three") is True
+    assert event_ids.remember("one") is True
+    assert len(event_ids) == 2
