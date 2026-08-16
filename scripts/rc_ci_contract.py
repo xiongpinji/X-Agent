@@ -80,8 +80,8 @@ REQUIRED_CONTAINS: tuple[Requirement, ...] = (
     ),
     Requirement(
         id="backend_install",
-        description="Backend editable dev/CLI install and Python vulnerability-audit tool check are present.",
-        tokens=('python -m pip install -e ".[dev,cli]"', "python -m pip show pip-audit"),
+        description="Backend editable RC dependency install and Python vulnerability-audit tool check are present.",
+        tokens=('python -m pip install -e ".[dev,test,cli,mcp,monitoring]"', "python -m pip show pip-audit"),
     ),
     Requirement(
         id="frontend_install",

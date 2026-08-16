@@ -8,18 +8,15 @@ X-Agent 端到端测试框架 - 同步测试模块
 - 三端冲突处理
 """
 
-import asyncio
 import json
 import time
-from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
+from datetime import datetime
 from enum import Enum
+from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
-from httpx import AsyncClient
-
 
 # ============================================================================
 # 数据模型
@@ -48,7 +45,7 @@ class SyncRecord:
     entity_type: str
     entity_id: str
     operation: str  # create, update, delete
-    data: Dict[str, Any]
+    data: dict[str, Any]
     timestamp: datetime
     source: str  # local, cloud, mobile
     version: int
@@ -64,13 +61,13 @@ class SyncConflict:
     local_version: int
     cloud_version: int
     mobile_version: int
-    local_data: Dict[str, Any]
-    cloud_data: Dict[str, Any]
-    mobile_data: Dict[str, Any]
+    local_data: dict[str, Any]
+    cloud_data: dict[str, Any]
+    mobile_data: dict[str, Any]
     detected_at: datetime
     resolution_strategy: ConflictResolutionStrategy
-    resolved_data: Optional[Dict[str, Any]] = None
-    resolved_at: Optional[datetime] = None
+    resolved_data: dict[str, Any] | None = None
+    resolved_at: datetime | None = None
 
 
 @dataclass
@@ -99,11 +96,11 @@ class LocalSyncClient:
     def __init__(self, base_url: str = "http://localhost:8000"):
         self.base_url = base_url
         self.client = TestClient(app=None)
-        self.local_store: Dict[str, Any] = {}
-        self.sync_queue: List[SyncRecord] = []
+        self.local_store: dict[str, Any] = {}
+        self.sync_queue: list[SyncRecord] = []
         self.offline_mode = False
 
-    async def create_record(self, entity_type: str, entity_id: str, data: Dict[str, Any]) -> SyncRecord:
+    async def create_record(self, entity_type: str, entity_id: str, data: dict[str, Any]) -> SyncRecord:
         """创建记录"""
         record = SyncRecord(
             id=f"{entity_type}_{entity_id}_{int(time.time() * 1000)}",
@@ -125,7 +122,7 @@ class LocalSyncClient:
         self.local_store[entity_id] = record
         return record
 
-    async def update_record(self, entity_id: str, data: Dict[str, Any]) -> SyncRecord:
+    async def update_record(self, entity_id: str, data: dict[str, Any]) -> SyncRecord:
         """更新记录"""
         if entity_id not in self.local_store:
             raise ValueError(f"Record {entity_id} not found")
@@ -181,7 +178,7 @@ class LocalSyncClient:
         """同步到云端"""
         try:
             # 模拟 HTTP 请求
-            response = await self._post(f"/api/v1/sync", asdict(record))
+            response = await self._post("/api/v1/sync", asdict(record))
             return response.get("success", False)
         except Exception as e:
             print(f"Sync failed: {e}")
@@ -205,14 +202,14 @@ class LocalSyncClient:
             error_rate=0
         )
 
-        start_time = time.time()
+        start_time = time.perf_counter()
         latencies = []
 
         for record in self.sync_queue:
-            record_start = time.time()
+            record_start = time.perf_counter()
             try:
                 success = await self.sync_to_cloud(record)
-                latency = (time.time() - record_start) * 1000
+                latency = (time.perf_counter() - record_start) * 1000
                 latencies.append(latency)
 
                 if success:
@@ -225,7 +222,7 @@ class LocalSyncClient:
 
         self.sync_queue.clear()
 
-        metrics.sync_duration = time.time() - start_time
+        metrics.sync_duration = max(time.perf_counter() - start_time, 1e-9)
         if latencies:
             metrics.average_latency = sum(latencies) / len(latencies)
             metrics.max_latency = max(latencies)
@@ -246,13 +243,13 @@ class LocalSyncClient:
         self.offline_mode = False
 
     @staticmethod
-    def _calculate_checksum(data: Dict[str, Any]) -> str:
+    def _calculate_checksum(data: dict[str, Any]) -> str:
         """计算校验和"""
         import hashlib
         data_str = json.dumps(data, sort_keys=True)
         return hashlib.md5(data_str.encode()).hexdigest()
 
-    async def _post(self, endpoint: str, data: Dict[str, Any]) -> Dict[str, Any]:
+    async def _post(self, endpoint: str, data: dict[str, Any]) -> dict[str, Any]:
         """发送 POST 请求"""
         # 模拟实现
         return {"success": True}
@@ -263,9 +260,9 @@ class CloudSyncClient:
 
     def __init__(self, base_url: str = "http://localhost:8000"):
         self.base_url = base_url
-        self.cloud_store: Dict[str, Any] = {}
-        self.sync_log: List[SyncRecord] = []
-        self.conflicts: List[SyncConflict] = []
+        self.cloud_store: dict[str, Any] = {}
+        self.sync_log: list[SyncRecord] = []
+        self.conflicts: list[SyncConflict] = []
 
     async def receive_sync(self, record: SyncRecord) -> bool:
         """接收同步"""
@@ -291,7 +288,7 @@ class CloudSyncClient:
             print(f"Failed to receive sync: {e}")
             return False
 
-    async def _check_conflict(self, record: SyncRecord) -> Optional[SyncConflict]:
+    async def _check_conflict(self, record: SyncRecord) -> SyncConflict | None:
         """检查冲突"""
         if record.entity_id in self.cloud_store:
             existing = self.cloud_store[record.entity_id]
@@ -312,7 +309,7 @@ class CloudSyncClient:
                 )
         return None
 
-    async def _resolve_conflict(self, conflict: SyncConflict) -> Dict[str, Any]:
+    async def _resolve_conflict(self, conflict: SyncConflict) -> dict[str, Any]:
         """解决冲突"""
         if conflict.resolution_strategy == ConflictResolutionStrategy.LAST_WRITE_WINS:
             # 最后写入获胜
@@ -335,11 +332,11 @@ class MobileSyncClient:
 
     def __init__(self, base_url: str = "http://localhost:8000"):
         self.base_url = base_url
-        self.mobile_store: Dict[str, Any] = {}
-        self.sync_queue: List[SyncRecord] = []
+        self.mobile_store: dict[str, Any] = {}
+        self.sync_queue: list[SyncRecord] = []
         self.offline_mode = False
 
-    async def pull_from_cloud(self) -> List[SyncRecord]:
+    async def pull_from_cloud(self) -> list[SyncRecord]:
         """从云端拉取数据"""
         try:
             # 模拟 HTTP 请求
@@ -362,12 +359,12 @@ class MobileSyncClient:
                 self.sync_queue.append(record)
             return False
 
-    async def _get(self, endpoint: str) -> List[Dict[str, Any]]:
+    async def _get(self, endpoint: str) -> list[dict[str, Any]]:
         """发送 GET 请求"""
         # 模拟实现
         return []
 
-    async def _post(self, endpoint: str, data: Dict[str, Any]) -> Dict[str, Any]:
+    async def _post(self, endpoint: str, data: dict[str, Any]) -> dict[str, Any]:
         """发送 POST 请求"""
         # 模拟实现
         return {"success": True}
@@ -508,7 +505,6 @@ class TestSyncConflicts:
         """TC-SYNC-023: 三端同时修改同一字段"""
         local_client = LocalSyncClient()
         cloud_client = CloudSyncClient()
-        mobile_client = MobileSyncClient()
 
         # 创建初始记录
         record = await local_client.create_record(
@@ -558,13 +554,12 @@ class TestOfflineSync:
     async def test_offline_create_and_sync(self):
         """TC-OFFLINE-001: 离线创建任务"""
         local_client = LocalSyncClient()
-        cloud_client = CloudSyncClient()
 
         # 启用离线模式
         local_client.enable_offline_mode()
 
         # 离线创建记录
-        record = await local_client.create_record(
+        await local_client.create_record(
             entity_type="task",
             entity_id="task_001",
             data={"title": "Offline Task", "status": "pending"}
@@ -584,7 +579,6 @@ class TestOfflineSync:
     async def test_network_recovery_sync(self):
         """TC-OFFLINE-008: 网络恢复后同步"""
         local_client = LocalSyncClient()
-        cloud_client = CloudSyncClient()
 
         # 启用离线模式
         local_client.enable_offline_mode()
@@ -656,4 +650,3 @@ class TestSyncPerformance:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "--tb=short"])
-

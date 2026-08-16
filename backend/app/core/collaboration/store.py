@@ -14,7 +14,7 @@ from __future__ import annotations
 import json
 import os
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from threading import RLock
 from uuid import uuid4
@@ -137,6 +137,7 @@ class CollaborationStore:
     def __init__(self, storage_path: str | Path | None = None) -> None:
         self._rooms: dict[str, CollaborationRoom] = {}
         self._lock = RLock()
+        self._last_mutation_at = datetime.min.replace(tzinfo=UTC)
         self._storage_path = Path(storage_path) if storage_path else None
         if self._storage_path is not None:
             self._load_from_disk()
@@ -147,18 +148,18 @@ class CollaborationStore:
         return self._storage_path is not None
 
     def create_room(self, *, topic: str, tenant_id: str, created_by: str, members: list[str] | None = None, memory_scope: dict[str, object] | None = None) -> CollaborationRoom:
-        now = datetime.now(UTC)
-        room = CollaborationRoom(
-            room_id=str(uuid4()),
-            topic=topic,
-            tenant_id=tenant_id,
-            created_by=created_by,
-            created_at=now,
-            updated_at=now,
-            members=members or [],
-            memory_scope=memory_scope or {},
-        )
         with self._lock:
+            now = self._next_timestamp()
+            room = CollaborationRoom(
+                room_id=str(uuid4()),
+                topic=topic,
+                tenant_id=tenant_id,
+                created_by=created_by,
+                created_at=now,
+                updated_at=now,
+                members=members or [],
+                memory_scope=memory_scope or {},
+            )
             self._rooms[room.room_id] = room
             self._save_to_disk()
         return room
@@ -182,24 +183,24 @@ class CollaborationStore:
         content: str,
         metadata: dict[str, object] | None = None,
     ) -> CollaborationMessage:
-        now = datetime.now(UTC)
         metadata = dict(metadata or {})
         memory_refs = [str(ref) for ref in metadata.get("memory_refs", []) if str(ref)] if isinstance(metadata.get("memory_refs", []), list) else []
         agent_id = str(metadata.get("agent_id") or sender_id)
         department_id = str(metadata.get("department_id") or "")
-        message = CollaborationMessage(
-            message_id=str(uuid4()),
-            room_id=room_id,
-            sender_id=sender_id,
-            sender_type=sender_type,
-            content=content,
-            created_at=now,
-            metadata=metadata,
-        )
         with self._lock:
             room = self._rooms.get(room_id)
             if room is None:
                 raise ValueError(f"Room not found: {room_id}")
+            now = self._next_timestamp()
+            message = CollaborationMessage(
+                message_id=str(uuid4()),
+                room_id=room_id,
+                sender_id=sender_id,
+                sender_type=sender_type,
+                content=content,
+                created_at=now,
+                metadata=metadata,
+            )
             room.messages.append(message)
             room.updated_at = now
             if sender_type == "agent":
@@ -226,7 +227,7 @@ class CollaborationStore:
                 raise ValueError(f"Room not found: {room_id}")
             if member_id not in room.members:
                 room.members.append(member_id)
-                room.updated_at = datetime.now(UTC)
+                room.updated_at = self._next_timestamp()
                 self._save_to_disk()
             return room
 
@@ -237,7 +238,7 @@ class CollaborationStore:
                 raise ValueError(f"Room not found: {room_id}")
             if member_id in room.members:
                 room.members.remove(member_id)
-                room.updated_at = datetime.now(UTC)
+                room.updated_at = self._next_timestamp()
                 self._save_to_disk()
             return room
 
@@ -248,7 +249,7 @@ class CollaborationStore:
                 raise ValueError(f"Room not found: {room_id}")
             if ref not in room.memory_refs:
                 room.memory_refs.append(ref)
-                room.updated_at = datetime.now(UTC)
+                room.updated_at = self._next_timestamp()
                 self._save_to_disk()
             return room
 
@@ -260,7 +261,7 @@ class CollaborationStore:
             agent_refs = room.agent_memory_refs.setdefault(agent_id, [])
             if ref not in agent_refs:
                 agent_refs.append(ref)
-                room.updated_at = datetime.now(UTC)
+                room.updated_at = self._next_timestamp()
                 self._save_to_disk()
             return room
 
@@ -272,7 +273,7 @@ class CollaborationStore:
             dept_refs = room.department_memory_refs.setdefault(department_id, [])
             if ref not in dept_refs:
                 dept_refs.append(ref)
-                room.updated_at = datetime.now(UTC)
+                room.updated_at = self._next_timestamp()
                 self._save_to_disk()
             return room
 
@@ -282,13 +283,20 @@ class CollaborationStore:
             if room is None:
                 raise ValueError(f"Room not found: {room_id}")
             room.status = "closed"
-            room.updated_at = datetime.now(UTC)
+            room.updated_at = self._next_timestamp()
             self._save_to_disk()
             return room
 
     # ------------------------------------------------------------------
     # Persistence helpers
     # ------------------------------------------------------------------
+
+    def _next_timestamp(self) -> datetime:
+        now = datetime.now(UTC)
+        if now <= self._last_mutation_at:
+            now = self._last_mutation_at + timedelta(microseconds=1)
+        self._last_mutation_at = now
+        return now
 
     def _load_from_disk(self) -> None:
         if self._storage_path is None or not self._storage_path.exists():
@@ -299,6 +307,7 @@ class CollaborationStore:
         for item in rooms:
             room = CollaborationRoom.from_dict(item)
             self._rooms[room.room_id] = room
+            self._last_mutation_at = max(self._last_mutation_at, room.updated_at)
 
     def _save_to_disk(self) -> None:
         """Atomically snapshot all rooms (caller must hold ``self._lock``)."""

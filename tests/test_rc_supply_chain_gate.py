@@ -9,9 +9,9 @@ from scripts.rc_supply_chain_gate import (
     SupplyChainCheck,
     check_ci_dependency_contract,
     check_frontend_lockfile,
+    check_npm_audit,
     check_python_lockfile,
     check_python_manifest,
-    check_npm_audit,
     check_release_dependency_evidence,
     run_supply_chain_gate,
 )
@@ -325,7 +325,7 @@ cache-dependency-path: frontend/package-lock.json
 working-directory: frontend
 npm ci
 npm audit --audit-level=moderate
-python -m pip install -e ".[dev,cli]"
+python -m pip install -e ".[dev,test,cli,mcp,monitoring]"
 python -m pip show pip-audit
 npm install
 """,
@@ -347,7 +347,7 @@ cache-dependency-path: frontend/package-lock.json
 working-directory: frontend
 npm ci
 npm audit --audit-level=moderate
-# python -m pip install -e ".[dev,cli]"
+# python -m pip install -e ".[dev,test,cli,mcp,monitoring]"
 python -m pip show pip-audit
 """,
         encoding="utf-8",
@@ -356,7 +356,7 @@ python -m pip show pip-audit
     check = check_ci_dependency_contract(tmp_path)
 
     assert check.status == "failed"
-    assert 'python -m pip install -e ".[dev,cli]"' in check.details["missing"]
+    assert 'python -m pip install -e ".[dev,test,cli,mcp,monitoring]"' in check.details["missing"]
 
 
 def test_ci_dependency_contract_ignores_forbidden_tokens_in_comments(tmp_path: Path) -> None:
@@ -368,7 +368,7 @@ cache-dependency-path: frontend/package-lock.json
 working-directory: frontend
 npm ci
 npm audit --audit-level=moderate
-python -m pip install -e ".[dev,cli]"
+python -m pip install -e ".[dev,test,cli,mcp,monitoring]"
 python -m pip show pip-audit
 # npm install
 """,
@@ -390,7 +390,7 @@ cache-dependency-path: frontend/package-lock.json
 working-directory: frontend
 npm ci
 npm audit --audit-level=moderate
-python -m pip install -e ".[dev,cli]"
+python -m pip install -e ".[dev,test,cli,mcp,monitoring]"
 """,
         encoding="utf-8",
     )

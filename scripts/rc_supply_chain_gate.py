@@ -192,6 +192,7 @@ def check_python_lockfile(root: Path = ROOT, *, timeout_seconds: float = 120.0) 
         return SupplyChainCheck("python_lockfile", "failed", error=str(exc))
 
     required = {
+        "anthropic",
         "asyncpg",
         "bcrypt",
         "celery",
@@ -199,7 +200,9 @@ def check_python_lockfile(root: Path = ROOT, *, timeout_seconds: float = 120.0) 
         "fastapi",
         "httpx",
         "langfuse",
+        "mcp",
         "openai",
+        "orjson",
         "playwright",
         "psycopg",
         "psycopg-binary",
@@ -399,7 +402,7 @@ def check_ci_dependency_contract(root: Path = ROOT) -> SupplyChainCheck:
         "working-directory: frontend",
         "npm ci",
         "npm audit --audit-level=moderate",
-        'python -m pip install -e ".[dev,cli]"',
+        'python -m pip install -e ".[dev,test,cli,mcp,monitoring]"',
         "python -m pip show pip-audit",
     ]
     missing = [token for token in required if token not in text]
