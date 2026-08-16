@@ -74,7 +74,6 @@ export default defineConfig({
       input: {
         main: path.resolve(__dirname, 'index.html'),
         chat: path.resolve(__dirname, 'chat.html'),
-        console: path.resolve(__dirname, 'console.html'),
         startup: path.resolve(__dirname, 'startup.html'),
       },
       output: {
