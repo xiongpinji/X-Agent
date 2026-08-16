@@ -405,10 +405,12 @@ def test_messages_stream_prefers_last_event_id_header(monkeypatch) -> None:
         _clear_event_bus()
 
 
-def test_message_bus_bounds_slow_subscriber_and_keeps_latest_event() -> None:
+def test_message_bus_overflow_emits_private_gap_and_keeps_authoritative_history() -> None:
     _clear_event_bus()
     channel_key = build_channel_key(tenant_id="tenant-1", trace_id="bounded-queue")
+    foreign_channel = build_channel_key(tenant_id="tenant-2", trace_id="bounded-queue")
     queue = message_event_bus.subscribe(channel_key)
+    foreign_queue = message_event_bus.subscribe(foreign_channel)
 
     try:
         async def publish_all() -> None:
@@ -425,15 +427,29 @@ def test_message_bus_bounds_slow_subscriber_and_keeps_latest_event() -> None:
         asyncio.run(asyncio.wait_for(publish_all(), timeout=1))
 
         assert queue.maxsize == 256
-        assert queue.qsize() == 256
-        assert queue.get_nowait().event_id == "queue-1"
-        latest = None
-        while not queue.empty():
-            latest = queue.get_nowait()
-        assert latest is not None
-        assert latest.event_id == "queue-256"
+        assert queue.qsize() == 1
+        gap = queue.get_nowait()
+        assert gap.event_type == "stream.gap"
+        assert gap.tenant_id == "tenant-1"
+        assert gap.payload == {"reason": "subscriber_overflow"}
+        history = message_event_bus.get_history(channel_key)
+        assert history[-1].event_id == "queue-256"
+        assert all(event.event_type != "stream.gap" for event in history)
+        assert foreign_queue.empty()
+        asyncio.run(
+            message_event_bus.publish(
+                foreign_channel,
+                UnifiedMessageEvent(
+                    event_id="foreign-event",
+                    event_type="message.created",
+                    tenant_id="tenant-2",
+                ),
+            )
+        )
+        assert foreign_queue.get_nowait().event_id == "foreign-event"
     finally:
         message_event_bus.unsubscribe(channel_key, queue)
+        message_event_bus.unsubscribe(foreign_channel, foreign_queue)
         _clear_event_bus()
 
 
@@ -468,6 +484,71 @@ def test_message_bus_prunes_evicted_history_ids(monkeypatch) -> None:
         ]
         assert message_event_bus.get_history(channel_key)[-1].payload == {"generation": 2}
     finally:
+        _clear_event_bus()
+
+
+def test_message_bus_keeps_event_id_until_every_channel_reference_is_removed() -> None:
+    _clear_event_bus()
+    first_channel = build_channel_key(tenant_id="tenant-1", room_id="room-1")
+    second_channel = build_channel_key(tenant_id="tenant-1", room_id="room-2")
+    reuse_channel = build_channel_key(tenant_id="tenant-1", room_id="room-reuse")
+    shared = UnifiedMessageEvent(
+        event_id="shared-event",
+        event_type="message.created",
+        tenant_id="tenant-1",
+        payload={"generation": 1},
+    )
+
+    try:
+        message_event_bus.record(first_channel, shared)
+        message_event_bus.record(second_channel, shared)
+        assert [event.event_id for event in message_event_bus.get_history(first_channel)] == [
+            "shared-event"
+        ]
+        assert [event.event_id for event in message_event_bus.get_history(second_channel)] == [
+            "shared-event"
+        ]
+
+        message_event_bus.clear_channel(first_channel)
+        message_event_bus.record(
+            reuse_channel,
+            UnifiedMessageEvent(
+                event_id="shared-event",
+                event_type="message.created",
+                tenant_id="tenant-1",
+                payload={"generation": 2},
+            ),
+        )
+        assert message_event_bus.get_history(reuse_channel) == []
+
+        message_event_bus.clear_channel(second_channel)
+        message_event_bus.record(
+            reuse_channel,
+            UnifiedMessageEvent(
+                event_id="shared-event",
+                event_type="message.created",
+                tenant_id="tenant-1",
+                payload={"generation": 2},
+            ),
+        )
+        assert message_event_bus.get_history(reuse_channel)[0].payload == {"generation": 2}
+    finally:
+        _clear_event_bus()
+
+
+def test_message_bus_unsubscribe_removes_only_the_empty_channel_entry() -> None:
+    _clear_event_bus()
+    first_channel = build_channel_key(tenant_id="tenant-1", room_id="room-1")
+    second_channel = build_channel_key(tenant_id="tenant-1", room_id="room-2")
+    first_queue = message_event_bus.subscribe(first_channel)
+    second_queue = message_event_bus.subscribe(second_channel)
+
+    try:
+        message_event_bus.unsubscribe(first_channel, first_queue)
+        assert message_event_bus.get_channel_snapshot(first_channel)["subscriber_count"] == 0
+        assert message_event_bus.get_channel_snapshot(second_channel)["subscriber_count"] == 1
+    finally:
+        message_event_bus.unsubscribe(second_channel, second_queue)
         _clear_event_bus()
 
 

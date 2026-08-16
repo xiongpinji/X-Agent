@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from collections import defaultdict, deque
+from collections import OrderedDict, defaultdict, deque
 from datetime import UTC, datetime
 from typing import Annotated
 from uuid import uuid4
@@ -19,6 +19,9 @@ PrincipalDependency = Annotated[Principal, Depends(get_current_principal)]
 HISTORY_LIMIT = 1000
 SUBSCRIBER_QUEUE_LIMIT = 256
 REPLAY_DEDUPE_LIMIT = HISTORY_LIMIT
+MAX_CHANNELS_PER_TENANT = 256
+MAX_CHANNEL_INDEX_RESULTS = 100
+_UNSCOPED_TENANT = "*"
 
 # Final event reference for `messages/stream`.
 #
@@ -104,19 +107,25 @@ class _MessageEventBus:
         self._subscribers: dict[str, list[asyncio.Queue[UnifiedMessageEvent]]] = defaultdict(list)
         self._history: dict[str, deque[UnifiedMessageEvent]] = defaultdict(lambda: deque(maxlen=HISTORY_LIMIT))
         self._history_by_id: dict[str, UnifiedMessageEvent] = {}
+        self._history_id_refcounts: dict[str, int] = {}
+        self._channel_event_ids: dict[str, set[str]] = defaultdict(set)
+        self._tenant_channels: dict[str, OrderedDict[str, None]] = defaultdict(OrderedDict)
+        self._channel_tenant: dict[str, str] = {}
 
     def clear(self) -> None:
         self._subscribers.clear()
         self._history.clear()
         self._history_by_id.clear()
+        self._history_id_refcounts.clear()
+        self._channel_event_ids.clear()
+        self._tenant_channels.clear()
+        self._channel_tenant.clear()
 
     def clear_channel(self, channel_key: str) -> bool:
         existed = channel_key in self._history or channel_key in self._subscribers
         self._subscribers.pop(channel_key, None)
-        history = self._history.pop(channel_key, None)
-        if history is not None:
-            for event in history:
-                self._prune_history_id(event.event_id)
+        self._drop_channel_history(channel_key)
+        self._remove_channel_registration(channel_key)
         return existed
 
     def clear_trace(self, trace_id: str, *, tenant_id: str | None = None) -> int:
@@ -135,11 +144,16 @@ class _MessageEventBus:
                 remaining.append(event)
             if remaining:
                 self._history[channel_key] = remaining
+                self._channel_event_ids[channel_key] = {
+                    event.event_id for event in remaining
+                }
             else:
                 self._history.pop(channel_key, None)
+                self._channel_event_ids.pop(channel_key, None)
                 self._subscribers.pop(channel_key, None)
+                self._remove_channel_registration(channel_key)
             for event_id in removed_ids:
-                self._prune_history_id(event_id)
+                self._release_history_id(event_id)
         return removed_count
 
     def clear_domain(self, domain: str, *, tenant_id: str | None = None) -> int:
@@ -158,11 +172,16 @@ class _MessageEventBus:
                 remaining.append(event)
             if remaining:
                 self._history[channel_key] = remaining
+                self._channel_event_ids[channel_key] = {
+                    event.event_id for event in remaining
+                }
             else:
                 self._history.pop(channel_key, None)
+                self._channel_event_ids.pop(channel_key, None)
                 self._subscribers.pop(channel_key, None)
+                self._remove_channel_registration(channel_key)
             for event_id in removed_ids:
-                self._prune_history_id(event_id)
+                self._release_history_id(event_id)
         return removed_count
 
     def get_domain_counts(self, channel_key: str) -> dict[str, int]:
@@ -198,16 +217,21 @@ class _MessageEventBus:
             "last_event_type": history[-1].event_type if history else None,
         }
 
-    def get_channel_index(self, *, tenant_id: str | None = None) -> list[dict[str, object]]:
-        channel_keys = [
-            channel_key
-            for channel_key, events in self._history.items()
-            if tenant_id is None or any(event.tenant_id == tenant_id for event in events)
-        ]
-        return [
-            self.get_channel_snapshot(channel_key, tenant_id=tenant_id)
-            for channel_key in sorted(channel_keys)
-        ]
+    def get_channel_index(self, *, tenant_id: str | None = None) -> dict[str, object]:
+        if tenant_id is None:
+            channel_keys = sorted(self._history)
+        else:
+            channel_keys = list(self._tenant_channels.get(tenant_id, {}))
+        total = len(channel_keys)
+        selected = list(reversed(channel_keys[-MAX_CHANNEL_INDEX_RESULTS:]))
+        return {
+            "items": [
+                self.get_channel_snapshot(channel_key, tenant_id=tenant_id)
+                for channel_key in selected
+            ],
+            "total": total,
+            "truncated": total > MAX_CHANNEL_INDEX_RESULTS,
+        }
 
     def get_history_by_trace(
         self,
@@ -251,35 +275,101 @@ class _MessageEventBus:
             self._subscribers.pop(channel_key, None)
 
     def record(self, channel_key: str, event: UnifiedMessageEvent) -> None:
+        channel_event_ids = self._channel_event_ids.get(channel_key)
+        if channel_event_ids is not None and event.event_id in channel_event_ids:
+            return
+        existing = self._history_by_id.get(event.event_id)
+        if existing is not None and existing != event:
+            return
         history = self._history[channel_key]
-        if history and history[-1].event_id == event.event_id:
-            return
-        if event.event_id in self._history_by_id:
-            return
+        if channel_event_ids is None:
+            channel_event_ids = self._channel_event_ids[channel_key]
         evicted_id = (
             history[0].event_id
             if history.maxlen is not None and len(history) == history.maxlen
             else None
         )
         history.append(event)
-        self._history_by_id[event.event_id] = event
+        channel_event_ids.add(event.event_id)
+        if existing is None:
+            self._history_by_id[event.event_id] = event
+        self._history_id_refcounts[event.event_id] = (
+            self._history_id_refcounts.get(event.event_id, 0) + 1
+        )
         if evicted_id is not None:
-            self._prune_history_id(evicted_id)
+            channel_event_ids.discard(evicted_id)
+            self._release_history_id(evicted_id)
+        self._touch_channel(channel_key, event.tenant_id)
 
-    def _prune_history_id(self, event_id: str) -> None:
-        if any(
-            event.event_id == event_id
-            for history in self._history.values()
-            for event in history
-        ):
+    def _touch_channel(self, channel_key: str, tenant_id: str | None) -> None:
+        tenant_key = tenant_id or _UNSCOPED_TENANT
+        previous_tenant = self._channel_tenant.get(channel_key)
+        if previous_tenant is not None and previous_tenant != tenant_key:
+            previous_channels = self._tenant_channels.get(previous_tenant)
+            if previous_channels is not None:
+                previous_channels.pop(channel_key, None)
+                if not previous_channels:
+                    self._tenant_channels.pop(previous_tenant, None)
+        channels = self._tenant_channels[tenant_key]
+        channels[channel_key] = None
+        channels.move_to_end(channel_key)
+        self._channel_tenant[channel_key] = tenant_key
+        while len(channels) > MAX_CHANNELS_PER_TENANT:
+            evicted_channel, _ = channels.popitem(last=False)
+            self._channel_tenant.pop(evicted_channel, None)
+            self._drop_channel_history(evicted_channel)
+        if not channels:
+            self._tenant_channels.pop(tenant_key, None)
+
+    def _remove_channel_registration(self, channel_key: str) -> None:
+        tenant_key = self._channel_tenant.pop(channel_key, None)
+        if tenant_key is None:
             return
+        channels = self._tenant_channels.get(tenant_key)
+        if channels is None:
+            return
+        channels.pop(channel_key, None)
+        if not channels:
+            self._tenant_channels.pop(tenant_key, None)
+
+    def _drop_channel_history(self, channel_key: str) -> None:
+        history = self._history.pop(channel_key, None)
+        self._channel_event_ids.pop(channel_key, None)
+        if history is None:
+            return
+        for event in history:
+            self._release_history_id(event.event_id)
+
+    def _release_history_id(self, event_id: str) -> None:
+        remaining = self._history_id_refcounts.get(event_id, 0) - 1
+        if remaining > 0:
+            self._history_id_refcounts[event_id] = remaining
+            return
+        self._history_id_refcounts.pop(event_id, None)
         self._history_by_id.pop(event_id, None)
 
     async def publish(self, channel_key: str, event: UnifiedMessageEvent) -> None:
         self.record(channel_key, event)
         for queue in self._subscribers.get(channel_key, []):
             if queue.full():
-                queue.get_nowait()
+                while not queue.empty():
+                    queue.get_nowait()
+                queue.put_nowait(
+                    UnifiedMessageEvent(
+                        event_id="",
+                        event_type="stream.gap",
+                        tenant_id=event.tenant_id,
+                        org_id=event.org_id,
+                        room_id=event.room_id,
+                        conversation_id=event.conversation_id,
+                        agent_id=event.agent_id,
+                        user_id=event.user_id,
+                        channel_type=event.channel_type,
+                        trace_id=event.trace_id,
+                        payload={"reason": "subscriber_overflow"},
+                    )
+                )
+                continue
             queue.put_nowait(event)
 
     def get_history(
@@ -384,11 +474,17 @@ def _event_matches_filter(event: UnifiedMessageEvent, stream_filter: MessageStre
     return not (stream_filter.since and event.timestamp < stream_filter.since)
 
 
-def _serialize_sse(event: UnifiedMessageEvent, event_name: str | None = None) -> str:
+def _serialize_sse(
+    event: UnifiedMessageEvent,
+    event_name: str | None = None,
+    *,
+    include_id: bool = True,
+) -> str:
     lines = []
     if event_name:
         lines.append(f"event: {event_name}")
-    lines.append(f"id: {event.event_id}")
+    if include_id:
+        lines.append(f"id: {event.event_id}")
     lines.append(f"data: {event.model_dump_json()}")
     return "\n".join(lines) + "\n\n"
 
@@ -489,6 +585,9 @@ async def stream_messages(
             while True:
                 try:
                     event = await asyncio.wait_for(queue.get(), timeout=15)
+                    if event.event_type == "stream.gap":
+                        yield _serialize_sse(event, "stream.gap", include_id=False)
+                        return
                     if not replay_ids.remember(event.event_id):
                         continue
                     if not _event_matches_filter(event, stream_filter):
@@ -581,7 +680,7 @@ async def get_channel_snapshot(
 
 
 @router.get("/debug/channel-index")
-async def get_channel_index(principal: PrincipalDependency) -> list[dict[str, object]]:
+async def get_channel_index(principal: PrincipalDependency) -> dict[str, object]:
     enforce_scope(principal, "agent:run")
     return message_event_bus.get_channel_index(tenant_id=principal.tenant_id)
 
@@ -638,13 +737,13 @@ async def clear_channel(
 
 @router.delete("/debug/trace")
 async def clear_trace(principal: PrincipalDependency, trace_id: str = Query(...)) -> dict[str, object]:
-    enforce_scope(principal, "agent:run")
+    enforce_scope(principal, "security:manage")
     removed_count = message_event_bus.clear_trace(trace_id, tenant_id=principal.tenant_id)
     return {"trace_id": trace_id, "removed_count": removed_count}
 
 
 @router.delete("/debug/domain")
 async def clear_domain(principal: PrincipalDependency, domain: str = Query(...)) -> dict[str, object]:
-    enforce_scope(principal, "agent:run")
+    enforce_scope(principal, "security:manage")
     removed_count = message_event_bus.clear_domain(domain, tenant_id=principal.tenant_id)
     return {"domain": domain, "removed_count": removed_count}

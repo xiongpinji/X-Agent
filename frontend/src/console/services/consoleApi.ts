@@ -101,6 +101,7 @@ function takeNextBlock(buffer: string): { block: string; rest: string } | null {
 }
 
 const TERMINAL_EVENT_NAMES = new Set(["stream.closed", "stream.completed"]);
+const RECOVERY_EVENT_NAMES = new Set(["stream.gap"]);
 
 export async function readConsoleEventStream(options: {
   url?: string;
@@ -155,6 +156,10 @@ export async function readConsoleEventStream(options: {
           if (TERMINAL_EVENT_NAMES.has(event.name)) {
             await reader.cancel();
             return { terminal: true, lastEventId: latestEventId };
+          }
+          if (RECOVERY_EVENT_NAMES.has(event.name)) {
+            await reader.cancel();
+            return { terminal: false, lastEventId: latestEventId };
           }
         }
         next = takeNextBlock(buffer);

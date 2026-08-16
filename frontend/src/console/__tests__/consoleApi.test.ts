@@ -49,6 +49,28 @@ function readerBackedResponse(chunks: string[]) {
   };
 }
 
+function hangingReaderResponse(chunks: string[]) {
+  const encoder = new TextEncoder();
+  let index = 0;
+  const reader = {
+    read: vi.fn().mockImplementation(() => (
+      index < chunks.length
+        ? Promise.resolve({ done: false, value: encoder.encode(chunks[index++]) })
+        : new Promise(() => undefined)
+    )),
+    cancel: vi.fn().mockResolvedValue(undefined),
+    releaseLock: vi.fn(),
+  };
+  return {
+    response: {
+      ok: true,
+      status: 200,
+      body: { getReader: () => reader },
+    } as unknown as Response,
+    reader,
+  };
+}
+
 const emptyBootstrap = {
   console: {
     mode: "unified_console",
@@ -290,5 +312,62 @@ describe("consoleApi authentication and SSE", () => {
     expect(screen.getByText("closed")).toBeTruthy();
     expect(screen.getByText("real collaboration message")).toBeTruthy();
     expect(screen.queryByText("malformed-secret")).toBeNull();
+  });
+
+  it("reconnects from the last processed event after a stream gap and recovers without duplicates", async () => {
+    localStorage.setItem("auth_token", "bearer-secret");
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const bootstrap = {
+      ...emptyBootstrap,
+      meeting_rooms: {
+        availability: "available",
+        rooms: [{
+          room_id: "room-gap",
+          name: "Gap Recovery",
+          topic: "Gap Recovery",
+          status: "active",
+          member_count: 1,
+          member_agent_ids: ["agent-a"],
+        }],
+      },
+    };
+    const firstStream = hangingReaderResponse([
+      'event: message.created\nid: evt-gap-1\ndata: {"event_id":"evt-gap-1","event_type":"message.created","room_id":"room-gap","payload":{"message":{"message_id":"message-gap-1","room_id":"room-gap","sender_id":"agent-a","content":"before gap","created_at":"2026-08-16T00:00:00Z"}}}\n\n'
+      + 'event: stream.gap\ndata: {"event_type":"stream.gap","payload":{"reason":"subscriber_overflow"}}\n\n',
+    ]);
+    let streamCalls = 0;
+    const fetcher = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.startsWith("/api/v1/workbench")) {
+        return new Response(JSON.stringify(bootstrap), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      if (url.startsWith("/api/v1/messages/stream")) {
+        streamCalls += 1;
+        if (streamCalls === 1) return firstStream.response;
+        return chunkedResponse([
+          'event: message.created\nid: evt-gap-2\ndata: {"event_id":"evt-gap-2","event_type":"message.created","room_id":"room-gap","payload":{"message":{"message_id":"message-gap-2","room_id":"room-gap","sender_id":"agent-b","content":"after gap","created_at":"2026-08-16T00:00:01Z"}}}\n\n',
+          'event: stream.closed\ndata: {"event_type":"stream.closed"}\n\n',
+        ]);
+      }
+      throw new Error(`Unexpected Console URL: ${url}`);
+    });
+
+    render(React.createElement(ConsoleApp));
+
+    await waitFor(() => expect(firstStream.reader.cancel).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByText("正在使用轮询兜底同步")).toBeTruthy());
+    expect(screen.queryByText("SSE 实时连接正常")).toBeNull();
+    await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(3), { timeout: 3000 });
+    const [, recoveryInit] = fetcher.mock.calls[2];
+    expect(recoveryInit?.headers).toEqual(
+      expect.objectContaining({ "Last-Event-ID": "evt-gap-1" }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "会议室" }));
+    await waitFor(() => expect(screen.getByText("after gap")).toBeTruthy());
+    expect(screen.getAllByText("before gap")).toHaveLength(1);
+    expect(screen.getAllByText("after gap")).toHaveLength(1);
   });
 });

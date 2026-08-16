@@ -34,8 +34,22 @@ class _OverridePrincipal:
         return _FakePrincipal()
 
 
+class _ManagePrincipal(_FakePrincipal):
+    role = "admin"
+    scopes = [*_FakePrincipal.scopes, "security:manage"]
+
+
+class _OverrideManagePrincipal:
+    def __call__(self):
+        return _ManagePrincipal()
+
+
 def _set_principal_override() -> None:
     app.dependency_overrides[get_current_principal] = _OverridePrincipal()
+
+
+def _set_manage_principal_override() -> None:
+    app.dependency_overrides[get_current_principal] = _OverrideManagePrincipal()
 
 
 def _clear_principal_override() -> None:
@@ -135,8 +149,10 @@ def test_messages_debug_channel_index_returns_all_channels() -> None:
 
         index_response = client.get("/api/v1/messages/debug/channel-index")
         assert index_response.status_code == 200
-        index = index_response.json()
+        payload = index_response.json()
+        index = payload["items"]
 
+        assert payload == {"items": index, "total": 2, "truncated": False}
         assert len(index) == 2
         assert {item["last_event_type"] for item in index} == {"room.created", "workflow.updated"}
         assert {tuple(item["event_types"]) for item in index} == {("room.created",), ("workflow.updated",)}
@@ -310,7 +326,7 @@ def test_messages_debug_clear_channel_removes_channel_state() -> None:
 
 def test_messages_debug_clear_trace_removes_trace_state() -> None:
     client = TestClient(app, headers={"x-api-key": "bootstrap"})
-    _set_principal_override()
+    _set_manage_principal_override()
     _clear_event_bus()
 
     try:
@@ -352,7 +368,7 @@ def test_messages_debug_clear_trace_removes_trace_state() -> None:
 
 def test_messages_debug_clear_domain_removes_domain_state() -> None:
     client = TestClient(app, headers={"x-api-key": "bootstrap"})
-    _set_principal_override()
+    _set_manage_principal_override()
     _clear_event_bus()
 
     try:
@@ -453,11 +469,12 @@ def test_messages_debug_reads_and_clears_only_principal_tenant() -> None:
         )
 
         assert index.status_code == 200
-        assert [item["channel_key"] for item in index.json()] == [tenant_a_channel]
+        assert [item["channel_key"] for item in index.json()["items"]] == [tenant_a_channel]
         assert [item["event_id"] for item in trace.json()] == ["event-a"]
         assert [item["event_id"] for item in domain.json()] == ["event-a"]
         assert "secret-tenant-2" not in trace.text + domain.text
 
+        _set_manage_principal_override()
         clear_trace = client.delete(
             "/api/v1/messages/debug/trace",
             params={"trace_id": "shared-trace"},
@@ -486,6 +503,129 @@ def test_messages_debug_reads_and_clears_only_principal_tenant() -> None:
         assert clear_domain.json()["removed_count"] == 1
         assert [event.event_id for event in message_event_bus.get_history(tenant_b_channel)] == [
             "event-b"
+        ]
+    finally:
+        _clear_principal_override()
+        _clear_event_bus()
+
+
+def test_messages_debug_destructive_clear_requires_manage_scope_and_stays_tenant_scoped() -> None:
+    client = TestClient(app, headers={"x-api-key": "bootstrap"})
+    _set_principal_override()
+    _clear_event_bus()
+    tenant_a_channel = build_channel_key(tenant_id="tenant-1", trace_id="managed-trace")
+    tenant_b_channel = build_channel_key(tenant_id="tenant-2", trace_id="managed-trace")
+    for tenant_id, channel_key, event_id in (
+        ("tenant-1", tenant_a_channel, "managed-a"),
+        ("tenant-2", tenant_b_channel, "managed-b"),
+    ):
+        message_event_bus.record(
+            channel_key,
+            UnifiedMessageEvent(
+                event_id=event_id,
+                event_type="message.created",
+                tenant_id=tenant_id,
+                trace_id="managed-trace",
+            ),
+        )
+
+    try:
+        denied_trace = client.delete(
+            "/api/v1/messages/debug/trace",
+            params={"trace_id": "managed-trace"},
+        )
+        denied_domain = client.delete(
+            "/api/v1/messages/debug/domain",
+            params={"domain": "room"},
+        )
+        assert denied_trace.status_code == 403
+        assert denied_domain.status_code == 403
+        assert [event.event_id for event in message_event_bus.get_history(tenant_a_channel)] == [
+            "managed-a"
+        ]
+        assert [event.event_id for event in message_event_bus.get_history(tenant_b_channel)] == [
+            "managed-b"
+        ]
+
+        _set_manage_principal_override()
+        cleared = client.delete(
+            "/api/v1/messages/debug/trace",
+            params={"trace_id": "managed-trace"},
+        )
+        assert cleared.status_code == 200
+        assert cleared.json()["removed_count"] == 1
+        assert message_event_bus.get_history(tenant_a_channel) == []
+        assert [event.event_id for event in message_event_bus.get_history(tenant_b_channel)] == [
+            "managed-b"
+        ]
+    finally:
+        _clear_principal_override()
+        _clear_event_bus()
+
+
+def test_messages_channel_registry_evicts_oldest_per_tenant_and_caps_debug_index(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        "backend.app.api.messages.MAX_CHANNELS_PER_TENANT",
+        3,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        "backend.app.api.messages.MAX_CHANNEL_INDEX_RESULTS",
+        2,
+        raising=False,
+    )
+    client = TestClient(app, headers={"x-api-key": "bootstrap"})
+    _set_principal_override()
+    _clear_event_bus()
+    tenant_a_channels = [
+        build_channel_key(tenant_id="tenant-1", room_id=f"room-{index}")
+        for index in range(4)
+    ]
+    tenant_b_channel = build_channel_key(tenant_id="tenant-2", room_id="room-b")
+    for index, channel_key in enumerate(tenant_a_channels):
+        message_event_bus.record(
+            channel_key,
+            UnifiedMessageEvent(
+                event_id=f"tenant-a-{index}",
+                event_type="message.created",
+                tenant_id="tenant-1",
+            ),
+        )
+    message_event_bus.record(
+        tenant_b_channel,
+        UnifiedMessageEvent(
+            event_id="tenant-b",
+            event_type="message.created",
+            tenant_id="tenant-2",
+        ),
+    )
+
+    try:
+        assert message_event_bus.get_history(tenant_a_channels[0]) == []
+        assert [event.event_id for event in message_event_bus.get_history(tenant_b_channel)] == [
+            "tenant-b"
+        ]
+        index = client.get("/api/v1/messages/debug/channel-index")
+        assert index.status_code == 200
+        payload = index.json()
+        assert payload["total"] == 3
+        assert payload["truncated"] is True
+        assert len(payload["items"]) == 2
+        assert all("tenant:tenant-1" in item["channel_key"] for item in payload["items"])
+
+        reuse_channel = build_channel_key(tenant_id="tenant-1", room_id="room-reuse")
+        message_event_bus.record(
+            reuse_channel,
+            UnifiedMessageEvent(
+                event_id="tenant-a-0",
+                event_type="message.created",
+                tenant_id="tenant-1",
+            ),
+        )
+        assert [event.event_id for event in message_event_bus.get_history(reuse_channel)] == [
+            "tenant-a-0"
         ]
     finally:
         _clear_principal_override()
