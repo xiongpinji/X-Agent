@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
+from backend.app.api.auth import _issue_token, _store_token_user
 from backend.app.api.messages import UnifiedMessageEvent, build_channel_key, message_event_bus
+from backend.app.core.admin import UserCreateRequest, UserStore
+from backend.app.core.security import APIKeyCreateRequest, APIKeyStore
 from backend.app.dependencies import get_current_principal
 from backend.app.main import app
 
@@ -243,4 +246,158 @@ def test_messages_stream_uses_last_event_id_as_continuation_anchor() -> None:
         assert message_event_bus.get_domain_counts(channel_key) == {"room": 2}
     finally:
         _clear_principal_override()
+        _clear_event_bus()
+
+
+def _install_real_header_credentials(monkeypatch) -> tuple[str, str]:
+    api_keys = APIKeyStore()
+    raw_key = api_keys.create(
+        APIKeyCreateRequest(
+            name="messages-test",
+            tenant_id="tenant-a",
+            user_id="user-a",
+            role="developer",
+        )
+    ).key
+    monkeypatch.setattr("backend.app.dependencies.get_api_key_store", lambda: api_keys)
+
+    users = UserStore()
+    user = users.create(
+        UserCreateRequest(
+            email="messages-user@example.com",
+            display_name="Messages User",
+            role="developer",
+            tenant_id="tenant-a",
+        )
+    )
+    monkeypatch.setattr("backend.app.core.admin.user_store", users)
+    token = _issue_token()
+    _store_token_user(token, user.id)
+    return raw_key, token
+
+
+def test_messages_stream_accepts_bearer_and_api_key_headers(monkeypatch) -> None:
+    api_key, bearer = _install_real_header_credentials(monkeypatch)
+    client = TestClient(app)
+    params = {"replay_only": "true", "trace_id": "trace-header-auth"}
+
+    api_key_response = client.get(
+        "/api/v1/messages/stream", params=params, headers={"x-api-key": api_key}
+    )
+    bearer_response = client.get(
+        "/api/v1/messages/stream",
+        params=params,
+        headers={"Authorization": f"Bearer {bearer}"},
+    )
+
+    assert api_key_response.status_code == 200
+    assert bearer_response.status_code == 200
+    assert "event: system.notification" in api_key_response.text
+    assert "event: system.notification" in bearer_response.text
+
+
+def test_messages_stream_query_tenant_cannot_override_principal(monkeypatch) -> None:
+    api_key, _ = _install_real_header_credentials(monkeypatch)
+    _clear_event_bus()
+    principal_channel = build_channel_key(
+        tenant_id="tenant-a",
+        agent_id="default-agent",
+        user_id="user-a",
+        channel_type="room",
+        trace_id="trace-tenant-scope",
+    )
+    foreign_channel = build_channel_key(
+        tenant_id="tenant-b",
+        agent_id="default-agent",
+        user_id="user-a",
+        channel_type="room",
+        trace_id="trace-tenant-scope",
+    )
+    message_event_bus.record(
+        principal_channel,
+        UnifiedMessageEvent(
+            event_id="evt-tenant-a",
+            event_type="message.created",
+            tenant_id="tenant-a",
+            agent_id="default-agent",
+            user_id="user-a",
+            channel_type="room",
+            trace_id="trace-tenant-scope",
+            payload={"content": "tenant-a-event"},
+        ),
+    )
+    message_event_bus.record(
+        foreign_channel,
+        UnifiedMessageEvent(
+            event_id="evt-tenant-b",
+            event_type="message.created",
+            tenant_id="tenant-b",
+            agent_id="default-agent",
+            user_id="user-a",
+            channel_type="room",
+            trace_id="trace-tenant-scope",
+            payload={"content": "tenant-b-event"},
+        ),
+    )
+
+    try:
+        response = TestClient(app).get(
+            "/api/v1/messages/stream",
+            params={
+                "tenant_id": "tenant-b",
+                "channel_type": "room",
+                "trace_id": "trace-tenant-scope",
+                "replay_only": "true",
+            },
+            headers={"x-api-key": api_key},
+        )
+
+        assert response.status_code == 200
+        assert "event: message.created" in response.text
+        assert "tenant-a-event" in response.text
+        assert "tenant-b-event" not in response.text
+    finally:
+        _clear_event_bus()
+
+
+def test_messages_stream_prefers_last_event_id_header(monkeypatch) -> None:
+    api_key, _ = _install_real_header_credentials(monkeypatch)
+    _clear_event_bus()
+    channel_key = build_channel_key(
+        tenant_id="tenant-a",
+        agent_id="default-agent",
+        user_id="user-a",
+        channel_type="room",
+        trace_id="trace-header-resume",
+    )
+    for event_id in ("evt-header-1", "evt-header-2"):
+        message_event_bus.record(
+            channel_key,
+            UnifiedMessageEvent(
+                event_id=event_id,
+                event_type="message.created",
+                tenant_id="tenant-a",
+                agent_id="default-agent",
+                user_id="user-a",
+                channel_type="room",
+                trace_id="trace-header-resume",
+                payload={"event": event_id},
+            ),
+        )
+
+    try:
+        response = TestClient(app).get(
+            "/api/v1/messages/stream",
+            params={
+                "channel_type": "room",
+                "trace_id": "trace-header-resume",
+                "replay_only": "true",
+            },
+            headers={"x-api-key": api_key, "Last-Event-ID": "evt-header-1"},
+        )
+
+        assert response.status_code == 200
+        assert "id: evt-header-1\n" not in response.text
+        assert "evt-header-2" in response.text
+    finally:
         _clear_event_bus()

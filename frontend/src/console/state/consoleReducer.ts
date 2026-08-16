@@ -76,6 +76,7 @@ export type ConsoleState = {
     user_id: string;
   };
   bootstrap: ConsoleBootstrapResponse | null;
+  availability: Record<string, string>;
   organizationGraph: OrganizationGraphView | null;
   envelope: LinkedSummaryEnvelope | null;
   meetingRooms: MeetingRoomSummary[];
@@ -249,6 +250,7 @@ export function createInitialConsoleState(): ConsoleState {
       user_id: "anonymous",
     },
     bootstrap: null,
+    availability: {},
     organizationGraph: null,
     envelope: null,
     meetingRooms: [],
@@ -301,6 +303,15 @@ function hydrateStateFromEnvelope(state: ConsoleState, payload: ConsoleBootstrap
   return {
     ...state,
     bootstrap: payload,
+    availability: Object.fromEntries(
+      ["dispatch", "collaboration", "workflow", "execution", "organization_graph", "meeting_rooms", "realtime", "ui", "tools", "workflows", "memory"].map((key) => {
+        const section = primary[key];
+        const value = section && typeof section === "object" && "availability" in section
+          ? String((section as { availability?: unknown }).availability ?? "unavailable")
+          : "unavailable";
+        return [key, value];
+      }),
+    ),
     console: {
       ...state.console,
       ...consoleSummary,
@@ -311,11 +322,15 @@ function hydrateStateFromEnvelope(state: ConsoleState, payload: ConsoleBootstrap
       // meeting_rooms 变 undefined 导致渲染崩溃（2026-08-14 实测）。空对象或
       // 缺字段时保留/回退默认结构。
       const incoming = primary.organization_graph as OrganizationGraphView | undefined;
-      if (!incoming || Object.keys(incoming).length === 0) return state.organizationGraph;
+      if (!incoming || !incoming.organization) return null;
       return {
         ...incoming,
+        departments: incoming.departments ?? [],
+        role_templates: incoming.role_templates ?? [],
         agent_instances: incoming.agent_instances ?? [],
         meeting_rooms: incoming.meeting_rooms ?? [],
+        nodes: incoming.nodes ?? [],
+        edges: incoming.edges ?? [],
       } as OrganizationGraphView;
     })(),
     meetingRooms: ((primary.meeting_rooms as { rooms?: MeetingRoomSummary[] } | undefined)?.rooms) ?? state.meetingRooms,

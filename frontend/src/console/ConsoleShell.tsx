@@ -2,14 +2,6 @@ import React from "react";
 import { ConsoleLayout } from "./components/layout/ConsoleLayout";
 import { ConsoleSyncStatusBadge } from "./components/layout/ConsoleSyncStatusBadge";
 import { useConsoleDispatch, useConsoleState } from "./state/consoleContext";
-import type {
-  ExecutionControlOverview,
-  MarketplaceCenterOverview,
-  MemoryCenterOverview,
-  NavigationCenterOverview,
-  OrganizationCenterOverview,
-  ToolsCenterOverview,
-} from "./state/consoleReducer";
 import {
   selectAuditData,
   selectChatData,
@@ -35,7 +27,6 @@ import { selectMarketplaceCenterOverviewData } from "./state/marketplaceCenterSe
 import { selectNavigationCenterOverviewData } from "./state/navigationCenterSelectors";
 import { validateConsoleBootstrapResponse, validateConsoleSelectors, warnConsoleBootstrapIssues } from "./state/consoleValidation";
 import { useConsoleRealtimeSync } from "./hooks/useConsoleRealtimeSync";
-import { OverviewPage } from "./pages/overview/OverviewPage";
 import { CreateAgentPage } from "./pages/agents/CreateAgentPage";
 import { OrganizationGraphPage } from "./pages/graph/OrganizationGraphPage";
 import { MeetingRoomsPage } from "./pages/meetings/MeetingRoomsPage";
@@ -81,7 +72,7 @@ export function ConsoleShell() {
   }, [sync.syncStatus]);
 
   const bootstrapValidation = React.useMemo(
-    () => validateConsoleBootstrapResponse(state.bootstrap),
+    () => state.bootstrap?.envelope ? validateConsoleBootstrapResponse(state.bootstrap) : null,
     [state.bootstrap],
   );
 
@@ -116,7 +107,7 @@ export function ConsoleShell() {
   );
 
   React.useEffect(() => {
-    warnConsoleBootstrapIssues(bootstrapValidation);
+    if (bootstrapValidation) warnConsoleBootstrapIssues(bootstrapValidation);
   }, [bootstrapValidation]);
 
   React.useEffect(() => {
@@ -125,83 +116,6 @@ export function ConsoleShell() {
       console.warn(`[console-selectors] ${issue.path}: ${issue.message}`);
     }
   }, [selectorValidation]);
-
-  React.useEffect(() => {
-    let cancelled = false;
-
-    type OverviewResponse<TPrimary, TLinks> = {
-      resource_type: string;
-      resource_id: string;
-      primary: TPrimary;
-      linked_summaries: TLinks;
-    };
-
-    const load = async () => {
-      try {
-        const [executionRes, toolsRes, memoryRes, orgRes, marketRes, navRes] = await Promise.all([
-          fetch("/api/v1/execution-control/overview", { method: "GET", headers: { "Content-Type": "application/json" } }),
-          fetch("/api/v1/tools-control/overview", { method: "GET", headers: { "Content-Type": "application/json" } }),
-          fetch("/api/v1/memory-control/overview", { method: "GET", headers: { "Content-Type": "application/json" } }),
-          fetch("/api/v1/organization-control/overview", { method: "GET", headers: { "Content-Type": "application/json" } }),
-          fetch("/api/v1/marketplace-control/overview", { method: "GET", headers: { "Content-Type": "application/json" } }),
-          fetch("/api/v1/navigation-control/overview", { method: "GET", headers: { "Content-Type": "application/json" } }),
-        ]);
-
-        if (cancelled) return;
-
-        if (executionRes.ok) {
-          const payload = (await executionRes.json()) as OverviewResponse<ExecutionControlOverview["primary"], ExecutionControlOverview["linked_summaries"]>;
-          dispatch({ type: "executionControl/overviewUpdate", payload: payload as unknown as ExecutionControlOverview });
-        }
-        if (toolsRes.ok) {
-          const payload = (await toolsRes.json()) as OverviewResponse<ToolsCenterOverview["primary"], ToolsCenterOverview["linked_summaries"]>;
-          dispatch({ type: "toolsCenter/overviewUpdate", payload: payload as unknown as ToolsCenterOverview });
-        }
-        if (memoryRes.ok) {
-          const payload = (await memoryRes.json()) as OverviewResponse<MemoryCenterOverview["primary"], MemoryCenterOverview["linked_summaries"]>;
-          dispatch({ type: "memoryCenter/overviewUpdate", payload: payload as unknown as MemoryCenterOverview });
-        }
-        if (orgRes.ok) {
-          const payload = (await orgRes.json()) as OverviewResponse<OrganizationCenterOverview["primary"], OrganizationCenterOverview["linked_summaries"]>;
-          dispatch({ type: "organizationCenter/overviewUpdate", payload: payload as unknown as OrganizationCenterOverview });
-        }
-        if (marketRes.ok) {
-          const payload = (await marketRes.json()) as OverviewResponse<MarketplaceCenterOverview["primary"], MarketplaceCenterOverview["linked_summaries"]>;
-          dispatch({ type: "marketplaceCenter/overviewUpdate", payload: payload as unknown as MarketplaceCenterOverview });
-        }
-        if (navRes.ok) {
-          const payload = (await navRes.json()) as OverviewResponse<NavigationCenterOverview["primary"], NavigationCenterOverview["linked_summaries"]>;
-          dispatch({ type: "navigationCenter/overviewUpdate", payload: payload as unknown as NavigationCenterOverview });
-        }
-      } catch (error) {
-        console.warn("Failed to load platform overview data", error);
-      }
-    };
-
-    void load();
-    return () => {
-      cancelled = true;
-    };
-  }, [dispatch]);
-
-  const openConversation = (conversationId: string) => {
-    dispatch({ type: "conversation/setActive", payload: conversationId });
-    dispatch({ type: "page/set", payload: "realtime_chat" });
-  };
-
-  const openAudit = (messageId?: string) => {
-    if (messageId) {
-      dispatch({ type: "node/setSelected", payload: messageId });
-    }
-    dispatch({ type: "page/set", payload: "audit" });
-  };
-
-  const openWorkflow = (roleTemplateId?: string) => {
-    if (roleTemplateId) {
-      dispatch({ type: "roleTemplate/setSelected", payload: roleTemplateId });
-    }
-    dispatch({ type: "page/set", payload: "workflow" });
-  };
 
   const handleCreateAgent = async (payload: AgentCreatePayload) => {
     console.log("create agent", payload);
@@ -213,47 +127,12 @@ export function ConsoleShell() {
   };
 
   const renderPage = () => {
+    if (!["overview", "organization_graph", "meeting_room", "realtime_chat"].includes(state.activePage)) {
+      return <UnavailablePanel />;
+    }
     switch (state.activePage) {
       case "overview":
-        return (
-          <OverviewPage
-            dispatch={executionOverviewData.dispatch}
-            organizationGraph={overviewData.organizationGraph ?? emptyGraph()}
-            meetingRooms={meetingRoomData.rooms}
-            realtime={overviewData.realtime}
-            memory={overviewData.memory}
-            avatars={overviewData.avatars}
-            onOpenAgent={(agentId) => {
-              dispatch({ type: "agent/setSelected", payload: agentId });
-              dispatch({ type: "page/set", payload: "organization_graph" });
-            }}
-            onOpenRoom={(roomId) => {
-              dispatch({ type: "room/setActive", payload: roomId });
-              dispatch({ type: "page/set", payload: "meeting_room" });
-            }}
-            onOpenConversation={openConversation}
-            onOpenAudit={() => openAudit()}
-            onOpenPendingItem={(itemKey) => {
-              if (itemKey === "pending_execution") dispatch({ type: "page/set", payload: "execution_overview" });
-              if (itemKey === "pending_audit") dispatch({ type: "page/set", payload: "audit" });
-              if (itemKey === "pending_tools") dispatch({ type: "page/set", payload: "tools_overview" });
-              if (itemKey === "pending_org") dispatch({ type: "page/set", payload: "org_overview" });
-            }}
-            onOpenAction={(actionKey) => {
-              if (actionKey === "open_workflow") openWorkflow();
-              if (actionKey === "open_audit") openAudit();
-              if (actionKey === "open_rooms") dispatch({ type: "page/set", payload: "meeting_room" });
-              if (actionKey === "open_chat") dispatch({ type: "page/set", payload: "realtime_chat" });
-              if (actionKey === "open_tools") dispatch({ type: "page/set", payload: "tools_overview" });
-              if (actionKey === "open_memory") dispatch({ type: "page/set", payload: "memory_overview" });
-              if (actionKey === "open_org") dispatch({ type: "page/set", payload: "org_overview" });
-              if (actionKey === "open_market") dispatch({ type: "page/set", payload: "market_overview" });
-              if (actionKey === "open_search") dispatch({ type: "page/set", payload: "search_overview" });
-              if (actionKey === "open_execution") dispatch({ type: "page/set", payload: "execution_overview" });
-              if (actionKey === "open_agents") dispatch({ type: "page/set", payload: "organization_graph" });
-            }}
-          />
-        );
+        return <RuntimeOverview state={state} />;
       case "create_agent":
         return (
           <CreateAgentPage
@@ -287,7 +166,10 @@ export function ConsoleShell() {
             messages={meetingRoomData.messages}
             avatars={meetingRoomData.avatars}
             currentSenderId={meetingRoomData.currentSenderId}
-            onSelectRoom={(roomId) => dispatch({ type: "room/setActive", payload: roomId })}
+            onSelectRoom={(roomId) => {
+              dispatch({ type: "room/setActive", payload: roomId });
+              setTimeout(sync.reconnect, 0);
+            }}
             onRoomMessageSent={sync.refreshMessagesOnly}
             onInviteMemberSent={sync.refreshMessagesOnly}
           />
@@ -301,7 +183,10 @@ export function ConsoleShell() {
             avatars={chatData.avatars}
             presence={chatData.presence}
             currentSenderId={chatData.currentSenderId}
-            onSelectConversation={(conversationId) => dispatch({ type: "conversation/setActive", payload: conversationId })}
+            onSelectConversation={(conversationId) => {
+              dispatch({ type: "conversation/setActive", payload: conversationId });
+              setTimeout(sync.reconnect, 0);
+            }}
             onMessageSent={sync.refreshMessagesOnly}
           />
         );
@@ -508,26 +393,10 @@ export function ConsoleShell() {
           </div>
           <nav className="console-nav mt-4">
             <button onClick={() => dispatch({ type: "page/set", payload: "overview" })}>概览</button>
-            <button onClick={() => dispatch({ type: "page/set", payload: "organization_graph" })}>组织图</button>
-            <button onClick={() => dispatch({ type: "page/set", payload: "org_overview" })}>组织权限中心</button>
-            <button onClick={() => dispatch({ type: "page/set", payload: "org_structure" })}>组织结构</button>
-            <button onClick={() => dispatch({ type: "page/set", payload: "org_roles" })}>角色权限</button>
-            <button onClick={() => dispatch({ type: "page/set", payload: "org_audit" })}>组织审核</button>
-            <button onClick={() => dispatch({ type: "page/set", payload: "meeting_room" })}>会议室</button>
-            <button onClick={() => dispatch({ type: "page/set", payload: "realtime_chat" })}>对话</button>
-            <button onClick={() => dispatch({ type: "page/set", payload: "workflow" })}>工作流</button>
-            <button onClick={() => dispatch({ type: "page/set", payload: "execution_overview" })}>运行控制</button>
-            <button onClick={() => dispatch({ type: "page/set", payload: "tools_overview" })}>工具中心</button>
-            <button onClick={() => dispatch({ type: "page/set", payload: "tools_detail" })}>工具详情</button>
-            <button onClick={() => dispatch({ type: "page/set", payload: "tools_management" })}>工具管理</button>
-            <button onClick={() => dispatch({ type: "page/set", payload: "tools_history" })}>调用历史</button>
-            <button onClick={() => dispatch({ type: "page/set", payload: "market_overview" })}>能力市场</button>
-            <button onClick={() => dispatch({ type: "page/set", payload: "search_overview" })}>全局导航</button>
-            <button onClick={() => dispatch({ type: "page/set", payload: "memory_overview" })}>记忆中心</button>
-            <button onClick={() => dispatch({ type: "page/set", payload: "memory_detail" })}>记忆详情</button>
-            <button onClick={() => dispatch({ type: "page/set", payload: "memory_management" })}>记忆管理</button>
-            <button onClick={() => dispatch({ type: "page/set", payload: "memory_history" })}>记忆历史</button>
-            <button onClick={() => dispatch({ type: "page/set", payload: "audit" })}>审计</button>
+            {state.organizationGraph ? <button onClick={() => dispatch({ type: "page/set", payload: "organization_graph" })}>组织图</button> : null}
+            {state.availability.meeting_rooms === "available" ? <button onClick={() => dispatch({ type: "page/set", payload: "meeting_room" })}>会议室</button> : null}
+            {state.availability.realtime === "available" ? <button onClick={() => dispatch({ type: "page/set", payload: "realtime_chat" })}>对话</button> : null}
+            {state.availability.workflow === "available" ? <button onClick={() => dispatch({ type: "page/set", payload: "workflow" })}>工作流</button> : null}
           </nav>
         </div>
       }
@@ -579,4 +448,52 @@ export function ConsoleShell() {
 
 function emptyGraph(): OrganizationGraphView {
   return { organization: null, departments: [], role_templates: [], agent_instances: [], meeting_rooms: [], nodes: [], edges: [] };
+}
+
+function RuntimeOverview({ state }: { state: ReturnType<typeof useConsoleState> }) {
+  const bootstrap = (state.bootstrap ?? {}) as Record<string, unknown>;
+  const execution = (bootstrap.execution ?? {}) as { count?: number };
+  const memory = (bootstrap.memory ?? {}) as { count?: number };
+  const tools = (bootstrap.tools ?? {}) as { count?: number };
+  const unavailable = Object.entries(state.availability)
+    .filter(([, availability]) => availability !== "available")
+    .map(([section]) => section);
+
+  return (
+    <section className="space-y-4" aria-label="Console runtime overview">
+      <header>
+        <h1 className="page-title">统一控制台</h1>
+        <p className="page-subtitle">当前已鉴权租户的实时运行状态</p>
+      </header>
+      <div className="grid gap-3 md:grid-cols-4">
+        <RuntimeMetric label="运行记录" value={execution.count ?? 0} />
+        <RuntimeMetric label="记忆" value={memory.count ?? 0} />
+        <RuntimeMetric label="工具" value={tools.count ?? 0} />
+        <RuntimeMetric label="协作房间" value={state.meetingRooms.length} />
+      </div>
+      {unavailable.length > 0 ? (
+        <p className="rounded border border-slate-200 bg-white p-3 text-sm text-slate-600">
+          当前不可用：{unavailable.join("、")}
+        </p>
+      ) : null}
+    </section>
+  );
+}
+
+function RuntimeMetric({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded border border-slate-200 bg-white p-4">
+      <div className="text-sm text-slate-500">{label}</div>
+      <div className="mt-1 text-2xl font-semibold">{value}</div>
+    </div>
+  );
+}
+
+function UnavailablePanel() {
+  return (
+    <section className="rounded border border-slate-200 bg-white p-6" aria-label="Unavailable console capability">
+      <h1 className="page-title">当前能力不可用</h1>
+      <p className="page-subtitle">后端尚未提供可审计的真实数据接口。</p>
+    </section>
+  );
 }

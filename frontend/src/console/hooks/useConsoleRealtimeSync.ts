@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ConsoleApiError, fetchConsoleBootstrap, readConsoleEventStream } from "../services/consoleApi";
 import type { ConsoleAction, ConsoleBootstrapResponse, ConsoleState, RealtimeSnapshot } from "../state/consoleReducer";
 import { validateConsoleBootstrapResponse, warnConsoleBootstrapIssues } from "../state/consoleValidation";
 
@@ -75,11 +76,6 @@ function mergePresenceUpdate(realtime: RealtimeSnapshot, presence: PresenceMap):
   };
 }
 
-function getSseEventId(event: MessageEvent<string>): string | null {
-  const lastEventId = event.lastEventId?.trim();
-  return lastEventId || null;
-}
-
 export function useConsoleRealtimeSync(
   state: ConsoleState,
   dispatch: React.Dispatch<ConsoleAction>,
@@ -96,7 +92,7 @@ export function useConsoleRealtimeSync(
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
 
-  const eventSourceRef = useRef<EventSource | null>(null);
+  const streamAbortRef = useRef<AbortController | null>(null);
   const pollingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const aliveRef = useRef(true);
   const lastEventIdRef = useRef<string | null>(null);
@@ -167,18 +163,20 @@ export function useConsoleRealtimeSync(
 
   const refreshMessagesOnly = useCallback(async () => {
     try {
-      const response = await fetch(bootstrapUrl, { method: "GET", headers: { "Content-Type": "application/json" } });
-      if (!response.ok) return;
-
-      const data = (await response.json()) as ConsoleBootstrapResponse;
+      const data = await fetchConsoleBootstrap<ConsoleBootstrapResponse>({ url: bootstrapUrl });
       if (!aliveRef.current) return;
 
-      const validation = validateConsoleBootstrapResponse(data);
-      warnConsoleBootstrapIssues(validation);
+      if (data.envelope) {
+        const validation = validateConsoleBootstrapResponse(data);
+        warnConsoleBootstrapIssues(validation);
+      }
       dispatch({ type: "bootstrap/success", payload: data });
       setLastSyncedAt(new Date().toISOString());
-    } catch {
-      // ignore transient errors
+    } catch (error) {
+      if (error instanceof ConsoleApiError && error.status === 401) {
+        setSyncError(error.message);
+        setSyncStatus("error");
+      }
     }
   }, [bootstrapUrl, dispatch]);
 
@@ -193,73 +191,78 @@ export function useConsoleRealtimeSync(
 
   const getStreamUrl = useCallback(() => {
     const url = new URL(messagesStreamUrl, window.location.origin);
-    if (state.console.tenant_id) url.searchParams.set("tenant_id", state.console.tenant_id);
-    if (state.console.org_id) url.searchParams.set("org_id", state.console.org_id);
-    if (state.activeRoomId) url.searchParams.set("room_id", state.activeRoomId);
-    if (state.activeConversationId) url.searchParams.set("conversation_id", state.activeConversationId);
-    if (state.console.agent_id) url.searchParams.set("agent_id", state.console.agent_id);
-    if (state.console.user_id) url.searchParams.set("user_id", state.console.user_id);
+    const currentState = stateRef.current;
+    if (currentState.console.org_id) url.searchParams.set("org_id", currentState.console.org_id);
+    if (currentState.activeRoomId) url.searchParams.set("room_id", currentState.activeRoomId);
+    if (currentState.activeConversationId) url.searchParams.set("conversation_id", currentState.activeConversationId);
     url.searchParams.set("include_system", "true");
     url.searchParams.set("include_audit", "true");
     url.searchParams.set("include_workflow", "true");
-    if (lastEventIdRef.current) url.searchParams.set("last_event_id", lastEventIdRef.current);
-    return url;
-  }, [messagesStreamUrl, state.activeConversationId, state.activeRoomId, state.console.agent_id, state.console.org_id, state.console.tenant_id, state.console.user_id]);
+    return `${url.pathname}${url.search}`;
+  }, [messagesStreamUrl]);
 
   const connectSSE = useCallback(() => {
-    try {
-      clearReconnectTimer();
-      eventSourceRef.current?.close();
+    clearReconnectTimer();
+    streamAbortRef.current?.abort();
+    const controller = new AbortController();
+    streamAbortRef.current = controller;
 
-      const eventSource = new EventSource(getStreamUrl().toString());
-      eventSourceRef.current = eventSource;
-
-      const handleSsePayload = (rawEvent: MessageEvent<string>) => {
-        if (!aliveRef.current) return;
-        try {
-          const payload = JSON.parse(rawEvent.data) as UnifiedMessageEvent;
-          const eventId = getSseEventId(rawEvent);
-          if (eventId) lastEventIdRef.current = eventId;
-          if (payload.event_id) lastEventIdRef.current = payload.event_id;
-          handleRealtimeEvent(payload);
-          setLastSyncedAt(new Date().toISOString());
-          setSyncError(null);
-        } catch (error) {
-          console.warn("Invalid SSE payload", error);
-        }
-      };
-
-      eventSource.onopen = () => {
+    void readConsoleEventStream({
+      url: getStreamUrl(),
+      lastEventId: lastEventIdRef.current,
+      signal: controller.signal,
+      onOpen: () => {
         if (!aliveRef.current) return;
         reconnectAttemptRef.current = 0;
         reconnectDelayRef.current = 1000;
         setSyncStatus("sse");
         setSyncError(null);
         stopPolling();
-      };
-
-      eventSource.addEventListener("system.notification", handleSsePayload as EventListener);
-      eventSource.onmessage = handleSsePayload;
-
-      eventSource.onerror = () => {
+      },
+      onEvent: (streamEvent) => {
         if (!aliveRef.current) return;
-        eventSource.close();
-        eventSourceRef.current = null;
-        reconnectAttemptRef.current += 1;
-        setSyncStatus("polling");
-        startPolling();
+        try {
+          const payload = JSON.parse(streamEvent.data) as UnifiedMessageEvent;
+          if (streamEvent.id) lastEventIdRef.current = streamEvent.id;
+          if (payload.event_id) lastEventIdRef.current = payload.event_id;
+          handleRealtimeEvent(payload);
+          setLastSyncedAt(new Date().toISOString());
+          setSyncError(null);
+        } catch {
+          setSyncError("Console received an invalid event.");
+        }
+      },
+    }).then((result) => {
+      if (!aliveRef.current || controller.signal.aborted) return;
+      streamAbortRef.current = null;
+      if (result.lastEventId) lastEventIdRef.current = result.lastEventId;
+      if (result.terminal) {
+        setSyncStatus("idle");
+        stopPolling();
         clearReconnectTimer();
-        reconnectTimerRef.current = setTimeout(() => {
-          if (!aliveRef.current) return;
-          reconnectDelayRef.current = Math.min(reconnectDelayRef.current * 2, 30000);
-          connectSSE();
-        }, reconnectDelayRef.current);
-      };
-    } catch (error) {
+        return;
+      }
+      reconnectAttemptRef.current += 1;
       setSyncStatus("polling");
-      setSyncError(error instanceof Error ? error.message : "Failed to start SSE");
       startPolling();
-    }
+      reconnectTimerRef.current = setTimeout(connectSSE, reconnectDelayRef.current);
+      reconnectDelayRef.current = Math.min(reconnectDelayRef.current * 2, 30000);
+    }).catch((error: unknown) => {
+      if (!aliveRef.current || controller.signal.aborted) return;
+      streamAbortRef.current = null;
+      if (error instanceof ConsoleApiError && error.status === 401) {
+        setSyncError(error.message);
+        setSyncStatus("error");
+        stopPolling();
+        return;
+      }
+      reconnectAttemptRef.current += 1;
+      setSyncStatus("polling");
+      setSyncError("Console event stream disconnected.");
+      startPolling();
+      reconnectTimerRef.current = setTimeout(connectSSE, reconnectDelayRef.current);
+      reconnectDelayRef.current = Math.min(reconnectDelayRef.current * 2, 30000);
+    });
   }, [clearReconnectTimer, getStreamUrl, handleRealtimeEvent, startPolling, stopPolling]);
 
   const refreshBootstrap = useCallback(async () => {
@@ -268,23 +271,26 @@ export function useConsoleRealtimeSync(
     setSyncError(null);
 
     try {
-      const response = await fetch(bootstrapUrl, { method: "GET", headers: { "Content-Type": "application/json" } });
-      if (!response.ok) throw new Error(`Bootstrap failed: ${response.status}`);
-
-      const data = (await response.json()) as ConsoleBootstrapResponse;
+      const data = await fetchConsoleBootstrap<ConsoleBootstrapResponse>({ url: bootstrapUrl });
       if (!aliveRef.current) return;
 
       dispatch({ type: "bootstrap/success", payload: data });
       setLastSyncedAt(new Date().toISOString());
       setSyncStatus("sse");
+      return true;
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown bootstrap error";
       setSyncError(message);
       setSyncStatus("error");
       dispatch({ type: "bootstrap/error", error: message });
+      if (error instanceof ConsoleApiError && error.status === 401) {
+        stopPolling();
+        return false;
+      }
       startPolling();
+      return false;
     }
-  }, [bootstrapUrl, dispatch, startPolling]);
+  }, [bootstrapUrl, dispatch, startPolling, stopPolling]);
 
   useEffect(() => {
     if (!enabled) return;
@@ -292,8 +298,8 @@ export function useConsoleRealtimeSync(
 
     if (!didInitialBootstrapRef.current) {
       didInitialBootstrapRef.current = true;
-      void refreshBootstrap().then(() => {
-        if (aliveRef.current) connectSSE();
+      void refreshBootstrap().then((success) => {
+        if (aliveRef.current && success) connectSSE();
       });
     } else {
       connectSSE();
@@ -309,8 +315,8 @@ export function useConsoleRealtimeSync(
     return () => {
       aliveRef.current = false;
       document.removeEventListener("visibilitychange", onVisibilityChange);
-      eventSourceRef.current?.close();
-      eventSourceRef.current = null;
+      streamAbortRef.current?.abort();
+      streamAbortRef.current = null;
       stopPolling();
       clearReconnectTimer();
     };
@@ -320,8 +326,7 @@ export function useConsoleRealtimeSync(
     lastEventIdRef.current = null;
     reconnectDelayRef.current = 1000;
     reconnectAttemptRef.current = 0;
-    await refreshBootstrap();
-    connectSSE();
+    if (await refreshBootstrap()) connectSSE();
   }, [connectSSE, refreshBootstrap]);
 
   const reconnect = useCallback(() => {

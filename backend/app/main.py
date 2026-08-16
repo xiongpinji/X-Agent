@@ -700,7 +700,16 @@ async def tenant_isolation_middleware(request: Request, call_next):
         if principal and principal.role != "admin":
             # Check for tenant_id in query parameters
             tenant_id_param = request.query_params.get("tenant_id")
-            if tenant_id_param and tenant_id_param != principal.tenant_id:
+            principal_scoped_query_get = (
+                request.method == "GET"
+                and request.url.path.rstrip("/")
+                in {"/api/v1/workbench", "/api/v1/messages/stream"}
+            )
+            if (
+                tenant_id_param
+                and tenant_id_param != principal.tenant_id
+                and not principal_scoped_query_get
+            ):
                 return JSONResponse(
                     {"detail": f"Tenant isolation violation: cannot access tenant '{tenant_id_param}'"},
                     status_code=403

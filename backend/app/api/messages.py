@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from typing import Annotated
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
@@ -306,6 +306,7 @@ def _serialize_sse(event: UnifiedMessageEvent, event_name: str | None = None) ->
 
 @router.get("/stream")
 async def stream_messages(
+    request: Request,
     principal: PrincipalDependency,
     tenant_id: str | None = Query(default=None),
     org_id: str | None = Query(default=None),
@@ -323,9 +324,10 @@ async def stream_messages(
     replay_only: bool = Query(default=False),
 ):
     enforce_scope(principal, "agent:run")
+    resume_event_id = request.headers.get("last-event-id") or last_event_id
 
     stream_filter = MessageStreamFilter(
-        tenant_id=tenant_id or principal.tenant_id,
+        tenant_id=principal.tenant_id,
         org_id=org_id,
         room_id=room_id,
         conversation_id=conversation_id,
@@ -337,7 +339,7 @@ async def stream_messages(
         include_system=include_system,
         include_audit=include_audit,
         include_workflow=include_workflow,
-        last_event_id=last_event_id,
+        last_event_id=resume_event_id,
     )
 
     channel_key = build_channel_key(
@@ -433,7 +435,7 @@ async def stream_messages(
 async def publish_test_event(principal: PrincipalDependency, payload: dict[str, object]) -> dict[str, object]:
     enforce_scope(principal, "agent:run")
     channel_key = build_channel_key(
-        tenant_id=str(payload.get("tenant_id") or principal.tenant_id),
+        tenant_id=principal.tenant_id,
         org_id=payload.get("org_id") or None,
         room_id=payload.get("room_id") or None,
         conversation_id=payload.get("conversation_id") or None,
@@ -445,7 +447,7 @@ async def publish_test_event(principal: PrincipalDependency, payload: dict[str, 
     event = UnifiedMessageEvent(
         event_type=str(payload.get("event_type") or "system.notification"),
         trace_id=payload.get("trace_id") or principal.trace_id,
-        tenant_id=str(payload.get("tenant_id") or principal.tenant_id),
+        tenant_id=principal.tenant_id,
         org_id=payload.get("org_id") or None,
         room_id=payload.get("room_id") or None,
         conversation_id=payload.get("conversation_id") or None,
@@ -472,7 +474,7 @@ async def get_channel_snapshot(
 ) -> dict[str, object]:
     enforce_scope(principal, "agent:run")
     channel_key = build_channel_key(
-        tenant_id=tenant_id or principal.tenant_id,
+        tenant_id=principal.tenant_id,
         org_id=org_id,
         room_id=room_id,
         conversation_id=conversation_id,
@@ -516,7 +518,7 @@ async def clear_channel(
 ) -> dict[str, object]:
     enforce_scope(principal, "agent:run")
     channel_key = build_channel_key(
-        tenant_id=tenant_id or principal.tenant_id,
+        tenant_id=principal.tenant_id,
         org_id=org_id,
         room_id=room_id,
         conversation_id=conversation_id,
