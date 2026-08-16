@@ -275,11 +275,11 @@ python -m pytest tests/test_llm_quota_wiring.py tests/test_usage_reservation_lif
 - 测试：`tests/test_messages_stream.py`
 - 测试：`frontend/src/console/__tests__/consoleApi.test.ts`
 
-- [ ] **步骤 1：写失败合同**
+- [x] **步骤 1：写失败合同**
 
 启动 Console 只能调用 `/api/v1/workbench` 和 `/api/v1/messages/stream`；不得调用 `*-control/overview`。两者都携带 Bearer 或 API Key。tenant query 必须被服务端 principal 覆盖，tenant B 不能读取 tenant A 的 bootstrap 或事件。
 
-- [ ] **步骤 2：实现统一鉴权 fetch-stream**
+- [x] **步骤 2：实现统一鉴权 fetch-stream**
 
 ```ts
 export function consoleAuthHeaders(): HeadersInit {
@@ -291,17 +291,19 @@ export function consoleAuthHeaders(): HeadersInit {
 
 使用 `fetch` + `ReadableStream` 解析 SSE；禁止把 token 放入查询参数。
 
-- [ ] **步骤 3：真实 workbench 聚合**
+- [x] **步骤 3：真实 workbench 聚合**
 
 从真实 run、memory、tool manifest、organization store、collaboration store 和已缓存 skills 状态读取。不可用能力返回 `availability="unavailable"` 和空集合，不得写固定计数或示例实体。GET bootstrap 不创建计划、任务或其他副作用。
 
-- [ ] **步骤 4：运行后端、前端和浏览器回归**
+- [x] **步骤 4：运行后端、前端和浏览器回归**
 
 浏览器要求 `/console` 200、0 个 4xx/5xx、0 个 console error，并验证一条当前 principal 范围内的实时事件。
 
-- [ ] **步骤 5：双阶段审查并提交**
+- [x] **步骤 5：双阶段审查并提交**
 
 提交信息：`feat(console): project authenticated real runtime state`。
+
+任务 5 以 `c065dc5` 至 `075676e` 的独立实现与复审修复提交完成。最终后端限定回归 54 个通过，Console Vitest 11 个通过，TypeScript type-check 与生产 Vite build 通过；规格复审与质量复审均为 0 Critical、0 Important、0 Minor。浏览器同轮在本地专用端口完成真实 API Key 登录和精确 `/console` 入口验收：workbench 与 tenant-scoped message stream 均为 200，未出现 4xx/5xx，browser console 为 0 error / 0 warning；独立认证发布请求生成 `room.created` 后，当前 principal 的 Console 实时显示 `Browser Acceptance Room`、主题和成员信息。已验证统一 header-only 鉴权、Last-Event-ID、断流/容量 gap 恢复、租户隔离、tenant-wide 与 exact 诊断双通道、record-before-fanout、失败回滚、真实只读摘要与 legacy `console.html` 退役。浏览器截图、临时数据库和运行目录在提取证据后已精确删除，候选树干净。本任务未调用真实 provider、未联网、未 push、未部署；消息总线仍是单进程内存实现，多 Pod 持久实时语义留待任务 7 的受控生产验收。
 
 ### 任务 6：本地 RC、静态债务与四端产品门禁
 
