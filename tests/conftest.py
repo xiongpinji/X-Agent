@@ -22,6 +22,7 @@ def _set_worker_data_dir() -> None:
         # Settings reads these via XAGENT_ prefix before app imports
         for key, rel in [
             ("XAGENT_AUDIT_STORE_PATH", f"{_tmpdir}/audit.jsonl"),
+            ("XAGENT_MEMORY_STORE_PATH", f"{_tmpdir}/memory.jsonl"),
             ("XAGENT_RUN_STORE_PATH", f"{_tmpdir}/runs.jsonl"),
             ("XAGENT_WORKFLOW_STORE_PATH", f"{_tmpdir}/workflows.json"),
             ("XAGENT_WORKFLOW_RUN_STORE_PATH", f"{_tmpdir}/workflow_runs.jsonl"),

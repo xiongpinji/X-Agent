@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 from hmac import new as hmac_new
 from pathlib import Path
@@ -56,6 +56,7 @@ class AuditStore:
     ) -> None:
         self._records: list[AuditLogRecord] = []
         self._lock = RLock()
+        self._last_created_at: datetime | None = None
         self._storage_path = Path(storage_path) if storage_path else None
         self._hmac_secret = hmac_secret
         if isinstance(rotation, AuditLogRotator):
@@ -125,6 +126,7 @@ class AuditStore:
             record = AuditLogRecord(
                 id=event_id or str(uuid4()),
                 **event_content,
+                created_at=self._next_created_at(),
                 prev_hash=previous_hash,
                 snapshot={
                     "trace_id": trace_id,
@@ -141,6 +143,13 @@ class AuditStore:
             self._records.append(record)
             self._append_to_disk(record)
         return record
+
+    def _next_created_at(self) -> datetime:
+        created_at = datetime.now(UTC)
+        if self._last_created_at is not None and created_at <= self._last_created_at:
+            created_at = self._last_created_at + timedelta(microseconds=1)
+        self._last_created_at = created_at
+        return created_at
 
     def list(
         self,
@@ -303,6 +312,8 @@ class AuditStore:
                         "Skipping corrupt audit line in %s: %s",
                         self._storage_path, exc,
                     )
+        if self._records:
+            self._last_created_at = max(record.created_at for record in self._records)
         if bad_lines:
             import logging
             logging.getLogger(__name__).warning(

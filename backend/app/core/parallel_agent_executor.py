@@ -264,7 +264,7 @@ class ParallelAgentExecutor:
         batch_id = batch_id or str(uuid4())
         concurrency = max_parallel or self.max_concurrency
         semaphore = asyncio.Semaphore(concurrency)
-        start_time = time.time()
+        start_time = time.perf_counter()
 
         async def run_one(task: AgentTask) -> AgentTaskResult:
             async with semaphore:
@@ -275,7 +275,7 @@ class ParallelAgentExecutor:
                     agent_id=agent_id,
                     status=AgentTaskStatus.RUNNING,
                 )
-                task_start = time.time()
+                task_start = time.perf_counter()
                 try:
                     attempts = 1 + max(0, task.max_retries)
                     for attempt in range(attempts):
@@ -309,7 +309,7 @@ class ParallelAgentExecutor:
                                     type(e).__name__,
                                 )
                 finally:
-                    result.duration = time.time() - task_start
+                    result.duration = time.perf_counter() - task_start
                 return result
 
         results = await asyncio.gather(
@@ -334,7 +334,7 @@ class ParallelAgentExecutor:
             batch_id=batch_id,
             total_tasks=len(tasks),
             results=final_results,
-            total_duration_seconds=time.time() - start_time,
+            total_duration_seconds=time.perf_counter() - start_time,
             metadata={
                 "isolation_mode": isolation.value,
                 "max_parallel": concurrency,
