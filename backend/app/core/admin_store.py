@@ -55,33 +55,9 @@ from backend.app.core.admin import (
     UserUpdateRequest,
     _hash_password,
 )
+from backend.app.core.database_urls import normalize_sync_database_url
 
 logger = logging.getLogger(__name__)
-
-
-# ---------------------------------------------------------------------------
-# URL 规范化
-# ---------------------------------------------------------------------------
-
-def normalize_sync_database_url(database_url: str) -> str:
-    """把配置中的 database_url 规范化为 **同步** SQLAlchemy URL。
-
-    - ``postgres://`` / ``postgresql://`` / ``postgresql+asyncpg://``
-      → ``postgresql+psycopg://`` (psycopg v3 同步驱动)
-    - ``sqlite+aiosqlite:///`` → ``sqlite:///`` (同步 sqlite 驱动)
-    - 其他原样返回(已是指定同步驱动的 URL, 如 ``postgresql+psycopg://``)。
-    """
-    url = database_url.strip()
-    lowered = url.lower()
-    if lowered.startswith("postgres://"):
-        return "postgresql+psycopg://" + url[len("postgres://"):]
-    if lowered.startswith("postgresql+asyncpg://"):
-        return "postgresql+psycopg://" + url[len("postgresql+asyncpg://"):]
-    if lowered.startswith("postgresql://"):
-        return "postgresql+psycopg://" + url[len("postgresql://"):]
-    if lowered.startswith("sqlite+aiosqlite://"):
-        return "sqlite://" + url[len("sqlite+aiosqlite://"):]
-    return url
 
 
 # ---------------------------------------------------------------------------

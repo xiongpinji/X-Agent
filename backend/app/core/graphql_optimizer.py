@@ -267,7 +267,7 @@ class QueryResultCache:
         import json
 
         key_str = f"{query}:{json.dumps(variables, sort_keys=True)}"
-        return hashlib.md5(key_str.encode()).hexdigest()
+        return hashlib.md5(key_str.encode(), usedforsecurity=False).hexdigest()
 
     async def get(self, query: str, variables: dict[str, Any]) -> Any | None:
         """Get cached query result."""

@@ -5,15 +5,17 @@ global:
   debug: false
 
 image:
-  repository: your-registry/xagent
-  tag: latest
+  repository: ""
+  tag: ""
   pullPolicy: Always
 
 api:
   enabled: true
-  replicas: 5
+  # Realtime collaboration is process-local in the first commercial release.
+  # Keep a single API process until a distributed stream backend is available.
+  replicas: 1
   port: 8000
-  workers: 4
+  workers: 1
   terminationGracePeriodSeconds: 90
   preStopSleepSeconds: 10
   resources:
@@ -24,9 +26,9 @@ api:
       memory: "1Gi"
       cpu: "500m"
   autoscaling:
-    enabled: true
-    minReplicas: 5
-    maxReplicas: 20
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 1
     targetCPUUtilizationPercentage: 70
     targetMemoryUtilizationPercentage: 80
 
@@ -63,10 +65,9 @@ beat:
       memory: "512Mi"
       cpu: "200m"
 
-# 生产建议: 数据库类组件改用云厂商托管实例 —— 将对应 enabled 设为 false,
-# 并在 external.* 填写外部端点。默认仍启用集群内单副本(适合演示/中小规模)。
+# 商用生产必须使用外部持久化服务。端点留空会使 Helm 渲染直接失败。
 postgres:
-  enabled: true
+  enabled: false
   image: pgvector/pgvector:pg16
   port: 5432
   storage: 50Gi
@@ -81,7 +82,7 @@ postgres:
       cpu: "1000m"
 
 redis:
-  enabled: true
+  enabled: false
   image: redis:7-alpine
   port: 6379
   storage: 10Gi
@@ -96,7 +97,7 @@ redis:
       cpu: "200m"
 
 qdrant:
-  enabled: true
+  enabled: false
   image: qdrant/qdrant:latest
   port: 6333
   grpcPort: 6334
@@ -137,7 +138,13 @@ external:
 
 # P1 新增应用环境变量
 appEnv:
-  workflowStoreBackend: postgres
+  workflowStoreBackend: db
+  memoryBackend: postgres
+  traceBackend: postgres
+  adminStoreBackend: postgres
+  feedbackStoreBackend: postgres
+  runStoreBackend: postgres
+  auditStoreBackend: postgres
   neo4jEnabled: false
   pythonUtf8: "1"
 
@@ -172,28 +179,35 @@ ingress:
     nginx.ingress.kubernetes.io/rate-limit: "100"
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
   hosts:
-    - host: api.xagent.example.com
+    - host: ""
       paths:
         - path: /
           pathType: Prefix
   tls:
     - secretName: xagent-tls
       hosts:
-        - api.xagent.example.com
+        - ""
 
 service:
   type: ClusterIP
   port: 8000
 
 secrets:
-  dbUser: xagent
-  dbPassword: CHANGE_ME_IN_PRODUCTION
-  redisPassword: CHANGE_ME_IN_PRODUCTION
-  qdrantApiKey: CHANGE_ME_IN_PRODUCTION
-  neo4jPassword: CHANGE_ME_IN_PRODUCTION
-  # P0-03: 对应容器内 XAGENT_JWT_SECRET/XAGENT_ENCRYPTION_KEY (backend/app/settings.py)
-  jwtSecret: CHANGE_ME_IN_PRODUCTION_USE_STRONG_RANDOM_KEY
-  encryptionKey: CHANGE_ME_IN_PRODUCTION_USE_STRONG_RANDOM_KEY
+  existingSecret: ""
+
+migration:
+  enabled: true
+  verifiedBackupId: ""
+  timeoutSeconds: 600
+  backoffLimit: 1
+  ttlSecondsAfterFinished: 86400
+
+artifacts:
+  existingClaim: ""
+  mountPath: /var/lib/xagent/run-artifacts
+
+runtime:
+  mountPath: /var/lib/xagent
 
 database:
   name: xagent_db
@@ -213,14 +227,16 @@ backup:
   schedule: "0 2 * * *"
   retention: 30
   image:
-    repository: your-registry/xagent-backup
-    tag: latest
+    repository: ""
+    tag: ""
     pullPolicy: IfNotPresent
   storage: 100Gi
   s3:
-    enabled: false
+    enabled: true
     bucket: ""
     region: us-east-1
+  serviceAccount:
+    roleArn: ""
   terminationGracePeriodSeconds: 60
   preStopSleepSeconds: 5
   activeDeadlineSeconds: 7200

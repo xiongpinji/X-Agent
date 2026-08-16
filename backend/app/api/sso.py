@@ -31,6 +31,7 @@ from backend.app.api.errors import api_error
 from backend.app.core.contracts import ErrorCode
 from backend.app.core.saml_sso import (
     AUTHLIB_AVAILABLE,
+    SAML_BETA_MESSAGE,
     JITProvisioner,
     MultiTenantSSOManager,
     OIDCConfig,
@@ -173,6 +174,13 @@ def _ensure_env_providers() -> None:
 
 oidc_router = APIRouter(prefix="/api/v1/sso", tags=["sso"])
 
+SAML_CAPABILITY_STATUS: dict[str, Any] = {
+    "status": "beta_unavailable",
+    "enabled": False,
+    "require_signature": True,
+    "message": SAML_BETA_MESSAGE,
+}
+
 
 class OIDCAuthorizeResponse(BaseModel):
     authorization_url: str
@@ -199,7 +207,7 @@ async def list_sso_providers() -> dict[str, Any]:
     _ensure_env_providers()
     return {
         "oidc_providers": sso_manager.list_oidc_providers(),
-        "saml": {"status": "beta", "enabled": True, "require_signature": True, "message": "P1-05: 签名验证已启用"},
+        "saml": dict(SAML_CAPABILITY_STATUS),
     }
 
 
@@ -312,51 +320,14 @@ async def oidc_callback(provider: str, request: OIDCCallbackRequest) -> OIDCCall
 
 @oidc_router.get("/saml/{provider}/login")
 async def saml_login(provider: str) -> dict[str, str]:
-    """P1-05: SAML 登录 — 生成 AuthnRequest (Beta, 签名验证已启用)."""
-    from backend.app.core.sso.saml_provider import SAMLConfig, SAMLProvider
-
-    # Build config from environment
-    config = SAMLConfig(
-        entity_id=os.environ.get("XAGENT_SAML_ENTITY_ID", f"http://localhost:8000/api/v1/sso/saml/{provider}/acs"),
-        acs_url=os.environ.get("XAGENT_SAML_ACS_URL", f"http://localhost:8000/api/v1/sso/saml/{provider}/acs"),
-        idp_entity_id=os.environ.get("XAGENT_SAML_IDP_ENTITY_ID", ""),
-        idp_sso_url=os.environ.get("XAGENT_SAML_IDP_SSO_URL", ""),
-        idp_certificate=os.environ.get("XAGENT_SAML_IDP_CERTIFICATE", ""),
-        require_signature=True,
-    )
-    if not config.idp_sso_url:
-        raise HTTPException(status_code=501, detail="SAML IdP SSO URL 未配置 (XAGENT_SAML_IDP_SSO_URL)")
-    saml_provider = SAMLProvider(config)
-    request_id, auth_url = saml_provider.generate_auth_request()
-    return {"request_id": request_id, "redirect_url": auth_url}
+    """SAML 登录在 XML DSig 完整实现前 fail-closed。"""
+    raise HTTPException(status_code=501, detail=SAML_BETA_MESSAGE)
 
 
 @oidc_router.post("/saml/{provider}/acs")
 async def saml_acs(provider: str, saml_response: str = "", relay_state: str = "") -> dict[str, Any]:
-    """P1-05: SAML ACS — 处理 IdP 响应 (Beta, 签名验证已启用)."""
-    from backend.app.core.sso.saml_provider import SAMLConfig, SAMLProvider
-
-    if not saml_response:
-        raise HTTPException(status_code=400, detail="Missing SAMLResponse")
-    config = SAMLConfig(
-        entity_id=os.environ.get("XAGENT_SAML_ENTITY_ID", f"http://localhost:8000/api/v1/sso/saml/{provider}/acs"),
-        acs_url=os.environ.get("XAGENT_SAML_ACS_URL", f"http://localhost:8000/api/v1/sso/saml/{provider}/acs"),
-        idp_entity_id=os.environ.get("XAGENT_SAML_IDP_ENTITY_ID", ""),
-        idp_sso_url=os.environ.get("XAGENT_SAML_IDP_SSO_URL", ""),
-        idp_certificate=os.environ.get("XAGENT_SAML_IDP_CERTIFICATE", ""),
-        require_signature=True,
-    )
-    saml_provider = SAMLProvider(config)
-    assertion = saml_provider.verify_response(saml_response, relay_state=relay_state or None)
-    if not assertion:
-        raise HTTPException(status_code=401, detail="SAML 响应验证失败 (签名无效或断言过期)")
-    return {
-        "status": "authenticated",
-        "subject": assertion.subject,
-        "name_id": assertion.name_id,
-        "session_index": assertion.session_index,
-        "attributes": assertion.attributes,
-    }
+    """SAML ACS 在 XML DSig 完整实现前不解析任何输入。"""
+    raise HTTPException(status_code=501, detail=SAML_BETA_MESSAGE)
 
 
 @oidc_router.get("/status")
@@ -375,7 +346,7 @@ async def sso_status() -> dict[str, Any]:
             ],
             "providers_configured": len(sso_manager.oidc_configs),
         },
-        "saml": {"status": "beta", "enabled": True, "require_signature": True, "message": "P1-05: 签名验证已启用"},
+        "saml": dict(SAML_CAPABILITY_STATUS),
         "webauthn": {"status": "implemented", "features": ["registration", "authentication", "credential_management"]},
         "ldap": {
             "status": "implemented",
@@ -948,11 +919,10 @@ async def unified_sso_entry(
                 "features": ["discovery", "jwks_verification", "state_nonce", "jit_provisioning"],
             },
             "saml": {
-                "status": "beta",
+                **SAML_CAPABILITY_STATUS,
                 "login_endpoint": "/api/v1/sso/saml/{provider}/login",
                 "acs_endpoint": "/api/v1/sso/saml/{provider}/acs",
-                "require_signature": True,
-                "features": ["authn_request", "signature_verification"],
+                "features": [],
             },
             "ldap": {
                 "status": "implemented" if ldap_configured else "not_configured",

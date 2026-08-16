@@ -457,19 +457,35 @@ async def test_hs256_id_token(idp: MockIdP):
 
 
 # ============================================================================
-# SAML Beta (P1-05: 签名验证已启用, 未配置 IdP 时仍 501)
+# SAML Beta (XML DSig 未完成，全配置也必须 fail-closed)
 # ============================================================================
 
-def test_saml_endpoints_fail_closed(sso_app):
+def test_saml_endpoints_fail_closed_even_when_fully_configured(sso_app, monkeypatch):
     client, _idp, _adapter = sso_app
-    # P1-05: SAML login 在未配置 IdP SSO URL 时返回 501
+
+    monkeypatch.setenv("XAGENT_SAML_IDP_ENTITY_ID", "https://idp.example.com")
+    monkeypatch.setenv("XAGENT_SAML_IDP_SSO_URL", "https://idp.example.com/sso")
+    monkeypatch.setenv("XAGENT_SAML_IDP_CERTIFICATE", "PRIVATE_CERTIFICATE_MARKER")
+
+    from backend.app.core.sso.saml_provider import SAMLProvider
+
+    def unexpected_saml_processing(*_args, **_kwargs):
+        raise AssertionError("SAML beta endpoint must not invoke the legacy parser")
+
+    monkeypatch.setattr(SAMLProvider, "generate_auth_request", unexpected_saml_processing)
+    monkeypatch.setattr(SAMLProvider, "verify_response", unexpected_saml_processing)
+
     resp_login = client.get(f"/api/v1/sso/saml/{PROVIDER}/login")
     assert resp_login.status_code == 501
-    assert "SSO URL" in resp_login.json()["detail"] or "未配置" in resp_login.json()["detail"]
+    assert "XML DSig" in resp_login.json()["detail"]
 
-    # P1-05: SAML ACS 缺少 SAMLResponse 时返回 400
-    resp_acs = client.post(f"/api/v1/sso/saml/{PROVIDER}/acs")
-    assert resp_acs.status_code in (400, 422, 501)
+    resp_acs = client.post(
+        f"/api/v1/sso/saml/{PROVIDER}/acs",
+        params={"saml_response": "PRIVATE_SAML_RESPONSE_MARKER"},
+    )
+    assert resp_acs.status_code == 501
+    assert "XML DSig" in resp_acs.json()["detail"]
+    assert "PRIVATE_SAML_RESPONSE_MARKER" not in resp_acs.text
 
 
 # ============================================================================
@@ -482,12 +498,14 @@ def test_status_and_providers(sso_app):
     assert status.status_code == 200
     body = status.json()
     assert body["oidc"]["status"] == "GA"
-    assert body["saml"]["status"] == "beta"
-    assert body["saml"]["enabled"] is True  # P1-05: 签名验证已启用
+    assert body["saml"]["status"] == "beta_unavailable"
+    assert body["saml"]["enabled"] is False
+    assert "XML DSig" in body["saml"]["message"]
     assert body["jwt_backend"]["authlib_or_joserfc_available"] is True
     assert body["oidc"]["providers_configured"] >= 1
 
     providers = client.get("/api/v1/sso/providers")
     assert providers.status_code == 200
+    assert providers.json()["saml"]["enabled"] is False
     names = [p["provider_name"] for p in providers.json()["oidc_providers"]]
     assert PROVIDER in names

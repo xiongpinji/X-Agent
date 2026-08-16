@@ -1,131 +1,50 @@
-#!/bin/bash
-set -e
+#!/usr/bin/env bash
+set -euo pipefail
 
-# X-Agent Database Migration Script
-# This script handles database migrations safely
+# Apply the forward-only production migration after an operator has verified a
+# restorable backup. Database restoration is intentionally a separate,
+# explicitly confirmed operation (restore-database.sh).
+
+DRY_RUN=false
+if [[ "${1:-}" == "--dry-run" ]]; then
+  DRY_RUN=true
+  shift
+fi
+if [[ $# -ne 0 ]]; then
+  echo "Usage: migrate-db.sh [--dry-run]" >&2
+  exit 2
+fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+NAMESPACE="${NAMESPACE:-xagent}"
+BACKUP_ID="${XAGENT_PRE_MIGRATION_BACKUP_ID:-}"
 
-# Configuration
-NAMESPACE=${NAMESPACE:-xagent}
-ENVIRONMENT=${ENVIRONMENT:-production}
+if [[ ! -f "$PROJECT_ROOT/backend/migrations/alembic.ini" ]]; then
+  echo "Required Alembic configuration is missing" >&2
+  exit 2
+fi
+if [[ -z "$BACKUP_ID" ]]; then
+  echo "XAGENT_PRE_MIGRATION_BACKUP_ID must reference a verified backup" >&2
+  exit 2
+fi
 
-# Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m'
+if $DRY_RUN; then
+  echo "Migration dry-run validated namespace=$NAMESPACE backup_id=$BACKUP_ID"
+  exit 0
+fi
 
-log_info() {
-    echo -e "${GREEN}[INFO]${NC} $1"
-}
+if command -v docker-compose >/dev/null 2>&1; then
+  docker-compose exec -T \
+    -e XAGENT_PRE_MIGRATION_BACKUP_ID="$BACKUP_ID" \
+    xagent-api python -m backend.app.ops.migration_gate upgrade --timeout 300
+else
+  command -v kubectl >/dev/null 2>&1 || { echo "kubectl is required" >&2; exit 2; }
+  api_pod="$(kubectl get pods -n "$NAMESPACE" -l app=xagent-api -o jsonpath='{.items[0].metadata.name}')"
+  [[ -n "$api_pod" ]] || { echo "No xagent-api pod found" >&2; exit 2; }
+  kubectl exec "$api_pod" -n "$NAMESPACE" -- env \
+    XAGENT_PRE_MIGRATION_BACKUP_ID="$BACKUP_ID" \
+    python -m backend.app.ops.migration_gate upgrade --timeout 300
+fi
 
-log_warn() {
-    echo -e "${YELLOW}[WARN]${NC} $1"
-}
-
-log_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
-}
-
-# Backup database before migration
-backup_database() {
-    log_info "Creating database backup..."
-
-    local backup_dir="/backups/xagent"
-    local backup_file="$backup_dir/pre_migration_$(date +%Y%m%d_%H%M%S).sql"
-
-    mkdir -p "$backup_dir"
-
-    if command -v docker-compose &> /dev/null; then
-        docker-compose exec -T postgres pg_dump -U xagent xagent_db > "$backup_file"
-    else
-        kubectl exec -i deployment/postgres -n "$NAMESPACE" -- \
-            pg_dump -U xagent xagent_db > "$backup_file"
-    fi
-
-    log_info "Backup created: $backup_file"
-    echo "$backup_file"
-}
-
-# Run migrations
-run_migrations() {
-    log_info "Running database migrations..."
-
-    # 仓库当前没有 alembic.ini(backend/migrations/ 为纯 SQL, 全新部署由
-    # postgres 容器 initdb 挂载 backend/migrations/init_schema.sql 初始化)。
-    # 显式降级: 无 alembic.ini 时跳过并告警, 不假装迁移成功。
-    if [ ! -f "${PROJECT_ROOT}/alembic.ini" ]; then
-        log_warn "alembic.ini 不存在, 跳过 alembic 迁移"
-        log_warn "全新部署的 schema 由 postgres initdb (backend/migrations/init_schema.sql) 初始化"
-        return 0
-    fi
-
-    if command -v docker-compose &> /dev/null; then
-        docker-compose exec xagent-api alembic upgrade head
-    else
-        local api_pod=$(kubectl get pods -n "$NAMESPACE" -l app=xagent-api -o jsonpath='{.items[0].metadata.name}')
-        kubectl exec -it "$api_pod" -n "$NAMESPACE" -- alembic upgrade head
-    fi
-
-    log_info "Migrations completed successfully"
-}
-
-# Verify migrations
-verify_migrations() {
-    if [ ! -f "${PROJECT_ROOT}/alembic.ini" ]; then
-        log_warn "alembic.ini 不存在, 跳过迁移验证"
-        return 0
-    fi
-
-    log_info "Verifying migrations..."
-
-    if command -v docker-compose &> /dev/null; then
-        docker-compose exec xagent-api alembic current
-    else
-        local api_pod=$(kubectl get pods -n "$NAMESPACE" -l app=xagent-api -o jsonpath='{.items[0].metadata.name}')
-        kubectl exec -it "$api_pod" -n "$NAMESPACE" -- alembic current
-    fi
-
-    log_info "Migration verification completed"
-}
-
-# Rollback migrations
-rollback_migrations() {
-    local backup_file=$1
-
-    log_warn "Rolling back migrations..."
-
-    if command -v docker-compose &> /dev/null; then
-        docker-compose exec -T postgres psql -U xagent xagent_db < "$backup_file"
-    else
-        kubectl exec -i deployment/postgres -n "$NAMESPACE" -- \
-            psql -U xagent xagent_db < "$backup_file"
-    fi
-
-    log_info "Rollback completed"
-}
-
-# Main
-main() {
-    log_info "Starting database migration"
-    log_info "Environment: $ENVIRONMENT"
-
-    # Create backup
-    backup_file=$(backup_database)
-
-    # Run migrations
-    if ! run_migrations; then
-        log_error "Migration failed, rolling back..."
-        rollback_migrations "$backup_file"
-        exit 1
-    fi
-
-    # Verify migrations
-    verify_migrations
-
-    log_info "Database migration completed successfully"
-}
-
-main "$@"
+echo "Migration completed from verified backup reference: $BACKUP_ID"

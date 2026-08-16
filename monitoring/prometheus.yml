@@ -22,9 +22,8 @@
 #     prometheus_metrics.py，但其接线入口（monitoring_setup /
 #     PrometheusMiddleware）当前未被 main.py 调用，不产生数据。
 #
-# 注意：生产模式（app_mode=production）下 require_api_key 强制为 true，
-#       抓取 /api/v1/metrics/prometheus 需携带 x-api-key 头，否则 401。
-#       生产部署时需在本配置中为 x-agent-api 任务补充认证头。
+# 生产模式强制 API key；Prometheus 从只读文件注入 x-api-key，
+# 密钥不进入 YAML、镜像或命令行。
 # =============================================================================
 
 global:
@@ -32,8 +31,8 @@ global:
   evaluation_interval: 15s
   external_labels:
     monitor: 'x-agent-monitor'
-    environment: '${ENVIRONMENT:-development}'
-    cluster: '${CLUSTER_NAME:-default}'
+    environment: '${ENVIRONMENT}'
+    cluster: '${CLUSTER_NAME}'
 
 # TODO: remote_write 指向的 prometheus-remote-storage:9009 服务不存在于任何
 # 部署清单，已注释。待长期存储方案确定后再启用。
@@ -60,8 +59,8 @@ alerting:
     #       services: ['alertmanager']
 
 rule_files:
-  - 'alert_rules.yml'
-  - 'recording_rules.yml'
+  - '/etc/prometheus/alert_rules.yml'
+  - '/etc/prometheus/recording_rules.yml'
   # 挂载状态（2026-07-19 第二波）：monitoring/docker-compose.monitoring.yml
   # 与 monitoring/docker-compose.yml 均已补挂 recording_rules.yml，
   # 与上述 rule_files 引用一致，可正常启动。
@@ -70,12 +69,16 @@ scrape_configs:
   # X-Agent API Server（唯一真实指标来源）
   - job_name: 'x-agent-api'
     static_configs:
-      - targets: ['localhost:8000']
+      - targets: ['${XAGENT_METRICS_TARGET}']
         labels:
           service: 'api'
           component: 'core'
     # 与 backend/app/api/metrics.py 实际挂载路径一致
     metrics_path: '/api/v1/metrics/prometheus'
+    http_headers:
+      X-Api-Key:
+        files:
+          - /run/secrets/xagent_metrics_api_key
     scrape_interval: 10s
     scrape_timeout: 5s
     relabel_configs:

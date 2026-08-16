@@ -14,9 +14,9 @@ MEMORY_SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS memories (
     id UUID PRIMARY KEY,
     tenant_id TEXT NOT NULL,
-    agent_id UUID NULL,
+    agent_id TEXT NULL,
     content TEXT NOT NULL,
-    layer INTEGER NOT NULL CHECK (layer BETWEEN 1 AND 4),
+    layer INTEGER NOT NULL CHECK (layer BETWEEN 1 AND 10),
     importance DOUBLE PRECISION NOT NULL CHECK (importance >= 0 AND importance <= 1),
     tags TEXT[] NOT NULL DEFAULT '{}',
     metadata JSONB NOT NULL DEFAULT '{}',
@@ -26,8 +26,6 @@ CREATE TABLE IF NOT EXISTS memories (
 CREATE INDEX IF NOT EXISTS idx_memories_tenant_layer_created
     ON memories (tenant_id, layer, created_at DESC);
 
-CREATE INDEX IF NOT EXISTS idx_memories_content_trgm
-    ON memories USING gin (content gin_trgm_ops);
 """
 
 
@@ -35,9 +33,7 @@ class PostgresMemorySystem:
     """PostgreSQL-backed memory store.
 
     Reality notes (aligned with the code, P1-13):
-    - The schema CHECK constrains ``layer`` to 1-4, although the canonical
-      ``MemoryItem`` model allows 1-10; writes with layer>4 are rejected by
-      Postgres until the schema is migrated.
+    - The schema accepts the canonical MemoryItem layers 1-10 and string agent IDs.
     - Search is keyword-based unless ``enable_vector_search=True`` (pgvector).
     - Write-path dedup is available but OPT-IN here (``enable_dedup=True``):
       exact normalized-content match per tenant, plus vector near-duplicate
@@ -109,7 +105,7 @@ class PostgresMemorySystem:
                     id, tenant_id, agent_id, content, layer, importance, tags,
                     metadata, created_at, embedding
                 )
-                VALUES ($1::uuid, $2, $3::uuid, $4, $5, $6, $7::text[], $8::jsonb, $9, $10::vector)
+                VALUES ($1::uuid, $2, $3, $4, $5, $6, $7::text[], $8::jsonb, $9, $10::vector)
                 """,
                 item.id,
                 item.tenant_id,
@@ -128,7 +124,7 @@ class PostgresMemorySystem:
                 INSERT INTO memories (
                     id, tenant_id, agent_id, content, layer, importance, tags, metadata, created_at
                 )
-                VALUES ($1::uuid, $2, $3::uuid, $4, $5, $6, $7::text[], $8::jsonb, $9)
+                VALUES ($1::uuid, $2, $3, $4, $5, $6, $7::text[], $8::jsonb, $9)
                 """,
                 item.id,
                 item.tenant_id,
@@ -156,7 +152,7 @@ class PostgresMemorySystem:
         owner_filter = ""
         params_extra: list = []
         if scope is not None and scope.owner_agent_id:
-            owner_filter = " AND agent_id = $5::uuid"
+            owner_filter = " AND agent_id = $5"
             params_extra = [scope.owner_agent_id]
         if self._enable_vector_search and self._embedding_model is not None:
             query_embedding = await self._embed(query)
@@ -347,7 +343,6 @@ class PostgresMemorySystem:
                 dsn = "postgresql://" + dsn[len("postgres://"):]
             self._pool = await asyncpg.create_pool(dsn)
         if self._ensure_schema and not self._initialized:
-            await self._pool.execute("CREATE EXTENSION IF NOT EXISTS pg_trgm;")
             await self._pool.execute(MEMORY_SCHEMA_SQL)
             if self._enable_vector_search:
                 await self._pool.execute("CREATE EXTENSION IF NOT EXISTS vector;")

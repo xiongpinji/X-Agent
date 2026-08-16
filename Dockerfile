@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.7@sha256:a57df69d0ea827fb7266491f2813635de6f17269be881f696fbfdf2d83dda33e
 # ==============================================================================
 # Multi-stage Dockerfile for X-Agent Production Deployment
 # Stages: frontend (Node build) → builder (Python deps) → runtime (minimal)
@@ -6,7 +7,7 @@
 # ------------------------------------------------------------------------------
 # Stage 1: Frontend — build React/Vite static assets
 # ------------------------------------------------------------------------------
-FROM node:20-alpine AS frontend
+FROM node:20-alpine@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293 AS frontend
 
 WORKDIR /build/frontend
 
@@ -21,7 +22,7 @@ RUN npm run build
 # ------------------------------------------------------------------------------
 # Stage 2: Builder — install Python dependencies into isolated prefix
 # ------------------------------------------------------------------------------
-FROM python:3.11-slim AS builder
+FROM python:3.11-slim@sha256:a630a63cdb314e2d138a2fca3e375e319e8568346ffafac5b980f888630ac4f1 AS builder
 
 WORKDIR /build
 
@@ -33,16 +34,20 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Install Python packages into /install (isolated prefix)
 COPY requirements-lock.txt pyproject.toml ./
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --prefix=/install -r requirements-lock.txt
+
+# Application source changes must not invalidate the production dependency layer.
 COPY backend/ ./backend/
 COPY cli/ ./cli/
-RUN pip install --no-cache-dir --upgrade pip setuptools wheel \
-    && pip install --no-cache-dir --prefix=/install -r requirements-lock.txt \
-    && pip install --no-cache-dir --prefix=/install --no-deps .
+RUN --mount=type=cache,target=/root/.cache/pip \
+    PYTHONPATH=/install/lib/python3.11/site-packages \
+    pip install --prefix=/install --no-deps --no-build-isolation .
 
 # ------------------------------------------------------------------------------
 # Stage 3: Runtime — minimal production image
 # ------------------------------------------------------------------------------
-FROM python:3.11-slim AS runtime
+FROM python:3.11-slim@sha256:a630a63cdb314e2d138a2fca3e375e319e8568346ffafac5b980f888630ac4f1 AS runtime
 
 # Runtime system deps only (curl for healthcheck, ca-certificates for TLS)
 RUN apt-get update && apt-get install -y --no-install-recommends \

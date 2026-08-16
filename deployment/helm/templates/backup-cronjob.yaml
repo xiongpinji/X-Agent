@@ -1,4 +1,15 @@
 {{- if .Values.backup.enabled }}
+{{- if .Values.backup.s3.enabled }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: xagent-backup
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    eks.amazonaws.com/role-arn: {{ include "xagent.backupRoleArn" . | quote }}
+automountServiceAccountToken: true
+---
+{{- end }}
 # P1-17: K8s 定时备份 CronJob —— 执行 deployment/backup/backup.sh
 # (PG pg_dump / Redis RDB / Qdrant 官方快照 API POST /collections/{name}/snapshots)
 apiVersion: batch/v1
@@ -23,13 +34,26 @@ spec:
             app: xagent-backup
         spec:
           restartPolicy: OnFailure
+          serviceAccountName: {{ if .Values.backup.s3.enabled }}xagent-backup{{ else }}xagent{{ end }}
+          securityContext:
+            fsGroup: 10001
+            fsGroupChangePolicy: OnRootMismatch
           # P1-16: 优雅停机(批任务正常结束时 preStop 不触发, 节点驱逐时生效)
           terminationGracePeriodSeconds: {{ .Values.backup.terminationGracePeriodSeconds | default 60 }}
           containers:
           - name: backup
             # 备份镜像由 deployment/backup/Dockerfile 构建, 含 pg_dump/redis-cli/curl/jq
-            image: "{{ .Values.backup.image.repository }}:{{ .Values.backup.image.tag }}"
+            image: {{ include "xagent.backupImage" . | quote }}
             imagePullPolicy: {{ .Values.backup.image.pullPolicy | default "IfNotPresent" }}
+            securityContext:
+              runAsNonRoot: true
+              runAsUser: 10001
+              runAsGroup: 10001
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: true
+              capabilities:
+                drop:
+                - ALL
             command:
             - /bin/bash
             - /usr/local/bin/backup.sh
@@ -53,12 +77,12 @@ spec:
             - name: DB_USER
               valueFrom:
                 secretKeyRef:
-                  name: xagent-secrets
+                  name: {{ include "xagent.secretName" . }}
                   key: DB_USER
             - name: DB_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: xagent-secrets
+                  name: {{ include "xagent.secretName" . }}
                   key: DB_PASSWORD
             - name: DB_NAME
               valueFrom:
@@ -72,7 +96,7 @@ spec:
             - name: REDIS_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: xagent-secrets
+                  name: {{ include "xagent.secretName" . }}
                   key: REDIS_PASSWORD
             - name: QDRANT_HOST
               value: {{ include "xagent.qdrantHost" . | quote }}
@@ -81,12 +105,12 @@ spec:
             - name: QDRANT_API_KEY
               valueFrom:
                 secretKeyRef:
-                  name: xagent-secrets
+                  name: {{ include "xagent.secretName" . }}
                   key: QDRANT_API_KEY
             - name: S3_ENABLED
               value: {{ .Values.backup.s3.enabled | quote }}
             - name: S3_BUCKET
-              value: {{ .Values.backup.s3.bucket | quote }}
+              value: {{ include "xagent.backupBucket" . | quote }}
             - name: S3_REGION
               value: {{ .Values.backup.s3.region | quote }}
             volumeMounts:

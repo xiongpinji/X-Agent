@@ -17,11 +17,32 @@ spec:
         app: xagent-beat
     spec:
       serviceAccountName: xagent
+      {{- if .Values.migration.enabled }}
+      initContainers:
+      - name: wait-for-schema
+        image: "{{ include "xagent.imageRepository" . }}:{{ include "xagent.imageTag" . }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        command: ["python", "-m", "backend.app.ops.migration_gate", "wait", "--timeout", {{ .Values.migration.timeoutSeconds | quote }}]
+        envFrom:
+        - configMapRef:
+            name: xagent-config
+        - secretRef:
+            name: {{ include "xagent.secretName" . }}
+        env:
+        - name: XAGENT_DATABASE_URL
+          value: "postgresql+asyncpg://$(DB_USER):$(DB_PASSWORD)@{{ include "xagent.postgresHost" . }}:{{ .Values.database.port }}/$(DB_NAME)"
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: ["ALL"]
+      {{- end }}
       # P1-16: 优雅停机 —— 宽限期默认 60s; preStop sleep 后再 SIGTERM
       terminationGracePeriodSeconds: {{ .Values.beat.terminationGracePeriodSeconds | default 60 }}
       containers:
       - name: xagent-beat
-        image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        image: "{{ include "xagent.imageRepository" . }}:{{ include "xagent.imageTag" . }}"
         imagePullPolicy: {{ .Values.image.pullPolicy }}
         # P0-02: 后端无 Celery 应用; beat 角色当前与 worker 同为 asyncio 轮询进程,
         # 直接以 python -m 启动, 待真 Celery 返工后再拆分调度器
@@ -41,7 +62,7 @@ spec:
         - configMapRef:
             name: xagent-config
         - secretRef:
-            name: xagent-secrets
+            name: {{ include "xagent.secretName" . }}
         env:
         - name: XAGENT_DATABASE_URL
           value: "postgresql+asyncpg://$(DB_USER):$(DB_PASSWORD)@{{ include "xagent.postgresHost" . }}:{{ .Values.database.port }}/$(DB_NAME)"
@@ -62,9 +83,14 @@ spec:
           mountPath: /tmp
         - name: logs
           mountPath: /app/logs
+        - name: runtime-state
+          mountPath: {{ .Values.runtime.mountPath }}
       volumes:
       - name: tmp
         emptyDir: {}
       - name: logs
         emptyDir: {}
+      - name: runtime-state
+        persistentVolumeClaim:
+          claimName: {{ include "xagent.artifactsClaim" . }}
 {{- end }}

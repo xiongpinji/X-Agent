@@ -9,13 +9,13 @@ data:
   # LOG_LEVEL 由 backend/app/monitoring 与 core/config.py LogSettings(LOG_ 前缀)直接读取, 保持原名
   LOG_LEVEL: {{ .Values.global.logLevel | quote }}
   XAGENT_DEBUG: {{ .Values.global.debug | quote }}
-  XAGENT_API_WORKERS: {{ .Values.api.workers | quote }}
+  # gunicorn.conf.py reads API_WORKERS without the application prefix.
+  API_WORKERS: {{ .Values.api.workers | quote }}
   XAGENT_JWT_ALGORITHM: "HS256"
   XAGENT_JWT_EXPIRATION_HOURS: "24"
   # 以下为组合 URL 用的辅助变量(由 api-deployment 中 $(VAR) 引用), 非应用直读配置
   DB_NAME: {{ .Values.database.name | quote }}
   DB_PORT: {{ .Values.database.port | quote }}
-  DB_USER: {{ .Values.secrets.dbUser | quote }}
   REDIS_PORT: {{ .Values.redis.port | quote }}
   QDRANT_PORT: {{ .Values.qdrant.port | quote }}
   NEO4J_PORT: {{ .Values.neo4j.port | quote }}
@@ -23,7 +23,24 @@ data:
   # P1: Python UTF-8 模式 (PEP 540)
   PYTHONUTF8: {{ .Values.appEnv.pythonUtf8 | default "1" | quote }}
   # P1: 工作流存储后端
-  XAGENT_WORKFLOW_STORE_BACKEND: {{ .Values.appEnv.workflowStoreBackend | default "postgres" | quote }}
+  XAGENT_WORKFLOW_STORE_BACKEND: {{ .Values.appEnv.workflowStoreBackend | default "db" | quote }}
+  XAGENT_MEMORY_BACKEND: {{ .Values.appEnv.memoryBackend | default "postgres" | quote }}
+  XAGENT_TRACE_BACKEND: {{ .Values.appEnv.traceBackend | default "postgres" | quote }}
+  XAGENT_ADMIN_STORE_BACKEND: {{ .Values.appEnv.adminStoreBackend | default "postgres" | quote }}
+  XAGENT_FEEDBACK_STORE_BACKEND: {{ .Values.appEnv.feedbackStoreBackend | default "postgres" | quote }}
+  XAGENT_RUN_STORE_BACKEND: {{ .Values.appEnv.runStoreBackend | default "postgres" | quote }}
+  XAGENT_AUDIT_STORE_BACKEND: {{ .Values.appEnv.auditStoreBackend | default "postgres" | quote }}
+  XAGENT_RUN_ARTIFACT_STORE_PATH: {{ .Values.artifacts.mountPath | quote }}
+  XAGENT_API_KEY_STORE_PATH: {{ printf "%s/runtime-data/api_keys.json" .Values.runtime.mountPath | quote }}
+  XAGENT_APPROVAL_STORE_PATH: {{ printf "%s/runtime-data/approvals.json" .Values.runtime.mountPath | quote }}
+  XAGENT_TOOL_EXECUTION_STORE_PATH: {{ printf "%s/runtime-data/tool_executions.json" .Values.runtime.mountPath | quote }}
+  XAGENT_AUDIT_STORE_PATH: {{ printf "%s/runtime-data/audit.jsonl" .Values.runtime.mountPath | quote }}
+  XAGENT_QUOTA_STORE_PATH: {{ printf "%s/runtime-data/quotas.json" .Values.runtime.mountPath | quote }}
+  XAGENT_AGENT_CONTEXT_STORE_PATH: {{ printf "%s/runtime-data/agent-contexts" .Values.runtime.mountPath | quote }}
+  XAGENT_CONTEXT_SESSION_STORE_PATH: {{ printf "%s/runtime-data/sessions" .Values.runtime.mountPath | quote }}
+  XAGENT_NOTIFICATION_SUBSCRIPTION_STORE_PATH: {{ printf "%s/runtime-data/notification-subscriptions.json" .Values.runtime.mountPath | quote }}
+  X_AGENT_GOALS_STORE_PATH: {{ printf "%s/runtime-data/goals.json" .Values.runtime.mountPath | quote }}
+  XAGENT_REQUIRE_API_KEY: "true"
   # P1: Neo4j 功能开关
   XAGENT_NEO4J_ENABLED: {{ .Values.appEnv.neo4jEnabled | default false | quote }}
   # P1: SSO - SAML

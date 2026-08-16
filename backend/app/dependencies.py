@@ -34,6 +34,7 @@ from backend.app.core.contracts import ErrorCode
 from backend.app.core.desktop import DesktopAutomationStore, desktop_automation_store
 from backend.app.core.policy import ToolPolicyEngine
 from backend.app.core.runs import RunStore
+from backend.app.core.runs_sql import SqlRunStore
 from backend.app.core.security import (
     ROLE_SCOPES,
     APIKeyStore,
@@ -180,6 +181,8 @@ def get_trace_store() -> TraceStore | PostgresTraceStore:
 @lru_cache
 def get_run_store() -> RunStore:
     settings = get_settings()
+    if settings.run_store_backend == "postgres":
+        return SqlRunStore(settings.database_url, create_schema=False)
     return RunStore(storage_path=settings.run_store_path)
 
 
@@ -249,12 +252,20 @@ def get_audit_store() -> AuditStore:
             "Set XAGENT_AUDIT_HMAC_SECRET for stable audit signatures "
             "(required in production)."
         )
-    return _attach_audit_shipper_hook(
-        AuditStore(
+    if settings.audit_store_backend == "postgres":
+        from backend.app.core.audit_sql import SqlAuditStore
+
+        store = SqlAuditStore(
+            settings.database_url,
+            hmac_secret=hmac_secret,
+            create_schema=False,
+        )
+    else:
+        store = AuditStore(
             storage_path=settings.audit_store_path,
             hmac_secret=hmac_secret,
         )
-    )
+    return _attach_audit_shipper_hook(store)
 
 
 # ---------------------------------------------------------------------------
@@ -346,9 +357,14 @@ async def get_rbac_engine() -> "AdvancedRBACEngine":
                 pool = await asyncpg.create_pool(db_url, min_size=1, max_size=5)
                 storage = PostgresRBACRepository(pool)
             except Exception as e:
-                import logging
+                if settings.app_mode == "production":
+                    logging.getLogger(__name__).error(
+                        "RBAC PostgreSQL storage unavailable (%s)", type(e).__name__
+                    )
+                    raise RuntimeError("RBAC storage is unavailable in production") from e
                 logging.getLogger(__name__).warning(
-                    f"Failed to create RBAC PostgreSQL storage, falling back to memory: {e}"
+                    "Failed to create RBAC PostgreSQL storage; falling back to memory (%s)",
+                    type(e).__name__,
                 )
                 storage = None
 
@@ -509,8 +525,7 @@ def get_agent_context_manager() -> "AgentContextManager":
     from backend.app.core.agent_context import AgentContextManager
 
     settings = get_settings()
-    storage_path = getattr(settings, "agent_context_store_path", None) or "data/agent_contexts"
-    return AgentContextManager(storage_path=storage_path)
+    return AgentContextManager(storage_path=settings.agent_context_store_path)
 
 
 @lru_cache
@@ -522,7 +537,9 @@ def get_context_manager() -> Any:
     """
     from backend.app.core.context.agent_integration import AgentLoopContextBridge
 
-    return AgentLoopContextBridge.create_default().context_manager
+    return AgentLoopContextBridge.create_default(
+        storage_path=get_settings().context_session_store_path
+    ).context_manager
 
 
 @lru_cache

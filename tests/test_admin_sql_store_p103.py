@@ -304,6 +304,7 @@ class TestStoreFactory:
         monkeypatch.setenv("XAGENT_JWT_SECRET", "ProdJWTSecret1234567890ABCDEFGHIJK")
         monkeypatch.setenv("XAGENT_ENCRYPTION_KEY", "ProdEncKey1234567890ABCDEFGHIJKLMN")
         monkeypatch.setenv("XAGENT_AUDIT_HMAC_SECRET", "hmac-secret")
+        monkeypatch.setenv("XAGENT_GITHUB_WEBHOOK_SECRET", "github-webhook-secret")
         from backend.app.settings import get_settings
 
         get_settings.cache_clear()

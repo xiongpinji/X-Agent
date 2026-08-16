@@ -145,6 +145,27 @@ class TestQdrantHappyPath:
 
 
 class TestQdrantDegradation:
+    def test_service_client_uses_locked_qdrant_constructor_contract(self, monkeypatch) -> None:
+        from backend.app.services.memory import qdrant_client as client_module
+
+        captured: dict[str, object] = {}
+
+        def constructor(**kwargs):
+            captured.update(kwargs)
+            return object()
+
+        monkeypatch.setattr(client_module, "QdrantClient", constructor)
+        client = client_module.QdrantVectorClient(
+            url="http://qdrant.example:6333",
+            api_key="test-key",
+        )
+
+        assert client.has_real_client is True
+        assert captured == {
+            "url": "http://qdrant.example:6333",
+            "api_key": "test-key",
+        }
+
     async def test_unreachable_server_degrades_explicitly(self, caplog) -> None:
         with caplog.at_level(logging.WARNING):
             system = build_qdrant_memory_system(

@@ -21,18 +21,13 @@ The CI/CD pipeline automatically rolls back on deployment failure:
 ### Manual Rollback
 
 ```bash
-# Rollback to previous version
-bash deployment/rollback.sh
-
-# Rollback to specific version
-bash deployment/rollback.sh -v v1.0.0
-
-# Rollback with database schema
-bash deployment/rollback.sh -v v1.0.0 -d
-
-# Rollback in specific namespace
-bash deployment/rollback.sh -v v1.0.0 -n production
+# Roll back the Helm release to its previous audited revision.
+NAMESPACE=production RELEASE_NAME=xagent \
+  bash deployment/scripts/rollback.sh
 ```
+
+The rollback script never downgrades the database. A specific image or schema
+recovery requires a separately reviewed operator procedure and verified backup.
 
 ## Rollback Scenarios
 
@@ -76,12 +71,14 @@ kubectl logs -n production -l app=xagent-worker --tail=50
 # - Schema validation failures
 # - Migration errors
 
-# Rollback steps:
-python deployment/migrations/migrate.py rollback 1
-python deployment/migrations/migrate.py verify
+# Application rollback only. Migration 0002 is forward-only and must never be
+# downgraded automatically.
+bash deployment/scripts/rollback.sh
 
-# If verification fails, restore from backup:
-python deployment/migrations/migrate.py restore /backups/backup_20240527_020000/database.dump
+# If schema recovery is approved, stop writes and restore a verified backup:
+export XAGENT_RESTORE_CONFIRMATION="$XAGENT_DATABASE_NAME"
+bash deployment/scripts/restore-database.sh \
+  /backups/backup_20240527_020000/database.dump
 ```
 
 ### Scenario 4: Complete System Failure
@@ -92,14 +89,14 @@ python deployment/migrations/migrate.py restore /backups/backup_20240527_020000/
 # - Cascading errors
 # - System unresponsive
 
-# Rollback steps:
-bash deployment/rollback.sh -v <previous-stable-version> -d
+# Rollback application workloads to the previous audited Helm revision:
+bash deployment/scripts/rollback.sh
 
 # This will:
-# 1. Rollback all deployments
-# 2. Rollback database schema
-# 3. Verify health
-# 4. Notify team
+# 1. Roll back the complete Helm release to its previous revision
+# 2. Wait for the Helm rollback to finish
+# 3. Leave the database schema unchanged
+# 4. Require the operator to run the verification steps below
 ```
 
 ## Rollback Verification

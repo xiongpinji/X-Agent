@@ -810,4 +810,6 @@ class RunArtifactManager:
 
 @lru_cache
 def get_run_artifact_manager() -> RunArtifactManager:
-    return RunArtifactManager(Path("data") / "run_artifacts")
+    from backend.app.settings import get_settings
+
+    return RunArtifactManager(get_settings().run_artifact_store_path)

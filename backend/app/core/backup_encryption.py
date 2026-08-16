@@ -216,8 +216,6 @@ class BackupIntegrity:
             return hashlib.sha256(data).hexdigest()
         elif algorithm == "SHA-512":
             return hashlib.sha512(data).hexdigest()
-        elif algorithm == "MD5":
-            return hashlib.md5(data).hexdigest()
         else:
             raise ValueError(f"Unsupported checksum algorithm: {algorithm}")
 

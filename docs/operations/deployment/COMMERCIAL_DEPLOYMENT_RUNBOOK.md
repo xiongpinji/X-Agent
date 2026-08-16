@@ -1,29 +1,16 @@
 # X-Agent Commercial RC Deployment Runbook
 
-Last updated: 2026-06-07
+Last updated: 2026-08-16
 
-This runbook is the deployment handoff for the current
-`codex/codex-hermes-gap-closure` release-candidate branch. It turns the broader
-deployment docs into a commercial RC procedure with explicit verification gates.
+This runbook is the deployment handoff for an audited X-Agent release candidate.
+Evidence is valid only for the exact immutable commit and image digest recorded
+by the release receipt. Historical provider, browser, hosted CI, or deployment
+results from another commit are not acceptance evidence for the current candidate.
 
-It is not a GA claim and it is not a full Codex/Hermes parity claim. It is a
-commercial pilot/RC deployment path that must still be validated with the
-customer's real provider tokens, channel credentials, and infrastructure.
-Current local/CI final-gate status is `ready_with_owner_gates` with
-`full_parity_claimed=false`. Only after owner-controlled Feishu, GitHub, and hosted Actions evidence is verified for the current commit does the final gate report `ready_for_rc_tag`. This runbook does not claim full Codex/Hermes parity.
-Current local provider smoke is verified with Ollama at
-`http://127.0.0.1:11435`, model `qwen2.5:1.5b`, after copying the required
-model blobs to the ASCII-only model directory `D:\ollama-models`. The direct
-proof command returned the required sentinel:
-`ollama run qwen2.5:1.5b "Reply with exactly: xagent-rc-ok"`.
-The previous `http://localhost:11434` Ollama instance still reproduces an HTTP
-500 model-load failure because its model blob path is passed to the loader with
-mojibake from the non-ASCII `D:\AI模型库` directory. For Windows local-provider
-release smoke, use an ASCII-only `OLLAMA_MODELS` path, prove `ollama run
-<model>` works, and pass the same `--ollama-base-url` and `--ollama-model` to
-the refresh chain.
-Feishu, GitHub issue-to-PR, and hosted GitHub Actions are owner-controlled
-gates and must remain verified for the exact commit SHA used for RC tagging.
+Local mock tests, builds, migration drills, and Helm rendering do not establish
+GA by themselves. Real provider, channel, hosted CI, backup/restore drill, and
+production rollout evidence remain owner-controlled gates and must be refreshed
+for the same commit before a commercial release is declared complete.
 
 ## 1. Release Scope
 
@@ -78,7 +65,10 @@ XAGENT_REDIS_URL=redis://:<password>@<host>:6379/0
 XAGENT_QDRANT_URL=http://<qdrant-host>:6333
 XAGENT_QDRANT_API_KEY=<qdrant-api-key>
 XAGENT_MEMORY_BACKEND=postgres
-XAGENT_TRACE_BACKEND=jsonl
+XAGENT_TRACE_BACKEND=postgres
+XAGENT_RUN_STORE_BACKEND=postgres
+XAGENT_AUDIT_STORE_BACKEND=postgres
+XAGENT_WORKFLOW_STORE_BACKEND=db
 XAGENT_LLM_BACKEND=<mock|openai|deepseek>
 XAGENT_ENABLE_HIGH_RISK_TOOLS=false
 XAGENT_PLAYWRIGHT_HEADLESS=true
@@ -288,6 +278,14 @@ curl -f https://<deployment-host>/ready
 Run the backend-only runtime smoke against the exposed API by passing the
 deployment port through a tunnel or staging ingress.
 
+Production Helm is fail-closed. Before rendering or installing, the release
+owner must provide external PostgreSQL, Redis, and Qdrant endpoints; immutable
+application and backup image tags; a pre-provisioned Secret; a shared RWX
+artifact PVC; the ingress host; and `XAGENT_PRE_MIGRATION_BACKUP_ID` identifying
+a backup that has already passed an isolated restore check. The migration Job
+runs before workloads and all workloads wait until Alembic reports the single
+current head.
+
 ## 6. Observability And Operations
 
 Health probes:
@@ -341,8 +339,12 @@ curl -f http://localhost:8000/health
 curl -f http://localhost:8000/ready
 ```
 
-Database rollback must only be performed after confirming a current backup and
-the migration rollback path for the target version.
+Database migration `0002_commercial_schema` is forward-only. Do not run an
+automatic database downgrade and do not assume `kubectl rollout undo` makes an
+older application compatible with the upgraded schema. If schema recovery is
+required, stop writes, validate the selected backup, set
+`XAGENT_RESTORE_CONFIRMATION` to the exact target database name, and use
+`deployment/scripts/restore-database.sh` under an approved recovery procedure.
 
 ## 8. External Integration Acceptance
 
@@ -440,8 +442,9 @@ Keep these items visible in the release report:
   `scripts/rc_external_smoke.py --github-actions-preflight` must confirm
   `status=completed`, `conclusion=success`, and `head_sha_verified=true` via
   the read-only Actions run API.
-- Full workstation/CI baseline across all tests is still separate from targeted
-  RC evidence.
+- The full safe local suite must pass for the exact candidate, excluding only
+  the explicitly prohibited real-provider trace test; hosted CI must reproduce
+  the release gate before tagging.
 - Real external provider, Feishu, and GitHub execute evidence depends on
   deployment-owner tokens and test resources.
 - High-risk tool execution must remain disabled by default and enabled only for

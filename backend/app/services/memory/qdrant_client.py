@@ -27,7 +27,7 @@ class QdrantVectorClient:
     def __init__(self, url: str | None = None, api_key: str | None = None) -> None:
         self._collections: dict[str, list[VectorRecord]] = {}
         self._client = (
-            QdrantClient(url=url, api_key=api_key, check_compatibility=False)
+            QdrantClient(url=url, api_key=api_key)
             if QdrantClient is not None and url
             else None
         )

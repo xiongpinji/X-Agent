@@ -22,6 +22,27 @@ spec:
         app: xagent-worker
     spec:
       serviceAccountName: xagent
+      {{- if .Values.migration.enabled }}
+      initContainers:
+      - name: wait-for-schema
+        image: "{{ include "xagent.imageRepository" . }}:{{ include "xagent.imageTag" . }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        command: ["python", "-m", "backend.app.ops.migration_gate", "wait", "--timeout", {{ .Values.migration.timeoutSeconds | quote }}]
+        envFrom:
+        - configMapRef:
+            name: xagent-config
+        - secretRef:
+            name: {{ include "xagent.secretName" . }}
+        env:
+        - name: XAGENT_DATABASE_URL
+          value: "postgresql+asyncpg://$(DB_USER):$(DB_PASSWORD)@{{ include "xagent.postgresHost" . }}:{{ .Values.database.port }}/$(DB_NAME)"
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: ["ALL"]
+      {{- end }}
       # P1-16: 优雅停机 —— worker 执行长任务, 宽限期默认 120s; preStop sleep 等待摘除传播
       terminationGracePeriodSeconds: {{ .Values.worker.terminationGracePeriodSeconds | default 120 }}
       affinity:
@@ -38,7 +59,7 @@ spec:
               topologyKey: kubernetes.io/hostname
       containers:
       - name: xagent-worker
-        image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        image: "{{ include "xagent.imageRepository" . }}:{{ include "xagent.imageTag" . }}"
         imagePullPolicy: {{ .Values.image.pullPolicy }}
         # P0-02: 后端无 Celery 应用, workflow_worker 是 asyncio 轮询 worker,
         # 直接以 python -m 启动; celery 依赖保留但未使用, 待真 Celery 返工
@@ -58,7 +79,7 @@ spec:
         - configMapRef:
             name: xagent-config
         - secretRef:
-            name: xagent-secrets
+            name: {{ include "xagent.secretName" . }}
         # P0-03: envFrom 仅注入零散 key, 应用实际读取的连接串在此由辅助变量组合
         env:
         - name: XAGENT_DATABASE_URL
@@ -67,8 +88,18 @@ spec:
           value: "redis://:$(REDIS_PASSWORD)@{{ include "xagent.redisHost" . }}:{{ .Values.redis.port }}/0"
         - name: XAGENT_QDRANT_URL
           value: "http://{{ include "xagent.qdrantHost" . }}:{{ .Values.qdrant.port }}"
-        - name: XAGENT_NEO4J_URI
+        - name: XAGENT_QDRANT_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "xagent.secretName" . }}
+              key: QDRANT_API_KEY
+        - name: XAGENT_NEO4J_URL
           value: "bolt://{{ include "xagent.neo4jHost" . }}:{{ .Values.neo4j.port }}"
+        - name: XAGENT_NEO4J_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "xagent.secretName" . }}
+              key: NEO4J_PASSWORD
         resources:
           {{- toYaml .Values.worker.resources | nindent 10 }}
         securityContext:
@@ -84,11 +115,16 @@ spec:
           mountPath: /tmp
         - name: logs
           mountPath: /app/logs
+        - name: runtime-state
+          mountPath: {{ .Values.runtime.mountPath }}
       volumes:
       - name: tmp
         emptyDir: {}
       - name: logs
         emptyDir: {}
+      - name: runtime-state
+        persistentVolumeClaim:
+          claimName: {{ include "xagent.artifactsClaim" . }}
 {{- if .Values.worker.autoscaling.enabled }}
 ---
 apiVersion: autoscaling/v2

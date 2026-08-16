@@ -1,24 +1,29 @@
-version: '3.8'
-
 services:
   prometheus:
-    image: prom/prometheus:latest
+    image: prom/prometheus:v3.13.1
     container_name: x-agent-prometheus
     ports:
       - "9090:9090"
     volumes:
       # P1-15 修正: compose 相对路径以本文件所在目录(monitoring/)为基准解析
       - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./start-prometheus.sh:/etc/prometheus/start-prometheus.sh:ro
       - ./alert_rules.yml:/etc/prometheus/alert_rules.yml
       - ./recording_rules.yml:/etc/prometheus/recording_rules.yml
+      - ${XAGENT_METRICS_API_KEY_FILE:?XAGENT_METRICS_API_KEY_FILE must be set}:/run/secrets/xagent_metrics_api_key:ro
       - prometheus_data:/prometheus
+    entrypoint: ["/bin/sh", "/etc/prometheus/start-prometheus.sh"]
     command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--config.file=/tmp/prometheus.rendered.yml'
       - '--storage.tsdb.path=/prometheus'
       - '--web.console.libraries=/usr/share/prometheus/console_libraries'
       - '--web.console.templates=/usr/share/prometheus/consoles'
+    environment:
+      - ENVIRONMENT=${ENVIRONMENT:-development}
+      - CLUSTER_NAME=${CLUSTER_NAME:-default}
+      - XAGENT_METRICS_TARGET=${XAGENT_METRICS_TARGET:?XAGENT_METRICS_TARGET must be set}
     networks:
-      - x-agent-network
+      - xagent-network
     restart: unless-stopped
 
   grafana:
@@ -40,7 +45,7 @@ services:
     depends_on:
       - prometheus
     networks:
-      - x-agent-network
+      - xagent-network
     restart: unless-stopped
 
   alertmanager:
@@ -55,7 +60,7 @@ services:
       - '--config.file=/etc/alertmanager/alertmanager.yml'
       - '--storage.path=/alertmanager'
     networks:
-      - x-agent-network
+      - xagent-network
     restart: unless-stopped
 
   node-exporter:
@@ -72,7 +77,7 @@ services:
       - '--path.sysfs=/host/sys'
       - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
     networks:
-      - x-agent-network
+      - xagent-network
     restart: unless-stopped
 
   postgres-exporter:
@@ -85,7 +90,7 @@ services:
     depends_on:
       - postgres
     networks:
-      - x-agent-network
+      - xagent-network
     restart: unless-stopped
 
   redis-exporter:
@@ -98,7 +103,7 @@ services:
     depends_on:
       - redis
     networks:
-      - x-agent-network
+      - xagent-network
     restart: unless-stopped
 
   postgres:
@@ -113,7 +118,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
-      - x-agent-network
+      - xagent-network
     restart: unless-stopped
 
   redis:
@@ -124,7 +129,7 @@ services:
     volumes:
       - redis_data:/data
     networks:
-      - x-agent-network
+      - xagent-network
     restart: unless-stopped
 
   qdrant:
@@ -135,7 +140,7 @@ services:
     volumes:
       - qdrant_data:/qdrant/storage
     networks:
-      - x-agent-network
+      - xagent-network
     restart: unless-stopped
 
   # Elasticsearch - Log storage
@@ -151,7 +156,7 @@ services:
     volumes:
       - elasticsearch_data:/usr/share/elasticsearch/data
     networks:
-      - x-agent-network
+      - xagent-network
     restart: unless-stopped
 
   # Logstash - Log processing and forwarding
@@ -170,7 +175,7 @@ services:
       - ELASTICSEARCH_HOST=elasticsearch
       - ELASTICSEARCH_PORT=9200
     networks:
-      - x-agent-network
+      - xagent-network
     restart: unless-stopped
     depends_on:
       - elasticsearch
@@ -184,7 +189,7 @@ services:
     environment:
       - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
     networks:
-      - x-agent-network
+      - xagent-network
     restart: unless-stopped
     depends_on:
       - elasticsearch
@@ -203,7 +208,7 @@ services:
     environment:
       - COLLECTOR_OTLP_ENABLED=true
     networks:
-      - x-agent-network
+      - xagent-network
     restart: unless-stopped
 
 volumes:
@@ -216,5 +221,5 @@ volumes:
   elasticsearch_data:
 
 networks:
-  x-agent-network:
+  xagent-network:
     driver: bridge

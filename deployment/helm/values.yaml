@@ -155,8 +155,13 @@ external:
 
 # P1 新增应用环境变量
 appEnv:
-  # 工作流存储后端: postgres | neo4j
-  workflowStoreBackend: postgres
+  workflowStoreBackend: db
+  memoryBackend: postgres
+  traceBackend: postgres
+  adminStoreBackend: postgres
+  feedbackStoreBackend: postgres
+  runStoreBackend: postgres
+  auditStoreBackend: postgres
   # Neo4j 功能开关 (与 neo4j.enabled 联动)
   neo4jEnabled: false
   # Python UTF-8 模式 (PEP 540), 避免 Windows/非 UTF-8 locale 下编码问题
@@ -211,13 +216,26 @@ service:
 # P0-03: jwtSecret/encryptionKey 对应容器内 XAGENT_JWT_SECRET/XAGENT_ENCRYPTION_KEY,
 # 生产模式必须为 >=32 字符且含大写字母与数字的强随机值
 secrets:
-  dbUser: xagent
-  dbPassword: change-me-in-production
-  redisPassword: change-me-in-production
-  qdrantApiKey: change-me-in-production
-  neo4jPassword: change-me-in-production
-  jwtSecret: change-me-in-production-use-strong-random-key
-  encryptionKey: change-me-in-production-use-strong-random-key
+  # Pre-provision this Secret through your secret manager. Required keys:
+  # DB_USER, DB_PASSWORD, REDIS_PASSWORD, QDRANT_API_KEY, NEO4J_PASSWORD,
+  # XAGENT_JWT_SECRET, XAGENT_ENCRYPTION_KEY, XAGENT_AUDIT_HMAC_SECRET,
+  # XAGENT_GITHUB_WEBHOOK_SECRET.
+  existingSecret: xagent-secrets
+
+migration:
+  enabled: true
+  # Production must replace this with the identifier of an operator-verified backup.
+  verifiedBackupId: development-no-backup
+  timeoutSeconds: 300
+  backoffLimit: 1
+  ttlSecondsAfterFinished: 86400
+
+artifacts:
+  existingClaim: xagent-artifacts
+  mountPath: /var/lib/xagent/run-artifacts
+
+runtime:
+  mountPath: /var/lib/xagent
 
 # Database configuration
 database:
@@ -251,6 +269,9 @@ backup:
     enabled: false
     bucket: ""
     region: us-east-1
+  serviceAccount:
+    # Required only when S3 is enabled (EKS IRSA role with write access to the bucket).
+    roleArn: ""
   # 优雅停机(CronJob Pod; 批任务正常结束时 preStop 不触发)
   terminationGracePeriodSeconds: 60
   preStopSleepSeconds: 5

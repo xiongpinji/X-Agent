@@ -70,6 +70,10 @@ if pg_dump \
     --format=custom \
     --file="$BACKUP_PATH/database.dump" \
     --verbose; then
+    if ! pg_restore --list "$BACKUP_PATH/database.dump" >/dev/null; then
+        log_error "PostgreSQL backup validation failed"
+        exit 1
+    fi
     log_info "PostgreSQL backup completed"
     ls -lh "$BACKUP_PATH/database.dump"
 else
@@ -86,10 +90,15 @@ else
 fi
 
 if redis-cli $REDIS_CLI_ARGS --rdb "$BACKUP_PATH/redis.rdb" > /dev/null 2>&1; then
+    if ! redis-check-rdb "$BACKUP_PATH/redis.rdb" >/dev/null; then
+        log_error "Redis backup validation failed"
+        exit 1
+    fi
     log_info "Redis backup completed"
     ls -lh "$BACKUP_PATH/redis.rdb"
 else
-    log_warn "Redis backup failed (continuing with other backups)"
+    log_error "Redis backup failed"
+    exit 1
 fi
 
 # Backup Qdrant
@@ -174,7 +183,8 @@ if [ "$qdrant_backup_ok" = true ]; then
         ls -lh "$BACKUP_PATH/$f"
     done
 else
-    log_warn "Qdrant backup incomplete (continuing with other backups)"
+    log_error "Qdrant backup incomplete"
+    exit 1
 fi
 
 # Backup configuration files
@@ -249,7 +259,8 @@ if [ "$S3_ENABLED" = true ] && [ -n "$S3_BUCKET" ]; then
             exit 1
         fi
     else
-        log_warn "AWS CLI not found, skipping S3 upload"
+        log_error "AWS CLI is required when S3 backup is enabled"
+        exit 1
     fi
 fi
 

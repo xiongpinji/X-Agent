@@ -79,6 +79,14 @@ class TestBackupEncryption:
         wrong_checksum = "0" * 64
         assert not BackupIntegrity.verify_checksum(data, wrong_checksum)
 
+    def test_md5_checksum_is_rejected_for_backup_integrity(self):
+        """Security-sensitive backup integrity must use a SHA-2 digest."""
+        with pytest.raises(ValueError, match="Unsupported checksum algorithm"):
+            BackupIntegrity.calculate_checksum(b"backup", algorithm="MD5")
+
+        with pytest.raises(ValueError, match="Unsupported checksum algorithm"):
+            BackupIntegrity.verify_checksum(b"backup", "0" * 32, algorithm="MD5")
+
 
 class TestBackupStorage:
     """Test backup storage."""

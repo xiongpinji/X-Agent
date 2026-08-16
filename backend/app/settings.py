@@ -73,7 +73,11 @@ class Settings(BaseSettings):
 
     trace_backend: str = "memory"
     trace_store_path: Path = PROJECT_ROOT / "data" / "traces.jsonl"
+    agent_context_store_path: Path = PROJECT_ROOT / "data" / "agent_contexts"
+    context_session_store_path: Path = PROJECT_ROOT / "data" / "sessions"
+    run_store_backend: str = "file"
     run_store_path: Path = PROJECT_ROOT / "data" / "runs.jsonl"
+    run_artifact_store_path: Path = PROJECT_ROOT / "data" / "run_artifacts"
     workflow_store_path: Path = PROJECT_ROOT / "data" / "workflows.json"
     workflow_run_store_path: Path = PROJECT_ROOT / "data" / "workflow_runs.jsonl"
     workflow_schedule_store_path: Path = PROJECT_ROOT / "data" / "workflow_schedules.json"
@@ -88,6 +92,7 @@ class Settings(BaseSettings):
     approval_store_path: Path = PROJECT_ROOT / "data" / "approvals.json"
     api_key_store_path: Path = PROJECT_ROOT / "data" / "api_keys.json"
     audit_store_path: Path = PROJECT_ROOT / "data" / "audit.jsonl"
+    audit_store_backend: str = "file"
     audit_hmac_secret: str | None = None
 
     # P1-04: 审计日志轮转与外送
@@ -313,9 +318,8 @@ class Settings(BaseSettings):
     @classmethod
     def _validate_github_webhook_secret(cls, value: str | None, info) -> str | None:
         if not value and info.data.get("app_mode") == "production":
-            import logging
-            logging.getLogger(__name__).warning(
-                "XAGENT_GITHUB_WEBHOOK_SECRET is not set — GitHub webhooks will be unauthenticated"
+            raise ValueError(
+                "github_webhook_secret must be set for authenticated production webhooks"
             )
         return value
 
@@ -329,6 +333,14 @@ class Settings(BaseSettings):
             raise ValueError(
                 f"Invalid admin_store_backend: {value!r}. Must be one of: {sorted(valid_backends)}"
             )
+        return normalized
+
+    @field_validator("run_store_backend", "audit_store_backend")
+    @classmethod
+    def _validate_commercial_store_backend(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized not in {"file", "postgres"}:
+            raise ValueError("store backend must be one of: file, postgres")
         return normalized
 
     @field_validator("context_strategy")
@@ -408,6 +420,18 @@ class Settings(BaseSettings):
             violations.append(
                 f"- admin_store_backend={self.admin_store_backend!r} 为进程内存/本地文件后端(重启不丢但不可多实例共享): "
                 "设置 XAGENT_ADMIN_STORE_BACKEND=postgres"
+            )
+        if self.run_store_backend != "postgres":
+            violations.append(
+                "- run_store_backend 未外置: 设置 XAGENT_RUN_STORE_BACKEND=postgres"
+            )
+        if self.audit_store_backend != "postgres":
+            violations.append(
+                "- audit_store_backend 未外置: 设置 XAGENT_AUDIT_STORE_BACKEND=postgres"
+            )
+        if self.workflow_store_backend != "db":
+            violations.append(
+                "- workflow_store_backend 未外置: 设置 XAGENT_WORKFLOW_STORE_BACKEND=db"
             )
 
         if violations:

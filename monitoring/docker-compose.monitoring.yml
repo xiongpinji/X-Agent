@@ -1,20 +1,21 @@
-version: '3.8'
-
 services:
   # Prometheus - Metrics collection and storage
   prometheus:
-    image: prom/prometheus:v2.48.0
+    image: prom/prometheus:v3.13.1
     container_name: x-agent-prometheus
     ports:
       - "9090:9090"
     volumes:
       # P1-15 修正: compose 相对路径以本文件所在目录(monitoring/)为基准解析
       - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./start-prometheus.sh:/etc/prometheus/start-prometheus.sh:ro
       - ./alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
       - ./recording_rules.yml:/etc/prometheus/recording_rules.yml:ro
+      - ${XAGENT_METRICS_API_KEY_FILE:?XAGENT_METRICS_API_KEY_FILE must be set}:/run/secrets/xagent_metrics_api_key:ro
       - prometheus_data:/prometheus
+    entrypoint: ["/bin/sh", "/etc/prometheus/start-prometheus.sh"]
     command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--config.file=/tmp/prometheus.rendered.yml'
       - '--storage.tsdb.path=/prometheus'
       - '--storage.tsdb.retention.time=30d'
       - '--web.console.libraries=/usr/share/prometheus/console_libraries'
@@ -22,8 +23,11 @@ services:
       - '--web.enable-lifecycle'
     environment:
       - TZ=UTC
+      - ENVIRONMENT=${ENVIRONMENT:-development}
+      - CLUSTER_NAME=${CLUSTER_NAME:-default}
+      - XAGENT_METRICS_TARGET=${XAGENT_METRICS_TARGET:?XAGENT_METRICS_TARGET must be set}
     networks:
-      - x-agent-network
+      - xagent-network
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
@@ -57,7 +61,7 @@ services:
       prometheus:
         condition: service_healthy
     networks:
-      - x-agent-network
+      - xagent-network
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/api/health"]
@@ -82,7 +86,7 @@ services:
     environment:
       - TZ=UTC
     networks:
-      - x-agent-network
+      - xagent-network
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9093/-/healthy"]
@@ -109,7 +113,7 @@ services:
     environment:
       - TZ=UTC
     networks:
-      - x-agent-network
+      - xagent-network
     restart: unless-stopped
 
   # Elasticsearch - Log storage
@@ -127,7 +131,7 @@ services:
     volumes:
       - elasticsearch_data:/usr/share/elasticsearch/data
     networks:
-      - x-agent-network
+      - xagent-network
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "curl -s http://localhost:9200/_cluster/health | grep -q '\"status\":\"green\"'"]
@@ -156,7 +160,7 @@ services:
       elasticsearch:
         condition: service_healthy
     networks:
-      - x-agent-network
+      - xagent-network
     restart: unless-stopped
 
   # Kibana - Log visualization
@@ -174,7 +178,7 @@ services:
       elasticsearch:
         condition: service_healthy
     networks:
-      - x-agent-network
+      - xagent-network
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "curl -s http://localhost:5601/api/status | grep -q 'state.*green'"]
@@ -199,7 +203,7 @@ services:
       - COLLECTOR_ZIPKIN_HOST_PORT=:9411
       - TZ=UTC
     networks:
-      - x-agent-network
+      - xagent-network
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:16686/"]
@@ -220,7 +224,7 @@ services:
     depends_on:
       - postgres
     networks:
-      - x-agent-network
+      - xagent-network
     restart: unless-stopped
 
   # Redis Exporter - Redis metrics
@@ -235,7 +239,7 @@ services:
     depends_on:
       - redis
     networks:
-      - x-agent-network
+      - xagent-network
     restart: unless-stopped
 
   # PostgreSQL - Database
@@ -252,7 +256,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
-      - x-agent-network
+      - xagent-network
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U xagent"]
@@ -270,7 +274,7 @@ services:
       - redis_data:/data
     command: redis-server --appendonly yes
     networks:
-      - x-agent-network
+      - xagent-network
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
@@ -290,7 +294,7 @@ services:
       QDRANT_API_KEY: qdrant_key
       TZ: UTC
     networks:
-      - x-agent-network
+      - xagent-network
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:6333/health"]
@@ -316,7 +320,7 @@ volumes:
     driver: local
 
 networks:
-  x-agent-network:
+  xagent-network:
     driver: bridge
     ipam:
       config:

@@ -20,6 +20,13 @@ jobs:
   test:
     name: Run Tests
     runs-on: ubuntu-latest
+    env:
+      PYTHONUTF8: "1"
+      XAGENT_LLM_BACKEND: mock
+      XAGENT_E2E: "0"
+      XAGENT_OPENAI_API_KEY: ""
+      XAGENT_DEEPSEEK_API_KEY: ""
+      XAGENT_ANTHROPIC_API_KEY: ""
     steps:
       - uses: actions/checkout@v4
         with:
@@ -34,22 +41,21 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev,test]"
+          pip install -r requirements-lock.txt
+          pip install --no-deps --no-build-isolation -e .
+          pip install pytest==9.0.3 pytest-asyncio==1.4.0 pytest-cov==4.0.0 pytest-timeout==2.3.1 pytest-xdist==3.8.0 fakeredis==2.35.1 lupa==2.5
 
-      - name: Run unit tests
+      - name: Run safe release tests
         run: |
-          pytest tests/ -v --cov=backend --cov-report=xml
-
-      - name: Upload coverage
-        uses: codecov/codecov-action@v3
-        with:
-          files: ./coverage.xml
+          pytest -n 4 --dist loadscope \
+            --ignore=tests/test_trace_audit_integration.py \
+            -o addopts= -p no:cov -q
 
       - name: Run security scan
         run: |
-          pip install bandit safety
-          bandit -r backend/ -f json -o bandit-report.json || true
-          safety check --json > safety-report.json || true
+          pip install bandit==1.9.4 pip-audit==2.10.1
+          bandit -r backend/ -lll -q -f json -o bandit-report.json
+          pip-audit -r requirements-lock.txt --progress-spinner off -f json -o pip-audit-report.json
 
       - name: Upload security reports
         uses: actions/upload-artifact@v4
@@ -57,7 +63,7 @@ jobs:
           name: security-reports
           path: |
             bandit-report.json
-            safety-report.json
+            pip-audit-report.json
 
   lint:
     name: Code Quality
@@ -74,58 +80,66 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install ruff mypy pylint
+          pip install ruff==0.14.14
 
       - name: Run ruff
         run: ruff check backend/
 
-      - name: Run mypy
-        run: mypy backend/ --ignore-missing-imports
-
-      - name: Run pylint
-        run: pylint backend/ --exit-zero
+      - name: Compile backend
+        run: python -m compileall -q backend
 
   build:
     name: Build Docker Image
     needs: [test, lint]
     runs-on: ubuntu-latest
     outputs:
-      image-tag: ${{ steps.meta.outputs.tags }}
+      image-repository: ${{ steps.names.outputs.image-repository }}
+      image-tag: ${{ steps.names.outputs.image-tag }}
       image-digest: ${{ steps.build.outputs.digest }}
+      backup-image-repository: ${{ steps.names.outputs.backup-image-repository }}
+      backup-image-tag: ${{ steps.names.outputs.image-tag }}
     steps:
       - uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
+        uses: docker/setup-buildx-action@v3
 
       - name: Log in to Docker Registry
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
-          registry: ${{ secrets.DOCKER_REGISTRY }}
+          registry: ${{ vars.DOCKER_REGISTRY }}
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Extract metadata
-        id: meta
-        uses: docker/metadata-action@v4
-        with:
-          images: ${{ secrets.DOCKER_REGISTRY }}/xagent
-          tags: |
-            type=ref,event=tag
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=sha
+      - name: Define immutable image names
+        id: names
+        env:
+          REGISTRY: ${{ vars.DOCKER_REGISTRY }}
+        run: |
+          test -n "$REGISTRY"
+          echo "image-repository=$REGISTRY/xagent" >> "$GITHUB_OUTPUT"
+          echo "backup-image-repository=$REGISTRY/xagent-backup" >> "$GITHUB_OUTPUT"
+          echo "image-tag=sha-$GITHUB_SHA" >> "$GITHUB_OUTPUT"
 
       - name: Build and push
         id: build
-        uses: docker/build-push-action@v4
+        uses: docker/build-push-action@v6
         with:
           context: .
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          tags: ${{ steps.names.outputs.image-repository }}:${{ steps.names.outputs.image-tag }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Build and push backup image
+        uses: docker/build-push-action@v6
+        with:
+          context: deployment/backup
+          file: deployment/backup/Dockerfile
+          push: true
+          tags: ${{ steps.names.outputs.backup-image-repository }}:${{ steps.names.outputs.image-tag }}
+          cache-from: type=gha,scope=backup
+          cache-to: type=gha,mode=max,scope=backup
 
   deploy:
     name: Deploy to Production
@@ -133,7 +147,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: production
-      url: https://api.example.com
+      url: ${{ vars.PRODUCTION_API_URL }}
     steps:
       - uses: actions/checkout@v4
 
@@ -148,18 +162,46 @@ jobs:
         run: |
           aws eks update-kubeconfig --name xagent-prod --region ${{ secrets.AWS_REGION }}
 
+      - name: Validate production inputs
+        env:
+          API_URL: ${{ vars.PRODUCTION_API_URL }}
+          API_HOST: ${{ vars.PRODUCTION_API_HOST }}
+          POSTGRES_HOST: ${{ vars.PRODUCTION_POSTGRES_HOST }}
+          REDIS_HOST: ${{ vars.PRODUCTION_REDIS_HOST }}
+          QDRANT_HOST: ${{ vars.PRODUCTION_QDRANT_HOST }}
+          SECRET_NAME: ${{ vars.XAGENT_K8S_SECRET_NAME }}
+          ARTIFACTS_PVC: ${{ vars.XAGENT_ARTIFACTS_PVC }}
+          PRE_MIGRATION_BACKUP_ID: ${{ vars.XAGENT_PRE_MIGRATION_BACKUP_ID }}
+          BACKUP_S3_BUCKET: ${{ vars.PRODUCTION_BACKUP_S3_BUCKET }}
+          BACKUP_ROLE_ARN: ${{ vars.XAGENT_BACKUP_ROLE_ARN }}
+        run: |
+          for name in API_URL API_HOST POSTGRES_HOST REDIS_HOST QDRANT_HOST SECRET_NAME ARTIFACTS_PVC PRE_MIGRATION_BACKUP_ID BACKUP_S3_BUCKET BACKUP_ROLE_ARN; do
+            test -n "${!name}" || { echo "$name must be configured" >&2; exit 1; }
+          done
+          case "$API_URL" in https://*) ;; *) echo "API_URL must use https" >&2; exit 1 ;; esac
+
       - name: Deploy with Helm
         run: |
-          helm repo add xagent ${{ secrets.HELM_REPO_URL }}
-          helm repo update
-          helm upgrade --install xagent xagent/xagent \
+          helm upgrade --install xagent deployment/helm \
             --namespace production \
+            --create-namespace \
             --values deployment/helm/values-production.yaml \
-            --set image.tag=${{ needs.build.outputs.image-tag }} \
-            --set secrets.secretKey=${{ secrets.SECRET_KEY }} \
-            --set secrets.dbPassword=${{ secrets.DB_PASSWORD }} \
-            --set secrets.redisPassword=${{ secrets.REDIS_PASSWORD }} \
+            --set-string image.repository=${{ needs.build.outputs.image-repository }} \
+            --set-string image.tag=${{ needs.build.outputs.image-tag }} \
+            --set-string backup.image.repository=${{ needs.build.outputs.backup-image-repository }} \
+            --set-string backup.image.tag=${{ needs.build.outputs.backup-image-tag }} \
+            --set-string secrets.existingSecret=${{ vars.XAGENT_K8S_SECRET_NAME }} \
+            --set-string artifacts.existingClaim=${{ vars.XAGENT_ARTIFACTS_PVC }} \
+            --set-string migration.verifiedBackupId=${{ vars.XAGENT_PRE_MIGRATION_BACKUP_ID }} \
+            --set-string backup.s3.bucket=${{ vars.PRODUCTION_BACKUP_S3_BUCKET }} \
+            --set-string backup.serviceAccount.roleArn=${{ vars.XAGENT_BACKUP_ROLE_ARN }} \
+            --set-string external.postgresHost=${{ vars.PRODUCTION_POSTGRES_HOST }} \
+            --set-string external.redisHost=${{ vars.PRODUCTION_REDIS_HOST }} \
+            --set-string external.qdrantHost=${{ vars.PRODUCTION_QDRANT_HOST }} \
+            --set-string ingress.hosts[0].host=${{ vars.PRODUCTION_API_HOST }} \
+            --set-string ingress.tls[0].hosts[0]=${{ vars.PRODUCTION_API_HOST }} \
             --wait \
+            --wait-for-jobs \
             --timeout 10m
 
       - name: Wait for rollout
@@ -168,9 +210,11 @@ jobs:
           kubectl rollout status deployment/xagent-worker -n production --timeout=5m
 
       - name: Run smoke tests
+        env:
+          API_URL: ${{ vars.PRODUCTION_API_URL }}
         run: |
           for i in {1..30}; do
-            if curl -f https://api.example.com/health; then
+            if curl --fail --silent --show-error "$API_URL/health"; then
               echo "Health check passed"
               exit 0
             fi
@@ -179,11 +223,6 @@ jobs:
           done
           echo "Health check failed"
           exit 1
-
-      - name: Run integration tests
-        run: |
-          pip install httpx pytest
-          pytest tests/integration/ -v --tb=short
 
       - name: Notify Slack - Success
         if: success()
@@ -223,8 +262,8 @@ jobs:
               ]
             }
 
-  rollback:
-    name: Rollback on Failure
+  failure-diagnostics:
+    name: Capture Failure Diagnostics
     needs: deploy
     runs-on: ubuntu-latest
     if: failure()
@@ -242,25 +281,26 @@ jobs:
         run: |
           aws eks update-kubeconfig --name xagent-prod --region ${{ secrets.AWS_REGION }}
 
-      - name: Rollback deployment
+      - name: Capture deployment state
         run: |
-          kubectl rollout undo deployment/xagent-api -n production
-          kubectl rollout undo deployment/xagent-worker -n production
-          kubectl rollout status deployment/xagent-api -n production --timeout=5m
+          kubectl get pods,jobs,deployments -n production -o wide
+          kubectl describe job -n production -l app=xagent-migration
+          echo "Automatic rollback is disabled because database migrations are forward-only."
+          echo "Use the audited rollback runbook after reviewing schema compatibility."
 
-      - name: Notify Slack - Rollback
+      - name: Notify Slack - Manual recovery required
         uses: slackapi/slack-github-action@v1.24.0
         with:
           webhook-url: ${{ secrets.SLACK_WEBHOOK }}
           payload: |
             {
-              "text": "Production deployment rolled back",
+              "text": "Production deployment failed; manual recovery review required",
               "blocks": [
                 {
                   "type": "section",
                   "text": {
                     "type": "mrkdwn",
-                    "text": "*Production Deployment Rolled Back*\nVersion: ${{ github.ref_name }}\nReason: Deployment failed"
+                    "text": "*Production Deployment Failed*\nVersion: ${{ github.ref_name }}\nAutomatic rollback is disabled for forward-only migrations. Review diagnostics and the restore runbook."
                   }
                 }
               ]

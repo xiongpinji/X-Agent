@@ -24,6 +24,27 @@ spec:
         version: v1
     spec:
       serviceAccountName: xagent
+      {{- if .Values.migration.enabled }}
+      initContainers:
+      - name: wait-for-schema
+        image: "{{ include "xagent.imageRepository" . }}:{{ include "xagent.imageTag" . }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        command: ["python", "-m", "backend.app.ops.migration_gate", "wait", "--timeout", {{ .Values.migration.timeoutSeconds | quote }}]
+        envFrom:
+        - configMapRef:
+            name: xagent-config
+        - secretRef:
+            name: {{ include "xagent.secretName" . }}
+        env:
+        - name: XAGENT_DATABASE_URL
+          value: "postgresql+asyncpg://$(DB_USER):$(DB_PASSWORD)@{{ include "xagent.postgresHost" . }}:{{ .Values.database.port }}/$(DB_NAME)"
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: ["ALL"]
+      {{- end }}
       # P1-16: 优雅停机 —— 宽限期默认 90s; preStop sleep 等待 Endpoints 摘除传播
       terminationGracePeriodSeconds: {{ .Values.api.terminationGracePeriodSeconds | default 90 }}
       affinity:
@@ -40,7 +61,7 @@ spec:
               topologyKey: kubernetes.io/hostname
       containers:
       - name: xagent-api
-        image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        image: "{{ include "xagent.imageRepository" . }}:{{ include "xagent.imageTag" . }}"
         imagePullPolicy: {{ .Values.image.pullPolicy }}
         ports:
         - containerPort: {{ .Values.api.port }}
@@ -57,7 +78,7 @@ spec:
         - configMapRef:
             name: xagent-config
         - secretRef:
-            name: xagent-secrets
+            name: {{ include "xagent.secretName" . }}
         # P0-03: envFrom 仅注入零散 key, 应用实际读取的连接串在此由辅助变量组合
         # (envFrom 变量先于 env 处理, 可被 $(VAR) 引用)
         env:
@@ -67,8 +88,18 @@ spec:
           value: "redis://:$(REDIS_PASSWORD)@{{ include "xagent.redisHost" . }}:{{ .Values.redis.port }}/0"
         - name: XAGENT_QDRANT_URL
           value: "http://{{ include "xagent.qdrantHost" . }}:{{ .Values.qdrant.port }}"
-        - name: XAGENT_NEO4J_URI
+        - name: XAGENT_QDRANT_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "xagent.secretName" . }}
+              key: QDRANT_API_KEY
+        - name: XAGENT_NEO4J_URL
           value: "bolt://{{ include "xagent.neo4jHost" . }}:{{ .Values.neo4j.port }}"
+        - name: XAGENT_NEO4J_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "xagent.secretName" . }}
+              key: NEO4J_PASSWORD
         resources:
           {{- toYaml .Values.api.resources | nindent 10 }}
         livenessProbe:
@@ -101,11 +132,16 @@ spec:
           mountPath: /tmp
         - name: logs
           mountPath: /app/logs
+        - name: runtime-state
+          mountPath: {{ .Values.runtime.mountPath }}
       volumes:
       - name: tmp
         emptyDir: {}
       - name: logs
         emptyDir: {}
+      - name: runtime-state
+        persistentVolumeClaim:
+          claimName: {{ include "xagent.artifactsClaim" . }}
 ---
 apiVersion: v1
 kind: Service

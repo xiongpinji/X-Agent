@@ -104,11 +104,13 @@ kubectl exec -it <pod-name> -n xagent -- \
 # List available backups
 ls -lh /backups/
 
-# Restore from backup
-python deployment/migrations/migrate.py restore /backups/backup_20240527_020000/database.dump
+# Restore from a verified backup. The confirmation must exactly match DB_NAME.
+export XAGENT_RESTORE_CONFIRMATION=xagent_prod
+bash deployment/scripts/restore-database.sh \
+  /backups/backup_20240527_020000/database.dump
 
 # Verify restoration
-python deployment/migrations/migrate.py verify
+psql "$XAGENT_DATABASE_URL" -c "SELECT 1"
 ```
 
 **RTO:** 15-60 minutes
@@ -232,8 +234,9 @@ curl -X PUT "http://prod-qdrant.example.com:6333/collections/<collection>/snapsh
 #### Step 3: Restore Services
 
 ```bash
-# 1. Restore database from backup
-python deployment/migrations/migrate.py restore /backups/latest/database.dump
+# 1. Restore database from a verified backup under the approved recovery window
+export XAGENT_RESTORE_CONFIRMATION=xagent_prod
+bash deployment/scripts/restore-database.sh /backups/latest/database.dump
 
 # 2. Restore Redis from backup (RDB 文件放回数据目录后重启; --rdb 是备份命令)
 kubectl cp /backups/latest/redis.rdb <redis-pod>:/data/dump.rdb -n xagent
@@ -279,8 +282,8 @@ bash disaster-recovery/scripts/health-check.sh
 # - Qdrant: 同一任务内顺序执行 (官方快照 API, 每个集合一个 .snapshot 文件)
 
 # Backup retention: 30 days (RETENTION_DAYS)
-# Backup location: 本地 PVC (xagent-backup-pvc); 可选 S3 (跨区, S3_ENABLED=true,
-# S3 上传需 aws cli, 请扩展 deployment/backup/Dockerfile 安装后启用)
+# Backup location: 本地 PVC + 强制开启的离集群 S3 存储。生产 Helm 在
+# S3 bucket/IRSA role 缺失时拒绝渲染，备份任务在上传失败时失败关闭。
 
 # Backup verification: Daily
 # - Restore test weekly
@@ -293,18 +296,20 @@ bash disaster-recovery/scripts/health-check.sh
 # List backups (本地 PVC; 若启用了可选 S3 上传, 用 aws s3 ls s3://$S3_BUCKET/)
 ls -lhd /backups/*/
 
-# Verify backup integrity (读取 XAGENT_DATABASE_URL, 兼容 DATABASE_URL)
-python deployment/migrations/migrate.py verify
+# Validate the custom PostgreSQL dump before any restore
+pg_restore --list /backups/latest/database.dump >/dev/null
 
 # Test restore (in staging)
-python deployment/migrations/migrate.py restore /backups/latest/database.dump
+export XAGENT_RESTORE_CONFIRMATION=xagent_staging_restore
+bash deployment/scripts/restore-database.sh /backups/latest/database.dump
 ```
 
 ### Restore Procedures
 
 ```bash
-# Database restore
-python deployment/migrations/migrate.py restore <backup-file>
+# Database restore (custom database.dump or plain .sql.gz)
+export XAGENT_RESTORE_CONFIRMATION="$XAGENT_DATABASE_NAME"
+bash deployment/scripts/restore-database.sh <backup-file>
 
 # Redis restore: RDB 文件放回数据目录后重启 (redis-cli --rdb 是备份命令, 不能用于恢复)
 docker cp /backups/latest/redis.rdb <redis-container>:/data/dump.rdb

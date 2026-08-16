@@ -63,6 +63,12 @@ _redis_client = None
 _use_redis = False
 
 
+def _production_mode() -> bool:
+    from backend.app.settings import get_settings
+
+    return get_settings().app_mode == "production"
+
+
 def _init_redis() -> None:
     """Initialize Redis client if available."""
     global _redis_client, _use_redis
@@ -80,7 +86,13 @@ def _init_redis() -> None:
         else:
             logger.info("Redis URL not configured, using in-memory storage")
     except Exception as e:
-        logger.warning(f"Failed to initialize Redis: {e}. Falling back to in-memory storage.")
+        if _production_mode():
+            logger.error("Redis session storage initialization failed (%s)", type(e).__name__)
+            raise RuntimeError("Redis session storage is unavailable in production") from e
+        logger.warning(
+            "Redis session storage initialization failed; using memory (%s)",
+            type(e).__name__,
+        )
         _use_redis = False
 
 
@@ -94,7 +106,10 @@ def _issue_token(ttl_seconds: int = _DEFAULT_TOKEN_TTL_SECONDS) -> str:
             _redis_client.setex(f"token:{token}:expiry", ttl_seconds, str(expiry_time))
             logger.debug(f"Token stored in Redis: {token}")
         except Exception as e:
-            logger.warning(f"Failed to store token in Redis: {e}. Using in-memory fallback.")
+            if _production_mode():
+                logger.error("Redis session write failed (%s)", type(e).__name__)
+                raise RuntimeError("Redis session storage is unavailable in production") from e
+            logger.warning("Redis session write failed; using memory (%s)", type(e).__name__)
             with _token_lock:
                 _token_expiry[token] = expiry_time
     else:
@@ -115,7 +130,10 @@ def _is_token_valid(token: str) -> bool:
             is_revoked = _redis_client.exists(f"token:{token}:revoked")
             return time.time() <= expiry and not is_revoked
         except Exception as e:
-            logger.warning(f"Redis token validation failed: {e}. Using in-memory fallback.")
+            logger.error("Redis token validation failed (%s)", type(e).__name__)
+            if _production_mode():
+                return False
+            logger.warning("Using in-memory token validation fallback")
 
     # Fallback to in-memory storage
     _purge_expired_tokens()
@@ -134,7 +152,10 @@ def _revoke_token(token: str) -> None:
             _redis_client.setex(f"token:{token}:revoked", 86400, "1")  # 24 hour TTL
             logger.debug(f"Token revoked in Redis: {token}")
         except Exception as e:
-            logger.warning(f"Failed to revoke token in Redis: {e}. Using in-memory fallback.")
+            if _production_mode():
+                logger.error("Redis token revocation failed (%s)", type(e).__name__)
+                raise RuntimeError("Redis session storage is unavailable in production") from e
+            logger.warning("Redis token revocation failed; using memory (%s)", type(e).__name__)
             with _token_lock:
                 _revoked_tokens.add(token)
                 _token_expiry.pop(token, None)
@@ -150,7 +171,10 @@ def _store_token_user(token: str, user_id: str) -> None:
         try:
             _redis_client.setex(f"token:{token}:user", 86400, user_id)
         except Exception as e:
-            logger.warning(f"Failed to store token-user mapping in Redis: {e}")
+            if _production_mode():
+                logger.error("Redis token-user write failed (%s)", type(e).__name__)
+                raise RuntimeError("Redis session storage is unavailable in production") from e
+            logger.warning("Redis token-user write failed; using memory (%s)", type(e).__name__)
             with _token_lock:
                 _token_users[token] = user_id
     else:
@@ -164,7 +188,10 @@ def _get_token_user(token: str) -> str | None:
         try:
             return _redis_client.get(f"token:{token}:user")
         except Exception as e:
-            logger.warning(f"Failed to retrieve token-user mapping from Redis: {e}")
+            logger.error("Redis token-user lookup failed (%s)", type(e).__name__)
+            if _production_mode():
+                return None
+            logger.warning("Using in-memory token-user lookup fallback")
 
     with _token_lock:
         return _token_users.get(token)

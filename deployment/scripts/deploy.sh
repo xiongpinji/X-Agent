@@ -1,5 +1,5 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
 # X-Agent Production Deployment Script
 # This script deploys X-Agent to Kubernetes using Helm
@@ -14,6 +14,19 @@ ENVIRONMENT=${ENVIRONMENT:-production}
 # P1-15 修正: SCRIPT_DIR 为 deployment/scripts, Chart 在 deployment/helm;
 # 原值 "${SCRIPT_DIR}/helm" 指向不存在的 deployment/scripts/helm
 HELM_CHART_PATH="${PROJECT_ROOT}/deployment/helm"
+IMAGE_REPOSITORY="${XAGENT_IMAGE_REPOSITORY:-}"
+IMAGE_TAG="${XAGENT_IMAGE_TAG:-}"
+BACKUP_IMAGE_REPOSITORY="${XAGENT_BACKUP_IMAGE_REPOSITORY:-}"
+BACKUP_IMAGE_TAG="${XAGENT_BACKUP_IMAGE_TAG:-}"
+SECRET_NAME="${XAGENT_K8S_SECRET_NAME:-}"
+ARTIFACTS_PVC="${XAGENT_ARTIFACTS_PVC:-}"
+PRE_MIGRATION_BACKUP_ID="${XAGENT_PRE_MIGRATION_BACKUP_ID:-}"
+BACKUP_S3_BUCKET="${XAGENT_BACKUP_S3_BUCKET:-}"
+BACKUP_ROLE_ARN="${XAGENT_BACKUP_ROLE_ARN:-}"
+POSTGRES_HOST="${XAGENT_POSTGRES_HOST:-}"
+REDIS_HOST="${XAGENT_REDIS_HOST:-}"
+QDRANT_HOST="${XAGENT_QDRANT_HOST:-}"
+API_HOST="${XAGENT_API_HOST:-}"
 
 # Colors for output
 RED='\033[0;31m'
@@ -48,25 +61,28 @@ check_prerequisites() {
         exit 1
     fi
 
-    if ! command -v docker &> /dev/null; then
-        log_warn "docker is not installed (needed for building images)"
+    if [ ! -f "${PROJECT_ROOT}/backend/migrations/alembic.ini" ]; then
+        log_error "Required Alembic configuration is missing"
+        exit 1
+    fi
+
+    local required_name
+    for required_name in \
+        IMAGE_REPOSITORY IMAGE_TAG BACKUP_IMAGE_REPOSITORY BACKUP_IMAGE_TAG \
+        SECRET_NAME ARTIFACTS_PVC PRE_MIGRATION_BACKUP_ID BACKUP_S3_BUCKET \
+        BACKUP_ROLE_ARN POSTGRES_HOST REDIS_HOST QDRANT_HOST API_HOST; do
+        if [ -z "${!required_name}" ]; then
+            log_error "$required_name must be configured"
+            exit 2
+        fi
+    done
+
+    if [[ ! "$IMAGE_TAG" =~ ^sha-[0-9a-f]{40}$ ]] || [[ ! "$BACKUP_IMAGE_TAG" =~ ^sha-[0-9a-f]{40}$ ]]; then
+        log_error "IMAGE_TAG and BACKUP_IMAGE_TAG must be immutable sha-<40 hex> tags"
+        exit 2
     fi
 
     log_info "Prerequisites check passed"
-}
-
-# Build Docker image
-build_image() {
-    log_info "Building Docker image..."
-
-    if ! command -v docker &> /dev/null; then
-        log_warn "Skipping Docker build (docker not installed)"
-        return
-    fi
-
-    cd "$PROJECT_ROOT"
-    docker build -t xagent:latest -f Dockerfile .
-    log_info "Docker image built successfully"
 }
 
 # Create namespace
@@ -84,15 +100,29 @@ deploy_helm() {
     local values_file="${PROJECT_ROOT}/deployment/helm/values-${ENVIRONMENT}.yaml"
 
     if [ ! -f "$values_file" ]; then
-        log_warn "Environment-specific values file not found: $values_file"
-        log_info "Using default values.yaml"
-        values_file="${SCRIPT_DIR}/values.yaml"
+        log_error "Environment-specific values file not found: $values_file"
+        exit 2
     fi
 
     helm upgrade --install "$RELEASE_NAME" "$HELM_CHART_PATH" \
         --namespace "$NAMESPACE" \
         --values "$values_file" \
+        --set-string image.repository="$IMAGE_REPOSITORY" \
+        --set-string image.tag="$IMAGE_TAG" \
+        --set-string backup.image.repository="$BACKUP_IMAGE_REPOSITORY" \
+        --set-string backup.image.tag="$BACKUP_IMAGE_TAG" \
+        --set-string secrets.existingSecret="$SECRET_NAME" \
+        --set-string artifacts.existingClaim="$ARTIFACTS_PVC" \
+        --set-string migration.verifiedBackupId="$PRE_MIGRATION_BACKUP_ID" \
+        --set-string backup.s3.bucket="$BACKUP_S3_BUCKET" \
+        --set-string backup.serviceAccount.roleArn="$BACKUP_ROLE_ARN" \
+        --set-string external.postgresHost="$POSTGRES_HOST" \
+        --set-string external.redisHost="$REDIS_HOST" \
+        --set-string external.qdrantHost="$QDRANT_HOST" \
+        --set-string ingress.hosts[0].host="$API_HOST" \
+        --set-string ingress.tls[0].hosts[0]="$API_HOST" \
         --wait \
+        --wait-for-jobs \
         --timeout 10m
 
     log_info "Helm deployment completed"
@@ -128,33 +158,6 @@ verify_deployment() {
     log_info "Deployment verification completed"
 }
 
-# Run database migrations
-run_migrations() {
-    log_info "Running database migrations..."
-
-    # 仓库当前没有 alembic.ini(backend/migrations/ 为纯 SQL, 全新部署由
-    # postgres 容器的 initdb 挂载 backend/migrations/init_schema.sql 完成初始化)。
-    # 显式降级: 无 alembic.ini 时跳过并告警, 不假装迁移成功。
-    if [ ! -f "${PROJECT_ROOT}/alembic.ini" ]; then
-        log_warn "alembic.ini 不存在, 跳过 alembic 迁移"
-        log_warn "全新部署的 schema 由 postgres initdb (backend/migrations/init_schema.sql) 初始化;"
-        log_warn "增量迁移请使用 deployment/migrations/migrate.py (需先落地 alembic 工程)"
-        return 0
-    fi
-
-    local api_pod=$(kubectl get pods -n "$NAMESPACE" -l app=xagent-api -o jsonpath='{.items[0].metadata.name}')
-
-    if [ -z "$api_pod" ]; then
-        log_error "No API pod found for migrations"
-        return 1
-    fi
-
-    kubectl exec -it "$api_pod" -n "$NAMESPACE" -- \
-        python -m alembic upgrade head
-
-    log_info "Database migrations completed"
-}
-
 # Main deployment flow
 main() {
     log_info "Starting X-Agent production deployment"
@@ -163,12 +166,10 @@ main() {
     log_info "Release: $RELEASE_NAME"
 
     check_prerequisites
-    build_image
     create_namespace
     deploy_helm
     wait_for_deployment
     verify_deployment
-    run_migrations
 
     log_info "X-Agent deployment completed successfully!"
     log_info "Access the API at: http://xagent-api.$NAMESPACE.svc.cluster.local:8000"

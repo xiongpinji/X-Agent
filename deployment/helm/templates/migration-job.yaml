@@ -1,0 +1,42 @@
+{{- if .Values.migration.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: xagent-migrate-{{ .Release.Revision }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: xagent-migration
+spec:
+  backoffLimit: {{ .Values.migration.backoffLimit }}
+  activeDeadlineSeconds: {{ .Values.migration.timeoutSeconds }}
+  ttlSecondsAfterFinished: {{ .Values.migration.ttlSecondsAfterFinished }}
+  template:
+    metadata:
+      labels:
+        app: xagent-migration
+    spec:
+      restartPolicy: Never
+      serviceAccountName: xagent
+      containers:
+      - name: migrate
+        image: "{{ include "xagent.imageRepository" . }}:{{ include "xagent.imageTag" . }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        command: ["python", "-m", "backend.app.ops.migration_gate", "upgrade", "--timeout", {{ .Values.migration.timeoutSeconds | quote }}]
+        envFrom:
+        - configMapRef:
+            name: xagent-config
+        - secretRef:
+            name: {{ include "xagent.secretName" . }}
+        env:
+        - name: XAGENT_PRE_MIGRATION_BACKUP_ID
+          value: {{ include "xagent.verifiedBackupId" . | quote }}
+        - name: XAGENT_DATABASE_URL
+          value: "postgresql+asyncpg://$(DB_USER):$(DB_PASSWORD)@{{ include "xagent.postgresHost" . }}:{{ .Values.database.port }}/$(DB_NAME)"
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: ["ALL"]
+{{- end }}

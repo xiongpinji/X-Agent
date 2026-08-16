@@ -64,6 +64,26 @@ async def test_postgres_memory_store_and_search_use_pool() -> None:
     assert hits[0].metadata["trace_id"] == "trace-1"
 
 
+async def test_postgres_memory_accepts_canonical_non_uuid_agent_and_all_layers() -> None:
+    pool = FakePool()
+    memory = PostgresMemorySystem(
+        database_url="postgresql://example",
+        pool=pool,
+        ensure_schema=False,
+    )
+
+    await memory.store(
+        RunContext(tenant_id="tenant-a", agent_id="agent-primary"),
+        content="commercial memory",
+        layer=8,
+    )
+
+    sql, args = pool.executed[0]
+    assert args[2] == "agent-primary"
+    assert args[4] == 8
+    assert "$3::uuid" not in sql
+
+
 async def test_postgres_memory_vector_store_and_search_use_pgvector() -> None:
     pool = FakePool()
     memory = PostgresMemorySystem(

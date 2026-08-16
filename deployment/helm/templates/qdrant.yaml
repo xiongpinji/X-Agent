@@ -39,7 +39,7 @@ spec:
         - name: QDRANT_API_KEY
           valueFrom:
             secretKeyRef:
-              name: xagent-secrets
+              name: {{ include "xagent.secretName" . }}
               key: QDRANT_API_KEY
         resources:
           {{- toYaml .Values.qdrant.resources | nindent 10 }}

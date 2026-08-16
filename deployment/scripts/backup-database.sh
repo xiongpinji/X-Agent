@@ -1,54 +1,64 @@
-#!/bin/bash
-set -e
+#!/usr/bin/env bash
+set -euo pipefail
 
-# X-Agent Database Backup Script
-# Usage: bash deployment/scripts/backup-database.sh [backup_dir]
+# Usage: backup-database.sh [--dry-run] [backup_dir]
+DRY_RUN=false
+if [[ "${1:-}" == "--dry-run" ]]; then
+  DRY_RUN=true
+  shift
+fi
 
 BACKUP_DIR="${1:-./.backups}"
-TIMESTAMP=$(date +%Y%m%d-%H%M%S)
-BACKUP_FILE="$BACKUP_DIR/backup-$TIMESTAMP.sql.gz"
-
-# Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m'
-
-# Create backup directory
-mkdir -p "$BACKUP_DIR"
-
-echo -e "${YELLOW}Starting database backup...${NC}"
-echo "Backup file: $BACKUP_FILE"
-
-# Get database connection details from environment
 DB_HOST="${XAGENT_DATABASE_HOST:-localhost}"
 DB_PORT="${XAGENT_DATABASE_PORT:-5432}"
 DB_USER="${XAGENT_DATABASE_USER:-xagent}"
 DB_NAME="${XAGENT_DATABASE_NAME:-xagent}"
+DB_PASSWORD="${XAGENT_DATABASE_PASSWORD:-}"
+RETENTION_COUNT="${XAGENT_BACKUP_RETENTION_COUNT:-30}"
 
-# Perform backup
-if PGPASSWORD="$XAGENT_DATABASE_PASSWORD" pg_dump \
-  -h "$DB_HOST" \
-  -p "$DB_PORT" \
-  -U "$DB_USER" \
-  -d "$DB_NAME" \
-  --verbose \
-  --no-password \
-  | gzip > "$BACKUP_FILE"; then
-
-  FILE_SIZE=$(du -h "$BACKUP_FILE" | cut -f1)
-  echo -e "${GREEN}✓ Backup completed successfully${NC}"
-  echo "File size: $FILE_SIZE"
-  echo "Location: $BACKUP_FILE"
-
-  # Keep only last 30 backups
-  echo "Cleaning up old backups..."
-  ls -t "$BACKUP_DIR"/backup-*.sql.gz | tail -n +31 | xargs -r rm
-
-  echo -e "${GREEN}✓ Backup cleanup completed${NC}"
-  exit 0
-else
-  echo -e "${RED}✗ Backup failed${NC}"
-  rm -f "$BACKUP_FILE"
-  exit 1
+if [[ -z "$DB_PASSWORD" ]]; then
+  echo "XAGENT_DATABASE_PASSWORD must be set" >&2
+  exit 2
 fi
+if [[ ! "$RETENTION_COUNT" =~ ^[1-9][0-9]*$ ]]; then
+  echo "XAGENT_BACKUP_RETENTION_COUNT must be a positive integer" >&2
+  exit 2
+fi
+
+TIMESTAMP="$(date -u +%Y%m%d-%H%M%S)"
+BACKUP_FILE="$BACKUP_DIR/backup-$TIMESTAMP.sql.gz"
+
+if $DRY_RUN; then
+  echo "Backup dry-run validated target $DB_HOST:$DB_PORT/$DB_NAME -> $BACKUP_FILE"
+  exit 0
+fi
+
+command -v pg_dump >/dev/null || { echo "pg_dump is required" >&2; exit 2; }
+command -v gzip >/dev/null || { echo "gzip is required" >&2; exit 2; }
+mkdir -p "$BACKUP_DIR"
+TEMP_FILE="${BACKUP_FILE}.tmp.$$"
+trap 'rm -f -- "$TEMP_FILE"' EXIT
+
+PGPASSWORD="$DB_PASSWORD" pg_dump \
+  --host "$DB_HOST" \
+  --port "$DB_PORT" \
+  --username "$DB_USER" \
+  --dbname "$DB_NAME" \
+  --no-password \
+  --format=plain \
+  | gzip -9 > "$TEMP_FILE"
+gzip -t "$TEMP_FILE"
+mv -- "$TEMP_FILE" "$BACKUP_FILE"
+trap - EXIT
+
+mapfile -t OLD_BACKUPS < <(
+  find "$BACKUP_DIR" -maxdepth 1 -type f -name 'backup-*.sql.gz' -printf '%T@ %p\n' \
+    | sort -rn \
+    | tail -n "+$((RETENTION_COUNT + 1))" \
+    | cut -d' ' -f2-
+)
+for old_backup in "${OLD_BACKUPS[@]}"; do
+  rm -f -- "$old_backup"
+done
+
+echo "Backup completed: $BACKUP_FILE"

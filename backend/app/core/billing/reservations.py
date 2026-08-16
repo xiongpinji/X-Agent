@@ -36,7 +36,7 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
 
-from backend.app.core.admin_store import normalize_sync_database_url
+from backend.app.core.database_urls import normalize_sync_database_url
 from backend.app.settings import PROJECT_ROOT, Settings, get_settings
 
 ReservationStatus = Literal[

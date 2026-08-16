@@ -5,6 +5,7 @@ app_mode=production 时:
 - memory_backend 为 memory/jsonl          -> 拒绝启动
 - trace_backend 为 memory                 -> 拒绝启动
 - admin_store_backend 为 memory           -> 拒绝启动
+- run/audit store 为 file                -> 拒绝启动
 全部外部化后允许启动; 非生产模式不受影响。
 """
 from __future__ import annotations
@@ -23,6 +24,9 @@ _POSTGRES_KWARGS = {
     "memory_backend": "postgres",
     "trace_backend": "postgres",
     "admin_store_backend": "postgres",
+    "run_store_backend": "postgres",
+    "audit_store_backend": "postgres",
+    "workflow_store_backend": "db",
 }
 
 
@@ -32,7 +36,8 @@ def _production_kwargs(**overrides):
         "jwt_secret": _VALID_JWT,
         "encryption_key": _VALID_ENC,
         "audit_hmac_secret": "hmac-secret",
-        "redis_url": "redis://localhost:6379/0",
+        "github_webhook_secret": "github-webhook-secret",
+        "redis_url": "redis://redis.internal:6379/0",
     }
     payload.update(overrides)
     return payload
@@ -56,6 +61,11 @@ class TestProductionStorageFailFast:
         with pytest.raises(ValidationError, match="admin_store_backend"):
             Settings(**_production_kwargs(**{**_POSTGRES_KWARGS, "admin_store_backend": "memory"}))
 
+    @pytest.mark.parametrize("backend", ["auto", "file"])
+    def test_non_database_workflow_backend_rejected(self, backend):
+        with pytest.raises(ValidationError, match="workflow_store_backend"):
+            Settings(**_production_kwargs(**{**_POSTGRES_KWARGS, "workflow_store_backend": backend}))
+
     def test_all_violations_listed_together(self):
         """多项违规一次性全部列出(清晰错误信息, 避免逐条修复反复重启)。"""
         with pytest.raises(ValidationError) as exc_info:
@@ -77,6 +87,12 @@ class TestProductionStorageFailFast:
         assert settings.app_mode == "production"
         assert settings.database_url.startswith("postgresql")
 
+    def test_missing_github_webhook_secret_rejected(self):
+        payload = _production_kwargs(**_POSTGRES_KWARGS)
+        payload["github_webhook_secret"] = None
+        with pytest.raises(ValidationError, match="github_webhook_secret"):
+            Settings(**payload)
+
     def test_development_mode_unaffected(self):
         settings = Settings(app_mode="development")
         assert settings.app_mode == "development"
@@ -95,6 +111,7 @@ class TestFailFastThroughEnvVars:
         monkeypatch.setenv("XAGENT_JWT_SECRET", _VALID_JWT)
         monkeypatch.setenv("XAGENT_ENCRYPTION_KEY", _VALID_ENC)
         monkeypatch.setenv("XAGENT_AUDIT_HMAC_SECRET", "hmac-secret")
+        monkeypatch.setenv("XAGENT_GITHUB_WEBHOOK_SECRET", "github-webhook-secret")
         get_settings.cache_clear()
         try:
             with pytest.raises(ValidationError, match="拒绝启动"):
@@ -107,11 +124,15 @@ class TestFailFastThroughEnvVars:
         monkeypatch.setenv("XAGENT_JWT_SECRET", _VALID_JWT)
         monkeypatch.setenv("XAGENT_ENCRYPTION_KEY", _VALID_ENC)
         monkeypatch.setenv("XAGENT_AUDIT_HMAC_SECRET", "hmac-secret")
+        monkeypatch.setenv("XAGENT_GITHUB_WEBHOOK_SECRET", "github-webhook-secret")
         monkeypatch.setenv("XAGENT_REDIS_URL", "redis://localhost:6379/0")
         monkeypatch.setenv("XAGENT_DATABASE_URL", "postgresql+asyncpg://u:p@db:5432/xagent")
         monkeypatch.setenv("XAGENT_MEMORY_BACKEND", "postgres")
         monkeypatch.setenv("XAGENT_TRACE_BACKEND", "postgres")
         monkeypatch.setenv("XAGENT_ADMIN_STORE_BACKEND", "postgres")
+        monkeypatch.setenv("XAGENT_RUN_STORE_BACKEND", "postgres")
+        monkeypatch.setenv("XAGENT_AUDIT_STORE_BACKEND", "postgres")
+        monkeypatch.setenv("XAGENT_WORKFLOW_STORE_BACKEND", "db")
         get_settings.cache_clear()
         try:
             settings = get_settings()
