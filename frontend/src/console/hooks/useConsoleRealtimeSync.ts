@@ -38,6 +38,19 @@ type ConsoleRealtimeSyncHandle = {
   startPolling: () => void;
 };
 
+const RECONNECT_BASE_DELAY_MS = 1000;
+const RECONNECT_MAX_DELAY_MS = 30000;
+const RECONNECT_JITTER_RATIO = 0.25;
+
+function jitteredReconnectDelay(baseDelay: number): number {
+  return Math.min(
+    RECONNECT_MAX_DELAY_MS,
+    Math.round(
+      baseDelay * (1 - RECONNECT_JITTER_RATIO + Math.random() * RECONNECT_JITTER_RATIO * 2),
+    ),
+  );
+}
+
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === "object" && !Array.isArray(value)
     ? value as Record<string, unknown>
@@ -163,7 +176,7 @@ export function useConsoleRealtimeSync(
   const pollingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const aliveRef = useRef(true);
   const lastEventIdRef = useRef<string | null>(null);
-  const reconnectDelayRef = useRef<number>(1000);
+  const reconnectDelayRef = useRef<number>(RECONNECT_BASE_DELAY_MS);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const didInitialBootstrapRef = useRef(false);
   const reconnectAttemptRef = useRef(0);
@@ -188,50 +201,74 @@ export function useConsoleRealtimeSync(
   }, []);
 
   const handleRealtimeEvent = useCallback(
-    (event: UnifiedMessageEvent) => {
+    (event: UnifiedMessageEvent): boolean => {
       const currentState = stateRef.current;
       switch (event.event_type) {
         case "message.created":
         case "message.updated": {
           const message = normalizeRealtimeMessage(event);
-          if (!message) break;
+          if (!message) return false;
           const realtime = mergeRealtimeMessage(currentState.realtime, message);
           stateRef.current = { ...currentState, realtime };
           dispatch({ type: "realtime/update", payload: realtime });
-          break;
+          return true;
         }
         case "room.created":
         case "room.member_added":
         case "room.updated":
         case "room.closed": {
           const room = normalizeMeetingRoom(event);
-          if (!room) break;
+          if (!room) return false;
           const rooms = mergeRoomUpdate(currentState.meetingRooms, room);
           stateRef.current = { ...currentState, meetingRooms: rooms };
           dispatch({ type: "rooms/update", payload: rooms });
-          break;
+          return true;
         }
         case "conversation.updated": {
-          const conversation = event.payload as ConversationSummary;
-          dispatch({ type: "realtime/update", payload: mergeConversationUpdate(currentState.realtime, conversation) });
-          break;
+          const conversation = asRecord(event.payload);
+          if (!asNonEmptyString(conversation?.conversation_id)) return false;
+          dispatch({
+            type: "realtime/update",
+            payload: mergeConversationUpdate(
+              currentState.realtime,
+              conversation as unknown as ConversationSummary,
+            ),
+          });
+          return true;
         }
         case "presence.updated": {
-          const presence = event.payload as PresenceMap;
-          dispatch({ type: "realtime/update", payload: mergePresenceUpdate(currentState.realtime, presence) });
-          break;
+          const presence = asRecord(event.payload);
+          if (!presence || Object.keys(presence).length === 0) return false;
+          dispatch({
+            type: "realtime/update",
+            payload: mergePresenceUpdate(
+              currentState.realtime,
+              presence as unknown as PresenceMap,
+            ),
+          });
+          return true;
         }
         case "workflow.updated":
-        case "audit.created":
-        case "system.notification": {
-          const payload = event.payload ?? {};
+        case "audit.created": {
+          const payload = asRecord(event.payload);
+          if (!payload) return false;
           if (payload.realtime) dispatch({ type: "realtime/update", payload: payload.realtime as RealtimeSnapshot });
           if (payload.dispatch) dispatch({ type: "dispatch/update", payload: payload.dispatch as DispatchResult });
           if (payload.rooms) dispatch({ type: "rooms/update", payload: payload.rooms as MeetingRoomSummary[] });
-          break;
+          return true;
+        }
+        case "system.notification": {
+          const payload = asRecord(event.payload);
+          if (!payload) return false;
+          let applied = false;
+          if (payload.realtime) dispatch({ type: "realtime/update", payload: payload.realtime as RealtimeSnapshot });
+          if (payload.dispatch) dispatch({ type: "dispatch/update", payload: payload.dispatch as DispatchResult });
+          if (payload.rooms) dispatch({ type: "rooms/update", payload: payload.rooms as MeetingRoomSummary[] });
+          if (payload.realtime || payload.dispatch || payload.rooms) applied = true;
+          return applied;
         }
         default:
-          break;
+          return false;
       }
     },
     [dispatch],
@@ -289,8 +326,6 @@ export function useConsoleRealtimeSync(
       signal: controller.signal,
       onOpen: () => {
         if (!aliveRef.current) return;
-        reconnectAttemptRef.current = 0;
-        reconnectDelayRef.current = 1000;
         setSyncStatus("sse");
         setSyncError(null);
         stopPolling();
@@ -301,7 +336,10 @@ export function useConsoleRealtimeSync(
           const payload = JSON.parse(streamEvent.data) as UnifiedMessageEvent;
           if (streamEvent.id) lastEventIdRef.current = streamEvent.id;
           if (payload.event_id) lastEventIdRef.current = payload.event_id;
-          handleRealtimeEvent(payload);
+          if (handleRealtimeEvent(payload)) {
+            reconnectAttemptRef.current = 0;
+            reconnectDelayRef.current = RECONNECT_BASE_DELAY_MS;
+          }
           setLastSyncedAt(new Date().toISOString());
           setSyncError(null);
         } catch {
@@ -321,8 +359,9 @@ export function useConsoleRealtimeSync(
       reconnectAttemptRef.current += 1;
       setSyncStatus("polling");
       startPolling();
-      reconnectTimerRef.current = setTimeout(connectSSE, reconnectDelayRef.current);
-      reconnectDelayRef.current = Math.min(reconnectDelayRef.current * 2, 30000);
+      const reconnectDelay = jitteredReconnectDelay(reconnectDelayRef.current);
+      reconnectTimerRef.current = setTimeout(connectSSE, reconnectDelay);
+      reconnectDelayRef.current = Math.min(reconnectDelayRef.current * 2, RECONNECT_MAX_DELAY_MS);
     }).catch((error: unknown) => {
       if (!aliveRef.current || controller.signal.aborted) return;
       streamAbortRef.current = null;
@@ -336,8 +375,9 @@ export function useConsoleRealtimeSync(
       setSyncStatus("polling");
       setSyncError("Console event stream disconnected.");
       startPolling();
-      reconnectTimerRef.current = setTimeout(connectSSE, reconnectDelayRef.current);
-      reconnectDelayRef.current = Math.min(reconnectDelayRef.current * 2, 30000);
+      const reconnectDelay = jitteredReconnectDelay(reconnectDelayRef.current);
+      reconnectTimerRef.current = setTimeout(connectSSE, reconnectDelay);
+      reconnectDelayRef.current = Math.min(reconnectDelayRef.current * 2, RECONNECT_MAX_DELAY_MS);
     });
   }, [clearReconnectTimer, getStreamUrl, handleRealtimeEvent, startPolling, stopPolling]);
 
@@ -400,14 +440,14 @@ export function useConsoleRealtimeSync(
 
   const manualRefresh = useCallback(async () => {
     lastEventIdRef.current = null;
-    reconnectDelayRef.current = 1000;
+    reconnectDelayRef.current = RECONNECT_BASE_DELAY_MS;
     reconnectAttemptRef.current = 0;
     if (await refreshBootstrap()) connectSSE();
   }, [connectSSE, refreshBootstrap]);
 
   const reconnect = useCallback(() => {
     lastEventIdRef.current = lastEventIdRef.current ?? null;
-    reconnectDelayRef.current = 1000;
+    reconnectDelayRef.current = RECONNECT_BASE_DELAY_MS;
     reconnectAttemptRef.current = 0;
     connectSSE();
   }, [connectSSE]);

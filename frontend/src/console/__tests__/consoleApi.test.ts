@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import React from "react";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ConsoleApp } from "../ConsoleApp";
@@ -105,6 +105,7 @@ describe("consoleApi authentication and SSE", () => {
   afterEach(() => {
     cleanup();
     vi.restoreAllMocks();
+    vi.useRealTimers();
   });
 
   it("prefers the Login bearer key and falls back to the Login API key", () => {
@@ -369,5 +370,64 @@ describe("consoleApi authentication and SSE", () => {
     await waitFor(() => expect(screen.getByText("after gap")).toBeTruthy());
     expect(screen.getAllByText("before gap")).toHaveLength(1);
     expect(screen.getAllByText("after gap")).toHaveLength(1);
+  });
+
+  it("backs off consecutive stream gaps and resets only after a valid business event", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, "random").mockReturnValue(0.5);
+    localStorage.setItem("auth_token", "bearer-secret");
+    const gap = 'event: stream.gap\ndata: {"event_type":"stream.gap","payload":{"reason":"subscriber_overflow"}}\n\n';
+    const stableThenGap =
+      'event: message.created\nid: evt-stable\ndata: {"event_id":"evt-stable","event_type":"message.created","room_id":"room-gap","payload":{"message":{"message_id":"stable-message","room_id":"room-gap","sender_id":"agent-a","content":"stable","created_at":"2026-08-16T00:00:00Z"}}}\n\n'
+      + gap;
+    const gapReaders = Array.from({ length: 7 }, () => readerBackedResponse([gap]));
+    const recoveredReader = readerBackedResponse([stableThenGap]);
+    let streamCalls = 0;
+    const fetcher = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.startsWith("/api/v1/workbench")) {
+        return new Response(JSON.stringify(emptyBootstrap), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      if (url.startsWith("/api/v1/messages/stream")) {
+        streamCalls += 1;
+        if (streamCalls <= gapReaders.length) return gapReaders[streamCalls - 1].response;
+        if (streamCalls === gapReaders.length + 1) return recoveredReader.response;
+        return chunkedResponse([
+          'event: stream.closed\ndata: {"event_type":"stream.closed"}\n\n',
+        ]);
+      }
+      throw new Error(`Unexpected Console URL: ${url}`);
+    });
+
+    render(React.createElement(ConsoleApp));
+    await act(async () => vi.advanceTimersByTimeAsync(0));
+    expect(streamCalls).toBe(1);
+
+    const reconnectDelays = [1000, 2000, 4000, 8000, 16000, 30000, 30000];
+    for (const [index, delay] of reconnectDelays.entries()) {
+      await act(async () => vi.advanceTimersByTimeAsync(delay - 1));
+      expect(streamCalls).toBe(index + 1);
+      await act(async () => vi.advanceTimersByTimeAsync(1));
+      expect(streamCalls).toBe(index + 2);
+    }
+
+    await act(async () => vi.advanceTimersByTimeAsync(999));
+    expect(streamCalls).toBe(8);
+    await act(async () => vi.advanceTimersByTimeAsync(1));
+    expect(streamCalls).toBe(9);
+    const [, finalRecovery] = fetcher.mock.calls.filter(
+      ([input]) => String(input).startsWith("/api/v1/messages/stream"),
+    ).at(-1) ?? [];
+    expect(finalRecovery?.headers).toEqual(
+      expect.objectContaining({ "Last-Event-ID": "evt-stable" }),
+    );
+    for (const gapReader of gapReaders) {
+      expect(gapReader.reader.cancel).toHaveBeenCalledTimes(1);
+    }
+    expect(recoveredReader.reader.cancel).toHaveBeenCalledTimes(1);
+    expect(vi.getTimerCount()).toBe(0);
   });
 });

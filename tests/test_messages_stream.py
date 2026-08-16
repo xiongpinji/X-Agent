@@ -124,6 +124,39 @@ def test_messages_stream_replays_history_and_sets_sse_ids() -> None:
         _clear_event_bus()
 
 
+def test_messages_stream_ephemeral_connect_notice_does_not_replace_replay_anchor() -> None:
+    client = TestClient(app, headers={"x-api-key": "bootstrap"})
+    _set_principal_override()
+    _clear_event_bus()
+    channel_key = build_channel_key(
+        tenant_id="tenant-1",
+        agent_id="agent-1",
+        user_id="user-1",
+        trace_id="trace-1",
+    )
+    message_event_bus.record(
+        channel_key,
+        UnifiedMessageEvent(
+            event_id="durable-anchor",
+            event_type="message.created",
+            tenant_id="tenant-1",
+            agent_id="agent-1",
+            user_id="user-1",
+            trace_id="trace-1",
+        ),
+    )
+
+    try:
+        stream_text = _read_stream_history(client, {})
+        connect_notice, durable_event = stream_text.split("\n\n", 2)[:2]
+        assert "event: system.notification" in connect_notice
+        assert "id:" not in connect_notice
+        assert "id: durable-anchor" in durable_event
+    finally:
+        _clear_principal_override()
+        _clear_event_bus()
+
+
 def test_messages_stream_honors_domain_filters() -> None:
     client = TestClient(app, headers={"x-api-key": "bootstrap"})
     _set_principal_override()
@@ -405,6 +438,68 @@ def test_messages_stream_prefers_last_event_id_header(monkeypatch) -> None:
         _clear_event_bus()
 
 
+def test_messages_stream_rejects_new_active_channel_at_tenant_capacity(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr("backend.app.api.messages.MAX_CHANNELS_PER_TENANT", 1)
+    client = TestClient(app, headers={"x-api-key": "bootstrap"})
+    _set_principal_override()
+    _clear_event_bus()
+    held_channel = build_channel_key(tenant_id="tenant-1", room_id="held")
+    message_event_bus.record(
+        held_channel,
+        UnifiedMessageEvent(
+            event_id="held-anchor",
+            event_type="message.created",
+            tenant_id="tenant-1",
+        ),
+    )
+    held_queue = message_event_bus.subscribe(held_channel)
+    foreign_channel = build_channel_key(tenant_id="tenant-2", room_id="foreign-active")
+    message_event_bus.record(
+        foreign_channel,
+        UnifiedMessageEvent(
+            event_id="foreign-anchor",
+            event_type="message.created",
+            tenant_id="tenant-2",
+        ),
+    )
+    foreign_queue = message_event_bus.subscribe(foreign_channel)
+    blocked_channel = build_channel_key(
+        tenant_id="tenant-1",
+        room_id="blocked",
+        agent_id="agent-1",
+        user_id="user-1",
+        trace_id="trace-1",
+    )
+
+    try:
+        blocked = client.get(
+            "/api/v1/messages/stream",
+            params={"room_id": "blocked", "replay_only": "true"},
+        )
+        assert blocked.status_code == 429
+        assert blocked.json()["detail"] == {
+            "code": "message_stream_capacity_exceeded",
+            "message": "Message stream capacity is temporarily exhausted.",
+        }
+        assert message_event_bus.get_channel_snapshot(blocked_channel)["subscriber_count"] == 0
+        assert message_event_bus.get_history(blocked_channel) == []
+        assert message_event_bus.get_channel_snapshot(foreign_channel)["subscriber_count"] == 1
+
+        message_event_bus.unsubscribe(held_channel, held_queue)
+        accepted = client.get(
+            "/api/v1/messages/stream",
+            params={"room_id": "blocked", "replay_only": "true"},
+        )
+        assert accepted.status_code == 200
+    finally:
+        message_event_bus.unsubscribe(held_channel, held_queue)
+        message_event_bus.unsubscribe(foreign_channel, foreign_queue)
+        _clear_principal_override()
+        _clear_event_bus()
+
+
 def test_message_bus_overflow_emits_private_gap_and_keeps_authoritative_history() -> None:
     _clear_event_bus()
     channel_key = build_channel_key(tenant_id="tenant-1", trace_id="bounded-queue")
@@ -450,6 +545,83 @@ def test_message_bus_overflow_emits_private_gap_and_keeps_authoritative_history(
     finally:
         message_event_bus.unsubscribe(channel_key, queue)
         message_event_bus.unsubscribe(foreign_channel, foreign_queue)
+        _clear_event_bus()
+
+
+def test_message_bus_lru_preserves_active_history_and_evicts_inactive_history(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr("backend.app.api.messages.MAX_CHANNELS_PER_TENANT", 2)
+    _clear_event_bus()
+    active_channel = build_channel_key(tenant_id="tenant-1", room_id="active-oldest")
+    inactive_channel = build_channel_key(tenant_id="tenant-1", room_id="inactive")
+    newcomer_channel = build_channel_key(tenant_id="tenant-1", room_id="newcomer")
+    rejected_channel = build_channel_key(tenant_id="tenant-1", room_id="rejected")
+    reuse_channel = build_channel_key(tenant_id="tenant-1", room_id="reuse")
+    foreign_channel = build_channel_key(tenant_id="tenant-2", room_id="foreign")
+    message_event_bus.record(
+        active_channel,
+        UnifiedMessageEvent(
+            event_id="active-anchor",
+            event_type="message.created",
+            tenant_id="tenant-1",
+            payload={"generation": 1},
+        ),
+    )
+    active_queue = message_event_bus.subscribe(active_channel)
+    newcomer_queue = None
+    for channel_key, event_id, tenant_id in (
+        (inactive_channel, "inactive-event", "tenant-1"),
+        (foreign_channel, "foreign-event", "tenant-2"),
+        (newcomer_channel, "newcomer-event", "tenant-1"),
+    ):
+        message_event_bus.record(
+            channel_key,
+            UnifiedMessageEvent(
+                event_id=event_id,
+                event_type="message.created",
+                tenant_id=tenant_id,
+            ),
+        )
+
+    try:
+        assert [event.event_id for event in message_event_bus.get_history(active_channel)] == [
+            "active-anchor"
+        ]
+        assert message_event_bus.get_history(inactive_channel) == []
+        assert [event.event_id for event in message_event_bus.get_history(foreign_channel)] == [
+            "foreign-event"
+        ]
+        message_event_bus.record(
+            reuse_channel,
+            UnifiedMessageEvent(
+                event_id="active-anchor",
+                event_type="message.created",
+                tenant_id="tenant-1",
+                payload={"generation": 2},
+            ),
+        )
+        assert message_event_bus.get_history(reuse_channel) == []
+        newcomer_queue = message_event_bus.subscribe(newcomer_channel)
+        assert message_event_bus.record(
+            rejected_channel,
+            UnifiedMessageEvent(
+                event_id="rejected-event",
+                event_type="message.created",
+                tenant_id="tenant-1",
+            ),
+        ) is False
+        assert message_event_bus.get_history(rejected_channel) == []
+        assert [event.event_id for event in message_event_bus.get_history(active_channel)] == [
+            "active-anchor"
+        ]
+        assert [event.event_id for event in message_event_bus.get_history(newcomer_channel)] == [
+            "newcomer-event"
+        ]
+    finally:
+        message_event_bus.unsubscribe(active_channel, active_queue)
+        if newcomer_queue is not None:
+            message_event_bus.unsubscribe(newcomer_channel, newcomer_queue)
         _clear_event_bus()
 
 

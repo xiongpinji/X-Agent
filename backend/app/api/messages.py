@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from typing import Annotated
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
@@ -102,6 +102,10 @@ class _BoundedEventIds:
         return True
 
 
+class MessageStreamCapacityError(RuntimeError):
+    pass
+
+
 class _MessageEventBus:
     def __init__(self) -> None:
         self._subscribers: dict[str, list[asyncio.Queue[UnifiedMessageEvent]]] = defaultdict(list)
@@ -111,6 +115,8 @@ class _MessageEventBus:
         self._channel_event_ids: dict[str, set[str]] = defaultdict(set)
         self._tenant_channels: dict[str, OrderedDict[str, None]] = defaultdict(OrderedDict)
         self._channel_tenant: dict[str, str] = {}
+        self._active_tenant_channels: dict[str, set[str]] = defaultdict(set)
+        self._subscriber_tenant: dict[str, str] = {}
 
     def clear(self) -> None:
         self._subscribers.clear()
@@ -120,10 +126,13 @@ class _MessageEventBus:
         self._channel_event_ids.clear()
         self._tenant_channels.clear()
         self._channel_tenant.clear()
+        self._active_tenant_channels.clear()
+        self._subscriber_tenant.clear()
 
     def clear_channel(self, channel_key: str) -> bool:
         existed = channel_key in self._history or channel_key in self._subscribers
         self._subscribers.pop(channel_key, None)
+        self._remove_active_channel_registration(channel_key)
         self._drop_channel_history(channel_key)
         self._remove_channel_registration(channel_key)
         return existed
@@ -151,6 +160,7 @@ class _MessageEventBus:
                 self._history.pop(channel_key, None)
                 self._channel_event_ids.pop(channel_key, None)
                 self._subscribers.pop(channel_key, None)
+                self._remove_active_channel_registration(channel_key)
                 self._remove_channel_registration(channel_key)
             for event_id in removed_ids:
                 self._release_history_id(event_id)
@@ -179,6 +189,7 @@ class _MessageEventBus:
                 self._history.pop(channel_key, None)
                 self._channel_event_ids.pop(channel_key, None)
                 self._subscribers.pop(channel_key, None)
+                self._remove_active_channel_registration(channel_key)
                 self._remove_channel_registration(channel_key)
             for event_id in removed_ids:
                 self._release_history_id(event_id)
@@ -260,7 +271,25 @@ class _MessageEventBus:
             and (tenant_id is None or event.tenant_id == tenant_id)
         ]
 
-    def subscribe(self, channel_key: str) -> asyncio.Queue[UnifiedMessageEvent]:
+    def subscribe(
+        self,
+        channel_key: str,
+        *,
+        tenant_id: str | None = None,
+    ) -> asyncio.Queue[UnifiedMessageEvent]:
+        tenant_key = tenant_id or self._channel_tenant.get(channel_key) or _UNSCOPED_TENANT
+        registered_tenant = self._subscriber_tenant.get(channel_key)
+        if registered_tenant is not None and registered_tenant != tenant_key:
+            raise MessageStreamCapacityError
+        queues = self._subscribers.get(channel_key)
+        if not queues:
+            active_channels = self._active_tenant_channels.get(tenant_key)
+            if active_channels is not None and len(active_channels) >= MAX_CHANNELS_PER_TENANT:
+                raise MessageStreamCapacityError
+            if active_channels is None:
+                active_channels = self._active_tenant_channels[tenant_key]
+            active_channels.add(channel_key)
+            self._subscriber_tenant[channel_key] = tenant_key
         queue: asyncio.Queue[UnifiedMessageEvent] = asyncio.Queue(maxsize=SUBSCRIBER_QUEUE_LIMIT)
         self._subscribers[channel_key].append(queue)
         return queue
@@ -273,14 +302,28 @@ class _MessageEventBus:
             queues.remove(queue)
         if not queues:
             self._subscribers.pop(channel_key, None)
+            self._remove_active_channel_registration(channel_key)
 
-    def record(self, channel_key: str, event: UnifiedMessageEvent) -> None:
+    def _remove_active_channel_registration(self, channel_key: str) -> None:
+        tenant_key = self._subscriber_tenant.pop(channel_key, None)
+        if tenant_key is None:
+            return
+        active_channels = self._active_tenant_channels.get(tenant_key)
+        if active_channels is None:
+            return
+        active_channels.discard(channel_key)
+        if not active_channels:
+            self._active_tenant_channels.pop(tenant_key, None)
+
+    def record(self, channel_key: str, event: UnifiedMessageEvent) -> bool:
         channel_event_ids = self._channel_event_ids.get(channel_key)
         if channel_event_ids is not None and event.event_id in channel_event_ids:
-            return
+            return True
         existing = self._history_by_id.get(event.event_id)
         if existing is not None and existing != event:
-            return
+            return False
+        if not self._touch_channel(channel_key, event.tenant_id):
+            return False
         history = self._history[channel_key]
         if channel_event_ids is None:
             channel_event_ids = self._channel_event_ids[channel_key]
@@ -299,27 +342,36 @@ class _MessageEventBus:
         if evicted_id is not None:
             channel_event_ids.discard(evicted_id)
             self._release_history_id(evicted_id)
-        self._touch_channel(channel_key, event.tenant_id)
+        return True
 
-    def _touch_channel(self, channel_key: str, tenant_id: str | None) -> None:
+    def _touch_channel(self, channel_key: str, tenant_id: str | None) -> bool:
         tenant_key = tenant_id or _UNSCOPED_TENANT
         previous_tenant = self._channel_tenant.get(channel_key)
         if previous_tenant is not None and previous_tenant != tenant_key:
-            previous_channels = self._tenant_channels.get(previous_tenant)
-            if previous_channels is not None:
-                previous_channels.pop(channel_key, None)
-                if not previous_channels:
-                    self._tenant_channels.pop(previous_tenant, None)
+            return False
         channels = self._tenant_channels[tenant_key]
-        channels[channel_key] = None
-        channels.move_to_end(channel_key)
-        self._channel_tenant[channel_key] = tenant_key
-        while len(channels) > MAX_CHANNELS_PER_TENANT:
-            evicted_channel, _ = channels.popitem(last=False)
+        if channel_key in channels:
+            channels.move_to_end(channel_key)
+            return True
+        while len(channels) >= MAX_CHANNELS_PER_TENANT:
+            evicted_channel = next(
+                (
+                    candidate
+                    for candidate in channels
+                    if not self._subscribers.get(candidate)
+                ),
+                None,
+            )
+            if evicted_channel is None:
+                if not channels:
+                    self._tenant_channels.pop(tenant_key, None)
+                return False
+            channels.pop(evicted_channel)
             self._channel_tenant.pop(evicted_channel, None)
             self._drop_channel_history(evicted_channel)
-        if not channels:
-            self._tenant_channels.pop(tenant_key, None)
+        channels[channel_key] = None
+        self._channel_tenant[channel_key] = tenant_key
+        return True
 
     def _remove_channel_registration(self, channel_key: str) -> None:
         tenant_key = self._channel_tenant.pop(channel_key, None)
@@ -538,7 +590,19 @@ async def stream_messages(
         trace_id=stream_filter.trace_id,
     )
 
-    queue = message_event_bus.subscribe(channel_key)
+    try:
+        queue = message_event_bus.subscribe(
+            channel_key,
+            tenant_id=principal.tenant_id,
+        )
+    except MessageStreamCapacityError:
+        raise HTTPException(
+            status_code=429,
+            detail={
+                "code": "message_stream_capacity_exceeded",
+                "message": "Message stream capacity is temporarily exhausted.",
+            },
+        ) from None
     history = message_event_bus.get_history(
         channel_key,
         since=stream_filter.since,
@@ -571,7 +635,7 @@ async def stream_messages(
                     "last_event_id": stream_filter.last_event_id,
                 },
             )
-            yield _serialize_sse(hello, "system.notification")
+            yield _serialize_sse(hello, "system.notification", include_id=False)
 
             for historical_event in history:
                 yield _serialize_sse(historical_event, historical_event.event_type)
@@ -606,7 +670,11 @@ async def stream_messages(
                         trace_id=principal.trace_id,
                         payload={"type": "heartbeat", "server_time": datetime.now(UTC).isoformat()},
                     )
-                    yield _serialize_sse(heartbeat, "system.notification")
+                    yield _serialize_sse(
+                        heartbeat,
+                        "system.notification",
+                        include_id=False,
+                    )
         finally:
             message_event_bus.unsubscribe(channel_key, queue)
 
@@ -721,7 +789,7 @@ async def clear_channel(
     channel_type: str | None = Query(default=None),
     trace_id: str | None = Query(default=None),
 ) -> dict[str, object]:
-    enforce_scope(principal, "agent:run")
+    enforce_scope(principal, "security:manage")
     channel_key = build_channel_key(
         tenant_id=principal.tenant_id,
         org_id=org_id,

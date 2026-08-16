@@ -265,7 +265,7 @@ def test_messages_debug_domain_events_returns_events_for_domain() -> None:
 
 def test_messages_debug_clear_channel_removes_channel_state() -> None:
     client = TestClient(app, headers={"x-api-key": "bootstrap"})
-    _set_principal_override()
+    _set_manage_principal_override()
     _clear_event_bus()
 
     try:
@@ -513,7 +513,12 @@ def test_messages_debug_destructive_clear_requires_manage_scope_and_stays_tenant
     client = TestClient(app, headers={"x-api-key": "bootstrap"})
     _set_principal_override()
     _clear_event_bus()
-    tenant_a_channel = build_channel_key(tenant_id="tenant-1", trace_id="managed-trace")
+    tenant_a_channel = build_channel_key(
+        tenant_id="tenant-1",
+        agent_id="agent-1",
+        user_id="user-1",
+        trace_id="managed-trace",
+    )
     tenant_b_channel = build_channel_key(tenant_id="tenant-2", trace_id="managed-trace")
     for tenant_id, channel_key, event_id in (
         ("tenant-1", tenant_a_channel, "managed-a"),
@@ -538,8 +543,13 @@ def test_messages_debug_destructive_clear_requires_manage_scope_and_stays_tenant
             "/api/v1/messages/debug/domain",
             params={"domain": "room"},
         )
+        denied_channel = client.delete(
+            "/api/v1/messages/debug/channel",
+            params={"trace_id": "managed-trace"},
+        )
         assert denied_trace.status_code == 403
         assert denied_domain.status_code == 403
+        assert denied_channel.status_code == 403
         assert [event.event_id for event in message_event_bus.get_history(tenant_a_channel)] == [
             "managed-a"
         ]
@@ -548,6 +558,25 @@ def test_messages_debug_destructive_clear_requires_manage_scope_and_stays_tenant
         ]
 
         _set_manage_principal_override()
+        cleared_channel = client.delete(
+            "/api/v1/messages/debug/channel",
+            params={"trace_id": "managed-trace"},
+        )
+        assert cleared_channel.status_code == 200
+        assert cleared_channel.json()["cleared"] is True
+        assert message_event_bus.get_history(tenant_a_channel) == []
+        assert [event.event_id for event in message_event_bus.get_history(tenant_b_channel)] == [
+            "managed-b"
+        ]
+        message_event_bus.record(
+            tenant_a_channel,
+            UnifiedMessageEvent(
+                event_id="managed-a-restored",
+                event_type="message.created",
+                tenant_id="tenant-1",
+                trace_id="managed-trace",
+            ),
+        )
         cleared = client.delete(
             "/api/v1/messages/debug/trace",
             params={"trace_id": "managed-trace"},

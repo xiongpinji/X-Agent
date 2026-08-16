@@ -34,8 +34,22 @@ class _OverridePrincipal:
         return _FakePrincipal()
 
 
+class _ManagePrincipal(_FakePrincipal):
+    role = "admin"
+    scopes = [*_FakePrincipal.scopes, "security:manage"]
+
+
+class _OverrideManagePrincipal:
+    def __call__(self):
+        return _ManagePrincipal()
+
+
 def _set_principal_override() -> None:
     app.dependency_overrides[get_current_principal] = _OverridePrincipal()
+
+
+def _set_manage_principal_override() -> None:
+    app.dependency_overrides[get_current_principal] = _OverrideManagePrincipal()
 
 
 def _clear_principal_override() -> None:
@@ -111,6 +125,7 @@ def test_messages_end_to_end_publish_stream_snapshot_and_clear() -> None:
         assert snapshot["history_count"] == 1
         assert snapshot["last_event_type"] == "room.created"
 
+        _set_manage_principal_override()
         clear_response = client.delete(
             "/api/v1/messages/debug/channel",
             params={
