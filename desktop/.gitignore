@@ -1,6 +1,5 @@
 # Rust
 /target/
-Cargo.lock
 **/*.rs.bk
 *.pdb
 
@@ -25,7 +24,7 @@ yarn-error.log*
 
 # Tauri
 src-tauri/target/
-src-tauri/Cargo.lock
+/gen/
 
 # Frontend build
 frontend/dist/
