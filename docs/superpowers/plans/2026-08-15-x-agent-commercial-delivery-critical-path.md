@@ -307,6 +307,15 @@ export function consoleAuthHeaders(): HeadersInit {
 
 ### 任务 6：本地 RC、静态债务与四端产品门禁
 
+**2026-08-16 增量证据：Mobile 真实 Agent 纵切**
+
+- 提交 `a3c55b5` 将 Mobile 从 Expo SDK 50 / React Native 0.73 升级到当前 Expo SDK 57 / React Native 0.86 / React 19；新锁文件通过从零 `npm ci --ignore-scripts`，`expo-doctor` 21/21 通过。
+- Mobile 使用显式 HTTPS API 配置，缺失时失败关闭；登录/刷新指向真实 `/api/v1/auth/*`，REST 与原生 WebSocket 均使用 Bearer 优先、API Key 回退的 header-only 凭证。
+- `/api/v1/mobile` 触发链路绑定真实 active agent、tenant/user/operation/run/trace，真实取回 Agent answer，取消会终止实际 asyncio task，run/push/WebSocket 按 tenant + user 隔离，失败响应与日志不回显原异常。请求的 operation/metadata/push 字段已有空白、字节、数量和枚举上限。
+- Mobile 产品面只保留真实可达的 Login、Trigger/Status/Cancel、Theme 和 Logout；Sign Up、Forgot Password、Biometric、Profile/Security/API Keys/Cache/Legal 等未挂载或空实现入口已隐藏。
+- 同轮证据：后端 Mobile/Auth/入口 48 tests passed；Mobile Jest 4 suites / 13 tests passed；TypeScript、ESLint、Ruff、py_compile、diff/secret/runtime denylist 全部通过；Android + iOS Metro/Hermes bundle 均生成，46 个已忽略文件、约 11.5 MB。
+- 不得升级为完整 Mobile 商用通过：MobileRunManager 的 run 索引仍为单进程内存，重启/多 Pod 状态查询还未收敛到权威持久 run store；未在签名 Android/iOS 真机安装，EAS/APNs/FCM 资源也未授权；依赖审计仍为 0 critical / 14 high / 8 moderate，全部来自当前 Expo/RN/Metro 链，npm 建议的自动修复会倒退至 Expo 53 / RN 0.72，因此未强制降级，须作为上游供应链风险持续跟踪。
+
 **2026-08-16 增量证据：Feedback 产品面**
 
 - 提交 `2f2fc9c` 将后端真实 Feedback router 挂入商用应用，并把 `/feedback` 接到鉴权路由和侧栏。
