@@ -26,6 +26,21 @@ BASH = shutil.which("bash")
 POWERSHELL = shutil.which("powershell") or shutil.which("pwsh")
 
 
+def _bash_path(path: Path) -> str:
+    """Translate Windows paths for the inbox WSL bash executable."""
+    resolved = path.resolve()
+    if BASH and Path(BASH).parent.name.lower() == "system32" and resolved.drive:
+        drive = resolved.drive.rstrip(":").lower()
+        return f"/mnt/{drive}{resolved.as_posix()[2:]}"
+    return str(resolved)
+
+
+def _venv_bin(venv: Path) -> tuple[Path, str, str]:
+    if BASH and Path(BASH).parent.name.lower() == "system32":
+        return venv / "bin", "python", "xagent"
+    return venv / "Scripts", "python.exe", "xagent.exe"
+
+
 def _run_bash(script: str, cwd: Path) -> subprocess.CompletedProcess:
     return subprocess.run(
         [BASH, "-c", script],
@@ -41,16 +56,16 @@ def _source_lib(script_body: str) -> str:
     """Source install.sh in lib-only mode, then run the given body."""
     return (
         "export XAGENT_INSTALL_LIB_ONLY=1; "
-        f'source "{INSTALL_SH}"; '
+        f'source "{_bash_path(INSTALL_SH)}"; '
         f"{script_body}"
     )
 
 
 def _make_stub_python(venv: Path, import_ok: bool) -> Path:
     """Create a fake venv python that 'imports backend' successfully or not."""
-    scripts = venv / "Scripts"
+    scripts, python_name, _ = _venv_bin(venv)
     scripts.mkdir(parents=True, exist_ok=True)
-    stub = scripts / "python.exe"
+    stub = scripts / python_name
     rc = "0" if import_ok else "1"
     stub.write_text(
         "#!/usr/bin/env bash\n"
@@ -63,6 +78,7 @@ def _make_stub_python(venv: Path, import_ok: bool) -> Path:
         "fi\n"
         "exit 0\n",
         encoding="utf-8",
+        newline="\n",
     )
     stub.chmod(stub.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
     return stub
@@ -78,7 +94,7 @@ class TestScriptExistence:
     @pytest.mark.skipif(BASH is None, reason="bash not available")
     def test_install_sh_bash_syntax_valid(self):
         result = subprocess.run(
-            [BASH, "-n", str(INSTALL_SH)], capture_output=True, text=True, check=False
+            [BASH, "-n", _bash_path(INSTALL_SH)], capture_output=True, text=True, check=False
         )
         assert result.returncode == 0, result.stderr
 
@@ -106,8 +122,11 @@ class TestInstallShIdempotency:
 
     def test_skip_install_when_venv_usable(self, tmp_path):
         _make_stub_python(tmp_path / "venv", import_ok=True)
-        xagent = tmp_path / "venv" / "Scripts" / "xagent.exe"
-        xagent.write_text("#!/usr/bin/env bash\nexit 0\n", encoding="utf-8")
+        scripts, _, xagent_name = _venv_bin(tmp_path / "venv")
+        xagent = scripts / xagent_name
+        xagent.write_text(
+            "#!/usr/bin/env bash\nexit 0\n", encoding="utf-8", newline="\n"
+        )
         xagent.chmod(0o755)
 
         result = _run_bash(_source_lib("should_skip_install"), cwd=tmp_path)
@@ -121,8 +140,11 @@ class TestInstallShIdempotency:
 
     def test_no_skip_when_backend_not_importable(self, tmp_path):
         _make_stub_python(tmp_path / "venv", import_ok=False)
-        xagent = tmp_path / "venv" / "Scripts" / "xagent.exe"
-        xagent.write_text("#!/usr/bin/env bash\nexit 0\n", encoding="utf-8")
+        scripts, _, xagent_name = _venv_bin(tmp_path / "venv")
+        xagent = scripts / xagent_name
+        xagent.write_text(
+            "#!/usr/bin/env bash\nexit 0\n", encoding="utf-8", newline="\n"
+        )
         xagent.chmod(0o755)
 
         result = _run_bash(_source_lib("should_skip_install"), cwd=tmp_path)

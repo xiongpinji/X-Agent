@@ -264,7 +264,11 @@ def test_owner_gate_runner_loads_non_placeholder_env_file_values(tmp_path: Path,
     assert calls[0]["env"].get("XAGENT_GITHUB_TOKEN") != "<set-in-owner-secret-store>"
 
 
-def test_owner_gate_runner_reports_selected_gate_placeholder_env_values(tmp_path: Path) -> None:
+def test_owner_gate_runner_reports_selected_gate_placeholder_env_values(
+    tmp_path: Path, monkeypatch
+) -> None:
+    monkeypatch.delenv("XAGENT_GITHUB_TOKEN", raising=False)
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
     plan = _write_plan(tmp_path / "rc-owner-gate-plan.json")
     env_file = tmp_path / "owner.env"
     env_file.write_text(

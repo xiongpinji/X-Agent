@@ -304,17 +304,16 @@ class TestBuildLLMRouter:
 
     def test_build_router_with_empty_fallback_order(self):
         """Test building router with empty fallback order."""
-        router = build_llm_router(
-            llm_backend="auto",
-            fallback_order="",
-            openai_api_key=None,
-            openai_model="gpt-4",
-            deepseek_api_key=None,
-            deepseek_model="deepseek-chat",
-            deepseek_base_url="https://api.deepseek.com/v1",
-        )
-        assert len(router._backends) == 1
-        assert isinstance(router._backends[0], MockLLMBackend)
+        with pytest.raises(RuntimeError, match="No LLM API key configured"):
+            build_llm_router(
+                llm_backend="auto",
+                fallback_order="",
+                openai_api_key=None,
+                openai_model="gpt-4",
+                deepseek_api_key=None,
+                deepseek_model="deepseek-chat",
+                deepseek_base_url="https://api.deepseek.com/v1",
+            )
 
     def test_build_router_with_whitespace_fallback_order(self):
         """Test building router with whitespace in fallback order."""
@@ -332,14 +331,13 @@ class TestBuildLLMRouter:
 
     def test_build_router_with_unknown_backend(self):
         """Test building router with unknown backend name."""
-        router = build_llm_router(
-            llm_backend="unknown",
-            fallback_order="unknown,mock",
-            openai_api_key=None,
-            openai_model="gpt-4",
-            deepseek_api_key=None,
-            deepseek_model="deepseek-chat",
-            deepseek_base_url="https://api.deepseek.com/v1",
-        )
-        assert len(router._backends) == 1
-        assert isinstance(router._backends[0], MockLLMBackend)
+        with pytest.raises(RuntimeError, match="No LLM API key configured"):
+            build_llm_router(
+                llm_backend="unknown",
+                fallback_order="unknown,mock",
+                openai_api_key=None,
+                openai_model="gpt-4",
+                deepseek_api_key=None,
+                deepseek_model="deepseek-chat",
+                deepseek_base_url="https://api.deepseek.com/v1",
+            )

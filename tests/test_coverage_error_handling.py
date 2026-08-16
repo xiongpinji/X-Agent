@@ -95,7 +95,7 @@ class TestAgentLoopErrorHandling:
 
         with patch.object(agent.tools, 'execute', side_effect=failing_then_success):
             try:
-                result = await agent.run(context, "test task")
+                result = await agent.run(context, "echo: test")
             except Exception:
                 pass
 

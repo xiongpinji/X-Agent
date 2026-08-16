@@ -60,6 +60,7 @@ class HotMemoryStore:
             (self.storage_path / category).mkdir(exist_ok=True)
 
         self._index: dict[str, MemoryIndex] = {}
+        self._cache: dict[str, Memory] = {}
         self._load_index()
 
     async def save(self, memory: Memory) -> str:
@@ -93,6 +94,7 @@ class HotMemoryStore:
             path=str(memory_file.relative_to(self.storage_path)),
         )
         self._index[memory.id] = index_entry
+        self._cache[memory.id] = memory.model_copy(deep=True)
 
         # Rebuild index file
         await self.rebuild_index()
@@ -108,7 +110,20 @@ class HotMemoryStore:
         Returns:
             Memory object or None if not found
         """
-        # Search in all category directories
+        cached = self._cache.get(memory_id)
+        if cached is not None:
+            return cached.model_copy(deep=True)
+
+        index_entry = self._index.get(memory_id)
+        if index_entry is not None:
+            memory_file = self.storage_path / index_entry.path
+            if memory_file.is_file():
+                content = memory_file.read_text(encoding="utf-8")
+                memory = self._parse_memory_markdown(content, memory_id)
+                self._cache[memory_id] = memory
+                return memory.model_copy(deep=True)
+
+        # Fall back to a directory scan for files created outside this process.
         for category_dir in self.storage_path.glob("*/"):
             if not category_dir.is_dir():
                 continue
@@ -116,7 +131,9 @@ class HotMemoryStore:
             memory_file = category_dir / f"{memory_id}.md"
             if memory_file.exists():
                 content = memory_file.read_text(encoding="utf-8")
-                return self._parse_memory_markdown(content, memory_id)
+                memory = self._parse_memory_markdown(content, memory_id)
+                self._cache[memory_id] = memory
+                return memory.model_copy(deep=True)
 
         return None
 
@@ -194,6 +211,7 @@ class HotMemoryStore:
             if memory_file.exists():
                 memory_file.unlink()
                 self._index.pop(memory_id, None)
+                self._cache.pop(memory_id, None)
                 await self.rebuild_index()
                 return True
 
@@ -400,5 +418,6 @@ class HotMemoryStore:
                                 tags=memory.tags,
                                 path=str(memory_file.relative_to(self.storage_path)),
                             )
+                            self._cache[memory_id] = memory
                         except Exception:
                             pass

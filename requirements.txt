@@ -23,7 +23,7 @@ anthropic>=0.28.0          # P1-08: AnthropicBackend (llm/anthropic_backend.py);
 langfuse==2.60.0
 
 # MCP (Model Context Protocol)
-mcp>=1.28.1                # P1-01: 官方 MCP SDK — MCPClient 真实协议支持 (core/mcp/client.py, stdio + Streamable HTTP); venv 实测 1.28.1 可用
+mcp>=1.28.1,<2.0.0         # P1-01: 官方 MCP SDK — 2.x 移除了当前使用的 FastMCP/streamablehttp_client API
 
 # Numeric / Scientific (CORE — used by memory analytics/fusion/dedup & multimodal at module level)
 numpy>=1.26.0          # loosened: 1.24.3 has no cp313 wheel (compile fails on Py3.13)

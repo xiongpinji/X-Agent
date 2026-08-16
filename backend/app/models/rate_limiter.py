@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import logging
 from datetime import UTC, datetime
+from uuid import uuid4
 
 import redis.asyncio as redis
 
@@ -65,6 +66,7 @@ class RateLimiterRedis:
             local window_start = tonumber(ARGV[2])
             local limit = tonumber(ARGV[3])
             local window_seconds = tonumber(ARGV[4])
+            local member = ARGV[5]
 
             -- 删除窗口外的记录
             redis.call('ZREMRANGEBYSCORE', key, 0, window_start)
@@ -75,7 +77,7 @@ class RateLimiterRedis:
             -- 检查是否超限
             if current_count < limit then
                 -- 添加当前请求
-                redis.call('ZADD', key, now, now)
+                redis.call('ZADD', key, now, member)
                 redis.call('EXPIRE', key, window_seconds + 1)
                 return {1, current_count + 1, limit - current_count - 1}
             else
@@ -91,6 +93,7 @@ class RateLimiterRedis:
                 window_start,
                 limit,
                 window_seconds,
+                uuid4().hex,
             )
 
             allowed = bool(result[0])

@@ -633,7 +633,13 @@ class AgentLoop:
             return None
         return derive_operation_id(context.operation_id, stage)
 
-    async def _fast_path_answer(self, context: RunContext, task: str, session_recap: str | None = None) -> AgentRunResponse | None:
+    async def _fast_path_answer(
+        self,
+        context: RunContext,
+        task: str,
+        session_recap: str | None = None,
+        extra_context: dict | None = None,
+    ) -> AgentRunResponse | None:
         """Try to answer a simple question directly via LLM (no planning loop).
 
         Returns None if the fast path is not applicable (complex task).
@@ -652,6 +658,9 @@ class AgentLoop:
                         "(use as background, most recent last):\n" + session_recap
                     ),
                 })
+            agents_md_message = agents_md.maybe_build_injection(extra_context)
+            if agents_md_message is not None:
+                messages.append(agents_md_message)
             messages.append({"role": "user", "content": task})
             resp = await self.llm.chat(
                 messages, [],
@@ -753,7 +762,12 @@ class AgentLoop:
                 logger.debug("fast-path session open failed: %s", exc)
                 fast_bridge_open = False
 
-        fast = await self._fast_path_answer(context, task, session_recap=fast_recap or None)
+        fast = await self._fast_path_answer(
+            context,
+            task,
+            session_recap=fast_recap or None,
+            extra_context=extra_context,
+        )
         if fast is not None:
             fast.execution_summary.setdefault("context_management", {"enabled": False})
             if fast_bridge_open:

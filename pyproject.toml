@@ -88,7 +88,7 @@ test = [
     "locust>=2.20.0",
 ]
 mcp = [
-    "mcp>=1.0.0",
+    "mcp>=1.28.1,<2.0.0",
 ]
 monitoring = [
     "prometheus-client>=0.20.0",
