@@ -307,6 +307,14 @@ export function consoleAuthHeaders(): HeadersInit {
 
 ### 任务 6：本地 RC、静态债务与四端产品门禁
 
+**2026-08-16 增量证据：Feedback 产品面**
+
+- 提交 `2f2fc9c` 将后端真实 Feedback router 挂入商用应用，并把 `/feedback` 接到鉴权路由和侧栏。
+- CRUD、resolve、真实统计/趋势/情感/分类、搜索及 CSV/JSON 导出均已接入；通知、PDF 和“持久响应备注”没有后端能力，因此从页面隐藏并在文档中明确 unavailable。
+- 所有端点要求 `feedback:read/write`，普通用户按 tenant + user 收敛，管理员才可查看租户汇总；生产模式禁止文件存储降级，错误日志不输出原始异常内容。
+- 同轮证据：后端相关 168 tests passed；前端 106 tests passed；完整 frontend lint、type-check、production build 通过。
+- 尚未升级为生产通过：当前 Alembic 仍有 `001` 与 `001_initial` 两个 head，Feedback ORM 也尚未进入可验证的单一生产迁移链。任务 7 必须先闭合迁移 dry-run/fail-closed，再允许生产部署声明。
+
 **文件：**
 - 修改：导致 Ruff 85 条错误和未 await warning 的精确源文件
 - 修改：`.github/workflows/commercial-rc.yml`
