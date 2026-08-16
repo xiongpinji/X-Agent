@@ -2,10 +2,16 @@ from __future__ import annotations
 
 import asyncio
 
+import pytest
 from fastapi.testclient import TestClient
 
 from backend.app.api.auth import _issue_token, _store_token_user
-from backend.app.api.messages import UnifiedMessageEvent, build_channel_key, message_event_bus
+from backend.app.api.messages import (
+    MessageStreamCapacityError,
+    UnifiedMessageEvent,
+    build_channel_key,
+    message_event_bus,
+)
 from backend.app.core.admin import UserCreateRequest, UserStore
 from backend.app.core.security import APIKeyCreateRequest, APIKeyStore
 from backend.app.dependencies import get_current_principal
@@ -49,6 +55,10 @@ def _clear_principal_override() -> None:
 
 def _clear_event_bus() -> None:
     message_event_bus.clear()
+
+
+def _publish_event(channel_key: str, event: UnifiedMessageEvent) -> None:
+    asyncio.run(message_event_bus.publish(channel_key, event))
 
 
 def _read_stream_history(client, params: dict) -> str:
@@ -95,7 +105,7 @@ def test_messages_stream_replays_history_and_sets_sse_ids() -> None:
         trace_id="trace-1",
         payload={"ok": True},
     )
-    message_event_bus.record(channel_key, historical_event)
+    _publish_event(channel_key, historical_event)
 
     try:
         stream_text = _read_stream_history(
@@ -134,7 +144,7 @@ def test_messages_stream_ephemeral_connect_notice_does_not_replace_replay_anchor
         user_id="user-1",
         trace_id="trace-1",
     )
-    message_event_bus.record(
+    _publish_event(
         channel_key,
         UnifiedMessageEvent(
             event_id="durable-anchor",
@@ -173,7 +183,7 @@ def test_messages_stream_honors_domain_filters() -> None:
         trace_id="trace-1",
     )
 
-    message_event_bus.record(
+    _publish_event(
         channel_key,
         UnifiedMessageEvent(
             event_id="evt-2",
@@ -208,6 +218,61 @@ def test_messages_stream_honors_domain_filters() -> None:
         assert "event: system.notification" in stream_text
         assert '\"event_type\":\"audit.created\"' not in stream_text
         assert message_event_bus.get_domain_counts(channel_key) == {"audit": 1}
+    finally:
+        _clear_principal_override()
+        _clear_event_bus()
+
+
+def test_tenant_stream_applies_only_explicit_room_and_trace_filters() -> None:
+    client = TestClient(app, headers={"x-api-key": "bootstrap"})
+    _set_principal_override()
+    _clear_event_bus()
+    matching_channel = build_channel_key(
+        tenant_id="tenant-1",
+        room_id="room-match",
+        trace_id="trace-match",
+    )
+    other_channel = build_channel_key(
+        tenant_id="tenant-1",
+        room_id="room-other",
+        trace_id="trace-other",
+    )
+    _publish_event(
+        matching_channel,
+        UnifiedMessageEvent(
+            event_id="explicit-filter-match",
+            event_type="room.created",
+            tenant_id="tenant-1",
+            room_id="room-match",
+            trace_id="trace-match",
+            payload={"room": {"name": "Matching Room"}},
+        ),
+    )
+    _publish_event(
+        other_channel,
+        UnifiedMessageEvent(
+            event_id="explicit-filter-other",
+            event_type="room.created",
+            tenant_id="tenant-1",
+            room_id="room-other",
+            trace_id="trace-other",
+            payload={"room": {"name": "Other Room"}},
+        ),
+    )
+
+    try:
+        response = client.get(
+            "/api/v1/messages/stream",
+            params={
+                "room_id": "room-match",
+                "trace_id": "trace-match",
+                "replay_only": "true",
+            },
+        )
+
+        assert response.status_code == 200
+        assert "Matching Room" in response.text
+        assert "Other Room" not in response.text
     finally:
         _clear_principal_override()
         _clear_event_bus()
@@ -255,8 +320,8 @@ def test_messages_stream_uses_last_event_id_as_continuation_anchor() -> None:
         trace_id="trace-1",
         payload={"step": 2},
     )
-    message_event_bus.record(channel_key, older_event)
-    message_event_bus.record(channel_key, newer_event)
+    _publish_event(channel_key, older_event)
+    _publish_event(channel_key, newer_event)
 
     try:
         stream_text = _read_stream_history(
@@ -311,6 +376,73 @@ def _install_real_header_credentials(monkeypatch) -> tuple[str, str]:
     return raw_key, token
 
 
+def _install_real_tenant_api_keys(monkeypatch) -> tuple[str, str]:
+    api_keys = APIKeyStore()
+    tenant_a_key = api_keys.create(
+        APIKeyCreateRequest(
+            name="messages-tenant-a",
+            tenant_id="tenant-a",
+            user_id="user-a",
+            role="developer",
+        )
+    ).key
+    tenant_b_key = api_keys.create(
+        APIKeyCreateRequest(
+            name="messages-tenant-b",
+            tenant_id="tenant-b",
+            user_id="user-b",
+            role="developer",
+        )
+    ).key
+    monkeypatch.setattr("backend.app.dependencies.get_api_key_store", lambda: api_keys)
+    return tenant_a_key, tenant_b_key
+
+
+def test_tenant_console_stream_receives_separate_authenticated_publish(monkeypatch) -> None:
+    tenant_a_key, tenant_b_key = _install_real_tenant_api_keys(monkeypatch)
+    client = TestClient(app)
+    _clear_event_bus()
+    tenant_a_channel = build_channel_key(tenant_id="tenant-a")
+    tenant_b_channel = build_channel_key(tenant_id="tenant-b")
+    tenant_a_live = message_event_bus.subscribe(tenant_a_channel, tenant_id="tenant-a")
+    tenant_b_live = message_event_bus.subscribe(tenant_b_channel, tenant_id="tenant-b")
+
+    try:
+        publish_response = client.post(
+            "/api/v1/messages/publish-test",
+            headers={"x-api-key": tenant_a_key},
+            json={
+                "event_type": "room.created",
+                "room_id": "browser-acceptance-room",
+                "channel_type": "room",
+                "room": {"name": "Browser Acceptance Room"},
+            },
+        )
+        tenant_a_stream = client.get(
+            "/api/v1/messages/stream",
+            headers={"x-api-key": tenant_a_key},
+            params={"replay_only": "true"},
+        )
+        tenant_b_stream = client.get(
+            "/api/v1/messages/stream",
+            headers={"x-api-key": tenant_b_key},
+            params={"replay_only": "true"},
+        )
+
+        assert publish_response.status_code == 200
+        assert tenant_a_live.get_nowait().event_type == "room.created"
+        assert tenant_b_live.empty()
+        assert tenant_a_stream.status_code == 200
+        assert "room.created" in tenant_a_stream.text
+        assert "Browser Acceptance Room" in tenant_a_stream.text
+        assert tenant_b_stream.status_code == 200
+        assert "Browser Acceptance Room" not in tenant_b_stream.text
+    finally:
+        message_event_bus.unsubscribe(tenant_a_channel, tenant_a_live)
+        message_event_bus.unsubscribe(tenant_b_channel, tenant_b_live)
+        _clear_event_bus()
+
+
 def test_messages_stream_accepts_bearer_and_api_key_headers(monkeypatch) -> None:
     api_key, bearer = _install_real_header_credentials(monkeypatch)
     client = TestClient(app)
@@ -348,7 +480,7 @@ def test_messages_stream_query_tenant_cannot_override_principal(monkeypatch) -> 
         channel_type="room",
         trace_id="trace-tenant-scope",
     )
-    message_event_bus.record(
+    _publish_event(
         principal_channel,
         UnifiedMessageEvent(
             event_id="evt-tenant-a",
@@ -361,7 +493,7 @@ def test_messages_stream_query_tenant_cannot_override_principal(monkeypatch) -> 
             payload={"content": "tenant-a-event"},
         ),
     )
-    message_event_bus.record(
+    _publish_event(
         foreign_channel,
         UnifiedMessageEvent(
             event_id="evt-tenant-b",
@@ -406,7 +538,7 @@ def test_messages_stream_prefers_last_event_id_header(monkeypatch) -> None:
         trace_id="trace-header-resume",
     )
     for event_id in ("evt-header-1", "evt-header-2"):
-        message_event_bus.record(
+        _publish_event(
             channel_key,
             UnifiedMessageEvent(
                 event_id=event_id,
@@ -500,6 +632,45 @@ def test_messages_stream_rejects_new_active_channel_at_tenant_capacity(
         _clear_event_bus()
 
 
+def test_messages_stream_rejects_subscriber_when_tenant_channel_is_full(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr("backend.app.api.messages.MAX_SUBSCRIBERS_PER_CHANNEL", 2)
+    client = TestClient(app, headers={"x-api-key": "bootstrap"})
+    _set_principal_override()
+    _clear_event_bus()
+    tenant_channel = build_channel_key(tenant_id="tenant-1")
+    held_queue = message_event_bus.subscribe(tenant_channel, tenant_id="tenant-1")
+    strict_mode_queue = message_event_bus.subscribe(
+        tenant_channel,
+        tenant_id="tenant-1",
+    )
+
+    try:
+        blocked = client.get(
+            "/api/v1/messages/stream",
+            params={"replay_only": "true"},
+        )
+
+        assert blocked.status_code == 429
+        assert blocked.json()["detail"]["code"] == "message_stream_capacity_exceeded"
+        assert message_event_bus.get_channel_snapshot(tenant_channel)[
+            "subscriber_count"
+        ] == 2
+
+        message_event_bus.unsubscribe(tenant_channel, strict_mode_queue)
+        accepted = client.get(
+            "/api/v1/messages/stream",
+            params={"replay_only": "true"},
+        )
+        assert accepted.status_code == 200
+    finally:
+        message_event_bus.unsubscribe(tenant_channel, held_queue)
+        message_event_bus.unsubscribe(tenant_channel, strict_mode_queue)
+        _clear_principal_override()
+        _clear_event_bus()
+
+
 def test_publish_test_fails_closed_when_history_cannot_record(
     monkeypatch,
 ) -> None:
@@ -537,10 +708,218 @@ def test_publish_test_fails_closed_when_history_cannot_record(
         _clear_event_bus()
 
 
+def test_message_bus_dual_channel_publish_fails_without_partial_history(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr("backend.app.api.messages.MAX_HISTORY_CHANNELS_PER_TENANT", 1)
+    _clear_event_bus()
+    tenant_channel = build_channel_key(tenant_id="tenant-1")
+    exact_channel = build_channel_key(tenant_id="tenant-1", room_id="room-1")
+    event = UnifiedMessageEvent(
+        event_id="dual-channel-capacity",
+        event_type="room.created",
+        tenant_id="tenant-1",
+        room_id="room-1",
+    )
+
+    try:
+        with pytest.raises(MessageStreamCapacityError):
+            asyncio.run(message_event_bus.publish(exact_channel, event))
+
+        assert message_event_bus.get_history(tenant_channel) == []
+        assert message_event_bus.get_history(exact_channel) == []
+        assert message_event_bus.record(
+            build_channel_key(tenant_id="tenant-1", room_id="reuse"),
+            event.model_copy(update={"payload": {"reused": True}}),
+        ) is True
+    finally:
+        _clear_event_bus()
+
+
+def test_message_bus_rolls_back_first_record_before_fanout_when_second_fails(
+    monkeypatch,
+) -> None:
+    _clear_event_bus()
+    tenant_channel = build_channel_key(tenant_id="tenant-1")
+    exact_channel = build_channel_key(tenant_id="tenant-1", room_id="room-1")
+    tenant_queue = message_event_bus.subscribe(tenant_channel, tenant_id="tenant-1")
+    exact_queue = message_event_bus.subscribe(exact_channel, tenant_id="tenant-1")
+    event = UnifiedMessageEvent(
+        event_id="dual-channel-rollback",
+        event_type="room.created",
+        tenant_id="tenant-1",
+        room_id="room-1",
+    )
+    original_record = message_event_bus.record
+
+    def fail_exact_record(channel_key, candidate, **kwargs):
+        if channel_key == exact_channel:
+            return False
+        return original_record(channel_key, candidate, **kwargs)
+
+    monkeypatch.setattr(message_event_bus, "record", fail_exact_record)
+
+    try:
+        with pytest.raises(MessageStreamCapacityError):
+            asyncio.run(message_event_bus.publish(exact_channel, event))
+
+        assert message_event_bus.get_history(tenant_channel) == []
+        assert message_event_bus.get_history(exact_channel) == []
+        assert tenant_queue.empty()
+        assert exact_queue.empty()
+        assert original_record(
+            build_channel_key(tenant_id="tenant-1", room_id="reuse"),
+            event.model_copy(update={"payload": {"reused": True}}),
+        ) is True
+    finally:
+        message_event_bus.unsubscribe(tenant_channel, tenant_queue)
+        message_event_bus.unsubscribe(exact_channel, exact_queue)
+        _clear_event_bus()
+
+
+def test_message_bus_converts_second_record_exception_after_atomic_rollback(
+    monkeypatch,
+) -> None:
+    _clear_event_bus()
+    tenant_channel = build_channel_key(tenant_id="tenant-1")
+    exact_channel = build_channel_key(tenant_id="tenant-1", room_id="room-1")
+    tenant_queue = message_event_bus.subscribe(tenant_channel, tenant_id="tenant-1")
+    event = UnifiedMessageEvent(
+        event_id="dual-channel-exception",
+        event_type="room.created",
+        tenant_id="tenant-1",
+        room_id="room-1",
+    )
+    original_record = message_event_bus.record
+
+    def raise_for_exact(channel_key, candidate, **kwargs):
+        if channel_key == exact_channel:
+            original_record(channel_key, candidate, **kwargs)
+            raise OSError("injected record failure")
+        return original_record(channel_key, candidate, **kwargs)
+
+    monkeypatch.setattr(message_event_bus, "record", raise_for_exact)
+
+    try:
+        with pytest.raises(
+            MessageStreamCapacityError,
+            match="message_history_capacity_exceeded",
+        ):
+            asyncio.run(message_event_bus.publish(exact_channel, event))
+
+        assert message_event_bus.get_history(tenant_channel) == []
+        assert message_event_bus.get_history(exact_channel) == []
+        assert tenant_queue.empty()
+    finally:
+        message_event_bus.unsubscribe(tenant_channel, tenant_queue)
+        _clear_event_bus()
+
+
+def test_message_bus_rollback_restores_history_entry_evicted_by_first_record(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr("backend.app.api.messages.HISTORY_LIMIT", 1)
+    _clear_event_bus()
+    tenant_channel = build_channel_key(tenant_id="tenant-1")
+    exact_channel = build_channel_key(tenant_id="tenant-1", room_id="room-1")
+    original_record = message_event_bus.record
+    original_record(
+        tenant_channel,
+        UnifiedMessageEvent(
+            event_id="existing-anchor",
+            event_type="message.created",
+            tenant_id="tenant-1",
+        ),
+    )
+
+    def raise_for_exact(channel_key, candidate, **kwargs):
+        if channel_key == exact_channel:
+            raise OSError("injected record failure")
+        return original_record(channel_key, candidate, **kwargs)
+
+    monkeypatch.setattr(message_event_bus, "record", raise_for_exact)
+
+    try:
+        with pytest.raises(MessageStreamCapacityError):
+            asyncio.run(
+                message_event_bus.publish(
+                    exact_channel,
+                    UnifiedMessageEvent(
+                        event_id="new-event",
+                        event_type="room.created",
+                        tenant_id="tenant-1",
+                        room_id="room-1",
+                    ),
+                )
+            )
+
+        assert [
+            event.event_id for event in message_event_bus.get_history(tenant_channel)
+        ] == ["existing-anchor"]
+        assert message_event_bus.get_history(exact_channel) == []
+    finally:
+        _clear_event_bus()
+
+
+def test_message_bus_rollback_restores_inactive_channel_evicted_during_publish(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr("backend.app.api.messages.MAX_HISTORY_CHANNELS_PER_TENANT", 2)
+    _clear_event_bus()
+    first_old_channel = build_channel_key(tenant_id="tenant-1", room_id="old-1")
+    second_old_channel = build_channel_key(tenant_id="tenant-1", room_id="old-2")
+    exact_channel = build_channel_key(tenant_id="tenant-1", room_id="new")
+    original_record = message_event_bus.record
+    for channel_key, event_id in (
+        (first_old_channel, "old-1"),
+        (second_old_channel, "old-2"),
+    ):
+        original_record(
+            channel_key,
+            UnifiedMessageEvent(
+                event_id=event_id,
+                event_type="message.created",
+                tenant_id="tenant-1",
+            ),
+        )
+
+    def raise_for_exact(channel_key, candidate, **kwargs):
+        if channel_key == exact_channel:
+            raise OSError("injected record failure")
+        return original_record(channel_key, candidate, **kwargs)
+
+    monkeypatch.setattr(message_event_bus, "record", raise_for_exact)
+
+    try:
+        with pytest.raises(MessageStreamCapacityError):
+            asyncio.run(
+                message_event_bus.publish(
+                    exact_channel,
+                    UnifiedMessageEvent(
+                        event_id="new-event",
+                        event_type="room.created",
+                        tenant_id="tenant-1",
+                        room_id="new",
+                    ),
+                )
+            )
+
+        assert [
+            event.event_id
+            for event in message_event_bus.get_history(first_old_channel)
+        ] == ["old-1"]
+        assert [
+            event.event_id
+            for event in message_event_bus.get_history(second_old_channel)
+        ] == ["old-2"]
+    finally:
+        _clear_event_bus()
+
+
 def test_message_bus_overflow_emits_private_gap_and_keeps_authoritative_history() -> None:
     _clear_event_bus()
-    channel_key = build_channel_key(tenant_id="tenant-1", trace_id="bounded-queue")
-    foreign_channel = build_channel_key(tenant_id="tenant-2", trace_id="bounded-queue")
+    channel_key = build_channel_key(tenant_id="tenant-1")
+    foreign_channel = build_channel_key(tenant_id="tenant-2")
     queue = message_event_bus.subscribe(channel_key)
     foreign_queue = message_event_bus.subscribe(foreign_channel)
 
@@ -666,7 +1045,7 @@ def test_message_bus_records_business_events_with_full_active_capacity_and_histo
     monkeypatch,
 ) -> None:
     monkeypatch.setattr("backend.app.api.messages.MAX_ACTIVE_CHANNELS_PER_TENANT", 2)
-    monkeypatch.setattr("backend.app.api.messages.MAX_HISTORY_CHANNELS_PER_TENANT", 3)
+    monkeypatch.setattr("backend.app.api.messages.MAX_HISTORY_CHANNELS_PER_TENANT", 4)
     _clear_event_bus()
     active_channels = [
         build_channel_key(tenant_id="tenant-1", room_id=f"active-{index}")

@@ -18,6 +18,7 @@ PrincipalDependency = Annotated[Principal, Depends(get_current_principal)]
 
 HISTORY_LIMIT = 1000
 SUBSCRIBER_QUEUE_LIMIT = 256
+MAX_SUBSCRIBERS_PER_CHANNEL = 64
 REPLAY_DEDUPE_LIMIT = HISTORY_LIMIT
 MAX_ACTIVE_CHANNELS_PER_TENANT = 128
 MAX_HISTORY_CHANNELS_PER_TENANT = 256
@@ -139,7 +140,7 @@ class _MessageEventBus:
         return existed
 
     def clear_trace(self, trace_id: str, *, tenant_id: str | None = None) -> int:
-        removed_count = 0
+        removed_event_ids: set[str] = set()
         for channel_key in list(self._history.keys()):
             history = self._history[channel_key]
             remaining = deque(maxlen=HISTORY_LIMIT)
@@ -149,7 +150,7 @@ class _MessageEventBus:
                     tenant_id is None or event.tenant_id == tenant_id
                 ):
                     removed_ids.append(event.event_id)
-                    removed_count += 1
+                    removed_event_ids.add(event.event_id)
                     continue
                 remaining.append(event)
             if remaining:
@@ -160,15 +161,15 @@ class _MessageEventBus:
             else:
                 self._history.pop(channel_key, None)
                 self._channel_event_ids.pop(channel_key, None)
-                self._subscribers.pop(channel_key, None)
-                self._remove_active_channel_registration(channel_key)
+                if not self._subscribers.get(channel_key):
+                    self._remove_active_channel_registration(channel_key)
                 self._remove_channel_registration(channel_key)
             for event_id in removed_ids:
                 self._release_history_id(event_id)
-        return removed_count
+        return len(removed_event_ids)
 
     def clear_domain(self, domain: str, *, tenant_id: str | None = None) -> int:
-        removed_count = 0
+        removed_event_ids: set[str] = set()
         for channel_key in list(self._history.keys()):
             history = self._history[channel_key]
             remaining = deque(maxlen=HISTORY_LIMIT)
@@ -178,7 +179,7 @@ class _MessageEventBus:
                     tenant_id is None or event.tenant_id == tenant_id
                 ):
                     removed_ids.append(event.event_id)
-                    removed_count += 1
+                    removed_event_ids.add(event.event_id)
                     continue
                 remaining.append(event)
             if remaining:
@@ -189,12 +190,12 @@ class _MessageEventBus:
             else:
                 self._history.pop(channel_key, None)
                 self._channel_event_ids.pop(channel_key, None)
-                self._subscribers.pop(channel_key, None)
-                self._remove_active_channel_registration(channel_key)
+                if not self._subscribers.get(channel_key):
+                    self._remove_active_channel_registration(channel_key)
                 self._remove_channel_registration(channel_key)
             for event_id in removed_ids:
                 self._release_history_id(event_id)
-        return removed_count
+        return len(removed_event_ids)
 
     def get_domain_counts(self, channel_key: str) -> dict[str, int]:
         counts: dict[str, int] = defaultdict(int)
@@ -231,9 +232,17 @@ class _MessageEventBus:
 
     def get_channel_index(self, *, tenant_id: str | None = None) -> dict[str, object]:
         if tenant_id is None:
-            channel_keys = sorted(self._history)
+            channel_keys = sorted(
+                channel_key
+                for channel_key in self._history
+                if not self._is_tenant_channel(channel_key)
+            )
         else:
-            channel_keys = list(self._tenant_channels.get(tenant_id, {}))
+            channel_keys = [
+                channel_key
+                for channel_key in self._tenant_channels.get(tenant_id, {})
+                if not self._is_tenant_channel(channel_key)
+            ]
         total = len(channel_keys)
         selected = list(reversed(channel_keys[-MAX_CHANNEL_INDEX_RESULTS:]))
         return {
@@ -251,12 +260,15 @@ class _MessageEventBus:
         *,
         tenant_id: str | None = None,
     ) -> list[UnifiedMessageEvent]:
-        return [
-            event
-            for events in self._history.values()
-            for event in events
-            if event.trace_id == trace_id and (tenant_id is None or event.tenant_id == tenant_id)
-        ]
+        return _dedupe_events(
+            [
+                event
+                for events in self._history.values()
+                for event in events
+                if event.trace_id == trace_id
+                and (tenant_id is None or event.tenant_id == tenant_id)
+            ]
+        )
 
     def get_history_by_domain_global(
         self,
@@ -264,13 +276,22 @@ class _MessageEventBus:
         *,
         tenant_id: str | None = None,
     ) -> list[UnifiedMessageEvent]:
-        return [
-            event
-            for events in self._history.values()
-            for event in events
-            if _event_domain(event.event_type) == domain
-            and (tenant_id is None or event.tenant_id == tenant_id)
-        ]
+        return _dedupe_events(
+            [
+                event
+                for events in self._history.values()
+                for event in events
+                if _event_domain(event.event_type) == domain
+                and (tenant_id is None or event.tenant_id == tenant_id)
+            ]
+        )
+
+    def _is_tenant_channel(self, channel_key: str) -> bool:
+        tenant_key = self._channel_tenant.get(channel_key)
+        if tenant_key is None:
+            return False
+        tenant_id = None if tenant_key == _UNSCOPED_TENANT else tenant_key
+        return channel_key == build_channel_key(tenant_id=tenant_id)
 
     def subscribe(
         self,
@@ -283,6 +304,8 @@ class _MessageEventBus:
         if registered_tenant is not None and registered_tenant != tenant_key:
             raise MessageStreamCapacityError
         queues = self._subscribers.get(channel_key)
+        if queues and len(queues) >= MAX_SUBSCRIBERS_PER_CHANNEL:
+            raise MessageStreamCapacityError
         if not queues:
             active_channels = self._active_tenant_channels.get(tenant_key)
             if (
@@ -319,14 +342,24 @@ class _MessageEventBus:
         if not active_channels:
             self._active_tenant_channels.pop(tenant_key, None)
 
-    def record(self, channel_key: str, event: UnifiedMessageEvent) -> bool:
+    def record(
+        self,
+        channel_key: str,
+        event: UnifiedMessageEvent,
+        *,
+        protected_channels: set[str] | None = None,
+    ) -> bool:
         channel_event_ids = self._channel_event_ids.get(channel_key)
         if channel_event_ids is not None and event.event_id in channel_event_ids:
             return True
         existing = self._history_by_id.get(event.event_id)
         if existing is not None and existing != event:
             return False
-        if not self._touch_channel(channel_key, event.tenant_id):
+        if not self._touch_channel(
+            channel_key,
+            event.tenant_id,
+            protected_channels=protected_channels,
+        ):
             return False
         history = self._history[channel_key]
         if channel_event_ids is None:
@@ -348,7 +381,13 @@ class _MessageEventBus:
             self._release_history_id(evicted_id)
         return True
 
-    def _touch_channel(self, channel_key: str, tenant_id: str | None) -> bool:
+    def _touch_channel(
+        self,
+        channel_key: str,
+        tenant_id: str | None,
+        *,
+        protected_channels: set[str] | None = None,
+    ) -> bool:
         tenant_key = tenant_id or _UNSCOPED_TENANT
         previous_tenant = self._channel_tenant.get(channel_key)
         if previous_tenant is not None and previous_tenant != tenant_key:
@@ -362,7 +401,8 @@ class _MessageEventBus:
                 (
                     candidate
                     for candidate in channels
-                    if not self._subscribers.get(candidate)
+                    if candidate not in (protected_channels or set())
+                    and not self._subscribers.get(candidate)
                 ),
                 None,
             )
@@ -404,30 +444,245 @@ class _MessageEventBus:
         self._history_id_refcounts.pop(event_id, None)
         self._history_by_id.pop(event_id, None)
 
-    async def publish(self, channel_key: str, event: UnifiedMessageEvent) -> None:
-        if not self.record(channel_key, event):
-            raise MessageStreamCapacityError("message_history_capacity_exceeded")
-        for queue in self._subscribers.get(channel_key, []):
-            if queue.full():
-                while not queue.empty():
-                    queue.get_nowait()
-                queue.put_nowait(
-                    UnifiedMessageEvent(
-                        event_id="",
-                        event_type="stream.gap",
-                        tenant_id=event.tenant_id,
-                        org_id=event.org_id,
-                        room_id=event.room_id,
-                        conversation_id=event.conversation_id,
-                        agent_id=event.agent_id,
-                        user_id=event.user_id,
-                        channel_type=event.channel_type,
-                        trace_id=event.trace_id,
-                        payload={"reason": "subscriber_overflow"},
-                    )
-                )
+    def _rollback_latest_record(
+        self,
+        channel_key: str,
+        event_id: str,
+        evicted_event: UnifiedMessageEvent | None,
+    ) -> bool:
+        history = self._history.get(channel_key)
+        if not history or history[-1].event_id != event_id:
+            return False
+        history.pop()
+        self._channel_event_ids[channel_key].discard(event_id)
+        self._release_history_id(event_id)
+        if evicted_event is not None:
+            existing = self._history_by_id.get(evicted_event.event_id)
+            if existing is not None and existing != evicted_event:
+                return False
+            history.appendleft(evicted_event)
+            self._channel_event_ids[channel_key].add(evicted_event.event_id)
+            if existing is None:
+                self._history_by_id[evicted_event.event_id] = evicted_event
+            self._history_id_refcounts[evicted_event.event_id] = (
+                self._history_id_refcounts.get(evicted_event.event_id, 0) + 1
+            )
+        if not history:
+            self._history.pop(channel_key, None)
+            self._channel_event_ids.pop(channel_key, None)
+            self._remove_channel_registration(channel_key)
+        return True
+
+    def _plan_channel_records(
+        self,
+        channel_keys: list[str],
+        event: UnifiedMessageEvent,
+    ) -> tuple[
+        str,
+        list[str],
+        list[tuple[str, deque[UnifiedMessageEvent] | None]],
+    ] | None:
+        existing = self._history_by_id.get(event.event_id)
+        if existing is not None and existing != event:
+            return None
+        tenant_key = event.tenant_id or _UNSCOPED_TENANT
+        channels = self._tenant_channels.get(tenant_key, {})
+        new_channels = [
+            channel_key
+            for channel_key in channel_keys
+            if channel_key not in channels
+            and event.event_id not in self._channel_event_ids.get(channel_key, set())
+        ]
+        if any(
+            self._channel_tenant.get(channel_key) not in {None, tenant_key}
+            for channel_key in channel_keys
+        ):
+            return None
+        free_slots = max(0, MAX_HISTORY_CHANNELS_PER_TENANT - len(channels))
+        protected_channels = set(channel_keys)
+        evictable_channels = [
+            channel_key
+            for channel_key in channels
+            if channel_key not in protected_channels
+            and not self._subscribers.get(channel_key)
+        ]
+        required_evictions = max(0, len(new_channels) - free_slots)
+        if required_evictions > len(evictable_channels):
+            return None
+        return (
+            tenant_key,
+            list(channels),
+            [
+                (channel_key, self._history.get(channel_key))
+                for channel_key in evictable_channels[:required_evictions]
+            ],
+        )
+
+    def _rollback_records(
+        self,
+        records: list[tuple[str, UnifiedMessageEvent | None]],
+        event_id: str,
+    ) -> None:
+        rollback_ok = True
+        for channel_key, evicted_event in reversed(records):
+            rollback_ok = (
+                self._rollback_latest_record(channel_key, event_id, evicted_event)
+                and rollback_ok
+            )
+        if not rollback_ok:
+            raise MessageStreamCapacityError("message_history_rollback_failed")
+
+    def _restore_evicted_channels(
+        self,
+        tenant_key: str,
+        original_order: list[str],
+        snapshots: list[tuple[str, deque[UnifiedMessageEvent] | None]],
+    ) -> bool:
+        snapshot_keys = {channel_key for channel_key, _history in snapshots}
+        for channel_key, history in snapshots:
+            registered_tenant = self._channel_tenant.get(channel_key)
+            if registered_tenant is not None:
+                if registered_tenant != tenant_key:
+                    return False
                 continue
-            queue.put_nowait(event)
+            self._channel_tenant[channel_key] = tenant_key
+            if history is None:
+                continue
+            self._history[channel_key] = history
+            self._channel_event_ids[channel_key] = {
+                event.event_id for event in history
+            }
+            for historical_event in history:
+                existing = self._history_by_id.get(historical_event.event_id)
+                if existing is not None and existing != historical_event:
+                    return False
+                if existing is None:
+                    self._history_by_id[historical_event.event_id] = historical_event
+                self._history_id_refcounts[historical_event.event_id] = (
+                    self._history_id_refcounts.get(historical_event.event_id, 0) + 1
+                )
+
+        current_order = list(self._tenant_channels.get(tenant_key, {}))
+        restored_order = [
+            channel_key
+            for channel_key in original_order
+            if channel_key in current_order or channel_key in snapshot_keys
+        ]
+        restored_order.extend(
+            channel_key
+            for channel_key in current_order
+            if channel_key not in restored_order
+        )
+        if restored_order:
+            self._tenant_channels[tenant_key] = OrderedDict.fromkeys(restored_order)
+        return True
+
+    def _rollback_publish(
+        self,
+        records: list[tuple[str, UnifiedMessageEvent | None]],
+        event_id: str,
+        tenant_key: str,
+        original_order: list[str],
+        eviction_snapshots: list[tuple[str, deque[UnifiedMessageEvent] | None]],
+    ) -> None:
+        rollback_ok = True
+        try:
+            self._rollback_records(records, event_id)
+        except MessageStreamCapacityError:
+            rollback_ok = False
+        restore_ok = self._restore_evicted_channels(
+            tenant_key,
+            original_order,
+            eviction_snapshots,
+        )
+        if not rollback_ok or not restore_ok:
+            raise MessageStreamCapacityError("message_history_rollback_failed")
+
+    async def publish(self, channel_key: str, event: UnifiedMessageEvent) -> None:
+        tenant_channel_key = build_channel_key(tenant_id=event.tenant_id)
+        channel_keys = list(dict.fromkeys((tenant_channel_key, channel_key)))
+        record_plan = self._plan_channel_records(channel_keys, event)
+        if record_plan is None:
+            raise MessageStreamCapacityError("message_history_capacity_exceeded")
+        tenant_key, original_order, eviction_snapshots = record_plan
+        protected_channels = set(channel_keys)
+        newly_recorded: list[tuple[str, UnifiedMessageEvent | None]] = []
+        for target_channel in channel_keys:
+            already_recorded = event.event_id in self._channel_event_ids.get(
+                target_channel, set()
+            )
+            history = self._history.get(target_channel)
+            evicted_event = (
+                history[0]
+                if not already_recorded
+                and history is not None
+                and history.maxlen is not None
+                and len(history) == history.maxlen
+                else None
+            )
+            try:
+                recorded = self.record(
+                    target_channel,
+                    event,
+                    protected_channels=protected_channels,
+                )
+            except Exception:
+                if (
+                    not already_recorded
+                    and event.event_id
+                    in self._channel_event_ids.get(target_channel, set())
+                ):
+                    newly_recorded.append((target_channel, evicted_event))
+                self._rollback_publish(
+                    newly_recorded,
+                    event.event_id,
+                    tenant_key,
+                    original_order,
+                    eviction_snapshots,
+                )
+                raise MessageStreamCapacityError(
+                    "message_history_capacity_exceeded"
+                ) from None
+            if not recorded:
+                if (
+                    not already_recorded
+                    and event.event_id
+                    in self._channel_event_ids.get(target_channel, set())
+                ):
+                    newly_recorded.append((target_channel, evicted_event))
+                self._rollback_publish(
+                    newly_recorded,
+                    event.event_id,
+                    tenant_key,
+                    original_order,
+                    eviction_snapshots,
+                )
+                raise MessageStreamCapacityError("message_history_capacity_exceeded")
+            if not already_recorded:
+                newly_recorded.append((target_channel, evicted_event))
+
+        for target_channel in channel_keys:
+            for queue in self._subscribers.get(target_channel, []):
+                if queue.full():
+                    while not queue.empty():
+                        queue.get_nowait()
+                    queue.put_nowait(
+                        UnifiedMessageEvent(
+                            event_id="",
+                            event_type="stream.gap",
+                            tenant_id=event.tenant_id,
+                            org_id=event.org_id,
+                            room_id=event.room_id,
+                            conversation_id=event.conversation_id,
+                            agent_id=event.agent_id,
+                            user_id=event.user_id,
+                            channel_type=event.channel_type,
+                            trace_id=event.trace_id,
+                            payload={"reason": "subscriber_overflow"},
+                        )
+                    )
+                    continue
+                queue.put_nowait(event)
 
     def get_history(
         self,
@@ -573,10 +828,10 @@ async def stream_messages(
         org_id=org_id,
         room_id=room_id,
         conversation_id=conversation_id,
-        agent_id=agent_id or principal.agent_id,
-        user_id=user_id or principal.user_id,
+        agent_id=agent_id,
+        user_id=user_id,
         channel_type=channel_type,
-        trace_id=trace_id or principal.trace_id,
+        trace_id=trace_id,
         since=datetime.fromisoformat(since) if since else None,
         include_system=include_system,
         include_audit=include_audit,
@@ -584,16 +839,7 @@ async def stream_messages(
         last_event_id=resume_event_id,
     )
 
-    channel_key = build_channel_key(
-        tenant_id=stream_filter.tenant_id,
-        org_id=stream_filter.org_id,
-        room_id=stream_filter.room_id,
-        conversation_id=stream_filter.conversation_id,
-        agent_id=stream_filter.agent_id,
-        user_id=stream_filter.user_id,
-        channel_type=stream_filter.channel_type,
-        trace_id=stream_filter.trace_id,
-    )
+    channel_key = build_channel_key(tenant_id=stream_filter.tenant_id)
 
     try:
         queue = message_event_bus.subscribe(

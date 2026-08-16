@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
-from backend.app.api.messages import message_event_bus
+from backend.app.api.messages import build_channel_key, message_event_bus
 from backend.app.dependencies import get_current_principal
 from backend.app.main import app
 
@@ -85,6 +85,11 @@ def test_collaboration_room_events_are_published_to_event_bus() -> None:
         history = message_event_bus.get_history(channel_key)
         event_types = [event.event_type for event in history]
 
+        tenant_channel = build_channel_key(tenant_id="tenant-1")
+        tenant_event_types = [
+            event.event_type for event in message_event_bus.get_history(tenant_channel)
+        ]
+
         assert "room.created" in event_types
         assert "room.member_added" in event_types
         assert "message.created" in event_types
@@ -92,6 +97,15 @@ def test_collaboration_room_events_are_published_to_event_bus() -> None:
         assert "room.closed" in event_types
         assert message_event_bus.get_event_types(channel_key) == event_types
         assert message_event_bus.get_domain_counts(channel_key) == {"room": 4, "workflow": 1}
+        assert tenant_event_types == event_types
+
+        console_stream = client.get(
+            "/api/v1/messages/stream",
+            params={"replay_only": "true"},
+        )
+        assert console_stream.status_code == 200
+        for event_type in event_types:
+            assert f"event: {event_type}" in console_stream.text
 
         room_created = next(event for event in history if event.event_type == "room.created")
         assert room_created.payload["room"]["topic"] == "Realtime room"
