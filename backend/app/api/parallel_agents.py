@@ -34,7 +34,7 @@ import json
 import logging
 from collections.abc import Callable
 from hashlib import sha256
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field, field_validator
@@ -235,11 +235,16 @@ class SpawnAgentsRequest(BaseModel):
     """Request to spawn parallel agents."""
     operation_id: str = Field(min_length=1, max_length=220)
     tasks: list[TaskRequest] = Field(min_length=1, max_length=MAX_SPAWN_TASKS)
-    isolation: str = "thread"
+    isolation: Literal["shared", "isolated", "thread"] = "thread"
     max_parallel: int | None = Field(default=None, ge=1, le=MAX_SPAWN_TASKS)
     aggregate_results: bool = True
-    merge_strategy: str = "merge"
-    conflict_resolution: str = "keep_last"
+    merge_strategy: Literal["merge", "concat", "reduce", "first", "last"] = "merge"
+    conflict_resolution: Literal[
+        "keep_first",
+        "keep_last",
+        "merge_values",
+        "raise_error",
+    ] = "keep_last"
 
     @field_validator("operation_id", mode="before")
     @classmethod
@@ -355,6 +360,7 @@ class _AgentLoopParallelAgent:
             user_id=self._principal.user_id,
             agent_id=self.agent_id,
             request_id=str(billing_context["operation_id"]),
+            operation_id=str(billing_context["operation_id"]),
             permission_scope=list(getattr(self._principal, "scopes", None) or []),
         )
         response = await self._loop.run(context, task.goal, extra_context)
@@ -458,14 +464,7 @@ async def spawn_agents(
             for index, t in enumerate(request.tasks)
         ]
 
-        # Determine isolation mode
-        try:
-            isolation = IsolationMode(request.isolation)
-        except ValueError:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Invalid isolation mode: {request.isolation}",
-            )
+        isolation = IsolationMode(request.isolation)
 
         # Build the real AgentLoop-backed factory for this request. Raises
         # AgentFactoryNotConfiguredError (-> HTTP 501) when the engine is

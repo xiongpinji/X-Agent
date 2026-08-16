@@ -53,6 +53,7 @@ class RunContext(BaseModel):
     user_id: str = "anonymous"
     agent_id: str = Field(default_factory=lambda: str(uuid4()))
     request_id: str = Field(default_factory=lambda: str(uuid4()))
+    operation_id: str | None = None
     session_id: str | None = None
     permission_scope: list[str] = Field(
         default_factory=lambda: ["tools:read", "memory:read", "memory:write"]

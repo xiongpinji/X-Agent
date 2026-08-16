@@ -22,6 +22,8 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Any
 
+from backend.app.core.billing import ReservationConflictError
+
 logger = logging.getLogger(__name__)
 
 # OpenAI SDK is an optional dependency; import gracefully.
@@ -872,6 +874,10 @@ class LLMRouter:
                             ),
                         },
                     )
+                except ReservationConflictError as exc:
+                    raise LLMReplayBlockedError(
+                        "provider replay blocked by conflicting request parameters"
+                    ) from exc
                 except Exception as exc:
                     raise LLMReservationPersistenceError(
                         "usage reservation could not be persisted"

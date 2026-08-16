@@ -990,6 +990,62 @@ def test_spawn_accepts_documented_resource_boundaries(monkeypatch) -> None:
     assert executor_calls[0]["tasks"][1].timeout_seconds == 3600
 
 
+@pytest.mark.parametrize(
+    "payload_update",
+    [
+        {"isolation": "not-a-mode"},
+        {"isolation": "sandboxed"},
+        {"isolation": "process"},
+        {"merge_strategy": "not-a-strategy"},
+        {"merge_strategy": "custom"},
+        {"conflict_resolution": "not-a-resolution"},
+        {"conflict_resolution": "custom"},
+    ],
+)
+def test_spawn_rejects_unsupported_modes_before_agent_execution(
+    monkeypatch,
+    payload_update,
+) -> None:
+    factory_calls = 0
+    executor_calls = 0
+
+    def provider_factory(_principal):
+        nonlocal factory_calls
+        factory_calls += 1
+        raise AssertionError("agent/provider factory must not run")
+
+    class ExecutorMustNotRun:
+        async def spawn_agents(self, **_kwargs):
+            nonlocal executor_calls
+            executor_calls += 1
+            raise AssertionError("executor must not run")
+
+    monkeypatch.setattr(
+        parallel_agents,
+        "build_agent_loop_factory",
+        provider_factory,
+    )
+    app = FastAPI()
+    app.include_router(parallel_agents.router)
+    app.dependency_overrides[get_current_principal] = _principal
+    app.dependency_overrides[parallel_agents.get_executor] = ExecutorMustNotRun
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/v1/agents/parallel/spawn",
+            json={
+                "operation_id": "spawn-invalid-mode",
+                "tasks": [{"goal": "child"}],
+                "aggregate_results": False,
+                **payload_update,
+            },
+        )
+
+    assert response.status_code == 422
+    assert factory_calls == 0
+    assert executor_calls == 0
+
+
 def test_spawn_passes_stable_batch_and_task_run_context(
     monkeypatch,
 ) -> None:
@@ -1060,6 +1116,14 @@ def test_spawn_passes_stable_batch_and_task_run_context(
         for index in range(2)
     ]
     assert [context.trace_id for context in contexts] == expected_traces * 2
+    assert [context.operation_id for context in contexts] == [
+        "spawn-op-1:0",
+        "spawn-op-1:1",
+    ] * 2
+    assert [context.request_id for context in contexts] == [
+        "spawn-op-1:0",
+        "spawn-op-1:1",
+    ] * 2
     assert [extra["operation_id"] for extra in extras] == [
         "spawn-op-1:0",
         "spawn-op-1:1",
@@ -1251,10 +1315,152 @@ def test_spawn_real_agent_loop_confirm_failure_replay_calls_provider_once(
     with TestClient(app) as client:
         first = client.post("/api/v1/agents/parallel/spawn", json=payload)
         replay = client.post("/api/v1/agents/parallel/spawn", json=payload)
+        drifted = client.post(
+            "/api/v1/agents/parallel/spawn",
+            json={
+                **payload,
+                "tasks": [{"goal": "different payload?", "max_retries": 3}],
+            },
+        )
 
     assert first.status_code == 503
     assert first.json()["detail"]["code"] == "LLM_RESERVATION_PERSISTENCE_FAILED"
     assert replay.status_code == 409
     assert replay.json()["detail"]["code"] == "LLM_REPLAY_BLOCKED"
-    assert "spawn-database-secret" not in first.text + replay.text
+    assert drifted.status_code == 409
+    assert drifted.json()["detail"]["code"] == "LLM_REPLAY_BLOCKED"
+    assert "spawn-database-secret" not in first.text + replay.text + drifted.text
     assert backend.calls == 1
+
+
+async def test_agent_loop_uses_distinct_operations_for_multiple_llm_stages(
+    tmp_path,
+) -> None:
+    from backend.app.core.agent.loop import AgentLoop
+    from backend.app.core.billing.reservations import SqlUsageReservationStore
+    from backend.app.core.hooks import HookManager
+    from backend.app.core.llm import BaseLLMBackend, LLMRouter
+    from backend.app.core.memory import InMemoryMemorySystem
+    from backend.app.core.tools import ToolRegistry
+    from backend.app.core.tracing import TraceStore
+
+    class RecordingStore(SqlUsageReservationStore):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            self.root_operations: list[str] = []
+
+        async def reserve(self, *args, **kwargs):
+            self.root_operations.append(kwargs["root_operation_id"])
+            return await super().reserve(*args, **kwargs)
+
+    class ScriptedBackend(BaseLLMBackend):
+        name = "fake"
+        model = "fake-v1"
+
+        def __init__(self):
+            self.calls = 0
+
+        async def chat(self, messages, tools, *, response_format=None):
+            self.calls += 1
+            prompt = str(messages[-1].get("content", "")) if messages else ""
+            if "基于以上执行结果" in prompt:
+                response = "Completed answer"
+            elif self.calls == 1:
+                response = '[{"kind":"reflect","instruction":"Reflect"}]'
+            else:
+                response = '[{"kind":"final","instruction":"Finalize"}]'
+            return LLMResponse(
+                content=response,
+                model=self.model,
+                tokens_used=3,
+                cost=0.001,
+            )
+
+    store = RecordingStore(
+        f"sqlite:///{(tmp_path / 'usage.db').as_posix()}",
+        create_schema=True,
+    )
+    backend = ScriptedBackend()
+    router = LLMRouter(backends=[backend], reservation_store=store)
+    agent = AgentLoop(
+        llm_router=router,
+        memory=InMemoryMemorySystem(),
+        tools=ToolRegistry(),
+        tracer=TraceStore(tmp_path / "trace.jsonl"),
+        hook_manager=HookManager(),
+        max_iterations=6,
+    )
+    context = RunContext(
+        trace_id="agent-multi-stage-trace",
+        tenant_id="tenant-a",
+        user_id="user-a",
+        operation_id="agent-multi-stage",
+    )
+
+    result = await agent.run(context, "fix app.py after reviewing the current code")
+
+    assert result.status.value == "completed"
+    assert backend.calls >= 2
+    assert store.root_operations[0] == "agent-multi-stage:plan:initial"
+    assert len(store.root_operations) == len(set(store.root_operations))
+    assert any(root.endswith(":synthesis") for root in store.root_operations)
+    for root_operation_id in store.root_operations:
+        reservation = await store.get(
+            tenant_id="tenant-a",
+            operation_id=router.provider_attempt_id(
+                root_operation_id,
+                0,
+                backend,
+            ),
+        )
+        assert reservation is not None
+        assert reservation.status == "confirmed"
+        assert reservation.root_operation_id == root_operation_id
+
+
+async def test_agent_loop_replan_does_not_swallow_billing_control_error(
+    tmp_path,
+) -> None:
+    from backend.app.core.agent.loop import AgentLoop
+    from backend.app.core.hooks import HookManager
+    from backend.app.core.memory import InMemoryMemorySystem
+    from backend.app.core.tools import ToolRegistry
+    from backend.app.core.tracing import TraceStore
+
+    class FailingReplanRouter:
+        reservation_store = object()
+
+        def __init__(self):
+            self.operations: list[str | None] = []
+
+        async def chat(self, messages, tools, **kwargs):
+            self.operations.append(kwargs.get("operation_id"))
+            if len(self.operations) == 1:
+                return LLMResponse(
+                    content='[{"kind":"reflect","instruction":"Reflect"}]',
+                    model="fake-v1",
+                )
+            raise LLMReplayBlockedError("replan-secret")
+
+    router = FailingReplanRouter()
+    agent = AgentLoop(
+        llm_router=router,
+        memory=InMemoryMemorySystem(),
+        tools=ToolRegistry(),
+        tracer=TraceStore(tmp_path / "trace.jsonl"),
+        hook_manager=HookManager(),
+    )
+    context = RunContext(
+        trace_id="agent-replan-trace",
+        tenant_id="tenant-a",
+        user_id="user-a",
+        operation_id="agent-replan",
+    )
+
+    with pytest.raises(LLMReplayBlockedError, match="replan-secret"):
+        await agent.run(context, "fix app.py after reviewing the current code")
+
+    assert router.operations[0] == "agent-replan:plan:initial"
+    assert len(router.operations) == 2
+    assert router.operations[1] is not None
+    assert router.operations[1].startswith("agent-replan:plan:reflect:")

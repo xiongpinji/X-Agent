@@ -62,6 +62,12 @@ from backend.app.services.observability.langfuse_client import langfuse_client
 
 logger = logging.getLogger(__name__)
 
+_BILLING_CONTROL_ERRORS = (
+    LLMReplayBlockedError,
+    LLMReservationPersistenceError,
+    LLMSubmissionUnknownError,
+)
+
 
 @dataclass
 class AgentPlanStep:
@@ -615,6 +621,17 @@ class AgentLoop:
         # Short conversational / knowledge questions → simple
         return True
 
+    def _billable_operation_id(
+        self,
+        context: RunContext,
+        stage: str,
+    ) -> str | None:
+        if getattr(self.llm, "reservation_store", None) is None:
+            return None
+        if not context.operation_id:
+            return None
+        return f"{context.operation_id}:{stage}"
+
     async def _fast_path_answer(self, context: RunContext, task: str, session_recap: str | None = None) -> AgentRunResponse | None:
         """Try to answer a simple question directly via LLM (no planning loop).
 
@@ -639,6 +656,7 @@ class AgentLoop:
                 messages, [],
                 tenant_id=context.tenant_id,
                 user_id=context.user_id,
+                operation_id=self._billable_operation_id(context, "fast"),
                 run_id=context.trace_id,
                 trace_id=context.trace_id,
             )
@@ -905,7 +923,12 @@ class AgentLoop:
 
         self._record_audit("agent.run.started", context, trajectory, outcome="success")
 
-        plan = await self._plan(context, trajectory, compact_context)
+        plan = await self._plan(
+            context,
+            trajectory,
+            compact_context,
+            operation_stage="plan:initial",
+        )
         plan = self._apply_execution_plan(plan, compact_context)
 
         if resume_trace_id:
@@ -1150,7 +1173,14 @@ class AgentLoop:
                                 "Generate production-quality code with type annotations and docstrings. "
                                 "Do NOT call inspect_tree, list_files, or read_file again."
                             )
-                            new_steps = await self._plan(context, trajectory, replan_context)
+                            new_steps = await self._plan(
+                                context,
+                                trajectory,
+                                replan_context,
+                                operation_stage=(
+                                    f"plan:reflect:{iteration}:{_replanned + 1}"
+                                ),
+                            )
                             mutating_steps = [
                                 s for s in new_steps
                                 if s.kind == "tool" and s.tool_name in {
@@ -1169,6 +1199,8 @@ class AgentLoop:
                                 actionable = [s for s in new_steps if s.kind not in {"final", "observe"}]
                                 if actionable:
                                     plan[:0] = actionable
+                        except _BILLING_CONTROL_ERRORS:
+                            raise
                         except Exception:
                             pass
             elif step.kind == "final":
@@ -1331,7 +1363,12 @@ class AgentLoop:
                     "Call write_file with the correct path and COMPLETE file content for EVERY remaining file. "
                     "For multi-file tasks, call write_file multiple times (once per file)."
                 )
-                new_plan = await self._plan(context, trajectory, _replan_ctx)
+                new_plan = await self._plan(
+                    context,
+                    trajectory,
+                    _replan_ctx,
+                    operation_stage=f"plan:continuation:{_continuation_count}",
+                )
                 new_plan = self._apply_execution_plan(new_plan, _replan_ctx)
                 # Filter out pure-final plans (no actionable steps)
                 _MUTATING_TOOLS = {"write_file", "apply_text_patch", "apply_batch_patch"}
@@ -1364,6 +1401,8 @@ class AgentLoop:
                         ] + [AgentPlanStep(kind="final", instruction="Finalize")]
                     else:
                         break
+            except _BILLING_CONTROL_ERRORS:
+                raise
             except Exception as cont_exc:
                 logger.debug("Continuation re-plan failed: %s", cont_exc)
                 break
@@ -1501,6 +1540,10 @@ class AgentLoop:
                     [],
                     tenant_id=context.tenant_id,
                     user_id=context.user_id,
+                    operation_id=self._billable_operation_id(
+                        context,
+                        "synthesis",
+                    ),
                     run_id=context.trace_id,
                     trace_id=context.trace_id,
                 ),
@@ -2782,7 +2825,14 @@ class AgentLoop:
             summary["overlap"] = overlap
         return summary
 
-    async def _plan(self, context: RunContext, trajectory: AgentTrajectory, extra_context: dict[str, object]) -> list[AgentPlanStep]:
+    async def _plan(
+        self,
+        context: RunContext,
+        trajectory: AgentTrajectory,
+        extra_context: dict[str, object],
+        *,
+        operation_stage: str = "plan:initial",
+    ) -> list[AgentPlanStep]:
         tool_manifest = self.tools.manifest()
         platform_context = self._build_platform_context(context, trajectory, extra_context)
         workflow_context = platform_context.get("workflow", {})
@@ -2846,6 +2896,10 @@ class AgentLoop:
             self.tools.definitions_for_llm(),
             tenant_id=context.tenant_id,
             user_id=context.user_id,
+            operation_id=self._billable_operation_id(
+                context,
+                operation_stage,
+            ),
             run_id=context.trace_id,
             trace_id=context.trace_id,
         )
