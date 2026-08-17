@@ -107,6 +107,7 @@ docs/RC_STAGING_MANIFEST.md
 docs/operations/deployment/COMMERCIAL_DEPLOYMENT_RUNBOOK.md
 docs/operations/deployment/DISASTER_RECOVERY.md
 docs/operations/deployment/RC_COMMERCIAL_DEPLOYMENT_CHECKLIST.md
+docs/operations/deployment/RC_RELEASE_DIFF_REVIEW.md
 docs/operations/deployment/ROLLBACK_PROCEDURE.md
 extension/jest.config.js
 extension/manifest.json
@@ -235,6 +236,7 @@ requirements.txt
 scripts/rc_artifact_integrity_gate.py
 scripts/rc_ci_contract.py
 scripts/rc_final_gate.py
+scripts/rc_install_release_gate.py
 scripts/rc_release_audit.py
 scripts/rc_release_receipt.py
 scripts/rc_source_bundle.py
@@ -267,6 +269,7 @@ tests/test_parallel_d1.py
 tests/test_postgres_memory.py
 tests/test_postgres_trace.py
 tests/test_rc_artifact_integrity_gate.py
+tests/test_rc_install_release_gate.py
 tests/test_rc_owner_gate_runner.py
 tests/test_rc_release_audit.py
 tests/test_rc_source_bundle.py

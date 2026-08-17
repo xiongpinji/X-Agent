@@ -5,7 +5,7 @@ import json
 import zipfile
 from pathlib import Path
 
-from scripts.rc_artifact_integrity_gate import run_artifact_integrity_gate
+from scripts.rc_artifact_integrity_gate import check_zip_security_scan, run_artifact_integrity_gate
 from scripts.rc_source_bundle import DELETION_MANIFEST_PATH
 
 
@@ -205,6 +205,25 @@ def test_artifact_integrity_gate_rejects_secret_like_zip_content(tmp_path: Path)
     assert report.status == "failed"
     scan_check = next(check for check in report.checks if check.name == "zip_security_scan")
     assert scan_check.details["secret_findings"][0]["sample"].startswith("xage")
+
+
+def test_zip_security_scan_ignores_unquoted_code_attribute_assignments(tmp_path: Path) -> None:
+    artifact = tmp_path / "bundle.zip"
+    with zipfile.ZipFile(artifact, "w") as archive:
+        archive.writestr(
+            "candidate.py",
+            '\n'.join(
+                [
+                    'api_key = websocket.query_params.get("api_key", "")',
+                    "hmac_secret = settings.audit_hmac_secret",
+                ]
+            ),
+        )
+
+    check = check_zip_security_scan(artifact)
+
+    assert check.status == "passed"
+    assert check.details["secret_findings"] == []
 
 
 def test_artifact_integrity_gate_rejects_excluded_reference_zip_content(tmp_path: Path) -> None:

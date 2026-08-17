@@ -183,6 +183,39 @@ def test_release_artifact_consistency_requires_installer_files_in_bundle(tmp_pat
     assert "install-xagent.sh" in str(check.error)
 
 
+def test_release_artifact_consistency_accepts_installer_files_unchanged_from_base(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    artifact_path = tmp_path / "release" / "bundle.zip"
+    source = _write_json(
+        tmp_path / "source.json",
+        {
+            "status": "created",
+            "file_count": 1,
+            "output_path": str(artifact_path),
+            "files": [{"path": "README.md"}],
+            "base_sha": "a" * 40,
+            "head_sha": "b" * 40,
+        },
+    )
+    artifact = _write_json(
+        tmp_path / "artifact.json",
+        {"status": "passed", "file_count": 1, "artifact_path": str(artifact_path)},
+    )
+    staging = _write_json(tmp_path / "staging.json", {"status": "planned", "file_count": 1})
+    monkeypatch.setattr(gate, "_git_path_unchanged_between", lambda *args, **kwargs: True)
+
+    check = check_release_artifact_consistency(source, staging, artifact, root=tmp_path)
+
+    assert check.status == "passed"
+    assert check.details["inherited_unchanged_files"] == [
+        "scripts/install-xagent.ps1",
+        "scripts/install-xagent.sh",
+        "scripts/xagent_doctor.py",
+    ]
+
+
 def test_windows_installer_dry_run_parses_expected_output(monkeypatch) -> None:
     monkeypatch.setattr(gate, "_powershell_executable", lambda: "powershell")
     monkeypatch.setattr(

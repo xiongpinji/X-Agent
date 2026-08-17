@@ -390,7 +390,7 @@ Runtime smoke evidence captured on 2026-06-06:
 - `scripts/rc_staging_plan.py` writes
   `.xagent_runtime/reports/rc-staging-plan.json` with exact `git add -- ...`
   commands split into safe chunks. It does not stage files. The latest dry-run
-  planned 340 files across 17 commands, and `git diff --cached --name-only`
+  planned 343 files across 18 commands, and `git diff --cached --name-only`
   remained empty.
 
 ## RC-S1 Evidence Notes

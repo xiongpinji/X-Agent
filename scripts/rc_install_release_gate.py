@@ -246,10 +246,36 @@ def _bundle_paths(payload: dict[str, Any] | None) -> set[str]:
     return paths
 
 
+def _git_path_unchanged_between(root: Path, base_sha: str, head_sha: str, relative_path: str) -> bool:
+    if not re.fullmatch(r"[0-9a-f]{40}", base_sha) or not re.fullmatch(r"[0-9a-f]{40}", head_sha):
+        return False
+    if not (root / relative_path).is_file():
+        return False
+    diff = subprocess.run(
+        ["git", "diff", "--quiet", base_sha, head_sha, "--", relative_path],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if diff.returncode != 0:
+        return False
+    tracked = subprocess.run(
+        ["git", "cat-file", "-e", f"{head_sha}:{relative_path}"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return tracked.returncode == 0
+
+
 def check_release_artifact_consistency(
     source_bundle_report: Path,
     staging_plan_report: Path,
     artifact_integrity_report: Path,
+    *,
+    root: Path = ROOT,
 ) -> InstallReleaseCheck:
     source_payload, source_error = _json_load(source_bundle_report)
     staging_payload, staging_error = _json_load(staging_plan_report)
@@ -289,9 +315,15 @@ def check_release_artifact_consistency(
         problems.append("source_bundle.output_path does not match artifact_integrity_gate.artifact_path")
 
     bundle_paths = _bundle_paths(source_payload)
-    missing_required = sorted(required_bundle_files.difference(bundle_paths))
+    base_sha = str((source_payload or {}).get("base_sha") or "")
+    head_sha = str((source_payload or {}).get("head_sha") or "")
+    absent_from_delta = required_bundle_files.difference(bundle_paths)
+    inherited_unchanged = sorted(
+        path for path in absent_from_delta if _git_path_unchanged_between(root, base_sha, head_sha, path)
+    )
+    missing_required = sorted(absent_from_delta.difference(inherited_unchanged))
     if missing_required:
-        problems.append(f"source bundle is missing installer/doctor files: {missing_required}")
+        problems.append(f"source delta neither includes nor inherits unchanged installer/doctor files: {missing_required}")
 
     return InstallReleaseCheck(
         name="release_artifact_consistency",
@@ -308,6 +340,7 @@ def check_release_artifact_consistency(
             "source_output_path": source_output_path,
             "artifact_path": artifact_path,
             "required_bundle_files": sorted(required_bundle_files),
+            "inherited_unchanged_files": inherited_unchanged,
             "missing_required_bundle_files": missing_required,
         },
         error="; ".join(problems) if problems else None,
