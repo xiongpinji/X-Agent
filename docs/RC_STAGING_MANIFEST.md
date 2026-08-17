@@ -2,7 +2,7 @@
 
 Release candidate delta manifest for the X-Agent commercial release process.
 
-Base commit: `4f1f5dc5de132abb5a9a46cd0f0cc79f2b0b0f75`
+Base commit: `eedeef026812070747dda519aaa3ea77d7d77b47`
 Target reference: `HEAD`
 
 This manifest must exactly match the committed candidate delta from the base
@@ -143,7 +143,18 @@ frontend/src/components/feedback/NotificationSettings.tsx
 frontend/src/components/ui/DataTable.tsx
 frontend/src/components/ui/OptimizedImage.tsx
 frontend/src/console/ConsoleShell.tsx
+frontend/src/console/components/layout/ConsoleLayout.tsx
+frontend/src/console/components/layout/ConsoleSyncStatusBadge.tsx
 frontend/src/console/hooks/useConsoleRealtimeSync.ts
+frontend/src/console/pages/execution/ExecutionOverviewPage.tsx
+frontend/src/console/pages/marketplace/MarketplaceOverviewPage.tsx
+frontend/src/console/pages/marketplace/SkillMarket.tsx
+frontend/src/console/pages/marketplace/SkillMarketComplete.tsx
+frontend/src/console/pages/memory/MemoryOverviewPage.tsx
+frontend/src/console/pages/navigation/NavigationOverviewPage.tsx
+frontend/src/console/pages/organization/OrganizationCenterOverviewPage.tsx
+frontend/src/console/pages/overview/OverviewPage.tsx
+frontend/src/console/pages/tools/ToolsOverviewPage.tsx
 frontend/src/console/state/consoleReducer.ts
 frontend/src/console/state/consoleSelectors.ts
 frontend/src/hooks/index.ts
@@ -152,28 +163,37 @@ frontend/src/hooks/useResponsive.ts
 frontend/src/hooks/useStreamingEvents.ts
 frontend/src/i18n/I18nContext.tsx
 frontend/src/i18n/context.tsx
+frontend/src/index.css
 frontend/src/main.tsx
 frontend/src/pages/AgentWorkspace.tsx
 frontend/src/pages/AgentWorkspacePage.tsx
 frontend/src/pages/BackupPage.tsx
+frontend/src/pages/BrowserAutomationPage.tsx
 frontend/src/pages/ChatPage.tsx
+frontend/src/pages/CheckpointsPage.tsx
 frontend/src/pages/CodeReviewPage.tsx
 frontend/src/pages/Dashboard.tsx
 frontend/src/pages/EvolutionPage.tsx
 frontend/src/pages/FeedbackDashboard.tsx
+frontend/src/pages/GdprCompliancePage.tsx
 frontend/src/pages/GoalModePage.tsx
 frontend/src/pages/LoginPage.tsx
 frontend/src/pages/McpManagementPage.tsx
 frontend/src/pages/MemoryPage.tsx
+frontend/src/pages/ObservabilityPage.tsx
 frontend/src/pages/OptimizedDashboard.tsx
 frontend/src/pages/OptimizedTasksPage.tsx
 frontend/src/pages/PerformanceMonitorPage.tsx
+frontend/src/pages/SandboxTasksPage.tsx
 frontend/src/pages/SecurityAuthPage.tsx
+frontend/src/pages/SyncPage.tsx
 frontend/src/pages/TasksPage.tsx
 frontend/src/pages/TenantsBillingPage.tsx
 frontend/src/pages/ToolsPage.tsx
 frontend/src/pages/UsersAdminPage.tsx
+frontend/src/pages/WorkSessionsPage.tsx
 frontend/src/pages/WorkflowEditorPage.tsx
+frontend/src/pages/WorkflowRunsPage.tsx
 frontend/src/pages/WorkflowSchedulesPage.tsx
 frontend/src/pages/WorkflowsPage.tsx
 frontend/src/serviceWorker.ts
