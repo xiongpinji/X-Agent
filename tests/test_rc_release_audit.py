@@ -2,12 +2,18 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from scripts.rc_release_audit import (
+    DEFAULT_MANIFEST,
     candidate_paths,
+    committed_candidate_paths,
+    committed_deleted_paths,
     is_excluded,
     is_safe_manifest_path,
-    manifest_candidate_sections,
+    manifest_base_ref,
     manifest_candidate_paths,
+    manifest_candidate_sections,
     manifest_classification_mismatches,
     manifest_extra_paths,
     manifest_unsafe_path_findings,
@@ -64,6 +70,12 @@ scripts/rc_release_audit.py
 tests/test_rc_release_audit.py
 ```
 
+## Deleted Candidate Files
+
+```text
+legacy.py
+```
+
 ## Generated Evidence Not Intended For Git
 
 ```text
@@ -72,13 +84,51 @@ tests/test_rc_release_audit.py
 """
 
     assert manifest_candidate_paths(manifest) == [
+        "legacy.py",
         "scripts/rc_release_audit.py",
         "tests/test_rc_release_audit.py",
     ]
     assert manifest_candidate_sections(manifest) == {
+        "Deleted Candidate Files": ["legacy.py"],
         "New Candidate Files": ["tests/test_rc_release_audit.py"],
         "Tracked Modified Candidate Files": ["scripts/rc_release_audit.py"],
     }
+
+
+def test_committed_candidate_paths_uses_merge_base_delta(monkeypatch) -> None:
+    def fake_git_lines(*args: str) -> list[str]:
+        if args == ("merge-base", "main", "HEAD"):
+            return ["base-sha"]
+        if args == ("rev-parse", "HEAD"):
+            return ["head-sha"]
+        if args == ("diff", "--name-only", "--diff-filter=ACMRD", "base-sha...HEAD"):
+            return ["changed.py", "deleted.py", ".agents/local.md"]
+        raise AssertionError(args)
+
+    monkeypatch.setattr("scripts.rc_release_audit._git_lines", fake_git_lines)
+
+    included, excluded, base_sha, head_sha = committed_candidate_paths(base_ref="main")
+
+    assert included == ["changed.py", "deleted.py"]
+    assert excluded == [".agents/local.md"]
+    assert base_sha == "base-sha"
+    assert head_sha == "head-sha"
+
+
+def test_repository_manifest_matches_exact_committed_candidate_delta() -> None:
+    manifest_text = DEFAULT_MANIFEST.read_text(encoding="utf-8")
+    _dirty, _excluded_dirty, manifest_fallback = candidate_paths(manifest_text)
+    if not manifest_fallback:
+        pytest.skip("exact committed-delta acceptance requires a clean worktree")
+    committed, excluded, base_sha, _head_sha = committed_candidate_paths(
+        base_ref=manifest_base_ref(manifest_text)
+    )
+
+    assert excluded == []
+    assert manifest_candidate_paths(manifest_text) == committed
+    assert manifest_candidate_sections(manifest_text)["Deleted Candidate Files"] == committed_deleted_paths(
+        base_sha=base_sha
+    )
 
 
 def test_manifest_extra_paths_reports_entries_not_in_current_candidate_diff() -> None:
@@ -140,6 +190,14 @@ tests/test_rc_runtime_smoke.py
     )
 
     def fake_git_lines(*args: str) -> list[str]:
+        if args == ("merge-base", "main", "HEAD"):
+            return ["base-sha"]
+        if args == ("rev-parse", "HEAD"):
+            return ["head-sha"]
+        if args == ("diff", "--name-only", "--diff-filter=ACMRD", "base-sha...HEAD"):
+            return ["scripts/rc_runtime_smoke.py", "tests/test_rc_runtime_smoke.py"]
+        if args == ("diff", "--name-only", "--diff-filter=D", "base-sha...HEAD"):
+            return []
         if args == ("diff", "--name-only"):
             return ["scripts/rc_runtime_smoke.py"]
         if args == ("diff", "--cached", "--name-only"):

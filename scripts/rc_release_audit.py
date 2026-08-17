@@ -5,16 +5,19 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import subprocess
-from dataclasses import asdict, dataclass
+from collections.abc import Iterable
+from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Iterable
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_MANIFEST = ROOT / "docs" / "RC_STAGING_MANIFEST.md"
 DEFAULT_OUTPUT = ROOT / ".xagent_runtime" / "reports" / "rc-release-audit.json"
+DEFAULT_BASE_REF = "main"
+BASE_REF_PATTERN = re.compile(r"(?m)^Base commit:\s*`([^`]+)`\s*$")
 
 EXCLUDED_PREFIXES = (".agents/", ".codex/", ".xagent_runtime/", "backend/app/core/creative_studio/")
 EXCLUDED_EXACT = {
@@ -130,6 +133,11 @@ class ReleaseAudit:
     local_path_findings: list[LocalPathFinding]
     file_hygiene_findings: list[FileHygieneFinding]
     excluded_present: list[str]
+    base_ref: str = ""
+    base_sha: str = ""
+    head_sha: str = ""
+    deleted_candidates: list[str] = field(default_factory=list)
+    manifest_deleted_misclassified: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, object]:
         payload = asdict(self)
@@ -172,6 +180,52 @@ def candidate_paths(manifest_text: str | None = None) -> tuple[list[str], list[s
     return candidates, excluded_present, manifest_fallback
 
 
+def committed_candidate_paths(
+    *, base_ref: str = DEFAULT_BASE_REF
+) -> tuple[list[str], list[str], str, str]:
+    """Return the committed release delta relative to the merge base."""
+    base_lines = _git_lines("merge-base", base_ref, "HEAD")
+    head_lines = _git_lines("rev-parse", "HEAD")
+    if len(base_lines) != 1 or len(head_lines) != 1:
+        raise RuntimeError(f"unable to resolve release base/head: {base_ref}")
+    base_sha = base_lines[0]
+    head_sha = head_lines[0]
+    changed = sorted(
+        dict.fromkeys(
+            _git_lines(
+                "diff",
+                "--name-only",
+                "--diff-filter=ACMRD",
+                f"{base_sha}...HEAD",
+            )
+        )
+    )
+    included = [path for path in changed if not is_excluded(path)]
+    excluded = [path for path in changed if is_excluded(path)]
+    return included, excluded, base_sha, head_sha
+
+
+def manifest_base_ref(manifest_text: str) -> str:
+    override = os.environ.get("XAGENT_RC_BASE_REF", "").strip()
+    if override:
+        return override
+    match = BASE_REF_PATTERN.search(manifest_text)
+    return match.group(1).strip() if match else DEFAULT_BASE_REF
+
+
+def committed_deleted_paths(*, base_sha: str) -> list[str]:
+    return sorted(
+        path
+        for path in _git_lines(
+            "diff",
+            "--name-only",
+            "--diff-filter=D",
+            f"{base_sha}...HEAD",
+        )
+        if not is_excluded(path)
+    )
+
+
 def repository_classification_paths() -> tuple[set[str], set[str]]:
     head_paths = set(_git_lines("ls-tree", "-r", "--name-only", "HEAD"))
     index_paths = set(_git_lines("ls-files", "--cached"))
@@ -192,7 +246,11 @@ def manifest_candidate_paths(manifest_text: str) -> list[str]:
 
 
 def manifest_candidate_sections(manifest_text: str) -> dict[str, list[str]]:
-    wanted = {"Tracked Modified Candidate Files", "New Candidate Files"}
+    wanted = {
+        "Tracked Modified Candidate Files",
+        "New Candidate Files",
+        "Deleted Candidate Files",
+    }
     current_heading = ""
     in_block = False
     sections: dict[str, list[str]] = {heading: [] for heading in wanted}
@@ -434,26 +492,43 @@ def scan_file_hygiene_findings(paths: Iterable[str], root: Path = ROOT) -> list[
     return findings
 
 
-def run_audit(manifest_path: Path = DEFAULT_MANIFEST, *, manifest_candidates: bool = False) -> ReleaseAudit:
+def run_audit(
+    manifest_path: Path = DEFAULT_MANIFEST,
+    *,
+    manifest_candidates: bool = False,
+    base_ref: str | None = None,
+) -> ReleaseAudit:
     tracked, untracked = repository_classification_paths()
     manifest_text = manifest_path.read_text(encoding="utf-8")
+    effective_base_ref = base_ref or manifest_base_ref(manifest_text)
     manifest_paths = manifest_candidate_paths(manifest_text)
+    base_sha = ""
+    head_sha = ""
+    deleted_candidates: list[str] = []
+    manifest_deleted_misclassified: list[str] = []
     if manifest_candidates:
-        candidates = [path for path in manifest_paths if (ROOT / path).exists()]
-        excluded_present = []
+        committed, excluded_present, base_sha, head_sha = committed_candidate_paths(base_ref=effective_base_ref)
+        deleted_candidates = committed_deleted_paths(base_sha=base_sha)
+        candidates = [path for path in committed if (ROOT / path).exists()]
         manifest_fallback = True
     else:
         candidates, excluded_present, manifest_fallback = candidate_paths(manifest_text)
     manifest_sections = manifest_candidate_sections(manifest_text)
     post_commit_manifest = bool(set(manifest_sections["New Candidate Files"]).intersection(tracked))
     manifest_unsafe_paths = manifest_unsafe_path_findings(manifest_paths)
-    missing = missing_from_manifest(candidates, manifest_text)
-    known_manifest_paths = set(candidates)
-    if post_commit_manifest:
+    compared_candidates = committed if manifest_candidates else candidates
+    missing = missing_from_manifest(compared_candidates, manifest_text)
+    known_manifest_paths = set(compared_candidates)
+    if post_commit_manifest and not manifest_candidates:
         known_manifest_paths.update(tracked)
         known_manifest_paths.update(untracked)
     extra = manifest_extra_paths(manifest_paths, known_manifest_paths)
-    if manifest_fallback:
+    if manifest_candidates:
+        declared_deleted = set(manifest_sections["Deleted Candidate Files"])
+        actual_deleted = set(deleted_candidates)
+        manifest_deleted_misclassified = sorted(declared_deleted.symmetric_difference(actual_deleted))
+        tracked_misclassified, new_misclassified = [], []
+    elif manifest_fallback:
         tracked_misclassified, new_misclassified = [], []
     else:
         tracked_misclassified, new_misclassified = manifest_classification_mismatches(
@@ -478,6 +553,7 @@ def run_audit(manifest_path: Path = DEFAULT_MANIFEST, *, manifest_candidates: bo
         and not excluded_reference_findings
         and not local_path_findings
         and not file_hygiene_findings
+        and not manifest_deleted_misclassified
         else "failed"
     )
     branch = _git_lines("branch", "--show-current")
@@ -485,7 +561,7 @@ def run_audit(manifest_path: Path = DEFAULT_MANIFEST, *, manifest_candidates: bo
         status=status,
         generated_at=datetime.now(UTC).isoformat(),
         branch=branch[0] if branch else "",
-        candidate_count=len(candidates),
+        candidate_count=len(compared_candidates),
         manifest_count=len(manifest_paths),
         missing_from_manifest=missing,
         manifest_extra=extra,
@@ -497,6 +573,11 @@ def run_audit(manifest_path: Path = DEFAULT_MANIFEST, *, manifest_candidates: bo
         local_path_findings=local_path_findings,
         file_hygiene_findings=file_hygiene_findings,
         excluded_present=excluded_present,
+        base_ref=effective_base_ref if manifest_candidates else "",
+        base_sha=base_sha,
+        head_sha=head_sha,
+        deleted_candidates=deleted_candidates,
+        manifest_deleted_misclassified=manifest_deleted_misclassified,
     )
 
 
@@ -513,10 +594,15 @@ def main() -> int:
         action="store_true",
         help="audit the full staging manifest instead of only the current working-tree diff",
     )
+    parser.add_argument("--base-ref")
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     args = parser.parse_args()
 
-    audit = run_audit(args.manifest, manifest_candidates=args.manifest_candidates)
+    audit = run_audit(
+        args.manifest,
+        manifest_candidates=args.manifest_candidates,
+        base_ref=args.base_ref,
+    )
     write_report(audit, args.output)
     print(f"RC release audit status: {audit.status}")
     print(f"Candidate files: {audit.candidate_count}")
@@ -558,6 +644,10 @@ def main() -> int:
         for finding in audit.file_hygiene_findings:
             location = f"{finding.path}:{finding.line}" if finding.line else finding.path
             print(f"- {location} {finding.kind}: {finding.sample}")
+    if audit.manifest_deleted_misclassified:
+        print("Manifest deletion entries do not match the committed delta:")
+        for path in audit.manifest_deleted_misclassified:
+            print(f"- {path}")
     return 0 if audit.status == "passed" else 1
 
 

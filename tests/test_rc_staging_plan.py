@@ -21,6 +21,12 @@ backend/app/main.py
 ```text
 scripts/rc_final_gate.py
 ```
+
+## Deleted Candidate Files
+
+```text
+legacy-entrypoint.py
+```
 """,
         encoding="utf-8",
     )
@@ -85,8 +91,10 @@ def test_build_staging_plan_from_manifest_without_mutation(tmp_path: Path) -> No
 
     assert report.status == "planned"
     assert report.manifest_sha256 == hashlib.sha256(manifest.read_bytes()).hexdigest()
-    assert report.file_count == 3
+    assert report.file_count == 4
     assert report.command_count == 2
+    assert report.deleted_files == ["legacy-entrypoint.py"]
+    assert any("legacy-entrypoint.py" in command.paths for command in report.commands)
     assert report.errors == []
     assert "git diff --cached --stat" in report.next_commands[-1]
 

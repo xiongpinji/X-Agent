@@ -1416,6 +1416,7 @@ def _cross_report_consistency_gate(paths: dict[str, Path]) -> GateInput:
         for field_name in (
             "missing_from_manifest",
             "manifest_extra",
+            "manifest_deleted_misclassified",
             "secret_findings",
             "excluded_reference_findings",
         ):
@@ -1425,6 +1426,20 @@ def _cross_report_consistency_gate(paths: dict[str, Path]) -> GateInput:
             elif values not in (None, []) and not isinstance(values, list):
                 problems.append(f"release_audit.{field_name} is not a list")
 
+    identity_fields = {
+        "release_base_sha": (release_payload or {}).get("base_sha"),
+        "release_head_sha": (release_payload or {}).get("head_sha"),
+        "source_base_sha": (source_payload or {}).get("base_sha"),
+        "source_head_sha": (source_payload or {}).get("head_sha"),
+    }
+    if any(identity_fields.values()):
+        if any(not isinstance(value, str) or len(value) != 40 for value in identity_fields.values()):
+            problems.append(f"release/source commit identity is incomplete: {identity_fields}")
+        elif identity_fields["release_base_sha"] != identity_fields["source_base_sha"]:
+            problems.append("release/source base_sha mismatch")
+        elif identity_fields["release_head_sha"] != identity_fields["source_head_sha"]:
+            problems.append("release/source head_sha mismatch")
+
     details = {
         "file_counts": counts,
         "release_audit_clean": not any(
@@ -1433,11 +1448,13 @@ def _cross_report_consistency_gate(paths: dict[str, Path]) -> GateInput:
             for field_name in (
                 "missing_from_manifest",
                 "manifest_extra",
+                "manifest_deleted_misclassified",
                 "secret_findings",
                 "excluded_reference_findings",
             )
         ),
         "source_path_count": len(source_paths),
+        "commit_identity": identity_fields,
         "staging_path_count": len(staging_paths),
         "staging_plan_clean": not any(
             isinstance((staging_payload or {}).get(field_name), list)

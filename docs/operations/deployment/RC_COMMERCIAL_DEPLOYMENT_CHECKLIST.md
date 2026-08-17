@@ -135,8 +135,10 @@ Observed status:
   `prohibited_secret_artifacts` so real env/key/pem/pfx/p12 files and secret
   directories cannot enter the source bundle.
 - RC source bundle artifact: created from the manifest with `--create`; the
-  zip is a runtime release artifact and is not intended for source-control
-  staging.
+  manifest must exactly match the committed delta from its immutable base SHA
+  through `HEAD`. Deleted candidate paths are carried as verified tombstones in
+  `.xagent-release/deleted-paths.txt`. The zip is a runtime release artifact and
+  is not intended for source-control staging.
 - RC artifact integrity gate: validates the created zip exists, has a recorded
   SHA-256, and every archive entry matches the source-bundle report by path,
   size, and SHA-256 with excluded paths blocked. It also scans zip text entries
@@ -365,9 +367,11 @@ Runtime smoke evidence captured on 2026-06-06:
   templates remain internally consistent, include the required Feishu,
   GitHub, and hosted Actions commands, and do not contain secret-like values.
 - `scripts/rc_source_bundle.py --create` builds the commercial RC source bundle
-  from `docs/RC_STAGING_MANIFEST.md` only and writes
+  from `docs/RC_STAGING_MANIFEST.md` only, fails if that manifest differs from
+  the committed base-to-HEAD delta, and writes
   `.xagent_runtime/reports/rc-source-bundle.json` plus a zip under
-  `.xagent_runtime/release/`. The artifact remains outside source control.
+  `.xagent_runtime/release/`. Deleted files are recorded in the archive's
+  `.xagent-release/deleted-paths.txt`; the artifact remains outside source control.
 - `scripts/rc_artifact_integrity_gate.py` reads the source-bundle report,
   validates the created zip exists, rejects excluded or unsafe archive names,
   verifies every entry's path/size/SHA-256, scans zip text entries for
@@ -386,7 +390,7 @@ Runtime smoke evidence captured on 2026-06-06:
 - `scripts/rc_staging_plan.py` writes
   `.xagent_runtime/reports/rc-staging-plan.json` with exact `git add -- ...`
   commands split into safe chunks. It does not stage files. The latest dry-run
-  planned 115 files across 6 commands, and `git diff --cached --name-only`
+  planned 340 files across 17 commands, and `git diff --cached --name-only`
   remained empty.
 
 ## RC-S1 Evidence Notes

@@ -12,13 +12,20 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+from collections.abc import Iterable
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Iterable
 
 from scripts.rc_release_audit import is_excluded
-from scripts.rc_source_bundle import DEFAULT_MANIFEST, ROOT, is_safe_manifest_path, manifest_candidate_paths, normalize_manifest_path
+from scripts.rc_source_bundle import (
+    DEFAULT_MANIFEST,
+    ROOT,
+    is_safe_manifest_path,
+    manifest_candidate_paths,
+    manifest_deleted_paths,
+    normalize_manifest_path,
+)
 
 DEFAULT_REPORT = ROOT / ".xagent_runtime" / "reports" / "rc-staging-plan.json"
 
@@ -44,6 +51,8 @@ class StagingPlanReport:
     excluded_files: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
     next_commands: list[str] = field(default_factory=list)
+    deleted_files: list[str] = field(default_factory=list)
+    undeleted_files: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, object]:
         payload = asdict(self)
@@ -60,16 +69,25 @@ def _quote_path(path: str) -> str:
     return f'"{escaped}"'
 
 
-def validate_stage_paths(paths: Iterable[str], root: Path = ROOT) -> tuple[list[str], list[str], list[str]]:
+def validate_stage_paths(
+    paths: Iterable[str],
+    root: Path = ROOT,
+    *,
+    deleted_paths: Iterable[str] = (),
+) -> tuple[list[str], list[str], list[str]]:
     valid: list[str] = []
     missing: list[str] = []
     excluded: list[str] = []
+    deleted = {normalize_manifest_path(path) for path in deleted_paths}
     for item in paths:
         normalized = normalize_manifest_path(item)
         if not is_safe_manifest_path(normalized) or is_excluded(normalized) or normalized.startswith(".xagent_runtime/"):
             excluded.append(normalized)
             continue
         path = root / normalized
+        if normalized in deleted:
+            valid.append(normalized)
+            continue
         if not path.exists() or not path.is_file():
             missing.append(normalized)
             continue
@@ -106,13 +124,21 @@ def build_staging_plan(
 ) -> StagingPlanReport:
     manifest_sha256 = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
     candidates = manifest_candidate_paths(manifest_path)
-    valid, missing, excluded = validate_stage_paths(candidates, root=root)
+    deleted = manifest_deleted_paths(manifest_path)
+    undeleted = sorted(path for path in deleted if (root / path).exists())
+    valid, missing, excluded = validate_stage_paths(
+        candidates,
+        root=root,
+        deleted_paths=deleted,
+    )
     commands = build_staging_commands(valid, chunk_size=chunk_size)
     errors: list[str] = []
     if missing:
         errors.append("manifest candidate files are missing from the worktree")
     if excluded:
         errors.append("manifest includes excluded paths")
+    if undeleted:
+        errors.append("manifest deletion entries still exist in the worktree")
     status = "failed" if errors else "planned"
     return StagingPlanReport(
         status=status,
@@ -130,6 +156,8 @@ def build_staging_plan(
             "Run the generated git add -- commands only after owner review.",
             "Run git diff --cached --stat before commit.",
         ],
+        deleted_files=deleted,
+        undeleted_files=undeleted,
     )
 
 

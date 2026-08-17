@@ -627,6 +627,11 @@ def _source_bundle_summary(payload: dict[str, Any] | None) -> dict[str, Any]:
         "output_path": payload.get("output_path"),
         "file_count": payload.get("file_count"),
         "total_bytes": payload.get("total_bytes"),
+        "base_ref": payload.get("base_ref"),
+        "base_sha": payload.get("base_sha"),
+        "head_sha": payload.get("head_sha"),
+        "deleted_files": payload.get("deleted_files", []),
+        "deletion_manifest_path": payload.get("deletion_manifest_path"),
         "errors": payload.get("errors", []),
     }
 

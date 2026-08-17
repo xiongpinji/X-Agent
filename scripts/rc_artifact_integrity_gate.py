@@ -27,7 +27,7 @@ from scripts.rc_release_audit import (
     _redact,
     is_excluded,
 )
-from scripts.rc_source_bundle import ROOT
+from scripts.rc_source_bundle import DELETION_MANIFEST_PATH, ROOT
 
 REPORT_DIR = ROOT / ".xagent_runtime" / "reports"
 DEFAULT_SOURCE_BUNDLE = REPORT_DIR / "rc-source-bundle.json"
@@ -111,6 +111,22 @@ def _reported_files(payload: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return files
 
 
+def _active_reported_files(payload: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    return {
+        path: item
+        for path, item in _reported_files(payload).items()
+        if item.get("deleted") is not True
+    }
+
+
+def _deleted_reported_paths(payload: dict[str, Any]) -> list[str]:
+    return sorted(
+        path
+        for path, item in _reported_files(payload).items()
+        if item.get("deleted") is True
+    )
+
+
 def _unsafe_archive_name(name: str) -> bool:
     parts = [part for part in name.replace("\\", "/").split("/") if part]
     return name.startswith("/") or ":" in parts[0] or ".." in parts
@@ -161,16 +177,20 @@ def check_artifact_file(path: Path | None) -> ArtifactIntegrityCheck:
 def check_zip_contents(path: Path | None, payload: dict[str, Any] | None) -> ArtifactIntegrityCheck:
     if path is None or payload is None:
         return ArtifactIntegrityCheck("zip_contents", "failed", error="artifact path or source bundle report missing")
-    expected = _reported_files(payload)
+    expected = _active_reported_files(payload)
+    deleted = _deleted_reported_paths(payload)
     try:
         with zipfile.ZipFile(path) as archive:
             infos = [info for info in archive.infolist() if not info.is_dir()]
             names = [info.filename.replace("\\", "/") for info in infos]
             actual = {info.filename.replace("\\", "/"): info for info in infos}
             mismatches: list[str] = []
-            if sorted(actual) != sorted(expected):
-                missing = sorted(set(expected).difference(actual))
-                extra = sorted(set(actual).difference(expected))
+            expected_archive_names = set(expected)
+            if deleted:
+                expected_archive_names.add(DELETION_MANIFEST_PATH)
+            if set(actual) != expected_archive_names:
+                missing = sorted(expected_archive_names.difference(actual))
+                extra = sorted(set(actual).difference(expected_archive_names))
                 mismatches.append(f"zip file list mismatch: missing={missing}, extra={extra}")
             unsafe = sorted(name for name in actual if _unsafe_archive_name(name))
             if unsafe:
@@ -178,6 +198,11 @@ def check_zip_contents(path: Path | None, payload: dict[str, Any] | None) -> Art
             excluded = sorted(name for name in actual if is_excluded(name) or name.startswith(".xagent_runtime/"))
             if excluded:
                 mismatches.append(f"zip contains excluded paths: {excluded}")
+            if deleted and DELETION_MANIFEST_PATH in actual:
+                deletion_payload = archive.read(actual[DELETION_MANIFEST_PATH]).decode("utf-8", errors="replace")
+                expected_payload = "".join(f"{path}\n" for path in deleted)
+                if deletion_payload != expected_payload:
+                    mismatches.append("zip deletion manifest does not match reported deleted paths")
             for name, reported in expected.items():
                 info = actual.get(name)
                 if info is None:
@@ -206,6 +231,10 @@ def check_workspace_contents(payload: dict[str, Any] | None, root: Path = ROOT) 
             mismatches.append(f"{name}: unsafe or excluded path")
             continue
         path = root / name
+        if reported.get("deleted") is True:
+            if path.exists():
+                mismatches.append(f"{name}: deleted candidate still exists")
+            continue
         if not path.exists() or not path.is_file():
             mismatches.append(f"{name}: workspace file missing")
             continue

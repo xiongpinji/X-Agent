@@ -6,6 +6,7 @@ import zipfile
 from pathlib import Path
 
 from scripts.rc_artifact_integrity_gate import run_artifact_integrity_gate
+from scripts.rc_source_bundle import DELETION_MANIFEST_PATH
 
 
 def _sha256(data: bytes) -> str:
@@ -69,6 +70,39 @@ def test_artifact_integrity_gate_accepts_matching_zip(tmp_path: Path) -> None:
     assert report.file_count == 2
     workspace_check = next(check for check in report.checks if check.name == "workspace_contents")
     assert workspace_check.status == "passed"
+
+
+def test_artifact_integrity_gate_accepts_verified_deleted_candidates(tmp_path: Path) -> None:
+    artifact = tmp_path / "release" / "bundle.zip"
+    artifact.parent.mkdir()
+    active = b"readme"
+    (tmp_path / "README.md").write_bytes(active)
+    with zipfile.ZipFile(artifact, "w") as archive:
+        archive.writestr("README.md", active)
+        archive.writestr(DELETION_MANIFEST_PATH, "legacy.py\n")
+    report_path = _write_report(
+        tmp_path / "reports" / "rc-source-bundle.json",
+        {
+            "status": "created",
+            "dry_run": False,
+            "output_path": str(artifact),
+            "file_count": 2,
+            "files": [
+                {"path": "README.md", "size_bytes": len(active), "sha256": _sha256(active)},
+                {
+                    "path": "legacy.py",
+                    "size_bytes": 0,
+                    "sha256": _sha256(b""),
+                    "deleted": True,
+                },
+            ],
+        },
+    )
+
+    report = run_artifact_integrity_gate(report_path, root=tmp_path)
+
+    assert report.status == "passed"
+    assert report.file_count == 2
 
 
 def test_artifact_integrity_gate_rejects_tampered_zip_entry(tmp_path: Path) -> None:
