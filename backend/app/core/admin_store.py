@@ -1,7 +1,7 @@
 """P1-03: 用户/租户管理存储的 SQL(Postgres) 后端。
 
 设计说明
-========
+--------
 - 本模块为 ``backend.app.core.admin`` 中的内存版 ``UserStore``/``TenantStore``
   提供 **调用契约完全一致** 的 SQL 后端。API 层(api/users.py、api/tenants.py、
   api/auth.py、dependencies.py)以 **同步** 方式调用存储, 因此这里使用
@@ -15,7 +15,7 @@
   ``create_all`` 幂等, 开发/测试环境建表便捷, 生产以迁移 SQL 为准。
 
 兼容说明
-========
+--------
 - ``_records`` 属性以 ``MutableMapping`` 视图暴露, 兼容既有的两处直接访问:
   ``tests/conftest.py`` 的 ``user_store._records.clear()`` 与
   ``api/auth.py`` 密码重置的 ``user_store._records[user.id] = user``

@@ -76,6 +76,7 @@ PLACEHOLDER_TOKENS = (
     "secure_key",
     "your",
 )
+CODE_SUFFIXES = {".js", ".jsx", ".py", ".ts", ".tsx"}
 
 
 @dataclass(frozen=True)
@@ -353,6 +354,15 @@ def _redact(value: str) -> str:
     return f"{value[:4]}...{value[-4:]}"
 
 
+def _is_unquoted_code_attribute(path: Path, line: str, match: re.Match[str], sample: str) -> bool:
+    if path.suffix.lower() not in CODE_SUFFIXES:
+        return False
+    if not re.fullmatch(r"[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)+", sample):
+        return False
+    prefix = line[: match.start(1)].rstrip()
+    return not prefix.endswith(("'", '"'))
+
+
 def scan_secret_findings(paths: Iterable[str], root: Path = ROOT) -> list[SecretFinding]:
     findings: list[SecretFinding] = []
     seen: set[tuple[str, int, str]] = set()
@@ -368,7 +378,7 @@ def scan_secret_findings(paths: Iterable[str], root: Path = ROOT) -> list[Secret
             for pattern in SECRET_PATTERNS:
                 for match in pattern.finditer(line):
                     sample = match.group(1) if match.groups() else match.group(0)
-                    if _is_probable_placeholder(sample):
+                    if _is_probable_placeholder(sample) or _is_unquoted_code_attribute(path, line, match, sample):
                         continue
                     key = (relative_path, line_number, sample)
                     if key in seen:

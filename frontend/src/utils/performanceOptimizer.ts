@@ -306,7 +306,7 @@ class PerformanceOptimizer {
 
     return `
 Performance Report
-==================
+------------------
 
 Score: ${score}/100
 

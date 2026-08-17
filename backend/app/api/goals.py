@@ -1,7 +1,7 @@
 """Goals API — 目标模式端点 (前端 GoalModePage 消费)。
 
 接线说明
-========
+--------
 - 响应结构保持与旧内存 stub 一致；资源按已认证 tenant/user 隔离。
 - 目标执行由 ``backend.app.core.goal_mode.GoalModeOrchestrator`` 真实编排器
   承担, 在 asyncio 后台任务中运行 (start 端点触发)。

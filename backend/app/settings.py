@@ -218,7 +218,7 @@ class Settings(BaseSettings):
 
     # ─── Message Platform Gateway (Telegram / Discord / DingTalk / Feishu) ────
     telegram_bot_token: str = ""  # XAGENT_TELEGRAM_BOT_TOKEN
-    telegram_webhook_secret: str = ""  # XAGENT_TELEGRAM_WEBHOOK_SECRET: X-Telegram-Bot-Api-Secret-Token
+    telegram_webhook_secret: str = ""  # XAGENT_TELEGRAM_WEBHOOK_SECRET: verification header value
     telegram_webhook_url: str = ""  # XAGENT_TELEGRAM_WEBHOOK_URL: public webhook URL registered via setWebhook
     discord_bot_token: str = ""  # XAGENT_DISCORD_BOT_TOKEN
     discord_public_key: str = ""  # XAGENT_DISCORD_PUBLIC_KEY: Ed25519 public key (hex) for interaction signing

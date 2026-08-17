@@ -364,6 +364,22 @@ def test_secret_scan_ignores_code_identifier_token_assignments(tmp_path: Path) -
     assert scan_secret_findings(["candidate.py"], root=tmp_path) == []
 
 
+def test_secret_scan_ignores_code_attribute_assignments(tmp_path: Path) -> None:
+    candidate = tmp_path / "candidate.py"
+    candidate.write_text(
+        "\n".join(
+            [
+                'api_key = websocket.query_params.get("api_key", "")',
+                "hmac_secret = settings.audit_hmac_secret",
+                "openai_api_key=settings.openai_api_key,",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    assert scan_secret_findings(["candidate.py"], root=tmp_path) == []
+
+
 def test_secret_scan_ignores_cli_flag_values(tmp_path: Path) -> None:
     candidate = tmp_path / "candidate.py"
     candidate.write_text('command = ["--github-execute-preflight"]\n', encoding="utf-8")

@@ -76,7 +76,7 @@ def _split_system_messages(
 
 class AnthropicBackend(BaseLLMBackend):
     """Anthropic Messages API backend with tool-use and usage accounting.
-    
+
     Uses a persistent AsyncAnthropic client with connection pooling for efficiency.
     """
 
@@ -113,7 +113,7 @@ class AnthropicBackend(BaseLLMBackend):
                     try:
                         import httpx
                         from anthropic import AsyncAnthropic
-                        
+
                         # Create HTTP client with connection pooling if not provided
                         http_client = self._http_client
                         if http_client is None:
@@ -125,7 +125,7 @@ class AnthropicBackend(BaseLLMBackend):
                                 ),
                                 timeout=httpx.Timeout(self.timeout, connect=10.0),
                             )
-                        
+
                         kwargs: dict[str, Any] = {
                             "api_key": self.api_key,
                             "timeout": self.timeout,
@@ -134,7 +134,7 @@ class AnthropicBackend(BaseLLMBackend):
                         }
                         if self.base_url:
                             kwargs["base_url"] = self.base_url
-                        
+
                         self._client = AsyncAnthropic(**kwargs)
                         logger.info(f"Anthropic client initialized with connection pool (max_connections={self.max_connections})")
                     except ImportError as exc:

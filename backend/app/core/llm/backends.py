@@ -273,7 +273,7 @@ class MockLLMBackend(BaseLLMBackend):
         )
 class OpenAIBackend(BaseLLMBackend):
     """Full-featured OpenAI API backend with streaming, retries, rate limiting, and cost tracking.
-    
+
     Uses a persistent AsyncOpenAI client with connection pooling for efficiency.
     """
 
@@ -314,7 +314,7 @@ class OpenAIBackend(BaseLLMBackend):
                     try:
                         import httpx
                         from openai import AsyncOpenAI
-                        
+
                         # Create HTTP client with connection pooling
                         http_client = httpx.AsyncClient(
                             limits=httpx.Limits(
@@ -324,7 +324,7 @@ class OpenAIBackend(BaseLLMBackend):
                             ),
                             timeout=httpx.Timeout(self.timeout, connect=10.0),
                         )
-                        
+
                         client_kwargs: dict[str, Any] = {
                             "api_key": self.api_key,
                             "http_client": http_client,
@@ -332,7 +332,7 @@ class OpenAIBackend(BaseLLMBackend):
                         }
                         if self.base_url:
                             client_kwargs["base_url"] = self.base_url
-                        
+
                         self._client = AsyncOpenAI(**client_kwargs)
                         logger.info(f"OpenAI client initialized with connection pool (max_connections={self.max_connections})")
                     except ImportError as exc:
