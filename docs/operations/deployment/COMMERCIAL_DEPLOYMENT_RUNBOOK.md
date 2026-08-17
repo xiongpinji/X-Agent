@@ -10,6 +10,10 @@ results from another commit are not acceptance evidence for the current candidat
 This is not a GA claim and not a full Codex/Hermes parity claim. It does not
 claim full Codex/Hermes parity (`full_parity_claimed=false`).
 
+The current local final-gate status is `ready_with_owner_gates`: local gates
+are green, but owner-controlled external gates remain `action_required`. This
+status does not authorize an RC tag, push, deployment, or paid provider call.
+
 Local mock tests, builds, migration drills, and Helm rendering do not establish
 GA by themselves. Real provider, channel, hosted CI, backup/restore drill, and
 production rollout evidence remain owner-controlled gates and must be refreshed
