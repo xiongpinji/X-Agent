@@ -2,7 +2,7 @@
 """Validate dependency and supply-chain gates for the commercial RC.
 
 The gate stays deterministic and local where possible. It checks project
-manifests, lockfiles, CI install discipline, and runs the frontend npm audit
+manifests, lockfiles, CI install discipline, and runs every client npm audit
 that is already part of the commercial RC workflow.
 """
 
@@ -35,6 +35,7 @@ LOCAL_USER_PATH_OUTPUT_RE = re.compile(
 LOCAL_RUNTIME_MARKER_RE = re.compile(r"(?i)\bhermes-agent\b")
 NPM_REGISTRY_PREFIX = "https://registry.npmjs.org/"
 REQUIRED_PYPROJECT_DEV_TOOLS = ("aiosqlite", "nest-asyncio", "pip-audit")
+NODE_PROJECT_DIRS = ("frontend", "desktop/frontend", "extension", "mobile")
 
 
 @dataclass(frozen=True)
@@ -361,33 +362,40 @@ def check_frontend_lockfile(root: Path = ROOT) -> SupplyChainCheck:
 
 def check_npm_audit(root: Path = ROOT, *, timeout_seconds: float = 120.0) -> SupplyChainCheck:
     command = [_npm_executable(), "audit", "--audit-level=moderate", "--json"]
-    try:
-        result = _run_command(command, cwd=root / "frontend", timeout_seconds=timeout_seconds)
-    except (OSError, subprocess.TimeoutExpired) as exc:
-        return SupplyChainCheck("npm_audit", "failed", details={"command": command}, error=str(exc))
-
-    try:
-        payload = json.loads(result.stdout or "{}")
-    except json.JSONDecodeError as exc:
-        return SupplyChainCheck(
-            "npm_audit",
-            "failed",
-            details={"exit_code": result.returncode, "stdout_tail": _tail(result.stdout), "stderr_tail": _tail(result.stderr)},
-            error=f"npm audit did not emit JSON: {exc}",
-        )
-    vulnerabilities = ((payload.get("metadata") or {}).get("vulnerabilities") or {})
-    moderate_plus = sum(int(vulnerabilities.get(level, 0) or 0) for level in ("moderate", "high", "critical"))
-    ok = result.returncode == 0 and moderate_plus == 0
+    project_results: list[dict[str, Any]] = []
+    totals = {level: 0 for level in ("info", "low", "moderate", "high", "critical", "total")}
+    ok = True
+    for relative_dir in NODE_PROJECT_DIRS:
+        try:
+            result = _run_command(command, cwd=root / relative_dir, timeout_seconds=timeout_seconds)
+            payload = json.loads(result.stdout or "{}")
+            vulnerabilities = ((payload.get("metadata") or {}).get("vulnerabilities") or {})
+            moderate_plus = sum(int(vulnerabilities.get(level, 0) or 0) for level in ("moderate", "high", "critical"))
+            project_ok = result.returncode == 0 and moderate_plus == 0
+            for level in totals:
+                totals[level] += int(vulnerabilities.get(level, 0) or 0)
+            project_results.append(
+                {
+                    "project": relative_dir,
+                    "status": "passed" if project_ok else "failed",
+                    "exit_code": result.returncode,
+                    "vulnerabilities": vulnerabilities,
+                    "stderr_tail": _tail(result.stderr),
+                }
+            )
+            ok = ok and project_ok
+        except (OSError, subprocess.TimeoutExpired, json.JSONDecodeError) as exc:
+            project_results.append({"project": relative_dir, "status": "failed", "error": str(exc)})
+            ok = False
     return SupplyChainCheck(
         name="npm_audit",
         status="passed" if ok else "failed",
         details={
             "command": command,
-            "exit_code": result.returncode,
-            "vulnerabilities": vulnerabilities,
-            "stderr_tail": _tail(result.stderr),
+            "projects": project_results,
+            "vulnerabilities": totals,
         },
-        error=None if ok else "npm audit reported moderate-or-higher vulnerabilities.",
+        error=None if ok else "At least one client npm audit failed or reported moderate-or-higher vulnerabilities.",
     )
 
 
@@ -398,7 +406,10 @@ def check_ci_dependency_contract(root: Path = ROOT) -> SupplyChainCheck:
     except FileNotFoundError as exc:
         return SupplyChainCheck("ci_dependency_contract", "failed", error=str(exc))
     required = [
-        "cache-dependency-path: frontend/package-lock.json",
+        "frontend/package-lock.json",
+        "desktop/frontend/package-lock.json",
+        "extension/package-lock.json",
+        "mobile/package-lock.json",
         "working-directory: frontend",
         "npm ci",
         "npm audit --audit-level=moderate",
@@ -603,7 +614,7 @@ def run_supply_chain_gate(
         next_commands=[
             "Review .xagent_runtime/reports/rc-supply-chain-gate.json.",
             "Keep pip-audit installed through the dev extra so Python vulnerability audit evidence remains enforced.",
-            "Regenerate frontend/package-lock.json with npm install only when package.json intentionally changes.",
+            "Regenerate a client package-lock.json only when its package.json intentionally changes.",
             "Keep CI on npm ci and the editable Python install path.",
         ],
     )

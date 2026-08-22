@@ -321,7 +321,11 @@ def test_ci_dependency_contract_rejects_npm_install(tmp_path: Path) -> None:
     workflow.parent.mkdir(parents=True)
     workflow.write_text(
         """
-cache-dependency-path: frontend/package-lock.json
+cache-dependency-path: |
+  frontend/package-lock.json
+  desktop/frontend/package-lock.json
+  extension/package-lock.json
+  mobile/package-lock.json
 working-directory: frontend
 npm ci
 npm audit --audit-level=moderate
@@ -343,7 +347,11 @@ def test_ci_dependency_contract_ignores_required_tokens_in_comments(tmp_path: Pa
     workflow.parent.mkdir(parents=True)
     workflow.write_text(
         """
-cache-dependency-path: frontend/package-lock.json
+cache-dependency-path: |
+  frontend/package-lock.json
+  desktop/frontend/package-lock.json
+  extension/package-lock.json
+  mobile/package-lock.json
 working-directory: frontend
 npm ci
 npm audit --audit-level=moderate
@@ -364,7 +372,11 @@ def test_ci_dependency_contract_ignores_forbidden_tokens_in_comments(tmp_path: P
     workflow.parent.mkdir(parents=True)
     workflow.write_text(
         """
-cache-dependency-path: frontend/package-lock.json
+cache-dependency-path: |
+  frontend/package-lock.json
+  desktop/frontend/package-lock.json
+  extension/package-lock.json
+  mobile/package-lock.json
 working-directory: frontend
 npm ci
 npm audit --audit-level=moderate
@@ -386,7 +398,11 @@ def test_ci_dependency_contract_requires_pip_audit_tool_check(tmp_path: Path) ->
     workflow.parent.mkdir(parents=True)
     workflow.write_text(
         """
-cache-dependency-path: frontend/package-lock.json
+cache-dependency-path: |
+  frontend/package-lock.json
+  desktop/frontend/package-lock.json
+  extension/package-lock.json
+  mobile/package-lock.json
 working-directory: frontend
 npm ci
 npm audit --audit-level=moderate
@@ -401,21 +417,53 @@ python -m pip install -e ".[dev,test,cli,mcp,monitoring]"
     assert "python -m pip show pip-audit" in check.details["missing"]
 
 
+def test_ci_dependency_contract_accepts_all_client_lockfiles(tmp_path: Path) -> None:
+    workflow = tmp_path / ".github" / "workflows" / "commercial-rc.yml"
+    workflow.parent.mkdir(parents=True)
+    workflow.write_text(
+        """
+cache-dependency-path: |
+  frontend/package-lock.json
+  desktop/frontend/package-lock.json
+  extension/package-lock.json
+  mobile/package-lock.json
+working-directory: frontend
+npm ci
+npm audit --audit-level=moderate
+python -m pip install -e ".[dev,test,cli,mcp,monitoring]"
+python -m pip show pip-audit
+""",
+        encoding="utf-8",
+    )
+
+    check = check_ci_dependency_contract(tmp_path)
+
+    assert check.status == "passed"
+
+
 def test_npm_audit_accepts_zero_moderate_plus(monkeypatch) -> None:
-    monkeypatch.setattr(
-        gate,
-        "_run_command",
-        lambda command, cwd, timeout_seconds: subprocess.CompletedProcess(
+    audited_projects: list[str] = []
+
+    def fake_run(command, cwd, timeout_seconds):
+        del timeout_seconds
+        audited_projects.append(cwd.relative_to(gate.ROOT).as_posix())
+        return subprocess.CompletedProcess(
             command,
             0,
             stdout=json.dumps({"metadata": {"vulnerabilities": {"info": 0, "low": 1, "moderate": 0, "high": 0, "critical": 0}}}),
             stderr="",
-        ),
+        )
+
+    monkeypatch.setattr(
+        gate,
+        "_run_command",
+        fake_run,
     )
 
     check = check_npm_audit()
 
     assert check.status == "passed"
+    assert audited_projects == ["frontend", "desktop/frontend", "extension", "mobile"]
 
 
 def test_npm_executable_prefers_cmd_on_windows(monkeypatch) -> None:

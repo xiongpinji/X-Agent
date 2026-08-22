@@ -124,8 +124,8 @@ Observed status:
   handoff boundary before release-owner execution.
 - RC install/release gate: validates Windows/POSIX installer dry-runs, doctor
   JSON output, source bundle report, and staging plan report.
-- RC supply-chain gate: validates Python dependency metadata, frontend lockfile
-  consistency, npm audit, Python vulnerability audit evidence from
+- RC supply-chain gate: validates Python dependency metadata, all four client
+  lockfile references and npm audits, Python vulnerability audit evidence from
   `pip-audit`, and CI dependency-install discipline. CI must install the dev
   extra and run `python -m pip show pip-audit` so the audit tool is present
   before `scripts\rc_supply_chain_gate.py` runs.
@@ -400,8 +400,8 @@ Runtime smoke evidence captured on 2026-06-06:
 Security and supply-chain evidence captured on 2026-06-06:
 
 - `npm audit --audit-level=moderate`: 0 vulnerabilities.
-- `python scripts\rc_supply_chain_gate.py`: passed; Python manifest,
-  frontend lockfile, npm audit, Python vulnerability audit evidence via
+- `python scripts\rc_supply_chain_gate.py`: passed; Python manifest, all four
+  client lockfile references and npm audits, Python vulnerability evidence via
   `pip-audit`, and CI dependency contract checks passed. The CI contract
   includes `python -m pip show pip-audit` after the editable dev/CLI install.
 - `python scripts\rc_artifact_integrity_gate.py`: passed after source bundle
