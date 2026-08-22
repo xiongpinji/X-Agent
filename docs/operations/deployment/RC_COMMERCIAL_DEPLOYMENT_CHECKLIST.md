@@ -1,9 +1,9 @@
 # X-Agent Commercial RC Deployment Checklist
 
-Last updated: 2026-06-07
+Last updated: 2026-08-23
 
 This checklist is the release gate for turning the current
-`codex/codex-hermes-gap-closure` branch into a commercial deployment release
+`codex/commercial-delivery` branch into a commercial deployment release
 candidate. It is intentionally stricter than the Codex/Hermes gap-closure
 matrix: repository evidence can show P0 closure, but commercial deployment also
 needs security, runtime, CI, documentation, and rollback proof.
@@ -21,7 +21,7 @@ needs security, runtime, CI, documentation, and rollback proof.
 
 ## Current Evidence Snapshot
 
-These checks were last verified locally on 2026-06-07:
+These checks were last verified locally on 2026-08-23:
 
 ```powershell
 python scripts\codex_hermes_gap_matrix.py --write-report
@@ -151,7 +151,7 @@ Observed status:
   release-owner review.
 - Doctor: pass/warn, with only optional channel/GitHub owner resources missing.
 - Diff whitespace check: clean.
-- RC aggregate test group: 299 passed.
+- RC aggregate test group: 417 passed.
 - RC runtime smoke unit tests: passed.
 - Docker Compose environment contract tests: passed.
 - GitHub issue-to-PR API/CLI/pipeline tests: passed.
@@ -168,7 +168,7 @@ Observed status:
 
 ## RC-S0 Source Control Gate
 
-- [x] Current branch identified: `codex/codex-hermes-gap-closure`.
+- [x] Current branch identified: `codex/commercial-delivery`.
 - [x] Dirty worktree inspected before release planning.
 - [x] Explicit staging manifest created: `docs/RC_STAGING_MANIFEST.md`.
 - [x] Pre-existing dirty files reviewed before staging.
@@ -225,10 +225,11 @@ Observed status:
   other owner gates.
 - [x] Add a release-owner checklist renderer for owner gates that records only
   env variable names, commands, evidence paths, and missing actions.
-- [x] Run one configured real provider smoke for the intended deployment
+- [ ] Run one configured real provider smoke for the intended deployment
   backend: OpenAI, Anthropic, DeepSeek, or local model. The provider response
   must contain the `xagent-rc-ok` sentinel recorded by `rc_external_smoke.py`.
-  Current local RC evidence uses Ollama at `http://127.0.0.1:11435` with
+  Historical local evidence from 2026-08-17 used Ollama at
+  `http://127.0.0.1:11435` with
   `qwen2.5:1.5b` after copying the selected model to the ASCII-only
   `D:\ollama-models` directory. The direct proof command
   `ollama run qwen2.5:1.5b "Reply with exactly: xagent-rc-ok"` returned
@@ -390,7 +391,7 @@ Runtime smoke evidence captured on 2026-06-06:
 - `scripts/rc_staging_plan.py` writes
   `.xagent_runtime/reports/rc-staging-plan.json` with exact `git add -- ...`
   commands split into safe chunks. It does not stage files. The latest dry-run
-  planned 363 files across 19 commands, and `git diff --cached --name-only`
+  planned 376 files across 19 commands, and `git diff --cached --name-only`
   remained empty.
 
 ## RC-S1 Evidence Notes
