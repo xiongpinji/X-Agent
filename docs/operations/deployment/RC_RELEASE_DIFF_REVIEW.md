@@ -81,8 +81,10 @@ Important correction made during review:
 - `docker-compose.yml` now passes aligned production-relevant `XAGENT_*`
   variables to API and worker services.
 - `.github/workflows/commercial-rc.yml` adds the targeted commercial RC gate:
-  frontend audit/type-check/build, doctor, gap matrix, release audit, runtime
-  smoke, sequential release evidence refresh, and Windows installer dry-run.
+  main frontend audit/type-check/build, mobile audit/tests/Android+iOS bundle,
+  extension audit/tests/package, desktop frontend/Rust tests/release build,
+  doctor, gap matrix, release audit, runtime smoke, sequential release evidence
+  refresh, and Windows installer dry-run.
 - `scripts/rc_release_audit.py` verifies candidate-file manifest coverage,
   excluded local artifacts, secret-like patterns, excluded references,
   local user/runtime path findings, and file hygiene findings such as NUL
@@ -117,11 +119,22 @@ git diff --check
 
 Observed local results:
 
-- RC release gate group: 418 passed.
+- Full backend mock-only suite: 7329 passed, 247 skipped; the real-provider trace
+  integration was deliberately excluded so this local gate could not spend or
+  mutate an external provider account.
+- RC release gate group: 418 passed before the cross-client CI contract was
+  added; the focused CI contract is now 13 passed.
 - Expanded RC, production deployment, configuration, and readiness group:
   477 passed.
 - Frontend Vitest: 106 passed; audit, type-check, and production build passed.
-- Release audit: passed, 377 candidate files, no secret-like findings, no
+- Mobile: clean install and audit reported 0 vulnerabilities; 13 tests, lint,
+  type-check, Expo compatibility, Android bundle, and iOS bundle passed.
+- Desktop: frontend audit/lint/type-check/3 tests/build, Rust 2 tests, and the
+  optimized Windows executable build passed. The local executable SHA-256 is
+  `0d531c0b592b3025362ee5cb04b98ef6a9e463ec35d475c89986a712d37b562d`.
+- Extension: audit reported 0 vulnerabilities; lint, 7 tests, coverage, and ZIP
+  packaging passed.
+- Release audit: passed, 378 candidate files, no secret-like findings, no
   manifest unsafe paths, no excluded-area references, no local user/runtime
   path findings, and no file hygiene findings.
 - Release diff review gate: passed.
@@ -152,4 +165,8 @@ These are not completed by local diff review:
 - `github_issue_to_pr_dry_run`
 - `github_issue_to_pr_execute_preflight`
 - `hosted_github_actions_commercial_rc`
+- Signed EAS Android/iOS builds and store submission acceptance.
+- Desktop installer/install-smoke on a clean Windows host.
+- Browser extension acceptance in a controlled Chromium profile and store
+  signing/submission.
 - Final staging review with `git diff --cached --stat`.

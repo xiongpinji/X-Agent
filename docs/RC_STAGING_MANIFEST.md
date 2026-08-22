@@ -300,6 +300,7 @@ tests/test_parallel_d1.py
 tests/test_postgres_memory.py
 tests/test_postgres_trace.py
 tests/test_rc_artifact_integrity_gate.py
+tests/test_rc_ci_contract.py
 tests/test_rc_install_release_gate.py
 tests/test_rc_owner_gate_runner.py
 tests/test_rc_release_audit.py

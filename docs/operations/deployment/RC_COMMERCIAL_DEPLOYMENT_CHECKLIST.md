@@ -392,7 +392,7 @@ Runtime smoke evidence captured on 2026-06-06:
 - `scripts/rc_staging_plan.py` writes
   `.xagent_runtime/reports/rc-staging-plan.json` with exact `git add -- ...`
   commands split into safe chunks. It does not stage files. The latest dry-run
-  planned 377 files across 19 commands, and `git diff --cached --name-only`
+  planned 378 files across 19 commands, and `git diff --cached --name-only`
   remained empty.
 
 ## RC-S1 Evidence Notes
@@ -481,11 +481,10 @@ Deployment gate evidence captured on 2026-08-23:
   categories. The GitHub issue-to-PR group is intentionally slow in this local
   profile and the full matrix took about 5 minutes 41 seconds.
 - `.github/workflows/commercial-rc.yml` now defines a focused commercial RC
-  workflow with Linux gap matrix, frontend audit/type-check/build, doctor,
-  runtime smoke, external readiness smoke, owner gate execution plan,
-  supply-chain gate, secrets readiness gate, source-bundle creation, artifact
-  integrity validation, install/release artifact gate, final RC gate, and
-  release receipt generation plus Windows installer dry-run jobs.
+  workflow with Linux gap matrix, main frontend, mobile, and extension gates;
+  doctor, runtime/external readiness smoke, owner gate execution plan,
+  supply-chain/secrets/source-bundle/artifact/final gates; and a Windows job for
+  desktop frontend, pinned Rust tests/release build, and installer dry-run.
   `scripts/rc_ci_contract.py`
   validates this workflow contract locally; the workflow still needs to be
   executed on GitHub Actions before final RC tagging.
