@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib
+import logging
 from typing import Any
 from uuid import uuid4
 
@@ -8,6 +9,7 @@ from backend.app.services.browser.playwright_client import (
     BrowserActionResult,
     BrowserSession,
     browser_client,
+    chromium_launch_options,
     resolve_screenshot_path,
 )
 from backend.app.services.observability.langfuse_client import langfuse_client
@@ -16,6 +18,8 @@ try:  # Playwright is an optional dependency
     from playwright.async_api import async_playwright
 except Exception:  # pragma: no cover - optional import
     async_playwright = None  # type: ignore[assignment]
+
+logger = logging.getLogger(__name__)
 
 
 class BrowserUnavailableError(RuntimeError):
@@ -45,7 +49,9 @@ class BrowserAutomation:
         if async_playwright is None:
             raise RuntimeError("Playwright is not installed")
         self._playwright = await async_playwright().start()
-        self._browser = await self._playwright.chromium.launch(headless=headless)
+        self._browser = await self._playwright.chromium.launch(
+            **chromium_launch_options(headless=headless)
+        )
         self._page = await self._browser.new_page()
         self._alive = True
 
@@ -151,7 +157,13 @@ class BrowserAutomationService:
         except Exception as exc:
             with contextlib.suppress(Exception):
                 await automation.close()
-            raise BrowserUnavailableError(f"Failed to launch browser backend: {exc}") from exc
+            logger.warning(
+                "browser backend launch failed error_type=%s",
+                type(exc).__name__,
+            )
+            raise BrowserUnavailableError(
+                "Browser automation backend unavailable."
+            ) from exc
         session = BrowserSession(
             session_id=str(uuid4()),
             trace_id=kwargs.get("trace_id"),

@@ -207,7 +207,7 @@ services:
       # 为无效配置已移除; celery 依赖在 requirements.txt 保留但标注未使用, 待真 Celery 返工。
       API_HOST: 0.0.0.0
       API_PORT: 8000
-      API_WORKERS: ${API_WORKERS:-4}
+      API_WORKERS: ${API_WORKERS:-1}
     ports:
       - "${API_PORT:-8000}:8000"
     depends_on:

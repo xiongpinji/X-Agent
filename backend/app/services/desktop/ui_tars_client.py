@@ -7,6 +7,8 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
+from backend.app.services.browser.playwright_client import chromium_launch_options
+
 try:
     from playwright.sync_api import sync_playwright
 except ImportError:  # pragma: no cover - optional runtime dependency
@@ -61,7 +63,9 @@ class UiTarsDesktopClient:
         if sync_playwright is not None and os.getenv("XAGENT_DESKTOP_REAL_BROWSER", "").lower() in {"1", "true", "yes"}:
             try:
                 playwright = sync_playwright().start()
-                browser = playwright.chromium.launch(headless=True)
+                browser = playwright.chromium.launch(
+                    **chromium_launch_options(headless=True)
+                )
                 context = browser.new_context()
                 page = context.new_page()
                 session.browser_context = context

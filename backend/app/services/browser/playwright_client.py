@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import os
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
@@ -11,6 +13,26 @@ try:
 except ImportError:  # pragma: no cover - optional runtime dependency
     Browser = BrowserContext = Page = object  # type: ignore[assignment]
     sync_playwright = None  # type: ignore[assignment]
+
+
+def chromium_launch_options(*, headless: bool) -> dict[str, Any]:
+    """Return the shared Playwright launch options for the runtime browser."""
+    options: dict[str, Any] = {"headless": headless}
+    executable_path = os.getenv("PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH", "").strip()
+    if executable_path:
+        options["executable_path"] = executable_path
+    return options
+
+
+def chromium_runtime_available() -> bool:
+    """Return whether an explicit executable is available to Playwright."""
+    executable_path = os.getenv("PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH", "").strip()
+    return bool(
+        sync_playwright is not None
+        and executable_path
+        and Path(executable_path).is_file()
+        and os.access(executable_path, os.X_OK)
+    )
 
 
 def resolve_screenshot_path(path: str) -> str:
@@ -109,6 +131,8 @@ class PlaywrightBrowserClient:
 
     @property
     def has_real_client(self) -> bool:
+        if not chromium_runtime_available():
+            return False
         try:
             return sync_playwright is not None and not asyncio.get_running_loop().is_running()
         except RuntimeError:
@@ -164,7 +188,9 @@ class PlaywrightBrowserClient:
                 loop_running = False
             if not loop_running:
                 playwright = sync_playwright().start()
-                browser = playwright.chromium.launch(headless=headless)
+                browser = playwright.chromium.launch(
+                    **chromium_launch_options(headless=headless)
+                )
                 context = browser.new_context()
                 page = context.new_page()
                 session.browser = browser

@@ -17,9 +17,10 @@ image:
 # API Server configuration
 api:
   enabled: true
-  replicas: 3
+  # Realtime and browser sessions are process-local in the first commercial release.
+  replicas: 1
   port: 8000
-  workers: 4
+  workers: 1
   # P1-16: 优雅停机 —— 宽限期(>=60) + preStop sleep 秒数
   terminationGracePeriodSeconds: 90
   preStopSleepSeconds: 10
@@ -31,9 +32,9 @@ api:
       memory: "1Gi"
       cpu: "500m"
   autoscaling:
-    enabled: true
-    minReplicas: 3
-    maxReplicas: 10
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 1
     targetCPUUtilizationPercentage: 70
     targetMemoryUtilizationPercentage: 80
 

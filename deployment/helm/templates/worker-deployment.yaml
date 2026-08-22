@@ -27,7 +27,7 @@ spec:
       - name: wait-for-schema
         image: "{{ include "xagent.imageRepository" . }}:{{ include "xagent.imageTag" . }}"
         imagePullPolicy: {{ .Values.image.pullPolicy }}
-        command: ["python", "-m", "backend.app.ops.migration_gate", "wait", "--timeout", {{ .Values.migration.timeoutSeconds | quote }}]
+        command: ["/usr/bin/python", "-m", "backend.app.ops.migration_gate", "wait", "--timeout", {{ .Values.migration.timeoutSeconds | quote }}]
         envFrom:
         - configMapRef:
             name: xagent-config
@@ -38,7 +38,7 @@ spec:
           value: "postgresql+asyncpg://$(DB_USER):$(DB_PASSWORD)@{{ include "xagent.postgresHost" . }}:{{ .Values.database.port }}/$(DB_NAME)"
         securityContext:
           runAsNonRoot: true
-          runAsUser: 1000
+          runAsUser: 65532
           allowPrivilegeEscalation: false
           capabilities:
             drop: ["ALL"]
@@ -64,17 +64,17 @@ spec:
         # P0-02: 后端无 Celery 应用, workflow_worker 是 asyncio 轮询 worker,
         # 直接以 python -m 启动; celery 依赖保留但未使用, 待真 Celery 返工
         command:
-        - python
+        - /usr/bin/python
         - -m
         - backend.app.workflow_worker
         lifecycle:
-          # P1-16: 镜像为 python:3.11-slim, 内置 /bin/sh 与 sleep
+          # Chainguard runtime has no shell; use the pinned Python entrypoint.
           preStop:
             exec:
               command:
-              - /bin/sh
+              - /usr/bin/python
               - -c
-              - sleep {{ .Values.worker.preStopSleepSeconds | default 10 }}
+              - "import time; time.sleep({{ .Values.worker.preStopSleepSeconds | default 10 }})"
         envFrom:
         - configMapRef:
             name: xagent-config
@@ -104,7 +104,7 @@ spec:
           {{- toYaml .Values.worker.resources | nindent 10 }}
         securityContext:
           runAsNonRoot: true
-          runAsUser: 1000
+          runAsUser: 65532
           allowPrivilegeEscalation: false
           readOnlyRootFilesystem: true
           capabilities:

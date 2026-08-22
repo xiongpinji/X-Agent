@@ -34,7 +34,6 @@ from backend.app.core.security import Principal
 from backend.app.core.tenant_isolation import TenantIsolationMiddleware
 from backend.app.dependencies import (
     get_audit_store,
-    get_browser_store,
     get_current_principal,
     get_memory,
     get_run_store,
@@ -1297,6 +1296,7 @@ async def ready() -> JSONResponse:
     so a dev box with no Qdrant/Langfuse still reports ready. `integrations`
     is a parallel name→bool map of whether each optional backend is real.
     """
+    from backend.app.services.browser.playwright_client import chromium_runtime_available
     from backend.app.services.memory.qdrant_client import vector_client
     from backend.app.services.observability.langfuse_client import langfuse_client
 
@@ -1323,7 +1323,7 @@ async def ready() -> JSONResponse:
     integrations: dict[str, bool] = {}
     for name, probe in (
         ("qdrant", lambda: vector_client.has_real_client),
-        ("browser", lambda: get_browser_store().has_real_client if hasattr(get_browser_store(), "has_real_client") else True),
+        ("browser", chromium_runtime_available),
         ("langfuse", lambda: langfuse_client.has_real_client),
     ):
         try:

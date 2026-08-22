@@ -243,7 +243,7 @@ async def create_browser_session(
         raise api_error(
             503,
             ErrorCode.INTERNAL_ERROR,
-            f"Browser automation backend unavailable: {exc}",
+            "Browser automation backend unavailable.",
         ) from exc
     return _session_response(session)
 

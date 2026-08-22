@@ -21,7 +21,7 @@ spec:
       - name: migrate
         image: "{{ include "xagent.imageRepository" . }}:{{ include "xagent.imageTag" . }}"
         imagePullPolicy: {{ .Values.image.pullPolicy }}
-        command: ["python", "-m", "backend.app.ops.migration_gate", "upgrade", "--timeout", {{ .Values.migration.timeoutSeconds | quote }}]
+        command: ["/usr/bin/python", "-m", "backend.app.ops.migration_gate", "upgrade", "--timeout", {{ .Values.migration.timeoutSeconds | quote }}]
         envFrom:
         - configMapRef:
             name: xagent-config
@@ -34,7 +34,7 @@ spec:
           value: "postgresql+asyncpg://$(DB_USER):$(DB_PASSWORD)@{{ include "xagent.postgresHost" . }}:{{ .Values.database.port }}/$(DB_NAME)"
         securityContext:
           runAsNonRoot: true
-          runAsUser: 1000
+          runAsUser: 65532
           allowPrivilegeEscalation: false
           readOnlyRootFilesystem: true
           capabilities:

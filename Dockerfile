@@ -71,7 +71,7 @@ ENV PYTHONUTF8=1 \
     PYTHONPATH=/install/lib/python3.14/site-packages \
     PATH=/install/bin:/usr/bin \
     PORT=8000 \
-    API_WORKERS=4
+    API_WORKERS=1
 
 USER 65532:65532
 

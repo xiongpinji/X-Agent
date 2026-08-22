@@ -19,7 +19,7 @@ metadata:
     app: xagent-api
     app.kubernetes.io/managed-by: argo-rollouts
 spec:
-  replicas: 3
+  replicas: 1
   revisionHistoryLimit: 5
   selector:
     matchLabels:
@@ -89,8 +89,8 @@ spec:
       terminationGracePeriodSeconds: 90
       securityContext:
         runAsNonRoot: true
-        runAsUser: 1000
-        fsGroup: 1000
+        runAsUser: 65532
+        fsGroup: 65532
       affinity:
         podAntiAffinity:
           preferredDuringSchedulingIgnoredDuringExecution:
@@ -111,9 +111,9 @@ spec:
           preStop:
             exec:
               command:
-              - /bin/sh
+              - /usr/bin/python
               - -c
-              - sleep 10
+              - "import time; time.sleep(10)"
         ports:
         - name: http
           containerPort: 8000
@@ -134,11 +134,11 @@ spec:
             configMapKeyRef:
               name: xagent-config
               key: XAGENT_DEBUG
-        - name: XAGENT_API_WORKERS
+        - name: API_WORKERS
           valueFrom:
             configMapKeyRef:
               name: xagent-config
-              key: XAGENT_API_WORKERS
+              key: API_WORKERS
         - name: XAGENT_JWT_SECRET
           valueFrom:
             secretKeyRef:

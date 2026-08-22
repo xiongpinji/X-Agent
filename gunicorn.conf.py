@@ -3,19 +3,18 @@
 Usage:
     gunicorn -c gunicorn.conf.py backend.app.main:app
 
-This configuration uses Uvicorn workers for async support and is optimized
-for production deployments with multiple workers.
+This configuration uses a Uvicorn worker for async support. The first commercial
+release stays single-process because realtime and browser sessions are process-local.
 """
 
-import multiprocessing
 import os
 
 # Server socket
 bind = os.getenv("GUNICORN_BIND", "0.0.0.0:8000")
 
 # Worker processes
-# Use 2-4 workers per CPU core for I/O-bound async workloads
-workers = int(os.getenv("API_WORKERS", multiprocessing.cpu_count() * 2 + 1))
+# Realtime and browser sessions are process-local in the first commercial release.
+workers = int(os.getenv("API_WORKERS", "1"))
 worker_class = "uvicorn.workers.UvicornWorker"
 worker_connections = 1000
 timeout = int(os.getenv("GUNICORN_TIMEOUT", 120))

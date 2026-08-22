@@ -38,21 +38,21 @@ spec:
       terminationGracePeriodSeconds: 90
       securityContext:
         runAsNonRoot: true
-        runAsUser: 1000
-        fsGroup: 1000
+        runAsUser: 65532
+        fsGroup: 65532
       containers:
       # P1-15: 容器名与稳定版一致(xagent-api), deploy-canary.sh/rollback.sh 按此名 set image
       - name: xagent-api
         image: xagent:canary
         imagePullPolicy: Always
         lifecycle:
-          # P1-16: 镜像为 python:3.11-slim, 内置 /bin/sh 与 sleep
+          # Chainguard runtime has no shell; use the pinned Python entrypoint.
           preStop:
             exec:
               command:
-              - /bin/sh
+              - /usr/bin/python
               - -c
-              - sleep 10
+              - "import time; time.sleep(10)"
         ports:
         - name: http
           containerPort: 8000

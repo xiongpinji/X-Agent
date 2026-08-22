@@ -125,6 +125,51 @@ def test_production_values_fail_closed_without_operator_configuration() -> None:
     assert "your-registry" not in text
 
 
+def test_process_local_api_state_is_never_split_across_workers_or_replicas() -> None:
+    dockerfile = _read("Dockerfile")
+    gunicorn = _read("gunicorn.conf.py")
+    compose = _read("docker-compose.yml")
+    values = yaml.safe_load(_read("deployment/helm/values.yaml"))
+    canary = next(yaml.safe_load_all(_read("deployment/canary/rollout.yaml")))
+
+    assert "API_WORKERS=1" in dockerfile
+    assert 'os.getenv("API_WORKERS", "1")' in gunicorn
+    assert "API_WORKERS: ${API_WORKERS:-1}" in compose
+    assert values["api"]["replicas"] == 1
+    assert values["api"]["workers"] == 1
+    assert values["api"]["autoscaling"]["enabled"] is False
+    assert canary["spec"]["replicas"] == 1
+    env_names = {
+        item["name"]
+        for item in canary["spec"]["template"]["spec"]["containers"][0]["env"]
+    }
+    assert "API_WORKERS" in env_names
+    assert "XAGENT_API_WORKERS" not in env_names
+
+
+def test_application_manifests_match_the_distroless_runtime_contract() -> None:
+    application_manifests = (
+        "deployment/helm/templates/api-deployment.yaml",
+        "deployment/helm/templates/worker-deployment.yaml",
+        "deployment/helm/templates/beat-deployment.yaml",
+        "deployment/helm/templates/migration-job.yaml",
+        "deployment/canary/canary-deployment.yaml",
+        "deployment/canary/rollout.yaml",
+    )
+    lifecycle_manifests = application_manifests[:3] + application_manifests[4:]
+
+    for path in application_manifests:
+        text = _read(path)
+        assert "runAsUser: 1000" not in text
+        assert "runAsUser: 65532" in text
+        assert 'command: ["python"' not in text
+
+    for path in lifecycle_manifests:
+        text = _read(path)
+        assert "/bin/sh" not in text
+        assert "/usr/bin/python" in text
+
+
 def test_chart_requires_external_endpoints_image_ingress_and_existing_secret() -> None:
     helpers = _read("deployment/helm/templates/_helpers.tpl")
     secret = _read("deployment/helm/templates/secret.yaml")
