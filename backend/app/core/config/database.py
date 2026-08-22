@@ -125,12 +125,17 @@ class DatabaseConfig(BaseConfig):
         """Validate database URL format."""
         if not v:
             raise ValueError("database_url cannot be empty")
-        if not any(v.startswith(prefix) for prefix in ["sqlite://", "postgresql://", "mysql://", "mongodb://"]):
+        scheme, separator, _remainder = v.partition("://")
+        base_scheme = scheme.split("+", 1)[0].lower()
+        if not separator or base_scheme not in {"sqlite", "postgresql", "mysql", "mongodb"}:
             raise ValueError(
                 "database_url must start with a valid scheme: "
                 "sqlite://, postgresql://, mysql://, or mongodb://"
             )
         return v
+
+    def _base_scheme(self) -> str:
+        return self.database_url.partition("://")[0].split("+", 1)[0].lower()
 
     def get_database_url(self) -> str:
         """Get the database URL, expanding relative paths for SQLite."""
@@ -144,12 +149,12 @@ class DatabaseConfig(BaseConfig):
 
     def is_sqlite(self) -> bool:
         """Check if using SQLite backend."""
-        return self.database_url.startswith("sqlite://")
+        return self._base_scheme() == "sqlite"
 
     def is_postgresql(self) -> bool:
         """Check if using PostgreSQL backend."""
-        return self.database_url.startswith("postgresql://")
+        return self._base_scheme() == "postgresql"
 
     def is_mysql(self) -> bool:
         """Check if using MySQL backend."""
-        return self.database_url.startswith("mysql://")
+        return self._base_scheme() == "mysql"

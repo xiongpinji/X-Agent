@@ -1314,7 +1314,11 @@ async def ready() -> JSONResponse:
             getter()
             components[name] = "ok"
         except Exception as exc:
-            logger.warning("readiness check failed for %s: %s", name, exc)
+            logger.warning(
+                "readiness check failed for %s error_type=%s",
+                name,
+                type(exc).__name__,
+            )
             components[name] = "error"
             all_ok = False
 
@@ -1336,7 +1340,11 @@ async def ready() -> JSONResponse:
         try:
             integrations[name] = bool(probe())
         except Exception as exc:
-            logger.warning("readiness integration probe failed for %s: %s", name, exc)
+            logger.warning(
+                "readiness integration probe failed for %s error_type=%s",
+                name,
+                type(exc).__name__,
+            )
             integrations[name] = False
     components["qdrant"] = "ok" if integrations["qdrant"] else "degraded"
     components["browser"] = "ok" if integrations["browser"] else "degraded"
