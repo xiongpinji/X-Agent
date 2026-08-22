@@ -51,12 +51,13 @@ gzip -t "$TEMP_FILE"
 mv -- "$TEMP_FILE" "$BACKUP_FILE"
 trap - EXIT
 
-mapfile -t OLD_BACKUPS < <(
-  find "$BACKUP_DIR" -maxdepth 1 -type f -name 'backup-*.sql.gz' -printf '%T@ %p\n' \
-    | sort -rn \
-    | tail -n "+$((RETENTION_COUNT + 1))" \
-    | cut -d' ' -f2-
-)
+shopt -s nullglob
+BACKUP_FILES=("$BACKUP_DIR"/backup-*.sql.gz)
+OLD_BACKUPS=()
+if (( ${#BACKUP_FILES[@]} > RETENTION_COUNT )); then
+  mapfile -t SORTED_BACKUPS < <(printf '%s\n' "${BACKUP_FILES[@]}" | sort -r)
+  OLD_BACKUPS=("${SORTED_BACKUPS[@]:RETENTION_COUNT}")
+fi
 for old_backup in "${OLD_BACKUPS[@]}"; do
   rm -f -- "$old_backup"
 done

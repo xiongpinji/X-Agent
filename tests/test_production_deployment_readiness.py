@@ -380,6 +380,8 @@ def test_backup_and_restore_have_non_mutating_dry_run_contract(tmp_path: Path) -
         assert "XAGENT_DATABASE_PASSWORD" in script
         assert "must be set" in script
     assert "XAGENT_RESTORE_CONFIRMATION" in restore
+    assert "find \"$BACKUP_DIR\"" not in backup
+    assert 'BACKUP_FILES=("$BACKUP_DIR"/backup-*.sql.gz)' in backup
     assert "gzip -t" in restore
     assert "pg_restore --list" in restore
     assert "--exit-on-error" in restore
