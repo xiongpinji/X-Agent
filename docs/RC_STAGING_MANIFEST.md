@@ -19,6 +19,7 @@ Dockerfile
 backend/app/api/agents.py
 backend/app/api/artifacts.py
 backend/app/api/auth.py
+backend/app/api/browser.py
 backend/app/api/chat_history.py
 backend/app/api/collaboration.py
 backend/app/api/feedback.py
@@ -64,11 +65,17 @@ backend/app/dependencies.py
 backend/app/main.py
 backend/app/models/feedback.py
 backend/app/models/rate_limiter.py
+backend/app/services/browser/automation.py
+backend/app/services/browser/playwright_client.py
+backend/app/services/browser/pool.py
+backend/app/services/desktop/ui_tars_client.py
 backend/app/services/memory/qdrant_client.py
 backend/app/services/search/cache.py
 backend/app/settings.py
 deployment/backup/Dockerfile
 deployment/backup/backup.sh
+deployment/canary/canary-deployment.yaml
+deployment/canary/rollout.yaml
 deployment/helm/README.md
 deployment/helm/templates/_helpers.tpl
 deployment/helm/templates/api-deployment.yaml
@@ -103,6 +110,7 @@ desktop/src/commands/mod.rs
 desktop/src/main.rs
 desktop/src/state.rs
 desktop/tauri.conf.json
+docker-compose.yml
 docs/RC_STAGING_MANIFEST.md
 docs/operations/deployment/COMMERCIAL_DEPLOYMENT_RUNBOOK.md
 docs/operations/deployment/DISASTER_RECOVERY.md
@@ -222,6 +230,7 @@ frontend/src/utils/performanceOptimizer.ts
 frontend/src/utils/pushNotificationManager.ts
 frontend/src/utils/pwaManager.ts
 frontend/vite.config.ts
+gunicorn.conf.py
 mobile/app.json
 mobile/jest.config.js
 mobile/jest.setup.js
@@ -295,6 +304,7 @@ tests/test_rc_release_audit.py
 tests/test_rc_source_bundle.py
 tests/test_rc_staging_plan.py
 tests/test_rc_supply_chain_gate.py
+tests/test_ready_checks.py
 tests/test_report_generator.py
 tests/test_settings_production_guard_p119.py
 tests/unit/test_api_batch3_part2.py
@@ -355,6 +365,7 @@ tests/test_agent_stream_api.py
 tests/test_artifact_tenant_isolation.py
 tests/test_backup_scheduler_api.py
 tests/test_billable_orchestration_boundaries.py
+tests/test_browser_runtime_contract.py
 tests/test_chat_history_persistence.py
 tests/test_chat_history_tenant_isolation.py
 tests/test_commercial_sql_stores.py
