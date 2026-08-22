@@ -118,7 +118,7 @@ def test_ci_contract_requires_desktop_commercial_gate(tmp_path: Path) -> None:
 def test_ci_contract_requires_extension_commercial_gate(tmp_path: Path) -> None:
     workflow = _copy_workflow(tmp_path)
     workflow.write_text(
-        workflow.read_text(encoding="utf-8").replace("npm run verify", ""),
+        workflow.read_text(encoding="utf-8").replace("npm run browser:acceptance", ""),
         encoding="utf-8",
     )
     report = run_contract(workflow)

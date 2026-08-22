@@ -82,7 +82,8 @@ Important correction made during review:
   variables to API and worker services.
 - `.github/workflows/commercial-rc.yml` adds the targeted commercial RC gate:
   main frontend audit/type-check/build, mobile audit/tests/Android+iOS bundle,
-  extension audit/tests/package, desktop frontend/Rust tests/release build,
+  extension audit/tests/controlled-Chromium acceptance/package, desktop
+  frontend/Rust tests/release build,
   doctor, gap matrix, release audit, runtime smoke, sequential release evidence
   refresh, and Windows installer dry-run.
 - `scripts/rc_release_audit.py` verifies candidate-file manifest coverage,
@@ -132,8 +133,8 @@ Observed local results:
 - Desktop: frontend audit/lint/type-check/3 tests/build, Rust 2 tests, and the
   optimized Windows executable build passed. The local executable SHA-256 is
   `0d531c0b592b3025362ee5cb04b98ef6a9e463ec35d475c89986a712d37b562d`.
-- Extension: audit reported 0 vulnerabilities; lint, 7 tests, coverage, and ZIP
-  packaging passed.
+- Extension: audit reported 0 vulnerabilities; lint, 7 tests, coverage, real
+  isolated Playwright Chromium popup acceptance, and ZIP packaging passed.
 - Release audit: passed, 378 candidate files, no secret-like findings, no
   manifest unsafe paths, no excluded-area references, no local user/runtime
   path findings, and no file hygiene findings.
@@ -167,6 +168,5 @@ These are not completed by local diff review:
 - `hosted_github_actions_commercial_rc`
 - Signed EAS Android/iOS builds and store submission acceptance.
 - Desktop installer/install-smoke on a clean Windows host.
-- Browser extension acceptance in a controlled Chromium profile and store
-  signing/submission.
+- Browser extension store signing/submission and target-store acceptance.
 - Final staging review with `git diff --cached --stat`.

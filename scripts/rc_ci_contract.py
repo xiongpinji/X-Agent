@@ -130,12 +130,14 @@ REQUIRED_CONTAINS: tuple[Requirement, ...] = (
     ),
     Requirement(
         id="extension_client_gate",
-        description="Browser extension dependencies, audit, tests, and packaged artifact are gated.",
+        description="Browser extension dependencies, audit, tests, real Chromium acceptance, and package are gated.",
         tokens=(
             "Install extension dependencies",
             "Extension audit, tests, and package",
             "working-directory: extension",
             "npm run verify",
+            "npx playwright-core install --with-deps chromium",
+            "npm run browser:acceptance",
             "extension/dist/x-agent-extension.zip",
         ),
     ),
