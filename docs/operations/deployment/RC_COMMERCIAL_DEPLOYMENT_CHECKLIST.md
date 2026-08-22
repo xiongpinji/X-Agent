@@ -151,7 +151,8 @@ Observed status:
   release-owner review.
 - Doctor: pass/warn, with only optional channel/GitHub owner resources missing.
 - Diff whitespace check: clean.
-- RC aggregate test group: 417 passed.
+- RC aggregate test group: 418 passed; the expanded final deployment,
+  configuration, and readiness group passed 477 tests.
 - RC runtime smoke unit tests: passed.
 - Docker Compose environment contract tests: passed.
 - GitHub issue-to-PR API/CLI/pipeline tests: passed.
