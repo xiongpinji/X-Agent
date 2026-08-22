@@ -43,10 +43,10 @@ def test_database_config_accepts_async_driver_urls(database_url: str, backend: s
 
 
 def test_ready_logs_only_the_component_error_type(monkeypatch, caplog) -> None:
-    secret = "private-database-password"
+    sensitive_marker = "SENSITIVE_DB_MARKER_7F3A"
 
     def fail_audit_store():
-        raise RuntimeError(f"postgresql+asyncpg://user:{secret}@database.internal/xagent")
+        raise RuntimeError(f"postgresql+asyncpg://user:{sensitive_marker}@database.internal/xagent")
 
     monkeypatch.setattr(main_module, "get_audit_store", fail_audit_store)
 
@@ -56,7 +56,7 @@ def test_ready_logs_only_the_component_error_type(monkeypatch, caplog) -> None:
     assert response.status_code == 503
     assert response.json()["components"]["audit"] == "error"
     assert "RuntimeError" in caplog.text
-    assert secret not in caplog.text
+    assert sensitive_marker not in caplog.text
 
 
 def test_ready_degrades_when_the_qdrant_probe_cannot_connect(monkeypatch) -> None:
