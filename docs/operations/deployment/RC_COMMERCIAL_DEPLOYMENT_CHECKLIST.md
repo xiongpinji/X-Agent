@@ -455,10 +455,16 @@ Security and supply-chain evidence captured on 2026-06-06:
   variables.
 - [x] Rollback path references existing deployment rollback scripts or a tested
   manual fallback.
+- [x] Isolated PostgreSQL drill completed: verified pre-migration backup,
+  production-gated upgrade to `0002_commercial_schema`, post-migration backup,
+  destructive mutation, explicitly confirmed restore, and restored-data/schema
+  checks. The drill used only disposable local resources.
+- [ ] Designated previous application image passes a real staging Helm/traffic
+  rollback against the current schema and production database URL form.
 
 ## RC-S3 Evidence Notes
 
-Deployment gate evidence captured on 2026-06-06:
+Deployment gate evidence captured on 2026-08-23:
 
 - `powershell -ExecutionPolicy Bypass -File scripts\install-xagent.ps1 -DryRun`
   printed the expected venv, editable install, frontend install/type-check, and

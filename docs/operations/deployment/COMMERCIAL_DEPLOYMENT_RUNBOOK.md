@@ -353,6 +353,11 @@ required, stop writes, validate the selected backup, set
 `XAGENT_RESTORE_CONFIRMATION` to the exact target database name, and use
 `deployment/scripts/restore-database.sh` under an approved recovery procedure.
 
+Before naming an application image as the rollback target, run it against the
+current schema and the configured `XAGENT_DATABASE_URL` form (including
+`postgresql+asyncpg://` when used by Compose or Helm). An arbitrary older image
+is not a valid rollback target merely because Helm can select it.
+
 ## 8. External Integration Acceptance
 
 Before enabling an integration for a customer:
