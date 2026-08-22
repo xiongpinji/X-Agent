@@ -22,15 +22,10 @@ RUN npm run build
 # ------------------------------------------------------------------------------
 # Stage 2: Builder — install Python dependencies into isolated prefix
 # ------------------------------------------------------------------------------
-FROM python:3.11-slim@sha256:a630a63cdb314e2d138a2fca3e375e319e8568346ffafac5b980f888630ac4f1 AS builder
+FROM cgr.dev/chainguard/python:latest-dev@sha256:e80d78c70f4d71290b8ea7adbe2b510a14b0fa87f422be76d0d7c76b2e0fd9f7 AS builder
 
+USER root
 WORKDIR /build
-
-# Build-time system deps (compiled C extensions, libpq headers)
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    libpq-dev \
-    && rm -rf /var/lib/apt/lists/*
 
 # Install Python packages into /install (isolated prefix)
 COPY requirements-lock.txt pyproject.toml ./
@@ -41,54 +36,50 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 COPY backend/ ./backend/
 COPY cli/ ./cli/
 RUN --mount=type=cache,target=/root/.cache/pip \
-    PYTHONPATH=/install/lib/python3.11/site-packages \
+    PYTHONPATH=/install/lib/python3.14/site-packages \
     pip install --prefix=/install --no-deps --no-build-isolation .
+
+RUN mkdir -p /runtime-root/logs /runtime-root/data \
+    && chown -R 65532:65532 /runtime-root
 
 # ------------------------------------------------------------------------------
 # Stage 3: Runtime — minimal production image
 # ------------------------------------------------------------------------------
-FROM python:3.11-slim@sha256:a630a63cdb314e2d138a2fca3e375e319e8568346ffafac5b980f888630ac4f1 AS runtime
-
-# Runtime system deps only (curl for healthcheck, ca-certificates for TLS)
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl \
-    ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
-
-# Security: create non-root user
-RUN useradd -m -r -u 1000 xagent \
-    && mkdir -p /app/logs /app/data \
-    && chown -R xagent:xagent /app
+FROM cgr.dev/chainguard/python:latest@sha256:e15765ff7066a0eaf91e1b6fd5000c1bba47d62b9f9731f2da560711d910c4f3 AS runtime
 
 WORKDIR /app
 
 # Copy installed Python packages from builder
-COPY --from=builder /install /usr/local
+COPY --from=builder /install /install
+COPY --from=builder --chown=65532:65532 /runtime-root/ /app/
 
 # Copy application code
-COPY --chown=xagent:xagent backend/ ./backend/
-COPY --chown=xagent:xagent config/ ./config/
-COPY --chown=xagent:xagent gunicorn.conf.py ./
-COPY --chown=xagent:xagent pyproject.toml ./
+COPY --chown=65532:65532 backend/ ./backend/
+COPY --chown=65532:65532 config/ ./config/
+COPY --chown=65532:65532 gunicorn.conf.py ./
+COPY --chown=65532:65532 pyproject.toml ./
 
 # Copy frontend static HTML (served directly by FastAPI)
-COPY --chown=xagent:xagent frontend/*.html frontend/*.css ./frontend/
+COPY --chown=65532:65532 frontend/*.html frontend/*.css ./frontend/
 # Copy Vite build output (React SPA)
-COPY --from=frontend --chown=xagent:xagent /build/frontend/dist ./frontend/dist/
+COPY --from=frontend --chown=65532:65532 /build/frontend/dist ./frontend/dist/
 
 # Environment
 ENV PYTHONUTF8=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/install/lib/python3.14/site-packages \
+    PATH=/install/bin:/usr/bin \
     PORT=8000 \
     API_WORKERS=4
 
-USER xagent
+USER 65532:65532
 
 EXPOSE 8000
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD curl -f http://localhost:${PORT}/health || exit 1
+    CMD ["/usr/bin/python", "-c", "import os,urllib.request; urllib.request.urlopen(f'http://127.0.0.1:{os.environ.get(\"PORT\",\"8000\")}/health',timeout=5).read()"]
 
 # Production: gunicorn + uvicorn workers
-CMD ["gunicorn", "-c", "gunicorn.conf.py", "backend.app.main:app"]
+ENTRYPOINT ["/usr/bin/python"]
+CMD ["-m", "gunicorn", "-c", "gunicorn.conf.py", "backend.app.main:app"]

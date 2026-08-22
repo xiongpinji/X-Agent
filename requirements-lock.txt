@@ -29,10 +29,8 @@ anyio==4.14.2
     #   starlette
     #   watchfiles
 async-timeout==5.0.1
-    # via
-    #   asyncpg
-    #   redis
-asyncpg==0.29.0
+    # via redis
+asyncpg==0.31.0
     # via x-agent-core (pyproject.toml)
 attrs==26.1.0
     # via
@@ -91,7 +89,7 @@ frozenlist==1.8.0
     # via
     #   aiohttp
     #   aiosignal
-greenlet==3.1.1
+greenlet==3.5.5
     # via
     #   playwright
     #   sqlalchemy
@@ -183,7 +181,7 @@ packaging==24.0
     # via
     #   gunicorn
     #   langfuse
-playwright==1.48.0
+playwright==1.62.0
     # via x-agent-core (pyproject.toml)
 portalocker==2.10.1
     # via qdrant-client
@@ -225,7 +223,7 @@ pydantic-settings==2.14.2
     # via
     #   x-agent-core (pyproject.toml)
     #   mcp
-pyee==12.0.0
+pyee==13.0.1
     # via playwright
 pygments==2.20.0
     # via rich

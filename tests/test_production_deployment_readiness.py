@@ -417,7 +417,7 @@ def test_legacy_rollback_entrypoint_cannot_downgrade_the_database() -> None:
     assert "--database" not in legacy
 
 
-def test_production_dependency_lock_targets_linux_python_311() -> None:
+def test_production_dependency_lock_targets_supported_linux_runtimes() -> None:
     lock = _read("requirements-lock.txt")
     assert "--python-version 3.11" in lock
     assert "--python-platform linux" in lock
@@ -429,6 +429,9 @@ def test_production_dependency_lock_targets_linux_python_311() -> None:
     assert "\nauthlib==" in lock
     assert "\npsutil==" in lock
     assert "\ncroniter==" in lock
+    assert "\nasyncpg==0.31.0" in lock
+    assert "\ngreenlet==3.5.5" in lock
+    assert "\nplaywright==1.62.0" in lock
 
     dockerfile = _read("Dockerfile")
     requirements_copy = dockerfile.index("COPY requirements-lock.txt pyproject.toml ./")
@@ -436,7 +439,7 @@ def test_production_dependency_lock_targets_linux_python_311() -> None:
     source_copy = dockerfile.index("COPY backend/ ./backend/")
     assert requirements_copy < dependency_install < source_copy
     assert "--no-build-isolation" in dockerfile
-    assert "PYTHONPATH=/install/lib/python3.11/site-packages" in dockerfile
+    assert "PYTHONPATH=/install/lib/python3.14/site-packages" in dockerfile
     assert "pip install --no-cache-dir --upgrade" not in dockerfile
 
 
@@ -448,3 +451,23 @@ def test_production_container_builds_pin_every_base_image_by_digest() -> None:
         from_lines = [line for line in _read(path).splitlines() if line.startswith("FROM ")]
         assert from_lines
         assert all("@sha256:" in line for line in from_lines)
+
+
+def test_production_runtime_uses_cve_bounded_python_base() -> None:
+    dockerfile = _read("Dockerfile")
+    builder_base = (
+        "cgr.dev/chainguard/python:latest-dev@sha256:"
+        "e80d78c70f4d71290b8ea7adbe2b510a14b0fa87f422be76d0d7c76b2e0fd9f7"
+    )
+    runtime_base = (
+        "cgr.dev/chainguard/python:latest@sha256:"
+        "e15765ff7066a0eaf91e1b6fd5000c1bba47d62b9f9731f2da560711d910c4f3"
+    )
+
+    assert f"FROM {builder_base} AS builder" in dockerfile
+    assert f"FROM {runtime_base} AS runtime" in dockerfile
+    assert "apt-get" not in dockerfile
+    assert "apk add" not in dockerfile
+    assert "PYTHONPATH=/install/lib/python3.14/site-packages" in dockerfile
+    assert 'ENTRYPOINT ["/usr/bin/python"]' in dockerfile
+    assert "USER 65532:65532" in dockerfile
