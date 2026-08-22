@@ -75,8 +75,14 @@ REQUIRED_CONTAINS: tuple[Requirement, ...] = (
     ),
     Requirement(
         id="runtime_versions",
-        description="Workflow pins Python 3.11 and Node 20 setup.",
-        tokens=('PYTHON_VERSION: "3.11"', 'NODE_VERSION: "20"', "actions/setup-python@v5", "actions/setup-node@v4"),
+        description="Workflow pins Python, Node, and Rust versions used by the commercial clients.",
+        tokens=(
+            'PYTHON_VERSION: "3.11"',
+            'NODE_VERSION: "24.15.0"',
+            'RUST_VERSION: "1.95.0"',
+            "actions/setup-python@v5",
+            "actions/setup-node@v4",
+        ),
     ),
     Requirement(
         id="backend_install",
@@ -92,6 +98,46 @@ REQUIRED_CONTAINS: tuple[Requirement, ...] = (
         id="frontend_audit_typecheck_build",
         description="Frontend audit, type-check, and build gates are present.",
         tokens=("npm audit", "npm run type-check", "npm run build"),
+    ),
+    Requirement(
+        id="mobile_client_gate",
+        description="Mobile dependencies, security audit, tests, compatibility, and Android/iOS bundles are gated.",
+        tokens=(
+            "Install mobile dependencies",
+            "Mobile audit, tests, and bundles",
+            "working-directory: mobile",
+            "npx expo install --check",
+            "npm test -- --runInBand",
+            "npx expo export --platform android",
+            "npx expo export --platform ios",
+            ".xagent_runtime/mobile-export-android",
+            ".xagent_runtime/mobile-export-ios",
+        ),
+    ),
+    Requirement(
+        id="desktop_client_gate",
+        description="Desktop frontend and pinned Rust tests/build are gated on Windows.",
+        tokens=(
+            "Install desktop frontend dependencies",
+            "Desktop frontend gate",
+            "Desktop Rust gate",
+            "working-directory: desktop/frontend",
+            "rustup toolchain install ${{ env.RUST_VERSION }} --profile minimal",
+            "cargo test --locked",
+            "cargo build --release --locked",
+            "desktop/target/release/x-agent-desktop.exe",
+        ),
+    ),
+    Requirement(
+        id="extension_client_gate",
+        description="Browser extension dependencies, audit, tests, and packaged artifact are gated.",
+        tokens=(
+            "Install extension dependencies",
+            "Extension audit, tests, and package",
+            "working-directory: extension",
+            "npm run verify",
+            "extension/dist/x-agent-extension.zip",
+        ),
     ),
     Requirement(
         id="static_release_checks",

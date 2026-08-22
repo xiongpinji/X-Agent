@@ -12,7 +12,8 @@ permissions:
 
 env:
   PYTHON_VERSION: "3.11"
-  NODE_VERSION: "20"
+  NODE_VERSION: "24.15.0"
+  RUST_VERSION: "1.95.0"
   XAGENT_QDRANT_URL: ""
   XAGENT_LLM_BACKEND: "mock"
   XAGENT_E2E: "0"
@@ -41,7 +42,10 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
-          cache-dependency-path: frontend/package-lock.json
+          cache-dependency-path: |
+            frontend/package-lock.json
+            extension/package-lock.json
+            mobile/package-lock.json
 
       - name: Install backend dependencies
         run: |
@@ -51,6 +55,14 @@ jobs:
 
       - name: Install frontend dependencies
         working-directory: frontend
+        run: npm ci
+
+      - name: Install extension dependencies
+        working-directory: extension
+        run: npm ci
+
+      - name: Install mobile dependencies
+        working-directory: mobile
         run: npm ci
 
       - name: Static release checks
@@ -65,6 +77,23 @@ jobs:
           npm audit --audit-level=moderate
           npm run type-check
           npm run build
+
+      - name: Extension audit, tests, and package
+        working-directory: extension
+        run: |
+          npm audit --audit-level=moderate
+          npm run verify
+
+      - name: Mobile audit, tests, and bundles
+        working-directory: mobile
+        run: |
+          npm audit --audit-level=moderate
+          npx expo install --check
+          npm test -- --runInBand
+          npm run lint
+          npm run type-check
+          npx expo export --platform android --output-dir ../.xagent_runtime/mobile-export-android
+          npx expo export --platform ios --output-dir ../.xagent_runtime/mobile-export-ios
 
       - name: Doctor
         run: python scripts/xagent_doctor.py --json
@@ -153,13 +182,16 @@ jobs:
             .xagent_runtime/release/*.zip
             .xagent_runtime/release/x-agent-commercial-rc-evidence-*.zip
             .xagent_runtime/release/*.zip.sha256
+            .xagent_runtime/mobile-export-android
+            .xagent_runtime/mobile-export-ios
             .xagent_runtime/smoke/rc-runtime-smoke.json
             .xagent_runtime/smoke/rc-*.log
+            extension/dist/x-agent-extension.zip
 
   commercial-rc-windows-installer:
     name: commercial-rc-windows-installer
     runs-on: windows-latest
-    timeout-minutes: 10
+    timeout-minutes: 30
 
     steps:
       - name: Checkout
@@ -167,6 +199,41 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: desktop/frontend/package-lock.json
+
+      - name: Install desktop frontend dependencies
+        working-directory: desktop/frontend
+        run: npm ci
+
+      - name: Desktop frontend gate
+        working-directory: desktop/frontend
+        run: |
+          npm audit --audit-level=moderate
+          npm run test:all
+
+      - name: Set up Rust
+        shell: pwsh
+        run: |
+          rustup toolchain install ${{ env.RUST_VERSION }} --profile minimal
+          rustup default ${{ env.RUST_VERSION }}
+
+      - name: Desktop Rust gate
+        working-directory: desktop
+        run: |
+          cargo test --locked
+          cargo build --release --locked
+
       - name: Windows installer dry-run
         shell: pwsh
         run: powershell -ExecutionPolicy Bypass -File scripts\install-xagent.ps1 -DryRun
+
+      - name: Upload desktop executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: x-agent-desktop-windows
+          path: desktop/target/release/x-agent-desktop.exe

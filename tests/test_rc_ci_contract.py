@@ -91,6 +91,42 @@ def test_ci_contract_requires_hosted_actions_head_sha_handoff_token(tmp_path: Pa
     assert any(finding.id == "owner_external_gate_command_contract" for finding in report.findings)
 
 
+def test_ci_contract_requires_mobile_commercial_gate(tmp_path: Path) -> None:
+    workflow = _copy_workflow(tmp_path)
+    workflow.write_text(
+        workflow.read_text(encoding="utf-8").replace("npx expo export --platform ios", ""),
+        encoding="utf-8",
+    )
+    report = run_contract(workflow)
+
+    assert report.status == "failed"
+    assert any(finding.id == "mobile_client_gate" for finding in report.findings)
+
+
+def test_ci_contract_requires_desktop_commercial_gate(tmp_path: Path) -> None:
+    workflow = _copy_workflow(tmp_path)
+    workflow.write_text(
+        workflow.read_text(encoding="utf-8").replace("cargo build --release --locked", ""),
+        encoding="utf-8",
+    )
+    report = run_contract(workflow)
+
+    assert report.status == "failed"
+    assert any(finding.id == "desktop_client_gate" for finding in report.findings)
+
+
+def test_ci_contract_requires_extension_commercial_gate(tmp_path: Path) -> None:
+    workflow = _copy_workflow(tmp_path)
+    workflow.write_text(
+        workflow.read_text(encoding="utf-8").replace("npm run verify", ""),
+        encoding="utf-8",
+    )
+    report = run_contract(workflow)
+
+    assert report.status == "failed"
+    assert any(finding.id == "extension_client_gate" for finding in report.findings)
+
+
 def test_ci_contract_requires_refresh_chain_execution_not_only_uploaded_report(tmp_path: Path) -> None:
     workflow = _copy_workflow(tmp_path)
     text = workflow.read_text(encoding="utf-8")
