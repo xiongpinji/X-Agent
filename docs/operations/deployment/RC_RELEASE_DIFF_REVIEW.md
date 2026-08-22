@@ -119,7 +119,7 @@ Observed local results:
 
 - RC release gate group: 417 passed.
 - Frontend Vitest: 106 passed; audit, type-check, and production build passed.
-- Release audit: passed, 376 candidate files, no secret-like findings, no
+- Release audit: passed, 377 candidate files, no secret-like findings, no
   manifest unsafe paths, no excluded-area references, no local user/runtime
   path findings, and no file hygiene findings.
 - Release diff review gate: passed.

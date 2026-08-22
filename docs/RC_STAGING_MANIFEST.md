@@ -38,6 +38,7 @@ backend/app/core/backup_encryption.py
 backend/app/core/backup_scheduler.py
 backend/app/core/cache.py
 backend/app/core/collaboration/store.py
+backend/app/core/config/database.py
 backend/app/core/contracts.py
 backend/app/core/feature_flags.py
 backend/app/core/feedback_store_file.py
