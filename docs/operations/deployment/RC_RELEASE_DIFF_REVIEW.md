@@ -1,8 +1,8 @@
 # X-Agent Commercial RC Diff Review
 
-Last updated: 2026-06-06
+Last updated: 2026-08-23
 
-Branch: `codex/codex-hermes-gap-closure`
+Branch: `codex/commercial-delivery`
 
 This review covers the current commercial RC candidate file set listed in
 `docs/RC_STAGING_MANIFEST.md`. No files have been staged as part of this review.
@@ -91,6 +91,12 @@ Important correction made during review:
   order so downstream gates do not read half-written upstream JSON.
 - `scripts/rc_runtime_smoke.py` starts backend + Vite and validates health,
   readiness, `/chat`, workflow-chat, and proxied workbench.
+- The commercial runtime image runs as UID `65532` with one API worker, and its
+  High/Critical image vulnerability scan is clean. Browser automation remains
+  explicitly degraded unless an operator supplies a separately controlled
+  Chromium executable; the rejected public Chromium build is not bundled.
+- `/ready` now probes Qdrant connectivity instead of treating construction of a
+  client object as proof that Qdrant is reachable.
 
 ## Evidence
 
@@ -99,7 +105,7 @@ Latest local review evidence:
 ```powershell
 python -m pytest tests/test_rc_runtime_smoke.py tests/test_rc_external_smoke.py tests/test_docker_compose_env_contract.py tests/test_rc_release_audit.py tests/test_rc_release_diff_review_gate.py tests/test_rc_deployment_docs_gate.py tests/test_rc_ci_contract.py tests/test_rc_evidence_pack.py tests/test_rc_refresh_release_chain.py tests/test_rc_owner_gate_plan.py tests/test_rc_owner_env_template.py tests/test_rc_owner_gate_checklist.py tests/test_rc_install_release_gate.py tests/test_rc_supply_chain_gate.py tests/test_rc_secrets_gate.py tests/test_rc_artifact_integrity_gate.py tests/test_rc_final_gate.py tests/test_rc_release_receipt.py tests/test_rc_source_bundle.py tests/test_rc_staging_plan.py tests/test_codex_hermes_gap_matrix.py -o addopts="" -p no:cov -p no:cacheprovider -q
 python scripts\rc_release_audit.py
-python scripts\rc_refresh_release_chain.py --provider ollama --ollama-model qwen2.5:1.5b --ollama-base-url http://localhost:11434
+python scripts\rc_refresh_release_chain.py --provider mock
 python scripts\rc_release_diff_review_gate.py
 python scripts\codex_hermes_gap_matrix.py --write-report
 python scripts\rc_runtime_smoke.py
@@ -111,8 +117,9 @@ git diff --check
 
 Observed local results:
 
-- RC release gate group: 299 passed.
-- Release audit: passed, 363 candidate files, no secret-like findings, no
+- RC release gate group: 417 passed.
+- Frontend Vitest: 106 passed; audit, type-check, and production build passed.
+- Release audit: passed, 374 candidate files, no secret-like findings, no
   manifest unsafe paths, no excluded-area references, no local user/runtime
   path findings, and no file hygiene findings.
 - Release diff review gate: passed.
@@ -120,9 +127,8 @@ Observed local results:
 - Runtime smoke: passed.
 - Frontend audit/type-check/build: passed.
 - Diff whitespace check: clean.
-- Provider owner gate: not verified in the current local evidence. The latest
-  explicit Ollama attempt uses `qwen2.5:1.5b` at `http://localhost:11434` and is
-  skipped with an HTTP 500 model-load failure.
+- Provider owner gate: not verified in the current evidence; this refresh uses
+  the mock backend and does not make a real or paid provider request.
 
 ## Explicit Non-Staged / Excluded Files
 
@@ -141,7 +147,6 @@ These are not completed by local diff review:
 
 - Owner-generated production secrets and owner approval of secret handling.
 - `provider`
-- `feishu_webhook_contract`
 - `github_issue_to_pr_dry_run`
 - `github_issue_to_pr_execute_preflight`
 - `hosted_github_actions_commercial_rc`

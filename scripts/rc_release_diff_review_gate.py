@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -253,8 +254,8 @@ def _review_evidence_freshness_check(review_text: str, candidate_count: int | No
         problems.append("candidate count is unavailable")
     elif required not in review_text:
         problems.append(f"review observed evidence must contain: {required}")
-    stale_markers = ("74 candidate files", "75 candidate files", "100 candidate files")
-    stale = [marker for marker in stale_markers if marker in review_text and marker != f"{candidate_count} candidate files"]
+    observed_counts = {int(value) for value in re.findall(r"\b(\d+) candidate files\b", review_text)}
+    stale = [f"{value} candidate files" for value in sorted(observed_counts) if value != candidate_count]
     if stale:
         problems.append(f"review contains stale candidate-count markers: {', '.join(stale)}")
     return DiffReviewCheck(

@@ -142,6 +142,12 @@ def test_diff_review_gate_passes_for_consistent_review_evidence(tmp_path: Path) 
     assert {check.name: check.status for check in report.checks}["candidate_payload_consistency"] == "passed"
 
 
+def test_diff_review_gate_does_not_treat_a_count_suffix_as_stale(tmp_path: Path) -> None:
+    report = _gate(_reports(tmp_path, count=374))
+
+    assert report.status == "passed"
+
+
 def test_diff_review_gate_rejects_stale_review_candidate_count(tmp_path: Path) -> None:
     paths = _reports(tmp_path, count=101)
     _write_review(paths["review"], count=74)
