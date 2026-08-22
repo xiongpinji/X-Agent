@@ -267,6 +267,7 @@ scripts/rc_ci_contract.py
 scripts/rc_final_gate.py
 scripts/rc_install_release_gate.py
 scripts/rc_release_audit.py
+scripts/rc_release_diff_review_gate.py
 scripts/rc_release_receipt.py
 scripts/rc_source_bundle.py
 scripts/rc_staging_plan.py
@@ -301,6 +302,7 @@ tests/test_rc_artifact_integrity_gate.py
 tests/test_rc_install_release_gate.py
 tests/test_rc_owner_gate_runner.py
 tests/test_rc_release_audit.py
+tests/test_rc_release_diff_review_gate.py
 tests/test_rc_source_bundle.py
 tests/test_rc_staging_plan.py
 tests/test_rc_supply_chain_gate.py
