@@ -1321,8 +1321,15 @@ async def ready() -> JSONResponse:
     # 可选服务集成：探针只读其连通性，不因缺失而 not_ready（dev 环境无 Qdrant/
     # Langfuse 也应 ready）。real backend → "ok"，内存回退 → "degraded"。
     integrations: dict[str, bool] = {}
+    try:
+        integrations["qdrant"] = bool(await vector_client.is_reachable())
+    except Exception as exc:
+        logger.warning(
+            "readiness integration probe failed for qdrant error_type=%s",
+            type(exc).__name__,
+        )
+        integrations["qdrant"] = False
     for name, probe in (
-        ("qdrant", lambda: vector_client.has_real_client),
         ("browser", chromium_runtime_available),
         ("langfuse", lambda: langfuse_client.has_real_client),
     ):

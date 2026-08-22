@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from typing import Any
 from uuid import uuid4
+
+import httpx
 
 try:
     from qdrant_client import QdrantClient
@@ -10,6 +13,8 @@ try:
 except ImportError:  # pragma: no cover - optional runtime dependency
     QdrantClient = None  # type: ignore[assignment]
     qmodels = None  # type: ignore[assignment]
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
@@ -26,6 +31,8 @@ class QdrantVectorClient:
 
     def __init__(self, url: str | None = None, api_key: str | None = None) -> None:
         self._collections: dict[str, list[VectorRecord]] = {}
+        self._url = url.rstrip("/") if url else None
+        self._api_key = api_key
         self._client = (
             QdrantClient(url=url, api_key=api_key)
             if QdrantClient is not None and url
@@ -35,6 +42,24 @@ class QdrantVectorClient:
     @property
     def has_real_client(self) -> bool:
         return self._client is not None
+
+    async def is_reachable(self) -> bool:
+        if self._client is None or self._url is None:
+            return False
+        headers = {"api-key": self._api_key} if self._api_key else {}
+        try:
+            async with httpx.AsyncClient(timeout=1.5, trust_env=False) as client:
+                response = await client.get(
+                    f"{self._url}/collections",
+                    headers=headers,
+                )
+            return response.status_code == 200
+        except Exception as exc:
+            logger.warning(
+                "qdrant readiness probe failed error_type=%s",
+                type(exc).__name__,
+            )
+            return False
 
     def ensure_collection(self, collection: str, vector_size: int = 1536) -> bool:
         if self._client is None or qmodels is None:

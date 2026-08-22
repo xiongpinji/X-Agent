@@ -1,3 +1,7 @@
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
+
+import pytest
 from fastapi.testclient import TestClient
 
 from backend.app.main import app
@@ -18,4 +22,59 @@ def test_ready_reports_browser_qdrant_and_observability_components() -> None:
 
 def test_real_client_status_accessors_exist() -> None:
     assert hasattr(vector_client, "has_real_client")
+    assert hasattr(vector_client, "is_reachable")
     assert hasattr(langfuse_client, "has_real_client")
+
+
+def test_ready_degrades_when_the_qdrant_probe_cannot_connect(monkeypatch) -> None:
+    probe = AsyncMock(return_value=False)
+    monkeypatch.setattr(vector_client, "is_reachable", probe, raising=False)
+
+    response = TestClient(app).get("/ready")
+
+    assert response.status_code in {200, 503}
+    assert response.json()["integrations"]["qdrant"] is False
+    assert response.json()["components"]["qdrant"] == "degraded"
+    probe.assert_awaited_once_with()
+
+
+@pytest.mark.asyncio
+async def test_qdrant_probe_uses_a_bounded_authenticated_http_request(monkeypatch) -> None:
+    from backend.app.services.memory import qdrant_client as client_module
+
+    captured: dict[str, object] = {}
+
+    class FakeAsyncClient:
+        def __init__(self, *, timeout: float, trust_env: bool) -> None:
+            captured["timeout"] = timeout
+            captured["trust_env"] = trust_env
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args: object) -> None:
+            return None
+
+        async def get(self, url: str, *, headers: dict[str, str]):
+            captured["url"] = url
+            captured["headers"] = headers
+            return SimpleNamespace(status_code=200)
+
+    monkeypatch.setattr(
+        client_module,
+        "httpx",
+        SimpleNamespace(AsyncClient=FakeAsyncClient),
+        raising=False,
+    )
+    client = client_module.QdrantVectorClient(
+        url="https://qdrant.internal/",
+        api_key="probe-key",
+    )
+
+    assert await client.is_reachable() is True
+    assert captured == {
+        "timeout": 1.5,
+        "trust_env": False,
+        "url": "https://qdrant.internal/collections",
+        "headers": {"api-key": "probe-key"},
+    }
