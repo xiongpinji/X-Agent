@@ -123,9 +123,11 @@ REQUIRED_CONTAINS: tuple[Requirement, ...] = (
             "Desktop Rust gate",
             "working-directory: desktop/frontend",
             "rustup toolchain install ${{ env.RUST_VERSION }} --profile minimal",
+            "cargo install tauri-cli --version 2.11.4 --locked",
             "cargo test --locked",
-            "cargo build --release --locked",
-            "desktop/target/release/x-agent-desktop.exe",
+            "cargo tauri build --ci",
+            "desktop/target/release/bundle/msi/*.msi",
+            "desktop/target/release/bundle/nsis/*-setup.exe",
         ),
     ),
     Requirement(

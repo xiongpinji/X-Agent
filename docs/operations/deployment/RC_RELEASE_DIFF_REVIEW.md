@@ -130,9 +130,12 @@ Observed local results:
 - Frontend Vitest: 106 passed; audit, type-check, and production build passed.
 - Mobile: clean install and audit reported 0 vulnerabilities; 13 tests, lint,
   type-check, Expo compatibility, Android bundle, and iOS bundle passed.
-- Desktop: frontend audit/lint/type-check/3 tests/build, Rust 2 tests, and the
-  optimized Windows executable build passed. The local executable SHA-256 is
-  `0d531c0b592b3025362ee5cb04b98ef6a9e463ec35d475c89986a712d37b562d`.
+- Desktop: frontend audit/lint/type-check/3 tests/build, Rust 2 tests, optimized
+  build, isolated-profile startup/shutdown smoke, MSI, and NSIS packaging
+  passed. MSI SHA-256 is
+  `4fb8a502c36833049397e399e8bd260ca82e4c4ccb5bc98ad5ef7b2d3dc79a40`;
+  NSIS SHA-256 is
+  `dd423061062b299b08810563968ecf76e1affb7dd2643efa91d91c066fef4467`.
 - Extension: audit reported 0 vulnerabilities; lint, 7 tests, coverage, real
   isolated Playwright Chromium popup acceptance, and ZIP packaging passed.
 - Release audit: passed, 378 candidate files, no secret-like findings, no

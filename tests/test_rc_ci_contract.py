@@ -106,7 +106,7 @@ def test_ci_contract_requires_mobile_commercial_gate(tmp_path: Path) -> None:
 def test_ci_contract_requires_desktop_commercial_gate(tmp_path: Path) -> None:
     workflow = _copy_workflow(tmp_path)
     workflow.write_text(
-        workflow.read_text(encoding="utf-8").replace("cargo build --release --locked", ""),
+        workflow.read_text(encoding="utf-8").replace("cargo tauri build --ci", ""),
         encoding="utf-8",
     )
     report = run_contract(workflow)

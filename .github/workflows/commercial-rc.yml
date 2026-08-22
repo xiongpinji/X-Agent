@@ -193,7 +193,7 @@ jobs:
   commercial-rc-windows-installer:
     name: commercial-rc-windows-installer
     runs-on: windows-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
 
     steps:
       - name: Checkout
@@ -223,19 +223,22 @@ jobs:
         run: |
           rustup toolchain install ${{ env.RUST_VERSION }} --profile minimal
           rustup default ${{ env.RUST_VERSION }}
+          cargo install tauri-cli --version 2.11.4 --locked
 
       - name: Desktop Rust gate
         working-directory: desktop
         run: |
           cargo test --locked
-          cargo build --release --locked
+          cargo tauri build --ci
 
       - name: Windows installer dry-run
         shell: pwsh
         run: powershell -ExecutionPolicy Bypass -File scripts\install-xagent.ps1 -DryRun
 
-      - name: Upload desktop executable
+      - name: Upload desktop installers
         uses: actions/upload-artifact@v4
         with:
           name: x-agent-desktop-windows
-          path: desktop/target/release/x-agent-desktop.exe
+          path: |
+            desktop/target/release/bundle/msi/*.msi
+            desktop/target/release/bundle/nsis/*-setup.exe

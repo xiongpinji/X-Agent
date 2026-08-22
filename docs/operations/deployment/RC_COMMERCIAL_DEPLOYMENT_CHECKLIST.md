@@ -484,7 +484,7 @@ Deployment gate evidence captured on 2026-08-23:
   workflow with Linux gap matrix, main frontend, mobile, and extension gates;
   doctor, runtime/external readiness smoke, owner gate execution plan,
   supply-chain/secrets/source-bundle/artifact/final gates; and a Windows job for
-  desktop frontend, pinned Rust tests/release build, and installer dry-run.
+  desktop frontend, pinned Rust tests, MSI/NSIS build, and installer dry-run.
   `scripts/rc_ci_contract.py`
   validates this workflow contract locally; the workflow still needs to be
   executed on GitHub Actions before final RC tagging.
