@@ -17,10 +17,11 @@
     "lint": "eslint . --ext .js",
     "lint:fix": "eslint . --ext .js --fix",
     "format": "prettier --write \"**/*.{js,json,css,html,md}\"",
-    "package": "zip -r x-agent-extension.zip . -x 'node_modules/*' '.git/*' 'tests/*' 'scripts/*' '*.md'",
+    "package": "node scripts/package.js",
     "clean": "rm -rf coverage/ x-agent-extension.zip"
   },
   "devDependencies": {
+    "@babel/preset-env": "^8.0.2",
     "eslint": "^8.50.0",
     "eslint-config-prettier": "^9.0.0",
     "eslint-plugin-prettier": "^5.0.0",
@@ -28,7 +29,6 @@
     "jest-environment-jsdom": "^29.7.0",
     "prettier": "^3.0.0"
   },
-  "dependencies": {},
   "engines": {
     "node": ">=16.0.0",
     "npm": ">=8.0.0"

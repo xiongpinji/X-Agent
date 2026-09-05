@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>X-Agent 设置</title>
+    <link rel="stylesheet" href="popup.css">
+    <style>
+        body {
+            width: 480px;
+            padding: 16px;
+        }
+        .options-section {
+            margin-bottom: 20px;
+        }
+        .hint {
+            font-size: 11px;
+            color: var(--text-secondary);
+            line-height: 1.6;
+        }
+        .status-line {
+            margin-top: 8px;
+            font-size: 12px;
+            min-height: 16px;
+        }
+        .status-line.ok { color: var(--secondary-color); }
+        .status-line.fail { color: var(--danger-color); }
+        .native-note {
+            padding: 10px;
+            border: 1px dashed var(--border-color);
+            border-radius: 6px;
+            background-color: var(--background-color);
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="logo">
+            <span class="logo-icon">⚡</span>
+            <span class="logo-text">X-Agent 设置</span>
+        </div>
+    </div>
+
+    <div class="options-section">
+        <h3 class="section-title">后端连接（直连模式）</h3>
+        <div class="backend-settings">
+            <label class="backend-field">
+                <span class="backend-label">后端地址 (Base URL)</span>
+                <input type="text" id="opt-backend-url" placeholder="http://localhost:8000">
+            </label>
+            <label class="backend-field">
+                <span class="backend-label">API Key (x-api-key 请求头)</span>
+                <input type="password" id="opt-api-key" placeholder="留空表示无需认证">
+            </label>
+            <label class="setting-item">
+                <input type="checkbox" id="opt-attach-page">
+                <span>对话时默认附带当前页面内容</span>
+            </label>
+            <label class="setting-item">
+                <input type="checkbox" id="opt-stream">
+                <span>默认使用流式输出 (SSE)</span>
+            </label>
+            <label class="backend-field">
+                <span class="backend-label">页面文本最大字符数</span>
+                <input type="number" id="opt-max-chars" min="500" max="50000" step="500">
+            </label>
+            <div class="backend-actions">
+                <button class="btn btn-primary" id="opt-save-btn">保存</button>
+                <button class="btn btn-secondary" id="opt-test-btn">测试连接</button>
+            </div>
+            <div class="status-line" id="opt-status"></div>
+            <p class="hint">
+                直连模式下，扩展通过 HTTP 直接访问 X-Agent 后端
+                （POST /api/v1/agents/run）。若后端开启了 API Key 或 CSRF 保护，
+                必须填写有效的 API Key 才能执行任务。
+            </p>
+        </div>
+    </div>
+
+    <div class="options-section">
+        <h3 class="section-title">桌面端 (Native Messaging)</h3>
+        <div class="native-note">
+            <p class="hint">
+                桌面端程序（com.xagent.extension）为可选组件：<strong>未安装时直连后端模式完全可用</strong>，
+                扩展不会因连接不到桌面端而报错。安装桌面端后，扩展会自动通过
+                native messaging 与之通信（页面自动化指令、会话同步等）。
+            </p>
+            <div class="status-line" id="opt-native-status">检测中…</div>
+        </div>
+    </div>
+
+    <script type="module" src="options.js"></script>
+</body>
+</html>

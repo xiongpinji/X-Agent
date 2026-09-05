@@ -14,6 +14,7 @@ from .skill_loader import (
     SKILL_ENTRYPOINT_CANDIDATES,
     SKILL_IMPLEMENTATION_CLASS,
     SkillLoader,
+    get_custom_skills_dir,
     get_default_skills_dirs,
 )
 from .skill_registry import SkillRegistry
@@ -27,5 +28,6 @@ __all__ = [
     "SkillMetadata",
     "SkillRegistry",
     "SkillResult",
+    "get_custom_skills_dir",
     "get_default_skills_dirs",
 ]

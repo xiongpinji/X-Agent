@@ -63,19 +63,31 @@ describe('Content Script Integration Tests', () => {
       recordingMode: false,
       actionHistory: [],
 
+      // Mirror content.js visibility heuristic (offsetParent is null for
+      // everything in jsdom and for position:fixed elements in Chrome).
+      isElementHidden: function(el) {
+        try {
+          if (el.hidden || el.getAttribute('aria-hidden') === 'true') return true;
+          const style = window.getComputedStyle(el);
+          return style.display === 'none' || style.visibility === 'hidden';
+        } catch {
+          return false;
+        }
+      },
+
       getElements: function(selector, includeHidden = false) {
         try {
           const elements = document.querySelectorAll(selector || '*');
           const result = [];
           elements.forEach((el, index) => {
-            if (!includeHidden && el.offsetParent === null) return;
+            if (!includeHidden && this.isElementHidden(el)) return;
             const refId = `ref_${++this.refCounter}`;
             this.elementRefs.set(refId, el);
             result.push({
               refId,
               tag: el.tagName,
               text: el.textContent?.substring(0, 100),
-              visible: el.offsetParent !== null
+              visible: !this.isElementHidden(el)
             });
           });
           return { success: true, elements: result, count: result.length };
@@ -498,9 +510,13 @@ describe('MCP Protocol Integration Tests', () => {
     await mcpClient.connect();
 
     const id1 = mcpClient.messageId;
-    await mcpClient.send({ type: 'test1' });
+    const p1 = mcpClient.send({ type: 'test1' });
+    mcpClient.pendingRequests.get(mcpClient.messageId).resolve({ success: true });
+    await p1;
     const id2 = mcpClient.messageId;
-    await mcpClient.send({ type: 'test2' });
+    const p2 = mcpClient.send({ type: 'test2' });
+    mcpClient.pendingRequests.get(mcpClient.messageId).resolve({ success: true });
+    await p2;
     const id3 = mcpClient.messageId;
 
     expect(id2).toBe(id1 + 1);

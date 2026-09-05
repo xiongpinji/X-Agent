@@ -4,7 +4,13 @@
  */
 
 export class MCPClient {
-  constructor() {
+  /**
+   * @param {object} [options]
+   * @param {boolean} [options.silent]       Suppress log/error spam when the
+   *   desktop app is simply not installed (direct-backend mode is the default).
+   * @param {boolean} [options.autoReconnect] Whether to retry after disconnects.
+   */
+  constructor(options = {}) {
     this.connected = false;
     this.port = null;
     this.messageId = 0;
@@ -13,11 +19,35 @@ export class MCPClient {
     this.reconnectAttempts = 0;
     this.maxReconnectAttempts = 5;
     this.reconnectDelay = 1000;
+    this.silent = options.silent === true;
+    this.autoReconnect = options.autoReconnect !== false;
+    this.gaveUp = false; // set when the native host is (likely) not installed
+  }
+
+  _log(...args) {
+    if (!this.silent) {
+      console.log(...args);
+    }
+  }
+
+  _warn(...args) {
+    if (!this.silent) {
+      console.warn(...args);
+    }
+  }
+
+  _error(...args) {
+    if (!this.silent) {
+      console.error(...args);
+    }
   }
 
   async connect() {
+    if (this.gaveUp) {
+      return false;
+    }
     try {
-      console.log('[X-Agent MCP] Attempting to connect...');
+      this._log('[X-Agent MCP] Attempting to connect...');
 
       // Try to connect to desktop app via native messaging
       this.port = chrome.runtime.connectNative('com.xagent.extension');
@@ -33,10 +63,11 @@ export class MCPClient {
       this.connected = true;
       this.reconnectAttempts = 0;
 
-      console.log('[X-Agent MCP] Connected successfully');
+      this._log('[X-Agent MCP] Connected successfully');
 
-      // Send handshake
-      await this.send({
+      // Fire-and-forget handshake: do not block (or fail) connect() while
+      // waiting for the desktop app to acknowledge.
+      this.send({
         type: 'initialize',
         version: '1.0.0',
         capabilities: [
@@ -48,12 +79,19 @@ export class MCPClient {
           'tab_management',
           'element_reference'
         ]
+      }).catch(() => {
+        // Handshake reply never arrived; connection stays best-effort.
       });
 
       return true;
     } catch (error) {
-      console.error('[X-Agent MCP] Connection failed:', error);
-      this.handleConnectionError();
+      // "Specified native host not found" => desktop app not installed.
+      // This is an expected state (direct-backend mode); degrade quietly.
+      this.connected = false;
+      this.port = null;
+      this.gaveUp = true;
+      this._warn('[X-Agent MCP] Native messaging host unavailable - desktop app not installed?');
+      this.emitEvent('connection_failed', { reason: 'native_host_unavailable' });
       return false;
     }
   }
@@ -297,23 +335,37 @@ export class MCPClient {
   }
 
   handleDisconnect() {
-    console.warn('[X-Agent MCP] Disconnected from desktop app');
+    const lastError = typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.lastError;
+    const hostMissing = lastError && /native host|not found|not installed/i.test(String(lastError.message || lastError));
     this.connected = false;
     this.port = null;
+
+    if (hostMissing) {
+      // Desktop app not installed: expected in direct-backend mode, do not spam.
+      this.gaveUp = true;
+      this.emitEvent('connection_failed', { reason: 'native_host_unavailable' });
+      return;
+    }
+
+    this._warn('[X-Agent MCP] Disconnected from desktop app');
 
     // Attempt to reconnect
     this.attemptReconnect();
   }
 
   handleConnectionError() {
-    console.error('[X-Agent MCP] Connection error');
     this.connected = false;
-    this.attemptReconnect();
+    if (this.autoReconnect) {
+      this.attemptReconnect();
+    }
   }
 
   attemptReconnect() {
+    if (!this.autoReconnect || this.gaveUp) {
+      return;
+    }
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      console.error('[X-Agent MCP] Max reconnection attempts reached');
+      this._error('[X-Agent MCP] Max reconnection attempts reached');
       this.emitEvent('connection_failed', {
         attempts: this.reconnectAttempts
       });
@@ -323,11 +375,11 @@ export class MCPClient {
     this.reconnectAttempts++;
     const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1);
 
-    console.log(`[X-Agent MCP] Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts})`);
+    this._log(`[X-Agent MCP] Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts})`);
 
     setTimeout(() => {
       this.connect().catch(error => {
-        console.error('[X-Agent MCP] Reconnection failed:', error);
+        this._error('[X-Agent MCP] Reconnection failed:', error);
       });
     }, delay);
   }
@@ -357,7 +409,7 @@ export class MCPClient {
       try {
         handler(data);
       } catch (error) {
-        console.error(`[X-Agent MCP] Error in event handler for ${event}:`, error);
+        this._error(`[X-Agent MCP] Error in event handler for ${event}:`, error);
       }
     });
   }

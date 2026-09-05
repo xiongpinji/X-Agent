@@ -5,6 +5,8 @@
 2. 高频模式自动生成 SkillDraft
 3. Curator 去重/质量门控
 4. 通过的候选存入技能库 (待人工 promote 或自动 promote)
+5. P2-12: promote 落盘 custom-skills/<name>/ + SkillLoader 热加载
+   + ToolRegistry 增量注册（最后一公里，见 promotion.py / mount_promoted_skills）
 
 设计原则:
 - best-effort: 沉淀失败不阻断主循环
@@ -18,13 +20,29 @@ import logging
 import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 from backend.app.core.skill_distillation.curator import SkillCurator
-from backend.app.core.skill_distillation.generator import SkillGenerator
+from backend.app.core.skill_distillation.generator import SkillDraft, SkillGenerator
 from backend.app.core.skill_distillation.harvester import PatternHarvester
+from backend.app.core.skill_distillation.promotion import (
+    sanitize_skill_name,
+    write_skill_package,
+)
 
 logger = logging.getLogger(__name__)
+
+
+def _skill_main_py_exists(safe_name: str, base_dir: str | Path | None) -> bool:
+    """检查技能包 main.py 是否已落盘（默认目录为项目 custom-skills/）。"""
+    if base_dir is not None:
+        skill_dir = Path(base_dir) / safe_name
+    else:
+        from backend.app.core.skills import get_custom_skills_dir
+
+        skill_dir = get_custom_skills_dir() / safe_name
+    return (skill_dir / "main.py").is_file()
 
 
 @dataclass
@@ -56,6 +74,7 @@ class SkillSedimentationEngine:
         max_skills: int = 200,
         similarity_threshold: float = 0.75,
         auto_promote: bool = False,
+        custom_skills_dir: str | Path | None = None,
     ):
         self._harvester = PatternHarvester(
             min_frequency=min_frequency,
@@ -69,6 +88,10 @@ class SkillSedimentationEngine:
         self._auto_promote = auto_promote
         self._events: list[SedimentationEvent] = []
         self._trajectory_buffer: list[list[dict[str, Any]]] = []
+        # P2-12: promote 落盘目录与热加载注册目标
+        self._custom_skills_dir = Path(custom_skills_dir) if custom_skills_dir else None
+        self._tool_registry: Any | None = None
+        self._mounted_versions: dict[str, int] = {}
 
     @property
     def curator(self) -> SkillCurator:
@@ -141,7 +164,7 @@ class SkillSedimentationEngine:
                 event.drafts_accepted += 1
                 event.skill_names.append(draft.name)
                 if self._auto_promote:
-                    self._curator.promote(draft.name)
+                    self.promote_skill(draft.name)
             elif status == "duplicate":
                 event.drafts_rejected_duplicate += 1
 
@@ -183,8 +206,109 @@ class SkillSedimentationEngine:
         return [s.to_dict() for s in skills]
 
     def promote_skill(self, name: str) -> bool:
-        """人工确认技能入库."""
-        return self._curator.promote(name)
+        """人工确认技能入库（P2-12: 同时落盘 custom-skills/<name>/）.
+
+        落盘失败返回 False 且技能保持 draft 状态——promote 的语义是
+        "可在磁盘上被 SkillLoader 加载"，写不进磁盘就不算 promote 成功。
+        """
+        draft = next((d for d in self._curator.list_all() if d.name == name), None)
+        if draft is None:
+            return False
+        try:
+            write_skill_package(draft, base_dir=self._custom_skills_dir)
+        except Exception as e:
+            logger.error("Skill promote disk-write failed for '%s': %s", name, e)
+            return False
+        if not self._curator.promote(name):
+            return False
+        self._register_in_evolution_engine(draft)
+        return True
+
+    def bind_tool_registry(self, tool_registry: Any) -> None:
+        """绑定 AgentLoop 的 ToolRegistry，供 mount_promoted_skills 增量注册。"""
+        self._tool_registry = tool_registry
+
+    async def mount_promoted_skills(
+        self,
+        tool_registry: Any | None = None,
+        loader: Any | None = None,
+        force: bool = False,
+    ) -> list[str]:
+        """把已 promote 且已落盘的技能热加载并增量注册进 ToolRegistry。
+
+        - 只处理 curator 状态为 promoted 的技能；
+        - 版本去重：工具已注册且挂载版本 >= 当前版本时跳过（force 可强制重挂），
+          evolution_engine 自改进提升版本后会在下一次挂载时热更新；
+        - best-effort：单个技能失败记日志跳过，不影响其余技能。
+
+        Returns:
+            本次成功挂载（新注册或热更新）的工具名列表。
+        """
+        from backend.app.core.skill_agent_adapter import register_skill_into_tool_registry
+
+        registry = tool_registry or self._tool_registry
+        if registry is None:
+            return []
+
+        mounted: list[str] = []
+        for skill in self._curator.list_all():
+            if skill.status != "promoted":
+                continue
+            safe_name = sanitize_skill_name(skill.name)
+            current_version = self._promoted_version(safe_name)
+            if (
+                not force
+                and getattr(registry, "get", lambda _n: None)(f"skill__{safe_name}") is not None
+                and self._mounted_versions.get(safe_name, 1) >= current_version
+            ):
+                continue
+            try:
+                # 包缺失（如落盘后被删除）时补写
+                base_dir = self._custom_skills_dir
+                if not _skill_main_py_exists(safe_name, base_dir):
+                    write_skill_package(skill, base_dir=base_dir)
+                ok = await register_skill_into_tool_registry(
+                    registry, safe_name, loader=loader, base_dir=base_dir
+                )
+            except Exception as e:
+                logger.warning("Skill mount failed for '%s': %s", skill.name, e)
+                continue
+            if ok:
+                self._mounted_versions[safe_name] = current_version
+                mounted.append(f"skill__{safe_name}")
+                logger.info("Skill mounted into tool registry: skill__%s (v%s)", safe_name, current_version)
+        return mounted
+
+    def _promoted_version(self, safe_name: str) -> int:
+        """查询 evolution_engine 中该技能的当前版本（未登记为 1）。"""
+        try:
+            from backend.app.core.evolution_engine import evolution_engine
+
+            for s in evolution_engine.promoted_skills:
+                if s.name == safe_name:
+                    return int(s.version)
+        except Exception:
+            pass
+        return 1
+
+    def _register_in_evolution_engine(self, draft: SkillDraft) -> None:
+        """把落盘技能登记进 evolution_engine，纳入 usage 统计与自改进闭环。"""
+        try:
+            from backend.app.core.evolution_engine import PromotedSkill, evolution_engine
+
+            main_py = draft.to_runtime_main_py()
+            evolution_engine.register_promoted_skill(
+                PromotedSkill(
+                    id=sanitize_skill_name(draft.name),
+                    name=sanitize_skill_name(draft.name),
+                    description=draft.description,
+                    trigger_pattern=",".join(draft.trigger_conditions[:3]),
+                    code=main_py,
+                    tool_sequence=[s.strip() for s in draft.source_pattern.split("→")],
+                )
+            )
+        except Exception as e:
+            logger.warning("Failed to register promoted skill in evolution engine: %s", e)
 
     def reject_skill(self, name: str) -> bool:
         """拒绝技能."""

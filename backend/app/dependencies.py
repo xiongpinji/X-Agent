@@ -54,6 +54,7 @@ def get_memory() -> "MemorySystem | PostgresMemorySystem | QdrantMemorySystem":
         memory_backend=settings.memory_backend,
         database_url=settings.database_url,
         memory_store_path=settings.memory_store_path,
+        memory_fts_path=settings.memory_fts_path,
         embedding_backend=settings.embedding_backend,
         openai_api_key=settings.openai_api_key,
         openai_embedding_model=settings.openai_embedding_model,
@@ -100,6 +101,7 @@ def build_memory_system(
     memory_backend: str,
     database_url: str,
     memory_store_path,
+    memory_fts_path=None,
     embedding_backend: str = "auto",
     openai_api_key: str | None = None,
     openai_embedding_model: str = "text-embedding-3-small",
@@ -151,7 +153,14 @@ def build_memory_system(
         )
     if memory_backend == "memory":
         return MemorySystem(embedding_model=embedding_model)
-    return MemorySystem(storage_path=memory_store_path, embedding_model=embedding_model)
+    # jsonl 后端: FTS5 索引库加速 search_with_scores(BM25 top-50 候选 +
+    # 线性扫描兜底)。memory_fts_path 未传时 MemorySystem 自动取
+    # storage_path 同级 memory_fts.sqlite3（等价于 data/memory_fts.sqlite3）。
+    return MemorySystem(
+        storage_path=memory_store_path,
+        embedding_model=embedding_model,
+        fts_path=memory_fts_path,
+    )
 
 
 def build_trace_store(

@@ -10,8 +10,13 @@ global.chrome = {
     onMessage: {
       addListener: jest.fn()
     },
+    onInstalled: {
+      addListener: jest.fn()
+    },
     getURL: jest.fn(path => `chrome-extension://id/${path}`),
+    getManifest: jest.fn(() => ({ version: '0.3.0' })),
     connectNative: jest.fn(),
+    openOptionsPage: jest.fn(),
     id: 'test-extension-id'
   },
   tabs: {
@@ -45,6 +50,20 @@ global.chrome = {
     onCommand: {
       addListener: jest.fn()
     }
+  },
+  contextMenus: {
+    create: jest.fn(),
+    removeAll: jest.fn(),
+    onClicked: {
+      addListener: jest.fn()
+    }
+  },
+  notifications: {
+    create: jest.fn(),
+    clear: jest.fn(),
+    onClicked: {
+      addListener: jest.fn()
+    }
   }
 };
 
@@ -61,6 +80,15 @@ window.location = {
   search: '',
   hash: ''
 };
+
+// jsdom does not expose WHATWG encoding streams; api-client.js needs them
+// for SSE parsing.
+if (typeof global.TextDecoder === 'undefined') {
+  global.TextDecoder = require('util').TextDecoder;
+}
+if (typeof global.TextEncoder === 'undefined') {
+  global.TextEncoder = require('util').TextEncoder;
+}
 
 // Mock console methods
 global.console = {

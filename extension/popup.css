@@ -346,6 +346,131 @@ body {
   animation: spin 0.8s linear infinite;
 }
 
+/* Chat Box */
+.chat-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.chat-box textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  font-size: 12px;
+  font-family: inherit;
+  resize: vertical;
+  min-height: 54px;
+}
+
+.chat-box textarea:focus {
+  outline: none;
+  border-color: var(--primary-color);
+}
+
+.chat-options {
+  display: flex;
+  gap: 12px;
+}
+
+.chat-output {
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 8px;
+  background-color: var(--surface-color);
+}
+
+.chat-status {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+
+.chat-status.running {
+  color: var(--primary-color);
+}
+
+.chat-status.done {
+  color: var(--secondary-color);
+}
+
+.chat-status.error {
+  color: var(--danger-color);
+}
+
+.chat-answer {
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+/* Backend Settings */
+.backend-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+}
+
+.backend-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.backend-field input {
+  padding: 6px 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: inherit;
+}
+
+.backend-field input:focus {
+  outline: none;
+  border-color: var(--primary-color);
+}
+
+.backend-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.connection-status {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.connection-status.ok {
+  color: var(--secondary-color);
+}
+
+.connection-status.fail {
+  color: var(--danger-color);
+}
+
+.options-link {
+  font-size: 11px;
+  color: var(--primary-color);
+  text-decoration: none;
+  align-self: flex-start;
+}
+
+.options-link:hover {
+  text-decoration: underline;
+}
+
 @keyframes spin {
   to {
     transform: rotate(360deg);

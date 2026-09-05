@@ -22,7 +22,11 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import json
 import logging
+import os
+from datetime import UTC, datetime
+from pathlib import Path
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Request
@@ -68,6 +72,67 @@ _queue: Any = None
 _orchestrator: Any = None
 _results: dict[str, Any] = {}
 _status: dict[str, str] = {}
+
+
+# ----- A3（2026-09-05）任务结果持久化 -----
+# 此前 _results/_status 是纯内存 dict：进程重启即全丢，"assign and come back"
+# 模型在重启后 come back 404。这里用 JSONL 追加保存最近的任务终态，
+# 启动时回灌 _status（GET 端点因此重启后仍可查询）。best-effort：失败只告警。
+
+_PERSIST_DIR = Path(os.environ.get("XAGENT_SANDBOX_TASKS_PATH", "data/sandbox_tasks"))
+_PERSIST_FILE = _PERSIST_DIR / "tasks.jsonl"
+_PERSIST_MAX = 1000  # 回灌上限，防止无限增长
+# task_id -> 最近一条持久化记录（重启后 GET 端点回退数据源）
+_persisted_records: dict[str, dict[str, Any]] = {}
+
+
+def _persist_task(task_id: str, status: str, result: Any = None, name: str = "") -> None:
+    record = {
+        "task_id": task_id,
+        "status": status,
+        "name": name,
+        "backend": getattr(result, "backend", None),
+        "error": getattr(result, "error", None),
+        "steps": getattr(result, "steps", []) or [],
+        "updated_at": datetime.now(UTC).isoformat(),
+    }
+    try:
+        with contextlib.suppress(TypeError, ValueError):
+            record = json.loads(json.dumps(record, default=str))  # 防 dataclass 序列化失败
+        _persisted_records[task_id] = record
+        _PERSIST_DIR.mkdir(parents=True, exist_ok=True)
+        with open(_PERSIST_FILE, "a", encoding="utf-8") as f:
+            f.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
+    except OSError as e:
+        logger.warning("sandbox task persist failed for %s: %s", task_id, e)
+
+
+def _load_persisted() -> None:
+    """启动时回灌最近的任务状态（最新优先，容量封顶）。"""
+    if not _PERSIST_FILE.exists():
+        return
+    try:
+        lines = _PERSIST_FILE.read_text(encoding="utf-8").splitlines()
+    except OSError as e:
+        logger.warning("sandbox task persist load failed: %s", e)
+        return
+    for line in reversed(lines[-_PERSIST_MAX:]):
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            rec = json.loads(line)
+        except ValueError:
+            continue
+        task_id = str(rec.get("task_id") or "")
+        if not task_id:
+            continue
+        _persisted_records.setdefault(task_id, rec)
+        if task_id not in _status:
+            _status[task_id] = str(rec.get("status") or "unknown")
+
+
+_load_persisted()
 
 
 def _get_orchestrator():
@@ -121,12 +186,15 @@ async def _drain_loop() -> None:
             continue
         task_id = getattr(task, "task_id", None) or task.id
         _status[task_id] = "running"
+        _persist_task(task_id, "running", name=getattr(task, "name", ""))
         try:
             result = await orch._worker.process(task)
             _results[task_id] = result
             _status[task_id] = "completed" if result.success else "failed"
+            _persist_task(task_id, _status[task_id], result=result)
         except Exception:
             _status[task_id] = "error"
+            _persist_task(task_id, "error")
             logger.exception("sandbox task %s failed", task_id)
 
 
@@ -177,6 +245,7 @@ async def submit_task(
         },
     )
     _status[task_id] = "queued"
+    _persist_task(task_id, "queued", name=request.name)
     return TaskSubmitResponse(task_id=task_id, status="queued")
 
 
@@ -188,6 +257,16 @@ async def get_task(task_id: str, principal: PrincipalDependency) -> TaskStatusRe
     if status is None:
         raise api_error(404, ErrorCode.RESOURCE_NOT_FOUND, f"task {task_id} not found")
     result = _results.get(task_id)
+    if result is None:
+        # 重启后内存结果丢失：回退到最近一条持久化记录（A3）
+        rec = _persisted_records.get(task_id) or {}
+        return TaskStatusResponse(
+            task_id=task_id,
+            status=status,
+            backend=rec.get("backend"),
+            steps=list(rec.get("steps") or []),
+            error=rec.get("error"),
+        )
     return TaskStatusResponse(
         task_id=task_id,
         status=status,
@@ -236,8 +315,12 @@ async def _run_issue_pipeline(event: Any, token: str) -> None:
         result = await pipeline.run(event)
         _issue_results[key] = result
         _issue_status[key] = result.status
+        with contextlib.suppress(Exception):
+            _persist_task(key, result.status, name=f"issue-{event.issue_number}")
     except Exception:
         _issue_status[key] = "error"
+        with contextlib.suppress(Exception):
+            _persist_task(key, "error", name=f"issue-{event.issue_number}")
         logger.exception("issue pipeline failed for #%s", event.issue_number)
 
 
@@ -295,4 +378,5 @@ async def github_webhook(request: Request) -> dict[str, Any]:
         },
     )
     _status[task_id] = "queued"
+    _persist_task(task_id, "queued", name=f"github-issue-{event.issue_number}")
     return {"status": "queued", "task_id": task_id, "issue": event.issue_number}

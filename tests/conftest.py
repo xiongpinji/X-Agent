@@ -11,6 +11,18 @@ os.environ.setdefault("XAGENT_QDRANT_URL", "")
 # P0-15：测试会话属开发环境，显式 opt-in 宿主机降级写（agent_fix_runner 在无
 # Docker sandbox 时默认 fail-closed；test_agent_fix_runner 走 sandbox=None 路径）
 os.environ.setdefault("XAGENT_ALLOW_DEGRADED_HOST_WRITE", "1")
+# P2-12：测试会话内把 custom-skills 落盘目录隔离到临时目录。
+# 技能自沉淀 promote（sedimentation.promote_skill）会写 custom-skills/<name>/，
+# 不隔离的话任何触发 promote 的测试都会向仓库写入生成的技能包。
+os.environ.setdefault(
+    "XAGENT_CUSTOM_SKILLS_DIR",
+    tempfile.mkdtemp(prefix="xagent_custom_skills_").replace("\\", "/"),
+)
+# 同理隔离 evolution 反思记录 JSONL，避免测试写 data/evolution_reflections.jsonl
+os.environ.setdefault(
+    "XAGENT_EVOLUTION_STORE_PATH",
+    tempfile.mkdtemp(prefix="xagent_evolution_").replace("\\", "/") + "/evolution_reflections.jsonl",
+)
 
 # Per-worker isolated data directory for xdist parallel runs.
 # Prevents PermissionError when multiple workers write to the same
@@ -23,6 +35,9 @@ def _set_worker_data_dir() -> None:
         for key, rel in [
             ("XAGENT_AUDIT_STORE_PATH", f"{_tmpdir}/audit.jsonl"),
             ("XAGENT_RUN_STORE_PATH", f"{_tmpdir}/runs.jsonl"),
+            # FTS5 索引库: 派生数据(可从 jsonl 重建), 隔离避免多 worker 并发
+            # 读写同一 SQLite 索引(Windows 文件锁)及重复全量重建
+            ("XAGENT_MEMORY_FTS_PATH", f"{_tmpdir}/memory_fts.sqlite3"),
             ("XAGENT_WORKFLOW_STORE_PATH", f"{_tmpdir}/workflows.json"),
             ("XAGENT_WORKFLOW_RUN_STORE_PATH", f"{_tmpdir}/workflow_runs.jsonl"),
             ("XAGENT_WORKFLOW_SCHEDULE_STORE_PATH", f"{_tmpdir}/workflow_schedules.json"),

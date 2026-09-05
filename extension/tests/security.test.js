@@ -117,8 +117,9 @@ describe('Security & Permissions Tests', () => {
               return /^[#.\w\s\[\]="':>+~-]*$/.test(input);
             case 'url':
               try {
-                new URL(input);
-                return true;
+                const url = new URL(input);
+                // Only http(s) URLs are acceptable; javascript:/data: must be rejected
+                return url.protocol === 'http:' || url.protocol === 'https:';
               } catch {
                 return false;
               }
@@ -182,7 +183,11 @@ describe('Security & Permissions Tests', () => {
             'contextMenus': ['contextMenus']
           };
 
-          const required = apiPermissionMap[apiName] || [];
+          // APIs not present in the permission map are denied by default
+          const required = apiPermissionMap[apiName];
+          if (!required) {
+            return false;
+          }
           return required.every(p => permissions.includes(p));
         }
       };
@@ -230,7 +235,12 @@ describe('Security & Permissions Tests', () => {
 
           try {
             const url = new URL(sender.url);
-            return allowedOrigins.includes(url.origin);
+            // Non-special schemes (chrome-extension://) report origin "null",
+            // so reconstruct the origin from protocol + host.
+            const origin = url.origin && url.origin !== 'null'
+              ? url.origin
+              : `${url.protocol}//${url.host}`;
+            return allowedOrigins.includes(origin);
           } catch {
             return false;
           }
@@ -309,12 +319,15 @@ describe('Security & Permissions Tests', () => {
         }
       };
 
-      xssHelper.setContent('#target', '<img src=x onerror="alert(1)">');
+    xssHelper.setContent('#target', '<img src=x onerror="alert(1)">');
 
-      const target = document.getElementById('target');
-      expect(target.textContent).toContain('<img');
-      expect(target.innerHTML).not.toContain('onerror');
-    });
+    const target = document.getElementById('target');
+    expect(target.textContent).toContain('<img');
+    // textContent assignment means no live HTML is injected - the raw markup
+    // never appears in innerHTML (only its escaped entity form does).
+    expect(target.innerHTML).not.toContain('<img');
+    expect(target.querySelector('img')).toBeNull();
+  });
   });
 
   describe('CSRF Protection Tests', () => {
@@ -373,8 +386,9 @@ describe('Security & Permissions Tests', () => {
       const urlValidator = {
         isValid: function(url) {
           try {
-            new URL(url);
-            return true;
+            const parsed = new URL(url);
+            // Restrict to http(s); reject javascript:, data:, etc.
+            return parsed.protocol === 'http:' || parsed.protocol === 'https:';
           } catch {
             return false;
           }

@@ -58,6 +58,59 @@ async def execute(context: dict) -> dict:
     return {{"status": "completed", "skill": "{self.name}"}}
 '''
 
+    def to_runtime_main_py(self) -> str:
+        """生成 SkillLoader 可加载的 main.py（导出 SkillImplementation 类）。
+
+        唯一技能运行时（backend.app.core.skills）约定目录技能必须导出
+        ``SkillImplementation`` 且继承 ``Skill``；``to_main_py`` 的裸
+        ``execute`` 函数不满足该约定，无法被加载执行，
+        故 promote 落盘使用本模板。
+        """
+        import json as _json
+
+        name = _json.dumps(self.name, ensure_ascii=False)
+        description = _json.dumps(self.description or f"Auto-generated skill: {self.name}", ensure_ascii=False)
+        steps_json = _json.dumps(self.steps, ensure_ascii=False)
+        triggers_json = _json.dumps(self.trigger_conditions, ensure_ascii=False)
+        step_lines = "\n".join(f"        # Step {i + 1}: {s}" for i, s in enumerate(self.steps))
+        return f'''"""自动生成的技能: {self.name}
+
+由技能自沉淀引擎（skill_distillation）生成，可被 SkillLoader 热加载。
+契约：backend.app.core.skills.Skill（导出 SkillImplementation）。
+"""
+
+from __future__ import annotations
+
+from backend.app.core.skills import Skill, SkillContext, SkillMetadata, SkillResult
+
+
+class SkillImplementation(Skill):
+    """{self.description}"""
+
+    parameters_schema: dict = {{"type": "object", "properties": {{}}, "additionalProperties": True}}
+
+    @property
+    def metadata(self) -> SkillMetadata:
+        return SkillMetadata(
+            name={name},
+            version="1.0.0",
+            description={description},
+            author="x-agent-sedimentation",
+            tags=["auto-generated"],
+        )
+
+    async def execute(self, context: SkillContext, **kwargs) -> SkillResult:
+        # 触发条件: {triggers_json}
+{step_lines}
+        # 骨架实现：记录预期步骤后成功返回。
+        # 后续由 evolution_engine 自改进或人工编辑替换为真实编排逻辑。
+        return SkillResult(
+            success=True,
+            data={{"skill": {name}, "steps": {steps_json}, "arguments": kwargs}},
+            metadata={{"generated_by": "skill_distillation"}},
+        )
+'''
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "name": self.name,

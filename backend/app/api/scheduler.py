@@ -6,6 +6,8 @@ Provides endpoints for managing scheduled tasks.
 
 from __future__ import annotations
 
+import logging
+from collections.abc import Callable, Coroutine
 from datetime import UTC, datetime
 from typing import Annotated, Any
 
@@ -19,8 +21,43 @@ from backend.app.core.task_monitor import task_monitor
 from backend.app.core.task_queue import TaskPriority, task_queue
 from backend.app.dependencies import enforce_scope, get_current_principal
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/api/scheduler", tags=["scheduler"])
 PrincipalDependency = Annotated[Principal, Depends(get_current_principal)]
+
+
+def _build_task_coroutine(
+    payload: dict[str, Any],
+) -> Callable[[], Coroutine[Any, Any, Any]]:
+    """构建定时触发的实际协程：到点后向 task_queue 投递 agent 运行任务。
+
+    payload["agent_task"] = {"task": "...", "context": {...}} 时投递真实 agent
+    任务（由 main.py startup 注册的 "agent.run" handler 执行）；未提供时
+    显式返回 skipped 并告警——不再用哑协程伪装执行成功。
+    """
+    agent_task = payload.get("agent_task") or {}
+    schedule_name = str(payload.get("name", "task"))
+
+    async def _fire():
+        task_text = str(agent_task.get("task") or "").strip()
+        if not task_text:
+            logger.warning(
+                "Scheduled task %r fired without agent_task.task; skipping. "
+                "Provide payload[\"agent_task\"][\"task\"] to run a real agent task.",
+                schedule_name,
+            )
+            return {"status": "skipped", "reason": "no agent_task.task configured"}
+        queue_task_id = await task_queue.enqueue(
+            "agent.run",
+            {"task": task_text, "context": agent_task.get("context", {})},
+        )
+        logger.info(
+            "Scheduled task %r enqueued agent.run %s", schedule_name, queue_task_id
+        )
+        return {"status": "enqueued", "queue_task_id": queue_task_id}
+
+    return _fire
 
 
 @router.post("/tasks")
@@ -43,15 +80,12 @@ async def create_scheduled_task(
 
     try:
         schedule_type = payload.get("schedule_type", "interval")
-
-        # Create dummy coroutine
-        async def dummy_coro():
-            return {"status": "executed"}
+        task_coroutine = _build_task_coroutine(payload)
 
         if schedule_type == "cron":
             task_id = cron_scheduler.schedule_cron(
                 name=payload.get("name", "task"),
-                coroutine=dummy_coro,
+                coroutine=task_coroutine,
                 cron_expression=payload.get("cron_expression", "0 * * * *"),
                 max_runs=payload.get("max_runs"),
                 metadata=payload.get("metadata", {}),
@@ -60,7 +94,7 @@ async def create_scheduled_task(
         elif schedule_type == "interval":
             task_id = cron_scheduler.schedule_interval(
                 name=payload.get("name", "task"),
-                coroutine=dummy_coro,
+                coroutine=task_coroutine,
                 interval_seconds=payload.get("interval_seconds", 3600),
                 max_runs=payload.get("max_runs"),
                 metadata=payload.get("metadata", {}),
@@ -70,7 +104,7 @@ async def create_scheduled_task(
             run_at = datetime.fromisoformat(payload.get("run_at"))
             task_id = cron_scheduler.schedule_once(
                 name=payload.get("name", "task"),
-                coroutine=dummy_coro,
+                coroutine=task_coroutine,
                 run_at=run_at,
                 metadata=payload.get("metadata", {}),
             )
@@ -335,12 +369,13 @@ async def enqueue_task(
         priority_str = payload.get("priority", "NORMAL")
         priority = TaskPriority[priority_str]
 
+        # RedisTaskQueue.enqueue 是位置参数签名（task_name, payload, ...），
+        # 此前按 name=/payload=/metadata= 关键字调用必然 TypeError→400。
         task_id = await task_queue.enqueue(
-            name=payload.get("name", "task"),
-            payload=payload.get("payload", {}),
+            payload.get("name", "task"),
+            payload.get("payload", {}),
             priority=priority,
             max_retries=payload.get("max_retries", 3),
-            metadata=payload.get("metadata", {}),
         )
 
         return {

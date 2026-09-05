@@ -115,13 +115,30 @@ class ContentScriptManager {
     }
   }
 
+  /**
+   * Robust visibility check. `offsetParent === null` is unreliable: it is
+   * always null in environments without layout (tests) and for
+   * position:fixed elements in Chrome. Use computed styles instead.
+   */
+  isElementHidden(el) {
+    try {
+      if (el.hidden || el.getAttribute('aria-hidden') === 'true') {
+        return true;
+      }
+      const style = window.getComputedStyle(el);
+      return style.display === 'none' || style.visibility === 'hidden';
+    } catch {
+      return false;
+    }
+  }
+
   getElements(selector, includeHidden = false) {
     try {
       const elements = document.querySelectorAll(selector || '*');
       const result = [];
 
       elements.forEach((el, index) => {
-        if (!includeHidden && el.offsetParent === null) return;
+        if (!includeHidden && this.isElementHidden(el)) return;
 
         const refId = `ref_${++this.refCounter}`;
         this.elementRefs.set(refId, el);
@@ -131,7 +148,7 @@ class ContentScriptManager {
           tag: el.tagName,
           text: el.textContent?.substring(0, 100),
           selector: this.getSelector(el),
-          visible: el.offsetParent !== null,
+          visible: !this.isElementHidden(el),
           rect: el.getBoundingClientRect()
         });
       });
@@ -179,7 +196,7 @@ class ContentScriptManager {
             width: rect.width,
             height: rect.height
           },
-          visible: element.offsetParent !== null,
+          visible: !this.isElementHidden(element),
           disabled: element.disabled,
           readonly: element.readOnly,
           attributes: this.getAttributes(element),
@@ -256,8 +273,10 @@ class ContentScriptManager {
         return { success: false, error: 'Element not found' };
       }
 
-      // Scroll into view
-      element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      // Scroll into view (not implemented in all environments, e.g. jsdom)
+      if (typeof element.scrollIntoView === 'function') {
+        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
 
       // Wait for scroll
       setTimeout(() => {
@@ -590,13 +609,21 @@ class ContentScriptManager {
       this.actionHistory.shift();
     }
 
-    // Send to background script
-    chrome.runtime.sendMessage({
-      type: 'RECORD_ACTION',
-      payload: { action: type, details }
-    }).catch(() => {
-      // Background script might not be ready
-    });
+    // Send to background script (sendMessage may not return a promise in
+    // every host environment - guard the .catch).
+    try {
+      const maybePromise = chrome.runtime.sendMessage({
+        type: 'RECORD_ACTION',
+        payload: { action: type, details }
+      });
+      if (maybePromise && typeof maybePromise.catch === 'function') {
+        maybePromise.catch(() => {
+          // Background script might not be ready
+        });
+      }
+    } catch {
+      // Extension context invalidated (page is being unloaded) - ignore.
+    }
   }
 }
 

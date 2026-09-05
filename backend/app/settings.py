@@ -40,6 +40,9 @@ class Settings(BaseSettings):
     admin_store_backend: str = "file"
     admin_store_path: Path = PROJECT_ROOT / "data" / "admin_store.json"
     memory_store_path: Path = PROJECT_ROOT / "data" / "memory.jsonl"
+    # FTS5 全文索引库(MemorySystem BM25 候选生成): XAGENT_MEMORY_FTS_PATH 覆盖;
+    # XAGENT_MEMORY_FTS=off 可整体停用(回退线性扫描)
+    memory_fts_path: Path = PROJECT_ROOT / "data" / "memory_fts.sqlite3"
     embedding_backend: str = "auto"  # auto | openai | sentence-transformers | local (hash)
     embedding_model: str = "text-embedding-3-small"  # XAGENT_EMBEDDING_MODEL
     embedding_dim: int = 384  # XAGENT_EMBEDDING_DIM

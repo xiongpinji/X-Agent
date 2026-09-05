@@ -25,7 +25,8 @@ from fastapi import APIRouter, Body, Depends, Query
 from pydantic import BaseModel, Field
 
 from backend.app.core.agent import AgentLoop
-from backend.app.core.contracts import RunContext
+from backend.app.core.approvals import ApprovalStatus
+from backend.app.core.contracts import RunContext, RunStatus, TraceEvent
 from backend.app.core.security import Principal
 from backend.app.dependencies import (
     enforce_scope,
@@ -277,6 +278,185 @@ class StreamEventStore:
 event_store = StreamEventStore()
 
 
+# ---------------------------------------------------------------------------
+# Fine-grained agent event bridging (TraceEvent -> SSE StreamEvent)
+#
+# AgentLoop._emit_trace pushes every lifecycle event through the
+# ``event_callback`` hook passed to ``agent.run(...)``. The streaming run
+# endpoint installs a bridge that converts those trace events into SSE
+# StreamEvents so subscribers see each agent step in real time.
+#
+# New SSE event types (consumed by the CLI TUI):
+#   iteration        — an agent loop iteration started (step_kind/instruction)
+#   tool_call        — a tool invocation reached completion (name/success/latency)
+#   tool_result      — post-run tool detail (arguments summary + output summary)
+#   plan             — execution plan created (goal/step_count)
+#   observation      — observe-step output preview
+#   reflection       — reflect-step output preview
+#   agent            — generic whitelisted lifecycle event (resumed/fast_path/...)
+#   approval_required— a tool call is blocked on a pending approval decision
+#
+# Legacy event types (message/progress/completion/error/heartbeat/...) are
+# preserved unchanged for compatibility.
+# ---------------------------------------------------------------------------
+
+TERMINAL_EVENT_TYPES = frozenset({"completion", "error"})
+
+#: Whitelisted AgentLoop trace events -> SSE event types. Events not listed
+#: here (including internal ones like agent.completed, whose payload is
+#: superseded by the run-level completion event) are dropped to avoid leaking
+#: internal state over the stream.
+_TRACE_EVENT_TYPE_MAP: dict[str, str] = {
+    "agent.iteration.started": "iteration",
+    "agent.tool.completed": "tool_call",
+    "agent.plan.created": "plan",
+    "agent.observation.recorded": "observation",
+    "agent.reflection.created": "reflection",
+    "agent.task.decomposed": "agent",
+    "agent.resumed": "agent",
+    "agent.fast_path": "agent",
+    "agent.blocked": "agent",
+    "agent.orchestrated": "agent",
+    "agent.continuation.replan": "agent",
+    "agent.replan.after_reflect": "agent",
+    "agent.write.retry_scheduled": "agent",
+    "agent.repair.retry_scheduled": "agent",
+    "agent.auto_verify.injected": "agent",
+    "agent.test_failure.repair_injected": "agent",
+    "agent.observe.completed": "agent",
+    "agent.plan.ready": "agent",
+    "agent.write.verified": "agent",
+    "agent.write.needs_repair": "agent",
+    "agent.context.session_opened": "agent",
+    "agent.context.compressed": "agent",
+}
+
+_MAX_INSTRUCTION_CHARS = 200
+_MAX_TEXT_CHARS = 200
+_MAX_ARGS_CHARS = 300
+_MAX_RESULT_CHARS = 400
+
+
+def _trunc(value: Any, limit: int) -> str:
+    """Stringify and truncate a value for safe transport over SSE."""
+    if value is None:
+        return ""
+    if not isinstance(value, str):
+        try:
+            value = json.dumps(value, ensure_ascii=False, default=str)
+        except Exception:
+            value = str(value)
+    if len(value) <= limit:
+        return value
+    return value[: max(0, limit - 3)] + "..."
+
+
+def _coerce_bool(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() in ("true", "1", "yes", "ok")
+
+
+def _coerce_number(value: Any) -> Any:
+    """Trace events stringify scalars via json.dumps; parse numbers back."""
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return value
+    text = str(value).strip()
+    try:
+        return int(text)
+    except ValueError:
+        try:
+            return float(text)
+        except ValueError:
+            return value
+
+
+def trace_to_stream_event(run_id: str, trace_event: TraceEvent) -> StreamEvent | None:
+    """Convert an AgentLoop TraceEvent into an SSE StreamEvent.
+
+    Returns None for trace events that should not be surfaced on the stream
+    (unknown/internal events). Pure function — unit-testable without a server.
+    """
+    name = str(getattr(trace_event, "event", "") or "")
+    sse_type = _TRACE_EVENT_TYPE_MAP.get(name)
+    if sse_type is None:
+        return None
+
+    data = getattr(trace_event, "data", None) or {}
+    if not isinstance(data, dict):
+        data = {}
+
+    payload: dict[str, Any] = {}
+    if sse_type == "iteration":
+        payload["iteration"] = _coerce_number(data.get("iteration"))
+        payload["step_kind"] = str(data.get("step_kind") or "")
+        payload["instruction"] = _trunc(data.get("instruction"), _MAX_INSTRUCTION_CHARS)
+    elif sse_type == "tool_call":
+        payload["phase"] = "completed"
+        payload["tool_name"] = str(data.get("tool_name") or "")
+        payload["success"] = _coerce_bool(data.get("success"))
+        payload["latency_ms"] = _coerce_number(data.get("latency_ms"))
+        payload["iteration"] = _coerce_number(data.get("iteration"))
+    elif sse_type == "plan":
+        payload["goal"] = _trunc(data.get("goal"), _MAX_TEXT_CHARS)
+        payload["step_count"] = _coerce_number(data.get("step_count"))
+        payload["task"] = _trunc(data.get("task"), 120)
+    elif sse_type == "observation":
+        payload["iteration"] = _coerce_number(data.get("iteration"))
+        payload["observation"] = _trunc(data.get("observation"), _MAX_TEXT_CHARS)
+    elif sse_type == "reflection":
+        payload["iteration"] = _coerce_number(data.get("iteration"))
+        payload["reflection"] = _trunc(data.get("reflection"), _MAX_TEXT_CHARS)
+    else:  # generic whitelisted lifecycle event
+        payload["trace_event"] = name
+        for key, value in data.items():
+            payload[str(key)] = _trunc(value, 160) if isinstance(value, str) and len(value) > 160 else value
+
+    payload["trace_id"] = getattr(trace_event, "trace_id", None)
+    return StreamEvent(event_type=sse_type, run_id=run_id, data=payload)
+
+
+def tool_call_to_result_event(run_id: str, record: Any) -> StreamEvent:
+    """Convert a final ToolCallRecord into a detailed tool_result SSE event.
+
+    Carries the tool name, an arguments summary and a result summary, both
+    truncated to bound payload size and avoid leaking large file contents.
+    """
+    args_preview = getattr(record, "arguments_preview", None) or {}
+    output = getattr(record, "output", None)
+    error = getattr(record, "error", None)
+    return StreamEvent(
+        event_type="tool_result",
+        run_id=run_id,
+        data={
+            "tool_name": str(getattr(record, "tool_name", "") or ""),
+            "success": bool(getattr(record, "success", False)),
+            "latency_ms": getattr(record, "latency_ms", 0.0),
+            "arguments": _trunc(args_preview, _MAX_ARGS_CHARS),
+            "output": _trunc(output, _MAX_RESULT_CHARS),
+            "error": _trunc(error, _MAX_TEXT_CHARS) if error else None,
+        },
+    )
+
+
+def approval_to_event(run_id: str, record: Any) -> StreamEvent:
+    """Convert a pending ApprovalRequestRecord into an approval_required event."""
+    return StreamEvent(
+        event_type="approval_required",
+        run_id=run_id,
+        data={
+            "approval_id": str(getattr(record, "id", "") or ""),
+            "tool_name": str(getattr(record, "resource_id", "") or ""),
+            "action": str(getattr(record, "action", "") or ""),
+            "risk_level": str(getattr(getattr(record, "risk_level", None), "value", "") or ""),
+            "reason": _trunc(getattr(record, "reason", None), _MAX_TEXT_CHARS),
+            "arguments": _trunc(getattr(record, "arguments_preview", None) or {}, _MAX_ARGS_CHARS),
+        },
+    )
+
+
 def _context_from_principal(principal: Principal) -> RunContext:
     """Create RunContext from Principal."""
     return RunContext(
@@ -306,6 +486,13 @@ async def _stream_events(
                 yield f"data: {event_json}\n\n"
 
                 asyncio.get_event_loop().time()
+
+                # Close the stream once the run reaches a terminal state so
+                # clients (CLI/HTTP) get a natural end-of-stream instead of
+                # hanging on heartbeats forever.
+                if event.event_type in TERMINAL_EVENT_TYPES:
+                    logger.debug(f"Stream reached terminal event for run {run_id}")
+                    return
 
             except TimeoutError:
                 # Send heartbeat
@@ -346,6 +533,58 @@ async def stream_health() -> dict[str, Any]:
     }
 
 
+@router.get("/model-config")
+async def get_model_config(principal: PrincipalDependency) -> dict[str, Any]:
+    """
+    Report the active LLM/model configuration (no secrets).
+
+    Used by CLI chat ``/model`` to show which backend and models the
+    agent is currently routed to. API keys are never included.
+    """
+    enforce_scope(principal, "agent:read")
+
+    config: dict[str, Any] = {
+        "llm_backend": "unknown",
+        "fallback_order": [],
+        "openai_model": None,
+        "deepseek_model": None,
+        "router_backends": [],
+    }
+    try:
+        from backend.app.settings import get_settings
+
+        settings = get_settings()
+        config.update(
+            {
+                "llm_backend": settings.llm_backend,
+                "fallback_order": [b.strip() for b in settings.llm_fallback_order.split(",") if b.strip()],
+                "openai_model": settings.openai_model,
+                "deepseek_model": settings.deepseek_model,
+                "openai_base_url": settings.openai_base_url,
+                "deepseek_base_url": settings.deepseek_base_url,
+            }
+        )
+    except Exception as exc:
+        logger.debug(f"settings unavailable for model-config: {exc}")
+
+    try:
+        from backend.app.dependencies import get_agent
+
+        router = getattr(get_agent(), "llm", None)
+        backends = getattr(router, "_backends", None) or []
+        config["router_backends"] = [
+            {
+                "name": getattr(b, "name", b.__class__.__name__),
+                "type": b.__class__.__name__,
+            }
+            for b in backends
+        ]
+    except Exception as exc:
+        logger.debug(f"router introspection failed for model-config: {exc}")
+
+    return config
+
+
 @router.get("/stream/{run_id}")
 async def subscribe_to_stream(
     run_id: str,
@@ -382,11 +621,18 @@ async def subscribe_to_stream(
 
     async def event_generator() -> AsyncGenerator[str, None]:
         try:
+            terminal_seen = False
             # Send buffered events first
             for event in buffered_events:
                 event_json = json.dumps(event.model_dump())
                 yield f"event: {event.event_type}\n"
                 yield f"data: {event_json}\n\n"
+                if event.event_type in TERMINAL_EVENT_TYPES:
+                    terminal_seen = True
+
+            if terminal_seen:
+                # Run already finished before we subscribed; nothing more to wait for.
+                return
 
             # Stream new events
             async for chunk in _stream_events(run_id, queue):
@@ -411,6 +657,7 @@ async def subscribe_to_stream(
 async def create_streaming_run(
     task: str = Body(..., min_length=1, max_length=20_000, description="Task to execute"),
     extra_context: dict[str, Any] = Body(default={}, description="Additional context"),
+    session_id: str | None = Body(default=None, max_length=200, description="Optional session id for multi-turn context"),
     *,
     agent: AgentDependency,
     principal: PrincipalDependency,
@@ -420,18 +667,27 @@ async def create_streaming_run(
     Create a new agent run with streaming support.
 
     Returns a run_id that can be used with /stream/{run_id} endpoint.
+    While the agent executes in the background, every whitelisted
+    AgentLoop trace event (iteration started, tool call completed, plan
+    created, ...) is bridged onto the stream as a fine-grained SSE event,
+    followed by tool_result details, approval_required events for pending
+    approvals, and a final completion (or error) event that closes the
+    stream.
 
     Args:
         task: The task to execute
         extra_context: Additional context for the task
+        session_id: Optional session id (persisted multi-turn context)
 
     Returns:
-        Dictionary with run_id and stream_url
+        Dictionary with run_id, stream_url, trace_id and status
     """
     enforce_scope(principal, "agent:run")
 
     run_id = str(uuid4())
     context = _context_from_principal(principal)
+    if session_id:
+        context.session_id = session_id
 
     # Create initial event
     initial_event = MessageEvent(
@@ -442,27 +698,86 @@ async def create_streaming_run(
     )
     event_store.add_event(run_id, initial_event)
 
+    # Trace-event bridge: AgentLoop calls this callback (via its
+    # event_callback hook) for every step; convert each whitelisted trace
+    # event into an SSE StreamEvent on this run's channel.
+    #
+    # NOTE: AgentLoop keeps a single _event_callback slot. Concurrent runs
+    # through other endpoints (which pass no callback) can overwrite the
+    # slot mid-run; the trace_id guard below ensures this bridge never
+    # forwards another run's events, and the run-level completion event is
+    # always emitted from the returned result, so terminal state stays correct.
+    def _on_trace_event(trace_event: TraceEvent) -> None:
+        try:
+            if getattr(trace_event, "trace_id", None) != context.trace_id:
+                return
+            stream_event = trace_to_stream_event(run_id, trace_event)
+            if stream_event is not None:
+                event_store.add_event(run_id, stream_event)
+        except Exception as exc:  # bridging must never break the agent run
+            logger.debug(f"trace bridge failed for run {run_id}: {exc}")
+
     # Start async execution in background
     async def run_agent_async():
+        sequence = 1
+
+        # Send progress event
+        progress_event = ProgressEvent(
+            run_id=run_id,
+            overall_progress=0.1,
+            current_step="Planning",
+            total_steps=4,
+            completed_steps=0,
+            sequence=sequence,
+        )
+        event_store.add_event(run_id, progress_event)
+
         try:
-            sequence = 1
+            # Execute agent with the live trace-event bridge attached
+            result = await agent.run(context, task, extra_context, event_callback=_on_trace_event)
 
-            # Send progress event
-            progress_event = ProgressEvent(
-                run_id=run_id,
-                overall_progress=0.1,
-                current_step="Planning",
-                total_steps=4,
-                completed_steps=0,
-                sequence=sequence,
-            )
-            event_store.add_event(run_id, progress_event)
-            sequence += 1
+            # Post-run tool details: arguments summary + result summary per call
+            for tool_record in result.tool_calls:
+                event_store.add_event(run_id, tool_call_to_result_event(run_id, tool_record))
 
-            # Execute agent
-            result = await agent.run(context, task, extra_context)
+            # Approval gate: surface pending tool approvals before completion.
+            # Scope: tool approvals (resource_type == "tool") linked to this
+            # tenant, or any approval linked to this run's trace. Stale
+            # workflow-type approvals from other subsystems are not replayed
+            # on every chat turn.
+            approval_store = getattr(agent, "approval_store", None)
+            pending_approvals: list[Any] = []
+            if approval_store is not None:
+                try:
+                    candidates = list(
+                        approval_store.list(limit=10, status=ApprovalStatus.PENDING, tenant_id=context.tenant_id)
+                    )
+                except TypeError:
+                    try:
+                        candidates = list(approval_store.list(limit=10, status=ApprovalStatus.PENDING))
+                    except Exception as exc:
+                        candidates = []
+                        logger.debug(f"approval listing failed for run {run_id}: {exc}")
+                except Exception as exc:
+                    candidates = []
+                    logger.debug(f"approval listing failed for run {run_id}: {exc}")
+                pending_approvals = [
+                    rec for rec in candidates
+                    if str(getattr(rec, "resource_type", "") or "") == "tool"
+                    or str(getattr(rec, "trace_id", "") or "") == context.trace_id
+                ]
+            if result.status == RunStatus.NEEDS_APPROVAL or pending_approvals:
+                if not pending_approvals:
+                    # Needs approval but store unavailable/unpopulated: generic notice
+                    event_store.add_event(run_id, StreamEvent(
+                        event_type="approval_required",
+                        run_id=run_id,
+                        data={"approval_id": None, "reason": "run is waiting for an approval decision"},
+                    ))
+                for approval_record in pending_approvals[:5]:
+                    event_store.add_event(run_id, approval_to_event(run_id, approval_record))
 
-            # Send completion event
+            # Send completion event (terminal — closes open SSE streams)
             completion_event = CompletionEvent(
                 run_id=run_id,
                 status=result.status,
@@ -472,8 +787,12 @@ async def create_streaming_run(
             )
             event_store.add_event(run_id, completion_event)
 
-            # Save to run store
-            run_store.save(context, task, result)
+            # Save to run store (non-fatal: a persistence failure must not
+            # append a spurious error event after the terminal completion)
+            try:
+                run_store.save(context, task, result)
+            except Exception as save_exc:
+                logger.warning(f"run_store.save failed for streaming run {run_id}: {save_exc}")
 
         except Exception as e:
             logger.error(f"Error executing streaming run {run_id}: {e}")
@@ -492,6 +811,7 @@ async def create_streaming_run(
     return {
         "run_id": run_id,
         "stream_url": f"/api/v1/agent/stream/{run_id}",
+        "trace_id": context.trace_id,
         "status": "started",
     }
 

@@ -1068,6 +1068,7 @@ class AgentLoop:
                 execution_frame.execution_summary["retry_budget"] = int(extra_context["retry_budget"])
 
         iteration = 0
+        _sediment_tc_seen = 0  # P2-11: 已喂给技能自沉淀引擎的工具调用数（增量喂入游标）
         while iteration < self.max_iterations and plan:
             step = plan.pop(0)
             iteration += 1
@@ -1203,6 +1204,9 @@ class AgentLoop:
                 trajectory=trajectory,
                 extra_context=extra_context,
             )
+
+            # P2-11: 技能自沉淀 — 每轮迭代把新增工具调用喂给沉淀引擎（best-effort）
+            _sediment_tc_seen = self._feed_sedimentation(context, tool_calls, _sediment_tc_seen)
 
             # P1-14: AgentContextManager — 每次迭代后保存快照（失败静默降级）
             if self.agent_context_manager is not None and self._acm_session_id is not None:
@@ -1446,6 +1450,9 @@ class AgentLoop:
                             )
                         except Exception:
                             pass
+
+                # P2-11: 技能自沉淀 — continuation 迭代同样增量喂入（best-effort）
+                _sediment_tc_seen = self._feed_sedimentation(context, tool_calls, _sediment_tc_seen)
 
         if not answer:
             answer = self._finalize_answer(task, trajectory, last_tool_result, extra_context)
@@ -2151,6 +2158,10 @@ class AgentLoop:
         try:
             from backend.app.core.evolution_engine import evolution_engine
 
+            # P2-12: 注入真实依赖（只补空槽）—— 单例默认 llm_router/memory 均为
+            # None，不注入则反思/技能生成/自改进全部走降级空转路径
+            evolution_engine.configure(llm_router=self.llm, memory=self.memory)
+
             trajectory_data = {
                 "tool_calls": [
                     {"name": tc.tool_name, "success": tc.success, "latency_ms": tc.latency_ms}
@@ -2168,6 +2179,32 @@ class AgentLoop:
             await evolution_engine.on_task_complete(trajectory_data, result_data)
         except Exception:
             pass  # Evolution must never break agent execution
+
+        # P2-11/P2-12: 技能自沉淀闭环 — 任务成功后从轨迹沉淀技能草稿，
+        # 并把已 promote 的技能落盘热加载进本循环的 ToolRegistry（best-effort，
+        # 失败静默降级记日志，绝不阻断主循环）
+        try:
+            from backend.app.core.skill_distillation import get_sedimentation_engine
+
+            _sediment_engine = get_sedimentation_engine()
+            _sediment_engine.bind_tool_registry(self.tools)
+            _sediment_steps = [
+                {"type": "tool_call", "tool": tc.tool_name, "success": tc.success, "duration_ms": tc.latency_ms}
+                for tc in tool_calls
+            ]
+            _sediment_event = await _sediment_engine.try_sediment(
+                context.trace_id, task, _sediment_steps, success=True
+            )
+            _mounted = await _sediment_engine.mount_promoted_skills()
+            self._emit_trace(
+                context, "agent.skill_sedimentation",
+                decision=_sediment_event.decision,
+                patterns_found=_sediment_event.patterns_found,
+                drafts_accepted=_sediment_event.drafts_accepted,
+                mounted=_mounted,
+            )
+        except Exception as _sediment_exc:
+            logger.debug("Skill sedimentation failed (non-blocking): %s", _sediment_exc)
 
         # ─── Codex 对齐: Post-Run Learning — 失败运行自动提取教训 ───────────
         try:
@@ -2981,15 +3018,19 @@ class AgentLoop:
             f"Recent evidence: {self._stringify(last_tool_result)[:280] if last_tool_result else 'none'}",
         ]
         reflection = f"{' | '.join(summary_bits)}. Evidence: {json.dumps(evidence, ensure_ascii=False, default=str)[:1200]}"
+        # P2-12 修复：此前传入的 domain/prompt/reflection/confidence 等字段在
+        # ReflectionRecord 中不存在，Pydantic v2 静默丢弃导致持久化的是空壳记录；
+        # 现按真实字段（task_summary/strengths/weaknesses/lessons/next_actions）写入。
         evolution_store.add_reflection(
             ReflectionRecord(
                 tenant_id=context.tenant_id,
                 agent_id=context.agent_id,
-                domain="agent_reasoning",
-                prompt=trajectory.task,
-                reflection=reflection,
-                confidence=0.72,
-                promoted=False,
+                trace_id=context.trace_id,
+                task_summary=f"{trajectory.goal or trajectory.task} @ {trajectory.stage}",
+                strengths=[f"completed tool calls: {len(trajectory.tool_results)}"],
+                weaknesses=open_items[:3],
+                lessons=[reflection[:400]] if reflection else [],
+                next_actions=list(open_items[:3]),
             )
         )
         if hasattr(self.memory, "add_revision") and trajectory.observations:
@@ -3010,6 +3051,42 @@ class AgentLoop:
                     ),
                 )
         return reflection
+
+    def _feed_sedimentation(
+        self,
+        context: RunContext,
+        tool_calls: list,
+        prev_count: int,
+    ) -> int:
+        """P2-11: 把本轮新增的工具调用喂给技能自沉淀引擎（best-effort，失败静默降级）。
+
+        只喂入 ``prev_count`` 之后的新增调用，避免每轮重复喂入累积列表
+        造成 harvester 频率统计膨胀。
+
+        Returns:
+            喂入后的游标（已处理的 tool_calls 数量），供下一轮增量喂入。
+        """
+        try:
+            new_calls = tool_calls[prev_count:]
+            if not new_calls:
+                return prev_count
+            from backend.app.core.skill_distillation import get_sedimentation_engine
+
+            get_sedimentation_engine().record_trajectory(
+                context.trace_id,
+                [
+                    {
+                        "type": "tool_call",
+                        "tool": tc.tool_name,
+                        "success": tc.success,
+                        "duration_ms": tc.latency_ms,
+                    }
+                    for tc in new_calls
+                ],
+            )
+        except Exception as exc:
+            logger.debug("Sedimentation trajectory feed failed (non-blocking): %s", exc)
+        return len(tool_calls)
 
     def _save_iteration_checkpoint(
         self,

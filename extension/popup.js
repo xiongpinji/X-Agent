@@ -3,15 +3,37 @@
  * Handles popup UI interactions and communication with background script
  */
 
+import {
+  ApiClientError,
+  buildPageContext,
+  checkHealth,
+  loadBackendSettings,
+  normalizeBaseUrl,
+  runAgent,
+  runAgentStream,
+  saveBackendSettings
+} from './api-client.js';
+
 class PopupManager {
   constructor() {
     this.currentSession = null;
     this.tabGroups = [];
     this.actionHistory = [];
+    this.backendSettings = null;
+    this.chatBusy = false;
+    this.activeTabId = null;
   }
 
   async initialize() {
     console.log('[X-Agent Popup] Initializing...');
+
+    // Track the active tab (used to attach page content to chat tasks)
+    try {
+      const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+      this.activeTabId = tabs.length > 0 ? tabs[0].id : null;
+    } catch {
+      this.activeTabId = null;
+    }
 
     // Load current session
     await this.loadSession();
@@ -21,6 +43,9 @@ class PopupManager {
 
     // Load action history
     await this.loadActionHistory();
+
+    // Load backend settings into the settings form
+    await this.loadBackendSettingsIntoUI();
 
     // Setup event listeners
     this.setupEventListeners();
@@ -35,6 +60,17 @@ class PopupManager {
     // Session buttons
     document.getElementById('create-session-btn').addEventListener('click', () => {
       this.createSession();
+    });
+
+    // Chat / agent run
+    document.getElementById('chat-send-btn').addEventListener('click', () => {
+      this.sendChat();
+    });
+    document.getElementById('chat-input').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        this.sendChat();
+      }
     });
 
     // Quick action buttons
@@ -67,6 +103,21 @@ class PopupManager {
       this.createTabGroup();
     });
 
+    // Backend settings
+    document.getElementById('test-connection-btn').addEventListener('click', () => {
+      this.testBackendConnection();
+    });
+    document.getElementById('backend-url-input').addEventListener('change', () => {
+      this.persistBackendSettings();
+    });
+    document.getElementById('api-key-input').addEventListener('change', () => {
+      this.persistBackendSettings();
+    });
+    document.getElementById('open-options-link').addEventListener('click', (e) => {
+      e.preventDefault();
+      chrome.runtime.openOptionsPage();
+    });
+
     // Settings
     document.getElementById('auto-highlight-toggle').addEventListener('change', (e) => {
       this.saveSetting('autoHighlight', e.target.checked);
@@ -92,6 +143,155 @@ class PopupManager {
     document.getElementById('about-btn').addEventListener('click', () => {
       this.showAbout();
     });
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* Backend settings + connectivity                                  */
+  /* ---------------------------------------------------------------- */
+
+  async loadBackendSettingsIntoUI() {
+    try {
+      this.backendSettings = await loadBackendSettings();
+      document.getElementById('backend-url-input').value = this.backendSettings.baseUrl;
+      document.getElementById('api-key-input').value = this.backendSettings.apiKey;
+      document.getElementById('attach-page-toggle').checked = this.backendSettings.attachPageContent !== false;
+      document.getElementById('stream-toggle').checked = this.backendSettings.useStreaming === true;
+    } catch (error) {
+      console.error('[X-Agent Popup] Error loading backend settings:', error);
+    }
+  }
+
+  async persistBackendSettings() {
+    try {
+      const partial = {
+        baseUrl: document.getElementById('backend-url-input').value,
+        apiKey: document.getElementById('api-key-input').value,
+        attachPageContent: document.getElementById('attach-page-toggle').checked,
+        useStreaming: document.getElementById('stream-toggle').checked
+      };
+      this.backendSettings = await saveBackendSettings(partial);
+      document.getElementById('backend-url-input').value = this.backendSettings.baseUrl;
+      return this.backendSettings;
+    } catch (error) {
+      console.error('[X-Agent Popup] Error saving backend settings:', error);
+      this.showNotification('保存设置失败', 'error');
+      return null;
+    }
+  }
+
+  async testBackendConnection() {
+    const button = document.getElementById('test-connection-btn');
+    const statusEl = document.getElementById('connection-status');
+    button.disabled = true;
+    statusEl.textContent = '测试中…';
+    statusEl.className = 'connection-status testing';
+
+    const settings = (await this.persistBackendSettings()) || this.backendSettings;
+    const health = await checkHealth(settings.baseUrl, settings.apiKey);
+
+    button.disabled = false;
+    if (health.ok) {
+      statusEl.textContent = `已连接（${health.latencyMs}ms）`;
+      statusEl.className = 'connection-status ok';
+    } else {
+      statusEl.textContent = health.error || '连接失败';
+      statusEl.className = 'connection-status fail';
+    }
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* Chat / agent run                                                 */
+  /* ---------------------------------------------------------------- */
+
+  async extractActivePage() {
+    if (this.activeTabId == null) {
+      return buildPageContext({ success: false, error: '没有活跃的标签页' });
+    }
+    try {
+      const extract = await chrome.tabs.sendMessage(this.activeTabId, {
+        type: 'EXTRACT_CONTENT',
+        includeText: true,
+        includeLinks: true,
+        includeImages: false
+      });
+      return buildPageContext(extract, {
+        maxChars: this.backendSettings ? this.backendSettings.maxPageTextChars : undefined
+      });
+    } catch (error) {
+      return buildPageContext({ success: false, error: error.message });
+    }
+  }
+
+  async sendChat() {
+    if (this.chatBusy) return;
+
+    const input = document.getElementById('chat-input');
+    const sendBtn = document.getElementById('chat-send-btn');
+    const output = document.getElementById('chat-output');
+    const statusEl = document.getElementById('chat-status');
+    const answerEl = document.getElementById('chat-answer');
+    const task = input.value.trim();
+
+    if (!task) {
+      this.showNotification('请输入任务内容', 'warning');
+      return;
+    }
+
+    this.chatBusy = true;
+    sendBtn.disabled = true;
+    sendBtn.textContent = '执行中…';
+    output.hidden = false;
+    statusEl.textContent = this.backendSettings && this.backendSettings.useStreaming
+      ? '已提交，等待后端响应…'
+      : '任务执行中（可能需要数十秒）…';
+    statusEl.className = 'chat-status running';
+    answerEl.textContent = '';
+
+    try {
+      const settings = (await this.persistBackendSettings()) || this.backendSettings;
+      const attachPage = document.getElementById('attach-page-toggle').checked;
+      const extraContext = attachPage ? await this.extractActivePage() : {};
+      const options = {
+        task,
+        extraContext,
+        sessionId: this.currentSession ? this.currentSession.traceId : undefined
+      };
+
+      const finish = (result) => {
+        const answer = (result && result.answer) || '';
+        const failed = result && ['failed', 'error'].includes(String(result.status || ''));
+        if (failed) {
+          statusEl.textContent = `执行失败${result.error ? `：${result.error}` : ''}`;
+          statusEl.className = 'chat-status error';
+          answerEl.textContent = answer || '';
+        } else {
+          statusEl.textContent = `完成（trace: ${(result && result.trace_id || '').slice(0, 8)}）`;
+          statusEl.className = 'chat-status done';
+          answerEl.textContent = answer || '(无输出)';
+        }
+      };
+
+      if (document.getElementById('stream-toggle').checked) {
+        let traceCount = 0;
+        const result = await runAgentStream(options, settings, {
+          onTraceEvent: () => {
+            traceCount += 1;
+            statusEl.textContent = `执行中…（已收到 ${traceCount} 个事件）`;
+          }
+        });
+        finish(result);
+      } else {
+        const result = await runAgent(options, settings);
+        finish(result);
+      }
+    } catch (error) {
+      statusEl.textContent = error instanceof ApiClientError ? error.message : `请求失败：${error.message}`;
+      statusEl.className = 'chat-status error';
+    } finally {
+      this.chatBusy = false;
+      sendBtn.disabled = false;
+      sendBtn.textContent = '发送任务';
+    }
   }
 
   async loadSession() {
@@ -350,16 +550,25 @@ class PopupManager {
     const dot = document.querySelector('.status-dot');
     const text = document.querySelector('.status-text');
 
-    // Check connection status
+    // Check connection status (backend direct mode + optional desktop app)
     chrome.runtime.sendMessage({ type: 'GET_STATUS' }, (response) => {
-      if (response && response.connected) {
+      if (!response) {
+        dot.classList.add('disconnected');
+        dot.classList.remove('connected');
+        text.textContent = '后台未响应';
+        return;
+      }
+      if (response.backend && response.backend.ok) {
         dot.classList.add('connected');
         dot.classList.remove('disconnected');
-        text.textContent = '已连接';
+        const native = response.nativeMcp && response.nativeMcp.available ? ' + 桌面端' : '';
+        text.title = response.backend.baseUrl;
+        text.textContent = `后端已连接${native}`;
       } else {
         dot.classList.add('disconnected');
         dot.classList.remove('connected');
-        text.textContent = '未连接';
+        text.title = (response.backend && response.backend.error) || '';
+        text.textContent = '后端未连接';
       }
     });
   }
@@ -392,28 +601,34 @@ class PopupManager {
   showHelp() {
     alert(`X-Agent 浏览器扩展帮助
 
+对话:
+• 在顶部输入任务，默认附带当前页面内容
+• 需要在设置中配置后端地址与 API Key
+
 快速操作:
 • 提取内容: 提取当前页面的文本、链接和图片
 • 高亮元素: 高亮页面上的交互元素
 • 录制操作: 记录您在页面上的操作
 • 侧边栏: 打开/关闭操作侧边栏
 
+右键菜单:
+• 在任意网页上右键选择"让 X-Agent 分析此页"
+
 快捷键:
 • Ctrl+Shift+X: 切换侧边栏
 • Ctrl+Shift+H: 切换元素高亮
 
-更多帮助请访问: https://x-agent.example.com/help`);
+后端默认地址: http://localhost:8000`);
   }
 
   showAbout() {
     alert(`X-Agent 浏览器扩展
-版本: 1.0.0
+版本: ${chrome.runtime.getManifest ? chrome.runtime.getManifest().version : '0.3.0'}
 
 X-Agent 是一个强大的浏览器自动化工具，
 帮助您自动化重复的网页操作。
 
-官网: https://x-agent.example.com
-文档: https://docs.x-agent.example.com`);
+直连后端模式：无需桌面端，直接访问 X-Agent 后端 API。`);
   }
 
   generateId() {

@@ -235,19 +235,16 @@ describe('MCPClient', () => {
     };
 
     chrome.runtime.connectNative.mockReturnValue(mockPort);
-    mcpClient.port = mockPort;
-    mcpClient.connected = true;
+    await mcpClient.connect(); // registers onMessage handler; handshake is fire-and-forget
 
     const promise = mcpClient.send({ type: 'test' });
 
-    // Simulate response
-    const handlers = mockPort.onMessage.addListener.mock.calls[0];
-    if (handlers) {
-      handlers[0]({ id: 1, data: { success: true } });
-    }
+    // Simulate the desktop app replying via the registered onMessage handler
+    const handler = mockPort.onMessage.addListener.mock.calls[0][0];
+    handler({ id: mcpClient.messageId, data: { success: true } });
 
     const result = await promise;
-    expect(result).toBeDefined();
+    expect(result).toEqual({ success: true });
   });
 
   test('should handle reconnection', async () => {

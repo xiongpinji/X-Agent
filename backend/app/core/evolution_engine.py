@@ -89,6 +89,19 @@ class EvolutionEngine:
         self.skill_drafts: list[SkillDraft] = []
         self.promoted_skills: list[PromotedSkill] = []
         self._execution_history: list[dict[str, Any]] = []
+        # 自改进产物落盘目录（custom-skills/）；None 时用 promotion 模块默认值
+        self.skills_base_dir: str | None = None
+
+    def configure(self, llm_router=None, memory=None) -> None:
+        """注入真实依赖（只补空槽，不覆盖已配置实例）。
+
+        AgentLoop 在任务完成钩子处把自身的 LLMRouter/MemorySystem 注入单例，
+        使反思/技能生成/自改进从空转降级路径升级为真实调用。
+        """
+        if self.llm_router is None and llm_router is not None:
+            self.llm_router = llm_router
+        if self.memory is None and memory is not None:
+            self.memory = memory
 
     async def on_task_complete(self, trajectory: dict[str, Any], result: dict[str, Any]) -> Reflection | None:
         """Called after each task execution completes."""
@@ -216,15 +229,51 @@ class EvolutionEngine:
         logger.info(f"Promoted skill: {skill.name} (confidence={skill.success_rate:.2f})")
 
         if self.memory:
+            await self._persist_to_memory(
+                content=f"Evolved skill: {skill.name}\n{skill.description}\nTools: {skill.tool_sequence}",
+                layer=8,
+                importance=0.8,
+                tags=["evolution", "skill", skill.name],
+            )
+
+    def register_promoted_skill(self, skill: PromotedSkill) -> PromotedSkill:
+        """登记一个外部（如 skill_distillation 落盘）晋升的技能，纳入 usage 统计。
+
+        同名已存在时原地更新（保留 usage 计数），避免重复登记。
+        """
+        existing = next((s for s in self.promoted_skills if s.name == skill.name), None)
+        if existing is not None:
+            existing.code = skill.code or existing.code
+            existing.description = skill.description or existing.description
+            existing.tool_sequence = skill.tool_sequence or existing.tool_sequence
+            return existing
+        self.promoted_skills.append(skill)
+        return skill
+
+    async def _persist_to_memory(
+        self,
+        content: str,
+        layer: int,
+        importance: float,
+        tags: list[str],
+    ) -> bool:
+        """写入记忆系统（兼容带/不带 RunContext 的 store 签名，best-effort）。"""
+        if not self.memory:
+            return False
+        try:
             try:
+                await self.memory.store(content=content, layer=layer, importance=importance, tags=tags)
+            except TypeError:
+                # MemorySystem.store 需要 RunContext 作为首参
+                from backend.app.core.contracts import RunContext
+
                 await self.memory.store(
-                    content=f"Evolved skill: {skill.name}\n{skill.description}\nTools: {skill.tool_sequence}",
-                    layer=8,
-                    importance=0.8,
-                    tags=["evolution", "skill", skill.name],
+                    RunContext(), content=content, layer=layer, importance=importance, tags=tags
                 )
-            except Exception as e:
-                logger.warning(f"Failed to persist skill to memory: {e}")
+            return True
+        except Exception as e:
+            logger.warning(f"Failed to persist to memory: {e}")
+            return False
 
     def match_skill(self, task_description: str) -> PromotedSkill | None:
         """Match an incoming task to an available skill."""
@@ -253,8 +302,14 @@ class EvolutionEngine:
 
         This implements Hermes-like skill self-improvement during use:
         skills that underperform are automatically flagged for refinement.
+
+        ``skill_id`` 接受 PromotedSkill.id 或技能名（skill_agent_adapter 的
+        handler 只知道技能名，按名匹配让落盘技能也能进入 usage 统计）。
         """
-        skill = next((s for s in self.promoted_skills if s.id == skill_id), None)
+        skill = next(
+            (s for s in self.promoted_skills if s.id == skill_id or s.name == skill_id),
+            None,
+        )
         if not skill:
             return {"status": "error", "reason": "skill not found"}
 
@@ -300,7 +355,9 @@ class EvolutionEngine:
                     f"Current code:\n```python\n{skill.code}\n```\n\n"
                     f"Tool sequence: {skill.tool_sequence}\n"
                     f"Recent context: {context or 'N/A'}\n\n"
-                    "Generate an improved version with better error handling and edge case coverage."
+                    "Generate an improved version with better error handling and edge case coverage. "
+                    "Return the complete module source defining class SkillImplementation "
+                    "(subclass of backend.app.core.skills.Skill)."
                 )
                 messages = [{"role": "user", "content": prompt}]
                 response = await self.llm_router.chat(messages, tools=[])
@@ -317,6 +374,17 @@ class EvolutionEngine:
                 skill.version += 1
                 improvement_record["success"] = True
                 improvement_record["new_version"] = skill.version
+                # 改进产物落盘为新版本（best-effort，失败不影响内存态改进结果）
+                try:
+                    from backend.app.core.skill_distillation.promotion import persist_improved_skill
+
+                    persisted = persist_improved_skill(
+                        skill.name, skill.code, skill.version, base_dir=self.skills_base_dir
+                    )
+                    if persisted is not None:
+                        improvement_record["persisted_path"] = str(persisted)
+                except Exception as persist_exc:
+                    logger.warning(f"Skill improvement persist failed: {persist_exc}")
             except Exception as e:
                 logger.warning(f"Skill improvement failed: {e}")
                 improvement_record["success"] = False
@@ -341,21 +409,19 @@ class EvolutionEngine:
         # Persist high-value skills
         for skill in self.promoted_skills:
             if skill.success_rate >= 0.8 and skill.usage_count >= 5:
-                try:
-                    await self.memory.store(
-                        content=(
-                            f"Proven skill: {skill.name}\n"
-                            f"Success rate: {skill.success_rate:.0%} over {skill.usage_count} uses\n"
-                            f"Tools: {skill.tool_sequence}\n"
-                            f"Trigger: {skill.trigger_pattern}"
-                        ),
-                        layer=8,  # Long-term skill memory
-                        importance=0.9,
-                        tags=["evolution", "proven_skill", skill.name],
-                    )
+                ok = await self._persist_to_memory(
+                    content=(
+                        f"Proven skill: {skill.name}\n"
+                        f"Success rate: {skill.success_rate:.0%} over {skill.usage_count} uses\n"
+                        f"Tools: {skill.tool_sequence}\n"
+                        f"Trigger: {skill.trigger_pattern}"
+                    ),
+                    layer=8,  # Long-term skill memory
+                    importance=0.9,
+                    tags=["evolution", "proven_skill", skill.name],
+                )
+                if ok:
                     persisted += 1
-                except Exception as e:
-                    logger.warning(f"Failed to persist skill {skill.name}: {e}")
 
         return {
             "status": "completed",

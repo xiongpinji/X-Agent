@@ -23,8 +23,21 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-# Default FTS database path
-DEFAULT_FTS_DB_PATH = Path("data/memory_fts.db")
+# Default FTS database path (X-Agent 主路径约定: data/memory_fts.sqlite3,
+# 可被 settings.memory_fts_path / XAGENT_MEMORY_FTS_PATH 覆盖)
+DEFAULT_FTS_DB_PATH = Path("data/memory_fts.sqlite3")
+
+# unicode61 把整段无空格 CJK 当作单个 token，导致中文查询无法命中子串。
+# 启用中文分词时按字(unigram)切开再入索引/查询，查询端组合为短语(连续字序)。
+_CJK_RUN_RE = re.compile(r"[\u4e00-\u9fff]+")
+_ASCII_TERM_RE = re.compile(r"[a-z0-9_]{2,}")
+
+
+def _preprocess_text(text: str) -> str:
+    """Insert spaces between CJK characters so unicode61 indexes per-character."""
+    if not text:
+        return text
+    return _CJK_RUN_RE.sub(lambda m: " ".join(m.group(0)), text)
 
 
 @dataclass
@@ -162,6 +175,8 @@ class MemoryFTSEngine:
         conn = self._get_conn()
         now = time.time()
         tags_str = " ".join(tags) if tags else ""
+        indexed_content = self._prepare(content)
+        indexed_tags = self._prepare(tags_str)
 
         try:
             # Upsert into FTS table
@@ -174,7 +189,7 @@ class MemoryFTSEngine:
                 INSERT INTO memory_fts (memory_id, content, session_id, tenant_id, agent_id, tags)
                 VALUES (?, ?, ?, ?, ?, ?)
                 """,
-                (memory_id, content, session_id, tenant_id, agent_id, tags_str),
+                (memory_id, indexed_content, session_id, tenant_id, agent_id, indexed_tags),
             )
 
             # Upsert into metadata table
@@ -193,6 +208,95 @@ class MemoryFTSEngine:
             logger.error(f"Failed to index memory {memory_id}: {e}")
             conn.rollback()
             return False
+
+    def _prepare(self, text: str) -> str:
+        """Preprocess text for the FTS index (CJK unigram spacing when enabled)."""
+        if not self.enable_chinese_tokenizer:
+            return text
+        return _preprocess_text(text)
+
+    def index_memory_bulk(self, items: list[dict[str, Any]]) -> int:
+        """Idempotently (re)index many memories in a single transaction.
+
+        Each item dict accepts the same fields as :meth:`index_memory`
+        (memory_id + content required). Row count is stable across repeated
+        calls: the FTS row is DELETEd then re-INSERTed and metadata is
+        INSERT OR REPLACE keyed by memory_id.
+
+        Returns the number of items indexed.
+        """
+        if not items:
+            return 0
+        conn = self._get_conn()
+        started = time.perf_counter()
+        try:
+            conn.execute("BEGIN")
+            for entry in items:
+                memory_id = str(entry["memory_id"])
+                content = str(entry.get("content", ""))
+                tags = entry.get("tags") or []
+                tags_str = " ".join(tags) if isinstance(tags, list) else str(tags or "")
+                conn.execute(
+                    "DELETE FROM memory_fts WHERE memory_id = ?",
+                    (memory_id,),
+                )
+                conn.execute(
+                    """
+                    INSERT INTO memory_fts (memory_id, content, session_id, tenant_id, agent_id, tags)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        memory_id,
+                        self._prepare(content),
+                        entry.get("session_id"),
+                        entry.get("tenant_id", "default"),
+                        entry.get("agent_id"),
+                        self._prepare(tags_str),
+                    ),
+                )
+                now = time.time()
+                conn.execute(
+                    """
+                    INSERT OR REPLACE INTO memory_meta
+                    (memory_id, content, session_id, tenant_id, agent_id, tags, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        memory_id,
+                        content,
+                        entry.get("session_id"),
+                        entry.get("tenant_id", "default"),
+                        entry.get("agent_id"),
+                        tags_str,
+                        float(entry.get("created_at", now)),
+                        now,
+                    ),
+                )
+            conn.commit()
+            logger.debug(
+                "FTS bulk index: %d items in %.1fms", len(items), (time.perf_counter() - started) * 1000
+            )
+            return len(items)
+        except Exception as e:
+            conn.rollback()
+            raise RuntimeError(f"FTS bulk index failed: {e}") from e
+
+    def remove_memories(self, memory_ids: list[str]) -> int:
+        """Remove many memories from the index in a single transaction."""
+        if not memory_ids:
+            return 0
+        conn = self._get_conn()
+        try:
+            conn.execute("BEGIN")
+            for memory_id in memory_ids:
+                conn.execute("DELETE FROM memory_fts WHERE memory_id = ?", (memory_id,))
+                conn.execute("DELETE FROM memory_meta WHERE memory_id = ?", (memory_id,))
+            conn.commit()
+            return len(memory_ids)
+        except Exception as e:
+            conn.rollback()
+            logger.error(f"Failed to remove memories in bulk: {e}")
+            return 0
 
     def remove_memory(self, memory_id: str) -> bool:
         """Remove a memory from the index."""
@@ -230,11 +334,11 @@ class MemoryFTSEngine:
         start_time = time.perf_counter()
         conn = self._get_conn()
 
-        # Escape FTS5 special characters
-        safe_query = self._escape_fts_query(query)
+        # Build FTS5 OR-recall query (ASCII terms + CJK unigram phrases)
+        safe_query = self._build_match_query(query)
 
         # Build FTS5 query with BM25 ranking
-        # BM25 weights: content=10.0, tags=5.0 (title-like boost)
+        # BM25 weights (one per column): content=10.0, tags=5.0, others 0
         sql = """
             SELECT
                 m.memory_id,
@@ -242,7 +346,7 @@ class MemoryFTSEngine:
                 m.session_id,
                 m.created_at,
                 m.tags,
-                bm25(memory_fts, 10.0, 5.0) as rank,
+                bm25(memory_fts, 0.0, 10.0, 0.0, 0.0, 0.0, 5.0) as rank,
                 snippet(memory_fts, 1, '<b>', '</b>', '...', 32) as snippet
             FROM memory_fts
             JOIN memory_meta m ON memory_fts.memory_id = m.memory_id
@@ -286,6 +390,13 @@ class MemoryFTSEngine:
             results = self._fallback_search(query, tenant_id, limit)
 
         search_time = (time.perf_counter() - start_time) * 1000
+        logger.debug(
+            "FTS search '%s': %d/%d results in %.2fms",
+            query[:50],
+            len(results),
+            limit,
+            search_time,
+        )
 
         # Generate summary if requested
         summary = None
@@ -385,16 +496,30 @@ class MemoryFTSEngine:
             logger.error(f"Failed to get stats: {e}")
             return {"error": str(e)}
 
-    def _escape_fts_query(self, query: str) -> str:
-        """Escape special FTS5 characters and build query."""
-        # Remove FTS5 operators for safety
-        safe = re.sub(r'[^\w\s\u4e00-\u9fff]', ' ', query)
-        # Split into terms and join with OR for broader matching
-        terms = [t.strip() for t in safe.split() if t.strip()]
-        if not terms:
+    def _build_match_query(self, query: str) -> str:
+        """Build a safe FTS5 MATCH expression with OR recall.
+
+        Mirrors the linear scan's "any term hit survives" filter semantics:
+        ASCII word terms become quoted tokens; each CJK run becomes a quoted
+        phrase of unigram tokens (contiguous subsequence match). Parts are
+        joined with OR so every keyword-exact hit is in the MATCH set.
+        """
+        normalized = (query or "").casefold()
+        parts: list[str] = []
+        for term in _ASCII_TERM_RE.findall(normalized):
+            parts.append(f'"{term}"')
+        if self.enable_chinese_tokenizer:
+            for run in _CJK_RUN_RE.findall(normalized):
+                if len(run) == 1:
+                    parts.append(f'"{run}"')
+                else:
+                    parts.append('"{}"'.format(" ".join(run)))
+        else:
+            for run in _CJK_RUN_RE.findall(normalized):
+                parts.append(f'"{run}"')
+        if not parts:
             return '""'
-        # Use implicit AND for better precision
-        return " ".join(f'"{t}"' for t in terms)
+        return " OR ".join(parts)
 
     def _fallback_search(
         self,

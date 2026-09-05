@@ -1,4 +1,6 @@
+import asyncio
 import logging
+import os
 import time
 from collections import deque
 from secrets import token_urlsafe
@@ -743,6 +745,8 @@ async def security_headers_middleware(request: Request, call_next):
 
 
 _routers_registered = False
+# B3: 调度器接线幂等守卫（见 startup_event 内 B3 块说明）
+_scheduler_wiring_done = False
 
 # Track C (2026-08): explicit keep-list of mounted API router modules.
 # Only coding-agent core domains are mounted. Each entry is a module under
@@ -819,6 +823,10 @@ _KEPT_ROUTER_MODULES: tuple[str, ...] = (
     "analytics",      # 实时分析
     "forum",          # 论坛
     "forum_search",   # 论坛搜索（自 archive 恢复）
+    # 2026-09-05 学习闭环批次接线（组件此前已实现但未挂载）：
+    "skill_sediment", # P2-11 技能自沉淀（stats/promote/reject/prune/events）
+    "memory_advanced",# 情节/跨会话/程序性记忆 API（含 FTS5 检索）
+    "scheduler",      # 定时任务 CRUD/队列（B3：到点投递 agent.run）
 )
 
 
@@ -1126,6 +1134,70 @@ async def startup_event():
         logger.error(f"Failed to initialize OTel exporter: {e}", exc_info=True)
         logger.warning("Application startup continuing without OTel")
 
+    # B3（2026-09-05）调度器常驻化 —— 组件此前已完整但从未启动：
+    #   1. task_queue 注册 "agent.run" handler + 启动 worker（定时任务的真实执行体）
+    #   2. cron_scheduler 循环（/api/scheduler 创建的 cron/interval/once 到点投递）
+    #   3. workflow run_due 循环（workflow_schedules 表的 lease 抢占调度）
+    # XAGENT_SCHEDULER_ENABLED=false 可整体关闭（测试/纯 CLI 场景）。
+    # 幂等：进程内只接线一次；TestClient 反复启动时旧事件循环已销毁，
+    # 守卫跳过重启（调度任务随宿主事件循环消亡，无泄漏）。
+    global _scheduler_wiring_done
+    if os.environ.get("XAGENT_SCHEDULER_ENABLED", "true").lower() in ("false", "0", "no"):
+        logger.info("B3: Scheduler wiring disabled (XAGENT_SCHEDULER_ENABLED=false)")
+    elif _scheduler_wiring_done:
+        logger.info("B3: Scheduler wiring already done; skipping")
+    else:
+        _scheduler_wiring_done = True
+        try:
+            from backend.app.core.contracts import RunContext
+            from backend.app.core.task_queue import task_queue
+
+            async def _agent_run_handler(payload: dict, metadata: dict | None = None):
+                task_text = str((payload or {}).get("task") or "").strip()
+                if not task_text:
+                    return {"status": "skipped", "reason": "empty task"}
+                from backend.app.dependencies import get_agent
+
+                agent = get_agent()
+                result = await agent.run(
+                    RunContext(),
+                    task_text,
+                    extra_context=dict((payload or {}).get("context") or {}),
+                )
+                return {
+                    "status": result.status.value,
+                    "answer": (result.answer or "")[:2000],
+                    "trace_id": result.trace_id,
+                }
+
+            if "agent.run" not in task_queue._handlers:
+                task_queue.register_handler("agent.run", _agent_run_handler)
+            await task_queue.start_worker(concurrency=2)
+            logger.info("B3: task_queue worker started (agent.run handler registered)")
+        except Exception as e:
+            logger.error(f"B3: task_queue wiring failed: {e}", exc_info=True)
+            logger.warning("Application startup continuing without task queue worker")
+
+        try:
+            from backend.app.core.scheduler import cron_scheduler
+
+            app.state.cron_scheduler_task = asyncio.create_task(cron_scheduler.start())
+            logger.info("B3: cron scheduler loop started")
+        except Exception as e:
+            logger.error(f"B3: cron scheduler start failed: {e}", exc_info=True)
+            logger.warning("Application startup continuing without cron scheduler")
+
+        try:
+            from backend.app.workflow_worker import run_forever as _workflow_worker_forever
+
+            app.state.workflow_scheduler_task = asyncio.create_task(
+                _workflow_worker_forever(interval_seconds=30.0, limit=20, lease_seconds=60)
+            )
+            logger.info("B3: workflow schedule worker loop started (interval=30s)")
+        except Exception as e:
+            logger.error(f"B3: workflow schedule worker start failed: {e}", exc_info=True)
+            logger.warning("Application startup continuing without workflow scheduler")
+
 
 @app.on_event("shutdown")
 async def shutdown_event():
@@ -1137,6 +1209,18 @@ async def shutdown_event():
     3. 反依赖顺序关闭所有服务连接
     """
     # cloud_executor 已归档（2026-08-04，见 startup 处注释），无需停表
+
+    # B3: 停调度常驻循环（task_queue worker 优雅排空；两个 asyncio 循环任务取消）
+    try:
+        from backend.app.core.task_queue import task_queue
+
+        await task_queue.stop_worker(timeout=5.0)
+    except Exception as e:
+        logger.warning(f"task_queue stop failed during shutdown: {e}")
+    for attr in ("cron_scheduler_task", "workflow_scheduler_task"):
+        task = getattr(app.state, attr, None)
+        if task is not None and not task.done():
+            task.cancel()
 
     lifecycle = get_lifecycle_manager()
     await lifecycle.on_shutdown(

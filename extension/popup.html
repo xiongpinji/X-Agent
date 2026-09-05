@@ -22,6 +22,29 @@
 
         <!-- Main Content -->
         <div class="content">
+            <!-- Chat with X-Agent backend -->
+            <div class="section">
+                <h3 class="section-title">对话 X-Agent</h3>
+                <div class="chat-box">
+                    <textarea id="chat-input" rows="3" placeholder="输入任务，例如：总结此页面的关键信息"></textarea>
+                    <div class="chat-options">
+                        <label class="setting-item">
+                            <input type="checkbox" id="attach-page-toggle" checked>
+                            <span>附带当前页面</span>
+                        </label>
+                        <label class="setting-item">
+                            <input type="checkbox" id="stream-toggle">
+                            <span>流式输出</span>
+                        </label>
+                    </div>
+                    <button class="btn btn-primary" id="chat-send-btn">发送任务</button>
+                    <div class="chat-output" id="chat-output" hidden>
+                        <div class="chat-status" id="chat-status"></div>
+                        <div class="chat-answer" id="chat-answer"></div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Session Info -->
             <div class="section">
                 <h3 class="section-title">当前会话</h3>
@@ -74,6 +97,21 @@
             <!-- Settings -->
             <div class="section">
                 <h3 class="section-title">设置</h3>
+                <div class="backend-settings">
+                    <label class="backend-field">
+                        <span class="backend-label">后端地址</span>
+                        <input type="text" id="backend-url-input" placeholder="http://localhost:8000">
+                    </label>
+                    <label class="backend-field">
+                        <span class="backend-label">API Key</span>
+                        <input type="password" id="api-key-input" placeholder="留空表示无需认证">
+                    </label>
+                    <div class="backend-actions">
+                        <button class="btn btn-secondary" id="test-connection-btn">测试连接</button>
+                        <span class="connection-status" id="connection-status">未测试</span>
+                    </div>
+                    <a href="#" class="options-link" id="open-options-link">更多设置…</a>
+                </div>
                 <div class="settings-group">
                     <label class="setting-item">
                         <input type="checkbox" id="auto-highlight-toggle" checked>
@@ -99,6 +137,6 @@
         </div>
     </div>
 
-    <script src="popup.js"></script>
+    <script type="module" src="popup.js"></script>
 </body>
 </html>

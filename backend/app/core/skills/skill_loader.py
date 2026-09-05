@@ -17,6 +17,7 @@ X-Agent 唯一技能运行时（P1-11 架构决策，见 SKILLS_SYSTEM_README.md
 import importlib
 import importlib.util
 import logging
+import os
 import sys
 from pathlib import Path
 
@@ -29,6 +30,8 @@ logger = logging.getLogger(__name__)
 SKILL_ENTRYPOINT_CANDIDATES = ("main.py", "skill.py")
 # 技能实现类名约定
 SKILL_IMPLEMENTATION_CLASS = "SkillImplementation"
+# custom-skills 目录环境变量覆盖（主要用于测试隔离，防止测试向仓库写技能包）
+CUSTOM_SKILLS_DIR_ENV = "XAGENT_CUSTOM_SKILLS_DIR"
 
 
 def get_default_skills_dirs() -> list[Path]:
@@ -38,8 +41,21 @@ def get_default_skills_dirs() -> list[Path]:
     不受进程工作目录影响。
     """
     project_root = Path(__file__).resolve().parents[4]
-    candidates = [project_root / "skills", project_root / "custom-skills"]
+    candidates = [project_root / "skills", get_custom_skills_dir()]
     return [p for p in candidates if p.is_dir()]
+
+
+def get_custom_skills_dir() -> Path:
+    """返回 custom-skills 目录路径（不要求已存在，写入方自行 mkdir）。
+
+    技能自沉淀（skill_distillation）的 promote 落盘目标目录。
+    可用 ``XAGENT_CUSTOM_SKILLS_DIR`` 环境变量覆盖（测试隔离用）。
+    """
+    override = os.environ.get(CUSTOM_SKILLS_DIR_ENV)
+    if override:
+        return Path(override)
+    project_root = Path(__file__).resolve().parents[4]
+    return project_root / "custom-skills"
 
 
 class SkillLoader:

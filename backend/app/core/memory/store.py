@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import time
 from bisect import insort
 from datetime import UTC, datetime
 from inspect import isawaitable
@@ -24,6 +25,7 @@ from backend.app.core.memory_dedup_adapter import (
     canonical_from_store_item,
     dedup_memory_from_canonical,
 )
+from backend.app.core.memory_fts import MemoryFTSEngine
 from backend.app.core.memory_graph import MemoryGraph
 
 logger = logging.getLogger(__name__)
@@ -172,6 +174,9 @@ class MemorySystem:
         10: {"name": "long_term_evolution", "role": "identity", "scope": "long_term", "lifetime": "persistent", "access": "persistent"},
     }
 
+    # FTS5 BM25 候选上限（替代全量遍历；OR 召回保证关键词精确命中在候选集内）
+    FTS_CANDIDATE_LIMIT: int = 50
+
     def add(self, content: str, summary: str | None = None, *, tenant_id: str | None = None) -> str:
         """Raw synchronous append primitive (NOT deduplicated by design).
 
@@ -203,6 +208,8 @@ class MemorySystem:
         enable_dedup: bool | None = None,
         dedup_vector_threshold: float | None = None,
         dedup_candidate_limit: int = 2000,
+        fts_path: str | Path | None = None,
+        enable_fts: bool | None = None,
     ) -> None:
         self._items: list[MemoryItem] = []
         self._sessions: dict[str, SessionRecord] = {}
@@ -234,6 +241,24 @@ class MemorySystem:
         # loads, imports, and rebuilt after batch removals. Legacy O(n)-per-write
         # scan remains as fallback when numpy is unavailable.
         self._dedup_index: dict[str, _TenantDedupIndex] = {}
+        # FTS5 全文索引 (BM25 候选生成, 替代 search_with_scores 全量线性扫描)。
+        # 路径解析优先级: fts_path 参数 > XAGENT_MEMORY_FTS_PATH env >
+        # storage_path 同级 memory_fts.sqlite3；storage_path 为 None(纯内存模式)
+        # 时默认关闭, 避免污染 data/。XAGENT_MEMORY_FTS=off 可显式停用。
+        self._fts: MemoryFTSEngine | None = None
+        self._fts_failed = False
+        if enable_fts is None:
+            enable_fts = os.getenv("XAGENT_MEMORY_FTS", "on").strip().lower() not in {
+                "off",
+                "0",
+                "false",
+                "no",
+            }
+        if fts_path is None:
+            fts_path = os.getenv("XAGENT_MEMORY_FTS_PATH", "").strip() or None
+        if fts_path is None and self._storage_path is not None:
+            fts_path = self._storage_path.parent / "memory_fts.sqlite3"
+        self._fts_path = Path(fts_path) if enable_fts and fts_path else None
         if self._storage_path:
             self._load_from_disk()
 
@@ -543,17 +568,113 @@ class MemorySystem:
         top_k: int = 5,
         scope: MemoryScope | None = None,
     ) -> list[MemorySearchHit]:
+        started = time.perf_counter()
         query_terms = {term.lower() for term in query.split() if term.strip()}
         graph_query_terms = set(MemoryGraph.extract_terms(query))
         related_terms = self._graph.related_terms(query_terms | graph_query_terms)
         allowed_layers = set(layers or list(range(1, 11)))
         query_embedding = await self._embed(query)
         scope = self._normalize_scope(scope, context, None, {})
-        scored: list[MemorySearchHit] = []
-        # Snapshot under lock: 循环内有 await，会让出控制权，避免并发 append 致迭代期列表变更（B3）。
+        # 候选生成: 优先 FTS5 BM25 top-N（OR 召回保证关键词精确命中的条目都在
+        # MATCH 集内），FTS 空/损坏/异常时回退全量快照（与旧行为一致）。
+        items_snapshot, fts_used = self._search_candidates(query, context.tenant_id)
+        scored = await self._score_items(
+            items_snapshot,
+            context=context,
+            scope=scope,
+            allowed_layers=allowed_layers,
+            query_terms=query_terms,
+            related_terms=related_terms,
+            query_embedding=query_embedding,
+        )
+        if fts_used and len(scored) < top_k and len(items_snapshot) < self.count():
+            # Top-up：FTS 候选不足以填满 top_k 时回退全量重排，保证结果集
+            # 不劣于线性扫描（小数据集/纯向量召回场景走此分支）。
+            logger.debug(
+                "memory search top-up: fts candidates=%d scored=%d top_k=%d total=%d",
+                len(items_snapshot),
+                len(scored),
+                top_k,
+                self.count(),
+            )
+            with self._lock:
+                full_snapshot = list(self._items)
+            scored = await self._score_items(
+                full_snapshot,
+                context=context,
+                scope=scope,
+                allowed_layers=allowed_layers,
+                query_terms=query_terms,
+                related_terms=related_terms,
+                query_embedding=query_embedding,
+            )
+        scored.sort(key=lambda hit: (hit.score, hit.item.created_at), reverse=True)
+        results = scored[:top_k]
+        logger.debug(
+            "memory search: total=%d fts=%s candidates=%d hits=%d in %.2fms",
+            self.count(),
+            fts_used,
+            len(items_snapshot),
+            len(results),
+            (time.perf_counter() - started) * 1000,
+        )
+        return results
+
+    def _search_candidates(self, query: str, tenant_id: str) -> tuple[list[MemoryItem], bool]:
+        """Return (candidate items, fts_used). Falls back to a full snapshot."""
+        fts_ids = self._fts_candidate_ids(query, tenant_id)
+        if fts_ids is None:
+            with self._lock:
+                return list(self._items), False
         with self._lock:
-            items_snapshot = list(self._items)
-        for item in items_snapshot:
+            by_id = {item.id: item for item in self._items}
+        return [by_id[memory_id] for memory_id in fts_ids if memory_id in by_id], True
+
+    def _fts_candidate_ids(self, query: str, tenant_id: str) -> list[str] | None:
+        """FTS5 BM25 candidate ids, or None to signal "use the full scan".
+
+        Returns None when the engine is off/unavailable, the query yields no
+        matches, or the index errors (empty/corrupt/degraded) — the caller then
+        falls back to the original linear scan, so quality never regresses.
+        """
+        engine = self._get_fts()
+        if engine is None:
+            return None
+        try:
+            response = engine.search(
+                query,
+                tenant_id=tenant_id,
+                limit=self.FTS_CANDIDATE_LIMIT,
+                include_summary=False,
+            )
+            ids = [result.memory_id for result in response.results]
+            logger.debug(
+                "memory fts candidates: %d in %.2fms", len(ids), response.search_time_ms
+            )
+            if not ids:
+                # 空候选无法区分"确实无匹配"与"索引降级/未建"，统一回退全扫保证召回。
+                return None
+            return ids
+        except Exception as error:
+            logger.warning(
+                "memory fts search failed (%s); falling back to linear scan", error
+            )
+            return None
+
+    async def _score_items(
+        self,
+        items: list[MemoryItem],
+        *,
+        context: RunContext,
+        scope: MemoryScope,
+        allowed_layers: set[int],
+        query_terms: set[str],
+        related_terms: set[str],
+        query_embedding: list[float],
+    ) -> list[MemorySearchHit]:
+        """Deterministic rerank over a candidate list (keyword+graph+vector+加权)."""
+        scored: list[MemorySearchHit] = []
+        for item in items:
             if not self._can_access_item(context, item, scope):
                 continue
             if item.layer not in allowed_layers:
@@ -590,8 +711,7 @@ class MemorySystem:
                     freshness_score=round(freshness_score, 6),
                 )
             )
-        scored.sort(key=lambda hit: (hit.score, hit.item.created_at), reverse=True)
-        return scored[:top_k]
+        return scored
 
     def count(self) -> int:
         return len(self._items)
@@ -624,6 +744,7 @@ class MemorySystem:
                     existing.revisions = item.revisions
                 imported_memories += 1
         self._dedup_index_rebuild_all()
+        self._rebuild_fts_index()
         return {"memories": imported_memories, "sessions": imported_sessions}
 
     def session_count(self) -> int:
@@ -942,13 +1063,105 @@ class MemorySystem:
                     self._items.append(item)
                 self._graph.add_text(item.content)
         self._dedup_index_rebuild_all()
+        # 全量重建 FTS 索引（幂等 upsert + 批量事务），失败降级为线性扫描。
+        self._rebuild_fts_index()
 
     def _append_to_disk(self, record: MemoryItem | SessionRecord) -> None:
-        if self._storage_path is None:
+        if self._storage_path is not None:
+            self._storage_path.parent.mkdir(parents=True, exist_ok=True)
+            with self._storage_path.open("a", encoding="utf-8") as handle:
+                handle.write(json.dumps(record.model_dump(mode="json"), ensure_ascii=False) + "\n")
+        # FTS 写路径接线：落盘成功与否都尝试同步索引（幂等 upsert），失败只告警不阻断。
+        self._index_fts(record)
+
+    def _get_fts(self) -> MemoryFTSEngine | None:
+        """Lazily construct the FTS engine; None when disabled or init failed."""
+        if self._fts_path is None or self._fts_failed:
+            return None
+        if self._fts is None:
+            try:
+                self._fts = MemoryFTSEngine(self._fts_path)
+            except Exception as error:
+                self._fts_failed = True
+                logger.warning(
+                    "memory fts engine init failed at %s (%s); search falls back to linear scan",
+                    self._fts_path,
+                    error,
+                )
+        return self._fts
+
+    def _index_fts(self, record: MemoryItem | SessionRecord) -> None:
+        """Best-effort synchronous FTS index write (warn, never block)."""
+        if not isinstance(record, MemoryItem):
             return
-        self._storage_path.parent.mkdir(parents=True, exist_ok=True)
-        with self._storage_path.open("a", encoding="utf-8") as handle:
-            handle.write(json.dumps(record.model_dump(mode="json"), ensure_ascii=False) + "\n")
+        engine = self._get_fts()
+        if engine is None:
+            return
+        try:
+            engine.index_memory(
+                memory_id=record.id,
+                content=record.content,
+                session_id=record.session_id,
+                tenant_id=record.tenant_id,
+                agent_id=record.agent_id,
+                tags=record.tags,
+            )
+        except Exception as error:
+            logger.warning("memory fts index write failed for %s: %s", record.id, error)
+
+    def _rebuild_fts_index(self) -> None:
+        """Rebuild the FTS index from all in-memory items (idempotent, batched)."""
+        engine = self._get_fts()
+        if engine is None:
+            return
+        with self._lock:
+            entries = [
+                {
+                    "memory_id": item.id,
+                    "content": item.content,
+                    "session_id": item.session_id,
+                    "tenant_id": item.tenant_id,
+                    "agent_id": item.agent_id,
+                    "tags": item.tags,
+                }
+                for item in self._items
+            ]
+        started = time.perf_counter()
+        try:
+            engine.index_memory_bulk(entries)
+        except Exception as error:
+            self._fts = None
+            self._fts_failed = True
+            logger.warning(
+                "memory fts index rebuild failed; fts disabled for this instance: %s", error
+            )
+            return
+        logger.debug(
+            "memory fts index rebuilt: %d items in %.1fms",
+            len(entries),
+            (time.perf_counter() - started) * 1000,
+        )
+
+    def _fts_remove(self, memory_ids: list[str]) -> None:
+        """Best-effort FTS cleanup after batch removals (deduplicate)."""
+        if not memory_ids:
+            return
+        engine = self._get_fts()
+        if engine is None:
+            return
+        try:
+            engine.remove_memories(memory_ids)
+        except Exception as error:
+            logger.warning("memory fts index cleanup failed: %s", error)
+
+    def close_fts(self) -> None:
+        """Close the thread-local FTS connection (Windows file-lock hygiene)."""
+        if self._fts is not None:
+            try:
+                self._fts.close()
+            except Exception:
+                pass
+            self._fts = None
 
     async def _embedding_for_item(self, item: MemoryItem) -> list[float]:
         if item.embedding:
@@ -1232,6 +1445,7 @@ class MemorySystem:
                         kept.metadata["dedup_merged_ids"] = list(info.get("merged_ids", []))
                 self._dedup_index_rebuild(context.tenant_id)
                 self._rewrite_disk()
+                self._fts_remove(sorted(removed_ids))
         logger.info(
             "batch dedup tenant=%s: %d -> %d (removed %d, groups %d)",
             context.tenant_id,

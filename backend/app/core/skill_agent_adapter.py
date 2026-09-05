@@ -132,13 +132,39 @@ def build_skill_tool_handler(
         )
 
         started = time.perf_counter()
+        outcome_success: bool | None = None  # None = 基础设施失败，不计 usage
         try:
             if not await skill.validate(context, **kwargs):
+                outcome_success = False
                 return {"success": False, "error": f"Skill input validation failed: {skill_name}"}
             result = await skill.execute(context, **kwargs)
+            outcome_success = bool(result.success)
         except Exception as e:  # 技能异常显式上抛为失败结果，不静默
             logger.error(f"Skill '{skill_name}' raised: {e}", exc_info=True)
+            outcome_success = False
             return {"success": False, "error": f"Skill '{skill_name}' execution error: {e}"}
+        finally:
+            # P2-12: usage 反哺进化引擎（best-effort，绝不影响技能执行结果）。
+            # 低成功率（needs_improvement）触发的自改进依赖这里的数据源。
+            if outcome_success is not None:
+                try:
+                    from backend.app.core.evolution_engine import (
+                        evolution_engine as _evolution_engine,
+                    )
+
+                    await _evolution_engine.record_skill_usage(
+                        skill_name,
+                        outcome_success,
+                        execution_context={
+                            "skill": skill_name,
+                            "execution_id": context.execution_id,
+                            "tenant_id": context.tenant_id,
+                        },
+                    )
+                except Exception as usage_exc:
+                    logger.debug(
+                        "Skill usage recording failed (non-blocking): %s", usage_exc
+                    )
 
         return {
             "success": result.success,
@@ -168,8 +194,6 @@ async def register_skills_into_tool_registry(
         注册成功的工具名列表（"skill__<name>"）。
         加载失败的技能不会注册，失败原因见 loader.load_report（显式，不静默）。
     """
-    from backend.app.core.tools import RiskLevel  # 延迟导入避免循环
-
     loader = loader or SkillLoader()
     if not loader.list_loaded_skills():
         await loader.load_all_skills()
@@ -179,21 +203,79 @@ async def register_skills_into_tool_registry(
         skill = loader.get_skill(skill_name)
         if skill is None:
             continue
-        metadata = skill.metadata
-        tool_name = skill_tool_name(metadata.name)
-        handler = build_skill_tool_handler(skill_name, loader, context_defaults)
-        tool_registry.register(
-            tool_name,
-            description=metadata.description or f"Skill: {metadata.name}",
-            handler=handler,
-            risk_level=RiskLevel[DEFAULT_SKILL_RISK_LEVEL],
-            required_scope=DEFAULT_SKILL_REQUIRED_SCOPE,
-            parameters_schema=get_skill_parameters_schema(skill),
-        )
-        registered.append(tool_name)
-        logger.info(f"Registered skill tool: {tool_name}")
+        if _register_skill_tool(tool_registry, skill, loader, context_defaults):
+            registered.append(skill_tool_name(skill.metadata.name))
 
     return registered
+
+
+async def register_skill_into_tool_registry(
+    tool_registry: Any,
+    skill_name: str,
+    loader: SkillLoader | None = None,
+    context_defaults: dict[str, str | None] | None = None,
+    base_dir: str | None = None,
+    reload: bool = False,
+) -> bool:
+    """增量注册单个技能（P2-12: 技能自沉淀 promote 最后一公里）。
+
+    与 :func:`register_skills_into_tool_registry` 的区别：
+    - 只处理一个技能，不做全目录扫描；
+    - ``base_dir`` 指定加载目录（如自沉淀引擎的 custom-skills/ 隔离目录）；
+    - ``reload=True`` 时先卸载再加载，热更新磁盘上的新版本
+      （evolution_engine 自改进产物落盘后经此生效）。
+
+    Args:
+        tool_registry: backend.app.core.tools.ToolRegistry 实例
+        skill_name: 技能名（目录名）
+        loader: 复用的技能加载器（缺省按 base_dir/默认目录新建）
+        context_defaults: 注入 SkillContext 的默认 tenant_id/user_id
+        base_dir: 技能目录（缺省用 loader 既有目录或默认目录）
+        reload: 是否强制从磁盘重新加载
+
+    Returns:
+        是否注册成功（加载失败返回 False，原因见 loader.load_report）。
+    """
+    if loader is None:
+        loader = SkillLoader(base_dir) if base_dir else SkillLoader()
+
+    skill = loader.get_skill(skill_name)
+    if skill is not None and reload:
+        await loader.unload_skill(skill_name)
+        skill = None
+    if skill is None:
+        skill = await loader.load_skill(skill_name)
+    if skill is None:
+        logger.warning(
+            "Incremental skill registration failed for '%s' (see loader.load_report)", skill_name
+        )
+        return False
+
+    return _register_skill_tool(tool_registry, skill, loader, context_defaults)
+
+
+def _register_skill_tool(
+    tool_registry: Any,
+    skill: Skill,
+    loader: SkillLoader,
+    context_defaults: dict[str, str | None] | None = None,
+) -> bool:
+    """把单个已加载技能注册为一个 skill__ 工具（注册约定与批量入口一致）。"""
+    from backend.app.core.tools import RiskLevel  # 延迟导入避免循环
+
+    skill_name = skill.metadata.name
+    tool_name = skill_tool_name(skill_name)
+    handler = build_skill_tool_handler(skill_name, loader, context_defaults)
+    tool_registry.register(
+        tool_name,
+        description=skill.metadata.description or f"Skill: {skill_name}",
+        handler=handler,
+        risk_level=RiskLevel[DEFAULT_SKILL_RISK_LEVEL],
+        required_scope=DEFAULT_SKILL_REQUIRED_SCOPE,
+        parameters_schema=get_skill_parameters_schema(skill),
+    )
+    logger.info(f"Registered skill tool: {tool_name}")
+    return True
 
 
 __all__ = [
@@ -203,6 +285,7 @@ __all__ = [
     "build_skill_tool_handler",
     "get_skill_parameters_schema",
     "list_skill_tools",
+    "register_skill_into_tool_registry",
     "register_skills_into_tool_registry",
     "skill_name_from_tool",
     "skill_tool_name",
