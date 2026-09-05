@@ -38,9 +38,9 @@
       "shell": {
         "all": false,
         "open": true,
-        "execute": true,
-        "sidecar": true,
-        "scope": ["*"]
+        "execute": false,
+        "sidecar": false,
+        "scope": []
       },
       "fs": {
         "all": true,
@@ -63,8 +63,6 @@
         "center": true,
         "requestUserAttention": true,
         "setResizable": true,
-        "setMaxPhysicalSize": true,
-        "setMinPhysicalSize": true,
         "setTitle": true,
         "maximize": true,
         "unmaximize": true,
@@ -125,30 +123,23 @@
       "windows": {
         "certificateThumbprint": null,
         "digestAlgorithm": "sha256",
-        "signingIdentity": null,
         "timestampUrl": ""
       },
       "macOS": {
         "frameworks": [],
         "minimumSystemVersion": "10.13",
-        "useBootstrapper": true,
-        "useScript": false,
-        "script": null,
         "entitlements": null,
         "signingIdentity": null,
-        "providerShortName": null,
-        "entitlementsLaunchAgent": null
+        "providerShortName": null
       },
-      "linux": {
-        "deb": {
-          "depends": []
-        },
-        "appimage": {
-          "bundleMediaFramework": true
-        },
-        "rpm": {
-          "epoch": 0
-        }
+      "deb": {
+        "depends": []
+      },
+      "appimage": {
+        "bundleMediaFramework": true
+      },
+      "rpm": {
+        "epoch": 0
       }
     }
   }
