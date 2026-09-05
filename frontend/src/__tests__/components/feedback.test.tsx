@@ -148,7 +148,8 @@ describe('FeedbackDetail Component', () => {
     const editButton = screen.getByText('Edit')
     fireEvent.click(editButton)
 
-    const statusSelect = screen.getByDisplayValue('open')
+    // Edit mode renders labeled selects (option labels are capitalized)
+    const statusSelect = screen.getByLabelText('Status')
     await userEvent.selectOptions(statusSelect, 'in_progress')
 
     const saveButton = screen.getByText('Save')
@@ -247,10 +248,12 @@ describe('NotificationSettings Component', () => {
     const emailInput = screen.getByPlaceholderText('user@example.com')
     await userEvent.type(emailInput, 'newuser@example.com')
 
-    const checkbox = screen.getByRole('checkbox', { name: /new_feedback/i })
+    // Trigger labels render underscores as spaces ("new feedback")
+    const checkbox = screen.getByRole('checkbox', { name: /new feedback/i })
     fireEvent.click(checkbox)
 
-    const submitButton = screen.getByText('Add Channel')
+    // Two "Add Channel" texts exist while the form is open: header toggle + form submit
+    const submitButton = screen.getAllByText('Add Channel')[1]
     fireEvent.click(submitButton)
 
     expect(mockProps.onAdd).toHaveBeenCalled()
@@ -269,14 +272,17 @@ describe('NotificationSettings Component', () => {
     window.confirm = vi.fn(() => true)
     render(<NotificationSettings {...mockProps} />)
 
-    const deleteButtons = screen.getAllByRole('button')
-    const deleteButton = deleteButtons.find(btn => btn.querySelector('svg'))
+    // The delete button is the one carrying the lucide-trash2 icon
+    const deleteButton = screen
+      .getAllByRole('button')
+      .find((btn) => btn.querySelector('svg.lucide-trash2'))
 
+    expect(deleteButton).toBeDefined()
     if (deleteButton) {
       fireEvent.click(deleteButton)
     }
 
-    expect(mockProps.onDelete).toHaveBeenCalled()
+    expect(mockProps.onDelete).toHaveBeenCalledWith('1')
   })
 
   it('shows empty state when no notifications', () => {

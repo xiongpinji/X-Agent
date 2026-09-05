@@ -33,7 +33,7 @@ class Todo:
 
     id: int
     title: str
-    description: str
+    description: str = ""
     completed: bool = False
     priority: int = 1
     created_at: str = ""

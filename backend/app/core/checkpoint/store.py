@@ -101,11 +101,13 @@ class CheckpointStore:
 
             self._checkpoints[trace_id].append(checkpoint)
 
-            # 限制每个 run 的 checkpoint 数量
+            # 限制每个 run 的 checkpoint 数量；触发裁剪时同步压缩磁盘文件，
+            # 否则 JSONL 只增不减（曾观察到单文件 1000+ 行）。
             if len(self._checkpoints[trace_id]) > self._max_per_run:
                 self._checkpoints[trace_id] = self._checkpoints[trace_id][-self._max_per_run:]
-
-            self._append_to_disk(checkpoint)
+                self._rewrite_disk(trace_id)
+            else:
+                self._append_to_disk(checkpoint)
 
         logger.debug(
             "Checkpoint saved: trace=%s iter=%d/%d status=%s",
@@ -162,8 +164,12 @@ class CheckpointStore:
             if trace_id in self._checkpoints:
                 for cp in self._checkpoints[trace_id]:
                     cp.status = "completed"
-                # 完成后保留最新一个用于审计, 删除其余
+                # 完成后保留最新一个用于审计, 删除其余。
+                # 同步压缩磁盘文件——只改内存的话, 进程重启后重新加载
+                # 磁盘上遗留的 running 状态行, 已完成的 run 会再次出现在
+                # list_resumable 里。
                 self._checkpoints[trace_id] = self._checkpoints[trace_id][-1:]
+                self._rewrite_disk(trace_id)
 
     def delete(self, trace_id: str) -> int:
         """删除指定 run 的所有 checkpoint. 返回删除数量."""
@@ -180,16 +186,48 @@ class CheckpointStore:
     # ─── 持久化 ───────────────────────────────────────────────────
 
     def _append_to_disk(self, checkpoint: CheckpointData) -> None:
-        """追加写入 JSONL 文件."""
+        """追加写入 JSONL 文件.
+
+        flush + fsync 防止崩溃时留下撕裂的半行 JSON（曾导致整文件加载失败）。
+        """
         try:
             file_path = self._storage_path / f"{checkpoint.trace_id}.jsonl"
             with open(file_path, "a", encoding="utf-8") as f:
                 f.write(checkpoint.model_dump_json() + "\n")
+                f.flush()
+                os.fsync(f.fileno())
         except OSError as e:
             logger.warning("Failed to persist checkpoint: %s", e)
 
+    def _rewrite_disk(self, trace_id: str) -> None:
+        """用内存中的 checkpoint 全量重写 JSONL 文件（原子替换）.
+
+        用于数量裁剪和 mark_completed 压缩，保证磁盘与内存一致。
+        """
+        checkpoints = self._checkpoints.get(trace_id, [])
+        file_path = self._storage_path / f"{trace_id}.jsonl"
+        tmp_path = file_path.with_suffix(".jsonl.tmp")
+        try:
+            with open(tmp_path, "w", encoding="utf-8") as f:
+                for cp in checkpoints:
+                    f.write(cp.model_dump_json() + "\n")
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp_path, file_path)
+        except OSError as e:
+            logger.warning("Failed to compact checkpoint file %s: %s", file_path, e)
+            try:
+                tmp_path.unlink(missing_ok=True)
+            except OSError:
+                pass
+
     def _load_from_disk(self) -> None:
-        """从磁盘加载所有 checkpoint."""
+        """从磁盘加载所有 checkpoint.
+
+        逐行解析：单行损坏（如崩溃留下的撕裂写入）只跳过该行并告警，
+        不丢弃整个 run 的其余有效 checkpoint——否则一次半行写入就让
+        崩溃恢复永久失效。
+        """
         if not self._storage_path.exists():
             return
         for file_path in self._storage_path.glob("*.jsonl"):
@@ -197,12 +235,18 @@ class CheckpointStore:
             checkpoints = []
             try:
                 with open(file_path, encoding="utf-8") as f:
-                    for line in f:
+                    for line_no, line in enumerate(f, 1):
                         line = line.strip()
-                        if line:
-                            cp = CheckpointData.model_validate_json(line)
-                            checkpoints.append(cp)
-            except (OSError, ValueError) as e:
+                        if not line:
+                            continue
+                        try:
+                            checkpoints.append(CheckpointData.model_validate_json(line))
+                        except ValueError as e:
+                            logger.warning(
+                                "Skipping corrupt checkpoint line %s:%d: %s",
+                                file_path, line_no, e,
+                            )
+            except OSError as e:
                 logger.warning("Failed to load checkpoint file %s: %s", file_path, e)
                 continue
             if checkpoints:

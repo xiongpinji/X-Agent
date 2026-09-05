@@ -1,8 +1,47 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
-import axios from 'axios'
-import { feedbackService, Feedback, FeedbackStats } from '@/services/feedback'
+/**
+ * FeedbackService tests
+ *
+ * The service creates its axios instance at module load time, so axios is
+ * mocked with a hoisted factory whose per-verb mocks stay controllable from
+ * each test. Assertions follow the CURRENT backend contract:
+ * - CRUD via GET/POST/PATCH /feedback (no PUT, no DELETE endpoint)
+ * - trends / notifications / export / search fail fast with unsupported()
+ */
 
-vi.mock('axios')
+import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { feedbackService } from '@/services/feedback'
+
+const http = vi.hoisted(() => ({
+  get: vi.fn(),
+  post: vi.fn(),
+  patch: vi.fn(),
+  interceptors: {
+    request: { use: vi.fn() },
+    response: { use: vi.fn() },
+  },
+}))
+
+vi.mock('axios', () => ({
+  default: {
+    create: vi.fn(() => http),
+  },
+}))
+
+/** Backend FeedbackResponse payload (snake_case). */
+const rawFeedback = {
+  id: '1',
+  user_id: 'user-1',
+  feedback_type: 'bug',
+  category: 'UI',
+  title: 'Test feedback',
+  description: 'Test description',
+  sentiment: 'negative',
+  severity: 'high',
+  status: 'new',
+  tags: ['frontend'],
+  created_at: '2026-08-01T00:00:00Z',
+  updated_at: '2026-08-01T00:00:00Z',
+}
 
 describe('FeedbackService', () => {
   beforeEach(() => {
@@ -11,51 +50,27 @@ describe('FeedbackService', () => {
   })
 
   describe('listFeedback', () => {
-    it('should fetch feedbacks with pagination', async () => {
-      const mockData = {
-        items: [
-          {
-            id: '1',
-            userId: 'user-1',
-            type: 'bug',
-            category: 'UI',
-            title: 'Test feedback',
-            description: 'Test description',
-            sentiment: 'negative',
-            priority: 'high',
-            status: 'open',
-            tags: [],
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          },
-        ],
-        total: 1,
-        page: 1,
-        pageSize: 20,
-        hasMore: false,
-      }
-
-      vi.mocked(axios.create).mockReturnValue({
-        get: vi.fn().mockResolvedValue({ data: mockData }),
-      } as any)
+    it('fetches feedbacks with pagination and adapts snake_case fields', async () => {
+      http.get.mockResolvedValue({
+        data: { items: [rawFeedback], total: 1 },
+      })
 
       const result = await feedbackService.listFeedback(1, 20)
+
+      expect(http.get).toHaveBeenCalledWith('/feedback/', {
+        params: { skip: 0, limit: 20, feedback_type: undefined, status: undefined, severity: undefined },
+      })
       expect(result.items).toHaveLength(1)
       expect(result.total).toBe(1)
+      // adapter: feedback_type -> type, severity -> priority, status new -> open
+      expect(result.items[0].type).toBe('bug')
+      expect(result.items[0].priority).toBe('high')
+      expect(result.items[0].status).toBe('open')
+      expect(result.items[0].userId).toBe('user-1')
     })
 
-    it('should apply filters', async () => {
-      const mockData = {
-        items: [],
-        total: 0,
-        page: 1,
-        pageSize: 20,
-        hasMore: false,
-      }
-
-      vi.mocked(axios.create).mockReturnValue({
-        get: vi.fn().mockResolvedValue({ data: mockData }),
-      } as any)
+    it('applies type/status/priority filters as query params', async () => {
+      http.get.mockResolvedValue({ data: { items: [], total: 0 } })
 
       await feedbackService.listFeedback(1, 20, {
         type: 'bug',
@@ -63,287 +78,119 @@ describe('FeedbackService', () => {
         priority: 'high',
       })
 
-      expect(axios.create).toHaveBeenCalled()
+      expect(http.get).toHaveBeenCalledWith('/feedback/', {
+        params: { skip: 0, limit: 20, feedback_type: 'bug', status: 'open', severity: 'high' },
+      })
+    })
+
+    it('computes hasMore from the page window', async () => {
+      http.get.mockResolvedValue({ data: { items: [rawFeedback], total: 30 } })
+
+      const result = await feedbackService.listFeedback(1, 20)
+      expect(result.hasMore).toBe(true)
     })
   })
 
   describe('getFeedback', () => {
-    it('should fetch single feedback', async () => {
-      const mockFeedback: Feedback = {
-        id: '1',
-        userId: 'user-1',
-        type: 'bug',
-        category: 'UI',
-        title: 'Test feedback',
-        description: 'Test description',
-        sentiment: 'negative',
-        priority: 'high',
-        status: 'open',
-        tags: [],
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      }
-
-      vi.mocked(axios.create).mockReturnValue({
-        get: vi.fn().mockResolvedValue({ data: mockFeedback }),
-      } as any)
+    it('fetches a single adapted feedback', async () => {
+      http.get.mockResolvedValue({ data: rawFeedback })
 
       const result = await feedbackService.getFeedback('1')
+
+      expect(http.get).toHaveBeenCalledWith('/feedback/1')
       expect(result.id).toBe('1')
       expect(result.title).toBe('Test feedback')
+      expect(result.status).toBe('open')
     })
   })
 
   describe('createFeedback', () => {
-    it('should create new feedback', async () => {
-      const newFeedback: Feedback = {
-        id: '2',
-        userId: 'user-1',
-        type: 'feature',
-        category: 'API',
-        title: 'New feature request',
-        description: 'Add export functionality',
-        sentiment: 'positive',
-        priority: 'medium',
-        status: 'open',
-        tags: ['enhancement'],
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      }
-
-      vi.mocked(axios.create).mockReturnValue({
-        post: vi.fn().mockResolvedValue({ data: newFeedback }),
-      } as any)
+    it('posts the backend payload shape (feedback_type/severity)', async () => {
+      http.post.mockResolvedValue({ data: rawFeedback })
 
       const result = await feedbackService.createFeedback({
-        type: 'feature',
-        title: 'New feature request',
+        type: 'bug',
+        title: 'Test feedback',
       })
 
-      expect(result.id).toBe('2')
-      expect(result.type).toBe('feature')
+      expect(http.post).toHaveBeenCalledWith('/feedback/', {
+        feedback_type: 'bug',
+        title: 'Test feedback',
+        description: '',
+        severity: 'medium',
+        metadata: undefined,
+      })
+      expect(result.id).toBe('1')
+      expect(result.type).toBe('bug')
     })
   })
 
   describe('updateFeedback', () => {
-    it('should update feedback', async () => {
-      const updatedFeedback: Feedback = {
-        id: '1',
-        userId: 'user-1',
-        type: 'bug',
-        category: 'UI',
-        title: 'Test feedback',
-        description: 'Test description',
-        sentiment: 'negative',
-        priority: 'high',
-        status: 'in_progress',
-        tags: [],
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      }
-
-      vi.mocked(axios.create).mockReturnValue({
-        put: vi.fn().mockResolvedValue({ data: updatedFeedback }),
-      } as any)
-
-      const result = await feedbackService.updateFeedback('1', {
-        status: 'in_progress',
+    it('status updates go through PATCH with status param (open maps to new)', async () => {
+      http.patch.mockResolvedValue({
+        data: { ...rawFeedback, status: 'in_progress' },
       })
 
+      const result = await feedbackService.updateFeedback('1', { status: 'in_progress' })
+
+      expect(http.patch).toHaveBeenCalledWith('/feedback/1', null, {
+        params: { status: 'in_progress' },
+      })
       expect(result.status).toBe('in_progress')
     })
   })
 
-  describe('deleteFeedback', () => {
-    it('should delete feedback', async () => {
-      vi.mocked(axios.create).mockReturnValue({
-        delete: vi.fn().mockResolvedValue({}),
-      } as any)
-
-      await expect(feedbackService.deleteFeedback('1')).resolves.toBeUndefined()
-    })
-  })
-
   describe('resolveFeedback', () => {
-    it('should resolve feedback with response', async () => {
-      const resolvedFeedback: Feedback = {
-        id: '1',
-        userId: 'user-1',
-        type: 'bug',
-        category: 'UI',
-        title: 'Test feedback',
-        description: 'Test description',
-        sentiment: 'negative',
-        priority: 'high',
-        status: 'resolved',
-        tags: [],
-        response: 'We fixed this issue',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        resolvedAt: new Date().toISOString(),
-      }
-
-      vi.mocked(axios.create).mockReturnValue({
-        post: vi.fn().mockResolvedValue({ data: resolvedFeedback }),
-      } as any)
+    it('resolves via PATCH with status=resolved and response', async () => {
+      http.patch.mockResolvedValue({
+        data: { ...rawFeedback, status: 'resolved', response: 'We fixed this issue' },
+      })
 
       const result = await feedbackService.resolveFeedback('1', 'We fixed this issue')
+
+      expect(http.patch).toHaveBeenCalledWith('/feedback/1', null, {
+        params: { status: 'resolved', response: 'We fixed this issue' },
+      })
       expect(result.status).toBe('resolved')
       expect(result.response).toBe('We fixed this issue')
     })
   })
 
   describe('getStats', () => {
-    it('should fetch feedback statistics', async () => {
-      const mockStats: FeedbackStats = {
-        total: 100,
-        byType: { bug: 40, feature: 30, improvement: 20, other: 10 },
-        byStatus: { open: 30, in_progress: 20, resolved: 40, closed: 10 },
-        bySentiment: { positive: 30, neutral: 40, negative: 30 },
-        byPriority: { critical: 10, high: 20, medium: 40, low: 30 },
-        avgResolutionTime: 5,
-        resolutionRate: 0.8,
-      }
-
-      vi.mocked(axios.create).mockReturnValue({
-        get: vi.fn().mockResolvedValue({ data: mockStats }),
-      } as any)
-
-      const result = await feedbackService.getStats()
-      expect(result.total).toBe(100)
-      expect(result.resolutionRate).toBe(0.8)
-    })
-  })
-
-  describe('getTrends', () => {
-    it('should fetch feedback trends', async () => {
-      const mockTrends = [
-        {
-          date: new Date().toISOString(),
-          count: 10,
-          byType: { bug: 5, feature: 3, improvement: 2, other: 0 },
-          bySentiment: { positive: 3, neutral: 4, negative: 3 },
+    it('adapts backend stats and derives the resolution rate', async () => {
+      http.get.mockResolvedValue({
+        data: {
+          total: 100,
+          by_type: { bug: 40, feature: 30 },
+          by_status: { new: 30, in_progress: 20, resolved: 40, closed: 10 },
+          by_sentiment: { positive: 30, neutral: 40, negative: 30 },
+          by_severity: { critical: 10, high: 20 },
         },
-      ]
-
-      vi.mocked(axios.create).mockReturnValue({
-        get: vi.fn().mockResolvedValue({ data: mockTrends }),
-      } as any)
-
-      const result = await feedbackService.getTrends(30, 'day')
-      expect(result).toHaveLength(1)
-      expect(result[0].count).toBe(10)
-    })
-  })
-
-  describe('Notifications', () => {
-    it('should list notifications', async () => {
-      const mockNotifications = [
-        {
-          id: '1',
-          type: 'email',
-          enabled: true,
-          target: 'admin@example.com',
-          triggers: ['new_feedback'],
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        },
-      ]
-
-      vi.mocked(axios.create).mockReturnValue({
-        get: vi.fn().mockResolvedValue({ data: mockNotifications }),
-      } as any)
-
-      const result = await feedbackService.listNotifications()
-      expect(result).toHaveLength(1)
-      expect(result[0].type).toBe('email')
-    })
-
-    it('should create notification', async () => {
-      const newNotification = {
-        id: '2',
-        type: 'slack',
-        enabled: true,
-        target: 'https://hooks.slack.com/...',
-        triggers: ['critical_feedback'],
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      }
-
-      vi.mocked(axios.create).mockReturnValue({
-        post: vi.fn().mockResolvedValue({ data: newNotification }),
-      } as any)
-
-      const result = await feedbackService.createNotification({
-        type: 'slack',
-        target: 'https://hooks.slack.com/...',
       })
 
-      expect(result.type).toBe('slack')
-    })
+      const result = await feedbackService.getStats()
 
-    it('should test notification', async () => {
-      const mockResult = { success: true, message: 'Test sent successfully' }
-
-      vi.mocked(axios.create).mockReturnValue({
-        post: vi.fn().mockResolvedValue({ data: mockResult }),
-      } as any)
-
-      const result = await feedbackService.testNotification('1')
-      expect(result.success).toBe(true)
+      expect(http.get).toHaveBeenCalledWith('/feedback/stats/summary')
+      expect(result.total).toBe(100)
+      // resolved (40) + closed (10) over total (100)
+      expect(result.resolutionRate).toBe(0.5)
+      expect(result.byPriority).toEqual({ critical: 10, high: 20 })
     })
   })
 
-  describe('Export', () => {
-    it('should export feedback as CSV', async () => {
-      const mockBlob = new Blob(['csv data'], { type: 'text/csv' })
-
-      vi.mocked(axios.create).mockReturnValue({
-        get: vi.fn().mockResolvedValue({ data: mockBlob }),
-      } as any)
-
-      const result = await feedbackService.exportFeedback('csv')
-      expect(result).toBeInstanceOf(Blob)
-    })
-
-    it('should export feedback as PDF', async () => {
-      const mockBlob = new Blob(['pdf data'], { type: 'application/pdf' })
-
-      vi.mocked(axios.create).mockReturnValue({
-        get: vi.fn().mockResolvedValue({ data: mockBlob }),
-      } as any)
-
-      const result = await feedbackService.exportFeedback('pdf')
-      expect(result).toBeInstanceOf(Blob)
-    })
-  })
-
-  describe('Search', () => {
-    it('should search feedbacks', async () => {
-      const mockResults = [
-        {
-          id: '1',
-          userId: 'user-1',
-          type: 'bug',
-          category: 'UI',
-          title: 'Login issue',
-          description: 'Cannot login',
-          sentiment: 'negative',
-          priority: 'high',
-          status: 'open',
-          tags: [],
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        },
-      ]
-
-      vi.mocked(axios.create).mockReturnValue({
-        get: vi.fn().mockResolvedValue({ data: mockResults }),
-      } as any)
-
-      const result = await feedbackService.searchFeedback('login')
-      expect(result).toHaveLength(1)
-      expect(result[0].title).toContain('Login')
+  describe('endpoints without backend support', () => {
+    it.each([
+      ['deleteFeedback', () => feedbackService.deleteFeedback('1'), 'deletion'],
+      ['getTrends', () => feedbackService.getTrends(30), 'trends'],
+      ['listNotifications', () => feedbackService.listNotifications(), 'notifications'],
+      ['createNotification', () => feedbackService.createNotification({ type: 'slack' }), 'notifications'],
+      ['testNotification', () => feedbackService.testNotification('1'), 'notifications'],
+      ['exportFeedback', () => feedbackService.exportFeedback('csv'), 'export'],
+      ['searchFeedback', () => feedbackService.searchFeedback('login'), 'search'],
+    ])('%s fails fast instead of hitting a 404', async (_name, act, feature) => {
+      await expect(act()).rejects.toThrow(
+        `Feedback ${feature} is not supported by the backend (no such endpoint).`
+      )
     })
   })
 })

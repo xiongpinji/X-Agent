@@ -26,6 +26,10 @@ class QdrantVectorClient:
 
     def __init__(self, url: str | None = None, api_key: str | None = None) -> None:
         self._collections: dict[str, list[VectorRecord]] = {}
+        # .env 里 "XAGENT_QDRANT_API_KEY=" 解析为空串而非 None；
+        # 空串会让 qdrant_client 触发 "insecure connection" 误告警，这里归一化。
+        url = (url or "").strip() or None
+        api_key = (api_key or "").strip() or None
         self._client = (
             QdrantClient(url=url, api_key=api_key, check_compatibility=False)
             if QdrantClient is not None and url

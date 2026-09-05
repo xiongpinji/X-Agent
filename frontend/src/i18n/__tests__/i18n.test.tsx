@@ -14,6 +14,13 @@ import { render, screen, fireEvent } from '@testing-library/react'
 import { I18nProvider, useI18n } from '../context'
 import { SUPPORTED_LANGUAGES, isRTL, getLanguageConfig } from '../config'
 
+// The provider resolves the initial language as
+// localStorage -> browser language -> defaultLanguage prop, so tests that
+// target a specific language must prime localStorage first.
+beforeEach(() => {
+  localStorage.clear()
+})
+
 describe('I18n Configuration', () => {
   it('should have all required languages configured', () => {
     const requiredLanguages = ['en', 'zh', 'ja', 'ko', 'es', 'ar']
@@ -171,6 +178,7 @@ describe('Translation Loading', () => {
   })
 
   it('should load Chinese translations', () => {
+    localStorage.setItem('language', 'zh')
     render(
       <I18nProvider defaultLanguage="zh">
         <TestComponent />
@@ -182,6 +190,7 @@ describe('Translation Loading', () => {
   })
 
   it('should load Japanese translations', () => {
+    localStorage.setItem('language', 'ja')
     render(
       <I18nProvider defaultLanguage="ja">
         <TestComponent />
@@ -193,6 +202,7 @@ describe('Translation Loading', () => {
   })
 
   it('should load Korean translations', () => {
+    localStorage.setItem('language', 'ko')
     render(
       <I18nProvider defaultLanguage="ko">
         <TestComponent />
@@ -204,6 +214,7 @@ describe('Translation Loading', () => {
   })
 
   it('should load Spanish translations', () => {
+    localStorage.setItem('language', 'es')
     render(
       <I18nProvider defaultLanguage="es">
         <TestComponent />
@@ -215,6 +226,7 @@ describe('Translation Loading', () => {
   })
 
   it('should load Arabic translations', () => {
+    localStorage.setItem('language', 'ar')
     render(
       <I18nProvider defaultLanguage="ar">
         <TestComponent />
@@ -319,6 +331,7 @@ describe('Currency Formatting', () => {
 
 describe('RTL Support', () => {
   it('should apply RTL styles for Arabic', () => {
+    localStorage.setItem('language', 'ar')
     render(
       <I18nProvider defaultLanguage="ar">
         <div>Test</div>

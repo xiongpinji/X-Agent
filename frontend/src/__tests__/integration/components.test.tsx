@@ -2,52 +2,52 @@
  * Component Integration Tests
  */
 
-import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import '@testing-library/jest-dom';
-import StreamingOutput from '../components/StreamingOutput';
-import TaskList from '../components/TaskList';
-import ProgressIndicator from '../components/ProgressIndicator';
+import React from 'react'
+import { describe, test, expect, beforeEach, vi } from 'vitest'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import StreamingOutput from '@/components/StreamingOutput'
+import TaskList from '@/components/TaskList'
+import ProgressIndicator from '@/components/ProgressIndicator'
 
 describe('StreamingOutput Component', () => {
   beforeEach(() => {
-    global.EventSource = jest.fn(() => ({
-      addEventListener: jest.fn(),
-      close: jest.fn(),
-      readyState: EventSource.OPEN,
-    })) as any;
-  });
+    global.EventSource = vi.fn(() => ({
+      addEventListener: vi.fn(),
+      close: vi.fn(),
+      readyState: 1,
+    })) as any
+  })
 
   test('should render streaming output', () => {
-    render(<StreamingOutput runId="test-run-1" />);
+    render(<StreamingOutput runId="test-run-1" />)
 
-    expect(screen.getByText(/Connected|Disconnected/)).toBeInTheDocument();
-  });
+    expect(screen.getByText(/Connected|Disconnected/)).toBeInTheDocument()
+  })
 
   test('should display connection status', () => {
-    render(<StreamingOutput runId="test-run-1" />);
+    render(<StreamingOutput runId="test-run-1" />)
 
-    const statusElement = screen.getByText(/Connected|Disconnected/);
-    expect(statusElement).toBeInTheDocument();
-  });
+    const statusElement = screen.getByText(/Connected|Disconnected/)
+    expect(statusElement).toBeInTheDocument()
+  })
 
   test('should show waiting message when no events', () => {
-    render(<StreamingOutput runId="test-run-1" />);
+    render(<StreamingOutput runId="test-run-1" />)
 
-    expect(screen.getByText(/Waiting for events/)).toBeInTheDocument();
-  });
+    expect(screen.getByText(/Waiting for events/)).toBeInTheDocument()
+  })
 
   test('should call onComplete callback', async () => {
-    const onComplete = jest.fn();
+    const onComplete = vi.fn()
     render(
       <StreamingOutput runId="test-run-1" onComplete={onComplete} />
-    );
+    )
 
     // Simulate completion event
-    const eventSource = (global.EventSource as jest.Mock).mock.results[0].value;
+    const eventSource = (global.EventSource as any).mock.results[0].value
     const completionHandler = eventSource.addEventListener.mock.calls.find(
       (call: any) => call[0] === 'completion'
-    )?.[1];
+    )?.[1]
 
     completionHandler?.(
       new MessageEvent('completion', {
@@ -60,21 +60,21 @@ describe('StreamingOutput Component', () => {
           run_id: 'test-run-1',
         }),
       })
-    );
+    )
 
     await waitFor(() => {
-      expect(onComplete).toHaveBeenCalled();
-    });
-  });
-});
+      expect(onComplete).toHaveBeenCalled()
+    })
+  })
+})
 
 describe('TaskList Component', () => {
   beforeEach(() => {
-    global.fetch = jest.fn();
-  });
+    global.fetch = vi.fn()
+  })
 
   test('should render task list', async () => {
-    (global.fetch as jest.Mock).mockResolvedValueOnce({
+    ;(global.fetch as any).mockResolvedValueOnce({
       ok: true,
       json: async () => ({
         tasks: [
@@ -98,17 +98,17 @@ describe('TaskList Component', () => {
         failed: 0,
         pending: 0,
       }),
-    });
+    })
 
-    render(<TaskList runId="test-run-1" />);
+    render(<TaskList runId="test-run-1" />)
 
     await waitFor(() => {
-      expect(screen.getByText('Test Task')).toBeInTheDocument();
-    });
-  });
+      expect(screen.getByText('Test Task')).toBeInTheDocument()
+    })
+  })
 
   test('should display task stats', async () => {
-    (global.fetch as jest.Mock).mockResolvedValueOnce({
+    ;(global.fetch as any).mockResolvedValueOnce({
       ok: true,
       json: async () => ({
         tasks: [],
@@ -118,18 +118,18 @@ describe('TaskList Component', () => {
         failed: 1,
         pending: 0,
       }),
-    });
+    })
 
-    render(<TaskList runId="test-run-1" />);
+    render(<TaskList runId="test-run-1" />)
 
     await waitFor(() => {
-      expect(screen.getByText('5')).toBeInTheDocument(); // Total
-      expect(screen.getByText('3')).toBeInTheDocument(); // Completed
-    });
-  });
+      expect(screen.getByText('5')).toBeInTheDocument() // Total
+      expect(screen.getByText('3')).toBeInTheDocument() // Completed
+    })
+  })
 
   test('should handle refresh', async () => {
-    (global.fetch as jest.Mock).mockResolvedValue({
+    ;(global.fetch as any).mockResolvedValue({
       ok: true,
       json: async () => ({
         tasks: [],
@@ -139,20 +139,21 @@ describe('TaskList Component', () => {
         failed: 0,
         pending: 0,
       }),
-    });
+    })
 
-    render(<TaskList runId="test-run-1" />);
+    render(<TaskList runId="test-run-1" />)
 
-    const refreshButton = screen.getByText('Refresh');
-    fireEvent.click(refreshButton);
+    // Wait for the initial load to finish (button reads "Refreshing..." while loading)
+    const refreshButton = await screen.findByText('Refresh')
+    fireEvent.click(refreshButton)
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledTimes(2); // Initial + refresh
-    });
-  });
+      expect(global.fetch).toHaveBeenCalledTimes(2) // Initial + refresh
+    })
+  })
 
   test('should show empty state', async () => {
-    (global.fetch as jest.Mock).mockResolvedValueOnce({
+    ;(global.fetch as any).mockResolvedValueOnce({
       ok: true,
       json: async () => ({
         tasks: [],
@@ -162,23 +163,23 @@ describe('TaskList Component', () => {
         failed: 0,
         pending: 0,
       }),
-    });
+    })
 
-    render(<TaskList runId="test-run-1" />);
+    render(<TaskList runId="test-run-1" />)
 
     await waitFor(() => {
-      expect(screen.getByText('No tasks found')).toBeInTheDocument();
-    });
-  });
-});
+      expect(screen.getByText('No tasks found')).toBeInTheDocument()
+    })
+  })
+})
 
 describe('ProgressIndicator Component', () => {
   beforeEach(() => {
-    global.fetch = jest.fn();
-  });
+    global.fetch = vi.fn()
+  })
 
   test('should render progress indicator', async () => {
-    (global.fetch as jest.Mock).mockResolvedValueOnce({
+    ;(global.fetch as any).mockResolvedValueOnce({
       ok: true,
       json: async () => ({
         events: [
@@ -193,17 +194,17 @@ describe('ProgressIndicator Component', () => {
           },
         ],
       }),
-    });
+    })
 
-    render(<ProgressIndicator runId="test-run-1" />);
+    render(<ProgressIndicator runId="test-run-1" />)
 
     await waitFor(() => {
-      expect(screen.getByText('Processing')).toBeInTheDocument();
-    });
-  });
+      expect(screen.getByText('Processing')).toBeInTheDocument()
+    })
+  })
 
   test('should display progress percentage', async () => {
-    (global.fetch as jest.Mock).mockResolvedValueOnce({
+    ;(global.fetch as any).mockResolvedValueOnce({
       ok: true,
       json: async () => ({
         events: [
@@ -218,17 +219,17 @@ describe('ProgressIndicator Component', () => {
           },
         ],
       }),
-    });
+    })
 
-    render(<ProgressIndicator runId="test-run-1" />);
+    render(<ProgressIndicator runId="test-run-1" />)
 
     await waitFor(() => {
-      expect(screen.getByText('75%')).toBeInTheDocument();
-    });
-  });
+      expect(screen.getByText('75%')).toBeInTheDocument()
+    })
+  })
 
   test('should show step breakdown', async () => {
-    (global.fetch as jest.Mock).mockResolvedValueOnce({
+    ;(global.fetch as any).mockResolvedValueOnce({
       ok: true,
       json: async () => ({
         events: [
@@ -243,28 +244,28 @@ describe('ProgressIndicator Component', () => {
           },
         ],
       }),
-    });
+    })
 
-    render(<ProgressIndicator runId="test-run-1" />);
+    render(<ProgressIndicator runId="test-run-1" />)
 
     await waitFor(() => {
-      expect(screen.getByText('2 / 4')).toBeInTheDocument();
-    });
-  });
-});
+      expect(screen.getByText('2 / 4')).toBeInTheDocument()
+    })
+  })
+})
 
 describe('Component Integration', () => {
   beforeEach(() => {
-    global.fetch = jest.fn();
-    global.EventSource = jest.fn(() => ({
-      addEventListener: jest.fn(),
-      close: jest.fn(),
-      readyState: EventSource.OPEN,
-    })) as any;
-  });
+    global.fetch = vi.fn()
+    global.EventSource = vi.fn(() => ({
+      addEventListener: vi.fn(),
+      close: vi.fn(),
+      readyState: 1,
+    })) as any
+  })
 
   test('should handle multiple components together', async () => {
-    (global.fetch as jest.Mock).mockResolvedValue({
+    ;(global.fetch as any).mockResolvedValue({
       ok: true,
       json: async () => ({
         tasks: [],
@@ -275,7 +276,7 @@ describe('Component Integration', () => {
         pending: 0,
         events: [],
       }),
-    });
+    })
 
     const { container } = render(
       <div>
@@ -283,8 +284,8 @@ describe('Component Integration', () => {
         <TaskList runId="test-run-1" />
         <ProgressIndicator runId="test-run-1" />
       </div>
-    );
+    )
 
-    expect(container).toBeInTheDocument();
-  });
-});
+    expect(container).toBeInTheDocument()
+  })
+})

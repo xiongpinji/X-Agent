@@ -95,7 +95,10 @@ class TestAgentLoopErrorHandling:
 
         with patch.object(agent.tools, 'execute', side_effect=failing_then_success):
             try:
-                result = await agent.run(context, "test task")
+                # 用 echo: 前缀让 MockLLMBackend 返回 echo 工具调用——
+                # 通用任务（"test task"）的 fallback plan 不含工具步骤，
+                # tools.execute 根本不会被触达，重试路径就成了空转。
+                result = await agent.run(context, "echo: test task")
             except Exception:
                 pass
 

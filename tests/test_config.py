@@ -197,6 +197,10 @@ class TestConfigValidator:
             jwt_secret="a" * 64,
             encryption_key="b" * 64,
             require_https=True,
+            # BaseSettings 会读本地 .env（开发环境 XAGENT_CORS_ALLOW_HEADERS=*），
+            # 显式传合法值隔离环境，否则字段级 fail-fast 在构造期就抛
+            # ValidationError，到不了 validate_all 的 ConfigValidationError 路径。
+            cors_allow_headers="Authorization,Content-Type",
         )
         observability_config = ObservabilityConfig()
 

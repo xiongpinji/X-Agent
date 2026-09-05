@@ -13,9 +13,10 @@ archive/dead_code_2026-07-19/，本运行时不复用、不复活归档代码。
 - ``no_manifest``         目录不含任何清单（examples/templates 等辅助目录）
 
 诚实性说明：
-- 本运行时不自动启动插件子进程（安全默认）；start() 仅做进程拉起，
-  MCP 协议握手在 mcp_plugin_adapter 中仍是 TODO，调用方不得声称
-  "插件工具已可通过 MCP 协议调用"。
+- 本运行时不自动启动插件子进程（安全默认）；start() 执行**真实的 stdio
+  MCP 协议握手**（官方 ``mcp`` SDK：spawn → initialize → initialized →
+  tools/list），失败 fail-closed 且错误可诊断；工具调用经
+  call_plugin_tool() → ``tools/call``。
 - inspect_entrypoint() 提供进程内真实验证：导入入口模块并实例化入口类，
   比对 manifest 声明的 tools 与类方法，结果如实上报。
 """
@@ -92,6 +93,9 @@ class PluginRuntime:
         self._adapter = MCPPluginAdapter(self.plugins_dir)
         self._loaded: dict[str, MCPPlugin] = {}   # dir_name -> MCPPlugin
         self._scan_cache: dict[str, PluginInfo] = {}
+        # dir_name -> (ToolRegistry, [注册的工具名])：MCP 子进程工具桥接
+        # 进 Agent 主循环后记录，stop/unload 时同步移除。
+        self._bridged: dict[str, tuple[Any, list[str]]] = {}
 
     # ---------- 扫描 ----------
 
@@ -220,12 +224,13 @@ class PluginRuntime:
             return info
 
     def unload(self, name: str) -> bool:
-        """卸载插件"""
+        """卸载插件（含 MCP 会话与桥接工具的清理）"""
         plugin = self._loaded.pop(name, None)
         if plugin is None:
             return False
+        self._unbridge_tools(name)
         try:
-            if plugin.status == MCPPluginStatus.RUNNING:
+            if plugin.status == MCPPluginStatus.RUNNING or plugin.session is not None:
                 self._adapter.stop_server(plugin)
         except Exception as e:
             logger.error(f"Error stopping plugin '{name}': {e}")
@@ -318,34 +323,107 @@ class PluginRuntime:
                 config[key] = spec["default"]
         return config
 
-    # ---------- 子进程（安全默认：不自动启动） ----------
+    # ---------- 子进程 MCP 会话（安全默认：不自动启动） ----------
 
-    def start(self, name: str) -> dict[str, Any]:
-        """拉起插件子进程。
+    def start(
+        self,
+        name: str,
+        *,
+        timeout: float | None = None,
+        tool_registry: Any | None = None,
+    ) -> dict[str, Any]:
+        """拉起插件子进程并完成真实 stdio MCP 握手。
 
-        注意：仅进程级拉起；MCP 协议握手在适配器中仍是 TODO，
-        返回结果显式标注该限制，不得据此声称工具已可经 MCP 调用。
+        成功即表示 initialize → initialized → tools/list 全部完成，结果含
+        server_info 与发现的工具列表；失败 fail-closed（ok=False，error
+        含命令行/cwd/stderr 尾部等可诊断信息，进程已清理）。
+
+        Args:
+            name: 插件目录名（须已 load）。
+            timeout: per-server 握手超时（秒）；None 用适配器默认。
+            tool_registry: 可选的运行时 ToolRegistry；传入时把发现的
+                MCP 工具桥接进 Agent 主循环执行表（plugin_mcp__ 前缀）。
         """
         plugin = self._loaded.get(name)
         if plugin is None:
             return {"name": name, "ok": False, "error": "plugin not loaded; call load() first"}
-        ok = self._adapter.start_server(plugin)
-        return {
+        ok = self._adapter.start_server(plugin, timeout=timeout)
+        result: dict[str, Any] = {
             "name": name,
             "ok": ok,
             "status": plugin.status.value,
-            "pid": plugin.process.pid if plugin.process else None,
             "error": plugin.error_message,
-            "limitation": "MCP 协议握手未实现（mcp_plugin_adapter TODO）；仅验证进程可拉起",
         }
+        if ok:
+            result.update(
+                server_info=plugin.server_info,
+                tools=[t.get("name") for t in plugin.remote_tools],
+                handshake="stdio JSON-RPC: initialize/initialized + tools/list completed",
+            )
+            if tool_registry is not None:
+                result["registered_tools"] = self.bridge_tools(name, tool_registry)
+        return result
 
     def stop(self, name: str) -> dict[str, Any]:
-        """停止插件子进程"""
+        """停止插件子进程（含 MCP 会话关停与桥接工具移除）"""
         plugin = self._loaded.get(name)
         if plugin is None:
             return {"name": name, "ok": False, "error": "plugin not loaded"}
+        self._unbridge_tools(name)
         ok = self._adapter.stop_server(plugin)
         return {"name": name, "ok": ok, "status": plugin.status.value, "error": plugin.error_message}
+
+    # ---------- MCP 工具调用 / 发现 ----------
+
+    def call_plugin_tool(
+        self, name: str, tool_name: str, args: dict[str, Any] | None = None
+    ) -> Any:
+        """经 stdio MCP ``tools/call`` 调用插件工具。
+
+        Raises:
+            RuntimeError: 插件未启动或会话不可用（进程退出等）。
+            ValueError: 工具未在 manifest 声明 / 必填参数缺失 / 远端失败。
+        """
+        plugin = self._loaded.get(name)
+        if plugin is None:
+            raise RuntimeError(f"plugin not loaded: {name}")
+        return self._adapter.call_tool(plugin, tool_name, args or {})
+
+    def list_remote_tools(self, name: str) -> list[dict[str, Any]]:
+        """实时 tools/list（刷新插件远端工具缓存）。"""
+        plugin = self._loaded.get(name)
+        if plugin is None:
+            raise RuntimeError(f"plugin not loaded: {name}")
+        return self._adapter.list_remote_tools(plugin)
+
+    # ---------- ToolRegistry 桥接 ----------
+
+    def bridge_tools(self, name: str, tool_registry: Any) -> list[str]:
+        """把插件 MCP 会话发现的工具桥接进运行时 ToolRegistry。
+
+        Returns:
+            注册成功的工具名列表（``plugin_mcp__<plugin>__<tool>``）；
+            插件未运行/无会话时返回空列表（显式，不静默注册）。
+        """
+        from backend.app.core.plugin_agent_adapter import register_plugin_mcp_tools
+
+        plugin = self._loaded.get(name)
+        if plugin is None:
+            return []
+        registered = register_plugin_mcp_tools(tool_registry, self, plugin_name=name)
+        if registered:
+            self._bridged[name] = (tool_registry, list(registered))
+        return registered
+
+    def _unbridge_tools(self, name: str) -> list[str]:
+        """移除插件桥接进 ToolRegistry 的工具（stop/unload 时调用）。"""
+        from backend.app.core.plugin_agent_adapter import unregister_plugin_mcp_tools
+
+        entry = self._bridged.pop(name, None)
+        if entry is None:
+            return []
+        tool_registry, names = entry
+        return unregister_plugin_mcp_tools(tool_registry, name, names=names)
 
 
 # 全局运行时实例（惰性）

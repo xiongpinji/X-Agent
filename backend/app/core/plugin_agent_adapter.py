@@ -257,13 +257,170 @@ def unregister_plugin_tools(tool_registry: Any, plugin_name: str) -> list[str]:
     return removed
 
 
+# ---------------------------------------------------------------------------
+# MCP 子进程会话桥接（stdio 协议路径，区别于上面的进程内实例化路径）
+# ---------------------------------------------------------------------------
+
+# MCP 子进程工具前缀：与进程内桥接（plugin__）区分，避免同名冲突
+PLUGIN_MCP_TOOL_PREFIX = "plugin_mcp__"
+
+
+def plugin_mcp_tool_name(plugin_name: str, tool_name: str) -> str:
+    """构造 MCP 子进程工具注册进 ToolRegistry 的工具名"""
+    safe_plugin = plugin_name.replace("-", "_")
+    safe_tool = tool_name.replace("-", "_")
+    return f"{PLUGIN_MCP_TOOL_PREFIX}{safe_plugin}__{safe_tool}"
+
+
+def build_plugin_mcp_tool_handler(
+    plugin: Any,
+    tool_name: str,
+    plugin_name: str,
+) -> Any:
+    """构造单个 MCP 子进程工具的 async handler（tools/call 经插件会话）。
+
+    会话调用在后台事件循环线程上同步等待，故用 ``asyncio.to_thread``
+    包装，避免阻塞 Agent 主循环的事件循环；结果契约与进程内桥接一致
+    （``{"success": True, "data": ...}`` / ``{"success": False, "error": ...}``）。
+    """
+
+    async def _handler(**kwargs: Any) -> dict[str, Any]:
+        import asyncio
+
+        started = time.perf_counter()
+        session = getattr(plugin, "session", None)
+        if session is None or not session.is_alive:
+            return {
+                "success": False,
+                "error": (
+                    f"Plugin '{plugin_name}' MCP session is not active; "
+                    f"tool '{tool_name}' is unavailable (restart the plugin)"
+                ),
+                "execution_time": time.perf_counter() - started,
+            }
+        try:
+            data = await asyncio.to_thread(session.call_tool, tool_name, kwargs)
+            return {
+                "success": True,
+                "data": data,
+                "execution_time": time.perf_counter() - started,
+            }
+        except Exception as e:
+            logger.error(
+                "Plugin MCP tool '%s/%s' raised: %s", plugin_name, tool_name, e,
+                exc_info=True,
+            )
+            return {
+                "success": False,
+                "error": f"Plugin MCP tool execution error: {e}",
+                "execution_time": time.perf_counter() - started,
+            }
+
+    _handler.__name__ = (
+        f"plugin_mcp_handler_{plugin_name.replace('-', '_')}_{tool_name.replace('-', '_')}"
+    )
+    return _handler
+
+
+def register_plugin_mcp_tools(
+    tool_registry: Any,
+    runtime: Any,
+    plugin_name: str | None = None,
+) -> list[str]:
+    """把插件子进程 MCP 会话发现的工具注册进 ToolRegistry（stdio 路径）。
+
+    与 ``register_plugins_into_tool_registry``（进程内实例化路径）互补：
+    本函数只桥接**已通过真实 MCP 握手**（start 成功、tools/list 已发现）
+    的插件工具，命名加 ``plugin_mcp__`` 前缀避免与进程内桥接冲突。
+
+    Args:
+        tool_registry: backend.app.core.tools.ToolRegistry 实例
+        runtime: PluginRuntime 实例
+        plugin_name: 指定插件目录名；None 时桥接所有运行中的插件
+
+    Returns:
+        注册成功的工具名列表（``plugin_mcp__<plugin>__<tool>``）。
+        无运行中会话的插件跳过（显式日志，不静默伪造）。
+    """
+    from backend.app.core.tools import RiskLevel
+
+    names = [plugin_name] if plugin_name else list(runtime.list_loaded())
+    registered: list[str] = []
+
+    for dir_name in names:
+        plugin = runtime.get_loaded(dir_name)
+        if plugin is None:
+            continue
+        session = getattr(plugin, "session", None)
+        remote_tools = getattr(plugin, "remote_tools", None) or []
+        if session is None or not session.is_alive:
+            logger.info(
+                "P1-12: Plugin '%s' skipped for MCP bridge — no live MCP session "
+                "(start() the plugin first)", dir_name,
+            )
+            continue
+
+        for tool in remote_tools:
+            tool_name = tool.get("name")
+            if not tool_name:
+                continue
+            reg_name = plugin_mcp_tool_name(dir_name, tool_name)
+            description = (
+                tool.get("description")
+                or f"Plugin MCP tool {dir_name}: {tool_name}"
+            )
+            parameters_schema = tool.get("input_schema")
+            tool_registry.register(
+                reg_name,
+                description=description,
+                handler=build_plugin_mcp_tool_handler(plugin, tool_name, dir_name),
+                risk_level=RiskLevel[DEFAULT_PLUGIN_RISK_LEVEL],
+                required_scope=DEFAULT_PLUGIN_REQUIRED_SCOPE,
+                parameters_schema=parameters_schema,
+            )
+            registered.append(reg_name)
+            logger.info("P1-12: Registered plugin MCP tool: %s", reg_name)
+
+    return registered
+
+
+def unregister_plugin_mcp_tools(
+    tool_registry: Any,
+    plugin_name: str,
+    names: list[str] | None = None,
+) -> list[str]:
+    """从 ToolRegistry 移除插件的 MCP 子进程工具（stop/unload 时调用）。
+
+    Args:
+        names: 已知的注册工具名列表（运行时缓存）；None 时按前缀扫描。
+    """
+    prefix = f"{PLUGIN_MCP_TOOL_PREFIX}{plugin_name.replace('-', '_')}__"
+    removed: list[str] = []
+    tools_dict = getattr(tool_registry, "_tools", None)
+    if tools_dict is None:
+        return removed
+    if names:
+        to_remove = [n for n in names if tools_dict.get(n) is not None]
+    else:
+        to_remove = [n for n in tools_dict if n.startswith(prefix)]
+    for name in to_remove:
+        tools_dict.pop(name, None)
+        removed.append(name)
+    return removed
+
+
 __all__ = [
     "DEFAULT_PLUGIN_REQUIRED_SCOPE",
     "DEFAULT_PLUGIN_RISK_LEVEL",
+    "PLUGIN_MCP_TOOL_PREFIX",
     "PLUGIN_TOOL_PREFIX",
+    "build_plugin_mcp_tool_handler",
     "build_plugin_tool_handler",
+    "plugin_mcp_tool_name",
     "plugin_name_from_tool",
     "plugin_tool_name",
+    "register_plugin_mcp_tools",
     "register_plugins_into_tool_registry",
+    "unregister_plugin_mcp_tools",
     "unregister_plugin_tools",
 ]

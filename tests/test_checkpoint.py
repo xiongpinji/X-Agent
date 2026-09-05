@@ -129,6 +129,44 @@ class TestCheckpointStore:
         assert latest is not None
         assert latest.iteration == 2
 
+    def test_corrupt_line_skipped_not_whole_file(self, tmp_path):
+        """单行撕裂写入（崩溃残留的半行 JSON）只跳过该行, 不丢弃整个 run."""
+        path = tmp_path / "cp"
+        path.mkdir()
+        good1 = self._make_checkpoint(iteration=1).model_dump_json()
+        good2 = self._make_checkpoint(iteration=2).model_dump_json()
+        (path / "trace-1.jsonl").write_text(
+            good1 + "\n" + ',"version":1}\n' + good2 + "\n", encoding="utf-8"
+        )
+
+        store = CheckpointStore(storage_path=path)
+
+        checkpoints = store.list_for_run("trace-1")
+        assert len(checkpoints) == 2
+        assert store.get_latest("trace-1").iteration == 2
+
+    def test_trim_compacts_disk_file(self, tmp_path):
+        """超过 max_per_run 触发裁剪时, 磁盘文件同步压缩到同等行数."""
+        path = tmp_path / "cp"
+        store = CheckpointStore(storage_path=path, max_per_run=3)
+        for i in range(5):
+            store.save(self._make_checkpoint(iteration=i + 1))
+
+        lines = (path / "trace-1.jsonl").read_text(encoding="utf-8").strip().splitlines()
+        assert len(lines) == 3
+
+    def test_mark_completed_persists_to_disk(self, tmp_path):
+        """mark_completed 落盘: 新实例加载后 run 不再可恢复."""
+        path = tmp_path / "cp"
+        store1 = CheckpointStore(storage_path=path)
+        store1.save(self._make_checkpoint(iteration=1))
+        store1.save(self._make_checkpoint(iteration=2))
+        store1.mark_completed("trace-1")
+
+        store2 = CheckpointStore(storage_path=path)
+        assert all(s.trace_id != "trace-1" for s in store2.list_resumable())
+        assert store2.get_latest("trace-1").status == "completed"
+
     def test_multiple_traces_isolated(self, store):
         store.save(self._make_checkpoint(trace_id="t1", iteration=1))
         store.save(self._make_checkpoint(trace_id="t2", iteration=1))

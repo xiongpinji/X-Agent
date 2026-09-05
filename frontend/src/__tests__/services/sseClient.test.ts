@@ -2,46 +2,51 @@
  * SSE Client Tests
  */
 
-import { SSEClient } from '../services/sseClient';
+import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest'
+import { SSEClient } from '@/services/sseClient'
 
 describe('SSEClient', () => {
-  let client: SSEClient;
-  let mockEventSource: any;
+  let client: SSEClient
+  let mockEventSource: any
+  let originalEventSource: any
 
   beforeEach(() => {
-    client = new SSEClient();
+    vi.clearAllMocks()
+    client = new SSEClient()
 
-    // Mock EventSource
+    // Mock EventSource (jsdom does not implement it)
+    originalEventSource = global.EventSource
     mockEventSource = {
-      addEventListener: jest.fn(),
-      close: jest.fn(),
-      readyState: EventSource.OPEN,
-    };
-
-    global.EventSource = jest.fn(() => mockEventSource) as any;
-  });
+      addEventListener: vi.fn(),
+      close: vi.fn(),
+      readyState: 1, // OPEN
+      onerror: null as ((ev: any) => void) | null,
+    }
+    global.EventSource = vi.fn(() => mockEventSource) as any
+  })
 
   afterEach(() => {
-    client.disconnect();
-  });
+    client.disconnect()
+    global.EventSource = originalEventSource
+  })
 
   test('should connect to SSE stream', () => {
-    const onMessage = jest.fn();
-    client.connect('test-run-id', onMessage);
+    const onMessage = vi.fn()
+    client.connect('test-run-id', onMessage)
 
     expect(global.EventSource).toHaveBeenCalledWith(
       '/api/v1/agent/stream/test-run-id'
-    );
-    expect(mockEventSource.addEventListener).toHaveBeenCalled();
-  });
+    )
+    expect(mockEventSource.addEventListener).toHaveBeenCalled()
+  })
 
   test('should handle incoming messages', () => {
-    const onMessage = jest.fn();
-    client.connect('test-run-id', onMessage);
+    const onMessage = vi.fn()
+    client.connect('test-run-id', onMessage)
 
     const messageHandler = mockEventSource.addEventListener.mock.calls.find(
       (call: any) => call[0] === 'message'
-    )?.[1];
+    )?.[1]
 
     const event = new MessageEvent('message', {
       data: JSON.stringify({
@@ -51,42 +56,80 @@ describe('SSEClient', () => {
         timestamp: new Date().toISOString(),
         run_id: 'test-run-id',
       }),
-    });
+    })
 
-    messageHandler?.(event);
-    expect(onMessage).toHaveBeenCalled();
-  });
+    messageHandler?.(event)
+    expect(onMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ event_type: 'message', content: 'test' })
+    )
+  })
 
   test('should handle connection errors', () => {
-    const onError = jest.fn();
-    client.connect('test-run-id', jest.fn(), onError);
+    const onError = vi.fn()
+    client.connect('test-run-id', vi.fn(), onError)
 
-    mockEventSource.onerror?.();
+    mockEventSource.onerror?.(new Event('error'))
 
-    // Should attempt reconnection
-    expect(client.getReconnectAttempts()).toBeGreaterThan(0);
-  });
+    // Should schedule a reconnection (attempt counter incremented)
+    expect(client.getReconnectAttempts()).toBeGreaterThan(0)
+  })
 
   test('should disconnect properly', () => {
-    client.connect('test-run-id', jest.fn());
-    client.disconnect();
+    client.connect('test-run-id', vi.fn())
+    client.disconnect()
 
-    expect(mockEventSource.close).toHaveBeenCalled();
-    expect(client.isConnected()).toBe(false);
-  });
+    expect(mockEventSource.close).toHaveBeenCalled()
+    expect(client.isConnected()).toBe(false)
+  })
 
-  test('should handle max reconnect attempts', async () => {
-    const onError = jest.fn();
-    const clientWithLimit = new SSEClient({ maxReconnectAttempts: 2 });
+  test('should stop reconnecting after max reconnect attempts', () => {
+    vi.useFakeTimers()
+    try {
+      const onError = vi.fn()
+      const clientWithLimit = new SSEClient({ maxReconnectAttempts: 2 })
 
-    clientWithLimit.connect('test-run-id', jest.fn(), onError);
+      clientWithLimit.connect('test-run-id', vi.fn(), onError)
 
-    // Simulate multiple connection errors
-    for (let i = 0; i < 3; i++) {
-      mockEventSource.onerror?.();
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Simulate repeated connection errors; each call schedules an
+      // (exponential backoff) reconnect until the limit is exceeded.
+      mockEventSource.onerror?.(new Event('error'))
+      mockEventSource.onerror?.(new Event('error'))
+      expect(clientWithLimit.getReconnectAttempts()).toBe(2)
+      expect(onError).not.toHaveBeenCalled()
+
+      mockEventSource.onerror?.(new Event('error'))
+      expect(onError).toHaveBeenCalledWith(
+        new Error('Failed to connect after 2 attempts')
+      )
+
+      clientWithLimit.disconnect()
+    } finally {
+      vi.useRealTimers()
     }
+  })
 
-    expect(onError).toHaveBeenCalled();
-  });
-});
+  test('should invoke onComplete and close on completion event', () => {
+    const onComplete = vi.fn()
+    client.connect('test-run-id', vi.fn(), undefined, onComplete)
+
+    const completionHandler = mockEventSource.addEventListener.mock.calls.find(
+      (call: any) => call[0] === 'completion'
+    )?.[1]
+
+    completionHandler?.(
+      new MessageEvent('completion', {
+        data: JSON.stringify({
+          event_type: 'completion',
+          status: 'success',
+          result: { answer: 'test' },
+          summary: {},
+          timestamp: new Date().toISOString(),
+          run_id: 'test-run-id',
+        }),
+      })
+    )
+
+    expect(onComplete).toHaveBeenCalled()
+    expect(mockEventSource.close).toHaveBeenCalled()
+  })
+})
